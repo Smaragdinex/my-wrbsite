@@ -65,13 +65,14 @@
   .lh h4{font-size:24px;font-weight:800}
   .anbtn{background:var(--blue);color:#fff;font-size:13px;font-weight:600;padding:7px 14px;border-radius:11px;display:flex;gap:5px;align-items:center}
   .rows{flex:1;overflow:hidden}
-  .row{display:grid;grid-template-columns:1fr 78px 84px;align-items:center;gap:8px;padding:11px 16px;border-top:1px solid rgba(255,255,255,.05)}
+  .row{display:grid;grid-template-columns:minmax(0,1fr) 66px 86px;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid rgba(255,255,255,.05)}
+  .row .meta{min-width:0}
   .row .sym{font-size:17px;font-weight:800;color:#fff}
   .row .nm{font-size:11px;color:#8b97a7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .spark{width:78px;height:30px}
+  .spark{width:66px;height:30px}
   .spark path{stroke-dasharray:200;stroke-dashoffset:200;animation:draw 1.4s ease forwards}
   @keyframes draw{to{stroke-dashoffset:0}}
-  .price{font-size:13px;font-weight:700;color:#fff;text-align:center;padding:8px 6px;border-radius:10px}
+  .price{font-size:12px;font-weight:700;color:#fff;text-align:center;padding:8px 4px;border-radius:10px;white-space:nowrap}
   .price.up{background:var(--up)}.price.down{background:var(--down)}
   .tabs{display:flex;justify-content:space-around;align-items:center;padding:12px 0 16px;border-top:1px solid rgba(255,255,255,.06)}
   .tabs svg{width:22px;height:22px}
@@ -229,7 +230,7 @@ var rows=document.getElementById('rows');
 data.forEach(function(d){
   var col=d.up?'#2bd66a':'#f9485f';
   rows.insertAdjacentHTML('beforeend',
-   '<div class="row"><div><div class="sym">'+d.s+'</div><div class="nm">'+d.n+'</div></div>'+
+   '<div class="row"><div class="meta"><div class="sym">'+d.s+'</div><div class="nm">'+d.n+'</div></div>'+
    '<svg class="spark" viewBox="0 0 70 24" preserveAspectRatio="none"><polyline fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" points="'+d.pts+'" style="stroke-dasharray:200;stroke-dashoffset:200;animation:draw 1.5s ease forwards"/><line x1="2" y1="11" x2="68" y2="11" stroke="#3a3f48" stroke-width="0.6" stroke-dasharray="2 2"/></svg>'+
    '<div class="price '+(d.up?'up':'down')+'">'+d.p+'</div></div>');
 });
