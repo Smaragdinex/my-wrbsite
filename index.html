@@ -1,465 +1,248 @@
 <!DOCTYPE html>
-<html  >
+<html lang="en">
 <head>
-  
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
-  <link rel="shortcut icon" href="assets/images/mbr-192x192.jpg" type="image/x-icon">
-  <meta name="description" content="《第十藝術的遊戲開發紀錄站》網站，展示遊戲開發歷程。暗色霓虹風格，提供About、Game、Development三大區塊。包含作者介紹、聯絡方式、遊戲Demo、開發日誌等豐富內容。現代字體與卡片布局，打造沉浸式體驗。">
-  
-  
-  <title>index</title>
-  <link rel="stylesheet" href="assets/web/assets/mobirise-icons2/mobirise2.css">
-  <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
-  <link rel="stylesheet" href="assets/bootstrap/css/bootstrap-grid.min.css">
-  <link rel="stylesheet" href="assets/bootstrap/css/bootstrap-reboot.min.css">
-  <link rel="stylesheet" href="assets/parallax/jarallax.css">
-  <link rel="stylesheet" href="assets/dropdown/css/style.css">
-  <link rel="stylesheet" href="assets/theme/css/style.css">
-  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap&display=swap"></noscript>
-  <link rel="preload" as="style" href="assets/mobirise/css/mbr-additional.css?v=l3RqKJ"><link rel="stylesheet" href="assets/mobirise/css/mbr-additional.css?v=l3RqKJ" type="text/css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CatInsight Stock — AI-Powered Stock Research</title>
+<meta name="description" content="CatInsight Stock — a transparent, machine-learning stock ranking plus an AI research assistant for US and Taiwan markets. Candlestick charts, fundamentals, alerts.">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#080b11; --bg2:#0d131d; --card:rgba(255,255,255,.04); --border:rgba(255,255,255,.09);
+    --text:#e8eef6; --muted:#93a1b3; --green:#22c55e; --teal:#14b8a6; --up:#22c55e; --down:#f43f5e;
+  }
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.6;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+  .grad{background:linear-gradient(120deg,var(--green),var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
 
-  
-  
-  
+  /* nav */
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(8,11,17,.7);border-bottom:1px solid var(--border)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.3px}
+  .logo .mark{width:30px;height:30px}
+  .nav-links{display:flex;gap:28px;align-items:center}
+  .nav-links a{color:var(--muted);font-size:15px;font-weight:500;transition:color .2s}
+  .nav-links a:hover{color:var(--text)}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:12px;font-weight:600;font-size:15px;transition:transform .15s,box-shadow .2s}
+  .btn-primary{background:linear-gradient(120deg,var(--green),var(--teal));color:#04130c;box-shadow:0 6px 24px rgba(20,184,166,.3)}
+  .btn-primary:hover{transform:translateY(-2px)}
+  .btn-ghost{border:1px solid var(--border);color:var(--text)}
+  @media(max-width:760px){.nav-links a:not(.btn){display:none}}
+
+  /* hero */
+  .hero{position:relative;padding:90px 0 70px}
+  .glow{position:absolute;border-radius:50%;filter:blur(110px);opacity:.5;z-index:0}
+  .glow.a{width:480px;height:480px;background:#0f766e;top:-120px;right:-100px}
+  .glow.b{width:420px;height:420px;background:#166534;bottom:-160px;left:-120px}
+  .hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:1.05fr .95fr;gap:50px;align-items:center}
+  .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--muted);margin-bottom:22px}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  h1{font-size:54px;line-height:1.07;letter-spacing:-1.5px;font-weight:850}
+  .sub{color:var(--muted);font-size:18px;margin:20px 0 16px;max-width:520px}
+  .zh{color:var(--muted);font-size:15px;margin-bottom:30px}
+  .cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .note{font-size:13px;color:var(--muted);margin-top:16px}
+  @media(max-width:860px){.hero-grid{grid-template-columns:1fr;gap:40px}h1{font-size:40px}}
+
+  /* phone */
+  .phone-wrap{display:flex;justify-content:center}
+  .phone{width:300px;height:600px;background:#0c1119;border:10px solid #1a212d;border-radius:44px;box-shadow:0 30px 80px rgba(0,0,0,.6);padding:16px 14px;position:relative}
+  .notch{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:110px;height:22px;background:#1a212d;border-radius:0 0 16px 16px}
+  .scr-head{display:flex;justify-content:space-between;align-items:center;margin:18px 4px 14px}
+  .tick{font-weight:800;font-size:20px}
+  .tick small{display:block;font-size:12px;color:var(--green);font-weight:600}
+  .badge{font-size:11px;background:rgba(34,197,94,.15);color:var(--green);padding:4px 9px;border-radius:8px;font-weight:600}
+  .card-mini{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px}
+  .card-mini .lbl{font-size:11px;color:var(--muted);margin-bottom:4px}
+  .bubble{background:linear-gradient(120deg,rgba(34,197,94,.16),rgba(20,184,166,.16));border:1px solid rgba(20,184,166,.25);border-radius:14px 14px 14px 4px;padding:11px 13px;font-size:12.5px;color:#cfe9df}
+
+  /* sections */
+  section{padding:80px 0}
+  .eyebrow{color:var(--teal);font-weight:700;font-size:14px;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px}
+  h2{font-size:38px;letter-spacing:-1px;font-weight:800;line-height:1.15}
+  .lead{color:var(--muted);font-size:17px;margin-top:14px;max-width:620px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:46px}
+  @media(max-width:860px){.grid3{grid-template-columns:1fr}h2{font-size:30px}}
+  .feat{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:26px;transition:transform .2s,border-color .2s,background .2s}
+  .feat:hover{transform:translateY(-4px);border-color:rgba(20,184,166,.4);background:rgba(20,184,166,.05)}
+  .feat .ic{width:46px;height:46px;border-radius:12px;background:rgba(20,184,166,.13);display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+  .feat h3{font-size:18px;margin-bottom:8px}
+  .feat p{color:var(--muted);font-size:14.5px}
+
+  /* steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:46px;counter-reset:s}
+  @media(max-width:860px){.steps{grid-template-columns:1fr}}
+  .step{position:relative;padding-left:8px}
+  .step .n{font-size:13px;font-weight:800;color:#04130c;background:linear-gradient(120deg,var(--green),var(--teal));width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+  .step h3{font-size:18px;margin-bottom:6px}
+  .step p{color:var(--muted);font-size:14.5px}
+
+  /* stats */
+  .stats{display:flex;gap:40px;flex-wrap:wrap;justify-content:center;padding:34px;border:1px solid var(--border);border-radius:20px;background:var(--card)}
+  .stat{text-align:center}
+  .stat .big{font-size:34px;font-weight:850}
+  .stat .cap{color:var(--muted);font-size:13px}
+
+  /* disclaimer / footer */
+  .disc{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:22px 26px;color:var(--muted);font-size:13.5px}
+  footer{border-top:1px solid var(--border);padding:40px 0;margin-top:40px}
+  .foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;color:var(--muted);font-size:14px}
+  .foot a{color:var(--muted);margin-left:22px;transition:color .2s}
+  .foot a:hover{color:var(--text)}
+</style>
 </head>
 <body>
-  
-  <section data-bs-version="5.1" class="menu menu2 cid-uMpoLG6EhI" once="menu" id="menu-5-uMpoLG6EhI">
-	
 
-	<nav class="navbar navbar-dropdown navbar-fixed-top navbar-expand-lg">
-		<div class="container">
-			<div class="navbar-brand">
-				<span class="navbar-logo">
-					<a href="#">
-						<img src="assets/images/mbr-192x192.jpg" alt="" style="height: 4.3rem;">
-					</a>
-				</span>
-				<span class="navbar-caption-wrap"><a class="navbar-caption text-black text-primary display-4" href="index.html">第十藝術&nbsp;X-Arts</a></span>
-			</div>
-			<button class="navbar-toggler" type="button" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbarSupportedContent" data-bs-target="#navbarSupportedContent" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
-				<div class="hamburger">
-					<span></span>
-					<span></span>
-					<span></span>
-					<span></span>
-				</div>
-			</button>
-			<div class="collapse navbar-collapse" id="navbarSupportedContent">
-				<ul class="navbar-nav nav-dropdown" data-app-modern-menu="true"><li class="nav-item dropdown">
-						<a class="nav-link link text-black dropdown-toggle display-4" href="#" aria-expanded="false" data-toggle="dropdown-submenu" data-bs-toggle="dropdown" data-bs-auto-close="outside">Straybound: The Dream Train</a><div class="dropdown-menu" aria-labelledby="dropdown-118"><div class="dropdown"><a class="text-black dropdown-item dropdown-toggle display-4" href="#" data-toggle="dropdown-submenu" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Introduction 介紹&nbsp;&nbsp;</a><div class="dropdown-menu dropdown-submenu" aria-labelledby="dropdown-150"><a class="text-black dropdown-item text-primary display-4" href="page5.html" aria-expanded="false">Story 故事</a><a class="text-black dropdown-item show text-primary display-4" href="page6.html" aria-expanded="true">Controls 控制</a></div></div><div class="dropdown"><a class="text-black dropdown-item dropdown-toggle display-4" href="#" data-toggle="dropdown-submenu" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Demo</a><div class="dropdown-menu dropdown-submenu" aria-labelledby="dropdown-415"><a class="text-black show dropdown-item text-primary display-4" href="https://smaragdinex.github.io/cat-game/">Play</a><a class="text-black dropdown-item show text-primary display-4" href="page7.html">Trailer</a><a class="text-black dropdown-item show text-primary display-4" href="page8.html">DownLoad</a></div></div><div class="dropdown"><a class="text-black dropdown-item dropdown-toggle display-4" href="#" data-toggle="dropdown-submenu" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Gallery</a><div class="dropdown-menu dropdown-submenu" aria-labelledby="dropdown-773"><a class="text-black show dropdown-item text-primary display-4" href="page9.html">Characters 角色</a><a class="text-black show dropdown-item text-primary display-4" href="page10.html">Scenes 場景</a></div></div></div>
-					</li><li class="nav-item dropdown">
-						<a class="nav-link link text-black dropdown-toggle show display-4" href="#" data-toggle="dropdown-submenu" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">關於</a><div class="dropdown-menu show" aria-labelledby="dropdown-595" data-bs-popper="none"><a class="text-black show dropdown-item text-primary display-4" href="page1.html">About Site 本站</a><a class="text-black show dropdown-item text-primary display-4" href="page2.html">About Me 我</a></div>
-					</li>
-					
-					<li class="nav-item dropdown">
-						<a class="nav-link link text-black dropdown-toggle display-4" href="#" data-toggle="dropdown-submenu" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">開發</a><div class="dropdown-menu" aria-labelledby="dropdown-276"><a class="text-black dropdown-item text-primary display-4" href="page11.html">Dev Log 開發日誌</a><a class="text-black show dropdown-item text-primary display-4" href="page12.html">Tech 技術</a></div>
-					</li></ul>
-				
-				<div class="navbar-buttons mbr-section-btn"><a class="btn btn-primary display-4" href="index.html#contact-form-2-uMpoLGMQsF">聯絡</a></div>
-			</div>
-		</div>
-	</nav>
-</section>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22c55e"/><stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+</svg>
 
-<section data-bs-version="5.1" class="header18 cid-uMpoLGa3iE mbr-fullscreen" data-bg-video="https://www.youtube.com/embed/pCo1g5NQAqc?autoplay=1&amp;loop=1&amp;playlist=pCo1g5NQAqc&amp;t=20&amp;mute=1&amp;playsinline=1&amp;controls=0&amp;showinfo=0&amp;autohide=1&amp;allowfullscreen=true&amp;mode=transparent" id="hero-16-uMpoLGa3iE">
-  
+<nav><div class="wrap nav">
+  <div class="logo">
+    <svg class="mark" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="9" fill="url(#g)"/><path d="M8 21l4-5 3 3 5-8 4 6" stroke="#04130c" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="10" r="1.6" fill="#04130c"/><circle cx="23" cy="10" r="1.6" fill="#04130c"/></svg>
+    CatInsight <span class="grad">Stock</span>
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="support.html">Support</a>
+    <a href="#download" class="btn btn-primary">Get the App</a>
+  </div>
+</div></nav>
 
-  <div class="mbr-overlay" style="opacity: 0.5; background-color: rgb(0, 0, 0);"></div>
-  <div class="container-fluid">
-    <div class="row">
-      <div class="content-wrap col-12 col-md-12">
-        <h1 class="mbr-section-title mbr-fonts-style mbr-white mb-4 display-1"><strong>迷途之貓的列車</strong><br><strong>Straybound: The Dream Train&nbsp;</strong></h1>
-        
-        <p class="mbr-fonts-style mbr-text mbr-white mb-4 display-7">探索遊戲開發的奧秘與樂趣</p>
-        <div class="mbr-section-btn"><a class="btn btn-white-outline display-7" href="https://smaragdinex.github.io/cat-game/">遊玩</a></div>
+<header class="hero"><div class="wrap">
+  <div class="glow a"></div><div class="glow b"></div>
+  <div class="hero-grid">
+    <div>
+      <span class="pill"><span class="dot"></span> US &amp; Taiwan markets · Updated daily</span>
+      <h1>See what the <span class="grad">data</span> sees.</h1>
+      <p class="sub">A transparent, machine-learning stock ranking paired with an AI research assistant — built on real fundamentals, technicals and money flow.</p>
+      <p class="zh">讓數據替你看盤 — AI 選股排名 + 個股 AI 研究助理,涵蓋美股與台股。</p>
+      <div class="cta">
+        <a href="#download" class="btn btn-primary">Download on iOS</a>
+        <a href="#features" class="btn btn-ghost">Explore features</a>
+      </div>
+      <p class="note">No account needed · For informational purposes only</p>
+    </div>
+
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="scr-head">
+          <div class="tick">SMTC <small>+9.6% today</small></div>
+          <span class="badge">#2 Ranked</span>
+        </div>
+        <div class="card-mini">
+          <div class="lbl">Price action · 1M</div>
+          <svg viewBox="0 0 260 90" width="100%" height="90">
+            <g stroke-width="5" stroke-linecap="round">
+              <line x1="14" y1="40" x2="14" y2="70" stroke="#f43f5e"/><line x1="14" y1="48" x2="14" y2="62" stroke="#f43f5e" stroke-width="11"/>
+              <line x1="38" y1="38" x2="38" y2="66" stroke="#22c55e"/><line x1="38" y1="44" x2="38" y2="58" stroke="#22c55e" stroke-width="11"/>
+              <line x1="62" y1="44" x2="62" y2="74" stroke="#f43f5e"/><line x1="62" y1="52" x2="62" y2="66" stroke="#f43f5e" stroke-width="11"/>
+              <line x1="86" y1="32" x2="86" y2="60" stroke="#22c55e"/><line x1="86" y1="38" x2="86" y2="54" stroke="#22c55e" stroke-width="11"/>
+              <line x1="110" y1="28" x2="110" y2="52" stroke="#22c55e"/><line x1="110" y1="32" x2="110" y2="46" stroke="#22c55e" stroke-width="11"/>
+              <line x1="134" y1="34" x2="134" y2="58" stroke="#f43f5e"/><line x1="134" y1="40" x2="134" y2="52" stroke="#f43f5e" stroke-width="11"/>
+              <line x1="158" y1="24" x2="158" y2="48" stroke="#22c55e"/><line x1="158" y1="28" x2="158" y2="42" stroke="#22c55e" stroke-width="11"/>
+              <line x1="182" y1="20" x2="182" y2="40" stroke="#22c55e"/><line x1="182" y1="24" x2="182" y2="36" stroke="#22c55e" stroke-width="11"/>
+              <line x1="206" y1="16" x2="206" y2="38" stroke="#22c55e"/><line x1="206" y1="20" x2="206" y2="32" stroke="#22c55e" stroke-width="11"/>
+              <line x1="230" y1="14" x2="230" y2="34" stroke="#22c55e"/><line x1="230" y1="18" x2="230" y2="28" stroke="#22c55e" stroke-width="11"/>
+            </g>
+          </svg>
+        </div>
+        <div class="card-mini" style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:var(--muted)">RSI 59 · MACD ↘ · VWAP 160</span>
+          <span style="color:var(--green)">Analyst +18%</span>
+        </div>
+        <div class="bubble">💬 “MACD just rolled below its signal — momentum is cooling even though price sits near its 52-week high.”</div>
       </div>
     </div>
   </div>
-</section>
+</div></header>
 
-<section data-bs-version="5.1" class="features03 cid-uMpoLGb39v" id="news-1-uMpoLGb39v">
-  
-  
-  <div class="container-fluid">
-    <div class="row justify-content-center mb-5">
-      <div class="col-12 content-head">
-        <div class="mbr-section-head">
-          <h4 class="mbr-section-title mbr-fonts-style align-center mb-0 display-2">
-            <strong>最新消息</strong>
-          </h4>
-          
-        </div>
-      </div>
+<section id="features"><div class="wrap">
+  <div class="eyebrow">Features</div>
+  <h2>Everything you need to <span class="grad">research smarter</span>.</h2>
+  <p class="lead">No hype, no black box — just real data, clearly explained.</p>
+  <div class="grid3">
+    <div class="feat">
+      <div class="ic">📊</div>
+      <h3>Multi-Factor AI Ranking</h3>
+      <p>A machine-learning model (LambdaMART) orders stocks by real fundamentals, technicals, momentum and liquidity — refreshed every trading day.</p>
     </div>
-    <div class="row">
-      <div class="item features-image col-12 col-md-6 col-lg-3 active">
-        <div class="item-wrapper">
-          <div class="item-img mb-3">
-            <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1619796404374-aff912b43cd2.jpeg" alt="" title="">
-          </div>
-          <div class="item-content align-left">
-            <h5 class="item-title mbr-fonts-style mt-0 mb-2 display-5">
-              <strong>遊戲預告片釋出</strong>
-            </h5>
-            <p class="mbr-text mbr-fonts-style mb-3 display-7">2025/05/27</p>
-            <p class="mbr-text mbr-fonts-style mb-3 display-7">最新遊戲預告片釋出！快來一睹為快，感受遊戲的震撼魅力。</p>
-            <div class="mbr-section-btn item-footer"><a href="page7.html" class="btn item-btn btn-primary display-7">看</a></div>
-          </div>
-        </div>
-      </div>
-      <div class="item features-image col-12 col-md-6 col-lg-3">
-        <div class="item-wrapper">
-          <div class="item-img mb-3">
-            <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1581373449483-37449f962b6c.jpeg" alt="" title="" data-slide-to="1" data-bs-slide-to="1">
-          </div>
-          <div class="item-content align-left">
-            <h5 class="item-title mbr-fonts-style mb-2 mt-0 display-5">
-              <strong>最新開發日誌</strong>
-            </h5>
-            <p class="mbr-text mbr-fonts-style mb-3 display-7">2025/05/20</p>
-            <p class="mbr-text mbr-fonts-style mb-3 display-7">我們分享了最新的開發日誌，深入了解遊戲背後的製作故事。</p>
-            <div class="mbr-section-btn item-footer"><a href="page11.html" class="btn item-btn btn-primary display-7">看</a></div>
-          </div>
-        </div>
-      </div>
-      <div class="item features-image col-12 col-md-6 col-lg-3">
-        <div class="item-wrapper">
-          <div class="item-img mb-3">
-            <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1563863251222-11d3e3bd3b62.jpeg" alt="" title="" data-slide-to="2" data-bs-slide-to="2">
-          </div>
-          <div class="item-content align-left">
-            <h5 class="item-title mbr-fonts-style mb-2 mt-0 display-5">
-              <strong>角色設計概念</strong>
-            </h5>
-            <p class="mbr-text mbr-fonts-style mb-3 display-7">2025/05/13</p>
-            <p class="mbr-text mbr-fonts-style mb-3 display-7">角色設計概念公開！一窺遊戲角色的設計理念與靈感。</p>
-            <div class="mbr-section-btn item-footer"><a href="page9.html" class="btn item-btn btn-primary display-7">看</a></div>
-          </div>
-        </div>
-      </div>
-      <div class="item features-image col-12 col-md-6 col-lg-3">
-        <div class="item-wrapper">
-          <div class="item-img mb-3">
-            <img src="assets/images/mbr-518x259.jpg" alt="" title="" data-slide-to="2" data-bs-slide-to="2">
-          </div>
-          <div class="item-content align-left">
-            <h5 class="item-title mbr-fonts-style mb-2 mt-0 display-5">
-              <strong>場景美術圖公開</strong>
-            </h5>
-            <p class="mbr-text mbr-fonts-style mb-3 display-7">2025/05/06</p>
-            <p class="mbr-text mbr-fonts-style mb-3 display-7">場景美術圖搶先看！感受遊戲世界的精緻與細膩。</p>
-            <div class="mbr-section-btn item-footer"><a href="page10.html" class="btn item-btn btn-primary display-7">看</a></div>
-          </div>
-        </div>
-      </div>
+    <div class="feat">
+      <div class="ic">🤖</div>
+      <h3>AI Research Assistant</h3>
+      <p>Ask any stock a question in plain language. Answers are grounded in live indicators — RSI, MACD, VWAP, analyst targets and 52-week range.</p>
+    </div>
+    <div class="feat">
+      <div class="ic">🕯️</div>
+      <h3>Candlestick &amp; Volume</h3>
+      <p>Clean candlestick charts with a volume sub-chart and switchable 1D / 5D / 1M timeframes for a real trading-desk view.</p>
+    </div>
+    <div class="feat">
+      <div class="ic">🔔</div>
+      <h3>Smart Alerts</h3>
+      <p>Set alerts on price, RSI, moving averages, VWAP, MACD and large-holder outflow — with fully configurable periods.</p>
+    </div>
+    <div class="feat">
+      <div class="ic">🌏</div>
+      <h3>US &amp; Taiwan Markets</h3>
+      <p>Coverage across US equities and Taiwan stocks, with fundamentals, analyst consensus and the latest headlines in one place.</p>
+    </div>
+    <div class="feat">
+      <div class="ic">🔍</div>
+      <h3>Transparent by Design</h3>
+      <p>Every ranking is driven by named, explainable factors — never an opaque score. You always see why a stock stands out.</p>
     </div>
   </div>
-</section>
+</div></section>
 
-<section data-bs-version="5.1" class="article12 cid-uMpoLGbal3" id="about-us-12-uMpoLGbal3">    
-    
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-12 col-lg-10">
-                <h3 class="mbr-section-title mbr-fonts-style mb-4 mt-0 display-2"><strong>藝術與科技的結合</strong></h3>
-                
-                <p class="mbr-text mbr-fonts-style display-7">歡迎來到「第十藝術的遊戲開發紀錄站」！這裡致力於分享遊戲開發的熱情與技術。在這裡，您將看到我如何一步步打造出令人驚豔的遊戲世界。</p>
-                <p class="mbr-text mbr-fonts-style display-7">我是一個熱愛遊戲的開發者，目標是創造出獨特且引人入勝的遊戲體驗。透過這個網站，我希望與您分享我的開發歷程、技術心得以及遊戲設計理念。</p>
-                <p class="mbr-text mbr-fonts-style display-7"></p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section data-bs-version="5.1" class="header18 cid-uMpoLGbe0U mbr-fullscreen" data-bg-video="https://www.youtube.com/embed/pwuFTsvJL34?autoplay=1&amp;loop=1&amp;playlist=pwuFTsvJL34&amp;t=20&amp;mute=1&amp;playsinline=1&amp;controls=0&amp;showinfo=0&amp;autohide=1&amp;allowfullscreen=true&amp;mode=transparent" id="video-5-uMpoLGbe0U">
-  
-
-  <div class="mbr-overlay" style="opacity: 0.3; background-color: rgb(0, 0, 0);"></div>
-  <div class="container-fluid">
-    <div class="row">
-    </div>
+<section id="how" style="padding-top:20px"><div class="wrap">
+  <div class="eyebrow">How it works</div>
+  <h2>From raw data to a <span class="grad">clear answer</span>.</h2>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><h3>We crunch the data</h3><p>Every day we pull prices, fundamentals, money flow and news, then engineer 120+ factors.</p></div>
+    <div class="step"><div class="n">2</div><h3>The model ranks</h3><p>A learn-to-rank model orders the universe, surfacing the strongest setups to the top.</p></div>
+    <div class="step"><div class="n">3</div><h3>You ask, AI explains</h3><p>Tap any stock and ask the AI assistant — it answers using the same real numbers, in your language.</p></div>
   </div>
-</section>
+</div></section>
 
-<section data-bs-version="5.1" class="video04 cid-uMpoLGbaVp" id="video-6-uMpoLGbaVp">
-  
-  
-  <div class="container">
-    <div class="mbr-section-head mb-5">
-      <h4 class="mbr-section-title mbr-fonts-style mb-0 mt-0 display-2">
-        <strong>遊戲展示</strong></h4>
-      
-    </div>
-    <div class="row justify-content-center">
-      <div class="col-12 col-md-10 video-block">
-        <div class="video-wrapper"><iframe class="mbr-embedded-video" src="https://www.youtube.com/embed/14EDbqEEWls?rel=0&amp;amp;mute=1&amp;showinfo=0&amp;autoplay=1&amp;loop=1&amp;playlist=14EDbqEEWls" width="800" height="600" frameborder="0" allowfullscreen></iframe></div>
-        
-      </div>
-    </div>
+<section style="padding-top:0"><div class="wrap">
+  <div class="stats">
+    <div class="stat"><div class="big grad">120+</div><div class="cap">Factors per stock</div></div>
+    <div class="stat"><div class="big grad">Daily</div><div class="cap">Ranking refresh</div></div>
+    <div class="stat"><div class="big grad">2</div><div class="cap">Markets (US · TW)</div></div>
+    <div class="stat"><div class="big grad">$0</div><div class="cap">Free to start</div></div>
   </div>
-</section>
+</div></section>
 
-<section data-bs-version="5.1" class="gallery4 cid-uMpoLGIcg9" id="gallery-12-uMpoLGIcg9">
-  
-  
-  <div class="container-fluid gallery-wrapper">
-    <div class="row justify-content-center">
-      <div class="col-12 content-head">
-        
-      </div>
-    </div>
-    <div class="grid-container">
-      <div class="grid-container-1" style="transform: translate3d(-200px, 0px, 0px);">
-        <div class="grid-item">
-          <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1535237654113-09c1e5d6e622.jpeg" alt="">
-        </div>
-        <div class="grid-item">
-          <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1555086156-e6c7353d283f.jpeg" alt="">
-        </div>
-        <div class="grid-item">
-          <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1498736297812-3a08021f206f.jpeg" alt="">
-        </div>
-        <div class="grid-item">
-          <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1502872364588-894d7d6ddfab.jpeg" alt="">
-        </div>
-      </div>
-      <div class="grid-container-2" style="transform: translate3d(-70px, 0px, 0px);">
-        <div class="grid-item">
-          <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1563089145-599997674d42.jpeg" alt="">
-        </div>
-        <div class="grid-item">
-          <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1608501078713-8e445a709b39.jpeg" alt="">
-        </div>
-        <div class="grid-item">
-          <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1604818640599-71bda0165d53.jpeg" alt="">
-        </div>
-        <div class="grid-item">
-          <img src="https://r.mobirisesite.com/1527831/assets/images/photo-1511447333015-45b65e60f6d5.jpeg" alt="">
-        </div>
-      </div>
-    </div>
+<section id="download"><div class="wrap" style="text-align:center">
+  <div class="eyebrow" style="justify-content:center">Get started</div>
+  <h2>Ready to see what the data sees?</h2>
+  <p class="lead" style="margin:14px auto 30px">CatInsight Stock is coming to the App Store. No account, no clutter — just sharper research.</p>
+  <a href="mailto:contact@xarts.games" class="btn btn-primary" style="font-size:16px;padding:14px 28px">Contact us · contact@xarts.games</a>
+</div></section>
+
+<div class="wrap">
+  <div class="disc">
+    <b>Disclaimer.</b> CatInsight Stock is provided for informational and educational purposes only. It is not investment advice and does not execute trades or handle funds. All valuations shown are model reference figures, not recommendations. Market data may be delayed. Investing involves risk, including possible loss of principal. Make your own decisions or consult a licensed financial advisor.
   </div>
-</section>
+</div>
 
-<section data-bs-version="5.1" class="header14 cid-uMpoLGJx96" id="call-to-action-10-uMpoLGJx96">
-    
-
-    
-    
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="card col-12 col-md-12 col-lg-10">
-                <div class="card-wrapper">
-                    <div class="card-box align-center">
-                        <h1 class="card-title mbr-fonts-style mb-4 display-1">
-                            <strong>啟程探索</strong>
-                        </h1>
-                        <p class="mbr-text mbr-fonts-style mb-4 display-7">沉浸於遊戲開發的奧秘世界。</p>
-                        <div class="mbr-section-btn mt-4"><a class="btn btn-primary display-7" href="https://smaragdinex.github.io/cat-game/">遊玩</a></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section data-bs-version="5.1" class="image02 cid-uMpoLGJO28 mbr-fullscreen mbr-parallax-background" id="image-13-uMpoLGJO28">
-    
-    
-    <div class="container">
-        <div class="row"></div>
-    </div>
-</section>
-
-<section data-bs-version="5.1" class="list1 cid-uMpoLGKrFm" id="faq-1-uMpoLGKrFm">
-    
-    
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-12 col-md-12 col-lg-10 m-auto">
-                <div class="content">
-                    <div class="row justify-content-center mb-5">
-                        <div class="col-12 content-head">
-                            <div class="mbr-section-head">
-                                <h4 class="mbr-section-title mbr-fonts-style align-center mb-0 display-2">
-                                    <strong>常見問題</strong>
-                                </h4>
-                                
-                            </div>
-                        </div>
-                    </div>
-                    <div id="bootstrap-accordion_16" class="panel-group accordionStyles accordion" role="tablist" aria-multiselectable="true">
-                        <div class="card">
-                            <div class="card-header" role="tab" id="headingOne">
-                                <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse1_16" aria-expanded="false" aria-controls="collapse1">
-                                    <h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">網站的宗旨？</h6>
-                                    <span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-                                </a>
-                            </div>
-                            <div id="collapse1_16" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_16">
-                                <div class="panel-body">
-                                    <p class="mbr-fonts-style panel-text display-7">分享遊戲開發的點滴，從概念到實現。</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-header" role="tab" id="headingOne">
-                                <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse2_16" aria-expanded="false" aria-controls="collapse2">
-                                    <h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">能學到什麼？</h6>
-                                    <span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-                                </a>
-                            </div>
-                            <div id="collapse2_16" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_16">
-                                <div class="panel-body">
-                                    <p class="mbr-fonts-style panel-text display-7">探索程式碼、設計和藝術的交織。</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-header" role="tab" id="headingOne">
-                                <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse3_16" aria-expanded="false" aria-controls="collapse3">
-                                    <h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">靈感來源？</h6>
-                                    <span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-                                </a>
-                            </div>
-                            <div id="collapse3_16" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_16">
-                                <div class="panel-body">
-                                    <p class="mbr-fonts-style panel-text display-7">靈感來自經典，創新塑造未來。</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-header" role="tab" id="headingOne">
-                                <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse4_16" aria-expanded="false" aria-controls="collapse4">
-                                    <h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">如何參與？</h6>
-                                    <span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-                                </a>
-                            </div>
-                            <div id="collapse4_16" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_16">
-                                <div class="panel-body">
-                                    <p class="mbr-fonts-style panel-text display-7">社群是我們的動力，共同成長。</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-header" role="tab" id="headingOne">
-                                <a role="button" class="panel-title collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-core="" href="#collapse5_16" aria-expanded="false" aria-controls="collapse5">
-                                    <h6 class="panel-title-edit mbr-semibold mbr-fonts-style mb-0 display-5">遊戲的意義？</h6>
-                                    <span class="sign mbr-iconfont mobi-mbri-arrow-down"></span>
-                                </a>
-                            </div>
-                            <div id="collapse5_16" class="panel-collapse noScroll collapse" role="tabpanel" aria-labelledby="headingOne" data-parent="#accordion" data-bs-parent="#bootstrap-accordion_16">
-                                <div class="panel-body">
-                                    <p class="mbr-fonts-style panel-text display-7">透過遊戲，我們傳遞無限可能。</p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section data-bs-version="5.1" class="form5 cid-uMpoLGMQsF" id="contact-form-2-uMpoLGMQsF">
-    
-    
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-12 content-head">
-                <div class="mbr-section-head mb-5">
-                    <h3 class="mbr-section-title mbr-fonts-style align-center mb-0 display-2">
-                        <strong>聯繫我們</strong></h3>
-                    
-                </div>
-            </div>
-        </div>
-        <div class="row justify-content-center">
-            <div class="col-lg-8 mx-auto mbr-form" data-form-type="formoid">
-                <form action="https://mobirise.eu/" method="POST" class="mbr-form form-with-styler" data-form-title="Form Name"><input type="hidden" name="email" data-form-email="true" value="lU/u8WXAOwKUYrnP5Z20WLfsasxaCYYVdRBysXSGyy2n68KcFFQ/IbekWqE83KKl4QwypIBoe15yxrjjtWt99azNvVyQvxY3CraVPaKx/sYxZRVyOa8kUK4smdVf4Pwf.3epRGOC0xX7CgdC8DZQ98mM3f54q+SqrIwW94YB+V/NesgvPN+Gi/vFLG3mKCgqz8g8CdRyVMwmyLc017HyECS780he5nq8ONGsQtuxsy0P/F/uOT3QuEoPlE8BZtKz5">
-                    <div class="row">
-                        <div hidden="hidden" data-form-alert="" class="alert alert-success col-12">Thanks for filling out the form!</div>
-                        <div hidden="hidden" data-form-alert-danger="" class="alert alert-danger col-12">
-                            Oops...! some problem!
-                        </div>
-                    </div>
-                    <div class="dragArea row">
-                        <div class="col-md col-sm-12 form-group mb-3" data-for="name">
-                            <input type="text" name="name" placeholder="姓名" data-form-field="name" class="form-control" value="" id="name-contact-form-2-uMpoLGMQsF">
-                        </div>
-                        <div class="col-md col-sm-12 form-group mb-3" data-for="email">
-                            <input type="email" name="email" placeholder="信箱" data-form-field="email" class="form-control" value="" id="email-contact-form-2-uMpoLGMQsF">
-                        </div>
-                        <div class="col-12 form-group mb-3" data-for="textarea">
-                            <textarea name="textarea" placeholder="訊息" data-form-field="textarea" class="form-control" id="textarea-contact-form-2-uMpoLGMQsF"></textarea>
-                        </div>
-                        <div class="col-lg-12 col-md-12 col-sm-12 align-center mbr-section-btn">
-                            <button type="submit" class="btn btn-primary display-7">發送</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section data-bs-version="5.1" class="contacts03 cid-uMpoLGN7Vh" id="contacts-11-uMpoLGN7Vh">
-  
-
-  
-  <div class="container">
-    <div class="row justify-content-center">
-      <div class="col-lg-4">
-        <div class="col-12 col-md-12">
-          <h5 class="mbr-section-title mbr-fonts-style mt-0 mb-4 display-2"><strong>營業地址</strong></h5>
-          <p class="mbr-section-subtitle mbr-fonts-style mt-0 mb-4 display-7">
-            電話: 0910313399<br>信箱: contact@xarts.games<br>地址: 台北市南京東路五段92號9樓<br>營業時間: 週一至週五 09:00-17:00
-          </p> 
-
-          
-        </div>
-      </div>
-        <div class="col-lg-8 side-features">
-        <div class="google-map"><iframe frameborder="0" style="border:0" src="https://www.google.com/maps/embed/v1/place?key=AIzaSyAtXm0x23nRCgazjDV2Kl3GTHRP411ougQ&amp;q=南京東路五段92號9樓" allowfullscreen=""></iframe></div>
-      </div>
-    </div>
+<footer><div class="wrap foot">
+  <div>© 2026 X-Arts Corporation LTD · CatInsight Stock</div>
+  <div>
+    <a href="privacy.html">Privacy</a>
+    <a href="support.html">Support</a>
+    <a href="mailto:contact@xarts.games">Contact</a>
   </div>
-</section>
+</div></footer>
 
-<section data-bs-version="5.1" class="footer4 cid-uMpoLGNEVF" once="footers" id="footer-4-uMpoLGNEVF">
-
-    
-
-    
-
-    <div class="container">
-        <div class="media-container-row align-center mbr-white">
-            <div class="col-12">
-                <p class="mbr-text mb-0 mbr-fonts-style display-7">© 2025 第十藝術 All rights reserved</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-
-<script src="assets/bootstrap/js/bootstrap.bundle.min.js"></script>
-  <script src="assets/parallax/jarallax.js"></script>
-  <script src="assets/smoothscroll/smooth-scroll.js"></script>
-  <script src="assets/ytplayer/index.js"></script>
-  <script src="assets/dropdown/js/navbar-dropdown.js"></script>
-  <script src="assets/vimeoplayer/player.js"></script>
-  <script src="assets/scrollgallery/scroll-gallery.js"></script>
-  <script src="assets/mbr-switch-arrow/mbr-switch-arrow.js"></script>
-  <script src="assets/theme/js/script.js"></script>
-  <script src="assets/formoid/formoid.min.js"></script>
-  
-  
-  
 </body>
 </html>
