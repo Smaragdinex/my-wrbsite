@@ -78,8 +78,9 @@
   .note{font-size:13px;color:var(--muted);margin-top:16px}
   @media(max-width:860px){.hero-grid{grid-template-columns:1fr;gap:30px}h1{font-size:44px}}
 
-  /* hero cat video */
-  .catvid{position:relative;width:100%;max-width:480px;border-radius:24px;overflow:hidden;box-shadow:0 30px 70px rgba(40,30,0,.22);animation:float 7s ease-in-out infinite}
+  /* cat video showcase */
+  .catshow{padding:80px 0 40px}
+  .catvid{position:relative;width:100%;max-width:840px;margin:38px auto 0;border-radius:28px;overflow:hidden;box-shadow:0 40px 90px rgba(40,30,0,.25);animation:float 8s ease-in-out infinite}
   .catvid video{display:block;width:100%;height:auto}
 
   /* hero orb (icon + rotating rings) */
@@ -217,16 +218,30 @@
       <p class="note">No account needed · For informational purposes only</p>
     </div>
     <div class="stage reveal">
-      <div class="catvid">
-        <video autoplay muted loop playsinline poster="assets/cat-poster.jpg">
-          <source src="assets/cat-hero.mp4" type="video/mp4">
-        </video>
+      <div class="bigorb">
+        <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+        <div class="core"></div>
+        <img class="catface" src="assets/app-icon.png" alt="CatInsight Stock">
+        <div class="scan"></div>
+        <div class="orbit"><span class="p"></span></div>
+        <div class="orbit o2"><span class="p"></span></div>
       </div>
     </div>
   </div>
 </div></header>
 
 <div class="tape"><div class="tape-track" id="tape"></div></div>
+
+<section class="catshow"><div class="wrap reveal center">
+  <div class="eyebrow" style="justify-content:center">Your AI detective</div>
+  <h2 class="big">On the case, <span class="grad">24/7</span>.</h2>
+  <p class="lead">Our cat detective scans the market with data — so you don't have to squint at charts.</p>
+  <div class="catvid">
+    <video autoplay muted loop playsinline poster="assets/cat-poster.jpg">
+      <source src="assets/cat-hero.mp4" type="video/mp4">
+    </video>
+  </div>
+</div></section>
 
 <!-- scroll-pinned cat + phone storytelling -->
 <section class="scrolly" id="features"><div class="pin"><div class="wrap"><div class="scene">
