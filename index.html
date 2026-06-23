@@ -313,7 +313,8 @@ var hc=sb()+'<div class="hd"><h4>SMTC</h4></div><div class="cprice"><b>$174.30</
 var hch=sb()+'<div class="hd"><h4>SMTC</h4></div><div class="chat"><div class="bub u">MACD 交叉了嗎?離高點多遠?</div><div class="bub a">MACD 8.5 已跌破信號線 10.0,屬偏空交叉,動能轉弱。現價 $174.3,距 52 週高點僅 -1.6%,處於高位區。</div><div class="bub u">估值貴嗎?</div><div class="bub a">分析師平均目標 $205(+18%),Strong Buy,但低標 $175 已接近現價。</div></div><div class="inp">繼續問…</div>'+bar;
 
 // ---- scroll-pinned stage engine ----
-var SCREENS=[hw,hr,hc,hch];
+var shot=function(f){return '<img src="'+f+'" style="width:100%;height:100%;object-fit:cover;display:block">';};
+var SCREENS=[hw,shot('assets/shot-rank.png'),shot('assets/shot-detail.png'),hch];
 var CAPS=[
  {e:"Your watchlist",t:'<span class="grad">Watchlist,</span><span class="grad">alive.</span>',d:"Live sparklines and momentum colors. One tap to AI-analyze your whole list."},
  {e:"AI Ranking",t:'<span class="grad">Smart</span><span class="grad">Ranking.</span>',d:"A daily machine-learning ranking by real fundamentals, technicals and money flow."},
