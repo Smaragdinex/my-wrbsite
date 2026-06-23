@@ -131,6 +131,29 @@
   .tabs{display:flex;justify-content:space-around;padding:11px 0 15px;border-top:1px solid rgba(255,255,255,.06)}
   .tabs svg{width:21px;height:21px}
 
+  /* scroll-pinned scene */
+  .scrolly{position:relative;height:480vh}
+  .pin{position:sticky;top:0;height:100vh;display:flex;align-items:center;overflow:hidden}
+  .scene{display:grid;grid-template-columns:1fr 340px;gap:40px;align-items:center;width:100%}
+  .caption .eyebrow{color:var(--gtext);font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;transition:opacity .3s}
+  .caption h2{font-size:60px;line-height:1.0;letter-spacing:-2px;font-weight:860;transition:opacity .3s}
+  .caption h2 .grad{display:block}
+  .caption p{color:var(--muted);font-size:18px;margin-top:18px;max-width:380px;transition:opacity .3s}
+  .dots{display:flex;gap:9px;margin-top:30px}
+  .dots i{width:9px;height:9px;border-radius:50%;background:rgba(0,0,0,.15);transition:.3s}
+  .dots i.on{background:linear-gradient(115deg,var(--g1),var(--g2));transform:scale(1.25)}
+  .stage-wrap{position:relative;display:flex;justify-content:center;align-items:center}
+  .cat-mascot{position:absolute;left:-78px;bottom:24px;width:128px;height:128px;border-radius:28px;box-shadow:0 16px 40px rgba(140,100,20,.32);z-index:1;transform:rotate(-10deg);transition:transform .5s ease}
+  .stage-wrap .device{z-index:2;transition:opacity .28s ease}
+  .stage-wrap .device.fade{opacity:0}
+  @media(max-width:860px){
+    .scrolly{height:440vh}
+    .scene{grid-template-columns:1fr;gap:24px;justify-items:center;text-align:center}
+    .caption h2{font-size:40px}.caption p{margin-left:auto;margin-right:auto}
+    .dots{justify-content:center}
+    .cat-mascot{left:auto;right:-50px;bottom:auto;top:-40px;width:92px;height:92px}
+  }
+
   /* tape */
   .tape{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(255,255,255,.5);overflow:hidden;white-space:nowrap;padding:13px 0;margin-top:10px}
   .tape-track{display:inline-block;animation:marq 28s linear infinite}
@@ -204,35 +227,19 @@
 
 <div class="tape"><div class="tape-track" id="tape"></div></div>
 
-<!-- DRIP-style product feature sections -->
-<div id="features"></div>
-
-<section class="feature"><div class="wrap"><div class="frow reveal">
-  <div class="ftext">
-    <div class="eyebrow">AI Ranking</div>
-    <h2><span class="grad">Smart</span><span class="grad">Ranking.</span></h2>
-    <p>A machine-learning model orders the market by real fundamentals, technicals, momentum and liquidity — refreshed every trading day, with the strongest setups on top.</p>
+<!-- scroll-pinned cat + phone storytelling -->
+<section class="scrolly" id="features"><div class="pin"><div class="wrap"><div class="scene">
+  <div class="caption">
+    <div class="eyebrow" id="cap-eye">AI Ranking</div>
+    <h2 id="cap-title"><span class="grad">Smart</span><span class="grad">Ranking.</span></h2>
+    <p id="cap-desc">A daily machine-learning ranking by real fundamentals, technicals and money flow.</p>
+    <div class="dots" id="dots"></div>
   </div>
-  <div class="stage"><div class="device static"><div class="notch"></div><div class="screen" id="scr-rank"></div></div></div>
-</div></div></section>
-
-<section class="feature" style="padding-top:0"><div class="wrap"><div class="frow rev reveal">
-  <div class="ftext">
-    <div class="eyebrow">Charts</div>
-    <h2><span class="grad">Real</span><span class="grad">Data.</span></h2>
-    <p>Candlestick charts with a volume sub-chart and 1D / 5D / 1M timeframes. Live RSI, MACD, VWAP and money-flow signals — the numbers, not a guess.</p>
+  <div class="stage-wrap">
+    <img class="cat-mascot" id="mascot" src="assets/app-icon.png" alt="CatInsight cat">
+    <div class="device static" id="liveDevice"><div class="notch"></div><div class="screen" id="scr-live"></div></div>
   </div>
-  <div class="stage"><div class="device static"><div class="notch"></div><div class="screen" id="scr-chart"></div></div></div>
-</div></div></section>
-
-<section class="feature" style="padding-top:0"><div class="wrap"><div class="frow reveal">
-  <div class="ftext">
-    <div class="eyebrow">AI Assistant</div>
-    <h2><span class="grad">Ask</span><span class="grad">Anything.</span></h2>
-    <p>Ask any stock a question in plain language. The assistant answers from the same live indicators shown in the app — and replies in your language.</p>
-  </div>
-  <div class="stage"><div class="device static"><div class="notch"></div><div class="screen" id="scr-chat"></div></div></div>
-</div></div></section>
+</div></div></div></section>
 
 <section class="pad" style="padding-top:0"><div class="wrap reveal">
   <div class="stats">
@@ -267,20 +274,58 @@ if(intro){if(sessionStorage.getItem('ci_seen')){intro.parentNode.removeChild(int
 var bar='<div class="tabs"><svg viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"><path d="M3 17l5-6 4 4 6-8" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="#7a8696" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4" stroke-linecap="round"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="#7a8696" stroke-width="2"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-5A8 8 0 1 1 21 12z"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="#7a8696" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg></div>';
 function sb(){return '<div class="sb"><span>7:30</span><span class="r">📶 🔋</span></div>';}
 
+// ---- build the 4 app screens as strings ----
+// watchlist
+var wd=[["MU","Micron Technology","$1210.24",1,"2,18 10,12 18,20 26,8 34,16 42,10 50,18 58,5 68,3"],["NVDA","NVIDIA Corporation","$208.65",0,"2,5 12,8 22,12 32,14 44,17 56,19 68,20"],["LITE","Lumentum Holdings","$893.74",1,"2,20 12,16 24,9 36,6 48,8 60,4 68,3"],["AAOI","Applied Optoelectronics","$171.32",1,"2,18 12,17 24,12 36,8 48,6 60,5 68,4"],["AVGO","Broadcom Inc.","$393.10",0,"2,5 14,9 26,8 38,13 50,14 60,17 68,19"]];
+var hw=sb()+'<div class="hd"><h4>清單</h4><div class="anbtn">✦ 分析</div></div><div class="rows">';
+wd.forEach(function(d){var c=d[3]?'#1fae54':'#e23b4e';hw+='<div class="row"><div class="meta"><div class="sym">'+d[0]+'</div><div class="nm">'+d[1]+'</div></div><svg class="spark" viewBox="0 0 70 24" preserveAspectRatio="none"><polyline fill="none" stroke="'+c+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" points="'+d[4]+'"/><line x1="2" y1="11" x2="68" y2="11" stroke="#3a3f48" stroke-width=".6" stroke-dasharray="2 2"/></svg><div class="price '+(d[3]?'up':'down')+'">'+d[2]+'</div></div>';});
+hw+='</div>'+bar;
+
 // ranking
-var rk=[["1","WDC",100,"+12%"],["2","AMKR",96,"+9%"],["3","MU",91,"+18%"],["4","MRVL",90,"+7%"],["5","ALGM",84,"+6%"],["6","COHU",83,"+5%"],["7","ICHR",81,"+8%"],["8","CRDO",76,"+11%"]];
+var rk=[["1","WDC",100,"+12%"],["2","AMKR",96,"+9%"],["3","MU",91,"+18%"],["4","MRVL",90,"+7%"],["5","ALGM",84,"+6%"],["6","COHU",83,"+5%"],["7","ICHR",81,"+8%"]];
 var hr=sb()+'<div class="hd"><h4>排行 · TOP</h4></div><div class="rows">';
 rk.forEach(function(d){hr+='<div class="rk"><div class="num">'+d[0]+'</div><div class="sym">'+d[1]+'</div><div class="bar"><i style="width:'+d[2]+'%"></i></div><div class="pc">'+d[3]+'</div></div>';});
-hr+='</div>'+bar;document.getElementById('scr-rank').innerHTML=hr;
+hr+='</div>'+bar;
 
 // chart
 var cs='';var bars=[[40,70,48,62,0],[38,66,44,58,1],[44,74,52,66,0],[32,60,38,54,1],[28,52,32,46,1],[34,58,40,52,0],[24,48,28,42,1],[20,40,24,36,1],[16,38,20,32,1],[14,34,18,28,1]];
 bars.forEach(function(b,i){var x=18+i*22;var c=b[4]?'#1fae54':'#e23b4e';cs+='<line x1="'+x+'" y1="'+b[0]+'" x2="'+x+'" y2="'+b[1]+'" stroke="'+c+'" stroke-width="3"/><line x1="'+x+'" y1="'+b[2]+'" x2="'+x+'" y2="'+b[3]+'" stroke="'+c+'" stroke-width="10"/>';});
 var vol='';bars.forEach(function(b,i){var x=18+i*22;var c=b[4]?'#1fae54':'#e23b4e';var h=8+(i%3)*7;vol+='<rect x="'+(x-5)+'" y="'+(40-h)+'" width="10" height="'+h+'" fill="'+c+'" opacity=".5"/>';});
-document.getElementById('scr-chart').innerHTML=sb()+'<div class="hd"><h4>SMTC</h4></div><div class="cprice"><b>$174.30</b> <span class="g">+9.6%</span></div><div class="tf"><span>1D</span><span>5D</span><span class="on">1M</span></div><div style="padding:6px 14px"><svg viewBox="0 0 240 90" width="100%" height="120">'+cs+'</svg></div><div style="padding:0 14px"><svg viewBox="0 0 240 42" width="100%" height="46">'+vol+'</svg></div>'+bar;
+var hc=sb()+'<div class="hd"><h4>SMTC</h4></div><div class="cprice"><b>$174.30</b> <span class="g">+9.6%</span></div><div class="tf"><span>1D</span><span>5D</span><span class="on">1M</span></div><div style="padding:6px 14px"><svg viewBox="0 0 240 90" width="100%" height="120">'+cs+'</svg></div><div style="padding:0 14px"><svg viewBox="0 0 240 42" width="100%" height="46">'+vol+'</svg></div>'+bar;
 
 // chat
-document.getElementById('scr-chat').innerHTML=sb()+'<div class="hd"><h4>SMTC</h4></div><div class="chat"><div class="bub u">MACD 交叉了嗎?離高點多遠?</div><div class="bub a">MACD 8.5 已跌破信號線 10.0,屬偏空交叉,動能轉弱。現價 $174.3,距 52 週高點僅 -1.6%,處於高位區。</div><div class="bub u">估值貴嗎?</div><div class="bub a">分析師平均目標 $205(+18%),Strong Buy,但低標 $175 已接近現價。</div></div><div class="inp">繼續問…</div>'+bar;
+var hch=sb()+'<div class="hd"><h4>SMTC</h4></div><div class="chat"><div class="bub u">MACD 交叉了嗎?離高點多遠?</div><div class="bub a">MACD 8.5 已跌破信號線 10.0,屬偏空交叉,動能轉弱。現價 $174.3,距 52 週高點僅 -1.6%,處於高位區。</div><div class="bub u">估值貴嗎?</div><div class="bub a">分析師平均目標 $205(+18%),Strong Buy,但低標 $175 已接近現價。</div></div><div class="inp">繼續問…</div>'+bar;
+
+// ---- scroll-pinned stage engine ----
+var SCREENS=[hw,hr,hc,hch];
+var CAPS=[
+ {e:"Your watchlist",t:'<span class="grad">Watchlist,</span><span class="grad">alive.</span>',d:"Live sparklines and momentum colors. One tap to AI-analyze your whole list."},
+ {e:"AI Ranking",t:'<span class="grad">Smart</span><span class="grad">Ranking.</span>',d:"A daily machine-learning ranking by real fundamentals, technicals and money flow."},
+ {e:"Charts",t:'<span class="grad">Real</span><span class="grad">Data.</span>',d:"Candlesticks, volume and live RSI / MACD / VWAP — the numbers, not a guess."},
+ {e:"AI Assistant",t:'<span class="grad">Ask</span><span class="grad">Anything.</span>',d:"Ask any stock in plain language; answers from live data, in your language."}
+];
+var scr=document.getElementById('scr-live'),dev=document.getElementById('liveDevice'),mascot=document.getElementById('mascot'),
+    capE=document.getElementById('cap-eye'),capT=document.getElementById('cap-title'),capD=document.getElementById('cap-desc'),dots=document.getElementById('dots');
+var N=SCREENS.length,cur=-1;
+for(var i=0;i<N;i++)dots.insertAdjacentHTML('beforeend','<i></i>');
+function setStage(s){if(s===cur)return;cur=s;
+  dev.classList.add('fade');capT.style.opacity=0;capD.style.opacity=0;capE.style.opacity=0;
+  setTimeout(function(){
+    scr.innerHTML=SCREENS[s];capE.textContent=CAPS[s].e;capT.innerHTML=CAPS[s].t;capD.textContent=CAPS[s].d;
+    dev.classList.remove('fade');capT.style.opacity=1;capD.style.opacity=1;capE.style.opacity=1;
+    var d=dots.children;for(var k=0;k<d.length;k++)d[k].className=(k===s?'on':'');
+    mascot.style.transform='rotate('+(-12+s*5)+'deg)';
+  },180);
+}
+setStage(0);
+var scrolly=document.getElementById('features');
+function stageScroll(){
+  var r=scrolly.getBoundingClientRect(),vh=window.innerHeight;
+  var total=scrolly.offsetHeight-vh;
+  var p=Math.min(1,Math.max(0,(-r.top)/total));
+  var s=Math.min(N-1,Math.floor(p*N));
+  setStage(s);
+}
 
 // tape
 var tk=[["MU","+9.6%",1],["NVDA","-3.1%",0],["LITE","+5.4%",1],["SMTC","+9.6%",1],["AVGO","-2.4%",0],["AAOI","+4.2%",1],["AMKR","+6.1%",1],["SNDK","-1.8%",0]];
@@ -289,7 +334,10 @@ var tp=document.getElementById('tape'),th='';for(var k=0;k<2;k++){tk.forEach(fun
 // reveal + nav
 var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('show');io.unobserve(e.target);}});},{threshold:.12});
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});
-var nav=document.getElementById('nav');window.addEventListener('scroll',function(){nav.classList.toggle('scrolled',window.scrollY>20);},{passive:true});
+var nav=document.getElementById('nav'),ticking=false;
+function onScroll(){nav.classList.toggle('scrolled',window.scrollY>20);stageScroll();ticking=false;}
+window.addEventListener('scroll',function(){if(!ticking){requestAnimationFrame(onScroll);ticking=true;}},{passive:true});
+window.addEventListener('resize',stageScroll,{passive:true});stageScroll();
 </script>
 </body>
 </html>
