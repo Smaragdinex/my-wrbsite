@@ -1,41 +1,79 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Support - CatInsight Stock</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--ink:#15161a;--muted:#6c6e77;--line:rgba(0,0,0,.08);--g1:#e6c052;--g2:#b07c25;--gtext:#9a6e22}
+  body{background:radial-gradient(135% 90% at 50% -10%,#fffdf8,#f1eff2 50%,#e4e2e8) fixed;color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.7;min-height:100vh}
+  a{color:inherit;text-decoration:none}
+  .grad{background:linear-gradient(115deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  nav{backdrop-filter:blur(14px);background:rgba(255,255,255,.6);border-bottom:1px solid var(--line)}
+  .nav{max-width:860px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+  .logo img{width:28px;height:28px;border-radius:7px}
+  .back{color:var(--muted);font-size:15px;font-weight:500}.back:hover{color:var(--ink)}
+  .wrap{max-width:760px;margin:48px auto 0;padding:0 24px}
+  .hero{text-align:center;margin-bottom:30px}
+  .hero img{width:84px;height:84px;border-radius:20px;box-shadow:0 14px 36px rgba(140,100,20,.28);margin-bottom:18px}
+  h1{font-size:40px;letter-spacing:-1.2px;font-weight:850}
+  .sub{color:var(--muted);font-size:17px;margin-top:10px}
+  .card{background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:20px;padding:30px 34px;box-shadow:0 20px 50px rgba(40,30,0,.06);margin-bottom:18px}
+  .contact{text-align:center}
+  .contact .mail{display:inline-block;margin-top:8px;background:linear-gradient(115deg,var(--g1),var(--g2));color:#2a1d04;font-weight:700;font-size:16px;padding:13px 26px;border-radius:13px;box-shadow:0 8px 24px rgba(176,124,37,.3)}
+  h2{font-size:20px;font-weight:800;margin-bottom:6px;letter-spacing:-.3px}
+  p{color:#3a3b40;font-size:15.5px;margin-bottom:8px}
+  .q{font-weight:700;color:var(--ink);margin-top:16px}
+  a.link{color:var(--gtext);font-weight:600}
+  footer{max-width:760px;margin:36px auto 60px;padding:0 24px;color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  footer a{color:var(--muted);margin-left:18px}footer a:hover{color:var(--ink)}
+  @media(max-width:600px){.card{padding:24px 22px}h1{font-size:30px}}
+</style>
 </head>
+<body>
+<nav><div class="nav">
+  <a href="index.html" class="logo"><img src="assets/icon-180.png" alt="">CatInsight <span class="grad">Stock</span></a>
+  <a href="index.html" class="back">← Home</a>
+</div></nav>
 
-<body style="max-width:800px;margin:auto;font-family:Arial;padding:40px;line-height:1.6;color:#222">
+<div class="wrap">
+  <div class="hero">
+    <img src="assets/icon-180.png" alt="CatInsight Stock">
+    <h1>How can we <span class="grad">help?</span></h1>
+    <p class="sub">Questions, feedback or bug reports — we're happy to assist.</p>
+  </div>
 
-<h1>CatInsight Stock — Support</h1>
+  <div class="card contact">
+    <h2>Contact</h2>
+    <p>We aim to respond within a few business days.</p>
+    <a class="mail" href="mailto:contact@xarts.games">✉ contact@xarts.games</a>
+  </div>
 
-<p>Need help with CatInsight Stock? We're happy to assist.</p>
+  <div class="card">
+    <h2>About the App</h2>
+    <p>CatInsight Stock is an informational stock research and analytics tool for US and Taiwan markets. It offers a machine-learning stock ranking, technical and fundamental data, charts, news, watchlists, alerts, and an AI research assistant for natural-language questions about stocks.</p>
+  </div>
 
-<h2>Contact</h2>
-<p>For questions, feedback, or bug reports, email us at:</p>
-<p><b>Email: contact@xarts.games</b></p>
-<p>We aim to respond within a few business days.</p>
+  <div class="card">
+    <h2>Frequently Asked Questions</h2>
+    <p class="q">Do I need an account?</p>
+    <p>No. The app works immediately with no sign-up or login.</p>
+    <p class="q">Is this investment advice?</p>
+    <p>No. CatInsight Stock is for informational and educational purposes only. It does not provide personalized investment advice or execute trades. All valuations shown are model reference figures, not recommendations.</p>
+    <p class="q">Where does the data come from?</p>
+    <p>Market data, fundamentals, analyst figures and news are sourced from third-party financial data providers and may be delayed.</p>
+    <p class="q">How is my data handled?</p>
+    <p>Please see our <a class="link" href="privacy.html">Privacy Policy</a>.</p>
+  </div>
+</div>
 
-<h2>About the App</h2>
-<p>CatInsight Stock is an informational stock research and analytics tool for US and Taiwan markets. It offers a machine-learning stock ranking, technical and fundamental data, charts, news, watchlists, alerts, and an AI research assistant for natural-language questions about stocks.</p>
-
-<h2>Frequently Asked Questions</h2>
-
-<p><b>Do I need an account?</b><br>
-No. The app works immediately with no sign-up or login.</p>
-
-<p><b>Is this investment advice?</b><br>
-No. CatInsight Stock is for informational and educational purposes only. It does not provide personalized investment advice or execute trades. All valuations shown are model reference figures, not recommendations.</p>
-
-<p><b>Where does the data come from?</b><br>
-Market data, fundamentals, analyst figures, and news are sourced from third-party financial data providers and may be delayed.</p>
-
-<p><b>How is my data handled?</b><br>
-Please see our <a href="privacy.html">Privacy Policy</a>.</p>
-
-<h2>Privacy</h2>
-<p>Read our <a href="privacy.html">Privacy Policy</a>.</p>
-
+<footer>
+  <div>© 2026 X-Arts Corporation LTD · CatInsight Stock</div>
+  <div><a href="index.html">Home</a><a href="privacy.html">Privacy</a><a href="mailto:contact@xarts.games">Contact</a></div>
+</footer>
 </body>
 </html>
