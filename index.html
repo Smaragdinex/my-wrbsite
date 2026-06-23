@@ -79,9 +79,12 @@
   @media(max-width:860px){.hero-grid{grid-template-columns:1fr;gap:30px}h1{font-size:44px}}
 
   /* cat video showcase */
-  .catshow{padding:80px 0 40px}
+  .catshow{padding:80px 0 50px}
   .catvid{position:relative;width:100%;max-width:840px;margin:38px auto 0;border-radius:28px;overflow:hidden;box-shadow:0 40px 90px rgba(40,30,0,.25);animation:float 8s ease-in-out infinite}
   .catvid video{display:block;width:100%;height:auto}
+  /* 滿版、隨視窗動態縮放 */
+  .catvid.full{max-width:none;width:100vw;margin:40px 0 0;border-radius:0;box-shadow:none;animation:none}
+  .catvid.full video{width:100%;height:clamp(300px,46vw,720px);object-fit:cover}
 
   /* hero orb (icon + rotating rings) */
   .bigorb{position:relative;width:380px;height:380px;display:flex;align-items:center;justify-content:center;animation:float 7s ease-in-out infinite}
@@ -232,16 +235,18 @@
 
 <div class="tape"><div class="tape-track" id="tape"></div></div>
 
-<section class="catshow"><div class="wrap reveal center">
-  <div class="eyebrow" style="justify-content:center">Your AI detective</div>
-  <h2 class="big">On the case, <span class="grad">24/7</span>.</h2>
-  <p class="lead">Our cat detective scans the market with data — so you don't have to squint at charts.</p>
-  <div class="catvid">
+<section class="catshow">
+  <div class="wrap reveal center">
+    <div class="eyebrow" style="justify-content:center">Your AI detective</div>
+    <h2 class="big">On the case, <span style="color:var(--g2)">24&#47;7</span></h2>
+    <p class="lead">Our cat detective scans the market with data — so you don't have to squint at charts.</p>
+  </div>
+  <div class="catvid full reveal">
     <video autoplay muted loop playsinline poster="assets/cat-poster.jpg">
       <source src="assets/cat-hero.mp4" type="video/mp4">
     </video>
   </div>
-</div></section>
+</section>
 
 <!-- scroll-pinned cat + phone storytelling -->
 <section class="scrolly" id="features"><div class="pin"><div class="wrap"><div class="scene">
