@@ -78,6 +78,10 @@
   .note{font-size:13px;color:var(--muted);margin-top:16px}
   @media(max-width:860px){.hero-grid{grid-template-columns:1fr;gap:30px}h1{font-size:44px}}
 
+  /* hero cat video */
+  .catvid{position:relative;width:100%;max-width:480px;border-radius:24px;overflow:hidden;box-shadow:0 30px 70px rgba(40,30,0,.22);animation:float 7s ease-in-out infinite}
+  .catvid video{display:block;width:100%;height:auto}
+
   /* hero orb (icon + rotating rings) */
   .bigorb{position:relative;width:380px;height:380px;display:flex;align-items:center;justify-content:center;animation:float 7s ease-in-out infinite}
   .bigorb .ring{border-width:1.5px}
@@ -213,13 +217,10 @@
       <p class="note">No account needed · For informational purposes only</p>
     </div>
     <div class="stage reveal">
-      <div class="bigorb">
-        <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
-        <div class="core"></div>
-        <img class="catface" src="assets/app-icon.png" alt="CatInsight Stock">
-        <div class="scan"></div>
-        <div class="orbit"><span class="p"></span></div>
-        <div class="orbit o2"><span class="p"></span></div>
+      <div class="catvid">
+        <video autoplay muted loop playsinline poster="assets/cat-poster.jpg">
+          <source src="assets/cat-hero.mp4" type="video/mp4">
+        </video>
       </div>
     </div>
   </div>
