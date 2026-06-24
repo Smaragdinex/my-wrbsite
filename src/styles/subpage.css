@@ -1,0 +1,45 @@
+/* 子頁(support / privacy 等)共用設計系統 — platinum 品牌風 */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ink:#15161a;--muted:#6c6e77;--line:rgba(0,0,0,.08);--g1:#e6c052;--g2:#b07c25;--gtext:#9a6e22}
+body{background:radial-gradient(135% 90% at 50% -10%,#fffdf8,#f1eff2 50%,#e4e2e8) fixed;color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.7;min-height:100vh}
+a{color:inherit;text-decoration:none}
+.grad{background:linear-gradient(115deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* nav (SubpageNav 組件) */
+nav{backdrop-filter:blur(14px);background:rgba(255,255,255,.6);border-bottom:1px solid var(--line)}
+.nav{max-width:860px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+.logo img{width:28px;height:28px;border-radius:7px}
+.back{color:var(--muted);font-size:15px;font-weight:500}.back:hover{color:var(--ink)}
+
+.wrap{max-width:760px;margin:48px auto 0;padding:0 24px}
+.card{background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:20px;box-shadow:0 20px 50px rgba(40,30,0,.06)}
+
+/* footer (SiteFooter 組件) */
+footer{max-width:760px;margin:36px auto 60px;padding:0 24px;color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+footer a{color:var(--muted);margin-left:18px}footer a:hover{color:var(--ink)}
+
+/* support 頁專屬 */
+.support-hero{text-align:center;margin-bottom:30px}
+.support-hero img{width:84px;height:84px;border-radius:20px;box-shadow:0 14px 36px rgba(140,100,20,.28);margin-bottom:18px}
+.support-hero h1{font-size:40px;letter-spacing:-1.2px;font-weight:850}
+.support-hero .sub{color:var(--muted);font-size:17px;margin-top:10px}
+.card{padding:30px 34px;margin-bottom:18px}
+.contact{text-align:center}
+.contact .mail{display:inline-block;margin-top:8px;background:linear-gradient(115deg,var(--g1),var(--g2));color:#2a1d04;font-weight:700;font-size:16px;padding:13px 26px;border-radius:13px;box-shadow:0 8px 24px rgba(176,124,37,.3)}
+.card h2{font-size:20px;font-weight:800;margin-bottom:6px;letter-spacing:-.3px}
+.card p{color:#3a3b40;font-size:15.5px;margin-bottom:8px}
+.q{font-weight:700;color:var(--ink);margin-top:16px}
+a.link{color:var(--gtext);font-weight:600}
+
+/* privacy 頁專屬 */
+.legal.card{padding:44px 40px}
+.legal h1{font-size:40px;letter-spacing:-1.2px;font-weight:850;margin-bottom:8px}
+.legal .upd{color:var(--gtext);font-weight:600;font-size:14px;margin-bottom:24px}
+.legal h2{font-size:20px;font-weight:800;margin:30px 0 8px;letter-spacing:-.3px}
+.legal p{color:#3a3b40;font-size:15.5px;margin-bottom:10px}
+.legal ul{margin:6px 0 10px 22px;color:#3a3b40;font-size:15.5px}.legal li{margin-bottom:6px}
+a.mail{color:var(--gtext);font-weight:600}
+
+@media(max-width:600px){.card{padding:24px 22px}.legal.card{padding:30px 24px}h1,.legal h1{font-size:30px}}

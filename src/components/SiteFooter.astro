@@ -1,0 +1,17 @@
+---
+// 全站共用頁尾。改這一個檔,所有子頁同步生效。
+// current: 目前頁面 slug,會自動略過指向自己的連結。
+const { current } = Astro.props;
+const links = [
+  { href: 'index.html', label: 'Home', key: 'home' },
+  { href: 'privacy.html', label: 'Privacy', key: 'privacy' },
+  { href: 'support.html', label: 'Support', key: 'support' },
+  { href: 'mailto:contact@xarts.games', label: 'Contact', key: 'contact' },
+];
+---
+<footer>
+  <div>© 2026 X-Arts Corporation LTD · CatInsight Stock</div>
+  <div>
+    {links.filter(l => l.key !== current).map(l => <a href={l.href}>{l.label}</a>)}
+  </div>
+</footer>

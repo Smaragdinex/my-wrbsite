@@ -1,0 +1,23 @@
+---
+// 子頁共用版型:統一 head + 導覽列 + 頁尾。
+// 新增子頁時只要 import 這個 layout,nav/footer 自動共用。
+import SubpageNav from '../components/SubpageNav.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import '../styles/subpage.css';
+
+const { title, current } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title}</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+</head>
+<body>
+  <SubpageNav />
+  <slot />
+  <SiteFooter current={current} />
+</body>
+</html>
