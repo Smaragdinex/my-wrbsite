@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CatInsight Stock — 概念頁(貓 × 股市科技)</title>
+<link rel="icon" type="image/png" href="assets/favicon.png" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--g1:#e6c052;--g2:#b07c25;--ink:#f4f1ea;--muted:#9a9ba4;--up:#2fd47a;--down:#ff5a5a;--bg:#0a0b0f}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);overflow-x:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.6}
+a{color:inherit;text-decoration:none}
+.grad{background:linear-gradient(115deg,var(--g1),#f6df8e 45%,var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* 3D 背景 canvas:固定鋪滿,放在所有內容後面 */
+#bg{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
+.veil{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(120% 80% at 50% 0%,rgba(10,11,15,0) 40%,rgba(10,11,15,.85) 100%)}
+.content{position:relative;z-index:2}
+
+/* nav */
+nav{position:fixed;top:0;left:0;right:0;z-index:5;backdrop-filter:blur(10px);background:rgba(10,11,15,.35);border-bottom:1px solid rgba(255,255,255,.06)}
+.nav{max-width:1080px;margin:0 auto;padding:0 24px;height:62px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+.logo img{width:28px;height:28px;border-radius:8px}
+.navlinks a{color:var(--muted);font-size:14.5px;font-weight:500;margin-left:22px}.navlinks a:hover{color:var(--ink)}
+
+/* hero */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:90px 24px 40px;position:relative}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--g1);
+  border:1px solid rgba(230,192,82,.3);background:rgba(230,192,82,.07);padding:7px 16px;border-radius:999px;margin-bottom:26px}
+.eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--up);box-shadow:0 0 10px var(--up)}
+.catwrap{position:relative;margin:0 auto 14px}
+.catwrap img{width:104px;height:104px;border-radius:26px;box-shadow:0 18px 60px rgba(230,192,82,.35);animation:float 5s ease-in-out infinite}
+.catwrap::after{content:"";position:absolute;inset:-30px;border-radius:50%;background:radial-gradient(circle,rgba(230,192,82,.28),transparent 65%);z-index:-1}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.hero h1{font-size:clamp(40px,8vw,82px);line-height:1.02;letter-spacing:-2px;font-weight:850;margin:8px 0 18px}
+.hero .sub{max-width:560px;color:var(--muted);font-size:clamp(16px,2.4vw,19px);margin:0 auto 30px}
+.cta{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.btn{font-weight:700;font-size:15.5px;padding:14px 28px;border-radius:13px;transition:transform .15s ease,box-shadow .2s ease}
+.btn.primary{background:linear-gradient(115deg,var(--g1),var(--g2));color:#221803;box-shadow:0 10px 30px rgba(176,124,37,.4)}
+.btn.ghost{border:1px solid rgba(255,255,255,.18);color:var(--ink)}
+.btn:hover{transform:translateY(-2px)}
+.scrollcue{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:12px;letter-spacing:2px}
+.scrollcue::before{content:"";display:block;width:1px;height:34px;margin:0 auto 8px;background:linear-gradient(var(--g1),transparent);animation:cue 1.8s ease-in-out infinite}
+@keyframes cue{0%,100%{opacity:.3;transform:scaleY(.6)}50%{opacity:1;transform:scaleY(1)}}
+
+/* ticker 跑馬燈 */
+.ticker{border-block:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02);overflow:hidden;white-space:nowrap;padding:12px 0;position:relative}
+.ticker .row{display:inline-block;animation:scrollx 26s linear infinite}
+.ticker span{margin:0 26px;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.ticker .u{color:var(--up)}.ticker .d{color:var(--down)}
+@keyframes scrollx{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* features */
+.sec{max-width:1080px;margin:0 auto;padding:96px 24px}
+.sec h2{font-size:clamp(28px,5vw,46px);letter-spacing:-1px;font-weight:850;text-align:center;margin-bottom:10px}
+.sec .lead{text-align:center;color:var(--muted);max-width:520px;margin:0 auto 50px;font-size:17px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:30px;backdrop-filter:blur(6px);transition:border-color .25s,transform .25s}
+.card:hover{border-color:rgba(230,192,82,.4);transform:translateY(-4px)}
+.card .ic{font-size:30px;margin-bottom:14px}
+.card h3{font-size:19px;font-weight:800;margin-bottom:8px}
+.card p{color:var(--muted);font-size:15px}
+
+footer{border-top:1px solid rgba(255,255,255,.07);padding:30px 24px;text-align:center;color:var(--muted);font-size:13.5px}
+footer a{color:var(--muted);margin:0 10px}footer a:hover{color:var(--ink)}
+.note{max-width:760px;margin:0 auto;padding:0 24px 70px;color:#6e6f78;font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+
+<!-- Three.js WebGL 3D 背景 -->
+<canvas id="bg"></canvas>
+<div class="veil"></div>
+
+<div class="content">
+  <nav><div class="nav">
+    <a href="index.html" class="logo"><img src="assets/icon-180.png" alt="">CatInsight <span class="grad">Stock</span></a>
+    <div class="navlinks">
+      <a href="#features">功能</a>
+      <a href="resume.html">履歷</a>
+      <a href="index.html">← 回首頁</a>
+    </div>
+  </div></nav>
+
+  <header class="hero">
+    <div class="eyebrow"><span class="dot"></span>AI 選股 · 即時訊號 · 貓眼看盤</div>
+    <div class="catwrap"><img src="assets/icon-180.png" alt="CatInsight 貓"></div>
+    <h1>讓貓<span class="grad">帶你看盤</span></h1>
+    <p class="sub">CatInsight Stock 把機器學習選股模型、族群輪動與即時訊號,包進一隻會看盤的貓。資料驅動,科技感滿載。</p>
+    <div class="cta">
+      <a href="#features" class="btn primary">看看牠會什麼</a>
+      <a href="index.html" class="btn ghost">前往官網</a>
+    </div>
+    <div class="scrollcue">SCROLL</div>
+  </header>
+
+  <div class="ticker"><div class="row" id="tickerRow"></div></div>
+
+  <section class="sec" id="features">
+    <h2>貓 × 股市科技</h2>
+    <p class="lead">不是占卜,是模型。每一個訊號背後都是回測過的數據。</p>
+    <div class="grid">
+      <div class="card"><div class="ic">🧠</div><h3>AI 選股引擎</h3><p>LambdaMART 排序模型 + 風險交互特徵,從上千支股票裡挑出主力進場的標的。</p></div>
+      <div class="card"><div class="ic">🔁</div><h3>族群輪動傾斜</h3><p>反應式偵測族群相對大盤強度,動態調整排名 —— 讓模型有「現在什麼類股在動」的意識。</p></div>
+      <div class="card"><div class="ic">⏱️</div><h3>進場時機</h3><p>階段 2 時機模型告訴你 🟢 現在進場 還是 🔴 等回檔,不只選對股,也抓對點。</p></div>
+      <div class="card"><div class="ic">💧</div><h3>流動性護欄</h3><p>用日成交額分辨真主力與假突破,過濾掉沒人玩的薄量股。</p></div>
+      <div class="card"><div class="ic">📊</div><h3>穩健統計</h3><p>報酬看中位數與修尾平均,不被少數能源股美化,還原真實勝率。</p></div>
+      <div class="card"><div class="ic">🐱</div><h3>會講人話的貓</h3><p>AI 聊天即時解讀訊號,中英自動切換 —— 複雜的盤,一隻貓講給你聽。</p></div>
+    </div>
+  </section>
+
+  <p class="note">這是技術概念展示頁(Astro + Three.js + Lenis + GSAP),仿照 everswap.com 的 WebGL 質感,結合 CatInsight Stock 品牌。背景的粒子資料場與跳動 K 線都是即時 WebGL 渲染。</p>
+
+  <footer>
+    © 2026 X-Arts Corporation LTD · CatInsight Stock
+    <div style="margin-top:8px">
+      <a href="index.html">Home</a><a href="resume.html">Resume</a><a href="mailto:contact@xarts.games">Contact</a>
+    </div>
+  </footer>
+</div>
+
+<!-- ====== Three.js WebGL 場景 ====== -->
+<script type="module">
+  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const canvas = document.getElementById('bg');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x0a0b0f, 0.05);
+  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 120);
+  camera.position.set(0, 3, 15);
+
+  // 1) 粒子資料場(金色星塵)
+  const N = 1300;
+  const pg = new THREE.BufferGeometry();
+  const pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    pos[i*3]   = (Math.random() - 0.5) * 46;
+    pos[i*3+1] = (Math.random() - 0.5) * 20;
+    pos[i*3+2] = (Math.random() - 0.5) * 46;
+  }
+  pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const points = new THREE.Points(pg, new THREE.PointsMaterial({
+    color: 0xe6c052, size: 0.07, transparent: true, opacity: 0.7,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  scene.add(points);
+
+  // 2) 網格地板(交易大廳感)
+  const grid = new THREE.GridHelper(80, 48, 0xb07c25, 0x1c1a14);
+  grid.position.y = -4; grid.material.transparent = true; grid.material.opacity = 0.22;
+  scene.add(grid);
+
+  // 3) 即時跳動的 K 線蠟燭
+  const COUNT = 30, bars = [], grp = new THREE.Group();
+  for (let i = 0; i < COUNT; i++) {
+    const up = Math.random() > 0.45;
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(0.34, 1, 0.34),
+      new THREE.MeshBasicMaterial({ color: up ? 0x2fd47a : 0xff5a5a, transparent: true, opacity: 0.85 })
+    );
+    m.position.x = (i - COUNT / 2) * 0.78;
+    grp.add(m);
+    bars.push({ seed: Math.random() * 10 });
+  }
+  grp.position.set(0, 0, -3);
+  scene.add(grp);
+
+  let mx = 0, my = 0, running = true;
+  addEventListener('pointermove', e => { mx = e.clientX / innerWidth - 0.5; my = e.clientY / innerHeight - 0.5; });
+  document.addEventListener('visibilitychange', () => running = !document.hidden);
+  function resize() {
+    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  }
+  addEventListener('resize', resize); resize();
+
+  let t = 0;
+  function tick() {
+    requestAnimationFrame(tick);
+    if (!running) return;
+    t += reduce ? 0 : 0.016;
+    points.rotation.y = t * 0.03;
+    grp.children.forEach((m, i) => {
+      const h = 0.5 + (Math.sin(t * 1.3 + bars[i].seed) * 0.5 + 0.5) * 3.4;
+      m.scale.y = h; m.position.y = -3 + h / 2;
+    });
+    camera.position.x += (mx * 4 - camera.position.x) * 0.04;
+    camera.position.y += (3 - my * 2 - camera.position.y) * 0.04;
+    camera.lookAt(0, -1, -2);
+    renderer.render(scene, camera);
+  }
+  tick();
+</script>
+
+<!-- ====== ticker 內容 + Lenis 平滑滾動 + GSAP 區塊淡入 ====== -->
+<script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+  // 假的跑馬燈報價(示意)
+  const syms = [['NVDA','+3.2'],['CRDO','+5.1'],['UCTT','+2.8'],['ASYS','-1.4'],['NVTS','+4.6'],['ICHR','+1.9'],['CMP','-0.7'],['TSM','+2.1']];
+  const row = document.getElementById('tickerRow');
+  if (row) {
+    const html = syms.map(([s,c]) => `<span>${s} <b class="${c[0]==='+'?'u':'d'}">${c}%</b></span>`).join('');
+    row.innerHTML = html + html; // 重複一份讓跑馬燈無縫
+  }
+
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduce && window.Lenis && window.gsap) {
+    gsap.registerPlugin(ScrollTrigger);
+    const lenis = new Lenis({ duration: 1.1 });
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add(time => lenis.raf(time * 1000));
+    gsap.ticker.lagSmoothing(0);
+    gsap.from('.card', {
+      opacity: 0, y: 40, duration: 0.7, ease: 'power3.out', stagger: 0.08,
+      scrollTrigger: { trigger: '#features', start: 'top 75%' },
+    });
+  }
+</script>
+</body>
+</html>
