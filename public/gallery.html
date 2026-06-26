@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CatInsight 美術館 — 滾動逛 app 功能(3D 概念)</title>
+<link rel="icon" type="image/png" href="assets/favicon.png" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--g1:#e6c052;--g2:#b07c25;--ink:#f4f1ea;--muted:#9a9ba4;--bg:#0a0b0f}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.6}
+a{color:inherit;text-decoration:none}
+.grad{background:linear-gradient(115deg,var(--g1),#f6df8e 45%,var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* 固定鋪滿的 3D 畫布 */
+#bg{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
+
+/* 固定 UI 疊層 */
+.hud{position:fixed;inset:0;z-index:4;pointer-events:none}
+.hud a{pointer-events:auto}
+nav{position:fixed;top:0;left:0;right:0;z-index:5;backdrop-filter:blur(10px);background:rgba(10,11,15,.3);border-bottom:1px solid rgba(255,255,255,.06)}
+.nav{max-width:1080px;margin:0 auto;padding:0 22px;height:58px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;pointer-events:auto}
+.logo img{width:26px;height:26px;border-radius:7px}
+.navlinks a{color:var(--muted);font-size:14px;font-weight:500;margin-left:18px}.navlinks a:hover{color:var(--ink)}
+
+/* 開場字幕 */
+.intro{position:fixed;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px;transition:opacity .3s}
+.intro h1{font-size:clamp(34px,7vw,68px);letter-spacing:-2px;font-weight:850;line-height:1.05}
+.intro p{color:var(--muted);margin-top:16px;font-size:clamp(14px,2.2vw,18px)}
+.intro .down{margin-top:30px;color:var(--g1);font-size:13px;letter-spacing:3px}
+.intro .down::after{content:"";display:block;width:1px;height:30px;margin:10px auto 0;background:linear-gradient(var(--g1),transparent);animation:cue 1.7s ease-in-out infinite}
+@keyframes cue{0%,100%{opacity:.3;transform:scaleY(.6)}50%{opacity:1;transform:scaleY(1)}}
+
+/* 每幅畫的說明 */
+.cap{position:fixed;left:0;right:0;bottom:90px;z-index:4;text-align:center;opacity:0;transition:opacity .12s;padding:0 24px}
+.cap .k{display:inline-block;font-size:12px;letter-spacing:2px;color:var(--g1);border:1px solid rgba(230,192,82,.3);padding:5px 14px;border-radius:999px;margin-bottom:12px}
+.cap h2{font-size:clamp(24px,4.5vw,40px);letter-spacing:-1px;font-weight:850}
+.cap p{color:var(--muted);font-size:clamp(14px,2.2vw,17px);margin-top:6px}
+
+/* 進度點 */
+.dots{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:11px}
+.dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.22);transition:all .25s}
+.dots i.on{background:var(--g1);transform:scale(1.35);box-shadow:0 0 12px var(--g1)}
+
+/* 驅動滾動的高空白區 */
+.scroller{position:relative;z-index:1;height:500vh;pointer-events:none}
+
+/* 結尾段(實底色蓋住 canvas) */
+.end{position:relative;z-index:3;background:var(--bg);border-top:1px solid rgba(255,255,255,.07);text-align:center;padding:90px 24px 40px}
+.end h2{font-size:clamp(28px,5vw,44px);letter-spacing:-1px;font-weight:850;margin-bottom:14px}
+.end p{color:var(--muted);max-width:560px;margin:0 auto 30px;font-size:16px}
+.cta{display:flex;gap:13px;flex-wrap:wrap;justify-content:center}
+.btn{font-weight:700;font-size:15px;padding:13px 26px;border-radius:12px;transition:transform .15s}
+.btn.primary{background:linear-gradient(115deg,var(--g1),var(--g2));color:#221803}
+.btn.ghost{border:1px solid rgba(255,255,255,.18);color:var(--ink)}
+.btn:hover{transform:translateY(-2px)}
+.note{max-width:680px;margin:48px auto 0;color:#6e6f78;font-size:13px;line-height:1.7}
+footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+
+<!-- 固定疊層 UI -->
+<div class="hud">
+  <nav><div class="nav">
+    <a href="index.html" class="logo"><img src="assets/icon-180.png" alt="">CatInsight <span class="grad">Stock</span></a>
+    <div class="navlinks"><a href="concept.html">概念頁</a><a href="index.html">← 回首頁</a></div>
+  </div></nav>
+</div>
+
+<div class="intro" id="intro">
+  <h1>走進 <span class="grad">CatInsight</span> 美術館</h1>
+  <p>每一幅畫,都是一個 app 功能 · 一隻貓陪你逐一看過</p>
+  <div class="down">向下滾動</div>
+</div>
+
+<!-- 四幅畫的說明(由 JS 切換) -->
+<div class="cap" id="cap0"><span class="k">AI CHAT</span><h2>AI 聊天解讀</h2><p>一隻會講人話的貓,即時把盤勢說給你聽</p></div>
+<div class="cap" id="cap1"><span class="k">PICKS</span><h2>選股清單</h2><p>模型從上千支股票挑出的主力進場標的</p></div>
+<div class="cap" id="cap2"><span class="k">RANKING</span><h2>即時排名</h2><p>族群輪動傾斜後的分數排序,什麼在動一眼看出</p></div>
+<div class="cap" id="cap3"><span class="k">ANALYSIS</span><h2>個股分析</h2><p>進場時機 🟢 現在進場 / 🔴 等回檔</p></div>
+
+<div class="dots" id="dots"><i class="on"></i><i></i><i></i><i></i></div>
+
+<!-- 驅動鏡頭的滾動空間 -->
+<div class="scroller"></div>
+
+<!-- 結尾 -->
+<section class="end">
+  <h2>這只是<span class="grad">臨時房間</span></h2>
+  <p>牆、地板、貓現在都是用程式幾何體蓋的。等你從 Unity 匯出 <code>room.glb</code>、從 Meshy 生成 <code>cat.glb</code>,把檔案丟進 <code>assets/</code>,這整套滾動轉鏡頭的邏輯就直接接上真模型。</p>
+  <div class="cta">
+    <a href="concept.html" class="btn primary">看 WebGL 首頁概念</a>
+    <a href="index.html" class="btn ghost">回官網</a>
+  </div>
+  <p class="note">技術:Astro + Three.js(GLTFLoader-ready)+ GSAP ScrollTrigger(滾動驅動鏡頭)+ Lenis(平滑滾動)。畫框內是 CatInsight Stock 的真實 app 截圖,以貼圖方式貼上 —— 換功能只要換圖,不必重匯模型。</p>
+  <footer>© 2026 X-Arts Corporation LTD<a href="index.html">Home</a><a href="resume.html">Resume</a><a href="mailto:contact@xarts.games">Contact</a></footer>
+</section>
+
+<!-- ===== Three.js 場景 ===== -->
+<script type="module">
+  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const canvas = document.getElementById('bg');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0x0a0b0f, 1);
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x0a0b0f, 8, 22);
+  const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 100);
+
+  // 燈光
+  scene.add(new THREE.AmbientLight(0xffffff, 1.25));
+  const warm = new THREE.PointLight(0xffd9a0, 30, 40, 2);
+  warm.position.set(0, 2.5, 0); scene.add(warm);
+  scene.add(new THREE.HemisphereLight(0xffe9c0, 0x0a0b0f, 0.5));
+
+  // 房間(內側)
+  const room = new THREE.Mesh(
+    new THREE.BoxGeometry(12, 7, 12),
+    new THREE.MeshStandardMaterial({ color: 0x16171d, side: THREE.BackSide, roughness: 1, metalness: 0 })
+  );
+  scene.add(room);
+
+  // 地板金色網格(品牌科技感)
+  const grid = new THREE.GridHelper(12, 12, 0xb07c25, 0x2a261c);
+  grid.position.y = -3.48; grid.material.transparent = true; grid.material.opacity = 0.32;
+  scene.add(grid);
+
+  // 畫框 = app 截圖貼圖(unlit,像背光螢幕)
+  const texLoader = new THREE.TextureLoader();
+  function screenMat(path) {
+    const t = texLoader.load(path); t.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.MeshBasicMaterial({ map: t });
+  }
+  function addFrame(path, pos, rotY) {
+    const g = new THREE.Group();
+    const border = new THREE.Mesh(
+      new THREE.BoxGeometry(1.62, 3.24, 0.12),
+      new THREE.MeshStandardMaterial({ color: 0x100e0a, emissive: 0xb07c25, emissiveIntensity: 0.4, metalness: 0.5, roughness: 0.45 })
+    );
+    border.position.z = -0.05;
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.38, 3.0), screenMat(path));
+    g.add(border, scr);
+    g.position.copy(pos); g.rotation.y = rotY; scene.add(g);
+  }
+  // 截圖尺寸 294x640(直式)
+  addFrame('assets/shot-chat.png',   new THREE.Vector3(0, 0, -5.85),  0);            // 前牆
+  addFrame('assets/shot-list.png',   new THREE.Vector3(5.85, 0, 0),  -Math.PI / 2);  // 右牆
+  addFrame('assets/shot-rank.png',   new THREE.Vector3(0, 0, 5.85),   Math.PI);      // 後牆
+  addFrame('assets/shot-detail.png', new THREE.Vector3(-5.85, 0, 0),  Math.PI / 2);  // 左牆
+
+  // ===== 臨時貓(之後用 cat.glb 取代這整段)=====
+  const cat = new THREE.Group();
+  const fur = new THREE.MeshStandardMaterial({ color: 0x111216, roughness: 0.7, emissive: 0x2a1f06, emissiveIntensity: 0.3 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 24), fur); body.scale.set(1, 0.95, 0.8); body.position.y = 0.42;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 24), fur); head.position.set(0, 1.0, 0.06);
+  const ear = new THREE.ConeGeometry(0.12, 0.22, 16);
+  const earL = new THREE.Mesh(ear, fur); earL.position.set(-0.16, 1.26, 0.04);
+  const earR = earL.clone(); earR.position.x = 0.16;
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.75, 12), fur); tail.position.set(0, 0.55, -0.42); tail.rotation.x = Math.PI / 3;
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xe6c052 });
+  const eyeG = new THREE.SphereGeometry(0.05, 12, 12);
+  const eyeL = new THREE.Mesh(eyeG, eyeMat); eyeL.position.set(-0.1, 1.04, 0.33);
+  const eyeR = eyeL.clone(); eyeR.position.x = 0.1;
+  cat.add(body, head, earL, earR, tail, eyeL, eyeR);
+  cat.position.set(0, -3.5, 1.2); cat.scale.setScalar(1.15);
+  scene.add(cat);
+  // 真模型載入(拿到檔案就解除註解、刪掉上面臨時貓):
+  // import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+  // new GLTFLoader().load('assets/cat.glb', g => { g.scene.position.set(0,-3.5,1.2); scene.add(g.scene); });
+  // 同理 room.glb 可整個取代上面的房間幾何。
+
+  // ===== 滾動驅動的鏡頭角度 =====
+  const state = { a: 0 }; // 0 / 90 / 180 / 270 度 → 對準四面牆
+  const camPos = new THREE.Vector3(0, 0, 0);
+  const dirOf = (deg) => { const r = deg * Math.PI / 180; return new THREE.Vector3(Math.sin(r), 0, -Math.cos(r)); };
+
+  let mx = 0, my = 0, running = true;
+  addEventListener('pointermove', e => { mx = e.clientX / innerWidth - 0.5; my = e.clientY / innerHeight - 0.5; });
+  document.addEventListener('visibilitychange', () => running = !document.hidden);
+  function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); }
+  addEventListener('resize', resize); resize();
+
+  // 字幕 / 進度點
+  const caps = [0, 1, 2, 3].map(i => document.getElementById('cap' + i));
+  const dots = [...document.querySelectorAll('#dots i')];
+  function updateHUD() {
+    const a = ((state.a % 360) + 360) % 360;
+    const idx = Math.round(a / 90) % 4;
+    const near = Math.abs(a / 90 - Math.round(a / 90)); // 0=正對牆, .5=轉場中
+    const op = Math.max(0, 1 - near * 3);
+    caps.forEach((c, i) => c.style.opacity = (i === idx ? op : 0));
+    dots.forEach((d, i) => d.classList.toggle('on', i === idx));
+  }
+
+  const target = new THREE.Vector3();
+  function tick() {
+    requestAnimationFrame(tick);
+    if (!running) return;
+    const d = dirOf(state.a);
+    target.copy(camPos).add(d);
+    const perp = new THREE.Vector3(d.z, 0, -d.x);       // 水平垂直方向,做滑鼠視差
+    target.add(perp.multiplyScalar(mx * 0.5));
+    target.y += -my * 0.35;
+    camera.position.copy(camPos);
+    camera.lookAt(target);
+    // 貓轉頭看當前那面牆(只轉水平,不前後傾)
+    const wall = dirOf(state.a).multiplyScalar(6); wall.y = cat.position.y;
+    cat.lookAt(wall);
+    updateHUD();
+    renderer.render(scene, camera);
+  }
+  tick();
+
+  // 把 state 丟到全域給下面的 GSAP 用
+  window.__cam = state;
+</script>
+
+<!-- ===== Lenis 平滑滾動 + GSAP ScrollTrigger(轉鏡頭)===== -->
+<script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const intro = document.getElementById('intro');
+
+  // Lenis 平滑滾動(reduced-motion 則用原生滾動)
+  let lenis = null;
+  if (!reduce && window.Lenis) {
+    lenis = new Lenis({ duration: 1.15 });
+    function raf(t) { lenis.raf(t); requestAnimationFrame(raf); }
+    requestAnimationFrame(raf);
+    lenis.on('scroll', ({ scroll }) => { intro.style.opacity = Math.max(0, 1 - scroll / 320); });
+  } else {
+    addEventListener('scroll', () => { intro.style.opacity = Math.max(0, 1 - scrollY / 320); });
+  }
+
+  // GSAP:把滾動進度對應到鏡頭角度 0→90→180→270(依序對準四面牆)
+  if (window.gsap && window.ScrollTrigger && window.__cam) {
+    gsap.registerPlugin(ScrollTrigger);
+    if (lenis) lenis.on('scroll', ScrollTrigger.update);
+    gsap.timeline({ scrollTrigger: { trigger: '.scroller', start: 'top top', end: 'bottom bottom', scrub: 1 } })
+      .to(window.__cam, { a: 90,  ease: 'power2.inOut', duration: 1 })
+      .to(window.__cam, { a: 180, ease: 'power2.inOut', duration: 1 })
+      .to(window.__cam, { a: 270, ease: 'power2.inOut', duration: 1 });
+  }
+</script>
+</body>
+</html>
