@@ -153,5 +153,42 @@ footer a{color:var(--muted);margin-left:18px}footer a:hover{color:var(--ink)}
     <a href="mailto:contact@xarts.games">Contact</a>
   </div>
 </footer>
+
+<!-- ===== 滾動動畫:Lenis(平滑滾動) + GSAP ScrollTrigger(區塊淡入) ===== -->
+<!-- 全部走 CDN,純 JS。GSAP 用 .from() 設定起始狀態,所以沒載到 JS 時內容照常顯示(漸進增強)。 -->
+<script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+  // 尊重使用者「減少動態效果」的系統設定(無障礙)— 開了就不跑動畫。
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (!reduce && window.Lenis && window.gsap) {
+    gsap.registerPlugin(ScrollTrigger);
+
+    // 1) Lenis:讓滾動帶物理慣性,看起來像電影一樣順。
+    const lenis = new Lenis({ duration: 1.1, smoothWheel: true });
+
+    // 2) 把 Lenis 接到 GSAP 的 ticker,讓滾動進度與動畫引擎同步(關鍵步驟)。
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add((time) => lenis.raf(time * 1000));
+    gsap.ticker.lagSmoothing(0);
+
+    // 3) 每個區塊捲進視窗時,從「下方 + 透明」淡入到定位。
+    gsap.utils.toArray('.hero, .card').forEach((el) => {
+      gsap.from(el, {
+        opacity: 0,
+        y: 40,
+        duration: 0.9,
+        ease: 'power3.out',
+        scrollTrigger: {
+          trigger: el,
+          start: 'top 85%',   // 元素頂端進到視窗 85% 高度時觸發
+          // markers: true,    // ← 開發時打開,可看到觸發線,debug 超好用
+        },
+      });
+    });
+  }
+</script>
 </body>
 </html>
