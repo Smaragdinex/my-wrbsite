@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>賴思翰 · 個人履歷</title>
+<link rel="icon" type="image/png" href="assets/favicon.png" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ink:#15161a;--muted:#6c6e77;--line:rgba(0,0,0,.08);--g1:#e6c052;--g2:#b07c25;--gtext:#9a6e22}
+body{background:radial-gradient(135% 90% at 50% -10%,#fffdf8,#f1eff2 50%,#e4e2e8) fixed;color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.7;min-height:100vh}
+a{color:inherit;text-decoration:none}
+.grad{background:linear-gradient(115deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+nav{backdrop-filter:blur(14px);background:rgba(255,255,255,.6);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+.nav{max-width:860px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+.logo img{width:28px;height:28px;border-radius:7px}
+.back{color:var(--muted);font-size:15px;font-weight:500}.back:hover{color:var(--ink)}
+
+.wrap{max-width:760px;margin:48px auto 0;padding:0 24px}
+.card{background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:20px;box-shadow:0 20px 50px rgba(40,30,0,.06);padding:30px 34px;margin-bottom:18px}
+
+.hero{text-align:center;margin-bottom:30px}
+.hero h1{font-size:44px;letter-spacing:-1.4px;font-weight:850}
+.hero .role{color:var(--gtext);font-weight:700;font-size:17px;margin-top:8px}
+.hero .sub{color:var(--muted);font-size:16px;margin-top:6px}
+
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 28px;margin-top:18px;text-align:left}
+.meta .row{display:flex;gap:8px;font-size:15px;color:#3a3b40;padding:5px 0;border-bottom:1px dashed var(--line)}
+.meta .k{color:var(--muted);min-width:74px;font-weight:600}
+.meta a.link{color:var(--gtext);font-weight:600}
+
+h2.sec{font-size:21px;font-weight:850;margin-bottom:14px;letter-spacing:-.4px;display:flex;align-items:center;gap:10px}
+h2.sec::before{content:"";width:5px;height:20px;border-radius:3px;background:linear-gradient(115deg,var(--g1),var(--g2))}
+
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.tag{font-size:13.5px;font-weight:600;color:#5a4a1d;background:linear-gradient(115deg,rgba(230,192,82,.22),rgba(176,124,37,.16));border:1px solid rgba(176,124,37,.22);padding:5px 12px;border-radius:999px}
+.skillgrp{margin-bottom:14px}
+.skillgrp:last-child{margin-bottom:0}
+.skillgrp .lbl{font-weight:700;color:var(--ink);font-size:15px;margin-bottom:7px}
+
+.job{margin-bottom:24px}.job:last-child{margin-bottom:0}
+.job h3{font-size:17px;font-weight:800;letter-spacing:-.2px}
+.job .org{color:var(--gtext);font-weight:700;font-size:14.5px;margin:2px 0 4px}
+.job .proj{font-weight:700;color:var(--ink);font-size:15px;margin:8px 0 4px}
+.job p{color:#3a3b40;font-size:15px;margin-bottom:6px}
+.job ul{margin:6px 0 0 20px;color:#3a3b40;font-size:15px}.job li{margin-bottom:6px}
+
+.edu .name{font-size:17px;font-weight:800}
+.edu .deg{color:var(--gtext);font-weight:700;font-size:14.5px;margin:3px 0 8px}
+.edu p{color:#3a3b40;font-size:15px}
+
+footer{max-width:760px;margin:36px auto 60px;padding:0 24px;color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+footer a{color:var(--muted);margin-left:18px}footer a:hover{color:var(--ink)}
+
+@media(max-width:600px){.card{padding:24px 22px}.hero h1{font-size:34px}}
+@media print{nav,footer{display:none}body{background:#fff}.card{box-shadow:none;border-color:#ddd}}
+</style>
+</head>
+<body>
+<nav><div class="nav">
+  <a href="index.html" class="logo"><img src="assets/icon-180.png" alt="">CatInsight <span class="grad">Stock</span></a>
+  <a href="index.html" class="back">← Home</a>
+</div></nav>
+
+<main class="wrap">
+
+  <header class="hero">
+    <h1>賴思翰</h1>
+    <div class="role">創辦人 · 全端 / 遊戲與 3D 開發者</div>
+    <div class="sub">獨立軟體開發 · AI 整合 · 跨領域技術溝通</div>
+    <div class="meta">
+      <div class="row"><span class="k">電子郵件</span><span>請自行補上(xxx@gmail.com)</span></div>
+      <div class="row"><span class="k">聯絡電話</span><span>請自行補上(09XX-XXX-XXX)</span></div>
+      <div class="row"><span class="k">作品集</span><span>GitHub / Demo 影片 / 3D 專案(待補)</span></div>
+      <div class="row"><span class="k">官方網站</span><a class="link" href="index.html">xarts.games</a></div>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2 class="sec">專業核心技能</h2>
+    <div class="skillgrp">
+      <div class="lbl">程式語言</div>
+      <div class="tags"><span class="tag">Java</span><span class="tag">JavaScript</span><span class="tag">C / C++</span><span class="tag">Python</span><span class="tag">Swift</span><span class="tag">Kotlin</span><span class="tag">C#</span></div>
+    </div>
+    <div class="skillgrp">
+      <div class="lbl">遊戲與 3D 開發</div>
+      <div class="tags"><span class="tag">Unity 引擎</span><span class="tag">Blender 3D 建模</span><span class="tag">動態基礎</span></div>
+    </div>
+    <div class="skillgrp">
+      <div class="lbl">雲端與自動化</div>
+      <div class="tags"><span class="tag">Cloudflare</span><span class="tag">Railway</span><span class="tag">GitHub</span><span class="tag">OpenAI API</span><span class="tag">Claude API</span><span class="tag">Dify 工作流</span></div>
+    </div>
+    <div class="skillgrp">
+      <div class="lbl">資料庫與系統環境</div>
+      <div class="tags"><span class="tag">資料庫管理</span><span class="tag">作業系統概念</span><span class="tag">Mac / Linux</span><span class="tag">Ollama</span><span class="tag">LM Studio</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="sec">工作與專案經歷</h2>
+
+    <div class="job">
+      <h3>獨立遊戲與軟體公司 — 創辦人 / 核心開發者</h3>
+      <div class="proj">手遊《Kitty Chasing》開發與上架</div>
+      <p>獨立主導行動端遊戲開發,使用 C# 與 Unity 引擎進行 3D 貓咪模型的渲染、物理碰撞與動態邏輯設計;負責 Xcode 環境配置,優化 iOS 平台效能表現並成功提交 App Store 審查。</p>
+      <p><b>技術應用:</b> Unity、Blender、Swift、Xcode、C#。</p>
+      <div class="proj">商業專案架構</div>
+      <p>利用 Cloudflare 與 Railway 部署後端服務,整合 OpenAI / Claude 等大型語言模型 API 與 Dify 自動化工作流,提升軟體服務的智能化互動表現。</p>
+    </div>
+
+    <div class="job">
+      <h3>跨領域合作專案 — 軟體與遊戲開發主導</h3>
+      <div class="org">跨學群合作專案(與廣告行銷團隊協作)</div>
+      <p>擔任技術核心,負責將廣告團隊的創意視覺與敘事腳本,轉化為具體的互動軟體或遊戲 Demo。在團隊中扮演技術溝通橋樑,確保美術資產、行銷痛點與程式邏輯完美對接。</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="sec">學歷背景</h2>
+    <div class="edu">
+      <div class="name">輔仁大學 (Fu Jen Catholic University)</div>
+      <div class="deg">軟體工程與數位創意學士學位學程 (Software Engineering and Digital Creative)</div>
+      <p><b>核心修習課程:</b> 作業系統 (Operating Systems)、離散數學 (Discrete Mathematics)、資料庫管理、軟體工程學。</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="sec">語文與專業軟實力</h2>
+    <div class="skillgrp">
+      <div class="lbl">語文能力</div>
+      <p style="color:#3a3b40;font-size:15px">英文 — 具備 IELTS Academic 檢定實力,能流暢閱讀原文技術文件與撰寫 API 規格書。</p>
+    </div>
+    <div class="skillgrp">
+      <div class="lbl">軟實力</div>
+      <ul style="margin:4px 0 0 20px;color:#3a3b40;font-size:15px">
+        <li><b>跨領域溝通:</b> 具備與非技術背景(如廣告、行銷人員)高效溝通與協作的經驗。</li>
+        <li><b>獨立解決問題:</b> 擁有全端配置(從前端互動、3D 資產到雲端部署)與獨立營運專案的思維。</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div>© 2026 X-Arts Corporation LTD · CatInsight Stock</div>
+  <div>
+    <a href="index.html">Home</a>
+    <a href="privacy.html">Privacy</a>
+    <a href="support.html">Support</a>
+    <a href="mailto:contact@xarts.games">Contact</a>
+  </div>
+</footer>
+</body>
+</html>
