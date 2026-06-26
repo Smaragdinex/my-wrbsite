@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: Arial, sans-serif; line-height: 1.25; color: #333333; }
+  h1 { color: #1a365d; border-bottom: 2px solid #2b6cb0; padding-bottom: 5px; margin-top: 20px; margin-bottom: 15px; font-size: 24px; }
+  h2 { color: #2b6cb0; margin-top: 15px; margin-bottom: 10px; font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; }
+  h3 { color: #2d3748; margin-top: 10px; margin-bottom: 5px; font-size: 15px; }
+  p { margin: 0 0 8px 0; }
+  ul, ol { margin: 0 0 10px 0; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 15px; margin-top: 10px; }
+  th, td { border: 1px solid #cbd5e0; padding: 10px; text-align: left; }
+  th { background-color: #f7fafc; color: #2d3748; font-weight: bold; }
+  .contact-info { margin-bottom: 20px; font-size: 14px; }
+  .highlight { font-weight: bold; color: #2b6cb0; }
+</style>
+</head>
+<body>
+
+<div style="text-align: center; margin-bottom: 25px;">
+  <span style="font-size: 32px; font-weight: bold; color: #1a365d; letter-spacing: 2px;">賴思翰 (Scott Lai)</span>
+  <div class="contact-info" style="margin-top: 8px;">
+    手機：09XX-XXX-XXX &nbsp;|&nbsp; 電子郵件：xxx@gmail.com &nbsp;|&nbsp; GitHub: github.com/yourprofile<br>
+    應徵職缺：<span class="highlight">iOS 軟體開發工程師</span>
+  </div>
+</div>
+
+<h1>【個人簡介與求職動機】</h1>
+<p>
+  我是賴思翰。我熱愛將創新的點子轉化為流暢、美觀且具備高度互動性的行動應用程式。過去除了專注於資訊工程領域的核心知識，更擁有<b>獨立主導 3D 行動專案開發、iOS App Store 完整上架與審查流程</b>的實戰經驗。得知暢騰科技致力於打造全球千萬級下載量、兼具創意與高評價的 App 體驗，這份對產品極致體驗的追求深切吸引著我。我渴望加入團隊，發揮我在 Swift 開發、圖形概念與跨領域協作上的優勢，與團隊攜手打造數百萬人喜愛的原生 App 體驗。
+</p>
+
+<br>
+
+<h1>【專業核心技能】</h1>
+<table>
+  <tr>
+    <th style="width: 25%;">技能類別</th>
+    <th style="width: 75%;">熟練工具與技術應用</th>
+  </tr>
+  <tr>
+    <td><b>iOS 開發技術</b></td>
+    <td>精通 <span class="highlight">Swift</span> 語言核心語法與 iOS SDK、物件導向程式設計 (OOP) 實踐、Xcode 開發環境。</td>
+  </tr>
+  <tr>
+    <td><b>網路與 API 串接</b></td>
+    <td>熟練掌握 <b>RESTful API 串接</b>，精準處理 JSON 資料解析、異步請求與端對端資料傳輸。</td>
+  </tr>
+  <tr>
+    <td><b>圖形渲染與 3D 概念</b></td>
+    <td>具備 <b>Blender 3D 建模與視覺動態基礎</b>，熟悉圖形渲染基本概念，有助於與設計師高效對接互動特效。</td>
+  </tr>
+  <tr>
+    <td><b>版本控制與雲端</b></td>
+    <td>熟練使用 <span class="highlight">Git / GitHub</span> 進行團隊版本管理。具備 Cloudflare、Railway、API 自動化工作流部署經驗。</td>
+  </tr>
+  <tr>
+    <td><b>其他程式語言</b></td>
+    <td>Java, JavaScript, C/C++, Python, Kotlin, C#。</td>
+  </tr>
+</table>
+
+<br>
+
+<h1>【專案與工作經歷】</h1>
+
+<h2>1. 獨立遊戲與軟體專案 | 創辦人與核心開發者</h2>
+<p><b>核心成果：獨立主導並成功上架行動端 App</b></p>
+<ul>
+  <li><b>《Kitty Chasing》行動遊戲開發與上架：</b>
+    <ul>
+      <li>使用 C# 與 Unity 引擎主導 3D 貓咪模型互動、物理碰撞與動態邏輯設計，並深度優化圖形渲染表現。</li>
+      <li>負責 <b>Xcode 環境配置、憑證管理、TestFlight 測試部署</b>，成功克服 App Store 審查指南規範，順利上架。</li>
+    </ul>
+  </li>
+  <li><b>後端與 API 智能化整合專案：</b>
+    <ul>
+      <li>利用 Cloudflare 與 Railway 部署雲端輕量化服務，並結合 RESTful API 串接大型語言模型（OpenAI/Claude API），設計自動化互動工作流。</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>2. 跨領域合作專案 | 技術負責人</h2>
+<p><b>核心成果：與非技術背景（廣告行銷團隊）跨界協作，成功落地產品原型</b></p>
+<ul>
+  <li>在多人群組中擔任唯一的技術開發核心，與廣告學群團隊緊密配合。</li>
+  <li>負責將設計師的視覺靈感、行銷敘事腳本，轉化為流暢、具備互動特效的產品 Demo。</li>
+  <li>展現極佳的團隊溝通能力，將複雜的程式技術邏輯以通俗語言向非技術成員說明，確保專案時程與核心功能完美交集。</li>
+</ul>
+
+<br>
+
+<h1>【學歷背景】</h1>
+<p><b>輔仁大學 (Fu Jen Catholic University)</b> —— 軟體工程與數位創意學士學位學程</p>
+<ul>
+  <li><b>核心學群與能力養成：</b>
+    <ul>
+      <li><span class="highlight">作業系統 (Operating Systems)</span>：深刻理解記憶體管理、執行緒 (Threads) 與效能優化概念，有助於優化 App 記憶體佔用與解決 Crash 問題。</li>
+      <li><span class="highlight">離散數學 (Discrete Mathematics)</span> 與 資料庫管理：鍛鍊嚴謹的邏輯思維與高效的資料結構設計能力。</li>
+    </ul>
+  </li>
+</ul>
+
+<br>
+
+<h1>【自傳 (Autobiography)】</h1>
+
+<h3>一、 關於我：兼具技術深度與產品思維的開發者</h3>
+<p>
+  我是賴思翰，目前就讀於輔仁大學軟體工程與數位創意學程。資訊工程的背景培養了我扎實的邏輯推演與底層程式結構能力（如作業系統、資料結構）；而「數位創意」的訓練則驅使我不斷思考如何透過程式碼，為使用者創造驚豔的互動體驗。我擁有獨立營運軟體專案與開公司的經驗，這讓我跳脫單純的工程師視角，更懂得從產品生命週期、用戶評價與市場反饋出發來審視程式碼的品質。
+</p>
+
+<h3>二、 Side Project 實戰：從 0 到 1 成功上架 App Store</h3>
+<p>
+  在獨立主導的手遊《Kitty Chasing》專案中，我親自完成了從 3D Asset 調校、核心邏輯撰寫到上架的完整流程。在此期間，我深入研究了圖形渲染與動態特效的呈現，並透過 <b>Xcode 與 Swift / C#</b> 進行行動端的效能調優。面對 App Store 嚴格的審核機制，我展現了強大的問題解決毅力，積極追蹤並排除審查錯誤，最終讓產品穩定上架。這段經歷不僅印證了我具備獨立思考與高執行力的 Side Project 實踐能力，更讓我對 iOS 生態圈的上架與版本維護流程瞭若指掌。
+</p>
+
+<h3>三、 團隊協作與跨界溝通：將設計師的靈感精準轉化</h3>
+<p>
+  我非常認同暢騰科技所強調的「與團隊緊密合作，將設計師的靈感轉化為流暢又美觀的應用程式」。在過去與廣告行銷學群跨領域合作的專案中，我是唯一的技術輸出者。我深知優秀的 App 體驗來自於「技術與設計的完美妥協」。我熱愛並擅長與設計師、行銷人員溝通，能精準理解設計稿中的視覺細節與流暢度要求，並用<b>清晰、高效且易於維護的物件導向程式碼</b>將其落地。同時，我們使用 <b>Git 進行嚴格的版本控制</b>，確保多人協作的穩定度。
+</p>
+
+<h3>四、 未來展望：與暢騰科技共同創造下一個千萬下載 App</h3>
+<p>
+  在技術日新月異的今天，我始終保持高度的學習熱情，近期也熱衷於在地化 AI 模型（Ollama / LM Studio）等前沿技術的實踐。加入暢騰科技後，我將以 100% 的專注度投入原生 iOS 應用程式的設計與維護。我相信，我兼具的 <b>Swift 開發能力、RESTful API 串接熟練度、Git 協作默契、以及對圖形渲染的基本認識</b>，能讓我迅速融入團隊。我期待與各位優秀的夥伴共同成長，親手寫出讓數百萬用戶愛不釋手的卓越體驗！
+</p>
+
+</body>
+</html>
