@@ -105,6 +105,7 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
 <script type="module">
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
   const canvas = document.getElementById('bg');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -200,7 +201,9 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
   const RATIO = 294 / 640;        // 直式手機比例
   const SHOTS = ['assets/shot-chat.png', 'assets/shot-list.png', 'assets/shot-rank.png', 'assets/shot-detail.png'];
 
-  new GLTFLoader().load('assets/museum.glb', (gltf) => {
+  const _draco = new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
+  const _loader = new GLTFLoader(); _loader.setDRACOLoader(_draco);
+  _loader.load('assets/museum.glb', (gltf) => {
     proc.visible = false;          // 收起臨時走廊與臨時貓
     scene.fog = null;
     scene.add(gltf.scene);
