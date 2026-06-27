@@ -38,7 +38,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:5;backdrop-filter:blur(10px);bac
 .dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.22);transition:all .25s}
 .dots i.on{background:var(--g1);transform:scale(1.35);box-shadow:0 0 12px var(--g1)}
 
-.scroller{position:relative;z-index:1;height:620vh;pointer-events:none}
+.scroller{position:relative;z-index:1;height:780vh;pointer-events:none}
 
 .end{position:relative;z-index:3;background:var(--bg);border-top:1px solid rgba(255,255,255,.07);text-align:center;padding:90px 24px 40px}
 .end h2{font-size:clamp(28px,5vw,44px);letter-spacing:-1px;font-weight:850;margin-bottom:14px}
@@ -188,6 +188,14 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
   ];
   const state = { t: 0 };  // 0 → stops.length-1
 
+  // 把所有 stop 串成 Catmull-Rom 曲線 → 連續絲滑移動(取代逐段直線)
+  let posCurve, lookCurve;
+  function rebuildCurves() {
+    posCurve = new THREE.CatmullRomCurve3(stops.map(s => s.pos.clone()));
+    lookCurve = new THREE.CatmullRomCurve3(stops.map(s => s.look.clone()));
+  }
+  rebuildCurves();
+
   // ===== 載入 Unity 匯出的 museum.glb(已壓縮 75MB→5.9MB)→ 自動接管 =====
   // 下列座標擷取自你這次的 Unity 匯出:每站 = { cam: Waypoint 位置, art: 最近畫框位置 }
   // (Waypoint 是空物件,壓縮時會被移除,所以直接寫死座標;你之後移動 Waypoint 重匯,我再更新這組數字)
@@ -225,6 +233,7 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
     stops[0].look.copy(arts[0].art);
     stops[5].pos.copy(arts[3].cam).add(arts[3].cam.clone().sub(arts[2].cam).multiplyScalar(0.4));
     stops[5].look.copy(arts[3].art);
+    rebuildCurves();               // 用真模型座標重建鏡頭曲線
     console.log('museum.glb loaded ✓');
   }, undefined, (e) => { console.warn('museum.glb 載入失敗,沿用臨時走廊', e); });
 
@@ -249,10 +258,9 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
   function tick() {
     requestAnimationFrame(tick);
     if (!running) return;
-    const T = Math.max(0, Math.min(stops.length - 1.001, state.t));
-    const i = Math.floor(T), f = T - i;
-    camP.lerpVectors(stops[i].pos, stops[i + 1].pos, f);
-    lookP.lerpVectors(stops[i].look, stops[i + 1].look, f);
+    const u = Math.max(0, Math.min(1, state.t / (stops.length - 1)));
+    posCurve.getPointAt(u, camP);   // 弧長等速 + 曲線平滑(遠近段速度一致)
+    lookCurve.getPointAt(u, lookP);
     camera.position.copy(camP);
     camera.position.x += mx * 0.35; camera.position.y += -my * 0.2;  // 滑鼠視差
     camera.lookAt(lookP);
