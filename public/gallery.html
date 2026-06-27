@@ -187,52 +187,43 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
   ];
   const state = { t: 0 };  // 0 → stops.length-1
 
-  // ===== 有 Unity 的 museum.glb 就自動接管(否則沿用上面的臨時走廊)=====
-  // 你在 Unity 只要放 Screen_01~04(畫面位置,Z 軸朝走道)與 Waypoint_01~04(鏡頭停點),其餘我全包。
-  const VIEW_DIST = 3.0;      // 沒放 Waypoint 時,自動站在畫前多遠(公尺)
-  const SCREEN_H = 1.6;       // app 畫面高度(公尺),寬度依直式比例自動算
-  const RATIO = 294 / 640;    // 你的截圖長寬比(直式手機)
+  // ===== 載入 Unity 匯出的 museum.glb(已壓縮 75MB→5.9MB)→ 自動接管 =====
+  // 下列座標擷取自你這次的 Unity 匯出:每站 = { cam: Waypoint 位置, art: 最近畫框位置 }
+  // (Waypoint 是空物件,壓縮時會被移除,所以直接寫死座標;你之後移動 Waypoint 重匯,我再更新這組數字)
+  const TOUR = [
+    { cam: [-8.10, 3.89, 17.97], art: [-5.70, 3.30, 18.00] },  // WP1 → Advertising poster 4
+    { cam: [-10.74, 3.99, 23.36], art: [-10.90, 3.50, 21.00] }, // WP2 → Picture 20
+    { cam: [-11.15, 3.93, 27.56], art: [-11.20, 3.50, 30.20] }, // WP3 → Picture 15
+    { cam: [0.03, 3.90, 27.64], art: [0.10, 3.50, 30.20] },     // WP4 → Picture 14
+  ];
+  const SCREEN_H = 1.3;            // app 畫面高度(公尺)— 可調
+  const RATIO = 294 / 640;        // 直式手機比例
   const SHOTS = ['assets/shot-chat.png', 'assets/shot-list.png', 'assets/shot-rank.png', 'assets/shot-detail.png'];
-  function makeScreen(path) {
-    return new THREE.Mesh(new THREE.PlaneGeometry(SCREEN_H * RATIO, SCREEN_H), screenMat(path));
-  }
+
   new GLTFLoader().load('assets/museum.glb', (gltf) => {
     proc.visible = false;          // 收起臨時走廊與臨時貓
-    scene.fog = null;              // 真模型先關霧
+    scene.fog = null;
     scene.add(gltf.scene);
 
-    const grab = (re) => { const a = []; gltf.scene.traverse(o => { if (re.test(o.name)) a.push(o); }); return a.sort((x, y) => x.name.localeCompare(y.name)); };
-    const screens = grab(/^screen_\d+/i);
-    const wps = grab(/^waypoint_\d+/i);
-
-    const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), fwd = new THREE.Vector3();
-    const arts = [];
-    screens.slice(0, 4).forEach((mk, i) => {
-      mk.getWorldPosition(pos); mk.getWorldQuaternion(quat);
-      fwd.set(0, 0, 1).applyQuaternion(quat).normalize();      // 標記朝外方向
-      const scr = makeScreen(SHOTS[i % SHOTS.length]);
-      scr.position.copy(pos).addScaledVector(fwd, 0.02);       // 稍微離牆避免閃爍
-      scr.quaternion.copy(quat);
+    const arts = TOUR.map(t => ({ cam: new THREE.Vector3(...t.cam), art: new THREE.Vector3(...t.art) }));
+    arts.forEach((a, i) => {
+      // 在畫框前方(朝鏡頭那側)貼上比例正確的 app 畫面,並面向鏡頭
+      const out = a.cam.clone().sub(a.art).normalize();
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN_H * RATIO, SCREEN_H), screenMat(SHOTS[i % SHOTS.length]));
+      scr.position.copy(a.art).addScaledVector(out, 0.12);
+      scr.lookAt(a.cam);
       scene.add(scr);
-      arts.push({ p: pos.clone(), f: fwd.clone() });
+      // 覆寫鏡頭停點 stops[1..4](維持 6 個 stop,GSAP 時間軸不變)
+      stops[i + 1].pos.copy(a.cam);
+      stops[i + 1].look.copy(a.art);
     });
-
-    // 覆寫 stops[1..4] 的鏡頭位置與看向(維持 6 個 stop,GSAP 時間軸不變)
-    for (let i = 0; i < 4 && i < arts.length; i++) {
-      const a = arts[i];
-      let cam;
-      if (wps[i]) { cam = wps[i].getWorldPosition(new THREE.Vector3()); }       // 用你擺的 Waypoint
-      else { cam = a.p.clone().addScaledVector(a.f, VIEW_DIST); cam.y = a.p.y; } // 否則自動站畫前、平視
-      stops[i + 1].pos.copy(cam);
-      stops[i + 1].look.copy(a.p);
-    }
-    if (arts.length) {
-      const first = arts[0], last = arts[Math.min(3, arts.length - 1)];
-      stops[0].pos.copy(first.p).addScaledVector(first.f, VIEW_DIST * 2.4); stops[0].look.copy(first.p);
-      stops[5].pos.copy(last.p).addScaledVector(last.f, VIEW_DIST * 1.3);   stops[5].look.copy(last.p);
-    }
-    console.log(`museum.glb OK — screens:${screens.length} waypoints:${wps.length}`);
-  }, undefined, () => { /* 沒有 museum.glb → 靜默沿用臨時走廊 */ });
+    // 入口/出口:沿路徑兩端外推,做出走進/走出的感覺
+    stops[0].pos.copy(arts[0].cam).add(arts[0].cam.clone().sub(arts[1].cam).multiplyScalar(0.6));
+    stops[0].look.copy(arts[0].art);
+    stops[5].pos.copy(arts[3].cam).add(arts[3].cam.clone().sub(arts[2].cam).multiplyScalar(0.4));
+    stops[5].look.copy(arts[3].art);
+    console.log('museum.glb loaded ✓');
+  }, undefined, (e) => { console.warn('museum.glb 載入失敗,沿用臨時走廊', e); });
 
   let mx = 0, my = 0, running = true;
   addEventListener('pointermove', e => { mx = e.clientX / innerWidth - 0.5; my = e.clientY / innerHeight - 0.5; });
