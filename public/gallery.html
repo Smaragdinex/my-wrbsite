@@ -88,7 +88,12 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
   <footer>© 2026 X-Arts Corporation LTD<a href="index.html">Home</a><a href="resume.html">Resume</a><a href="mailto:contact@xarts.games">Contact</a></footer>
 </section>
 
-<!-- ===== Three.js 場景 ===== -->
+<!-- 先載入函式庫(classic,會在 module 之前執行,確保 module 內可用 window.Lenis/gsap)-->
+<script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+<!-- ===== Three.js 場景 + 滾動互動(都在同一個 module)===== -->
 <script type="module">
   import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
@@ -205,14 +210,8 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
     renderer.render(scene, camera);
   }
   tick();
-  window.__cam = state; window.__stops = stops.length - 1;
-</script>
 
-<!-- ===== Lenis + GSAP(滾動 = 前進距離)===== -->
-<script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-<script>
+  // ===== Lenis 平滑滾動 + GSAP 滾動驅動鏡頭(同一 module,此時 state/stops 已存在)=====
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const intro = document.getElementById('intro');
   let lenis = null;
@@ -223,11 +222,11 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
   } else {
     addEventListener('scroll', () => intro.style.opacity = Math.max(0, 1 - scrollY / 340));
   }
-  if (window.gsap && window.ScrollTrigger && window.__cam) {
+  if (window.gsap && window.ScrollTrigger) {
     gsap.registerPlugin(ScrollTrigger);
     if (lenis) lenis.on('scroll', ScrollTrigger.update);
     const tl = gsap.timeline({ scrollTrigger: { trigger: '.scroller', start: 'top top', end: 'bottom bottom', scrub: 1 } });
-    for (let k = 1; k <= window.__stops; k++) tl.to(window.__cam, { t: k, ease: 'power1.inOut', duration: 1 });
+    for (let k = 1; k <= stops.length - 1; k++) tl.to(state, { t: k, ease: 'power1.inOut', duration: 1 });
   }
 </script>
 </body>
