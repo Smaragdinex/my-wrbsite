@@ -88,6 +88,14 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
   <footer>© 2026 X-Arts Corporation LTD<a href="index.html">Home</a><a href="resume.html">Resume</a><a href="mailto:contact@xarts.games">Contact</a></footer>
 </section>
 
+<!-- import map:讓 module 內可用 'three' 與 'three/addons/'(GLTFLoader 需要)-->
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+
 <!-- 先載入函式庫(classic,會在 module 之前執行,確保 module 內可用 window.Lenis/gsap)-->
 <script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
@@ -95,7 +103,8 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
 
 <!-- ===== Three.js 場景 + 滾動互動(都在同一個 module)===== -->
 <script type="module">
-  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
   const canvas = document.getElementById('bg');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -104,10 +113,13 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x0a0b0f, 7, 34);   // 遠處畫作隨接近而浮現(美術館縱深感)
-  const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.1, 1000);
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.15));
   scene.add(new THREE.HemisphereLight(0xffe9c0, 0x0a0b0f, 0.5));
+
+  // proc = 臨時走廊群組(拿到 museum.glb 後整組隱藏)
+  const proc = new THREE.Group(); scene.add(proc);
 
   // 長走廊(內側):寬 8、高 7、長 50,中心在 z=-18
   const HALL_LEN = 50;
@@ -116,13 +128,13 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
     new THREE.MeshStandardMaterial({ color: 0x17181e, side: THREE.BackSide, roughness: 1 })
   );
   hall.position.set(0, 0, -18);
-  scene.add(hall);
+  proc.add(hall);
 
   // 地板金色長地毯網格
   const grid = new THREE.GridHelper(8, 8, 0xb07c25, 0x2a261c);
   grid.scale.z = HALL_LEN / 8; grid.position.set(0, -3.48, -18);
   grid.material.transparent = true; grid.material.opacity = 0.3;
-  scene.add(grid);
+  proc.add(grid);
 
   // 畫框貼圖(app 截圖,unlit 像背光螢幕)
   const texLoader = new THREE.TextureLoader();
@@ -133,11 +145,11 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
       new THREE.MeshStandardMaterial({ color: 0x100e0a, emissive: 0xb07c25, emissiveIntensity: 0.45, metalness: 0.5, roughness: 0.45 }));
     border.position.z = -0.05;
     g.add(border, new THREE.Mesh(new THREE.PlaneGeometry(1.38, 3.0), screenMat(path)));
-    g.position.copy(pos); g.rotation.y = rotY; scene.add(g);
+    g.position.copy(pos); g.rotation.y = rotY; proc.add(g);
     // 打在畫上的暖光
     const spot = new THREE.PointLight(0xffd9a0, 8, 9, 2);
     spot.position.set(pos.x + Math.sin(rotY) * 1.6, 1.6, pos.z + Math.cos(rotY) * 1.6);
-    scene.add(spot);
+    proc.add(spot);
   }
   // 四幅畫沿走廊左右交錯(左牆 x=-3.9 朝右;右牆 x=3.9 朝左)
   const L = Math.PI / 2, R = -Math.PI / 2;
@@ -159,7 +171,7 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
   const eyeL = new THREE.Mesh(eyeG, eyeMat); eyeL.position.set(-0.1, 1.04, 0.33);
   const eyeR = eyeL.clone(); eyeR.position.x = 0.1;
   cat.add(body, head, earL, earR, tail, eyeL, eyeR);
-  cat.scale.setScalar(1.1); scene.add(cat);
+  cat.scale.setScalar(1.1); proc.add(cat);
   // 真模型:new GLTFLoader().load('assets/cat.glb', g => { scene.add(g.scene); /* 取代上面 */ });
 
   // ===== 鏡頭沿路徑「移動」(waypoint = 之後可從 Unity GLB 讀)=====
@@ -174,6 +186,53 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
     { pos: V(0, 0, -40),  look: V(0, 0, -50)  },  // 走到底
   ];
   const state = { t: 0 };  // 0 → stops.length-1
+
+  // ===== 有 Unity 的 museum.glb 就自動接管(否則沿用上面的臨時走廊)=====
+  // 你在 Unity 只要放 Screen_01~04(畫面位置,Z 軸朝走道)與 Waypoint_01~04(鏡頭停點),其餘我全包。
+  const VIEW_DIST = 3.0;      // 沒放 Waypoint 時,自動站在畫前多遠(公尺)
+  const SCREEN_H = 1.6;       // app 畫面高度(公尺),寬度依直式比例自動算
+  const RATIO = 294 / 640;    // 你的截圖長寬比(直式手機)
+  const SHOTS = ['assets/shot-chat.png', 'assets/shot-list.png', 'assets/shot-rank.png', 'assets/shot-detail.png'];
+  function makeScreen(path) {
+    return new THREE.Mesh(new THREE.PlaneGeometry(SCREEN_H * RATIO, SCREEN_H), screenMat(path));
+  }
+  new GLTFLoader().load('assets/museum.glb', (gltf) => {
+    proc.visible = false;          // 收起臨時走廊與臨時貓
+    scene.fog = null;              // 真模型先關霧
+    scene.add(gltf.scene);
+
+    const grab = (re) => { const a = []; gltf.scene.traverse(o => { if (re.test(o.name)) a.push(o); }); return a.sort((x, y) => x.name.localeCompare(y.name)); };
+    const screens = grab(/^screen_\d+/i);
+    const wps = grab(/^waypoint_\d+/i);
+
+    const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), fwd = new THREE.Vector3();
+    const arts = [];
+    screens.slice(0, 4).forEach((mk, i) => {
+      mk.getWorldPosition(pos); mk.getWorldQuaternion(quat);
+      fwd.set(0, 0, 1).applyQuaternion(quat).normalize();      // 標記朝外方向
+      const scr = makeScreen(SHOTS[i % SHOTS.length]);
+      scr.position.copy(pos).addScaledVector(fwd, 0.02);       // 稍微離牆避免閃爍
+      scr.quaternion.copy(quat);
+      scene.add(scr);
+      arts.push({ p: pos.clone(), f: fwd.clone() });
+    });
+
+    // 覆寫 stops[1..4] 的鏡頭位置與看向(維持 6 個 stop,GSAP 時間軸不變)
+    for (let i = 0; i < 4 && i < arts.length; i++) {
+      const a = arts[i];
+      let cam;
+      if (wps[i]) { cam = wps[i].getWorldPosition(new THREE.Vector3()); }       // 用你擺的 Waypoint
+      else { cam = a.p.clone().addScaledVector(a.f, VIEW_DIST); cam.y = a.p.y; } // 否則自動站畫前、平視
+      stops[i + 1].pos.copy(cam);
+      stops[i + 1].look.copy(a.p);
+    }
+    if (arts.length) {
+      const first = arts[0], last = arts[Math.min(3, arts.length - 1)];
+      stops[0].pos.copy(first.p).addScaledVector(first.f, VIEW_DIST * 2.4); stops[0].look.copy(first.p);
+      stops[5].pos.copy(last.p).addScaledVector(last.f, VIEW_DIST * 1.3);   stops[5].look.copy(last.p);
+    }
+    console.log(`museum.glb OK — screens:${screens.length} waypoints:${wps.length}`);
+  }, undefined, () => { /* 沒有 museum.glb → 靜默沿用臨時走廊 */ });
 
   let mx = 0, my = 0, running = true;
   addEventListener('pointermove', e => { mx = e.clientX / innerWidth - 0.5; my = e.clientY / innerHeight - 0.5; });
