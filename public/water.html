@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Water — 滑鼠流體扭曲 demo</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:crosshair}
+  canvas{display:block;width:100%;height:100%}
+  .hint{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
+    font:500 14px/1.5 system-ui,"PingFang TC",sans-serif;color:#fff;
+    letter-spacing:.08em;opacity:.75;pointer-events:none;text-shadow:0 1px 6px #000;
+    background:rgba(0,0,0,.25);padding:8px 16px;border-radius:99px;backdrop-filter:blur(6px)}
+</style>
+</head>
+<body>
+<div class="hint">移動滑鼠 —— 畫面會像水一樣被推開 💧</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const geo = new THREE.PlaneGeometry(2, 2);
+const scene = new THREE.Scene();
+const quad = new THREE.Mesh(geo);
+scene.add(quad);
+
+// 兩張離屏緩衝(ping-pong):記錄游標推出來的「水流位移場」
+const rtOpts = { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false,
+                 minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+let rtA = new THREE.WebGLRenderTarget(1, 1, rtOpts);
+let rtB = new THREE.WebGLRenderTarget(1, 1, rtOpts);
+
+const vert = `
+  varying vec2 vUv;
+  void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+
+// 模擬:衰減 + 擴散(讓水波會散開)+ 在游標處按速度蓋一筆
+const simFrag = `
+  precision highp float;
+  varying vec2 vUv;
+  uniform sampler2D uPrev;
+  uniform vec2 uMouse, uVelocity, uRes;
+  uniform float uAspect, uFade, uRadius, uStrength;
+  void main(){
+    vec2 t = 1.0 / uRes;
+    vec2 sum = texture2D(uPrev, vUv).xy * 0.6
+      + texture2D(uPrev, vUv + vec2(t.x,0.0)).xy * 0.1
+      + texture2D(uPrev, vUv - vec2(t.x,0.0)).xy * 0.1
+      + texture2D(uPrev, vUv + vec2(0.0,t.y)).xy * 0.1
+      + texture2D(uPrev, vUv - vec2(0.0,t.y)).xy * 0.1;
+    vec2 disp = sum * uFade;
+    vec2 d = vUv - uMouse; d.x *= uAspect;
+    float fall = exp(-dot(d,d) / uRadius);
+    disp += uVelocity * fall * uStrength;
+    gl_FragColor = vec4(disp, 0.0, 1.0);
+  }`;
+
+// 顯示:用位移場扭曲背景圖的取樣座標 + 一點水面反光
+const dispFrag = `
+  precision highp float;
+  varying vec2 vUv;
+  uniform sampler2D uFlow, uImage;
+  uniform vec2 uCover;
+  uniform float uDistort;
+  void main(){
+    vec2 flow = texture2D(uFlow, vUv).xy;
+    vec2 uv = (vUv - 0.5) * uCover + 0.5 + flow * uDistort;
+    vec3 col = texture2D(uImage, uv).rgb;
+    float m = clamp(length(flow) * 4.0, 0.0, 1.0);   // 水面反光
+    col += m * 0.14;
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+
+const simMat = new THREE.ShaderMaterial({ vertexShader: vert, fragmentShader: simFrag, uniforms: {
+  uPrev:{value:null}, uMouse:{value:new THREE.Vector2(0.5,0.5)}, uVelocity:{value:new THREE.Vector2()},
+  uRes:{value:new THREE.Vector2(1,1)}, uAspect:{value:1}, uFade:{value:0.955},
+  uRadius:{value:0.0025}, uStrength:{value:0.32} }});
+
+const dispMat = new THREE.ShaderMaterial({ vertexShader: vert, fragmentShader: dispFrag, uniforms: {
+  uFlow:{value:null}, uImage:{value:null}, uCover:{value:new THREE.Vector2(1,1)}, uDistort:{value:0.16} }});
+
+// 背景圖(用官網現成的貓海報);載入失敗就用漸層
+let imgAspect = 1.5;
+const onTex = (tex) => {
+  tex.minFilter = THREE.LinearFilter; tex.colorSpace = THREE.SRGBColorSpace;
+  const img = tex.image; if (img && img.width) imgAspect = img.width / img.height;
+  dispMat.uniforms.uImage.value = tex; resize();
+};
+new THREE.TextureLoader().load('/assets/cat-poster.jpg', onTex, undefined, () => {
+  const c = document.createElement('canvas'); c.width = 1200; c.height = 800;
+  const g = c.getContext('2d'); const grd = g.createLinearGradient(0,0,1200,800);
+  grd.addColorStop(0,'#1b2a4a'); grd.addColorStop(.5,'#3b6ea5'); grd.addColorStop(1,'#ffce3d');
+  g.fillStyle = grd; g.fillRect(0,0,1200,800);
+  g.font='bold 90px system-ui'; g.fillStyle='rgba(255,255,255,.9)';
+  g.fillText('CatInsight', 90, 430);
+  onTex(new THREE.CanvasTexture(c));
+});
+
+const mouse = new THREE.Vector2(0.5, 0.5);
+const prev  = new THREE.Vector2(0.5, 0.5);
+const vel   = new THREE.Vector2();
+function move(x, y){
+  mouse.set(x / innerWidth, 1 - y / innerHeight);
+  vel.subVectors(mouse, prev).multiplyScalar(60); // 速度=這幀移動量
+  prev.copy(mouse);
+}
+addEventListener('mousemove', e => move(e.clientX, e.clientY));
+addEventListener('touchmove', e => { const t=e.touches[0]; move(t.clientX, t.clientY); }, {passive:true});
+
+function resize(){
+  const w = innerWidth, h = innerHeight, dpr = renderer.getPixelRatio();
+  renderer.setSize(w, h);
+  const sw = Math.round(w*dpr*0.5), sh = Math.round(h*dpr*0.5); // 模擬用半解析度,夠用又快
+  rtA.setSize(sw, sh); rtB.setSize(sw, sh);
+  simMat.uniforms.uRes.value.set(sw, sh);
+  simMat.uniforms.uAspect.value = w / h;
+  const sa = w / h;                                  // 背景圖 cover 填滿
+  if (sa > imgAspect) dispMat.uniforms.uCover.value.set(1, imgAspect / sa);
+  else                dispMat.uniforms.uCover.value.set(sa / imgAspect, 1);
+}
+addEventListener('resize', resize); resize();
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function frame(){
+  // 1) 模擬水流 → 寫進 rtB
+  quad.material = simMat;
+  simMat.uniforms.uPrev.value = rtA.texture;
+  simMat.uniforms.uMouse.value.copy(mouse);
+  simMat.uniforms.uVelocity.value.copy(vel);
+  renderer.setRenderTarget(rtB); renderer.render(scene, cam);
+  [rtA, rtB] = [rtB, rtA];                          // 交換
+  // 2) 用水流扭曲背景 → 畫到螢幕
+  quad.material = dispMat;
+  dispMat.uniforms.uFlow.value = rtA.texture;
+  renderer.setRenderTarget(null); renderer.render(scene, cam);
+  vel.multiplyScalar(0.86);                          // 速度自然衰減
+  requestAnimationFrame(frame);
+}
+if (!reduce) frame(); else { quad.material = dispMat; renderer.render(scene, cam); }
+</script>
+</body>
+</html>
