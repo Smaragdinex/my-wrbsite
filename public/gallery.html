@@ -254,13 +254,19 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}footer a{margin:0 9px;c
     dots.forEach((d, i) => d.classList.toggle('on', i === best));
   }
 
-  const camP = new THREE.Vector3(), lookP = new THREE.Vector3();
+  const camP = new THREE.Vector3(), lookP = new THREE.Vector3(), _tan = new THREE.Vector3();
   function tick() {
     requestAnimationFrame(tick);
     if (!running) return;
     const u = Math.max(0, Math.min(1, state.t / (stops.length - 1)));
-    posCurve.getPointAt(u, camP);   // 弧長等速 + 曲線平滑(遠近段速度一致)
-    lookCurve.getPointAt(u, lookP);
+    posCurve.getPointAt(u, camP);          // 鏡頭位置:沿曲線弧長等速
+    posCurve.getTangentAt(u, _tan);        // 前進方向(走路看向正前方)
+    lookP.copy(camP).addScaledVector(_tan, 3.0);
+    const k = Math.round(state.t);         // 經過畫作(整數停點)時,視線飄去瞄一眼
+    if (k >= 1 && k <= 4) {
+      const near = Math.max(0, 1 - Math.abs(state.t - k) / 0.45);
+      lookP.lerp(stops[k].look, near * 0.85);
+    }
     camera.position.copy(camP);
     camera.position.x += mx * 0.35; camera.position.y += -my * 0.2;  // 滑鼠視差
     camera.lookAt(lookP);
