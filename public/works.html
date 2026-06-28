@@ -15,6 +15,11 @@
     padding:clamp(20px,4vw,52px);pointer-events:none}
   header{display:flex;justify-content:space-between;align-items:flex-start;
     font-size:13px;letter-spacing:.18em;text-transform:uppercase}
+  .face{pointer-events:none;line-height:0;filter:drop-shadow(0 2px 10px rgba(0,0,0,.4))}
+  #eyes{transform-box:fill-box;transform-origin:center;transition:transform .12s ease}
+  #eyes.blink{transform:scaleY(.08)}
+  .pupil{transition:transform .18s cubic-bezier(.2,.8,.2,1)}
+  .brand{display:flex;flex-direction:column;align-items:flex-end;gap:5px;text-align:right}
   header b{font-weight:700}
   header span{color:var(--dim)}
   .center{flex:1;display:flex;flex-direction:column;justify-content:center}
@@ -59,8 +64,30 @@
 
 <div class="wrap">
   <header>
-    <b>X·ARTS</b>
-    <span>Studio&nbsp;— 2026</span>
+    <div class="face" id="face">
+      <svg viewBox="0 0 100 100" width="56" height="56" aria-hidden="true">
+        <path d="M24 34 L31 10 L48 28 Z" fill="#f2f2f0"/>
+        <path d="M76 34 L69 10 L52 28 Z" fill="#f2f2f0"/>
+        <path d="M30 28 L33 17 L41 27 Z" fill="#e58a9a"/>
+        <path d="M70 28 L67 17 L59 27 Z" fill="#e58a9a"/>
+        <circle cx="50" cy="56" r="33" fill="#f2f2f0"/>
+        <g id="eyes">
+          <ellipse cx="39" cy="54" rx="8.5" ry="10.5" fill="#16181f"/>
+          <ellipse cx="61" cy="54" rx="8.5" ry="10.5" fill="#16181f"/>
+          <circle class="pupil" cx="39" cy="54" r="3.4" fill="#f7c948"/>
+          <circle class="pupil" cx="61" cy="54" r="3.4" fill="#f7c948"/>
+          <circle class="pupil" cx="40.4" cy="52.2" r="1.1" fill="#fff"/>
+          <circle class="pupil" cx="62.4" cy="52.2" r="1.1" fill="#fff"/>
+        </g>
+        <path d="M47 64 L53 64 L50 67 Z" fill="#e58a9a"/>
+        <path d="M50 67 q-4 5 -8 2 M50 67 q4 5 8 2" stroke="#16181f" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        <g stroke="#cfcfca" stroke-width="1" stroke-linecap="round">
+          <line x1="20" y1="60" x2="36" y2="62"/><line x1="19" y1="66" x2="36" y2="66"/>
+          <line x1="80" y1="60" x2="64" y2="62"/><line x1="81" y1="66" x2="64" y2="66"/>
+        </g>
+      </svg>
+    </div>
+    <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
   </header>
 
   <div class="center">
@@ -101,6 +128,16 @@ list.addEventListener('mouseleave', () => { list.classList.remove('hovering'); c
 const cursor = document.getElementById('cursor');
 const cur = { x: innerWidth/2, y: innerHeight/2, tx: innerWidth/2, ty: innerHeight/2 };
 addEventListener('pointermove', e => { cur.tx = e.clientX; cur.ty = e.clientY; });
+
+/* ===== 左上貓臉:眼睛跟滑鼠 + 眨眼 ===== */
+const face = document.getElementById('face');
+const pupils = face.querySelectorAll('.pupil');
+const eyesG = document.getElementById('eyes');
+let fc = { x:0, y:0 };
+function faceCenter(){ const r = face.getBoundingClientRect(); fc.x = r.left + r.width/2; fc.y = r.top + r.height/2; }
+faceCenter(); addEventListener('resize', faceCenter); addEventListener('scroll', faceCenter, {passive:true});
+(function blink(){ eyesG.classList.add('blink'); setTimeout(()=>eyesG.classList.remove('blink'),140);
+  setTimeout(blink, 2200 + Math.random()*3200); })();
 
 /* ===== WebGL:水流扭曲背景(ping-pong)+ 作品圖交叉淡入 ===== */
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias:false });
@@ -195,6 +232,10 @@ function frame(){
   // 圓球平滑跟隨
   cur.x += (cur.tx-cur.x)*.18; cur.y += (cur.ty-cur.y)*.18;
   cursor.style.transform = `translate(${cur.x}px,${cur.y}px) translate(-50%,-50%)`;
+  // 貓眼跟著游標看
+  { const dx=cur.tx-fc.x, dy=cur.ty-fc.y, d=Math.hypot(dx,dy)||1, k=Math.min(1,d/260)*4.6;
+    const ox=(dx/d*k).toFixed(1), oy=(dy/d*k).toFixed(1);
+    pupils.forEach(p=>p.setAttribute('transform',`translate(${ox} ${oy})`)); }
   // 交叉淡入
   if (fading){ const m=dispMat.uniforms.uMix; m.value += (mixTarget-m.value)*.08;
     if (Math.abs(mixTarget-m.value)<.01){ m.value=mixTarget; fading=false;
