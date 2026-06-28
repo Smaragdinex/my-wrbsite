@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>X-Arts — Selected Works</title>
+<style>
+  :root{ --fg:#f2f2f0; --dim:rgba(242,242,240,.45); }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#0a0a0c;color:var(--fg);overflow:hidden;
+    font-family:"Helvetica Neue",-apple-system,"PingFang TC","Noto Sans TC",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  canvas#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+  .wrap{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;
+    padding:clamp(20px,4vw,52px);pointer-events:none}
+  header{display:flex;justify-content:space-between;align-items:flex-start;
+    font-size:13px;letter-spacing:.18em;text-transform:uppercase}
+  header b{font-weight:700}
+  header span{color:var(--dim)}
+  .center{flex:1;display:flex;flex-direction:column;justify-content:center}
+  .eyebrow{font-size:12px;letter-spacing:.32em;color:var(--dim);text-transform:uppercase;margin-bottom:26px}
+  .list{display:flex;flex-direction:column;pointer-events:auto;width:min(100%,820px)}
+  .work{display:flex;align-items:baseline;gap:22px;padding:clamp(10px,1.6vw,20px) 4px;
+    border-top:1px solid rgba(242,242,240,.14);text-decoration:none;color:var(--fg);
+    position:relative;transition:padding-left .5s cubic-bezier(.2,.8,.2,1)}
+  .list .work:last-child{border-bottom:1px solid rgba(242,242,240,.14)}
+  .work .no{font-size:13px;letter-spacing:.1em;color:var(--dim);width:34px;flex:none;
+    transition:color .4s}
+  .work .ttl{font-size:clamp(28px,5.2vw,62px);font-weight:600;line-height:1;
+    letter-spacing:-.01em;transition:opacity .4s,transform .5s cubic-bezier(.2,.8,.2,1)}
+  .work .tag{margin-left:auto;font-size:12px;letter-spacing:.14em;color:var(--dim);
+    text-transform:uppercase;white-space:nowrap;opacity:0;transform:translateX(10px);
+    transition:opacity .4s,transform .5s}
+  .work:hover{padding-left:26px}
+  .work:hover .no{color:var(--fg)}
+  .work:hover .tag{opacity:1;transform:none}
+  .list.hovering .work:not(:hover) .ttl{opacity:.32}
+  footer{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.14em;
+    color:var(--dim);text-transform:uppercase}
+  .hint{font-size:11px;letter-spacing:.2em}
+  /* 滑鼠圓球 */
+  .cursor{position:fixed;top:0;left:0;width:13px;height:13px;border-radius:50%;
+    background:#fff;mix-blend-mode:difference;pointer-events:none;z-index:50;
+    transform:translate(-50%,-50%);transition:width .35s cubic-bezier(.2,.8,.2,1),
+    height .35s cubic-bezier(.2,.8,.2,1)}
+  .cursor.big{width:96px;height:96px}
+  .cursor .view{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:11px;letter-spacing:.16em;color:#000;mix-blend-mode:difference;
+    opacity:0;transition:opacity .3s;text-transform:uppercase}
+  .cursor.big .view{opacity:1}
+  @media (hover:none){ .cursor{display:none} html,body{cursor:auto} }
+  @media (min-width:701px){ html,body{cursor:none} a{cursor:none} }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="cursor" id="cursor"><span class="view">View</span></div>
+
+<div class="wrap">
+  <header>
+    <b>X·ARTS</b>
+    <span>Studio&nbsp;— 2026</span>
+  </header>
+
+  <div class="center">
+    <div class="eyebrow">Selected Works</div>
+    <nav class="list" id="list"><!-- 作品由 JS 產生 --></nav>
+  </div>
+
+  <footer>
+    <span class="hint">移動滑鼠 — 背景像水 / 滑作品看畫面</span>
+    <span>xarts.games</span>
+  </footer>
+</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+/* ===== 你的 4 個作品(改這裡就好:標題 / 說明 / 圖 / 連結)===== */
+const WORKS = [
+  { no:'01', title:'CatInsight AI', tag:'AI Stock Signals',  img:'assets/shot-rank.png',  url:'#' },
+  { no:'02', title:'3D Museum',     tag:'WebGL Gallery',     img:'assets/shot-detail.png', url:'gallery.html' },
+  { no:'03', title:'Fluid Lab',     tag:'GPGPU Water',       img:'assets/cat-poster.jpg',  url:'water.html' },
+  { no:'04', title:'Your Next Work',tag:'Coming Soon',       img:'assets/shot-chat.png',   url:'#' },
+];
+
+/* ===== 作品清單 DOM ===== */
+const list = document.getElementById('list');
+WORKS.forEach((w, i) => {
+  const a = document.createElement('a');
+  a.className = 'work'; a.href = w.url;
+  a.innerHTML = `<span class="no">${w.no}</span><span class="ttl">${w.title}</span><span class="tag">${w.tag}</span>`;
+  a.addEventListener('mouseenter', () => { switchTo(i); cursor.classList.add('big'); });
+  list.appendChild(a);
+});
+list.addEventListener('mouseenter', () => list.classList.add('hovering'));
+list.addEventListener('mouseleave', () => { list.classList.remove('hovering'); cursor.classList.remove('big'); switchTo(-1); });
+
+/* ===== 滑鼠圓球 ===== */
+const cursor = document.getElementById('cursor');
+const cur = { x: innerWidth/2, y: innerHeight/2, tx: innerWidth/2, ty: innerHeight/2 };
+addEventListener('pointermove', e => { cur.tx = e.clientX; cur.ty = e.clientY; });
+
+/* ===== WebGL:水流扭曲背景(ping-pong)+ 作品圖交叉淡入 ===== */
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias:false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const cam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+const geo = new THREE.PlaneGeometry(2,2);
+const scene = new THREE.Scene();
+const quad = new THREE.Mesh(geo); scene.add(quad);
+
+const rtO = { type:THREE.HalfFloatType, depthBuffer:false, stencilBuffer:false,
+  minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter };
+let rtA = new THREE.WebGLRenderTarget(1,1,rtO), rtB = new THREE.WebGLRenderTarget(1,1,rtO);
+
+const vert = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
+
+const simFrag = `precision highp float; varying vec2 vUv;
+  uniform sampler2D uPrev; uniform vec2 uMouse,uVelocity,uRes; uniform float uAspect,uFade,uRadius,uStrength;
+  void main(){ vec2 t=1./uRes;
+    vec2 s=texture2D(uPrev,vUv).xy*.6
+      +texture2D(uPrev,vUv+vec2(t.x,0.)).xy*.1+texture2D(uPrev,vUv-vec2(t.x,0.)).xy*.1
+      +texture2D(uPrev,vUv+vec2(0.,t.y)).xy*.1+texture2D(uPrev,vUv-vec2(0.,t.y)).xy*.1;
+    vec2 d=vUv-uMouse; d.x*=uAspect; float f=exp(-dot(d,d)/uRadius);
+    gl_FragColor=vec4(s*uFade+uVelocity*f*uStrength,0.,1.); }`;
+
+const dispFrag = `precision highp float; varying vec2 vUv;
+  uniform sampler2D uFlow,uImg0,uImg1; uniform vec2 uCover0,uCover1; uniform float uMix,uDistort,uDim;
+  vec3 samp(sampler2D tx, vec2 cv, vec2 fl){ vec2 uv=(vUv-.5)*cv+.5+fl*uDistort; return texture2D(tx,uv).rgb; }
+  void main(){ vec2 fl=texture2D(uFlow,vUv).xy;
+    vec3 c=mix(samp(uImg0,uCover0,fl), samp(uImg1,uCover1,fl), uMix);
+    float m=clamp(length(fl)*4.,0.,1.); c+=m*.10; c*=uDim;
+    gl_FragColor=vec4(c,1.); }`;
+
+const simMat = new THREE.ShaderMaterial({ vertexShader:vert, fragmentShader:simFrag, uniforms:{
+  uPrev:{value:null}, uMouse:{value:new THREE.Vector2(.5,.5)}, uVelocity:{value:new THREE.Vector2()},
+  uRes:{value:new THREE.Vector2(1,1)}, uAspect:{value:1}, uFade:{value:.96},
+  uRadius:{value:.0022}, uStrength:{value:.30} }});
+
+const dispMat = new THREE.ShaderMaterial({ vertexShader:vert, fragmentShader:dispFrag, uniforms:{
+  uFlow:{value:null}, uImg0:{value:null}, uImg1:{value:null},
+  uCover0:{value:new THREE.Vector2(1,1)}, uCover1:{value:new THREE.Vector2(1,1)},
+  uMix:{value:0}, uDistort:{value:.14}, uDim:{value:.62} }});
+
+/* 紋理:預設深色漸層 + 4 個作品圖 */
+function gradientTex(){
+  const c=document.createElement('canvas'); c.width=1280; c.height=800; const g=c.getContext('2d');
+  const grd=g.createRadialGradient(640,400,80,640,400,820);
+  grd.addColorStop(0,'#1a1d2b'); grd.addColorStop(1,'#0a0a0c');
+  g.fillStyle=grd; g.fillRect(0,0,1280,800);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.userData.aspect=1280/800; return t;
+}
+const defaultTex = gradientTex();
+const texes = WORKS.map(()=>defaultTex);
+const loader = new THREE.TextureLoader();
+WORKS.forEach((w,i)=> loader.load(w.img, t=>{
+  t.colorSpace=THREE.SRGBColorSpace; t.userData.aspect=(t.image&&t.image.width)?t.image.width/t.image.height:1.5;
+  texes[i]=t;
+}));
+
+let aspect0 = defaultTex.userData.aspect, aspect1 = defaultTex.userData.aspect;
+dispMat.uniforms.uImg0.value = defaultTex; dispMat.uniforms.uImg1.value = defaultTex;
+
+/* 交叉淡入到第 i 個作品(-1 = 回到深色背景) */
+let mixTarget = 0, fading = false;
+function switchTo(i){
+  const tex = (i<0)? defaultTex : texes[i];
+  if (dispMat.uniforms.uImg1.value === tex && mixTarget===1) return;
+  // 把目前畫面折進 slot0,再從 slot0→slot1 淡入新圖
+  dispMat.uniforms.uImg0.value = dispMat.uniforms.uMix.value>0.5 ? dispMat.uniforms.uImg1.value : dispMat.uniforms.uImg0.value;
+  aspect0 = dispMat.uniforms.uMix.value>0.5 ? aspect1 : aspect0;
+  dispMat.uniforms.uImg1.value = tex; aspect1 = tex.userData.aspect;
+  dispMat.uniforms.uMix.value = 0; mixTarget = 1; fading = true;
+}
+
+function coverFor(asp){ const sa=innerWidth/innerHeight;
+  return sa>asp ? [1, asp/sa] : [sa/asp, 1]; }
+
+const mouse=new THREE.Vector2(.5,.5), prev=new THREE.Vector2(.5,.5), vel=new THREE.Vector2();
+addEventListener('pointermove', e=>{ mouse.set(e.clientX/innerWidth, 1-e.clientY/innerHeight);
+  vel.subVectors(mouse,prev).multiplyScalar(60); prev.copy(mouse); });
+
+function resize(){
+  const w=innerWidth,h=innerHeight,dpr=renderer.getPixelRatio();
+  renderer.setSize(w,h);
+  const sw=Math.max(2,Math.round(w*dpr*.5)), sh=Math.max(2,Math.round(h*dpr*.5));
+  rtA.setSize(sw,sh); rtB.setSize(sw,sh);
+  simMat.uniforms.uRes.value.set(sw,sh); simMat.uniforms.uAspect.value=w/h;
+}
+addEventListener('resize', resize); resize();
+
+function frame(){
+  // 圓球平滑跟隨
+  cur.x += (cur.tx-cur.x)*.18; cur.y += (cur.ty-cur.y)*.18;
+  cursor.style.transform = `translate(${cur.x}px,${cur.y}px) translate(-50%,-50%)`;
+  // 交叉淡入
+  if (fading){ const m=dispMat.uniforms.uMix; m.value += (mixTarget-m.value)*.08;
+    if (Math.abs(mixTarget-m.value)<.01){ m.value=mixTarget; fading=false;
+      dispMat.uniforms.uImg0.value=dispMat.uniforms.uImg1.value; aspect0=aspect1; m.value=0; mixTarget=0; } }
+  dispMat.uniforms.uCover0.value.set(...coverFor(aspect0));
+  dispMat.uniforms.uCover1.value.set(...coverFor(aspect1));
+  // 水流模擬
+  quad.material=simMat; simMat.uniforms.uPrev.value=rtA.texture;
+  simMat.uniforms.uMouse.value.copy(mouse); simMat.uniforms.uVelocity.value.copy(vel);
+  renderer.setRenderTarget(rtB); renderer.render(scene,cam);
+  [rtA,rtB]=[rtB,rtA];
+  // 顯示
+  quad.material=dispMat; dispMat.uniforms.uFlow.value=rtA.texture;
+  renderer.setRenderTarget(null); renderer.render(scene,cam);
+  vel.multiplyScalar(.86);
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
