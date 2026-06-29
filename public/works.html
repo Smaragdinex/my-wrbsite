@@ -155,7 +155,7 @@ let rtA = new THREE.WebGLRenderTarget(1,1,rtO), rtB = new THREE.WebGLRenderTarge
 
 const vert = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
 
-/* ===== [升級] 物理流體水波模擬 Shader ===== */
+/* ===== 物理流體水波模擬 Shader ===== */
 const simFrag = `
 precision highp float;
 varying vec2 vUv;
@@ -195,7 +195,7 @@ void main() {
     gl_FragColor = vec4(velocity, height, current.z);
 }`;
 
-/* ===== [升級] Lusion 霓虹發光色相折射 Shader ===== */
+/* ===== Lusion 汽油薄膜干涉虹彩折射 Shader ===== */
 const dispFrag = `
 precision highp float;
 varying vec2 vUv;
@@ -209,16 +209,35 @@ uniform float uDistort;
 uniform float uDim;
 uniform float uColor;
 
-vec3 getFluidColor(float speed, vec2 dir) {
-    vec3 baseColor = mix(vec3(0.04, 0.04, 0.06), vec3(0.1, 0.12, 0.2), vUv.y);
-    float angle = atan(dir.y, dir.x) / 6.28318530718 + 0.5;
-    // 質感霓虹流體調色盤
-    vec3 neon = 0.5 + 0.5 * cos(6.28318 * (angle + vec3(0.0, 0.33, 0.67)));
-    float glow = clamp(speed * 3.5, 0.0, 1.0);
-    return mix(baseColor, neon, glow * uColor);
+// 模擬汽油薄膜干涉的虹彩函數
+vec3 getGasolineColor(float speed, vec2 dir, float height) {
+    // 基礎背景色 (跟 Lusion 一樣的深邃暗黑底色)
+    vec3 baseBg = vec3(0.04, 0.04, 0.05);
+    
+    // 根據流速與水波高度，計算干涉係數
+    float interference = speed * 1.8 + abs(height) * 0.4;
+    
+    // 汽油油膜的經典黃金比例色彩常數 (透過調校餘弦參數，讓紅、綠、藍產生相位差)
+    vec3 cA = vec3(0.5, 0.5, 0.5);
+    vec3 cB = vec3(0.5, 0.5, 0.5);
+    vec3 cC = vec3(1.0, 1.0, 1.0);
+    // 關鍵調色盤：控制相位差 (這個比例能調出汽油般的彩虹光澤)
+    vec3 cD = vec3(0.00, 0.33, 0.67) + interference * 0.6; 
+    
+    // 計算出干涉彩虹色
+    vec3 iridescence = cA + cB * cos(6.28318 * (cC * (vUv.y * 0.15 + interference * 0.5) + cD));
+    
+    // 柔化亮部：用飽和度較低的灰潤色代替死白，營造高級感
+    float oilMask = clamp(speed * 2.2 + abs(height) * 3.0, 0.0, 1.0);
+    
+    // 降低發光強度，加入一層油膜的反光質感
+    vec3 finalOil = mix(baseBg, iridescence * 0.75, oilMask * uColor);
+    
+    return finalOil;
 }
 
 vec3 samp(sampler2D tx, vec2 cv, vec2 fl) {
+    // 汽油流動的細微折射扭曲
     vec2 distortedUv = (vUv - 0.5) * cv + 0.5 + fl * uDistort;
     return texture2D(tx, distortedUv).rgb;
 }
@@ -228,25 +247,32 @@ void main() {
     vec2 velocity = flowData.xy;
     float height = flowData.z;
     
-    vec2 finalDistortion = velocity * 0.5 + vec2(height) * 0.05;
-    float speed = length(velocity) + abs(height) * 0.2;
+    // 結合物理速度與坡度阻尼
+    vec2 finalDistortion = velocity * 0.4 + vec2(height) * 0.03;
+    float speed = length(velocity);
     
+    // 採樣底圖
     vec3 imageColor = mix(samp(uImg0, uCover0, finalDistortion), samp(uImg1, uCover1, finalDistortion), uMix);
-    vec3 fluidGlow = getFluidColor(speed, normalize(velocity + 0.001));
     
-    vec3 finalColor = imageColor * uDim + fluidGlow * (1.0 - uDim * 0.3);
-    finalColor += vec3(clamp(height * 2.0, 0.0, 1.0) * 0.08); // 水波亮邊高光
+    // 呼叫汽油油膜調色盤
+    vec3 oilGlow = getGasolineColor(speed, velocity, height);
+    
+    // 疊加：底圖亮度壓低，疊上高檔的汽油折射光
+    vec3 finalColor = imageColor * uDim + oilGlow;
+    
+    // 微微加上一層細緻的暗部環境光遮蔽 (AO)，讓邊緣更有厚度感
+    finalColor += vec3(height * 0.03);
     
     gl_FragColor = vec4(finalColor, 1.0);
 }`;
 
-/* ===== 材質與變數初始化 ===== */
+/* ===== 材質與變數初始化 (已微調為 Lusion 慢速浮油變數) ===== */
 const simMat = new THREE.ShaderMaterial({ vertexShader:vert, fragmentShader:simFrag, uniforms:{
   uPrev:{value:null}, uMouse:{value:new THREE.Vector2(.5,.5)}, uVelocity:{value:new THREE.Vector2()},
   uRes:{value:new THREE.Vector2(1,1)}, uAspect:{value:1}, 
-  uFade:{value:.98},       // 高雅的物理延遲阻尼
-  uRadius:{value:.0035},   // 擴大滑鼠波及半徑
-  uStrength:{value:.45}    // 增強水波推動力道
+  uFade:{value:.94},       // 調降阻尼，讓浮油波動散開時更柔和、不碎散
+  uRadius:{value:.0045},   // 放大滑鼠半徑，讓推動浮油的範圍更平滑自然
+  uStrength:{value:.35}    // 降低力道，防止畫面噴出突兀的暴亮白點
 }});
 
 const dispMat = new THREE.ShaderMaterial({ vertexShader:vert, fragmentShader:dispFrag, uniforms:{
