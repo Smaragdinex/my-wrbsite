@@ -1,0 +1,858 @@
+---
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#020912" />
+  <title>X-Arts Particle X Preview</title>
+  <meta name="description" content="A full-screen interactive 3D particle X built with Three.js, spring return physics, and underwater motion." />
+  <style>
+    :root {
+      --bg0: #02070d;
+      --bg1: #03111a;
+      --bg2: #051e27;
+      --text: rgba(233, 247, 255, 0.92);
+      --muted: rgba(233, 247, 255, 0.55);
+      --edge: rgba(175, 230, 255, 0.18);
+      --glass: rgba(8, 18, 28, 0.42);
+      --accent: #7ef4ff;
+      --accent2: #53ffd2;
+      --accent3: #a98cff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(1200px 900px at 50% 42%, rgba(42, 143, 187, 0.18), transparent 58%),
+        radial-gradient(900px 700px at 30% 65%, rgba(30, 231, 172, 0.12), transparent 56%),
+        linear-gradient(180deg, var(--bg1), var(--bg0) 45%, #010408 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: -20%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::before {
+      background:
+        radial-gradient(circle at 20% 20%, rgba(125, 255, 240, 0.08), transparent 22%),
+        radial-gradient(circle at 80% 35%, rgba(143, 122, 255, 0.06), transparent 20%),
+        radial-gradient(circle at 55% 80%, rgba(63, 255, 186, 0.05), transparent 24%);
+      filter: blur(28px);
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+
+    body::after {
+      background-image:
+        linear-gradient(rgba(160, 235, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(160, 235, 255, 0.02) 1px, transparent 1px);
+      background-size: 120px 120px, 120px 120px;
+      opacity: 0.18;
+      mask-image: radial-gradient(circle at center, black 35%, transparent 82%);
+      animation: gridFloat 22s linear infinite;
+    }
+
+    @keyframes drift {
+      from {
+        transform: translate3d(-1.5%, -1%, 0) scale(1);
+      }
+      to {
+        transform: translate3d(1.5%, 1.5%, 0) scale(1.06);
+      }
+    }
+
+    @keyframes gridFloat {
+      from {
+        transform: translate3d(0, 0, 0);
+      }
+      to {
+        transform: translate3d(0, -120px, 0);
+      }
+    }
+
+    .stage {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .cursor-dot {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 18px;
+      height: 18px;
+      margin-left: -9px;
+      margin-top: -9px;
+      border-radius: 50%;
+      z-index: 4;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.96) 0 10%, rgba(196, 255, 248, 0.98) 16%, rgba(121, 246, 255, 0.7) 38%, rgba(121, 246, 255, 0.12) 70%, transparent 100%);
+      box-shadow:
+        0 0 14px rgba(111, 245, 255, 0.68),
+        0 0 34px rgba(111, 245, 255, 0.28),
+        0 0 48px rgba(255, 175, 71, 0.12);
+      mix-blend-mode: screen;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      will-change: transform, opacity;
+    }
+
+    .cursor-dot::after {
+      content: "";
+      position: absolute;
+      inset: -10px;
+      border-radius: inherit;
+      border: 1px solid rgba(180, 255, 248, 0.14);
+      box-shadow: 0 0 20px rgba(152, 255, 243, 0.12);
+      opacity: 0.9;
+    }
+
+    .ui {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      padding:
+        max(18px, env(safe-area-inset-top))
+        max(18px, env(safe-area-inset-right))
+        max(18px, env(safe-area-inset-bottom))
+        max(18px, env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand,
+    .badge,
+    .hint,
+    .legend {
+      pointer-events: auto;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      background: var(--glass);
+      border: 1px solid var(--edge);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+
+    .brand {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      max-width: min(520px, 68vw);
+    }
+
+    .brand strong {
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(214, 248, 255, 0.9);
+    }
+
+    .brand span {
+      font-size: clamp(20px, 3.2vw, 42px);
+      line-height: 0.98;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      color: var(--text);
+    }
+
+    .brand em {
+      font-style: normal;
+      background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .badge {
+      align-self: flex-start;
+      padding: 12px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(227, 250, 255, 0.76);
+      white-space: nowrap;
+    }
+
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+
+    .legend {
+      max-width: min(560px, 100%);
+      padding: 12px 14px;
+      border-radius: 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .legend b {
+      color: rgba(240, 252, 255, 0.93);
+      font-weight: 600;
+    }
+
+    .hint {
+      padding: 12px 14px;
+      border-radius: 16px;
+      color: rgba(239, 250, 255, 0.72);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      line-height: 1.5;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(173, 231, 255, 0.18);
+      background: rgba(5, 14, 22, 0.44);
+      color: rgba(233, 247, 255, 0.74);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: radial-gradient(circle, #ffffff 0%, var(--accent) 36%, rgba(126, 244, 255, 0.12) 72%);
+      box-shadow: 0 0 12px rgba(126, 244, 255, 0.8), 0 0 18px rgba(255, 190, 72, 0.08);
+    }
+
+    @media (max-width: 720px) {
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .brand {
+        max-width: 100%;
+      }
+
+      .badge {
+        align-self: flex-start;
+      }
+
+      .hud {
+        align-items: stretch;
+      }
+
+      .legend {
+        font-size: 12px;
+      }
+    }
+
+    @media (hover: none) {
+      .hint {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" aria-label="Particle X preview">
+    <canvas id="gl"></canvas>
+  </main>
+  <div class="cursor-dot" id="cursorDot" aria-hidden="true"></div>
+
+  <div class="ui">
+    <div class="topbar">
+      <div class="brand">
+        <strong>X-Arts / WebGL Preview</strong>
+        <span><em>Particle X</em> underwater physics</span>
+      </div>
+      <div class="badge">36,000 particles · spring return · additive glow</div>
+    </div>
+
+    <div class="hud">
+      <div class="legend">
+        <b>Move your cursor</b> to blast particles away in 3D, then watch the spring system rebuild the abstract X with soft buoyancy and subtle noise drift.
+      </div>
+      <div class="controls">
+        <div class="pill"><span class="dot"></span> Repulsion field</div>
+        <div class="pill"><span class="dot"></span> Damped spring recoil</div>
+        <div class="pill"><span class="dot"></span> Underwater palette</div>
+      </div>
+      <div class="hint">
+        Preview page only. After you approve the look, I can swap this into <code>works.html</code>.
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+    const canvas = document.getElementById('gl');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x02070d);
+    scene.fog = new THREE.FogExp2(0x02070d, 0.055);
+
+    const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0.05, 7.2);
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: 'high-performance',
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+
+    const cursorDot = document.getElementById('cursorDot');
+
+    const waterPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2, 1, 1),
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.CustomBlending,
+        blendSrc: THREE.SrcAlphaFactor,
+        blendDst: THREE.OneMinusSrcAlphaFactor,
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          precision highp float;
+          varying vec2 vUv;
+          uniform vec2 uPointer;
+          uniform float uTime;
+          uniform float uStrength;
+          uniform vec4 uRipples[8];
+
+          float hash(vec2 p) {
+            p = fract(p * vec2(123.34, 345.45));
+            p += dot(p, p + 34.345);
+            return fract(p.x * p.y);
+          }
+
+          float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            float a = hash(i);
+            float b = hash(i + vec2(1.0, 0.0));
+            float c = hash(i + vec2(0.0, 1.0));
+            float d = hash(i + vec2(1.0, 1.0));
+            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+          }
+
+          void main() {
+            vec2 uv = vUv;
+            vec2 p = uv - 0.5;
+            vec2 pointer = uPointer - 0.5;
+            float dist = length(uv - uPointer);
+            float ripple = sin((dist * 34.0 - uTime * 5.4) * 3.14159) * exp(-dist * 4.6);
+            float ripple2 = sin((dist * 18.0 + uTime * 2.5) * 3.14159) * exp(-dist * 2.8);
+            float n1 = noise(uv * 6.0 + vec2(uTime * 0.05, -uTime * 0.04));
+            float n2 = noise(uv * 16.0 - vec2(uTime * 0.12, uTime * 0.08));
+
+            float trail = 0.0;
+            float trailGlow = 0.0;
+            for (int i = 0; i < 8; i++) {
+              vec4 r = uRipples[i];
+              float active = step(0.0, r.w);
+              float age = max(0.0, uTime - r.z);
+              float life = 3.2;
+              float fade = active * smoothstep(life, 0.0, age);
+              vec2 rp = uv - r.xy;
+              float d = length(rp);
+              float wave = sin((d * 38.0 - age * 10.0) * 3.14159);
+              float ring = exp(-d * 9.8) * wave * fade;
+              float ring2 = exp(-d * 5.6) * smoothstep(0.35, 0.0, abs(d - age * 0.04)) * fade;
+              trail += (ring + ring2 * 0.85) * r.w;
+              trailGlow += exp(-d * 4.6) * fade * r.w;
+            }
+
+            float flow = sin((p.x + p.y) * 12.0 + uTime * 0.8) * 0.03;
+            flow += sin((p.x * 18.0 - p.y * 13.0) + uTime * 1.15) * 0.018;
+
+            vec2 warp = p;
+            warp += pointer * (0.06 * uStrength) * exp(-dist * 4.0);
+            warp += vec2(trail * 0.08, trail * -0.06);
+            warp += vec2(flow, -flow) + vec2(n1 - 0.5, n2 - 0.5) * 0.025;
+
+            float caustic = 0.5 + 0.5 * sin((warp.x * 14.0 + warp.y * 8.0) + uTime * 0.7);
+            caustic += 0.25 * sin((warp.x * 26.0 - warp.y * 17.0) - uTime * 1.2);
+            caustic = smoothstep(0.12, 1.25, caustic + ripple * 1.15 + ripple2 * 0.72 + trailGlow * 1.25);
+
+            vec3 baseA = vec3(0.01, 0.08, 0.1);
+            vec3 baseB = vec3(0.04, 0.22, 0.28);
+            vec3 baseC = vec3(0.05, 0.32, 0.37);
+            vec3 col = mix(baseA, baseB, smoothstep(0.0, 1.0, uv.y));
+            col = mix(col, baseC, 0.46 + 0.26 * ripple + 0.14 * n1);
+
+            vec3 oilA = vec3(1.0, 0.28, 0.54);
+            vec3 oilB = vec3(1.0, 0.72, 0.12);
+            vec3 oilC = vec3(0.26, 1.0, 0.84);
+            vec3 oilD = vec3(0.42, 0.34, 1.0);
+            float oilPhase = sin((p.x * 12.0 - p.y * 16.0) + uTime * 1.5 + ripple * 4.0 + trail * 3.5);
+            float oilBlend = 0.5 + 0.5 * oilPhase;
+            vec3 oil = mix(mix(oilA, oilB, oilBlend), mix(oilC, oilD, 1.0 - oilBlend), smoothstep(0.05, 0.7, trailGlow + abs(ripple) * 0.8));
+
+            col = mix(col, oil, (0.45 * uStrength + 0.35 * trailGlow) * smoothstep(0.0, 0.5, length(pointer)));
+            col += vec3(0.1, 0.3, 0.4) * caustic * uStrength;
+            col += vec3(0.05, 0.2, 0.35) * ripple * ripple;
+            col += vec3(0.09, 0.18, 0.28) * (n2 - 0.35) * 0.2;
+            col += oil * smoothstep(0.42, 1.0, trailGlow) * 0.28;
+
+            float vignette = smoothstep(0.95, 0.2, length(p * vec2(1.0, 1.08)));
+            col *= 0.78 + 0.22 * vignette;
+            gl_FragColor = vec4(col, 0.88);
+          }
+        `,
+        uniforms: {
+          uPointer: { value: new THREE.Vector2(0.5, 0.5) },
+          uTime: { value: 0 },
+          uStrength: { value: 0 },
+          uRipples: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0.5, 0.5, -10.0, 0.0)) },
+        },
+      })
+    );
+    waterPlane.scale.set(30, 30, 1); // 稍微放大，確保全螢幕覆蓋
+    waterPlane.position.z = 2.0; // 移到前方（粒子的初始 Z 軸大多在 0 附近，相機在 7.2）
+
+    const group = new THREE.Group();
+    scene.add(group);
+    scene.add(waterPlane);
+
+    const COUNT = 36000;
+    const originPosition = new Float32Array(COUNT * 3);
+    const currentPosition = new Float32Array(COUNT * 3);
+    const velocity = new Float32Array(COUNT * 3);
+    const scatterEnergy = new Float32Array(COUNT);
+    const scatterHold = new Float32Array(COUNT);
+    const particleSize = new Float32Array(COUNT);
+    const particleSeed = new Float32Array(COUNT);
+    const particleColor = new Float32Array(COUNT * 3);
+
+    const TAU = Math.PI * 2;
+    const axisA = new THREE.Vector3(1, 1, 0.38).normalize();
+    const axisB = new THREE.Vector3(-1, 1, -0.38).normalize();
+
+    function makeBasis(axis) {
+      const helper = Math.abs(axis.y) > 0.85 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+      const side = new THREE.Vector3().crossVectors(axis, helper).normalize();
+      const up = new THREE.Vector3().crossVectors(side, axis).normalize();
+      return { axis, side, up };
+    }
+
+    const basisA = makeBasis(axisA);
+    const basisB = makeBasis(axisB);
+
+    function gaussianish() {
+      return (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 0.5;
+    }
+
+    function fillParticle(index) {
+      const arm = index % 2;
+      const basis = arm === 0 ? basisA : basisB;
+
+      const bias = Math.pow(Math.random(), 0.72);
+      const direction = Math.random() < 0.5 ? -1 : 1;
+      const u = direction * bias;
+      const centerWeight = 1 - Math.min(1, Math.abs(u));
+      const thickness = 0.07 + Math.pow(Math.random(), 1.8) * (0.46 * (0.24 + centerWeight * 0.9));
+      const theta = Math.random() * TAU;
+      const twist = Math.sin(u * 3.5 + arm * 1.2) * 0.25 + gaussianish() * 0.12;
+      const wobble = Math.sin(u * 6.2 + arm * 2.8) * 0.05;
+      const flank = Math.cos(theta + twist) * thickness;
+      const lift = Math.sin(theta - twist) * thickness;
+      const spine = u * 2.65;
+
+      const x =
+        basis.axis.x * spine +
+        basis.side.x * flank +
+        basis.up.x * lift +
+        basis.side.x * wobble * centerWeight;
+      const y =
+        basis.axis.y * spine +
+        basis.side.y * flank +
+        basis.up.y * lift +
+        basis.up.y * wobble * centerWeight;
+      const z =
+        basis.axis.z * spine +
+        basis.side.z * flank +
+        basis.up.z * lift +
+        (Math.sin(u * 4.8 + arm * 5.2) * 0.08 + gaussianish() * 0.02);
+
+      const offset = index * 3;
+      originPosition[offset + 0] = x;
+      originPosition[offset + 1] = y;
+      originPosition[offset + 2] = z;
+
+      currentPosition[offset + 0] = x;
+      currentPosition[offset + 1] = y;
+      currentPosition[offset + 2] = z;
+
+      velocity[offset + 0] = 0;
+      velocity[offset + 1] = 0;
+      velocity[offset + 2] = 0;
+      scatterEnergy[index] = 0;
+      scatterHold[index] = 0;
+
+      particleSeed[index] = Math.random();
+      particleSize[index] = 0.8 + Math.pow(Math.random(), 3.0) * 2.9 + centerWeight * 1.1;
+
+      const c = new THREE.Color();
+      const hue = 0.47 + 0.07 * (arm === 0 ? 1 : -1) + (u * 0.03) + gaussianish() * 0.01;
+      const sat = 0.65 + centerWeight * 0.18;
+      const light = 0.58 + centerWeight * 0.12;
+      c.setHSL((hue + 1) % 1, Math.min(1, sat), Math.min(0.92, light));
+      particleColor[offset + 0] = c.r;
+      particleColor[offset + 1] = c.g;
+      particleColor[offset + 2] = c.b;
+    }
+
+    for (let i = 0; i < COUNT; i += 1) {
+      fillParticle(i);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(currentPosition, 3));
+    geometry.setAttribute('aOrigin', new THREE.BufferAttribute(originPosition, 3));
+    geometry.setAttribute('aSeed', new THREE.BufferAttribute(particleSeed, 1));
+    geometry.setAttribute('aSize', new THREE.BufferAttribute(particleSize, 1));
+    geometry.setAttribute('aColor', new THREE.BufferAttribute(particleColor, 3));
+    geometry.computeBoundingSphere();
+
+    const shaderMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      blending: THREE.AdditiveBlending,
+      vertexShader: `
+        precision highp float;
+
+        attribute float aSeed;
+        attribute float aSize;
+        attribute vec3 aColor;
+
+        uniform float uTime;
+        uniform float uPixelRatio;
+        uniform float uSize;
+
+        varying vec3 vColor;
+        varying float vSeed;
+        varying float vDepth;
+
+        void main() {
+          vColor = aColor;
+          vSeed = aSeed;
+
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          vDepth = -mvPosition.z;
+
+          float pulse = 1.0 + sin(uTime * 1.3 + aSeed * 31.0) * 0.05;
+          float size = aSize * uSize * uPixelRatio * pulse;
+          gl_PointSize = clamp(size * (190.0 / vDepth), 0.9, 20.0);
+
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+
+        varying vec3 vColor;
+        varying float vSeed;
+        varying float vDepth;
+
+        void main() {
+          vec2 uv = gl_PointCoord - 0.5;
+          float dist = length(uv);
+
+          float core = smoothstep(0.16, 0.0, dist);
+          float halo = smoothstep(0.52, 0.12, dist);
+          float aura = smoothstep(0.66, 0.25, dist);
+          float alpha = core * 0.52 + halo * 0.18 + aura * 0.06;
+
+          float depthFade = smoothstep(18.0, 3.0, vDepth);
+          float shimmer = 0.88 + 0.12 * sin(vSeed * 67.0 + vDepth * 0.18);
+
+          vec3 color = vColor * (1.0 + core * 0.3 + halo * 0.12);
+          color += vec3(0.12, 0.28, 0.34) * halo * 0.12;
+          color += vec3(0.52, 0.9, 1.0) * core * 0.05;
+          color *= shimmer;
+
+          if (alpha < 0.01) discard;
+          gl_FragColor = vec4(color, alpha * depthFade);
+        }
+      `,
+      uniforms: {
+        uTime: { value: 0 },
+        uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+        uSize: { value: 1.0 },
+      },
+    });
+
+    const points = new THREE.Points(geometry, shaderMaterial);
+    points.frustumCulled = false;
+    group.add(points);
+
+    const pointer = {
+      active: false,
+      ndcX: 0,
+      ndcY: 0,
+      speed: 0,
+      lastX: window.innerWidth * 0.5,
+      lastY: window.innerHeight * 0.5,
+      lastTime: performance.now(),
+    };
+    const ripples = Array.from({ length: 8 }, () => ({
+      x: 0.5,
+      y: 0.5,
+      start: -10,
+      strength: 0,
+    }));
+
+    const raycaster = new THREE.Raycaster();
+    const pointerNdc = new THREE.Vector2();
+    const restPointer = new THREE.Vector2(0.5, 0.5);
+    const worldPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const pointerWorld = new THREE.Vector3(99, 99, 99);
+    const pointerLocal = new THREE.Vector3(99, 99, 99);
+    const localHit = new THREE.Vector3();
+
+    function updatePointer(e) {
+      const now = performance.now();
+      const dx = e.clientX - pointer.lastX;
+      const dy = e.clientY - pointer.lastY;
+      const dt = Math.max(8, now - pointer.lastTime);
+
+      pointer.speed = Math.min(4000, (Math.hypot(dx, dy) / dt) * 1000);
+      pointer.lastX = e.clientX;
+      pointer.lastY = e.clientY;
+      pointer.lastTime = now;
+      pointerNdc.x = (e.clientX / window.innerWidth) * 2 - 1;
+      pointerNdc.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      pointer.active = true;
+
+      const rippleStrength = Math.min(1.4, 0.22 + pointer.speed / 1000);
+      ripples.pop();
+      ripples.unshift({
+        x: e.clientX / window.innerWidth,
+        y: 1.0 - e.clientY / window.innerHeight,
+        start: now * 0.001,
+        strength: rippleStrength,
+      });
+      if (cursorDot) {
+        cursorDot.style.opacity = '1';
+        cursorDot.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) scale(${Math.min(1.8, 1 + pointer.speed / 1800)})`;
+      }
+    }
+
+    window.addEventListener('pointermove', updatePointer, { passive: true });
+    window.addEventListener('pointerdown', updatePointer, { passive: true });
+    window.addEventListener('pointerleave', () => {
+      pointer.active = false;
+      if (cursorDot) cursorDot.style.opacity = '0';
+    });
+    window.addEventListener('blur', () => {
+      pointer.active = false;
+      if (cursorDot) cursorDot.style.opacity = '0';
+    });
+
+    function resize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+      shaderMaterial.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 2);
+    }
+
+    window.addEventListener('resize', resize, { passive: true });
+
+    let last = performance.now();
+    const springStrength = 11.5;
+    const drag = 0.862;
+    const buoyancy = 0.09;
+    const sway = 0.045;
+    const repulsionRadius = 2.35;
+    const repulsionRadiusSq = repulsionRadius * repulsionRadius;
+
+    function step(now) {
+      const dt = Math.min(0.033, (now - last) / 1000 || 0.016);
+      last = now;
+      const t = now * 0.001;
+      const pointerStrength = pointer.active ? Math.min(1.0, 0.15 + pointer.speed / 1100) : 0;
+      waterPlane.material.uniforms.uTime.value = t;
+      waterPlane.material.uniforms.uPointer.value.lerp(pointer.active ? pointerNdc : restPointer, 0.12);
+      waterPlane.material.uniforms.uStrength.value = pointerStrength;
+      for (let i = 0; i < ripples.length; i += 1) {
+        const r = ripples[i];
+        waterPlane.material.uniforms.uRipples.value[i].set(r.x, r.y, r.start, r.strength);
+      }
+
+      group.rotation.y = Math.sin(t * 0.22) * 0.26;
+      group.rotation.x = Math.sin(t * 0.17) * 0.14 - 0.05;
+      group.rotation.z = Math.sin(t * 0.13) * 0.06;
+      group.position.y = Math.sin(t * 0.37) * 0.05;
+
+      if (pointer.active) {
+        raycaster.setFromCamera(pointerNdc, camera);
+        if (raycaster.ray.intersectPlane(worldPlane, pointerWorld)) {
+          group.updateWorldMatrix(true, false);
+          localHit.copy(pointerWorld);
+          group.worldToLocal(localHit);
+          pointerLocal.copy(localHit);
+        }
+      }
+
+      shaderMaterial.uniforms.uTime.value = t;
+
+      for (let i = 0, j = 0; i < COUNT; i += 1, j += 3) {
+        const ox = originPosition[j + 0];
+        const oy = originPosition[j + 1];
+        const oz = originPosition[j + 2];
+
+        let cx = currentPosition[j + 0];
+        let cy = currentPosition[j + 1];
+        let cz = currentPosition[j + 2];
+
+        let vx = velocity[j + 0];
+        let vy = velocity[j + 1];
+        let vz = velocity[j + 2];
+        let energy = scatterEnergy[i];
+        let hold = scatterHold[i];
+
+        const dx = cx - ox;
+        const dy = cy - oy;
+        const dz = cz - oz;
+
+        const seed = particleSeed[i];
+        const driftX = Math.sin(t * 0.9 + seed * 19.2) * sway;
+        const driftY = Math.cos(t * 0.72 + seed * 13.7) * buoyancy;
+        const driftZ = Math.sin(t * 0.8 + seed * 11.4) * sway;
+
+        vx += driftX * dt;
+        vy += driftY * dt;
+        vz += driftZ * dt;
+
+        if (pointer.active) {
+          const rx = cx - pointerLocal.x;
+          const ry = cy - pointerLocal.y;
+          const rz = cz - pointerLocal.z;
+          const distSq = rx * rx + ry * ry + rz * rz;
+
+          if (distSq < repulsionRadiusSq) {
+            const dist = Math.sqrt(distSq) + 0.0001;
+            const falloff = Math.exp(-distSq * 0.85);
+            const burst = 1.1 + Math.min(4.5, pointer.speed / 650);
+            const force = falloff * burst * 38.0; // 提高排斥力基數
+
+            vx += (rx / dist) * force * dt;
+            vy += (ry / dist) * force * dt;
+            vz += (rz / dist) * force * dt;
+
+            const swirl = force * 1.45 * dt; // 大幅調高 Swirl 漩渦切線力
+            vx += (-ry / dist) * swirl;
+            vy += (rx / dist) * swirl;
+            energy = Math.min(2.0, energy + force * 0.02 * dt);
+            hold = Math.min(1.9, hold + 0.7 + force * 0.01 * dt);
+          }
+        }
+
+        energy *= Math.exp(-dt * 0.48);
+        hold *= Math.exp(-dt * 0.18);
+
+        const springMix = springStrength * Math.max(0.05, 1.0 - energy * 0.38 - hold * 0.52);
+        vx += -dx * springMix * dt;
+        vy += -dy * springMix * dt;
+        vz += -dz * springMix * dt;
+
+        if (energy > 0.001 || hold > 0.001) {
+          const wobble = energy * energy + hold * hold * 1.4;
+          vx += Math.sin(t * 2.8 + seed * 29.0) * wobble * 0.16 * dt;
+          vy += Math.cos(t * 2.2 + seed * 21.0) * wobble * 0.11 * dt;
+          vz += Math.sin(t * 3.1 + seed * 13.0) * wobble * 0.14 * dt;
+          vx += Math.sin(seed * 41.0 + t * 0.7) * hold * 0.025;
+          vy += Math.cos(seed * 37.0 + t * 0.9) * hold * 0.02;
+        }
+
+        const dragFrame = Math.pow(drag, dt * 60);
+        vx *= dragFrame;
+        vy *= dragFrame;
+        vz *= dragFrame;
+
+        cx += vx * dt;
+        cy += vy * dt;
+        cz += vz * dt;
+
+        currentPosition[j + 0] = cx;
+        currentPosition[j + 1] = cy;
+        currentPosition[j + 2] = cz;
+        velocity[j + 0] = vx;
+        velocity[j + 1] = vy;
+        velocity[j + 2] = vz;
+        scatterEnergy[i] = energy;
+        scatterHold[i] = hold;
+      }
+
+      geometry.attributes.position.needsUpdate = true;
+      renderer.render(scene, camera);
+      requestAnimationFrame(step);
+    }
+
+    requestAnimationFrame(step);
+  </script>
+</body>
+</html>
