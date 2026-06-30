@@ -135,13 +135,10 @@
     <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
   </header>
 
-  <div class="center">
-    <div class="eyebrow">Selected Works</div>
-    <nav class="list" id="list"></nav>
-  </div>
+  <div class="center"></div>
 
   <footer>
-    <span class="hint">滑動滑鼠 — 像水一樣撥開鹽粒，汽油虹光隨波蕩漾</span>
+    <span></span>
     <span>xarts.games</span>
   </footer>
 </div>
@@ -161,19 +158,8 @@ const WORKS = [
   { no:'04', title:'Your Next Work',tag:'Coming Soon',       url:'#',           img:'/assets/shot-chat.png' },
 ];
 
-/* ===== 作品清單 DOM ===== */
-const list = document.getElementById('list');
+/* ===== 游標 ===== */
 const cursor = document.getElementById('cursor');
-
-WORKS.forEach((w, i) => {
-  const a = document.createElement('a');
-  a.className = 'work'; a.href = w.url;
-  a.innerHTML = `<span class="no">${w.no}</span><span class="ttl">${w.title}</span><span class="tag">${w.tag}</span>`;
-  a.addEventListener('mouseenter', () => { switchTo(i); cursor.classList.add('big'); });
-  list.appendChild(a);
-});
-list.addEventListener('mouseenter', () => list.classList.add('hovering'));
-list.addEventListener('mouseleave', () => { list.classList.remove('hovering'); cursor.classList.remove('big'); switchTo(-1); });
 
 /* ===== 往下滑出現的作品大區塊(70% 左右交替,圖黑灰→hover 彩色,標題翻滾) ===== */
 const worksWrap = document.getElementById('works');
