@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>X-Arts — Selected Works (Fluid Shader Edition)</title>
+<title>X-Arts — Selected Works</title>
 <style>
   :root{ --fg:#f2f2f0; --dim:rgba(242,242,240,.45); }
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;background:#0a0a0c;color:var(--fg);overflow:hidden;
+  html,body{height:100%;background:#08080a;color:var(--fg);overflow:hidden;
     font-family:"Helvetica Neue",-apple-system,"PingFang TC","Noto Sans TC",sans-serif;
     -webkit-font-smoothing:antialiased}
   canvas#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0}
@@ -96,7 +96,7 @@
   </div>
 
   <footer>
-    <span class="hint">滑動滑鼠 — 感受絲滑流體水波物理</span>
+    <span class="hint">滑動滑鼠 — 像水一樣撥開鹽粒，汽油虹光隨波蕩漾</span>
     <span>xarts.games</span>
   </footer>
 </div>
@@ -106,10 +106,10 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
 /* ===== 你的 4 個作品 ===== */
 const WORKS = [
-  { no:'01', title:'CatInsight AI', tag:'AI Stock Signals',  img:'assets/shot-rank.png',  url:'#' },
-  { no:'02', title:'3D Museum',     tag:'WebGL Gallery',     img:'assets/shot-detail.png', url:'gallery.html' },
-  { no:'03', title:'Fluid Lab',     tag:'GPGPU Water',       img:'assets/cat-poster.jpg',  url:'water.html' },
-  { no:'04', title:'Your Next Work',tag:'Coming Soon',       img:'assets/shot-chat.png',   url:'#' },
+  { no:'01', title:'CatInsight AI', tag:'AI Stock Signals',  url:'#' },
+  { no:'02', title:'3D Museum',     tag:'WebGL Gallery',     url:'gallery.html' },
+  { no:'03', title:'Fluid Lab',     tag:'GPGPU Water',       url:'water.html' },
+  { no:'04', title:'Your Next Work',tag:'Coming Soon',       url:'#' },
 ];
 
 /* ===== 作品清單 DOM ===== */
@@ -128,7 +128,6 @@ list.addEventListener('mouseleave', () => { list.classList.remove('hovering'); c
 
 /* ===== 滑鼠圓球位置跟隨 ===== */
 const cur = { x: innerWidth/2, y: innerHeight/2, tx: innerWidth/2, ty: innerHeight/2 };
-addEventListener('pointermove', e => { cur.tx = e.clientX; cur.ty = e.clientY; });
 
 /* ===== 左上貓臉:眼睛跟滑鼠 + 眨眼 ===== */
 const face = document.getElementById('face');
@@ -140,217 +139,240 @@ faceCenter(); addEventListener('resize', faceCenter); addEventListener('scroll',
 (function blink(){ eyesG.classList.add('blink'); setTimeout(()=>eyesG.classList.remove('blink'),140);
   setTimeout(blink, 2200 + Math.random()*3200); })();
 
-/* ===== WebGL 設置 ===== */
-const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias:false });
+/* ===== WebGL：3D 鹽粒 X 粒子場 ===== */
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias:true, alpha:false });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x08080a, 1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-const cam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
-const geo = new THREE.PlaneGeometry(2,2);
+
 const scene = new THREE.Scene();
-const quad = new THREE.Mesh(geo); scene.add(quad);
+const cam = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
+cam.position.set(0, 0, 6);
+cam.lookAt(0, 0, 0);
 
-const rtO = { type:THREE.HalfFloatType, depthBuffer:false, stencilBuffer:false,
-  minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter };
-let rtA = new THREE.WebGLRenderTarget(1,1,rtO), rtB = new THREE.WebGLRenderTarget(1,1,rtO);
+/* --- 產生排成「X」的粒子家位置 --- */
+const COUNT = 46000;
+const home = new Float32Array(COUNT * 3);
+const seed = new Float32Array(COUNT);
+const ARM_LEN = 2.05, ARM_W = 0.14, ARM_D = 0.15;
+// 近似常態分佈（讓鹽粒邊緣柔散，中央較密）
+function gauss(){ return ((Math.random()+Math.random()+Math.random()) / 1.5) - 1.0; }
+const SQ = 1/Math.SQRT2;
+for (let i=0;i<COUNT;i++){
+  const arm = Math.random() < 0.5 ? 1 : -1;        // 兩條對角臂組成 X
+  const dx = SQ, dy = arm*SQ;                        // 臂方向
+  const px = -dy, py = dx;                           // 垂直方向（寬度）
+  const u = (Math.random()*2-1) * ARM_LEN;           // 沿臂長
+  const v = gauss() * ARM_W;                         // 臂寬（柔散）
+  const w = gauss() * ARM_D;                         // 厚度（立體感）
+  home[i*3+0] = u*dx + v*px;
+  home[i*3+1] = u*dy + v*py;
+  home[i*3+2] = w;
+  seed[i] = Math.random();
+}
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(home.slice(), 3)); // 佔位，實際位移在 shader
+geo.setAttribute('aHome', new THREE.BufferAttribute(home, 3));
+geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
 
-const vert = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
+const MAX_RIPPLES = 12;
+const ripUniform = [];
+for (let i=0;i<MAX_RIPPLES;i++) ripUniform.push(new THREE.Vector3());
 
-/* ===== 物理流體水波模擬 Shader ===== */
-const simFrag = `
+const uniforms = {
+  uTime:        { value: 0 },
+  uMouse:       { value: new THREE.Vector3(99,99,0) }, // 世界座標滑鼠（z=0 平面）
+  uMouseStr:    { value: 0 },
+  uRepelRadius: { value: 0.10 },
+  uRipples:     { value: ripUniform },
+  uRippleCount: { value: 0 },
+  uColor:       { value: 0.85 },
+  uHover:       { value: 0 },
+  uSize:        { value: Math.min(devicePixelRatio,2) },
+};
+
+const vert = `
 precision highp float;
-varying vec2 vUv;
-uniform sampler2D uPrev;
-uniform vec2 uMouse;
-uniform vec2 uVelocity;
-uniform vec2 uRes;
-uniform float uAspect;
-uniform float uFade;
-uniform float uRadius;
-uniform float uStrength;
+attribute vec3 aHome;
+attribute float aSeed;
+uniform float uTime, uMouseStr, uRepelRadius, uColor, uHover, uSize;
+uniform vec3 uMouse;
+uniform vec3 uRipples[${MAX_RIPPLES}];
+uniform int uRippleCount;
+varying float vDisp; varying float vDepth; varying float vSeed;
 
-void main() {
-    vec2 st = 1.0 / uRes;
-    vec4 current = texture2D(uPrev, vUv);
-    
-    // Laplacian 算子計算周圍水位的拉力差差值
-    float n = texture2D(uPrev, vUv + vec2(0.0, st.y)).z;
-    float s = texture2D(uPrev, vUv - vec2(0.0, st.y)).z;
-    float e = texture2D(uPrev, vUv + vec2(st.x, 0.0)).z;
-    float w = texture2D(uPrev, vUv - vec2(st.x, 0.0)).z;
-    
-    float waveSpeed = 0.25;
-    float dVelocity = (n + s + e + w - 4.0 * current.z) * waveSpeed;
-    
-    vec2 velocity = current.xy * uFade;
-    float height = (current.z + current.w + dVelocity) * uFade;
-    
-    // 計算滑鼠物理交互力
-    vec2 distVec = vUv - uMouse;
-    distVec.x *= uAspect;
-    float mouseForce = exp(-dot(distVec, distVec) / uRadius);
-    
-    velocity += uVelocity * mouseForce * uStrength;
-    height += length(uVelocity) * mouseForce * uStrength * 0.5;
-    
-    gl_FragColor = vec4(velocity, height, current.z);
+vec3 rotX(vec3 p, float a){ float c=cos(a),s=sin(a); return vec3(p.x, c*p.y-s*p.z, s*p.y+c*p.z); }
+vec3 rotY(vec3 p, float a){ float c=cos(a),s=sin(a); return vec3(c*p.x+s*p.z, p.y, -s*p.x+c*p.z); }
+
+void main(){
+  // 緩慢翻轉，立體 X
+  vec3 p = aHome;
+  p = rotY(p, sin(uTime*0.12)*0.32);
+  p = rotX(p, sin(uTime*0.09)*0.17);
+
+  // 鹽粒在原地細微漂浮（閒置也有生命）
+  p += 0.013 * vec3(
+      sin(uTime*0.7 + aSeed*40.0),
+      cos(uTime*0.6 + aSeed*33.0),
+      sin(uTime*0.9 + aSeed*27.0));
+
+  float disp = 0.0;
+
+  // 滑鼠像水一樣把鹽粒撥開
+  vec2 md = p.xy - uMouse.xy;
+  float mdist = length(md);
+  float infl = exp(-mdist*mdist / uRepelRadius) * uMouseStr;
+  vec2 mdir = mdist > 1e-4 ? md/mdist : vec2(0.0);
+  p.xy += mdir * infl;
+  p.z  += infl * 0.55;
+  disp += infl;
+
+  // 擴散水波（一圈圈推開）
+  for (int i=0;i<${MAX_RIPPLES};i++){
+    if (i >= uRippleCount) break;
+    vec3 r = uRipples[i];
+    float age = r.z;
+    float rad = age * 1.7;
+    float dd  = distance(p.xy, r.xy);
+    float band = exp(-pow((dd - rad)*3.2, 2.0));   // 細環
+    float life = max(0.0, 1.0 - age*0.5);
+    vec2 rdir = dd > 1e-4 ? (p.xy - r.xy)/dd : vec2(0.0);
+    p.xy += rdir * band * life * 0.13;
+    p.z  += band * life * 0.20 * sin(age*6.0);
+    disp += band * life;
+  }
+
+  vDisp = disp; vSeed = aSeed;
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  vDepth = -mv.z;
+  gl_Position = projectionMatrix * mv;
+  float s = (24.0 + aSeed*42.0) * (1.0 + uHover*0.35 + disp*0.7);
+  gl_PointSize = s * uSize / -mv.z;
 }`;
 
-/* ===== Lusion 汽油薄膜干涉虹彩折射 Shader ===== */
-const dispFrag = `
+const frag = `
 precision highp float;
-varying vec2 vUv;
-uniform sampler2D uFlow;
-uniform sampler2D uImg0;
-uniform sampler2D uImg1;
-uniform vec2 uCover0;
-uniform vec2 uCover1;
-uniform float uMix;
-uniform float uDistort;
-uniform float uDim;
-uniform float uColor;
+varying float vDisp; varying float vDepth; varying float vSeed;
+uniform float uTime, uColor, uHover;
 
-// 模擬汽油薄膜干涉的虹彩函數
-vec3 getGasolineColor(float speed, vec2 dir, float height) {
-    // 基礎背景色 (跟 Lusion 一樣的深邃暗黑底色)
-    vec3 baseBg = vec3(0.04, 0.04, 0.05);
-    
-    // 根據流速與水波高度，計算干涉係數
-    float interference = speed * 1.8 + abs(height) * 0.4;
-    
-    // 汽油油膜的經典黃金比例色彩常數 (透過調校餘弦參數，讓紅、綠、藍產生相位差)
-    vec3 cA = vec3(0.5, 0.5, 0.5);
-    vec3 cB = vec3(0.5, 0.5, 0.5);
-    vec3 cC = vec3(1.0, 1.0, 1.0);
-    // 關鍵調色盤：控制相位差 (這個比例能調出汽油般的彩虹光澤)
-    vec3 cD = vec3(0.00, 0.33, 0.67) + interference * 0.6; 
-    
-    // 計算出干涉彩虹色
-    vec3 iridescence = cA + cB * cos(6.28318 * (cC * (vUv.y * 0.15 + interference * 0.5) + cD));
-    
-    // 柔化亮部：用飽和度較低的灰潤色代替死白，營造高級感
-    float oilMask = clamp(speed * 2.2 + abs(height) * 3.0, 0.0, 1.0);
-    
-    // 降低發光強度，加入一層油膜的反光質感
-    vec3 finalOil = mix(baseBg, iridescence * 0.75, oilMask * uColor);
-    
-    return finalOil;
-}
+void main(){
+  vec2 pc = gl_PointCoord - 0.5;
+  float r = length(pc);
+  if (r > 0.5) discard;
+  float alpha = smoothstep(0.5, 0.0, r);
+  alpha *= alpha;
 
-vec3 samp(sampler2D tx, vec2 cv, vec2 fl) {
-    // 汽油流動的細微折射扭曲
-    vec2 distortedUv = (vUv - 0.5) * cv + 0.5 + fl * uDistort;
-    return texture2D(tx, distortedUv).rgb;
-}
+  // 汽油薄膜干涉虹彩（餘弦調色盤），刻意「很淺」
+  float t = vSeed + vDisp*0.85 + vDepth*0.14 + uTime*0.03;
+  vec3 a  = vec3(0.70, 0.71, 0.76);
+  vec3 b  = vec3(0.22, 0.20, 0.26);
+  vec3 ph = vec3(0.00, 0.33, 0.67);
+  vec3 irid = a + b * cos(6.28318 * (t + ph));
 
-void main() {
-    vec4 flowData = texture2D(uFlow, vUv);
-    vec2 velocity = flowData.xy;
-    float height = flowData.z;
-    
-    // 結合物理速度與坡度阻尼
-    vec2 finalDistortion = velocity * 0.4 + vec2(height) * 0.03;
-    float speed = length(velocity);
-    
-    // 採樣底圖
-    vec3 imageColor = mix(samp(uImg0, uCover0, finalDistortion), samp(uImg1, uCover1, finalDistortion), uMix);
-    
-    // 呼叫汽油油膜調色盤
-    vec3 oilGlow = getGasolineColor(speed, velocity, height);
-    
-    // 疊加：底圖亮度壓低，疊上高檔的汽油折射光
-    vec3 finalColor = imageColor * uDim + oilGlow;
-    
-    // 微微加上一層細緻的暗部環境光遮蔽 (AO)，讓邊緣更有厚度感
-    finalColor += vec3(height * 0.03);
-    
-    gl_FragColor = vec4(finalColor, 1.0);
+  float sheen = clamp(vDisp*1.3, 0.0, 1.0);          // 被擾動越多→虹光越強
+  vec3 salt = vec3(0.58, 0.60, 0.66);                // 靜止時的淡鹽白
+  vec3 col = mix(salt, irid, (0.30 + sheen*0.70) * uColor);
+  col += sheen * 0.18;                                // 撥開瞬間的閃光
+  col += uHover * 0.08;
+
+  gl_FragColor = vec4(col, alpha * (0.55 + sheen*0.40 + uHover*0.15));
 }`;
 
-/* ===== 材質與變數初始化 (已微調為 Lusion 慢速浮油變數) ===== */
-const simMat = new THREE.ShaderMaterial({ vertexShader:vert, fragmentShader:simFrag, uniforms:{
-  uPrev:{value:null}, uMouse:{value:new THREE.Vector2(.5,.5)}, uVelocity:{value:new THREE.Vector2()},
-  uRes:{value:new THREE.Vector2(1,1)}, uAspect:{value:1}, 
-  uFade:{value:.94},       // 調降阻尼，讓浮油波動散開時更柔和、不碎散
-  uRadius:{value:.0045},   // 放大滑鼠半徑，讓推動浮油的範圍更平滑自然
-  uStrength:{value:.35}    // 降低力道，防止畫面噴出突兀的暴亮白點
-}});
+const mat = new THREE.ShaderMaterial({
+  uniforms, vertexShader: vert, fragmentShader: frag,
+  transparent: true, depthTest: false, depthWrite: false,
+  blending: THREE.NormalBlending,
+});
+const points = new THREE.Points(geo, mat);
+scene.add(points);
 
-const dispMat = new THREE.ShaderMaterial({ vertexShader:vert, fragmentShader:dispFrag, uniforms:{
-  uFlow:{value:null}, uImg0:{value:null}, uImg1:{value:null},
-  uCover0:{value:new THREE.Vector2(1,1)}, uCover1:{value:new THREE.Vector2(1,1)},
-  uMix:{value:0}, uDistort:{value:.14}, uDim:{value:.62}, uColor:{value:.55} }});
+/* ===== 滑鼠 → 世界座標（z=0 平面） + 水波生成 ===== */
+const ndc = new THREE.Vector2(99, 99);
+const raycaster = new THREE.Raycaster();
+const plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+const hit = new THREE.Vector3();
+let lastSpawn = 0, lastMX = 0, lastMY = 0, mouseInside = false;
+const ripples = []; // {x,y,age}
 
-function gradientTex(){
-  const c=document.createElement('canvas'); c.width=1280; c.height=800; const g=c.getContext('2d');
-  const grd=g.createRadialGradient(640,400,80,640,400,820);
-  grd.addColorStop(0,'#1a1d2b'); grd.addColorStop(1,'#0a0a0c');
-  g.fillStyle=grd; g.fillRect(0,0,1280,800);
-  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.userData.aspect=1280/800; return t;
+addEventListener('pointermove', e => {
+  cur.tx = e.clientX; cur.ty = e.clientY;
+  mouseInside = true;
+  ndc.set(e.clientX/innerWidth*2 - 1, -(e.clientY/innerHeight)*2 + 1);
+  raycaster.setFromCamera(ndc, cam);
+  if (raycaster.ray.intersectPlane(plane, hit)){
+    uniforms.uMouse.value.copy(hit);
+  }
+  uniforms.uMouseStr.value = 0.26;     // 撥開力道（移動時拉滿）
+  // 依移動速度灑下水波
+  const now = performance.now();
+  const dist = Math.hypot(e.clientX-lastMX, e.clientY-lastMY);
+  if (now - lastSpawn > 45 && dist > 3){
+    spawnRipple(hit.x, hit.y);
+    lastSpawn = now; lastMX = e.clientX; lastMY = e.clientY;
+  }
+});
+addEventListener('pointerdown', () => { spawnRipple(uniforms.uMouse.value.x, uniforms.uMouse.value.y); });
+addEventListener('pointerleave', () => { mouseInside = false; });
+
+function spawnRipple(x, y){
+  ripples.push({ x, y, age: 0 });
+  if (ripples.length > MAX_RIPPLES) ripples.shift();
 }
-const defaultTex = gradientTex();
-const texes = WORKS.map(()=>defaultTex);
-const loader = new THREE.TextureLoader();
-WORKS.forEach((w,i)=> loader.load(w.img, t=>{
-  t.colorSpace=THREE.SRGBColorSpace; t.userData.aspect=(t.image&&t.image.width)?t.image.width/t.image.height:1.5;
-  texes[i]=t;
-}));
 
-let aspect0 = defaultTex.userData.aspect, aspect1 = defaultTex.userData.aspect;
-dispMat.uniforms.uImg0.value = defaultTex; dispMat.uniforms.uImg1.value = defaultTex;
+/* ===== hover 作品：增強虹光 ===== */
+let hoverTarget = 0;
+function switchTo(i){ hoverTarget = i < 0 ? 0 : 1; }
 
-let mixTarget = 0, fading = false;
-function switchTo(i){
-  const tex = (i<0)? defaultTex : texes[i];
-  if (dispMat.uniforms.uImg1.value === tex && mixTarget===1) return;
-  dispMat.uniforms.uImg0.value = dispMat.uniforms.uMix.value>0.5 ? dispMat.uniforms.uImg1.value : dispMat.uniforms.uImg0.value;
-  aspect0 = dispMat.uniforms.uMix.value>0.5 ? aspect1 : aspect0;
-  dispMat.uniforms.uImg1.value = tex; aspect1 = tex.userData.aspect;
-  dispMat.uniforms.uMix.value = 0; mixTarget = 1; fading = true;
-}
-
-function coverFor(asp){ const sa=innerWidth/innerHeight; return sa>asp ? [1, asp/sa] : [sa/asp, 1]; }
-
-const mouse=new THREE.Vector2(.5,.5), prev=new THREE.Vector2(.5,.5), vel=new THREE.Vector2();
-addEventListener('pointermove', e=>{ mouse.set(e.clientX/innerWidth, 1-e.clientY/innerHeight);
-  vel.subVectors(mouse,prev).multiplyScalar(60); prev.copy(mouse); });
-
+/* ===== resize ===== */
 function resize(){
-  const w=innerWidth,h=innerHeight,dpr=renderer.getPixelRatio();
-  renderer.setSize(w,h);
-  const sw=Math.max(2,Math.round(w*dpr*.5)), sh=Math.max(2,Math.round(h*dpr*.5));
-  rtA.setSize(sw,sh); rtB.setSize(sw,sh);
-  simMat.uniforms.uRes.value.set(sw,sh); simMat.uniforms.uAspect.value=w/h;
+  renderer.setSize(innerWidth, innerHeight);
+  cam.aspect = innerWidth/innerHeight; cam.updateProjectionMatrix();
+  uniforms.uSize.value = Math.min(devicePixelRatio, 2);
 }
 addEventListener('resize', resize); resize();
 
-/* ===== 動畫渲染循環 (Render Loop) ===== */
+/* ===== 動畫循環 ===== */
+let t0 = performance.now();
 function frame(){
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - t0)/1000); t0 = now;
+  uniforms.uTime.value += dt;
+
+  // 游標球
   cur.x += (cur.tx-cur.x)*.18; cur.y += (cur.ty-cur.y)*.18;
   cursor.style.transform = `translate(${cur.x}px,${cur.y}px) translate(-50%,-50%)`;
-  
+
   // 貓眼注視
   { const dx=cur.tx-fc.x, dy=cur.ty-fc.y, d=Math.hypot(dx,dy)||1, k=Math.min(1,d/260)*4.6;
     const ox=(dx/d*k).toFixed(1), oy=(dy/d*k).toFixed(1);
     pupils.forEach(p=>p.setAttribute('transform',`translate(${ox} ${oy})`)); }
-    
-  // 交叉淡入
-  if (fading){ const m=dispMat.uniforms.uMix; m.value += (mixTarget-m.value)*.08;
-    if (Math.abs(mixTarget-m.value)<.01){ m.value=mixTarget; fading=false;
-      dispMat.uniforms.uImg0.value=dispMat.uniforms.uImg1.value; aspect0=aspect1; m.value=0; mixTarget=0; } }
-  dispMat.uniforms.uCover0.value.set(...coverFor(aspect0));
-  dispMat.uniforms.uCover1.value.set(...coverFor(aspect1));
-  
-  // 核心雙緩衝流體模擬運算 (Ping-pong buffer loop)
-  quad.material=simMat; simMat.uniforms.uPrev.value=rtA.texture;
-  simMat.uniforms.uMouse.value.copy(mouse); simMat.uniforms.uVelocity.value.copy(vel);
-  renderer.setRenderTarget(rtB); renderer.render(scene,cam);
-  [rtA,rtB]=[rtB,rtA];
-  
-  // 畫布顯示與折射疊加
-  quad.material=dispMat; dispMat.uniforms.uFlow.value=rtA.texture;
-  renderer.setRenderTarget(null); renderer.render(scene,cam);
-  
-  vel.multiplyScalar(.86); // 速度物理阻尼
+
+  // 滑鼠撥開力道在靜止/離開時緩緩鬆手，X 重新聚合
+  if (!mouseInside) uniforms.uMouseStr.value *= 0.92;
+  else uniforms.uMouseStr.value *= 0.96;
+
+  // hover 虹光過渡
+  uniforms.uHover.value += (hoverTarget - uniforms.uHover.value) * 0.06;
+  uniforms.uColor.value = 0.85 + uniforms.uHover.value * 0.5;
+
+  // 偶爾自動冒一圈水波，畫面常保流動
+  if (Math.random() < 0.012){
+    spawnRipple((Math.random()*2-1)*1.6, (Math.random()*2-1)*1.6);
+  }
+
+  // 更新水波（年齡增長、消亡）
+  for (let i=ripples.length-1; i>=0; i--){
+    ripples[i].age += dt * 1.5;
+    if (ripples[i].age > 2.0) ripples.splice(i, 1);
+  }
+  for (let i=0;i<MAX_RIPPLES;i++){
+    const rp = ripples[i];
+    if (rp) ripUniform[i].set(rp.x, rp.y, rp.age);
+    else ripUniform[i].set(0, 0, 99); // 失效（life=0）
+  }
+  uniforms.uRippleCount.value = ripples.length;
+
+  renderer.render(scene, cam);
   requestAnimationFrame(frame);
 }
 frame();
