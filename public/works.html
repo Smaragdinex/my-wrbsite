@@ -170,6 +170,28 @@ const homeData = new Float32Array(COUNT*4);
 const aHome = new Float32Array(COUNT*3);
 const aRef  = new Float32Array(COUNT*2);
 const aSeed = new Float32Array(COUNT);
+const aColor = new Float32Array(COUNT*3);
+
+// 程式生成「星雲色票」:X 的每顆粒子依其 xy 取色 → 彩色點雲(取代原本灰色)
+const NW = 256;
+const ncv = document.createElement('canvas'); ncv.width = ncv.height = NW;
+const nctx = ncv.getContext('2d');
+nctx.fillStyle = '#0e1626'; nctx.fillRect(0,0,NW,NW);              // 暗藍底(空隙也有色)
+nctx.globalCompositeOperation = 'lighter';
+const nebBlobs = [
+  [0.30,0.30, 95, '120,175,255'],   // 藍
+  [0.72,0.26, 92, '178,128,255'],   // 紫
+  [0.80,0.68, 98, '120,235,210'],   // 青綠
+  [0.28,0.74, 98, '255,150,200'],   // 粉
+  [0.50,0.50,130, '150,205,255'],   // 中央淡藍
+];
+for (const [cx,cy,rr,rgb] of nebBlobs){
+  const g = nctx.createRadialGradient(cx*NW,cy*NW,0, cx*NW,cy*NW,rr);
+  g.addColorStop(0, 'rgba('+rgb+',0.85)'); g.addColorStop(1, 'rgba('+rgb+',0)');
+  nctx.fillStyle = g; nctx.fillRect(0,0,NW,NW);
+}
+const nebPix = nctx.getImageData(0,0,NW,NW).data;
+
 for (let i=0;i<COUNT;i++){
   const arm = Math.random()<0.5 ? 1 : -1;
   const dx = SQ, dy = arm*SQ, px = -dy, py = dx;
@@ -182,6 +204,13 @@ for (let i=0;i<COUNT;i++){
   aHome[i*3+0]=hx; aHome[i*3+1]=hy; aHome[i*3+2]=hz;
   aRef[i*2+0]=((i%TEX)+0.5)/TEX; aRef[i*2+1]=((Math.floor(i/TEX))+0.5)/TEX;
   aSeed[i]=sd;
+  // 依 home xy(約 ±2.5)取星雲色,稍微提亮+加底,確保不過暗
+  const cu = Math.min(0.999, Math.max(0, hx/5.0 + 0.5));
+  const cv = Math.min(0.999, Math.max(0, 0.5 - hy/5.0));
+  const ci = (((cv*NW)|0)*NW + ((cu*NW)|0))*4;
+  aColor[i*3+0] = Math.min(1, nebPix[ci]  /255*1.5 + 0.08);
+  aColor[i*3+1] = Math.min(1, nebPix[ci+1]/255*1.5 + 0.08);
+  aColor[i*3+2] = Math.min(1, nebPix[ci+2]/255*1.5 + 0.08);
 }
 const homeTex = new THREE.DataTexture(homeData, TEX, TEX, THREE.RGBAFormat, THREE.FloatType);
 homeTex.minFilter = homeTex.magFilter = THREE.NearestFilter;
@@ -394,6 +423,7 @@ geo.setAttribute('position', new THREE.BufferAttribute(aHome.slice(), 3)); // �
 geo.setAttribute('aHome', new THREE.BufferAttribute(aHome, 3));
 geo.setAttribute('aRef',  new THREE.BufferAttribute(aRef, 2));
 geo.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 1));
+geo.setAttribute('aColor', new THREE.BufferAttribute(aColor, 3));
 
 const pointsMat = new THREE.ShaderMaterial({
   transparent:true, depthTest:false, depthWrite:false, blending:THREE.NormalBlending,
@@ -401,16 +431,16 @@ const pointsMat = new THREE.ShaderMaterial({
     uSize:{value:Math.min(devicePixelRatio,2)}, uHover:{value:0} },
   vertexShader:`
 precision highp float;
-attribute vec3 aHome; attribute vec2 aRef; attribute float aSeed;
+attribute vec3 aHome; attribute vec2 aRef; attribute float aSeed; attribute vec3 aColor;
 uniform sampler2D uOff, uVel;
 uniform float uTime, uSize, uHover;
-varying float vSpeed; varying float vSeed; varying float vDepth;
+varying float vSpeed; varying float vSeed; varying float vDepth; varying vec3 vColor;
 ${ROT_GLSL}
 void main(){
   vec3 off = texture2D(uOff, aRef).xyz;
   vec3 vel = texture2D(uVel, aRef).xyz;
   vec3 pos = applyRot(aHome, uTime) + off;     // 固定 X:被滑鼠打散後靠彈簧回原位
-  vSpeed = length(vel); vSeed = aSeed;
+  vSpeed = length(vel); vSeed = aSeed; vColor = aColor;
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   vDepth = -mv.z;
   gl_Position = projectionMatrix * mv;
@@ -419,7 +449,7 @@ void main(){
 }`,
   fragmentShader:`
 precision highp float;
-varying float vSpeed; varying float vSeed; varying float vDepth;
+varying float vSpeed; varying float vSeed; varying float vDepth; varying vec3 vColor;
 uniform float uTime, uHover;
 vec3 oil(float t){ return 0.5 + 0.5*cos(6.28318*(t + vec3(0.0,0.33,0.67))); }
 void main(){
@@ -429,12 +459,12 @@ void main(){
   float a = smoothstep(0.5, 0.0, r); a *= a;
 
   float sheen = clamp(vSpeed*0.7, 0.0, 1.0);          // 流動時才泛汽油虹光
-  vec3 salt = vec3(0.64, 0.66, 0.70);                 // 偏灰、更淡的鹽粒(中性灰)
+  vec3 base = vColor;                                 // 星雲色票取的顏色(彩色點雲)
   vec3 irid = oil(vSeed + vSpeed*0.6 + vDepth*0.08 + uTime*0.02);
-  vec3 col = mix(salt, mix(salt, irid, 0.45), sheen);
-  col += sheen * 0.12 + uHover * 0.05;
+  vec3 col = mix(base, mix(base, irid, 0.5), sheen);  // 流動時微微泛汽油虹光
+  col += sheen * 0.12 + uHover * 0.06;
 
-  gl_FragColor = vec4(col, a * (0.40 + sheen*0.34 + uHover*0.12));
+  gl_FragColor = vec4(col, a * (0.42 + sheen*0.34 + uHover*0.12));
 }`});
 const points = new THREE.Points(geo, pointsMat);
 const pointsScene = new THREE.Scene(); pointsScene.add(points);
@@ -468,7 +498,7 @@ void main(){
   vB = sin(ph * 3.14159);                                   // 兩端淡出:隱藏循環接縫 + 避免貼臉爆大
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = clamp((5.0 + aSeed*8.0) * uSize / -mv.z, 0.0, 38.0);
+  gl_PointSize = clamp((19.0 + aSeed*22.0) * uSize / -mv.z, 0.0, 48.0);  // 與 X 粒子同基準大小
 }`,
   fragmentShader:`
 precision highp float;
