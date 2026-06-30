@@ -67,24 +67,28 @@
   <header>
     <div class="face" id="face">
       <svg viewBox="0 0 100 100" width="56" height="56" aria-hidden="true">
-        <path d="M24 34 L31 10 L48 28 Z" fill="#f2f2f0"/>
-        <path d="M76 34 L69 10 L52 28 Z" fill="#f2f2f0"/>
-        <path d="M30 28 L33 17 L41 27 Z" fill="#e58a9a"/>
-        <path d="M70 28 L67 17 L59 27 Z" fill="#e58a9a"/>
-        <circle cx="50" cy="56" r="33" fill="#f2f2f0"/>
-        <g id="eyes">
-          <ellipse cx="39" cy="54" rx="8.5" ry="10.5" fill="#16181f"/>
-          <ellipse cx="61" cy="54" rx="8.5" ry="10.5" fill="#16181f"/>
-          <circle class="pupil" cx="39" cy="54" r="3.4" fill="#f7c948"/>
-          <circle class="pupil" cx="61" cy="54" r="3.4" fill="#f7c948"/>
-          <circle class="pupil" cx="40.4" cy="52.2" r="1.1" fill="#fff"/>
-          <circle class="pupil" cx="62.4" cy="52.2" r="1.1" fill="#fff"/>
+        <defs><clipPath id="catbg"><circle cx="50" cy="50" r="49"/></clipPath></defs>
+        <!-- 粉紅圓底 + 底部深粉弧影 -->
+        <g clip-path="url(#catbg)">
+          <rect x="0" y="0" width="100" height="100" fill="#e8808a"/>
+          <circle cx="46" cy="44" r="49" fill="#f3969d"/>
         </g>
-        <path d="M47 64 L53 64 L50 67 Z" fill="#e58a9a"/>
-        <path d="M50 67 q-4 5 -8 2 M50 67 q4 5 8 2" stroke="#16181f" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-        <g stroke="#cfcfca" stroke-width="1" stroke-linecap="round">
-          <line x1="20" y1="60" x2="36" y2="62"/><line x1="19" y1="66" x2="36" y2="66"/>
-          <line x1="80" y1="60" x2="64" y2="62"/><line x1="81" y1="66" x2="64" y2="66"/>
+        <!-- 白頭 + 耳 -->
+        <path d="M16,58 C15,44 18,36 24,33 L26,15 Q28,11 31,14 L44,33 Q50,34.5 56,33 L69,14 Q72,11 74,15 L76,33 C82,36 85,44 84,58 C86,80 64,88 50,88 C36,88 14,80 16,58 Z" fill="#fdfdfb"/>
+        <!-- 內耳 -->
+        <path d="M31,30 L32,20 L40,31 Z" fill="#f4a3a9"/>
+        <path d="M69,30 L68,20 L60,31 Z" fill="#f4a3a9"/>
+        <!-- 腮紅 -->
+        <circle cx="27" cy="70" r="6.4" fill="#f4b0b6"/>
+        <circle cx="73" cy="70" r="6.4" fill="#f4b0b6"/>
+        <!-- 鼻 -->
+        <path d="M47.5,62 Q50,60.3 52.5,62 Q52,64.6 50,65.6 Q48,64.6 47.5,62 Z" fill="#ef9aa0"/>
+        <!-- ω 微笑嘴 -->
+        <path d="M50,65.6 Q46.8,69.4 44,66.6 M50,65.6 Q53.2,69.4 56,66.6" stroke="#3b2329" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        <!-- 大栗色眼(追游標 + 眨眼) -->
+        <g id="eyes">
+          <ellipse class="pupil" cx="35" cy="60" rx="8.4" ry="9.4" fill="#3b2329"/>
+          <ellipse class="pupil" cx="65" cy="60" rx="8.4" ry="9.4" fill="#3b2329"/>
         </g>
       </svg>
     </div>
