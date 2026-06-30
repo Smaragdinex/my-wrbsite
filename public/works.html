@@ -195,15 +195,18 @@ let velA = new THREE.WebGLRenderTarget(TEX,TEX,dataOpt), velB = new THREE.WebGLR
 const flowOpt = { type:THREE.HalfFloatType, format:THREE.RGBAFormat, depthBuffer:false,
                   stencilBuffer:false, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter };
 let watA = new THREE.WebGLRenderTarget(2,2,flowOpt), watB = new THREE.WebGLRenderTarget(2,2,flowOpt);
+// 共用流體速度場(velocity advection):粒子與水波共讀同一張流體貼圖→整片同一股水流
+const FLUIDRES = 192;
+let fluidA = new THREE.WebGLRenderTarget(FLUIDRES,FLUIDRES,flowOpt), fluidB = new THREE.WebGLRenderTarget(FLUIDRES,FLUIDRES,flowOpt);
 
 function clearRT(rt){ renderer.setRenderTarget(rt); renderer.clear(true,false,false); }
-[offA,offB,velA,velB,watA,watB].forEach(clearRT);   // 初始 offset=0 vel=0 → 粒子先聚成 X
+[offA,offB,velA,velB,watA,watB,fluidA,fluidB].forEach(clearRT);   // 初始 offset=0 vel=0 → 粒子先聚成 X
 
 /* --- 旋轉函式：sim 與 render 必須一致（共用同一個 uTime）--- */
 const ROT_GLSL = `
 vec3 applyRot(vec3 p, float t){
-  // 小幅傾角(剛好看出立體厚度與前後交叉) + 緩慢擺動,但維持 X 端正對稱
-  float ax = 0.08 + sin(t*0.13)*0.13, ay = 0.10 + sin(t*0.18)*0.20;
+  // 固定傾角(看得出立體厚度與前後交叉),不隨時間擺動 → X 完全靜止
+  float ax = 0.10, ay = 0.16;
   float cx=cos(ax), sx=sin(ax);
   p = vec3(p.x, cx*p.y - sx*p.z, sx*p.y + cx*p.z);
   float cy=cos(ay), sy=sin(ay);
@@ -211,13 +214,44 @@ vec3 applyRot(vec3 p, float t){
   return p;
 }`;
 
+/* ===== 共用流體速度場 sim：semi-Lagrangian advection + 滑鼠動量 + 環境渦流 ===== */
+const fluidSimMat = new THREE.ShaderMaterial({ vertexShader:fsVert, fragmentShader:`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uPrev;
+uniform vec2 uMouse, uMouseVel;
+uniform float uDt, uTime, uAspect, uDissip, uRadius, uForce, uAdvect, uAmb;
+void main(){
+  vec2 vel = texture2D(uPrev, vUv).xy;
+  // semi-Lagrangian 自我搬運:場帶著自己流動→產生會流走、捲動的水流(非瞬時)
+  vec2 src = vUv - vel * uDt * uAdvect;
+  vel = texture2D(uPrev, src).xy;
+  // 滑鼠動量注入(沿移動方向):動量之後被 advect 帶走、慢慢散開
+  vec2 dv = vUv - uMouse; dv.x *= uAspect;
+  float splat = exp(-dot(dv,dv)/uRadius);
+  vel += uMouseVel * splat * uForce;
+  // 環境緩流(curl):整片水永遠輕輕流動,有活水感
+  vel += vec2(
+    sin(vUv.y*7.0 + uTime*0.5) - cos(vUv.x*5.5 - uTime*0.4),
+    sin(vUv.x*6.5 + uTime*0.45) - cos(vUv.y*8.0 - uTime*0.35)
+  ) * uAmb;
+  vel *= uDissip;                 // 衰減=慣性,停手後流動慢慢平息
+  vel = clamp(vel, -3.0, 3.0);
+  gl_FragColor = vec4(vel, 0.0, 1.0);
+}`,
+  uniforms:{ uPrev:{value:null}, uMouse:{value:new THREE.Vector2(.5,.5)}, uMouseVel:{value:new THREE.Vector2()},
+    uDt:{value:0.016}, uTime:{value:0}, uAspect:{value:1}, uDissip:{value:0.984},
+    uRadius:{value:0.0016}, uForce:{value:0.10}, uAdvect:{value:0.9}, uAmb:{value:0.0} }});
+
 /* ===== 粒子速度 sim：水流推散 + 彈簧回家 + 阻尼 ===== */
 const velSimMat = new THREE.ShaderMaterial({ vertexShader:fsVert, fragmentShader:`
 precision highp float;
 varying vec2 vUv;
 uniform sampler2D uHome, uOffPrev, uVelPrev;
 uniform vec3 uMouse;
-uniform float uTime, uDt, uMouseStr, uRadius, uSpring, uDamp;
+uniform sampler2D uFluid;
+uniform mat4 uViewProj;
+uniform float uTime, uDt, uMouseStr, uRadius, uSpring, uDamp, uFlowPush, uZFlow;
 ${ROT_GLSL}
 void main(){
   vec4 H = texture2D(uHome, vUv);
@@ -228,26 +262,32 @@ void main(){
   vec3 pos = Rhome + off;
 
   vec3 force = vec3(0.0);
-  // 滑鼠水流：把附近粒子往外推開（在水裡化開）
+  // === 取樣「共用流體場」:粒子被同一股水流帶走(advection) ===
+  vec4 clip = uViewProj * vec4(pos, 1.0);
+  vec2 suv = clip.xy / clip.w * 0.5 + 0.5;              // 粒子的螢幕座標→查流體貼圖
+  vec2 flow = texture2D(uFluid, suv).xy;
+  float fspeed = length(flow);
+  force.xy += flow * uFlowPush;                         // 順水流被帶走(整片同一股流、會捲動)
+  force.z  += fspeed * uZFlow;                          // z 軸水流:把顆粒往視覺前方(+z 朝我們)帶
+  force.z  += (sd-0.5) * fspeed * 1.6;                  // 同時往深度散開→立體
+
+  // 少量徑向撥開(撥水缺口),用世界座標滑鼠位置
   vec2 d = pos.xy - uMouse.xy;
   float dist = length(d);
   float infl = exp(-dist*dist / uRadius) * uMouseStr;
   vec2 dir = dist > 1e-4 ? d/dist : vec2(1.0,0.0);
-  force.xy += dir * infl;
-  force.z  += (sd-0.5) * infl * 2.4;                 // 沿 z 散開→立體化開
-  // 一點漩渦擾動，讓擴散像水流而非直線
-  force.xy += vec2(-dir.y, dir.x) * infl * 0.5 * sin(uTime*1.3 + sd*30.0);
+  force.xy += dir * infl * 0.4;
 
   // 像在水中攪拌:被擾動的顆粒受亂流(curl 渦流場)混合,整個融進水裡;
   // disturb 隨「離家距離 + 滑鼠影響」變大→停手後顆粒仍懸浮亂流,再緩緩漂回
-  float disturb = clamp(length(off)*0.55 + infl*1.4, 0.0, 1.8);
+  float disturb = clamp(length(off)*0.55 + fspeed*2.2 + infl*0.4, 0.0, 1.8);
   vec3 tp = pos * 1.7;
   vec3 curl = vec3(
     sin(tp.y*1.7 + uTime*0.9) - cos(tp.z*1.3 - uTime*0.6),
     sin(tp.z*1.9 + uTime*0.7) - cos(tp.x*1.5 - uTime*0.5),
     sin(tp.x*1.4 + uTime*1.1) - cos(tp.y*1.8 - uTime*0.8)
   );
-  force += curl * (disturb*1.3 + 0.02);              // 0.02=平時極淡的水中懸浮感
+  force += curl * disturb * 1.3;                     // 只有被擾動(離家/流體/滑鼠)時才亂流,靜止完全不動
 
   // 彈簧拉回旋轉中的家（off=pos-Rhome）→ 滑鼠停下時慢慢重組成 X
   force += -uSpring * off;
@@ -256,8 +296,10 @@ void main(){
   gl_FragColor = vec4(vel, 1.0);
 }`,
   uniforms:{ uHome:{value:homeTex}, uOffPrev:{value:null}, uVelPrev:{value:null},
-    uMouse:{value:new THREE.Vector3(99,99,0)}, uTime:{value:0}, uDt:{value:0.016},
-    uMouseStr:{value:0}, uRadius:{value:0.6}, uSpring:{value:1.15}, uDamp:{value:0.955} }});
+    uMouse:{value:new THREE.Vector3(99,99,0)}, uFluid:{value:null}, uViewProj:{value:new THREE.Matrix4()},
+    uTime:{value:0}, uDt:{value:0.016},
+    uMouseStr:{value:0}, uRadius:{value:0.6}, uSpring:{value:1.15}, uDamp:{value:0.955},
+    uFlowPush:{value:34.0}, uZFlow:{value:9.0} }});
 
 /* ===== 粒子位置 sim：offset += vel*dt ===== */
 const offSimMat = new THREE.ShaderMaterial({ vertexShader:fsVert, fragmentShader:`
@@ -292,9 +334,12 @@ void main(){
   float lap = (n + s + e + w - 4.0*h);
   vec2 velocity = c.xy * 0.94;
   float height = (2.0*h - hPrev + 0.24*lap) * uFade;
-  // 滑鼠擾動注入(夾住注入量,避免快速甩動把波場打爆)
+  // 滑鼠擾動注入:沿移動方向把 footprint 拉長→方向性水流尾跡(非對稱同心圓)
   vec2 dv = vUv - uMouse; dv.x *= uAspect;
-  float mf = exp(-dot(dv,dv)/uRadius);
+  vec2 vdir = length(uVelocity) > 1e-4 ? normalize(uVelocity) : vec2(1.0, 0.0);
+  float along = dot(dv, vdir);                       // 沿移動方向
+  float perp  = dot(dv, vec2(-vdir.y, vdir.x));      // 垂直方向
+  float mf = exp(-(along*along/(uRadius*5.0) + perp*perp/uRadius));  // 拉長5倍→橢圓尾跡
   velocity += uVelocity * mf * uStrength;
   height   += clamp(length(uVelocity), 0.0, 3.0) * mf * uStrength * 0.4;
   // 安全護欄：半浮點下夾住數值,杜絕指數放大→整片變白
@@ -309,17 +354,17 @@ void main(){
 const watShowMat = new THREE.ShaderMaterial({ vertexShader:fsVert, fragmentShader:`
 precision highp float;
 varying vec2 vUv;
-uniform sampler2D uFlow;
+uniform sampler2D uFlow, uFluid;
 uniform float uTime;
 vec3 oil(float t){ return 0.5 + 0.5*cos(6.28318*(t + vec3(0.0,0.33,0.67))); }
 void main(){
   vec4 f = texture2D(uFlow, vUv);
-  vec2 flow = f.xy;              // 滑鼠推動的水流(有方向)
+  vec2 flow = texture2D(uFluid, vUv).xy;   // 共用流體場(與粒子同一股水流,有方向、會捲)
   float speed = length(flow);
-  float h = f.z;                 // 水波高度
+  float h = f.z;                            // 水波高度(crest 漣漪)
 
-  // 把油膜座標被水流「撥開」位移 → 滑鼠像在油/水中把它推開、油彩跟著被推走
-  vec2 warp = vUv + flow*0.10 + vec2(h*0.05);
+  // 油膜座標被同一股水流「撥開」位移 → 油彩跟著水流被推走、拉伸
+  vec2 warp = vUv + flow*0.12 + vec2(h*0.05);
 
   // 深水/油底色
   vec3 base = mix(vec3(0.030,0.040,0.058), vec3(0.010,0.015,0.026), vUv.y);
@@ -338,7 +383,7 @@ void main(){
   col += vec3(h*0.03);
   gl_FragColor = vec4(col, 1.0);
 }`,
-  uniforms:{ uFlow:{value:null}, uTime:{value:0} }});
+  uniforms:{ uFlow:{value:null}, uFluid:{value:null}, uTime:{value:0} }});
 
 /* ===== 粒子 X 渲染（白色顆粒，淡，不搶選單）===== */
 const perspCam = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.1, 100);
@@ -364,7 +409,7 @@ ${ROT_GLSL}
 void main(){
   vec3 off = texture2D(uOff, aRef).xyz;
   vec3 vel = texture2D(uVel, aRef).xyz;
-  vec3 pos = applyRot(aHome, uTime) + off;
+  vec3 pos = applyRot(aHome, uTime) + off;     // 固定 X:被滑鼠打散後靠彈簧回原位
   vSpeed = length(vel); vSeed = aSeed;
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   vDepth = -mv.z;
@@ -394,6 +439,88 @@ void main(){
 const points = new THREE.Points(geo, pointsMat);
 const pointsScene = new THREE.Scene(); pointsScene.add(points);
 
+/* ===== 穿越銀河星場(Star Wars 超空間):粒子由中心朝相機飛來→投影上從中心往外噴射 =====
+   完全獨立於固定 X(不讀 uOff/uVel),所以 X 靜止不動,只有這些星點在飛 */
+const STARC = 4200;
+const starPos = new Float32Array(STARC*3), starSeed = new Float32Array(STARC);
+for (let i=0;i<STARC;i++){
+  const ang = Math.random()*Math.PI*2, rad = Math.sqrt(Math.random())*3.4;  // 均勻散在圓盤
+  starPos[i*3+0] = Math.cos(ang)*rad;
+  starPos[i*3+1] = Math.sin(ang)*rad;
+  starPos[i*3+2] = 0;
+  starSeed[i] = Math.random();
+}
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos,3));
+starGeo.setAttribute('aSeed', new THREE.BufferAttribute(starSeed,1));
+const starMat = new THREE.ShaderMaterial({
+  transparent:true, depthTest:false, depthWrite:false, blending:THREE.AdditiveBlending,
+  uniforms:{ uTime:{value:0}, uSize:{value:Math.min(devicePixelRatio,2)}, uSpeed:{value:0.09}, uAlpha:{value:0.7} },
+  vertexShader:`
+precision highp float;
+attribute float aSeed;
+uniform float uTime, uSize, uSpeed;
+varying float vB;
+void main(){
+  float ph = fract(aSeed + uTime*uSpeed*(0.6 + aSeed*0.8)); // 0(遠/近中心)→1(近相機/外緣)
+  float z = mix(-6.0, 4.7, ph);                             // 從遠處朝相機(5.2)飛來
+  vec3 pos = vec3(position.xy, z);                          // 同一 xy、z 往前→透視投影往外噴
+  vB = sin(ph * 3.14159);                                   // 兩端淡出:隱藏循環接縫 + 避免貼臉爆大
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = clamp((5.0 + aSeed*8.0) * uSize / -mv.z, 0.0, 38.0);
+}`,
+  fragmentShader:`
+precision highp float;
+varying float vB;
+uniform float uAlpha;
+void main(){
+  vec2 pc = gl_PointCoord - 0.5; float r = length(pc);
+  if (r > 0.5) discard;
+  float a = smoothstep(0.5, 0.0, r); a *= a;
+  gl_FragColor = vec4(vec3(0.72,0.77,0.92), a * clamp(vB,0.0,1.0) * uAlpha);  // 冷白星點
+}`});
+const starPoints = new THREE.Points(starGeo, starMat);
+starPoints.frustumCulled = false;
+pointsScene.add(starPoints);
+
+/* ===== ember:從固定 X 表面往前(朝相機)飄散、匯入星海的稀疏顆粒 =====
+   讓靜止的 X 與往前飛的銀河連起來;只取約 22% 的點,在 X 處隱形、往前才亮、淡出循環,
+   所以 X 核心仍完全固定不動,只是「送」細顆粒往前流 */
+const emberMat = new THREE.ShaderMaterial({
+  transparent:true, depthTest:false, depthWrite:false, blending:THREE.AdditiveBlending,
+  uniforms:{ uTime:{value:0}, uSize:{value:Math.min(devicePixelRatio,2)}, uSpeed:{value:0.16}, uDist:{value:3.0}, uAlpha:{value:0.5} },
+  vertexShader:`
+precision highp float;
+attribute vec3 aHome; attribute float aSeed;
+uniform float uTime, uSize, uSpeed, uDist;
+varying float vB; varying float vCull;
+${ROT_GLSL}
+void main(){
+  vec3 pos = applyRot(aHome, uTime);                  // 從固定 X 的位置出發
+  float ph = fract(aSeed*17.0 + uTime*uSpeed*(0.6 + aSeed*0.8));
+  pos.z += ph * uDist;                                // 往相機(+z)漂→投影上往外匯入星海
+  vB = sin(ph * 3.14159);                             // X 處=0(不動到核心)、中途最亮、前緣淡出
+  vCull = step(aSeed, 0.22);                          // 只取約 22% 當 ember(稀疏)
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = vCull * clamp((6.0 + aSeed*8.0) * uSize / -mv.z, 0.0, 40.0);
+}`,
+  fragmentShader:`
+precision highp float;
+varying float vB; varying float vCull;
+uniform float uAlpha;
+void main(){
+  if (vCull < 0.5) discard;
+  vec2 pc = gl_PointCoord - 0.5; float r = length(pc);
+  if (r > 0.5) discard;
+  float a = smoothstep(0.5, 0.0, r); a *= a;
+  gl_FragColor = vec4(vec3(0.70,0.76,0.92), a * clamp(vB,0.0,1.0) * uAlpha);
+}`});
+const emberPoints = new THREE.Points(geo, emberMat);
+emberPoints.frustumCulled = false;
+pointsScene.add(emberPoints);
+
 /* ===== 滑鼠輸入 ===== */
 const ndc = new THREE.Vector2(99,99);
 const raycaster = new THREE.Raycaster();
@@ -401,6 +528,9 @@ const plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
 const hit = new THREE.Vector3();
 let mouseInside = false;
 const watMouse = new THREE.Vector2(.5,.5), watPrev = new THREE.Vector2(.5,.5), watVel = new THREE.Vector2();
+// 世界座標滑鼠速度向量(含慣性):捕捉「往哪動、多快」→ 驅動流體推水
+const mouseWorldPrev = new THREE.Vector3(99,99,0); let hasMousePrev = false;
+const mouseVel = new THREE.Vector3();
 
 addEventListener('pointermove', e => {
   cur.tx = e.clientX; cur.ty = e.clientY;
@@ -408,8 +538,13 @@ addEventListener('pointermove', e => {
   // 世界座標（給粒子）
   ndc.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1);
   raycaster.setFromCamera(ndc, perspCam);
-  if (raycaster.ray.intersectPlane(plane, hit)) velSimMat.uniforms.uMouse.value.copy(hit);
-  velSimMat.uniforms.uMouseStr.value = 16.0;         // 移動時推力拉滿(散更開、可鋪滿全螢幕)
+  if (raycaster.ray.intersectPlane(plane, hit)) {
+    velSimMat.uniforms.uMouse.value.copy(hit);
+    // deltaX/deltaY:這一幀與上一幀之間,滑鼠在世界座標的位移向量 = 方向 × 瞬間速度
+    if (hasMousePrev) mouseVel.set(hit.x - mouseWorldPrev.x, hit.y - mouseWorldPrev.y, 0);
+    mouseWorldPrev.copy(hit); hasMousePrev = true;
+  }
+  velSimMat.uniforms.uMouseStr.value = 16.0;          // 影響範圍強度(停手後在 step 衰減)
   // 正規化座標（給水面 sim）
   watMouse.set(e.clientX/innerWidth, 1 - e.clientY/innerHeight);
   watVel.subVectors(watMouse, watPrev).multiplyScalar(60); watPrev.copy(watMouse);
@@ -428,12 +563,16 @@ function resize(){
   const sw=Math.max(2,Math.round(w*dpr*.5)), sh=Math.max(2,Math.round(h*dpr*.5));
   watA.setSize(sw,sh); watB.setSize(sw,sh);
   watSimMat.uniforms.uRes.value.set(sw,sh); watSimMat.uniforms.uAspect.value = w/h;
+  fluidSimMat.uniforms.uAspect.value = w/h;
   pointsMat.uniforms.uSize.value = dpr;
+  starMat.uniforms.uSize.value = dpr;
+  emberMat.uniforms.uSize.value = dpr;
 }
 addEventListener('resize', resize); resize();
 
 /* ===== 渲染循環 ===== */
 function blit(mat, target){ fsQuad.material = mat; renderer.setRenderTarget(target); renderer.render(fsScene, fsCam); }
+const viewProj = new THREE.Matrix4();
 let t0 = performance.now();
 function frame(){
   const now = performance.now();
@@ -452,6 +591,17 @@ function frame(){
   velSimMat.uniforms.uMouseStr.value *= mouseInside ? 0.90 : 0.82;
   hoverTarget; pointsMat.uniforms.uHover.value += (hoverTarget - pointsMat.uniforms.uHover.value)*0.06;
 
+  // 相機 view-projection(把粒子世界座標投到螢幕,用來查共用流體場)
+  perspCam.updateMatrixWorld();
+  viewProj.multiplyMatrices(perspCam.projectionMatrix, perspCam.matrixWorldInverse);
+
+  // 0) 共用流體場 sim:advection + 滑鼠動量 → fluidB(粒子與水波都讀它)
+  fluidSimMat.uniforms.uPrev.value = fluidA.texture;
+  fluidSimMat.uniforms.uMouse.value.copy(watMouse);
+  fluidSimMat.uniforms.uMouseVel.value.copy(watVel);
+  fluidSimMat.uniforms.uDt.value = dt; fluidSimMat.uniforms.uTime.value = time;
+  blit(fluidSimMat, fluidB); [fluidA,fluidB]=[fluidB,fluidA];
+
   // 1) 水面 sim
   watSimMat.uniforms.uPrev.value = watA.texture;
   watSimMat.uniforms.uMouse.value.copy(watMouse);
@@ -462,6 +612,8 @@ function frame(){
   // 2) 粒子速度 sim → velB
   velSimMat.uniforms.uOffPrev.value = offA.texture;
   velSimMat.uniforms.uVelPrev.value = velA.texture;
+  velSimMat.uniforms.uFluid.value = fluidA.texture;     // 共用流體場(粒子被同一股水流帶走)
+  velSimMat.uniforms.uViewProj.value.copy(viewProj);
   velSimMat.uniforms.uTime.value = time; velSimMat.uniforms.uDt.value = dt;
   blit(velSimMat, velB);
   // 3) 粒子位置 sim：offA + velB → offB
@@ -474,11 +626,13 @@ function frame(){
   // 4) 上螢幕：水面背景 → 粒子 X
   renderer.setRenderTarget(null);
   renderer.clear(true, true, true);
-  watShowMat.uniforms.uFlow.value = watA.texture; watShowMat.uniforms.uTime.value = time;
+  watShowMat.uniforms.uFlow.value = watA.texture; watShowMat.uniforms.uFluid.value = fluidA.texture; watShowMat.uniforms.uTime.value = time;
   fsQuad.material = watShowMat; renderer.render(fsScene, fsCam);
   pointsMat.uniforms.uOff.value = offA.texture;
   pointsMat.uniforms.uVel.value = velA.texture;
   pointsMat.uniforms.uTime.value = time;
+  starMat.uniforms.uTime.value = time;
+  emberMat.uniforms.uTime.value = time;
   renderer.render(pointsScene, perspCam);
 
   requestAnimationFrame(frame);
