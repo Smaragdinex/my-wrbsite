@@ -7,13 +7,22 @@
 <style>
   :root{ --fg:#f2f2f0; --dim:rgba(242,242,240,.45); }
   *{margin:0;padding:0;box-sizing:border-box}
-  html{scroll-behavior:smooth}
   html,body{min-height:100%;background:#08080a;color:var(--fg);overflow-x:hidden;
     font-family:"Helvetica Neue",-apple-system,"PingFang TC","Noto Sans TC",sans-serif;
     -webkit-font-smoothing:antialiased}
   canvas#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0}
-  .wrap{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column;
+  /* HUD:固定不隨捲動(左上貓/右上品牌+導覽/右下 xarts.games) */
+  .wrap{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;
     padding:clamp(20px,4vw,52px);pointer-events:none}
+  .topright{display:flex;align-items:flex-start;gap:clamp(16px,2vw,34px);pointer-events:auto}
+  .topnav{display:flex;gap:clamp(14px,1.6vw,26px);align-items:center;padding-top:4px}
+  .topnav a{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--fg);opacity:.7;
+    transition:opacity .3s;position:relative}
+  .topnav a:hover{opacity:1}
+  .topnav a::after{content:"";position:absolute;left:0;right:0;bottom:-5px;height:1px;background:currentColor;
+    transform:scaleX(0);transform-origin:left;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .topnav a:hover::after{transform:scaleX(1)}
+  .hero{height:100vh}
   header{display:flex;justify-content:space-between;align-items:flex-start;
     font-size:13px;letter-spacing:.18em;text-transform:uppercase}
   .face{pointer-events:auto;line-height:0;filter:drop-shadow(0 2px 10px rgba(0,0,0,.4))}
@@ -60,7 +69,7 @@
 
   /* ===== 往下滑出現的作品大區塊(70% 靠左/右交替,圖片黑灰→hover 彩色) ===== */
   .works{position:relative;z-index:2}
-  .exp{min-height:96vh;display:flex;align-items:center;padding:6vh clamp(20px,5vw,64px)}
+  .exp{height:100vh;display:flex;align-items:center;padding:6vh clamp(20px,5vw,64px)}
   .exp.left{justify-content:flex-start}
   .exp.right{justify-content:flex-end}
   .ecard{position:relative;width:70%;aspect-ratio:16/10;border-radius:20px;overflow:hidden;
@@ -132,7 +141,13 @@
         </g>
       </svg>
     </div>
-    <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
+    <div class="topright">
+      <nav class="topnav">
+        <a href="#works">About</a>
+        <a href="mailto:contact@xarts.games">Contact</a>
+      </nav>
+      <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
+    </div>
   </header>
 
   <div class="center"></div>
@@ -143,9 +158,10 @@
   </footer>
 </div>
 
-<!-- 往下滑才出現的作品大區塊 -->
+<!-- 第一屏:只有固定 HUD + 粒子 X(往下滑才出現作品) -->
+<div class="hero"></div>
+<!-- 作品大區塊(無限往下迴圈) -->
 <main class="works" id="works"></main>
-<footer class="worksfoot">X·ARTS — xarts.games</footer>
 
 <script type="module">
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
@@ -163,7 +179,7 @@ const cursor = document.getElementById('cursor');
 
 /* ===== 往下滑出現的作品大區塊(70% 左右交替,圖黑灰→hover 彩色,標題翻滾) ===== */
 const worksWrap = document.getElementById('works');
-WORKS.forEach((w, i) => {
+function buildCard(w, i){
   const sec = document.createElement('section');
   sec.className = 'exp ' + (i % 2 === 0 ? 'left' : 'right');
   sec.innerHTML = `
@@ -176,12 +192,29 @@ WORKS.forEach((w, i) => {
         <div class="etags">${w.tag}</div>
       </div>
     </a>`;
-  worksWrap.appendChild(sec);
-});
+  return sec;
+}
+WORKS.forEach((w, i) => worksWrap.appendChild(buildCard(w, i)));   // 原始 4 個
+WORKS.forEach((w, i) => worksWrap.appendChild(buildCard(w, i)));   // 複製一份當迴圈緩衝
+
 const _io = new IntersectionObserver((es) => {
-  es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); _io.unobserve(e.target); } });
+  es.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
 }, { threshold: .25 });
 document.querySelectorAll('.ecard').forEach(c => _io.observe(c));
+
+/* ===== 無限往下迴圈:滑過第 4 個後,無縫跳回第 1 個(內容相同→看不出接縫) ===== */
+const N = WORKS.length;
+let loopTick = false;
+addEventListener('scroll', () => {
+  if (loopTick) return; loopTick = true;
+  requestAnimationFrame(() => {
+    const vh = innerHeight;          // .hero 與 .exp 都是 100vh
+    const loopH = N * vh;            // 4 個區塊的總高
+    const y = scrollY;
+    if (y >= vh + loopH) scrollTo(0, y - loopH);   // 到第 1 個複製品→跳回原始第 1 個
+    loopTick = false;
+  });
+}, { passive: true });
 
 /* ===== 滑鼠圓球位置跟隨 ===== */
 const cur = { x: innerWidth/2, y: innerHeight/2, tx: innerWidth/2, ty: innerHeight/2 };
