@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08080a">
+<title>X-Arts — About</title>
+<meta name="description" content="X-Arts is an independent studio crafting playful, high-craft web experiences where real-time graphics, motion, and AI meet.">
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<style>
+  :root{ --fg:#f2f2f0; --dim:rgba(242,242,240,.45); --line:rgba(242,242,240,.12); }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{min-height:100%;background:#08080a;color:var(--fg);overflow-x:hidden;
+    font-family:"Helvetica Neue",-apple-system,"PingFang TC","Noto Sans TC",sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  canvas#stars{position:fixed;inset:0;width:100%;height:100%;z-index:0;
+    background:radial-gradient(1200px 800px at 50% 30%,rgba(42,143,187,.10),transparent 60%),
+      radial-gradient(900px 700px at 80% 80%,rgba(150,120,255,.08),transparent 56%),#070709}
+
+  /* 固定 HUD */
+  .hud{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;
+    padding:clamp(20px,4vw,52px);pointer-events:none}
+  .hud header{display:flex;justify-content:space-between;align-items:flex-start}
+  .face{pointer-events:auto;line-height:0;filter:drop-shadow(0 2px 10px rgba(0,0,0,.5))}
+  #eyes{transform-box:fill-box;transform-origin:center;transition:transform .12s ease}
+  #eyes.blink{transform:scaleY(.08)}
+  .pupil{transition:transform .18s cubic-bezier(.2,.8,.2,1)}
+  .topright{display:flex;align-items:flex-start;gap:clamp(16px,2vw,34px);pointer-events:auto}
+  .topnav{display:flex;gap:clamp(14px,1.6vw,26px);align-items:center;padding-top:4px}
+  .topnav a{font-size:17px;letter-spacing:.14em;text-transform:uppercase;opacity:.7;transition:opacity .3s;position:relative}
+  .topnav a.active{opacity:1}
+  .topnav a:hover{opacity:1}
+  .topnav a::after{content:"";position:absolute;left:0;right:0;bottom:-5px;height:1px;background:currentColor;
+    transform:scaleX(0);transform-origin:left;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .topnav a.active::after,.topnav a:hover::after{transform:scaleX(1)}
+  .brand{display:flex;flex-direction:column;align-items:flex-end;gap:5px;text-align:right;font-size:13px;letter-spacing:.18em;text-transform:uppercase}
+  .brand b{font-weight:700}.brand span{color:var(--dim)}
+  .hud footer{margin-top:auto;display:flex;justify-content:space-between;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+
+  /* 內容 */
+  .page{position:relative;z-index:2;max-width:1180px;margin:0 auto;
+    padding:clamp(140px,20vh,240px) clamp(22px,6vw,80px) 22vh}
+  .eyebrow{font-size:12px;letter-spacing:.34em;text-transform:uppercase;color:var(--dim);margin-bottom:22px}
+  .lead{font-size:clamp(30px,5.2vw,72px);line-height:1.04;font-weight:600;letter-spacing:-.02em;max-width:15ch}
+  .lead em{font-style:normal;color:var(--dim)}
+  .make{margin-top:clamp(40px,7vh,90px);display:flex;flex-wrap:wrap;gap:12px 26px}
+  .make span{font-size:14px;letter-spacing:.06em;color:rgba(242,242,240,.82);
+    border:1px solid var(--line);border-radius:999px;padding:9px 16px}
+
+  .sec{margin-top:clamp(80px,16vh,190px);display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,5vw,80px);align-items:start}
+  .sec.rev{direction:rtl}.sec.rev>*{direction:ltr}
+  .sec .q{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-style:italic;padding-top:8px}
+  .sec .a{font-size:clamp(20px,2.5vw,34px);line-height:1.32;font-weight:500;letter-spacing:-.01em}
+  .sec .a.small{font-size:clamp(17px,1.7vw,22px);line-height:1.55;font-weight:400;color:rgba(242,242,240,.9)}
+  @media(max-width:760px){ .sec{grid-template-columns:1fr;gap:14px} .sec.rev{direction:ltr} }
+
+  .foot{margin-top:clamp(100px,20vh,220px);display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:clamp(24px,4vw,60px);
+    border-top:1px solid var(--line);padding-top:clamp(30px,5vh,60px)}
+  .foot h4{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:16px;font-weight:600}
+  .foot ul{list-style:none;display:flex;flex-direction:column;gap:9px}
+  .foot li,.foot a{font-size:clamp(16px,1.6vw,20px);letter-spacing:.02em}
+  .foot .big{font-size:clamp(22px,2.4vw,32px);line-height:1.2;font-weight:600}
+  .foot a:hover{text-decoration:underline}
+  @media(max-width:760px){ .foot{grid-template-columns:1fr;gap:34px} }
+
+  /* 淡入 */
+  .rise{opacity:0;transform:translateY(40px);transition:opacity .9s cubic-bezier(.2,.8,.2,1),transform .9s cubic-bezier(.2,.8,.2,1)}
+  .rise.in{opacity:1;transform:none}
+
+  /* 游標 */
+  .cursor{position:fixed;top:0;left:0;width:50px;height:50px;border-radius:50%;background:#fff;
+    mix-blend-mode:difference;pointer-events:none;z-index:50;transform:translate(-50%,-50%);
+    transition:width .35s cubic-bezier(.2,.8,.2,1),height .35s cubic-bezier(.2,.8,.2,1)}
+  .cursor.onnav{width:30px;height:30px}
+  @media (hover:none){ .cursor{display:none} }
+  @media (min-width:701px){ html,body{cursor:none} a{cursor:none} }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="cursor" id="cursor"></div>
+
+<div class="hud">
+  <header>
+    <div class="face" id="face">
+      <svg viewBox="0 0 100 100" width="56" height="56" aria-hidden="true">
+        <defs><clipPath id="catbg"><circle cx="50" cy="50" r="49"/></clipPath></defs>
+        <g clip-path="url(#catbg)">
+          <rect x="0" y="0" width="100" height="100" fill="#e8808a"/>
+          <circle cx="46" cy="44" r="49" fill="#f3969d"/>
+        </g>
+        <path d="M16,58 C15,44 18,36 24,33 L26,15 Q28,11 31,14 L44,33 Q50,34.5 56,33 L69,14 Q72,11 74,15 L76,33 C82,36 85,44 84,58 C86,80 64,88 50,88 C36,88 14,80 16,58 Z" fill="#fdfdfb"/>
+        <path d="M31,30 L32,20 L40,31 Z" fill="#f4a3a9"/>
+        <path d="M69,30 L68,20 L60,31 Z" fill="#f4a3a9"/>
+        <circle cx="27" cy="70" r="6.4" fill="#f4b0b6"/>
+        <circle cx="73" cy="70" r="6.4" fill="#f4b0b6"/>
+        <path d="M47.5,62 Q50,60.3 52.5,62 Q52,64.6 50,65.6 Q48,64.6 47.5,62 Z" fill="#ef9aa0"/>
+        <path d="M50,65.6 Q46.8,69.4 44,66.6 M50,65.6 Q53.2,69.4 56,66.6" stroke="#3b2329" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        <g id="eyes">
+          <ellipse class="pupil" cx="35" cy="60" rx="8.4" ry="9.4" fill="#3b2329"/>
+          <ellipse class="pupil" cx="65" cy="60" rx="8.4" ry="9.4" fill="#3b2329"/>
+          <circle class="pupil" cx="38.4" cy="56" r="2.7" fill="#ffffff"/>
+          <circle class="pupil" cx="68.4" cy="56" r="2.7" fill="#ffffff"/>
+          <circle class="pupil" cx="32.2" cy="63" r="1.2" fill="#ffffff" opacity="0.85"/>
+          <circle class="pupil" cx="62.2" cy="63" r="1.2" fill="#ffffff" opacity="0.85"/>
+        </g>
+      </svg>
+    </div>
+    <div class="topright">
+      <nav class="topnav">
+        <a class="active" href="/about.html">About</a>
+        <a href="mailto:contact@xarts.games">Contact</a>
+        <a href="/">← Home</a>
+      </nav>
+      <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
+    </div>
+  </header>
+  <footer><span></span><span>xarts.games</span></footer>
+</div>
+
+<main class="page">
+  <div class="eyebrow rise">(We are)</div>
+  <h1 class="lead rise">An independent studio crafting playful, high-craft experiences for the web — <em>where real-time graphics, motion, and AI meet.</em></h1>
+
+  <div class="make rise">
+    <span>Interactive WebGL &amp; 3D</span>
+    <span>Creative coding &amp; shaders</span>
+    <span>AI products &amp; tools</span>
+    <span>Generative &amp; motion design</span>
+  </div>
+
+  <section class="sec rise">
+    <div class="q">Why do we build?</div>
+    <div class="a">We build to find out what the web can <em>feel</em> like. Every project starts as a question — can a page flow like water, can particles fall into place like a thought, can a cat help you read the market? Chasing those questions is what keeps our craft sharp and our work worth looking at twice.</div>
+  </section>
+
+  <section class="sec rev rise">
+    <div class="q">Our approach</div>
+    <div class="a small">We work small, fast, and hands-on. Design and engineering share the same desk, so an idea can travel from a rough shader to a shipped product without losing its spark. We prototype in the open, keep whatever feels alive, and cut everything that doesn't.</div>
+  </section>
+
+  <section class="sec rev rise">
+    <div class="q">Why these experiments?</div>
+    <div class="a small">The experiments are where we play. They let us test new techniques, break our own habits, and bank the tricks that later power our apps — like CatInsight — and the work we do for others. And honestly, they're just fun. That energy tends to end up in everything we ship.</div>
+  </section>
+
+  <footer class="foot rise">
+    <div>
+      <h4>Areas</h4>
+      <div class="big">Playground<br>Selected Works<br>Experiments</div>
+    </div>
+    <div>
+      <h4>Follow</h4>
+      <ul>
+        <li><a href="#">Instagram</a></li>
+        <li><a href="#">X</a></li>
+        <li><a href="https://github.com/Smaragdinex">GitHub</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Contact</h4>
+      <ul><li><a href="mailto:contact@xarts.games">contact@xarts.games</a></li></ul>
+    </div>
+  </footer>
+</main>
+
+<script>
+/* 星場背景 */
+(function(){
+  const cv=document.getElementById('stars'), ctx=cv.getContext('2d');
+  let w,h,dpr=Math.min(2,devicePixelRatio||1), stars=[];
+  function resize(){ w=innerWidth;h=innerHeight;cv.width=w*dpr;cv.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+    stars=Array.from({length:Math.round(w*h/9000)},()=>({x:Math.random()*w,y:Math.random()*h,r:Math.random()*1.3+.2,a:Math.random()*.5+.15,s:Math.random()*.06+.01})); }
+  resize(); addEventListener('resize',resize,{passive:true});
+  let sy=0; addEventListener('scroll',()=>{sy=scrollY;},{passive:true});
+  (function loop(){ ctx.clearRect(0,0,w,h);
+    for(const st of stars){ st.y-=st.s; if(st.y<-2)st.y=h+2;
+      const yy=st.y - sy*0.04; const y=((yy%(h+4))+(h+4))%(h+4);
+      ctx.globalAlpha=st.a; ctx.fillStyle='#cfe0ff'; ctx.beginPath(); ctx.arc(st.x,y,st.r,0,6.283); ctx.fill(); }
+    ctx.globalAlpha=1; requestAnimationFrame(loop); })();
+})();
+
+/* 自訂游標 + hover 導覽縮小 */
+const cursor=document.getElementById('cursor');
+let cx=innerWidth/2,cy=innerHeight/2,tx=cx,ty=cy;
+addEventListener('pointermove',e=>{tx=e.clientX;ty=e.clientY;});
+document.querySelectorAll('.topnav a').forEach(a=>{
+  a.addEventListener('mouseenter',()=>cursor.classList.add('onnav'));
+  a.addEventListener('mouseleave',()=>cursor.classList.remove('onnav'));
+});
+
+/* 貓眼追游標 + 眨眼 */
+const face=document.getElementById('face'), pupils=face.querySelectorAll('.pupil'), eyesG=document.getElementById('eyes');
+let fc={x:0,y:0};
+function faceCenter(){const r=face.getBoundingClientRect();fc.x=r.left+r.width/2;fc.y=r.top+r.height/2;}
+faceCenter(); addEventListener('resize',faceCenter); addEventListener('scroll',faceCenter,{passive:true});
+(function blink(){eyesG.classList.add('blink');setTimeout(()=>eyesG.classList.remove('blink'),140);setTimeout(blink,2200+Math.random()*3200);})();
+(function tick(){
+  cx+=(tx-cx)*.18; cy+=(ty-cy)*.18;
+  cursor.style.transform=`translate(${cx}px,${cy}px) translate(-50%,-50%)`;
+  const dx=tx-fc.x,dy=ty-fc.y,d=Math.hypot(dx,dy)||1,k=Math.min(1,d/260)*4.6;
+  const ox=(dx/d*k).toFixed(1),oy=(dy/d*k).toFixed(1);
+  pupils.forEach(p=>p.setAttribute('transform',`translate(${ox} ${oy})`));
+  requestAnimationFrame(tick);
+})();
+
+/* 往下滑淡入 */
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}}),{threshold:.2});
+document.querySelectorAll('.rise').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>
