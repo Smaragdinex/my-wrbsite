@@ -75,10 +75,8 @@
   .exp.right{justify-content:flex-end}
   .ecard{position:relative;width:70%;aspect-ratio:16/10;border-radius:20px;overflow:hidden;
     background:#0e1118;border:1px solid rgba(242,242,240,.12);text-decoration:none;color:var(--fg);
-    opacity:0;transform:translateY(56px) scale(.975);
-    transition:opacity 1s cubic-bezier(.2,.8,.2,1),transform 1s cubic-bezier(.2,.8,.2,1);
+    opacity:0;will-change:transform,opacity;
     box-shadow:0 40px 90px rgba(0,0,0,.5);pointer-events:auto}
-  .ecard.in{opacity:1;transform:none}
   @media(max-width:760px){ .ecard{width:100%;aspect-ratio:4/5} .exp{padding:5vh 5vw} }
   .ecard img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
     filter:grayscale(1) brightness(.5) contrast(.95);transform:scale(1.04);
@@ -203,24 +201,41 @@ function buildCard(w, i){
 WORKS.forEach((w, i) => worksWrap.appendChild(buildCard(w, i)));   // 原始 4 個
 WORKS.forEach((w, i) => worksWrap.appendChild(buildCard(w, i)));   // 複製一份當迴圈緩衝
 
-const _io = new IntersectionObserver((es) => {
-  es.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
-}, { threshold: .25 });
-document.querySelectorAll('.ecard').forEach(c => _io.observe(c));
+/* ===== 卡片水平視差:進場前偏外側,捲到中央時滑回 70% 位置 ===== */
+const EXPS = [...document.querySelectorAll('.exp')];
+const CARD_OUT = 170;   // 外側偏移量(px);左卡更靠左、右卡更靠右
+function updateCards(){
+  const vh = innerHeight;
+  for (const sec of EXPS){
+    const card = sec.querySelector('.ecard');
+    const r = card.getBoundingClientRect();
+    const center = r.top + r.height/2;
+    let p = 1 - (center - vh/2) / (vh*0.72);   // 0=卡片中心在視窗底 → 1=到視窗中央(定位)
+    p = p<0?0:p>1?1:p;
+    const dir = sec.classList.contains('left') ? -1 : 1;
+    const tx = dir * CARD_OUT * (1-p);          // 外側 → 0(滑回它的 70% 位置)
+    const ty = (1-p) * 34;
+    card.style.transform = 'translate('+tx.toFixed(1)+'px,'+ty.toFixed(1)+'px)';
+    const o = p*1.25; card.style.opacity = (o>1?1:o).toFixed(3);
+  }
+}
 
-/* ===== 無限往下迴圈:滑過第 4 個後,無縫跳回第 1 個(內容相同→看不出接縫) ===== */
+/* ===== 無限往下迴圈 + 每幀更新視差 ===== */
 const N = WORKS.length;
 let loopTick = false;
 addEventListener('scroll', () => {
   if (loopTick) return; loopTick = true;
   requestAnimationFrame(() => {
-    const vh = innerHeight;          // .hero 與 .exp 都是 100vh
-    const loopH = N * vh;            // 4 個區塊的總高
+    const vh = innerHeight;
+    const loopH = N * vh;
     const y = scrollY;
-    if (y >= vh + loopH) scrollTo(0, y - loopH);   // 到第 1 個複製品→跳回原始第 1 個
+    if (y >= vh + loopH) scrollTo(0, y - loopH);   // 到第 1 個複製品→無縫跳回原始第 1 個
+    updateCards();
     loopTick = false;
   });
 }, { passive: true });
+addEventListener('resize', updateCards, { passive:true });
+updateCards();
 
 /* ===== 滑鼠圓球位置跟隨 ===== */
 const cur = { x: innerWidth/2, y: innerHeight/2, tx: innerWidth/2, ty: innerHeight/2 };
