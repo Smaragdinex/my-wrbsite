@@ -72,6 +72,42 @@
     mix-blend-mode:difference;pointer-events:none;z-index:50;transform:translate(-50%,-50%);
     transition:width .35s cubic-bezier(.2,.8,.2,1),height .35s cubic-bezier(.2,.8,.2,1)}
   .cursor.onnav{width:30px;height:30px}
+
+  /* ===== Contact 面板(從底部往上滑出,X 關閉) ===== */
+  .cx{position:fixed;inset:0;z-index:45;background:#060608;color:#f2f2f0;
+    transform:translateY(100%);transition:transform .8s cubic-bezier(.76,0,.24,1);
+    padding:clamp(24px,4vw,58px);display:flex;flex-direction:column;overflow-y:auto;pointer-events:none;visibility:hidden}
+  .cx.open{transform:none;pointer-events:auto;visibility:visible}
+  .cx-top{display:flex;justify-content:space-between;align-items:flex-start}
+  .cx-logo{font-size:clamp(18px,2vw,26px);font-weight:700;letter-spacing:.06em}
+  .cx-logo span{color:rgba(242,242,240,.42)}
+  .cx-close{background:none;border:0;color:#f2f2f0;font-size:24px;cursor:pointer;line-height:1;
+    width:44px;height:44px;display:flex;align-items:center;justify-content:center;transition:transform .35s}
+  .cx-close:hover{transform:rotate(90deg)}
+  .cx-lbl{font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:rgba(242,242,240,.4);margin-bottom:18px}
+  .cx-grid{flex:1;display:grid;grid-template-columns:1.35fr 1fr;gap:clamp(30px,6vh,64px) clamp(24px,6vw,90px);
+    align-content:center;padding:clamp(20px,5vh,54px) 0;max-width:1300px;width:100%;margin:0 auto}
+  .cx-big{font-size:clamp(26px,3.4vw,46px);font-weight:700;line-height:1.08;letter-spacing:-.02em}
+  .cx-follow ul{list-style:none}
+  .cx-follow li{margin-bottom:10px}
+  .cx-follow a,.cx-mail{font-size:clamp(18px,1.8vw,24px);position:relative;display:inline-block;color:#f2f2f0;text-decoration:none}
+  .cx-follow a::after,.cx-mail::after{content:"";position:absolute;left:0;bottom:-3px;width:100%;height:1px;
+    background:currentColor;transform:scaleX(0);transform-origin:left;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .cx-follow a:hover::after,.cx-mail:hover::after{transform:scaleX(1)}
+  .cx-subhead{font-size:16px;margin-bottom:14px}
+  .cx-subhead span{color:rgba(242,242,240,.45);font-size:13px}
+  .cx-field{display:flex;align-items:center;border:1px solid rgba(242,242,240,.35);border-radius:12px;padding:5px 5px 5px 18px;max-width:420px}
+  .cx-field input{flex:1;background:none;border:0;color:#f2f2f0;font-size:16px;padding:12px 0;outline:none;font-family:inherit}
+  .cx-field input::placeholder{color:rgba(242,242,240,.4)}
+  .cx-field button{width:40px;height:40px;border-radius:999px;border:0;background:#fff;color:#000;cursor:pointer;font-size:11px;flex:none}
+  .cx-foot{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;
+    border-top:1px solid rgba(242,242,240,.12);padding-top:22px}
+  .cx-copy{font-size:clamp(30px,5vw,62px);font-weight:800;letter-spacing:-.03em}
+  .cx-tag{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:rgba(242,242,240,.55);max-width:260px;line-height:1.5}
+  .cx-dot{width:60px;height:60px;border-radius:999px;background:#f2f2f0}
+  .cx-clock{font-size:13px;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;gap:12px}
+  .cx-clock em{font-style:normal;background:#f2f2f0;color:#000;border-radius:999px;padding:5px 12px}
+  @media(max-width:760px){ .cx-grid{grid-template-columns:1fr;gap:34px} .cx-dot{display:none} }
   @media (hover:none){ .cursor{display:none} }
   @media (min-width:701px){ html,body{cursor:none} a{cursor:none} }
 </style>
@@ -109,7 +145,7 @@
     <div class="topright">
       <nav class="topnav">
         <a class="active" href="/about.html">About</a>
-        <a href="mailto:contact@xarts.games">Contact</a>
+        <a href="#contact" data-contact>Contact</a>
         <a href="/">← Home</a>
       </nav>
       <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
@@ -207,6 +243,64 @@ faceCenter(); addEventListener('resize',faceCenter); addEventListener('scroll',f
 /* 往下滑淡入 */
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}}),{threshold:.2});
 document.querySelectorAll('.rise').forEach(el=>io.observe(el));
+</script>
+<!-- ===== Contact 面板 ===== -->
+<div class="cx" id="contactPanel" role="dialog" aria-label="Contact" aria-hidden="true">
+  <div class="cx-top">
+    <div class="cx-logo">X·ARTS <span>: STUDIO</span></div>
+    <button class="cx-close" id="cxClose" aria-label="關閉">✕</button>
+  </div>
+  <div class="cx-grid">
+    <div>
+      <div class="cx-lbl">Areas</div>
+      <div class="cx-big">Playground<br>Selected Works<br>Experiments</div>
+    </div>
+    <div class="cx-follow">
+      <div class="cx-lbl">Follow</div>
+      <ul>
+        <li><a href="#" target="_blank" rel="noopener">Instagram</a></li>
+        <li><a href="#" target="_blank" rel="noopener">X</a></li>
+        <li><a href="https://github.com/Smaragdinex" target="_blank" rel="noopener">GitHub</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="cx-lbl">Newsletter</div>
+      <form id="cxForm">
+        <div class="cx-subhead">Subscribe <span>(you may opt out anytime)</span></div>
+        <div class="cx-field"><input type="email" id="cxEmail" placeholder="Email address" required><button type="submit" aria-label="Subscribe">●</button></div>
+      </form>
+    </div>
+    <div>
+      <div class="cx-lbl">Contact</div>
+      <a class="cx-mail" href="mailto:contact@xarts.games">contact@xarts.games</a>
+    </div>
+  </div>
+  <div class="cx-foot">
+    <div class="cx-copy">©2026</div>
+    <div class="cx-tag">X·ARTS Studio — playful, high-craft web experiences</div>
+    <div class="cx-dot"></div>
+    <div class="cx-clock"><span id="cxTime">00:00:00</span> <em id="cxGreet">Hello</em></div>
+  </div>
+</div>
+<script>
+(function(){
+  const panel=document.getElementById('contactPanel');
+  const close=document.getElementById('cxClose');
+  function open(e){ if(e)e.preventDefault(); panel.classList.add('open'); panel.setAttribute('aria-hidden','false'); }
+  function shut(){ panel.classList.remove('open'); panel.setAttribute('aria-hidden','true'); }
+  document.querySelectorAll('[data-contact]').forEach(a=>a.addEventListener('click',open));
+  close.addEventListener('click',shut);
+  addEventListener('keydown',e=>{ if(e.key==='Escape') shut(); });
+  const form=document.getElementById('cxForm');
+  form.addEventListener('submit',e=>{ e.preventDefault();
+    const v=document.getElementById('cxEmail').value;
+    location.href='mailto:contact@xarts.games?subject=Newsletter&body='+encodeURIComponent('Please subscribe: '+v); });
+  const t=document.getElementById('cxTime'), g=document.getElementById('cxGreet');
+  const p=n=>String(n).padStart(2,'0');
+  function tick(){ const d=new Date(); t.textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+    const h=d.getHours(); g.textContent = h<5?'Good Night':h<12?'Good Morning':h<18?'Good Afternoon':h<22?'Good Evening':'Good Night'; }
+  tick(); setInterval(tick,1000);
+})();
 </script>
 </body>
 </html>
