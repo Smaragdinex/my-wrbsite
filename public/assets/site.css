@@ -182,3 +182,8 @@
   body[data-ns="about"] .topnav a.about-link::after{transform:scaleX(1)}
   /* Barba container:GSAP 淡入淡出基底 */
   main[data-barba="container"]{position:relative;z-index:2;will-change:opacity}
+
+  /* ===== 頁面轉場:SVG path morph 液態揭幕(Codrops example-3) ===== */
+  .pt-morph{position:fixed;inset:0;z-index:100;width:100%;height:100%;pointer-events:none;visibility:hidden;opacity:0}
+  .pt-morph svg,.pt-morph{display:block}
+  .pt-morph path{fill:#0e0e12}

@@ -659,6 +659,13 @@ function currentNS(){ const c=document.querySelector('[data-barba="container"]')
 let _teardown = null;
 function runInit(ns){ document.body.dataset.ns = ns; return ns==='about' ? initAbout() : initHome(); }
 
+/* ===== SVG path morph 液態揭幕:proxy 補間改 path d(免付費 morphSVG) ===== */
+const _morph = () => document.getElementById('ptMorph');
+const _mpath = () => { const m=_morph(); return m && m.querySelector('path'); };
+const dBottom = (s,c) => `M 0 100 V ${s} Q 50 ${c} 100 ${s} V 100 z`;
+const dTop    = (s,c) => `M 0 0 V ${s} Q 50 ${c} 100 ${s} V 0 z`;
+function setMorph(d){ const p=_mpath(); if(p) p.setAttribute('d', d); }
+
 // 首次載入:直接依當前容器 namespace 初始化(Barba 的 view hook 不會對初始頁觸發)
 _teardown = runInit(currentNS());
 
@@ -671,10 +678,25 @@ barba.init({
     } catch(e){ return true; }
   },
   transitions: [{
-    name: 'fade',
-    // GSAP 做視覺淡出/淡入;Barba 流程用 setTimeout 收尾(不受分頁未繪製時 rAF 節流影響)
-    leave({ current }){ gsap.to(current.container, { opacity:0, duration:0.35, ease:'power2.inOut' }); return new Promise(res=>setTimeout(res, 370)); },
-    enter({ next }){ scrollTo(0,0); gsap.from(next.container, { opacity:0, duration:0.5, ease:'power2.inOut' }); return new Promise(res=>setTimeout(res, 500)); }
+    name: 'morph',
+    // 離開:液態波形從底部上湧蓋滿(流程用 setTimeout 收尾並直接設終態,避免分頁未繪製時 GSAP 凍住卡住)
+    leave(){
+      const ov=_morph(); gsap.set(ov,{visibility:'visible',opacity:1});
+      const st={s:100,c:100}, upd=()=>setMorph(dBottom(st.s,st.c));
+      const tl=gsap.timeline();
+      tl.to(st,{s:50,c:0,duration:0.85,ease:'none',onUpdate:upd});
+      tl.to(st,{s:0,c:0,duration:0.55,ease:'sine.inOut',onUpdate:upd},'<+=0.4');
+      return new Promise(res=>setTimeout(()=>{ tl.kill(); setMorph(dBottom(0,0)); res(); }, 1000));
+    },
+    // 進入:瞬間切成上錨定滿版(視覺同為全覆蓋),再以曲線往上退去露出新頁
+    enter(){
+      scrollTo(0,0); setMorph(dTop(100,100));
+      const ov=_morph(), st={s:100,c:100}, upd=()=>setMorph(dTop(st.s,st.c));
+      const tl=gsap.timeline();
+      tl.to(st,{s:50,c:100,duration:0.5,ease:'none',onUpdate:upd});
+      tl.to(st,{s:0,c:0,duration:0.6,ease:'sine.inOut',onUpdate:upd},'<+=0.35');
+      return new Promise(res=>setTimeout(()=>{ tl.kill(); setMorph(dTop(0,0)); gsap.set(ov,{visibility:'hidden',opacity:0}); res(); }, 1050));
+    }
   }],
   views: [
     { namespace:'home',  beforeLeave(){ _teardown && _teardown(); }, afterEnter(){ _teardown = runInit('home'); } },
