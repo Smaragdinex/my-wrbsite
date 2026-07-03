@@ -74,21 +74,16 @@
     transition:width .35s cubic-bezier(.2,.8,.2,1),height .35s cubic-bezier(.2,.8,.2,1)}
   .cursor.onnav{width:30px;height:30px}
 
-  /* ===== 頁面轉場(About / Home):黑幕 + 兩條黑灰斜條上→下掃過、邊掃邊變窄 ===== */
-  .pt{position:fixed;inset:0;z-index:100;pointer-events:none;overflow:hidden;visibility:hidden}
+  /* ===== 頁面轉場(About / Home):翻書式 3D 翻頁(單次、較慢) ===== */
+  .pt{position:fixed;inset:0;z-index:100;pointer-events:none;overflow:hidden;visibility:hidden;perspective:1800px;perspective-origin:0% 50%}
   .pt.on{visibility:visible;pointer-events:auto}
-  .pt-bg{position:absolute;inset:0;background:#060606;opacity:0;transition:opacity .5s ease}
-  .pt.cover .pt-bg{opacity:1}
-  .pt-band{position:absolute;left:-40%;top:-25%;width:180%;height:44%;
-    transform:rotate(-16deg) translateY(-260%) scaleY(1);transform-origin:center;opacity:1;
-    display:flex;flex-direction:column;
-    transition:transform 1.15s cubic-bezier(.76,0,.24,1),opacity .35s ease}
-  .pt-band i{flex:1 0 0;width:100%}
-  .pt-band .g{background:#8f8f8f}
-  .pt-band .k{background:#141414}
-  .pt.sweep .pt-band{transform:rotate(-16deg) translateY(330%) scaleY(.12)}
-  .pt.fade .pt-band{opacity:0}
-  .pt.instant .pt-bg,.pt.instant .pt-band{transition:none}
+  .pt-page{position:absolute;inset:0;transform-origin:left center;transform:rotateY(0deg);
+    background:linear-gradient(100deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,.12) 18%,rgba(255,255,255,.06) 52%,rgba(0,0,0,.34) 100%),#0e0e12;
+    box-shadow:0 0 120px 24px rgba(0,0,0,.55);
+    transition:transform 1.35s cubic-bezier(.66,0,.30,1)}
+  .pt.pre .pt-page{transform:rotateY(120deg)}
+  .pt.turn .pt-page{transform:rotateY(-120deg)}
+  .pt.instant .pt-page{transition:none}
 
   /* ===== Contact 面板(從底部往上滑出,X 關閉) ===== */
   .cx{position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:45;background:#060608;color:#f2f2f0;
@@ -326,29 +321,32 @@ document.querySelectorAll('.rise').forEach(el=>io.observe(el));
 </script>
 
 <!-- ===== 頁面轉場 ===== -->
-<div class="pt" id="pageTrans" aria-hidden="true"><div class="pt-bg"></div><div class="pt-band"><i class="g"></i><i class="k"></i></div></div>
+<div class="pt" id="pageTrans" aria-hidden="true"><div class="pt-page"></div></div>
 <script>
 (function(){
   const pt=document.getElementById('pageTrans');
-  // 進入頁面:全黑不動 → 光刃上→下掃過黑幕 → 掃完才淡出揭開新頁
+  // 進入頁面:書頁平放覆蓋 → 繞左側書脊翻走露出新頁(翻書 reveal)
   if(sessionStorage.getItem('ptrans')){
     sessionStorage.removeItem('ptrans');
-    pt.classList.add('instant','on','cover');           // 立即全黑,光刃在頂端
+    pt.classList.add('instant','on');                   // 書頁平放覆蓋(rotateY 0)
     var started=false;
     function begin(){ if(started)return; started=true;
       pt.classList.remove('instant');
-      pt.classList.add('sweep');                        // 兩條黑灰斜條上→下掃過、邊掃邊變窄(底仍全黑)
-      setTimeout(()=>pt.classList.add('fade'), 850);    // 條子完全淡出後才揭開,任何角落都不留殘影
-      setTimeout(()=>{
-        pt.classList.remove('cover');                   // 條子已淡出才淡出黑幕 → 顯示新頁
-        setTimeout(()=>pt.classList.remove('on','sweep','fade'), 560);
-      }, 1280);
+      pt.classList.add('turn');                         // 0°→-120° 翻走露出新頁
+      setTimeout(()=>pt.classList.remove('on','turn'), 1450);
     }
     requestAnimationFrame(()=>requestAnimationFrame(begin));
     setTimeout(begin, 120);                             // rAF 被節流時的保險
   }
-  // 離開頁面:黑幕 + 兩條黑灰斜條上→下掃過變窄(尾端淡出不留殘影) → 導頁
-  function go(url){ pt.classList.add('on'); requestAnimationFrame(()=>pt.classList.add('cover','sweep')); setTimeout(()=>pt.classList.add('fade'), 950); sessionStorage.setItem('ptrans','1'); setTimeout(()=>{ location.href=url; }, 1300); }
+  // 離開頁面:書頁從左側翻入平放覆蓋(120°→0°)→ 導頁
+  function go(url){
+    pt.classList.add('instant','on','pre');             // 書頁翻起在左側(畫面仍是舊頁)
+    sessionStorage.setItem('ptrans','1');
+    var s=false; function turnIn(){ if(s)return; s=true; pt.classList.remove('instant','pre'); }
+    requestAnimationFrame(()=>requestAnimationFrame(turnIn));
+    setTimeout(turnIn, 80);
+    setTimeout(()=>{ location.href=url; }, 1250);        // 覆蓋後導頁
+  }
   document.querySelectorAll('a[href="/about.html"], a[href="/"], a[href="/index.html"]').forEach(a=>{
     a.addEventListener('click',e=>{ const d=new URL(a.href,location.origin);
       if(d.pathname===location.pathname) return; e.preventDefault(); go(d.pathname+d.search); });
