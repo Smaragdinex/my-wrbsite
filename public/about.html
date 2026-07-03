@@ -74,9 +74,9 @@
   .cursor.onnav{width:30px;height:30px}
 
   /* ===== Contact 面板(從底部往上滑出,X 關閉) ===== */
-  .cx{position:fixed;inset:0;z-index:45;background:#060608;color:#f2f2f0;
+  .cx{position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:45;background:#060608;color:#f2f2f0;
     transform:translateY(100%);transition:transform .8s cubic-bezier(.76,0,.24,1);
-    padding:clamp(24px,4vw,58px);display:flex;flex-direction:column;overflow-y:auto;pointer-events:none;visibility:hidden}
+    padding:clamp(20px,3vw,42px) clamp(24px,4vw,58px);display:flex;flex-direction:column;overflow-y:auto;pointer-events:none;visibility:hidden;border-top:1px solid rgba(242,242,240,.14)}
   .cx.open{transform:none;pointer-events:auto;visibility:visible}
   .cx-top{display:flex;justify-content:space-between;align-items:flex-start}
   .cx-logo{font-size:clamp(18px,2vw,26px);font-weight:700;letter-spacing:.06em}
@@ -85,8 +85,8 @@
     width:44px;height:44px;display:flex;align-items:center;justify-content:center;transition:transform .35s}
   .cx-close:hover{transform:rotate(90deg)}
   .cx-lbl{font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:rgba(242,242,240,.4);margin-bottom:18px}
-  .cx-grid{flex:1;display:grid;grid-template-columns:1.35fr 1fr;gap:clamp(30px,6vh,64px) clamp(24px,6vw,90px);
-    align-content:center;padding:clamp(20px,5vh,54px) 0;max-width:1300px;width:100%;margin:0 auto}
+  .cx-grid{flex:1;display:grid;grid-template-columns:1.35fr 1fr;gap:clamp(18px,3.4vh,40px) clamp(24px,6vw,90px);
+    align-content:center;padding:clamp(10px,2vh,24px) 0;max-width:1300px;width:100%;margin:0 auto}
   .cx-big{font-size:clamp(26px,3.4vw,46px);font-weight:700;line-height:1.08;letter-spacing:-.02em}
   .cx-follow ul{list-style:none}
   .cx-follow li{margin-bottom:10px}
