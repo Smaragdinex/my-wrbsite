@@ -680,13 +680,14 @@ barba.init({
   transitions: [{
     name: 'morph',
     // 離開:液態波形從底部上湧蓋滿(流程用 setTimeout 收尾並直接設終態,避免分頁未繪製時 GSAP 凍住卡住)
-    leave(){
+    leave({ current }){
       const ov=_morph(); gsap.set(ov,{visibility:'visible',opacity:1});
       const st={s:100,c:100}, upd=()=>setMorph(dBottom(st.s,st.c));
       const tl=gsap.timeline();
       tl.to(st,{s:50,c:0,duration:0.85,ease:'none',onUpdate:upd});
       tl.to(st,{s:0,c:0,duration:0.55,ease:'sine.inOut',onUpdate:upd},'<+=0.4');
-      return new Promise(res=>setTimeout(()=>{ tl.kill(); setMorph(dBottom(0,0)); res(); }, 1000));
+      // 蓋滿當下把舊容器移出版面流,避免掀開時仍看到舊頁內容(Barba 預設要到最後才移除舊容器)
+      return new Promise(res=>setTimeout(()=>{ tl.kill(); setMorph(dBottom(0,0)); if(current&&current.container) current.container.style.display='none'; res(); }, 1000));
     },
     // 進入:瞬間切成上錨定滿版(視覺同為全覆蓋),再以曲線往上退去露出新頁
     enter(){
