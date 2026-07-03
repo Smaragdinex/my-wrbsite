@@ -30,12 +30,13 @@
   .pt.on{visibility:visible;pointer-events:auto}
   .pt-bg{position:absolute;inset:0;background:#060606;opacity:0;transition:opacity .5s ease}
   .pt.cover .pt-bg{opacity:1}
-  .pt-blade{position:absolute;left:-40%;top:-20%;width:180%;height:42%;
-    transform:rotate(-16deg) translateY(-250%);
+  .pt-blade{position:absolute;left:-40%;top:-25%;width:180%;height:38%;
+    transform:rotate(-16deg) translateY(-280%);opacity:1;
     background:linear-gradient(180deg,rgba(140,140,140,0) 20%,rgba(200,200,200,.72) 42%,#fff 50%,rgba(200,200,200,.72) 58%,rgba(140,140,140,0) 80%);
     filter:blur(.4px);
-    transition:transform 1.05s cubic-bezier(.76,0,.24,1)}
-  .pt.sweep .pt-blade{transform:rotate(-16deg) translateY(280%)}
+    transition:transform 1.05s cubic-bezier(.76,0,.24,1),opacity .35s ease}
+  .pt.sweep .pt-blade{transform:rotate(-16deg) translateY(340%)}
+  .pt.fade .pt-blade{opacity:0}
   .pt.instant .pt-bg,.pt.instant .pt-blade{transition:none}
 
   /* ===== Contact 面板(從底部往上滑出,X 關閉) ===== */
@@ -908,16 +909,17 @@ frame();
     function begin(){ if(started)return; started=true;
       pt.classList.remove('instant');
       pt.classList.add('sweep');                        // 光刃上→下掃過(底仍全黑)
+      setTimeout(()=>pt.classList.add('fade'), 900);    // 掃到底前先讓光刃淡出,消除左下殘留
       setTimeout(()=>{
-        pt.classList.remove('cover');                   // 掃完才淡出黑幕 → 顯示新頁
-        setTimeout(()=>pt.classList.remove('on','sweep'), 560);
-      }, 1080);
+        pt.classList.remove('cover');                   // 光刃已淡出後才淡出黑幕 → 顯示新頁
+        setTimeout(()=>pt.classList.remove('on','sweep','fade'), 560);
+      }, 1120);
     }
     requestAnimationFrame(()=>requestAnimationFrame(begin));
     setTimeout(begin, 120);                             // rAF 被節流時的保險
   }
-  // 離開頁面:淡黑 + 亮白光刃上→下掃過 → 導頁
-  function go(url){ pt.classList.add('on'); requestAnimationFrame(()=>pt.classList.add('cover','sweep')); sessionStorage.setItem('ptrans','1'); setTimeout(()=>{ location.href=url; }, 1150); }
+  // 離開頁面:淡黑 + 亮白光刃上→下掃過(尾端淡出不留殘影) → 導頁
+  function go(url){ pt.classList.add('on'); requestAnimationFrame(()=>pt.classList.add('cover','sweep')); setTimeout(()=>pt.classList.add('fade'), 850); sessionStorage.setItem('ptrans','1'); setTimeout(()=>{ location.href=url; }, 1200); }
   document.querySelectorAll('a[href="/about.html"], a[href="/"], a[href="/index.html"]').forEach(a=>{
     a.addEventListener('click',e=>{ const d=new URL(a.href,location.origin);
       if(d.pathname===location.pathname) return; e.preventDefault(); go(d.pathname+d.search); });
