@@ -25,17 +25,17 @@
   .topnav a:hover::after{transform:scaleX(1)}
   .hero{height:100vh}
 
-  /* ===== 頁面轉場(About / Home):淡黑底 + 單道亮白斜光刃掃過(Lusion 風) ===== */
+  /* ===== 頁面轉場(About / Home):淡黑底 + 單道亮白斜光刃「上下」掃過(Lusion 風) ===== */
   .pt{position:fixed;inset:0;z-index:100;pointer-events:none;overflow:hidden;visibility:hidden}
   .pt.on{visibility:visible;pointer-events:auto}
-  .pt-bg{position:absolute;inset:0;background:#060606;opacity:0;transition:opacity .42s ease}
+  .pt-bg{position:absolute;inset:0;background:#060606;opacity:0;transition:opacity .5s ease}
   .pt.cover .pt-bg{opacity:1}
-  .pt-blade{position:absolute;top:-40%;left:-20%;width:42%;height:180%;
-    transform:rotate(-16deg) translateX(-230%);
-    background:linear-gradient(90deg,rgba(140,140,140,0) 20%,rgba(200,200,200,.75) 42%,#fff 50%,rgba(200,200,200,.75) 58%,rgba(140,140,140,0) 80%);
+  .pt-blade{position:absolute;left:-40%;top:-20%;width:180%;height:42%;
+    transform:rotate(-16deg) translateY(-250%);
+    background:linear-gradient(180deg,rgba(140,140,140,0) 20%,rgba(200,200,200,.72) 42%,#fff 50%,rgba(200,200,200,.72) 58%,rgba(140,140,140,0) 80%);
     filter:blur(.4px);
-    transition:transform .6s cubic-bezier(.76,0,.24,1)}
-  .pt.cover .pt-blade{transform:rotate(-16deg) translateX(270%)}
+    transition:transform 1.05s cubic-bezier(.76,0,.24,1)}
+  .pt.sweep .pt-blade{transform:rotate(-16deg) translateY(280%)}
   .pt.instant .pt-bg,.pt.instant .pt-blade{transition:none}
 
   /* ===== Contact 面板(從底部往上滑出,X 關閉) ===== */
@@ -900,17 +900,24 @@ frame();
 <script>
 (function(){
   const pt=document.getElementById('pageTrans');
-  // 進入頁面:若來自轉場 → 瞬間全黑(光刃在右),再淡出、光刃反向掃回揭開新頁
+  // 進入頁面:全黑不動 → 光刃上→下掃過黑幕 → 掃完才淡出揭開新頁
   if(sessionStorage.getItem('ptrans')){
     sessionStorage.removeItem('ptrans');
-    pt.classList.add('instant','on','cover');
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      pt.classList.remove('instant'); pt.classList.remove('cover');
-      setTimeout(()=>pt.classList.remove('on'), 720);
-    }));
+    pt.classList.add('instant','on','cover');           // 立即全黑,光刃在頂端
+    var started=false;
+    function begin(){ if(started)return; started=true;
+      pt.classList.remove('instant');
+      pt.classList.add('sweep');                        // 光刃上→下掃過(底仍全黑)
+      setTimeout(()=>{
+        pt.classList.remove('cover');                   // 掃完才淡出黑幕 → 顯示新頁
+        setTimeout(()=>pt.classList.remove('on','sweep'), 560);
+      }, 1080);
+    }
+    requestAnimationFrame(()=>requestAnimationFrame(begin));
+    setTimeout(begin, 120);                             // rAF 被節流時的保險
   }
-  // 離開頁面:淡黑 + 亮白光刃左→右掃過 → 導頁
-  function go(url){ pt.classList.add('on'); requestAnimationFrame(()=>pt.classList.add('cover')); sessionStorage.setItem('ptrans','1'); setTimeout(()=>{ location.href=url; }, 640); }
+  // 離開頁面:淡黑 + 亮白光刃上→下掃過 → 導頁
+  function go(url){ pt.classList.add('on'); requestAnimationFrame(()=>pt.classList.add('cover','sweep')); sessionStorage.setItem('ptrans','1'); setTimeout(()=>{ location.href=url; }, 1150); }
   document.querySelectorAll('a[href="/about.html"], a[href="/"], a[href="/index.html"]').forEach(a=>{
     a.addEventListener('click',e=>{ const d=new URL(a.href,location.origin);
       if(d.pathname===location.pathname) return; e.preventDefault(); go(d.pathname+d.search); });
