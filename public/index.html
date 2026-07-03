@@ -25,14 +25,17 @@
   .topnav a:hover::after{transform:scaleX(1)}
   .hero{height:100vh}
 
-  /* ===== 頁面轉場(About / Home 切換) ===== */
-  .pt{position:fixed;inset:0;z-index:100;background:#0a0a0c;display:flex;align-items:center;justify-content:center;
-    transform:translateY(100%);pointer-events:none;transition:transform .62s cubic-bezier(.76,0,.24,1)}
-  .pt.cover{transform:translateY(0);pointer-events:auto}
-  .pt.reveal{transform:translateY(-100%)}
-  .pt-mark{color:#f2f2f0;font-weight:700;letter-spacing:.34em;text-transform:uppercase;font-size:clamp(15px,1.8vw,22px);
-    opacity:0;transform:translateY(8px);transition:opacity .35s ease,transform .5s ease}
-  .pt.cover .pt-mark,.pt.reveal .pt-mark{opacity:1;transform:none}
+  /* ===== 頁面轉場(About / Home):斜向灰白黑條紋逐條掃場 ===== */
+  .pt{position:fixed;inset:0;z-index:100;pointer-events:none;overflow:hidden;visibility:hidden}
+  .pt.on{visibility:visible;pointer-events:auto}
+  .pt-bars{position:absolute;top:-30%;left:-30%;width:160%;height:160%;transform:rotate(-12deg);display:flex}
+  .pt-bars i{flex:1 0 0;height:100%;transform:scaleY(0);transform-origin:top;
+    transition:transform .5s cubic-bezier(.7,0,.2,1)}
+  .pt.cover .pt-bars i{transform:scaleY(1)}
+  .pt.instant .pt-bars i{transition:none}
+  .pt-bars i:nth-child(3n+1){background:#0c0c0c}
+  .pt-bars i:nth-child(3n+2){background:#ededed}
+  .pt-bars i:nth-child(3n+3){background:#8f8f8f}
 
   /* ===== Contact 面板(從底部往上滑出,X 關閉) ===== */
   .cx{position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:45;background:#060608;color:#f2f2f0;
@@ -892,21 +895,25 @@ frame();
 </script>
 
 <!-- ===== 頁面轉場 ===== -->
-<div class="pt" id="pageTrans" aria-hidden="true"><span class="pt-mark">X·ARTS</span></div>
+<div class="pt" id="pageTrans" aria-hidden="true"></div>
 <script>
 (function(){
   const pt=document.getElementById('pageTrans');
-  // 進入頁面:若來自轉場 → 先瞬間覆蓋,再往上揭開
+  const bars=document.createElement('div'); bars.className='pt-bars';
+  const N=9;
+  for(let i=0;i<N;i++){ const b=document.createElement('i'); b.style.transitionDelay=(i*0.04)+'s'; bars.appendChild(b); }
+  pt.appendChild(bars);
+  // 進入頁面:若來自轉場 → 瞬間覆蓋,再逐條收起揭開
   if(sessionStorage.getItem('ptrans')){
     sessionStorage.removeItem('ptrans');
-    pt.style.transition='none'; pt.classList.add('cover');
+    pt.classList.add('instant','on','cover');
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      pt.style.transition=''; pt.classList.remove('cover'); pt.classList.add('reveal');
-      setTimeout(()=>{ pt.style.transition='none'; pt.classList.remove('reveal'); void pt.offsetWidth; pt.style.transition=''; },780);
+      pt.classList.remove('instant'); pt.classList.remove('cover');
+      setTimeout(()=>pt.classList.remove('on'), 980);
     }));
   }
-  // 離開頁面:面板從底部滑上覆蓋 → 導頁
-  function go(url){ pt.classList.remove('reveal'); pt.classList.add('cover'); sessionStorage.setItem('ptrans','1'); setTimeout(()=>{ location.href=url; },600); }
+  // 離開頁面:斜向條紋逐條覆蓋 → 導頁
+  function go(url){ pt.classList.add('on','cover'); sessionStorage.setItem('ptrans','1'); setTimeout(()=>{ location.href=url; }, 780); }
   document.querySelectorAll('a[href="/about.html"], a[href="/"], a[href="/index.html"]').forEach(a=>{
     a.addEventListener('click',e=>{ const d=new URL(a.href,location.origin);
       if(d.pathname===location.pathname) return; e.preventDefault(); go(d.pathname+d.search); });
