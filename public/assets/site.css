@@ -176,10 +176,13 @@
   .rise.in{opacity:1;transform:none}
 
   /* ===== Barba namespace 切換:導覽 Home 連結 + 背景 ===== */
-  .topnav a.home-link{display:none}
-  body[data-ns="about"] .topnav a.home-link{display:inline-block}
-  body[data-ns="about"] .topnav a.about-link{opacity:1}
-  body[data-ns="about"] .topnav a.about-link::after{transform:scaleX(1)}
+  /* 首頁也保留 Home 版位(visibility 佔位),About/Contact 兩頁位置一致 */
+  .topnav a.home-link{visibility:hidden;pointer-events:none}
+  body[data-ns="about"] .topnav a.home-link{visibility:visible;pointer-events:auto}
+  /* 在 about 頁:About 變灰字且不可再按 */
+  body[data-ns="about"] .topnav a.about-link{opacity:.36;pointer-events:none}
+  body[data-ns="about"] .topnav a.about-link:hover{opacity:.36}
+  body[data-ns="about"] .topnav a.about-link::after{transform:scaleX(0)}
   /* Barba container:GSAP 淡入淡出基底 */
   main[data-barba="container"]{position:relative;z-index:2;will-change:opacity}
 
