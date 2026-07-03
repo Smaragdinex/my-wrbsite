@@ -8,130 +8,14 @@
 <meta name="description" content="X-Arts is an independent studio crafting playful, high-craft web experiences where real-time graphics, motion, and AI meet.">
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/css/dseg.css">
-<style>
-  :root{ --fg:#f2f2f0; --dim:rgba(242,242,240,.45); --line:rgba(242,242,240,.12); }
-  *{margin:0;padding:0;box-sizing:border-box}
-  html,body{min-height:100%;background:#08080a;color:var(--fg);overflow-x:hidden;
-    font-family:"Helvetica Neue",-apple-system,"PingFang TC","Noto Sans TC",sans-serif;-webkit-font-smoothing:antialiased}
-  a{color:inherit;text-decoration:none}
-  canvas#stars{position:fixed;inset:0;width:100%;height:100%;z-index:0;
-    background:radial-gradient(1200px 800px at 50% 30%,rgba(42,143,187,.10),transparent 60%),
-      radial-gradient(900px 700px at 80% 80%,rgba(150,120,255,.08),transparent 56%),#070709}
-
-  /* 固定 HUD */
-  .hud{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;
-    padding:clamp(20px,4vw,52px);pointer-events:none}
-  .hud header{display:flex;justify-content:space-between;align-items:flex-start}
-  .face{pointer-events:auto;line-height:0;filter:drop-shadow(0 2px 10px rgba(0,0,0,.5))}
-  #eyes{transform-box:fill-box;transform-origin:center;transition:transform .12s ease}
-  #eyes.blink{transform:scaleY(.08)}
-  .pupil{transition:transform .18s cubic-bezier(.2,.8,.2,1)}
-  .topright{display:flex;align-items:flex-start;gap:clamp(16px,2vw,34px);pointer-events:auto}
-  .topnav{display:flex;gap:clamp(14px,1.6vw,26px);align-items:center;padding-top:4px}
-  .topnav a{font-size:17px;letter-spacing:.14em;text-transform:uppercase;opacity:.7;transition:opacity .3s;position:relative}
-  .topnav a.active{opacity:1}
-  .topnav a:hover{opacity:1}
-  .topnav a::after{content:"";position:absolute;left:0;right:0;bottom:-5px;height:1px;background:currentColor;
-    transform:scaleX(0);transform-origin:left;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
-  .topnav a.active::after,.topnav a:hover::after{transform:scaleX(1)}
-  .brand{display:flex;flex-direction:column;align-items:flex-end;gap:5px;text-align:right;font-size:13px;letter-spacing:.18em;text-transform:uppercase}
-  .brand b{font-weight:700}.brand span{color:var(--dim)}
-  .hud footer{margin-top:auto;display:flex;justify-content:space-between;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
-
-  /* 內容 */
-  .page{position:relative;z-index:2;max-width:1180px;margin:0 auto;
-    padding:clamp(140px,20vh,240px) clamp(22px,6vw,80px) 22vh}
-  .eyebrow{font-size:12px;letter-spacing:.34em;text-transform:uppercase;color:var(--dim);margin-bottom:22px}
-  .lead{font-size:clamp(30px,5.2vw,72px);line-height:1.04;font-weight:600;letter-spacing:-.02em;max-width:15ch}
-  .lead em{font-style:normal;color:var(--dim)}
-  .make{margin-top:clamp(40px,7vh,90px);display:flex;flex-wrap:wrap;gap:12px 26px}
-  .make span{font-size:14px;letter-spacing:.06em;color:rgba(242,242,240,.82);
-    border:1px solid var(--line);border-radius:999px;padding:9px 16px}
-
-  .sec{margin-top:clamp(80px,16vh,190px);display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,5vw,80px);align-items:start}
-  .sec.rev{direction:rtl}.sec.rev>*{direction:ltr}
-  .sec .q{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-style:italic;padding-top:8px}
-  .sec .a{font-size:clamp(20px,2.5vw,34px);line-height:1.32;font-weight:500;letter-spacing:-.01em}
-  .sec .a.small{font-size:clamp(17px,1.7vw,22px);line-height:1.55;font-weight:400;color:rgba(242,242,240,.9)}
-  @media(max-width:760px){ .sec{grid-template-columns:1fr;gap:14px} .sec.rev{direction:ltr} }
-
-  .foot{margin-top:clamp(100px,20vh,220px);display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:clamp(24px,4vw,60px);
-    border-top:1px solid var(--line);padding-top:clamp(30px,5vh,60px)}
-  .foot h4{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:16px;font-weight:600}
-  .foot ul{list-style:none;display:flex;flex-direction:column;gap:9px}
-  .foot li,.foot a{font-size:clamp(16px,1.6vw,20px);letter-spacing:.02em}
-  .foot .big{font-size:clamp(22px,2.4vw,32px);line-height:1.2;font-weight:600}
-  .foot a:hover{text-decoration:underline}
-  @media(max-width:760px){ .foot{grid-template-columns:1fr;gap:34px} }
-
-  /* 淡入 */
-  .rise{opacity:0;transform:translateY(40px);transition:opacity .9s cubic-bezier(.2,.8,.2,1),transform .9s cubic-bezier(.2,.8,.2,1)}
-  .rise.in{opacity:1;transform:none}
-
-  /* 游標 */
-  .cursor{position:fixed;top:0;left:0;width:50px;height:50px;border-radius:50%;background:#fff;
-    mix-blend-mode:difference;pointer-events:none;z-index:50;transform:translate(-50%,-50%);
-    transition:width .35s cubic-bezier(.2,.8,.2,1),height .35s cubic-bezier(.2,.8,.2,1)}
-  .cursor.onnav{width:30px;height:30px}
-
-  /* ===== 頁面轉場(About / Home):翻書式 3D 翻頁(單次、較慢) ===== */
-  .pt{position:fixed;inset:0;z-index:100;pointer-events:none;overflow:hidden;visibility:hidden;perspective:1800px;perspective-origin:0% 50%}
-  .pt.on{visibility:visible;pointer-events:auto}
-  .pt-page{position:absolute;inset:0;transform-origin:left center;transform:rotateY(0deg);
-    background:linear-gradient(100deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,.12) 18%,rgba(255,255,255,.06) 52%,rgba(0,0,0,.34) 100%),#0e0e12;
-    box-shadow:0 0 120px 24px rgba(0,0,0,.55);
-    transition:transform 1.35s cubic-bezier(.66,0,.30,1)}
-  .pt.pre .pt-page{transform:rotateY(120deg)}
-  .pt.turn .pt-page{transform:rotateY(-120deg)}
-  .pt.instant .pt-page{transition:none}
-
-  /* ===== Contact 面板(從底部往上滑出,X 關閉) ===== */
-  .cx{position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:45;background:#060608;color:#f2f2f0;
-    transform:translateY(100%);transition:transform .8s cubic-bezier(.76,0,.24,1);
-    padding:clamp(20px,3vw,42px) clamp(24px,4vw,58px);display:flex;flex-direction:column;overflow-y:auto;pointer-events:none;visibility:hidden;border-top:1px solid rgba(242,242,240,.14)}
-  .cx.open{transform:none;pointer-events:auto;visibility:visible}
-  .cx-top{display:flex;justify-content:space-between;align-items:flex-start}
-  .cx-logo{font-size:clamp(18px,2vw,26px);font-weight:700;letter-spacing:.06em}
-  .cx-logo span{color:rgba(242,242,240,.42)}
-  .cx-close{background:none;border:0;color:#f2f2f0;font-size:24px;cursor:pointer;line-height:1;
-    width:44px;height:44px;display:flex;align-items:center;justify-content:center;transition:transform .35s}
-  .cx-close:hover{transform:rotate(90deg)}
-  .cx-lbl{font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:rgba(242,242,240,.4);margin-bottom:18px}
-  .cx-grid{flex:1;display:grid;grid-template-columns:1.35fr 1fr;gap:clamp(18px,3.4vh,40px) clamp(24px,6vw,90px);
-    align-content:center;padding:clamp(10px,2vh,24px) 0;max-width:1300px;width:100%;margin:0 auto}
-  .cx-big{font-size:clamp(26px,3.4vw,46px);font-weight:700;line-height:1.08;letter-spacing:-.02em}
-  .cx-follow ul{list-style:none}
-  .cx-follow li{margin-bottom:10px}
-  .cx-follow a,.cx-mail{font-size:clamp(18px,1.8vw,24px);position:relative;display:inline-block;color:#f2f2f0;text-decoration:none}
-  .cx-follow a::after,.cx-mail::after{content:"";position:absolute;left:0;bottom:-3px;width:100%;height:1px;
-    background:currentColor;transform:scaleX(0);transform-origin:left;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
-  .cx-follow a:hover::after,.cx-mail:hover::after{transform:scaleX(1)}
-  .cx-subhead{font-size:16px;margin-bottom:14px}
-  .cx-subhead span{color:rgba(242,242,240,.45);font-size:13px}
-  .cx-field{display:flex;align-items:center;border:1px solid rgba(242,242,240,.35);border-radius:12px;padding:5px 5px 5px 18px;max-width:420px}
-  .cx-field input{flex:1;background:none;border:0;color:#f2f2f0;font-size:16px;padding:12px 0;outline:none;font-family:inherit}
-  .cx-field input::placeholder{color:rgba(242,242,240,.4)}
-  .cx-field button{width:40px;height:40px;border-radius:999px;border:0;background:#fff;color:#000;cursor:pointer;font-size:11px;flex:none}
-  .cx-foot{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;
-    border-top:1px solid rgba(242,242,240,.12);padding-top:22px}
-  .cx-copy{font-size:clamp(18px,2.2vw,30px);font-weight:800;letter-spacing:-.02em}
-  .cx-tag{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:rgba(242,242,240,.55);max-width:260px;line-height:1.5}
-  .cx-dot{width:60px;height:60px;border-radius:999px;background:#f2f2f0}
-  .cx-clock{display:flex;flex-direction:column;align-items:flex-end;gap:9px}
-  .led{position:relative;font-family:'DSEG7 Classic','Courier New',monospace;font-size:clamp(30px,3.6vw,52px);line-height:1;letter-spacing:2px}
-  .led-off{color:rgba(242,242,240,.09)}
-  .led-on{position:absolute;inset:0;color:#eef3fb;text-shadow:0 0 10px rgba(160,205,255,.45)}
-  .cx-clock em{font-style:normal;background:#f2f2f0;color:#000;border-radius:999px;padding:5px 12px;font-size:12px;letter-spacing:.14em;text-transform:uppercase}
-  @media(max-width:760px){ .cx-grid{grid-template-columns:1fr;gap:34px} .cx-dot{display:none} }
-  @media (hover:none){ .cursor{display:none} }
-  @media (min-width:701px){ html,body{cursor:none} a{cursor:none} }
-</style>
+<link rel="stylesheet" href="/assets/site.css">
 </head>
-<body>
-<canvas id="stars"></canvas>
-<div class="cursor" id="cursor"></div>
+<body data-barba="wrapper" data-ns="about">
+<canvas id="gl"></canvas>
+<div class="cursor" id="cursor"><span class="view">View</span></div>
 
-<div class="hud">
+<!-- ===== 常駐 HUD(Barba 容器外,永不重載) ===== -->
+<div class="wrap">
   <header>
     <div class="face" id="face">
       <svg viewBox="0 0 100 100" width="56" height="56" aria-hidden="true">
@@ -159,17 +43,19 @@
     </div>
     <div class="topright">
       <nav class="topnav">
-        <a class="active" href="/about.html">About</a>
+        <a class="about-link" href="/about.html">About</a>
         <a href="#contact" data-contact>Contact</a>
-        <a href="/">← Home</a>
+        <a class="home-link" href="/index.html">← Home</a>
       </nav>
       <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
     </div>
   </header>
+  <div class="center"></div>
   <footer><span></span><span>xarts.games</span></footer>
 </div>
 
-<main class="page">
+<!-- ===== Barba 容器:about 內容(只有這裡會被抽換) ===== -->
+<main data-barba="container" data-barba-namespace="about" class="page">
   <div class="eyebrow rise">(We are)</div>
   <h1 class="lead rise">An independent studio crafting playful, high-craft experiences for the web — <em>where real-time graphics, motion, and AI meet.</em></h1>
 
@@ -215,51 +101,7 @@
   </footer>
 </main>
 
-<script>
-/* 星場背景 */
-(function(){
-  const cv=document.getElementById('stars'), ctx=cv.getContext('2d');
-  let w,h,dpr=Math.min(2,devicePixelRatio||1), stars=[];
-  function resize(){ w=innerWidth;h=innerHeight;cv.width=w*dpr;cv.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
-    stars=Array.from({length:Math.round(w*h/9000)},()=>({x:Math.random()*w,y:Math.random()*h,r:Math.random()*1.3+.2,a:Math.random()*.5+.15,s:Math.random()*.06+.01})); }
-  resize(); addEventListener('resize',resize,{passive:true});
-  let sy=0; addEventListener('scroll',()=>{sy=scrollY;},{passive:true});
-  (function loop(){ ctx.clearRect(0,0,w,h);
-    for(const st of stars){ st.y-=st.s; if(st.y<-2)st.y=h+2;
-      const yy=st.y - sy*0.04; const y=((yy%(h+4))+(h+4))%(h+4);
-      ctx.globalAlpha=st.a; ctx.fillStyle='#cfe0ff'; ctx.beginPath(); ctx.arc(st.x,y,st.r,0,6.283); ctx.fill(); }
-    ctx.globalAlpha=1; requestAnimationFrame(loop); })();
-})();
-
-/* 自訂游標 + hover 導覽縮小 */
-const cursor=document.getElementById('cursor');
-let cx=innerWidth/2,cy=innerHeight/2,tx=cx,ty=cy;
-addEventListener('pointermove',e=>{tx=e.clientX;ty=e.clientY;});
-document.querySelectorAll('.topnav a').forEach(a=>{
-  a.addEventListener('mouseenter',()=>cursor.classList.add('onnav'));
-  a.addEventListener('mouseleave',()=>cursor.classList.remove('onnav'));
-});
-
-/* 貓眼追游標 + 眨眼 */
-const face=document.getElementById('face'), pupils=face.querySelectorAll('.pupil'), eyesG=document.getElementById('eyes');
-let fc={x:0,y:0};
-function faceCenter(){const r=face.getBoundingClientRect();fc.x=r.left+r.width/2;fc.y=r.top+r.height/2;}
-faceCenter(); addEventListener('resize',faceCenter); addEventListener('scroll',faceCenter,{passive:true});
-(function blink(){eyesG.classList.add('blink');setTimeout(()=>eyesG.classList.remove('blink'),140);setTimeout(blink,2200+Math.random()*3200);})();
-(function tick(){
-  cx+=(tx-cx)*.18; cy+=(ty-cy)*.18;
-  cursor.style.transform=`translate(${cx}px,${cy}px) translate(-50%,-50%)`;
-  const dx=tx-fc.x,dy=ty-fc.y,d=Math.hypot(dx,dy)||1,k=Math.min(1,d/260)*4.6;
-  const ox=(dx/d*k).toFixed(1),oy=(dy/d*k).toFixed(1);
-  pupils.forEach(p=>p.setAttribute('transform',`translate(${ox} ${oy})`));
-  requestAnimationFrame(tick);
-})();
-
-/* 往下滑淡入 */
-const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}}),{threshold:.2});
-document.querySelectorAll('.rise').forEach(el=>io.observe(el));
-</script>
-<!-- ===== Contact 面板 ===== -->
+<!-- ===== 常駐 Contact 面板(Barba 容器外) ===== -->
 <div class="cx" id="contactPanel" role="dialog" aria-label="Contact" aria-hidden="true">
   <div class="cx-top">
     <div class="cx-logo">X·ARTS <span>: STUDIO</span></div>
@@ -299,59 +141,9 @@ document.querySelectorAll('.rise').forEach(el=>io.observe(el));
     </div>
   </div>
 </div>
-<script>
-(function(){
-  const panel=document.getElementById('contactPanel');
-  const close=document.getElementById('cxClose');
-  function open(e){ if(e)e.preventDefault(); panel.classList.add('open'); panel.setAttribute('aria-hidden','false'); }
-  function shut(){ panel.classList.remove('open'); panel.setAttribute('aria-hidden','true'); }
-  document.querySelectorAll('[data-contact]').forEach(a=>a.addEventListener('click',open));
-  close.addEventListener('click',shut);
-  addEventListener('keydown',e=>{ if(e.key==='Escape') shut(); });
-  const form=document.getElementById('cxForm');
-  form.addEventListener('submit',e=>{ e.preventDefault();
-    const v=document.getElementById('cxEmail').value;
-    location.href='mailto:contact@xarts.games?subject=Newsletter&body='+encodeURIComponent('Please subscribe: '+v); });
-  const t=document.getElementById('cxTime'), g=document.getElementById('cxGreet');
-  const p=n=>String(n).padStart(2,'0');
-  function tick(){ const d=new Date(); t.textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
-    const h=d.getHours(); g.textContent = h<5?'Good Night':h<12?'Good Morning':h<18?'Good Afternoon':h<22?'Good Evening':'Good Night'; }
-  tick(); setInterval(tick,1000);
-})();
-</script>
 
-<!-- ===== 頁面轉場 ===== -->
-<div class="pt" id="pageTrans" aria-hidden="true"><div class="pt-page"></div></div>
-<script>
-(function(){
-  const pt=document.getElementById('pageTrans');
-  // 進入頁面:書頁平放覆蓋 → 繞左側書脊翻走露出新頁(翻書 reveal)
-  if(sessionStorage.getItem('ptrans')){
-    sessionStorage.removeItem('ptrans');
-    pt.classList.add('instant','on');                   // 書頁平放覆蓋(rotateY 0)
-    var started=false;
-    function begin(){ if(started)return; started=true;
-      pt.classList.remove('instant');
-      pt.classList.add('turn');                         // 0°→-120° 翻走露出新頁
-      setTimeout(()=>pt.classList.remove('on','turn'), 1450);
-    }
-    requestAnimationFrame(()=>requestAnimationFrame(begin));
-    setTimeout(begin, 120);                             // rAF 被節流時的保險
-  }
-  // 離開頁面:書頁從左側翻入平放覆蓋(120°→0°)→ 導頁
-  function go(url){
-    pt.classList.add('instant','on','pre');             // 書頁翻起在左側(畫面仍是舊頁)
-    sessionStorage.setItem('ptrans','1');
-    var s=false; function turnIn(){ if(s)return; s=true; pt.classList.remove('instant','pre'); }
-    requestAnimationFrame(()=>requestAnimationFrame(turnIn));
-    setTimeout(turnIn, 80);
-    setTimeout(()=>{ location.href=url; }, 1250);        // 覆蓋後導頁
-  }
-  document.querySelectorAll('a[href="/about.html"], a[href="/"], a[href="/index.html"]').forEach(a=>{
-    a.addEventListener('click',e=>{ const d=new URL(a.href,location.origin);
-      if(d.pathname===location.pathname) return; e.preventDefault(); go(d.pathname+d.search); });
-  });
-})();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@barba/core@2.10.3/dist/barba.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script type="module" src="/assets/shell.mjs"></script>
 </body>
 </html>
