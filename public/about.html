@@ -74,6 +74,15 @@
     transition:width .35s cubic-bezier(.2,.8,.2,1),height .35s cubic-bezier(.2,.8,.2,1)}
   .cursor.onnav{width:30px;height:30px}
 
+  /* ===== 頁面轉場(About / Home 切換) ===== */
+  .pt{position:fixed;inset:0;z-index:100;background:#0a0a0c;display:flex;align-items:center;justify-content:center;
+    transform:translateY(100%);pointer-events:none;transition:transform .62s cubic-bezier(.76,0,.24,1)}
+  .pt.cover{transform:translateY(0);pointer-events:auto}
+  .pt.reveal{transform:translateY(-100%)}
+  .pt-mark{color:#f2f2f0;font-weight:700;letter-spacing:.34em;text-transform:uppercase;font-size:clamp(15px,1.8vw,22px);
+    opacity:0;transform:translateY(8px);transition:opacity .35s ease,transform .5s ease}
+  .pt.cover .pt-mark,.pt.reveal .pt-mark{opacity:1;transform:none}
+
   /* ===== Contact 面板(從底部往上滑出,X 關閉) ===== */
   .cx{position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:45;background:#060608;color:#f2f2f0;
     transform:translateY(100%);transition:transform .8s cubic-bezier(.76,0,.24,1);
@@ -306,6 +315,27 @@ document.querySelectorAll('.rise').forEach(el=>io.observe(el));
   function tick(){ const d=new Date(); t.textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
     const h=d.getHours(); g.textContent = h<5?'Good Night':h<12?'Good Morning':h<18?'Good Afternoon':h<22?'Good Evening':'Good Night'; }
   tick(); setInterval(tick,1000);
+})();
+</script>
+
+<!-- ===== 頁面轉場 ===== -->
+<div class="pt" id="pageTrans" aria-hidden="true"><span class="pt-mark">X·ARTS</span></div>
+<script>
+(function(){
+  const pt=document.getElementById('pageTrans');
+  if(sessionStorage.getItem('ptrans')){
+    sessionStorage.removeItem('ptrans');
+    pt.style.transition='none'; pt.classList.add('cover');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      pt.style.transition=''; pt.classList.remove('cover'); pt.classList.add('reveal');
+      setTimeout(()=>{ pt.style.transition='none'; pt.classList.remove('reveal'); void pt.offsetWidth; pt.style.transition=''; },780);
+    }));
+  }
+  function go(url){ pt.classList.remove('reveal'); pt.classList.add('cover'); sessionStorage.setItem('ptrans','1'); setTimeout(()=>{ location.href=url; },600); }
+  document.querySelectorAll('a[href="/about.html"], a[href="/"], a[href="/index.html"]').forEach(a=>{
+    a.addEventListener('click',e=>{ const d=new URL(a.href,location.origin);
+      if(d.pathname===location.pathname) return; e.preventDefault(); go(d.pathname+d.search); });
+  });
 })();
 </script>
 </body>
