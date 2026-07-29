@@ -23,6 +23,26 @@
             content: ''; position: absolute; width: 27px; height: 2px;
             background: currentColor; transform: rotate(-45deg); border-radius: 2px;
         }
+        #palette {
+            position: fixed; right: 20px; top: 78px; z-index: 10;
+            display: grid; grid-template-columns: repeat(4, 22px); gap: 7px;
+            padding: 10px 11px; border-radius: 14px;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.16);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+        }
+        #palette .sw {
+            width: 22px; height: 22px; padding: 0; border-radius: 50%;
+            background: var(--c); cursor: pointer;
+            border: 1px solid rgba(255,255,255,.45);
+            box-shadow: 0 1px 3px rgba(0,0,0,.25);
+            transition: transform .12s, box-shadow .12s;
+        }
+        #palette .sw:hover { transform: scale(1.18); }
+        #palette .sw.on {
+            transform: scale(1.18);
+            box-shadow: 0 0 0 2px rgba(255,255,255,.92), 0 2px 6px rgba(0,0,0,.3);
+        }
         #keys {
             position: fixed; right: 20px; bottom: 20px; z-index: 10;
             display: flex; flex-direction: column; align-items: center; gap: 7px;
@@ -64,6 +84,7 @@
 </head>
 <body>
     <button id="musicBtn" class="off" title="音樂">♪</button>
+    <div id="palette" title="機身顏色"></div>
     <div id="hint"></div>
     <div id="keys">
         <div class="cap">飛行操作</div>
@@ -225,6 +246,35 @@
         const V = 7   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
 
+        // 馬卡龍色盤:柔和低飽和,和低多邊形星球的色調協調
+        const MACARON = [
+            ['#f2a0a8', '草莓'], ['#f7be8f', '蜜桃'], ['#f1de97', '檸檬'], ['#afd69c', '抹茶'],
+            ['#97d8cb', '薄荷'], ['#9dc6ec', '天空'], ['#b4a7de', '薰衣草'], ['#dfa9ce', '丁香'],
+        ]
+        const paletteEl = document.getElementById('palette')
+        const bodyMats = []                                   // 機身材質(不含機翼/座艙)
+        let planeColor = localStorage.getItem('tp.color') || MACARON[0][0]
+
+        function applyPlaneColor(hex) {
+            planeColor = hex
+            localStorage.setItem('tp.color', hex)
+            for (const m of bodyMats) {
+                m.color.set(hex)
+                m.emissive.copy(m.color)                      // 自發光跟著換,夜裡才不會色偏
+            }
+            paletteEl.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c === hex))
+        }
+
+        MACARON.forEach(([hex, name]) => {
+            const b = document.createElement('button')
+            b.className = 'sw'
+            b.style.setProperty('--c', hex)
+            b.dataset.c = hex
+            b.title = name
+            b.addEventListener('click', e => { e.stopPropagation(); applyPlaneColor(hex) })
+            paletteEl.appendChild(b)
+        })
+
         const planeMats = []
         let rig = null, tilt = null, propeller = null
         let headlight = null, beacon = null, halo = null
@@ -247,6 +297,7 @@
                     m.emissive.copy(m.color)
                     m.emissiveIntensity = 0.42
                     planeMats.push(m)
+                    if (m.name.includes('PlaneRed')) bodyMats.push(m)   // 機身/機鼻/尾翼
                 }
             })
 
@@ -255,6 +306,8 @@
             headlight = new THREE.PointLight(0xffd9a0, 0, 6, 1.4)
             headlight.position.set(0, 0.15, 0)
             tilt.add(headlight)
+
+            applyPlaneColor(planeColor)          // 套用上次選的顏色
 
             // 光暈:圍繞飛機的柔和光球,夜裡向外暈開
             const c = document.createElement('canvas')
