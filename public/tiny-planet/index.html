@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiny Planet - 飛行</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #musicBtn {
+            position: fixed; right: 20px; top: 20px; z-index: 10;
+            width: 46px; height: 46px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 21px; line-height: 1; color: #fff; cursor: pointer;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.24);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: background .18s, color .18s, transform .12s;
+        }
+        #musicBtn:hover { transform: scale(1.07); }
+        #musicBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
+        #musicBtn.off { opacity: .78; }
+        #musicBtn.off::after {
+            content: ''; position: absolute; width: 27px; height: 2px;
+            background: currentColor; transform: rotate(-45deg); border-radius: 2px;
+        }
+        #keys {
+            position: fixed; right: 20px; bottom: 20px; z-index: 10;
+            display: flex; flex-direction: column; align-items: center; gap: 7px;
+            padding: 14px 16px 12px; border-radius: 16px;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            font: 600 13px/1 system-ui; color: #fff; user-select: none;
+            box-shadow: 0 6px 22px rgba(0,0,0,.22);
+        }
+        #keys .row { display: flex; gap: 7px; }
+        #keys .key {
+            min-width: 40px; height: 40px; padding: 0 10px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-radius: 9px; background: rgba(255,255,255,.13);
+            border: 1px solid rgba(255,255,255,.22);
+            border-bottom-width: 3px;
+            transition: background .08s, transform .08s;
+        }
+        #keys .key .sub { font-size: 10px; font-weight: 500; opacity: .72; margin-top: 2px; }
+        #keys .key.active {
+            background: rgba(255,214,140,.9); color: #23262e;
+            border-color: rgba(255,255,255,.5); transform: translateY(2px);
+            border-bottom-width: 1px;
+        }
+        #keys .cap { font-size: 11px; font-weight: 500; opacity: .68; letter-spacing: .04em; }
+        #hint {
+            position: fixed; top: 12px; left: 14px; color: #fff;
+            font: 14px/1.7 system-ui; text-shadow: 0 1px 3px rgba(0,0,0,.45);
+            user-select: none;
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <button id="musicBtn" class="off" title="音樂">♪</button>
+    <div id="hint"></div>
+    <div id="keys">
+        <div class="cap">飛行操作</div>
+        <div class="row">
+            <div class="key" data-k="up">↑<span class="sub">W</span></div>
+        </div>
+        <div class="row">
+            <div class="key" data-k="left">←<span class="sub">A</span></div>
+            <div class="key" data-k="down">↓<span class="sub">S</span></div>
+            <div class="key" data-k="right">→<span class="sub">D</span></div>
+        </div>
+    </div>
+    <script type="module">
+        import * as THREE from 'three'
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
+        import { Music } from './music.js'
+
+        const scene = new THREE.Scene()
+        scene.background = new THREE.Color(0x87b8e8)
+
+        const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600)
+        const renderer = new THREE.WebGLRenderer({ antialias: true })
+        renderer.setSize(innerWidth, innerHeight)
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+        renderer.toneMapping = THREE.ACESFilmicToneMapping   // 暗部平滑滾降,不死黑
+        renderer.toneMappingExposure = 1.15
+        document.body.appendChild(renderer.domElement)
+
+        // 燈光:業界標準三層 —— 主光(太陽)+ 半球環境光 + 冷色補光
+        const sun = new THREE.DirectionalLight(0xfff2dd, 3.5)
+        sun.position.set(30, 20, 15)
+        scene.add(sun)
+
+        // 半球光:上半是天空藍、下半是地面反光,暗面自然帶一點環境色
+        const hemi = new THREE.HemisphereLight(0x9db8e8, 0x3d4a35, 0.55)
+        scene.add(hemi)
+
+        // 補光:太陽反方向的弱冷光,勾出暗面輪廓(業界叫 fill light)
+        const fill = new THREE.DirectionalLight(0x6677aa, 0.5)
+        fill.position.set(-30, -10, -20)
+        scene.add(fill)
+
+        // ---------- 晝夜循環 ----------
+        const DAY_SECONDS = 120           // 白天 2 分鐘
+        const NIGHT_SECONDS = 60           // 夜晚 1 分鐘
+        const CYCLE = DAY_SECONDS + NIGHT_SECONDS
+        const DAY_FRAC = DAY_SECONDS / CYCLE
+        // phase 0~1:0=日出 → DAY_FRAC=日落 → 1=再次日出;?sun= 可指定起始時刻
+        let phase = parseFloat(new URLSearchParams(location.search).get('sun') || '0.25')
+
+        const WORLD_Y = new THREE.Vector3(0, 1, 0)
+        const WORLD_X = new THREE.Vector3(1, 0, 0)
+        const sunTarget = new THREE.Object3D()
+        scene.add(sunTarget)
+        sun.target = sunTarget
+        fill.target = sunTarget
+        const sunEast = new THREE.Vector3(1, 0, 0)   // 世界空間的太陽方位,逐幀平滑延續
+
+        // 太陽本體(遠處的亮球)
+        const sunBall = new THREE.Mesh(
+            new THREE.SphereGeometry(7, 24, 16),
+            new THREE.MeshBasicMaterial({ color: 0xfff3b0 }))
+        scene.add(sunBall)
+
+        // 星空(夜晚淡入)
+        const starGeo = new THREE.BufferGeometry()
+        const starPos = new Float32Array(1500 * 3)
+        for (let i = 0; i < 1500; i++) {
+            const v = new THREE.Vector3().randomDirection().multiplyScalar(260)
+            starPos.set([v.x, v.y, v.z], i * 3)
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
+        const starMat = new THREE.PointsMaterial({
+            color: 0xffffff, size: 0.7, sizeAttenuation: true,
+            transparent: true, opacity: 0, depthWrite: false
+        })
+        scene.add(new THREE.Points(starGeo, starMat))
+
+        // 天色關鍵影格:太陽仰角 → 天空顏色(深夜→黎明紫→日出橘→白天藍)
+        const skyStops = [
+            [-0.50, new THREE.Color(0x070d26)],
+            [-0.15, new THREE.Color(0x2a2050)],
+            [ 0.03, new THREE.Color(0xe08a60)],
+            [ 0.30, new THREE.Color(0x87b8e8)],
+        ]
+        function skyColor(e) {
+            if (e <= skyStops[0][0]) return skyStops[0][1]
+            for (let i = 1; i < skyStops.length; i++) {
+                if (e <= skyStops[i][0]) {
+                    const [e0, c0] = skyStops[i - 1], [e1, c1] = skyStops[i]
+                    return c0.clone().lerp(c1, (e - e0) / (e1 - e0))
+                }
+            }
+            return skyStops[skyStops.length - 1][1]
+        }
+        const smoothstep = (a, b, x) => {
+            const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1)
+            return t * t * (3 - 2 * t)
+        }
+
+        // ---------- 飛行參數 ----------
+        const R = 31.2
+        const SPEED = 13         // 巡航速度
+        const TURN = 1.6         // 轉彎速率 rad/s
+        const ALT_MIN = R + 7.65 // 最低高度
+        const ALT_MAX = R + 21.6
+        let pos = new THREE.Vector3(0, R + 8.5, 0)
+        let fwd = new THREE.Vector3(0, 0, -1)   // 北極出發往 -Z
+        let alt = pos.length(), targetAlt = alt
+
+        // ---------- 輸入 ----------
+        const music = new Music()
+        window.__music = music
+        const musicBtn = document.getElementById('musicBtn')
+        const paintMusic = on => {
+            musicBtn.classList.toggle('on', on)
+            musicBtn.classList.toggle('off', !on)
+        }
+        const startMusic = () => {
+            if (music.ctx) return
+            music.start()
+            paintMusic(true)
+        }
+        musicBtn.addEventListener('click', e => {
+            e.stopPropagation()
+            paintMusic(music.ctx ? music.toggle() : (music.start(), true))
+        })
+
+        // 右下角鍵盤面板:按下即時高亮
+        const KEY_MAP = {
+            ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
+            ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+        }
+        const keyEls = {}
+        document.querySelectorAll('#keys .key').forEach(el => { keyEls[el.dataset.k] = el })
+        const paintKey = (code, on) => {
+            const el = keyEls[KEY_MAP[code]]
+            if (el) el.classList.toggle('active', on)
+        }
+
+        const keys = {}
+        addEventListener('keydown', e => {
+            startMusic()                        // 任何按鍵都能解鎖音訊
+            paintKey(e.code, true)
+            if (e.code === 'KeyM') paintMusic(music.toggle())
+            keys[e.code] = true
+        })
+        addEventListener('keyup', e => { keys[e.code] = false; paintKey(e.code, false) })
+        const dbg = new URLSearchParams(location.search).has('dbg')
+        const hintEl = document.getElementById('hint')
+
+        // ---------- 載入模型 ----------
+        const loader = new GLTFLoader()
+        // Draco 解碼器:壓縮版模型用得到,未壓縮的模型設了也無妨
+        const draco = new DRACOLoader()
+        draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
+        loader.setDRACOLoader(draco)
+        const V = 7   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
+
+        const planeMats = []
+        let rig = null, tilt = null, propeller = null
+        let headlight = null, beacon = null, halo = null
+        const navLights = []
+        loader.load(`./public/assets/biplane.glb?v=${V}`, g => {
+            rig = new THREE.Group()          // 位置 + 航向
+            tilt = new THREE.Group()         // 壓坡度 / 俯仰的視覺傾斜
+            const inner = new THREE.Group()
+            inner.rotation.y = Math.PI       // 模型機頭原朝 -Z,轉 180° 對齊 rig +Z
+            inner.add(g.scene)
+            tilt.add(inner)
+            rig.add(tilt)
+            scene.add(rig)
+            propeller = g.scene.getObjectByName('Propeller')
+            // 自發光:讓飛機永遠看得清楚(逆光/夜晚也不會變成剪影),又不影響地形
+            g.scene.traverse(o => {
+                if (!o.isMesh) return
+                for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+                    if (!m.emissive) continue
+                    m.emissive.copy(m.color)
+                    m.emissiveIntensity = 0.42
+                    planeMats.push(m)
+                }
+            })
+
+            // ---------- 夜間航行燈 ----------
+            // 機艙內燈:從飛機內部往外照亮自己的機身
+            headlight = new THREE.PointLight(0xffd9a0, 0, 6, 1.4)
+            headlight.position.set(0, 0.15, 0)
+            tilt.add(headlight)
+
+            // 光暈:圍繞飛機的柔和光球,夜裡向外暈開
+            const c = document.createElement('canvas')
+            c.width = c.height = 128
+            const ctx = c.getContext('2d')
+            const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+            grad.addColorStop(0.0, 'rgba(255,224,170,0.85)')
+            grad.addColorStop(0.35, 'rgba(255,200,130,0.28)')
+            grad.addColorStop(1.0, 'rgba(255,180,110,0)')
+            ctx.fillStyle = grad
+            ctx.fillRect(0, 0, 128, 128)
+            halo = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: new THREE.CanvasTexture(c),
+                blending: THREE.AdditiveBlending,
+                depthWrite: false, transparent: true, opacity: 0
+            }))
+            halo.scale.setScalar(7)
+            tilt.add(halo)
+
+            // 尾部防撞燈:閃爍白光
+            beacon = new THREE.Mesh(
+                new THREE.SphereGeometry(0.07, 10, 8),
+                new THREE.MeshBasicMaterial({ color: 0xffffff }))
+            beacon.position.set(0, 0.62, -1.1)
+            const beaconGlow = new THREE.PointLight(0xffffff, 0, 2.5)
+            beacon.add(beaconGlow)
+            tilt.add(beacon)
+            navLights.push({ mesh: beacon, glow: beaconGlow, base: new THREE.Color(0xffffff), blink: true })
+        })
+
+        // ---------- 主迴圈 ----------
+        const clock = new THREE.Clock()
+        function tick() {
+            const dt = Math.min(clock.getDelta(), 0.05)
+
+            // ---- 晝夜:純粹由時間決定,與飛到星球哪一面無關 ----
+            phase = (phase + dt / CYCLE) % 1
+            // 晝夜長度不同 → 白天與夜晚各自等速走完半圈,交界處仰角連續為 0
+            const theta = phase < DAY_FRAC
+                ? Math.PI * (phase / DAY_FRAC)
+                : Math.PI * (1 + (phase - DAY_FRAC) / (1 - DAY_FRAC))
+            const e = Math.sin(theta)             // 太陽仰角,-1=午夜 0=地平線 1=正午
+            const dayF = smoothstep(-0.12, 0.28, e)
+
+            // 太陽相對「當地地平面」升落:東邊升起 → 過頂 → 西邊落下
+            // 方位參考用「平行移動」延續上一幀的方向(而非每幀由固定軸重算),
+            // 否則經過極點時參考軸會瞬間翻轉、且趨近零長度導致方向亂轉 → 畫面閃爍
+            const localUp = pos.clone().normalize()
+            sunEast.addScaledVector(localUp, -sunEast.dot(localUp))      // 投影回當前地平面
+            if (sunEast.lengthSq() < 1e-8) {                             // 極端情況的保險
+                sunEast.crossVectors(Math.abs(localUp.y) > 0.9 ? WORLD_X : WORLD_Y, localUp)
+            }
+            sunEast.normalize()
+
+            const sunDir = localUp.clone().multiplyScalar(e)
+                .addScaledVector(sunEast, Math.cos(theta)).normalize()
+
+            sunTarget.position.copy(pos)
+            sun.position.copy(pos).addScaledVector(sunDir, 110)
+            sunBall.position.copy(pos).addScaledVector(sunDir, 240)
+
+            // 補光跟著太陽的反方向,飛行中與地形的相對關係才穩定
+            fill.position.copy(pos).addScaledVector(sunDir, -90).addScaledVector(localUp, 30)
+
+            scene.background = skyColor(e)
+            sun.intensity = 0.05 + 3.4 * dayF
+            sun.color.set(0xff8a4d).lerp(new THREE.Color(0xfff2dd), smoothstep(0.0, 0.42, e))
+            hemi.intensity = 0.12 + 0.45 * dayF
+            fill.intensity = 0.18 + 0.32 * dayF
+            starMat.opacity = 1 - dayF
+            music.setNight(1 - dayF)
+
+            if (rig) {
+                const up = pos.clone().normalize()
+
+                const turn = ((keys.ArrowLeft || keys.KeyA) ? 1 : 0) - ((keys.ArrowRight || keys.KeyD) ? 1 : 0)
+                const climb = ((keys.ArrowUp || keys.KeyW) ? 1 : 0) - ((keys.ArrowDown || keys.KeyS) ? 1 : 0)
+                const boost = (keys.ShiftLeft || keys.ShiftRight) ? 1.9 : 1
+
+                // 航向繞「頭頂方向」旋轉 = 貼著球面轉彎
+                fwd.applyAxisAngle(up, turn * TURN * dt)
+
+                // 高度控制(平滑)
+                targetAlt = THREE.MathUtils.clamp(targetAlt + climb * 6 * dt, ALT_MIN, ALT_MAX)
+                alt += (targetAlt - alt) * Math.min(1, dt * 3)
+
+                // 前進 + 投影回球面高度 → 自然繞行星球
+                pos.addScaledVector(fwd, SPEED * boost * dt)
+                pos.setLength(alt)
+                const newUp = pos.clone().normalize()
+                fwd.sub(newUp.clone().multiplyScalar(fwd.dot(newUp))).normalize()
+
+                // 飛機姿態
+                rig.position.copy(pos)
+                rig.up.copy(newUp)
+                rig.lookAt(pos.clone().add(fwd))
+
+                // 轉彎壓坡度、爬升抬頭(純視覺,平滑過渡)
+                tilt.rotation.z += (-turn * 0.55 - tilt.rotation.z) * Math.min(1, dt * 5)
+                tilt.rotation.x += (-climb * 0.3 - tilt.rotation.x) * Math.min(1, dt * 5)
+
+                // 螺旋槳
+                if (propeller) propeller.rotation.z += dt * (25 * boost)
+
+                // 夜間航行燈:夜色越深越亮
+                const nightF = 1 - dayF
+                if (headlight) headlight.intensity = 7 * nightF
+                for (const m of planeMats) m.emissiveIntensity = 0.38 + 0.22 * nightF
+                if (halo) {
+                    // 光暈隨呼吸微微起伏
+                    halo.material.opacity = nightF * (0.72 + 0.12 * Math.sin(clock.elapsedTime * 1.6))
+                    halo.scale.setScalar(6.4 + 0.5 * Math.sin(clock.elapsedTime * 1.6))
+                }
+                const t = clock.elapsedTime
+                for (const L of navLights) {
+                    // 防撞燈快閃,翼尖燈慢呼吸
+                    const pulse = L.blink
+                        ? (t % 1.4 < 0.12 ? 1 : 0)
+                        : 0.55 + 0.45 * Math.sin(t * 2.2)
+                    L.glow.intensity = 0.5 * nightF * pulse
+                    L.mesh.material.color.copy(L.base).multiplyScalar(0.3 + 0.7 * nightF * pulse)
+                }
+
+                if (dbg) hintEl.textContent =
+                    `turn=${turn} climb=${climb} bank=${tilt.rotation.z.toFixed(2)} alt=${alt.toFixed(1)} pos=${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}`
+
+                // 相機:機尾追隨
+                const camTarget = pos.clone().addScaledVector(fwd, -8.5).addScaledVector(newUp, 4.2)
+                camera.position.lerp(camTarget, Math.min(1, dt * 4))
+                camera.up.copy(newUp)
+                camera.lookAt(pos.clone().addScaledVector(fwd, 6).addScaledVector(newUp, -3.2))
+            }
+
+            renderer.render(scene, camera)
+            requestAnimationFrame(tick)
+        }
+        // 相機初始位置
+        camera.position.set(0, R + 11.5, 14)
+        tick()
+
+        addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight
+            camera.updateProjectionMatrix()
+            renderer.setSize(innerWidth, innerHeight)
+        })
+    </script>
+</body>
+</html>
