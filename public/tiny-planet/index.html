@@ -21,11 +21,20 @@
             position: fixed; right: 20px; top: 78px; z-index: 10;
             width: 46px; height: 46px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 21px; line-height: 1; cursor: pointer;
-            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,.24);
+            font-size: 21px; line-height: 1; cursor: pointer; color: #23262e;
+            background: rgba(255,214,140,.92);          /* 與音樂鈕啟用時同一個琥珀黃 */
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.5);
             box-shadow: 0 4px 16px rgba(0,0,0,.2);
-            transition: background .18s, transform .12s, box-shadow .18s;
+            transition: transform .12s, box-shadow .18s;
+        }
+        /* 右下角小圓點顯示目前機身色 */
+        #planeBtn::after {
+            content: ''; position: absolute; right: 1px; bottom: 1px;
+            width: 13px; height: 13px; border-radius: 50%;
+            background: var(--body, #f2a0a8);
+            border: 2px solid rgba(255,255,255,.9);
+            box-shadow: 0 1px 3px rgba(0,0,0,.3);
         }
         #planeBtn.open { box-shadow: 0 0 0 2px rgba(255,255,255,.55), 0 4px 16px rgba(0,0,0,.2); }
         #musicBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
@@ -282,7 +291,7 @@
                 m.emissive.copy(m.color)                      // 自發光跟著換,夜裡才不會色偏
             }
             paletteEl.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c === hex))
-            planeBtn.style.color = hex            // 按鈕圖示直接顯示目前配色
+            planeBtn.style.setProperty('--body', hex)   // 按鈕上的小圓點顯示目前配色
         }
 
         const setPaletteOpen = open => {
