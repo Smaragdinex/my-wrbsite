@@ -171,11 +171,38 @@
         fill.target = sunTarget
         const sunEast = new THREE.Vector3(1, 0, 0)   // 世界空間的太陽方位,逐幀平滑延續
 
-        // 太陽本體(遠處的亮球)
+        // 太陽本體(遠處的亮球)。星球小、地平線下沉約 38°,
+        // 日落後仍會露臉,因此要主動淡出,否則夜空會出現一顆假月亮。
         const sunBall = new THREE.Mesh(
             new THREE.SphereGeometry(7, 24, 16),
-            new THREE.MeshBasicMaterial({ color: 0xfff3b0 }))
+            new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, depthWrite: false }))
         scene.add(sunBall)
+
+        // 月亮:位於太陽的正對面(和真實世界的滿月一樣),夜裡高掛
+        const moonBall = new THREE.Mesh(
+            new THREE.SphereGeometry(4.4, 24, 16),
+            new THREE.MeshBasicMaterial({ color: 0xe8eef8, transparent: true, depthWrite: false }))
+        scene.add(moonBall)
+
+        // 月暈:一圈柔和的光,讓月亮不會像貼紙
+        const moonHaloTex = (() => {
+            const c = document.createElement('canvas')
+            c.width = c.height = 128
+            const ctx = c.getContext('2d')
+            const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+            g.addColorStop(0.0, 'rgba(226,236,255,0.55)')
+            g.addColorStop(0.3, 'rgba(200,216,255,0.16)')
+            g.addColorStop(1.0, 'rgba(180,200,255,0)')
+            ctx.fillStyle = g
+            ctx.fillRect(0, 0, 128, 128)
+            return new THREE.CanvasTexture(c)
+        })()
+        const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: moonHaloTex, blending: THREE.AdditiveBlending,
+            depthWrite: false, transparent: true
+        }))
+        moonHalo.scale.setScalar(34)
+        scene.add(moonHalo)
 
         // 星空(夜晚淡入)
         const starGeo = new THREE.BufferGeometry()
@@ -410,6 +437,20 @@
             sunTarget.position.copy(pos)
             sun.position.copy(pos).addScaledVector(sunDir, 110)
             sunBall.position.copy(pos).addScaledVector(sunDir, 240)
+            sunBall.material.opacity = smoothstep(-0.06, 0.05, e)   // 落到地平線就淡出
+
+            // 月亮:放在水平線下約 20°(仍高於「視覺地平線」)。
+            // 小星球地平線下沉約 38°、鏡頭再下壓約 27°,畫面中的天空其實都在水平線以下,
+            // 月亮擺在天頂反而永遠拍不到。
+            const MOON_SIN = -0.34, MOON_COS = 0.94
+            const moonDir = localUp.clone().multiplyScalar(MOON_SIN)
+                .addScaledVector(sunEast, -MOON_COS).normalize()
+            moonBall.position.copy(pos).addScaledVector(moonDir, 230)
+            moonHalo.position.copy(moonBall.position)
+            const moonF = smoothstep(0.16, -0.05, e)
+            moonBall.material.opacity = moonF
+            moonHalo.material.opacity = moonF * 0.9
+            moonBall.visible = moonHalo.visible = moonF > 0.01
 
             // 補光跟著太陽的反方向,飛行中與地形的相對關係才穩定
             fill.position.copy(pos).addScaledVector(sunDir, -90).addScaledVector(localUp, 30)
