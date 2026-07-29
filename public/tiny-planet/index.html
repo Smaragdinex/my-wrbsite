@@ -16,7 +16,18 @@
             box-shadow: 0 4px 16px rgba(0,0,0,.2);
             transition: background .18s, color .18s, transform .12s;
         }
-        #musicBtn:hover { transform: scale(1.07); }
+        #musicBtn:hover, #planeBtn:hover { transform: scale(1.07); }
+        #planeBtn {
+            position: fixed; right: 20px; top: 78px; z-index: 10;
+            width: 46px; height: 46px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 21px; line-height: 1; cursor: pointer;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.24);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: background .18s, transform .12s, box-shadow .18s;
+        }
+        #planeBtn.open { box-shadow: 0 0 0 2px rgba(255,255,255,.55), 0 4px 16px rgba(0,0,0,.2); }
         #musicBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
         #musicBtn.off { opacity: .78; }
         #musicBtn.off::after {
@@ -24,7 +35,7 @@
             background: currentColor; transform: rotate(-45deg); border-radius: 2px;
         }
         #palette {
-            position: fixed; right: 20px; top: 78px; z-index: 10;
+            position: fixed; right: 20px; top: 136px; z-index: 10;
             display: grid; grid-template-columns: repeat(4, 22px); gap: 7px;
             padding: 10px 11px; border-radius: 14px;
             background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
@@ -38,6 +49,12 @@
             box-shadow: 0 1px 3px rgba(0,0,0,.25);
             transition: transform .12s, box-shadow .12s;
         }
+        #palette {
+            opacity: 0; transform: scale(.9) translateY(-8px);
+            transform-origin: top right; pointer-events: none;
+            transition: opacity .18s, transform .18s;
+        }
+        #palette.open { opacity: 1; transform: none; pointer-events: auto; }
         #palette .sw:hover { transform: scale(1.18); }
         #palette .sw.on {
             transform: scale(1.18);
@@ -84,7 +101,8 @@
 </head>
 <body>
     <button id="musicBtn" class="off" title="音樂">♪</button>
-    <div id="palette" title="機身顏色"></div>
+    <button id="planeBtn" title="機身顏色">✈</button>
+    <div id="palette"></div>
     <div id="hint"></div>
     <div id="keys">
         <div class="cap">飛行操作</div>
@@ -252,6 +270,7 @@
             ['#97d8cb', '薄荷'], ['#9dc6ec', '天空'], ['#b4a7de', '薰衣草'], ['#dfa9ce', '丁香'],
         ]
         const paletteEl = document.getElementById('palette')
+        const planeBtn = document.getElementById('planeBtn')
         const bodyMats = []                                   // 機身材質(不含機翼/座艙)
         let planeColor = localStorage.getItem('tp.color') || MACARON[0][0]
 
@@ -263,7 +282,21 @@
                 m.emissive.copy(m.color)                      // 自發光跟著換,夜裡才不會色偏
             }
             paletteEl.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c === hex))
+            planeBtn.style.color = hex            // 按鈕圖示直接顯示目前配色
         }
+
+        const setPaletteOpen = open => {
+            paletteEl.classList.toggle('open', open)
+            planeBtn.classList.toggle('open', open)
+        }
+        planeBtn.addEventListener('click', e => {
+            e.stopPropagation()
+            setPaletteOpen(!paletteEl.classList.contains('open'))
+        })
+        // 點畫面其他地方就收起來
+        addEventListener('pointerdown', e => {
+            if (!paletteEl.contains(e.target) && e.target !== planeBtn) setPaletteOpen(false)
+        })
 
         MACARON.forEach(([hex, name]) => {
             const b = document.createElement('button')
