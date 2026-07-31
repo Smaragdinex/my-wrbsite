@@ -1,0 +1,15 @@
+{
+  "name": "Tiny Planet",
+  "short_name": "Tiny Planet",
+  "description": "小星球飛行沙盒 — 開著小飛機環遊一顆低多邊形星球",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#87b8e8",
+  "theme_color": "#87b8e8",
+  "icons": [
+    { "src": "./public/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./public/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -2,7 +2,15 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#87b8e8">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <!-- iOS:加入主畫面後以無瀏覽器介面的全螢幕啟動 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tiny Planet">
+    <link rel="apple-touch-icon" href="./public/icons/icon-192.png">
     <title>Tiny Planet - 飛行</title>
     <style>
         body {
@@ -40,7 +48,7 @@
             #touchHint { display: block; }
         }
         #musicBtn {
-            position: fixed; right: 20px; top: 20px; z-index: 10;
+            position: fixed; right: 20px; top: calc(20px + env(safe-area-inset-top)); z-index: 10;
             width: 46px; height: 46px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             font-size: 21px; line-height: 1; color: #fff; cursor: pointer;
@@ -49,9 +57,20 @@
             box-shadow: 0 4px 16px rgba(0,0,0,.2);
             transition: background .18s, color .18s, transform .12s;
         }
-        #musicBtn:hover, #planeBtn:hover { transform: scale(1.07); }
+        #musicBtn:hover, #planeBtn:hover, #fsBtn:hover { transform: scale(1.07); }
+        #fsBtn {
+            position: fixed; left: 20px; top: calc(20px + env(safe-area-inset-top)); z-index: 10;
+            width: 46px; height: 46px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 19px; line-height: 1; color: #fff; cursor: pointer;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.24);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: transform .12s, background .18s;
+        }
+        #fsBtn.hidden { display: none; }
         #planeBtn {
-            position: fixed; right: 20px; top: 78px; z-index: 10;
+            position: fixed; right: 20px; top: calc(78px + env(safe-area-inset-top)); z-index: 10;
             width: 46px; height: 46px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             font-size: 21px; line-height: 1; cursor: pointer; color: #23262e;
@@ -77,7 +96,7 @@
             background: currentColor; transform: rotate(-45deg); border-radius: 2px;
         }
         #palette {
-            position: fixed; right: 20px; top: 136px; z-index: 10;
+            position: fixed; right: 20px; top: calc(136px + env(safe-area-inset-top)); z-index: 10;
             display: grid; grid-template-columns: repeat(4, 22px); gap: 7px;
             padding: 10px 11px; border-radius: 14px;
             background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
@@ -142,6 +161,7 @@
     </script>
 </head>
 <body>
+    <button id="fsBtn" title="全螢幕">⛶</button>
     <button id="musicBtn" class="off" title="音樂">♪</button>
     <button id="planeBtn" title="機身顏色">✈</button>
     <div id="palette"></div>
@@ -288,6 +308,21 @@
         // ---------- 輸入 ----------
         const music = new Music()
         window.__music = music
+        // ---------- 全螢幕 ----------
+        const fsBtn = document.getElementById('fsBtn')
+        const el = document.documentElement
+        const canFS = !!(el.requestFullscreen || el.webkitRequestFullscreen)
+        const inFS = () => !!(document.fullscreenElement || document.webkitFullscreenElement)
+        if (!canFS) fsBtn.classList.add('hidden')      // iPhone Safari 不支援 → 直接隱藏
+        fsBtn.addEventListener('click', e => {
+            e.stopPropagation()
+            if (inFS()) (document.exitFullscreen || document.webkitExitFullscreen).call(document)
+            else (el.requestFullscreen || el.webkitRequestFullscreen).call(el)
+        })
+        const paintFS = () => { fsBtn.textContent = inFS() ? '⛶' : '⛶'; fsBtn.title = inFS() ? '離開全螢幕' : '全螢幕' }
+        document.addEventListener('fullscreenchange', paintFS)
+        document.addEventListener('webkitfullscreenchange', paintFS)
+
         const musicBtn = document.getElementById('musicBtn')
         const paintMusic = on => {
             musicBtn.classList.toggle('on', on)
@@ -324,7 +359,7 @@
         const drag = { id: null, x0: 0, y0: 0, turn: 0, climb: 0, boost: false }
         const activePointers = new Set()
 
-        const onUI = el => el && el.closest && el.closest('#musicBtn, #planeBtn, #palette, #keys')
+        const onUI = el => el && el.closest && el.closest('#fsBtn, #musicBtn, #planeBtn, #palette, #keys')
 
         addEventListener('pointerdown', e => {
             activePointers.add(e.pointerId)
