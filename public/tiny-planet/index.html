@@ -69,6 +69,7 @@
             transition: transform .12s, background .18s;
         }
         #fsBtn.hidden { display: none; }
+        #fsBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
         #planeBtn {
             position: fixed; right: 20px; top: calc(78px + env(safe-area-inset-top)); z-index: 10;
             width: 46px; height: 46px; border-radius: 50%;
@@ -161,7 +162,7 @@
     </script>
 </head>
 <body>
-    <button id="fsBtn" title="全螢幕">⛶</button>
+    <button id="fsBtn" title="全螢幕"></button>
     <button id="musicBtn" class="off" title="音樂">♪</button>
     <button id="planeBtn" title="機身顏色">✈</button>
     <div id="palette"></div>
@@ -319,7 +320,16 @@
             if (inFS()) (document.exitFullscreen || document.webkitExitFullscreen).call(document)
             else (el.requestFullscreen || el.webkitRequestFullscreen).call(el)
         })
-        const paintFS = () => { fsBtn.textContent = inFS() ? '⛶' : '⛶'; fsBtn.title = inFS() ? '離開全螢幕' : '全螢幕' }
+        // 兩個狀態用方向相反的角標:向外=放大,向內=還原
+        const ICON_EXPAND = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"/></svg>'
+        const ICON_SHRINK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6"/></svg>'
+        const paintFS = () => {
+            const on = inFS()
+            fsBtn.innerHTML = on ? ICON_SHRINK : ICON_EXPAND
+            fsBtn.title = on ? '離開全螢幕' : '全螢幕'
+            fsBtn.classList.toggle('on', on)
+        }
+        paintFS()
         document.addEventListener('fullscreenchange', paintFS)
         document.addEventListener('webkitfullscreenchange', paintFS)
 
