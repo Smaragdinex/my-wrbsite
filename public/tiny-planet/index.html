@@ -327,11 +327,14 @@
         const R = 93.6
         const SPEED = 13         // 巡航速度
         const TURN = 1.6         // 轉彎速率 rad/s
-        const ALT_MIN = R + 7.65 // 最低高度
+        const ALT_MIN = R + 8.5  // 最低高度(需高於最高地標:金門大橋塔頂 99.61)
         const ALT_MAX = R + 21.6
         // ?goto=<x,y,z> 可直接從指定方向的上空起飛(除錯/看地標用)
         const gotoParam = new URLSearchParams(location.search).get('goto')
-        const SPAWN = { ny: [0.88, 0.21, 0.43] }          // 已轉成 Y-up
+        const SPAWN = {                                    // 已轉成 Y-up
+            ny: [0.88, 0.21, 0.43],
+            sf: [-0.85, 0.49, -0.17],
+        }
         let startDir = new THREE.Vector3(0, 1, 0)
         if (gotoParam) {
             const v = SPAWN[gotoParam] || gotoParam.split(',').map(Number)
