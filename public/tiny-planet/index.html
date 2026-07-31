@@ -460,6 +460,37 @@
         loader.setDRACOLoader(draco)
         const V = 9   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
+        // ---------- 城市燈火 ----------
+        // 幾千盞窗火用單一 Points 繪製(一次 draw call),夜裡才點亮。
+        let cityLights = null
+        fetch(`./public/assets/city_lights.json?v=${V}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+                if (!d || !d.positions || !d.positions.length) return
+                const geo = new THREE.BufferGeometry()
+                geo.setAttribute('position', new THREE.Float32BufferAttribute(d.positions, 3))
+
+                // 圓形柔邊光點貼圖(方形點會很像雜訊)
+                const c = document.createElement('canvas')
+                c.width = c.height = 64
+                const ctx = c.getContext('2d')
+                const gr = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+                gr.addColorStop(0.0, 'rgba(255,236,190,1)')
+                gr.addColorStop(0.35, 'rgba(255,205,120,0.55)')
+                gr.addColorStop(1.0, 'rgba(255,180,90,0)')
+                ctx.fillStyle = gr
+                ctx.fillRect(0, 0, 64, 64)
+
+                cityLights = new THREE.Points(geo, new THREE.PointsMaterial({
+                    map: new THREE.CanvasTexture(c), color: 0xffd79a,
+                    size: 1.6, sizeAttenuation: true,
+                    blending: THREE.AdditiveBlending,
+                    transparent: true, depthWrite: false, opacity: 0
+                }))
+                scene.add(cityLights)
+            })
+            .catch(err => console.error('[city lights] 載入失敗:', err))
+
         loader.load(`./public/assets/moon.glb?v=${V}`, g => {
             g.scene.scale.setScalar(32)
             g.scene.traverse(o => {
@@ -635,6 +666,11 @@
             hemi.intensity = 0.12 + 0.45 * dayF
             fill.intensity = 0.18 + 0.32 * dayF
             starMat.opacity = 1 - dayF
+            if (cityLights) {                       // 天黑才亮燈,黃昏漸亮
+                const lit = smoothstep(0.16, -0.06, e)
+                cityLights.material.opacity = lit
+                cityLights.visible = lit > 0.01
+            }
             music.setNight(1 - dayF)
 
             if (rig) {
