@@ -44,7 +44,7 @@
             transition: opacity .5s; display: none;
         }
         @media (hover: none) and (pointer: coarse) {
-            #keys { display: none; }
+            #keys, #remoteBtn { display: none; }
             #touchHint { display: block; }
         }
         #musicBtn {
@@ -59,7 +59,7 @@
         }
         #musicBtn:hover, #planeBtn:hover, #fsBtn:hover { transform: scale(1.07); }
         #fsBtn {
-            position: fixed; right: 20px; top: calc(136px + env(safe-area-inset-top)); z-index: 10;
+            position: fixed; left: calc(20px + env(safe-area-inset-left)); top: calc(20px + env(safe-area-inset-top)); z-index: 10;
             width: 46px; height: 46px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             font-size: 19px; line-height: 1; color: #fff; cursor: pointer;
@@ -68,7 +68,19 @@
             box-shadow: 0 4px 16px rgba(0,0,0,.2);
             transition: transform .12s, background .18s;
         }
-        #fsBtn.hidden { display: none; }
+        #fsBtn.hidden, #fsBtn.unsupported { display: none; }
+        #remoteBtn {
+            position: fixed; right: 20px; top: calc(136px + env(safe-area-inset-top)); z-index: 10;
+            width: 46px; height: 46px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; cursor: pointer;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.24);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: transform .12s, background .18s, color .18s;
+        }
+        #remoteBtn:hover { transform: scale(1.07); }
+        #remoteBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
         #fsBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
         #planeBtn {
             position: fixed; right: 20px; top: calc(78px + env(safe-area-inset-top)); z-index: 10;
@@ -146,6 +158,12 @@
             border-bottom-width: 1px;
         }
         #keys .cap { font-size: 11px; font-weight: 500; opacity: .68; letter-spacing: .04em; }
+        #keys {
+            opacity: 0; transform: scale(.92) translateY(10px);
+            transform-origin: bottom right; pointer-events: none;
+            transition: opacity .18s, transform .18s;
+        }
+        #keys.open { opacity: 1; transform: none; pointer-events: auto; }
         #hint {
             position: fixed; top: 12px; left: 14px; color: #fff;
             font: 14px/1.7 system-ui; text-shadow: 0 1px 3px rgba(0,0,0,.45);
@@ -166,6 +184,15 @@
     <button id="musicBtn" class="off" title="音樂">♪</button>
     <button id="planeBtn" title="機身顏色">✈</button>
     <div id="palette"></div>
+    <button id="remoteBtn" title="操作說明">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+            <rect x="7" y="2.5" width="10" height="19" rx="3"/>
+            <path d="M12 6.2v2.6M10.7 7.5h2.6"/>
+            <circle cx="10.4" cy="13" r="1.05"/><circle cx="13.6" cy="13" r="1.05"/>
+            <path d="M10 17.4h4"/>
+        </svg>
+    </button>
     <div id="hint"></div>
     <div id="stick"></div><div id="stickDot"></div>
     <div id="touchHint">👆 按住畫面拖曳操縱 ・ 雙指加速</div>
@@ -314,7 +341,8 @@
         const el = document.documentElement
         const canFS = !!(el.requestFullscreen || el.webkitRequestFullscreen)
         const inFS = () => !!(document.fullscreenElement || document.webkitFullscreenElement)
-        if (!canFS) fsBtn.classList.add('hidden')      // iPhone Safari 不支援 → 直接隱藏
+        if (!canFS) fsBtn.classList.add('unsupported')  // iPhone Safari 不支援 → 永久隱藏
+                                                       // (與全螢幕中的暫時隱藏用不同 class,才不會互相覆蓋)
         fsBtn.addEventListener('click', e => {
             e.stopPropagation()
             if (inFS()) (document.exitFullscreen || document.webkitExitFullscreen).call(document)
@@ -327,11 +355,21 @@
             const on = inFS()
             fsBtn.innerHTML = on ? ICON_SHRINK : ICON_EXPAND
             fsBtn.title = on ? '離開全螢幕' : '全螢幕'
-            fsBtn.classList.toggle('on', on)
+            fsBtn.classList.toggle('hidden', on)   // 全螢幕中交給系統的關閉鈕/Esc
         }
         paintFS()
         document.addEventListener('fullscreenchange', paintFS)
         document.addEventListener('webkitfullscreenchange', paintFS)
+
+        // 操作說明面板:平時收起,點右上角遙控器鈕展開
+        const remoteBtn = document.getElementById('remoteBtn')
+        const keysEl = document.getElementById('keys')
+        remoteBtn.addEventListener('click', e => {
+            e.stopPropagation()
+            const open = !keysEl.classList.contains('open')
+            keysEl.classList.toggle('open', open)
+            remoteBtn.classList.toggle('on', open)
+        })
 
         const musicBtn = document.getElementById('musicBtn')
         const paintMusic = on => {
@@ -369,7 +407,7 @@
         const drag = { id: null, x0: 0, y0: 0, turn: 0, climb: 0, boost: false }
         const activePointers = new Set()
 
-        const onUI = el => el && el.closest && el.closest('#fsBtn, #musicBtn, #planeBtn, #palette, #keys')
+        const onUI = el => el && el.closest && el.closest('#fsBtn, #musicBtn, #planeBtn, #remoteBtn, #palette, #keys')
 
         addEventListener('pointerdown', e => {
             activePointers.add(e.pointerId)
