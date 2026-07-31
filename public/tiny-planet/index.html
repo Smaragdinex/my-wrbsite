@@ -329,8 +329,17 @@
         const TURN = 1.6         // 轉彎速率 rad/s
         const ALT_MIN = R + 7.65 // 最低高度
         const ALT_MAX = R + 21.6
-        let pos = new THREE.Vector3(0, R + 8.5, 0)
-        let fwd = new THREE.Vector3(0, 0, -1)   // 北極出發往 -Z
+        // ?goto=<x,y,z> 可直接從指定方向的上空起飛(除錯/看地標用)
+        const gotoParam = new URLSearchParams(location.search).get('goto')
+        const SPAWN = { ny: [0.88, 0.21, 0.43] }          // 已轉成 Y-up
+        let startDir = new THREE.Vector3(0, 1, 0)
+        if (gotoParam) {
+            const v = SPAWN[gotoParam] || gotoParam.split(',').map(Number)
+            if (v && v.length === 3 && v.every(n => isFinite(n))) startDir.set(v[0], v[1], v[2]).normalize()
+        }
+        let pos = startDir.clone().multiplyScalar(R + 8.5)
+        let fwd = new THREE.Vector3().crossVectors(startDir, new THREE.Vector3(0, 0, 1)).normalize()
+        if (fwd.lengthSq() < 0.1) fwd.set(0, 0, -1)
         let alt = pos.length(), targetAlt = alt
 
         // ---------- 輸入 ----------
@@ -458,15 +467,20 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 9   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 10   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
+        loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
         // 幾千盞窗火用單一 Points 繪製(一次 draw call),夜裡才點亮。
         let cityLights = null
-        fetch(`./public/assets/city_lights.json?v=${V}`)
-            .then(r => r.ok ? r.json() : null)
-            .then(d => {
-                if (!d || !d.positions || !d.positions.length) return
+        const lightFiles = ['city_lights.json', 'landmark_lights.json']
+        Promise.all(lightFiles.map(f =>
+            fetch(`./public/assets/${f}?v=${V}`).then(r => r.ok ? r.json() : null).catch(() => null)
+        ))
+            .then(list => {
+                const pts = list.filter(Boolean).flatMap(d => d.positions || [])
+                if (!pts.length) return
+                const d = { positions: pts }
                 const geo = new THREE.BufferGeometry()
                 geo.setAttribute('position', new THREE.Float32BufferAttribute(d.positions, 3))
 
