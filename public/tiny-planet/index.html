@@ -216,7 +216,7 @@
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
 
-        const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600)
+        const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1400)
         const renderer = new THREE.WebGLRenderer({ antialias: true })
         renderer.setSize(innerWidth, innerHeight)
         renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
@@ -257,13 +257,13 @@
         // 太陽本體(遠處的亮球)。星球小、地平線下沉約 38°,
         // 日落後仍會露臉,因此要主動淡出,否則夜空會出現一顆假月亮。
         const sunBall = new THREE.Mesh(
-            new THREE.SphereGeometry(7, 24, 16),
+            new THREE.SphereGeometry(21, 24, 16),
             new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, depthWrite: false }))
         scene.add(sunBall)
 
         // 月亮:位於太陽的正對面(和真實世界的滿月一樣),夜裡高掛
         const moonBall = new THREE.Mesh(
-            new THREE.SphereGeometry(4.4, 24, 16),
+            new THREE.SphereGeometry(13, 24, 16),
             new THREE.MeshBasicMaterial({ color: 0xe8eef8, transparent: true, depthWrite: false }))
         scene.add(moonBall)
 
@@ -284,14 +284,14 @@
             map: moonHaloTex, blending: THREE.AdditiveBlending,
             depthWrite: false, transparent: true
         }))
-        moonHalo.scale.setScalar(34)
+        moonHalo.scale.setScalar(100)
         scene.add(moonHalo)
 
         // 星空(夜晚淡入)
         const starGeo = new THREE.BufferGeometry()
         const starPos = new Float32Array(1500 * 3)
         for (let i = 0; i < 1500; i++) {
-            const v = new THREE.Vector3().randomDirection().multiplyScalar(260)
+            const v = new THREE.Vector3().randomDirection().multiplyScalar(780)
             starPos.set([v.x, v.y, v.z], i * 3)
         }
         starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
@@ -324,7 +324,7 @@
         }
 
         // ---------- 飛行參數 ----------
-        const R = 31.2
+        const R = 93.6
         const SPEED = 13         // 巡航速度
         const TURN = 1.6         // 轉彎速率 rad/s
         const ALT_MIN = R + 7.65 // 最低高度
@@ -458,7 +458,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 7   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 8   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
 
         // 馬卡龍色盤:柔和低飽和,和低多邊形星球的色調協調
@@ -596,17 +596,17 @@
                 .addScaledVector(sunEast, Math.cos(theta)).normalize()
 
             sunTarget.position.copy(pos)
-            sun.position.copy(pos).addScaledVector(sunDir, 110)
-            sunBall.position.copy(pos).addScaledVector(sunDir, 240)
+            sun.position.copy(pos).addScaledVector(sunDir, 330)
+            sunBall.position.copy(pos).addScaledVector(sunDir, 720)
             sunBall.material.opacity = smoothstep(-0.06, 0.05, e)   // 落到地平線就淡出
 
             // 月亮:放在水平線下約 20°(仍高於「視覺地平線」)。
             // 小星球地平線下沉約 38°、鏡頭再下壓約 27°,畫面中的天空其實都在水平線以下,
             // 月亮擺在天頂反而永遠拍不到。
-            const MOON_SIN = -0.34, MOON_COS = 0.94
+            const MOON_SIN = -0.20, MOON_COS = 0.98
             const moonDir = localUp.clone().multiplyScalar(MOON_SIN)
                 .addScaledVector(sunEast, -MOON_COS).normalize()
-            moonBall.position.copy(pos).addScaledVector(moonDir, 230)
+            moonBall.position.copy(pos).addScaledVector(moonDir, 690)
             moonHalo.position.copy(moonBall.position)
             const moonF = smoothstep(0.16, -0.05, e)
             moonBall.material.opacity = moonF
@@ -614,7 +614,7 @@
             moonBall.visible = moonHalo.visible = moonF > 0.01
 
             // 補光跟著太陽的反方向,飛行中與地形的相對關係才穩定
-            fill.position.copy(pos).addScaledVector(sunDir, -90).addScaledVector(localUp, 30)
+            fill.position.copy(pos).addScaledVector(sunDir, -270).addScaledVector(localUp, 90)
 
             scene.background = skyColor(e)
             sun.intensity = 0.05 + 3.4 * dayF
