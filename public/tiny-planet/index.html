@@ -246,6 +246,7 @@
         // phase 0~1:0=日出 → DAY_FRAC=日落 → 1=再次日出;?sun= 可指定起始時刻
         let phase = parseFloat(new URLSearchParams(location.search).get('sun') || '0.25')
 
+        const MOON_X = new THREE.Vector3(1, 0, 0)
         const WORLD_Y = new THREE.Vector3(0, 1, 0)
         const WORLD_X = new THREE.Vector3(1, 0, 0)
         const sunTarget = new THREE.Object3D()
@@ -261,11 +262,10 @@
             new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, depthWrite: false }))
         scene.add(sunBall)
 
-        // 月亮:位於太陽的正對面(和真實世界的滿月一樣),夜裡高掛
-        const moonBall = new THREE.Mesh(
-            new THREE.SphereGeometry(13, 24, 16),
-            new THREE.MeshBasicMaterial({ color: 0xe8eef8, transparent: true, depthWrite: false }))
+        // 月亮:載入含隕石坑的模型(明暗已烘進頂點色,故用自發光材質不吃場景光)
+        const moonBall = new THREE.Group()
         scene.add(moonBall)
+        let moonMat = null
 
         // 月暈:一圈柔和的光,讓月亮不會像貼紙
         const moonHaloTex = (() => {
@@ -284,7 +284,7 @@
             map: moonHaloTex, blending: THREE.AdditiveBlending,
             depthWrite: false, transparent: true
         }))
-        moonHalo.scale.setScalar(100)
+        moonHalo.scale.setScalar(115)
         scene.add(moonHalo)
 
         // 星空(夜晚淡入)
@@ -458,8 +458,19 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 8   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 9   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
+        loader.load(`./public/assets/moon.glb?v=${V}`, g => {
+            g.scene.scale.setScalar(32)
+            g.scene.traverse(o => {
+                if (!o.isMesh) return
+                moonMat = new THREE.MeshBasicMaterial({
+                    vertexColors: true, transparent: true, depthWrite: false
+                })
+                o.material = moonMat
+            })
+            moonBall.add(g.scene)
+        })
 
         // 馬卡龍色盤:柔和低飽和,和低多邊形星球的色調協調
         const MACARON = [
@@ -609,9 +620,11 @@
             moonBall.position.copy(pos).addScaledVector(moonDir, 690)
             moonHalo.position.copy(moonBall.position)
             const moonF = smoothstep(0.16, -0.05, e)
-            moonBall.material.opacity = moonF
-            moonHalo.material.opacity = moonF * 0.9
+            if (moonMat) moonMat.opacity = moonF
+            moonHalo.material.opacity = moonF * 0.42
             moonBall.visible = moonHalo.visible = moonF > 0.01
+            // 烘焙受光是朝 +X,把 +X 轉向太陽,明暗交界就會落在正確的位置
+            moonBall.quaternion.setFromUnitVectors(MOON_X, sunDir)
 
             // 補光跟著太陽的反方向,飛行中與地形的相對關係才穩定
             fill.position.copy(pos).addScaledVector(sunDir, -270).addScaledVector(localUp, 90)
