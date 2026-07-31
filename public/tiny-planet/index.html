@@ -5,7 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tiny Planet - 飛行</title>
     <style>
-        body { margin: 0; overflow: hidden; }
+        body {
+            margin: 0; overflow: hidden;
+            touch-action: none;              /* 關掉捲動/縮放手勢,交給遊戲處理 */
+            overscroll-behavior: none;
+            -webkit-user-select: none; user-select: none;
+        }
+        /* 虛擬搖桿:按下時出現在手指位置 */
+        #stick, #stickDot {
+            position: fixed; border-radius: 50%; pointer-events: none;
+            opacity: 0; transition: opacity .15s; z-index: 9;
+        }
+        #stick {
+            width: 132px; height: 132px; margin: -66px 0 0 -66px;
+            border: 2px solid rgba(255,255,255,.5);
+            background: rgba(255,255,255,.07); backdrop-filter: blur(2px);
+        }
+        #stickDot {
+            width: 52px; height: 52px; margin: -26px 0 0 -26px;
+            background: rgba(255,255,255,.82);
+            box-shadow: 0 2px 10px rgba(0,0,0,.3);
+        }
+        #stick.on, #stickDot.on { opacity: 1; }
+        /* 觸控裝置:隱藏鍵盤面板,改顯示拖曳提示 */
+        #touchHint {
+            position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+            padding: 9px 18px; border-radius: 999px; z-index: 10;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            color: #fff; font: 14px system-ui; white-space: nowrap;
+            transition: opacity .5s; display: none;
+        }
+        @media (hover: none) and (pointer: coarse) {
+            #keys { display: none; }
+            #touchHint { display: block; }
+        }
         #musicBtn {
             position: fixed; right: 20px; top: 20px; z-index: 10;
             width: 46px; height: 46px; border-radius: 50%;
@@ -113,6 +146,8 @@
     <button id="planeBtn" title="機身顏色">✈</button>
     <div id="palette"></div>
     <div id="hint"></div>
+    <div id="stick"></div><div id="stickDot"></div>
+    <div id="touchHint">👆 按住畫面拖曳操縱 ・ 雙指加速</div>
     <div id="keys">
         <div class="cap">飛行操作</div>
         <div class="row">
@@ -279,6 +314,49 @@
             const el = keyEls[KEY_MAP[code]]
             if (el) el.classList.toggle('active', on)
         }
+
+        // ---------- 觸控/拖曳操縱 ----------
+        // 按住畫面任一處拖曳:左右=轉彎、上下=爬升俯衝;多指=加速。
+        const stickEl = document.getElementById('stick')
+        const stickDot = document.getElementById('stickDot')
+        const touchHint = document.getElementById('touchHint')
+        const STICK_R = 66                       // 拉到滿舵所需的位移(px)
+        const drag = { id: null, x0: 0, y0: 0, turn: 0, climb: 0, boost: false }
+        const activePointers = new Set()
+
+        const onUI = el => el && el.closest && el.closest('#musicBtn, #planeBtn, #palette, #keys')
+
+        addEventListener('pointerdown', e => {
+            activePointers.add(e.pointerId)
+            drag.boost = activePointers.size > 1          // 雙指 = 加速
+            if (onUI(e.target) || drag.id !== null) return
+            drag.id = e.pointerId
+            drag.x0 = e.clientX; drag.y0 = e.clientY
+            stickEl.style.left = stickDot.style.left = e.clientX + 'px'
+            stickEl.style.top = stickDot.style.top = e.clientY + 'px'
+            stickEl.classList.add('on'); stickDot.classList.add('on')
+            if (touchHint) touchHint.style.opacity = '0'
+        })
+
+        addEventListener('pointermove', e => {
+            if (e.pointerId !== drag.id) return
+            const dx = THREE.MathUtils.clamp((e.clientX - drag.x0) / STICK_R, -1, 1)
+            const dy = THREE.MathUtils.clamp((e.clientY - drag.y0) / STICK_R, -1, 1)
+            drag.turn = -dx                              // 往右拖 = 右轉
+            drag.climb = -dy                             // 往上拖 = 爬升
+            stickDot.style.left = (drag.x0 + dx * STICK_R) + 'px'
+            stickDot.style.top = (drag.y0 + dy * STICK_R) + 'px'
+        })
+
+        const endDrag = e => {
+            activePointers.delete(e.pointerId)
+            drag.boost = activePointers.size > 1
+            if (e.pointerId !== drag.id) return
+            drag.id = null; drag.turn = 0; drag.climb = 0
+            stickEl.classList.remove('on'); stickDot.classList.remove('on')
+        }
+        addEventListener('pointerup', endDrag)
+        addEventListener('pointercancel', endDrag)
 
         const keys = {}
         addEventListener('keydown', e => {
@@ -466,9 +544,12 @@
             if (rig) {
                 const up = pos.clone().normalize()
 
-                const turn = ((keys.ArrowLeft || keys.KeyA) ? 1 : 0) - ((keys.ArrowRight || keys.KeyD) ? 1 : 0)
-                const climb = ((keys.ArrowUp || keys.KeyW) ? 1 : 0) - ((keys.ArrowDown || keys.KeyS) ? 1 : 0)
-                const boost = (keys.ShiftLeft || keys.ShiftRight) ? 1.9 : 1
+                const keyTurn = ((keys.ArrowLeft || keys.KeyA) ? 1 : 0) - ((keys.ArrowRight || keys.KeyD) ? 1 : 0)
+                const keyClimb = ((keys.ArrowUp || keys.KeyW) ? 1 : 0) - ((keys.ArrowDown || keys.KeyS) ? 1 : 0)
+                // 鍵盤與拖曳共用同一組控制量,兩種操作方式都能用
+                const turn = THREE.MathUtils.clamp(keyTurn + drag.turn, -1, 1)
+                const climb = THREE.MathUtils.clamp(keyClimb + drag.climb, -1, 1)
+                const boost = ((keys.ShiftLeft || keys.ShiftRight) || drag.boost) ? 1.9 : 1
 
                 // 航向繞「頭頂方向」旋轉 = 貼著球面轉彎
                 fwd.applyAxisAngle(up, turn * TURN * dt)
