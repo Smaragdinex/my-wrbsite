@@ -212,11 +212,12 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=19'
-        import { Weather } from './weather.js?v=19'
+        import { Music } from './music.js?v=20'
+        import { Weather } from './weather.js?v=20'
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
+        scene.fog = new THREE.FogExp2(0x87b8e8, 0.0012)   // 大氣透視,濃度隨天氣調整
 
         const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1400)
         const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -261,7 +262,7 @@
         // 日落後仍會露臉,因此要主動淡出,否則夜空會出現一顆假月亮。
         const sunBall = new THREE.Mesh(
             new THREE.SphereGeometry(21, 24, 16),
-            new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, depthWrite: false }))
+            new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, depthWrite: false, fog: false }))
         scene.add(sunBall)
 
         // 月亮:載入含隕石坑的模型(明暗已烘進頂點色,故用自發光材質不吃場景光)
@@ -284,7 +285,7 @@
         })()
         const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({
             map: moonHaloTex, blending: THREE.AdditiveBlending,
-            depthWrite: false, transparent: true
+            depthWrite: false, transparent: true, fog: false
         }))
         moonHalo.scale.setScalar(115)
         scene.add(moonHalo)
@@ -336,6 +337,7 @@
             geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
             const mat = new THREE.PointsMaterial({
                 map: starTex, size, sizeAttenuation: false,   // 固定像素大小,才不會被距離吃掉
+                fog: false,
                 vertexColors: true, transparent: true, opacity: 0,
                 depthWrite: false, blending: THREE.AdditiveBlending
             })
@@ -539,7 +541,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 19   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 20   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
@@ -749,14 +751,19 @@
             // 天氣(雨勢會壓暗天色與陽光)
             const upNow = pos.clone().normalize()
             const rightNow = new THREE.Vector3().crossVectors(fwd, upNow).normalize()
-            const rain = weather.update(dt, pos, upNow, fwd, rightNow)
+            // 緯度越高越冷,超過門檻降水就變成雪
+            const lat = Math.abs(Math.asin(THREE.MathUtils.clamp(upNow.y, -1, 1)) * 180 / Math.PI)
+            const cold = smoothstep(46, 62, lat)
+            const rain = weather.update(dt, pos, upNow, fwd, rightNow, cold, dayF)
             const wet = rain * 0.75
 
             const sky = skyColor(e).clone().lerp(new THREE.Color(0x4a5460), wet)
             scene.background = sky
+            scene.fog.color.copy(sky)
+            scene.fog.density = 0.0012 + weather.fogFactor * 0.0075
             sun.intensity = (0.05 + 3.4 * dayF) * (1 - wet * 0.65)
             sun.color.set(0xff8a4d).lerp(new THREE.Color(0xfff2dd), smoothstep(0.0, 0.42, e))
-            hemi.intensity = (0.12 + 0.45 * dayF) * (1 - wet * 0.25)
+            hemi.intensity = (0.12 + 0.45 * dayF) * (1 - wet * 0.25) + weather.flash * 2.2
             fill.intensity = 0.18 + 0.32 * dayF
             starMat.opacity = (1 - dayF) * (1 - wet)      // 下雨看不到星星
             if (cityLights) {                       // 天黑才亮燈,黃昏漸亮
