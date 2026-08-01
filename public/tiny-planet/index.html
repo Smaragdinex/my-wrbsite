@@ -336,6 +336,7 @@
             sf: [37.82, -122.87],             // 金門大橋
             tokyo: [35.68, 139.77],
             paris: [48.86, 2.35],
+            sydney: [-33.95, 151.05],         // 雪梨歌劇院
             taipei: [25.03, 121.57],
         }
         // 經緯度 → 方向(先算 Blender Z-up,再轉成 Three 的 Y-up)
@@ -482,7 +483,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 13   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 14   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
