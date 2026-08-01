@@ -58,7 +58,7 @@ export class Weather {
     // ---------- 雲場 ----------
     _buildClouds() {
         const { THREE } = this
-        const CLUSTERS = 1700, PUFFS = 7, R_PLANET = 93.6
+        const CLUSTERS = 1000, PUFFS = 16, R_PLANET = 93.6
         const pos = new Float32Array(CLUSTERS * PUFFS * 3)
         const siz = new Float32Array(CLUSTERS * PUFFS)
         const v = new THREE.Vector3()
@@ -72,14 +72,16 @@ export class Weather {
             if (e.lengthSq() < 1e-6) e = new THREE.Vector3(1, 0, 0)
             e.normalize()
             const n = new THREE.Vector3().crossVectors(up, e).normalize()
-            const spread = 1.2 + Math.random() * 1.8
+            const spread = 2.6 + Math.random() * 4.0        // 雲的水平尺度
             for (let p = 0; p < PUFFS; p++) {
+                const gx = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5
+                const gy = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5
                 const o = up.clone().multiplyScalar(alt)
-                    .addScaledVector(e, (Math.random() - 0.5) * spread * 2)
-                    .addScaledVector(n, (Math.random() - 0.5) * spread * 2)
-                    .addScaledVector(up, (Math.random() - 0.5) * 0.8)
+                    .addScaledVector(e, gx * spread)          // 中心密、邊緣疏
+                    .addScaledVector(n, gy * spread)
+                    .addScaledVector(up, (Math.random() - 0.5) * 1.6)
                 pos.set([o.x, o.y, o.z], i * 3)
-                siz[i] = (2.0 + Math.random() * 2.6) * (0.7 + spread * 0.25)
+                siz[i] = (3.2 + Math.random() * 3.4) * (0.6 + spread * 0.18)
                 i++
             }
         }
