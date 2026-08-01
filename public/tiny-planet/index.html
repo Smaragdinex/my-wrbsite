@@ -212,8 +212,8 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=20'
-        import { Weather } from './weather.js?v=20'
+        import { Music } from './music.js?v=21'
+        import { Weather } from './weather.js?v=21'
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
@@ -541,7 +541,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 20   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 21   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
@@ -751,9 +751,10 @@
             // 天氣(雨勢會壓暗天色與陽光)
             const upNow = pos.clone().normalize()
             const rightNow = new THREE.Vector3().crossVectors(fwd, upNow).normalize()
-            // 緯度越高越冷,超過門檻降水就變成雪
+            // 緯度越高越冷。飛行時緯度每秒變化約 7°,門檻太低會一直在下雪,
+            // 故拉高到 58°~72°(約 66° 以北才轉為降雪)
             const lat = Math.abs(Math.asin(THREE.MathUtils.clamp(upNow.y, -1, 1)) * 180 / Math.PI)
-            const cold = smoothstep(46, 62, lat)
+            const cold = smoothstep(58, 72, lat)
             const rain = weather.update(dt, pos, upNow, fwd, rightNow, cold, dayF)
             const wet = rain * 0.75
 

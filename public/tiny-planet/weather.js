@@ -58,14 +58,15 @@ export class Weather {
     // ---------- 雲場 ----------
     _buildClouds() {
         const { THREE } = this
-        const CLUSTERS = 1300, PUFFS = 6, R_PLANET = 93.6
+        const CLUSTERS = 1700, PUFFS = 7, R_PLANET = 93.6
         const pos = new Float32Array(CLUSTERS * PUFFS * 3)
         const siz = new Float32Array(CLUSTERS * PUFFS)
         const v = new THREE.Vector3()
         let i = 0
         for (let c = 0; c < CLUSTERS; c++) {
             v.randomDirection()
-            const alt = R_PLANET + 4.5 + Math.random() * 7.5      // 雲層高度帶
+            // 飛行高度是 R+8.5,雲層要橫跨其上下才會同時出現在天空與腳下
+            const alt = R_PLANET + 6.0 + Math.random() * 12.0
             const up = v.clone()
             let e = new THREE.Vector3().crossVectors(up, new THREE.Vector3(0, 1, 0))
             if (e.lengthSq() < 1e-6) e = new THREE.Vector3(1, 0, 0)
@@ -78,7 +79,7 @@ export class Weather {
                     .addScaledVector(n, (Math.random() - 0.5) * spread * 2)
                     .addScaledVector(up, (Math.random() - 0.5) * 0.8)
                 pos.set([o.x, o.y, o.z], i * 3)
-                siz[i] = (1.6 + Math.random() * 2.2) * (0.7 + spread * 0.25)
+                siz[i] = (2.0 + Math.random() * 2.6) * (0.7 + spread * 0.25)
                 i++
             }
         }
