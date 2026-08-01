@@ -58,49 +58,63 @@ export class Weather {
     // ---------- 雲場 ----------
     _buildClouds() {
         const { THREE } = this
-        const CLUSTERS = 1000, PUFFS = 16, R_PLANET = 93.6
-        const pos = new Float32Array(CLUSTERS * PUFFS * 3)
-        const siz = new Float32Array(CLUSTERS * PUFFS)
+        const CLUSTERS = 950, PUFFS = 18, R_PLANET = 93.6
+        const N = CLUSTERS * PUFFS
+        const pos = new Float32Array(N * 3)
+        const siz = new Float32Array(N)
+        const shd = new Float32Array(N)          // 0=雲底陰影 1=雲頂受光
         const v = new THREE.Vector3()
         let i = 0
         for (let c = 0; c < CLUSTERS; c++) {
             v.randomDirection()
-            // 飛行高度是 R+8.5,雲層要橫跨其上下才會同時出現在天空與腳下
+            // 飛行高度是 R+8.5,雲層橫跨其上下才會同時出現在天空與腳下
             const alt = R_PLANET + 6.0 + Math.random() * 12.0
             const up = v.clone()
             let e = new THREE.Vector3().crossVectors(up, new THREE.Vector3(0, 1, 0))
             if (e.lengthSq() < 1e-6) e = new THREE.Vector3(1, 0, 0)
             e.normalize()
             const n = new THREE.Vector3().crossVectors(up, e).normalize()
-            const spread = 2.6 + Math.random() * 4.0        // 雲的水平尺度
+            const spread = 2.4 + Math.random() * 3.6      // 雲的水平尺度
+            const thick = 0.9 + Math.random() * 1.5       // 厚度
+
             for (let p = 0; p < PUFFS; p++) {
+                // 高斯分佈:中心密、邊緣疏
                 const gx = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5
                 const gy = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5
+                // 越高的團塊越靠中心、越小 → 堆出饅頭狀的積雲輪廓
+                const h = Math.random()
+                const shrink = 1 - h * 0.55
                 const o = up.clone().multiplyScalar(alt)
-                    .addScaledVector(e, gx * spread)          // 中心密、邊緣疏
-                    .addScaledVector(n, gy * spread)
-                    .addScaledVector(up, (Math.random() - 0.5) * 1.6)
+                    .addScaledVector(e, gx * spread * shrink)
+                    .addScaledVector(n, gy * spread * shrink)
+                    .addScaledVector(up, (h - 0.35) * thick)
                 pos.set([o.x, o.y, o.z], i * 3)
-                siz[i] = (3.2 + Math.random() * 3.4) * (0.6 + spread * 0.18)
+                siz[i] = (2.6 + Math.random() * 2.4) * (0.6 + spread * 0.18) * (0.75 + (1 - h) * 0.5)
+                shd[i] = Math.pow(h, 0.65)                // 底部暗、頂部亮
                 i++
             }
         }
         const geo = new THREE.BufferGeometry()
         geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
         geo.setAttribute('size', new THREE.BufferAttribute(siz, 1))
+        geo.setAttribute('shade', new THREE.BufferAttribute(shd, 1))
 
-        // 自訂 shader:PointsMaterial 只能統一尺寸,雲朵需要大小不一
+        // 自訂 shader:PointsMaterial 既不能讓每點不同大小,也無法做每點明暗
         this.cloudMat = new THREE.ShaderMaterial({
             uniforms: {
-                map: { value: this._softTexture('rgba(255,255,255,0.95)', 'rgba(255,255,255,0.55)') },
+                map: { value: this._cloudTexture() },
                 tint: { value: new THREE.Color(1, 1, 1) },
-                opacity: { value: 0.85 },
+                shadow: { value: new THREE.Color(0.55, 0.60, 0.70) },   // 雲底的冷灰
+                opacity: { value: 0.9 },
                 scale: { value: 480 },
             },
             vertexShader: `
                 attribute float size;
+                attribute float shade;
+                varying float vShade;
                 uniform float scale;
                 void main() {
+                    vShade = shade;
                     vec4 mv = modelViewMatrix * vec4(position, 1.0);
                     gl_PointSize = size * scale / max(1.0, -mv.z);
                     gl_Position = projectionMatrix * mv;
@@ -108,17 +122,38 @@ export class Weather {
             fragmentShader: `
                 uniform sampler2D map;
                 uniform vec3 tint;
+                uniform vec3 shadow;
                 uniform float opacity;
+                varying float vShade;
                 void main() {
                     vec4 t = texture2D(map, gl_PointCoord);
-                    if (t.a < 0.01) discard;
-                    gl_FragColor = vec4(tint, t.a * opacity);
+                    if (t.a < 0.02) discard;
+                    // 團塊本身也有上亮下暗的漸變,單顆看起來才有體積
+                    float lift = smoothstep(0.0, 1.0, gl_PointCoord.y);
+                    float sh = clamp(vShade * 0.75 + (1.0 - lift) * 0.45, 0.0, 1.0);
+                    vec3 col = mix(shadow * tint, tint, sh);
+                    gl_FragColor = vec4(col, t.a * opacity);
                 }`,
             transparent: true, depthWrite: false,
         })
         this.clouds = new THREE.Points(geo, this.cloudMat)
         this.clouds.frustumCulled = false
         this.scene.add(this.clouds)
+    }
+
+    /** 雲的團塊貼圖:核心夠實,邊緣才柔;太柔會像雪花 */
+    _cloudTexture() {
+        const c = document.createElement('canvas')
+        c.width = c.height = 128
+        const ctx = c.getContext('2d')
+        const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+        g.addColorStop(0.00, 'rgba(255,255,255,1)')
+        g.addColorStop(0.42, 'rgba(255,255,255,0.98)')   // 實心核心
+        g.addColorStop(0.72, 'rgba(255,255,255,0.55)')
+        g.addColorStop(1.00, 'rgba(255,255,255,0)')
+        ctx.fillStyle = g
+        ctx.fillRect(0, 0, 128, 128)
+        return new this.THREE.CanvasTexture(c)
     }
 
     // ---------- 降水(雨絲 / 雪點)----------
@@ -348,7 +383,7 @@ export class Weather {
         const night = 0.28 + 0.72 * dayF
         const k = dark * night
         this.cloudMat.uniforms.tint.value.setRGB(k * (1 - this.storm * 0.06), k, k * (1 + this.storm * 0.08))
-        this.cloudMat.uniforms.opacity.value = 0.55 + this.intensity * 0.35
+        this.cloudMat.uniforms.opacity.value = 0.88 + this.intensity * 0.1
 
         // --- 降水 ---
         const on = this.intensity > 0.02
