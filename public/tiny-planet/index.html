@@ -212,6 +212,7 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         import { Music } from './music.js'
+        import { Weather } from './weather.js'
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
@@ -406,6 +407,11 @@
         if (fwd.lengthSq() < 0.1) fwd.set(0, 0, -1)
         let alt = pos.length(), targetAlt = alt
 
+        // ---------- 天氣 ----------
+        const rainParam = new URLSearchParams(location.search).get('rain')
+        const weather = new Weather(THREE, scene,
+            rainParam === null ? null : Math.max(0, Math.min(1, parseFloat(rainParam) || 0)))
+
         // ---------- 輸入 ----------
         const music = new Music()
         window.__music = music
@@ -452,6 +458,7 @@
         const startMusic = () => {
             if (music.ctx) return
             music.start()
+            weather.attachAudio(music.ctx, music.master)   // 雨聲併入音樂總線
             paintMusic(true)
         }
         musicBtn.addEventListener('click', e => {
@@ -531,7 +538,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 17   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 18   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
@@ -738,12 +745,19 @@
             // 補光跟著太陽的反方向,飛行中與地形的相對關係才穩定
             fill.position.copy(pos).addScaledVector(sunDir, -270).addScaledVector(localUp, 90)
 
-            scene.background = skyColor(e)
-            sun.intensity = 0.05 + 3.4 * dayF
+            // 天氣(雨勢會壓暗天色與陽光)
+            const upNow = pos.clone().normalize()
+            const rightNow = new THREE.Vector3().crossVectors(fwd, upNow).normalize()
+            const rain = weather.update(dt, pos, upNow, fwd, rightNow)
+            const wet = rain * 0.75
+
+            const sky = skyColor(e).clone().lerp(new THREE.Color(0x4a5460), wet)
+            scene.background = sky
+            sun.intensity = (0.05 + 3.4 * dayF) * (1 - wet * 0.65)
             sun.color.set(0xff8a4d).lerp(new THREE.Color(0xfff2dd), smoothstep(0.0, 0.42, e))
-            hemi.intensity = 0.12 + 0.45 * dayF
+            hemi.intensity = (0.12 + 0.45 * dayF) * (1 - wet * 0.25)
             fill.intensity = 0.18 + 0.32 * dayF
-            starMat.opacity = 1 - dayF
+            starMat.opacity = (1 - dayF) * (1 - wet)      // 下雨看不到星星
             if (cityLights) {                       // 天黑才亮燈,黃昏漸亮
                 const lit = smoothstep(0.16, -0.06, e)
                 cityLights.material.opacity = lit
