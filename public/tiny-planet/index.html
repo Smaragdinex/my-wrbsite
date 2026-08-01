@@ -212,9 +212,9 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=26'
-        import { Weather } from './weather.js?v=26'
-        import { Traffic } from './traffic.js?v=26'
+        import { Music } from './music.js?v=27'
+        import { Weather } from './weather.js?v=27'
+        import { Traffic } from './traffic.js?v=27'
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
@@ -387,9 +387,14 @@
             ny: [40.75, -73.98],              // 紐約曼哈頓
             liberty: [38.76, -73.98],         // 自由女神(離岸小島)
             sf: [37.82, -122.87],             // 金門大橋
-            tokyo: [35.68, 139.77],
-            paris: [48.86, 2.35],
+            tokyo: [35.66, 139.75],           // 東京鐵塔
+            paris: [48.86, 2.29],             // 艾菲爾鐵塔
             sydney: [-34.74, 151.05],         // 雪梨歌劇院(伸入海中的半島)
+            rome: [41.89, 12.49],             // 羅馬競技場
+            giza: [29.32, 30.70],             // 吉薩金字塔(往內陸推 85km 避開尼羅河)
+            machu: [-13.16, -72.55],          // 馬丘比丘
+            chichen: [20.22, -88.57],         // 奇琴伊察(往內陸推 51km,海陸圖解析度所限)
+            wall: [40.36, 116.02],            // 萬里長城(八達嶺)
             taipei: [25.03, 121.57],
         }
         // 經緯度 → 方向(先算 Blender Z-up,再轉成 Three 的 Y-up)
@@ -399,6 +404,23 @@
             const y = Math.cos(la) * Math.sin(lo)
             const z = Math.sin(la)
             return new THREE.Vector3(x, z, -y).normalize()
+        }
+        // ?debug=1 才掛出來:加完地標要繞到現場近距離看,靠這個把相機擺到指定經緯度旁邊
+        if (new URLSearchParams(location.search).has('debug')) {
+            window.__tp = {
+                THREE, scene, camera, renderer, latLonDir, R,
+                look(lat, lon, dist = 15, high = 6) {
+                    const dir = latLonDir(lat, lon)
+                    const tan = new THREE.Vector3(0, 1, 0).cross(dir).normalize()
+                    camera.position.copy(dir).multiplyScalar(R + high).addScaledVector(tan, dist)
+                    camera.up.copy(dir)
+                    camera.lookAt(dir.clone().multiplyScalar(R + 1.2))
+                    camera.aspect = 16 / 9
+                    camera.updateProjectionMatrix()
+                    renderer.setSize(1280, 720, false)
+                    renderer.render(scene, camera)
+                },
+            }
         }
         const gotoParam = new URLSearchParams(location.search).get('goto')
         let startDir = latLonDir(40.75, -73.98)          // 預設從紐約出發
@@ -542,7 +564,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 26   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 27   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
