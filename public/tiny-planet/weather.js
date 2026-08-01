@@ -14,14 +14,29 @@ export class Weather {
     constructor(THREE, scene, startIntensity = null) {
         this.THREE = THREE
         this.scene = scene
-        this.intensity = startIntensity ?? 0
-        this.target = startIntensity ?? 0
         this.forced = startIntensity !== null
-        this.nextChange = 45 + Math.random() * 60
+        if (this.forced) {
+            this.intensity = this.target = startIntensity
+            this.nextChange = Infinity
+        } else {
+            // 開場就隨機:四成機率一登入就在下雨(不然每次都得等一分鐘才變天)
+            const raining = Math.random() < 0.4
+            this.target = raining ? this._randomRain() : 0
+            this.intensity = this.target                 // 直接就位,不用淡入
+            this.nextChange = raining ? 35 + Math.random() * 55 : 50 + Math.random() * 90
+        }
         this.t = 0
 
         this._buildRain()
         this._buildScreen()
+    }
+
+    /** 雨勢:多數是普通陣雨,偶爾毛毛雨或傾盆大雨 */
+    _randomRain() {
+        const r = Math.random()
+        if (r < 0.28) return 0.22 + Math.random() * 0.15    // 毛毛雨
+        if (r < 0.82) return 0.45 + Math.random() * 0.30    // 一般陣雨
+        return 0.85 + Math.random() * 0.15                  // 傾盆大雨
     }
 
     // ---------- 3D 雨絲 ----------
@@ -189,7 +204,8 @@ export class Weather {
         if (!this.forced) {
             this.nextChange -= dt
             if (this.nextChange <= 0) {
-                this.target = this.target > 0.1 ? 0 : 0.45 + Math.random() * 0.55
+                const wasRaining = this.target > 0.1
+                this.target = wasRaining ? 0 : this._randomRain()
                 this.nextChange = this.target > 0.1
                     ? 40 + Math.random() * 50       // 一場雨
                     : 70 + Math.random() * 110      // 放晴一陣子
