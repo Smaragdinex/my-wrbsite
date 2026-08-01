@@ -483,7 +483,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 15   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 16   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
