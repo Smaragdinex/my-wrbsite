@@ -212,8 +212,9 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=24'
-        import { Weather } from './weather.js?v=24'
+        import { Music } from './music.js?v=25'
+        import { Weather } from './weather.js?v=25'
+        import { Traffic } from './traffic.js?v=25'
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
@@ -541,7 +542,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 24   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 25   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
@@ -636,6 +637,7 @@
         })
 
         const planeMats = []
+        let traffic = null
         let rig = null, tilt = null, propeller = null
         let headlight = null, beacon = null, halo = null
         const navLights = []
@@ -668,6 +670,13 @@
             tilt.add(headlight)
 
             applyPlaneColor(planeColor)          // 套用上次選的顏色
+
+            // 空中交通:複製同一份機身模型,隨機配色各自巡航
+            traffic = new Traffic(THREE, scene, g.scene, {
+                count: 10, R, altMin: 6.5, altMax: 20,
+                palette: MACARON.map(m => m[0]),
+            })
+            traffic.spawnAround(pos.clone().normalize())
 
             // 光暈:圍繞飛機的柔和光球,夜裡向外暈開
             const c = document.createElement('canvas')
@@ -830,6 +839,8 @@
 
                 if (dbg) hintEl.textContent =
                     `turn=${turn} climb=${climb} bank=${tilt.rotation.z.toFixed(2)} alt=${alt.toFixed(1)} pos=${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}`
+
+                if (traffic) traffic.update(dt, pos, nightF)
 
                 // 相機:機尾追隨
                 const camTarget = pos.clone().addScaledVector(fwd, -8.5).addScaledVector(newUp, 4.2)
