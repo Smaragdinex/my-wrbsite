@@ -212,9 +212,9 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=31'
-        import { Weather } from './weather.js?v=31'
-        import { Traffic } from './traffic.js?v=31'
+        import { Music } from './music.js?v=32'
+        import { Weather } from './weather.js?v=32'
+        import { Traffic } from './traffic.js?v=32'
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
@@ -567,7 +567,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 31   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 32   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         // 倫敦眼是唯一會動的地標:輪子在 GLB 裡是獨立物件,原點就在輪心,
         // 轉軸由 landmark_anim.json 給(產生器算好的世界座標,已轉成 Y-up)
