@@ -332,8 +332,8 @@
         // ?goto=<地名|緯度,經度> 直接從該處上空起飛。星球用真實地球資料,座標即真實經緯度。
         const PLACES = {                      // 緯度, 經度
             ny: [40.75, -73.98],              // 紐約曼哈頓
-            liberty: [40.69, -74.04],         // 自由女神
-            sf: [37.79, -122.60],             // 金門大橋
+            liberty: [39.65, -75.13],         // 自由女神(遊戲尺度下往西南拉開,避免被高樓群埋住)
+            sf: [37.82, -122.87],             // 金門大橋
             tokyo: [35.68, 139.77],
             paris: [48.86, 2.35],
             taipei: [25.03, 121.57],
@@ -482,7 +482,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 11   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 12   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
