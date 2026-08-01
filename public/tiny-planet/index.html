@@ -329,19 +329,31 @@
         const TURN = 1.6         // 轉彎速率 rad/s
         const ALT_MIN = R + 8.5  // 最低高度(需高於最高地標:金門大橋塔頂 99.61)
         const ALT_MAX = R + 21.6
-        // ?goto=<x,y,z> 可直接從指定方向的上空起飛(除錯/看地標用)
-        const gotoParam = new URLSearchParams(location.search).get('goto')
-        const SPAWN = {                                    // 已轉成 Y-up
-            ny: [0.88, 0.21, 0.43],
-            sf: [-0.85, 0.49, -0.17],
+        // ?goto=<地名|緯度,經度> 直接從該處上空起飛。星球用真實地球資料,座標即真實經緯度。
+        const PLACES = {                      // 緯度, 經度
+            ny: [40.75, -73.98],              // 紐約曼哈頓
+            liberty: [40.69, -74.04],         // 自由女神
+            sf: [37.79, -122.60],             // 金門大橋
+            tokyo: [35.68, 139.77],
+            paris: [48.86, 2.35],
+            taipei: [25.03, 121.57],
         }
-        let startDir = new THREE.Vector3(0, 1, 0)
+        // 經緯度 → 方向(先算 Blender Z-up,再轉成 Three 的 Y-up)
+        const latLonDir = (lat, lon) => {
+            const la = lat * Math.PI / 180, lo = lon * Math.PI / 180
+            const x = Math.cos(la) * Math.cos(lo)
+            const y = Math.cos(la) * Math.sin(lo)
+            const z = Math.sin(la)
+            return new THREE.Vector3(x, z, -y).normalize()
+        }
+        const gotoParam = new URLSearchParams(location.search).get('goto')
+        let startDir = latLonDir(40.75, -73.98)          // 預設從紐約出發
         if (gotoParam) {
-            const v = SPAWN[gotoParam] || gotoParam.split(',').map(Number)
-            if (v && v.length === 3 && v.every(n => isFinite(n))) startDir.set(v[0], v[1], v[2]).normalize()
+            const p = PLACES[gotoParam.toLowerCase()] || gotoParam.split(',').map(Number)
+            if (p && p.length === 2 && p.every(n => isFinite(n))) startDir = latLonDir(p[0], p[1])
         }
         let pos = startDir.clone().multiplyScalar(R + 8.5)
-        let fwd = new THREE.Vector3().crossVectors(startDir, new THREE.Vector3(0, 0, 1)).normalize()
+        let fwd = new THREE.Vector3().crossVectors(startDir, new THREE.Vector3(0, 1, 0)).normalize()
         if (fwd.lengthSq() < 0.1) fwd.set(0, 0, -1)
         let alt = pos.length(), targetAlt = alt
 
@@ -470,7 +482,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 10   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 11   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
