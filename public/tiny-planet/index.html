@@ -287,19 +287,67 @@
         moonHalo.scale.setScalar(115)
         scene.add(moonHalo)
 
-        // 星空(夜晚淡入)
-        const starGeo = new THREE.BufferGeometry()
-        const starPos = new Float32Array(1500 * 3)
-        for (let i = 0; i < 1500; i++) {
-            const v = new THREE.Vector3().randomDirection().multiplyScalar(780)
-            starPos.set([v.x, v.y, v.z], i * 3)
+        // ---------- 星空 ----------
+        // 世界放大後,原本開啟距離衰減的星點只剩 0.4px。改為固定像素大小,
+        // 並分三層(微弱/中等/明亮)+ 銀河帶,才有層次。
+        const starTex = (() => {
+            const c = document.createElement('canvas')
+            c.width = c.height = 32
+            const ctx = c.getContext('2d')
+            const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16)
+            g.addColorStop(0.0, 'rgba(255,255,255,1)')
+            g.addColorStop(0.45, 'rgba(255,255,255,0.85)')   // 核心夠大,小點才不會整個變透明
+            g.addColorStop(0.75, 'rgba(255,255,255,0.25)')
+            g.addColorStop(1.0, 'rgba(255,255,255,0)')
+            ctx.fillStyle = g
+            ctx.fillRect(0, 0, 32, 32)
+            return new THREE.CanvasTexture(c)
+        })()
+
+        const STAR_R = 800
+        const MILKY_AXIS = new THREE.Vector3(0.35, 0.86, 0.37).normalize()
+        const starLayers = []
+
+        function makeStars(count, size, milkyRatio) {
+            const pos = new Float32Array(count * 3)
+            const col = new Float32Array(count * 3)
+            const v = new THREE.Vector3()
+            for (let i = 0; i < count; i++) {
+                v.randomDirection()
+                // 一部分星星集中在銀河帶上(壓向與銀河軸垂直的平面)
+                if (Math.random() < milkyRatio) {
+                    const along = v.dot(MILKY_AXIS)
+                    v.addScaledVector(MILKY_AXIS, -along * (0.82 + Math.random() * 0.15)).normalize()
+                }
+                pos.set([v.x * STAR_R, v.y * STAR_R, v.z * STAR_R], i * 3)
+
+                // 星色:多數偏白,少數偏藍或偏暖
+                const t = Math.random()
+                const c = t < 0.12 ? [0.72, 0.82, 1.0]        // 藍白
+                        : t < 0.22 ? [1.0, 0.88, 0.72]        // 橙黃
+                        : [1.0, 1.0, 1.0]
+                const dim = 0.75 + Math.random() * 0.25
+                col.set([c[0] * dim, c[1] * dim, c[2] * dim], i * 3)
+            }
+            const geo = new THREE.BufferGeometry()
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+            geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+            const mat = new THREE.PointsMaterial({
+                map: starTex, size, sizeAttenuation: false,   // 固定像素大小,才不會被距離吃掉
+                vertexColors: true, transparent: true, opacity: 0,
+                depthWrite: false, blending: THREE.AdditiveBlending
+            })
+            const pts = new THREE.Points(geo, mat)
+            pts.frustumCulled = false
+            scene.add(pts)
+            starLayers.push({ mat, base: 1 })
+            return pts
         }
-        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
-        const starMat = new THREE.PointsMaterial({
-            color: 0xffffff, size: 0.7, sizeAttenuation: true,
-            transparent: true, opacity: 0, depthWrite: false
-        })
-        scene.add(new THREE.Points(starGeo, starMat))
+
+        makeStars(3200, 3.0, 0.45)      // 微弱的背景星塵(含銀河帶)
+        makeStars(1100, 5.0, 0.30)      // 中等亮度
+        makeStars(220, 8.0, 0.10)       // 少數明亮的主星
+        const starMat = { set opacity(v) { for (const l of starLayers) l.mat.opacity = v } }
 
         // 天色關鍵影格:太陽仰角 → 天空顏色(深夜→黎明紫→日出橘→白天藍)
         const skyStops = [
@@ -483,7 +531,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 16   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 17   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => scene.add(g.scene))
         // ---------- 城市燈火 ----------
