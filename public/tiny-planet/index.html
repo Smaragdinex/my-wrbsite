@@ -362,11 +362,11 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=38'
-        import { Weather } from './weather.js?v=38'
-        import { Traffic } from './traffic.js?v=38'
-        import { Paint } from './paint.js?v=38'
-        import { I18N, LANG_NAMES, detectLang } from './lang.js?v=38'
+        import { Music } from './music.js?v=39'
+        import { Weather } from './weather.js?v=39'
+        import { Traffic } from './traffic.js?v=39'
+        import { Paint } from './paint.js?v=39'
+        import { I18N, LANG_NAMES, detectLang } from './lang.js?v=39'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -404,9 +404,9 @@
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
-        scene.fog = new THREE.FogExp2(0x87b8e8, 0.00120)   // 大氣透視,濃度隨天氣調整
+        scene.fog = new THREE.FogExp2(0x87b8e8, 0.00040)   // 大氣透視,濃度隨天氣調整
 
-        const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1400)
+        const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 4200)
         const renderer = new THREE.WebGLRenderer({ antialias: true })
         renderer.setSize(innerWidth, innerHeight)
         renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
@@ -474,7 +474,7 @@
             map: moonHaloTex, blending: THREE.AdditiveBlending,
             depthWrite: false, transparent: true, fog: false
         }))
-        moonHalo.scale.setScalar(115)
+        moonHalo.scale.setScalar(345)
         scene.add(moonHalo)
 
         // ---------- 星空 ----------
@@ -494,7 +494,7 @@
             return new THREE.CanvasTexture(c)
         })()
 
-        const STAR_R = 800
+        const STAR_R = 2400
         const MILKY_AXIS = new THREE.Vector3(0.35, 0.86, 0.37).normalize()
         const starLayers = []
 
@@ -563,7 +563,7 @@
         }
 
         // ---------- 飛行參數 ----------
-        const R = 93.6
+        const R = 280.8
         const SPEED = 13         // 巡航速度
         const TURN = 1.6         // 轉彎速率 rad/s
         const ALT_MIN = R + 8.5  // 最低高度(需高於最高地標:金門大橋塔頂 99.61)
@@ -814,7 +814,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 38   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 39   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`,
             g => { scene.add(g.scene); bootProgress('planet', 1) }, onXhr('planet'))
         // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
@@ -1061,8 +1061,8 @@
                 .addScaledVector(sunEast, Math.cos(theta)).normalize()
 
             sunTarget.position.copy(pos)
-            sun.position.copy(pos).addScaledVector(sunDir, 330)
-            sunBall.position.copy(pos).addScaledVector(sunDir, 720)
+            sun.position.copy(pos).addScaledVector(sunDir, 990)
+            sunBall.position.copy(pos).addScaledVector(sunDir, 2160)
             sunBall.material.opacity = smoothstep(-0.06, 0.05, e)   // 落到地平線就淡出
 
             // 月亮:放在水平線下約 20°(仍高於「視覺地平線」)。
@@ -1071,7 +1071,7 @@
             const MOON_SIN = -0.20, MOON_COS = 0.98
             const moonDir = localUp.clone().multiplyScalar(MOON_SIN)
                 .addScaledVector(sunEast, -MOON_COS).normalize()
-            moonBall.position.copy(pos).addScaledVector(moonDir, 690)
+            moonBall.position.copy(pos).addScaledVector(moonDir, 2070)
             moonHalo.position.copy(moonBall.position)
             const moonF = smoothstep(0.16, -0.05, e)
             if (moonMat) moonMat.opacity = moonF
@@ -1096,7 +1096,7 @@
             const sky = skyColor(e).clone().lerp(new THREE.Color(0x4a5460), wet)
             scene.background = sky
             scene.fog.color.copy(sky)
-            scene.fog.density = 0.00120 + weather.fogFactor * 0.00750
+            scene.fog.density = 0.00040 + weather.fogFactor * 0.00250
             sun.intensity = (0.05 + 3.4 * dayF) * (1 - wet * 0.65)
             sun.color.set(0xff8a4d).lerp(new THREE.Color(0xfff2dd), smoothstep(0.0, 0.42, e))
             hemi.intensity = (0.12 + 0.45 * dayF) * (1 - wet * 0.25) + weather.flash * 2.2
@@ -1191,8 +1191,12 @@
             renderer.render(scene, camera)
             requestAnimationFrame(tick)
         }
-        // 相機初始位置
-        camera.position.set(0, R + 11.5, 14)
+        // 相機初始位置:直接放到機尾該在的地方。
+        // 原本寫死在北極附近再 lerp 過去,星球一放大那段插值會穿過星球內部,
+        // 開場會有一兩秒在地底看地形背面(整片黑)。
+        camera.position.copy(pos).addScaledVector(fwd, -8.5).addScaledVector(startDir, 4.2)
+        camera.up.copy(startDir)
+        camera.lookAt(pos.clone().addScaledVector(fwd, 6).addScaledVector(startDir, -3.2))
         tick()
 
         addEventListener('resize', () => {

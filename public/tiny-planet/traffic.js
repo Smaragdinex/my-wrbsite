@@ -21,7 +21,7 @@ export class Traffic {
      * @param palette    可用的機身顏色(十六進位字串)
      */
     constructor(THREE, scene, protoScene, {
-        count = 10, R = 93.6, altMin = 6.5, altMax = 20, palette = ['#f2a0a8'],
+        count = 10, R = 280.8, altMin = 6.5, altMax = 20, palette = ['#f2a0a8'],
         onShoot = null,          // (plane, 發射點, 方向, 顏色) => void
     } = {}) {
         this.onShoot = onShoot
