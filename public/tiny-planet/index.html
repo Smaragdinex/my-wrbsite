@@ -144,7 +144,7 @@
             /* 尺寸與內縮都跟著畫面短邊走(vmin),大螢幕才不會顯得很小;
                上下用 clamp 夾住,手機不會佔掉半個畫面、4K 也不會誇張 */
             position: fixed; z-index: 11;
-            right: clamp(24px, 16vmin, 176px);
+            right: clamp(24px, 20vmin, 220px);
             bottom: calc(clamp(24px, 16vmin, 176px) + env(safe-area-inset-bottom));
             width: clamp(80px, 12vmin, 168px);
             height: clamp(80px, 12vmin, 168px);
@@ -165,7 +165,7 @@
             box-shadow: inset 0 -5px 10px rgba(0,0,0,.2), 0 1px 4px rgba(0,0,0,.25);
         }
         #keys {
-            position: fixed; right: 20px; bottom: 20px; z-index: 10;
+            position: fixed; left: 20px; bottom: 20px; z-index: 10;
             display: flex; flex-direction: column; align-items: center; gap: 7px;
             padding: 14px 16px 12px; border-radius: 16px;
             background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
@@ -173,6 +173,7 @@
             box-shadow: 0 6px 22px rgba(0,0,0,.22);
         }
         #keys .row { display: flex; gap: 7px; }
+        #keys .key.wide { min-width: 132px; }
         #keys .key {
             min-width: 40px; height: 40px; padding: 0 10px;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -190,6 +191,7 @@
         #keys .cap { font-size: 11px; font-weight: 500; opacity: .68; letter-spacing: .04em; }
         #keys {
             opacity: 0; transform: scale(.92) translateY(10px);
+            transform-origin: bottom left;
             transform-origin: bottom right; pointer-events: none;
             transition: opacity .18s, transform .18s;
         }
@@ -236,6 +238,9 @@
             <div class="key" data-k="left">←<span class="sub">A</span></div>
             <div class="key" data-k="down">↓<span class="sub">S</span></div>
             <div class="key" data-k="right">→<span class="sub">D</span></div>
+        </div>
+        <div class="row">
+            <div class="key wide" data-k="fire">空白鍵<span class="sub">發射漆彈</span></div>
         </div>
     </div>
     <script type="module">
