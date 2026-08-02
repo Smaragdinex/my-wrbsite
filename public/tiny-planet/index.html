@@ -18,6 +18,7 @@
             --ui: clamp(46px, 6vmin, 84px);
             --uiStep: calc(var(--ui) + 12px);      /* 垂直堆疊的間距 */
             --sw: clamp(22px, 2.6vmin, 34px);      /* 調色盤色票 */
+            --brand: #f2a0a8;                      /* 開場畫面固定用草莓粉,不跟著存檔的機身色跑 */
         }
         body {
             margin: 0; overflow: hidden;
@@ -176,7 +177,7 @@
         }
         #bootFill {
             position: absolute; inset: 0 auto 0 0; width: 0%;
-            border-radius: 99px; background: var(--body, #f2a0a8);
+            border-radius: 99px; background: var(--brand);
             transition: width .25s ease;
         }
         #bootPlane {
@@ -308,7 +309,7 @@
                 <g transform="translate(100 34)">
                     <ellipse cx="0" cy="0" rx="7" ry="15" fill="#faf3e5"/>
                     <ellipse cx="-15" cy="0" rx="3.5" ry="7" fill="#faf3e5"/>
-                    <ellipse cx="2" cy="0" rx="17" ry="6" fill="var(--body, #f2a0a8)"/>
+                    <ellipse cx="2" cy="0" rx="17" ry="6" fill="var(--brand)"/>
                     <circle cx="11" cy="0" r="2.6" fill="#c4e1ed"/>
                     <rect x="18" y="-1.4" width="9" height="2.8" rx="1.4" fill="#e6d6b8"/>
                 </g>
@@ -322,7 +323,7 @@
             <div id="bootPlane"><svg viewBox="0 0 64 40" fill="none">
                 <ellipse cx="27" cy="20" rx="8" ry="17" fill="#faf3e5"/>
                 <ellipse cx="9" cy="20" rx="4" ry="8" fill="#faf3e5"/>
-                <ellipse cx="31" cy="20" rx="19" ry="6.5" fill="var(--body, #f2a0a8)"/>
+                <ellipse cx="31" cy="20" rx="19" ry="6.5" fill="var(--brand)"/>
                 <circle cx="41" cy="20" r="3" fill="#c4e1ed"/>
                 <rect x="49" y="18.5" width="10" height="3" rx="1.5" fill="#e6d6b8"/>
             </svg></div>
