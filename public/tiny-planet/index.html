@@ -682,6 +682,8 @@
             musicBtn.classList.toggle('on', on)
             musicBtn.classList.toggle('off', !on)
         }
+        // 音樂預設關閉,只有使用者自己開過才會記住並自動播
+        let musicWanted = localStorage.getItem('tp.music') === 'on'
         const startMusic = () => {
             if (music.ctx) return
             music.start()
@@ -690,7 +692,11 @@
         }
         musicBtn.addEventListener('click', e => {
             e.stopPropagation()
-            paintMusic(music.ctx ? music.toggle() : (music.start(), true))
+            if (!music.ctx) { startMusic(); musicWanted = true; localStorage.setItem('tp.music', 'on'); return }
+            const on = music.toggle()
+            musicWanted = on
+            localStorage.setItem('tp.music', on ? 'on' : 'off')
+            paintMusic(on)
         })
 
         // 右下角鍵盤面板:按下即時高亮
@@ -752,9 +758,11 @@
 
         const keys = {}
         addEventListener('keydown', e => {
-            startMusic()                        // 任何按鍵都能解鎖音訊
             paintKey(e.code, true)
-            if (e.code === 'KeyM') paintMusic(music.toggle())
+            if (e.code === 'KeyM') {           // M 鍵手動開關
+                if (!music.ctx) { startMusic(); musicWanted = true; localStorage.setItem('tp.music', 'on') }
+                else { const on = music.toggle(); musicWanted = on; localStorage.setItem('tp.music', on ? 'on' : 'off'); paintMusic(on) }
+            }
             keys[e.code] = true
         })
         addEventListener('keyup', e => { keys[e.code] = false; paintKey(e.code, false) })
@@ -804,7 +812,7 @@
         bootStart.addEventListener('click', () => {
             if (bootStarted) return
             bootStarted = true
-            startMusic()                        // 這一下點擊同時解鎖音訊
+            if (musicWanted) startMusic()       // 預設不播;開過的人這一下點擊順便解鎖音訊
             bootEl.classList.add('loading')     // 切到讀取狀態
             bootMaybeEnter()
         })
