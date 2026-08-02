@@ -212,9 +212,9 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=33'
-        import { Weather } from './weather.js?v=33'
-        import { Traffic } from './traffic.js?v=33'
+        import { Music } from './music.js?v=35'
+        import { Weather } from './weather.js?v=35'
+        import { Traffic } from './traffic.js?v=35'
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
@@ -396,6 +396,10 @@
             machu: [-13.16, -72.55],          // 馬丘比丘
             chichen: [20.22, -88.57],         // 奇琴伊察(往內陸推 51km,海陸圖解析度所限)
             wall: [40.36, 116.02],            // 萬里長城(八達嶺)
+            taj: [27.18, 78.04],               // 泰姬瑪哈陵
+            angkor: [13.41, 103.87],           // 吳哥窟
+            hagia: [41.01, 28.98],             // 聖索菲亞大教堂
+            jerusalem: [31.78, 35.24],         // 圓頂清真寺
             taipei: [25.03, 121.56],           // 台北 101
             dubai: [25.20, 55.27],             // 哈里發塔
             shanghai: [31.23, 121.51],         // 上海中心大廈
@@ -568,7 +572,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 33   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 35   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
         // 倫敦眼是唯一會動的地標:輪子在 GLB 裡是獨立物件,原點就在輪心,
         // 轉軸由 landmark_anim.json 給(產生器算好的世界座標,已轉成 Y-up)
