@@ -171,7 +171,12 @@
             transform: translate(-50%, -50%); transition: left .25s ease;
         }
         #bootPlane svg { width: 100%; height: auto; display: block; }
-        #bootPct { font-size: clamp(11px, 1.6vmin, 15px); opacity: .6; letter-spacing: .08em; }
+        #bootPct { font-size: clamp(11px, 1.6vmin, 15px); opacity: 0; letter-spacing: .08em; }
+        /* 開場先只有標題與起飛鈕;按下去才切到讀取狀態 */
+        #bootBar { opacity: 0; transition: opacity .35s; }
+        #boot.loading #bootBar { opacity: 1; }
+        #boot.loading #bootPct { opacity: .6; }
+        #boot.loading #bootStart { opacity: 0; pointer-events: none; }
         #bootStart {
             margin-top: clamp(6px, 1.2vmin, 14px);
             padding: clamp(11px, 1.5vmin, 18px) clamp(30px, 5vmin, 56px);
@@ -181,7 +186,6 @@
             box-shadow: 0 6px 18px rgba(40,70,100,.22);
             transition: transform .12s, opacity .3s, box-shadow .18s;
         }
-        #bootStart:disabled { opacity: .45; cursor: default; box-shadow: none; }
         #bootStart:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 9px 24px rgba(40,70,100,.28); }
         #bootStart:not(:disabled):active { transform: scale(.96); }
 
@@ -288,7 +292,7 @@
             </svg></div>
         </div>
         <div id="bootPct">0%</div>
-        <button id="bootStart" disabled>準備中…</button>
+        <button id="bootStart">起飛</button>
     </div>
     <div id="fireBtn" title="發射漆彈(空白鍵)"><div class="dot"></div></div>
     <div id="keys">
@@ -697,18 +701,29 @@
             bootFill.style.width = pct + '%'
             bootPlane.style.left = pct + '%'
             bootPct.textContent = pct + '%'
-            if (bootShown >= 0.999) {
-                bootStart.disabled = false
-                bootStart.textContent = '起飛'
+            if (bootShown >= 0.999 && !bootReady) {
+                bootReady = true
+                bootMaybeEnter()
             }
+        }
+        let bootReady = false, bootStarted = false
+        const bootMaybeEnter = () => {
+            if (!bootReady || !bootStarted) return
+            // 就算資源早就載完,也讓讀條露臉一下再走,不然按下去畫面會硬跳
+            setTimeout(() => {
+                bootEl.classList.add('gone')
+                setTimeout(() => bootEl.remove(), 800)
+            }, 420)
         }
         // 有些瀏覽器不回報 total(壓縮傳輸時),那就退回「載完才跳」
         const onXhr = key => e => { if (e.lengthComputable) bootProgress(key, e.loaded / e.total) }
 
         bootStart.addEventListener('click', () => {
-            bootEl.classList.add('gone')
+            if (bootStarted) return
+            bootStarted = true
             startMusic()                        // 這一下點擊同時解鎖音訊
-            setTimeout(() => bootEl.remove(), 800)
+            bootEl.classList.add('loading')     // 切到讀取狀態
+            bootMaybeEnter()
         })
 
         const loader = new GLTFLoader()
