@@ -549,7 +549,9 @@
         const drag = { id: null, x0: 0, y0: 0, turn: 0, climb: 0, boost: false }
         const activePointers = new Set()
 
-        const onUI = el => el && el.closest && el.closest('#fsBtn, #musicBtn, #planeBtn, #remoteBtn, #palette, #keys')
+        // 點在 UI 上就不要啟動虛擬搖桿(漏掉某個元件的症狀就是「按鈕一按飛機就偏」)
+        const onUI = el => el && el.closest &&
+            el.closest('#fsBtn, #musicBtn, #planeBtn, #remoteBtn, #palette, #keys, #fireBtn')
 
         addEventListener('pointerdown', e => {
             activePointers.add(e.pointerId)
@@ -735,7 +737,10 @@
             fireBtn.classList.add('cool')
             paint.fire(pos.clone().addScaledVector(fwd, 2.4), fwd, planeColor, 'player')
         }
-        fireBtn.addEventListener('pointerdown', e => { e.preventDefault(); doFire() })
+        fireBtn.addEventListener('pointerdown', e => {
+            e.preventDefault(); e.stopPropagation()      // 別讓事件傳到搖桿
+            doFire()
+        })
         addEventListener('keydown', e => {
             if (e.code === 'Space') { e.preventDefault(); doFire() }
         })
