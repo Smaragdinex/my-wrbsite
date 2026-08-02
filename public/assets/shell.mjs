@@ -6,7 +6,7 @@ const WORKS = [
   { no:'02', title:'KittyCafe',        tag:'iOS · Casual Game',         url:'https://apps.apple.com/tw/app/kitty-cafe-by-x-arts/id6758956069', img:'/assets/kittycafe.jpg' },
   { no:'03', title:'CatInsight Stock', tag:'AI Stock Research · iOS',   url:'/catinsight.html', img:'/assets/cat-poster.jpg' },
   { no:'04', title:'Ocean Cleanup',    tag:'iOS Game · Beach Cleanup',  url:'https://apps.apple.com/tw/app/id6771914760', img:'/assets/oceancleanup.jpg' },
-  { no:'05', title:'Tiny Planet',      tag:'Three.js · Flight Sandbox',  url:'/tiny-planet/', img:'/assets/tinyplanet.jpg' },
+  { no:'05', title:'Tiny Planet',      tag:'Three.js · Flight Sandbox',  url:'/tiny-planet/', img:'/assets/tinyplanet.jpg?v=2' },
 ];
 
 /* ===== 游標 ===== */
