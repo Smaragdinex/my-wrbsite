@@ -412,6 +412,7 @@
         if (new URLSearchParams(location.search).has('debug')) {
             window.__tp = {
                 THREE, scene, camera, renderer, latLonDir, R,
+                get weather() { return weather },      // 天氣要能單獨驅動來驗證
                 look(lat, lon, dist = 15, high = 6) {
                     const dir = latLonDir(lat, lon)
                     const tan = new THREE.Vector3(0, 1, 0).cross(dir).normalize()
