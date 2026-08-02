@@ -212,9 +212,9 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=35'
-        import { Weather } from './weather.js?v=35'
-        import { Traffic } from './traffic.js?v=35'
+        import { Music } from './music.js?v=36'
+        import { Weather } from './weather.js?v=36'
+        import { Traffic } from './traffic.js?v=36'
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
@@ -396,6 +396,10 @@
             machu: [-13.16, -72.55],          // 馬丘比丘
             chichen: [20.22, -88.57],         // 奇琴伊察(往內陸推 51km,海陸圖解析度所限)
             wall: [40.36, 116.02],            // 萬里長城(八達嶺)
+            moscow: [55.75, 37.62],            // 紅場・聖瓦西里主教座堂
+            pisa: [43.72, 10.40],              // 比薩斜塔
+            kinderdijk: [51.88, 4.64],         // 小孩堤防風車村
+            rio: [-22.95, -43.21],             // 救世主基督像
             taj: [27.18, 78.04],               // 泰姬瑪哈陵
             angkor: [13.41, 103.87],           // 吳哥窟
             hagia: [41.01, 28.98],             // 聖索菲亞大教堂
@@ -572,23 +576,33 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 35   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 36   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
-        // 倫敦眼是唯一會動的地標:輪子在 GLB 裡是獨立物件,原點就在輪心,
-        // 轉軸由 landmark_anim.json 給(產生器算好的世界座標,已轉成 Y-up)
-        let londonEye = null, eyeAxis = null, eyeSpin = 0
-        let eyeQ0 = null                     // 模型自帶的朝向,轉動時要保留
-        const EYE_RPS = 0.11                 // rad/s,約 57 秒轉一圈
+        // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
+        // 具名物件、原點設在旋轉中心,轉軸與轉速寫在 landmark_anim.json
+        const spinners = []
+        let lmRoot = null, animMeta = null
+        const bindSpinners = () => {
+            if (!lmRoot || !animMeta || spinners.length) return
+            for (const [name, m] of Object.entries(animMeta)) {
+                const obj = lmRoot.getObjectByName(name)
+                if (!obj) continue
+                spinners.push({
+                    obj, angle: 0,
+                    axis: new THREE.Vector3(...m.axis).normalize(),
+                    speed: m.speed || 0.11,
+                    q0: obj.quaternion.clone(),      // 模型自帶的朝向,轉動時要保留
+                })
+            }
+        }
         loader.load(`./public/assets/landmarks.glb?v=${V}`, g => {
             scene.add(g.scene)
-            londonEye = g.scene.getObjectByName('LondonEye')
-            if (londonEye) eyeQ0 = londonEye.quaternion.clone()
+            lmRoot = g.scene
+            bindSpinners()
         })
         fetch(`./public/assets/landmark_anim.json?v=${V}`)
             .then(r => r.ok ? r.json() : null)
-            .then(d => {
-                if (d && d.LondonEye) eyeAxis = new THREE.Vector3(...d.LondonEye.axis).normalize()
-            })
+            .then(d => { animMeta = d; bindSpinners() })
             .catch(() => {})
         // ---------- 城市燈火 ----------
         // 幾千盞窗火用單一 Points 繪製(一次 draw call),夜裡才點亮。
@@ -886,10 +900,9 @@
                     `turn=${turn} climb=${climb} bank=${tilt.rotation.z.toFixed(2)} alt=${alt.toFixed(1)} pos=${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}`
 
                 if (traffic) traffic.update(dt, pos, nightF)
-                if (londonEye && eyeAxis) {
-                    eyeSpin += dt * EYE_RPS
-                    // 繞世界軸轉要左乘,原本的朝向才不會被蓋掉
-                    londonEye.quaternion.setFromAxisAngle(eyeAxis, eyeSpin).multiply(eyeQ0)
+                for (const s of spinners) {          // 繞世界軸轉要左乘,原朝向才不會被蓋掉
+                    s.angle += dt * s.speed
+                    s.obj.quaternion.setFromAxisAngle(s.axis, s.angle).multiply(s.q0)
                 }
 
                 // 相機:機尾追隨
