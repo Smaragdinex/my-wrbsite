@@ -375,7 +375,7 @@
         <a id="bootDonate" href="#" target="_blank" rel="noopener noreferrer" hidden></a>
     </div>
     <div id="fireBtn" title="發射漆彈(空白鍵)"><div class="dot"></div></div>
-    <div id="keys">
+    <div id="keys" dir="ltr">
         <div class="cap">Flight controls</div>
         <div class="row">
             <div class="key" data-k="up">↑<span class="sub">W</span></div>
@@ -394,12 +394,12 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=82'
-        import { Weather } from './weather.js?v=82'
-        import { Traffic } from './traffic.js?v=82'
-        import { Paint } from './paint.js?v=82'
-        import { I18N, LANG_NAMES, detectLang } from './lang.js?v=82'
-        import { Fireworks } from './fireworks.js?v=82'
+        import { Music } from './music.js?v=83'
+        import { Weather } from './weather.js?v=83'
+        import { Traffic } from './traffic.js?v=83'
+        import { Paint } from './paint.js?v=83'
+        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=83'
+        import { Fireworks } from './fireworks.js?v=83'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -429,6 +429,9 @@
             lang = code
             localStorage.setItem('tp.lang', code)
             document.documentElement.lang = code
+            // 阿拉伯語要由右至左。鍵盤圖示另外鎖成 ltr(標記上直接寫死),
+            // 否則 W A S D 會被翻成 D S A W
+            document.documentElement.dir = RTL.has(code) ? 'rtl' : 'ltr'
             const t = I18N[code]
             document.getElementById('bootSub').textContent = t.sub
             document.getElementById('bootStart').textContent = t.start
@@ -875,7 +878,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 82   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 83   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`,
             g => { scene.add(g.scene); bootProgress('planet', 1) }, onXhr('planet'))
         // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成

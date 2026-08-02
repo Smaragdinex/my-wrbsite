@@ -8,13 +8,18 @@
 export const LANG_NAMES = {
     en: 'English',
     zh: '繁體中文',
+    zhs: '简体中文',
     ja: '日本語',
     ko: '한국어',
     fr: 'Français',
     it: 'Italiano',
     es: 'Español',
     th: 'ไทย',
+    ar: 'العربية',
 }
+
+// 由右至左書寫的語言。加新語言時記得一起維護
+export const RTL = new Set(['ar'])
 
 export const I18N = {
     en: {
@@ -42,6 +47,19 @@ export const I18N = {
         tipFire: '發射漆彈(空白鍵)',
         donate: '支持這個專案',
         colors: ['草莓', '蜜桃', '檸檬', '抹茶', '薄荷', '天空', '薰衣草', '丁香'],
+    },
+    zhs: {
+        sub: '在小星球上飞行',
+        start: '起飞',
+        controls: '飞行操作',
+        space: '空格键',
+        fire: '发射彩弹',
+        hint: '👆 按住屏幕拖动操纵 ・ 双指加速',
+        tipFs: '全屏', tipFsExit: '退出全屏',
+        tipMusic: '音乐', tipColor: '机身颜色', tipHelp: '操作说明',
+        tipFire: '发射彩弹(空格键)',
+        donate: '支持这个项目',
+        colors: ['草莓', '蜜桃', '柠檬', '抹茶', '薄荷', '天空', '薰衣草', '丁香'],
     },
     ja: {
         sub: '小さな惑星を飛びまわろう',
@@ -121,6 +139,19 @@ export const I18N = {
         donate: 'สนับสนุนโปรเจกต์นี้',
         colors: ['สตรอว์เบอร์รี', 'พีช', 'เลมอน', 'มัทฉะ', 'มินต์', 'ฟ้า', 'ลาเวนเดอร์', 'ไลแลค'],
     },
+    ar: {
+        sub: 'حلّق حول كوكب صغير',
+        start: 'إقلاع',
+        controls: 'أدوات التحكم',
+        space: 'مسافة',
+        fire: 'كرة طلاء',
+        hint: '👆 اسحب للتوجيه · إصبعان للتسريع',
+        tipFs: 'ملء الشاشة', tipFsExit: 'إنهاء ملء الشاشة',
+        tipMusic: 'الموسيقى', tipColor: 'لون الطائرة', tipHelp: 'أدوات التحكم',
+        tipFire: 'إطلاق كرة الطلاء (مسافة)',
+        donate: 'ادعم هذا المشروع',
+        colors: ['فراولة', 'خوخ', 'ليمون', 'ماتشا', 'نعناع', 'سماوي', 'خزامى', 'ليلكي'],
+    },
 }
 
 /** 先看使用者存過什麼,沒有就照瀏覽器語言猜,再猜不到就英文 */
@@ -129,7 +160,10 @@ export function detectLang() {
     if (saved && I18N[saved]) return saved
     for (const tag of (navigator.languages || [navigator.language || 'en'])) {
         const code = String(tag).toLowerCase()
-        if (code.startsWith('zh')) return 'zh'
+        // 中文要分簡繁:zh-CN / zh-SG / zh-Hans 是簡體,其餘(TW / HK / Hant)給繁體
+        if (code.startsWith('zh')) {
+            return /(^|-)(cn|sg|hans)(-|$)/.test(code) ? 'zhs' : 'zh'
+        }
         const two = code.slice(0, 2)
         if (I18N[two]) return two
     }
