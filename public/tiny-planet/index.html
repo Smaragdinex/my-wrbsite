@@ -191,6 +191,16 @@
         #boot.loading #bootBar { opacity: 1; }
         #boot.loading #bootPct { opacity: .6; }
         #boot.loading #bootStart { opacity: 0; pointer-events: none; }
+        #bootLang {
+            margin-top: clamp(4px, 1vmin, 12px);
+            padding: clamp(7px, 1vmin, 12px) clamp(16px, 2.4vmin, 28px);
+            font: 600 clamp(12px, 1.6vmin, 16px)/1 system-ui, "Noto Sans TC", sans-serif;
+            color: #35506b; cursor: pointer; appearance: none; -webkit-appearance: none;
+            border: 1.5px solid rgba(255,255,255,.9); border-radius: 99px;
+            background: rgba(255,255,255,.55); backdrop-filter: blur(6px);
+            text-align: center; text-align-last: center;
+        }
+        #bootLang:hover { background: rgba(255,255,255,.78); }
         #bootStart {
             margin-top: clamp(6px, 1.2vmin, 14px);
             padding: clamp(11px, 1.5vmin, 18px) clamp(30px, 5vmin, 56px);
@@ -290,7 +300,7 @@
     </button>
     <div id="hint"></div>
     <div id="stick"></div><div id="stickDot"></div>
-    <div id="touchHint">👆 按住畫面拖曳操縱 ・ 雙指加速</div>
+    <div id="touchHint">👆 Drag to steer · two fingers to boost</div>
     <div id="boot">
         <div id="bootArt"><svg viewBox="0 0 200 200" fill="none">
             <g class="globe">
@@ -316,7 +326,7 @@
             </g>
         </svg></div>
         <div id="bootTitle">TINY PLANET</div>
-        <div id="bootSub">在小星球上飛行</div>
+        <div id="bootSub">Fly around a tiny planet</div>
         <div id="bootBar">
             <div id="bootFill"></div>
             <!-- 俯視的小飛機:機翼要先畫(在下層),機身才不會被蓋掉 -->
@@ -329,11 +339,12 @@
             </svg></div>
         </div>
         <div id="bootPct">0%</div>
-        <button id="bootStart">起飛</button>
+        <button id="bootStart">TAKE OFF</button>
+        <select id="bootLang" aria-label="Language"></select>
     </div>
     <div id="fireBtn" title="發射漆彈(空白鍵)"><div class="dot"></div></div>
     <div id="keys">
-        <div class="cap">飛行操作</div>
+        <div class="cap">Flight controls</div>
         <div class="row">
             <div class="key" data-k="up">↑<span class="sub">W</span></div>
         </div>
@@ -343,7 +354,7 @@
             <div class="key" data-k="right">→<span class="sub">D</span></div>
         </div>
         <div class="row">
-            <div class="key wide" data-k="fire">空白鍵<span class="sub">發射漆彈</span></div>
+            <div class="key wide" data-k="fire"><span class="kn">SPACE</span><span class="sub">Paintball</span></div>
         </div>
     </div>
     <script type="module">
@@ -355,6 +366,41 @@
         import { Weather } from './weather.js?v=38'
         import { Traffic } from './traffic.js?v=38'
         import { Paint } from './paint.js?v=38'
+        import { I18N, LANG_NAMES, detectLang } from './lang.js?v=38'
+
+        // ---------- 多語 ----------
+        let lang = detectLang()
+        const langSel = document.getElementById('bootLang')
+        Object.entries(LANG_NAMES).forEach(([code, name]) => {
+            const o = document.createElement('option')
+            o.value = code; o.textContent = name
+            langSel.appendChild(o)
+        })
+        langSel.value = lang
+
+        const applyLang = code => {
+            lang = code
+            localStorage.setItem('tp.lang', code)
+            document.documentElement.lang = code
+            const t = I18N[code]
+            document.getElementById('bootSub').textContent = t.sub
+            document.getElementById('bootStart').textContent = t.start
+            document.getElementById('touchHint').textContent = t.hint
+            document.querySelector('#keys .cap').textContent = t.controls
+            document.querySelector('#keys .key.wide .kn').textContent = t.space
+            document.querySelector('#keys .key.wide .sub').textContent = t.fire
+            document.getElementById('musicBtn').title = t.tipMusic
+            document.getElementById('planeBtn').title = t.tipColor
+            document.getElementById('remoteBtn').title = t.tipHelp
+            document.getElementById('fireBtn').title = t.tipFire
+            const fs = document.getElementById('fsBtn')
+            fs.title = document.fullscreenElement ? t.tipFsExit : t.tipFs
+            // 配色名稱(色票的提示文字)可能還沒建立,建立時會再讀一次 t.colors
+            document.querySelectorAll('#palette .sw').forEach((b, i) => { b.title = t.colors[i] })
+        }
+        langSel.addEventListener('change', () => applyLang(langSel.value))
+        applyLang(lang)
+
 
         const scene = new THREE.Scene()
         scene.background = new THREE.Color(0x87b8e8)
@@ -614,7 +660,7 @@
         const paintFS = () => {
             const on = inFS()
             fsBtn.innerHTML = on ? ICON_SHRINK : ICON_EXPAND
-            fsBtn.title = on ? '離開全螢幕' : '全螢幕'
+            fsBtn.title = on ? I18N[lang].tipFsExit : I18N[lang].tipFs
             fsBtn.classList.toggle('hidden', on)   // 全螢幕中交給系統的關閉鈕/Esc
         }
         paintFS()
@@ -885,12 +931,12 @@
             if (!paletteEl.contains(e.target) && e.target !== planeBtn) setPaletteOpen(false)
         })
 
-        MACARON.forEach(([hex, name]) => {
+        MACARON.forEach(([hex], i) => {
             const b = document.createElement('button')
             b.className = 'sw'
             b.style.setProperty('--c', hex)
             b.dataset.c = hex
-            b.title = name
+            b.title = I18N[lang].colors[i]
             b.addEventListener('click', e => { e.stopPropagation(); applyPlaneColor(hex) })
             paletteEl.appendChild(b)
         })
