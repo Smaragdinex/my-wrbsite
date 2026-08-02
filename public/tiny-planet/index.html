@@ -140,6 +140,51 @@
             transform: scale(1.18);
             box-shadow: 0 0 0 2px rgba(255,255,255,.92), 0 2px 6px rgba(0,0,0,.3);
         }
+        /* ---------- 開場 / 載入畫面 ---------- */
+        #boot {
+            position: fixed; inset: 0; z-index: 50;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: clamp(14px, 2.4vmin, 26px);
+            background: linear-gradient(180deg, #9cc8ee 0%, #bcdcf3 55%, #e9f2f7 100%);
+            font: 500 16px/1.5 system-ui, -apple-system, "Noto Sans TC", sans-serif;
+            color: #2b3a4a; transition: opacity .7s ease; -webkit-user-select: none; user-select: none;
+        }
+        #boot.gone { opacity: 0; pointer-events: none; }
+        #bootTitle {
+            font-size: clamp(30px, 6.5vmin, 68px); font-weight: 800; letter-spacing: .14em;
+            color: #23384d; text-shadow: 0 2px 0 rgba(255,255,255,.6);
+        }
+        #bootSub { font-size: clamp(12px, 1.9vmin, 18px); opacity: .72; letter-spacing: .22em; }
+        /* 讀條:小飛機沿著進度往前飛,後面留下已完成的軌跡 */
+        #bootBar {
+            position: relative; width: min(72vw, 460px); height: 8px;
+            border-radius: 99px; background: rgba(255,255,255,.55);
+            box-shadow: inset 0 1px 3px rgba(0,0,0,.12);
+        }
+        #bootFill {
+            position: absolute; inset: 0 auto 0 0; width: 0%;
+            border-radius: 99px; background: var(--body, #f2a0a8);
+            transition: width .25s ease;
+        }
+        #bootPlane {
+            position: absolute; top: 50%; left: 0; width: clamp(34px, 5vmin, 54px);
+            transform: translate(-50%, -50%); transition: left .25s ease;
+        }
+        #bootPlane svg { width: 100%; height: auto; display: block; }
+        #bootPct { font-size: clamp(11px, 1.6vmin, 15px); opacity: .6; letter-spacing: .08em; }
+        #bootStart {
+            margin-top: clamp(6px, 1.2vmin, 14px);
+            padding: clamp(11px, 1.5vmin, 18px) clamp(30px, 5vmin, 56px);
+            font: 700 clamp(15px, 2.1vmin, 21px)/1 system-ui, "Noto Sans TC", sans-serif;
+            letter-spacing: .12em; color: #23384d; cursor: pointer;
+            border: none; border-radius: 99px; background: #fff;
+            box-shadow: 0 6px 18px rgba(40,70,100,.22);
+            transition: transform .12s, opacity .3s, box-shadow .18s;
+        }
+        #bootStart:disabled { opacity: .45; cursor: default; box-shadow: none; }
+        #bootStart:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 9px 24px rgba(40,70,100,.28); }
+        #bootStart:not(:disabled):active { transform: scale(.96); }
+
         #fireBtn {
             /* 尺寸與內縮都跟著畫面短邊走(vmin),大螢幕才不會顯得很小;
                上下用 clamp 夾住,手機不會佔掉半個畫面、4K 也不會誇張 */
@@ -228,6 +273,23 @@
     <div id="hint"></div>
     <div id="stick"></div><div id="stickDot"></div>
     <div id="touchHint">👆 按住畫面拖曳操縱 ・ 雙指加速</div>
+    <div id="boot">
+        <div id="bootTitle">TINY PLANET</div>
+        <div id="bootSub">在小星球上飛行</div>
+        <div id="bootBar">
+            <div id="bootFill"></div>
+            <!-- 俯視的小飛機:機翼要先畫(在下層),機身才不會被蓋掉 -->
+            <div id="bootPlane"><svg viewBox="0 0 64 40" fill="none">
+                <ellipse cx="27" cy="20" rx="8" ry="17" fill="#faf3e5"/>
+                <ellipse cx="9" cy="20" rx="4" ry="8" fill="#faf3e5"/>
+                <ellipse cx="31" cy="20" rx="19" ry="6.5" fill="var(--body, #f2a0a8)"/>
+                <circle cx="41" cy="20" r="3" fill="#c4e1ed"/>
+                <rect x="49" y="18.5" width="10" height="3" rx="1.5" fill="#e6d6b8"/>
+            </svg></div>
+        </div>
+        <div id="bootPct">0%</div>
+        <button id="bootStart" disabled>準備中…</button>
+    </div>
     <div id="fireBtn" title="發射漆彈(空白鍵)"><div class="dot"></div></div>
     <div id="keys">
         <div class="cap">飛行操作</div>
@@ -460,6 +522,7 @@
                 get weather() { return weather },      // 天氣要能單獨驅動來驗證
                 get paint() { return paint },
                 get traffic() { return traffic },
+                get plane() { return rig },
                 look(lat, lon, dist = 15, high = 6) {
                     const dir = latLonDir(lat, lon)
                     const tan = new THREE.Vector3(0, 1, 0).cross(dir).normalize()
@@ -612,13 +675,50 @@
         const hintEl = document.getElementById('hint')
 
         // ---------- 載入模型 ----------
+        // ---------- 開場載入進度 ----------
+        // 各資產大小差很多(星球 2.1MB 佔大宗),用權重而不是「載完幾個檔」,
+        // 讀條才不會卡在某一格不動
+        const ASSETS = { planet: 0.52, landmarks: 0.20, biplane: 0.08, moon: 0.08, json: 0.12 }
+        const done = {}
+        const bootEl = document.getElementById('boot')
+        const bootFill = document.getElementById('bootFill')
+        const bootPlane = document.getElementById('bootPlane')
+        const bootPct = document.getElementById('bootPct')
+        const bootStart = document.getElementById('bootStart')
+        let bootShown = 0
+
+        const bootProgress = (key, frac) => {
+            done[key] = Math.min(1, frac)
+            const target = Object.entries(ASSETS)
+                .reduce((a, [k, w]) => a + w * (done[k] || 0), 0)
+            // 只往前不倒退,避免不同檔案的進度互相拉扯
+            bootShown = Math.max(bootShown, target)
+            const pct = Math.round(bootShown * 100)
+            bootFill.style.width = pct + '%'
+            bootPlane.style.left = pct + '%'
+            bootPct.textContent = pct + '%'
+            if (bootShown >= 0.999) {
+                bootStart.disabled = false
+                bootStart.textContent = '起飛'
+            }
+        }
+        // 有些瀏覽器不回報 total(壓縮傳輸時),那就退回「載完才跳」
+        const onXhr = key => e => { if (e.lengthComputable) bootProgress(key, e.loaded / e.total) }
+
+        bootStart.addEventListener('click', () => {
+            bootEl.classList.add('gone')
+            startMusic()                        // 這一下點擊同時解鎖音訊
+            setTimeout(() => bootEl.remove(), 800)
+        })
+
         const loader = new GLTFLoader()
         // Draco 解碼器:壓縮版模型用得到,未壓縮的模型設了也無妨
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
         const V = 38   // 模型改版時 +1,避免瀏覽器吃到舊快取
-        loader.load(`./public/assets/planet.glb?v=${V}`, g => scene.add(g.scene))
+        loader.load(`./public/assets/planet.glb?v=${V}`,
+            g => { scene.add(g.scene); bootProgress('planet', 1) }, onXhr('planet'))
         // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
         // 具名物件、原點設在旋轉中心,轉軸與轉速寫在 landmark_anim.json
         const spinners = []
@@ -640,17 +740,22 @@
             scene.add(g.scene)
             lmRoot = g.scene
             bindSpinners()
-        })
+            bootProgress('landmarks', 1)
+        }, onXhr('landmarks'))
+        let jsonDone = 0
+        const jsonTick = () => bootProgress('json', ++jsonDone / 3)
         fetch(`./public/assets/landmark_anim.json?v=${V}`)
             .then(r => r.ok ? r.json() : null)
             .then(d => { animMeta = d; bindSpinners() })
             .catch(() => {})
+            .finally(jsonTick)
         // ---------- 城市燈火 ----------
         // 幾千盞窗火用單一 Points 繪製(一次 draw call),夜裡才點亮。
         let cityLights = null
         const lightFiles = ['city_lights.json', 'landmark_lights.json']
         Promise.all(lightFiles.map(f =>
-            fetch(`./public/assets/${f}?v=${V}`).then(r => r.ok ? r.json() : null).catch(() => null)
+            fetch(`./public/assets/${f}?v=${V}`).then(r => r.ok ? r.json() : null)
+                .catch(() => null).finally(jsonTick)
         ))
             .then(list => {
                 const pts = list.filter(Boolean).flatMap(d => d.positions || [])
@@ -690,7 +795,8 @@
                 o.material = moonMat
             })
             moonBall.add(g.scene)
-        })
+            bootProgress('moon', 1)
+        }, onXhr('moon'))
 
         // 馬卡龍色盤:柔和低飽和,和低多邊形星球的色調協調
         const MACARON = [
@@ -826,7 +932,8 @@
             beacon.add(beaconGlow)
             tilt.add(beacon)
             navLights.push({ mesh: beacon, glow: beaconGlow, base: new THREE.Color(0xffffff), blink: true })
-        })
+            bootProgress('biplane', 1)
+        }, onXhr('biplane'))
 
         // ---------- 主迴圈 ----------
         const clock = new THREE.Clock()
