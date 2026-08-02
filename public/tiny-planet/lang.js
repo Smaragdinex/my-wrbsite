@@ -27,6 +27,7 @@ export const I18N = {
         tipFs: 'Fullscreen', tipFsExit: 'Exit fullscreen',
         tipMusic: 'Music', tipColor: 'Plane colour', tipHelp: 'Controls',
         tipFire: 'Fire paintball (Space)',
+        donate: 'Support this project',
         colors: ['Strawberry', 'Peach', 'Lemon', 'Matcha', 'Mint', 'Sky', 'Lavender', 'Lilac'],
     },
     zh: {
@@ -39,6 +40,7 @@ export const I18N = {
         tipFs: '全螢幕', tipFsExit: '離開全螢幕',
         tipMusic: '音樂', tipColor: '機身顏色', tipHelp: '操作說明',
         tipFire: '發射漆彈(空白鍵)',
+        donate: '支持這個專案',
         colors: ['草莓', '蜜桃', '檸檬', '抹茶', '薄荷', '天空', '薰衣草', '丁香'],
     },
     ja: {
@@ -51,6 +53,7 @@ export const I18N = {
         tipFs: 'フルスクリーン', tipFsExit: 'フルスクリーン解除',
         tipMusic: '音楽', tipColor: '機体の色', tipHelp: '操作方法',
         tipFire: 'ペイント弾を撃つ(スペース)',
+        donate: 'このプロジェクトを支援',
         colors: ['ストロベリー', 'ピーチ', 'レモン', '抹茶', 'ミント', 'スカイ', 'ラベンダー', 'ライラック'],
     },
     ko: {
@@ -63,6 +66,7 @@ export const I18N = {
         tipFs: '전체화면', tipFsExit: '전체화면 종료',
         tipMusic: '음악', tipColor: '기체 색상', tipHelp: '조작 방법',
         tipFire: '페인트볼 발사 (스페이스)',
+        donate: '이 프로젝트 후원하기',
         colors: ['딸기', '복숭아', '레몬', '말차', '민트', '하늘', '라벤더', '라일락'],
     },
     fr: {
@@ -75,6 +79,7 @@ export const I18N = {
         tipFs: 'Plein écran', tipFsExit: 'Quitter le plein écran',
         tipMusic: 'Musique', tipColor: 'Couleur de l’avion', tipHelp: 'Commandes',
         tipFire: 'Tirer une bille de peinture (Espace)',
+        donate: 'Soutenir ce projet',
         colors: ['Fraise', 'Pêche', 'Citron', 'Matcha', 'Menthe', 'Ciel', 'Lavande', 'Lilas'],
     },
     it: {
@@ -87,6 +92,7 @@ export const I18N = {
         tipFs: 'Schermo intero', tipFsExit: 'Esci da schermo intero',
         tipMusic: 'Musica', tipColor: 'Colore dell’aereo', tipHelp: 'Comandi',
         tipFire: 'Spara pallina di vernice (Spazio)',
+        donate: 'Sostieni il progetto',
         colors: ['Fragola', 'Pesca', 'Limone', 'Matcha', 'Menta', 'Cielo', 'Lavanda', 'Lillà'],
     },
     es: {
@@ -99,6 +105,7 @@ export const I18N = {
         tipFs: 'Pantalla completa', tipFsExit: 'Salir de pantalla completa',
         tipMusic: 'Música', tipColor: 'Color del avión', tipHelp: 'Controles',
         tipFire: 'Disparar bola de pintura (Espacio)',
+        donate: 'Apoya este proyecto',
         colors: ['Fresa', 'Melocotón', 'Limón', 'Matcha', 'Menta', 'Cielo', 'Lavanda', 'Lila'],
     },
     th: {
@@ -111,6 +118,7 @@ export const I18N = {
         tipFs: 'เต็มจอ', tipFsExit: 'ออกจากเต็มจอ',
         tipMusic: 'เพลง', tipColor: 'สีเครื่องบิน', tipHelp: 'การควบคุม',
         tipFire: 'ยิงลูกสี (สเปซ)',
+        donate: 'สนับสนุนโปรเจกต์นี้',
         colors: ['สตรอว์เบอร์รี', 'พีช', 'เลมอน', 'มัทฉะ', 'มินต์', 'ฟ้า', 'ลาเวนเดอร์', 'ไลแลค'],
     },
 }

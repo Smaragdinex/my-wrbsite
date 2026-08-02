@@ -201,6 +201,16 @@
             text-align: center; text-align-last: center;
         }
         #bootLang:hover { background: rgba(255,255,255,.78); }
+        /* 贊助連結:刻意做得低調 —— 標題畫面的主角是「起飛」,不是要錢 */
+        #bootDonate {
+            margin-top: clamp(10px, 1.8vmin, 20px);
+            font: 500 clamp(11px, 1.45vmin, 14px)/1 system-ui, "Noto Sans TC", sans-serif;
+            color: #35506b; opacity: .62; text-decoration: none;
+            letter-spacing: .06em; border-bottom: 1px solid rgba(53,80,107,.35);
+            padding-bottom: 2px; transition: opacity .18s;
+        }
+        #bootDonate:hover { opacity: .95; }
+        #boot.loading #bootDonate { opacity: 0; pointer-events: none; }
         #bootStart {
             margin-top: clamp(6px, 1.2vmin, 14px);
             padding: clamp(11px, 1.5vmin, 18px) clamp(30px, 5vmin, 56px);
@@ -341,6 +351,7 @@
         <div id="bootPct">0%</div>
         <button id="bootStart">TAKE OFF</button>
         <select id="bootLang" aria-label="Language"></select>
+        <a id="bootDonate" href="#" target="_blank" rel="noopener noreferrer" hidden></a>
     </div>
     <div id="fireBtn" title="發射漆彈(空白鍵)"><div class="dot"></div></div>
     <div id="keys">
@@ -362,15 +373,26 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=79'
-        import { Weather } from './weather.js?v=79'
-        import { Traffic } from './traffic.js?v=79'
-        import { Paint } from './paint.js?v=79'
-        import { I18N, LANG_NAMES, detectLang } from './lang.js?v=79'
-        import { Fireworks } from './fireworks.js?v=79'
+        import { Music } from './music.js?v=80'
+        import { Weather } from './weather.js?v=80'
+        import { Traffic } from './traffic.js?v=80'
+        import { Paint } from './paint.js?v=80'
+        import { I18N, LANG_NAMES, detectLang } from './lang.js?v=80'
+        import { Fireworks } from './fireworks.js?v=80'
 
         // ---------- 多語 ----------
         let lang = detectLang()
+        // ---------- 贊助連結 ----------
+        // GitHub Pages 是純靜態託管,沒有後端也不可能自己收款,所以這裡只能外連。
+        // 把下面換成你自己的收款頁(Ko-fi / Buy Me a Coffee / PayPal.me 都可以),
+        // 留空字串就整個隱藏,不會出現壞掉的連結。
+        const DONATE_URL = ''
+        const donateEl = document.getElementById('bootDonate')
+        if (DONATE_URL) {
+            donateEl.href = DONATE_URL
+            donateEl.hidden = false
+        }
+
         const langSel = document.getElementById('bootLang')
         Object.entries(LANG_NAMES).forEach(([code, name]) => {
             const o = document.createElement('option')
@@ -386,6 +408,7 @@
             const t = I18N[code]
             document.getElementById('bootSub').textContent = t.sub
             document.getElementById('bootStart').textContent = t.start
+            donateEl.textContent = t.donate
             document.getElementById('touchHint').textContent = t.hint
             document.querySelector('#keys .cap').textContent = t.controls
             document.querySelector('#keys .key.wide .kn').textContent = t.space
@@ -827,7 +850,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 79   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 80   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`,
             g => { scene.add(g.scene); bootProgress('planet', 1) }, onXhr('planet'))
         // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
