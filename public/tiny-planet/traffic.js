@@ -6,6 +6,9 @@
  * 這樣天上永遠有同伴,又不會看到憑空出現。
  */
 
+const SHOOT_R = 58        // AI 進到這個距離、而且玩家大致在前方就開火
+const SHOOT_AIM = 0.86    // 玩家要落在機頭前方這個餘弦角內
+const PAINT_SPEED = 46    // 與 paint.js 一致,用來算提前量
 const LOOK_R = 90         // 超過這個距離的直接跳過,省得算
 const LOOKAHEAD = 4.5     // 往前預測幾秒;對衝相對速度可達 34/秒,要提早這麼久才來得及
 const SAFE = 11           // 預計錯身距離小於這個就要修正
@@ -19,7 +22,9 @@ export class Traffic {
      */
     constructor(THREE, scene, protoScene, {
         count = 10, R = 93.6, altMin = 6.5, altMax = 20, palette = ['#f2a0a8'],
+        onShoot = null,          // (plane, 發射點, 方向, 顏色) => void
     } = {}) {
+        this.onShoot = onShoot
         this.THREE = THREE
         this.scene = scene
         this.R = R
@@ -79,6 +84,10 @@ export class Traffic {
                 bank: 0,
                 scale: 0.8 + Math.random() * 0.5,
                 dodgeUp: i % 2 ? 1 : -1,   // 同高度對衝時固定往上/往下讓,才不會兩架一起爬
+                color: hex,
+                shootTimer: 2 + Math.random() * 5,
+                splash: 0,                 // 被漆彈打中後的殘留時間
+                baseColors: bodyMats.map(m => m.color.clone()),
             })
             obj.scale.setScalar(this.planes[i].scale)
         }
@@ -104,6 +113,7 @@ export class Traffic {
         p.turn = (Math.random() - 0.5) * 0.25
         p.turnTimer = 3 + Math.random() * 8
         p.bank = 0
+        p.shootTimer = 2 + Math.random() * 5
         this._sync(p)                            // 立刻就位,不要有一幀停在球心
     }
 
@@ -180,6 +190,13 @@ export class Traffic {
         }
     }
 
+    /** 被漆彈打中:機身沾色,6 秒後褪回原本的馬卡龍色 */
+    splash(plane, color) {
+        if (!plane.splashColor) plane.splashColor = new this.THREE.Color()
+        plane.splashColor.set(color)
+        plane.splash = 6
+    }
+
     /** @param nightF 0=白天 1=夜晚,機身內光跟著亮起(與玩家同一套) */
     update(dt, playerPos, nightF = 0) {
         const { THREE } = this
@@ -218,6 +235,38 @@ export class Traffic {
             this._sync(p)
             if (p.propeller) p.propeller.rotation.z += dt * 22
             for (const m of p.glowMats) m.emissiveIntensity = 0.18 + 0.42 * nightF
+
+            // 中彈後機身沾上對方的顏色,再慢慢褪回原色
+            if (p.splash > 0) {
+                p.splash -= dt
+                const k = Math.max(0, p.splash / 6)
+                p.bodyMats.forEach((m, bi) => {
+                    m.color.copy(p.splashColor).lerp(p.baseColors[bi], 1 - k)
+                    m.emissive.copy(m.color)
+                })
+            }
+
+            // 開火:玩家夠近、又大致在機頭前方才射,並算一點提前量
+            p.shootTimer -= dt
+            if (this.onShoot && p.shootTimer <= 0) {
+                const toP = this._v3.subVectors(playerPos, p.rig.position)
+                const dist = toP.length()
+                if (dist < SHOOT_R && toP.clone().normalize().dot(p.fwd) > SHOOT_AIM) {
+                    // 提前量:漆彈飛過去要時間,朝玩家「等一下會在的地方」射
+                    // 提前量要夾住:玩家若因為某些原因瞬移,速度會爆掉把瞄準帶到外太空
+                    const lead = this._v1.copy(playerVel).clampLength(0, 30)
+                        .multiplyScalar(dist / PAINT_SPEED)
+                    const aim = toP.add(lead).normalize()
+                    aim.x += (Math.random() - 0.5) * 0.06      // 一點誤差,不然百發百中很煩
+                    aim.y += (Math.random() - 0.5) * 0.06
+                    aim.z += (Math.random() - 0.5) * 0.06
+                    this.onShoot(p, p.rig.position.clone().addScaledVector(p.fwd, 1.6),
+                                 aim.normalize(), p.color)
+                    p.shootTimer = 2.5 + Math.random() * 4
+                } else {
+                    p.shootTimer = 0.6            // 沒對準就過一下再看
+                }
+            }
 
             // 飛出視野很遠就換到玩家附近的地平線外重生
             const arc = Math.acos(THREE.MathUtils.clamp(p.dir.dot(playerDir), -1, 1)) * this.R

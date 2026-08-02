@@ -58,7 +58,7 @@ export class Weather {
     // ---------- 雲場 ----------
     _buildClouds() {
         const { THREE } = this
-        const CLUSTERS = 480, PUFFS = 18, R_PLANET = 93.6
+        const CLUSTERS = 480, PUFFS = 18, R_PLANET = 93.6   // 雲量隨星球表面積調整,見 tools/set_scale.py
         const N = CLUSTERS * PUFFS
         const pos = new Float32Array(N * 3)
         const siz = new Float32Array(N)
