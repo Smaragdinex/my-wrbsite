@@ -53,6 +53,8 @@
         @media (hover: none) and (pointer: coarse) {
             #keys, #remoteBtn { display: none; }
             #touchHint { display: block; }
+            /* 這裡 remoteBtn 不顯示,贊助鈕要遞補上去,不然按鈕列中間會空一格 */
+            #donateBtn { top: calc(20px + var(--uiStep) * 2 + env(safe-area-inset-top)); }
         }
         #musicBtn {
             position: fixed; right: 20px; top: calc(20px + env(safe-area-inset-top)); z-index: 10;
@@ -87,6 +89,19 @@
             transition: transform .12s, background .18s, color .18s;
         }
         #remoteBtn:hover { transform: scale(1.07); }
+        /* 贊助鈕:排在右側按鈕列最下面。DONATE_URL 沒設就不加 .show,整顆不出現 */
+        #donateBtn {
+            position: fixed; right: 20px; top: calc(20px + var(--uiStep) * 3 + env(safe-area-inset-top)); z-index: 10;
+            width: var(--ui); height: var(--ui); border-radius: 50%;
+            display: none; align-items: center; justify-content: center;
+            color: #fff; cursor: pointer; text-decoration: none;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.24);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: background .18s, color .18s, transform .12s;
+        }
+        #donateBtn.show { display: flex; }
+        #donateBtn:hover { transform: scale(1.07); background: rgba(255,150,165,.92); color: #23262e; }
         #remoteBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
         #fsBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
         #planeBtn {
@@ -299,6 +314,12 @@
     <button id="musicBtn" class="off" title="音樂">♪</button>
     <button id="planeBtn" title="機身顏色">✈</button>
     <div id="palette"></div>
+    <a id="donateBtn" href="#" target="_blank" rel="noopener noreferrer" title="支持這個專案">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20.5 4.2 12.9a4.6 4.6 0 0 1 6.5-6.5l1.3 1.3 1.3-1.3a4.6 4.6 0 0 1 6.5 6.5z"/>
+        </svg>
+    </a>
     <button id="remoteBtn" title="操作說明">
         <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
@@ -373,12 +394,12 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=81'
-        import { Weather } from './weather.js?v=81'
-        import { Traffic } from './traffic.js?v=81'
-        import { Paint } from './paint.js?v=81'
-        import { I18N, LANG_NAMES, detectLang } from './lang.js?v=81'
-        import { Fireworks } from './fireworks.js?v=81'
+        import { Music } from './music.js?v=82'
+        import { Weather } from './weather.js?v=82'
+        import { Traffic } from './traffic.js?v=82'
+        import { Paint } from './paint.js?v=82'
+        import { I18N, LANG_NAMES, detectLang } from './lang.js?v=82'
+        import { Fireworks } from './fireworks.js?v=82'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -388,9 +409,12 @@
         // 留空字串就整個隱藏,不會出現壞掉的連結。
         const DONATE_URL = 'https://paypal.me/xartsgames'
         const donateEl = document.getElementById('bootDonate')
+        const donateBtn = document.getElementById('donateBtn')
         if (DONATE_URL) {
             donateEl.href = DONATE_URL
             donateEl.hidden = false
+            donateBtn.href = DONATE_URL
+            donateBtn.classList.add('show')
         }
 
         const langSel = document.getElementById('bootLang')
@@ -409,6 +433,7 @@
             document.getElementById('bootSub').textContent = t.sub
             document.getElementById('bootStart').textContent = t.start
             donateEl.textContent = t.donate
+            donateBtn.title = t.donate
             document.getElementById('touchHint').textContent = t.hint
             document.querySelector('#keys .cap').textContent = t.controls
             document.querySelector('#keys .key.wide .kn').textContent = t.space
@@ -750,7 +775,7 @@
 
         // 點在 UI 上就不要啟動虛擬搖桿(漏掉某個元件的症狀就是「按鈕一按飛機就偏」)
         const onUI = el => el && el.closest &&
-            el.closest('#fsBtn, #musicBtn, #planeBtn, #remoteBtn, #palette, #keys, #fireBtn')
+            el.closest('#fsBtn, #musicBtn, #planeBtn, #remoteBtn, #palette, #keys, #fireBtn, #donateBtn')
 
         addEventListener('pointerdown', e => {
             activePointers.add(e.pointerId)
@@ -850,7 +875,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 81   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 82   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`,
             g => { scene.add(g.scene); bootProgress('planet', 1) }, onXhr('planet'))
         // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
