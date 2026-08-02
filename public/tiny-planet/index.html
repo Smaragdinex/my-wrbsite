@@ -150,6 +150,19 @@
             color: #2b3a4a; transition: opacity .7s ease; -webkit-user-select: none; user-select: none;
         }
         #boot.gone { opacity: 0; pointer-events: none; }
+        /* 封面插畫:小地球 + 繞著飛的小飛機 */
+        #bootArt {
+            width: clamp(130px, 26vmin, 260px); aspect-ratio: 1;
+            margin-bottom: clamp(-6px, -1vmin, 0px);
+        }
+        #bootArt svg { width: 100%; height: 100%; display: block; overflow: visible; }
+        #bootArt .globe { animation: bootBob 4.5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+        #bootArt .orbit { transform-box: view-box; transform-origin: 100px 112px; animation: bootOrbit 15s linear infinite; }
+        @keyframes bootOrbit { to { transform: rotate(360deg); } }
+        @keyframes bootBob { 50% { transform: translateY(-4px); } }
+        @media (prefers-reduced-motion: reduce) {
+            #bootArt .orbit, #bootArt .globe { animation: none; }
+        }
         #bootTitle {
             font-size: clamp(30px, 6.5vmin, 68px); font-weight: 800; letter-spacing: .14em;
             color: #23384d; text-shadow: 0 2px 0 rgba(255,255,255,.6);
@@ -278,6 +291,29 @@
     <div id="stick"></div><div id="stickDot"></div>
     <div id="touchHint">👆 按住畫面拖曳操縱 ・ 雙指加速</div>
     <div id="boot">
+        <div id="bootArt"><svg viewBox="0 0 200 200" fill="none">
+            <g class="globe">
+                <circle cx="100" cy="112" r="54" fill="#1f3f7a"/>
+                <path d="M62 92c10-9 24-11 33-5 8 6 4 15-4 19-9 5-24 6-31 1-5-4-3-11 2-15Z" fill="#7fa84a"/>
+                <path d="M108 76c9-4 21-2 26 5 4 6-2 12-10 14-9 3-19 1-22-5-3-6 0-11 6-14Z" fill="#8fb655"/>
+                <path d="M96 128c14-6 33-4 40 5 6 8-4 18-18 21-16 3-32-2-36-10-3-7 5-13 14-16Z" fill="#7fa84a"/>
+                <path d="M54 124c7-3 15-1 17 4 2 4-3 8-9 9-7 1-13-1-14-5-1-4 2-7 6-8Z" fill="#8fb655"/>
+                <circle cx="82" cy="90" r="18" fill="#fff" opacity=".13"/>
+                <ellipse cx="136" cy="98" rx="13" ry="6" fill="#fff" opacity=".72"/>
+                <ellipse cx="128" cy="95" rx="8" ry="5" fill="#fff" opacity=".72"/>
+                <ellipse cx="66" cy="142" rx="11" ry="5" fill="#fff" opacity=".6"/>
+            </g>
+            <!-- 小飛機沿著軌道繞星球 -->
+            <g class="orbit">
+                <g transform="translate(100 34)">
+                    <ellipse cx="0" cy="0" rx="7" ry="15" fill="#faf3e5"/>
+                    <ellipse cx="-15" cy="0" rx="3.5" ry="7" fill="#faf3e5"/>
+                    <ellipse cx="2" cy="0" rx="17" ry="6" fill="var(--body, #f2a0a8)"/>
+                    <circle cx="11" cy="0" r="2.6" fill="#c4e1ed"/>
+                    <rect x="18" y="-1.4" width="9" height="2.8" rx="1.4" fill="#e6d6b8"/>
+                </g>
+            </g>
+        </svg></div>
         <div id="bootTitle">TINY PLANET</div>
         <div id="bootSub">在小星球上飛行</div>
         <div id="bootBar">
