@@ -695,7 +695,8 @@
                 m.emissive.copy(m.color)                      // 自發光跟著換,夜裡才不會色偏
             }
             paletteEl.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c === hex))
-            planeBtn.style.setProperty('--body', hex)   // 按鈕上的小圓點顯示目前配色
+            // 設在 body 上,飛機鈕的小圓點和發射鈕的中心點才會一起跟著換
+            document.body.style.setProperty('--body', hex)
         }
 
         const setPaletteOpen = open => {
