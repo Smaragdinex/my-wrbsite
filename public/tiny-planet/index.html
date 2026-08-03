@@ -673,6 +673,13 @@
                 get fireworks() { return fireworks },
                 get net() { return net },
                 get plane() { return rig },
+                // 錄 demo 影片用:外部腳本靠 drag 這組操控量寫自動駕駛,
+                // 讓飛機自己飛去指定地標 —— 錄到的就是真實遊玩畫面,不是另外運鏡
+                get keys() { return keys },
+                get drag() { return drag },
+                get pos() { return pos },
+                get fwd() { return fwd },
+                get alt() { return alt },
                 look(lat, lon, dist = 15, high = 6) {
                     const dir = latLonDir(lat, lon)
                     const tan = new THREE.Vector3(0, 1, 0).cross(dir).normalize()
