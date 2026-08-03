@@ -394,13 +394,13 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=87'
-        import { Weather } from './weather.js?v=87'
-        import { Traffic } from './traffic.js?v=87'
-        import { Paint } from './paint.js?v=87'
-        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=87'
-        import { Fireworks } from './fireworks.js?v=87'
-        import { Net } from './net.js?v=87'
+        import { Music } from './music.js?v=88'
+        import { Weather } from './weather.js?v=88'
+        import { Traffic } from './traffic.js?v=88'
+        import { Paint } from './paint.js?v=88'
+        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=88'
+        import { Fireworks } from './fireworks.js?v=88'
+        import { Net } from './net.js?v=88'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -408,7 +408,7 @@
         // GitHub Pages 是純靜態託管,沒有後端也不可能自己收款,所以這裡只能外連。
         // 把下面換成你自己的收款頁(Ko-fi / Buy Me a Coffee / PayPal.me 都可以),
         // 留空字串就整個隱藏,不會出現壞掉的連結。
-        const DONATE_URL = 'https://paypal.me/xartsgames'
+        const DONATE_URL = 'https://buy.stripe.com/28EeVc5NL71E67ndLr5Rm00'
 
         // ---------- 同場飛行(多人)----------
         // 部署完 server/ 那個 Cloudflare Worker 之後,把網址填進來:
@@ -888,7 +888,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 87   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 88   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`,
             g => { scene.add(g.scene); bootProgress('planet', 1) }, onXhr('planet'))
         // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
