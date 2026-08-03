@@ -394,12 +394,13 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=83'
-        import { Weather } from './weather.js?v=83'
-        import { Traffic } from './traffic.js?v=83'
-        import { Paint } from './paint.js?v=83'
-        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=83'
-        import { Fireworks } from './fireworks.js?v=83'
+        import { Music } from './music.js?v=86'
+        import { Weather } from './weather.js?v=86'
+        import { Traffic } from './traffic.js?v=86'
+        import { Paint } from './paint.js?v=86'
+        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=86'
+        import { Fireworks } from './fireworks.js?v=86'
+        import { Net } from './net.js?v=86'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -408,6 +409,14 @@
         // 把下面換成你自己的收款頁(Ko-fi / Buy Me a Coffee / PayPal.me 都可以),
         // 留空字串就整個隱藏,不會出現壞掉的連結。
         const DONATE_URL = 'https://paypal.me/xartsgames'
+
+        // ---------- 同場飛行(多人)----------
+        // 部署完 server/ 那個 Cloudflare Worker 之後,把網址填進來:
+        //   wss://tiny-planet-room.<你的子網域>.workers.dev/ws
+        // 留空就完全不連線,遊戲照常是單人 + AI(所以填錯或忘了填也不會壞)。
+        // 本機測試:cd server && npx wrangler dev,再開 ?mp=ws://127.0.0.1:8787/ws
+        const MULTIPLAYER_DEFAULT = ''
+        const MULTIPLAYER_URL = new URLSearchParams(location.search).get('mp') || MULTIPLAYER_DEFAULT
         const donateEl = document.getElementById('bootDonate')
         const donateBtn = document.getElementById('donateBtn')
         if (DONATE_URL) {
@@ -662,6 +671,7 @@
                 get paint() { return paint },
                 get traffic() { return traffic },
                 get fireworks() { return fireworks },
+                get net() { return net },
                 get plane() { return rig },
                 look(lat, lon, dist = 15, high = 6) {
                     const dir = latLonDir(lat, lon)
@@ -878,7 +888,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 83   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 86   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`,
             g => { scene.add(g.scene); bootProgress('planet', 1) }, onXhr('planet'))
         // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
@@ -1007,7 +1017,7 @@
 
         const planeMats = []
         let traffic = null
-        let rig = null, tilt = null, propeller = null
+        let rig = null, tilt = null, propeller = null, net = null
         let headlight = null, beacon = null, halo = null
         const navLights = []
         // ---------- 漆彈 ----------
@@ -1066,6 +1076,10 @@
                 onShoot: (p, from, dir, color) => paint.fire(from, dir, color, p),
             })
             traffic.spawnAround(pos.clone().normalize())
+
+            // 同場飛行:機身沿用同一份 GLTF,真人玩家看起來就跟 AI 飛機一樣
+            net = new Net(THREE, scene, g.scene, MULTIPLAYER_URL,
+                () => rig && { pos: rig.position, quat: rig.quaternion, color: planeColor })
 
             // 光暈:圍繞飛機的柔和光球,夜裡向外暈開
             const c = document.createElement('canvas')
@@ -1232,6 +1246,7 @@
                     `turn=${turn} climb=${climb} bank=${tilt.rotation.z.toFixed(2)} alt=${alt.toFixed(1)} pos=${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}`
 
                 if (traffic) traffic.update(dt, pos, nightF)
+                if (net) net.update(dt)
 
                 if (fireCool > 0) {
                     fireCool -= dt

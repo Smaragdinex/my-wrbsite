@@ -1,0 +1,12 @@
+name = "tiny-planet-room"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+# Durable Object 第一次部署要宣告 migration,否則 wrangler 會拒絕
+[[migrations]]
+tag = "v1"
+new_classes = ["Room"]
