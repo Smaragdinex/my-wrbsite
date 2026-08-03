@@ -1,7 +1,7 @@
 {
   "name": "Tiny Planet",
   "short_name": "Tiny Planet",
-  "description": "小星球飛行沙盒 — 開著小飛機環遊一顆低多邊形星球",
+  "description": "Fly a biplane around a tiny low-poly planet",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
