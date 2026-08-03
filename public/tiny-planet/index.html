@@ -394,13 +394,13 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=86'
-        import { Weather } from './weather.js?v=86'
-        import { Traffic } from './traffic.js?v=86'
-        import { Paint } from './paint.js?v=86'
-        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=86'
-        import { Fireworks } from './fireworks.js?v=86'
-        import { Net } from './net.js?v=86'
+        import { Music } from './music.js?v=87'
+        import { Weather } from './weather.js?v=87'
+        import { Traffic } from './traffic.js?v=87'
+        import { Paint } from './paint.js?v=87'
+        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=87'
+        import { Fireworks } from './fireworks.js?v=87'
+        import { Net } from './net.js?v=87'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -415,7 +415,7 @@
         //   wss://tiny-planet-room.<你的子網域>.workers.dev/ws
         // 留空就完全不連線,遊戲照常是單人 + AI(所以填錯或忘了填也不會壞)。
         // 本機測試:cd server && npx wrangler dev,再開 ?mp=ws://127.0.0.1:8787/ws
-        const MULTIPLAYER_DEFAULT = ''
+        const MULTIPLAYER_DEFAULT = 'wss://tiny-planet-room.xarts.workers.dev/ws'
         const MULTIPLAYER_URL = new URLSearchParams(location.search).get('mp') || MULTIPLAYER_DEFAULT
         const donateEl = document.getElementById('bootDonate')
         const donateBtn = document.getElementById('donateBtn')
@@ -888,7 +888,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 86   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 87   // 模型改版時 +1,避免瀏覽器吃到舊快取
         loader.load(`./public/assets/planet.glb?v=${V}`,
             g => { scene.add(g.scene); bootProgress('planet', 1) }, onXhr('planet'))
         // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
