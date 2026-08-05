@@ -394,13 +394,13 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=100'
-        import { Weather } from './weather.js?v=100'
-        import { Traffic } from './traffic.js?v=100'
-        import { Paint } from './paint.js?v=100'
-        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=100'
-        import { Fireworks } from './fireworks.js?v=100'
-        import { Net } from './net.js?v=100'
+        import { Music } from './music.js?v=102'
+        import { Weather } from './weather.js?v=102'
+        import { Traffic } from './traffic.js?v=102'
+        import { Paint } from './paint.js?v=102'
+        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=102'
+        import { Fireworks } from './fireworks.js?v=102'
+        import { Net } from './net.js?v=102'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -895,7 +895,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 100   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 102   // 模型改版時 +1,避免瀏覽器吃到舊快取
         // 星球被切成上百塊區域網格(見 make_planet.py 的 build_chunked),
         // 這裡收集每一塊的「中心方向」與「角半徑」,主迴圈用來做地平線剔除。
         //
@@ -1312,10 +1312,14 @@
             if (chunks.length) {
                 const camLen = camera.position.length()
                 const camDir = camera.position.clone().multiplyScalar(1 / camLen)
-                const horizon = Math.acos(Math.min(1, R / camLen))
+                // 可見角半徑,再加一段餘裕:地形有起伏、山峰會突出地平線,
+                // 而且相機貼著地面時腳下那一塊的「中心」可能已經在身後
+                const horizon = Math.acos(Math.min(1, R / camLen)) + 0.10
                 for (const c of chunks) {
-                    c.obj.visible = c.dir.dot(camDir) > Math.cos(
-                        Math.min(Math.PI, horizon + c.ang))
+                    // 要看「這一塊離相機最近的點」有沒有進來,所以是
+                    // 角距 - 自身角半徑 < 地平線,不是把角半徑加在門檻上
+                    const d = Math.acos(Math.max(-1, Math.min(1, c.dir.dot(camDir))))
+                    c.obj.visible = d - c.ang < horizon
                 }
             }
 
