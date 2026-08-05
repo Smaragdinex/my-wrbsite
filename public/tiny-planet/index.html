@@ -394,13 +394,13 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=97'
-        import { Weather } from './weather.js?v=97'
-        import { Traffic } from './traffic.js?v=97'
-        import { Paint } from './paint.js?v=97'
-        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=97'
-        import { Fireworks } from './fireworks.js?v=97'
-        import { Net } from './net.js?v=97'
+        import { Music } from './music.js?v=100'
+        import { Weather } from './weather.js?v=100'
+        import { Traffic } from './traffic.js?v=100'
+        import { Paint } from './paint.js?v=100'
+        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=100'
+        import { Fireworks } from './fireworks.js?v=100'
+        import { Net } from './net.js?v=100'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -895,9 +895,39 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 97   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 100   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        // 星球被切成上百塊區域網格(見 make_planet.py 的 build_chunked),
+        // 這裡收集每一塊的「中心方向」與「角半徑」,主迴圈用來做地平線剔除。
+        //
+        // 為什麼不能只靠內建的視錐剔除:相機貼著地表往前看時,視錐是一個延伸到
+        // far=4200 的錐體,會直接穿過整顆星球打到背面 —— 那些被星球擋住的區塊
+        // 仍然落在視錐內,照畫不誤。實測只省了 37%。
+        // 球面上「看不看得到」有封閉解,補上之後才真的省。
+        const chunks = []
         loader.load(`./public/assets/planet.glb?v=${V}`,
-            g => { scene.add(g.scene); bootProgress('planet', 1) }, onXhr('planet'))
+            g => {
+                scene.add(g.scene)
+                g.scene.updateWorldMatrix(true, true)
+                g.scene.traverse(o => {
+                    if (!o.isMesh || !o.geometry) return
+                    o.geometry.computeBoundingSphere()
+                    const bs = o.geometry.boundingSphere
+                    if (!bs || bs.radius <= 0) return
+                    // 一定要換算到世界座標:glTF 匯出時把每個物件的原點放在自己的
+                    // 中心,幾何區域座標的球心是 (0,0,0),直接拿來算方向會全錯
+                    const c = bs.center.clone().applyMatrix4(o.matrixWorld)
+                    const rad = bs.radius * o.matrixWorld.getMaxScaleOnAxis()
+                    const len = c.length()
+                    if (len < 1e-3) return
+                    const dir = c.clone().multiplyScalar(1 / len)
+                    // 這塊涵蓋的角半徑,寧可高估一點免得邊緣被剔掉
+                    const ang = Math.min(Math.PI / 2,
+                        Math.asin(Math.min(1, rad / len)) * 1.15 + 0.04)
+                    chunks.push({ obj: o, dir, ang })
+                })
+                console.log('[cull] 區塊', chunks.length)
+                bootProgress('planet', 1)
+            }, onXhr('planet'))
         // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
         // 具名物件、原點設在旋轉中心,轉軸與轉速寫在 landmark_anim.json
         const spinners = []
@@ -1273,6 +1303,20 @@
                 camera.position.lerp(camTarget, Math.min(1, dt * 4))
                 camera.up.copy(newUp)
                 camera.lookAt(pos.clone().addScaledVector(fwd, 6).addScaledVector(newUp, -3.2))
+            }
+
+            // ---- 地平線剔除 ----
+            // 球面上,相機在高度 h 時看得到的角半徑是 acos(R/(R+h))。
+            // 某一塊只要「中心角距 - 自身角半徑」還在那個範圍內就要畫。
+            // 這比視錐剔除有效得多,因為視錐不知道星球會擋住後面的東西。
+            if (chunks.length) {
+                const camLen = camera.position.length()
+                const camDir = camera.position.clone().multiplyScalar(1 / camLen)
+                const horizon = Math.acos(Math.min(1, R / camLen))
+                for (const c of chunks) {
+                    c.obj.visible = c.dir.dot(camDir) > Math.cos(
+                        Math.min(Math.PI, horizon + c.ang))
+                }
             }
 
             renderer.render(scene, camera)
