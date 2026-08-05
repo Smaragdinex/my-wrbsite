@@ -394,13 +394,13 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=103'
-        import { Weather } from './weather.js?v=103'
-        import { Traffic } from './traffic.js?v=103'
-        import { Paint } from './paint.js?v=103'
-        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=103'
-        import { Fireworks } from './fireworks.js?v=103'
-        import { Net } from './net.js?v=103'
+        import { Music } from './music.js?v=104'
+        import { Weather } from './weather.js?v=104'
+        import { Traffic } from './traffic.js?v=104'
+        import { Paint } from './paint.js?v=104'
+        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=104'
+        import { Fireworks } from './fireworks.js?v=104'
+        import { Net } from './net.js?v=104'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -895,7 +895,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 103   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 104   // 模型改版時 +1,避免瀏覽器吃到舊快取
         // 星球被切成上百塊區域網格(見 make_planet.py 的 build_chunked),
         // 這裡收集每一塊的「中心方向」與「角半徑」,主迴圈用來做地平線剔除。
         //
