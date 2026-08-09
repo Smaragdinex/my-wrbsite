@@ -1,0 +1,141 @@
+---
+// Tiny Planet 的介紹頁。
+//
+// 存在的理由有三個,缺一都還是會做:
+//   1. 站上原本每頁只有 50~90 字,AdSense 最常見的退件理由就是低價值內容
+//   2. 「browser flight game」「low poly planet」這類搜尋詞現在完全收不到
+//   3. 對外推廣時需要一個能貼的落地頁,不能每次都直接丟遊戲網址
+//
+// 內容全部照實寫 —— 地標清單、玩法、做法都跟程式裡的實際狀況對得上。
+import SubpageLayout from '../layouts/SubpageLayout.astro';
+
+const LANDMARKS = [
+  'Statue of Liberty and the Vessel, New York', 'Golden Gate Bridge, San Francisco',
+  'Sydney Opera House', 'Eiffel Tower, Paris', 'Big Ben and the London Eye',
+  "Saint Basil's Cathedral, Moscow", 'Leaning Tower of Pisa',
+  'Kinderdijk windmills, Netherlands', 'Christ the Redeemer, Rio de Janeiro',
+  'Taj Mahal', 'Angkor Wat', 'Hagia Sophia, Istanbul', 'Dome of the Rock, Jerusalem',
+  'Taipei 101', 'Burj Khalifa, Dubai', 'Shanghai skyline', 'Colosseum, Rome',
+  'Pyramids and Great Sphinx of Giza', 'Tokyo Tower', 'Machu Picchu',
+  'Chichén Itzá', 'Great Wall of China', 'Sagrada Família, Barcelona',
+  'Merdeka 118, Kuala Lumpur', 'Lotte World Tower, Seoul', 'Mecca Clock Tower',
+  'Marina Bay Sands, Singapore', 'Forbidden City, Beijing', 'Petra, Jordan',
+  'Edinburgh Castle', 'Uluru, Australia', 'Parthenon, Athens',
+  'Mount Fuji and its lakeside torii', 'Neuschwanstein Castle', 'Alhambra, Granada',
+  'Bagan temple plain, Myanmar', 'Tikal, Guatemala', 'Stonehenge',
+  'Moai of Easter Island', 'Louvre Pyramid, Paris', 'Arc de Triomphe, Paris',
+  'Santorini blue domes', 'Antarctic and Arctic research stations',
+];
+
+// 遊戲支援的 ?goto= 捷徑,跟 index.html 的 PLACES 對應
+const SHORTCUTS = [
+  ['ny', 'New York'], ['sf', 'Golden Gate Bridge'], ['paris', 'Eiffel Tower'],
+  ['london', 'Big Ben'], ['rome', 'Colosseum'], ['giza', 'Pyramids'],
+  ['athens', 'Parthenon'], ['barcelona', 'Sagrada Família'],
+  ['edinburgh', 'Edinburgh Castle'], ['sydney', 'Opera House'],
+  ['tokyo', 'Tokyo Tower'], ['machu', 'Machu Picchu'],
+];
+---
+<SubpageLayout title="Tiny Planet — Fly Around a Whole World in Your Browser"
+                current="tiny-planet"
+                brand="X-Arts" brandAccent="Games" icon="assets/favicon.png">
+  <div class="wrap"><div class="legal card">
+
+    <h1>Tiny <span class="grad">Planet</span></h1>
+    <div class="upd">A free browser flight sandbox · No download, no account</div>
+
+    <p><a class="mail" href="/tiny-planet/"><b>▶ Play Tiny Planet now</b></a> — it runs in any
+    modern browser on desktop, tablet, or phone. Nothing to install and nothing to sign up for.</p>
+
+    <h2>What it is</h2>
+    <p>Tiny Planet is a small, calm flight game. You fly a paper biplane around an entire planet —
+    not a level, not an arena, but a closed sphere you can circle in a few minutes. There is no
+    score, no timer, and no way to lose. You take off and go wherever you like.</p>
+    <p>The planet is small enough that the horizon curves visibly in front of you. Climb a little
+    and you can see the far side coming over the edge; drop low and the ground rushes past between
+    the trees. That sense of scale is the whole point of the game.</p>
+
+    <h2>How to play</h2>
+    <p>New players are flying within one click. Press <b>Take off</b> and you are already in the air —
+    the plane flies itself forward, so you only ever steer.</p>
+    <ul>
+      <li><b>W / S</b> or <b>↑ / ↓</b> — pitch: dive toward the ground or climb away from it</li>
+      <li><b>A / D</b> or <b>← / →</b> — roll: bank left and right to turn</li>
+      <li><b>Shift</b> — boost</li>
+      <li><b>Space</b> — fire a paintball</li>
+      <li><b>Mouse drag</b> — look around without changing course</li>
+      <li><b>Touch</b> — drag anywhere to steer, tap the button in the corner to shoot</li>
+    </ul>
+    <p>There is no tutorial to sit through and nothing to unlock. Every part of the planet is
+    reachable from the moment you start.</p>
+
+    <h2>Real places, in their real locations</h2>
+    <p>The planet is built from real Earth elevation and land-cover data, so the continents are
+    where you expect them to be. Forty-three landmarks are placed at their true coordinates —
+    fly east from New York and you will cross the Atlantic and reach Europe, exactly as you would
+    on the real globe.</p>
+    <p>Because the planet is scaled down, one flight unit is roughly 23 km. A full lap takes a few
+    minutes, which means you can pass a dozen countries in the time it takes to finish a coffee.</p>
+    <p>The landmarks you can find:</p>
+    <ul>
+      {LANDMARKS.map((l) => <li>{l}</li>)}
+    </ul>
+
+    <h2>Jump straight to a place</h2>
+    <p>Add <code>?goto=</code> to the game's address to start somewhere specific. For example,
+    <a class="mail" href="/tiny-planet/?goto=rome">/tiny-planet/?goto=rome</a> starts you over Italy.</p>
+    <ul>
+      {SHORTCUTS.map(([k, name]) => (
+        <li><code>?goto={k}</code> — {name}</li>
+      ))}
+    </ul>
+    <p>You can also pass raw coordinates, like <code>?goto=48.86,2.29</code>, to start anywhere on
+    the planet.</p>
+
+    <h2>Weather, day and night</h2>
+    <p>The planet keeps its own time. Fly long enough and you will watch the sun go down, the sky
+    turn orange behind the clouds, and the city lights switch on one district at a time. Rain
+    sweeps across the ocean in bands you can fly into and out of. None of it is scripted — the
+    weather and the day cycle run on their own whether you are watching or not.</p>
+
+    <h2>Flying with other people</h2>
+    <p>Other real players share the same sky. There are no lobbies, no matchmaking, and no waiting
+    room: if someone else is flying, you will simply see their plane. Everyone carries a paintball
+    gun, and a hit leaves a splash of colour on the other plane's wings. There is no health, no
+    damage, and no respawn — it is just something to do when you pass someone.</p>
+    <p>No account is needed and no names are shown. Nothing about your session is stored on our
+    servers; see the <a class="mail" href="site-privacy.html">website privacy policy</a> for details.</p>
+
+    <h2>How it was made</h2>
+    <p>The planet is generated rather than modelled by hand. Terrain height comes from real
+    elevation data mapped onto a subdivided icosphere, and the colour of every triangle is sampled
+    from satellite land-cover imagery, which is why deserts, forests, and ice caps land in the
+    right places without anyone painting them.</p>
+    <p>The landmarks are a mix. Most are built procedurally in Blender from simple solids —
+    good for anything with regular repeating structure, like the lattice of the Eiffel Tower or the
+    stepped tiers of a skyscraper, where clean geometry beats detail. Others are generated as 3D
+    meshes and then cleaned up, decimated, and oriented by hand — better for single sculptural
+    forms like the Moai, Christ the Redeemer, or the Great Sphinx, where the silhouette is what
+    makes them recognisable.</p>
+    <p>Everything runs in WebGL through Three.js, with geometry compressed so the whole planet
+    loads in a few seconds. There is no game engine and no build step behind it.</p>
+
+    <h2>What it costs</h2>
+    <p>Nothing. Tiny Planet is free, has no adverts inside the game itself, sells nothing, and
+    asks for no account. If you enjoy it there is a donation link on the title screen, and that is
+    the only money involved anywhere.</p>
+
+    <h2>Questions</h2>
+    <p><b>Do I need to download anything?</b> No. It runs in the browser.</p>
+    <p><b>Does it work on a phone?</b> Yes — drag to steer, tap to shoot. A larger screen makes the
+    horizon easier to read, but nothing is missing on mobile.</p>
+    <p><b>Can I lose or crash?</b> No. Fly into the ground and you bounce back up. It is meant to be
+    something you can leave running.</p>
+    <p><b>Is there an end?</b> No. The planet is the whole game.</p>
+    <p><b>What languages does it support?</b> Ten, detected automatically from your browser:
+    English, 繁體中文, 简体中文, 日本語, 한국어, Français, Italiano, Español, ไทย, and العربية.</p>
+
+    <p><a class="mail" href="/tiny-planet/"><b>▶ Play Tiny Planet</b></a></p>
+
+  </div></div>
+</SubpageLayout>

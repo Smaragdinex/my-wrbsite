@@ -1,0 +1,79 @@
+---
+// 網站本身的隱私政策(xarts.games 與站上的網頁遊戲)。
+//
+// 跟 /privacy 是兩份不同的東西:那一份寫的是 CatInsight Stock 這個 iOS App
+// 的資料處理,涵蓋不到網站。AdSense 審核會看「這個網站」有沒有揭露廣告
+// Cookie 與第三方廣告商,拿 App 的政策去頂會被退。
+import SubpageLayout from '../layouts/SubpageLayout.astro';
+---
+<SubpageLayout title="Website Privacy Policy - X-Arts" current="privacy"
+                brand="X-Arts" brandAccent="Games" icon="assets/favicon.png">
+  <div class="wrap"><div class="legal card">
+    <h1>Website <span class="grad">Privacy Policy</span></h1>
+    <div class="upd">Last updated: August 2026</div>
+
+    <p>This page covers the website at <b>xarts.games</b> and the browser games hosted on it,
+    including Tiny Planet. Our iOS app CatInsight Stock has its own separate policy.</p>
+
+    <h2>No Account, No Sign-In</h2>
+    <p>You can browse this site and play the games without creating an account. We never ask
+    for your name, email address, phone number, or any other directly identifying information,
+    and there is no login of any kind.</p>
+
+    <h2>Stored on Your Device</h2>
+    <p>The games save a few preferences in your browser's local storage so the game remembers
+    them next time: your chosen aircraft colour, interface language, and whether music is on.
+    These stay in your browser. They are never sent to us and never used to identify you.
+    Clearing your browser data removes them.</p>
+
+    <h2>Multiplayer</h2>
+    <p>While you fly in Tiny Planet, your aircraft's position, orientation, and colour are sent
+    to our relay server so other players in the air can see your plane, and theirs is sent to
+    you. The server holds these only in memory for as long as your connection is open, forwards
+    them to the other players currently connected, and writes nothing to disk. Each connection
+    gets a sequential number for the duration of the session; it is not tied to you and is
+    discarded when you disconnect. No chat, no usernames, no history.</p>
+
+    <h2>Analytics</h2>
+    <p>We use Cloudflare Web Analytics to count page views and see which pages are popular.
+    It is cookie-free and does not fingerprint or track individual visitors across sites.</p>
+
+    <h2>Advertising</h2>
+    <p>We may display advertising on this site through Google AdSense.</p>
+    <ul>
+      <li>Third-party vendors, including Google, use cookies to serve ads based on your prior
+      visits to this website or other websites.</li>
+      <li>Google's use of advertising cookies enables it and its partners to serve ads to you
+      based on your visit to this and/or other sites on the Internet.</li>
+      <li>You may opt out of personalised advertising by visiting
+      <a class="mail" href="https://www.google.com/settings/ads">Google Ads Settings</a>.
+      You can also opt out of a third-party vendor's use of cookies for personalised
+      advertising at <a class="mail" href="https://www.aboutads.info/choices/">aboutads.info</a>.</li>
+      <li>Visitors in the European Economic Area, the United Kingdom, and Switzerland are shown
+      a consent prompt before any advertising or measurement cookies are set, and can change
+      or withdraw that choice at any time.</li>
+    </ul>
+
+    <h2>Payments and Donations</h2>
+    <p>Donations are handled entirely by Stripe on their own checkout page. Your card details
+    are entered on Stripe's page and are never seen by, sent to, or stored by us.</p>
+
+    <h2>Children's Privacy</h2>
+    <p>This site is not directed to children under 13 and we do not knowingly collect personal
+    information from them. Advertising served on this site is not personalised for users we
+    have reason to believe are children.</p>
+
+    <h2>Data Retention</h2>
+    <p>We keep no personal data, so there is nothing for us to retain or delete on request.
+    Preferences live in your browser until you clear them; multiplayer position data exists
+    only for the length of your session.</p>
+
+    <h2>Changes to This Policy</h2>
+    <p>We may update this page from time to time. The date at the top reflects the most recent
+    revision.</p>
+
+    <h2>Contact Us</h2>
+    <p>Questions about this policy? Email
+    <a class="mail" href="mailto:contact@xarts.games">contact@xarts.games</a>.</p>
+  </div></div>
+</SubpageLayout>
