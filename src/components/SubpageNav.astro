@@ -1,7 +1,15 @@
 ---
 // 子頁共用導覽列(logo + ← Home)。改這一個檔,所有子頁同步生效。
+//
+// 預設值是 CatInsight Stock —— 既有的子頁都是那個 App 的,不傳參數行為不變。
+// 網站層級的頁面(例如站台隱私政策)要傳自己的品牌,不然會掛著別的 App 名字。
+const {
+  brand = 'CatInsight',
+  brandAccent = 'Stock',
+  icon = 'assets/icon-180.png',
+} = Astro.props;
 ---
 <nav><div class="nav">
-  <a href="index.html" class="logo"><img src="assets/icon-180.png" alt="">CatInsight <span class="grad">Stock</span></a>
+  <a href="index.html" class="logo"><img src={icon} alt="">{brand} <span class="grad">{brandAccent}</span></a>
   <a href="index.html" class="back">← Home</a>
 </div></nav>

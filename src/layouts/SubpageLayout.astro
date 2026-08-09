@@ -5,7 +5,8 @@ import SubpageNav from '../components/SubpageNav.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import '../styles/subpage.css';
 
-const { title, current } = Astro.props;
+// brand/brandAccent/icon 只給網站層級的頁面用;不傳就沿用 SubpageNav 的預設
+const { title, current, brand, brandAccent, icon } = Astro.props;
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -14,9 +15,12 @@ const { title, current } = Astro.props;
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{title}</title>
   <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <!-- Google AdSense:驗證網站擁有權 + 放送廣告。必須在每一頁的 <head> 裡 -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5147653290882209"
+          crossorigin="anonymous"></script>
 </head>
 <body>
-  <SubpageNav />
+  <SubpageNav brand={brand} brandAccent={brandAccent} icon={icon} />
   <slot />
   <SiteFooter current={current} />
 </body>
