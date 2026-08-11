@@ -4,8 +4,8 @@
 // 全部是程式生成的基本形狀 —— 這種造型本來就是車床加方料車出來的,
 // 換成 GLB 只會多幾百 KB 的下載,換不到辨識度。
 import * as THREE from 'three'
-import { Path } from './track.js?v=53'
-import { painted, C } from './wood.js?v=53'
+import { Path } from './track.js?v=56'
+import { painted, C } from './wood.js?v=56'
 
 const SWALLOW = 0.04     // 車身尾端越過門多少就消失
 const AXLE = 0.175              // 輪軸高度:輪子下緣剛好陷進軌道凹槽

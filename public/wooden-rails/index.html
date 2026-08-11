@@ -248,11 +248,11 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=53'
-import { Train, pegPerson, barrelRoof } from './train.js?v=53'
-import { painted, woodMap, C } from './wood.js?v=53'
-import { buildWorld, HORIZON } from './world.js?v=53'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=53'
+    from './track.js?v=56'
+import { Train, pegPerson, barrelRoof } from './train.js?v=56'
+import { painted, woodMap, C } from './wood.js?v=56'
+import { buildWorld, HORIZON } from './world.js?v=56'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=56'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -300,6 +300,7 @@ const M = {
     groove: painted(0x9d7c4f, { rx: 1, ry: 1 }),      // 凹槽內壁,深一階才看得出溝
     door:  painted(0x5a4530, { rx: 2, ry: 2 }),       // 拱門洞口
     plank: painted(0xc9a373, { rx: 2, ry: 3 }),       // 月台檯面,比軌道深一階才分得出來
+    water: new THREE.MeshStandardMaterial({ color: 0x6fa8c4, roughness: 0.4 }),
     hole:  new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.98,
                polygonOffset: true, polygonOffsetFactor: -2 }),   // 榫孔輪廓,貼在頂面上
     mat:   new THREE.MeshStandardMaterial({ color: 0xc6dbab, roughness: 0.98 }),   // 比草原亮一階,棋盤範圍才分得出來
@@ -315,6 +316,7 @@ const M = {
 
 /* ── 遊戲狀態 ─────────────────────────────────────────────────────── */
 let level, cells, stock, pegs, boardGroup, train, world
+let ordered = false      // 這一關的乘客要不要照號碼順序接
 let sel = PLACEABLE[0], running = false, chase = false, collected = 0
 const KEY = 'wr.progress'
 let unlocked = Math.max(0, Math.min(LEVELS.length - 1, +localStorage.getItem(KEY) || 0))
@@ -335,6 +337,7 @@ function loadLevel(i) {
     cells = Array.from({ length: level.h }, () => Array(level.w).fill(null))
     stock = { ...level.stock }
     pegs = []
+    ordered = false
     collected = 0
     running = false
     chase = false
@@ -361,8 +364,20 @@ function loadLevel(i) {
         const ch = level.map[z][x]
         const p = cellWorld(x, z)
         if (ch === '#') { boardGroup.add(obstacle(p, x + z)); continue }
-        if (ch === 'o') {
-            const color = PEG_COLORS[pegs.length % PEG_COLORS.length]
+        if (ch === '~') {
+            // 河印在墊子上,不做成盒子 —— 盒子的頂面跟墊子同高會 z-fighting,
+            // 裂成鋸齒狀。玩具的遊戲墊本來就是把河印上去的
+            const river = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), M.water)
+            river.rotation.x = -Math.PI / 2
+            river.position.copy(p).setY(0.008)
+            river.receiveShadow = true
+            boardGroup.add(river)
+            continue
+        }
+        const num = ch >= '1' && ch <= '9' ? +ch : 0
+        if (ch === 'o' || num) {
+            // 有編號時顏色跟著號碼走,1 永遠是同一個顏色,好認
+            const color = PEG_COLORS[(num ? num - 1 : pegs.length) % PEG_COLORS.length]
             const st = halt(color)
             st.position.copy(p).add(HALT_OFF)
             st.rotation.y = -Math.PI / 4                  // 亭子面朝格子中央的軌道
@@ -371,7 +386,12 @@ function loadLevel(i) {
             peg.position.copy(p).add(HALT_OFF).setY(0.045)
             peg.rotation.y = -Math.PI / 4
             boardGroup.add(peg)
-            pegs.push({ x, z, obj: peg, on: false })
+            if (num) {
+                const plate = numberPlate(num)
+                plate.position.copy(p).add(HALT_OFF).add(new THREE.Vector3(-0.30, 0.006, 0.14))
+                boardGroup.add(plate)
+            }
+            pegs.push({ x, z, obj: peg, on: false, order: num })
         }
         // 空格提示:淺色小方塊,鋪上去就蓋掉
         const dot = new THREE.Mesh(new THREE.PlaneGeometry(0.74, 0.74),
@@ -388,6 +408,9 @@ function loadLevel(i) {
         sign.position.copy(cellWorld(fx, fz)).add(new THREE.Vector3(-0.34, 0, -0.34))
         boardGroup.add(sign)
     }
+
+    ordered = pegs.some(p => p.order)
+    pegs.sort((a, b) => a.order - b.order)
 
     boardGroup.add(station(cellWorld(sx, sz), cells[sz][sx], false))
     boardGroup.add(station(cellWorld(gx, gz), cells[gz][gx], true))
@@ -514,6 +537,27 @@ function shed(w, h, d, roofMat, openW, openH) {
     ch.position.set(w * 0.26, h + 0.17, -d * 0.24)
     g.add(ch)
     return g
+}
+
+const plateCache = new Map()
+/** 乘客的號碼牌。平貼在地上 —— 預設鏡頭是俯視,立牌會被壓扁看不清楚 */
+function numberPlate(n) {
+    if (!plateCache.has(n)) {
+        const c = document.createElement('canvas')
+        c.width = c.height = 64
+        const g = c.getContext('2d')
+        g.fillStyle = '#fdf6ea'; g.fillRect(0, 0, 64, 64)
+        g.fillStyle = '#4a3524'
+        g.font = 'bold 46px system-ui, sans-serif'
+        g.textAlign = 'center'; g.textBaseline = 'middle'
+        g.fillText(String(n), 32, 35)
+        const t = new THREE.CanvasTexture(c)
+        t.colorSpace = THREE.SRGBColorSpace
+        plateCache.set(n, new THREE.MeshStandardMaterial({ map: t, roughness: 0.92 }))
+    }
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), plateCache.get(n))
+    m.rotation.x = -Math.PI / 2
+    return m
 }
 
 /** 單行軌的箭頭牌:一根矮柱 + 一片三角板,指著唯一能走的方向 */
@@ -743,6 +787,8 @@ function tapCell(x, z) {
     if (running) return
     const ch = level.map[z][x]
     if (ch === '#') return
+    // 橋只能架在水上,一般軌道不能鋪進水裡
+    if ((ch === '~') !== (sel === 'bridge')) { if (sel !== 'erase') return }
     const cur = cells[z][x]
     if (cur && cur.fixed) return
 
@@ -783,6 +829,8 @@ const ICONS = {
     straight: '<path d="M20 4v32" stroke="#8a5a33" stroke-width="7" fill="none"/>',
     curve: '<path d="M20 36V24a10 10 0 0 1 10-10h6" stroke="#8a5a33" stroke-width="7" fill="none"/>',
     cross: '<path d="M20 4v32M4 20h32" stroke="#8a5a33" stroke-width="7" fill="none"/>',
+    bridge: '<path d="M4 27h32" stroke="#6fa8c4" stroke-width="6" fill="none"/>'
+          + '<path d="M6 24c6-13 22-13 28 0" stroke="#8a5a33" stroke-width="6" fill="none"/>',
     erase: '<path d="M9 28l12-12 10 10-9 9H15z" fill="#c9683f"/><path d="M7 34h26" stroke="#8a5a33" stroke-width="4"/>',
 }
 function syncUI() {
@@ -812,7 +860,9 @@ function syncUI() {
     tray.appendChild(go)
 
     const total = pegs.length
-    el('pax').textContent = total ? `🧍 ${collected}/${total}` : ''
+    el('pax').textContent = total
+        ? `🧍 ${collected}/${total}` + (ordered && collected < total ? ` → ${collected + 1} 號` : '')
+        : ''
     el('pax').className = total && collected === total ? 'done' : ''
 }
 
@@ -879,7 +929,9 @@ function finish() {
     } else if (collected < total) {
         train.arrive()
         chase = false; frameBoard()
-        show('少了乘客', `還有 ${total - collected} 位在等車,路線要經過他們那一格。`, false)
+        show('少了乘客', ordered
+            ? `還有 ${total - collected} 位在等車。要照號碼順序接,下一位是 ${collected + 1} 號。`
+            : `還有 ${total - collected} 位在等車,路線要經過他們那一格。`, false)
     } else {
         train.arrive()
         // 進站就退回俯視 —— 這一刻要看的是自己拼出來的那張軌道圖,不是車尾
@@ -990,6 +1042,8 @@ renderer.setAnimationLoop(() => {
             if (p.on) continue
             const mark = plan.marks.find(m => m.x === p.x && m.z === p.z)
             if (!mark || train.s < mark.s) continue
+            // 沒輪到就只是開過去。之後繞回來還能接 —— 十字軌因此更有用
+            if (ordered && p.order !== collected + 1) continue
             p.on = true
             collected++
             if (!train.board(p.obj)) p.obj.visible = false

@@ -14,11 +14,14 @@ export const PIECES = {
     straight: { conns: [0, 2], segs: [[0, 2]] },
     curve:    { conns: [0, 1], segs: [[0, 1]] },
     cross:    { conns: [0, 1, 2, 3], segs: [[0, 2], [1, 3]] },
+    // 橋:接法跟直軌一樣,但中段拱起來,而且只能鋪在水上。
+    // 它存在的理由就是「跨過不能鋪軌道的地方」—— 拿來當漂亮的直軌沒有意義
+    bridge:   { conns: [0, 2], segs: [[0, 2]], arch: 0.30, water: true },
     start:    { conns: [2], segs: [[2, -1]] },
     goal:     { conns: [2], segs: [[2, -1]] },
 }
 
-export const PLACEABLE = ['straight', 'curve', 'cross']
+export const PLACEABLE = ['straight', 'curve', 'cross', 'bridge']
 
 // 木軌斷面(x = 橫向,y = 高度)。上緣挖兩道凹槽 —— 這是木頭軌道一眼認得出來的特徵,
 // 少了它就只是一條棕色的長條。輪廓是逆時針的簡單多邊形,端蓋直接拿它三角化。
@@ -78,13 +81,26 @@ function segPoints(a, b) {
     return out
 }
 
-/** 一片(含旋轉)的所有中心線段,局部座標 */
+// 橋面的取樣數。直線本來只要兩點,拱起來就得多切幾段才不會變成折線
+const ARCH_SEG = 14
+
+/** 一片(含旋轉)的所有中心線段,局部座標;arch 是這一段的拱高 */
 export function pieceSegs(type, rot) {
-    return PIECES[type].segs.map(([a, b]) => ({
-        a: a === -1 ? -1 : (a + rot) % 4,
-        b: b === -1 ? -1 : (b + rot) % 4,
-        pts: segPoints(a, b).map(p => rot2(p, rot)),
-    }))
+    const arch = PIECES[type].arch || 0
+    return PIECES[type].segs.map(([a, b]) => {
+        let pts = segPoints(a, b)
+        if (arch) {                       // 直線切細,好讓中段拱得平順
+            const [p0, p1] = pts
+            pts = Array.from({ length: ARCH_SEG + 1 }, (_, i) =>
+                new THREE.Vector2().lerpVectors(p0, p1, i / ARCH_SEG))
+        }
+        return {
+            a: a === -1 ? -1 : (a + rot) % 4,
+            b: b === -1 ? -1 : (b + rot) % 4,
+            pts: pts.map(p => rot2(p, rot)),
+            arch,
+        }
+    })
 }
 
 export const connsOf = cell => PIECES[cell.type].conns.map(d => (d + cell.rot) % 4)
@@ -138,8 +154,12 @@ export function sweep(pts) {
 
 /** 一片軌道的世界座標中心線(給渲染和走軌共用) */
 export function segWorld(seg, cx, cz, w, h) {
-    return seg.pts.map(p => new THREE.Vector3(
-        cx - (w - 1) / 2 + p.x, 0, cz - (h - 1) / 2 + p.y))
+    const n = seg.pts.length - 1
+    return seg.pts.map((p, i) => new THREE.Vector3(
+        cx - (w - 1) / 2 + p.x,
+        // 拱形:兩端回到 0,中段最高,火車跟著俯仰
+        seg.arch ? seg.arch * Math.sin(Math.PI * (i / n)) : 0,
+        cz - (h - 1) / 2 + p.y))
 }
 
 /** 把折線兩端各往內縮 d,用來留出片與片之間的接縫(只給渲染用) */
