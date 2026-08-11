@@ -14,6 +14,10 @@ const LOOKAHEAD = 4.5     // 往前預測幾秒;對衝相對速度可達 34/秒,
 const SAFE = 11           // 預計錯身距離小於這個就要修正
 const AVOID_TURN = 1.1    // 閃避時最多額外壓多少舵(rad/s,玩家是 1.6)
 const AVOID_CLIMB = 4.5   // 閃避時最多爬升/下降多快(單位/s)
+const DYE_HITS = 2        // 連續幾發同色會被染色(與 index.html 的玩家規則一致)
+const DYE_TIME = 60       // 染色持續秒數
+const SPLASH_TIME = 2.5   // 單發沾色的殘留秒數
+const SPLASH_MIX = 0.35   // 單發最多只染一半 —— 塗滿的話「中一發」跟「被染色」會分不出來
 
 export class Traffic {
     /**
@@ -37,6 +41,7 @@ export class Traffic {
         this._v1 = new THREE.Vector3()
         this._v2 = new THREE.Vector3()
         this._v3 = new THREE.Vector3()
+        this._dyeC = new THREE.Color()
         this._playerVel = new THREE.Vector3()
         this._prevPlayer = null
 
@@ -87,6 +92,9 @@ export class Traffic {
                 color: hex,
                 shootTimer: 2 + Math.random() * 5,
                 splash: 0,                 // 被漆彈打中後的殘留時間
+                dyeColor: null,            // 連續中兩發同色後被染成的顏色(null = 沒被染)
+                dyeLeft: 0,
+                hitColor: null, hitCount: 0,
                 baseColors: bodyMats.map(m => m.color.clone()),
             })
             obj.scale.setScalar(this.planes[i].scale)
@@ -190,11 +198,20 @@ export class Traffic {
         }
     }
 
-    /** 被漆彈打中:機身沾色,6 秒後褪回原本的馬卡龍色 */
+    /** 被漆彈打中:機身沾色,6 秒後褪回原本的馬卡龍色。
+     *  連續被同一個顏色打中 DYE_HITS 發就整台被染成那個顏色 DYE_TIME 秒,
+     *  期間它自己發射的漆彈也是新顏色 —— 跟玩家同一套規則,顏色會傳染。 */
     splash(plane, color) {
         if (!plane.splashColor) plane.splashColor = new this.THREE.Color()
         plane.splashColor.set(color)
-        plane.splash = 6
+        plane.splash = SPLASH_TIME
+        if (color === (plane.dyeColor || plane.color)) return          // 同色打不動
+        plane.hitCount = color === plane.hitColor ? (plane.hitCount || 0) + 1 : 1
+        plane.hitColor = color
+        if (plane.hitCount < DYE_HITS) return
+        plane.hitCount = 0
+        plane.dyeColor = color
+        plane.dyeLeft = DYE_TIME
     }
 
     /** @param nightF 0=白天 1=夜晚,機身內光跟著亮起(與玩家同一套) */
@@ -236,12 +253,32 @@ export class Traffic {
             if (p.propeller) p.propeller.rotation.z += dt * 22
             for (const m of p.glowMats) m.emissiveIntensity = 0.18 + 0.42 * nightF
 
-            // 中彈後機身沾上對方的顏色,再慢慢褪回原色
+            // 染色期間整台就是那個顏色,蓋過底下的沾色褪色動畫
+            if (p.dyeLeft > 0) {
+                p.dyeLeft -= dt
+                if (p.dyeLeft <= 0) {                       // 褪回原本的馬卡龍色
+                    p.dyeColor = null
+                    p.bodyMats.forEach((m, bi) => {
+                        m.color.copy(p.baseColors[bi])
+                        m.emissive.copy(m.color)
+                    })
+                } else if (p.splash <= 0) {
+                    p.bodyMats.forEach(m => {
+                        m.color.set(p.dyeColor)
+                        m.emissive.copy(m.color)
+                    })
+                }
+            }
+
+            // 中彈後機身沾上對方的顏色,再慢慢褪回原色(染色中則褪回染色)。
+            // 只混一半:混滿的話「中一發」跟「被染色」在畫面上是同一件事,
+            // 兩發才變色的規則就白做了
             if (p.splash > 0) {
                 p.splash -= dt
-                const k = Math.max(0, p.splash / 6)
+                const k = Math.max(0, p.splash / SPLASH_TIME) * SPLASH_MIX
                 p.bodyMats.forEach((m, bi) => {
-                    m.color.copy(p.splashColor).lerp(p.baseColors[bi], 1 - k)
+                    const base = p.dyeColor ? this._dyeC.set(p.dyeColor) : p.baseColors[bi]
+                    m.color.copy(base).lerp(p.splashColor, k)
                     m.emissive.copy(m.color)
                 })
             }
@@ -261,7 +298,7 @@ export class Traffic {
                     aim.y += (Math.random() - 0.5) * 0.06
                     aim.z += (Math.random() - 0.5) * 0.06
                     this.onShoot(p, p.rig.position.clone().addScaledVector(p.fwd, 1.6),
-                                 aim.normalize(), p.color)
+                                 aim.normalize(), p.dyeColor || p.color)
                     p.shootTimer = 2.5 + Math.random() * 4
                 } else {
                     p.shootTimer = 0.6            // 沒對準就過一下再看

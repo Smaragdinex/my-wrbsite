@@ -242,6 +242,28 @@
         #bootStart:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 9px 24px rgba(40,70,100,.28); }
         #bootStart:not(:disabled):active { transform: scale(.96); }
 
+        /* 被染色時的提示:一顆同色的圓點加一圈倒數。
+           放在發射鈕正上方 —— 玩家開火時眼睛本來就在那裡,不用另外找 */
+        #dye {
+            position: fixed; z-index: 11; opacity: 0; pointer-events: none;
+            right: clamp(24px, 20vmin, 220px);
+            bottom: calc(clamp(24px, 16vmin, 176px) + clamp(80px, 12vmin, 168px)
+                         + 14px + env(safe-area-inset-bottom));
+            width: clamp(80px, 12vmin, 168px);
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity .25s;
+        }
+        #dye.on { opacity: 1; }
+        #dye .ring {
+            width: clamp(26px, 4vmin, 46px); height: clamp(26px, 4vmin, 46px);
+            border-radius: 50%;
+            background: var(--c, #fff);
+            box-shadow: 0 3px 10px rgba(0,0,0,.28), 0 0 0 2px rgba(255,255,255,.8) inset;
+            /* 倒數:用 conic-gradient 當進度環,不用另外畫 SVG */
+            background-image: conic-gradient(rgba(0,0,0,.28) calc((1 - var(--k, 1)) * 360deg), transparent 0);
+            background-blend-mode: multiply;
+        }
+
         #fireBtn {
             /* 尺寸與內縮都跟著畫面短邊走(vmin),大螢幕才不會顯得很小;
                上下用 clamp 夾住,手機不會佔掉半個畫面、4K 也不會誇張 */
@@ -378,6 +400,7 @@
         <select id="bootLang" aria-label="Language"></select>
         <a id="bootDonate" href="#" target="_blank" rel="noopener noreferrer" hidden></a>
     </div>
+    <div id="dye"><div class="ring"></div></div>
     <div id="fireBtn" title="發射漆彈(空白鍵)"><div class="dot"></div></div>
     <div id="keys" dir="ltr">
         <div class="cap">Flight controls</div>
@@ -398,13 +421,13 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
         // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
-        import { Music } from './music.js?v=112'
-        import { Weather } from './weather.js?v=112'
-        import { Traffic } from './traffic.js?v=112'
-        import { Paint } from './paint.js?v=112'
-        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=112'
-        import { Fireworks } from './fireworks.js?v=112'
-        import { Net } from './net.js?v=112'
+        import { Music } from './music.js?v=113'
+        import { Weather } from './weather.js?v=113'
+        import { Traffic } from './traffic.js?v=113'
+        import { Paint } from './paint.js?v=113'
+        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=113'
+        import { Fireworks } from './fireworks.js?v=113'
+        import { Net } from './net.js?v=113'
 
         // ---------- 多語 ----------
         let lang = detectLang()
@@ -677,6 +700,7 @@
                 get weather() { return weather },      // 天氣要能單獨驅動來驗證
                 get paint() { return paint },
                 get traffic() { return traffic },
+                onPlayerPainted,   // 染色機制要能不靠對手就驗證
                 get fireworks() { return fireworks },
                 get net() { return net },
                 get plane() { return rig },
@@ -902,7 +926,7 @@
         const draco = new DRACOLoader()
         draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
         loader.setDRACOLoader(draco)
-        const V = 112   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        const V = 113   // 模型改版時 +1,避免瀏覽器吃到舊快取
         // 星球被切成上百塊區域網格(見 make_planet.py 的 build_chunked),
         // 這裡收集每一塊的「中心方向」與「角半徑」,主迴圈用來做地平線剔除。
         //
@@ -1020,20 +1044,66 @@
             ['#97d8cb', '薄荷'], ['#9dc6ec', '天空'], ['#b4a7de', '薰衣草'], ['#dfa9ce', '丁香'],
         ]
         const paletteEl = document.getElementById('palette')
+        const dyeEl = document.getElementById('dye')
         const planeBtn = document.getElementById('planeBtn')
         const bodyMats = []                                   // 機身材質(不含機翼/座艙)
         let planeColor = localStorage.getItem('tp.color') || MACARON[0][0]
 
-        function applyPlaneColor(hex) {
-            planeColor = hex
-            localStorage.setItem('tp.color', hex)
+        // ---------- 染色 ----------
+        // 被同一個顏色連打兩發就會被「染」成那個顏色一分鐘。
+        // 這是漆彈第一次有後果 —— 在此之前打中只是沾一下就褪掉,沒有任何影響。
+        //
+        // 染色期間連自己發射的漆彈也是新顏色,所以會傳染:被染的人去打別人,
+        // 別人也會變成同一色。人多的時候會自己演成一場顏色戰爭。
+        //
+        // 刻意不寫進 localStorage —— 這是暫時狀態,一分鐘後要回到自己選的顏色。
+        const DYE_HITS = 2            // 連續幾發同色才會被染
+        const DYE_TIME = 60           // 染色持續秒數
+        let dyeColor = null, dyeLeft = 0
+        let hitColor = null, hitCount = 0     // 連擊紀錄:被別色打中就從頭算
+
+        const activeColor = () => dyeColor || planeColor
+
+        function paintBody(hex) {
             for (const m of bodyMats) {
                 m.color.set(hex)
                 m.emissive.copy(m.color)                      // 自發光跟著換,夜裡才不會色偏
             }
-            paletteEl.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c === hex))
             // 設在 body 上,飛機鈕的小圓點和發射鈕的中心點才會一起跟著換
             document.body.style.setProperty('--body', hex)
+        }
+
+        function applyPlaneColor(hex) {
+            planeColor = hex
+            localStorage.setItem('tp.color', hex)
+            paletteEl.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c === hex))
+            if (!dyeColor) paintBody(hex)      // 染色中就先不動,等褪了自然回到新選的顏色
+        }
+
+        /** 玩家被漆彈打中。回傳是否因此被染色 */
+        function onPlayerPainted(hex) {
+            paint.splat(hex)
+            if (hex === activeColor()) return false    // 同色打不動,免得自己人互相刷
+            hitCount = hex === hitColor ? hitCount + 1 : 1
+            hitColor = hex
+            if (hitCount < DYE_HITS) return false
+            hitCount = 0
+            dyeColor = hex
+            dyeLeft = DYE_TIME
+            paintBody(hex)
+            dyeEl.style.setProperty('--c', hex)
+            dyeEl.classList.add('on')
+            return true
+        }
+
+        function tickDye(dt) {
+            if (!dyeColor) return
+            dyeLeft -= dt
+            dyeEl.style.setProperty('--k', Math.max(0, dyeLeft / DYE_TIME))
+            if (dyeLeft > 0) return
+            dyeColor = null
+            paintBody(planeColor)              // 回到自己選的顏色
+            dyeEl.classList.remove('on')
         }
 
         const setPaletteOpen = open => {
@@ -1073,7 +1143,7 @@
             if (fireCool > 0) return
             fireCool = FIRE_CD
             fireBtn.classList.add('cool')
-            paint.fire(pos.clone().addScaledVector(fwd, 2.4), fwd, planeColor, 'player')
+            paint.fire(pos.clone().addScaledVector(fwd, 2.4), fwd, activeColor(), 'player')
         }
         fireBtn.addEventListener('pointerdown', e => {
             e.preventDefault(); e.stopPropagation()      // 別讓事件傳到搖桿
@@ -1123,7 +1193,7 @@
 
             // 同場飛行:機身沿用同一份 GLTF,真人玩家看起來就跟 AI 飛機一樣
             net = new Net(THREE, scene, g.scene, MULTIPLAYER_URL,
-                () => rig && { pos: rig.position, quat: rig.quaternion, color: planeColor })
+                () => rig && { pos: rig.position, quat: rig.quaternion, color: activeColor() })
 
             // 光暈:圍繞飛機的柔和光球,夜裡向外暈開
             const c = document.createElement('canvas')
@@ -1296,8 +1366,9 @@
                     fireCool -= dt
                     if (fireCool <= 0) fireBtn.classList.remove('cool')
                 }
+                tickDye(dt)
                 paint.update(dt,
-                    { pos, onHit: c => paint.splat(c) },
+                    { pos, onHit: onPlayerPainted },
                     traffic ? traffic.planes : null,
                     (p, c) => traffic.splash(p, c))
                 for (const s of spinners) {          // 繞世界軸轉要左乘,原朝向才不會被蓋掉
