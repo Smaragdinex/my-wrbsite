@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=49'
+import { painted } from './wood.js?v=50'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -257,6 +257,24 @@ export function buildWorld(scene, hx, hz, seed = 1) {
             break
         }
     }
+    // 更遠一圈的大山:沒有霧之後地平線是一條直線,要有東西把它切開。
+    // 這圈的半徑最大到 100,所以更要先算半徑再決定山心 —— 上一版直接把
+    // 山心固定在 75~145,結果內緣跑到 r = -14,整座山把棋盤包在裡面
+    const FAR_KEEP = 60
+    for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + (rand() - 0.5) * 0.5
+        const R = 18 + rand() * 22
+        const sx = 1.5 + rand(), sz = 1.5 + rand()
+        const rx = R * sx, rz = R * sz
+        const r = FAR_KEEP + Math.max(rx, rz) + rand() * 40
+        const far = new THREE.Mesh(
+            new THREE.SphereGeometry(R, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x93b189))
+        far.scale.set(sx, 0.30 + rand() * 0.22, sz)
+        far.position.set(Math.cos(a) * r, -1.5, Math.sin(a) * r)
+        g.add(far)
+        hills.push({ x: far.position.x, z: far.position.z, rx: rx * 1.06, rz: rz * 1.06 })
+    }
+
     const onHill = (x, z) => hills.some(h =>
         ((x - h.x) / h.rx) ** 2 + ((z - h.z) / h.rz) ** 2 < 1)
 
@@ -326,17 +344,6 @@ export function buildWorld(scene, hx, hz, seed = 1) {
         a.userData.phase = rand() * 6.283
         g.add(a)
         animals.push(a)
-    }
-
-    // 遠一圈的大山:沒有霧之後地平線是一條直線,要有東西把它切開
-    for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2 + (rand() - 0.5) * 0.5
-        const R = 18 + rand() * 22
-        const far = new THREE.Mesh(
-            new THREE.SphereGeometry(R, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x93b189))
-        far.scale.set(1.5 + rand(), 0.30 + rand() * 0.22, 1.5 + rand())
-        far.position.set(Math.cos(a) * (75 + rand() * 70), -1.5, Math.sin(a) * (75 + rand() * 70))
-        g.add(far)
     }
 
     // 雲
