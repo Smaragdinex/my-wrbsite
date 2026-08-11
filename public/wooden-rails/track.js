@@ -209,6 +209,9 @@ export function walk(level, cells) {
         if (x < 0 || z < 0 || x >= w || z >= h) break            // 衝出棋盤
         const cell = cells[z][x]
         if (!cell) break                                          // 沒鋪 → 開口
+        // 單行軌:只能照箭頭的方向開進來。限制的是「路線往哪個方向走」,
+        // 不是「這格放什麼片」—— 這是片數與障礙都做不到的約束
+        if (cell.oneWay != null && cell.oneWay !== dir) break
         const seg = pieceSegs(cell.type, cell.rot)
             .find(s => s.a === opposite(dir) || s.b === opposite(dir))
         if (!seg) break                                           // 有片但接不上

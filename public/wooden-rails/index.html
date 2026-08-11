@@ -248,11 +248,11 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=50'
-import { Train, pegPerson, barrelRoof } from './train.js?v=50'
-import { painted, woodMap, C } from './wood.js?v=50'
-import { buildWorld, HORIZON } from './world.js?v=50'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=50'
+    from './track.js?v=53'
+import { Train, pegPerson, barrelRoof } from './train.js?v=53'
+import { painted, woodMap, C } from './wood.js?v=53'
+import { buildWorld, HORIZON } from './world.js?v=53'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=53'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -343,6 +343,9 @@ function loadLevel(i) {
     const [sx, sz, sd] = level.start, [gx, gz, gd] = level.goal
     cells[sz][sx] = { type: 'start', rot: (DIR[sd] - 2 + 4) % 4, fixed: true }
     cells[gz][gx] = { type: 'goal', rot: (DIR[gd] - 2 + 4) % 4, fixed: true }
+    // 釘死的軌道。有 oneWay 的還限定行進方向,箭頭牌會立在旁邊
+    for (const [type, fx, fz, rot, way] of level.fixed || [])
+        cells[fz][fx] = { type, rot, fixed: true, oneWay: way == null ? null : DIR[way] }
 
     // 遊戲墊:讓棋盤範圍一眼看得出來,不然桌面是無邊無際的
     // 草原每關重建 —— 禁區要跟著棋盤大小走,不然小棋盤外圍會空一大圈
@@ -376,6 +379,14 @@ function loadLevel(i) {
         dot.rotation.x = -Math.PI / 2
         dot.position.copy(p).setY(0.004)
         boardGroup.add(dot)
+    }
+
+    // 單行軌的箭頭牌立在格子角落,跟候車亭錯開(候車亭在 +0.33 那一角)
+    for (const [, fx, fz, , way] of level.fixed || []) {
+        if (way == null) continue
+        const sign = arrowSign(DIR[way])
+        sign.position.copy(cellWorld(fx, fz)).add(new THREE.Vector3(-0.34, 0, -0.34))
+        boardGroup.add(sign)
     }
 
     boardGroup.add(station(cellWorld(sx, sz), cells[sz][sx], false))
@@ -502,6 +513,20 @@ function shed(w, h, d, roofMat, openW, openH) {
     const ch = bx(0.075, 0.16, 0.075, M.stop)
     ch.position.set(w * 0.26, h + 0.17, -d * 0.24)
     g.add(ch)
+    return g
+}
+
+/** 單行軌的箭頭牌:一根矮柱 + 一片三角板,指著唯一能走的方向 */
+function arrowSign(dir) {
+    const g = new THREE.Group()
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.02, 0.24, 8), M.trunk)
+    post.position.y = 0.12
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.13, 3), M.stop)
+    head.rotation.set(Math.PI / 2, 0, 0)
+    head.position.y = 0.28
+    post.castShadow = head.castShadow = true
+    g.add(post, head)
+    g.rotation.y = -dir * Math.PI / 2       // 方向索引 0=N 1=E 2=S 3=W,轉成繞 Y 的角度
     return g
 }
 
@@ -1016,7 +1041,8 @@ if (new URLSearchParams(location.search).has('debug')) {
         // 直接指定片型與方向,自動化驗證要能一次擺出正解,不必模擬點好幾下
         put: (type, x, z, rot) => {
             const cur = cells[z][x]
-            if (cur && !cur.fixed) stock[cur.type]++
+            if (cur && cur.fixed) return          // 釘死的格子動不得,跟 tapCell 一致
+            if (cur) stock[cur.type]++
             stock[type]--
             cells[z][x] = { type, rot }
             redrawTracks(); syncUI()
