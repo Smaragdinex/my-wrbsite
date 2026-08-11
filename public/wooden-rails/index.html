@@ -248,10 +248,11 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=40'
-import { Train, pegPerson, barrelRoof } from './train.js?v=40'
-import { painted, woodMap, C } from './wood.js?v=40'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=40'
+    from './track.js?v=42'
+import { Train, pegPerson, barrelRoof } from './train.js?v=42'
+import { painted, woodMap, C } from './wood.js?v=42'
+import { buildWorld, skyTexture } from './world.js?v=42'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=42'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -261,8 +262,8 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap
 document.body.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-scene.background = new THREE.Color(0xefe0c8)
-scene.fog = new THREE.Fog(0xefe0c8, 22, 52)   // 跟車時桌緣要溶進背景,不然正前方一條硬邊
+scene.background = skyTexture()
+scene.fog = new THREE.Fog(0xdcebef, 24, 66)   // 收在天空色:遠處丘陵與樹要溶進地平線
 
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100)
 const controls = new OrbitControls(camera, renderer.domElement)
@@ -286,7 +287,7 @@ scene.add(sun)
 
 // 桌面。木紋不做貼圖 —— 這個視距下看得到的只有底色,貼圖只是多一份下載
 const table = new THREE.Mesh(new THREE.CircleGeometry(60, 56),
-    new THREE.MeshStandardMaterial({ color: 0xc9a679, roughness: 0.95 }))
+    new THREE.MeshStandardMaterial({ color: 0x7fa65c, roughness: 0.98 }))
 table.rotation.x = -Math.PI / 2
 table.position.y = -0.001
 table.receiveShadow = true
@@ -299,7 +300,7 @@ const M = {
     plank: painted(0xc9a373, { rx: 2, ry: 3 }),       // 月台檯面,比軌道深一階才分得出來
     hole:  new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.98,
                polygonOffset: true, polygonOffsetFactor: -2 }),   // 榫孔輪廓,貼在頂面上
-    mat:   new THREE.MeshStandardMaterial({ color: 0xa9c79f, roughness: 0.98 }),
+    mat:   new THREE.MeshStandardMaterial({ color: 0xc6dbab, roughness: 0.98 }),   // 比草原亮一階,棋盤範圍才分得出來
     trunk: painted(0x9a7448, { rx: 2, ry: 2 }),
     leaf:  painted(0x63a05a, { rx: 2, ry: 2 }),
     fir:   painted(0x3f8552, { rx: 2, ry: 2, flat: true }),   // 平面著色,不然三層錐體會糊成一顆蛋
@@ -311,7 +312,7 @@ const M = {
 }
 
 /* ── 遊戲狀態 ─────────────────────────────────────────────────────── */
-let level, cells, stock, pegs, boardGroup, train
+let level, cells, stock, pegs, boardGroup, train, world
 let sel = PLACEABLE[0], running = false, chase = false, collected = 0
 const KEY = 'wr.progress'
 let unlocked = Math.max(0, Math.min(LEVELS.length - 1, +localStorage.getItem(KEY) || 0))
@@ -342,6 +343,10 @@ function loadLevel(i) {
     cells[gz][gx] = { type: 'goal', rot: (DIR[gd] - 2 + 4) % 4, fixed: true }
 
     // 遊戲墊:讓棋盤範圍一眼看得出來,不然桌面是無邊無際的
+    // 草原每關重建 —— 禁區要跟著棋盤大小走,不然小棋盤外圍會空一大圈
+    world?.dispose()
+    world = buildWorld(scene, (level.w + 0.7) / 2, (level.h + 0.7) / 2, i + 1)
+
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(level.w + 0.7, level.h + 0.7), M.mat)
     pad.rotation.x = -Math.PI / 2
     pad.receiveShadow = true
@@ -396,7 +401,7 @@ function frameBoard() {
     camTarget.set(0, 0, 0)
     const fov = THREE.MathUtils.degToRad(camera.fov)
     // 深度方向被 55 度俯角壓縮,所以 h 打八折;寬度要換算成等效的垂直視角才能比
-    const need = Math.max(level.h * 0.8 + 1.1, (level.w + 1.1) / camera.aspect)
+    const need = Math.max(level.h * 0.8 + 2.2, (level.w + 2.2) / camera.aspect)   // 多留一圈草原
     const dist = need / (2 * Math.tan(fov / 2)) * 1.02
     camera.position.set(0, dist * 0.82, dist * 0.58)      // 約 55 度俯角,桌遊的視線高度
     controls.update()
@@ -949,6 +954,7 @@ let frames = 0
 renderer.setAnimationLoop(() => {
     frames++
     const dt = Math.min(0.05, clock.getDelta())
+    world?.update(clock.elapsedTime)
     train.update(dt)
 
     if (running && train.state === 'run') {
