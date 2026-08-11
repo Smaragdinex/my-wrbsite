@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=42'
+import { painted } from './wood.js?v=44'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -152,6 +152,40 @@ function tree(r, tall) {
 }
 
 /**
+ * 熱氣球。球皮用 8 片獨立的 lathe 楔形拼成,兩色交錯 —— 這樣才有真正的
+ * 直向布瓣。整顆用一個 lathe 再貼條紋貼圖也行,但那要多一張貼圖。
+ */
+function balloon() {
+    const g = new THREE.Group()
+    // 淚滴形剖面:上圓下收,最後收成一個點
+    const prof = [[0.02, 0], [0.16, 0.10], [0.34, 0.26], [0.45, 0.50],
+                  [0.46, 0.72], [0.38, 0.92], [0.21, 1.08], [0, 1.13]]
+        .map(([x, y]) => new THREE.Vector2(x, y))
+    const skin = [mat(0xd4574a), mat(0xf2e6cf)]
+    const GORE = 8
+    for (let i = 0; i < GORE; i++) {
+        const wedge = new THREE.Mesh(
+            new THREE.LatheGeometry(prof, 5, (i / GORE) * Math.PI * 2, Math.PI * 2 / GORE),
+            skin[i % 2])
+        wedge.castShadow = true
+        g.add(wedge)
+    }
+    const basket = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.15, 0.19), mat(0xc9a06a))
+    basket.position.y = -0.30
+    basket.castShadow = true
+    g.add(basket)
+    const burner = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.06, 8), mat(C.dark))
+    burner.position.y = -0.19
+    g.add(burner)
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {      // 吊索
+        const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.22, 4), mat(C.dark))
+        rope.position.set(sx * 0.075, -0.16, sz * 0.075)
+        g.add(rope)
+    }
+    return g
+}
+
+/**
  * 建一片草原。
  * @param hx,hz 棋盤(含墊子)的半寬半深:這個範圍內什麼都不能放,不然會擋住軌道
  */
@@ -238,11 +272,22 @@ export function buildWorld(scene, hx, hz, seed = 1) {
         g.add(hill)
     }
 
+    // 熱氣球:一顆就好,慢慢飄過天空
+    const bal = balloon()
+    bal.scale.setScalar(1.5)
+    g.add(bal)
+
     scene.add(g)
     return {
         group: g,
+        balloon: bal,
         /** 動物低頭吃草。單純上下擺頭就夠了,靜止不動的動物看起來像模型 */
         update(t) {
+            // 兩個週期不同的正弦疊起來,路線才不會是一個看得出來的圓
+            bal.position.set(Math.cos(t * 0.062) * 7.5 + Math.cos(t * 0.023) * 2.5,
+                             4.2 + Math.sin(t * 0.10) * 0.4,
+                             Math.sin(t * 0.051) * 8.5 + Math.sin(t * 0.037) * 2.5)
+            bal.rotation.y = t * 0.06
             for (const a of animals) {
                 const k = Math.sin(t * 0.9 + a.userData.phase)
                 a.userData.head.rotation.z = 0.34 + k * 0.30

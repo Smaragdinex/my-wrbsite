@@ -248,11 +248,11 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=42'
-import { Train, pegPerson, barrelRoof } from './train.js?v=42'
-import { painted, woodMap, C } from './wood.js?v=42'
-import { buildWorld, skyTexture } from './world.js?v=42'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=42'
+    from './track.js?v=44'
+import { Train, pegPerson, barrelRoof } from './train.js?v=44'
+import { painted, woodMap, C } from './wood.js?v=44'
+import { buildWorld, skyTexture } from './world.js?v=44'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=44'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -1009,6 +1009,7 @@ if (new URLSearchParams(location.search).has('debug')) {
         get train() { return train }, get plan() { return plan },
         get stock() { return stock }, get pegs() { return pegs },
         get frames() { return frames },
+        get world() { return world },
         tap: (x, z) => tapCell(x, z),
         // 直接指定片型與方向,自動化驗證要能一次擺出正解,不必模擬點好幾下
         put: (type, x, z, rot) => {
