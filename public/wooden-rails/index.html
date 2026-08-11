@@ -248,11 +248,11 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=48'
-import { Train, pegPerson, barrelRoof } from './train.js?v=48'
-import { painted, woodMap, C } from './wood.js?v=48'
-import { buildWorld, HORIZON } from './world.js?v=48'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=48'
+    from './track.js?v=49'
+import { Train, pegPerson, barrelRoof } from './train.js?v=49'
+import { painted, woodMap, C } from './wood.js?v=49'
+import { buildWorld, HORIZON } from './world.js?v=49'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=49'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -263,9 +263,9 @@ document.body.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(HORIZON)   // 天空球以外的保底色
-// 霧色必須等於天空球的地平線色,遠處地面才會無縫溶進天空。
-// far 要小於地面圓盤的半徑(60),不然會看到圓盤的邊
-scene.fog = new THREE.Fog(HORIZON, 26, 56)
+// 晴天:霧推到 120 以外,遊戲區與近景完全沒有霾。整個拿掉不行 ——
+// 地面圓盤的邊會在遠處露出一圈硬邊,留著讓它溶進天空
+scene.fog = new THREE.Fog(HORIZON, 120, 460)
 
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100)
 const controls = new OrbitControls(camera, renderer.domElement)
@@ -276,8 +276,8 @@ controls.maxPolarAngle = 1.32           // 不讓鏡頭掉到桌面以下
 controls.enableDamping = true
 controls.dampingFactor = 0.12
 
-scene.add(new THREE.HemisphereLight(0xfff4e2, 0x9c7d5c, 0.85))   // 開太強會把凹槽與接縫的立體感洗掉
-const sun = new THREE.DirectionalLight(0xfff1d8, 2.45)
+scene.add(new THREE.HemisphereLight(0xdcefff, 0x8a9a68, 0.95))   // 天光偏藍、地面反光偏綠,晴天就是這個對比
+const sun = new THREE.DirectionalLight(0xfff4de, 2.9)
 sun.position.set(5, 11, 6)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
@@ -288,7 +288,7 @@ sun.shadow.bias = -0.0012
 scene.add(sun)
 
 // 桌面。木紋不做貼圖 —— 這個視距下看得到的只有底色,貼圖只是多一份下載
-const table = new THREE.Mesh(new THREE.CircleGeometry(60, 56),
+const table = new THREE.Mesh(new THREE.CircleGeometry(500, 72),
     new THREE.MeshStandardMaterial({ color: 0x7fa65c, roughness: 0.98 }))
 table.rotation.x = -Math.PI / 2
 table.position.y = -0.001

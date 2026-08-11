@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=48'
+import { painted } from './wood.js?v=49'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -36,7 +36,7 @@ const mat = (c, flat = true) => new THREE.MeshStandardMaterial({
 
 // 地平線的顏色。天空球在這個高度就是這個色,霧也是這個色 ——
 // 兩邊一致,遠處的地面才會無縫溶進天空
-export const HORIZON = 0xd7e5dc
+export const HORIZON = 0xdceff5
 
 /**
  * 天空球。
@@ -50,7 +50,7 @@ function skyDome() {
     const m = new THREE.ShaderMaterial({
         side: THREE.BackSide, depthWrite: false, fog: false,
         uniforms: {
-            top:  { value: new THREE.Color(0x74b8e4) },
+            top:  { value: new THREE.Color(0x54a9e0) },   // 晴天:藍要夠深
             horz: { value: new THREE.Color(HORIZON) },
         },
         vertexShader: `
@@ -68,7 +68,7 @@ function skyDome() {
                 gl_FragColor = vec4(mix(horz, top, smoothstep(0.0, 0.26, h)), 1.0);
             }`,
     })
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16), m)
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), m)
     dome.frustumCulled = false
     return dome
 }
@@ -171,6 +171,21 @@ function tree(r, tall) {
         g.add(top)
     }
     g.traverse(o => { if (o.isMesh) o.castShadow = true })
+    return g
+}
+
+/** 一朵雲:三四顆壓扁的球黏成一團。不吃光照,免得背光那面變灰 */
+function cloud(rand) {
+    const g = new THREE.Group()
+    const m = new THREE.MeshBasicMaterial({ color: 0xffffff })
+    const n = 3 + Math.floor(rand() * 3)
+    for (let i = 0; i < n; i++) {
+        const r = 1.1 + rand() * 1.5
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), m)
+        puff.position.set((i - n / 2) * 1.5 + rand(), rand() * 0.5, rand() * 1.4 - 0.7)
+        puff.scale.y = 0.55
+        g.add(puff)
+    }
     return g
 }
 
@@ -313,6 +328,28 @@ export function buildWorld(scene, hx, hz, seed = 1) {
         animals.push(a)
     }
 
+    // 遠一圈的大山:沒有霧之後地平線是一條直線,要有東西把它切開
+    for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + (rand() - 0.5) * 0.5
+        const R = 18 + rand() * 22
+        const far = new THREE.Mesh(
+            new THREE.SphereGeometry(R, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x93b189))
+        far.scale.set(1.5 + rand(), 0.30 + rand() * 0.22, 1.5 + rand())
+        far.position.set(Math.cos(a) * (75 + rand() * 70), -1.5, Math.sin(a) * (75 + rand() * 70))
+        g.add(far)
+    }
+
+    // 雲
+    const clouds = []
+    for (let i = 0; i < 7; i++) {
+        const c = cloud(rand)
+        const a = rand() * Math.PI * 2, r = 16 + rand() * 40
+        c.position.set(Math.cos(a) * r, 13 + rand() * 9, Math.sin(a) * r)
+        c.scale.setScalar(1.3 + rand() * 1.6)
+        g.add(c)
+        clouds.push({ obj: c, vx: 0.06 + rand() * 0.05 })
+    }
+
     // 熱氣球:一顆就好,慢慢飄過天空
     const bal = balloon()
     bal.scale.setScalar(1.5)
@@ -331,6 +368,10 @@ export function buildWorld(scene, hx, hz, seed = 1) {
                              4.2 + Math.sin(t * 0.10) * 0.4,
                              Math.sin(t * 0.051) * 8.5 + Math.sin(t * 0.037) * 2.5)
             bal.rotation.y = t * 0.06
+            for (const c of clouds) {
+                c.obj.position.x += c.vx * 0.016
+                if (c.obj.position.x > 70) c.obj.position.x = -70
+            }
             for (const a of animals) {
                 const k = Math.sin(t * 0.9 + a.userData.phase)
                 a.userData.head.rotation.z = 0.34 + k * 0.30
