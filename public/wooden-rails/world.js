@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=44'
+import { painted } from './wood.js?v=45'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -193,8 +193,27 @@ export function buildWorld(scene, hx, hz, seed = 1) {
     const rand = rng(seed * 7919 + 13)
     const g = new THREE.Group()
 
-    // 禁區用矩形判斷。用半徑會讓長方形棋盤的短邊塞不下東西、長邊又被吃掉
-    const clear = (x, z, pad) => Math.abs(x) > hx + pad || Math.abs(z) > hz + pad
+    // 遠處丘陵先建 —— 後面的草木動物要避開它們,不然會有樹半截插進山裡。
+    // 壓扁的半球在地面上的輪廓是橢圓,記下來當作第二個禁區
+    const hills = []
+    for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2 + rand() * 0.4
+        const r = 34 + rand() * 14
+        const R = 6 + rand() * 7
+        const sx = 1.6 + rand(), sz = 1.6 + rand()
+        const hill = new THREE.Mesh(
+            new THREE.SphereGeometry(R, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.hill))
+        hill.scale.set(sx, 0.32 + rand() * 0.25, sz)
+        hill.position.set(Math.cos(a) * r, -0.4, Math.sin(a) * r)
+        g.add(hill)
+        hills.push({ x: hill.position.x, z: hill.position.z, rx: R * sx * 1.06, rz: R * sz * 1.06 })
+    }
+    const onHill = (x, z) => hills.some(h =>
+        ((x - h.x) / h.rx) ** 2 + ((z - h.z) / h.rz) ** 2 < 1)
+
+    // 棋盤禁區用矩形判斷。用半徑會讓長方形棋盤的短邊塞不下東西、長邊又被吃掉
+    const clear = (x, z, pad) =>
+        (Math.abs(x) > hx + pad || Math.abs(z) > hz + pad) && !onHill(x, z)
     const spot = (min, max, pad) => {
         for (let i = 0; i < 40; i++) {
             const a = rand() * Math.PI * 2, r = min + rand() * (max - min)
@@ -258,18 +277,6 @@ export function buildWorld(scene, hx, hz, seed = 1) {
         a.userData.phase = rand() * 6.283
         g.add(a)
         animals.push(a)
-    }
-
-    // 遠處丘陵:壓扁的半球,顏色比草地淡,再交給霧氣把邊界化掉
-    for (let i = 0; i < 9; i++) {
-        const a = (i / 9) * Math.PI * 2 + rand() * 0.4
-        const r = 34 + rand() * 14
-        const hill = new THREE.Mesh(
-            new THREE.SphereGeometry(6 + rand() * 7, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2),
-            mat(C.hill))
-        hill.scale.set(1.6 + rand(), 0.32 + rand() * 0.25, 1.6 + rand())
-        hill.position.set(Math.cos(a) * r, -0.4, Math.sin(a) * r)
-        g.add(hill)
     }
 
     // 熱氣球:一顆就好,慢慢飄過天空
