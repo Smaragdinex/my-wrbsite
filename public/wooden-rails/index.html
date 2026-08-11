@@ -248,11 +248,11 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=45'
-import { Train, pegPerson, barrelRoof } from './train.js?v=45'
-import { painted, woodMap, C } from './wood.js?v=45'
-import { buildWorld, skyTexture } from './world.js?v=45'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=45'
+    from './track.js?v=48'
+import { Train, pegPerson, barrelRoof } from './train.js?v=48'
+import { painted, woodMap, C } from './wood.js?v=48'
+import { buildWorld, HORIZON } from './world.js?v=48'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=48'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -262,8 +262,10 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap
 document.body.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-scene.background = skyTexture()
-scene.fog = new THREE.Fog(0xdcebef, 24, 66)   // 收在天空色:遠處丘陵與樹要溶進地平線
+scene.background = new THREE.Color(HORIZON)   // 天空球以外的保底色
+// 霧色必須等於天空球的地平線色,遠處地面才會無縫溶進天空。
+// far 要小於地面圓盤的半徑(60),不然會看到圓盤的邊
+scene.fog = new THREE.Fog(HORIZON, 26, 56)
 
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100)
 const controls = new OrbitControls(camera, renderer.domElement)

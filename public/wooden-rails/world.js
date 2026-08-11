@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=45'
+import { painted } from './wood.js?v=48'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -34,20 +34,43 @@ const C = {
 const mat = (c, flat = true) => new THREE.MeshStandardMaterial({
     color: c, roughness: 0.95, metalness: 0, flatShading: flat })
 
-/** 天空:上藍下淺的直向漸層,當成背景畫布 */
-function skyTexture() {
-    const c = document.createElement('canvas')
-    c.width = 2; c.height = 256
-    const g = c.getContext('2d')
-    const grd = g.createLinearGradient(0, 0, 0, 256)
-    grd.addColorStop(0, '#9fcde8')
-    grd.addColorStop(0.62, '#cfe6ef')
-    grd.addColorStop(1, '#e8f0ea')
-    g.fillStyle = grd
-    g.fillRect(0, 0, 2, 256)
-    const t = new THREE.CanvasTexture(c)
-    t.colorSpace = THREE.SRGBColorSpace
-    return t
+// 地平線的顏色。天空球在這個高度就是這個色,霧也是這個色 ——
+// 兩邊一致,遠處的地面才會無縫溶進天空
+export const HORIZON = 0xd7e5dc
+
+/**
+ * 天空球。
+ *
+ * 原本用 scene.background 貼一張漸層圖,那是螢幕空間的:鏡頭一俯仰,
+ * 地平線在畫面上的位置就變了,但背景圖不動,於是「被霧吃到底的遠處地面」
+ * 接到的是天空漸層的隨便某一段,遠看就是一條白帶子。
+ * 改成世界空間的天空球之後,地平線高度永遠對應漸層的同一個位置。
+ */
+function skyDome() {
+    const m = new THREE.ShaderMaterial({
+        side: THREE.BackSide, depthWrite: false, fog: false,
+        uniforms: {
+            top:  { value: new THREE.Color(0x74b8e4) },
+            horz: { value: new THREE.Color(HORIZON) },
+        },
+        vertexShader: `
+            varying vec3 vP;
+            void main() {
+                vP = position;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }`,
+        fragmentShader: `
+            uniform vec3 top; uniform vec3 horz;
+            varying vec3 vP;
+            void main() {
+                float h = normalize(vP).y;
+                // 地平線以下也維持地平線色:鏡頭壓低時看到的那一圈才不會突然變色
+                gl_FragColor = vec4(mix(horz, top, smoothstep(0.0, 0.26, h)), 1.0);
+            }`,
+    })
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16), m)
+    dome.frustumCulled = false
+    return dome
 }
 
 /** 一叢草:三片交錯的細長三角形。用圓錐會變成小尖刺,不像草 */
@@ -196,17 +219,28 @@ export function buildWorld(scene, hx, hz, seed = 1) {
     // 遠處丘陵先建 —— 後面的草木動物要避開它們,不然會有樹半截插進山裡。
     // 壓扁的半球在地面上的輪廓是橢圓,記下來當作第二個禁區
     const hills = []
+    const HILL_KEEP = 22        // 山的內緣至少離中心這麼遠
     for (let i = 0; i < 9; i++) {
-        const a = (i / 9) * Math.PI * 2 + rand() * 0.4
-        const r = 34 + rand() * 14
-        const R = 6 + rand() * 7
-        const sx = 1.6 + rand(), sz = 1.6 + rand()
-        const hill = new THREE.Mesh(
-            new THREE.SphereGeometry(R, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.hill))
-        hill.scale.set(sx, 0.32 + rand() * 0.25, sz)
-        hill.position.set(Math.cos(a) * r, -0.4, Math.sin(a) * r)
-        g.add(hill)
-        hills.push({ x: hill.position.x, z: hill.position.z, rx: R * sx * 1.06, rz: R * sz * 1.06 })
+        for (let tryN = 0; tryN < 12; tryN++) {
+            const a = (i / 9) * Math.PI * 2 + (rand() - 0.5) * 0.6
+            const R = 6 + rand() * 7
+            const sx = 1.6 + rand(), sz = 1.6 + rand()
+            // 半徑要先算,再決定山心放多遠。原本山心固定在 34~48,但橫向縮放後
+            // 半徑最大到 33.8,內緣可以逼近原點 —— 整座山壓在棋盤上
+            const rx = R * sx, rz = R * sz
+            const r = HILL_KEEP + Math.max(rx, rz) + rand() * 8
+            const x = Math.cos(a) * r, z = Math.sin(a) * r
+            // 兩座山穿插的話,交線會在山坡上切出一道假懸崖。寧可少放一座
+            if (hills.some(h => Math.hypot(x - h.x, z - h.z) <
+                    Math.max(rx, rz) + Math.max(h.rx, h.rz) * 0.95)) continue
+            const hill = new THREE.Mesh(
+                new THREE.SphereGeometry(R, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.hill))
+            hill.scale.set(sx, 0.32 + rand() * 0.25, sz)
+            hill.position.set(x, -0.4, z)
+            g.add(hill)
+            hills.push({ x, z, rx: rx * 1.06, rz: rz * 1.06 })
+            break
+        }
     }
     const onHill = (x, z) => hills.some(h =>
         ((x - h.x) / h.rx) ** 2 + ((z - h.z) / h.rz) ** 2 < 1)
@@ -284,6 +318,8 @@ export function buildWorld(scene, hx, hz, seed = 1) {
     bal.scale.setScalar(1.5)
     g.add(bal)
 
+    g.add(skyDome())
+
     scene.add(g)
     return {
         group: g,
@@ -308,4 +344,4 @@ export function buildWorld(scene, hx, hz, seed = 1) {
     }
 }
 
-export { skyTexture }
+export { skyDome }
