@@ -1,0 +1,1025 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>小小木軌 — Wooden Rails</title>
+<meta name="description" content="用木頭軌道拼出一條路,把小火車開進站。">
+<style>
+    :root {
+        --wood: #d9a86c; --deep: #8a5a33; --ink: #4a3524;
+        --paper: #fdf6ea; --shadow: 0 3px 0 rgba(0,0,0,.16);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #efe0c8;
+        font-family: system-ui, "PingFang TC", "Noto Sans TC", sans-serif;
+        color: var(--ink); user-select: none; }
+    canvas { display: block; touch-action: none; }
+
+    #hud { position: fixed; inset: 0; pointer-events: none; }
+    #hud > * { pointer-events: auto; }
+
+    /* 上排:關卡名 + 提示 + 乘客 */
+    #top { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%;
+        transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
+        background: var(--paper); border-radius: 999px; padding: 8px 16px;
+        box-shadow: var(--shadow); max-width: calc(100vw - 24px); }
+    #lvName { font-weight: 800; font-size: 15px; white-space: nowrap; }
+    #lvHint { font-size: 12.5px; opacity: .62; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; }
+    #pax { font-size: 14px; font-weight: 700; white-space: nowrap; }
+    #pax.done { color: #3f8f5c; }
+
+    /* 左上:關卡選單 */
+    #menuBtn { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 12px;
+        width: 42px; height: 42px; border: 0; border-radius: 14px; background: var(--paper);
+        box-shadow: var(--shadow); font-size: 18px; cursor: pointer; }
+
+    /* 右側直排按鈕 */
+    #side { position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+        display: flex; flex-direction: column; gap: 10px; }
+    #side button { width: 46px; height: 46px; border: 0; border-radius: 15px;
+        background: var(--paper); box-shadow: var(--shadow); font-size: 19px; cursor: pointer; }
+    #side button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.16); }
+
+    /* 下排:軌道片盤 + 開車 */
+    #tray { position: absolute; left: 50%; transform: translateX(-50%);
+        bottom: max(12px, env(safe-area-inset-bottom)); display: flex; gap: 8px;
+        align-items: flex-end; }
+    .slot { position: relative; width: 62px; height: 62px; border: 0; border-radius: 18px;
+        background: var(--paper); box-shadow: var(--shadow); cursor: pointer;
+        display: grid; place-items: center; padding: 0; }
+    .slot.on { background: #ffe6b0; outline: 3px solid var(--deep); outline-offset: -3px; }
+    .slot:disabled { opacity: .35; cursor: default; }
+    .slot svg { width: 38px; height: 38px; }
+    .slot .n { position: absolute; right: -3px; top: -5px; min-width: 21px; height: 21px;
+        border-radius: 999px; background: var(--deep); color: #fff; font-size: 12px;
+        font-weight: 800; display: grid; place-items: center; padding: 0 5px; }
+    #goBtn { height: 62px; padding: 0 22px; border: 0; border-radius: 18px; cursor: pointer;
+        background: #4d9b6a; color: #fff; font-size: 17px; font-weight: 800;
+        box-shadow: 0 3px 0 #3a7a52; }
+    #goBtn:active { transform: translateY(2px); box-shadow: 0 1px 0 #3a7a52; }
+    #goBtn.stop { background: #c9683f; box-shadow: 0 3px 0 #a04f2d; }
+
+    /* 結果卡 */
+    #result { position: absolute; inset: 0; display: none;
+        place-items: start center; padding-top: 76px;
+        background: rgba(60,40,22,.14); }
+    #result.show { display: grid; }
+    #card { background: var(--paper); border-radius: 24px; padding: 20px 26px; text-align: center;
+        box-shadow: 0 12px 34px rgba(0,0,0,.24); min-width: 250px; }
+    #card h2 { margin: 0 0 5px; font-size: 22px; }
+    #card p { margin: 0 0 15px; opacity: .68; font-size: 13.5px; }
+    #card .row { display: flex; gap: 10px; justify-content: center; }
+    #card button { border: 0; border-radius: 15px; padding: 12px 20px; font-size: 15px;
+        font-weight: 700; cursor: pointer; background: #e8d9be; color: var(--ink); }
+    #card button.go { background: #4d9b6a; color: #fff; }
+
+    /* 關卡選單 */
+    /* 要壓在開場畫面(z-index 50)上面 —— 少了這行,從主畫面按「選關卡」
+       選單會開在開場畫面底下,看不到也點不到 */
+    #levels { position: fixed; inset: 0; display: none; place-items: center; z-index: 60;
+        background: rgba(60,40,22,.34); backdrop-filter: blur(2px); }
+    #levels.show { display: grid; }
+    #lvBox { background: var(--paper); border-radius: 26px; padding: 24px;
+        box-shadow: 0 12px 34px rgba(0,0,0,.24); }
+    #lvBox h2 { margin: 0 0 14px; font-size: 20px; text-align: center; }
+    #lvGrid { display: grid; grid-template-columns: repeat(5, 60px); gap: 9px; }
+    #lvGrid button { height: 60px; border: 0; border-radius: 16px; background: #e8d9be;
+        font-size: 19px; font-weight: 800; color: var(--ink); cursor: pointer; }
+    #lvGrid button.done { background: #4d9b6a; color: #fff; }
+    #lvGrid button:disabled { opacity: .38; cursor: default; }
+
+    /* 開場畫面。整頁蓋掉 3D,跟 tiny-planet 同一套語彙:
+       滿版漸層 + 大插畫 + 寬字距標題 + 圓角膠囊鈕,尺寸一律用 clamp 跟著視窗縮 */
+    #title {
+        position: fixed; inset: 0; z-index: 50;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: clamp(10px, 1.8vmin, 20px);
+        background: linear-gradient(180deg, #f6e8cd 0%, #ecd7ae 52%, #cdae7e 100%);
+        color: var(--ink); transition: opacity .7s ease;
+    }
+    #title.gone { opacity: 0; pointer-events: none; }
+    body:not(.playing) #top, body:not(.playing) #tray,
+    body:not(.playing) #side, body:not(.playing) #menuBtn { display: none; }
+
+    #titleArt { width: clamp(210px, 42vmin, 420px); }
+    #titleArt svg { width: 100%; height: auto; display: block; overflow: visible; }
+    #titleArt .train { animation: tBob 2.8s ease-in-out infinite;
+        transform-box: view-box; transform-origin: center; }
+    #titleArt .w { animation: tSpin 3.2s linear infinite;
+        transform-box: fill-box; transform-origin: center; }
+    #titleArt .puff { animation: tPuff 2.7s linear infinite;
+        transform-box: fill-box; transform-origin: center; }
+    #titleArt .p2 { animation-delay: .9s; }
+    #titleArt .p3 { animation-delay: 1.8s; }
+    @keyframes tBob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-2.5px) } }
+    @keyframes tSpin { to { transform: rotate(360deg) } }
+    @keyframes tPuff {
+        0%   { transform: translate(0, 0) scale(.4); opacity: .85 }
+        100% { transform: translate(-16px, -34px) scale(1.6); opacity: 0 }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        #titleArt .train, #titleArt .w, #titleArt .puff { animation: none }
+    }
+
+    #titleName { font-size: clamp(30px, 6.4vmin, 66px); font-weight: 800; letter-spacing: .16em;
+        text-shadow: 0 2px 0 rgba(255,255,255,.55); margin-left: .16em; }
+    #titleEn { font-size: clamp(11px, 1.8vmin, 17px); opacity: .5; letter-spacing: .34em;
+        margin-top: clamp(-8px, -1.2vmin, -2px); }
+    #titleSub { font-size: clamp(12px, 1.8vmin, 17px); opacity: .68; letter-spacing: .1em; }
+    #titleProg { font-size: clamp(11px, 1.5vmin, 14px); opacity: .45; letter-spacing: .08em; }
+
+    #playBtn { margin-top: clamp(4px, 1vmin, 12px);
+        padding: clamp(12px, 1.6vmin, 19px) clamp(30px, 5vmin, 58px);
+        font: 700 clamp(15px, 2.1vmin, 21px)/1 inherit; letter-spacing: .12em;
+        color: var(--ink); cursor: pointer; border: none; border-radius: 99px; background: #fff;
+        box-shadow: 0 6px 18px rgba(90,60,30,.22); transition: transform .12s, box-shadow .18s; }
+    #playBtn:hover { transform: translateY(-2px); box-shadow: 0 9px 24px rgba(90,60,30,.28); }
+    #playBtn:active { transform: scale(.96); }
+    /* 次要動作刻意做得低調 —— 開場畫面的主角是「繼續」那顆鈕 */
+    #titleLinks { display: flex; align-items: center; gap: clamp(12px, 2vmin, 22px);
+        margin-top: clamp(8px, 1.6vmin, 18px); }
+    #titleLinks .dot { width: 3px; height: 3px; border-radius: 50%;
+        background: currentColor; opacity: .3; }
+    #titleLinks button { background: none; border: none;
+        font: 500 clamp(11px, 1.5vmin, 14px)/1 inherit; letter-spacing: .06em; cursor: pointer;
+        color: var(--ink); opacity: .6; padding: 0 0 2px;
+        border-bottom: 1px solid rgba(74,53,36,.35); transition: opacity .18s; }
+    #titleLinks button:hover { opacity: .95; }
+    #titleLinks.solo .dot, #titleLinks.solo #newBtn { display: none; }
+    #homeBtn { margin-top: 14px; width: 100%; padding: 11px; border: 0; border-radius: 15px;
+        font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer;
+        background: #e8d9be; color: var(--ink); }
+
+    @media (max-width: 560px) {
+        #lvHint { display: none; }
+        .slot { width: 54px; height: 54px; }
+        #goBtn { height: 54px; padding: 0 16px; font-size: 15px; }
+        #lvGrid { grid-template-columns: repeat(5, 52px); }
+        #lvGrid button { height: 52px; font-size: 17px; }
+    }
+</style>
+</head>
+<body>
+<div id="hud">
+    <button id="menuBtn" title="關卡">☰</button>
+    <div id="top">
+        <span id="lvName"></span><span id="lvHint"></span><span id="pax"></span>
+    </div>
+    <div id="side">
+        <button id="camBtn" title="切換視角">🎥</button>
+        <button id="clearBtn" title="全部清掉">🗑</button>
+    </div>
+    <div id="tray"></div>
+    <div id="result"><div id="card">
+        <h2 id="rTitle"></h2><p id="rText"></p>
+        <div class="row">
+            <button id="rRetry">再試一次</button>
+            <button id="rNext" class="go">下一關</button>
+        </div>
+    </div></div>
+    <div id="levels"><div id="lvBox">
+        <h2>選關卡</h2><div id="lvGrid"></div>
+        <button id="homeBtn">回主畫面</button>
+    </div></div>
+    <div id="title">
+        <div id="titleArt"><svg viewBox="0 0 250 152" fill="none">
+            <!-- 煙:三球錯開時間往左上飄 -->
+            <circle class="puff p1" cx="197" cy="16" r="8" fill="#fffaf0" opacity=".9"/>
+            <circle class="puff p2" cx="197" cy="16" r="7" fill="#fffaf0" opacity=".85"/>
+            <circle class="puff p3" cx="197" cy="16" r="6" fill="#fffaf0" opacity=".8"/>
+            <!-- 軌道:兩道凹槽 -->
+            <rect x="2" y="120" width="246" height="15" rx="3.5" fill="#d8b483"/>
+            <rect x="2" y="123.5" width="246" height="2.6" rx="1.3" fill="#a8834f"/>
+            <rect x="2" y="129" width="246" height="2.6" rx="1.3" fill="#a8834f"/>
+            <g class="train">
+                <!-- 客車廂 -->
+                <rect x="26" y="55" width="70" height="11" rx="5.5" fill="#5b8ea8"/>
+                <rect x="30" y="63" width="62" height="35" rx="4" fill="#6fa3bd"/>
+                <rect x="38" y="71" width="15" height="14" rx="2" fill="#3d2e22"/>
+                <rect x="58" y="71" width="15" height="14" rx="2" fill="#3d2e22"/>
+                <rect x="28" y="96" width="66" height="8" rx="2" fill="#71905d"/>
+                <g class="w"><circle cx="44" cy="112" r="11" fill="#71905d"/>
+                    <rect x="43" y="103" width="2" height="8" rx="1" fill="#5d7a4c"/>
+                    <circle cx="44" cy="112" r="3.4" fill="#9a9086"/></g>
+                <g class="w"><circle cx="80" cy="112" r="11" fill="#71905d"/>
+                    <rect x="79" y="103" width="2" height="8" rx="1" fill="#5d7a4c"/>
+                    <circle cx="80" cy="112" r="3.4" fill="#9a9086"/></g>
+                <!-- 車頭。主體是一根長鍋爐,駕駛室只佔後面一小段 —— 這是側面
+                     一眼認得出蒸汽機車的比例,駕駛室畫大就變成電車 -->
+                <rect x="100" y="88" width="128" height="14" rx="3" fill="#c25a4c"/>
+                <rect x="146" y="54" width="76" height="36" rx="18" fill="#c25a4c"/>
+                <rect x="216" y="49" width="12" height="45" rx="4" fill="#a94a3e"/>
+                <circle cx="166" cy="54" r="9" fill="#c25a4c"/>
+                <path d="M181 19h32l-5 12h-22z" fill="#c25a4c"/>
+                <rect x="187" y="28" width="20" height="28" rx="2" fill="#c25a4c"/>
+                <rect x="97" y="35" width="54" height="11" rx="5.5" fill="#a94a3e"/>
+                <rect x="102" y="43" width="44" height="47" rx="4" fill="#c25a4c"/>
+                <rect x="112" y="53" width="25" height="19" rx="2.5" fill="#3d2e22"/>
+                <g class="w"><circle cx="124" cy="112" r="13" fill="#d6b34c"/>
+                    <rect x="123" y="101" width="2" height="10" rx="1" fill="#bb9a3c"/>
+                    <circle cx="124" cy="112" r="4" fill="#9a9086"/></g>
+                <g class="w"><circle cx="200" cy="112" r="13" fill="#d6b34c"/>
+                    <rect x="199" y="101" width="2" height="10" rx="1" fill="#bb9a3c"/>
+                    <circle cx="200" cy="112" r="4" fill="#9a9086"/></g>
+            </g>
+        </svg></div>
+        <div id="titleName">小小木軌</div>
+        <div id="titleEn">WOODEN RAILS</div>
+        <div id="titleSub">用木頭軌道拼出一條路,把小火車開進站</div>
+        <div id="titleProg"></div>
+        <button id="playBtn"></button>
+        <div id="titleLinks">
+            <button id="newBtn">新遊戲</button>
+            <span class="dot"></span>
+            <button id="pickBtn">選關卡</button>
+        </div>
+    </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
+    from './track.js?v=40'
+import { Train, pegPerson, barrelRoof } from './train.js?v=40'
+import { painted, woodMap, C } from './wood.js?v=40'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=40'
+
+/* ── 場景 ─────────────────────────────────────────────────────────── */
+const renderer = new THREE.WebGLRenderer({ antialias: true })
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
+document.body.appendChild(renderer.domElement)
+
+const scene = new THREE.Scene()
+scene.background = new THREE.Color(0xefe0c8)
+scene.fog = new THREE.Fog(0xefe0c8, 22, 52)   // 跟車時桌緣要溶進背景,不然正前方一條硬邊
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100)
+const controls = new OrbitControls(camera, renderer.domElement)
+controls.enablePan = false
+controls.minDistance = 4
+controls.maxDistance = 22
+controls.maxPolarAngle = 1.32           // 不讓鏡頭掉到桌面以下
+controls.enableDamping = true
+controls.dampingFactor = 0.12
+
+scene.add(new THREE.HemisphereLight(0xfff4e2, 0x9c7d5c, 0.85))   // 開太強會把凹槽與接縫的立體感洗掉
+const sun = new THREE.DirectionalLight(0xfff1d8, 2.45)
+sun.position.set(5, 11, 6)
+sun.castShadow = true
+sun.shadow.mapSize.set(2048, 2048)
+sun.shadow.camera.left = -11; sun.shadow.camera.right = 11
+sun.shadow.camera.top = 11; sun.shadow.camera.bottom = -11
+sun.shadow.camera.far = 34
+sun.shadow.bias = -0.0012
+scene.add(sun)
+
+// 桌面。木紋不做貼圖 —— 這個視距下看得到的只有底色,貼圖只是多一份下載
+const table = new THREE.Mesh(new THREE.CircleGeometry(60, 56),
+    new THREE.MeshStandardMaterial({ color: 0xc9a679, roughness: 0.95 }))
+table.rotation.x = -Math.PI / 2
+table.position.y = -0.001
+table.receiveShadow = true
+scene.add(table)
+
+const M = {
+    wood:  painted(C.beech, { rx: 1, ry: 1 }),        // 軌道與月台:原木色
+    groove: painted(0x9d7c4f, { rx: 1, ry: 1 }),      // 凹槽內壁,深一階才看得出溝
+    door:  painted(0x5a4530, { rx: 2, ry: 2 }),       // 拱門洞口
+    plank: painted(0xc9a373, { rx: 2, ry: 3 }),       // 月台檯面,比軌道深一階才分得出來
+    hole:  new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.98,
+               polygonOffset: true, polygonOffsetFactor: -2 }),   // 榫孔輪廓,貼在頂面上
+    mat:   new THREE.MeshStandardMaterial({ color: 0xa9c79f, roughness: 0.98 }),
+    trunk: painted(0x9a7448, { rx: 2, ry: 2 }),
+    leaf:  painted(0x63a05a, { rx: 2, ry: 2 }),
+    fir:   painted(0x3f8552, { rx: 2, ry: 2, flat: true }),   // 平面著色,不然三層錐體會糊成一顆蛋
+    wall:  painted(0xd9be92, { rx: 2, ry: 2 }),
+    stop:  painted(0xc25a4c, { rx: 2, ry: 2 }),
+    flag:  painted(0x5f9e63, { rx: 2, ry: 2 }),
+    roofs: [painted(0xc25a4c, { rx: 2, ry: 2 }), painted(0x6fa3bd, { rx: 2, ry: 2 }),
+            painted(0xd6b34c, { rx: 2, ry: 2 })],
+}
+
+/* ── 遊戲狀態 ─────────────────────────────────────────────────────── */
+let level, cells, stock, pegs, boardGroup, train
+let sel = PLACEABLE[0], running = false, chase = false, collected = 0
+const KEY = 'wr.progress'
+let unlocked = Math.max(0, Math.min(LEVELS.length - 1, +localStorage.getItem(KEY) || 0))
+
+const el = id => document.getElementById(id)
+// 候車亭與乘客放格子角落:那一格還要鋪軌道,中間留給軌道
+const HALT_OFF = new THREE.Vector3(0.33, 0, 0.33)
+const cellWorld = (x, z) => new THREE.Vector3(
+    x - (level.w - 1) / 2, 0, z - (level.h - 1) / 2)
+
+/* ── 建關 ─────────────────────────────────────────────────────────── */
+function loadLevel(i) {
+    level = { ...LEVELS[i], index: i }
+    if (boardGroup) scene.remove(boardGroup)
+    boardGroup = new THREE.Group()
+    scene.add(boardGroup)
+
+    cells = Array.from({ length: level.h }, () => Array(level.w).fill(null))
+    stock = { ...level.stock }
+    pegs = []
+    collected = 0
+    running = false
+    chase = false
+
+    // 起訖站是固定件,rot 由「連接埠要朝哪一邊」反推:基準連接埠是 S(2)
+    const [sx, sz, sd] = level.start, [gx, gz, gd] = level.goal
+    cells[sz][sx] = { type: 'start', rot: (DIR[sd] - 2 + 4) % 4, fixed: true }
+    cells[gz][gx] = { type: 'goal', rot: (DIR[gd] - 2 + 4) % 4, fixed: true }
+
+    // 遊戲墊:讓棋盤範圍一眼看得出來,不然桌面是無邊無際的
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(level.w + 0.7, level.h + 0.7), M.mat)
+    pad.rotation.x = -Math.PI / 2
+    pad.receiveShadow = true
+    boardGroup.add(pad)
+
+    for (let z = 0; z < level.h; z++) for (let x = 0; x < level.w; x++) {
+        const ch = level.map[z][x]
+        const p = cellWorld(x, z)
+        if (ch === '#') { boardGroup.add(obstacle(p, x + z)); continue }
+        if (ch === 'o') {
+            const color = PEG_COLORS[pegs.length % PEG_COLORS.length]
+            const st = halt(color)
+            st.position.copy(p).add(HALT_OFF)
+            st.rotation.y = -Math.PI / 4                  // 亭子面朝格子中央的軌道
+            boardGroup.add(st)
+            const peg = pegPerson(color)
+            peg.position.copy(p).add(HALT_OFF).setY(0.045)
+            peg.rotation.y = -Math.PI / 4
+            boardGroup.add(peg)
+            pegs.push({ x, z, obj: peg, on: false })
+        }
+        // 空格提示:淺色小方塊,鋪上去就蓋掉
+        const dot = new THREE.Mesh(new THREE.PlaneGeometry(0.74, 0.74),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16 }))
+        dot.rotation.x = -Math.PI / 2
+        dot.position.copy(p).setY(0.004)
+        boardGroup.add(dot)
+    }
+
+    boardGroup.add(station(cellWorld(sx, sz), cells[sz][sx], false))
+    boardGroup.add(station(cellWorld(gx, gz), cells[gz][gx], true))
+    redrawTracks()
+
+    train = train || new Train(scene)
+    train.reset(null)
+
+    savedCam.has = false
+    frameBoard()
+
+    el('lvName').textContent = `${i + 1}. ${level.name}`
+    el('lvHint').textContent = level.hint
+    syncUI()
+}
+
+/** 把整張棋盤(含一圈邊距)塞滿畫面。長寬比變了就得重算,直式與橫式的取景差很多 */
+function frameBoard() {
+    if (!level) return
+    // 目標一定要拉回棋盤中心。從跟車切回來時 controls.target 還停在火車身上,
+    // 只改鏡頭位置的話整張棋盤會偏出畫面
+    controls.enabled = true
+    controls.target.set(0, 0, 0)
+    camTarget.set(0, 0, 0)
+    const fov = THREE.MathUtils.degToRad(camera.fov)
+    // 深度方向被 55 度俯角壓縮,所以 h 打八折;寬度要換算成等效的垂直視角才能比
+    const need = Math.max(level.h * 0.8 + 1.1, (level.w + 1.1) / camera.aspect)
+    const dist = need / (2 * Math.tan(fov / 2)) * 1.02
+    camera.position.set(0, dist * 0.82, dist * 0.58)      // 約 55 度俯角,桌遊的視線高度
+    controls.update()
+}
+
+/** 把鏡頭移到某個點的斜上方(脫軌時對準斷點用) */
+function focusOn(p, dist) {
+    controls.enabled = true
+    controls.target.copy(p)
+    camTarget.copy(p)
+    camera.position.set(p.x, p.y + dist * 0.82, p.z + dist * 0.58)
+    controls.update()
+}
+
+function obstacle(p, seed) {
+    const g = new THREE.Group()
+    const kind = seed % 3
+    if (kind === 0) {                                    // 針葉樹:三層錐體,要拉開才看得出是分層的
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.16, 10), M.trunk)
+        trunk.position.y = 0.08
+        trunk.castShadow = true
+        g.add(trunk)
+        for (const [r, y] of [[0.24, 0.22], [0.185, 0.40], [0.125, 0.56]]) {
+            const c = new THREE.Mesh(new THREE.ConeGeometry(r, 0.24, 9), M.fir)
+            c.position.y = y
+            c.castShadow = true
+            g.add(c)
+        }
+    } else if (kind === 1) {                             // 棒棒糖樹:一根棍子 + 一顆球
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.052, 0.28, 10), M.trunk)
+        trunk.position.y = 0.14
+        const top = new THREE.Mesh(new THREE.SphereGeometry(0.19, 16, 12), M.leaf)
+        top.position.y = 0.42
+        top.scale.set(1, 0.88, 1)
+        trunk.castShadow = top.castShadow = true
+        g.add(trunk, top)
+    } else {                                             // 積木小屋:方塊 + 山形屋頂
+        const bw = 0.40, bh = 0.32, bd = 0.36
+        const body = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), M.wall)
+        body.position.y = bh / 2
+        // 屋頂用擠出的三角形。圓柱轉四面體去湊容易對不準,三角形斷面一次到位
+        const sh = new THREE.Shape()
+        sh.moveTo(-bw / 2 - 0.03, 0); sh.lineTo(bw / 2 + 0.03, 0); sh.lineTo(0, 0.22); sh.closePath()
+        const rg = new THREE.ExtrudeGeometry(sh, { depth: bd + 0.06, bevelEnabled: false })
+        rg.translate(0, 0, -(bd + 0.06) / 2)
+        const roof = new THREE.Mesh(rg, M.roofs[seed % 3])
+        roof.position.y = bh
+        const door = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.18, 0.02), M.trunk)
+        door.position.set(0, 0.09, bd / 2 + 0.005)
+        body.castShadow = roof.castShadow = true
+        g.add(body, roof, door)
+    }
+    g.rotation.y = (seed % 4) * 0.45
+    g.position.copy(p)
+    return g
+}
+
+/**
+ * 車庫。前面留一個真的洞,火車要從裡面開出來、也要完全開進去,
+ * 所以不能像候車亭那樣把拱門畫在牆上 —— 那樣火車會直接穿牆。
+ */
+const bx = (w, h, d, mat) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
+    m.castShadow = true
+    return m
+}
+function shed(w, h, d, roofMat, openW, openH) {
+    const g = new THREE.Group()
+    const t = 0.055                                   // 牆厚
+    const back = bx(w, h, t, M.wall)
+    back.position.set(0, h / 2, -d / 2 + t / 2)
+    g.add(back)
+    for (const sx of [-1, 1]) {
+        const side = bx(t, h, d, M.wall)
+        side.position.set(sx * (w / 2 - t / 2), h / 2, 0)
+        g.add(side)
+        const win = bx(0.15, 0.15, 0.016, M.door)     // 側窗
+        win.position.set(sx * (w / 2 - t * 0.4), h * 0.62, -d * 0.18)
+        win.rotation.y = Math.PI / 2
+        g.add(win)
+    }
+    // 正面:門的兩側各一根柱子 + 上面一道門楣,中間空著就是真的洞
+    const pw = (w - openW) / 2
+    for (const sx of [-1, 1]) {
+        const pillar = bx(pw, h, t, M.wall)
+        pillar.position.set(sx * (w / 2 - pw / 2), h / 2, d / 2 - t / 2)
+        g.add(pillar)
+    }
+    const lintel = bx(openW, h - openH, t, M.wall)
+    lintel.position.set(0, openH + (h - openH) / 2, d / 2 - t / 2)
+    g.add(lintel)
+
+    const roof = barrelRoof(w + 0.08, d + 0.08, 0.03, roofMat)
+    roof.position.y = h
+    g.add(roof)
+    const ch = bx(0.075, 0.16, 0.075, M.stop)
+    ch.position.set(w * 0.26, h + 0.17, -d * 0.24)
+    g.add(ch)
+    return g
+}
+
+/** 乘客的候車小站。放在格子角落 —— 那一格還要鋪軌道,只有角落一定空著 */
+function halt(color) {
+    const g = new THREE.Group()
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.045, 0.30), M.plank)
+    deck.position.y = 0.0225
+    deck.receiveShadow = deck.castShadow = true
+    g.add(deck)
+    for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {   // 四根柱子
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.24, 8), M.trunk)
+        post.position.set(sx * 0.115, 0.165, sz * 0.115)
+        post.castShadow = true
+        g.add(post)
+    }
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.16, 0.024), M.wall)   // 後牆擋風
+    back.position.set(0, 0.125, -0.12)
+    back.castShadow = true
+    g.add(back)
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.05), M.trunk)  // 長凳
+    bench.position.set(0, 0.10, -0.085)
+    bench.castShadow = true
+    g.add(bench)
+    // 屋頂要高過乘客的頭。原本 0.245 壓在釘子人頭上,看起來像被屋頂夾住
+    const roof = barrelRoof(0.36, 0.34, 0.026, painted(color, { rx: 2, ry: 2 }))
+    roof.position.y = 0.285
+    g.add(roof)
+    return g
+}
+
+/**
+ * 起點站 / 終點站。
+ * 月台鋪滿大半格,軌道從邊緣接進來到中央;中央是擋車器(終點式月台),
+ * 再往裡是候車亭。起點掛紅色擋車擋板,終點掛綠旗。
+ */
+function station(p, cell, isGoal) {
+    const g = new THREE.Group()
+    const d = opposite(connsOf(cell)[0])          // 月台盡頭的方向(軌道進來的反向)
+    const fwd = new THREE.Vector3(DELTA[d][0], 0, DELTA[d][1])
+    const side = new THREE.Vector3(DELTA[(d + 1) % 4][0], 0, DELTA[(d + 1) % 4][1])
+
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 1.0), M.plank)
+    base.position.y = 0.025
+    base.receiveShadow = base.castShadow = true
+    g.add(base)
+    // 月台圍邊只圍三面 —— 車庫那一側要留空,不然木條會從屋子裡穿出來
+    for (const [off, sgn] of [[side, -1], [side, 1], [fwd, -1]]) {
+        const alongX = Math.abs(off.x) > 0.5
+        const rim = new THREE.Mesh(
+            new THREE.BoxGeometry(alongX ? 0.05 : 1.0, 0.045, alongX ? 1.0 : 0.05), M.wood)
+        rim.position.copy(off).multiplyScalar(sgn * 0.475).setY(0.072)
+        rim.castShadow = true
+        g.add(rim)
+    }
+
+    // 擋車器放在車庫最裡面,從門口看得到一點,火車也真的停得住
+    const stopG = new THREE.Group()
+    for (const sgn of [-1, 1]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.19, 0.055), M.stop)
+        post.position.copy(side).multiplyScalar(sgn * 0.095).setY(0.145)
+        post.castShadow = true
+        stopG.add(post)
+    }
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.065, 0.055), M.stop)
+    beam.position.y = 0.215
+    beam.rotation.y = d % 2 ? Math.PI / 2 : 0
+    beam.castShadow = true
+    stopG.add(beam)
+    stopG.position.copy(fwd).multiplyScalar(0.52).setY(0.05)
+    g.add(stopG)
+
+    // 門高要讓煙囪過得去(車頭最高點約 0.61),不然火車會頂到門楣
+    const roofColor = isGoal ? 0x5f9e63 : 0xc25a4c
+    const h = shed(0.80, 0.82, 0.62, painted(roofColor, { rx: 2, ry: 2 }), 0.44, 0.68)
+    h.position.copy(fwd).multiplyScalar(0.31).setY(0.05)
+    h.lookAt(h.position.clone().addScaledVector(fwd, -1))   // 門朝月台
+    g.add(h)
+
+    for (const sgn of [-1, 1]) {                   // 兩側各一張長凳
+        const legs = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.055, 0.20), M.trunk)
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.022, 0.24), M.wood)
+        for (const m of [legs, seat]) {
+            m.position.copy(side).multiplyScalar(sgn * 0.38).addScaledVector(fwd, -0.24)
+            m.castShadow = true
+        }
+        legs.position.y = 0.078
+        seat.position.y = 0.116
+        if (Math.abs(side.x) > 0.5) { legs.rotation.y = Math.PI / 2; seat.rotation.y = Math.PI / 2 }
+        g.add(legs, seat)
+    }
+    const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.017, 0.30, 8), M.trunk)
+    lampPost.position.copy(side).multiplyScalar(-0.40).addScaledVector(fwd, -0.40).setY(0.20)
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.033, 12, 8), M.wall)
+    lamp.position.copy(lampPost.position).setY(0.365)
+    lampPost.castShadow = lamp.castShadow = true
+    g.add(lampPost, lamp)
+
+    if (isGoal) {                                  // 終點掛旗,遠遠就看得出哪一站要進
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.50, 8), M.trunk)
+        const flag = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.15, 0.018), M.flag)
+        pole.position.copy(side).multiplyScalar(0.40).addScaledVector(fwd, -0.34).setY(0.30)
+        flag.position.copy(pole.position).addScaledVector(side, 0.12).setY(0.47)
+        pole.castShadow = flag.castShadow = true
+        g.add(pole, flag)
+    }
+    g.position.copy(p)
+    return g
+}
+
+/**
+ * 接頭。實物軌道一端是蘑菇形凸榫、另一端是圓孔,這是木頭軌道最好認的特徵。
+ *
+ * 誰出榫、誰出孔要有個規則,不然兩片相接時可能兩邊都長榫、撞在一起。
+ * 用格線的邊來決定:每一條邊只由「編號較小」的那一格出榫,另一邊出孔。
+ * 這樣不管玩家怎麼擺都不會衝突,而且同一條邊每次重畫的結果都一樣。
+ */
+const PLANK_H = 0.088
+const NECK_W = 0.048, NECK_L = 0.050          // 細頸
+const HEAD_R = 0.050                          // 圓頭比頸寬,插進去才卡得住(實物就是靠這個)
+function jointPiece(pos, tan, peg) {
+    const g = new THREE.Group()
+    if (peg) {
+        const neck = new THREE.Mesh(new THREE.BoxGeometry(NECK_W, PLANK_H, NECK_L), M.wood)
+        neck.position.set(0, PLANK_H / 2, NECK_L / 2)
+        const head = new THREE.Mesh(new THREE.CylinderGeometry(HEAD_R, HEAD_R, PLANK_H, 18), M.wood)
+        head.position.set(0, PLANK_H / 2, NECK_L + HEAD_R * 0.55)
+        neck.castShadow = head.castShadow = true
+        g.add(neck, head)
+    } else {
+        // 榫孔。真的挖洞要 CSG,對這個尺寸不划算;改成貼在頂面上的深色輪廓 ——
+        // 空接時看起來是個孔,接上時看起來是榫頭與孔之間的縫,兩種情況都對
+        const ring = new THREE.Mesh(
+            new THREE.RingGeometry(HEAD_R - 0.008, HEAD_R, 20), M.hole)
+        ring.rotation.x = -Math.PI / 2
+        ring.position.set(0, PLANK_H + 0.0015, -(NECK_L + HEAD_R * 0.55))
+        const slot = new THREE.Mesh(new THREE.PlaneGeometry(NECK_W, NECK_L + 0.02), M.hole)
+        slot.rotation.x = -Math.PI / 2
+        slot.position.set(0, PLANK_H + 0.001, -(NECK_L + 0.02) / 2)
+        g.add(ring, slot)
+    }
+    g.position.copy(pos)
+    g.lookAt(pos.clone().add(tan))
+    return g
+}
+
+/** 重畫所有軌道。片數少,整批重建比追蹤增刪單純且不會漏 */
+let trackGroup = null
+function redrawTracks() {
+    if (trackGroup) {
+        // 幾何是每次重建的,舊的一定要 dispose。少了這行每點一下就漏一份
+        // GPU buffer,玩久了記憶體會一直長
+        trackGroup.traverse(o => o.geometry?.dispose())
+        boardGroup.remove(trackGroup)
+    }
+    trackGroup = new THREE.Group()
+    const id = (x, z) => z * level.w + x
+    for (let z = 0; z < level.h; z++) for (let x = 0; x < level.w; x++) {
+        const c = cells[z][x]
+        if (!c) continue
+        for (const seg of pieceSegs(c.type, c.rot)) {
+            const full = segWorld(seg, x, z, level.w, level.h)
+            const m = new THREE.Mesh(sweep(trimEnds(full)), [M.wood, M.groove])
+            m.castShadow = true; m.receiveShadow = true
+            trackGroup.add(m)
+
+            // 兩端各裝一個接頭。收在格子中央的月台端沒有接頭
+            for (const [d, i, j] of [[seg.a, 0, 1], [seg.b, full.length - 1, full.length - 2]]) {
+                if (d === -1) continue
+                const nx = x + DELTA[d][0], nz = z + DELTA[d][1]
+                const inside = nx >= 0 && nz >= 0 && nx < level.w && nz < level.h
+                const peg = !inside || id(x, z) < id(nx, nz)
+                const tan = new THREE.Vector3().subVectors(full[i], full[j]).normalize()
+                trackGroup.add(jointPiece(full[i], tan, peg))
+            }
+        }
+    }
+    boardGroup.add(trackGroup)
+}
+
+/* ── 鋪軌 ─────────────────────────────────────────────────────────── */
+const raycaster = new THREE.Raycaster()
+const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+const hit = new THREE.Vector3()
+
+function pickCell(ev) {
+    const r = renderer.domElement.getBoundingClientRect()
+    raycaster.setFromCamera(new THREE.Vector2(
+        ((ev.clientX - r.left) / r.width) * 2 - 1,
+        -((ev.clientY - r.top) / r.height) * 2 + 1), camera)
+    if (!raycaster.ray.intersectPlane(plane, hit)) return null
+    const x = Math.round(hit.x + (level.w - 1) / 2), z = Math.round(hit.z + (level.h - 1) / 2)
+    if (x < 0 || z < 0 || x >= level.w || z >= level.h) return null
+    return { x, z }
+}
+
+/** 放下去時挑一個最能接上鄰居的方向,少按幾次「轉」 */
+function bestRot(type, x, z) {
+    let best = 0, bestScore = -1
+    for (let r = 0; r < 4; r++) {
+        let score = 0
+        for (const d of PIECES[type].conns.map(c => (c + r) % 4)) {
+            const nx = x + DELTA[d][0], nz = z + DELTA[d][1]
+            if (nx < 0 || nz < 0 || nx >= level.w || nz >= level.h) { score -= 1; continue }
+            const n = cells[nz][nx]
+            if (n && connsOf(n).includes(opposite(d))) score += 2
+        }
+        if (score > bestScore) { bestScore = score; best = r }
+    }
+    return best
+}
+
+function tapCell(x, z) {
+    if (running) return
+    const ch = level.map[z][x]
+    if (ch === '#') return
+    const cur = cells[z][x]
+    if (cur && cur.fixed) return
+
+    if (sel === 'erase') {
+        if (!cur) return
+        stock[cur.type]++
+        cells[z][x] = null
+    } else if (!cur) {
+        if (!stock[sel]) return
+        stock[sel]--
+        cells[z][x] = { type: sel, rot: bestRot(sel, x, z) }
+    } else if (cur.type === sel) {
+        cur.rot = (cur.rot + 1) % 4            // 同一種:轉方向
+    } else {
+        stock[cur.type]++                       // 換一種:退回舊的再放新的
+        if (!stock[sel]) { stock[cur.type]--; return }
+        stock[sel]--
+        cells[z][x] = { type: sel, rot: bestRot(sel, x, z) }
+    }
+    redrawTracks()
+    syncUI()
+}
+
+// 拖曳轉鏡頭、輕點鋪軌:用移動距離區分,免得轉個鏡頭就亂放一片
+let down = null
+renderer.domElement.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY } })
+renderer.domElement.addEventListener('pointerup', e => {
+    if (!down) return
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y)
+    down = null
+    if (moved > 7) return
+    const c = pickCell(e)
+    if (c) tapCell(c.x, c.z)
+})
+
+/* ── 介面 ─────────────────────────────────────────────────────────── */
+const ICONS = {
+    straight: '<path d="M20 4v32" stroke="#8a5a33" stroke-width="7" fill="none"/>',
+    curve: '<path d="M20 36V24a10 10 0 0 1 10-10h6" stroke="#8a5a33" stroke-width="7" fill="none"/>',
+    cross: '<path d="M20 4v32M4 20h32" stroke="#8a5a33" stroke-width="7" fill="none"/>',
+    erase: '<path d="M9 28l12-12 10 10-9 9H15z" fill="#c9683f"/><path d="M7 34h26" stroke="#8a5a33" stroke-width="4"/>',
+}
+function syncUI() {
+    const tray = el('tray')
+    tray.innerHTML = ''
+    for (const t of PLACEABLE) {
+        if (!(t in level.stock)) continue
+        const b = document.createElement('button')
+        b.className = 'slot' + (sel === t ? ' on' : '')
+        b.innerHTML = `<svg viewBox="0 0 40 40">${ICONS[t]}</svg><span class="n">${stock[t]}</span>`
+        b.disabled = running
+        b.onclick = () => { sel = t; syncUI() }
+        tray.appendChild(b)
+    }
+    const er = document.createElement('button')
+    er.className = 'slot' + (sel === 'erase' ? ' on' : '')
+    er.innerHTML = `<svg viewBox="0 0 40 40">${ICONS.erase}</svg>`
+    er.disabled = running
+    er.onclick = () => { sel = 'erase'; syncUI() }
+    tray.appendChild(er)
+
+    const go = document.createElement('button')
+    go.id = 'goBtn'
+    go.className = running ? 'stop' : ''
+    go.textContent = running ? '停下' : '開車'
+    go.onclick = () => running ? stopRun() : startRun()
+    tray.appendChild(go)
+
+    const total = pegs.length
+    el('pax').textContent = total ? `🧍 ${collected}/${total}` : ''
+    el('pax').className = total && collected === total ? 'done' : ''
+}
+
+/* ── 開車 ─────────────────────────────────────────────────────────── */
+let plan = null
+let autoChase = false      // 等車頭離開車庫再切到跟車
+// 開車前的鏡頭。停下時要原樣還原 —— 進站會拉成俯視、脫軌會拉到斷點,
+// 不記起來的話按「再試一次」就停在那個位置回不去了。
+// 記的是玩家當下的視角,不是預設值,所以自己轉過的角度也會保留
+const savedCam = { pos: new THREE.Vector3(), target: new THREE.Vector3(), has: false }
+
+function startRun() {
+    savedCam.pos.copy(camera.position)
+    savedCam.target.copy(camTarget)
+    savedCam.has = true
+    plan = walk(level, cells)
+    for (const p of pegs) { if (p.on) continue; p.obj.visible = true }
+    collected = 0
+    running = true
+    train.reset(plan.path, plan.ok)
+    train.start()
+    // 先不跟車。車頭這時還在車庫裡,跟車鏡頭會掛在屋子背面 ——
+    // 出庫這一段用俯視看,上路了再切過去
+    chase = false
+    autoChase = true
+    syncUI()
+}
+
+function stopRun() {
+    running = false
+    plan = null
+    train.reset(null)
+    for (const p of pegs) {
+        p.on = false
+        p.obj.parent?.remove(p.obj)
+        p.obj.position.copy(cellWorld(p.x, p.z)).add(HALT_OFF).setY(0.045)
+        p.obj.rotation.y = -Math.PI / 4
+        p.obj.scale.setScalar(1)
+        boardGroup.add(p.obj)
+    }
+    collected = 0
+    chase = false
+    autoChase = false
+    if (savedCam.has) {
+        controls.enabled = true
+        camera.position.copy(savedCam.pos)
+        controls.target.copy(savedCam.target)
+        camTarget.copy(savedCam.target)
+        controls.update()
+    } else {
+        frameBoard()
+    }
+    syncUI()
+}
+
+function finish() {
+    running = false
+    const total = pegs.length
+    if (!plan.ok) {
+        train.derail()
+        chase = false
+        focusOn(plan.path.pts[plan.path.pts.length - 1], 5.2)
+        show('脫軌了!', '軌道沒有接到終點站,再看看哪裡斷掉。', false)
+    } else if (collected < total) {
+        train.arrive()
+        chase = false; frameBoard()
+        show('少了乘客', `還有 ${total - collected} 位在等車,路線要經過他們那一格。`, false)
+    } else {
+        train.arrive()
+        // 進站就退回俯視 —— 這一刻要看的是自己拼出來的那張軌道圖,不是車尾
+        chase = false; frameBoard()
+        show('進站!', '這班車開得漂亮。', true)
+        if (level.index + 1 > unlocked) {
+            unlocked = Math.min(LEVELS.length - 1, level.index + 1)
+            localStorage.setItem(KEY, unlocked)
+        }
+    }
+    syncUI()
+}
+
+function show(title, text, won) {
+    el('rTitle').textContent = title
+    el('rText').textContent = text
+    el('rNext').style.display = won && level.index + 1 < LEVELS.length ? '' : 'none'
+    el('rRetry').textContent = won ? '再玩一次' : '再試一次'
+    setTimeout(() => el('result').classList.add('show'), won ? 700 : 1100)
+}
+const hide = () => el('result').classList.remove('show')
+el('rRetry').onclick = () => { hide(); stopRun() }
+el('rNext').onclick = () => { hide(); loadLevel(level.index + 1) }
+
+/* ── 關卡選單 ─────────────────────────────────────────────────────── */
+function buildMenu() {
+    const g = el('lvGrid')
+    g.innerHTML = ''
+    LEVELS.forEach((L, i) => {
+        const b = document.createElement('button')
+        b.textContent = i + 1
+        b.disabled = i > unlocked
+        if (i < unlocked) b.classList.add('done')
+        b.onclick = () => { el('levels').classList.remove('show'); hide(); enterGame(i) }
+        g.appendChild(b)
+    })
+}
+el('menuBtn').onclick = () => { buildMenu(); el('levels').classList.toggle('show') }
+
+/* ── 主畫面 ───────────────────────────────────────────────────────── */
+// 標題期間讓鏡頭慢慢繞著棋盤轉。靜止的 3D 畫面看起來像當掉,轉起來才有生氣
+function showTitle() {
+    el('title').classList.remove('gone')
+    document.body.classList.remove('playing')
+    const done = unlocked
+    el('titleProg').textContent = done ? `已解鎖 ${done + 1} / ${LEVELS.length} 關` : ''
+    el('playBtn').textContent = done ? `繼續 第 ${done + 1} 關` : '開始'
+    // 沒有進度時「新遊戲」跟「開始」是同一件事,藏起來
+    el('titleLinks').classList.toggle('solo', !done)
+}
+function enterGame(i) {
+    el('title').classList.add('gone')
+    document.body.classList.add('playing')
+    if (i !== undefined && i !== level.index) loadLevel(i)
+    else frameBoard()
+}
+el('playBtn').onclick = () => enterGame(unlocked)
+// 新遊戲只是從第一關重玩,不會清掉已解鎖的關卡 —— 進度是玩家掙來的,
+// 開場畫面上一個不起眼的連結不該把它抹掉
+el('newBtn').onclick = () => enterGame(0)
+el('pickBtn').onclick = () => { buildMenu(); el('levels').classList.add('show') }
+el('homeBtn').onclick = () => { el('levels').classList.remove('show'); showTitle() }
+el('levels').onclick = e => { if (e.target.id === 'levels') el('levels').classList.remove('show') }
+el('clearBtn').onclick = () => {
+    if (running) return
+    for (let z = 0; z < level.h; z++) for (let x = 0; x < level.w; x++) {
+        const c = cells[z][x]
+        if (c && !c.fixed) { stock[c.type]++; cells[z][x] = null }
+    }
+    redrawTracks(); syncUI()
+}
+el('camBtn').onclick = () => { chase = !chase }
+addEventListener('keydown', e => {
+    if (!document.body.classList.contains('playing')) return   // 還在主畫面
+    if (e.key === 'c' || e.key === 'C') chase = !chase
+    if (e.key === ' ') { e.preventDefault(); running ? stopRun() : startRun() }
+    const i = PLACEABLE.indexOf(PLACEABLE[+e.key - 1])
+    if (+e.key >= 1 && +e.key <= 3 && PLACEABLE[+e.key - 1] in level.stock) {
+        sel = PLACEABLE[+e.key - 1]; syncUI()
+    }
+})
+
+/* ── 主迴圈 ───────────────────────────────────────────────────────── */
+const clock = new THREE.Clock()
+const camPos = new THREE.Vector3(), camAim = new THREE.Vector3()
+const camTarget = new THREE.Vector3()   // 跟車模式下鏡頭實際在看的點,切回俯視時交還給 controls
+const tp = new THREE.Vector3(), tt = new THREE.Vector3()
+
+function resize() {
+    camera.aspect = innerWidth / innerHeight
+    camera.updateProjectionMatrix()
+    renderer.setSize(innerWidth, innerHeight)
+    if (controls.enabled) frameBoard()
+}
+addEventListener('resize', resize)
+resize()
+
+let frames = 0
+renderer.setAnimationLoop(() => {
+    frames++
+    const dt = Math.min(0.05, clock.getDelta())
+    train.update(dt)
+
+    if (running && train.state === 'run') {
+        // 乘客:比對弧長,火車輾過那一格的中段就上車
+        for (const p of pegs) {
+            if (p.on) continue
+            const mark = plan.marks.find(m => m.x === p.x && m.z === p.z)
+            if (!mark || train.s < mark.s) continue
+            p.on = true
+            collected++
+            if (!train.board(p.obj)) p.obj.visible = false
+            syncUI()
+        }
+    }
+    if (autoChase && train.state === 'run' && train.s > 0.75) { chase = true; autoChase = false }
+    if (running && chase && train.state === 'run' && train.s >= train.path.length) {
+        chase = false                       // 車頭進車庫了。跟車鏡頭會鑽進屋子裡,
+        frameBoard()                        // 而且從上面才看得到整列一節一節開進去
+    }
+    if (running && train.state === 'end') finish()
+
+    if (chase && train.group.visible) {
+        // 跟車。OrbitControls 要關掉 —— 它 update() 會用自己的球座標把鏡頭拉回去,
+        // 兩邊同時寫 camera.position 的結果是鏡頭在原地抖
+        controls.enabled = false
+        const loco = train.cars[0]
+        loco.getWorldDirection(tt)                       // 車頭朝向
+        camPos.copy(loco.position).addScaledVector(tt, -3.2).setY(loco.position.y + 1.55)
+        camAim.copy(loco.position).addScaledVector(tt, 1.3).setY(loco.position.y + 0.25)
+        const k = 1 - Math.pow(0.0015, dt)               // 轉彎時鏡頭慢半拍,比硬鎖好看
+        camera.position.lerp(camPos, k)
+        camTarget.lerp(camAim, k)
+        camera.lookAt(camTarget)
+    } else {
+        if (!controls.enabled) {                          // 從跟車切回來:把控制器接回目前鏡頭
+            controls.enabled = true
+            controls.target.copy(camTarget)
+            controls.update()
+        }
+        controls.update()
+        camTarget.copy(controls.target)
+    }
+    renderer.render(scene, camera)
+})
+
+// ?debug=1 才掛出來:自動化驗證要能問到「火車現在到底在幹嘛」,
+// 光看畫面分不出「沒在跑」和「跑得很慢」
+if (new URLSearchParams(location.search).has('debug')) {
+    window.__wr = {
+        THREE, scene, camera, controls,
+        get level() { return level }, get cells() { return cells },
+        get train() { return train }, get plan() { return plan },
+        get stock() { return stock }, get pegs() { return pegs },
+        get frames() { return frames },
+        tap: (x, z) => tapCell(x, z),
+        // 直接指定片型與方向,自動化驗證要能一次擺出正解,不必模擬點好幾下
+        put: (type, x, z, rot) => {
+            const cur = cells[z][x]
+            if (cur && !cur.fixed) stock[cur.type]++
+            stock[type]--
+            cells[z][x] = { type, rot }
+            redrawTracks(); syncUI()
+        },
+        go: () => startRun(),
+        pick: t => { sel = t; syncUI() },
+        load: i => loadLevel(i),
+    }
+}
+
+loadLevel(unlocked)
+showTitle()
+</script>
+</body>
+</html>
