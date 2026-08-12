@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=75'
+import { painted } from './wood.js?v=80'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -91,28 +91,39 @@ export function riverOffset(t, hw) {
  * u 是橫向(0/1 是兩岸),v 是沿河的弧長。
  */
 export function waterTexture() {
-    const W = 48, H = 256
+    const W = 64, H = 256
     const c = document.createElement('canvas')
     c.width = W; c.height = H
     const g = c.getContext('2d')
+    // 亮松石綠的底 + 高對比的白色波紋條。這種卡通水的辨識度來自「稀疏但
+    // 很亮的長條反光」,不是均勻的漸層 —— 用 pow(sin, n) 把正弦壓成窄峰,
+    // 頻率取整數,所以垂直方向完美接合
     for (let y = 0; y < H; y++) {
         const t = (y / H) * Math.PI * 2
-        const k = 0.5 + 0.16 * Math.sin(t * 3) + 0.10 * Math.sin(t * 7 + 1.1)
         for (let x = 0; x < W; x++) {
-            // 靠岸的地方加一點白 —— 水花是「這是流動的水」很強的暗示
-            const edge = Math.max(0, 1 - Math.min(x, W - 1 - x) / 5)
-            const foam = edge * edge * 0.55
-            const l = 150 + k * 46
-            const r = Math.round(l * 0.55 + foam * 210)
-            const gg = Math.round(l * 0.78 + foam * 200)
-            const b = Math.round(l + foam * 150)
-            g.fillStyle = `rgb(${Math.min(255, r)}, ${Math.min(255, gg)}, ${Math.min(255, b)})`
+            const u = (x / W) * Math.PI * 2
+            const wob = Math.sin(u * 2 + t * 0.5) * 0.35      // 讓條紋不要筆直
+            const band = 0.5 + 0.22 * Math.sin(t * 3 + wob) + 0.14 * Math.sin(t * 7 - wob)
+            // 指數決定亮帶多寬。之前用 16 / 24,峰只有 5 像素寬,遠看直接被
+            // 過濾掉;3 / 5 才是看得見的寬帶
+            const s1 = Math.pow(Math.max(0, Math.sin(t * 3 + wob * 1.6)), 3)
+            const s2 = Math.pow(Math.max(0, Math.sin(t * 6 - wob * 2.2 + 1.7)), 5)
+            const streak = Math.min(1, s1 * 0.72 + s2 * 0.45)
+            const edge = Math.max(0, 1 - Math.min(x, W - 1 - x) / 6)
+            const foam = edge * edge * 0.6
+            const k = Math.min(1, streak + foam)
+            // 底色 → 白:整條的亮度由波紋條主導
+            const r = Math.round((36 + band * 30) * (1 - k) + 238 * k)
+            const gg = Math.round((188 + band * 34) * (1 - k) + 252 * k)
+            const b = Math.round((180 + band * 32) * (1 - k) + 248 * k)
+            g.fillStyle = `rgb(${r}, ${gg}, ${b})`
             g.fillRect(x, y, 1, 1)
         }
     }
     const t = new THREE.CanvasTexture(c)
     t.wrapS = t.wrapT = THREE.RepeatWrapping
     t.colorSpace = THREE.SRGBColorSpace
+    t.anisotropy = 8           // 河是大斜角看的,沒有這個水紋會被抹成平色
     return t
 }
 
@@ -152,6 +163,7 @@ export function waterNormal(size = 128) {
     const t = new THREE.CanvasTexture(c)
     t.wrapS = t.wrapT = THREE.RepeatWrapping
     t.colorSpace = THREE.NoColorSpace     // 這是資料不是顏色,不能做 sRGB 轉換
+    t.anisotropy = 8
     return t
 }
 

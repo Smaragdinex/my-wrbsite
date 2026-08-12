@@ -253,12 +253,12 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=75'
-import { Train, pegPerson, barrelRoof } from './train.js?v=75'
-import { painted, woodMap, C } from './wood.js?v=75'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset } from './world.js?v=75'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=75'
-import { SOLUTIONS } from './solutions.js?v=75'
+    from './track.js?v=80'
+import { Train, pegPerson, barrelRoof } from './train.js?v=80'
+import { painted, woodMap, C } from './wood.js?v=80'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset } from './world.js?v=80'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=80'
+import { SOLUTIONS } from './solutions.js?v=80'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -308,15 +308,15 @@ const M = {
     plank: painted(0xc9a373, { rx: 2, ry: 3 }),       // 月台檯面,比軌道深一階才分得出來
     truss: painted(0xe8542f, { rx: 3, ry: 3 }),        // 橋的側桁架,實物就是這個橘紅色
     bank:  painted(0xc9b083, { rx: 1, ry: 8 }),        // 河岸的乾沙
-    bed:   painted(0x8f7a56, { rx: 1, ry: 10 }),       // 水面下的濕河床
+    bed:   painted(0x7fb8a0, { rx: 1, ry: 10 }),       // 水面下的淺灘,偏綠才配得上松石綠的水
     hintRing: new THREE.MeshBasicMaterial({ color: 0xe8b33c, transparent: true, opacity: 0.75 }),
     // 水:低 roughness + 法線貼圖,陽光的鏡面反光才會隨波紋游動。
     // 少了 normalMap,不管怎麼捲動都只是一塊會動的藍布
     water: new THREE.MeshStandardMaterial({
         map: waterTexture(), normalMap: waterNormal(),
         normalScale: new THREE.Vector2(0.85, 0.85),
-        roughness: 0.16, metalness: 0.12,
-        transparent: true, opacity: 0.84,     // 透出底下的河床
+        roughness: 0.14, metalness: 0.05,
+        transparent: true, opacity: 0.93,     // 卡通水偏不透明,只透一點點河床
     }),
     hole:  new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.98,
                polygonOffset: true, polygonOffsetFactor: -2 }),   // 榫孔輪廓,貼在頂面上
@@ -789,7 +789,7 @@ function riverRibbon(river, w0, w1, y) {
         }
         if (prev !== null) arc += Math.hypot(dt, off - prev)
         prev = off
-        uv.push(0, arc / 3, 1, arc / 3)   // 每 3 個世界單位一個波紋週期
+        uv.push(0, arc / 2.4, 1, arc / 2.4)   // 每 2.4 個世界單位一輪水紋。有非等向性過濾撐著,不必為了防糊而放大
     }
     // 繞序要看河往哪個方向走。同一組順序對縱向的河法線朝上、對橫向的河
     // 就是朝下 —— 整條河會被背面剔除掉,什麼都看不見(第 32/37/39 關就是這樣)
@@ -807,18 +807,15 @@ function riverRibbon(river, w0, w1, y) {
 }
 
 /**
- * 要不要開真實反射。
+ * 要不要開真實反射。預設關,?reflect=1 才開。
  *
- * Reflector 會把整個場景多渲染一遍到 render target,draw call 直接翻倍 ——
- * 桌機吃得下,手機會掉幀,所以預設只在非觸控的大螢幕開。
- * ?reflect=1 / ?reflect=0 可以強制。
+ * 兩個理由:
+ *   1. three 的 Water 只吃 waterColor 與法線,**完全不用顏色貼圖** ——
+ *      卡通水的白色水紋就是畫在顏色貼圖上的,開了反射反而看不到水紋
+ *   2. 它會把整個場景多渲染一遍,每幀 draw call 394 → 514
+ * 真實反射跟這種卡通水本來就是兩種美術方向,選了後者就不該同時要前者。
  */
-const REFLECT = (() => {
-    const q = new URLSearchParams(location.search).get('reflect')
-    if (q === '1') return true
-    if (q === '0') return false
-    return !matchMedia('(pointer: coarse)').matches && innerWidth >= 900
-})()
+const REFLECT = new URLSearchParams(location.search).get('reflect') === '1'
 
 let waterMesh = null
 function makeWater(geom) {
@@ -832,7 +829,7 @@ function makeWater(geom) {
         waterNormals: M.water.normalMap,
         sunDirection: sun.position.clone().normalize(),
         sunColor: 0xfff4de,
-        waterColor: 0x2f5a7a,
+        waterColor: 0x2ec4bd,      // 亮松石綠
         distortionScale: 1.5,      // 這是溪流不是海,扭曲要小
         fog: true,
     })
@@ -840,14 +837,14 @@ function makeWater(geom) {
     // 淺溪應該看得到底下的河床。不透明的水面是這條河最假的地方 ——
     // 底下本來就鋪著沙洲那一層,透出來就有水深感
     w.material.transparent = true
-    w.material.uniforms.alpha.value = 0.82
+    w.material.uniforms.alpha.value = 0.93
     // 這個場景的天空很淡,直接反射會把整條河洗成白色。兩處要改:
     //   1. 基礎反射率 0.3 → 0.18
     //   2. 反射色往水色拉一半 —— 保留高光,但不要整片天空的亮度
     w.material.fragmentShader = w.material.fragmentShader
-        .replace('float rf0 = 0.3;', 'float rf0 = 0.18;')
+        .replace('float rf0 = 0.3;', 'float rf0 = 0.12;')
         .replace('vec3( 0.1 ) + reflectionSample * 0.9',
-                 'vec3( 0.02 ) + mix( waterColor, reflectionSample, 0.5 )')
+                 'vec3( 0.02 ) + mix( waterColor, reflectionSample, 0.35 )')
     return w
 }
 
