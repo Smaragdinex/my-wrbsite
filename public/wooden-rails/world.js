@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=80'
+import { painted } from './wood.js?v=83'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -84,6 +84,35 @@ export function riverOffset(t, hw) {
     const d = Math.max(0, Math.abs(t) - hw)
     const amp = Math.min(2.8, d * 0.24)
     return amp * (Math.sin(t * 0.19) + 0.5 * Math.sin(t * 0.33 + 1.3))
+}
+
+/**
+ * 河岸的擾動,回傳 0~1。
+ * 幾個不成比例的頻率疊起來,看不出週期。左右岸給不同的相位,
+ * 兩邊才不會同進同出 —— 平行的兩條線正是「假河」最明顯的特徵。
+ */
+export function wob(t, phase) {
+    return 0.5 + 0.5 * (0.55 * Math.sin(t * 0.9 + phase)
+                      + 0.30 * Math.sin(t * 2.3 - phase * 1.7)
+                      + 0.15 * Math.sin(t * 5.1 + phase * 0.6))
+}
+
+/**
+ * 水面在某一點、某一岸的半寬。
+ *
+ * 棋盤範圍內的擾動只能「往外長」—— 水必須蓋滿那一格,往內縮就會露出
+ * 半格乾地。出了棋盤才放開,而且離得越遠越寬、擺動越大。
+ */
+export function riverHalf(t, river, right) {
+    const d = Math.max(0, Math.abs(t) - river.hw)
+    const base = (1.0 + Math.min(1, d / 9) * 0.6) / 2
+    const amt = 0.10 + Math.min(1, d / 7) * 0.30
+    return base + wob(t, right ? 2.7 : 0) * amt
+}
+
+/** 沙洲永遠比水面寬,所以直接由水面的半寬加上一段會擺動的邊距 */
+export function bankHalf(t, river, right) {
+    return riverHalf(t, river, right) + 0.17 + wob(t, right ? 5.3 : 1.9) * 0.16
 }
 
 /**
