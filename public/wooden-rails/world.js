@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=66'
+import { painted } from './wood.js?v=68'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -71,6 +71,19 @@ function skyDome() {
     const dome = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), m)
     dome.frustumCulled = false
     return dome
+}
+
+/**
+ * 河在某個位置的橫向偏移。
+ *
+ * 棋盤範圍內必須是 0 —— 橋是格子對齊的直片,水也得剛好蓋滿那一格,
+ * 一彎就會有半格是乾的、半格溢到隔壁。出了棋盤才慢慢彎起來,
+ * 而且離得越遠彎得越大。
+ */
+export function riverOffset(t, hw) {
+    const d = Math.max(0, Math.abs(t) - hw)
+    const amp = Math.min(2.8, d * 0.24)
+    return amp * (Math.sin(t * 0.19) + 0.5 * Math.sin(t * 0.33 + 1.3))
 }
 
 /**
@@ -302,8 +315,12 @@ export function buildWorld(scene, hx, hz, seed = 1, river = null) {
 
     // 棋盤禁區用矩形判斷。用半徑會讓長方形棋盤的短邊塞不下東西、長邊又被吃掉
     // 河也是禁區 —— 樹長在河中間會很奇怪
-    const onRiver = (x, z) => river &&
-        Math.abs((river.axis ? z : x) - river.at) < 0.85
+    const onRiver = (x, z) => {
+        if (!river) return false
+        const along = river.axis ? x : z              // 沿著河的方向
+        const lat = (river.axis ? z : x) - river.at - riverOffset(along, river.hw)
+        return Math.abs(lat) < 1.05
+    }
     const clear = (x, z, pad) =>
         (Math.abs(x) > hx + pad || Math.abs(z) > hz + pad) && !onHill(x, z) && !onRiver(x, z)
     const spot = (min, max, pad) => {
