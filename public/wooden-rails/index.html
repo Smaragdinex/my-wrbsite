@@ -251,13 +251,14 @@
 <script type="module">
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=69'
-import { Train, pegPerson, barrelRoof } from './train.js?v=69'
-import { painted, woodMap, C } from './wood.js?v=69'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset } from './world.js?v=69'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=69'
-import { SOLUTIONS } from './solutions.js?v=69'
+    from './track.js?v=72'
+import { Train, pegPerson, barrelRoof } from './train.js?v=72'
+import { painted, woodMap, C } from './wood.js?v=72'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset } from './world.js?v=72'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=72'
+import { SOLUTIONS } from './solutions.js?v=72'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -376,6 +377,7 @@ function loadLevel(i) {
     // 河在哪一行/列。這段一定要在 buildWorld 之前 —— 草木動物要避開河,
     // 順序反過來的話它們避的是上一關的河
     river = null
+    waterMesh = null
     for (let z = 0; z < level.h && !river; z++) for (let x = 0; x < level.w; x++) {
         if (level.map[z][x] !== '~') continue
         const vertical = level.map.every(row => row[x] === '~')
@@ -436,8 +438,11 @@ function loadLevel(i) {
 
     if (river) {
         M.water.normalMap.repeat.set(1.6, 2.2)   // 法線的波紋要比色帶細
-        for (const [w0, w1, y, mat] of [[1.34, 2.1, 0.006, M.bank], [1.0, 1.6, 0.010, M.water]])
-            boardGroup.add(riverRibbon(river, w0, w1, y, mat))
+        const bank = new THREE.Mesh(riverRibbon(river, 1.34, 2.1, 0.006), M.bank)
+        bank.receiveShadow = true
+        boardGroup.add(bank)
+        waterMesh = makeWater(riverRibbon(river, 1.0, 1.6, 0.010))
+        boardGroup.add(waterMesh)
     }
 
     ordered = pegs.some(p => p.order)
@@ -752,7 +757,7 @@ function jointPiece(pos, tan, peg) {
  * 河的緞帶。棋盤內筆直、出了棋盤才蜿蜒,而且越遠越寬 ——
  * 一條等寬的直帶看起來是印上去的圖案,不是流過這片地景的河。
  */
-function riverRibbon(river, w0, w1, y, mat) {
+function riverRibbon(river, w0, w1, y) {
     const N = 260, LEN = 74
     const pos = [], uv = [], idx = []
     const at = (t) => {                       // 中心線在「沿河 / 橫向」座標系
@@ -790,9 +795,48 @@ function riverRibbon(river, w0, w1, y, mat) {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
     g.setIndex(idx)
     g.computeVertexNormals()
-    const m = new THREE.Mesh(g, mat)
-    m.receiveShadow = true
-    return m
+    return g
+}
+
+/**
+ * 要不要開真實反射。
+ *
+ * Reflector 會把整個場景多渲染一遍到 render target,draw call 直接翻倍 ——
+ * 桌機吃得下,手機會掉幀,所以預設只在非觸控的大螢幕開。
+ * ?reflect=1 / ?reflect=0 可以強制。
+ */
+const REFLECT = (() => {
+    const q = new URLSearchParams(location.search).get('reflect')
+    if (q === '1') return true
+    if (q === '0') return false
+    return !matchMedia('(pointer: coarse)').matches && innerWidth >= 900
+})()
+
+let waterMesh = null
+function makeWater(geom) {
+    if (!REFLECT) {
+        const m = new THREE.Mesh(geom, M.water)
+        m.receiveShadow = true
+        return m
+    }
+    const w = new Water(geom, {
+        textureWidth: 512, textureHeight: 512,
+        waterNormals: M.water.normalMap,
+        sunDirection: sun.position.clone().normalize(),
+        sunColor: 0xfff4de,
+        waterColor: 0x2f5a7a,
+        distortionScale: 1.5,      // 這是溪流不是海,扭曲要小
+        fog: true,
+    })
+    w.material.uniforms.size.value = 6.0
+    // 這個場景的天空很淡,直接反射會把整條河洗成白色。兩處要改:
+    //   1. 基礎反射率 0.3 → 0.18
+    //   2. 反射色往水色拉一半 —— 保留高光,但不要整片天空的亮度
+    w.material.fragmentShader = w.material.fragmentShader
+        .replace('float rf0 = 0.3;', 'float rf0 = 0.18;')
+        .replace('vec3( 0.1 ) + reflectionSample * 0.9',
+                 'vec3( 0.02 ) + mix( waterColor, reflectionSample, 0.5 )')
+    return w
 }
 
 /** 兩點之間的一根桿件 */
@@ -1240,10 +1284,14 @@ renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta())
     world?.update(clock.elapsedTime)
     if (river) {
-        // 兩層用不同速度捲:同速的話整面水像一張紙在平移,錯開才有流動感
-        M.water.map.offset.y -= dt * 0.30
-        M.water.normalMap.offset.y -= dt * 0.62
-        M.water.normalMap.offset.x += dt * 0.04
+        if (waterMesh?.material.uniforms?.time) {
+            waterMesh.material.uniforms.time.value += dt * 0.55   // 反射版:波紋由 shader 推
+        } else {
+            // 兩層用不同速度捲:同速的話整面水像一張紙在平移,錯開才有流動感
+            M.water.map.offset.y -= dt * 0.30
+            M.water.normalMap.offset.y -= dt * 0.62
+            M.water.normalMap.offset.x += dt * 0.04
+        }
     }
     train.update(dt)
 
@@ -1296,7 +1344,7 @@ renderer.setAnimationLoop(() => {
 // 光看畫面分不出「沒在跑」和「跑得很慢」
 if (new URLSearchParams(location.search).has('debug')) {
     window.__wr = {
-        THREE, scene, camera, controls,
+        THREE, scene, camera, controls, renderer,
         get level() { return level }, get cells() { return cells },
         get train() { return train }, get plan() { return plan },
         get stock() { return stock }, get pegs() { return pegs },
