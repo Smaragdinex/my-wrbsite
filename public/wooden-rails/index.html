@@ -253,12 +253,12 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=72'
-import { Train, pegPerson, barrelRoof } from './train.js?v=72'
-import { painted, woodMap, C } from './wood.js?v=72'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset } from './world.js?v=72'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=72'
-import { SOLUTIONS } from './solutions.js?v=72'
+    from './track.js?v=73'
+import { Train, pegPerson, barrelRoof } from './train.js?v=73'
+import { painted, woodMap, C } from './wood.js?v=73'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset } from './world.js?v=73'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=73'
+import { SOLUTIONS } from './solutions.js?v=73'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -307,7 +307,8 @@ const M = {
     door:  painted(0x5a4530, { rx: 2, ry: 2 }),       // 拱門洞口
     plank: painted(0xc9a373, { rx: 2, ry: 3 }),       // 月台檯面,比軌道深一階才分得出來
     truss: painted(0xe8542f, { rx: 3, ry: 3 }),        // 橋的側桁架,實物就是這個橘紅色
-    bank:  painted(0xc9b083, { rx: 1, ry: 8 }),        // 河岸的沙洲
+    bank:  painted(0xc9b083, { rx: 1, ry: 8 }),        // 河岸的乾沙
+    bed:   painted(0x8f7a56, { rx: 1, ry: 10 }),       // 水面下的濕河床
     hintRing: new THREE.MeshBasicMaterial({ color: 0xe8b33c, transparent: true, opacity: 0.75 }),
     // 水:低 roughness + 法線貼圖,陽光的鏡面反光才會隨波紋游動。
     // 少了 normalMap,不管怎麼捲動都只是一塊會動的藍布
@@ -315,6 +316,7 @@ const M = {
         map: waterTexture(), normalMap: waterNormal(),
         normalScale: new THREE.Vector2(0.85, 0.85),
         roughness: 0.16, metalness: 0.12,
+        transparent: true, opacity: 0.84,     // 透出底下的河床
     }),
     hole:  new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.98,
                polygonOffset: true, polygonOffsetFactor: -2 }),   // 榫孔輪廓,貼在頂面上
@@ -438,9 +440,13 @@ function loadLevel(i) {
 
     if (river) {
         M.water.normalMap.repeat.set(1.6, 2.2)   // 法線的波紋要比色帶細
-        const bank = new THREE.Mesh(riverRibbon(river, 1.34, 2.1, 0.006), M.bank)
+        const bank = new THREE.Mesh(riverRibbon(river, 1.34, 2.1, 0.004), M.bank)
         bank.receiveShadow = true
         boardGroup.add(bank)
+        // 水面正下方再鋪一層濕沙。乾濕交界正好落在水線上,水深感就出來了
+        const bed = new THREE.Mesh(riverRibbon(river, 1.02, 1.62, 0.007), M.bed)
+        bed.receiveShadow = true
+        boardGroup.add(bed)
         waterMesh = makeWater(riverRibbon(river, 1.0, 1.6, 0.010))
         boardGroup.add(waterMesh)
     }
@@ -829,6 +835,10 @@ function makeWater(geom) {
         fog: true,
     })
     w.material.uniforms.size.value = 6.0
+    // 淺溪應該看得到底下的河床。不透明的水面是這條河最假的地方 ——
+    // 底下本來就鋪著沙洲那一層,透出來就有水深感
+    w.material.transparent = true
+    w.material.uniforms.alpha.value = 0.82
     // 這個場景的天空很淡,直接反射會把整條河洗成白色。兩處要改:
     //   1. 基礎反射率 0.3 → 0.18
     //   2. 反射色往水色拉一半 —— 保留高光,但不要整片天空的亮度
