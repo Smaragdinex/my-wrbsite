@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=68'
+import { painted } from './wood.js?v=69'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -87,24 +87,71 @@ export function riverOffset(t, hw) {
 }
 
 /**
- * 水面貼圖。用列為單位的正弦疊加畫橫向波紋 —— 這樣在垂直方向是完美週期,
- * 捲動時不會出現接縫。隨機畫波紋的話,捲到接縫就會看到一條線
+ * 水面的顏色貼圖:底色 + 兩側的白色泡沫。
+ * u 是橫向(0/1 是兩岸),v 是沿河的弧長。
  */
 export function waterTexture() {
+    const W = 48, H = 256
     const c = document.createElement('canvas')
-    c.width = 8; c.height = 256
+    c.width = W; c.height = H
     const g = c.getContext('2d')
-    for (let y = 0; y < 256; y++) {
-        const t = (y / 256) * Math.PI * 2
-        const k = 0.5 + 0.30 * Math.sin(t * 3) + 0.20 * Math.sin(t * 7 + 1.1)
-                      + 0.12 * Math.sin(t * 13 + 2.3)
-        const l = Math.round(150 + k * 62)
-        g.fillStyle = `rgb(${Math.round(l * 0.62)}, ${Math.round(l * 0.82)}, ${l})`
-        g.fillRect(0, y, 8, 1)
+    for (let y = 0; y < H; y++) {
+        const t = (y / H) * Math.PI * 2
+        const k = 0.5 + 0.16 * Math.sin(t * 3) + 0.10 * Math.sin(t * 7 + 1.1)
+        for (let x = 0; x < W; x++) {
+            // 靠岸的地方加一點白 —— 水花是「這是流動的水」很強的暗示
+            const edge = Math.max(0, 1 - Math.min(x, W - 1 - x) / 5)
+            const foam = edge * edge * 0.55
+            const l = 150 + k * 46
+            const r = Math.round(l * 0.55 + foam * 210)
+            const gg = Math.round(l * 0.78 + foam * 200)
+            const b = Math.round(l + foam * 150)
+            g.fillStyle = `rgb(${Math.min(255, r)}, ${Math.min(255, gg)}, ${Math.min(255, b)})`
+            g.fillRect(x, y, 1, 1)
+        }
     }
     const t = new THREE.CanvasTexture(c)
     t.wrapS = t.wrapT = THREE.RepeatWrapping
     t.colorSpace = THREE.SRGBColorSpace
+    return t
+}
+
+/**
+ * 水面的法線貼圖 —— 這才是讓水看起來像水的東西。
+ *
+ * 平的藍色布面不管怎麼捲動都像塑膠布;有了法線起伏,陽光的鏡面反光會
+ * 隨著波紋游動,那個閃爍才是眼睛認得的「水」。用幾道不同頻率的正弦疊
+ * 成高度場,再取梯度當法線;頻率都取整數,所以四邊完美接合。
+ */
+export function waterNormal(size = 128) {
+    const c = document.createElement('canvas')
+    c.width = c.height = size
+    const g = c.getContext('2d')
+    const img = g.createImageData(size, size)
+    const h = (x, y) => {
+        const u = (x / size) * Math.PI * 2, v = (y / size) * Math.PI * 2
+        return 0.50 * Math.sin(v * 3 + u * 1)
+             + 0.30 * Math.sin(v * 7 - u * 2 + 1.1)
+             + 0.18 * Math.sin(v * 13 + u * 4 + 2.2)
+             + 0.14 * Math.sin(u * 5 + v * 2 + 0.7)
+    }
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const w = (n) => (n + size) % size
+        const dx = h(w(x + 1), y) - h(w(x - 1), y)
+        const dy = h(x, w(y + 1)) - h(x, w(y - 1))
+        const s = 2.2
+        let nx = -dx * s, ny = -dy * s, nz = 1
+        const l = Math.hypot(nx, ny, nz)
+        const i = (y * size + x) * 4
+        img.data[i]     = ((nx / l) * 0.5 + 0.5) * 255
+        img.data[i + 1] = ((ny / l) * 0.5 + 0.5) * 255
+        img.data[i + 2] = ((nz / l) * 0.5 + 0.5) * 255
+        img.data[i + 3] = 255
+    }
+    g.putImageData(img, 0, 0)
+    const t = new THREE.CanvasTexture(c)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.colorSpace = THREE.NoColorSpace     // 這是資料不是顏色,不能做 sRGB 轉換
     return t
 }
 
