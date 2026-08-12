@@ -74,6 +74,7 @@
     #card button { border: 0; border-radius: 15px; padding: 12px 20px; font-size: 15px;
         font-weight: 700; cursor: pointer; background: #e8d9be; color: var(--ink); }
     #card button.go { background: #4d9b6a; color: #fff; }
+    #rHint { background: #e8b33c; color: #4a3524; }
 
     /* 關卡選單 */
     /* 要壓在開場畫面(z-index 50)上面 —— 少了這行,從主畫面按「選關卡」
@@ -168,6 +169,7 @@
         <span id="lvName"></span><span id="lvHint"></span><span id="pax"></span>
     </div>
     <div id="side">
+        <button id="hintBtn" title="看廣告拿一片提示">💡</button>
         <button id="camBtn" title="切換視角">🎥</button>
         <button id="clearBtn" title="全部清掉">🗑</button>
     </div>
@@ -175,6 +177,7 @@
     <div id="result"><div id="card">
         <h2 id="rTitle"></h2><p id="rText"></p>
         <div class="row">
+            <button id="rHint">💡 看廣告拿提示</button>
             <button id="rRetry">再試一次</button>
             <button id="rNext" class="go">下一關</button>
         </div>
@@ -248,11 +251,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=57'
-import { Train, pegPerson, barrelRoof } from './train.js?v=57'
-import { painted, woodMap, C } from './wood.js?v=57'
-import { buildWorld, HORIZON } from './world.js?v=57'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=57'
+    from './track.js?v=59'
+import { Train, pegPerson, barrelRoof } from './train.js?v=59'
+import { painted, woodMap, C } from './wood.js?v=59'
+import { buildWorld, HORIZON } from './world.js?v=59'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=59'
+import { SOLUTIONS } from './solutions.js?v=59'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -300,6 +304,7 @@ const M = {
     groove: painted(0x9d7c4f, { rx: 1, ry: 1 }),      // 凹槽內壁,深一階才看得出溝
     door:  painted(0x5a4530, { rx: 2, ry: 2 }),       // 拱門洞口
     plank: painted(0xc9a373, { rx: 2, ry: 3 }),       // 月台檯面,比軌道深一階才分得出來
+    hintRing: new THREE.MeshBasicMaterial({ color: 0xe8b33c, transparent: true, opacity: 0.75 }),
     water: new THREE.MeshStandardMaterial({ color: 0x6fa8c4, roughness: 0.4 }),
     hole:  new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.98,
                polygonOffset: true, polygonOffsetFactor: -2 }),   // 榫孔輪廓,貼在頂面上
@@ -329,6 +334,9 @@ const cellWorld = (x, z) => new THREE.Vector3(
 
 /* ── 建關 ─────────────────────────────────────────────────────────── */
 function loadLevel(i) {
+    // 結果卡是全螢幕的,換關時一定要收掉 —— 不然它會蓋住整個 HUD,
+    // 玩家點什麼都是點在卡片上
+    el('result').classList.remove('show')
     level = { ...LEVELS[i], index: i }
     if (boardGroup) scene.remove(boardGroup)
     boardGroup = new THREE.Group()
@@ -731,6 +739,12 @@ function redrawTracks() {
     for (let z = 0; z < level.h; z++) for (let x = 0; x < level.w; x++) {
         const c = cells[z][x]
         if (!c) continue
+        if (c.hint) {                     // 提示是花廣告換來的,標一圈金色好認
+            const ring = new THREE.Mesh(new THREE.RingGeometry(0.40, 0.46, 24), M.hintRing)
+            ring.rotation.x = -Math.PI / 2
+            ring.position.copy(cellWorld(x, z)).setY(0.012)
+            trackGroup.add(ring)
+        }
         for (const seg of pieceSegs(c.type, c.rot)) {
             const full = segWorld(seg, x, z, level.w, level.h)
             const m = new THREE.Mesh(sweep(trimEnds(full)), [M.wood, M.groove])
@@ -866,6 +880,78 @@ function syncUI() {
     el('pax').className = total && collected === total ? 'done' : ''
 }
 
+/* ── 提示 ─────────────────────────────────────────────────────────── */
+/**
+ * 獎勵式廣告。
+ * - CrazyGames:SDK 原生支援,打包上去就能用
+ * - 官網:要 Google H5 Games Ads(Ad Placement API),那跟一般的 AdSense
+ *   是不同的產品,得另外申請
+ * 兩個都沒有的時候直接給提示 —— 廣告是變現手段,不該拿來擋玩家
+ */
+function rewardedAd() {
+    return new Promise(resolve => {
+        const cg = window.CrazyGames?.SDK?.ad
+        if (cg?.requestAd) {
+            try {
+                cg.requestAd('rewarded', {
+                    adFinished: () => resolve(true),
+                    adError: () => resolve(true),
+                })
+                return
+            } catch (e) { /* 非 CrazyGames 網域會丟錯,往下走 */ }
+        }
+        if (typeof window.adBreak === 'function') {
+            try {
+                window.adBreak({
+                    type: 'reward', name: 'hint',
+                    beforeReward: show => show(),
+                    adViewed: () => resolve(true),
+                    adDismissed: () => resolve(false),
+                    adBreakDone: () => resolve(true),
+                })
+                return
+            } catch (e) { /* 同上 */ }
+        }
+        resolve(true)
+    })
+}
+
+/**
+ * 給一片提示:照解答的順序找出第一個跟玩家擺得不一樣的格子,直接鋪上去。
+ * 提示鋪的片會鎖住(不能拆也不能轉),免得花了廣告的那一片被手滑清掉。
+ */
+function giveHint() {
+    const sol = SOLUTIONS[level.index]
+    if (!sol) return '這一關沒有解答資料'
+    for (const [type, x, z, rot] of sol) {
+        const c = cells[z][x]
+        if (c && c.type === type && c.rot === rot) continue
+        if (c && c.fixed) continue
+        if (c) stock[c.type]++
+        if (!stock[type]) return '手上的軌道片不夠,先把多餘的拆掉'
+        stock[type]--
+        cells[z][x] = { type, rot, fixed: true, hint: true }
+        redrawTracks(); syncUI()
+        return null
+    }
+    return '軌道已經是正確的了,直接開車吧'
+}
+
+let hintBusy = false
+async function askHint() {
+    if (running || hintBusy) return
+    hintBusy = true
+    const btn = el('hintBtn')
+    btn.textContent = '⏳'
+    const ok = await rewardedAd()
+    btn.textContent = '💡'
+    hintBusy = false
+    if (!ok) return
+    const err = giveHint()
+    if (err) { el('lvHint').textContent = err; return }
+    hide()
+}
+
 /* ── 開車 ─────────────────────────────────────────────────────────── */
 let plan = null
 let autoChase = false      // 等車頭離開車庫再切到跟車
@@ -949,11 +1035,14 @@ function show(title, text, won) {
     el('rTitle').textContent = title
     el('rText').textContent = text
     el('rNext').style.display = won && level.index + 1 < LEVELS.length ? '' : 'none'
+    el('rHint').style.display = won ? 'none' : ''
     el('rRetry').textContent = won ? '再玩一次' : '再試一次'
     setTimeout(() => el('result').classList.add('show'), won ? 700 : 1100)
 }
 const hide = () => el('result').classList.remove('show')
 el('rRetry').onclick = () => { hide(); stopRun() }
+el('rHint').onclick = () => { stopRun(); askHint() }
+el('hintBtn').onclick = () => askHint()
 el('rNext').onclick = () => { hide(); loadLevel(level.index + 1) }
 
 /* ── 關卡選單 ─────────────────────────────────────────────────────── */
