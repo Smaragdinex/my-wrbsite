@@ -171,6 +171,7 @@
     </div>
     <div id="side">
         <button id="hintBtn" title="看廣告拿一片提示">💡</button>
+        <button id="sndBtn" title="音樂與音效">🔊</button>
         <button id="camBtn" title="切換視角">🎥</button>
         <button id="clearBtn" title="全部清掉">🗑</button>
     </div>
@@ -253,12 +254,13 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=83'
-import { Train, pegPerson, barrelRoof } from './train.js?v=83'
-import { painted, woodMap, C } from './wood.js?v=83'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=83'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=83'
-import { SOLUTIONS } from './solutions.js?v=83'
+    from './track.js?v=84'
+import { Train, pegPerson, barrelRoof } from './train.js?v=84'
+import { painted, woodMap, C } from './wood.js?v=84'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=84'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=84'
+import { SOLUTIONS } from './solutions.js?v=84'
+import { Sound } from './sound.js?v=84'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -966,17 +968,21 @@ function tapCell(x, z) {
         if (!cur) return
         stock[cur.type]++
         cells[z][x] = null
+        sound.play('erase')
     } else if (!cur) {
         if (!stock[sel]) return
         stock[sel]--
         cells[z][x] = { type: sel, rot: bestRot(sel, x, z) }
+        sound.play('place')
     } else if (cur.type === sel) {
         cur.rot = (cur.rot + 1) % 4            // 同一種:轉方向
+        sound.play('rotate')
     } else {
         stock[cur.type]++                       // 換一種:退回舊的再放新的
         if (!stock[sel]) { stock[cur.type]--; return }
         stock[sel]--
         cells[z][x] = { type: sel, rot: bestRot(sel, x, z) }
+        sound.play('place')
     }
     redrawTracks()
     syncUI()
@@ -1096,6 +1102,7 @@ function giveHint() {
     return '軌道已經是正確的了,直接開車吧'
 }
 
+const sound = new Sound()
 let hintsLeft = 1        // 每一關只給一次
 let hintBusy = false
 async function askHint() {
@@ -1107,6 +1114,7 @@ async function askHint() {
     btn.textContent = '💡'
     hintBusy = false
     if (!ok) return
+    sound.play('hint')
     const err = giveHint()
     if (err) { el('lvHint').textContent = err; return }
     hintsLeft--
@@ -1132,6 +1140,7 @@ function startRun() {
     running = true
     train.reset(plan.path, plan.ok)
     train.start()
+    sound.play('whistle')
     // 先不跟車。車頭這時還在車庫裡,跟車鏡頭會掛在屋子背面 ——
     // 出庫這一段用俯視看,上路了再切過去
     chase = false
@@ -1173,6 +1182,7 @@ function finish() {
         train.derail()
         chase = false
         focusOn(plan.path.pts[plan.path.pts.length - 1], 5.2)
+        sound.play('derail')
         show('脫軌了!', '軌道沒有接到終點站,再看看哪裡斷掉。', false)
     } else if (collected < total) {
         train.arrive()
@@ -1184,6 +1194,7 @@ function finish() {
         train.arrive()
         // 進站就退回俯視 —— 這一刻要看的是自己拼出來的那張軌道圖,不是車尾
         chase = false; frameBoard()
+        sound.play('arrive')
         show('進站!', '這班車開得漂亮。', true)
         if (level.index + 1 > unlocked) {
             unlocked = Math.min(LEVELS.length - 1, level.index + 1)
@@ -1234,6 +1245,8 @@ function showTitle() {
     el('titleLinks').classList.toggle('solo', !done)
 }
 function enterGame(i) {
+    sound.start()                 // 瀏覽器要求先有使用者操作才能出聲
+    el('sndBtn').textContent = sound.muted ? '🔇' : '🔊'
     el('title').classList.add('gone')
     document.body.classList.add('playing')
     if (i !== undefined && i !== level.index) loadLevel(i)
@@ -1255,6 +1268,7 @@ el('clearBtn').onclick = () => {
     redrawTracks(); syncUI()
 }
 el('camBtn').onclick = () => { chase = !chase }
+el('sndBtn').onclick = () => { el('sndBtn').textContent = sound.toggle() ? '🔊' : '🔇' }
 addEventListener('keydown', e => {
     if (!document.body.classList.contains('playing')) return   // 還在主畫面
     if (e.key === 'c' || e.key === 'C') chase = !chase
@@ -1298,6 +1312,7 @@ renderer.setAnimationLoop(() => {
     train.update(dt)
 
     if (running && train.state === 'run') {
+        sound.chuff(dt, train.speed)
         // 乘客:比對弧長,火車輾過那一格的中段就上車
         for (const p of pegs) {
             if (p.on) continue
@@ -1308,6 +1323,7 @@ renderer.setAnimationLoop(() => {
             p.on = true
             collected++
             if (!train.board(p.obj)) p.obj.visible = false
+            sound.play('board')
             syncUI()
         }
     }
