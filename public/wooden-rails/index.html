@@ -252,12 +252,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=64'
-import { Train, pegPerson, barrelRoof } from './train.js?v=64'
-import { painted, woodMap, C } from './wood.js?v=64'
-import { buildWorld, HORIZON, waterTexture } from './world.js?v=64'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=64'
-import { SOLUTIONS } from './solutions.js?v=64'
+    from './track.js?v=66'
+import { Train, pegPerson, barrelRoof } from './train.js?v=66'
+import { painted, woodMap, C } from './wood.js?v=66'
+import { buildWorld, HORIZON, waterTexture } from './world.js?v=66'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=66'
+import { SOLUTIONS } from './solutions.js?v=66'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -305,6 +305,7 @@ const M = {
     groove: painted(0x9d7c4f, { rx: 1, ry: 1 }),      // 凹槽內壁,深一階才看得出溝
     door:  painted(0x5a4530, { rx: 2, ry: 2 }),       // 拱門洞口
     plank: painted(0xc9a373, { rx: 2, ry: 3 }),       // 月台檯面,比軌道深一階才分得出來
+    truss: painted(0xe8542f, { rx: 3, ry: 3 }),        // 橋的側桁架,實物就是這個橘紅色
     bank:  painted(0xc9b083, { rx: 1, ry: 8 }),        // 河岸的沙洲
     hintRing: new THREE.MeshBasicMaterial({ color: 0xe8b33c, transparent: true, opacity: 0.75 }),
     water: new THREE.MeshStandardMaterial({ map: waterTexture(), roughness: 0.35 }),
@@ -749,6 +750,45 @@ function jointPiece(pos, tan, peg) {
     return g
 }
 
+/** 兩點之間的一根桿件 */
+function strut(a, b, r, mat) {
+    const d = new THREE.Vector3().subVectors(b, a)
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 6), mat)
+    m.position.copy(a).addScaledVector(d, 0.5)
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize())
+    m.castShadow = true
+    return m
+}
+
+/**
+ * 橋的側桁架。實物的橋就是一塊拱起來的木板加上兩片橘紅色的格狀鋼梁,
+ * 少了鋼梁它只是一塊翹起來的木頭,看不出是橋。
+ * 沿著橋面的取樣點做:上弦、立柱、斜撐,兩側各一片。
+ */
+function bridgeTruss(pts) {
+    const g = new THREE.Group()
+    const H = 0.21, LAT = 0.185, R = 0.016   // LAT 要大於車身半寬 0.15,不然車頭會擦到
+    const up = new THREE.Vector3(0, 1, 0), tan = new THREE.Vector3(), right = new THREE.Vector3()
+    for (const side of [-1, 1]) {
+        const low = [], high = []
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]
+            tan.subVectors(b, a).normalize()
+            right.crossVectors(up, tan).normalize()
+            const base = pts[i].clone().addScaledVector(right, side * LAT).setY(pts[i].y + 0.085)
+            low.push(base)
+            high.push(base.clone().setY(base.y + H))
+        }
+        for (let i = 0; i < pts.length - 1; i++) g.add(strut(high[i], high[i + 1], R, M.truss))
+        for (let i = 0; i < pts.length; i += 3) g.add(strut(low[i], high[i], R, M.truss))
+        for (let i = 0; i + 3 < pts.length; i += 6) {          // 斜撐,格子感就靠它
+            g.add(strut(low[i], high[i + 3], R * 0.8, M.truss))
+            g.add(strut(high[i], low[i + 3], R * 0.8, M.truss))
+        }
+    }
+    return g
+}
+
 /** 重畫所有軌道。片數少,整批重建比追蹤增刪單純且不會漏 */
 let trackGroup = null
 function redrawTracks() {
@@ -774,6 +814,7 @@ function redrawTracks() {
             const m = new THREE.Mesh(sweep(trimEnds(full)), [M.wood, M.groove])
             m.castShadow = true; m.receiveShadow = true
             trackGroup.add(m)
+            if (c.type === 'bridge') trackGroup.add(bridgeTruss(full))
 
             // 兩端各裝一個接頭。收在格子中央的月台端沒有接頭
             for (const [d, i, j] of [[seg.a, 0, 1], [seg.b, full.length - 1, full.length - 2]]) {
