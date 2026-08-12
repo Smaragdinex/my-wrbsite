@@ -253,12 +253,12 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=73'
-import { Train, pegPerson, barrelRoof } from './train.js?v=73'
-import { painted, woodMap, C } from './wood.js?v=73'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset } from './world.js?v=73'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=73'
-import { SOLUTIONS } from './solutions.js?v=73'
+    from './track.js?v=74'
+import { Train, pegPerson, barrelRoof } from './train.js?v=74'
+import { painted, woodMap, C } from './wood.js?v=74'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset } from './world.js?v=74'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=74'
+import { SOLUTIONS } from './solutions.js?v=74'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -791,10 +791,12 @@ function riverRibbon(river, w0, w1, y) {
         prev = off
         uv.push(0, arc / 3, 1, arc / 3)   // 每 3 個世界單位一個波紋週期
     }
+    // 繞序要看河往哪個方向走。同一組順序對縱向的河法線朝上、對橫向的河
+    // 就是朝下 —— 整條河會被背面剔除掉,什麼都看不見(第 32/37/39 關就是這樣)
     for (let i = 0; i < N; i++) {
         const a = i * 2
-        // 這個繞序法線才朝上。反過來的話整條河會被背面剔除掉,什麼都看不到
-        idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3)
+        if (river.axis) idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
+        else            idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3)
     }
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
@@ -1360,6 +1362,7 @@ if (new URLSearchParams(location.search).has('debug')) {
         get stock() { return stock }, get pegs() { return pegs },
         get frames() { return frames },
         get world() { return world },
+        get riverInfo() { return river },
         tap: (x, z) => tapCell(x, z),
         // 直接指定片型與方向,自動化驗證要能一次擺出正解,不必模擬點好幾下
         put: (type, x, z, rot) => {
