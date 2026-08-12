@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=60'
+import { painted } from './wood.js?v=61'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {

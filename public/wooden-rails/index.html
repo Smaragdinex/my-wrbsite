@@ -252,12 +252,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=60'
-import { Train, pegPerson, barrelRoof } from './train.js?v=60'
-import { painted, woodMap, C } from './wood.js?v=60'
-import { buildWorld, HORIZON } from './world.js?v=60'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=60'
-import { SOLUTIONS } from './solutions.js?v=60'
+    from './track.js?v=61'
+import { Train, pegPerson, barrelRoof } from './train.js?v=61'
+import { painted, woodMap, C } from './wood.js?v=61'
+import { buildWorld, HORIZON } from './world.js?v=61'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=61'
+import { SOLUTIONS } from './solutions.js?v=61'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -326,6 +326,9 @@ let ordered = false      // 這一關的乘客要不要照號碼順序接
 let sel = PLACEABLE[0], running = false, chase = false, collected = 0
 const KEY = 'wr.progress'
 let unlocked = Math.max(0, Math.min(LEVELS.length - 1, +localStorage.getItem(KEY) || 0))
+// ?all=1 解開全部關卡(只影響這次開啟,不會寫進進度)——
+// 要看後面的關卡不必真的從第一關打上去
+if (new URLSearchParams(location.search).has('all')) unlocked = LEVELS.length - 1
 
 const el = id => document.getElementById(id)
 // 候車亭與乘客放格子角落:那一格還要鋪軌道,中間留給軌道
