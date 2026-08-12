@@ -41,6 +41,7 @@
     #side button { width: 46px; height: 46px; border: 0; border-radius: 15px;
         background: var(--paper); box-shadow: var(--shadow); font-size: 19px; cursor: pointer; }
     #side button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.16); }
+    #side button:disabled { opacity: .35; cursor: default; transform: none; }
 
     /* 下排:軌道片盤 + 開車 */
     #tray { position: absolute; left: 50%; transform: translateX(-50%);
@@ -251,12 +252,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=59'
-import { Train, pegPerson, barrelRoof } from './train.js?v=59'
-import { painted, woodMap, C } from './wood.js?v=59'
-import { buildWorld, HORIZON } from './world.js?v=59'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=59'
-import { SOLUTIONS } from './solutions.js?v=59'
+    from './track.js?v=60'
+import { Train, pegPerson, barrelRoof } from './train.js?v=60'
+import { painted, woodMap, C } from './wood.js?v=60'
+import { buildWorld, HORIZON } from './world.js?v=60'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=60'
+import { SOLUTIONS } from './solutions.js?v=60'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -346,6 +347,7 @@ function loadLevel(i) {
     stock = { ...level.stock }
     pegs = []
     ordered = false
+    hintsLeft = 1              // 每換一關重新給一次
     collected = 0
     running = false
     chase = false
@@ -873,6 +875,9 @@ function syncUI() {
     go.onclick = () => running ? stopRun() : startRun()
     tray.appendChild(go)
 
+    el('hintBtn').disabled = !hintsLeft || running
+    el('hintBtn').title = hintsLeft ? '看廣告拿一片提示(每關一次)' : '這一關的提示用過了'
+
     const total = pegs.length
     el('pax').textContent = total
         ? `🧍 ${collected}/${total}` + (ordered && collected < total ? ` → ${collected + 1} 號` : '')
@@ -937,9 +942,10 @@ function giveHint() {
     return '軌道已經是正確的了,直接開車吧'
 }
 
+let hintsLeft = 1        // 每一關只給一次
 let hintBusy = false
 async function askHint() {
-    if (running || hintBusy) return
+    if (running || hintBusy || !hintsLeft) return
     hintBusy = true
     const btn = el('hintBtn')
     btn.textContent = '⏳'
@@ -949,6 +955,8 @@ async function askHint() {
     if (!ok) return
     const err = giveHint()
     if (err) { el('lvHint').textContent = err; return }
+    hintsLeft--
+    syncUI()
     hide()
 }
 
@@ -1035,7 +1043,7 @@ function show(title, text, won) {
     el('rTitle').textContent = title
     el('rText').textContent = text
     el('rNext').style.display = won && level.index + 1 < LEVELS.length ? '' : 'none'
-    el('rHint').style.display = won ? 'none' : ''
+    el('rHint').style.display = won || !hintsLeft ? 'none' : ''
     el('rRetry').textContent = won ? '再玩一次' : '再試一次'
     setTimeout(() => el('result').classList.add('show'), won ? 700 : 1100)
 }
