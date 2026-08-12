@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=61'
+import { painted } from './wood.js?v=63'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -71,6 +71,28 @@ function skyDome() {
     const dome = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), m)
     dome.frustumCulled = false
     return dome
+}
+
+/**
+ * 水面貼圖。用列為單位的正弦疊加畫橫向波紋 —— 這樣在垂直方向是完美週期,
+ * 捲動時不會出現接縫。隨機畫波紋的話,捲到接縫就會看到一條線
+ */
+export function waterTexture() {
+    const c = document.createElement('canvas')
+    c.width = 8; c.height = 256
+    const g = c.getContext('2d')
+    for (let y = 0; y < 256; y++) {
+        const t = (y / 256) * Math.PI * 2
+        const k = 0.5 + 0.30 * Math.sin(t * 3) + 0.20 * Math.sin(t * 7 + 1.1)
+                      + 0.12 * Math.sin(t * 13 + 2.3)
+        const l = Math.round(150 + k * 62)
+        g.fillStyle = `rgb(${Math.round(l * 0.62)}, ${Math.round(l * 0.82)}, ${l})`
+        g.fillRect(0, y, 8, 1)
+    }
+    const t = new THREE.CanvasTexture(c)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
 }
 
 /** 一叢草:三片交錯的細長三角形。用圓錐會變成小尖刺,不像草 */
@@ -227,7 +249,7 @@ function balloon() {
  * 建一片草原。
  * @param hx,hz 棋盤(含墊子)的半寬半深:這個範圍內什麼都不能放,不然會擋住軌道
  */
-export function buildWorld(scene, hx, hz, seed = 1) {
+export function buildWorld(scene, hx, hz, seed = 1, river = null) {
     const rand = rng(seed * 7919 + 13)
     const g = new THREE.Group()
 
@@ -279,8 +301,11 @@ export function buildWorld(scene, hx, hz, seed = 1) {
         ((x - h.x) / h.rx) ** 2 + ((z - h.z) / h.rz) ** 2 < 1)
 
     // 棋盤禁區用矩形判斷。用半徑會讓長方形棋盤的短邊塞不下東西、長邊又被吃掉
+    // 河也是禁區 —— 樹長在河中間會很奇怪
+    const onRiver = (x, z) => river &&
+        Math.abs((river.axis ? z : x) - river.at) < 0.85
     const clear = (x, z, pad) =>
-        (Math.abs(x) > hx + pad || Math.abs(z) > hz + pad) && !onHill(x, z)
+        (Math.abs(x) > hx + pad || Math.abs(z) > hz + pad) && !onHill(x, z) && !onRiver(x, z)
     const spot = (min, max, pad) => {
         for (let i = 0; i < 40; i++) {
             const a = rand() * Math.PI * 2, r = min + rand() * (max - min)

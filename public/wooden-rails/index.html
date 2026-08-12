@@ -252,12 +252,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=61'
-import { Train, pegPerson, barrelRoof } from './train.js?v=61'
-import { painted, woodMap, C } from './wood.js?v=61'
-import { buildWorld, HORIZON } from './world.js?v=61'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=61'
-import { SOLUTIONS } from './solutions.js?v=61'
+    from './track.js?v=63'
+import { Train, pegPerson, barrelRoof } from './train.js?v=63'
+import { painted, woodMap, C } from './wood.js?v=63'
+import { buildWorld, HORIZON, waterTexture } from './world.js?v=63'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=63'
+import { SOLUTIONS } from './solutions.js?v=63'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -305,8 +305,9 @@ const M = {
     groove: painted(0x9d7c4f, { rx: 1, ry: 1 }),      // 凹槽內壁,深一階才看得出溝
     door:  painted(0x5a4530, { rx: 2, ry: 2 }),       // 拱門洞口
     plank: painted(0xc9a373, { rx: 2, ry: 3 }),       // 月台檯面,比軌道深一階才分得出來
+    bank:  painted(0xc9b083, { rx: 1, ry: 8 }),        // 河岸的沙洲
     hintRing: new THREE.MeshBasicMaterial({ color: 0xe8b33c, transparent: true, opacity: 0.75 }),
-    water: new THREE.MeshStandardMaterial({ color: 0x6fa8c4, roughness: 0.4 }),
+    water: new THREE.MeshStandardMaterial({ map: waterTexture(), roughness: 0.35 }),
     hole:  new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.98,
                polygonOffset: true, polygonOffsetFactor: -2 }),   // 榫孔輪廓,貼在頂面上
     mat:   new THREE.MeshStandardMaterial({ color: 0xc6dbab, roughness: 0.98 }),   // 比草原亮一階,棋盤範圍才分得出來
@@ -323,6 +324,7 @@ const M = {
 /* ── 遊戲狀態 ─────────────────────────────────────────────────────── */
 let level, cells, stock, pegs, boardGroup, train, world
 let ordered = false      // 這一關的乘客要不要照號碼順序接
+let river = null         // 這一關的河(沒有就是 null)
 let sel = PLACEABLE[0], running = false, chase = false, collected = 0
 const KEY = 'wr.progress'
 let unlocked = Math.max(0, Math.min(LEVELS.length - 1, +localStorage.getItem(KEY) || 0))
@@ -364,9 +366,20 @@ function loadLevel(i) {
         cells[fz][fx] = { type, rot, fixed: true, oneWay: way == null ? null : DIR[way] }
 
     // 遊戲墊:讓棋盤範圍一眼看得出來,不然桌面是無邊無際的
+    // 河在哪一行/列。這段一定要在 buildWorld 之前 —— 草木動物要避開河,
+    // 順序反過來的話它們避的是上一關的河
+    river = null
+    for (let z = 0; z < level.h && !river; z++) for (let x = 0; x < level.w; x++) {
+        if (level.map[z][x] !== '~') continue
+        const vertical = level.map.every(row => row[x] === '~')
+        river = vertical ? { axis: 0, at: x - (level.w - 1) / 2 }
+                         : { axis: 1, at: z - (level.h - 1) / 2 }
+        break
+    }
+
     // 草原每關重建 —— 禁區要跟著棋盤大小走,不然小棋盤外圍會空一大圈
     world?.dispose()
-    world = buildWorld(scene, (level.w + 0.7) / 2, (level.h + 0.7) / 2, i + 1)
+    world = buildWorld(scene, (level.w + 0.7) / 2, (level.h + 0.7) / 2, i + 1, river)
 
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(level.w + 0.7, level.h + 0.7), M.mat)
     pad.rotation.x = -Math.PI / 2
@@ -377,16 +390,7 @@ function loadLevel(i) {
         const ch = level.map[z][x]
         const p = cellWorld(x, z)
         if (ch === '#') { boardGroup.add(obstacle(p, x + z)); continue }
-        if (ch === '~') {
-            // 河印在墊子上,不做成盒子 —— 盒子的頂面跟墊子同高會 z-fighting,
-            // 裂成鋸齒狀。玩具的遊戲墊本來就是把河印上去的
-            const river = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), M.water)
-            river.rotation.x = -Math.PI / 2
-            river.position.copy(p).setY(0.008)
-            river.receiveShadow = true
-            boardGroup.add(river)
-            continue
-        }
+        if (ch === '~') continue        // 河統一畫成一條長帶,見下面的 riverStrip
         const num = ch >= '1' && ch <= '9' ? +ch : 0
         if (ch === 'o' || num) {
             // 有編號時顏色跟著號碼走,1 永遠是同一個顏色,好認
@@ -420,6 +424,21 @@ function loadLevel(i) {
         const sign = arrowSign(DIR[way])
         sign.position.copy(cellWorld(fx, fz)).add(new THREE.Vector3(-0.34, 0, -0.34))
         boardGroup.add(sign)
+    }
+
+    if (river) {
+        // 河畫成一條貫穿到草原深處的長帶。一格一格畫的話,河到墊子邊緣就斷掉,
+        // 看起來是印在墊子上的圖案,而不是穿過這片地景的地形
+        const LEN = 70
+        for (const [w, y, mat] of [[1.34, 0.006, M.bank], [1.0, 0.010, M.water]]) {
+            const strip = new THREE.Mesh(new THREE.PlaneGeometry(w, LEN), mat)
+            strip.rotation.x = -Math.PI / 2
+            if (river.axis === 1) strip.rotation.z = Math.PI / 2
+            strip.position.set(river.axis ? 0 : river.at, y, river.axis ? river.at : 0)
+            strip.receiveShadow = true
+            boardGroup.add(strip)
+        }
+        M.water.map.repeat.set(1, LEN / 3)     // 波紋沿著河長方向鋪開
     }
 
     ordered = pegs.some(p => p.order)
@@ -1134,6 +1153,7 @@ renderer.setAnimationLoop(() => {
     frames++
     const dt = Math.min(0.05, clock.getDelta())
     world?.update(clock.elapsedTime)
+    if (river) M.water.map.offset.y -= dt * 0.16      // 水流
     train.update(dt)
 
     if (running && train.state === 'run') {
