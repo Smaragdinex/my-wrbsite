@@ -252,12 +252,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=63'
-import { Train, pegPerson, barrelRoof } from './train.js?v=63'
-import { painted, woodMap, C } from './wood.js?v=63'
-import { buildWorld, HORIZON, waterTexture } from './world.js?v=63'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=63'
-import { SOLUTIONS } from './solutions.js?v=63'
+    from './track.js?v=64'
+import { Train, pegPerson, barrelRoof } from './train.js?v=64'
+import { painted, woodMap, C } from './wood.js?v=64'
+import { buildWorld, HORIZON, waterTexture } from './world.js?v=64'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=64'
+import { SOLUTIONS } from './solutions.js?v=64'
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -1153,7 +1153,7 @@ renderer.setAnimationLoop(() => {
     frames++
     const dt = Math.min(0.05, clock.getDelta())
     world?.update(clock.elapsedTime)
-    if (river) M.water.map.offset.y -= dt * 0.16      // 水流
+    if (river) M.water.map.offset.y -= dt * 0.34      // 水流
     train.update(dt)
 
     if (running && train.state === 'run') {

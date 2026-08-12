@@ -205,8 +205,9 @@ export class Path {
 export function walk(level, cells) {
     const { w, h } = level
     const pts = [], marks = []
-    const push = (segPts, cx, cz) => {
-        const world = segWorld({ pts: segPts }, cx, cz, w, h)
+    // arch 一定要跟著傳:拱形只做在渲染的幾何裡的話,火車會從橋「裡面」穿過去
+    const push = (segPts, cx, cz, arch = 0) => {
+        const world = segWorld({ pts: segPts, arch }, cx, cz, w, h)
         // 接縫上的點會重複一次,去掉才不會讓弧長出現零長段
         for (const p of world) if (!pts.length || p.distanceTo(pts[pts.length - 1]) > 1e-6) pts.push(p)
     }
@@ -236,7 +237,7 @@ export function walk(level, cells) {
             .find(s => s.a === opposite(dir) || s.b === opposite(dir))
         if (!seg) break                                           // 有片但接不上
         const forward = seg.a === opposite(dir)
-        push(forward ? seg.pts : [...seg.pts].reverse(), x, z)
+        push(forward ? seg.pts : [...seg.pts].reverse(), x, z, seg.arch)
         marks.push({ x, z, s: arcAt() })
         const exit = forward ? seg.b : seg.a
         if (exit === -1)                                          // 走到月台盡頭
