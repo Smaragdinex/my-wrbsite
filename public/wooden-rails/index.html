@@ -20,10 +20,13 @@
     #hud > * { pointer-events: auto; }
 
     /* 上排:關卡名 + 提示 + 乘客 */
-    #top { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%;
+    /* 安全區域:直向時瀏海在上方,橫向時會跑到左邊或右邊,
+       所以四個方向都要讓。純網頁在瀏海機上也吃得到這一段 */
+    #top { position: absolute; top: calc(env(safe-area-inset-top) + 10px); left: 50%;
         transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
         background: var(--paper); border-radius: 999px; padding: 8px 16px;
-        box-shadow: var(--shadow); max-width: calc(100vw - 24px); }
+        box-shadow: var(--shadow); max-width: calc(100vw - 24px
+            - env(safe-area-inset-left) - env(safe-area-inset-right)); }
     #lvName { font-weight: 800; font-size: 15px; white-space: nowrap; }
     #lvHint { font-size: 12.5px; opacity: .62; white-space: nowrap;
         overflow: hidden; text-overflow: ellipsis; }
@@ -31,12 +34,14 @@
     #pax.done { color: #3f8f5c; }
 
     /* 左上:關卡選單 */
-    #menuBtn { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 12px;
+    #menuBtn { position: absolute; top: calc(env(safe-area-inset-top) + 14px);
+        left: calc(env(safe-area-inset-left) + 14px);
         width: 42px; height: 42px; border: 0; border-radius: 14px; background: var(--paper);
         box-shadow: var(--shadow); font-size: 18px; cursor: pointer; }
 
     /* 右側直排按鈕 */
-    #side { position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    #side { position: absolute; right: calc(env(safe-area-inset-right) + 14px);
+        top: 50%; transform: translateY(-50%);
         display: flex; flex-direction: column; gap: 10px; }
     #side button { width: 46px; height: 46px; border: 0; border-radius: 15px;
         background: var(--paper); box-shadow: var(--shadow); font-size: 19px; cursor: pointer; }
@@ -45,7 +50,7 @@
 
     /* 下排:軌道片盤 + 開車 */
     #tray { position: absolute; left: 50%; transform: translateX(-50%);
-        bottom: max(12px, env(safe-area-inset-bottom)); display: flex; gap: 8px;
+        bottom: calc(env(safe-area-inset-bottom) + 12px); display: flex; gap: 8px;
         align-items: flex-end; }
     .slot { position: relative; width: 62px; height: 62px; border: 0; border-radius: 18px;
         background: var(--paper); box-shadow: var(--shadow); cursor: pointer;
@@ -265,15 +270,15 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=90'
-import { Train, pegPerson, barrelRoof } from './train.js?v=90'
-import { painted, woodMap, C } from './wood.js?v=90'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=90'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=90'
-import { SOLUTIONS } from './solutions.js?v=90'
-import { Sound } from './sound.js?v=90'
-import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=90'
-import { get as sget, set as sset, connect as storeConnect } from './store.js?v=90'
+    from './track.js?v=92'
+import { Train, pegPerson, barrelRoof } from './train.js?v=92'
+import { painted, woodMap, C } from './wood.js?v=92'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=92'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=92'
+import { SOLUTIONS } from './solutions.js?v=92'
+import { Sound } from './sound.js?v=92'
+import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=92'
+import { get as sget, set as sset, connect as storeConnect } from './store.js?v=92'
 
 // 語言要在最前面決定 —— 底下每一段 UI 程式碼都直接讀 T,
 // 晚一步宣告的話那些函式會撞上暫時性死區

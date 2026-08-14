@@ -9,7 +9,7 @@
  * 之後要丟去翻譯或做校對都不必碰程式。
  */
 
-import { get as sget } from './store.js?v=90'
+import { get as sget } from './store.js?v=92'
 
 export const LANG_NAMES = {
     en: 'English',

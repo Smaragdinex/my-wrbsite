@@ -31,7 +31,9 @@ export function set(key, val) {
 export async function connect(onReady) {
     const sdk = window.CrazyGames?.SDK
     if (!sdk) return                            // 不在 CrazyGames 上,維持 localStorage
-    try { await sdk.init() } catch (e) { return }
+    // 打包版的 index.html 已經起了一個 init(),共用它 —— 重複 init 是浪費,
+    // 而且兩邊各等各的會讓事件順序變得難以預期
+    try { await (window.__cgReady || (window.__cgReady = sdk.init())) } catch (e) { return }
     if (!sdk.data) return
     const read = k => { try { return sdk.data.getItem(k) } catch (e) { return null } }
     // 先接上再回呼 —— onReady 裡面會寫值(把本機較新的進度推上去),
