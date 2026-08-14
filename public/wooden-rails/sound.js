@@ -13,12 +13,16 @@ const CHORDS = [
     [174.61, 261.63, 329.63],   // F
     [196.00, 246.94, 293.66],   // G
 ]
+import { get as sget, set as sset } from './store.js?v=87'
+
 const KEY = 'wr.mute'
 
 export class Sound {
     constructor() {
         this.ctx = null
-        this.muted = localStorage.getItem(KEY) === '1'
+        this.muted = sget(KEY) === '1'
+        // CrazyGames 站方的靜音優先於遊戲內設定(平台明文要求)
+        this.platformMute = false
         this.timers = []
         this.chuffAcc = 0
     }
@@ -30,7 +34,7 @@ export class Sound {
         this.ctx = ctx
 
         this.master = ctx.createGain()
-        this.master.gain.value = this.muted ? 0 : 0.9
+        this.master.gain.value = this.off ? 0 : 0.9
         this.master.connect(ctx.destination)
 
         // 簡易殘響:一條回授延遲。真的捲積殘響要脈衝響應檔,這裡不值得
@@ -60,10 +64,18 @@ export class Sound {
         this._loop()
     }
 
+    /** 遊戲內靜音 or 平台靜音,任一個成立就不出聲 */
+    get off() { return this.muted || this.platformMute }
+
+    _applyGain() { if (this.master) this.master.gain.value = this.off ? 0 : 0.9 }
+
+    /** 由 CrazyGames 的 settings 變更事件呼叫 */
+    setPlatformMute(on) { this.platformMute = !!on; this._applyGain() }
+
     toggle() {
         this.muted = !this.muted
-        localStorage.setItem(KEY, this.muted ? '1' : '0')
-        if (this.master) this.master.gain.value = this.muted ? 0 : 0.9
+        sset(KEY, this.muted ? '1' : '0')
+        this._applyGain()
         return !this.muted
     }
 
@@ -105,7 +117,7 @@ export class Sound {
     /* ── 音效 ────────────────────────────────────────────────────── */
 
     play(name) {
-        if (!this.ctx || this.muted) return
+        if (!this.ctx || this.off) return
         switch (name) {
             case 'place':                       // 木片放到墊子上
                 this._noise({ dur: 0.06, gain: 0.35, freq: 1500, q: 1.2 })
@@ -145,7 +157,7 @@ export class Sound {
 
     /** 蒸汽聲:火車在跑的時候依速度一下一下噴 */
     chuff(dt, speed) {
-        if (!this.ctx || this.muted) return
+        if (!this.ctx || this.off) return
         this.chuffAcc += dt * Math.max(0.35, speed / 1.9)
         if (this.chuffAcc < 0.34) return
         this.chuffAcc = 0
@@ -159,7 +171,7 @@ export class Sound {
      * 每小節重排一次,所以不會聽出循環。
      */
     _bar() {
-        if (this.muted) return
+        if (this.off) return
         const chord = CHORDS[Math.floor(Math.random() * CHORDS.length)]
         for (const f of chord)
             this._tone(f, { dur: 3.4, gain: 0.05, type: 'sine', attack: 0.5, dest: this.musicGain })

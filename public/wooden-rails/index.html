@@ -265,14 +265,15 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=86'
-import { Train, pegPerson, barrelRoof } from './train.js?v=86'
-import { painted, woodMap, C } from './wood.js?v=86'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=86'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=86'
-import { SOLUTIONS } from './solutions.js?v=86'
-import { Sound } from './sound.js?v=86'
-import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=86'
+    from './track.js?v=87'
+import { Train, pegPerson, barrelRoof } from './train.js?v=87'
+import { painted, woodMap, C } from './wood.js?v=87'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=87'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=87'
+import { SOLUTIONS } from './solutions.js?v=87'
+import { Sound } from './sound.js?v=87'
+import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=87'
+import { get as sget, set as sset, connect as storeConnect } from './store.js?v=87'
 
 // 語言要在最前面決定 —— 底下每一段 UI 程式碼都直接讀 T,
 // 晚一步宣告的話那些函式會撞上暫時性死區
@@ -356,7 +357,7 @@ let ordered = false      // 這一關的乘客要不要照號碼順序接
 let river = null         // 這一關的河(沒有就是 null)
 let sel = PLACEABLE[0], running = false, chase = false, collected = 0
 const KEY = 'wr.progress'
-let unlocked = Math.max(0, Math.min(LEVELS.length - 1, +localStorage.getItem(KEY) || 0))
+let unlocked = Math.max(0, Math.min(LEVELS.length - 1, +sget(KEY) || 0))
 // ?all=1 解開全部關卡(只影響這次開啟,不會寫進進度)——
 // 要看後面的關卡不必真的從第一關打上去
 if (new URLSearchParams(location.search).has('all')) unlocked = LEVELS.length - 1
@@ -1215,7 +1216,7 @@ function finish() {
         show(T.wonT, T.wonD, true)
         if (level.index + 1 > unlocked) {
             unlocked = Math.min(LEVELS.length - 1, level.index + 1)
-            localStorage.setItem(KEY, unlocked)
+            sset(KEY, unlocked)
         }
     }
     syncUI()
@@ -1386,6 +1387,7 @@ if (new URLSearchParams(location.search).has('debug')) {
         get stock() { return stock }, get pegs() { return pegs },
         get frames() { return frames },
         get world() { return world },
+        get sound() { return sound },        // 驗證站方靜音用
         get chase() { return chase }, set chase(v) { chase = v },   // 出封面時要關掉跟車鏡頭
         get riverInfo() { return river },
         tap: (x, z) => tapCell(x, z),
@@ -1410,7 +1412,7 @@ if (new URLSearchParams(location.search).has('debug')) {
 function applyLang(code) {
     lang = code
     T = I18N[code]
-    localStorage.setItem('wr.lang', code)
+    sset('wr.lang', code)
     document.documentElement.lang = code
     // 阿拉伯文由右至左。#hud 底下的按鈕是絕對定位(left/right 不受 dir 影響),
     // 所以只有文字與 flex 排列會翻,版面不會亂掉
@@ -1448,6 +1450,34 @@ langSel.onchange = () => applyLang(langSel.value)
 
 loadLevel(unlocked)
 applyLang(lang)
+
+/* ── CrazyGames:跨裝置進度 + 站方靜音 ─────────────────────────────── */
+// 在官網與本機上 SDK 不存在,storeConnect 會直接返回,一切維持 localStorage 的行為。
+// 這一段跑在 SDK.init() 之後,所以是非同步補上去的 —— 遊戲不會等它
+storeConnect(remoteGet => {
+    // 解鎖關卡取兩邊較大的:換一台裝置不該讓進度倒退
+    const r = Math.min(LEVELS.length - 1, +remoteGet(KEY) || 0)
+    if (r > unlocked) { unlocked = r; showTitle() }
+    else if (unlocked) sset(KEY, unlocked)          // 本機比較新,推上去
+    // 語言與靜音:本機從沒設過才採用雲端的,不要覆蓋玩家在這台選的
+    const rl = remoteGet('wr.lang')
+    if (rl && I18N[rl] && !localStorage.getItem('wr.lang')) applyLang(rl)
+    const rm = remoteGet('wr.mute')
+    if (rm != null && localStorage.getItem('wr.mute') == null) {
+        sound.muted = rm === '1'
+        sound._applyGain()
+        el('sndBtn').textContent = sound.muted ? '🔇' : '🔊'
+    }
+}).then(() => {
+    // 站方的靜音開關優先於遊戲內的音效鈕(平台明文要求)
+    try {
+        const g = window.CrazyGames?.SDK?.game
+        if (!g?.addSettingsChangeListener) return
+        const apply = () => sound.setPlatformMute(g.settings?.muteAudio)
+        g.addSettingsChangeListener(apply)
+        apply()
+    } catch (e) {}
+})
 </script>
 </body>
 </html>

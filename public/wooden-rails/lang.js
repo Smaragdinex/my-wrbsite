@@ -9,6 +9,8 @@
  * 之後要丟去翻譯或做校對都不必碰程式。
  */
 
+import { get as sget } from './store.js?v=87'
+
 export const LANG_NAMES = {
     en: 'English',
     zh: '繁體中文',
@@ -639,7 +641,7 @@ export const I18N = {
 
 /** 從瀏覽器語言挑一個。挑不到就英文 —— 這遊戲的主要玩家在國際平台上 */
 export function detectLang() {
-    const saved = localStorage.getItem('wr.lang')
+    const saved = sget('wr.lang')
     if (saved && I18N[saved]) return saved
     for (const raw of navigator.languages || [navigator.language || '']) {
         const s = raw.toLowerCase()
