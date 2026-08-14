@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>小小木軌 — Wooden Rails</title>
-<meta name="description" content="用木頭軌道拼出一條路,把小火車開進站。">
+<title>Wooden Rails</title>
+<meta name="description" content="Lay the wooden track and bring the little train home. 50 hand-made levels.">
 <style>
     :root {
         --wood: #d9a86c; --deep: #8a5a33; --ink: #4a3524;
@@ -125,6 +125,16 @@
         #titleArt .train, #titleArt .w, #titleArt .puff { animation: none }
     }
 
+    #langSel {
+        margin-top: clamp(10px, 1.6vmin, 18px);
+        padding: clamp(6px, .9vmin, 10px) clamp(14px, 2.2vmin, 24px);
+        font: 600 clamp(11px, 1.5vmin, 15px)/1 system-ui, "Noto Sans TC", sans-serif;
+        color: #6b4f33; cursor: pointer; appearance: none; -webkit-appearance: none;
+        border: 1.5px solid rgba(255,255,255,.85); border-radius: 99px;
+        background: rgba(255,255,255,.5); backdrop-filter: blur(6px);
+        text-align: center; text-align-last: center;
+    }
+    #langSel:hover { background: rgba(255,255,255,.75); }
     #titleName { font-size: clamp(30px, 6.4vmin, 66px); font-weight: 800; letter-spacing: .16em;
         text-shadow: 0 2px 0 rgba(255,255,255,.55); margin-left: .16em; }
     #titleEn { font-size: clamp(11px, 1.8vmin, 17px); opacity: .5; letter-spacing: .34em;
@@ -165,28 +175,28 @@
 </head>
 <body>
 <div id="hud">
-    <button id="menuBtn" title="關卡">☰</button>
+    <button id="menuBtn">☰</button>
     <div id="top">
         <span id="lvName"></span><span id="lvHint"></span><span id="pax"></span>
     </div>
     <div id="side">
-        <button id="hintBtn" title="看廣告拿一片提示">💡</button>
-        <button id="sndBtn" title="音樂與音效">🔊</button>
-        <button id="camBtn" title="切換視角">🎥</button>
-        <button id="clearBtn" title="全部清掉">🗑</button>
+        <button id="hintBtn">💡</button>
+        <button id="sndBtn">🔊</button>
+        <button id="camBtn">🎥</button>
+        <button id="clearBtn">🗑</button>
     </div>
     <div id="tray"></div>
     <div id="result"><div id="card">
         <h2 id="rTitle"></h2><p id="rText"></p>
         <div class="row">
-            <button id="rHint">💡 看廣告拿提示</button>
-            <button id="rRetry">再試一次</button>
-            <button id="rNext" class="go">下一關</button>
+            <button id="rHint"></button>
+            <button id="rRetry"></button>
+            <button id="rNext" class="go"></button>
         </div>
     </div></div>
     <div id="levels"><div id="lvBox">
-        <h2>選關卡</h2><div id="lvGrid"></div>
-        <button id="homeBtn">回主畫面</button>
+        <h2 id="lvTitle"></h2><div id="lvGrid"></div>
+        <button id="homeBtn"></button>
     </div></div>
     <div id="title">
         <div id="titleArt"><svg viewBox="0 0 250 152" fill="none">
@@ -230,16 +240,17 @@
                     <circle cx="200" cy="112" r="4" fill="#9a9086"/></g>
             </g>
         </svg></div>
-        <div id="titleName">小小木軌</div>
+        <div id="titleName"></div>
         <div id="titleEn">WOODEN RAILS</div>
-        <div id="titleSub">用木頭軌道拼出一條路,把小火車開進站</div>
+        <div id="titleSub"></div>
         <div id="titleProg"></div>
         <button id="playBtn"></button>
         <div id="titleLinks">
-            <button id="newBtn">新遊戲</button>
+            <button id="newBtn"></button>
             <span class="dot"></span>
-            <button id="pickBtn">選關卡</button>
+            <button id="pickBtn"></button>
         </div>
+        <select id="langSel" aria-label="Language"></select>
     </div>
 </div>
 
@@ -254,13 +265,19 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=84'
-import { Train, pegPerson, barrelRoof } from './train.js?v=84'
-import { painted, woodMap, C } from './wood.js?v=84'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=84'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=84'
-import { SOLUTIONS } from './solutions.js?v=84'
-import { Sound } from './sound.js?v=84'
+    from './track.js?v=86'
+import { Train, pegPerson, barrelRoof } from './train.js?v=86'
+import { painted, woodMap, C } from './wood.js?v=86'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=86'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=86'
+import { SOLUTIONS } from './solutions.js?v=86'
+import { Sound } from './sound.js?v=86'
+import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=86'
+
+// 語言要在最前面決定 —— 底下每一段 UI 程式碼都直接讀 T,
+// 晚一步宣告的話那些函式會撞上暫時性死區
+let lang = detectLang()
+let T = I18N[lang]
 
 /* ── 場景 ─────────────────────────────────────────────────────────── */
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -467,8 +484,8 @@ function loadLevel(i) {
     savedCam.has = false
     frameBoard()
 
-    el('lvName').textContent = `${i + 1}. ${level.name}`
-    el('lvHint').textContent = level.hint
+    el('lvName').textContent = `${i + 1}. ${T.lv[i][0]}`
+    el('lvHint').textContent = T.lv[i][1]
     syncUI()
 }
 
@@ -1031,16 +1048,17 @@ function syncUI() {
     const go = document.createElement('button')
     go.id = 'goBtn'
     go.className = running ? 'stop' : ''
-    go.textContent = running ? '停下' : '開車'
+    go.textContent = running ? T.stop : T.go
     go.onclick = () => running ? stopRun() : startRun()
     tray.appendChild(go)
 
     el('hintBtn').disabled = !hintsLeft || running
-    el('hintBtn').title = hintsLeft ? '看廣告拿一片提示(每關一次)' : '這一關的提示用過了'
+    el('hintBtn').title = hintsLeft ? T.tipHint : T.tipHintUsed
 
     const total = pegs.length
     el('pax').textContent = total
-        ? `🧍 ${collected}/${total}` + (ordered && collected < total ? ` → ${collected + 1} 號` : '')
+        ? `🧍 ${collected}/${total}`
+          + (ordered && collected < total ? fmt(T.paxNext, { n: collected + 1 }) : '')
         : ''
     el('pax').className = total && collected === total ? 'done' : ''
 }
@@ -1087,19 +1105,19 @@ function rewardedAd() {
  */
 function giveHint() {
     const sol = SOLUTIONS[level.index]
-    if (!sol) return '這一關沒有解答資料'
+    if (!sol) return T.errNoSol
     for (const [type, x, z, rot] of sol) {
         const c = cells[z][x]
         if (c && c.type === type && c.rot === rot) continue
         if (c && c.fixed) continue
         if (c) stock[c.type]++
-        if (!stock[type]) return '手上的軌道片不夠,先把多餘的拆掉'
+        if (!stock[type]) return T.errNoStock
         stock[type]--
         cells[z][x] = { type, rot, fixed: true, hint: true }
         redrawTracks(); syncUI()
         return null
     }
-    return '軌道已經是正確的了,直接開車吧'
+    return T.errAlready
 }
 
 const sound = new Sound()
@@ -1183,19 +1201,18 @@ function finish() {
         chase = false
         focusOn(plan.path.pts[plan.path.pts.length - 1], 5.2)
         sound.play('derail')
-        show('脫軌了!', '軌道沒有接到終點站,再看看哪裡斷掉。', false)
+        show(T.derailT, T.derailD, false)
     } else if (collected < total) {
         train.arrive()
         chase = false; frameBoard()
-        show('少了乘客', ordered
-            ? `還有 ${total - collected} 位在等車。要照號碼順序接,下一位是 ${collected + 1} 號。`
-            : `還有 ${total - collected} 位在等車,路線要經過他們那一格。`, false)
+        show(T.paxT, fmt(ordered ? T.paxDOrd : T.paxD,
+            { left: total - collected, n: collected + 1 }), false)
     } else {
         train.arrive()
         // 進站就退回俯視 —— 這一刻要看的是自己拼出來的那張軌道圖,不是車尾
         chase = false; frameBoard()
         sound.play('arrive')
-        show('進站!', '這班車開得漂亮。', true)
+        show(T.wonT, T.wonD, true)
         if (level.index + 1 > unlocked) {
             unlocked = Math.min(LEVELS.length - 1, level.index + 1)
             localStorage.setItem(KEY, unlocked)
@@ -1209,7 +1226,7 @@ function show(title, text, won) {
     el('rText').textContent = text
     el('rNext').style.display = won && level.index + 1 < LEVELS.length ? '' : 'none'
     el('rHint').style.display = won || !hintsLeft ? 'none' : ''
-    el('rRetry').textContent = won ? '再玩一次' : '再試一次'
+    el('rRetry').textContent = won ? T.again : T.retry
     setTimeout(() => el('result').classList.add('show'), won ? 700 : 1100)
 }
 const hide = () => el('result').classList.remove('show')
@@ -1239,8 +1256,9 @@ function showTitle() {
     el('title').classList.remove('gone')
     document.body.classList.remove('playing')
     const done = unlocked
-    el('titleProg').textContent = done ? `已解鎖 ${done + 1} / ${LEVELS.length} 關` : ''
-    el('playBtn').textContent = done ? `繼續 第 ${done + 1} 關` : '開始'
+    el('titleProg').textContent = done
+        ? fmt(T.prog, { done: done + 1, total: LEVELS.length }) : ''
+    el('playBtn').textContent = done ? fmt(T.cont, { n: done + 1 }) : T.start
     // 沒有進度時「新遊戲」跟「開始」是同一件事,藏起來
     el('titleLinks').classList.toggle('solo', !done)
 }
@@ -1368,6 +1386,7 @@ if (new URLSearchParams(location.search).has('debug')) {
         get stock() { return stock }, get pegs() { return pegs },
         get frames() { return frames },
         get world() { return world },
+        get chase() { return chase }, set chase(v) { chase = v },   // 出封面時要關掉跟車鏡頭
         get riverInfo() { return river },
         tap: (x, z) => tapCell(x, z),
         // 直接指定片型與方向,自動化驗證要能一次擺出正解,不必模擬點好幾下
@@ -1385,8 +1404,50 @@ if (new URLSearchParams(location.search).has('debug')) {
     }
 }
 
+/* ── 語言 ─────────────────────────────────────────────────────────── */
+// 換語言不必重載頁面:靜態標籤直接改,會變動的字交給既有的 syncUI / showTitle
+// 重跑一次。反正整份 UI 的文字都是從 T 讀的,只要 T 換掉就會全部跟上
+function applyLang(code) {
+    lang = code
+    T = I18N[code]
+    localStorage.setItem('wr.lang', code)
+    document.documentElement.lang = code
+    // 阿拉伯文由右至左。#hud 底下的按鈕是絕對定位(left/right 不受 dir 影響),
+    // 所以只有文字與 flex 排列會翻,版面不會亂掉
+    document.documentElement.dir = RTL.has(code) ? 'rtl' : 'ltr'
+    document.title = T.brand ? `${T.name} — Wooden Rails` : 'Wooden Rails'
+
+    el('titleName').textContent = T.name
+    el('titleEn').style.display = T.brand ? '' : 'none'   // 名稱本來就是英文時不重複一次
+    el('titleSub').textContent = T.sub
+    el('newBtn').textContent = T.newGame
+    el('pickBtn').textContent = T.pick
+    el('lvTitle').textContent = T.pickTitle
+    el('homeBtn').textContent = T.back
+    el('rHint').textContent = T.hintAd
+    el('rNext').textContent = T.next
+    el('menuBtn').title = T.tipMenu
+    el('sndBtn').title = T.tipSound
+    el('camBtn').title = T.tipCam
+    el('clearBtn').title = T.tipClear
+    if (level) {
+        el('lvName').textContent = `${level.index + 1}. ${T.lv[level.index][0]}`
+        el('lvHint').textContent = T.lv[level.index][1]
+    }
+    syncUI()
+    showTitle()
+}
+const langSel = el('langSel')
+Object.entries(LANG_NAMES).forEach(([code, name]) => {
+    const o = document.createElement('option')
+    o.value = code; o.textContent = name
+    langSel.appendChild(o)
+})
+langSel.value = lang
+langSel.onchange = () => applyLang(langSel.value)
+
 loadLevel(unlocked)
-showTitle()
+applyLang(lang)
 </script>
 </body>
 </html>
