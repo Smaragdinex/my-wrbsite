@@ -6,7 +6,7 @@
 // 草叢數量以百計,所以用 InstancedMesh:一份幾何、一次 draw call。
 // 每關重建一次(棋盤大小不同,禁區跟著變),重建時舊的幾何要 dispose。
 import * as THREE from 'three'
-import { painted } from './wood.js?v=92'
+import { painted } from './wood.js?v=95'
 
 // 固定種子的亂數:同一關每次進來的草原長得一樣,不會每次重畫都跳動
 function rng(seed) {
@@ -31,8 +31,8 @@ const C = {
     dark:   0x4a4038,
 }
 
-const mat = (c, flat = true) => new THREE.MeshStandardMaterial({
-    color: c, roughness: 0.95, metalness: 0, flatShading: flat })
+const mat = (c, flat = true, rx = 1, ry = 1) =>
+    painted(c, { rough: 0.95, flat, rx, ry })
 
 // 地平線的顏色。天空球在這個高度就是這個色,霧也是這個色 ——
 // 兩邊一致,遠處的地面才會無縫溶進天空
@@ -322,7 +322,7 @@ function balloon() {
     const prof = [[0.02, 0], [0.16, 0.10], [0.34, 0.26], [0.45, 0.50],
                   [0.46, 0.72], [0.38, 0.92], [0.21, 1.08], [0, 1.13]]
         .map(([x, y]) => new THREE.Vector2(x, y))
-    const skin = [mat(0xd4574a), mat(0xf2e6cf)]
+    const skin = [mat(0xd4574a, true, 3, 2), mat(0xf2e6cf, true, 3, 2)]
     const GORE = 8
     for (let i = 0; i < GORE; i++) {
         const wedge = new THREE.Mesh(
@@ -372,7 +372,7 @@ export function buildWorld(scene, hx, hz, seed = 1, river = null) {
             if (hills.some(h => Math.hypot(x - h.x, z - h.z) <
                     Math.max(rx, rz) + Math.max(h.rx, h.rz) * 0.95)) continue
             const hill = new THREE.Mesh(
-                new THREE.SphereGeometry(R, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.hill))
+                new THREE.SphereGeometry(R, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.hill, true, 3, 1.5))
             hill.scale.set(sx, 0.32 + rand() * 0.25, sz)
             hill.position.set(x, -0.4, z)
             g.add(hill)
@@ -391,7 +391,7 @@ export function buildWorld(scene, hx, hz, seed = 1, river = null) {
         const rx = R * sx, rz = R * sz
         const r = FAR_KEEP + Math.max(rx, rz) + rand() * 40
         const far = new THREE.Mesh(
-            new THREE.SphereGeometry(R, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x93b189))
+            new THREE.SphereGeometry(R, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x93b189, true, 4, 2))
         far.scale.set(sx, 0.30 + rand() * 0.22, sz)
         far.position.set(Math.cos(a) * r, -1.5, Math.sin(a) * r)
         g.add(far)
