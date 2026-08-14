@@ -4,16 +4,9 @@
 // 鋪軌的喀答聲。用取樣音檔當然更真,但那是幾百 KB,而這整個遊戲的
 // 程式碼加起來才 130 KB。
 //
-// 旋律只從五聲音階挑音 —— 隨機挑也不會難聽,所以永遠不重複又不出錯。
-
-const PENTA = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50]
-const CHORDS = [
-    [130.81, 196.00, 246.94],   // C
-    [146.83, 220.00, 261.63],   // Dm7 的骨架
-    [174.61, 261.63, 329.63],   // F
-    [196.00, 246.94, 293.66],   // G
-]
-import { get as sget, set as sset } from './store.js?v=89'
+// 配樂是自己寫的一段曲子,不是隨機取音 —— 隨機的版本永遠不難聽,
+// 但也永遠哼不出來,而這種遊戲需要的正是一段記得住的調子。
+import { get as sget, set as sset } from './store.js?v=90'
 
 const KEY = 'wr.mute'
 
@@ -25,6 +18,8 @@ export class Sound {
         this.platformMute = false
         this.timers = []
         this.chuffAcc = 0
+        this.sec = 0          // 目前排到第幾段
+        this.nextAt = 0       // 下一段該從音訊時鐘的哪一刻開始
     }
 
     /** 瀏覽器要求先有使用者操作才能出聲,所以由「開始」那一下觸發 */
@@ -161,32 +156,128 @@ export class Sound {
         this.chuffAcc += dt * Math.max(0.35, speed / 1.9)
         if (this.chuffAcc < 0.34) return
         this.chuffAcc = 0
+        this.sec = 0          // 目前排到第幾段
+        this.nextAt = 0       // 下一段該從音訊時鐘的哪一刻開始
         this._noise({ dur: 0.11, gain: 0.075, freq: 520, q: 0.7 })
     }
 
     /* ── 配樂 ────────────────────────────────────────────────────── */
 
     /**
-     * 一小節:和弦鋪底 + 木魚般的節拍 + 幾個五聲音階的音。
-     * 每小節重排一次,所以不會聽出循環。
+     * 排一段(8 小節)。全部用音訊時鐘的絕對時間排,不靠 setTimeout ——
+     * setTimeout 會漂,而輕快的曲子只要拍子一鬆就整個垮掉。
      */
-    _bar() {
-        if (this.off) return
-        const chord = CHORDS[Math.floor(Math.random() * CHORDS.length)]
-        for (const f of chord)
-            this._tone(f, { dur: 3.4, gain: 0.05, type: 'sine', attack: 0.5, dest: this.musicGain })
-        for (let b = 0; b < 4; b++)               // 木魚:每拍一下,弱拍更輕
-            this._noise({ at: b * 0.85, dur: 0.04, gain: b % 2 ? 0.05 : 0.09, freq: 1800, q: 3 })
-        for (let i = 0; i < 5; i++) {
-            if (Math.random() < 0.35) continue     // 留白,不要每格都塞音
-            const f = PENTA[Math.floor(Math.random() * PENTA.length)]
-            this._tone(f, { at: 0.2 + i * 0.62, dur: 0.9, gain: 0.09,
-                            type: 'triangle', dest: this.musicGain })
+    _section(t0, sec) {
+        for (let b = 0; b < 8; b++) {
+            const at = t0 + b * BAR
+            const [rootName, triad] = CHORD[sec.ch[b]]
+            const root = hz(rootName)
+            // 低音踩正拍,第三拍換成五度 —— 這是往前走的推力
+            this._m(root, at, BEAT * 0.85, { gain: .16, type: 'triangle', cut: 900 })
+            this._m(root * 1.5, at + BEAT * 2, BEAT * 0.85, { gain: .14, type: 'triangle', cut: 900 })
+            // 和弦切在反拍,短促。「輕快」是這一下決定的,不是音色
+            for (let k = 0; k < 4; k++)
+                for (const n of triad)
+                    this._m(hz(n), at + BEAT * (k + .5), BEAT * .32,
+                            { gain: .05, type: 'square', cut: 1800 })
+            // 八分音符的細碎打點,正拍重一些
+            for (let k = 0; k < 8; k++)
+                this._mn(at + BEAT * k / 2, .03, k % 2 ? .02 : .045)
         }
+        let t = 0
+        for (const [n, beats] of sec.mel) {
+            if (n) {
+                const f = hz(n), dur = beats * BEAT * .92
+                this._m(f, t0 + t * BEAT, dur, { gain: .11, type: 'square', cut: 3200 })
+                // 疊一個略微失諧的同音,厚度就出來了
+                this._m(f, t0 + t * BEAT, dur, { gain: .045, type: 'square', cut: 3200, detune: 8 })
+            }
+            t += beats
+        }
+        return BAR * 8
+    }
+
+    /** 配樂用的單音(絕對時間) */
+    _m(freq, when, dur, { gain = .1, type = 'square', cut = 2600, detune = 0 } = {}) {
+        const ctx = this.ctx
+        const o = ctx.createOscillator()
+        o.type = type; o.frequency.value = freq; o.detune.value = detune
+        const f = ctx.createBiquadFilter()
+        f.type = 'lowpass'; f.frequency.value = cut
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.0001, when)
+        g.gain.exponentialRampToValueAtTime(gain, when + .012)
+        g.gain.exponentialRampToValueAtTime(0.0001, when + dur)
+        o.connect(f); f.connect(g); g.connect(this.musicGain)
+        o.start(when); o.stop(when + dur + .02)
+    }
+
+    /** 配樂用的打點(絕對時間) */
+    _mn(when, dur, gain) {
+        const ctx = this.ctx
+        const src = ctx.createBufferSource()
+        src.buffer = this.noise
+        const f = ctx.createBiquadFilter()
+        f.type = 'bandpass'; f.frequency.value = 7000; f.Q.value = 2
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(gain, when)
+        g.gain.exponentialRampToValueAtTime(0.0001, when + dur)
+        src.connect(f); f.connect(g); g.connect(this.musicGain)
+        src.start(when); src.stop(when + dur + .02)
     }
 
     _loop() {
-        this._bar()
-        this.timers.push(setTimeout(() => this._loop(), 3400))
+        const t = ms => { this.timers = [setTimeout(() => this._loop(), ms)] }
+        if (this.off) { this.nextAt = 0; return t(800) }
+        const t0 = Math.max(this.ctx.currentTime + .08, this.nextAt || 0)
+        this._section(t0, SECTIONS[this.sec++ % SECTIONS.length])
+        this.nextAt = t0 + BAR * 8
+        // 提前 0.25 秒排下一段:銜接處不能有縫,不然每 12 秒就頓一下
+        t(Math.max(500, (this.nextAt - this.ctx.currentTime - .25) * 1000))
     }
 }
+
+/* ── 曲子本身 ─────────────────────────────────────────────────────── */
+// 原創的小調子,不是任何既有曲目。A 段 B 段輪流,一輪約 25 秒。
+
+const BPM = 152                     // 走路再快一點的速度,不會催
+const BEAT = 60 / BPM
+const BAR = BEAT * 4
+
+const STEP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
+/** 音名轉頻率:C4 = 中央 C */
+const hz = n => 440 * Math.pow(2,
+    (STEP[n[0]] + (n[1] === '#' ? 1 : 0) + (+n[n.length - 1] + 1) * 12 - 69) / 12)
+
+const CHORD = {
+    C:  ['C2', ['C4', 'E4', 'G4']],
+    G:  ['G2', ['B3', 'D4', 'G4']],
+    Am: ['A2', ['A3', 'C4', 'E4']],
+    F:  ['F2', ['F3', 'A3', 'C4']],
+}
+
+// [音名, 幾拍];null 是休止。每段剛好 32 拍
+const SECTIONS = [
+    {   ch: ['C', 'G', 'Am', 'F', 'C', 'G', 'F', 'G'],
+        mel: [
+            ['E5', .5], ['G5', .5], ['E5', .5], ['C5', .5], ['D5', 1], ['E5', 1],
+            ['D5', .5], ['F5', .5], ['D5', .5], ['B4', .5], ['C5', 1], ['D5', 1],
+            ['C5', .5], ['E5', .5], ['A5', 1], ['G5', .5], ['E5', .5], ['C5', 1],
+            ['A4', .5], ['C5', .5], ['F5', 1], ['E5', 1], ['D5', 1],
+            ['E5', .5], ['G5', .5], ['C6', 1], ['B5', .5], ['G5', .5], ['E5', 1],
+            ['D5', .5], ['G5', .5], ['B5', 1], ['A5', .5], ['F5', .5], ['D5', 1],
+            ['A4', .5], ['C5', .5], ['F5', .5], ['A5', .5], ['G5', 1], ['F5', 1],
+            ['D5', 1], ['B4', 1], ['G4', 2],
+        ] },
+    {   ch: ['F', 'G', 'C', 'Am', 'F', 'G', 'C', 'G'],
+        mel: [
+            ['F5', .5], ['G5', .5], ['A5', 1], ['F5', .5], ['G5', .5], ['A5', 1],
+            ['G5', .5], ['A5', .5], ['B5', 1], ['G5', 1], ['D5', 1],
+            ['E5', .5], ['G5', .5], ['C6', 1.5], ['B5', .5], ['G5', 1],
+            ['A5', 1], ['G5', .5], ['E5', .5], ['C5', 2],
+            ['F5', .5], ['A5', .5], ['C6', 1], ['A5', .5], ['F5', .5], ['C5', 1],
+            ['D5', .5], ['F5', .5], ['B5', 1], ['A5', .5], ['G5', .5], ['D5', 1],
+            ['E5', .5], ['G5', .5], ['C6', 1], ['E6', 1], ['D6', 1],
+            ['D6', 1], ['B5', 1], ['G5', 2],
+        ] },
+]
