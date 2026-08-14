@@ -13,14 +13,9 @@ const CHORDS = [
     [174.61, 261.63, 329.63],   // F
     [196.00, 246.94, 293.66],   // G
 ]
-import { get as sget, set as sset } from './store.js?v=88'
+import { get as sget, set as sset } from './store.js?v=89'
 
 const KEY = 'wr.mute'
-
-// 背景音樂關掉,只留音效。旋律是隨機生成的,聽久了會膩,
-// 而火車本身的喀答與蒸汽聲才是這個遊戲該有的聲音。
-// 要放回來就把這行改成 true —— _bar / _loop 都還在
-const MUSIC = false
 
 export class Sound {
     constructor() {
@@ -66,7 +61,7 @@ export class Sound {
         const d = this.noise.getChannelData(0)
         for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1
 
-        if (MUSIC) this._loop()
+        this._loop()
     }
 
     /** 遊戲內靜音 or 平台靜音,任一個成立就不出聲 */
