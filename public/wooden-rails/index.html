@@ -34,10 +34,11 @@
     #pax.done { color: #3f8f5c; }
 
     /* 左上:關卡選單 */
+    /* 選單鈕在右上,尺寸跟下面那排側邊鈕一致,視覺上是同一組 */
     #menuBtn { position: absolute; top: calc(env(safe-area-inset-top) + 14px);
-        left: calc(env(safe-area-inset-left) - 1px);
-        width: 63px; height: 63px; border: 0; border-radius: 21px; background: var(--paper);
-        box-shadow: var(--shadow); font-size: 27px; cursor: pointer; }
+        right: calc(env(safe-area-inset-right) + 14px);
+        width: 46px; height: 46px; border: 0; border-radius: 15px; background: var(--paper);
+        box-shadow: var(--shadow); font-size: 19px; cursor: pointer; }
 
     /* 右側直排按鈕 */
     #side { position: absolute; right: calc(env(safe-area-inset-right) + 14px);
@@ -179,14 +180,24 @@
     /* 橫向:軌道片盤改放左下角,排成兩欄。直排單欄要 420px,
        手機橫向只有 400 出頭的高度,放不下 */
     @media (min-aspect-ratio: 13/10) and (max-height: 600px) {
+        /* 片盤靠左單欄。7 個鈕(5 種片 + 橡皮擦 + 開車)要塞進 400 出頭的高度,
+           所以縮到 44px:7×44 + 6×6 = 344,還留得下上下邊距 */
         #tray {
-            left: calc(env(safe-area-inset-left) + 14px);
-            bottom: calc(env(safe-area-inset-bottom) + 14px);
+            left: calc(env(safe-area-inset-left) + 12px);
+            bottom: calc(env(safe-area-inset-bottom) + 12px);
             transform: none;
-            display: grid; grid-template-columns: repeat(2, auto);
-            gap: 8px; justify-items: stretch; align-items: stretch;
+            display: flex; flex-direction: column; gap: 6px; align-items: stretch;
         }
-        #tray #goBtn { grid-column: 1 / -1; width: 100%; padding: 0; }
+        #tray .slot { width: 44px; height: 44px; border-radius: 13px; }
+        #tray .slot svg { width: 27px; height: 27px; }
+        #tray .slot .n { min-width: 17px; height: 17px; font-size: 10px;
+            right: -2px; top: -4px; padding: 0 4px; }
+        #tray #goBtn { width: 44px; height: 46px; padding: 0; font-size: 13px;
+            border-radius: 13px; }
+        /* 右側那排也一起縮,兩邊才對稱 */
+        #side button { width: 40px; height: 40px; border-radius: 13px; font-size: 17px; }
+        #side { gap: 8px; }
+        #menuBtn { width: 40px; height: 40px; border-radius: 13px; font-size: 17px; }
     }
 
     @media (max-width: 560px) {
@@ -293,15 +304,15 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=97'
-import { Train, pegPerson, barrelRoof } from './train.js?v=97'
-import { painted, woodMap, C } from './wood.js?v=97'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=97'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=97'
-import { SOLUTIONS } from './solutions.js?v=97'
-import { Sound } from './sound.js?v=97'
-import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=97'
-import { get as sget, set as sset, connect as storeConnect } from './store.js?v=97'
+    from './track.js?v=98'
+import { Train, pegPerson, barrelRoof } from './train.js?v=98'
+import { painted, woodMap, C } from './wood.js?v=98'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=98'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=98'
+import { SOLUTIONS } from './solutions.js?v=98'
+import { Sound } from './sound.js?v=98'
+import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=98'
+import { get as sget, set as sset, connect as storeConnect } from './store.js?v=98'
 
 // 語言要在最前面決定 —— 底下每一段 UI 程式碼都直接讀 T,
 // 晚一步宣告的話那些函式會撞上暫時性死區
