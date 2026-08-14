@@ -304,15 +304,15 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=98'
-import { Train, pegPerson, barrelRoof } from './train.js?v=98'
-import { painted, woodMap, C } from './wood.js?v=98'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=98'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=98'
-import { SOLUTIONS } from './solutions.js?v=98'
-import { Sound } from './sound.js?v=98'
-import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=98'
-import { get as sget, set as sset, connect as storeConnect } from './store.js?v=98'
+    from './track.js?v=99'
+import { Train, pegPerson, barrelRoof } from './train.js?v=99'
+import { painted, woodMap, C } from './wood.js?v=99'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=99'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=99'
+import { SOLUTIONS } from './solutions.js?v=99'
+import { Sound } from './sound.js?v=99'
+import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=99'
+import { get as sget, set as sset, connect as storeConnect } from './store.js?v=99'
 
 // 語言要在最前面決定 —— 底下每一段 UI 程式碼都直接讀 T,
 // 晚一步宣告的話那些函式會撞上暫時性死區
@@ -422,7 +422,6 @@ function loadLevel(i) {
     stock = { ...level.stock }
     pegs = []
     ordered = false
-    hintsLeft = 1              // 每換一關重新給一次
     collected = 0
     running = false
     chase = false
@@ -1093,8 +1092,8 @@ function syncUI() {
     go.onclick = () => running ? stopRun() : startRun()
     tray.appendChild(go)
 
-    el('hintBtn').disabled = !hintsLeft || running
-    el('hintBtn').title = hintsLeft ? T.tipHint : T.tipHintUsed
+    el('hintBtn').disabled = running
+    el('hintBtn').title = T.tipHint
 
     const total = pegs.length
     el('pax').textContent = total
@@ -1162,10 +1161,9 @@ function giveHint() {
 }
 
 const sound = new Sound()
-let hintsLeft = 1        // 每一關只給一次
 let hintBusy = false
 async function askHint() {
-    if (running || hintBusy || !hintsLeft) return
+    if (running || hintBusy) return
     hintBusy = true
     const btn = el('hintBtn')
     btn.textContent = '⏳'
@@ -1176,7 +1174,6 @@ async function askHint() {
     sound.play('hint')
     const err = giveHint()
     if (err) { el('lvHint').textContent = err; return }
-    hintsLeft--
     syncUI()
     hide()
 }
@@ -1266,7 +1263,7 @@ function show(title, text, won) {
     el('rTitle').textContent = title
     el('rText').textContent = text
     el('rNext').style.display = won && level.index + 1 < LEVELS.length ? '' : 'none'
-    el('rHint').style.display = won || !hintsLeft ? 'none' : ''
+    el('rHint').style.display = won ? 'none' : ''
     el('rRetry').textContent = won ? T.again : T.retry
     setTimeout(() => el('result').classList.add('show'), won ? 700 : 1100)
 }
