@@ -176,6 +176,19 @@
         font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer;
         background: #e8d9be; color: var(--ink); }
 
+    /* 橫向:軌道片盤改放左下角,排成兩欄。直排單欄要 420px,
+       手機橫向只有 400 出頭的高度,放不下 */
+    @media (min-aspect-ratio: 13/10) and (max-height: 600px) {
+        #tray {
+            left: calc(env(safe-area-inset-left) + 14px);
+            bottom: calc(env(safe-area-inset-bottom) + 14px);
+            transform: none;
+            display: grid; grid-template-columns: repeat(2, auto);
+            gap: 8px; justify-items: stretch; align-items: stretch;
+        }
+        #tray #goBtn { grid-column: 1 / -1; width: 100%; padding: 0; }
+    }
+
     @media (max-width: 560px) {
         #lvHint { display: none; }
         /* 直向手機:63px 會撞到上面那條關卡名稱,而且 -1px 在沒有瀏海的那側會被切掉 */
@@ -280,15 +293,15 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=95'
-import { Train, pegPerson, barrelRoof } from './train.js?v=95'
-import { painted, woodMap, C } from './wood.js?v=95'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=95'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=95'
-import { SOLUTIONS } from './solutions.js?v=95'
-import { Sound } from './sound.js?v=95'
-import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=95'
-import { get as sget, set as sset, connect as storeConnect } from './store.js?v=95'
+    from './track.js?v=97'
+import { Train, pegPerson, barrelRoof } from './train.js?v=97'
+import { painted, woodMap, C } from './wood.js?v=97'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=97'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=97'
+import { SOLUTIONS } from './solutions.js?v=97'
+import { Sound } from './sound.js?v=97'
+import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=97'
+import { get as sget, set as sset, connect as storeConnect } from './store.js?v=97'
 
 // 語言要在最前面決定 —— 底下每一段 UI 程式碼都直接讀 T,
 // 晚一步宣告的話那些函式會撞上暫時性死區

@@ -6,7 +6,7 @@
 //
 // 配樂是自己寫的一段曲子,不是隨機取音 —— 隨機的版本永遠不難聽,
 // 但也永遠哼不出來,而這種遊戲需要的正是一段記得住的調子。
-import { get as sget, set as sset } from './store.js?v=95'
+import { get as sget, set as sset } from './store.js?v=97'
 
 const KEY = 'wr.mute'
 
