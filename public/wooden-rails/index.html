@@ -103,6 +103,12 @@
     #lvGrid button { height: 60px; border: 0; border-radius: 16px; background: #e8d9be;
         font-size: 19px; font-weight: 800; color: var(--ink); cursor: pointer; }
     #lvGrid button.done { background: #4d9b6a; color: #fff; }
+    /* 關卡按鈕下緣的星星:小小一排,不要搶走數字 */
+    #lvGrid button .st { position: absolute; left: 0; right: 0; bottom: 3px;
+        font-size: 9px; letter-spacing: 1px; line-height: 1; opacity: .9; }
+    #lvGrid button { position: relative; padding-bottom: 9px; }
+    #rStars { font-size: 30px; letter-spacing: 6px; color: #d8a63c; margin: -4px 0 6px; }
+    #rStars.full { color: #e8b33c; text-shadow: 0 0 14px rgba(232,179,60,.55); }
     #lvGrid button:disabled { opacity: .38; cursor: default; }
 
     /* 開場畫面。整頁蓋掉 3D,跟 tiny-planet 同一套語彙:
@@ -226,7 +232,7 @@
     </div>
     <div id="tray"></div>
     <div id="result"><div id="card">
-        <h2 id="rTitle"></h2><p id="rText"></p>
+        <h2 id="rTitle"></h2><div id="rStars"></div><p id="rText"></p>
         <div class="row">
             <button id="rHint"></button>
             <button id="rRetry"></button>
@@ -304,15 +310,16 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Water } from 'three/addons/objects/Water.js'
 import { PIECES, PLACEABLE, DELTA, opposite, connsOf, pieceSegs, sweep, segWorld, trimEnds, walk }
-    from './track.js?v=99'
-import { Train, pegPerson, barrelRoof } from './train.js?v=99'
-import { painted, woodMap, C } from './wood.js?v=99'
-import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=99'
-import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=99'
-import { SOLUTIONS } from './solutions.js?v=99'
-import { Sound } from './sound.js?v=99'
-import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=99'
-import { get as sget, set as sset, connect as storeConnect } from './store.js?v=99'
+    from './track.js?v=101'
+import { Train, pegPerson, barrelRoof } from './train.js?v=101'
+import { painted, woodMap, C } from './wood.js?v=101'
+import { buildWorld, HORIZON, waterTexture, waterNormal, riverOffset, riverHalf, bankHalf } from './world.js?v=101'
+import { LEVELS, DIR, PEG_COLORS } from './levels.js?v=101'
+import { SOLUTIONS } from './solutions.js?v=101'
+import { PAR, STAR_SLACK } from './par.js?v=101'
+import { Sound } from './sound.js?v=101'
+import { I18N, LANG_NAMES, RTL, fmt, detectLang } from './lang.js?v=101'
+import { get as sget, set as sset, connect as storeConnect } from './store.js?v=101'
 
 // 語言要在最前面決定 —— 底下每一段 UI 程式碼都直接讀 T,
 // 晚一步宣告的話那些函式會撞上暫時性死區
@@ -397,6 +404,34 @@ let ordered = false      // 這一關的乘客要不要照號碼順序接
 let river = null         // 這一關的河(沒有就是 null)
 let sel = PLACEABLE[0], running = false, chase = false, collected = 0
 const KEY = 'wr.progress'
+const STAR_KEY = 'wr.stars'
+
+/** 這一關玩家實際鋪了幾片。起點站、終點站、固定軌道都不算 —— 那些不是玩家花的 */
+function piecesUsed() {
+    const skip = new Set((level.fixed || []).map(f => `${f[1]},${f[2]}`))
+    skip.add(`${level.start[0]},${level.start[1]}`)
+    skip.add(`${level.goal[0]},${level.goal[1]}`)
+    let n = 0
+    for (let z = 0; z < level.h; z++) for (let x = 0; x < level.w; x++)
+        if (cells[z][x] && !skip.has(`${x},${z}`)) n++
+    return n
+}
+
+/** 用掉的片數換算星等:剛好最省給三顆,略多兩顆,再多一顆 */
+const starsFor = (used, par) =>
+    used <= par ? 3 : used <= par + STAR_SLACK ? 2 : 1
+
+// 每一關的最佳星等。存的是最好成績,重玩拿到比較差的不會覆蓋掉
+let bestStars = (() => {
+    try { return JSON.parse(sget(STAR_KEY)) || {} } catch (e) { return {} }
+})()
+function recordStars(i, n) {
+    if ((bestStars[i] || 0) >= n) return false
+    bestStars[i] = n
+    sset(STAR_KEY, JSON.stringify(bestStars))
+    return true
+}
+const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n)
 let unlocked = Math.max(0, Math.min(LEVELS.length - 1, +sget(KEY) || 0))
 // ?all=1 解開全部關卡(只影響這次開啟,不會寫進進度)——
 // 要看後面的關卡不必真的從第一關打上去
@@ -419,7 +454,8 @@ function loadLevel(i) {
     scene.add(boardGroup)
 
     cells = Array.from({ length: level.h }, () => Array(level.w).fill(null))
-    stock = { ...level.stock }
+    // 配給比最省解寬鬆 —— 繞遠路照樣過得了關,只是拿不到三星
+    stock = { ...PAR[i].stock }
     pegs = []
     ordered = false
     collected = 0
@@ -1070,7 +1106,7 @@ function syncUI() {
     const tray = el('tray')
     tray.innerHTML = ''
     for (const t of PLACEABLE) {
-        if (!(t in level.stock)) continue
+        if (!(t in PAR[level.index].stock)) continue
         const b = document.createElement('button')
         b.className = 'slot' + (sel === t ? ' on' : '')
         b.innerHTML = `<svg viewBox="0 0 40 40">${ICONS[t]}</svg><span class="n">${stock[t]}</span>`
@@ -1250,7 +1286,10 @@ function finish() {
         // 進站就退回俯視 —— 這一刻要看的是自己拼出來的那張軌道圖,不是車尾
         chase = false; frameBoard()
         sound.play('arrive')
-        show(T.wonT, T.wonD, true)
+        const used = piecesUsed(), par = PAR[level.index].par
+        const st = starsFor(used, par)
+        recordStars(level.index, st)
+        show(T.wonT, fmt(T[`wonD${st}`], { used, par }), true, st)
         if (level.index + 1 > unlocked) {
             unlocked = Math.min(LEVELS.length - 1, level.index + 1)
             sset(KEY, unlocked)
@@ -1259,7 +1298,9 @@ function finish() {
     syncUI()
 }
 
-function show(title, text, won) {
+function show(title, text, won, stars = 0) {
+    el('rStars').textContent = stars ? starText(stars) : ''
+    el('rStars').className = stars === 3 ? 'full' : ''
     el('rTitle').textContent = title
     el('rText').textContent = text
     el('rNext').style.display = won && level.index + 1 < LEVELS.length ? '' : 'none'
@@ -1280,6 +1321,8 @@ function buildMenu() {
     LEVELS.forEach((L, i) => {
         const b = document.createElement('button')
         b.textContent = i + 1
+        if (bestStars[i]) b.insertAdjacentHTML('beforeend',
+            `<span class="st">${starText(bestStars[i])}</span>`)
         b.disabled = i > unlocked
         if (i < unlocked) b.classList.add('done')
         b.onclick = () => { el('levels').classList.remove('show'); hide(); enterGame(i) }
@@ -1330,7 +1373,7 @@ addEventListener('keydown', e => {
     if (e.key === 'c' || e.key === 'C') chase = !chase
     if (e.key === ' ') { e.preventDefault(); running ? stopRun() : startRun() }
     const i = PLACEABLE.indexOf(PLACEABLE[+e.key - 1])
-    if (+e.key >= 1 && +e.key <= 3 && PLACEABLE[+e.key - 1] in level.stock) {
+    if (+e.key >= 1 && +e.key <= 3 && PLACEABLE[+e.key - 1] in PAR[level.index].stock) {
         sel = PLACEABLE[+e.key - 1]; syncUI()
     }
 })
@@ -1425,6 +1468,7 @@ if (new URLSearchParams(location.search).has('debug')) {
         get frames() { return frames },
         get world() { return world },
         get sound() { return sound },        // 驗證站方靜音用
+        par: PAR, used: () => piecesUsed(),   // 驗證星等用
         get chase() { return chase }, set chase(v) { chase = v },   // 出封面時要關掉跟車鏡頭
         get riverInfo() { return river },
         tap: (x, z) => tapCell(x, z),
