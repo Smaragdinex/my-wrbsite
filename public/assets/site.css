@@ -142,6 +142,14 @@
   .einfo .ettl .roll span{display:block;line-height:1.12}
   .ecard:hover .einfo .ettl .roll{transform:translateY(0)}
   .einfo .etags{margin-top:10px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+  /* 作品卡右下角那顆次要連結(例如 KittyCafe 的 App Store)。
+     是 span 不是 a(<a> 不能包 <a>),點擊由 shell.mjs 代理 */
+  .estore{position:absolute;right:26px;bottom:26px;z-index:3;cursor:pointer;
+    padding:9px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.28);
+    background:rgba(8,8,10,.42);backdrop-filter:blur(6px);
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.86);
+    text-decoration:none;transition:background .3s,border-color .3s,color .3s}
+  .estore:hover{background:#fff;border-color:#fff;color:#0a0a0a}
   .worksfoot{position:relative;z-index:2;height:34vh;display:flex;align-items:center;justify-content:center;
     color:var(--dim);font-size:12px;letter-spacing:.2em;text-transform:uppercase}
 

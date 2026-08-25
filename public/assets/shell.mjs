@@ -3,7 +3,12 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 /* ===== 作品列表 ===== */
 const WORKS = [
   { no:'01', title:'CatGame',          tag:'p5.js · Web Game',          url:'https://smaragdinex.github.io/cat-game/', img:'/assets/catgame.jpg' },
-  { no:'02', title:'KittyCafe',        tag:'iOS · Casual Game',         url:'https://apps.apple.com/tw/app/kitty-cafe-by-x-arts/id6758956069', img:'/assets/kittycafe.jpg' },
+  // 卡片本身連網頁版(點進去就能玩);iOS 版另外掛一顆小的 store 連結,
+  // 不然 App Store 那條線會從首頁整個消失。
+  // 網頁版跟 Tiny Planet / Wooden Rails 一樣放在 public/ 的子目錄裡,
+  // 不是另外開網域 —— 一次 git push 全部上線
+  { no:'02', title:'KittyCafe',        tag:'Web · iOS · Casual Game',   url:'/kitty-cafe/', img:'/assets/kittycafe.jpg',
+    store:{ label:'App Store', url:'https://apps.apple.com/tw/app/kitty-cafe-by-x-arts/id6758956069' } },
   { no:'03', title:'CatInsight Stock', tag:'AI Stock Research · iOS',   url:'/catinsight.html', img:'/assets/cat-poster.jpg' },
   { no:'04', title:'Ocean Cleanup',    tag:'iOS Game · Beach Cleanup',  url:'https://apps.apple.com/tw/app/id6771914760', img:'/assets/oceancleanup.jpg' },
   { no:'05', title:'Tiny Planet',      tag:'Three.js · Flight Sandbox',  url:'/tiny-planet/', img:'/assets/tinyplanet.jpg?v=2' },
@@ -22,6 +27,14 @@ document.querySelectorAll('.topnav a').forEach(a => {
 function buildCard(w, i){
   const sec = document.createElement('section');
   sec.className = 'exp ' + (i % 2 === 0 ? 'left' : 'right');
+  // 次要連結(例如 KittyCafe 的 App Store)用 **span 不是 a**:
+  //   · <a> 不能包 <a>,瀏覽器會自己把它拆出去,版面就歪了
+  //   · 放在卡片外面也不行 —— 卡片是靠 JS translate 滑進來的,
+  //     外面的元素不會跟著動,會變成一顆浮在旁邊不動的東西
+  // 所以放進卡片裡當 span,點擊在下面用事件代理處理
+  const store = w.store
+    ? `<span class="estore" role="link" tabindex="0" data-href="${w.store.url}">${w.store.label} ↗</span>`
+    : ''
   sec.innerHTML = `
     <a class="ecard" href="${w.url}">
       <img src="${w.img}" alt="${w.title}" loading="lazy">
@@ -31,9 +44,23 @@ function buildCard(w, i){
         <div class="ettl"><span class="roll"><span>${w.title}</span><span>${w.title}</span></span></div>
         <div class="etags">${w.tag}</div>
       </div>
+      ${store}
     </a>`;
   return sec;
 }
+
+/* 卡片裡那顆次要連結。**一定要 stopPropagation + preventDefault** ——
+   它在 <a class="ecard"> 裡面,不擋的話會連卡片本身的連結一起觸發 */
+function openStore(e){
+  const el = e.target.closest?.('.estore')
+  if (!el) return
+  if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return
+  e.preventDefault()
+  e.stopPropagation()
+  window.open(el.dataset.href, '_blank', 'noopener')
+}
+document.addEventListener('click', openStore, true)
+document.addEventListener('keydown', openStore, true)
 
 /* ===== 滑鼠圓球位置跟隨 ===== */
 const cur = { x: innerWidth/2, y: innerHeight/2, tx: innerWidth/2, ty: innerHeight/2 };
