@@ -80,12 +80,29 @@ faceCenter(); addEventListener('resize', faceCenter); addEventListener('scroll',
    - 粒子位置/速度存在貼圖裡，逐幀積分：被滑鼠水流推散 → 彈簧力慢慢漂回重組
    ===================================================================== */
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias:true, alpha:false });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+/* --- 解析度自動降級 ------------------------------------------------
+   全螢幕的水面 shader 是這一頁最貴的東西:每一幀要算「視窗寬 x DPR」
+   乘「視窗高 x DPR」個像素。Retina 的 DPR=2,1600x1000 的視窗就是
+   **640 萬像素 x 每秒 60 次**,中階顯卡撐不住 —— 症狀就是整頁卡卡的。
+
+   ⚠️ 不寫死一個低畫質:那對高階機器是白白犧牲。改成**先給好的,
+   撐不住才降**,而且只降解析度不動視覺設計(這是一層柔和的水面,
+   放大一點點看不出來,但像素量差很多)。
+
+   1.5 起跳而不是 2:對這種模糊漸層的畫面,2.0 的收益極小、成本卻是 1.78 倍 */
+const DPR_STEPS = [1.5, 1.25, 1, 0.85, 0.7];
+let dprLevel = 0;
+const applyDPR = () => renderer.setPixelRatio(Math.min(devicePixelRatio, DPR_STEPS[dprLevel]));
+applyDPR();
 renderer.setClearColor(0x06070a, 1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.autoClear = false;
 
 /* --- 全螢幕 quad（給所有 fullscreen pass 用）--- */
+/** 降級用的幀時間統計 */
+let perfAcc = 0, perfN = 0;
+
 const fsCam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
 const fsScene = new THREE.Scene();
 const fsQuad = new THREE.Mesh(new THREE.PlaneGeometry(2,2));
@@ -544,6 +561,23 @@ function frame(){
   const dt = Math.min(0.033, (now-t0)/1000); t0 = now;
   const time = now * 0.001;
 
+  // 撐不住就降一級解析度。連續 45 幀(約 0.75 秒)平均低於 45fps 才降,
+  // 避免被單一幀的卡頓(例如剛載完圖)誤判
+  if (dprLevel < DPR_STEPS.length - 1) {
+    perfAcc += dt; perfN++;
+    if (perfN >= 45) {
+      if (perfAcc / perfN > 1 / 45) {
+        dprLevel++; applyDPR();
+        // ⚠️ **一定要跟著 resize()。** setPixelRatio 只是記下數字,
+        // Three.js 要等 setSize 才真的換 canvas 的實際像素尺寸;
+        // 而且水面的 render target 也是照 dpr 算的,不重算就白降了
+        resize();
+        console.info(`[效能] 幀率不足,解析度降到 ${DPR_STEPS[dprLevel]}x`);
+      }
+      perfAcc = 0; perfN = 0;
+    }
+  }
+
   // 游標球
   cur.x += (cur.tx-cur.x)*.18; cur.y += (cur.ty-cur.y)*.18;
   cursor.style.transform = `translate(${cur.x}px,${cur.y}px) translate(-50%,-50%)`;
@@ -615,18 +649,22 @@ function initHome(){
   }
   const EXPS = [...document.querySelectorAll('.exp')];
   const CARD_OUT = 170;
+  /* ⚠️ **先全部量完,再全部寫。**
+     原本是量一張、寫一張、再量下一張 —— 寫進 style 之後版面就髒了,
+     下一次 getBoundingClientRect 會強迫瀏覽器立刻重算整頁版面
+     (layout thrashing)。12 張卡就是每次捲動被迫重算 12 次版面 */
   function updateCards(){
     const vh = innerHeight;
+    const cards = [];
     for (const sec of EXPS){
       const card = sec.querySelector('.ecard');
       const r = card.getBoundingClientRect();
-      const center = r.top + r.height/2;
+      cards.push([card, r.top + r.height/2, sec.classList.contains('left') ? -1 : 1]);
+    }
+    for (const [card, center, dir] of cards){
       let p = 1 - (center - vh/2) / (vh*0.72);
       p = p<0?0:p>1?1:p;
-      const dir = sec.classList.contains('left') ? -1 : 1;
-      const tx = dir * CARD_OUT * (1-p);
-      const ty = (1-p) * 34;
-      card.style.transform = 'translate('+tx.toFixed(1)+'px,'+ty.toFixed(1)+'px)';
+      card.style.transform = 'translate('+(dir*CARD_OUT*(1-p)).toFixed(1)+'px,'+((1-p)*34).toFixed(1)+'px)';
       const o = p*1.25; card.style.opacity = (o>1?1:o).toFixed(3);
     }
   }
