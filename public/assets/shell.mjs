@@ -90,8 +90,9 @@ const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl')
    撐不住才降**,而且只降解析度不動視覺設計(這是一層柔和的水面,
    放大一點點看不出來,但像素量差很多)。
 
-   1.5 起跳而不是 2:對這種模糊漸層的畫面,2.0 的收益極小、成本卻是 1.78 倍 */
-const DPR_STEPS = [1.5, 1.25, 1, 0.85, 0.7];
+   ⚠️ **起跳值維持原本的 2.0** —— 這一頁在正常機器上本來就不卡,
+   一開始就降畫質是拿高階機器的體驗去換,不划算。只有真的撐不住才往下走 */
+const DPR_STEPS = [2, 1.5, 1.25, 1, 0.85];
 let dprLevel = 0;
 const applyDPR = () => renderer.setPixelRatio(Math.min(devicePixelRatio, DPR_STEPS[dprLevel]));
 applyDPR();
