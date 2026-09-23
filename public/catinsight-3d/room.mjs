@@ -368,28 +368,37 @@ const plantLeaves = [];
 
 // ---------- 貓 + 碗 ----------
 {
-  const b = group(2.25, 0, 2.45);   // 往前一點,離椅子遠些
+  // 低多邊形黑貓(不做五官),坐姿,放在青色碗裡;用 flatShading 做出切面感
+  const b = group(2.25, 0, 2.45);
   cyl(0.5, 0.42, 0.22, C.bowl, { y: 0.11, parent: b });
   cyl(0.42, 0.42, 0.02, 0x8fe0ea, { y: 0.23, parent: b });
-  const loader = new GLTFLoader();
-  loader.load('/assets/cat2_web.glb', (gltf) => {
-    const cat = gltf.scene;
-    // 模型是標準化到 [-1,1],這裡縮到高約 0.9,放在碗上
-    const bb = new THREE.Box3().setFromObject(cat);
-    const size = bb.getSize(new THREE.Vector3());
-    const s = 0.9 / size.y;
-    cat.scale.setScalar(s);
-    const bb2 = new THREE.Box3().setFromObject(cat);
-    cat.position.y = 0.24 - bb2.min.y;
-    cat.rotation.y = -Math.PI * 0.75;
-    cat.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    b.add(cat);
-    console.log('cat loaded', size.y.toFixed(2));
-  }, undefined, () => {
-    // 載不到就用簡單的貓
-    sphere(0.3, C.cat, { y: 0.55, parent: b });
-    sphere(0.22, C.cat, { y: 0.92, z: 0.1, parent: b });
-  });
+  const cat = new THREE.Group(); cat.position.y = 0.24; cat.rotation.y = -Math.PI * 0.7; b.add(cat);
+  const FUR = 0x2f2740;
+  const lp = (geo, x, y, z, rx = 0, ry = 0, rz = 0) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: FUR, roughness: 0.9, flatShading: true }));
+    m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; cat.add(m); return m;
+  };
+  // 身體:坐姿,後半圓潤、前面挺起
+  lp(new THREE.SphereGeometry(0.30, 7, 6), 0, 0.30, -0.05).scale.set(1, 1.05, 1.15);
+  lp(new THREE.CylinderGeometry(0.17, 0.26, 0.42, 7), 0, 0.50, 0.12, 0.12);       // 胸
+  // 頭
+  lp(new THREE.SphereGeometry(0.19, 7, 6), 0, 0.86, 0.16);
+  // 耳朵(三角錐)
+  lp(new THREE.ConeGeometry(0.075, 0.16, 4), -0.11, 1.05, 0.14, 0, Math.PI / 4, -0.18);
+  lp(new THREE.ConeGeometry(0.075, 0.16, 4), 0.11, 1.05, 0.14, 0, Math.PI / 4, 0.18);
+  // 前腳
+  lp(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 6), -0.11, 0.18, 0.28, 0.1);
+  lp(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 6), 0.11, 0.18, 0.28, 0.1);
+  // 尾巴:彎曲的管子繞到側邊
+  const tailCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.05, 0.12, -0.32), new THREE.Vector3(0.28, 0.08, -0.28),
+    new THREE.Vector3(0.42, 0.10, -0.05), new THREE.Vector3(0.40, 0.18, 0.15),
+  ]);
+  lp(new THREE.TubeGeometry(tailCurve, 12, 0.04, 6, false), 0, 0, 0);
+  // 橘色項圈
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.025, 8, 24), mat(0xf08262));
+  collar.position.set(0, 0.70, 0.15); collar.rotation.x = Math.PI / 2 + 0.15; cat.add(collar);
+  animated.push(cat);
 }
 
 // ---------- 螢幕上的股票線圖 ----------
