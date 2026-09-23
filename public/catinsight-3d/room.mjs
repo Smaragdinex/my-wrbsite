@@ -376,10 +376,11 @@ function resize() {
 }
 function loop() {
   requestAnimationFrame(loop);
+  if (window.__room) window.__room.frames++;
   resize();
   const dt = Math.min(clock.getDelta(), 0.05);
-  const t = clock.elapsedTime;
-  const introT = (performance.now() - introStart) / 1000;   // 用真實時間,分頁在背景也照跑
+  const t = (performance.now() - introStart) / 1000;         // 全部用真實時間,分頁切回來動畫接得上
+  const introT = t;
   for (const g of animated) {
     const p = Math.max(0, Math.min(1, (introT - g.userData.delay) / 0.6));
     const e = 1 - Math.pow(1 - p, 3);                 // easeOut
@@ -413,3 +414,4 @@ function loop() {
 }
 loop();
 setTimeout(() => document.getElementById('loading').classList.add('done'), 400);
+window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, frames: 0 };
