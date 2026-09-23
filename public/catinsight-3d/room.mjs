@@ -379,28 +379,30 @@ let catHead = null;
     const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: FUR, roughness: 0.9, flatShading: true }));
     m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; cat.add(m); return m;
   };
-  // 身體:坐姿,後半圓潤、前面挺起
-  lp(new THREE.SphereGeometry(0.30, 7, 6), 0, 0.30, -0.05).scale.set(1, 1.05, 1.15);
-  lp(new THREE.CylinderGeometry(0.17, 0.26, 0.42, 7), 0, 0.50, 0.12, 0.12);       // 胸
+  // 趴姿:身體壓低拉長,前腳向前伸平放地上,頭在前面略低,尾巴繞在身側
+  lp(new THREE.SphereGeometry(0.30, 7, 6), 0, 0.22, -0.02).scale.set(1.15, 0.62, 1.45);
+  lp(new THREE.SphereGeometry(0.22, 7, 6), 0, 0.24, 0.30).scale.set(1.0, 0.75, 1.0);    // 胸
   // 頭(獨立 group,之後會左右看)
-  const head = new THREE.Group(); head.position.set(0, 0.86, 0.16); cat.add(head);
+  const head = new THREE.Group(); head.position.set(0, 0.42, 0.50); cat.add(head);
   const lpH = (geo, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = lp(geo, 0, 0, 0, rx, ry, rz); head.add(m); m.position.set(x, y, z); return m; };
   lpH(new THREE.SphereGeometry(0.19, 7, 6), 0, 0, 0);
   lpH(new THREE.ConeGeometry(0.075, 0.16, 4), -0.11, 0.19, -0.02, 0, Math.PI / 4, -0.18);   // 耳朵
   lpH(new THREE.ConeGeometry(0.075, 0.16, 4), 0.11, 0.19, -0.02, 0, Math.PI / 4, 0.18);
   catHead = head;
-  // 前腳
-  lp(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 6), -0.11, 0.18, 0.28, 0.1);
-  lp(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 6), 0.11, 0.18, 0.28, 0.1);
-  // 尾巴:彎曲的管子繞到側邊
+  // 前腳:平放向前伸,末端小圓掌
+  for (const sx of [-1, 1]) {
+    lp(new THREE.CylinderGeometry(0.05, 0.055, 0.36, 6), sx * 0.12, 0.07, 0.42, Math.PI / 2);
+    lp(new THREE.SphereGeometry(0.06, 6, 5), sx * 0.12, 0.06, 0.60).scale.set(1, 0.7, 1.1);
+  }
+  // 尾巴:貼地繞到身體側邊
   const tailCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(0.05, 0.12, -0.32), new THREE.Vector3(0.28, 0.08, -0.28),
-    new THREE.Vector3(0.42, 0.10, -0.05), new THREE.Vector3(0.40, 0.18, 0.15),
+    new THREE.Vector3(0.05, 0.08, -0.40), new THREE.Vector3(0.32, 0.06, -0.36),
+    new THREE.Vector3(0.44, 0.06, -0.10), new THREE.Vector3(0.40, 0.06, 0.18),
   ]);
   lp(new THREE.TubeGeometry(tailCurve, 12, 0.04, 6, false), 0, 0, 0);
-  // 橘色項圈
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.025, 8, 24), mat(0xf08262));
-  collar.position.set(0, 0.70, 0.15); collar.rotation.x = Math.PI / 2 + 0.15; cat.add(collar);
+  // 項圈:藍色(橘色的對比色),套在頭與身體交界
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.025, 8, 24), mat(0x3b82f6));
+  collar.position.set(0, 0.34, 0.40); collar.rotation.x = Math.PI / 2 - 0.35; cat.add(collar);
   animated.push(cat);
 }
 
