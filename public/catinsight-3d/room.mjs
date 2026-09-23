@@ -154,15 +154,15 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
     return g;
   };
   // 立方體(粉)
-  const g1 = group(-1.35, 3.05, L.z + 0.15);
+  const g1 = group(-1.35, 3.10, L.z + 0.15);
   const e1 = thickEdges(new THREE.BoxGeometry(0.5, 0.5, 0.5), C.wire1, 0.028);
   e1.rotation.set(0.5, 0.6, 0.2); g1.add(e1);
-  g1.userData.jump = { phase: 0.0, height: 0.32, baseY: 3.05 };
+  g1.userData.jump = { phase: 0.0, height: 0.32, baseY: 3.10 };
   // 四面體(青)
-  const g2 = group(-0.45, 3.0, L.z + 0.15);
+  const g2 = group(-0.45, 3.14, L.z + 0.15);   // 四面體半徑 0.42,離層架面(2.61)要留夠,才不會插進去
   const e2 = thickEdges(new THREE.TetrahedronGeometry(0.42), C.wire2, 0.028);
   e2.rotation.set(0.3, 0.2, 0.4); g2.add(e2);
-  g2.userData.jump = { phase: 1.1, height: 0.28, baseY: 3.0 };
+  g2.userData.jump = { phase: 1.1, height: 0.28, baseY: 3.14 };
   // 彩球方陣
   const g3 = group(1.1, 2.61, L.z + 0.15);
   let k = 0;
