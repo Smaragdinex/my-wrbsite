@@ -292,12 +292,20 @@ let screenMesh;
   screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.42, 0.86), new THREE.MeshBasicMaterial({ map: screenTex }));
   screenMesh.position.set(0, 0.9, 0.045);
   m.add(screenMesh);
-  // 耳機掛在螢幕角
-  const hp = group(0.62, 1.05, 0.06, m);
-  const band = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 12, 32, Math.PI), mat(C.arcadeTop));
-  band.rotation.z = 0; hp.add(band);
-  sphere(0.085, C.balls[2], { x: -0.2, y: -0.02, parent: hp });
-  sphere(0.085, C.balls[2], { x: 0.2, y: -0.02, parent: hp });
+  // 耳機:米白色粗弧形頭帶掛在螢幕右上角(斜 45°),兩個橘色圓耳罩垂在螢幕前後,內側淺色耳墊
+  const hp = group(0.64, 1.37, 0.0, m);
+  hp.rotation.y = -Math.PI / 4;
+  const CREAM = 0xf7f1f2, CUP = 0xf08262, PAD = 0xfbe3d8;
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.032, 12, 40, Math.PI), mat(CREAM));
+  band.castShadow = true; hp.add(band);
+  for (const sx of [-1, 1]) {
+    // 頭帶末端往下一小段
+    cyl(0.032, 0.032, 0.12, CREAM, { x: sx * 0.21, y: -0.06, parent: hp });
+    // 耳罩:橘色圓盤,軸向 x(面朝內),外側再一片淺色耳墊
+    cyl(0.09, 0.09, 0.06, CUP, { x: sx * 0.21, y: -0.13, parent: hp, rz: Math.PI / 2 });
+    cyl(0.07, 0.07, 0.015, PAD, { x: sx * (0.21 - 0.035), y: -0.13, parent: hp, rz: Math.PI / 2 });
+    cyl(0.035, 0.035, 0.02, CREAM, { x: sx * 0.21, y: -0.06, parent: hp });
+  }
   // 鍵盤、滑鼠、滑鼠墊
   box(0.95, 0.03, 0.34, 0xd9c9ef, { x: 0, y: 1.42, z: 0.28, r: 0.01, parent: d, seg: 1, shadow: false });
   box(0.75, 0.05, 0.28, 0xf6eef8, { x: 0, y: 1.44, z: 0.28, r: 0.02, parent: d });
