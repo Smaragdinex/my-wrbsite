@@ -172,25 +172,64 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
 
 // ---------- 街機 ----------
 {
-  // 與左牆平行(不旋轉),背面貼齊層架前緣;每個貼在表面上的零件都往外多凸 1~2 公分,避免同平面閃爍
-  const a = group(-S / 2 + 0.12 + 0.58, 0, L.z + T / 2 + 0.46);   // 最左邊、背面貼牆
-  const BODY_D = 0.9, FRONT = BODY_D / 2;                                        // 主體深度、前面板 z
-  box(1.1, 2.4, BODY_D, C.arcade, { y: 1.2, r: 0.08, parent: a });               // 主體
-  // 頂蓋整個坐在機身上方(不嵌進去),而且前後比機身錯開,任何一面都不跟機身共平面
-  const TOP_Y = 2.4 + 0.175 + 0.006, TOP_Z = 0.1;
-  box(1.0, 0.35, 1.0, C.arcadeTop, { y: TOP_Y, z: TOP_Z, r: 0.08, parent: a });    // 頂
-  box(0.16, 0.03, 0.9, C.arcadeStripe, { y: TOP_Y + 0.175 + 0.012, z: TOP_Z, r: 0.01, parent: a, seg: 1, shadow: false }); // 白條:貼在頂面的薄片
-  box(0.16, 0.30, 0.03, C.arcadeStripe, { y: TOP_Y, z: TOP_Z + 0.5 + 0.012, r: 0.01, parent: a, seg: 1, shadow: false });  // 白條:頂的前面
-  box(0.9, 0.7, 0.1, C.arcadeScreen, { y: 1.78, z: FRONT + 0.02, r: 0.03, parent: a, seg: 1 });     // 螢幕框(前凸 7cm)
-  box(0.72, 0.5, 0.02, 0xefe6f5, { y: 1.78, z: FRONT + 0.075, r: 0.01, parent: a, seg: 1, shadow: false }); // 螢幕面
-  box(1.16, 0.28, 0.5, C.arcadeTop, { y: 1.22, z: FRONT - 0.02, r: 0.06, parent: a });  // 控制台(比機身寬 6cm,側面不共平面)
-  box(0.16, 0.03, 0.44, C.arcadeStripe, { y: 1.22 + 0.14 + 0.012, z: FRONT - 0.02, r: 0.01, parent: a, seg: 1, shadow: false }); // 白條:貼在控制台上
-  cyl(0.03, 0.03, 0.25, 0xeeeeee, { x: 0.05, y: 1.47, z: FRONT + 0.02, parent: a });  // 搖桿
-  sphere(0.075, C.balls[2], { x: 0.05, y: 1.62, z: FRONT + 0.02, parent: a });
-  sphere(0.045, C.balls[1], { x: -0.28, y: 1.39, z: FRONT + 0.1, parent: a });
-  sphere(0.045, C.balls[5], { x: -0.14, y: 1.39, z: FRONT + 0.1, parent: a });
-  sphere(0.045, C.balls[3], { x: 0.3, y: 1.39, z: FRONT + 0.1, parent: a });
-  box(0.34, 0.3, 0.06, 0xd8cfe8, { y: 0.9, z: FRONT + 0.02, r: 0.02, parent: a, seg: 1 });  // 投幣口
+  // 用側面輪廓(深度 z, 高度 y)拉伸出經典街機的機身:頂上斜招牌、螢幕往後傾、控制台往前凸、下半段直板
+  const a = group(-S / 2 + 0.12 + 0.58, 0, L.z + T / 2 + 0.50);   // 最左邊、背面貼牆
+  const W = 1.1;                                   // 機身寬
+  const prof = [                                   // [z, y]:z 正 = 前面
+    [-0.45, 0.00], [0.28, 0.00],                   // 底
+    [0.28, 0.98],                                  // 下半段直板頂
+    [0.50, 1.10], [0.52, 1.34],                    // 控制台往前凸
+    [0.30, 1.44],                                  // 控制台後緣(螢幕區起點)
+    [0.22, 2.12],                                  // 螢幕區(往後傾)
+    [0.52, 2.28], [0.52, 2.58],                    // 招牌往前凸
+    [0.30, 2.72], [-0.45, 2.72],                   // 招牌上斜面 → 背面頂
+  ];
+  const shape = new THREE.Shape(prof.map(([z, y]) => new THREE.Vector2(z, y)));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: W, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 3, curveSegments: 4 });
+  geo.rotateY(-Math.PI / 2);                       // 輪廓的 z → 世界 z(前),拉伸方向 → x
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, 0);   // x 置中、底貼地
+  const body = new THREE.Mesh(geo, mat(0xb28fb8));            // 玫瑰紫機身
+  body.castShadow = true; body.receiveShadow = true; a.add(body);
+
+  const ORANGE = 0xf27a5a, STRIPE = 0xfff4f6, PW = 1.0;   // 正面橘板寬(略窄於機身,露出紫色邊)
+  // 依兩點放一片板子(貼在斜面上):給起點終點與厚度
+  const plate = (z0, y0, z1, y1, w, thick, color, parent, out = 0.012, shadow = true) => {
+    const dz = z1 - z0, dy = y1 - y0, len = Math.hypot(dz, dy);
+    const nz = dy / len, ny = -dz / len;                        // 外法線(輪廓順時針→朝外)
+    const m = box(w, len, thick, color, { r: Math.min(0.015, thick / 2), parent, seg: 1, shadow });
+    m.position.set(0, (y0 + y1) / 2 + ny * out, (z0 + z1) / 2 + nz * out);
+    m.rotation.x = -Math.atan2(dz, dy);
+    return m;
+  };
+  // 橘色板:招牌正面、招牌斜頂、控制台正面、控制台斜面、下半段
+  plate(0.52, 2.28, 0.52, 2.58, PW, 0.05, ORANGE, a);
+  plate(0.52, 2.58, 0.30, 2.72, PW, 0.05, ORANGE, a);
+  plate(0.50, 1.10, 0.52, 1.34, PW, 0.05, ORANGE, a);
+  plate(0.52, 1.34, 0.30, 1.44, PW, 0.05, ORANGE, a);
+  plate(0.28, 0.02, 0.28, 0.98, PW, 0.05, ORANGE, a);
+  // 白色直條(疊在橘板上,再往外一點)
+  const SW = 0.13;
+  plate(0.52, 2.28, 0.52, 2.58, SW, 0.02, STRIPE, a, 0.05, false);
+  plate(0.52, 2.58, 0.30, 2.72, SW, 0.02, STRIPE, a, 0.05, false);
+  plate(0.50, 1.10, 0.52, 1.34, SW, 0.02, STRIPE, a, 0.05, false);
+  plate(0.52, 1.34, 0.30, 1.44, SW, 0.02, STRIPE, a, 0.05, false);
+  plate(0.28, 0.02, 0.28, 0.98, SW, 0.02, STRIPE, a, 0.05, false);
+  // 螢幕:深色邊框嵌在往後傾的面上,中間淺灰 CRT
+  plate(0.30, 1.46, 0.23, 2.08, PW - 0.08, 0.06, 0x6b5f8a, a, 0.01);
+  plate(0.30, 1.52, 0.235, 2.02, PW - 0.24, 0.02, 0xd9d3dc, a, 0.045, false);
+  // 搖桿(白底 + 橘球)與按鈕,放在控制台斜面上
+  const cpZ = 0.41, cpY = 1.40;                                // 控制台斜面中點附近
+  cyl(0.07, 0.07, 0.03, 0xf3edf5, { x: 0.05, y: cpY + 0.02, z: cpZ, parent: a });
+  cyl(0.025, 0.025, 0.22, 0xf3edf5, { x: 0.05, y: cpY + 0.13, z: cpZ, parent: a });
+  sphere(0.07, ORANGE, { x: 0.05, y: cpY + 0.26, z: cpZ, parent: a });
+  sphere(0.045, 0x9d7bea, { x: -0.30, y: cpY + 0.02, z: cpZ + 0.03, parent: a });   // 紫
+  sphere(0.045, 0x4fd1b8, { x: 0.32, y: cpY + 0.02, z: cpZ + 0.03, parent: a });    // 青
+  // 投幣口(淡紫小方塊,在下半段上方)
+  box(0.24, 0.26, 0.05, 0xcfc3e6, { x: 0.02, y: 0.78, z: 0.28 + 0.05 + 0.03, r: 0.02, parent: a, seg: 1 });
+  box(0.05, 0.10, 0.02, 0x8d80a8, { x: -0.04, y: 0.80, z: 0.28 + 0.05 + 0.06, r: 0, parent: a, seg: 1, shadow: false });
+  box(0.05, 0.05, 0.02, 0x8d80a8, { x: 0.07, y: 0.74, z: 0.28 + 0.05 + 0.06, r: 0, parent: a, seg: 1, shadow: false });
 }
 
 // ---------- 攝影機 + 三腳架 ----------
