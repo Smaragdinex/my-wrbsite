@@ -377,7 +377,7 @@ let catModel = null;
   const b = group(2.25, 0, 2.45);
   cyl(0.5, 0.42, 0.22, C.bowl, { y: 0.11, parent: b });
   cyl(0.42, 0.42, 0.02, 0x8fe0ea, { y: 0.23, parent: b });
-  const cat = new THREE.Group(); cat.position.y = 0.24; cat.rotation.y = -Math.PI * 0.7; b.add(cat);
+  const cat = new THREE.Group(); cat.position.y = 0.24; cat.rotation.y = -Math.PI * 0.7 + Math.PI / 6; b.add(cat);   // 再往牠的左邊轉 30°
   const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
   const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
   loader.load('./cat.glb', (gltf) => {
