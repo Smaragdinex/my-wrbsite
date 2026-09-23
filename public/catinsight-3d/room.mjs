@@ -171,73 +171,31 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
   }
 }
 
-// ---------- 街機 ----------
+// ---------- 街機(Meshy GLB:arcade.glb,Draco 壓縮 + 貼圖 1024)----------
+const ARCADE_H = 2.5;                                            // 機台高度
+let arcadeModel = null;
 {
-  // 結構照參考:兩片紫色「側板」用側面輪廓拉伸,比正面凸出;橘色招牌/控制台/下半段、螢幕都「嵌」在兩片側板之間
-  const a = group(-S / 2 + 0.12 + 0.58, 0, L.z + T / 2 + 0.50);   // 最左邊、背面貼牆
-  const PURPLE = 0xa98aa6, ORANGE = 0xf08262, STRIPE = 0xfdf6f7;
-  const SIDE_T = 0.07, W = 1.1, IW = W - SIDE_T * 2;             // 側板厚、總寬、內寬
-  // 側板輪廓 [z, y](z 正 = 前)
-  const prof = [
-    [-0.45, 0.00], [0.22, 0.00], [0.22, 0.28], [0.36, 0.28],     // 底部內縮的腳
-    [0.36, 1.04],                                                // 下半段直板
-    [0.58, 1.14], [0.60, 1.38],                                  // 控制台往前凸
-    [0.38, 1.46], [0.30, 2.16],                                  // 螢幕區凹進去、往後傾
-    [0.60, 2.32], [0.60, 2.64],                                  // 招牌往前凸
-    [0.42, 2.78], [-0.38, 2.78], [-0.45, 2.70],                  // 圓角頂 → 背
-  ];
-  const shape = new THREE.Shape(prof.map(([z, y]) => new THREE.Vector2(z, y)));
-  const sideGeo = new THREE.ExtrudeGeometry(shape, { depth: SIDE_T, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 2 });
-  sideGeo.rotateY(-Math.PI / 2);        // 輪廓 z → 世界 z;拉伸 → -x
-  sideGeo.computeBoundingBox();
-  sideGeo.translate(-sideGeo.boundingBox.min.x, -sideGeo.boundingBox.min.y, 0);   // 讓 x 從 0 開始
-  for (const sx of [-W / 2, W / 2 - SIDE_T]) {
-    const side = new THREE.Mesh(sideGeo, mat(PURPLE));
-    side.position.x = sx; side.castShadow = true; side.receiveShadow = true; a.add(side);
-  }
-  // 背板 + 頂蓋(紫)
-  box(IW, 2.70, 0.10, PURPLE, { y: 1.35, z: -0.40, r: 0.02, parent: a, seg: 1 });
-  box(IW, 0.16, 0.86, PURPLE, { y: 2.70, z: 0.00, r: 0.03, parent: a, seg: 1 });
-  // 依兩點放一片板子(貼在斜面上)
-  const plate = (z0, y0, z1, y1, w, thick, color, out = 0, shadow = true) => {
-    const dz = z1 - z0, dy = y1 - y0, len = Math.hypot(dz, dy);
-    const nz = dy / len, ny = -dz / len;
-    const m = box(w, len, thick, color, { r: Math.min(0.02, thick / 2), parent: a, seg: 1, shadow });
-    m.position.set(0, (y0 + y1) / 2 + ny * out, (z0 + z1) / 2 + nz * out);
-    m.rotation.x = -Math.atan2(dz, dy);
-    return m;
-  };
-  // 招牌(橘,嵌在側板之間,比側板前緣退 3cm)
-  box(IW, 0.32, 0.50, ORANGE, { y: 2.48, z: 0.32, r: 0.05, parent: a });
-  // 螢幕模組:紫色凹槽(往後傾)+ 淺灰 CRT(圓角)+ 深色內框
-  plate(0.36, 1.48, 0.29, 2.14, IW, 0.16, 0x8f7597, -0.08);
-  plate(0.36, 1.52, 0.295, 2.10, IW - 0.16, 0.03, 0x5a4d6e, 0.0, false);
-  plate(0.36, 1.56, 0.30, 2.06, IW - 0.24, 0.02, 0xd8d2db, 0.012, false);
-  // 控制台:斜面 + 直立前緣(橘)
-  plate(0.60, 1.38, 0.38, 1.46, IW, 0.06, ORANGE, -0.03);
-  box(IW, 0.24, 0.20, ORANGE, { y: 1.26, z: 0.47, r: 0.03, parent: a });
-  // 下半段(橘)+ 底部紫色腳
-  box(IW, 0.74, 0.16, ORANGE, { y: 0.67, z: 0.25, r: 0.03, parent: a });
-  box(IW, 0.28, 0.60, PURPLE, { y: 0.14, z: -0.10, r: 0.02, parent: a, seg: 1 });
-  // 白色直條:招牌正面與頂面、控制台斜面與前緣、下半段
-  const SW = 0.14;
-  box(SW, 0.30, 0.02, STRIPE, { y: 2.48, z: 0.32 + 0.25 + 0.005, r: 0.005, parent: a, seg: 1, shadow: false });
-  box(SW, 0.02, 0.48, STRIPE, { y: 2.48 + 0.16 + 0.005, z: 0.32, r: 0.005, parent: a, seg: 1, shadow: false });
-  plate(0.60, 1.38, 0.38, 1.46, SW, 0.02, STRIPE, 0.01, false);
-  box(SW, 0.22, 0.02, STRIPE, { y: 1.26, z: 0.47 + 0.10 + 0.005, r: 0.005, parent: a, seg: 1, shadow: false });
-  box(SW, 0.72, 0.02, STRIPE, { y: 0.67, z: 0.25 + 0.08 + 0.005, r: 0.005, parent: a, seg: 1, shadow: false });
-  // 搖桿(白色圓座 + 桿 + 橘球)與三顆按鈕,放在控制台斜面上
-  const cz = 0.49, cy = 1.42;
-  cyl(0.075, 0.075, 0.03, 0xf3edf5, { x: 0.02, y: cy + 0.015, z: cz, parent: a });
-  cyl(0.02, 0.02, 0.2, 0xf3edf5, { x: 0.02, y: cy + 0.11, z: cz, parent: a });
-  sphere(0.06, ORANGE, { x: 0.02, y: cy + 0.23, z: cz, parent: a });
-  sphere(0.04, 0x9d7bea, { x: -0.30, y: cy + 0.02, z: cz + 0.02, parent: a });   // 紫
-  sphere(0.032, 0xf27a5a, { x: -0.17, y: cy + 0.015, z: cz + 0.04, parent: a }); // 小橘
-  sphere(0.04, 0x4fd1b8, { x: 0.30, y: cy + 0.02, z: cz + 0.02, parent: a });    // 青
-  // 投幣門(淡紫方塊 + 投幣孔)
-  box(0.26, 0.30, 0.04, 0xcfc3e6, { x: 0.0, y: 0.74, z: 0.25 + 0.08 + 0.02, r: 0.015, parent: a, seg: 1 });
-  box(0.04, 0.12, 0.015, 0x7d6f94, { x: -0.06, y: 0.77, z: 0.25 + 0.08 + 0.045, r: 0, parent: a, seg: 1, shadow: false });
-  box(0.05, 0.05, 0.015, 0x7d6f94, { x: 0.06, y: 0.70, z: 0.25 + 0.08 + 0.045, r: 0, parent: a, seg: 1, shadow: false });
+  const a = group(-S / 2 + 0.12 + 0.66, 0, L.z + T / 2);         // 最左邊、背面貼牆
+  const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
+  const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
+  loader.load('./arcade.glb', (gltf) => {
+    const m = gltf.scene;
+    m.rotation.y = 0;                                            // 正面朝房間(依模型朝向調整)
+    m.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(m);
+    const size = box.getSize(new THREE.Vector3());
+    const k = ARCADE_H / size.y;
+    m.scale.setScalar(k);
+    // 置中 x、底部貼地、背面貼牆(z 最小值對齊群組原點)
+    m.position.set(-(box.min.x + box.max.x) / 2 * k, -box.min.y * k, -box.min.z * k + 0.02);
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true; o.receiveShadow = true;
+      o.material.side = THREE.FrontSide; o.material.metalness = 0;
+    });
+    a.add(m); arcadeModel = m;
+    if (window.__room) window.__room.arcade = m;
+  });
 }
 
 // ---------- 攝影機 + 三腳架 ----------
