@@ -121,17 +121,19 @@ box(0.9, H, T, C.wallL, { x: S / 2 - 0.45, y: H / 2, z: L.z, r: 0.04, seg: 2 });
 box(S, 0.5, T, C.wallL, { y: 0.25, z: L.z, r: 0.04, seg: 2 });                 // 下座
 cyl(0.16, 0.16, H - 1.4, C.pillar, { x: 0.35, y: (H - 1.4) / 2 + 0.5, z: L.z });   // 中間細柱
 // 兩層層架
-box(S - 1.6, 0.12, 0.7, C.shelf, { y: 2.55, z: L.z + 0.15, r: 0.03, seg: 1 });
-box(S - 1.6, 0.12, 0.7, C.shelf, { y: 1.65, z: L.z + 0.15, r: 0.03, seg: 1 });
+// 層架往右縮,最左邊讓給街機
+const SHELF_X0 = -1.85, SHELF_X1 = S / 2 - 0.8;
+box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 2.55, z: L.z + 0.15, r: 0.03, seg: 1 });
+box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 1.65, z: L.z + 0.15, r: 0.03, seg: 1 });
 
 // ---------- 層架上的東西 ----------
 {
   // 線框立方體(粉)
-  const g1 = group(-1.9, 3.05, L.z + 0.15);
+  const g1 = group(-1.35, 3.05, L.z + 0.15);
   const e1 = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.5, 0.5, 0.5)), new THREE.LineBasicMaterial({ color: C.wire1 }));
   e1.rotation.set(0.5, 0.6, 0.2); g1.add(e1); g1.userData.spin = 0.4;
   // 線框四面體(青)
-  const g2 = group(-0.9, 3.0, L.z + 0.15);
+  const g2 = group(-0.45, 3.0, L.z + 0.15);
   const e2 = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.TetrahedronGeometry(0.42)), new THREE.LineBasicMaterial({ color: C.wire2 }));
   e2.rotation.set(0.3, 0.2, 0.4); g2.add(e2); g2.userData.spin = -0.5;
   // 彩球方陣
@@ -145,7 +147,7 @@ box(S - 1.6, 0.12, 0.7, C.shelf, { y: 1.65, z: L.z + 0.15, r: 0.03, seg: 1 });
 // ---------- 街機 ----------
 {
   // 與左牆平行(不旋轉),背面貼齊層架前緣;每個貼在表面上的零件都往外多凸 1~2 公分,避免同平面閃爍
-  const a = group(-1.95, 0, L.z + 0.15 + 0.35 + 0.46);
+  const a = group(-S / 2 + 0.12 + 0.58, 0, L.z + T / 2 + 0.46);   // 最左邊、背面貼牆
   const BODY_D = 0.9, FRONT = BODY_D / 2;                                        // 主體深度、前面板 z
   box(1.1, 2.4, BODY_D, C.arcade, { y: 1.2, r: 0.08, parent: a });               // 主體
   // 頂蓋整個坐在機身上方(不嵌進去),而且前後比機身錯開,任何一面都不跟機身共平面
