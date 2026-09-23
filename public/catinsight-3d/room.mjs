@@ -194,8 +194,8 @@ let camHead = null;
 // ---------- 地毯 / 滑板 ----------
 box(3.6, 0.05, 2.7, C.rug, { x: -0.5, y: 0.075, z: 0.9, r: 0.02, seg: 1 });
 {
-  const s = group(-0.2, 0.08, 1.9);
-  s.rotation.y = 0.35;
+  const s = group(-1.55, 0.08, 1.75);   // 靠左邊
+  s.rotation.y = 0.5;
   box(1.5, 0.06, 0.42, C.board, { y: 0.19, r: 0.03, parent: s });
   for (const [x, z] of [[-0.5, 0.18], [-0.5, -0.18], [0.5, 0.18], [0.5, -0.18]]) {
     cyl(0.07, 0.07, 0.06, C.wheel, { x, y: 0.08, z, parent: s, rx: Math.PI / 2 });
@@ -249,17 +249,21 @@ let screenMesh;
 }
 
 // ---------- 植物 ----------
+const plantLeaves = [];
 {
   const p = group(1.85, 0, -1.9);
   cyl(0.28, 0.22, 0.28, C.chairDark, { y: 0.14, parent: p });
-  const leaf = (h, x, z, tilt, col) => {
+  // 每根葉子掛在底部的樞軸上,動畫時繞底部左右輕搖(像被風吹)
+  const leaf = (h, x, z, tilt, col, phase) => {
+    const pivot = new THREE.Group(); pivot.position.set(x, 0.28 + 0.1, z); p.add(pivot);
     const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, h, 6, 16), mat(col));
-    m.position.set(x, 0.28 + h / 2 + 0.1, z); m.rotation.z = tilt; m.rotation.x = tilt * 0.4;
-    m.castShadow = true; p.add(m);
+    m.position.y = h / 2 + 0.17; m.castShadow = true; pivot.add(m);
+    pivot.userData = { tilt, phase };
+    plantLeaves.push(pivot);
   };
-  leaf(1.9, 0, 0, 0.05, C.plant);
-  leaf(1.1, -0.28, 0.05, 0.45, C.plantDark);
-  leaf(0.9, 0.26, -0.05, -0.5, C.plant);
+  leaf(1.9, 0, 0, 0.05, C.plant, 0);
+  leaf(1.1, -0.28, 0.05, 0.45, C.plantDark, 1.3);
+  leaf(0.9, 0.26, -0.05, -0.5, C.plant, 2.4);
 }
 
 // ---------- 貓 + 碗 ----------
@@ -406,6 +410,12 @@ function loop() {
     const eased = ph * ph * (3 - 2 * ph);
     camHead.rotation.y = THREE.MathUtils.degToRad(-45 + 90 * eased);
     camHead.rotation.z = THREE.MathUtils.degToRad(4) * Math.sin(t * 2.5 + 1);
+  }
+  // 仙人掌左右輕搖(每根相位不同)
+  for (const lf of plantLeaves) {
+    const { tilt, phase } = lf.userData;
+    lf.rotation.z = tilt + THREE.MathUtils.degToRad(7) * Math.sin(t * 1.4 + phase);
+    lf.rotation.x = tilt * 0.4 + THREE.MathUtils.degToRad(3) * Math.sin(t * 0.9 + phase * 1.7);
   }
   tickSeries(performance.now());
   drawScreen(t);
