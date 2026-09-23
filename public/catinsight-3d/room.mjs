@@ -351,12 +351,24 @@ canvas.addEventListener('pointerdown', () => { targetAz = null; });
 animated.forEach((g, i) => { g.userData.baseScale = g.scale.clone(); g.scale.setScalar(0.001); g.userData.delay = 0.15 + i * 0.07; });
 const introStart = performance.now();
 const clock = new THREE.Clock();
+// 直式(手機)畫面窄,鏡頭要拉遠整間房才塞得進去:距離依長寬比調整
+const BASE_DIST = camera.position.distanceTo(CAM_TARGET);
+let lastAspect = 0;
+function fitCamera(aspect) {
+  const k = aspect >= 1.15 ? 1 : 1.28 / aspect;          // 越窄越遠
+  const dist = BASE_DIST * Math.min(k, 2.2);
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  camera.position.copy(controls.target).add(dir.multiplyScalar(dist));
+  // 直式時看的目標點稍微往上,底部留給按鈕
+  controls.target.set(0, aspect < 1 ? 1.35 : 1.55, 0);
+}
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix();
   }
+  if (Math.abs(camera.aspect - lastAspect) > 0.01) { lastAspect = camera.aspect; fitCamera(camera.aspect); }
 }
 function loop() {
   requestAnimationFrame(loop);
