@@ -156,12 +156,12 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
   const g1 = group(-1.35, 3.05, L.z + 0.15);
   const e1 = thickEdges(new THREE.BoxGeometry(0.5, 0.5, 0.5), C.wire1, 0.028);
   e1.rotation.set(0.5, 0.6, 0.2); g1.add(e1);
-  g1.userData.spin = 0.4; g1.userData.jump = { phase: 0.0, height: 0.32, baseY: 3.05 };
+  g1.userData.jump = { phase: 0.0, height: 0.32, baseY: 3.05 };
   // 四面體(青)
   const g2 = group(-0.45, 3.0, L.z + 0.15);
   const e2 = thickEdges(new THREE.TetrahedronGeometry(0.42), C.wire2, 0.028);
   e2.rotation.set(0.3, 0.2, 0.4); g2.add(e2);
-  g2.userData.spin = -0.5; g2.userData.jump = { phase: 1.1, height: 0.28, baseY: 3.0 };
+  g2.userData.jump = { phase: 1.1, height: 0.28, baseY: 3.0 };
   // 彩球方陣
   const g3 = group(1.1, 2.61, L.z + 0.15);
   let k = 0;
@@ -441,9 +441,15 @@ function loop() {
       // 每 2.6 秒跳一次:前 0.9 秒是拋物線,其餘停在架上
       const j = g.userData.jump, cycle = 2.6, air = 0.9;
       const u = ((t + j.phase) % cycle);
-      const hop = u < air ? Math.sin(Math.PI * u / air) : 0;
+      const inAir = u < air;
+      const hop = inAir ? Math.sin(Math.PI * u / air) : 0;
       g.position.y = j.baseY + j.height * hop;
-      g.scale.y = g.userData.baseScale.y * (u < air ? 1 + 0.08 * Math.sin(Math.PI * u / air) : 1);   // 跳起來時微拉長
+      g.scale.y = g.userData.baseScale.y * (inAir ? 1 + 0.08 * hop : 1);   // 跳起來時微拉長
+      // 空中轉一整圈(360°),落地剛好轉完;用 smoothstep 讓起跳/落地時轉速慢、最高點轉最快
+      const k = inAir ? u / air : 1;
+      const ease = k * k * (3 - 2 * k);
+      const laps = Math.floor((t + j.phase) / cycle);
+      g.rotation.y = (laps + ease) * Math.PI * 2;
     }
   }
   if (targetAz !== null) {
