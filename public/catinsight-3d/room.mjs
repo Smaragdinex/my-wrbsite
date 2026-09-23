@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // ---------- 配色(參考圖) ----------
 const C = {
@@ -367,52 +368,45 @@ const plantLeaves = [];
 }
 
 // ---------- 貓 + 碗 ----------
-let catHead = null;
+// 貓改用 Meshy 產生的 GLB(cat.glb,已 Draco 壓縮 + 貼圖縮到 1024)。
+// 模型只有一個 mesh、沒有骨架,所以「轉頭」用 vertex shader 做:脖子以上的頂點依高度加權繞垂直軸旋轉。
+let catHead = null;            // 舊介面保留(不再使用)
+const catUniforms = { uHead: { value: 0 }, uNeck: { value: 0.25 }, uBlend: { value: 0.3 }, uPivot: { value: new THREE.Vector2(0, 0.1) } };
+let catModel = null;
 {
-  // 低多邊形橘貓(參考圖):坐姿、奶油色胸口/嘴邊/腳掌/尾巴尖、黑眼睛、小鼻子;flatShading 做切面感
   const b = group(2.25, 0, 2.45);
   cyl(0.5, 0.42, 0.22, C.bowl, { y: 0.11, parent: b });
   cyl(0.42, 0.42, 0.02, 0x8fe0ea, { y: 0.23, parent: b });
   const cat = new THREE.Group(); cat.position.y = 0.24; cat.rotation.y = -Math.PI * 0.7; b.add(cat);
-  const FUR = 0xf2a555, CREAM = 0xf6e6c8, EYE = 0x2a2420, NOSE = 0xb8623a;
-  const lp = (geo, color, x, y, z, rx = 0, ry = 0, rz = 0, parent = cat) => {
-    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.9, flatShading: true }));
-    m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
-  };
-  // 後半身(圓潤)+ 大腿
-  lp(new THREE.SphereGeometry(0.30, 7, 6), FUR, 0, 0.30, -0.10).scale.set(1.05, 0.95, 1.2);
-  for (const sx of [-1, 1]) lp(new THREE.SphereGeometry(0.16, 6, 5), FUR, sx * 0.22, 0.19, -0.02).scale.set(0.75, 1, 1.15);
-  // 胸/軀幹挺起(圓潤)+ 頸部 + 奶油色胸口(只露出前面)
-  lp(new THREE.SphereGeometry(0.28, 8, 7), FUR, 0, 0.50, 0.08).scale.set(0.92, 1.25, 0.88);
-  lp(new THREE.SphereGeometry(0.16, 7, 6), FUR, 0, 0.76, 0.13);
-  lp(new THREE.SphereGeometry(0.19, 8, 7), CREAM, 0, 0.48, 0.25).scale.set(0.72, 1.2, 0.6);
-  // 頭(獨立 group,之後會左右看)
-  const head = new THREE.Group(); head.position.set(0, 0.88, 0.16); cat.add(head);
-  lp(new THREE.SphereGeometry(0.20, 7, 6), FUR, 0, 0, 0, 0, 0, 0, head).scale.set(1.05, 0.95, 1);
-  lp(new THREE.SphereGeometry(0.11, 6, 5), CREAM, 0, -0.07, 0.15, 0, 0, 0, head).scale.set(1.35, 0.8, 1);    // 嘴邊
-  lp(new THREE.ConeGeometry(0.035, 0.05, 4), NOSE, 0, -0.03, 0.245, Math.PI, Math.PI / 4, 0, head);        // 鼻子
-  for (const sx of [-1, 1]) {
-    lp(new THREE.SphereGeometry(0.035, 5, 4), EYE, sx * 0.085, 0.03, 0.17, 0, 0, 0, head).scale.set(1, 1.1, 0.5);
-    lp(new THREE.ConeGeometry(0.08, 0.18, 4), FUR, sx * 0.12, 0.19, -0.02, 0, Math.PI / 4, sx * 0.2, head);
-    lp(new THREE.ConeGeometry(0.045, 0.11, 4), CREAM, sx * 0.12, 0.17, 0.0, 0, Math.PI / 4, sx * 0.2, head);
-  }
-  catHead = head;
-  // 前腳(直立)+ 奶油色腳掌;後腳掌
-  for (const sx of [-1, 1]) {
-    lp(new THREE.CylinderGeometry(0.05, 0.055, 0.42, 6), FUR, sx * 0.11, 0.22, 0.24);
-    lp(new THREE.SphereGeometry(0.065, 6, 5), CREAM, sx * 0.11, 0.05, 0.28).scale.set(1, 0.7, 1.3);
-    lp(new THREE.SphereGeometry(0.065, 6, 5), CREAM, sx * 0.21, 0.05, 0.12).scale.set(1, 0.7, 1.3);
-  }
-  // 尾巴繞在身側,尾巴尖奶油色
-  const tailCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(0.05, 0.12, -0.36), new THREE.Vector3(0.30, 0.07, -0.32),
-    new THREE.Vector3(0.46, 0.07, -0.06), new THREE.Vector3(0.42, 0.10, 0.20),
-  ]);
-  lp(new THREE.TubeGeometry(tailCurve, 12, 0.045, 6, false), FUR, 0, 0, 0);
-  lp(new THREE.SphereGeometry(0.05, 6, 5), CREAM, 0.42, 0.10, 0.20).scale.set(1, 1, 1.6);
-  // 項圈:藍色(橘色的對比色)
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.025, 8, 24), mat(0x3b82f6));
-  collar.position.set(0, 0.74, 0.15); collar.rotation.x = Math.PI / 2 + 0.12; cat.add(collar);
+  const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
+  const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
+  loader.load('./cat.glb', (gltf) => {
+    const m = gltf.scene;
+    const box = new THREE.Box3().setFromObject(m);
+    const size = box.getSize(new THREE.Vector3());
+    const k = 1.0 / size.y;                       // 貓高約 1.0
+    m.scale.setScalar(k);
+    m.position.set(-(box.min.x + box.max.x) / 2 * k, -box.min.y * k, -(box.min.z + box.max.z) / 2 * k);
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true; o.receiveShadow = true;
+      const mat = o.material; mat.side = THREE.FrontSide;
+      mat.onBeforeCompile = (sh) => {
+        Object.assign(sh.uniforms, catUniforms);
+        sh.vertexShader = sh.vertexShader
+          .replace('#include <common>', `#include <common>
+            uniform float uHead, uNeck, uBlend; uniform vec2 uPivot;
+            mat2 headRot(float y) { float a = uHead * smoothstep(uNeck, uNeck + uBlend, y); float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }`)
+          .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+            objectNormal.xz = headRot(position.y) * objectNormal.xz;`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+            transformed.xz = uPivot + headRot(position.y) * (transformed.xz - uPivot);`);
+      };
+      mat.needsUpdate = true;
+    });
+    cat.add(m); catModel = m;
+    if (window.__room) window.__room.cat = m;
+  });
   animated.push(cat);
 }
 
@@ -550,11 +544,11 @@ function loop() {
     camHead.rotation.z = THREE.MathUtils.degToRad(4) * Math.sin(t * 2.5 + 1);
   }
   // 貓頭自由左右看:偶爾轉頭、停一下、再轉回來(用幾個不同頻率的 sin 疊出不規則的節奏)
-  if (catHead) {
+  {
     const look = 0.55 * Math.sin(t * 0.7) * Math.sin(t * 0.23 + 1.0) + 0.25 * Math.sin(t * 1.9 + 0.5) * Math.max(0, Math.sin(t * 0.31));
-    catHead.rotation.y += (look - catHead.rotation.y) * Math.min(1, dt * 3);       // 平滑跟上
-    catHead.rotation.z = 0.10 * Math.sin(t * 0.9 + 2.0);                             // 微微歪頭
+    catUniforms.uHead.value += (look - catUniforms.uHead.value) * Math.min(1, dt * 3);   // 平滑跟上
   }
+
   // 仙人掌彎曲:把時間餵給每根的著色器
   for (const lf of plantLeaves) lf.userData.uni.uTime.value = t;
   tickSeries(performance.now());
@@ -564,4 +558,4 @@ function loop() {
 }
 loop();
 setTimeout(() => document.getElementById('loading').classList.add('done'), 400);
-window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, frames: 0, camera, controls, THREE };
+window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, frames: 0, camera, controls, THREE, catUniforms };
