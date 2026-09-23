@@ -148,12 +148,14 @@ box(S - 1.6, 0.12, 0.7, C.shelf, { y: 1.65, z: L.z + 0.15, r: 0.03, seg: 1 });
   const a = group(-1.95, 0, L.z + 0.15 + 0.35 + 0.46);
   const BODY_D = 0.9, FRONT = BODY_D / 2;                                        // 主體深度、前面板 z
   box(1.1, 2.4, BODY_D, C.arcade, { y: 1.2, r: 0.08, parent: a });               // 主體
-  box(1.0, 0.35, 1.0, C.arcadeTop, { y: 2.56, z: 0.05, r: 0.08, parent: a });    // 頂
-  box(0.16, 0.03, 0.9, C.arcadeStripe, { y: 2.56 + 0.175 + 0.012, z: 0.05, r: 0.01, parent: a, seg: 1, shadow: false }); // 白條:貼在頂面的薄片
-  box(0.16, 0.30, 0.03, C.arcadeStripe, { y: 2.56, z: 0.05 + 0.5 + 0.012, r: 0.01, parent: a, seg: 1, shadow: false });  // 白條:頂的前面
+  // 頂蓋整個坐在機身上方(不嵌進去),而且前後比機身錯開,任何一面都不跟機身共平面
+  const TOP_Y = 2.4 + 0.175 + 0.006, TOP_Z = 0.1;
+  box(1.0, 0.35, 1.0, C.arcadeTop, { y: TOP_Y, z: TOP_Z, r: 0.08, parent: a });    // 頂
+  box(0.16, 0.03, 0.9, C.arcadeStripe, { y: TOP_Y + 0.175 + 0.012, z: TOP_Z, r: 0.01, parent: a, seg: 1, shadow: false }); // 白條:貼在頂面的薄片
+  box(0.16, 0.30, 0.03, C.arcadeStripe, { y: TOP_Y, z: TOP_Z + 0.5 + 0.012, r: 0.01, parent: a, seg: 1, shadow: false });  // 白條:頂的前面
   box(0.9, 0.7, 0.1, C.arcadeScreen, { y: 1.78, z: FRONT + 0.02, r: 0.03, parent: a, seg: 1 });     // 螢幕框(前凸 7cm)
   box(0.72, 0.5, 0.02, 0xefe6f5, { y: 1.78, z: FRONT + 0.075, r: 0.01, parent: a, seg: 1, shadow: false }); // 螢幕面
-  box(1.1, 0.28, 0.5, C.arcadeTop, { y: 1.22, z: FRONT - 0.02, r: 0.06, parent: a });   // 控制台(前凸)
+  box(1.16, 0.28, 0.5, C.arcadeTop, { y: 1.22, z: FRONT - 0.02, r: 0.06, parent: a });  // 控制台(比機身寬 6cm,側面不共平面)
   box(0.16, 0.03, 0.44, C.arcadeStripe, { y: 1.22 + 0.14 + 0.012, z: FRONT - 0.02, r: 0.01, parent: a, seg: 1, shadow: false }); // 白條:貼在控制台上
   cyl(0.03, 0.03, 0.25, 0xeeeeee, { x: 0.05, y: 1.47, z: FRONT + 0.02, parent: a });  // 搖桿
   sphere(0.075, C.balls[2], { x: 0.05, y: 1.62, z: FRONT + 0.02, parent: a });
