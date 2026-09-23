@@ -442,6 +442,10 @@ function updateZoom(dt) {
   if (zoomT < 0.002) {
     zoomT = 0;
     controls.enabled = true; controls.autoRotate = true;
+    // 自動旋轉到視角邊界就反向,左右來回
+    const az = controls.getAzimuthalAngle(), sp = controls.autoRotateSpeed;
+    if (az <= controls.minAzimuthAngle + 0.01 && sp > 0) controls.autoRotateSpeed = -Math.abs(sp);
+    else if (az >= controls.maxAzimuthAngle - 0.01 && sp < 0) controls.autoRotateSpeed = Math.abs(sp);
     controls.update();
     orbitPos.copy(camera.position); orbitTarget.copy(controls.target);     // 記住房間視角,退回時用
     return;
