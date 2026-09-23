@@ -253,12 +253,32 @@ const plantLeaves = [];
 {
   const p = group(1.85, 0, -1.9);
   cyl(0.28, 0.22, 0.28, C.chairDark, { y: 0.14, parent: p });
-  // 每根葉子掛在底部的樞軸上,動畫時繞底部左右輕搖(像被風吹)
+  // 每根葉子:高度方向切 24 段,頂點著色器依高度權重(底 0、頂 1,平方)往側邊推 → 根部不動、越上面彎越多
   const leaf = (h, x, z, tilt, col, phase) => {
     const pivot = new THREE.Group(); pivot.position.set(x, 0.28 + 0.1, z); p.add(pivot);
-    const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, h, 6, 16), mat(col));
+    pivot.rotation.z = tilt; pivot.rotation.x = tilt * 0.4;
+    const geo = new THREE.CapsuleGeometry(0.17, h, 8, 16, 24);   // capSegments, radialSegments, heightSegments
+    const material = mat(col);
+    const uni = { uTime: { value: 0 }, uPhase: { value: phase }, uAmp: { value: 0.16 * (h / 1.9 + 0.4) }, uYMin: { value: -h / 2 - 0.17 }, uH: { value: h + 0.34 } };
+    material.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, uni);
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>
+          uniform float uTime, uPhase, uAmp, uYMin, uH;`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          float w = clamp((position.y - uYMin) / uH, 0.0, 1.0);
+          w = w * w;                                   // 底部穩、頂端彎
+          float sway = sin(uTime * 1.4 + uPhase) * uAmp;
+          float sway2 = sin(uTime * 0.9 + uPhase * 1.7) * uAmp * 0.45;
+          transformed.x += sway * w;
+          transformed.z += sway2 * w;
+          transformed.y -= (sway * sway + sway2 * sway2) * w * 0.35;   // 彎的時候高度略縮,比較像真的彎
+        `);
+    };
+    material.customProgramCacheKey = () => 'cactus-bend';
+    const m = new THREE.Mesh(geo, material);
     m.position.y = h / 2 + 0.17; m.castShadow = true; pivot.add(m);
-    pivot.userData = { tilt, phase };
+    pivot.userData = { uni };
     plantLeaves.push(pivot);
   };
   leaf(1.9, 0, 0, 0.05, C.plant, 0);
@@ -411,12 +431,8 @@ function loop() {
     camHead.rotation.y = THREE.MathUtils.degToRad(-45 + 90 * eased);
     camHead.rotation.z = THREE.MathUtils.degToRad(4) * Math.sin(t * 2.5 + 1);
   }
-  // 仙人掌左右輕搖(每根相位不同)
-  for (const lf of plantLeaves) {
-    const { tilt, phase } = lf.userData;
-    lf.rotation.z = tilt + THREE.MathUtils.degToRad(7) * Math.sin(t * 1.4 + phase);
-    lf.rotation.x = tilt * 0.4 + THREE.MathUtils.degToRad(3) * Math.sin(t * 0.9 + phase * 1.7);
-  }
+  // 仙人掌彎曲:把時間餵給每根的著色器
+  for (const lf of plantLeaves) lf.userData.uni.uTime.value = t;
   tickSeries(performance.now());
   drawScreen(t);
   controls.update();
