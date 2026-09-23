@@ -238,7 +238,7 @@ const screenCanvas = document.createElement('canvas'); screenCanvas.width = 640;
 const screenTex = new THREE.CanvasTexture(screenCanvas); screenTex.colorSpace = THREE.SRGBColorSpace; screenTex.anisotropy = 8;
 let screenMesh;
 {
-  const d = group(1.1, 0, 0.2);
+  const d = group(1.25, 0, -0.4);   // 往仙人掌(牆邊)方向移
   box(2.9, 0.12, 1.3, C.desk, { y: 1.35, r: 0.05, parent: d });
   for (const [x, z] of [[-1.3, 0.55], [-1.3, -0.55], [1.3, 0.55], [1.3, -0.55]]) {
     cyl(0.05, 0.05, 1.3, C.deskLeg, { x, y: 0.65, z, parent: d });
@@ -277,7 +277,7 @@ let screenMesh;
 
 // ---------- 椅子 ----------
 {
-  const c = group(1.35, 0, 1.6);   // 桌面 z 到 0.85,椅墊從 1.15 開始,不重疊
+  const c = group(1.5, 0, 1.0);   // 跟著桌子移;桌面 z 到 0.25,椅墊從 1.15 開始,不重疊
   c.rotation.y = -0.35;
   box(0.9, 0.16, 0.9, C.chairDark, { y: 0.72, r: 0.07, parent: c });            // 座墊
   box(0.9, 1.0, 0.16, C.chair, { y: 1.3, z: -0.4, r: 0.07, parent: c });        // 靠背
