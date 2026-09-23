@@ -201,7 +201,7 @@ let arcadeModel = null;
 // ---------- 攝影機 + 三腳架 ----------
 let camHead = null;
 {
-  const t = group(-0.55, 0, -1.55);   // 靠牆一點(層架前緣在 -2.14,腳架腳張開 0.5 不會碰到)
+  const t = group(-0.55, 0, -1.55); t.rotation.y = -Math.PI / 3;   // 整體朝右轉 60°;靠牆一點(層架前緣在 -2.14,腳架腳張開 0.5 不會碰到)
   // 三隻腳:腳底在地上張開,頂端收攏到雲台下方
   const legs = 3, head = new THREE.Vector3(0, 1.45, 0), spread = 0.5;
   for (let i = 0; i < legs; i++) {
