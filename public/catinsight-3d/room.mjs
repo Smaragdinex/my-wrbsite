@@ -168,6 +168,7 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
 }
 
 // ---------- 攝影機 + 三腳架 ----------
+let camHead = null;
 {
   const t = group(-0.55, 0, -1.55);   // 靠牆一點(層架前緣在 -2.14,腳架腳張開 0.5 不會碰到)
   // 三隻腳:腳底在地上張開,頂端收攏到雲台下方
@@ -181,10 +182,13 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
     leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
   }
   cyl(0.05, 0.05, 0.4, C.tripod, { y: 1.55, parent: t });
-  box(0.55, 0.32, 0.3, C.camera, { y: 1.85, r: 0.06, parent: t });
-  cyl(0.11, 0.09, 0.22, C.camera, { x: 0.35, y: 1.85, parent: t, rz: Math.PI / 2 });
-  cyl(0.085, 0.085, 0.02, C.cameraLens, { x: 0.47, y: 1.85, parent: t, rz: Math.PI / 2 });
-  box(0.22, 0.12, 0.08, C.arcadeTop, { x: -0.1, y: 1.85, z: 0.19, r: 0.03, parent: t, seg: 1 });
+  // 攝影機頭獨立一個 group,繞雲台左右慢慢掃(±30°)
+  camHead = new THREE.Group(); camHead.position.y = 1.85; t.add(camHead);
+  box(0.55, 0.32, 0.3, C.camera, { r: 0.06, parent: camHead });
+  cyl(0.11, 0.09, 0.22, C.camera, { x: 0.35, parent: camHead, rz: Math.PI / 2 });
+  cyl(0.085, 0.085, 0.02, C.cameraLens, { x: 0.47, parent: camHead, rz: Math.PI / 2 });
+  box(0.22, 0.12, 0.08, C.arcadeTop, { x: -0.1, z: 0.19, r: 0.03, parent: camHead, seg: 1 });
+  sphere(0.02, 0xff4d4d, { x: -0.2, y: 0.1, z: 0.16, parent: camHead });   // 錄影紅燈
 }
 
 // ---------- 地毯 / 滑板 ----------
@@ -393,6 +397,11 @@ function loop() {
       v.applyAxisAngle(new THREE.Vector3(0, 1, 0), step);
       camera.position.copy(controls.target).add(v);
     }
+  }
+  // 攝影機頭左右掃 ±30°(約 8 秒一個來回),外加一點點上下點頭
+  if (camHead) {
+    camHead.rotation.y = THREE.MathUtils.degToRad(30) * Math.sin(t * 0.78);
+    camHead.rotation.z = THREE.MathUtils.degToRad(3) * Math.sin(t * 0.78 * 2 + 1);
   }
   tickSeries(performance.now());
   drawScreen(t);
