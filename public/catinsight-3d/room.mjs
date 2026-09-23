@@ -128,14 +128,40 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
 
 // ---------- 層架上的東西 ----------
 {
-  // 線框立方體(粉)
+  // 粗邊線框:把每條邊做成圓管、頂點放小球(WebGL 的線寬固定 1px,不能加粗,所以用實體)
+  const thickEdges = (geometry, color, radius) => {
+    const g = new THREE.Group();
+    const edges = new THREE.EdgesGeometry(geometry);
+    const pos = edges.attributes.position;
+    const m = mat(color);
+    const seen = new Set();
+    for (let i = 0; i < pos.count; i += 2) {
+      const a = new THREE.Vector3().fromBufferAttribute(pos, i);
+      const b = new THREE.Vector3().fromBufferAttribute(pos, i + 1);
+      const d = b.clone().sub(a);
+      const cylm = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, d.length(), 10), m);
+      cylm.position.copy(a).add(b).multiplyScalar(0.5);
+      cylm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+      cylm.castShadow = true; g.add(cylm);
+      for (const v of [a, b]) {
+        const k = v.toArray().map((n) => n.toFixed(3)).join(',');
+        if (seen.has(k)) continue; seen.add(k);
+        const sp = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.05, 12, 10), m);
+        sp.position.copy(v); sp.castShadow = true; g.add(sp);
+      }
+    }
+    return g;
+  };
+  // 立方體(粉)
   const g1 = group(-1.35, 3.05, L.z + 0.15);
-  const e1 = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.5, 0.5, 0.5)), new THREE.LineBasicMaterial({ color: C.wire1 }));
-  e1.rotation.set(0.5, 0.6, 0.2); g1.add(e1); g1.userData.spin = 0.4;
-  // 線框四面體(青)
+  const e1 = thickEdges(new THREE.BoxGeometry(0.5, 0.5, 0.5), C.wire1, 0.028);
+  e1.rotation.set(0.5, 0.6, 0.2); g1.add(e1);
+  g1.userData.spin = 0.4; g1.userData.jump = { phase: 0.0, height: 0.32, baseY: 3.05 };
+  // 四面體(青)
   const g2 = group(-0.45, 3.0, L.z + 0.15);
-  const e2 = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.TetrahedronGeometry(0.42)), new THREE.LineBasicMaterial({ color: C.wire2 }));
-  e2.rotation.set(0.3, 0.2, 0.4); g2.add(e2); g2.userData.spin = -0.5;
+  const e2 = thickEdges(new THREE.TetrahedronGeometry(0.42), C.wire2, 0.028);
+  e2.rotation.set(0.3, 0.2, 0.4); g2.add(e2);
+  g2.userData.spin = -0.5; g2.userData.jump = { phase: 1.1, height: 0.28, baseY: 3.0 };
   // 彩球方陣
   const g3 = group(1.1, 2.61, L.z + 0.15);
   let k = 0;
@@ -411,6 +437,14 @@ function loop() {
     const overshoot = p < 1 ? 1 + 0.08 * Math.sin(p * Math.PI) : 1;
     g.scale.copy(g.userData.baseScale).multiplyScalar(Math.max(0.001, e * overshoot));
     if (g.userData.spin) g.rotation.y += g.userData.spin * dt;
+    if (g.userData.jump) {
+      // 每 2.6 秒跳一次:前 0.9 秒是拋物線,其餘停在架上
+      const j = g.userData.jump, cycle = 2.6, air = 0.9;
+      const u = ((t + j.phase) % cycle);
+      const hop = u < air ? Math.sin(Math.PI * u / air) : 0;
+      g.position.y = j.baseY + j.height * hop;
+      g.scale.y = g.userData.baseScale.y * (u < air ? 1 + 0.08 * Math.sin(Math.PI * u / air) : 1);   // 跳起來時微拉長
+    }
   }
   if (targetAz !== null) {
     // 平滑轉到指定視角:直接推 camera 繞 target 轉
