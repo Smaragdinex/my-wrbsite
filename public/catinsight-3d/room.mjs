@@ -367,13 +367,14 @@ const plantLeaves = [];
 }
 
 // ---------- 貓 + 碗 ----------
+let catHead = null;
 {
   // 低多邊形黑貓(不做五官),坐姿,放在青色碗裡;用 flatShading 做出切面感
   const b = group(2.25, 0, 2.45);
   cyl(0.5, 0.42, 0.22, C.bowl, { y: 0.11, parent: b });
   cyl(0.42, 0.42, 0.02, 0x8fe0ea, { y: 0.23, parent: b });
   const cat = new THREE.Group(); cat.position.y = 0.24; cat.rotation.y = -Math.PI * 0.7; b.add(cat);
-  const FUR = 0x2f2740;
+  const FUR = 0xf29a4a;   // 橘貓
   const lp = (geo, x, y, z, rx = 0, ry = 0, rz = 0) => {
     const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: FUR, roughness: 0.9, flatShading: true }));
     m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; cat.add(m); return m;
@@ -381,11 +382,13 @@ const plantLeaves = [];
   // 身體:坐姿,後半圓潤、前面挺起
   lp(new THREE.SphereGeometry(0.30, 7, 6), 0, 0.30, -0.05).scale.set(1, 1.05, 1.15);
   lp(new THREE.CylinderGeometry(0.17, 0.26, 0.42, 7), 0, 0.50, 0.12, 0.12);       // 胸
-  // 頭
-  lp(new THREE.SphereGeometry(0.19, 7, 6), 0, 0.86, 0.16);
-  // 耳朵(三角錐)
-  lp(new THREE.ConeGeometry(0.075, 0.16, 4), -0.11, 1.05, 0.14, 0, Math.PI / 4, -0.18);
-  lp(new THREE.ConeGeometry(0.075, 0.16, 4), 0.11, 1.05, 0.14, 0, Math.PI / 4, 0.18);
+  // 頭(獨立 group,之後會左右看)
+  const head = new THREE.Group(); head.position.set(0, 0.86, 0.16); cat.add(head);
+  const lpH = (geo, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = lp(geo, 0, 0, 0, rx, ry, rz); head.add(m); m.position.set(x, y, z); return m; };
+  lpH(new THREE.SphereGeometry(0.19, 7, 6), 0, 0, 0);
+  lpH(new THREE.ConeGeometry(0.075, 0.16, 4), -0.11, 0.19, -0.02, 0, Math.PI / 4, -0.18);   // 耳朵
+  lpH(new THREE.ConeGeometry(0.075, 0.16, 4), 0.11, 0.19, -0.02, 0, Math.PI / 4, 0.18);
+  catHead = head;
   // 前腳
   lp(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 6), -0.11, 0.18, 0.28, 0.1);
   lp(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 6), 0.11, 0.18, 0.28, 0.1);
@@ -533,6 +536,12 @@ function loop() {
     const eased = ph * ph * (3 - 2 * ph);
     camHead.rotation.y = THREE.MathUtils.degToRad(-45 + 90 * eased);
     camHead.rotation.z = THREE.MathUtils.degToRad(4) * Math.sin(t * 2.5 + 1);
+  }
+  // 貓頭自由左右看:偶爾轉頭、停一下、再轉回來(用幾個不同頻率的 sin 疊出不規則的節奏)
+  if (catHead) {
+    const look = 0.55 * Math.sin(t * 0.7) * Math.sin(t * 0.23 + 1.0) + 0.25 * Math.sin(t * 1.9 + 0.5) * Math.max(0, Math.sin(t * 0.31));
+    catHead.rotation.y += (look - catHead.rotation.y) * Math.min(1, dt * 3);       // 平滑跟上
+    catHead.rotation.z = 0.10 * Math.sin(t * 0.9 + 2.0);                             // 微微歪頭
   }
   // 仙人掌彎曲:把時間餵給每根的著色器
   for (const lf of plantLeaves) lf.userData.uni.uTime.value = t;
