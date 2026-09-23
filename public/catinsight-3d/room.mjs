@@ -124,24 +124,6 @@ cyl(0.16, 0.16, H - 1.4, C.pillar, { x: 0.35, y: (H - 1.4) / 2 + 0.5, z: L.z });
 box(S - 1.6, 0.12, 0.7, C.shelf, { y: 2.55, z: L.z + 0.15, r: 0.03, seg: 1 });
 box(S - 1.6, 0.12, 0.7, C.shelf, { y: 1.65, z: L.z + 0.15, r: 0.03, seg: 1 });
 
-// 粉牆上的字
-{
-  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 1024;
-  const g = cv.getContext('2d');
-  g.clearRect(0, 0, 1024, 1024);
-  g.fillStyle = '#fff'; g.textBaseline = 'top';
-  g.font = '800 150px "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
-  g.fillText('CatInsight', 90, 300);
-  g.font = '600 110px "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
-  g.globalAlpha = 0.85;
-  g.fillText('Stock', 96, 470);
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
-  m.rotation.y = -Math.PI / 2;
-  m.position.set(S / 2 - T - 0.01, 3.05, -0.9);
-  root.add(m);
-}
-
 // ---------- 層架上的東西 ----------
 {
   // 線框立方體(粉)
