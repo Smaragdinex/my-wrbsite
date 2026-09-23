@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CatInsight Stock — Room</title>
+<meta name="description" content="CatInsight Stock — step into the room. AI stock research for US and Taiwan markets." />
+<link rel="icon" type="image/png" href="/assets/favicon.png" />
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", "Noto Sans TC", sans-serif;
+    background: radial-gradient(120% 90% at 50% 40%, #3a2a66 0%, #2a1f4e 45%, #1d1538 100%);
+    color: #fff; overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .brand { position: fixed; top: 22px; left: 26px; display: flex; align-items: center; gap: 10px; z-index: 5; text-decoration: none; color: #fff; }
+  .brand img { width: 34px; height: 34px; border-radius: 9px; }
+  .brand b { font-weight: 700; letter-spacing: .2px; }
+  .brand span { opacity: .65; font-weight: 500; }
+  .hint { position: fixed; top: 26px; right: 28px; font-size: 13px; opacity: .6; z-index: 5; }
+  .pill {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 999px;
+    background: #fff; color: #2a1f4e; box-shadow: 0 12px 40px rgba(0,0,0,.35); z-index: 5;
+  }
+  .pill button {
+    width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: #2a1f4e;
+    font-size: 22px; cursor: pointer; display: grid; place-items: center; transition: background .15s;
+  }
+  .pill button:hover { background: #f1ecfb; }
+  .pill button.hand { color: #7b5cf5; font-size: 24px; }
+  .pill button.hand.on { background: #ece6ff; }
+  #loading {
+    position: fixed; inset: 0; display: grid; place-items: center; z-index: 9; background: #2a1f4e;
+    transition: opacity .6s; font-size: 14px; letter-spacing: .3px; opacity: .9;
+  }
+  #loading.done { opacity: 0; pointer-events: none; }
+  .cta { position: fixed; right: 28px; bottom: 34px; z-index: 5; display: flex; gap: 10px; }
+  .cta a { text-decoration: none; padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 14px; }
+  .cta .primary { background: #ff6f91; color: #fff; }
+  .cta .ghost { background: rgba(255,255,255,.12); color: #fff; }
+  @media (max-width: 640px) { .hint, .cta { display: none; } }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<a class="brand" href="/catinsight.html"><img src="/assets/icon-180.png" alt=""><b>CatInsight</b><span>Stock</span></a>
+<div class="hint">drag to look around</div>
+<div class="pill">
+  <button id="prev" aria-label="previous">‹</button>
+  <button id="hand" class="hand on" aria-label="auto rotate">✋</button>
+  <button id="next" aria-label="next">›</button>
+</div>
+<div class="cta">
+  <a class="ghost" href="/catinsight.html">Learn more</a>
+  <a class="primary" href="https://apps.apple.com/app/id6763914049">Get the App</a>
+</div>
+<div id="loading">building the room…</div>
+<script type="module" src="./room.mjs"></script>
+</body>
+</html>
