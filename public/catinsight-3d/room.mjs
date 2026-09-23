@@ -170,11 +170,15 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
 // ---------- 攝影機 + 三腳架 ----------
 {
   const t = group(-0.4, 0, -0.9);
-  const legs = 3;
+  // 三隻腳:腳底在地上張開,頂端收攏到雲台下方
+  const legs = 3, head = new THREE.Vector3(0, 1.45, 0), spread = 0.5;
   for (let i = 0; i < legs; i++) {
     const a = i * (Math.PI * 2 / legs) + 0.4;
-    const leg = cyl(0.03, 0.03, 1.5, C.tripod, { x: Math.sin(a) * 0.3, y: 0.75, z: Math.cos(a) * 0.3, parent: t });
-    leg.rotation.set(Math.cos(a) * 0.38, 0, -Math.sin(a) * 0.38);
+    const foot = new THREE.Vector3(Math.sin(a) * spread, 0.02, Math.cos(a) * spread);
+    const dir = head.clone().sub(foot);
+    const leg = cyl(0.03, 0.035, dir.length(), C.tripod, { parent: t });
+    leg.position.copy(foot).add(head).multiplyScalar(0.5);
+    leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
   }
   cyl(0.05, 0.05, 0.4, C.tripod, { y: 1.55, parent: t });
   box(0.55, 0.32, 0.3, C.camera, { y: 1.85, r: 0.06, parent: t });
