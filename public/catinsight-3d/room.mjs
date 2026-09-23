@@ -428,6 +428,35 @@ function tickSeries(now) {
   }
 }
 
+// ---------- 滾輪:往上滾鏡頭慢慢飛到電腦螢幕前,往下滾退回房間 ----------
+let zoomT = 0, zoomGoal = 0;
+const orbitPos = new THREE.Vector3(), orbitTarget = new THREE.Vector3();
+const scrPos = new THREE.Vector3(), scrNormal = new THREE.Vector3(), endPos = new THREE.Vector3(), lookTgt = new THREE.Vector3();
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  zoomGoal = Math.max(0, Math.min(1, zoomGoal - e.deltaY * 0.0015));
+}, { passive: false });
+function updateZoom(dt) {
+  zoomT += (zoomGoal - zoomT) * Math.min(1, dt * 2.5);
+  if (zoomT < 0.002) {
+    zoomT = 0;
+    controls.enabled = true; controls.autoRotate = true;
+    controls.update();
+    orbitPos.copy(camera.position); orbitTarget.copy(controls.target);     // 記住房間視角,退回時用
+    return;
+  }
+  controls.enabled = false; controls.autoRotate = false;
+  const e = zoomT * zoomT * (3 - 2 * zoomT);
+  screenMesh.getWorldPosition(scrPos);
+  screenMesh.getWorldDirection(scrNormal);                                 // 平面 +z = 法線,朝向房間
+  const half = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const dist = Math.max(0.43 / half, 0.71 / (half * camera.aspect)) * 1.04; // 讓整個螢幕剛好填滿畫面
+  endPos.copy(scrPos).addScaledVector(scrNormal, dist);
+  camera.position.lerpVectors(orbitPos, endPos, e);
+  lookTgt.lerpVectors(orbitTarget, scrPos, e);
+  camera.lookAt(lookTgt);
+}
+
 // ---------- 進場動畫 + 迴圈 ----------
 animated.forEach((g, i) => { g.userData.baseScale = g.scale.clone(); g.scale.setScalar(0.001); g.userData.delay = 0.15 + i * 0.07; });
 const introStart = performance.now();
@@ -498,9 +527,9 @@ function loop() {
   for (const lf of plantLeaves) lf.userData.uni.uTime.value = t;
   tickSeries(performance.now());
   drawScreen(t);
-  controls.update();
+  updateZoom(dt);
   renderer.render(scene, camera);
 }
 loop();
 setTimeout(() => document.getElementById('loading').classList.add('done'), 400);
-window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, frames: 0, camera, controls, THREE, catUniforms };
+window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, frames: 0, camera, controls, THREE, catUniforms, get zoomT() { return zoomT; }, setZoom(v) { zoomGoal = v; } };
