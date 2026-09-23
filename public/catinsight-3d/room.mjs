@@ -428,16 +428,6 @@ function tickSeries(now) {
   }
 }
 
-// ---------- UI:左右鍵切視角、手掌切自動旋轉 ----------
-const VIEWS = [0.785, 0.45, 1.15];
-let viewIdx = 0, targetAz = null;
-const azimuth = () => controls.getAzimuthalAngle();
-document.getElementById('prev').onclick = () => { viewIdx = (viewIdx + VIEWS.length - 1) % VIEWS.length; targetAz = VIEWS[viewIdx]; controls.autoRotate = false; hand.classList.remove('on'); };
-document.getElementById('next').onclick = () => { viewIdx = (viewIdx + 1) % VIEWS.length; targetAz = VIEWS[viewIdx]; controls.autoRotate = false; hand.classList.remove('on'); };
-const hand = document.getElementById('hand');
-hand.onclick = () => { controls.autoRotate = !controls.autoRotate; hand.classList.toggle('on', controls.autoRotate); targetAz = null; };
-canvas.addEventListener('pointerdown', () => { targetAz = null; });
-
 // ---------- 進場動畫 + 迴圈 ----------
 animated.forEach((g, i) => { g.userData.baseScale = g.scale.clone(); g.scale.setScalar(0.001); g.userData.delay = 0.15 + i * 0.07; });
 const introStart = performance.now();
@@ -489,17 +479,7 @@ function loop() {
       g.rotation.y = (laps + ease) * Math.PI * 2;
     }
   }
-  if (targetAz !== null) {
-    // 平滑轉到指定視角:直接推 camera 繞 target 轉
-    const cur = azimuth(); let diff = targetAz - cur;
-    if (Math.abs(diff) < 0.002) targetAz = null;
-    else {
-      const step = diff * Math.min(1, dt * 4);
-      const v = camera.position.clone().sub(controls.target);
-      v.applyAxisAngle(new THREE.Vector3(0, 1, 0), step);
-      camera.position.copy(controls.target).add(v);
-    }
-  }
+
   // 攝影機頭左右掃 ±30°(約 8 秒一個來回),外加一點點上下點頭
   if (camHead) {
     // 掃描角度 ±45°、約 5 秒一個來回,並在兩端稍作停留(smoothstep 曲線)

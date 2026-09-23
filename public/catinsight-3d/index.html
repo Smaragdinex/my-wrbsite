@@ -21,18 +21,6 @@
   .brand b { font-weight: 700; letter-spacing: .2px; }
   .brand span { opacity: .65; font-weight: 500; }
   .hint { position: fixed; top: 26px; right: 28px; font-size: 13px; opacity: .6; z-index: 5; }
-  .pill {
-    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
-    display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 999px;
-    background: #fff; color: #2a1f4e; box-shadow: 0 12px 40px rgba(0,0,0,.35); z-index: 5;
-  }
-  .pill button {
-    width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: #2a1f4e;
-    font-size: 22px; cursor: pointer; display: grid; place-items: center; transition: background .15s;
-  }
-  .pill button:hover { background: #f1ecfb; }
-  .pill button.hand { color: #7b5cf5; font-size: 24px; }
-  .pill button.hand.on { background: #ece6ff; }
   #loading {
     position: fixed; inset: 0; display: grid; place-items: center; z-index: 9; background: #2a1f4e;
     transition: opacity .6s; font-size: 14px; letter-spacing: .3px; opacity: .9;
@@ -57,16 +45,11 @@
 <canvas id="c"></canvas>
 <a class="brand" href="/catinsight.html"><img src="/assets/icon-180.png" alt=""><b>CatInsight</b><span>Stock</span></a>
 <div class="hint">drag to look around</div>
-<div class="pill">
-  <button id="prev" aria-label="previous">‹</button>
-  <button id="hand" class="hand on" aria-label="auto rotate">✋</button>
-  <button id="next" aria-label="next">›</button>
-</div>
 <div class="cta">
   <a class="ghost" href="/catinsight.html">Learn more</a>
   <a class="primary" href="https://apps.apple.com/app/id6763914049">Get the App</a>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=38"></script>
+<script type="module" src="./room.mjs?v=39"></script>
 </body>
 </html>
