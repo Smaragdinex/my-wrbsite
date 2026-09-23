@@ -371,7 +371,7 @@ const plantLeaves = [];
 // 貓改用 Meshy 產生的 GLB(cat.glb,已 Draco 壓縮 + 貼圖縮到 1024)。
 // 模型只有一個 mesh、沒有骨架,所以「轉頭」用 vertex shader 做:脖子以上的頂點依高度加權繞垂直軸旋轉。
 let catHead = null;            // 舊介面保留(不再使用)
-const catUniforms = { uHead: { value: 0 }, uNeck: { value: 0.25 }, uBlend: { value: 0.3 }, uPivot: { value: new THREE.Vector2(0, 0.1) } };
+const catUniforms = { uHead: { value: 0 }, uNeck: { value: 0.08 }, uBlend: { value: 0.18 }, uPivot: { value: new THREE.Vector2(0.17, 0.40) } };   // 模型原始座標:脖子約 y=0.08~0.26,頭中心 xz≈(0.17, 0.40)
 let catModel = null;
 {
   const b = group(2.25, 0, 2.45);
@@ -391,6 +391,9 @@ let catModel = null;
       if (!o.isMesh) return;
       o.castShadow = true; o.receiveShadow = true;
       const mat = o.material; mat.side = THREE.FrontSide;
+      // 原貼圖偏暗棕,調亮並加一點金黃自發光,接近參考圖的金色
+      mat.metalness = 0; mat.color.setScalar(1.25);
+      mat.emissive.set(0xffb040); mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.3;
       mat.onBeforeCompile = (sh) => {
         Object.assign(sh.uniforms, catUniforms);
         sh.vertexShader = sh.vertexShader
