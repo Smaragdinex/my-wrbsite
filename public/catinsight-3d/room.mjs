@@ -265,7 +265,7 @@ let camHead = null;
 }
 
 // ---------- 地毯 / 滑板 ----------
-box(3.6, 0.05, 2.7, C.rug, { x: -0.5, y: 0.075, z: 0.9, r: 0.02, seg: 1 });
+box(3.6, 0.05, 2.7, C.rug, { x: -1.1, y: 0.075, z: 0.9, r: 0.02, seg: 1 });   // 地毯往左移 0.6
 {
   const s = group(-1.55, 0.08, 1.75);   // 靠左邊
   s.rotation.y = 0.5;
@@ -378,7 +378,7 @@ let catHead = null;            // 舊介面保留(不再使用)
 const catUniforms = { uHead: { value: 0 }, uNeck: { value: 0.08 }, uBlend: { value: 0.18 }, uPivot: { value: new THREE.Vector2(0.17, 0.40) } };   // 模型原始座標:脖子約 y=0.08~0.26,頭中心 xz≈(0.17, 0.40)
 let catModel = null;
 {
-  const b = group(1.5, 0, 2.6);   // 貓窩往左移,離開粉紅牆
+  const b = group(2.25, 0, 2.45);
   cyl(0.5, 0.42, 0.22, C.bowl, { y: 0.11, parent: b });
   cyl(0.42, 0.42, 0.02, 0x8fe0ea, { y: 0.23, parent: b });
   const cat = new THREE.Group(); cat.position.y = 0.24; cat.rotation.y = -Math.PI * 0.7 + Math.PI / 6; b.add(cat);   // 再往牠的左邊轉 30°
