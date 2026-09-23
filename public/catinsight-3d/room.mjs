@@ -434,6 +434,7 @@ const orbitPos = new THREE.Vector3(), orbitTarget = new THREE.Vector3();
 const scrPos = new THREE.Vector3(), scrNormal = new THREE.Vector3(), endPos = new THREE.Vector3(), lookTgt = new THREE.Vector3();
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
+  if (performance.now() < wheelLockUntil) return;                        // 剛從螢幕退出:忽略滾輪慣性
   zoomGoal = Math.max(0, Math.min(1, zoomGoal - e.deltaY * 0.0015));
 }, { passive: false });
 function updateZoom(dt) {
@@ -455,7 +456,66 @@ function updateZoom(dt) {
   camera.position.lerpVectors(orbitPos, endPos, e);
   lookTgt.lerpVectors(orbitTarget, scrPos, e);
   camera.lookAt(lookTgt);
+  if (zoomGoal >= 1 && zoomT > 0.985 && !uiOn) showUI();                    // 鏡頭到位 → 螢幕介面淡入
 }
+
+// ---------- 螢幕介面:鏡頭定在螢幕後淡入,滾輪一頁一頁介紹功能;第一頁再往上滾 → 退回房間 ----------
+const SLIDES = [
+  { icon: '🐱', title: 'CatInsight <span class="green">Stock</span>', text: 'AI that reads the market for you. US and Taiwan stocks, one app.', zh: 'AI 幫你看股票 · 美股與台股' },
+  { icon: '✨', title: 'Daily AI Picks', text: 'A ranking model re-scores the whole market every day and surfaces clear buy / sell signals.', zh: '每日 AI 精選,自動換榜' },
+  { icon: '📈', title: 'Pro Charts', text: '1D · 1W · 1M · 3M · YTD · 1Y, with a crosshair to check any price at a glance.', zh: '專業線圖,十字線查價' },
+  { icon: '🚀', title: 'Top Gainers', text: 'See the biggest movers, sorted by 1D, 1Y or year-to-date.', zh: '漲幅排行 1D / 1Y / YTD' },
+  { icon: '📰', title: 'AI Reads the News', text: 'Every headline boiled down to three sentences, with a bullish / bearish / neutral call.', zh: 'AI 幫你讀新聞,三句摘要 + 偏多偏空' },
+  { icon: '🎙️', title: 'Talk to the AI', text: 'Ask anything by voice, ChatGPT-style. Interrupt it any time, it listens.', zh: '語音對話,隨時可以打斷' },
+  { icon: '🔔', title: 'Smart Alerts', text: 'Price targets, tomorrow\'s earnings and daily pick changes, pushed straight to your phone.', zh: '推播提醒:到價、明日財報、AI 換榜' },
+  { icon: '📲', title: 'Get the App', text: 'Free on the App Store.', zh: '', cta: true },
+];
+const ui = document.getElementById('screen-ui');
+const uiTrack = ui.querySelector('.track'), uiNum = ui.querySelector('.num'), uiDots = ui.querySelector('.dots'), uiMore = ui.querySelector('.more');
+SLIDES.forEach((sl, i) => {
+  const el = document.createElement('div'); el.className = 'slide'; el.style.top = `${i * 100}%`;
+  el.innerHTML = `<div><div class="icon">${sl.icon}</div><h2>${sl.title}</h2><p>${sl.text}</p>` +
+    (sl.zh ? `<div class="zh">${sl.zh}</div>` : '') +
+    (sl.cta ? `<a class="store" href="https://apps.apple.com/app/id6763914049"> Download on the App Store</a><div class="soon">Android coming soon</div>` : '') + `</div>`;
+  uiTrack.appendChild(el);
+  const d = document.createElement('i'); d.onclick = () => setSlide(i); uiDots.appendChild(d);
+});
+let slide = 0, uiOn = false, navLockUntil = 0, wheelLockUntil = 0;
+function setSlide(i) {
+  slide = Math.max(0, Math.min(SLIDES.length - 1, i));
+  uiTrack.style.transform = `translateY(${-slide * 100}%)`;
+  uiNum.textContent = `${String(slide + 1).padStart(2, '0')} / ${String(SLIDES.length).padStart(2, '0')}`;
+  [...uiDots.children].forEach((d, k) => d.classList.toggle('on', k === slide));
+  uiMore.style.opacity = slide === SLIDES.length - 1 ? '0' : '';
+}
+function showUI() { uiOn = true; ui.classList.add('on'); document.body.classList.add('ui-on'); setSlide(0); navLockUntil = performance.now() + 900; }
+function hideUI() { uiOn = false; ui.classList.remove('on'); document.body.classList.remove('ui-on'); zoomGoal = 0; wheelLockUntil = performance.now() + 1000; }
+function uiNav(dir) {
+  const now = performance.now(); if (now < navLockUntil) return; navLockUntil = now + 700;
+  if (dir > 0) { if (slide < SLIDES.length - 1) setSlide(slide + 1); }
+  else { if (slide > 0) setSlide(slide - 1); else hideUI(); }
+}
+ui.addEventListener('wheel', (e) => { e.preventDefault(); if (Math.abs(e.deltaY) < 6) return; uiNav(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+let touchY0 = null;
+ui.addEventListener('touchstart', (e) => { touchY0 = e.touches[0].clientY; }, { passive: true });
+ui.addEventListener('touchend', (e) => { if (touchY0 === null) return; const dy = touchY0 - e.changedTouches[0].clientY; touchY0 = null; if (Math.abs(dy) > 40) uiNav(dy > 0 ? 1 : -1); });
+ui.querySelector('.back').onclick = hideUI;
+window.addEventListener('keydown', (e) => {
+  if (!uiOn) return;
+  if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') uiNav(1);
+  else if (e.key === 'ArrowUp' || e.key === 'PageUp') uiNav(-1);
+  else if (e.key === 'Escape') hideUI();
+});
+// 點螢幕也能進去(手機沒有滾輪)
+const raycaster = new THREE.Raycaster(); const ndc = new THREE.Vector2(); let pd = null;
+canvas.addEventListener('pointerdown', (e) => { pd = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('pointerup', (e) => {
+  if (!pd || Math.hypot(e.clientX - pd.x, e.clientY - pd.y) > 6 || !screenMesh) { pd = null; return; }
+  pd = null;
+  ndc.set((e.clientX / canvas.clientWidth) * 2 - 1, -(e.clientY / canvas.clientHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  if (raycaster.intersectObject(screenMesh).length) zoomGoal = 1;
+});
 
 // ---------- 進場動畫 + 迴圈 ----------
 animated.forEach((g, i) => { g.userData.baseScale = g.scale.clone(); g.scale.setScalar(0.001); g.userData.delay = 0.15 + i * 0.07; });
