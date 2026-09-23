@@ -61,8 +61,8 @@ key.shadow.mapSize.set(2048, 2048);
 key.shadow.camera.near = 1; key.shadow.camera.far = 40;
 key.shadow.camera.left = -8; key.shadow.camera.right = 8;
 key.shadow.camera.top = 8; key.shadow.camera.bottom = -8;
-key.shadow.bias = -0.0006;
-key.shadow.normalBias = 0.02;
+key.shadow.bias = -0.0015;
+key.shadow.normalBias = 0.06;   // 圓角面自遮陰影(acne)容易閃,偏移拉大
 scene.add(key);
 const fill = new THREE.DirectionalLight(0xe0d0ff, 0.6);
 fill.position.set(-6, 5, 6);
@@ -149,11 +149,12 @@ box(S - 1.6, 0.12, 0.7, C.shelf, { y: 1.65, z: L.z + 0.15, r: 0.03, seg: 1 });
   const BODY_D = 0.9, FRONT = BODY_D / 2;                                        // 主體深度、前面板 z
   box(1.1, 2.4, BODY_D, C.arcade, { y: 1.2, r: 0.08, parent: a });               // 主體
   box(1.0, 0.35, 1.0, C.arcadeTop, { y: 2.56, z: 0.05, r: 0.08, parent: a });    // 頂
-  box(0.16, 0.40, 1.05, C.arcadeStripe, { y: 2.56, z: 0.05, r: 0.03, parent: a, seg: 1 }); // 白條(比頂高/深)
+  box(0.16, 0.03, 0.9, C.arcadeStripe, { y: 2.56 + 0.175 + 0.012, z: 0.05, r: 0.01, parent: a, seg: 1, shadow: false }); // 白條:貼在頂面的薄片
+  box(0.16, 0.30, 0.03, C.arcadeStripe, { y: 2.56, z: 0.05 + 0.5 + 0.012, r: 0.01, parent: a, seg: 1, shadow: false });  // 白條:頂的前面
   box(0.9, 0.7, 0.1, C.arcadeScreen, { y: 1.78, z: FRONT + 0.02, r: 0.03, parent: a, seg: 1 });     // 螢幕框(前凸 7cm)
   box(0.72, 0.5, 0.02, 0xefe6f5, { y: 1.78, z: FRONT + 0.075, r: 0.01, parent: a, seg: 1, shadow: false }); // 螢幕面
   box(1.1, 0.28, 0.5, C.arcadeTop, { y: 1.22, z: FRONT - 0.02, r: 0.06, parent: a });   // 控制台(前凸)
-  box(0.16, 0.32, 0.54, C.arcadeStripe, { y: 1.22, z: FRONT - 0.02, r: 0.03, parent: a, seg: 1 });
+  box(0.16, 0.03, 0.44, C.arcadeStripe, { y: 1.22 + 0.14 + 0.012, z: FRONT - 0.02, r: 0.01, parent: a, seg: 1, shadow: false }); // 白條:貼在控制台上
   cyl(0.03, 0.03, 0.25, 0xeeeeee, { x: 0.05, y: 1.47, z: FRONT + 0.02, parent: a });  // 搖桿
   sphere(0.075, C.balls[2], { x: 0.05, y: 1.62, z: FRONT + 0.02, parent: a });
   sphere(0.045, C.balls[1], { x: -0.28, y: 1.39, z: FRONT + 0.1, parent: a });
