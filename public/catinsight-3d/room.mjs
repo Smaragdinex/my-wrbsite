@@ -169,7 +169,7 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
 
 // ---------- 攝影機 + 三腳架 ----------
 {
-  const t = group(-0.4, 0, -0.9);
+  const t = group(-0.55, 0, -1.55);   // 靠牆一點(層架前緣在 -2.14,腳架腳張開 0.5 不會碰到)
   // 三隻腳:腳底在地上張開,頂端收攏到雲台下方
   const legs = 3, head = new THREE.Vector3(0, 1.45, 0), spread = 0.5;
   for (let i = 0; i < legs; i++) {
@@ -230,8 +230,8 @@ let screenMesh;
 
 // ---------- 椅子 ----------
 {
-  const c = group(1.3, 0, 1.1);
-  c.rotation.y = -0.4;
+  const c = group(1.35, 0, 1.6);   // 桌面 z 到 0.85,椅墊從 1.15 開始,不重疊
+  c.rotation.y = -0.35;
   box(0.9, 0.16, 0.9, C.chairDark, { y: 0.72, r: 0.07, parent: c });            // 座墊
   box(0.9, 1.0, 0.16, C.chair, { y: 1.3, z: -0.4, r: 0.07, parent: c });        // 靠背
   for (let i = 0; i < 3; i++) box(0.82, 0.03, 0.02, C.chairDark, { y: 0.95 + i * 0.3, z: -0.31, r: 0, parent: c, shadow: false });
@@ -260,7 +260,7 @@ let screenMesh;
 
 // ---------- 貓 + 碗 ----------
 {
-  const b = group(2.2, 0, 1.75);
+  const b = group(2.25, 0, 2.45);   // 往前一點,離椅子遠些
   cyl(0.5, 0.42, 0.22, C.bowl, { y: 0.11, parent: b });
   cyl(0.42, 0.42, 0.02, 0x8fe0ea, { y: 0.23, parent: b });
   const loader = new GLTFLoader();
