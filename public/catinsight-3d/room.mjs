@@ -144,21 +144,22 @@ box(S - 1.6, 0.12, 0.7, C.shelf, { y: 1.65, z: L.z + 0.15, r: 0.03, seg: 1 });
 
 // ---------- 街機 ----------
 {
-  const a = group(-1.95, 0, -1.6);
-  a.rotation.y = 0.25;
-  box(1.1, 2.4, 0.9, C.arcade, { y: 1.2, r: 0.08, parent: a });                 // 主體
-  box(1.0, 0.35, 1.0, C.arcadeTop, { y: 2.55, z: 0.05, r: 0.08, parent: a });    // 頂
-  box(0.16, 0.36, 1.02, C.arcadeStripe, { y: 2.55, z: 0.05, r: 0.02, parent: a, seg: 1 }); // 白條
-  box(0.9, 0.7, 0.08, C.arcadeScreen, { y: 1.75, z: 0.44, r: 0.03, parent: a, seg: 1 });   // 螢幕框
-  box(0.72, 0.5, 0.02, 0xefe6f5, { y: 1.75, z: 0.49, r: 0.01, parent: a, seg: 1, shadow: false }); // 螢幕
-  box(1.1, 0.28, 0.5, C.arcadeTop, { y: 1.22, z: 0.4, r: 0.06, parent: a });     // 控制台
-  box(0.16, 0.3, 0.5, C.arcadeStripe, { y: 1.22, z: 0.4, r: 0.02, parent: a, seg: 1 });
-  cyl(0.03, 0.03, 0.25, 0xeeeeee, { x: 0.05, y: 1.45, z: 0.42, parent: a });     // 搖桿
-  sphere(0.075, C.balls[2], { x: 0.05, y: 1.6, z: 0.42, parent: a });
-  sphere(0.045, C.balls[1], { x: -0.28, y: 1.38, z: 0.5, parent: a });
-  sphere(0.045, C.balls[5], { x: -0.14, y: 1.38, z: 0.5, parent: a });
-  sphere(0.045, C.balls[3], { x: 0.3, y: 1.38, z: 0.5, parent: a });
-  box(0.34, 0.3, 0.04, 0xd8cfe8, { y: 0.9, z: 0.46, r: 0.02, parent: a, seg: 1 });  // 投幣口
+  // 與左牆平行(不旋轉),背面貼齊層架前緣;每個貼在表面上的零件都往外多凸 1~2 公分,避免同平面閃爍
+  const a = group(-1.95, 0, L.z + 0.15 + 0.35 + 0.46);
+  const BODY_D = 0.9, FRONT = BODY_D / 2;                                        // 主體深度、前面板 z
+  box(1.1, 2.4, BODY_D, C.arcade, { y: 1.2, r: 0.08, parent: a });               // 主體
+  box(1.0, 0.35, 1.0, C.arcadeTop, { y: 2.56, z: 0.05, r: 0.08, parent: a });    // 頂
+  box(0.16, 0.40, 1.05, C.arcadeStripe, { y: 2.56, z: 0.05, r: 0.03, parent: a, seg: 1 }); // 白條(比頂高/深)
+  box(0.9, 0.7, 0.1, C.arcadeScreen, { y: 1.78, z: FRONT + 0.02, r: 0.03, parent: a, seg: 1 });     // 螢幕框(前凸 7cm)
+  box(0.72, 0.5, 0.02, 0xefe6f5, { y: 1.78, z: FRONT + 0.075, r: 0.01, parent: a, seg: 1, shadow: false }); // 螢幕面
+  box(1.1, 0.28, 0.5, C.arcadeTop, { y: 1.22, z: FRONT - 0.02, r: 0.06, parent: a });   // 控制台(前凸)
+  box(0.16, 0.32, 0.54, C.arcadeStripe, { y: 1.22, z: FRONT - 0.02, r: 0.03, parent: a, seg: 1 });
+  cyl(0.03, 0.03, 0.25, 0xeeeeee, { x: 0.05, y: 1.47, z: FRONT + 0.02, parent: a });  // 搖桿
+  sphere(0.075, C.balls[2], { x: 0.05, y: 1.62, z: FRONT + 0.02, parent: a });
+  sphere(0.045, C.balls[1], { x: -0.28, y: 1.39, z: FRONT + 0.1, parent: a });
+  sphere(0.045, C.balls[5], { x: -0.14, y: 1.39, z: FRONT + 0.1, parent: a });
+  sphere(0.045, C.balls[3], { x: 0.3, y: 1.39, z: FRONT + 0.1, parent: a });
+  box(0.34, 0.3, 0.06, 0xd8cfe8, { y: 0.9, z: FRONT + 0.02, r: 0.02, parent: a, seg: 1 });  // 投幣口
 }
 
 // ---------- 攝影機 + 三腳架 ----------
