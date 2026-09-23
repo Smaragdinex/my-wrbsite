@@ -333,7 +333,7 @@ const plantLeaves = [];
 // 貓改用 Meshy 產生的 GLB(cat.glb,已 Draco 壓縮 + 貼圖縮到 1024)。
 // 模型只有一個 mesh、沒有骨架,所以「轉頭」用 vertex shader 做:脖子以上的頂點依高度加權繞垂直軸旋轉。
 let catHead = null;            // 舊介面保留(不再使用)
-const catUniforms = { uHead: { value: 0 }, uNeck: { value: 0.08 }, uBlend: { value: 0.18 }, uPivot: { value: new THREE.Vector2(0.17, 0.40) } };   // 模型原始座標:脖子約 y=0.08~0.26,頭中心 xz≈(0.17, 0.40)
+const catUniforms = { uHead: { value: 0 }, uTail: { value: 0 }, uNeck: { value: 0.08 }, uBlend: { value: 0.18 }, uPivot: { value: new THREE.Vector2(0.17, 0.40) } };   // 模型原始座標:脖子約 y=0.08~0.26,頭中心 xz≈(0.17, 0.40)
 let catModel = null;
 {
   const b = group(2.25, 0, 2.45);
@@ -360,12 +360,18 @@ let catModel = null;
         Object.assign(sh.uniforms, catUniforms);
         sh.vertexShader = sh.vertexShader
           .replace('#include <common>', `#include <common>
-            uniform float uHead, uNeck, uBlend; uniform vec2 uPivot;
-            mat2 headRot(float y) { float a = uHead * smoothstep(uNeck, uNeck + uBlend, y); float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }`)
+            uniform float uHead, uNeck, uBlend, uTail; uniform vec2 uPivot;
+            mat2 rot2(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+            mat2 headRot(float y) { return rot2(uHead * smoothstep(uNeck, uNeck + uBlend, y)); }
+            // 尾巴:模型座標 x < -0.4、y < -0.55 的那一圈(繞在身體左側),尾根在 z≈-0.62、尾尖在 z≈0.3;越靠尾尖擺越多
+            float tailW(vec3 p) { return (1.0 - smoothstep(-0.45, -0.33, p.x)) * (1.0 - smoothstep(-0.6, -0.5, p.y)) * smoothstep(-0.7, 0.25, p.z); }
+            const vec2 TAIL_PIVOT = vec2(-0.38, -0.62);`)
           .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
-            objectNormal.xz = headRot(position.y) * objectNormal.xz;`)
+            objectNormal.xz = headRot(position.y) * objectNormal.xz;
+            objectNormal.xz = rot2(uTail * tailW(position)) * objectNormal.xz;`)
           .replace('#include <begin_vertex>', `#include <begin_vertex>
-            transformed.xz = uPivot + headRot(position.y) * (transformed.xz - uPivot);`);
+            transformed.xz = uPivot + headRot(position.y) * (transformed.xz - uPivot);
+            transformed.xz = TAIL_PIVOT + rot2(uTail * tailW(position)) * (transformed.xz - TAIL_PIVOT);`);
       };
       mat.needsUpdate = true;
     });
@@ -585,6 +591,7 @@ function loop() {
   {
     const look = 0.55 * Math.sin(t * 0.7) * Math.sin(t * 0.23 + 1.0) + 0.25 * Math.sin(t * 1.9 + 0.5) * Math.max(0, Math.sin(t * 0.31));
     catUniforms.uHead.value += (look - catUniforms.uHead.value) * Math.min(1, dt * 3);   // 平滑跟上
+    catUniforms.uTail.value = -0.08 + 0.22 * Math.sin(t * 1.6) + 0.06 * Math.sin(t * 3.7 + 1.0);   // 尾巴左右搖(偏向外側,不打到腳)
   }
 
   // 仙人掌彎曲:把時間餵給每根的著色器
