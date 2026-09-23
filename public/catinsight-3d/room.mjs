@@ -293,9 +293,13 @@ let screenMesh;
   screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.42, 0.86), new THREE.MeshBasicMaterial({ map: screenTex }));
   screenMesh.position.set(0, 0.9, 0.045);
   m.add(screenMesh);
-  // 耳機:米白色粗弧形頭帶掛在螢幕右上角(斜 45°),兩個橘色圓耳罩垂在螢幕前後,內側淺色耳墊
-  const hp = group(0.64, 1.37, 0.0, m);
-  hp.rotation.y = -Math.PI / 4;
+  // 耳機架:桌面右側,圓底座 + 立桿 + 頂端橫桿;耳機頭帶掛在橫桿上,兩個耳罩垂在立桿兩側
+  const st = group(1.15, 1.41, -0.2, d);
+  cyl(0.15, 0.16, 0.03, C.stand, { y: 0.015, parent: st });
+  cyl(0.025, 0.025, 0.60, C.stand, { y: 0.30, parent: st });
+  cyl(0.03, 0.03, 0.18, C.stand, { y: 0.60, parent: st, rx: Math.PI / 2 });
+  // 耳機:米白色粗弧形頭帶,兩個橘色圓耳罩,內側淺色耳墊
+  const hp = group(0, 0.42, 0, st);
   const CREAM = 0xf7f1f2, CUP = 0xf08262, PAD = 0xfbe3d8;
   const band = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.032, 12, 40, Math.PI), mat(CREAM));
   band.castShadow = true; hp.add(band);
@@ -374,7 +378,7 @@ let catHead = null;            // 舊介面保留(不再使用)
 const catUniforms = { uHead: { value: 0 }, uNeck: { value: 0.08 }, uBlend: { value: 0.18 }, uPivot: { value: new THREE.Vector2(0.17, 0.40) } };   // 模型原始座標:脖子約 y=0.08~0.26,頭中心 xz≈(0.17, 0.40)
 let catModel = null;
 {
-  const b = group(2.25, 0, 2.45);
+  const b = group(1.5, 0, 2.6);   // 貓窩往左移,離開粉紅牆
   cyl(0.5, 0.42, 0.22, C.bowl, { y: 0.11, parent: b });
   cyl(0.42, 0.42, 0.02, 0x8fe0ea, { y: 0.23, parent: b });
   const cat = new THREE.Group(); cat.position.y = 0.24; cat.rotation.y = -Math.PI * 0.7 + Math.PI / 6; b.add(cat);   // 再往牠的左邊轉 30°
