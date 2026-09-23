@@ -400,8 +400,11 @@ function loop() {
   }
   // 攝影機頭左右掃 ±30°(約 8 秒一個來回),外加一點點上下點頭
   if (camHead) {
-    camHead.rotation.y = THREE.MathUtils.degToRad(30) * Math.sin(t * 0.78);
-    camHead.rotation.z = THREE.MathUtils.degToRad(3) * Math.sin(t * 0.78 * 2 + 1);
+    // 掃描角度 ±45°、約 5 秒一個來回,並在兩端稍作停留(smoothstep 曲線)
+    const ph = (Math.sin(t * 1.25) + 1) / 2;
+    const eased = ph * ph * (3 - 2 * ph);
+    camHead.rotation.y = THREE.MathUtils.degToRad(-45 + 90 * eased);
+    camHead.rotation.z = THREE.MathUtils.degToRad(4) * Math.sin(t * 2.5 + 1);
   }
   tickSeries(performance.now());
   drawScreen(t);
