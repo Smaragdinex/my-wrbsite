@@ -435,7 +435,7 @@ const scrPos = new THREE.Vector3(), scrNormal = new THREE.Vector3(), endPos = ne
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   if (performance.now() < wheelLockUntil) return;                        // 剛從螢幕退出:忽略滾輪慣性
-  zoomGoal = Math.max(0, Math.min(1, zoomGoal - e.deltaY * 0.0015));
+  zoomGoal = Math.max(0, Math.min(1, zoomGoal + e.deltaY * 0.0015));   // 和介紹頁同方向:往前滾 = 前進
 }, { passive: false });
 function updateZoom(dt) {
   zoomT += (zoomGoal - zoomT) * Math.min(1, dt * 2.5);
