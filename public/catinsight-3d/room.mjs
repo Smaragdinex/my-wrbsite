@@ -174,11 +174,22 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
 // ---------- 街機(Meshy GLB:arcade.glb,Draco 壓縮 + 貼圖 1024)----------
 const ARCADE_H = 2.5;                                            // 機台高度
 let arcadeModel = null, arcadeAnchor = null, playTag = null;
+// 共用的 GLB 載入器:Draco 解碼器只載一次並預先載入;載入狀態顯示在開頭的 loading 文字,失敗時印出原因(不然模型不見了也不知道為什麼)
+const loadingEl = document.getElementById('loading');
+const pending = new Set();
+const noteLoad = (name, state) => { if (state === 'done') pending.delete(name); else pending.add(name); if (loadingEl) loadingEl.textContent = pending.size ? `loading ${[...pending].join(' + ')}…` : 'building the room…'; };
+const glbLoader = (() => {
+  const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/'); draco.preload();
+  const loader = new GLTFLoader(); loader.setDRACOLoader(draco); return loader;
+})();
+function loadGLB(name, url, onLoad) {
+  noteLoad(name, 'start');
+  glbLoader.load(url, (gltf) => { noteLoad(name, 'done'); onLoad(gltf); }, undefined,
+    (err) => { noteLoad(name, 'done'); console.error(`[catinsight-3d] ${name} 載入失敗:`, err); });
+}
 {
   const a = group(-S / 2 + 0.12 + 0.66, 0, L.z + T / 2);         // 最左邊、背面貼牆
-  const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
-  const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
-  loader.load('./arcade.glb', (gltf) => {
+  loadGLB('arcade', './arcade.glb', (gltf) => {
     const m = gltf.scene;
     m.rotation.y = 0;                                            // 正面朝房間(依模型朝向調整)
     m.updateMatrixWorld(true);
@@ -354,9 +365,7 @@ let catModel = null;
   cyl(0.5, 0.42, 0.22, C.bowl, { y: 0.11, parent: b });
   cyl(0.42, 0.42, 0.02, 0x8fe0ea, { y: 0.23, parent: b });
   const cat = new THREE.Group(); cat.position.y = 0.24; cat.rotation.y = -Math.PI * 0.7 + Math.PI / 6; b.add(cat);   // 再往牠的左邊轉 30°
-  const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
-  const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
-  loader.load('./cat.glb', (gltf) => {
+  loadGLB('cat', './cat.glb', (gltf) => {
     const m = gltf.scene;
     const box = new THREE.Box3().setFromObject(m);
     const size = box.getSize(new THREE.Vector3());
@@ -679,5 +688,10 @@ function loop() {
   renderer.render(scene, camera);
 }
 loop();
-setTimeout(() => document.getElementById('loading').classList.add('done'), 400);
+// 等兩個模型都載好再收掉 loading(最多等 6 秒,網路慢就先進房間、模型稍後出現)
+const loadT0 = performance.now();
+(function waitModels() {
+  if ((pending.size === 0 && performance.now() - loadT0 > 400) || performance.now() - loadT0 > 6000) loadingEl.classList.add('done');
+  else setTimeout(waitModels, 100);
+})();
 window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, frames: 0, camera, controls, THREE, catUniforms, get zoomT() { return zoomT; }, setZoom(v) { zoomGoal = v; } };
