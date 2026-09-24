@@ -383,8 +383,11 @@ let catModel = null;
 
 // ---------- 螢幕上的股票線圖 ----------
 const series = [];
-let px = 222;
-for (let i = 0; i < 120; i++) { px += (Math.random() - 0.48) * 1.6; series.push(px); }
+// 假股價:圍繞 260 做均值回歸的隨機漫步,永遠夾在 220~300 之間(之前是有向上偏移的隨機漫步,放久會飄到一千多)
+const PX_MIN = 220, PX_MAX = 300, PX_MID = 260;
+const stepPrice = (v, amp) => Math.max(PX_MIN, Math.min(PX_MAX, v + (Math.random() - 0.5) * amp + (PX_MID - v) * 0.02));
+let px = 250;
+for (let i = 0; i < 120; i++) { px = stepPrice(px, 3.2); series.push(px); }
 function drawScreen(t) {
   const g = screenCanvas.getContext('2d');
   const W = screenCanvas.width, Hh = screenCanvas.height;
@@ -429,7 +432,7 @@ let lastTick = 0;
 function tickSeries(now) {
   if (now - lastTick > 700) {
     lastTick = now;
-    const v = series[series.length - 1] + (Math.random() - 0.48) * 1.4;
+    const v = stepPrice(series[series.length - 1], 2.8);
     series.push(v); series.shift();
   }
 }
