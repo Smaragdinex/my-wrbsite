@@ -481,13 +481,13 @@ const SLIDES = [
   { icon: '📰', title: 'AI Reads the News', text: 'Every headline boiled down to three sentences, with a bullish / bearish / neutral call.', zh: 'AI 幫你讀新聞,三句摘要 + 偏多偏空' },
   { icon: '🎙️', title: 'Talk to the AI', text: 'Ask anything by voice, ChatGPT-style. Interrupt it any time, it listens.', zh: '語音對話,隨時可以打斷' },
   { icon: '🔔', title: 'Smart Alerts', text: 'Price targets, tomorrow\'s earnings and daily pick changes, pushed straight to your phone.', zh: '推播提醒:到價、明日財報、AI 換榜' },
-  { icon: '📲', title: 'Get the App', text: 'Free on the App Store.', zh: '', cta: true },
+  { icon: '<img src="/assets/icon-180.png" alt="CatInsight Stock">', title: 'Get the App', text: 'Free on the App Store.', zh: '', cta: true },
 ];
 const ui = document.getElementById('screen-ui');
 const uiTrack = ui.querySelector('.track'), uiNum = ui.querySelector('.num'), uiDots = ui.querySelector('.dots');
 SLIDES.forEach((sl, i) => {
   const el = document.createElement('div'); el.className = 'slide'; el.style.top = `${i * 100}%`;
-  el.innerHTML = `<div><div class="icon">${sl.icon}</div><h2>${sl.title}</h2><p>${sl.text}</p>` +
+  el.innerHTML = `<div><div class="icon${sl.icon.startsWith('<img') ? ' img' : ''}">${sl.icon}</div><h2>${sl.title}</h2><p>${sl.text}</p>` +
     (sl.zh ? `<div class="zh">${sl.zh}</div>` : '') +
     (sl.cta ? `<a class="store" href="https://apps.apple.com/app/id6763914049"> Download on the App Store</a><div class="soon">Android coming soon</div>` : '') + `</div>`;
   uiTrack.appendChild(el);
