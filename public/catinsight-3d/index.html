@@ -52,7 +52,8 @@
     box-shadow: 0 0 0 14px #2a1f4e, 0 0 0 18px #f08262, 0 30px 80px rgba(0,0,0,.6); }
   #game-ui .scr, #game-ui iframe { width: 960px; height: 544px; border: 0; border-radius: 14px; display: block; background: #111; }
   #game-ui .title { position: absolute; top: -70px; left: 0; right: 0; text-align: center; font-weight: 800; letter-spacing: 3px; color: #fbe3d8; font-size: 15px; }
-  #game-ui .hint { position: absolute; top: -46px; left: 0; right: 0; text-align: center; font-size: 13px; opacity: .55; }
+  #game-ui .hint { position: absolute; top: -46px; left: 0; right: 0; text-align: center; font-size: 13px; opacity: .8; }
+  #game-ui .hint b { color: #f08262; font-weight: 800; }
   body.game-on .cta { opacity: 0; pointer-events: none; }
   body.game-on .pill button.mid .mouse { display: none; }
   body.game-on .pill button.mid .home { display: block; }
@@ -111,7 +112,7 @@
   <div class="cab">
     <div class="title">CAT ARCADE</div>
     <div class="scr"></div>
-    <div class="hint">← → move · space jump · touch: joystick + buttons</div>
+    <div class="hint">← → move · <b>SHIFT</b> run (jump higher) · SPACE jump, hold for a big jump · touch: joystick + 🐾 run + jump</div>
   </div>
 </div>
 <div class="pill">
@@ -123,6 +124,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=60"></script>
+<script type="module" src="./room.mjs?v=61"></script>
 </body>
 </html>
