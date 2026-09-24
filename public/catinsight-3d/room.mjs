@@ -509,8 +509,28 @@ let touchY0 = null;
 ui.addEventListener('touchstart', (e) => { touchY0 = e.touches[0].clientY; }, { passive: true });
 ui.addEventListener('touchend', (e) => { if (touchY0 === null) return; const dy = touchY0 - e.changedTouches[0].clientY; touchY0 = null; if (Math.abs(dy) > 40) uiNav(dy > 0 ? 1 : -1); });
 // 底部控制列:‹ / › 等於滾輪往回 / 往前,中間鍵在房間 ↔ 螢幕之間切換
-document.getElementById('next').onclick = () => { if (uiOn) uiNav(1); else zoomGoal = 1; };
-document.getElementById('prev').onclick = () => { if (uiOn) uiNav(-1); else zoomGoal = 0; };
+// 在房間裡:點一下 = 像滾一格(前進 1/3),按住不放 = 持續慢慢靠近/退遠;在介紹頁:點一下翻一頁
+function holdButton(id, dir) {
+  const el = document.getElementById(id);
+  let timer = null, t0 = 0, moved = false;
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); el.setPointerCapture(e.pointerId);
+    t0 = performance.now(); moved = false;
+    if (uiOn) return;
+    timer = setInterval(() => {
+      if (performance.now() - t0 < 220) return;                     // 220ms 內放開算點一下
+      moved = true; zoomGoal = Math.max(0, Math.min(1, zoomGoal + dir * 0.02));   // 每 30ms 一小步 ≈ 1.5 秒走完
+    }, 30);
+  });
+  const release = () => {
+    if (timer) { clearInterval(timer); timer = null; }
+    if (uiOn) { uiNav(dir); return; }
+    if (!moved) zoomGoal = Math.max(0, Math.min(1, zoomGoal + dir * 0.34));
+  };
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', () => { if (timer) { clearInterval(timer); timer = null; } });
+}
+holdButton('next', 1); holdButton('prev', -1);
 document.getElementById('mid').onclick = () => { if (uiOn) hideUI(); else zoomGoal = zoomGoal >= 1 ? 0 : 1; };
 window.addEventListener('keydown', (e) => {
   if (!uiOn) return;
