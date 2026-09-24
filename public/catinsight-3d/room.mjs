@@ -481,7 +481,7 @@ const SLIDES = [
   { icon: '📲', title: 'Get the App', text: 'Free on the App Store.', zh: '', cta: true },
 ];
 const ui = document.getElementById('screen-ui');
-const uiTrack = ui.querySelector('.track'), uiNum = ui.querySelector('.num'), uiDots = ui.querySelector('.dots'), uiMore = ui.querySelector('.more');
+const uiTrack = ui.querySelector('.track'), uiNum = ui.querySelector('.num'), uiDots = ui.querySelector('.dots');
 SLIDES.forEach((sl, i) => {
   const el = document.createElement('div'); el.className = 'slide'; el.style.top = `${i * 100}%`;
   el.innerHTML = `<div><div class="icon">${sl.icon}</div><h2>${sl.title}</h2><p>${sl.text}</p>` +
@@ -496,7 +496,6 @@ function setSlide(i) {
   uiTrack.style.transform = `translateY(${-slide * 100}%)`;
   uiNum.textContent = `${String(slide + 1).padStart(2, '0')} / ${String(SLIDES.length).padStart(2, '0')}`;
   [...uiDots.children].forEach((d, k) => d.classList.toggle('on', k === slide));
-  uiMore.style.opacity = slide === SLIDES.length - 1 ? '0' : '';
 }
 function showUI() { uiOn = true; ui.classList.add('on'); document.body.classList.add('ui-on'); setSlide(0); navLockUntil = performance.now() + 900; }
 function hideUI() { uiOn = false; ui.classList.remove('on'); document.body.classList.remove('ui-on'); zoomGoal = 0; wheelLockUntil = performance.now() + 1000; }
@@ -509,7 +508,10 @@ ui.addEventListener('wheel', (e) => { e.preventDefault(); if (Math.abs(e.deltaY)
 let touchY0 = null;
 ui.addEventListener('touchstart', (e) => { touchY0 = e.touches[0].clientY; }, { passive: true });
 ui.addEventListener('touchend', (e) => { if (touchY0 === null) return; const dy = touchY0 - e.changedTouches[0].clientY; touchY0 = null; if (Math.abs(dy) > 40) uiNav(dy > 0 ? 1 : -1); });
-ui.querySelector('.back').onclick = hideUI;
+// 底部控制列:‹ / › 等於滾輪往回 / 往前,中間鍵在房間 ↔ 螢幕之間切換
+document.getElementById('next').onclick = () => { if (uiOn) uiNav(1); else zoomGoal = 1; };
+document.getElementById('prev').onclick = () => { if (uiOn) uiNav(-1); else zoomGoal = 0; };
+document.getElementById('mid').onclick = () => { if (uiOn) hideUI(); else zoomGoal = zoomGoal >= 1 ? 0 : 1; };
 window.addEventListener('keydown', (e) => {
   if (!uiOn) return;
   if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') uiNav(1);

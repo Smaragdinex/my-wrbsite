@@ -29,6 +29,22 @@
   .cta a { text-decoration: none; padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 14px; }
   .cta .primary { background: #ff6f91; color: #fff; }
   .cta .ghost { background: rgba(255,255,255,.12); color: #fff; }
+  /* 底部控制列:‹ 往回、› 往前(等於滾輪),中間是「進螢幕 / 回房間」 */
+  .pill {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px;
+    background: #fff; color: #2a1f4e; box-shadow: 0 12px 40px rgba(0,0,0,.35); z-index: 8;
+  }
+  .pill button {
+    width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: #2a1f4e;
+    font-size: 24px; cursor: pointer; display: grid; place-items: center; transition: background .15s;
+  }
+  .pill button:hover { background: #f1ecfb; }
+  .pill button.mid { color: #7b5cf5; }
+  .pill button.mid svg { width: 22px; height: 22px; }
+  .pill button.mid .home { display: none; }
+  body.ui-on .pill button.mid .mouse { display: none; }
+  body.ui-on .pill button.mid .home { display: block; }
   /* 螢幕介面:鏡頭定在螢幕後淡入,一頁一頁介紹功能 */
   #screen-ui {
     position: fixed; inset: 0; z-index: 6; background: #0b0e17; color: #fff;
@@ -53,9 +69,6 @@
   #screen-ui .dots { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
   #screen-ui .dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.22); cursor: pointer; transition: all .25s; }
   #screen-ui .dots i.on { background: #fff; height: 22px; border-radius: 4px; }
-  #screen-ui .more { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); font-size: 13px; opacity: .5; animation: nudge 1.6s ease-in-out infinite; }
-  #screen-ui .back { position: absolute; bottom: 20px; left: 26px; font-size: 13px; opacity: .55; cursor: pointer; background: none; border: 0; color: #fff; }
-  @keyframes nudge { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 6px); } }
   body.ui-on .cta { opacity: 0; pointer-events: none; }
   .cta { transition: opacity .4s; }
   @media (max-width: 640px) { .hint, .cta { display: none; } }
@@ -80,10 +93,16 @@
   <div class="track"></div>
   <div class="num"></div>
   <div class="dots"></div>
-  <div class="more">scroll ↓</div>
-  <button class="back">← back to the room</button>
+</div>
+<div class="pill">
+  <button id="prev" aria-label="back">‹</button>
+  <button id="mid" class="mid" aria-label="toggle screen">
+    <svg class="mouse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="6"/><line x1="12" y1="6.5" x2="12" y2="10"/></svg>
+    <svg class="home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 3l9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
+  </button>
+  <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=48"></script>
+<script type="module" src="./room.mjs?v=49"></script>
 </body>
 </html>
