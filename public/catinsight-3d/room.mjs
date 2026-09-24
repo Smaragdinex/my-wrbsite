@@ -195,16 +195,16 @@ let arcadeModel = null, arcadeAnchor = null, playTag = null;
     });
     a.add(m); arcadeModel = m;
     // 街機上方的漂浮標記:白色「▶ PLAY」牌子 + 橘色倒三角,會上下漂浮並永遠面向鏡頭;點它等於點街機
-    playTag = new THREE.Group(); playTag.position.set(0, ARCADE_H + 0.7, size.z * k * 0.85); a.add(playTag);   // 靠前、再高一點,避免和層架上的方塊疊在一起
+    playTag = new THREE.Group(); playTag.position.set(0, ARCADE_H + 0.55, size.z * k * 0.5); a.add(playTag);   // 對齊街機中心
     const tc = document.createElement('canvas'); tc.width = 512; tc.height = 256;
     const g = tc.getContext('2d');
     g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect(8, 8, 496, 240, 70); g.fill();
     g.fillStyle = '#7b5cf5'; g.font = '800 120px -apple-system, Helvetica, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText('▶ PLAY', 256, 136);
     const tt = new THREE.CanvasTexture(tc); tt.colorSpace = THREE.SRGBColorSpace; tt.anisotropy = 8;
-    const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.45), new THREE.MeshBasicMaterial({ map: tt, transparent: true, side: THREE.DoubleSide }));
-    tag.position.y = 0.36; playTag.add(tag);
-    const tri = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.26, 3), new THREE.MeshStandardMaterial({ color: 0xf08262, roughness: 0.6, flatShading: true }));
+    const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.3), new THREE.MeshBasicMaterial({ map: tt, transparent: true, side: THREE.DoubleSide }));
+    tag.position.y = 0.27; playTag.add(tag);
+    const tri = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.18, 3), new THREE.MeshStandardMaterial({ color: 0xf08262, roughness: 0.6, flatShading: true }));
     tri.rotation.x = Math.PI; tri.castShadow = true; playTag.add(tri);
     // 街機螢幕的位置(給鏡頭飛過去用):正面、離地約 1.75(螢幕中心)
     arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.75, size.z * k + 0.02); a.add(arcadeAnchor);
@@ -668,7 +668,7 @@ function loop() {
   // 仙人掌彎曲:把時間餵給每根的著色器
   for (const lf of plantLeaves) lf.userData.uni.uTime.value = t;
   if (playTag) {                                                          // PLAY 標記:上下漂浮 + 面向鏡頭(只轉 y 軸)
-    playTag.position.y = ARCADE_H + 0.7 + 0.1 * Math.sin(t * 2.2);
+    playTag.position.y = ARCADE_H + 0.55 + 0.08 * Math.sin(t * 2.2);
     playTag.getWorldPosition(tagPos); tagLook.set(camera.position.x, tagPos.y, camera.position.z);
     playTag.lookAt(tagLook);
     playTag.children[1].rotation.y = t * 1.5;                             // 倒三角自轉
