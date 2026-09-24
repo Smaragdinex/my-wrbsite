@@ -173,7 +173,7 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
 
 // ---------- 街機(Meshy GLB:arcade.glb,Draco 壓縮 + 貼圖 1024)----------
 const ARCADE_H = 2.5;                                            // 機台高度
-let arcadeModel = null;
+let arcadeModel = null, arcadeAnchor = null;
 {
   const a = group(-S / 2 + 0.12 + 0.66, 0, L.z + T / 2);         // 最左邊、背面貼牆
   const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
@@ -194,6 +194,8 @@ let arcadeModel = null;
       o.material.side = THREE.FrontSide; o.material.metalness = 0;
     });
     a.add(m); arcadeModel = m;
+    // 街機螢幕的位置(給鏡頭飛過去用):正面、離地約 1.45
+    arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.45, size.z * k + 0.02); a.add(arcadeAnchor);
     if (window.__room) window.__room.arcade = m;
   });
 }
@@ -438,7 +440,7 @@ function tickSeries(now) {
 }
 
 // ---------- 滾輪:往上滾鏡頭慢慢飛到電腦螢幕前,往下滾退回房間 ----------
-let zoomT = 0, zoomGoal = 0;
+let zoomT = 0, zoomGoal = 0, focusArcade = false;   // focusArcade:這次是飛向街機(而不是電腦螢幕)
 const orbitPos = new THREE.Vector3(), orbitTarget = new THREE.Vector3();
 const scrPos = new THREE.Vector3(), scrNormal = new THREE.Vector3(), endPos = new THREE.Vector3(), lookTgt = new THREE.Vector3();
 canvas.addEventListener('wheel', (e) => {
@@ -449,7 +451,7 @@ canvas.addEventListener('wheel', (e) => {
 function updateZoom(dt) {
   zoomT += (zoomGoal - zoomT) * Math.min(1, dt * 2.5);
   if (zoomT < 0.002) {
-    zoomT = 0;
+    zoomT = 0; focusArcade = false;
     controls.enabled = true; controls.autoRotate = true;
     // 自動旋轉到視角邊界就反向,左右來回
     const az = controls.getAzimuthalAngle(), sp = controls.autoRotateSpeed;
@@ -461,15 +463,22 @@ function updateZoom(dt) {
   }
   controls.enabled = false; controls.autoRotate = false;
   const e = zoomT * zoomT * (3 - 2 * zoomT);
-  screenMesh.getWorldPosition(scrPos);
-  screenMesh.getWorldDirection(scrNormal);                                 // 平面 +z = 法線,朝向房間
   const half = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-  const dist = Math.max(0.43 / half, 0.71 / (half * camera.aspect)) * 1.04; // 讓整個螢幕剛好填滿畫面
+  let dist;
+  if (focusArcade && arcadeAnchor) {
+    arcadeAnchor.getWorldPosition(scrPos);
+    arcadeAnchor.getWorldDirection(scrNormal);                             // 街機正面朝向
+    dist = 1.7;
+  } else {
+    screenMesh.getWorldPosition(scrPos);
+    screenMesh.getWorldDirection(scrNormal);                               // 平面 +z = 法線,朝向房間
+    dist = Math.max(0.43 / half, 0.71 / (half * camera.aspect)) * 1.04;    // 讓整個螢幕剛好填滿畫面
+  }
   endPos.copy(scrPos).addScaledVector(scrNormal, dist);
   camera.position.lerpVectors(orbitPos, endPos, e);
   lookTgt.lerpVectors(orbitTarget, scrPos, e);
   camera.lookAt(lookTgt);
-  if (zoomGoal >= 1 && zoomT > 0.985 && !uiOn) showUI();                    // 鏡頭到位 → 螢幕介面淡入
+  if (zoomGoal >= 1 && zoomT > 0.985) { if (focusArcade) { if (!gameOn) showGame(); } else if (!uiOn) showUI(); }   // 鏡頭到位 → 淡入介面 / 遊戲
 }
 
 // ---------- 螢幕介面:鏡頭定在螢幕後淡入,滾輪一頁一頁介紹功能;第一頁再往上滾 → 退回房間 ----------
@@ -519,7 +528,7 @@ function holdButton(id, dir) {
   el.addEventListener('pointerdown', (e) => {
     e.preventDefault(); el.setPointerCapture(e.pointerId);
     t0 = performance.now(); moved = false;
-    if (uiOn) return;
+    if (uiOn || gameOn) return;
     timer = setInterval(() => {
       if (performance.now() - t0 < 220) return;                     // 220ms 內放開算點一下
       moved = true; zoomGoal = Math.max(0, Math.min(1, zoomGoal + dir * 0.02));   // 每 30ms 一小步 ≈ 1.5 秒走完
@@ -527,6 +536,7 @@ function holdButton(id, dir) {
   });
   const release = () => {
     if (timer) { clearInterval(timer); timer = null; }
+    if (gameOn) { if (dir < 0) hideGame(); return; }
     if (uiOn) { uiNav(dir); return; }
     if (!moved) zoomGoal = Math.max(0, Math.min(1, zoomGoal + dir * 0.34));
   };
@@ -534,8 +544,9 @@ function holdButton(id, dir) {
   el.addEventListener('pointercancel', () => { if (timer) { clearInterval(timer); timer = null; } });
 }
 holdButton('next', 1); holdButton('prev', -1);
-document.getElementById('mid').onclick = () => { if (uiOn) hideUI(); else zoomGoal = zoomGoal >= 1 ? 0 : 1; };
+document.getElementById('mid').onclick = () => { if (gameOn) hideGame(); else if (uiOn) hideUI(); else { focusArcade = false; zoomGoal = zoomGoal >= 1 ? 0 : 1; } };
 window.addEventListener('keydown', (e) => {
+  if (gameOn) { if (e.key === 'Escape') hideGame(); return; }
   if (!uiOn) return;
   if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') uiNav(1);
   else if (e.key === 'ArrowUp' || e.key === 'PageUp') uiNav(-1);
@@ -549,8 +560,30 @@ canvas.addEventListener('pointerup', (e) => {
   pd = null;
   ndc.set((e.clientX / canvas.clientWidth) * 2 - 1, -(e.clientY / canvas.clientHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
-  if (raycaster.intersectObject(screenMesh).length) zoomGoal = 1;
+  if (raycaster.intersectObject(screenMesh).length) { focusArcade = false; zoomGoal = 1; }
+  else if (arcadeModel && raycaster.intersectObject(arcadeModel, true).length) { focusArcade = true; zoomGoal = 1; }
 });
+
+// ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入貓咪瑪利歐小遊戲(cat-game?minigame=1) ----------
+const GAME_URL = 'https://smaragdinex.github.io/cat-game/?minigame=1';
+const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
+let gameFrame = null, gameOn = false;
+function fitGame() { const k = Math.min((innerWidth - 40) / 960, (innerHeight - 170) / 544, 1.15); gameCab.style.transform = `scale(${k})`; }
+window.addEventListener('resize', fitGame);
+function showGame() {
+  gameOn = true;
+  gameFrame = document.createElement('iframe'); gameFrame.src = GAME_URL; gameFrame.allow = 'autoplay'; gameFrame.title = 'Cat Arcade';
+  gameScr.appendChild(gameFrame); fitGame();
+  gameUI.classList.add('on'); document.body.classList.add('game-on');
+  setTimeout(() => { try { gameFrame.contentWindow.focus(); } catch (e) {} }, 400);   // 鍵盤直接可玩
+}
+function hideGame() {
+  gameOn = false; gameUI.classList.remove('on'); document.body.classList.remove('game-on');
+  if (gameFrame) { gameFrame.remove(); gameFrame = null; }                           // 移除 iframe,音樂一起停
+  zoomGoal = 0; wheelLockUntil = performance.now() + 1000;
+}
+gameUI.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
+window.addEventListener('message', (e) => { if (e.data && e.data.type === 'catgame-finished') console.log('cat arcade: cleared!'); });
 
 // ---------- 進場動畫 + 迴圈 ----------
 animated.forEach((g, i) => { g.userData.baseScale = g.scale.clone(); g.scale.setScalar(0.001); g.userData.delay = 0.15 + i * 0.07; });

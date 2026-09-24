@@ -45,6 +45,17 @@
   .pill button.mid .home { display: none; }
   body.ui-on .pill button.mid .mouse { display: none; }
   body.ui-on .pill button.mid .home { display: block; }
+  /* 街機遊戲:點街機後淡入,中間是嵌入貓咪瑪利歐小遊戲的 iframe(960×544,依視窗縮放) */
+  #game-ui { position: fixed; inset: 0; z-index: 6; background: #0b0e17; opacity: 0; pointer-events: none; transition: opacity .55s ease; display: grid; place-items: center; }
+  #game-ui.on { opacity: 1; pointer-events: auto; }
+  #game-ui .cab { width: 960px; height: 544px; position: relative; transform-origin: center; border-radius: 14px; background: #000;
+    box-shadow: 0 0 0 14px #2a1f4e, 0 0 0 18px #f08262, 0 30px 80px rgba(0,0,0,.6); }
+  #game-ui .scr, #game-ui iframe { width: 960px; height: 544px; border: 0; border-radius: 14px; display: block; background: #111; }
+  #game-ui .title { position: absolute; top: -70px; left: 0; right: 0; text-align: center; font-weight: 800; letter-spacing: 3px; color: #fbe3d8; font-size: 15px; }
+  #game-ui .hint { position: absolute; top: -46px; left: 0; right: 0; text-align: center; font-size: 13px; opacity: .55; }
+  body.game-on .cta { opacity: 0; pointer-events: none; }
+  body.game-on .pill button.mid .mouse { display: none; }
+  body.game-on .pill button.mid .home { display: block; }
   /* 螢幕介面:鏡頭定在螢幕後淡入,一頁一頁介紹功能 */
   #screen-ui {
     position: fixed; inset: 0; z-index: 6; background: #0b0e17; color: #fff;
@@ -96,6 +107,13 @@
   <div class="num"></div>
   <div class="dots"></div>
 </div>
+<div id="game-ui">
+  <div class="cab">
+    <div class="title">CAT ARCADE</div>
+    <div class="scr"></div>
+    <div class="hint">← → move · space jump · touch: joystick + buttons</div>
+  </div>
+</div>
 <div class="pill">
   <button id="prev" aria-label="back">‹</button>
   <button id="mid" class="mid" aria-label="toggle screen">
@@ -105,6 +123,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=52"></script>
+<script type="module" src="./room.mjs?v=54"></script>
 </body>
 </html>
