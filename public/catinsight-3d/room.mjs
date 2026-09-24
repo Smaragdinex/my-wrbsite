@@ -194,8 +194,8 @@ let arcadeModel = null, arcadeAnchor = null;
       o.material.side = THREE.FrontSide; o.material.metalness = 0;
     });
     a.add(m); arcadeModel = m;
-    // 街機螢幕的位置(給鏡頭飛過去用):正面、離地約 1.45
-    arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.45, size.z * k + 0.02); a.add(arcadeAnchor);
+    // 街機螢幕的位置(給鏡頭飛過去用):正面、離地約 1.75(螢幕中心)
+    arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.75, size.z * k + 0.02); a.add(arcadeAnchor);
     if (window.__room) window.__room.arcade = m;
   });
 }
@@ -565,7 +565,7 @@ canvas.addEventListener('pointerup', (e) => {
 });
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入貓咪瑪利歐小遊戲(cat-game?minigame=1) ----------
-const GAME_URL = 'https://smaragdinex.github.io/cat-game/?minigame=1';
+const GAME_URL = 'https://smaragdinex.github.io/cat-game/?minigame=1&v=2';   // v 參數用來避開 GitHub Pages 對 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 function fitGame() { const k = Math.min((innerWidth - 40) / 960, (innerHeight - 170) / 544, 1.15); gameCab.style.transform = `scale(${k})`; }
