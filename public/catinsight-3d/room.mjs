@@ -173,7 +173,8 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
 
 // ---------- 街機(Meshy GLB:arcade.glb,Draco 壓縮 + 貼圖 1024)----------
 const ARCADE_H = 2.5;                                            // 機台高度
-let arcadeModel = null, arcadeAnchor = null, playTag = null;
+let arcadeModel = null, arcadeAnchor = null, playTag = null, arcadeScreen = null, arcadeScreenTex = null;
+const arcadeCanvas = document.createElement('canvas'); arcadeCanvas.width = 520; arcadeCanvas.height = 385;
 // 共用的 GLB 載入器:Draco 解碼器只載一次並預先載入;載入狀態顯示在開頭的 loading 文字,失敗時印出原因(不然模型不見了也不知道為什麼)
 const loadingEl = document.getElementById('loading');
 const pending = new Set();
@@ -217,6 +218,11 @@ function loadGLB(name, url, onLoad) {
     tag.position.y = 0.27; playTag.add(tag);
     const tri = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.18, 3), new THREE.MeshStandardMaterial({ color: 0xf08262, roughness: 0.6, flatShading: true }));
     tri.rotation.x = Math.PI; tri.castShadow = true; playTag.add(tri);
+    // 街機螢幕:模型的螢幕貼圖是空白的,蓋一片會動的 canvas(吸引模式畫面)。位置/傾角是用射線量模型量出來的:
+    // 中心約 (0, 1.82, 1.01)、法線 (0, 0.34, 0.94) → 往後仰 20°
+    arcadeScreenTex = new THREE.CanvasTexture(arcadeCanvas); arcadeScreenTex.colorSpace = THREE.SRGBColorSpace; arcadeScreenTex.anisotropy = 8;
+    arcadeScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.72), new THREE.MeshBasicMaterial({ map: arcadeScreenTex, transparent: true, toneMapped: false }));
+    arcadeScreen.position.set(0, 1.82, 1.022); arcadeScreen.rotation.x = -0.35; a.add(arcadeScreen);
     // 街機螢幕的位置(給鏡頭飛過去用):正面、離地約 1.75(螢幕中心)
     arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.75, size.z * k + 0.02); a.add(arcadeAnchor);
     if (window.__room) window.__room.arcade = m;
@@ -404,6 +410,46 @@ let catModel = null;
   animated.push(cat);
 }
 
+// ---------- 街機螢幕的吸引模式畫面(像素風:天空、雲、山丘、磚塊地板捲動、橘貓、閃爍的 PRESS PLAY)----------
+function drawArcadeScreen(t) {
+  const g = arcadeCanvas.getContext('2d'), W = arcadeCanvas.width, H = arcadeCanvas.height;
+  g.clearRect(0, 0, W, H);
+  g.save();
+  g.beginPath(); g.roundRect(0, 0, W, H, 34); g.clip();                    // 圓角螢幕
+  // 天空
+  const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#5aa7ff'); sky.addColorStop(1, '#9fd2ff');
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  const px = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); };
+  // 雲(慢慢飄)
+  const cloud = (x, y) => { px(x, y, 60, 18, '#fff'); px(x + 12, y - 12, 36, 14, '#fff'); px(x - 8, y + 6, 76, 12, '#fff'); };
+  cloud(((t * 8) % (W + 120)) - 60, 48); cloud(((t * 8 + 260) % (W + 120)) - 60, 92); cloud(((t * 8 + 420) % (W + 120)) - 60, 30);
+  // 山丘
+  g.fillStyle = '#5fcf6a'; g.beginPath(); g.moveTo(-40, 300); g.quadraticCurveTo(80, 170, 200, 300); g.fill();
+  g.beginPath(); g.moveTo(300, 300); g.quadraticCurveTo(420, 200, 540, 300); g.fill();
+  // 問號磚
+  const scroll = (t * 60) % 44;
+  for (const bx of [150, 194, 238]) { px(bx, 150, 40, 40, '#e8923a'); px(bx + 4, 154, 32, 32, '#f7b24a'); g.fillStyle = '#7a3b12'; g.font = '900 26px Menlo, monospace'; g.fillText('?', bx + 11, 182); }
+  // 地板磚(往左捲動)
+  for (let x = -44 - scroll; x < W + 44; x += 44) { px(x, 300, 42, 40, '#c8772d'); px(x + 3, 303, 36, 34, '#e39a4a'); px(x + 3, 303, 36, 6, '#f2c07a'); px(x, 340, 42, 45, '#a85c1d'); px(x + 3, 343, 36, 40, '#c8772d'); }
+  // 橘貓(8-bit,原地小跑跳)
+  const bob = Math.abs(Math.sin(t * 6)) * 6; const cx = 70, cy = 300 - bob;
+  px(cx, cy - 34, 52, 26, '#f29a4a'); px(cx + 36, cy - 52, 24, 22, '#f29a4a');                     // 身體、頭
+  px(cx + 38, cy - 60, 6, 8, '#f29a4a'); px(cx + 52, cy - 60, 6, 8, '#f29a4a');                    // 耳朵
+  px(cx + 46, cy - 46, 4, 4, '#222'); px(cx + 55, cy - 46, 4, 4, '#222');                          // 眼睛
+  px(cx + 4, cy - 8, 8, 8, '#f29a4a'); px(cx + 18, cy - 8, 8, 8, '#f29a4a'); px(cx + 32, cy - 8, 8, 8, '#f29a4a'); px(cx + 44, cy - 8, 8, 8, '#f29a4a');   // 腳
+  px(cx - 10, cy - 44, 8, 14, '#f29a4a'); px(cx - 4, cy - 34, 8, 6, '#f29a4a');                    // 尾巴
+  px(cx + 4, cy - 20, 24, 10, '#fbe3d8');                                                            // 胸口
+  // 標題 + 閃爍提示
+  g.textAlign = 'center';
+  g.fillStyle = 'rgba(0,0,0,.35)'; g.font = '900 46px Menlo, monospace'; g.fillText('CAT ARCADE', W / 2 + 3, 232 + 3);
+  g.fillStyle = '#fff'; g.fillText('CAT ARCADE', W / 2, 232);
+  if (Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#fff36b'; g.font = '900 22px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2, 268); }
+  g.fillStyle = 'rgba(255,255,255,.7)'; g.font = '700 13px Menlo, monospace'; g.fillText('1 PLAYER · INSERT COIN', W / 2, 372);
+  g.restore();
+  // 掃描線,有點 CRT 味
+  g.fillStyle = 'rgba(0,0,0,.10)'; for (let y = 0; y < H; y += 4) g.fillRect(0, y, W, 2);
+}
+
 // ---------- 螢幕上的股票線圖 ----------
 const series = [];
 // 假股價:圍繞 260 做均值回歸的隨機漫步,永遠夾在 220~300 之間(之前是有向上偏移的隨機漫步,放久會飄到一千多)
@@ -583,7 +629,7 @@ canvas.addEventListener('pointerup', (e) => {
   ndc.set((e.clientX / canvas.clientWidth) * 2 - 1, -(e.clientY / canvas.clientHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   if (raycaster.intersectObject(screenMesh).length) { focusArcade = false; zoomGoal = 1; }
-  else if ((playTag && raycaster.intersectObject(playTag, true).length) || (arcadeModel && raycaster.intersectObject(arcadeModel, true).length)) { focusArcade = true; zoomGoal = 1; }
+  else if ((playTag && raycaster.intersectObject(playTag, true).length) || (arcadeScreen && raycaster.intersectObject(arcadeScreen).length) || (arcadeModel && raycaster.intersectObject(arcadeModel, true).length)) { focusArcade = true; zoomGoal = 1; }
 });
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入貓咪瑪利歐小遊戲(cat-game?minigame=1) ----------
@@ -630,6 +676,7 @@ function resize() {
   }
   if (Math.abs(camera.aspect - lastAspect) > 0.01) { lastAspect = camera.aspect; fitCamera(camera.aspect); }
 }
+let frameNo = 0;
 function loop() {
   requestAnimationFrame(loop);
   if (window.__room) window.__room.frames++;
@@ -684,6 +731,7 @@ function loop() {
   }
   tickSeries(performance.now());
   drawScreen(t);
+  if (arcadeScreen && (frameNo++ % 2 === 0)) { drawArcadeScreen(t); arcadeScreenTex.needsUpdate = true; }   // 街機螢幕每 2 幀更新
   updateZoom(dt);
   renderer.render(scene, camera);
 }
