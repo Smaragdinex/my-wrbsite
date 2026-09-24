@@ -6,7 +6,7 @@ import SiteFooter from '../components/SiteFooter.astro';
 import '../styles/subpage.css';
 
 // brand/brandAccent/icon 只給網站層級的頁面用;不傳就沿用 SubpageNav 的預設
-const { title, current, brand, brandAccent, icon } = Astro.props;
+const { title, current, brand, brandAccent, icon, home } = Astro.props;
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -20,7 +20,7 @@ const { title, current, brand, brandAccent, icon } = Astro.props;
           crossorigin="anonymous"></script>
 </head>
 <body>
-  <SubpageNav brand={brand} brandAccent={brandAccent} icon={icon} />
+  <SubpageNav brand={brand} brandAccent={brandAccent} icon={icon} home={home} />
   <slot />
   <SiteFooter current={current} />
 </body>

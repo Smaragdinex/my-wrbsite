@@ -3,13 +3,15 @@
 //
 // 預設值是 CatInsight Stock —— 既有的子頁都是那個 App 的,不傳參數行為不變。
 // 網站層級的頁面(例如站台隱私政策)要傳自己的品牌,不然會掛著別的 App 名字。
+// home:logo 與「← Home」要連去哪。CatInsight 的子頁(privacy / support)連回 3D 房間,其他維持首頁。
 const {
   brand = 'CatInsight',
   brandAccent = 'Stock',
   icon = 'assets/icon-180.png',
+  home = 'index.html',
 } = Astro.props;
 ---
 <nav><div class="nav">
-  <a href="index.html" class="logo"><img src={icon} alt="">{brand} <span class="grad">{brandAccent}</span></a>
-  <a href="index.html" class="back">← Home</a>
+  <a href={home} class="logo"><img src={icon} alt="">{brand} <span class="grad">{brandAccent}</span></a>
+  <a href={home} class="back">← Home</a>
 </div></nav>
