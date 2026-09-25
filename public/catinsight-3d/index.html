@@ -144,7 +144,9 @@
   #screen-ui .notif .ic { width: 34px; height: 34px; border-radius: 9px; background: #2a2352; display: grid; place-items: center; font-size: 18px; }
   #screen-ui .notif b { font-size: 11px; opacity: .6; } #screen-ui .notif .t { font-weight: 700; } #screen-ui .notif .m { opacity: .8; font-size: 12px; margin-top: 2px; }
   #screen-ui .notif .time { font-size: 11px; opacity: .5; }
-  #screen-ui .ttl { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; margin-bottom: 16px; }
+  #screen-ui .ttl { display: flex; align-items: center; gap: 26px; flex-wrap: nowrap; margin-bottom: 16px; }
+  #screen-ui .slide-app .s { grid-template-columns: 54% 46%; }
+  #screen-ui .slide-app h2 { font-size: clamp(30px, 3.4vw, 44px); white-space: nowrap; }
   #screen-ui .ttl h2 { margin-bottom: 0; }
   #screen-ui .h2icon { width: 232px; height: 232px; border-radius: 58px; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
   #screen-ui .dl .qr { text-align: center; padding: 22px 22px 16px; border-radius: 26px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09); box-shadow: 0 30px 80px rgba(0,0,0,.45); }
@@ -207,6 +209,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=82"></script>
+<script type="module" src="./room.mjs?v=83"></script>
 </body>
 </html>
