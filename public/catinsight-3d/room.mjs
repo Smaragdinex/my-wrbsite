@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { buildSlides, activateSlide, deactivate } from './intro.mjs?v=3';
 
 // ---------- 配色(參考圖) ----------
 const C = {
@@ -550,38 +551,23 @@ function updateZoom(dt) {
 }
 
 // ---------- 螢幕介面:鏡頭定在螢幕後淡入,滾輪一頁一頁介紹功能;第一頁再往上滾 → 退回房間 ----------
-const SLIDES = [
-  { icon: '🐱', title: 'CatInsight <span class="green">Stock</span>', text: 'AI that reads the market for you. US and Taiwan stocks, one app.', zh: 'AI 幫你看股票 · 美股與台股' },
-  { icon: '✨', title: 'Daily AI Picks', text: 'A ranking model re-scores the whole market every day and surfaces clear buy / sell signals.', zh: '每日 AI 精選,自動換榜' },
-  { icon: '📈', title: 'Pro Charts', text: '1D · 1W · 1M · 3M · YTD · 1Y, with a crosshair to check any price at a glance.', zh: '專業線圖,十字線查價' },
-  { icon: '🚀', title: 'Top Gainers', text: 'See the biggest movers, sorted by 1D, 1Y or year-to-date.', zh: '漲幅排行 1D / 1Y / YTD' },
-  { icon: '📰', title: 'AI Reads the News', text: 'Every headline boiled down to three sentences, with a bullish / bearish / neutral call.', zh: 'AI 幫你讀新聞,三句摘要 + 偏多偏空' },
-  { icon: '🎙️', title: 'Talk to the AI', text: 'Ask anything by voice, ChatGPT-style. Interrupt it any time, it listens.', zh: '語音對話,隨時可以打斷' },
-  { icon: '🔔', title: 'Smart Alerts', text: 'Price targets, tomorrow\'s earnings and daily pick changes, pushed straight to your phone.', zh: '推播提醒:到價、明日財報、AI 換榜' },
-  { icon: '<img src="/assets/icon-180.png" alt="CatInsight Stock">', title: 'Get the App', text: 'Free on the App Store.', zh: '', cta: true },
-];
 const ui = document.getElementById('screen-ui');
 const uiTrack = ui.querySelector('.track'), uiNum = ui.querySelector('.num'), uiDots = ui.querySelector('.dots');
-SLIDES.forEach((sl, i) => {
-  const el = document.createElement('div'); el.className = 'slide'; el.style.top = `${i * 100}%`;
-  el.innerHTML = `<div><div class="icon${sl.icon.startsWith('<img') ? ' img' : ''}">${sl.icon}</div><h2>${sl.title}</h2><p>${sl.text}</p>` +
-    (sl.zh ? `<div class="zh">${sl.zh}</div>` : '') +
-    (sl.cta ? `<a class="store" href="https://apps.apple.com/app/id6763914049"> Download on the App Store</a><div class="soon">Android coming soon</div>` : '') + `</div>`;
-  uiTrack.appendChild(el);
-  const d = document.createElement('i'); d.onclick = () => setSlide(i); uiDots.appendChild(d);
-});
+const SLIDE_COUNT = buildSlides(uiTrack);                       // 頁面內容與 widget 在 intro.mjs
+for (let i = 0; i < SLIDE_COUNT; i++) { const d = document.createElement('i'); d.onclick = () => setSlide(i); uiDots.appendChild(d); }
 let slide = 0, uiOn = false, navLockUntil = 0, wheelLockUntil = 0;
 function setSlide(i) {
-  slide = Math.max(0, Math.min(SLIDES.length - 1, i));
+  slide = Math.max(0, Math.min(SLIDE_COUNT - 1, i));
   uiTrack.style.transform = `translateY(${-slide * 100}%)`;
-  uiNum.textContent = `${String(slide + 1).padStart(2, '0')} / ${String(SLIDES.length).padStart(2, '0')}`;
+  uiNum.textContent = `${String(slide + 1).padStart(2, '0')} / ${String(SLIDE_COUNT).padStart(2, '0')}`;
   [...uiDots.children].forEach((d, k) => d.classList.toggle('on', k === slide));
+  activateSlide(slide);                                          // 只跑目前這頁的 widget 動畫
 }
 function showUI() { uiOn = true; ui.classList.add('on'); document.body.classList.add('ui-on'); setSlide(0); navLockUntil = performance.now() + 900; }
-function hideUI() { uiOn = false; ui.classList.remove('on'); document.body.classList.remove('ui-on'); zoomGoal = 0; wheelLockUntil = performance.now() + 1000; }
+function hideUI() { uiOn = false; ui.classList.remove('on'); document.body.classList.remove('ui-on'); zoomGoal = 0; wheelLockUntil = performance.now() + 1000; deactivate(); }
 function uiNav(dir) {
   const now = performance.now(); if (now < navLockUntil) return; navLockUntil = now + 700;
-  if (dir > 0) { if (slide < SLIDES.length - 1) setSlide(slide + 1); }
+  if (dir > 0) { if (slide < SLIDE_COUNT - 1) setSlide(slide + 1); }
   else { if (slide > 0) setSlide(slide - 1); else hideUI(); }
 }
 ui.addEventListener('wheel', (e) => { e.preventDefault(); if (Math.abs(e.deltaY) < 6) return; uiNav(e.deltaY > 0 ? 1 : -1); }, { passive: false });
