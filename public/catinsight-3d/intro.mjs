@@ -44,7 +44,8 @@ export function buildSlides(track) {
         <div class="icon img"><img src="/assets/icon-180.png" alt="CatInsight Stock"></div>
         <h2>${sl.title}</h2><p>${sl.text}</p><div class="zh">${sl.zh}</div></div>`;
     } else {
-      el.innerHTML = `<div class="s"><div class="txt"><div class="eyebrow">${String(i).padStart(2, '0')} · ${sl.eyebrow}</div><h2>${sl.title}</h2><p>${sl.text}</p><div class="zh">${sl.zh}</div>` +
+      const title = sl.cta ? `${sl.title}<img class="h2icon" src="/assets/icon-180.png" alt="">` : sl.title;   // 下載頁:貓咪 icon 放在標題右邊
+      el.innerHTML = `<div class="s"><div class="txt"><div class="eyebrow">${String(i).padStart(2, '0')} · ${sl.eyebrow}</div><h2>${title}</h2><p>${sl.text}</p><div class="zh">${sl.zh}</div>` +
         (sl.cta ? `<a class="store" href="${APP_STORE}"> Download on the App Store</a>` : '') +
         `</div><div class="wg"><div class="glow"></div><div class="wgin"></div></div></div>`;
     }
@@ -290,12 +291,12 @@ WIDGETS.alerts = (host) => {
 
 // 8) 下載:App icon + QR code(掃了直接到 App Store)
 WIDGETS.app = (host) => {
-  const box = h('div', 'dl', `<div class="icon img"><img src="/assets/icon-180.png" alt="CatInsight Stock"></div><div class="qr"><canvas></canvas><div class="muted">Scan to download</div></div>`);
+  const box = h('div', 'dl', `<div class="qr"><canvas></canvas><div class="muted">Scan to download</div></div>`);   // 只放一個大 QR code
   host.appendChild(box);
   const c = box.querySelector('canvas');
   try {                                                             // qrcode-generator(index.html 用 <script> 載入,全域 qrcode)
     const qr = window.qrcode(0, 'M'); qr.addData(APP_STORE); qr.make();
-    const n = qr.getModuleCount(), size = 168, cell = size / (n + 2);
+    const n = qr.getModuleCount(), size = Math.min(300, Math.max(180, Math.round(innerWidth * 0.2))), cell = size / (n + 2);
     const dpr = Math.min(devicePixelRatio || 1, 2); c.width = size * dpr; c.height = size * dpr; c.style.width = c.style.height = `${size}px`;
     const g = c.getContext('2d'); g.scale(dpr, dpr); g.fillStyle = '#fff';
     for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) if (qr.isDark(r, col)) g.fillRect((col + 1) * cell, (r + 1) * cell, cell + 0.4, cell + 0.4);
