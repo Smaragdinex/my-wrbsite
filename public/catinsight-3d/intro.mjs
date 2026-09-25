@@ -44,8 +44,9 @@ export function buildSlides(track) {
         <div class="icon img"><img src="/assets/icon-180.png" alt="CatInsight Stock"></div>
         <h2>${sl.title}</h2><p>${sl.text}</p><div class="zh">${sl.zh}</div></div>`;
     } else {
-      const title = sl.cta ? `${sl.title}<img class="h2icon" src="/assets/icon-180.png" alt="">` : sl.title;   // 下載頁:貓咪 icon 放在標題右邊
-      el.innerHTML = `<div class="s"><div class="txt"><div class="eyebrow">${String(i).padStart(2, '0')} · ${sl.eyebrow}</div><h2>${title}</h2><p>${sl.text}</p><div class="zh">${sl.zh}</div>` +
+      // 下載頁:大顆貓咪 icon 放在標題右邊(同一列)
+      const titleHtml = sl.cta ? `<div class="ttl"><h2>${sl.title}</h2><img class="h2icon" src="/assets/icon-180.png" alt=""></div>` : `<h2>${sl.title}</h2>`;
+      el.innerHTML = `<div class="s"><div class="txt"><div class="eyebrow">${String(i).padStart(2, '0')} · ${sl.eyebrow}</div>${titleHtml}<p>${sl.text}</p><div class="zh">${sl.zh}</div>` +
         (sl.cta ? `<a class="store" href="${APP_STORE}"> Download on the App Store</a>` : '') +
         `</div><div class="wg"><div class="glow"></div><div class="wgin"></div></div></div>`;
     }

@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { buildSlides, activateSlide, deactivate } from './intro.mjs?v=6';
+import { buildSlides, activateSlide, deactivate } from './intro.mjs?v=7';
 
 // ---------- 配色(參考圖) ----------
 const C = {
