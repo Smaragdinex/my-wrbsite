@@ -10,7 +10,7 @@ export const SLIDES = [
   { key: 'chart',   color: '#4be07a', eyebrow: 'CHARTS',     title: 'Pro Charts',        text: '1D · 1W · 1M · 3M · YTD · 1Y, with a crosshair to check any price at a glance.', zh: '專業線圖,十字線查價 · 試著把滑鼠移到圖上' },
   { key: 'gainers', color: '#ff7a59', eyebrow: 'MOVERS',     title: 'Top Gainers',       text: 'See the biggest movers, sorted by 1D, 1Y or year-to-date.', zh: '漲幅排行 1D / 1Y / YTD' },
   { key: 'news',    color: '#7b9cff', eyebrow: 'NEWS',       title: 'AI Reads the News', text: 'Every headline boiled down to three sentences, with a bullish / bearish / neutral call.', zh: 'AI 幫你讀新聞,三句摘要 + 偏多偏空' },
-  { key: 'voice',   color: '#1ed760', eyebrow: 'VOICE',      title: 'Talk to the AI',    text: 'Ask anything by voice, ChatGPT-style. Interrupt it any time, it listens.', zh: '語音對話,隨時可以打斷' },
+  { key: 'voice',   color: '#8b7cff', eyebrow: 'VOICE',      title: 'Talk to the AI',    text: 'Ask anything by voice, ChatGPT-style. Interrupt it any time, it listens.', zh: '語音對話,隨時可以打斷' },
   { key: 'alerts',  color: '#ff5c8a', eyebrow: 'ALERTS',     title: 'Smart Alerts',      text: 'Price targets, tomorrow\'s earnings and daily pick changes, pushed straight to your phone.', zh: '推播提醒:到價、明日財報、AI 換榜' },
   { key: 'app',     color: '#ffffff', eyebrow: 'DOWNLOAD',   title: 'Get the App',       text: 'Free on the App Store. Scan the code or tap the button.', zh: '免費下載 · Android 即將推出', cta: true },
 ];
@@ -193,17 +193,47 @@ WIDGETS.voice = (host) => {
     else { state.textContent = 'Speaking…'; let k = 0; const type = () => { if (!alive) return; if (k <= line.text.length) { b.textContent = line.text.slice(0, k); k += 1; speaking = 1; timers.push(later(28, type)); } else { speaking = 0; state.textContent = 'Listening…'; timers.push(later(1800, say)); } }; timers.push(later(300, type)); }
   };
   say();
+  // 科技感能量球:藍紫粉漸層的半透明球體、內部流動的光線、外圈細環、光暈;說話時內部波動加大、球體微微脈動
   const stopR = loopRAF((t) => {
-    const [g, w, hh] = fitCanvas(c); g.clearRect(0, 0, w, hh); const cx = w / 2, cy = hh / 2; const R = Math.min(w, hh) * 0.42;
-    const rings = [[1.0, '#2f6fe0', '#1a3d8f'], [0.78, '#19c3a3', '#0e7d6a'], [0.56, '#4be07a', '#1e9a4a']];
-    const env = speaking ? (0.55 + 0.45 * Math.abs(Math.sin(t * 9) * Math.sin(t * 2.3))) : 0;
-    const breathe = 1 + 0.035 * Math.sin(t * 1.6);
-    rings.forEach(([k, c1, c2], ri) => {
-      const r = R * k * breathe; const dentAmp = env * (0.32 - ri * 0.08); const dentAngle = -Math.PI * 0.62;
+    const [g, w, hh] = fitCanvas(c); g.clearRect(0, 0, w, hh); const cx = w / 2, cy = hh / 2;
+    const env = speaking ? 0.6 + 0.4 * Math.abs(Math.sin(t * 9) * Math.sin(t * 2.3)) : 0.12 + 0.08 * Math.sin(t * 1.6);
+    const r = Math.min(w, hh) * 0.27 * (1 + 0.03 * Math.sin(t * 1.6) + env * 0.04);
+    let gr;
+    // 光暈
+    gr = g.createRadialGradient(cx, cy, r * 0.7, cx, cy, r * 2.2); gr.addColorStop(0, 'rgba(90,130,255,.38)'); gr.addColorStop(0.5, 'rgba(120,80,255,.12)'); gr.addColorStop(1, 'rgba(90,130,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, hh);
+    // 外圈細環(慢慢轉、略橢圓)
+    g.lineWidth = 1;
+    for (const [k, a, rot] of [[1.3, .28, t * 0.25], [1.52, .16, -t * 0.15], [1.75, .09, t * 0.1]]) {
+      g.save(); g.translate(cx, cy); g.rotate(rot); g.scale(1, 0.9); g.strokeStyle = `rgba(130,180,255,${a})`; g.beginPath(); g.arc(0, 0, r * k, 0, Math.PI * 2); g.stroke(); g.restore();
+    }
+    // 球體
+    gr = g.createRadialGradient(cx - r * 0.25, cy - r * 0.25, r * 0.05, cx, cy, r);
+    gr.addColorStop(0, 'rgba(70,90,230,.55)'); gr.addColorStop(0.55, 'rgba(110,60,210,.75)'); gr.addColorStop(0.9, 'rgba(200,90,230,.85)'); gr.addColorStop(1, 'rgba(255,120,235,.95)');
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    // 內部流動光線(裁在球內、加亮混合)
+    g.save(); g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.clip(); g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 6; i++) {
+      const ph = t * (0.9 + i * 0.18) + i * 1.3;
+      const amp = r * (0.22 + 0.4 * env) * (0.6 + 0.4 * Math.sin(i * 1.7 + t * 0.5));
+      const col = i % 2 ? 'rgba(255,130,245,' : 'rgba(120,210,255,';
+      g.strokeStyle = col + '0.5)'; g.lineWidth = 1.2 + (i % 3) * 0.8; g.shadowColor = col + '0.95)'; g.shadowBlur = 16;
       g.beginPath();
-      for (let a = 0; a <= Math.PI * 2 + 0.01; a += 0.06) { const dd = Math.exp(-Math.pow((a - dentAngle + Math.PI * 3) % (Math.PI * 2) - Math.PI, 2) * 2.2); const rr = r * (1 - dentAmp * dd); const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr; a === 0 ? g.moveTo(x, y) : g.lineTo(x, y); }
-      g.closePath(); const gr = g.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r); gr.addColorStop(0, c1); gr.addColorStop(1, c2); g.fillStyle = gr; g.fill();
-    });
+      for (let x = -r; x <= r + 1; x += 5) {
+        const u = x / r;
+        const y = Math.sin(u * 2.4 + ph) * amp * Math.cos(u * 0.8) + Math.sin(u * 5 + ph * 1.6) * amp * 0.25 + Math.sin(ph * 0.35 + i) * r * 0.28 * ((i - 2.5) / 2.5);
+        x === -r ? g.moveTo(cx + x, cy + y) : g.lineTo(cx + x, cy + y);
+      }
+      g.stroke();
+    }
+    g.restore();
+    // 邊緣光(青 → 粉)
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const rim = g.createLinearGradient(cx - r, cy - r, cx + r, cy + r); rim.addColorStop(0, 'rgba(120,225,255,.95)'); rim.addColorStop(0.5, 'rgba(150,120,255,.3)'); rim.addColorStop(1, 'rgba(255,140,240,.95)');
+    g.strokeStyle = rim; g.lineWidth = 2.2; g.shadowColor = 'rgba(150,170,255,.9)'; g.shadowBlur = 18; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke(); g.restore();
+    // 左上高光
+    gr = g.createRadialGradient(cx - r * 0.35, cy - r * 0.4, 0, cx - r * 0.35, cy - r * 0.4, r * 0.7); gr.addColorStop(0, 'rgba(255,255,255,.22)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
   });
   return () => { alive = false; timers.forEach((s) => s()); stopR(); };
 };

@@ -129,12 +129,13 @@
   #screen-ui .news .call { display: inline-block; margin-top: 12px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: 1px; opacity: 0; transform: scale(.8); transition: all .35s cubic-bezier(.2,.8,.2,1); }
   #screen-ui .news .call.on { opacity: 1; transform: none; }
   #screen-ui .call.bullish { background: rgba(75,224,122,.18); color: #4be07a; } #screen-ui .call.bearish { background: rgba(255,92,106,.18); color: #ff5c6a; } #screen-ui .call.neutral { background: rgba(245,196,81,.18); color: #f5c451; }
-  #screen-ui .voice { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: center; width: min(520px, 100%); }
-  #screen-ui .voice .orb { width: 220px; height: 220px; }
-  #screen-ui .voice .state { grid-column: 1; text-align: center; margin-top: -8px; }
-  #screen-ui .bubbles { display: flex; flex-direction: column; gap: 10px; grid-row: 1 / span 2; }
+  #screen-ui .voice { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; align-items: center; width: 100%; }
+  #screen-ui .voice .orb { grid-column: 1; grid-row: 1; width: 250px; height: 250px; }
+  #screen-ui .voice .state { grid-column: 1; grid-row: 2; text-align: center; margin-top: -8px; }
+  #screen-ui .bubbles { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  @media (max-width: 1100px) { #screen-ui .voice { grid-template-columns: 1fr; justify-items: center; } #screen-ui .voice .orb, #screen-ui .voice .state, #screen-ui .bubbles { grid-column: 1; grid-row: auto; } #screen-ui .bubbles { width: 100%; } }
   #screen-ui .bub { max-width: 100%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.45; animation: rowin .4s both; }
-  #screen-ui .bub.you { align-self: flex-end; background: #2f6fe0; border-bottom-right-radius: 4px; }
+  #screen-ui .bub.you { align-self: flex-end; background: #5b5be6; border-bottom-right-radius: 4px; }
   #screen-ui .bub.ai { align-self: flex-start; background: rgba(255,255,255,.08); border-bottom-left-radius: 4px; }
   #screen-ui .phone { width: 340px; height: 380px; border-radius: 36px; background: linear-gradient(160deg, #1c2340, #0f1426); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 30px 80px rgba(0,0,0,.5); padding: 14px 12px; overflow: hidden; }
   #screen-ui .phone .status { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; padding: 4px 14px 12px; opacity: .8; }
@@ -152,7 +153,7 @@
     #screen-ui .txt { text-align: center; } #screen-ui .wg { min-height: 0; }
     #screen-ui h2 { font-size: 28px; } #screen-ui p { font-size: 14px; } #screen-ui .zh { display: none; }
     #screen-ui .card { padding: 14px; } #screen-ui .picks .list { height: 240px; } #screen-ui .picks .row { height: 44px; }
-    #screen-ui .chart canvas { height: 150px; } #screen-ui .voice { grid-template-columns: 1fr; justify-items: center; } #screen-ui .bubbles { grid-row: auto; width: 100%; }
+    #screen-ui .chart canvas { height: 150px; }
     #screen-ui .phone { width: 300px; height: 300px; } #screen-ui .dl { gap: 18px; } #screen-ui .dl .icon { width: 110px; height: 110px; border-radius: 30px; }
     #screen-ui .dots { display: none; }
     #screen-ui .picks .foot { display: none; }
@@ -204,6 +205,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=77"></script>
+<script type="module" src="./room.mjs?v=79"></script>
 </body>
 </html>
