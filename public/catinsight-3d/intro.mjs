@@ -202,11 +202,38 @@ WIDGETS.voice = (host) => {
     // 光暈
     gr = g.createRadialGradient(cx, cy, r * 0.7, cx, cy, r * 2.2); gr.addColorStop(0, 'rgba(90,130,255,.38)'); gr.addColorStop(0.5, 'rgba(120,80,255,.12)'); gr.addColorStop(1, 'rgba(90,130,255,0)');
     g.fillStyle = gr; g.fillRect(0, 0, w, hh);
-    // 外圈細環(慢慢轉、略橢圓)
-    g.lineWidth = 1;
-    for (const [k, a, rot] of [[1.3, .28, t * 0.25], [1.52, .16, -t * 0.15], [1.75, .09, t * 0.1]]) {
-      g.save(); g.translate(cx, cy); g.rotate(rot); g.scale(1, 0.9); g.strokeStyle = `rgba(130,180,255,${a})`; g.beginPath(); g.arc(0, 0, r * k, 0, Math.PI * 2); g.stroke(); g.restore();
+    // 外圈:像電流一樣 — 帶抖動的鋸齒環線、發光,加上一段亮點沿著環繞行(每圈方向、速度不同),偶爾閃一下
+    g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+    const rings = [[1.3, .55, 1.6, 'rgba(120,200,255,', 0], [1.52, .38, -1.1, 'rgba(180,140,255,', 2.1], [1.75, .25, 0.8, 'rgba(255,140,240,', 4.2]];
+    for (const [k, a, spd, col, off] of rings) {
+      const rr = r * k, flick = 0.8 + 0.2 * Math.sin(t * 23 + off) * Math.sin(t * 7.3 + off);
+      // 主環:半徑加上高頻小抖動(電流的毛邊)
+      g.beginPath();
+      for (let i = 0; i <= 140; i++) {
+        const ang = i / 140 * Math.PI * 2;
+        const jit = (Math.sin(ang * 23 + t * 14 + off) * 0.5 + Math.sin(ang * 41 - t * 19 + off) * 0.3 + (Math.random() - 0.5) * 0.6) * r * 0.018;
+        const x = cx + Math.cos(ang) * (rr + jit), y = cy + Math.sin(ang) * (rr + jit) * 0.92;
+        i ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.closePath(); g.strokeStyle = col + (a * flick * 0.6) + ')'; g.lineWidth = 1; g.shadowColor = col + '0.9)'; g.shadowBlur = 8; g.stroke();
+      // 繞行的電流亮段(頭亮尾淡,分三小段畫出漸層)
+      const head = t * spd + off;
+      for (let sgm = 0; sgm < 3; sgm++) {
+        const a0 = head - (sgm + 1) * 0.28, a1 = head - sgm * 0.28;
+        g.beginPath();
+        for (let i = 0; i <= 12; i++) {
+          const ang = a0 + (a1 - a0) * i / 12;
+          const jit = (Math.sin(ang * 23 + t * 14 + off) * 0.5 + (Math.random() - 0.5) * 0.8) * r * 0.022;
+          const x = cx + Math.cos(ang) * (rr + jit), y = cy + Math.sin(ang) * (rr + jit) * 0.92;
+          i ? g.lineTo(x, y) : g.moveTo(x, y);
+        }
+        g.strokeStyle = col + (a * flick * (1 - sgm * 0.3)) + ')'; g.lineWidth = 2.4 - sgm * 0.6; g.shadowColor = col + '1)'; g.shadowBlur = 16; g.stroke();
+      }
+      // 亮點
+      const hx = cx + Math.cos(head) * rr, hy = cy + Math.sin(head) * rr * 0.92;
+      g.fillStyle = 'rgba(255,255,255,' + (0.85 * flick) + ')'; g.shadowColor = col + '1)'; g.shadowBlur = 18; g.beginPath(); g.arc(hx, hy, 2.2, 0, Math.PI * 2); g.fill();
     }
+    g.restore();
     // 球體
     gr = g.createRadialGradient(cx - r * 0.25, cy - r * 0.25, r * 0.05, cx, cy, r);
     gr.addColorStop(0, 'rgba(70,90,230,.55)'); gr.addColorStop(0.55, 'rgba(110,60,210,.75)'); gr.addColorStop(0.9, 'rgba(200,90,230,.85)'); gr.addColorStop(1, 'rgba(255,120,235,.95)');
