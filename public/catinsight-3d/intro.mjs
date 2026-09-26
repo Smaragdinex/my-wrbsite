@@ -206,8 +206,8 @@ WIDGETS.voice = (host) => {
     g.fillStyle = gr; g.fillRect(0, 0, w, hh);
     // 外圈:像電流一樣 — 帶抖動的鋸齒環線、發光,加上一段亮點沿著環繞行(每圈方向、速度不同),偶爾閃一下
     g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
-    // 三圈同方向、同速度(2.5 秒一圈)、同角度 → 一道電流平穩繞 360°(和 App 一致)
-    const rings = [[1.3, .55, 2.5, 'rgba(120,200,255,', 0], [1.52, .38, 2.5, 'rgba(180,140,255,', 0], [1.75, .25, 2.5, 'rgba(255,140,240,', 0]];
+    // 三圈同方向、同速度(2.5 秒一圈)平穩繞 360°,三道電流錯開 120° 各在不同位置(和 App 一致)
+    const rings = [[1.3, .55, 2.5, 'rgba(120,200,255,', 0], [1.52, .38, 2.5, 'rgba(180,140,255,', 2 * Math.PI / 3], [1.75, .25, 2.5, 'rgba(255,140,240,', 4 * Math.PI / 3]];
     const spark = speaking ? 1 : 0;                         // 講話時外圈才有電流通過(固定亮度、固定速度,不閃跳;和 App 一致)
     for (const [k, a, spd, col, off] of rings) {
       const rr = r * k, flick = speaking ? 1 : 0.6;
