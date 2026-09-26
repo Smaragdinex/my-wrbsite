@@ -206,7 +206,8 @@ WIDGETS.voice = (host) => {
     g.fillStyle = gr; g.fillRect(0, 0, w, hh);
     // 外圈:像電流一樣 — 帶抖動的鋸齒環線、發光,加上一段亮點沿著環繞行(每圈方向、速度不同),偶爾閃一下
     g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
-    const rings = [[1.3, .55, 1.6, 'rgba(120,200,255,', 0], [1.52, .38, -1.1, 'rgba(180,140,255,', 2.1], [1.75, .25, 0.8, 'rgba(255,140,240,', 4.2]];
+    // 三圈同方向、同速度(2.5 秒一圈)、同角度 → 一道電流平穩繞 360°(和 App 一致)
+    const rings = [[1.3, .55, 2.5, 'rgba(120,200,255,', 0], [1.52, .38, 2.5, 'rgba(180,140,255,', 0], [1.75, .25, 2.5, 'rgba(255,140,240,', 0]];
     const spark = speaking ? 1 : 0;                         // 講話時外圈才有電流通過(固定亮度、固定速度,不閃跳;和 App 一致)
     for (const [k, a, spd, col, off] of rings) {
       const rr = r * k, flick = speaking ? 1 : 0.6;
@@ -222,8 +223,8 @@ WIDGETS.voice = (host) => {
       if (!spark) continue;                                  // 沒講話:只有安靜的細環
       // 繞行的電流亮段(頭亮尾淡,分三小段畫出漸層),越大聲跑越快
       const head = t * spd + off;                           // 固定速度繞行
-      for (let sgm = 0; sgm < 3; sgm++) {
-        const a0 = head - (sgm + 1) * 0.28, a1 = head - sgm * 0.28;
+      for (let sgm = 0; sgm < 4; sgm++) {                    // 拖尾約 90°,頭亮尾淡
+        const a0 = head - (sgm + 1) * 0.4, a1 = head - sgm * 0.4;
         g.beginPath();
         for (let i = 0; i <= 12; i++) {
           const ang = a0 + (a1 - a0) * i / 12;
@@ -231,7 +232,7 @@ WIDGETS.voice = (host) => {
           const x = cx + Math.cos(ang) * (rr + jit), y = cy + Math.sin(ang) * (rr + jit) * 0.92;
           i ? g.lineTo(x, y) : g.moveTo(x, y);
         }
-        g.strokeStyle = col + (a * flick * (1 - sgm * 0.3)) + ')'; g.lineWidth = 2.4 - sgm * 0.6; g.shadowColor = col + '1)'; g.shadowBlur = 16; g.stroke();
+        g.strokeStyle = col + ((a + 0.35) * flick * (1 - sgm * 0.24)) + ')'; g.lineWidth = 2.6 - sgm * 0.5; g.shadowColor = col + '1)'; g.shadowBlur = 16; g.stroke();
       }
       // 亮點
       const hx = cx + Math.cos(head) * rr, hy = cy + Math.sin(head) * rr * 0.92;
