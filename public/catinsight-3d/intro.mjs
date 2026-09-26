@@ -207,27 +207,27 @@ WIDGETS.voice = (host) => {
     // 外圈:像電流一樣 — 帶抖動的鋸齒環線、發光,加上一段亮點沿著環繞行(每圈方向、速度不同),偶爾閃一下
     g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
     const rings = [[1.3, .55, 1.6, 'rgba(120,200,255,', 0], [1.52, .38, -1.1, 'rgba(180,140,255,', 2.1], [1.75, .25, 0.8, 'rgba(255,140,240,', 4.2]];
-    const spark = speaking ? env : 0;                       // 講話時外圈才有電流通過(和 App 一致)
+    const spark = speaking ? 1 : 0;                         // 講話時外圈才有電流通過(固定亮度、固定速度,不閃跳;和 App 一致)
     for (const [k, a, spd, col, off] of rings) {
-      const rr = r * k, flick = speaking ? 0.8 + 0.2 * Math.sin(t * 23 + off) * Math.sin(t * 7.3 + off) : 0.6;
+      const rr = r * k, flick = speaking ? 1 : 0.6;
       // 主環:半徑加上高頻小抖動(電流的毛邊)
       g.beginPath();
       for (let i = 0; i <= 140; i++) {
         const ang = i / 140 * Math.PI * 2;
-        const jit = (Math.sin(ang * 23 + t * 14 + off) * 0.5 + Math.sin(ang * 41 - t * 19 + off) * 0.3 + (Math.random() - 0.5) * 0.6) * r * 0.018 * spark;
+        const jit = Math.sin(ang * 9 + t * 2.0 + off) * r * 0.008 * spark;   // 很輕、很慢的起伏,不抖
         const x = cx + Math.cos(ang) * (rr + jit), y = cy + Math.sin(ang) * (rr + jit) * 0.92;
         i ? g.lineTo(x, y) : g.moveTo(x, y);
       }
       g.closePath(); g.strokeStyle = col + (a * flick * (speaking ? 0.6 : 0.35)) + ')'; g.lineWidth = 1; g.shadowColor = col + '0.9)'; g.shadowBlur = speaking ? 8 : 2; g.stroke();
       if (!spark) continue;                                  // 沒講話:只有安靜的細環
       // 繞行的電流亮段(頭亮尾淡,分三小段畫出漸層),越大聲跑越快
-      const head = t * spd * (1 + spark) + off;
+      const head = t * spd + off;                           // 固定速度繞行
       for (let sgm = 0; sgm < 3; sgm++) {
         const a0 = head - (sgm + 1) * 0.28, a1 = head - sgm * 0.28;
         g.beginPath();
         for (let i = 0; i <= 12; i++) {
           const ang = a0 + (a1 - a0) * i / 12;
-          const jit = (Math.sin(ang * 23 + t * 14 + off) * 0.5 + (Math.random() - 0.5) * 0.8) * r * 0.022;
+          const jit = Math.sin(ang * 9 + t * 2.0 + off) * r * 0.008;
           const x = cx + Math.cos(ang) * (rr + jit), y = cy + Math.sin(ang) * (rr + jit) * 0.92;
           i ? g.lineTo(x, y) : g.moveTo(x, y);
         }
