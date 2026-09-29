@@ -144,7 +144,7 @@
   .emeta b{font-weight:700}
   /* 卡片下方的文字:標籤一行、大標題一行;hover 時標題左邊滑出箭頭 */
   .ecap{display:block;margin-top:18px;text-decoration:none;color:var(--fg)}
-  .ecap .etags{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+  .ecap .etags{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#fff}
   .ecap .ettl{margin-top:6px;font-size:clamp(24px,2.6vw,40px);font-weight:700;letter-spacing:-.02em;line-height:1.15;
     display:flex;align-items:center}
   .ecap .ettl .arr{display:inline-block;width:0;opacity:0;transform:translateX(-14px);overflow:hidden;
