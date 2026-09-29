@@ -113,22 +113,24 @@
   @media (hover:none){ .cursor{display:none} html,body{cursor:auto} }
   @media (min-width:701px){ html,body{cursor:none} a{cursor:none} }
 
-  /* ===== 作品區:兩欄網格(桌機),卡片預設較小,hover 放大 + 變彩色 ===== */
+  /* ===== 作品區:兩欄網格,像電影院兩片銀幕的 V 形傾斜(JS 依捲動與滑鼠更新 --ry/--rx/--s) ===== */
   .works{position:relative;z-index:2;display:grid;grid-template-columns:repeat(2,1fr);
-    gap:clamp(18px,3vw,40px);padding:8vh clamp(20px,5vw,64px) 6vh;align-items:start}
+    gap:clamp(18px,3vw,40px);padding:8vh clamp(20px,5vw,64px) 6vh;align-items:start;
+    perspective:1500px;perspective-origin:50% 50%}
   .exp{display:block;min-width:0}
   .exp.right{margin-top:clamp(40px,9vh,120px)}   /* 右欄整體下移,做出交錯感 */
   .exp.right ~ .exp.right{margin-top:0}
-  .ecard{--tx:0px;--ty:0px;--s:1;
+  .ecard{--tx:0px;--ty:0px;--ry:0deg;--rx:0deg;--s:1;
     position:relative;display:block;width:100%;aspect-ratio:16/10;border-radius:20px;overflow:hidden;
     background:#0e1118;border:1px solid rgba(242,242,240,.12);text-decoration:none;color:var(--fg);
-    opacity:0;will-change:transform,opacity;
-    transform:translate(var(--tx),var(--ty)) scale(var(--s));
-    transition:transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .5s;
+    opacity:0;will-change:transform,opacity;backface-visibility:hidden;
+    transform:translate(var(--tx),var(--ty)) rotateX(var(--rx)) rotateY(var(--ry)) scale(var(--s));
+    transition:box-shadow .5s;
     box-shadow:0 30px 70px rgba(0,0,0,.45);pointer-events:auto}
-  .ecard:hover{--s:1.045;z-index:3;box-shadow:0 50px 110px rgba(0,0,0,.6)}
+  .ecard:hover{z-index:3;box-shadow:0 50px 110px rgba(0,0,0,.6)}
+  canvas#gl{transition:opacity .15s linear}
   @media(max-width:760px){
-    .works{grid-template-columns:1fr;gap:26px;padding:6vh 5vw}
+    .works{grid-template-columns:1fr;gap:26px;padding:6vh 5vw;perspective:none}
     .exp.right{margin-top:0}
     .ecard{aspect-ratio:4/5}
   }

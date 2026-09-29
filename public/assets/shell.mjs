@@ -556,6 +556,7 @@ addEventListener('resize', resize); resize();
 function blit(mat, target){ fsQuad.material = mat; renderer.setRenderTarget(target); renderer.render(fsScene, fsCam); }
 const viewProj = new THREE.Matrix4();
 let t0 = performance.now();
+let bgAlpha = 1;
 function frame(){
   const now = performance.now();
   const dt = Math.min(0.033, (now-t0)/1000); t0 = now;
@@ -585,6 +586,12 @@ function frame(){
   { const dx=cur.tx-fc.x, dy=cur.ty-fc.y, d=Math.hypot(dx,dy)||1, k=Math.min(1,d/260)*4.6;
     const ox=(dx/d*k).toFixed(1), oy=(dy/d*k).toFixed(1);
     pupils.forEach(p=>p.setAttribute('transform',`translate(${ox} ${oy})`)); }
+
+  // 捲進作品區後背景(水面 + 粒子 X)淡出;完全淡出時跳過所有 GPU 模擬與繪製,省電也不搶 hover 的流暢度
+  { const vh = innerHeight, y = scrollY;
+    let a = 1 - (y - vh*0.30) / (vh*0.45); a = a<0?0:a>1?1:a;
+    if (a !== bgAlpha){ bgAlpha = a; renderer.domElement.style.opacity = a.toFixed(3); }
+    if (a <= 0.001){ requestAnimationFrame(frame); return; } }
 
   // 滑鼠停下/離開 → 推力歸零，粒子靠彈簧慢慢重組成 X
   velSimMat.uniforms.uMouseStr.value *= mouseInside ? 0.90 : 0.82;
@@ -646,39 +653,64 @@ function initHome(){
   if (worksWrap && !worksWrap.childElementCount){
     WORKS.forEach((w, i) => worksWrap.appendChild(buildCard(w, i)));
   }
+  /* 每張卡的狀態:
+       進場(tx/ty/op):從左右滑入淡入,只做一次
+       傾斜(ry/rx):兩欄像電影院的兩片銀幕 —— 離畫面中心越遠,越往內側(V 形)轉;
+                    滑到中間就拉平。用彈簧追目標,所以停下來會微微晃一下
+       hover:滑鼠在卡片上的位置決定額外的 rx/ry(跟著游標微傾),放大 1.045 */
   const EXPS = [...document.querySelectorAll('.exp')];
-  const CARD_OUT = 90;
-  /* 進場動畫:卡片從左右滑入 + 淡入,只做一次(p 到 1 之後就固定,讓 CSS hover 的 scale 接手)。
-     ⚠️ 先全部量完,再全部寫,避免 layout thrashing */
-  function updateCards(){
-    const vh = innerHeight;
-    const cards = [];
-    for (const sec of EXPS){
-      const card = sec.querySelector('.ecard');
-      if (card.dataset.in === '1') continue;
-      const r = card.getBoundingClientRect();
-      cards.push([card, r.top + r.height/2, sec.classList.contains('left') ? -1 : 1]);
-    }
-    for (const [card, center, dir] of cards){
-      let p = 1 - (center - vh*0.92) / (vh*0.45);
-      p = p<0?0:p>1?1:p;
-      card.style.setProperty('--tx', (dir*CARD_OUT*(1-p)).toFixed(1)+'px');
-      card.style.setProperty('--ty', ((1-p)*30).toFixed(1)+'px');
-      const o = p*1.25; card.style.opacity = (o>1?1:o).toFixed(3);
-      if (p >= 1) card.dataset.in = '1';
-    }
+  const cards = EXPS.map(sec => {
+    const el = sec.querySelector('.ecard');
+    const st = { el, dir: sec.classList.contains('left') ? -1 : 1,
+      tx:0, ty:0, op:0, done:false,
+      ry:0, rx:0, s:1, vry:0, vrx:0, vs:0,
+      hover:false, mx:0, my:0 };
+    el.addEventListener('mouseenter', () => { st.hover = true; st.vry += 1.2*st.dir; st.vrx -= 0.8; });  // 進來時給一點衝量 → 晃一下
+    el.addEventListener('mousemove', e => {
+      const r = el.getBoundingClientRect();
+      st.mx = (e.clientX - r.left)/r.width - 0.5; st.my = (e.clientY - r.top)/r.height - 0.5;
+    });
+    el.addEventListener('mouseleave', () => { st.hover = false; st.mx = st.my = 0; });
+    return st;
+  });
+  const CARD_OUT = 90, MAX_TILT = 26, MAX_PITCH = 7, HOVER_TILT = 9;
+  const K = 0.11, DAMP = 0.80;              // 彈簧:略欠阻尼,會過衝一下再停
+  const spring = (st, cur, vel, target) => { st[vel] += (target - st[cur]) * K; st[vel] *= DAMP; st[cur] += st[vel]; };
+  const smooth = (a, b, x) => { x = (x-a)/(b-a); x = x<0?0:x>1?1:x; return x*x*(3-2*x); };
+  let raf = 0, running = true;
+  function tick(){
+    const vh = innerHeight, desk = innerWidth > 760;
+    // 先全部量完再全部寫,避免 layout thrashing
+    const rects = cards.map(c => c.el.getBoundingClientRect());
+    cards.forEach((c, i) => {
+      const r = rects[i], center = r.top + r.height/2;
+      // 進場
+      if (!c.done){
+        let p = 1 - (center - vh*0.92) / (vh*0.45); p = p<0?0:p>1?1:p;
+        c.tx = c.dir*CARD_OUT*(1-p); c.ty = (1-p)*30; c.op = Math.min(1, p*1.25);
+        if (p >= 1) c.done = true;
+      }
+      // 傾斜目標
+      let ryT = 0, rxT = 0, sT = 1;
+      if (desk){
+        const d = (center - vh/2) / (vh/2);                 // -1(上緣) … 0(中心) … 1(下緣)
+        const amt = smooth(0.12, 1.0, Math.abs(d));
+        ryT = -c.dir * MAX_TILT * amt;                       // 左卡 +,右卡 - → 內側邊往後退,成 V
+        rxT = MAX_PITCH * Math.max(-1, Math.min(1, d));      // 下方的卡頂邊往後仰
+        if (c.hover){ ryT += c.mx * HOVER_TILT * 2; rxT += -c.my * HOVER_TILT * 2; sT = 1.045; }
+      }
+      spring(c, 'ry', 'vry', ryT); spring(c, 'rx', 'vrx', rxT); spring(c, 's', 'vs', sT);
+      const el = c.el.style;
+      el.setProperty('--tx', c.tx.toFixed(1)+'px'); el.setProperty('--ty', c.ty.toFixed(1)+'px');
+      el.setProperty('--ry', c.ry.toFixed(2)+'deg'); el.setProperty('--rx', c.rx.toFixed(2)+'deg');
+      el.setProperty('--s', c.s.toFixed(4)); el.opacity = c.op.toFixed(3);
+    });
+    if (running) raf = requestAnimationFrame(tick);
   }
-  let loopTick = false;
-  function onScroll(){
-    if (loopTick) return; loopTick = true;
-    requestAnimationFrame(() => { updateCards(); loopTick = false; });
-  }
-  addEventListener('scroll', onScroll, { passive:true });
-  addEventListener('resize', updateCards, { passive:true });
-  updateCards();
+  tick();
+  window.__homeTick = tick;   // 測試用:面板隱藏時 rAF 不跑,可手動逐幀
   return function teardown(){
-    removeEventListener('scroll', onScroll);
-    removeEventListener('resize', updateCards);
+    running = false; cancelAnimationFrame(raf); window.__homeTick = null;
   };
 }
 
