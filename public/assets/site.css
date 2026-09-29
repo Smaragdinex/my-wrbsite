@@ -115,7 +115,7 @@
 
   /* ===== 作品區:兩欄網格,像電影院兩片銀幕的 V 形傾斜(JS 依捲動與滑鼠更新 --ry/--rx/--s) ===== */
   .works{position:relative;z-index:2;display:grid;grid-template-columns:repeat(2,1fr);
-    gap:clamp(18px,3vw,40px);padding:8vh clamp(20px,5vw,64px) 6vh;align-items:start;
+    column-gap:clamp(18px,3vw,40px);row-gap:clamp(60px,12vh,160px);padding:8vh clamp(20px,5vw,64px) 6vh;align-items:start;
     perspective:1500px;perspective-origin:50% 50%}
   .exp{display:block;min-width:0}
   .exp.right{margin-top:clamp(40px,9vh,120px)}   /* 右欄整體下移,做出交錯感 */
