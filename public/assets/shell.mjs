@@ -34,16 +34,17 @@ function buildCard(w, i){
   const store = w.store
     ? `<span class="estore" role="link" tabindex="0" data-href="${w.store.url}">${w.store.label} ↗</span>`
     : ''
+  // 卡片只放圖(+ 左上編號、右下次要連結);標題和標籤放在**卡片下面**(參考 lusion.co),
+  // 滑鼠移上去時標題左邊滑出一支箭頭
   sec.innerHTML = `
     <a class="ecard" href="${w.url}">
       <img src="${w.img}" alt="${w.title}" loading="lazy">
       <div class="emeta"><b>EXP ${w.no}</b><br>2026</div>
-      <div class="earrow">↗</div>
-      <div class="einfo">
-        <div class="ettl"><span class="roll"><span>${w.title}</span><span>${w.title}</span></span></div>
-        <div class="etags">${w.tag}</div>
-      </div>
       ${store}
+    </a>
+    <a class="ecap" href="${w.url}">
+      <div class="etags">${w.tag}</div>
+      <div class="ettl"><span class="arr">→</span><span class="txt">${w.title}</span></div>
     </a>`;
   return sec;
 }
@@ -665,12 +666,14 @@ function initHome(){
       tx:0, ty:0, op:0, done:false,
       ry:0, rx:0, s:1, vry:0, vrx:0, vs:0,
       hover:false, mx:0, my:0 };
-    el.addEventListener('mouseenter', () => { st.hover = true; st.vry += 1.2*st.dir; st.vrx -= 0.8; });  // 進來時給一點衝量 → 晃一下
-    el.addEventListener('mousemove', e => {
+    // hover 範圍是整個 .exp(圖 + 下面的標題),游標在標題上時圖也會亮起來、微傾
+    sec.addEventListener('mouseenter', () => { st.hover = true; st.vry += 1.2*st.dir; st.vrx -= 0.8; });  // 進來時給一點衝量 → 晃一下
+    sec.addEventListener('mousemove', e => {
       const r = el.getBoundingClientRect();
-      st.mx = (e.clientX - r.left)/r.width - 0.5; st.my = (e.clientY - r.top)/r.height - 0.5;
+      const cl = v => v < -0.5 ? -0.5 : v > 0.5 ? 0.5 : v;
+      st.mx = cl((e.clientX - r.left)/r.width - 0.5); st.my = cl((e.clientY - r.top)/r.height - 0.5);
     });
-    el.addEventListener('mouseleave', () => { st.hover = false; st.mx = st.my = 0; });
+    sec.addEventListener('mouseleave', () => { st.hover = false; st.mx = st.my = 0; });
     return st;
   });
   const CARD_OUT = 90, MAX_TILT = 26, MAX_PITCH = 7, HOVER_TILT = 9;
