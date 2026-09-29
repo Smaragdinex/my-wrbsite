@@ -644,39 +644,34 @@ frame();
 function initHome(){
   const worksWrap = document.getElementById('works');
   if (worksWrap && !worksWrap.childElementCount){
-    WORKS.forEach((w, i) => worksWrap.appendChild(buildCard(w, i)));   // 原始清單
-    WORKS.forEach((w, i) => worksWrap.appendChild(buildCard(w, i)));   // 複製一份當迴圈緩衝
+    WORKS.forEach((w, i) => worksWrap.appendChild(buildCard(w, i)));
   }
   const EXPS = [...document.querySelectorAll('.exp')];
-  const CARD_OUT = 170;
-  /* ⚠️ **先全部量完,再全部寫。**
-     原本是量一張、寫一張、再量下一張 —— 寫進 style 之後版面就髒了,
-     下一次 getBoundingClientRect 會強迫瀏覽器立刻重算整頁版面
-     (layout thrashing)。12 張卡就是每次捲動被迫重算 12 次版面 */
+  const CARD_OUT = 90;
+  /* 進場動畫:卡片從左右滑入 + 淡入,只做一次(p 到 1 之後就固定,讓 CSS hover 的 scale 接手)。
+     ⚠️ 先全部量完,再全部寫,避免 layout thrashing */
   function updateCards(){
     const vh = innerHeight;
     const cards = [];
     for (const sec of EXPS){
       const card = sec.querySelector('.ecard');
+      if (card.dataset.in === '1') continue;
       const r = card.getBoundingClientRect();
       cards.push([card, r.top + r.height/2, sec.classList.contains('left') ? -1 : 1]);
     }
     for (const [card, center, dir] of cards){
-      let p = 1 - (center - vh/2) / (vh*0.72);
+      let p = 1 - (center - vh*0.92) / (vh*0.45);
       p = p<0?0:p>1?1:p;
-      card.style.transform = 'translate('+(dir*CARD_OUT*(1-p)).toFixed(1)+'px,'+((1-p)*34).toFixed(1)+'px)';
+      card.style.setProperty('--tx', (dir*CARD_OUT*(1-p)).toFixed(1)+'px');
+      card.style.setProperty('--ty', ((1-p)*30).toFixed(1)+'px');
       const o = p*1.25; card.style.opacity = (o>1?1:o).toFixed(3);
+      if (p >= 1) card.dataset.in = '1';
     }
   }
-  const N = WORKS.length;
   let loopTick = false;
   function onScroll(){
     if (loopTick) return; loopTick = true;
-    requestAnimationFrame(() => {
-      const vh = innerHeight, loopH = N * vh, y = scrollY;
-      if (y >= vh + loopH) scrollTo(0, y - loopH);
-      updateCards(); loopTick = false;
-    });
+    requestAnimationFrame(() => { updateCards(); loopTick = false; });
   }
   addEventListener('scroll', onScroll, { passive:true });
   addEventListener('resize', updateCards, { passive:true });
