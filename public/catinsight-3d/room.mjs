@@ -194,37 +194,50 @@ function loadGLB(name, url, onLoad) {
   const a = group(-S / 2 + 0.12 + 0.66, 0, L.z + T / 2);         // 最左邊、背面貼牆
   const m = new THREE.Group(); a.add(m); arcadeModel = m;
   const P = { parent: m };
-  const W = 1.3, D = 1.36, IN = 1.12;                             // 外寬、側板深度、兩片側板之間的寬度
+  const W = 1.3, D = 1.36, IN = 1.12;                             // 外寬、下半身深度、兩片側板之間的寬度
   const DARK = 0x2a2140, RED = 0xe2553d, PURPLE = 0x7b5cf5;
-  // 兩片側板(薰衣草紫),從地板到頂、蓋住操作檯兩側
-  for (const sx of [-1, 1]) box(0.09, ARCADE_H, D, C.arcade, { ...P, x: sx * (W / 2 - 0.045), y: ARCADE_H / 2, z: D / 2, r: 0.04 });
+  // 兩片側板(薰衣草紫):照參考模型量出來的街機側面輪廓 —— 下半身較淺、操作檯那段往前凸、
+  // 螢幕那段往後斜收、最上面招牌再往前凸。座標是(深度 z, 高度 y),用 Shape 擠出厚度
+  {
+    const prof = [[0, 0], [1.36, 0], [1.36, 0.62], [1.62, 0.76], [1.62, 1.34], [1.50, 1.46], [1.24, 1.53], [1.08, 2.18], [1.36, 2.23], [1.36, ARCADE_H], [0, ARCADE_H]];
+    const shape = new THREE.Shape(); prof.forEach(([z, y], i) => (i ? shape.lineTo(z, y) : shape.moveTo(z, y))); shape.closePath();
+    const TH = 0.09, BV = 0.014;
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: TH - BV * 2, bevelEnabled: true, bevelThickness: BV, bevelSize: BV, bevelSegments: 2, curveSegments: 4 });
+    for (const sx of [-1, 1]) {
+      const sp = new THREE.Mesh(geo, mat(C.arcade)); sp.rotation.y = -Math.PI / 2;      // Shape 的 x → 世界 +z,擠出方向 → 世界 -x
+      sp.position.set(sx > 0 ? W / 2 - BV : -W / 2 + TH - BV, 0, 0);
+      sp.castShadow = true; sp.receiveShadow = true; m.add(sp);
+    }
+  }
   // 下半身(橘)+ 中央白條 + 投幣門
-  box(IN, 0.96, 1.14, C.arcadeTop, { ...P, y: 0.48, z: 0.57, r: 0.03 });
-  box(0.24, 0.94, 0.02, C.arcadeStripe, { ...P, y: 0.48, z: 1.145, r: 0.008 });
-  box(0.34, 0.4, 0.03, C.arcade, { ...P, y: 0.5, z: 1.15, r: 0.02 });
-  box(0.05, 0.14, 0.02, DARK, { ...P, x: -0.06, y: 0.54, z: 1.168, r: 0.008 });
-  box(0.1, 0.1, 0.02, C.arcadeTop, { ...P, x: 0.08, y: 0.58, z: 1.168, r: 0.01 });
-  // 操作檯:略往玩家這邊斜,前緣凸出機身一點。搖桿在左、三顆按鈕在右,都比螢幕下緣低,不會撞在一起
-  const deck = new THREE.Group(); deck.position.set(0, 1.0, 0.98); deck.rotation.x = 0.13; m.add(deck);
+  box(IN, 0.74, 1.3, C.arcadeTop, { ...P, y: 0.37, z: 0.65, r: 0.03 });
+  box(0.24, 0.72, 0.02, C.arcadeStripe, { ...P, y: 0.37, z: 1.305, r: 0.008 });
+  box(0.34, 0.38, 0.03, C.arcade, { ...P, y: 0.38, z: 1.31, r: 0.02 });
+  box(0.05, 0.14, 0.02, DARK, { ...P, x: -0.06, y: 0.42, z: 1.328, r: 0.008 });
+  box(0.1, 0.1, 0.02, C.arcadeTop, { ...P, x: 0.08, y: 0.46, z: 1.328, r: 0.01 });
+  // 操作檯底下往前凸的那一段(跟著側板的凸出)
+  box(IN, 0.34, 1.52, C.arcadeTop, { ...P, y: 0.86, z: 0.76, r: 0.03 });
+  // 操作檯:略往玩家這邊斜。搖桿在左、三顆按鈕在右,都比螢幕下緣低,不會撞在一起
+  const deck = new THREE.Group(); deck.position.set(0, 1.05, 1.2); deck.rotation.x = 0.13; m.add(deck);
   const DP = { parent: deck };
-  box(IN, 0.12, 0.66, C.arcadeTop, { ...DP, r: 0.03 });
-  cyl(0.09, 0.11, 0.035, C.arcade, { ...DP, x: -0.26, y: 0.075, z: 0.19 });
-  cyl(0.02, 0.02, 0.14, 0xffffff, { ...DP, x: -0.26, y: 0.16, z: 0.19 });
-  { const ball = new THREE.Mesh(new THREE.SphereGeometry(0.062, 24, 18), mat(RED, { roughness: 0.45 })); ball.position.set(-0.26, 0.26, 0.19); ball.castShadow = true; deck.add(ball); }
-  [[0.08, PURPLE], [0.25, C.arcadeTop], [0.42, C.plant]].forEach(([x, c]) => { cyl(0.078, 0.078, 0.025, C.arcadeStripe, { ...DP, x, y: 0.07, z: 0.19 }); cyl(0.058, 0.064, 0.045, c, { ...DP, x, y: 0.095, z: 0.19 }); });
+  box(IN, 0.12, 0.78, C.arcadeTop, { ...DP, r: 0.03 });
+  cyl(0.09, 0.11, 0.035, C.arcade, { ...DP, x: -0.26, y: 0.075, z: 0.12 });
+  cyl(0.02, 0.02, 0.14, 0xffffff, { ...DP, x: -0.26, y: 0.16, z: 0.12 });
+  { const ball = new THREE.Mesh(new THREE.SphereGeometry(0.062, 24, 18), mat(RED, { roughness: 0.45 })); ball.position.set(-0.26, 0.26, 0.12); ball.castShadow = true; deck.add(ball); }
+  [[0.08, PURPLE], [0.25, C.arcadeTop], [0.42, C.plant]].forEach(([x, c]) => { cyl(0.078, 0.078, 0.025, C.arcadeStripe, { ...DP, x, y: 0.07, z: 0.12 }); cyl(0.058, 0.064, 0.045, c, { ...DP, x, y: 0.095, z: 0.12 }); });
   // 上半身(深紫機身)。螢幕下方多一塊凸出的「下巴」:把往後仰的螢幕邊框底下那個空隙補實,上面有三條喇叭孔
-  box(IN, 1.24, 0.8, C.arcadeScreen, { ...P, y: 1.58, z: 0.4, r: 0.03 });
-  box(IN, 0.42, 1.04, C.arcadeScreen, { ...P, y: 1.26, z: 0.52, r: 0.03 });
-  for (let i = 0; i < 3; i++) box(0.34, 0.022, 0.012, DARK, { ...P, y: 1.2 + i * 0.055, z: 1.043, r: 0.004 });
+  box(IN, 1.26, 0.8, C.arcadeScreen, { ...P, y: 1.6, z: 0.4, r: 0.03 });
+  box(IN, 0.42, 1.04, C.arcadeScreen, { ...P, y: 1.28, z: 0.52, r: 0.03 });
+  for (let i = 0; i < 3; i++) box(0.34, 0.022, 0.012, DARK, { ...P, y: 1.24 + i * 0.055, z: 1.043, r: 0.004 });
   // 往後仰 20° 的螢幕邊框(比螢幕大一圈),螢幕那片 canvas 貼在它前面
   box(IN, 0.9, 0.09, DARK, { ...P, y: 1.82, z: 0.97, rx: -0.35, r: 0.03 });
-  // 招牌(橘 + 白條 + 發亮的燈箱)。不能比螢幕邊框的上緣(z≈0.85)更凸出,不然鏡頭正對螢幕時會擋到螢幕最上面一排
-  box(IN, 0.34, 0.84, C.arcadeTop, { ...P, y: ARCADE_H - 0.17, z: 0.42, r: 0.03 });
-  for (const sx of [-1, 1]) { const l = new THREE.Mesh(new RoundedBoxGeometry(0.4, 0.2, 0.03, 2, 0.012), new THREE.MeshStandardMaterial({ color: 0xfff2c8, emissive: 0xffd76a, emissiveIntensity: 0.75, roughness: 0.6 }));
-    l.position.set(sx * 0.3, ARCADE_H - 0.17, 0.84); m.add(l); }
+  // 招牌(橘 + 發亮的燈箱):往前凸出到和側板上緣齊。底面要高過 y=2.24,鏡頭正對螢幕時才不會擋到螢幕最上面一排
+  box(IN, 0.25, 1.3, C.arcadeTop, { ...P, y: ARCADE_H - 0.125, z: 0.65, r: 0.03 });
+  for (const sx of [-1, 1]) { const l = new THREE.Mesh(new RoundedBoxGeometry(0.42, 0.15, 0.03, 2, 0.012), new THREE.MeshStandardMaterial({ color: 0xfff2c8, emissive: 0xffd76a, emissiveIntensity: 0.75, roughness: 0.6 }));
+    l.position.set(sx * 0.28, ARCADE_H - 0.125, 1.305); m.add(l); }
 
   // 街機上方的漂浮標記:白色「▶ PLAY」牌子 + 橘色倒三角,會上下漂浮並永遠面向鏡頭;點它等於點街機
-  playTag = new THREE.Group(); playTag.position.set(0, ARCADE_H + 0.55, D * 0.5); a.add(playTag);   // 對齊街機中心
+  playTag = new THREE.Group(); playTag.position.set(0, ARCADE_H + 0.55, 0.7); a.add(playTag);   // 對齊街機中心
   const tc = document.createElement('canvas'); tc.width = 512; tc.height = 256;
   const g = tc.getContext('2d');
   g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect(8, 8, 496, 240, 70); g.fill();
@@ -240,7 +253,7 @@ function loadGLB(name, url, onLoad) {
   arcadeScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.72), new THREE.MeshBasicMaterial({ map: arcadeScreenTex, transparent: true, toneMapped: false }));
   arcadeScreen.position.set(0, 1.82, 1.022); arcadeScreen.rotation.x = -0.35; a.add(arcadeScreen);
   // 街機螢幕的位置(給鏡頭飛過去用):正面、離地約 1.75(螢幕中心)
-  arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.75, D + 0.02); a.add(arcadeAnchor);
+  arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.75, 1.66); a.add(arcadeAnchor);
   if (window.__room) window.__room.arcade = m;
 }
 
