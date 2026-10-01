@@ -441,8 +441,8 @@ let catModel = null;
 // ---------- 街機螢幕的待機畫面:股票大富翁(一圈彩色格子、兔子繞圈跳、兩顆骰子、跑馬燈報價、閃爍的 PRESS PLAY)----------
 const ARC_COLORS = ['#ff8fc0', '#8b7cff', '#4f8ef0', '#ffd24a', '#f5b942', '#f2796b', '#54c98a', '#5aa9ff', '#c48ad6', '#2a9db5', '#ffd24a', '#e85d9b', '#9aa0ad', '#e6b422', '#3d5a80', '#ffd24a', '#2ec4b6', '#f7931a', '#5aa9ff', '#7fb069', '#b5179e', '#ff9f6b'];
 // 機台螢幕上的按鈕位置(畫布座標 520x385),畫和點擊判定共用
-// PLAY 放在原本「▶ PRESS PLAY」那行字的位置(選單出現時那行字就不畫),語言切換置中放在下方人行道
-const ARC_BTN = { zh: { x: 187, y: 301, w: 72, h: 32 }, en: { x: 261, y: 301, w: 72, h: 32 }, play: { x: 150, y: 187, w: 140, h: 38 } };
+// 版面:跑馬燈在最上面,中間是格子圈,最下面一排左邊是語言切換、右邊是 PLAY
+const ARC_BTN = { zh: { x: 107, y: 337, w: 70, h: 32 }, en: { x: 179, y: 337, w: 70, h: 32 }, play: { x: 273, y: 334, w: 140, h: 38 } };
 function arcadeButtonAt(x, y) {
   for (const k in ARC_BTN) { const b = ARC_BTN[k]; if (x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 8 && y <= b.y + b.h + 8) return k; }
   return null;
@@ -459,10 +459,10 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   g.save();
   g.beginPath(); g.roundRect(0, 0, W, H, 34); g.clip();                    // 圓角螢幕
   g.fillStyle = '#bfe6a8'; g.fillRect(0, 0, W, H);                         // 草地
-  g.fillStyle = '#f6e3c2'; g.beginPath(); g.roundRect(14, 14, W - 28, H - 62, 18); g.fill();   // 人行道
-  g.fillStyle = '#9bdc7a'; g.beginPath(); g.roundRect(84, 68, W - 168, 178, 12); g.fill();      // 中間草地
+  g.fillStyle = '#f6e3c2'; g.beginPath(); g.roundRect(14, 44, W - 28, H - 54, 18); g.fill();   // 人行道(上面留給跑馬燈)
+  g.fillStyle = '#9bdc7a'; g.beginPath(); g.roundRect(84, 98, W - 168, 178, 12); g.fill();      // 中間草地
   // 一圈格子:上下各 8 格、左右各 4 格,共 24 格,順時針排
-  const TW = 58, TH = 44, x0 = 22, y0 = 20, cols = 8, rows = 6, cells = [];
+  const TW = 58, TH = 44, x0 = 22, y0 = 50, cols = 8, rows = 6, cells = [];
   for (let i = 0; i < cols; i++) cells.push([x0 + i * (TW + 2), y0]);
   for (let j = 1; j < rows - 1; j++) cells.push([x0 + (cols - 1) * (TW + 2), y0 + j * (TH + 2)]);
   for (let i = cols - 1; i >= 0; i--) cells.push([x0 + i * (TW + 2), y0 + (rows - 1) * (TH + 2)]);
@@ -496,13 +496,13 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
     g.restore();
   };
   const k = Math.floor(t * 2);
-  die(W / 2 + 98, 138, 1 + (k * 5 + 2) % 6, Math.sin(t * 3) * 0.18); die(W / 2 + 146, 160, 1 + (k * 3 + 4) % 6, Math.sin(t * 3 + 1.4) * 0.18);
+  die(W / 2 + 98, 168, 1 + (k * 5 + 2) % 6, Math.sin(t * 3) * 0.18); die(W / 2 + 146, 190, 1 + (k * 3 + 4) % 6, Math.sin(t * 3 + 1.4) * 0.18);
   // 標題 + 閃爍提示
   g.textAlign = 'center';
-  g.fillStyle = 'rgba(0,0,0,.22)'; g.font = '900 30px Menlo, monospace'; g.fillText('CAT STREET', W / 2 - 40 + 2, 138 + 2); g.fillText('STOCKS', W / 2 - 40 + 2, 172 + 2);
-  g.fillStyle = '#fff'; g.fillText('CAT STREET', W / 2 - 40, 138); g.fillStyle = '#ff7a59'; g.fillText('STOCKS', W / 2 - 40, 172);
-  if (!arcadeMenu && Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#3b2f2a'; g.font = '900 18px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2 - 40, 210); }
-  // 鏡頭停在街機前時:人行道那一條畫上語言切換和 PLAY(點擊判定見 arcadeButtonAt)
+  g.fillStyle = 'rgba(0,0,0,.22)'; g.font = '900 30px Menlo, monospace'; g.fillText('CAT STREET', W / 2 - 40 + 2, 172 + 2); g.fillText('STOCKS', W / 2 - 40 + 2, 208 + 2);
+  g.fillStyle = '#fff'; g.fillText('CAT STREET', W / 2 - 40, 172); g.fillStyle = '#ff7a59'; g.fillText('STOCKS', W / 2 - 40, 208);
+  if (!arcadeMenu && Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#3b2f2a'; g.font = '900 18px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2 - 40, 244); }
+  // 鏡頭停在街機前時:最下面一排畫上語言切換(左)和 PLAY(右)(點擊判定見 arcadeButtonAt)
   if (arcadeMenu) {
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(59,47,42,.16)'; g.beginPath(); g.roundRect(ARC_BTN.zh.x - 4, ARC_BTN.zh.y - 4, ARC_BTN.zh.w + ARC_BTN.en.w + 10, ARC_BTN.zh.h + 8, 20); g.fill();
@@ -516,13 +516,13 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
     g.fillStyle = '#fff'; g.font = '900 17px Menlo, "PingFang TC", monospace'; g.fillText(gameLang === 'zh' ? '▶ 開始' : '▶ PLAY', 0, 1);
     g.restore(); g.textBaseline = 'alphabetic';
   }
-  // 底部跑馬燈報價
-  g.fillStyle = '#2a1f4e'; g.fillRect(0, H - 40, W, 40);
+  // 頂部跑馬燈報價
+  g.fillStyle = '#2a1f4e'; g.fillRect(0, 0, W, 36);
   g.font = '700 15px Menlo, monospace'; g.textAlign = 'left';
   const tw = g.measureText(ARC_TICKER).width; let tx = -((t * 50) % tw);
   for (; tx < W; tx += tw) {
     let x = tx;
-    for (const part of ARC_TICKER.split(/(\s{3})/)) { g.fillStyle = part.includes('+') ? '#7dffb0' : part.includes('-') ? '#ff8a80' : '#fff'; g.fillText(part, x, H - 15); x += g.measureText(part).width; }
+    for (const part of ARC_TICKER.split(/(\s{3})/)) { g.fillStyle = part.includes('+') ? '#7dffb0' : part.includes('-') ? '#ff8a80' : '#fff'; g.fillText(part, x, 24); x += g.measureText(part).width; }
   }
   g.restore();
   // 掃描線,有點 CRT 味
