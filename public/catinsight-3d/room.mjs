@@ -411,45 +411,72 @@ let catModel = null;
   animated.push(cat);
 }
 
-// ---------- 街機螢幕的吸引模式畫面(像素風:天空、雲、山丘、磚塊地板捲動、橘貓、閃爍的 PRESS PLAY)----------
+// ---------- 街機螢幕的待機畫面:股票大富翁(一圈彩色格子、兔子繞圈跳、兩顆骰子、跑馬燈報價、閃爍的 PRESS PLAY)----------
+const ARC_COLORS = ['#ff8fc0', '#8b7cff', '#4f8ef0', '#ffd24a', '#f5b942', '#f2796b', '#54c98a', '#5aa9ff', '#c48ad6', '#2a9db5', '#ffd24a', '#e85d9b', '#9aa0ad', '#e6b422', '#3d5a80', '#ffd24a', '#2ec4b6', '#f7931a', '#5aa9ff', '#7fb069', '#b5179e', '#ff9f6b'];
+const ARC_TICKER = 'TECH +12%   GOLD +10%   OIL -4%   CHIPS +25%   BOND -6%   ETF +3%   BIOTECH +35%   CRYPTO -45%   ';
 function drawArcadeScreen(t) {
   const g = arcadeCanvas.getContext('2d'), W = arcadeCanvas.width, H = arcadeCanvas.height;
   g.clearRect(0, 0, W, H);
   g.save();
   g.beginPath(); g.roundRect(0, 0, W, H, 34); g.clip();                    // 圓角螢幕
-  // 天空
-  const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#5aa7ff'); sky.addColorStop(1, '#9fd2ff');
-  g.fillStyle = sky; g.fillRect(0, 0, W, H);
-  const px = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); };
-  // 雲(慢慢飄)
-  const cloud = (x, y) => { px(x, y, 60, 18, '#fff'); px(x + 12, y - 12, 36, 14, '#fff'); px(x - 8, y + 6, 76, 12, '#fff'); };
-  cloud(((t * 8) % (W + 120)) - 60, 48); cloud(((t * 8 + 260) % (W + 120)) - 60, 92); cloud(((t * 8 + 420) % (W + 120)) - 60, 30);
-  // 山丘
-  g.fillStyle = '#5fcf6a'; g.beginPath(); g.moveTo(-40, 300); g.quadraticCurveTo(80, 170, 200, 300); g.fill();
-  g.beginPath(); g.moveTo(300, 300); g.quadraticCurveTo(420, 200, 540, 300); g.fill();
-  // 問號磚
-  const scroll = (t * 60) % 44;
-  for (const bx of [150, 194, 238]) { px(bx, 150, 40, 40, '#e8923a'); px(bx + 4, 154, 32, 32, '#f7b24a'); g.fillStyle = '#7a3b12'; g.font = '900 26px Menlo, monospace'; g.fillText('?', bx + 11, 182); }
-  // 地板磚(往左捲動)
-  for (let x = -44 - scroll; x < W + 44; x += 44) { px(x, 300, 42, 40, '#c8772d'); px(x + 3, 303, 36, 34, '#e39a4a'); px(x + 3, 303, 36, 6, '#f2c07a'); px(x, 340, 42, 45, '#a85c1d'); px(x + 3, 343, 36, 40, '#c8772d'); }
-  // 橘貓(8-bit,原地小跑跳)
-  const bob = Math.abs(Math.sin(t * 6)) * 6; const cx = 70, cy = 300 - bob;
-  px(cx, cy - 34, 52, 26, '#f29a4a'); px(cx + 36, cy - 52, 24, 22, '#f29a4a');                     // 身體、頭
-  px(cx + 38, cy - 60, 6, 8, '#f29a4a'); px(cx + 52, cy - 60, 6, 8, '#f29a4a');                    // 耳朵
-  px(cx + 46, cy - 46, 4, 4, '#222'); px(cx + 55, cy - 46, 4, 4, '#222');                          // 眼睛
-  px(cx + 4, cy - 8, 8, 8, '#f29a4a'); px(cx + 18, cy - 8, 8, 8, '#f29a4a'); px(cx + 32, cy - 8, 8, 8, '#f29a4a'); px(cx + 44, cy - 8, 8, 8, '#f29a4a');   // 腳
-  px(cx - 10, cy - 44, 8, 14, '#f29a4a'); px(cx - 4, cy - 34, 8, 6, '#f29a4a');                    // 尾巴
-  px(cx + 4, cy - 20, 24, 10, '#fbe3d8');                                                            // 胸口
+  g.fillStyle = '#bfe6a8'; g.fillRect(0, 0, W, H);                         // 草地
+  g.fillStyle = '#f6e3c2'; g.beginPath(); g.roundRect(14, 14, W - 28, H - 62, 18); g.fill();   // 人行道
+  g.fillStyle = '#9bdc7a'; g.beginPath(); g.roundRect(84, 68, W - 168, 178, 12); g.fill();      // 中間草地
+  // 一圈格子:上下各 8 格、左右各 4 格,共 24 格,順時針排
+  const TW = 58, TH = 44, x0 = 22, y0 = 20, cols = 8, rows = 6, cells = [];
+  for (let i = 0; i < cols; i++) cells.push([x0 + i * (TW + 2), y0]);
+  for (let j = 1; j < rows - 1; j++) cells.push([x0 + (cols - 1) * (TW + 2), y0 + j * (TH + 2)]);
+  for (let i = cols - 1; i >= 0; i--) cells.push([x0 + i * (TW + 2), y0 + (rows - 1) * (TH + 2)]);
+  for (let j = rows - 2; j >= 1; j--) cells.push([x0, y0 + j * (TH + 2)]);
+  const n = cells.length, step = t * 2.2, at = Math.floor(step) % n, frac = step % 1;
+  cells.forEach(([x, y], i) => {
+    const c = ARC_COLORS[i % ARC_COLORS.length], lit = i === at;
+    g.fillStyle = c; g.beginPath(); g.roundRect(x, y + 5, TW, TH - 5, 7); g.fill();                 // 側邊顏色
+    g.fillStyle = lit ? '#fffbe0' : '#fff8ec'; g.beginPath(); g.roundRect(x, y - (lit ? 0 : 0), TW, TH - 9, 7); g.fill();   // 頂面
+    g.fillStyle = c; g.beginPath(); g.arc(x + TW / 2, y + 12, 6, 0, Math.PI * 2); g.fill();        // 小圖示
+    g.fillStyle = '#3b2f2a'; g.font = '900 11px Menlo, monospace'; g.textAlign = 'center';
+    g.fillText(i === 0 ? 'GO' : (c === '#ffd24a' ? '?' : '$' + (60 + (i * 37) % 70)), x + TW / 2, y + 30);
+  });
+  // 兔子:從目前這格跳到下一格
+  const [ax, ay] = cells[at], [bx, by] = cells[(at + 1) % n];
+  const rx = ax + (bx - ax) * frac + TW / 2, ry = ay + (by - ay) * frac + 8 - Math.sin(frac * Math.PI) * 18;
+  g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(ax + (bx - ax) * frac + TW / 2, ay + (by - ay) * frac + 16, 13, 5, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#fff4e2';
+  g.beginPath(); g.ellipse(rx - 6, ry - 30, 4.5, 12, -0.12, 0, Math.PI * 2); g.fill(); g.beginPath(); g.ellipse(rx + 6, ry - 30, 4.5, 12, 0.12, 0, Math.PI * 2); g.fill();   // 耳朵
+  g.beginPath(); g.arc(rx, ry - 12, 13, 0, Math.PI * 2); g.fill();                                    // 頭
+  g.fillStyle = '#2e6bd6'; g.beginPath(); g.roundRect(rx - 10, ry - 1, 20, 14, 5); g.fill();          // 衣服
+  g.fillStyle = '#2b2420'; g.beginPath(); g.arc(rx - 5, ry - 13, 1.8, 0, 7); g.arc(rx + 5, ry - 13, 1.8, 0, 7); g.fill();   // 眼睛
+  g.fillStyle = '#ffb3c7'; g.beginPath(); g.arc(rx, ry - 8, 1.6, 0, 7); g.fill();                     // 鼻子
+  // 兩顆骰子:每 0.5 秒換一次點數,輕輕晃
+  const pips = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
+  const die = (cx, cy, v, rot) => {
+    g.save(); g.translate(cx, cy); g.rotate(rot);
+    g.fillStyle = 'rgba(0,0,0,.15)'; g.beginPath(); g.roundRect(-17, -13, 38, 38, 8); g.fill();
+    g.fillStyle = '#fffdf8'; g.strokeStyle = '#5c4033'; g.lineWidth = 2; g.beginPath(); g.roundRect(-19, -19, 38, 38, 8); g.fill(); g.stroke();
+    g.fillStyle = v === 1 ? '#e2483d' : '#2b2420'; for (const [px, py] of pips[v]) { g.beginPath(); g.arc(px * 9, py * 9, v === 1 ? 5 : 3.4, 0, 7); g.fill(); }
+    g.restore();
+  };
+  const k = Math.floor(t * 2);
+  die(W / 2 + 98, 138, 1 + (k * 5 + 2) % 6, Math.sin(t * 3) * 0.18); die(W / 2 + 146, 160, 1 + (k * 3 + 4) % 6, Math.sin(t * 3 + 1.4) * 0.18);
   // 標題 + 閃爍提示
   g.textAlign = 'center';
-  g.fillStyle = 'rgba(0,0,0,.35)'; g.font = '900 46px Menlo, monospace'; g.fillText('CAT ARCADE', W / 2 + 3, 232 + 3);
-  g.fillStyle = '#fff'; g.fillText('CAT ARCADE', W / 2, 232);
-  if (Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#fff36b'; g.font = '900 22px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2, 268); }
-  g.fillStyle = 'rgba(255,255,255,.7)'; g.font = '700 13px Menlo, monospace'; g.fillText('1 PLAYER · INSERT COIN', W / 2, 372);
+  g.fillStyle = 'rgba(0,0,0,.22)'; g.font = '900 30px Menlo, monospace'; g.fillText('CAT STREET', W / 2 - 40 + 2, 138 + 2); g.fillText('STOCKS', W / 2 - 40 + 2, 172 + 2);
+  g.fillStyle = '#fff'; g.fillText('CAT STREET', W / 2 - 40, 138); g.fillStyle = '#ff7a59'; g.fillText('STOCKS', W / 2 - 40, 172);
+  if (Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#3b2f2a'; g.font = '900 18px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2 - 40, 210); }
+  // 底部跑馬燈報價
+  g.fillStyle = '#2a1f4e'; g.fillRect(0, H - 40, W, 40);
+  g.font = '700 15px Menlo, monospace'; g.textAlign = 'left';
+  const tw = g.measureText(ARC_TICKER).width; let tx = -((t * 50) % tw);
+  for (; tx < W; tx += tw) {
+    let x = tx;
+    for (const part of ARC_TICKER.split(/(\s{3})/)) { g.fillStyle = part.includes('+') ? '#7dffb0' : part.includes('-') ? '#ff8a80' : '#fff'; g.fillText(part, x, H - 15); x += g.measureText(part).width; }
+  }
   g.restore();
   // 掃描線,有點 CRT 味
-  g.fillStyle = 'rgba(0,0,0,.10)'; for (let y = 0; y < H; y += 4) g.fillRect(0, y, W, 2);
+  g.fillStyle = 'rgba(0,0,0,.08)'; for (let y = 0; y < H; y += 4) g.fillRect(0, y, W, 2);
 }
+
+window.__arcadeCanvas = arcadeCanvas;
 
 // ---------- 螢幕上的股票線圖 ----------
 const series = [];
