@@ -155,7 +155,7 @@ function newState() {
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])),
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
-    missions: [], done: 0,
+    missions: [], done: 0, me: 'cat', foe: 'bear',
     ai: { pos: 0, cash: START_CASH, hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])) },
   };
   for (let i = 0; i < 3; i++) S.missions.push(drawMission());
@@ -387,7 +387,7 @@ const drawAll = () => tiles.forEach((_, i) => drawLabel(i));
 const piece = new THREE.Group(); scene.add(piece);
 const body = new THREE.Group(); piece.add(body);
 // 棋子可選:預設是原創的幾何兔子;網址加 ?piece=cat 換回房間那隻貓的模型
-const PIECE = new URLSearchParams(location.search).get('piece') || 'bunny';
+const PRESET = new URLSearchParams(location.search).get('piece');   // ?piece=cat|bunny|bear|dog 可以跳過選角
 // 原創兔子(純幾何):奶油色、一隻耳朵折下來、腮紅、粉紅圓點鼻、橘色圍巾。正面朝 +z
 function makeBunny() {
   const g = new THREE.Group();
@@ -419,9 +419,11 @@ function makeBunny() {
 // 載入棋子模型:先放幾何佔位,模型到了再換。貼圖保留,材質換成卡通著色讓它和場景同一種畫風
 function loadPiece(url, height, placeholder, tint, target = body) {
   placeholder.name = 'ph'; target.add(placeholder);
+  const token = (target.userData.token = (target.userData.token || 0) + 1);   // 之後又換角色的話,舊的載入結果就丟掉
   const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
   const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
   loader.load(url, (gltf) => {
+    if (target.userData.token !== token) return;
     const m = gltf.scene;
     const bb = new THREE.Box3().setFromObject(m), size = bb.getSize(new THREE.Vector3()), ctr = bb.getCenter(new THREE.Vector3());
     const k = height / size.y;
@@ -437,29 +439,27 @@ function loadPiece(url, height, placeholder, tint, target = body) {
     target.remove(target.getObjectByName('ph')); target.add(m);
   }, undefined, (e) => console.warn(`[board] ${url} 載入失敗,維持幾何佔位`, e));
 }
-if (PIECE === 'cat') {
-  const ph = new THREE.Group();
-  const b = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), mat(0xffb057)); b.position.y = 0.26; b.scale.y = 1.1; ph.add(b);
-  const h = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 16), mat(0xffb057)); h.position.y = 0.66; ph.add(h);
-  loadPiece('../cat.glb', 0.95, ph, 0xfff0d8);
-} else {
-  const ph = makeBunny(); ph.scale.setScalar(1.25);
-  loadPiece('./bunny.glb?v=1', 1.3, ph);
-}
 body.rotation.y = Math.PI / 4;
-// 對手:小熊(電腦控制)。和玩家站同一格時各往一邊偏一點才不會疊在一起
+// 對手(電腦控制)。和玩家站同一格時各往一邊偏一點才不會疊在一起
 const bearPiece = new THREE.Group(); scene.add(bearPiece);
 const bearBody = new THREE.Group(); bearPiece.add(bearBody); bearBody.rotation.y = Math.PI / 4;
-{
-  const ph = new THREE.Group(), brown = mat(0xb9793f);
-  const b = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), brown); b.position.y = 0.26; b.scale.y = 1.1; ph.add(b);
-  const h = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), brown); h.position.y = 0.68; ph.add(h);
-  [-0.15, 0.15].forEach((x) => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), brown); e.position.set(x, 0.88, 0); ph.add(e); });
-  loadPiece('./bear.glb?v=1', 1.25, ph, undefined, bearBody);
+// 四個角色:開局選一隻當自己,電腦從剩下的挑一隻當對手。模型都是 Meshy 生成後壓到約 250 KB
+const CHARS = {
+  cat:   { url: './kitty.glb?v=1', h: 1.25, name: L('Kitty', '貓咪'), icon: '🐱', color: 0xffb057 },
+  bunny: { url: './bunny.glb?v=1', h: 1.3,  name: L('Bunny', '兔子'), icon: '🐰', color: 0xfff4e2 },
+  bear:  { url: './bear.glb?v=1',  h: 1.25, name: L('Bear', '小熊'),  icon: '🐻', color: 0xb9793f },
+  dog:   { url: './pup.glb?v=1',   h: 1.25, name: L('Pup', '狗狗'),   icon: '🐶', color: 0xe8c9a0 },
+};
+function setChar(target, key) {
+  while (target.children.length) target.remove(target.children[0]);
+  const c = CHARS[key], ph = new THREE.Group(), m = mat(c.color);
+  const b = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), m); b.position.y = 0.26; b.scale.y = 1.1; ph.add(b);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), m); h.position.y = 0.68; ph.add(h);
+  loadPiece(c.url, c.h, ph, undefined, target);
 }
 let focus;
-const ME = { piece, body, off: new THREE.Vector3(-0.2, 0, 0.14) };
-const BEAR = { piece: bearPiece, body: bearBody, off: new THREE.Vector3(0.2, 0, -0.14) };
+const ME = { piece, body, off: new THREE.Vector3(-0.3, 0, 0.2) };
+const BEAR = { piece: bearPiece, body: bearBody, off: new THREE.Vector3(0.3, 0, -0.2) };
 focus = ME;
 function placePiece(i, P = ME) { const p = tilePos(i); P.piece.position.set(p.x + P.off.x, TOP, p.z + P.off.z); }
 
@@ -620,7 +620,7 @@ function hud() {
 function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
   document.title = L('Cat Street Stocks', '貓咪股市大富翁');
-  $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值'); $('lblBear').textContent = L('Bear', '小熊');
+  $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值'); 
   $('bagBtn').textContent = L('Backpack', '背包'); $('mapBtn').textContent = L('Map', '地圖'); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   $('note').textContent = L('Fictional companies · for learning, not investment advice', '公司皆為虛構 · 學習用途,非投資建議');
@@ -747,8 +747,8 @@ const r6 = () => 1 + Math.floor(Math.random() * 6);
 // 小熊的回合。策略很單純,但都是看得懂的規則:
 //   賺超過 15% 就賣;價格比開盤低 5% 以上且現金夠就多買;否則留 $1,500 現金後買 10 股
 async function aiTurn() {
-  const A = S.ai, who = L('Bear', '小熊');
-  focus = BEAR; toast(L("Bear's turn", '小熊的回合')); await wait(0.9);
+  const A = S.ai, who = CHARS[S.foe].name;
+  focus = BEAR; toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
   const a = r6(), b = r6(), n = a + b;
   await rollDice([a, b], BEAR); toast(`${who}: ${a} + ${b} = ${n}`);
   for (let i = 0; i < n; i++) {
@@ -847,7 +847,7 @@ function finish() {
     <h2>${title}</h2>
     <p>${L('Total assets', '總資產')} <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) · ${L(`${S.rolls} rolls`, `${S.rolls} 回合`)}</p>
     <p>${L(`${S.done} missions completed`, `完成 ${S.done} 個任務`)}</p>
-    <p>${L('Bear', '小熊')} <b>$${fmt(aiAssets())}</b> · ${a >= aiAssets() ? L('you beat the bear', '你贏過小熊') : L('the bear beat you', '小熊贏了')}</p>
+    <p>${CHARS[S.foe].icon} ${CHARS[S.foe].name} <b>$${fmt(aiAssets())}</b> · ${a >= aiAssets() ? L(`you beat ${CHARS[S.foe].name}`, `你贏過${CHARS[S.foe].name}`) : L(`${CHARS[S.foe].name} beat you`, `${CHARS[S.foe].name}贏了`)}</p>
     <p>${style}</p>
     <p style="font-size:12.5px">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`;
@@ -855,9 +855,24 @@ function finish() {
   $('again').onclick = start;
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
 }
-function start() {
+// 選角:四選一。電腦的對手從剩下三隻裡隨機挑
+function pickPanel() {
+  return new Promise((res) => {
+    const p = panel(`<h3>${L('Choose your character', '選擇你的角色')}</h3><p>${L('The computer plays one of the others.', '電腦會從其他角色裡挑一隻當對手。')}</p>` +
+      `<div class="pick">${Object.keys(CHARS).map((k) => `<button data-k="${k}"><span>${CHARS[k].icon}</span>${CHARS[k].name}</button>`).join('')}</div>`);
+    p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.k); });
+  });
+}
+async function start() {
   newState(); $('end').classList.add('hide'); closePanel();
-  staticText(); placePiece(0, ME); placePiece(0, BEAR); focus = ME; diceSpots(ME); dice.forEach((d, i) => d.position.copy(DIE_REST[i])); drawAll(); hud(); showCtl(true);
+  staticText(); placePiece(0, ME); placePiece(0, BEAR); focus = ME; diceSpots(ME); dice.forEach((d, i) => d.position.copy(DIE_REST[i])); drawAll();
+  S.busy = true; showCtl(false); hud();
+  const me = CHARS[PRESET] ? PRESET : await pickPanel();
+  const rest = Object.keys(CHARS).filter((k) => k !== me);
+  S.me = me; S.foe = rest[Math.floor(Math.random() * rest.length)];
+  setChar(body, S.me); setChar(bearBody, S.foe);
+  $('lblBear').textContent = CHARS[S.foe].name;
+  hud(); S.busy = false; showCtl(true);
 }
 
 $('rollBtn').onclick = () => turn();

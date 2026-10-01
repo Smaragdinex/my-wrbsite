@@ -476,12 +476,12 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
     g.fillStyle = '#3b2f2a'; g.font = '900 11px Menlo, monospace'; g.textAlign = 'center';
     g.fillText(i === 0 ? 'GO' : (c === '#ffd24a' ? '?' : '$' + (60 + (i * 37) % 70)), x + TW / 2, y + 30);
   });
-  // 兔子:從目前這格跳到下一格
+  // 貓:從目前這格跳到下一格
   const [ax, ay] = cells[at], [bx, by] = cells[(at + 1) % n];
   const rx = ax + (bx - ax) * frac + TW / 2, ry = ay + (by - ay) * frac + 8 - Math.sin(frac * Math.PI) * 18;
   g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(ax + (bx - ax) * frac + TW / 2, ay + (by - ay) * frac + 16, 13, 5, 0, 0, Math.PI * 2); g.fill();
-  g.fillStyle = '#fff4e2';
-  g.beginPath(); g.ellipse(rx - 6, ry - 30, 4.5, 12, -0.12, 0, Math.PI * 2); g.fill(); g.beginPath(); g.ellipse(rx + 6, ry - 30, 4.5, 12, 0.12, 0, Math.PI * 2); g.fill();   // 耳朵
+  g.fillStyle = '#ffb057';   // 主角是橘貓
+  g.beginPath(); g.moveTo(rx - 12, ry - 17); g.lineTo(rx - 9, ry - 30); g.lineTo(rx - 2, ry - 22); g.fill(); g.beginPath(); g.moveTo(rx + 12, ry - 17); g.lineTo(rx + 9, ry - 30); g.lineTo(rx + 2, ry - 22); g.fill();   // 尖耳朵
   g.beginPath(); g.arc(rx, ry - 12, 13, 0, Math.PI * 2); g.fill();                                    // 頭
   g.fillStyle = '#2e6bd6'; g.beginPath(); g.roundRect(rx - 10, ry - 1, 20, 14, 5); g.fill();          // 衣服
   g.fillStyle = '#2b2420'; g.beginPath(); g.arc(rx - 5, ry - 13, 1.8, 0, 7); g.arc(rx + 5, ry - 13, 1.8, 0, 7); g.fill();   // 眼睛
@@ -722,7 +722,7 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=24';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=25';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 在機台螢幕上按 PLAY → 鏡頭先推進到螢幕蓋滿畫面(updateZoom 裡的 pushT)→ 推到底時 openGame() 換成真正的遊戲
