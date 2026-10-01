@@ -438,7 +438,7 @@ let catModel = null;
   animated.push(cat);
 }
 
-// ---------- 街機螢幕的待機畫面:股票大富翁(一圈彩色格子、兔子繞圈跳、兩顆骰子、跑馬燈報價、閃爍的 PRESS PLAY)----------
+// ---------- 街機螢幕的待機畫面:股票大富翁(一圈彩色格子、兔子繞圈跳、兩顆骰子、跑馬燈報價)----------
 const ARC_COLORS = ['#ff8fc0', '#8b7cff', '#4f8ef0', '#ffd24a', '#f5b942', '#f2796b', '#54c98a', '#5aa9ff', '#c48ad6', '#2a9db5', '#ffd24a', '#e85d9b', '#9aa0ad', '#e6b422', '#3d5a80', '#ffd24a', '#2ec4b6', '#f7931a', '#5aa9ff', '#7fb069', '#b5179e', '#ff9f6b'];
 // 機台螢幕上的按鈕位置(畫布座標 520x385),畫和點擊判定共用
 // 版面:跑馬燈在最上面,中間是格子圈,最下面一排左邊是語言切換、右邊是 PLAY
@@ -501,7 +501,6 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   g.textAlign = 'center';
   g.fillStyle = 'rgba(0,0,0,.22)'; g.font = '900 30px Menlo, monospace'; g.fillText('CAT STREET', W / 2 - 40 + 2, 172 + 2); g.fillText('STOCKS', W / 2 - 40 + 2, 208 + 2);
   g.fillStyle = '#fff'; g.fillText('CAT STREET', W / 2 - 40, 172); g.fillStyle = '#ff7a59'; g.fillText('STOCKS', W / 2 - 40, 208);
-  if (!arcadeMenu && Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#3b2f2a'; g.font = '900 18px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2 - 40, 244); }
   // 鏡頭停在街機前時:最下面一排畫上語言切換(左)和 PLAY(右)(點擊判定見 arcadeButtonAt)
   if (arcadeMenu) {
     g.textAlign = 'center'; g.textBaseline = 'middle';
