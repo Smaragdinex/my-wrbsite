@@ -586,10 +586,11 @@ function updateZoom(dt) {
   const e = zoomT * zoomT * (3 - 2 * zoomT);
   const half = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
   let dist;
-  if (focusArcade && arcadeAnchor) {
-    arcadeAnchor.getWorldPosition(scrPos);
-    arcadeAnchor.getWorldDirection(scrNormal);                             // 街機正面朝向
-    dist = 1.7;
+  if (focusArcade && arcadeScreen) {
+    // 鏡頭正對街機螢幕(螢幕是往後仰的,所以沿著它的法線看),拉近到螢幕剛好填滿畫面,機台本身不入鏡
+    arcadeScreen.getWorldPosition(scrPos);
+    arcadeScreen.getWorldDirection(scrNormal);
+    dist = Math.max(0.36 / half, 0.49 / (half * camera.aspect)) * 1.01;
   } else {
     screenMesh.getWorldPosition(scrPos);
     screenMesh.getWorldDirection(scrNormal);                               // 平面 +z = 法線,朝向房間
@@ -599,7 +600,9 @@ function updateZoom(dt) {
   camera.position.lerpVectors(orbitPos, endPos, e);
   lookTgt.lerpVectors(orbitTarget, scrPos, e);
   camera.lookAt(lookTgt);
-  arcadeMenu = zoomGoal >= 1 && zoomT > 0.985 && focusArcade && !gameOn;   // 鏡頭停在街機前:機台螢幕上出現語言 / PLAY 按鈕
+  // 鏡頭快到街機螢幕前(0.9 就算,最後那段收尾很慢不用等):螢幕上出現語言 / PLAY 按鈕,房間的 logo 和右下按鈕先收起來
+  arcadeMenu = zoomGoal >= 1 && zoomT > 0.9 && focusArcade && !gameOn;
+  document.body.classList.toggle('arcade-on', zoomGoal >= 1 && focusArcade && zoomT > 0.5);
   if (zoomGoal >= 1 && zoomT > 0.985 && !focusArcade && !uiOn) showUI();     // 鏡頭到電腦螢幕 → 淡入介紹介面
 }
 
