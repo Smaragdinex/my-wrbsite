@@ -252,23 +252,35 @@ function makeBunny() {
   add(sph(0.045), pink, 0.165, 0.575, 0.17, 1, 0.6, 0.5).castShadow = false;
   return g;
 }
-if (PIECE === 'cat') {
-  // 佔位:模型還沒載到之前先放一隻幾何貓
-  const ph = new THREE.Group(); ph.name = 'ph'; body.add(ph);
-  const b = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), mat(0xffb057)); b.position.y = 0.26; b.scale.y = 1.1; b.castShadow = true; ph.add(b);
-  const h = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 16), mat(0xffb057)); h.position.y = 0.66; h.castShadow = true; ph.add(h);
+// 載入棋子模型:先放幾何佔位,模型到了再換。貼圖保留,材質換成卡通著色讓它和場景同一種畫風
+function loadPiece(url, height, placeholder, tint) {
+  placeholder.name = 'ph'; body.add(placeholder);
   const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
   const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
-  loader.load('../cat.glb', (gltf) => {
+  loader.load(url, (gltf) => {
     const m = gltf.scene;
     const bb = new THREE.Box3().setFromObject(m), size = bb.getSize(new THREE.Vector3()), ctr = bb.getCenter(new THREE.Vector3());
-    const k = 0.95 / size.y;
+    const k = height / size.y;
     m.scale.setScalar(k); m.position.set(-ctr.x * k, -bb.min.y * k, -ctr.z * k);
-    m.traverse((o) => { if (o.isMesh) { o.castShadow = true; if (o.material) { o.material.emissive = new THREE.Color(0xffb040); o.material.emissiveIntensity = 0.22; } } });
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      const old = o.material;
+      o.material = new THREE.MeshToonMaterial({ map: old.map || null, color: tint ?? 0xffffff, gradientMap: toonRamp, side: old.side });
+      // 生成模型在 UV 接縫處法線不連續,描邊會沿接縫裂開變成臉上的髒線 → 這個模型不描邊
+      o.material.userData.outlineParameters = { visible: false };
+    });
     body.remove(body.getObjectByName('ph')); body.add(m);
-  }, undefined, (e) => console.warn('[board] cat.glb 載入失敗,用幾何貓代替', e));
+  }, undefined, (e) => console.warn(`[board] ${url} 載入失敗,維持幾何佔位`, e));
+}
+if (PIECE === 'cat') {
+  const ph = new THREE.Group();
+  const b = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), mat(0xffb057)); b.position.y = 0.26; b.scale.y = 1.1; ph.add(b);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 16), mat(0xffb057)); h.position.y = 0.66; ph.add(h);
+  loadPiece('../cat.glb', 0.95, ph, 0xfff0d8);
 } else {
-  const bunny = makeBunny(); bunny.scale.setScalar(1.25); body.add(bunny);
+  const ph = makeBunny(); ph.scale.setScalar(1.25);
+  loadPiece('./bunny.glb?v=1', 1.3, ph);
 }
 body.rotation.y = Math.PI / 4;
 function placePiece(i) { const p = tilePos(i); piece.position.set(p.x, TOP, p.z); }
@@ -313,7 +325,7 @@ function step(dt) {
     if (k >= 1) { tweens.splice(i, 1); a.res(); }
   }
   // 待機:貓輕輕呼吸;小樓平滑長高
-  if (!S.busy) body.scale.y = 1 + Math.sin(T * 3) * 0.02;
+  if (!S.busy) { body.scale.y = 1 + Math.sin(T * 3) * 0.025; body.rotation.z = Math.sin(T * 1.6) * 0.04; } else body.rotation.z *= 0.85;
   tiles.forEach((t) => {
     if (!t.bld) return;
     const target = Math.min(3, S.hold[t.type].n / LOT) * 0.24;
