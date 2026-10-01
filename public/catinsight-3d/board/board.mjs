@@ -26,9 +26,11 @@ const SECTORS = {
   reit:   { name: L('Cat Tower REIT', '貓跳台不動產'), code: L('REIT', '不動產'), color: 0xc48ad6, css: '#ad6cc4', open: 100, div: 0.04, blurb: L('Pays 4% a lap. Hates rate hikes.', '每圈配息 4%,最怕升息。') },
 };
 const KEYS = Object.keys(SECTORS);
-// 16 格:四個角是特殊格
-const TILES = ['start', 'yield', 'chip', 'chance', 'fee', 'tech', 'health', 'oil', 'chance', 'reit', 'yield', 'chance', 'paw', 'chip', 'tech', 'oil'];
-const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, paw: 0x7cc6ff };
+// 7x7 外圈共 24 格;四個角是 起點 / 商店 / 手續費 / 商店
+const N = 7;
+const TILES = ['start', 'yield', 'chip', 'chance', 'tech', 'health', 'shop', 'oil', 'reit', 'chance', 'chip', 'yield',
+  'fee', 'tech', 'health', 'chance', 'oil', 'reit', 'shop', 'chip', 'tech', 'gift', 'yield', 'oil'];
+const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b };
 const EVENTS = [
   { t: L('Rate cut announced', '央行宣布降息'),        m: { tech: 1.20, chip: 1.10, yield: 0.97, oil: 1.00, health: 1.00, reit: 1.12 }, w: L('Cheaper borrowing lifts growth stocks and property.', '借錢變便宜,成長股和不動產最受惠。') },
   { t: L('AI server demand booms', 'AI 伺服器需求爆發'), m: { tech: 1.10, chip: 1.25, yield: 1.00, oil: 0.95, health: 1.00, reit: 1.00 }, w: L('Scarce chips let makers raise prices.', '晶片供不應求,廠商有漲價空間。') },
@@ -39,6 +41,17 @@ const EVENTS = [
   { t: L('Flu season hits', '流感疫情升溫'),           m: { tech: 0.98, chip: 0.98, yield: 1.00, oil: 0.96, health: 1.20, reit: 1.00 }, w: L('Demand for medicine and care jumps.', '醫療需求大增。') },
 ];
 const LOT = 10, START_CASH = 10000, SALARY = 500, FEE = 200, MAX_ROLLS = 15;
+// 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
+const SALE_EVENTS = [0, 1, 2, 4, 6];          // 商店會賣的事件卡(黑天鵝和升息不賣)
+const REMOTE_PRICE = 300, CARD_PRICE = 500;
+function itemInfo(id) {
+  if (id === 'remote') return { icon: '🎲', name: L('Remote dice', '遙控骰子'), desc: L('Pick any total from 2 to 12 instead of rolling.', '不用擲骰,自己指定走 2 到 12 步。'), price: REMOTE_PRICE };
+  const e = EVENTS[+id.slice(2)];
+  const best = KEYS.reduce((a, k) => (e.m[k] > e.m[a] ? k : a), KEYS[0]);
+  return { icon: '🃏', name: L('Event card: ', '事件卡:') + e.t, event: e, best,
+    desc: L(`Play it to trigger this event. ${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%.`, `使用後立刻發生這個事件,${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%。`), price: CARD_PRICE };
+}
+const randomItem = () => (Math.random() < 0.5 ? 'remote' : 'ev' + SALE_EVENTS[Math.floor(Math.random() * SALE_EVENTS.length)]);
 
 /* ───────────── 狀態 ───────────── */
 let S;
@@ -55,7 +68,7 @@ const MISSIONS = [
 function newState() {
   const pool = MISSIONS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
   S = {
-    pos: 0, cash: START_CASH, rolls: 0, paws: 2, busy: false, over: false,
+    pos: 0, cash: START_CASH, rolls: 0, bag: ['remote'], busy: false, over: false,
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])),
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
@@ -80,7 +93,7 @@ function resize() {
   const w = innerWidth, h = innerHeight, a = w / h;
   renderer.setSize(w, h, false);
   // 棋盤在等軸測下大約寬 9、高 6;兩個方向都要塞得下,下方再留一點給按鈕
-  const half = Math.max(4.2, 5.0 / a);
+  const half = Math.max(5.3, 6.6 / a);
   cam.left = -half * a; cam.right = half * a; cam.top = half * 0.92; cam.bottom = -half * 1.08;
   cam.updateProjectionMatrix();
 }
@@ -88,10 +101,10 @@ addEventListener('resize', resize);
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0xffe9c9, 1.15));
 const sun = new THREE.DirectionalLight(0xfff2dd, 1.7);
-sun.position.set(-6, 12, 5);
+sun.position.set(-7, 14, 6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 40 });
+Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 13, bottom: -13, near: 1, far: 50 });
 sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
 scene.add(sun);
 
@@ -109,8 +122,8 @@ function box(w, h, d, color, x, y, z, r = 0.06, parent = scene) {
 // 地面、人行道、草地
 {
   const g = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), mat(0xc9e8b8)); g.material.userData.outlineParameters = { visible: false }; g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
-  box(5 * STEP + 0.7, 0.12, 5 * STEP + 0.7, 0xf6e3c2, 0, 0.06, 0, 0.05);
-  box(3 * STEP - 0.12, 0.16, 3 * STEP - 0.12, 0x9bdc7a, 0, 0.10, 0, 0.05);
+  box(N * STEP + 0.7, 0.12, N * STEP + 0.7, 0xf6e3c2, 0, 0.06, 0, 0.05);
+  box((N - 2) * STEP - 0.12, 0.16, (N - 2) * STEP - 0.12, 0x9bdc7a, 0, 0.10, 0, 0.05);
 }
 // 小鎮裝飾:樹和房子(純幾何)
 function tree(x, z, s = 1) {
@@ -140,27 +153,29 @@ function fence(x, z, len, alongX) {
 function flowers(n) {
   const cols = [0xffffff, 0xffd24a, 0xff9ec4, 0xffffff];
   for (let i = 0; i < n; i++) {
-    const x = (Math.random() - 0.5) * 2.9, z = (Math.random() - 0.5) * 2.9;
-    if (Math.hypot(x - 0.55, z - 0.55) < 0.6) continue;   // 留位置給骰子
+    const R = (N - 2) * STEP - 0.7, x = (Math.random() - 0.5) * R, z = (Math.random() - 0.5) * R;
+    if (Math.hypot(x - 0.4, z - 0.6) < 1.1) continue;   // 留位置給骰子
     const f = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), mat(cols[i % cols.length])); f.position.set(x, 0.21, z); scene.add(f);
     const st = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), mat(0x86c96f)); st.position.set(x + 0.05, 0.19, z + 0.03); st.scale.y = 0.5; scene.add(st);
   }
 }
-const E = 2.5 * STEP + 0.62;
+const E = N / 2 * STEP + 0.62;
 [[-E, -E], [E, -E], [-E, E]].forEach(([x, z]) => lamp(x, z));   // 最靠鏡頭的那個角不放,會擋到起點
 fence(-E - 0.5, -1.4, 5, false); fence(-1.4, -E - 0.5, 5, true); fence(1.9, -E - 0.5, 4, true);
-flowers(26);
-[[-4.6, -4.4, 1.2], [-5.4, -1.6, 1], [-4.5, 1.6, 1.1], [-1.4, -5.2, 1], [1.8, -4.8, 1.2], [4.6, -5.3, 0.9], [-5.6, 4.4, 1.1], [5.5, -2.2, 1]].forEach((a) => tree(...a));
-house(-4.9, -2.9, 0xfff1dc, 0x6fb7c9, 0.2); house(-2.9, -5.1, 0xffe6ee, 0xf2a35e, -0.15); house(3.3, -5.4, 0xeef4ff, 0xe2726b, 0.1); house(-5.6, 0.2, 0xfdf6e3, 0xd9b24a, 0.3);
+flowers(70);
+[[-4.6, -4.4, 1.2], [-5.4, -1.6, 1], [-4.5, 1.6, 1.1], [-1.4, -5.2, 1], [1.8, -4.8, 1.2], [4.6, -5.3, 0.9], [-5.6, 4.4, 1.1], [5.5, -2.2, 1], [-3.2, -5.6, 1], [0.4, -5.6, 1.1]]
+  .forEach(([x, z, sc]) => tree(x * 1.42, z * 1.42, sc * 1.15));
+house(-7.0, -4.1, 0xfff1dc, 0x6fb7c9, 0.2); house(-4.1, -7.2, 0xffe6ee, 0xf2a35e, -0.15); house(4.7, -7.6, 0xeef4ff, 0xe2726b, 0.1); house(-7.9, 0.3, 0xfdf6e3, 0xd9b24a, 0.3); house(0.6, -7.9, 0xfdf6e3, 0x8fbf6a, 0);
 
 /* ───────────── 棋盤 ───────────── */
 // 5x5 外圈,從最靠近鏡頭的角開始逆時針走
 const COORD = [];
-for (let x = 4; x >= 0; x--) COORD.push([x, 4]);
-for (let z = 3; z >= 0; z--) COORD.push([0, z]);
-for (let x = 1; x <= 4; x++) COORD.push([x, 0]);
-for (let z = 1; z <= 3; z++) COORD.push([4, z]);
-const tilePos = (i) => new THREE.Vector3((COORD[i][0] - 2) * STEP, 0, (COORD[i][1] - 2) * STEP);
+const M = N - 1;
+for (let x = M; x >= 0; x--) COORD.push([x, M]);
+for (let z = M - 1; z >= 0; z--) COORD.push([0, z]);
+for (let x = 1; x <= M; x++) COORD.push([x, 0]);
+for (let z = 1; z <= M - 1; z++) COORD.push([M, z]);
+const tilePos = (i) => new THREE.Vector3((COORD[i][0] - M / 2) * STEP, 0, (COORD[i][1] - M / 2) * STEP);
 
 const tiles = [];
 TILES.forEach((type, i) => {
@@ -211,7 +226,7 @@ function drawLabel(i) {
     c.fillStyle = '#b0780a'; c.font = F(150); c.fillText('?', 128, 112);
     c.font = F(34); c.fillText(L('EVENT', '市場事件'), 128, 208);
   } else {
-    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], paw: [L('PAW', '貓掌'), '+1'] }[t.type];
+    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], shop: [L('SHOP', '商店'), L('buy items', '買道具')], gift: [L('GIFT', '禮物'), L('free item', '送道具')] }[t.type];
     c.fillStyle = '#fff'; c.font = F(ZH ? 60 : 72); c.fillText(a, 128, 104);
     c.font = F(ZH ? 34 : 40); c.fillText(b, 128, 168);
   }
@@ -298,10 +313,9 @@ function pipTex(n) {
 }
 // BoxGeometry 的面順序是 +x,-x,+y,-y,+z,-z;對面加起來是 7
 const FACE = [3, 4, 1, 6, 2, 5];
-const die = new THREE.Mesh(new RoundedBoxGeometry(DIE, DIE, DIE, 4, 0.08), FACE.map((n) => new THREE.MeshToonMaterial({ map: pipTex(n), gradientMap: toonRamp })));
-die.castShadow = true; scene.add(die);
-const DIE_REST = new THREE.Vector3(0.55, 0.18 + DIE / 2, 0.55);
-die.position.copy(DIE_REST);
+const dieMats = FACE.map((n) => new THREE.MeshToonMaterial({ map: pipTex(n), gradientMap: toonRamp }));
+const DIE_REST = [new THREE.Vector3(0.75, 0.18 + DIE / 2, 0.25), new THREE.Vector3(0.05, 0.18 + DIE / 2, 0.95)];
+const dice = DIE_REST.map((p) => { const d = new THREE.Mesh(new RoundedBoxGeometry(DIE, DIE, DIE, 4, 0.08), dieMats); d.castShadow = true; d.position.copy(p); scene.add(d); return d; });
 // 讓點數 n 朝上的姿態
 const UPQ = {
   1: new THREE.Quaternion(),
@@ -338,18 +352,23 @@ let last = performance.now();
 function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; step(dt); requestAnimationFrame(loop); }
 window.__tick = (ms = 16) => { for (let t = 0; t < ms; t += 16) step(0.016); };
 
-async function rollDie(n) {
-  const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
-  const final = yaw.multiply(UPQ[n]);
-  const axis = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.4, Math.random() - 0.5).normalize();
-  const from = new THREE.Vector3(-1.1, 2.6, -1.1), spin = new THREE.Quaternion();
-  await tween(0.95, (k) => {
+// 兩顆骰子一起擲:各自有自己的起點、旋轉軸和落點,最後停在指定點數朝上
+async function rollDice(vals) {
+  const plan = dice.map((d, i) => {
+    const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
+    return { d, rest: DIE_REST[i], final: yaw.multiply(UPQ[vals[i]]),
+      axis: new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.4, Math.random() - 0.5).normalize(),
+      from: new THREE.Vector3(-1.6 + i * 0.9, 2.8, -1.6 - i * 0.5), turns: 6 + i * 2, bounce: 2.5 + i * 0.4 };
+  });
+  const spin = new THREE.Quaternion();
+  await tween(1.0, (k) => {
     const e = ease(k);
-    die.position.lerpVectors(from, DIE_REST, e);
-    // 落地彈兩下
-    die.position.y = DIE_REST.y + Math.abs(Math.cos(k * Math.PI * 2.5)) * (1 - k) * 2.3;
-    spin.setFromAxisAngle(axis, (1 - k) * (1 - k) * Math.PI * 7);
-    die.quaternion.copy(final).multiply(spin);
+    for (const q of plan) {
+      q.d.position.lerpVectors(q.from, q.rest, e);
+      q.d.position.y = q.rest.y + Math.abs(Math.cos(k * Math.PI * q.bounce)) * (1 - k) * 2.3;   // 落地彈兩下
+      spin.setFromAxisAngle(q.axis, (1 - k) * (1 - k) * Math.PI * q.turns);
+      q.d.quaternion.copy(q.final).multiply(spin);
+    }
   });
   await wait(0.25);
 }
@@ -379,6 +398,11 @@ function advise() {
   if (todo.has('spread') && held.length < 3) return L(`You hold ${held.length} sector${held.length === 1 ? '' : 's'}. Three different ones spread your risk.`, `你現在持有 ${held.length} 種類股,湊滿 3 種可以分散風險。`);
   if (todo.has('paid')) return L('High-yield and REIT pay the most each lap. Hold them when you pass GO.', '高股息和不動產配息最多,持有它們再繞回起點就能領股利。');
   if (todo.has('cash') && S.cash < 2000) return L('Cash is low. Keep $2,000 so you can buy when a chance shows up.', '現金偏低。留 $2,000 以上,好機會出現時才買得起。');
+  const card = S.bag.find((id) => id !== 'remote');
+  if (card) { const it = itemInfo(card), sec = SECTORS[it.best];
+    return S.hold[it.best].n > 0
+      ? L(`You hold ${sec.name} and a card that lifts it. Open your backpack to play it.`, `你持有${sec.name},背包裡有一張會讓它上漲的事件卡,可以打開背包使用。`)
+      : L(`Your event card lifts ${sec.name}. Buy that sector first, then play the card.`, `你的事件卡會讓${sec.name}上漲。先買進那個類股,再使用卡片。`); }
   if (d) return L(`A market event is ${d} step${d > 1 ? 's' : ''} ahead. Every price may move.`, `前方第 ${d} 格是市場事件,所有價格都可能變動。`);
   return L('No one knows the next roll. Spread out and keep some cash.', '沒有人知道下一步會擲出幾點,分散持股、留點現金最穩。');
 }
@@ -386,10 +410,9 @@ function hud() {
   $('cash').textContent = fmt(S.cash);
   $('assets').textContent = fmt(assets());
   $('stocks').textContent = fmt(stockValue());
-  $('paws').textContent = S.paws;
+  $('bagCount').textContent = S.bag.length;
   $('mcount').textContent = S.missions.filter((m) => m.done).length + '/3';
   $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left`, `剩 ${MAX_ROLLS - S.rolls} 次`);
-  $('pawBtn').disabled = S.paws <= 0;
   $('miss').innerHTML = S.missions.map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
   $('tip').textContent = advise();
@@ -408,7 +431,7 @@ function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
   document.title = L('Cat Street Stocks', '貓咪股市大富翁');
   $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值');
-  $('pawBtn').textContent = L('Use paw', '使用貓掌'); $('rollTxt').textContent = L('ROLL', '擲骰子');
+  $('bagBtn').textContent = L('Backpack', '背包'); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   $('note').textContent = L('Fictional companies · for learning, not investment advice', '公司皆為虛構 · 學習用途,非投資建議');
 }
@@ -472,11 +495,71 @@ function checkMissions() {
   S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; toast(L('Mission complete: ', '任務完成:') + m.title); } });
   hud();
 }
+async function playEvent(e) {
+  KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
+  S.lastEvent = e; drawAll(); hud();
+  const moves = KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
+  await cardPanel(e.t, e.w, moves);
+}
+// 商店:每次進來賣遙控骰子 + 兩張隨機事件卡,可以買好幾個
+function shopPanel() {
+  const cards = SALE_EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 2).map((i) => 'ev' + i);
+  const stock = ['remote', ...cards];
+  return new Promise((res) => {
+    const draw = () => {
+      const p = panel(`<h3>${L('Item shop', '道具商店')}</h3><p>${L('Items go in your backpack. Use them before you roll.', '買的道具會放進背包,輪到你擲骰前可以使用。')}</p>` +
+        stock.map((id, i) => { const it = itemInfo(id);
+          return `<div class="it"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${it.desc}</small></span><button class="b-buy" data-i="${i}" ${S.cash < it.price ? 'disabled' : ''}>$${it.price}</button></div>`; }).join('') +
+        `<div class="btns"><button class="b-skip" data-i="-1">${L('Leave', '離開')}</button></div>`);
+      p.querySelectorAll('button').forEach((b) => b.onclick = () => {
+        const i = +b.dataset.i;
+        if (i < 0) { closePanel(); return res(); }
+        const it = itemInfo(stock[i]); S.cash -= it.price; S.bag.push(stock[i]); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
+      });
+    };
+    draw();
+  });
+}
+// 背包:只有輪到自己、還沒擲骰時能開
+function bagPanel() {
+  if (S.busy || S.over) return;
+  S.busy = true; $('ctl').classList.add('hide');
+  const close = () => { closePanel(); S.busy = false; showCtl(true); };
+  const kinds = [...new Set(S.bag)];
+  const p = panel(`<h3>${L('Backpack', '背包')}</h3>` +
+    (kinds.length ? kinds.map((id) => { const it = itemInfo(id), c = S.bag.filter((x) => x === id).length;
+      return `<div class="it"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}${c > 1 ? ' ×' + c : ''}</b><small>${it.desc}</small></span><button class="b-ok" data-id="${id}">${L('Use', '使用')}</button></div>`; }).join('')
+      : `<p>${L('Empty. Buy items at a shop tile.', '背包是空的。走到商店格可以買道具。')}</p>`) +
+    `<div class="btns"><button class="b-skip" data-id="">${L('Close', '關閉')}</button></div>`);
+  p.querySelectorAll('button').forEach((b) => b.onclick = async () => {
+    const id = b.dataset.id;
+    if (!id) return close();
+    closePanel();
+    if (id === 'remote') {
+      $('steps').innerHTML = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `<button data-n="${n}">${n}</button>`).join('') + '<button data-n="0" style="background:#a99b90;box-shadow:0 4px 0 #857a70">×</button>';
+      $('stepCtl').classList.remove('hide');
+      $('steps').querySelectorAll('button').forEach((x) => x.onclick = () => {
+        const n = +x.dataset.n; $('stepCtl').classList.add('hide'); S.busy = false;
+        if (!n) return showCtl(true);
+        S.bag.splice(S.bag.indexOf('remote'), 1); hud(); turn(n);
+      });
+    } else {
+      S.bag.splice(S.bag.indexOf(id), 1);
+      await playEvent(itemInfo(id).event);
+      checkMissions(); S.busy = false; showCtl(true);
+      if (S.missions.every((m) => m.done)) finish(3);
+    }
+  });
+}
 async function turn(forced) {
   if (S.busy || S.over) return;
   S.busy = true; showCtl(false);
-  const n = forced ?? 1 + Math.floor(Math.random() * 6);
-  if (!forced) await rollDie(n);
+  // 兩顆骰子;遙控骰子(forced)則是把指定的步數拆成兩顆的點數
+  const r6 = () => 1 + Math.floor(Math.random() * 6);
+  const a = forced ? Math.max(1, Math.min(6, Math.floor(forced / 2))) : r6(), b = forced ? forced - a : r6();
+  const n = a + b;
+  await rollDice([a, b]);
+  toast(`${a} + ${b} = ${n}`);
   for (let i = 0; i < n; i++) {
     S.pos = (S.pos + 1) % TILES.length;
     await hopTo(S.pos);
@@ -491,13 +574,11 @@ async function turn(forced) {
   const type = TILES[S.pos];
   if (SECTORS[type]) await buyPanel(type);
   else if (type === 'chance') {
-    const e = EVENTS[Math.floor(Math.random() * EVENTS.length)];
-    KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
-    S.lastEvent = e; drawAll(); hud();
-    const moves = KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
-    await cardPanel(e.t, e.w, moves);
+    await playEvent(EVENTS[Math.floor(Math.random() * EVENTS.length)]);
   } else if (type === 'fee') { S.cash -= FEE; hud(); await cardPanel(L('Trading fees', '交易手續費'), L(`Every trade has a cost. You paid $${FEE}.`, `每筆交易都有成本,這次付了 $${FEE}。`)); }
-  else if (type === 'paw') { S.paws++; hud(); await cardPanel(L('Lucky paw', '撿到貓掌'), L('You found a paw. Use it to pick how far you walk instead of rolling.', '得到一個貓掌,可以自己決定走幾步,不用擲骰子。')); }
+  else if (type === 'shop') await shopPanel();
+  else if (type === 'gift') { const id = randomItem(), it = itemInfo(id); S.bag.push(id); hud();
+    await cardPanel(L('A gift', '收到禮物'), `${it.icon} ${it.name}<br>${it.desc}<br>${L('It is in your backpack.', '已放進背包。')}`); }
   else await cardPanel(L('Payday', '發薪日'), L(`Salary $${fmt(SALARY)}${S.lastDividend > 0 ? ` plus $${fmt(S.lastDividend)} in dividends` : ''}. Holding stocks pays you every lap.`, `薪水 $${fmt(SALARY)}${S.lastDividend > 0 ? `,加上股利 $${fmt(S.lastDividend)}` : ''}。持有股票,每繞一圈都會配息。`));
 
   S.cashStreak = (stockValue() > 0 && S.cash >= 2000) ? S.cashStreak + 1 : 0;
@@ -538,18 +619,8 @@ function start() {
 }
 
 $('rollBtn').onclick = () => turn();
-$('pawBtn').onclick = () => {
-  if (S.busy || S.paws <= 0) return;
-  $('ctl').classList.add('hide');
-  $('steps').innerHTML = [1, 2, 3, 4, 5, 6].map((n) => `<button data-n="${n}">${n}</button>`).join('') + '<button data-n="0" style="background:#a99b90;box-shadow:0 4px 0 #857a70">×</button>';
-  $('stepCtl').classList.remove('hide');
-  $('steps').querySelectorAll('button').forEach((b) => b.onclick = () => {
-    const n = +b.dataset.n; $('stepCtl').classList.add('hide');
-    if (!n) return showCtl(true);
-    S.paws--; hud(); turn(n);
-  });
-};
+$('bagBtn').onclick = bagPanel;
 
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, turn, tiles, die, piece };
+window.__game = { get S() { return S; }, turn, tiles, dice, piece, bagPanel };
