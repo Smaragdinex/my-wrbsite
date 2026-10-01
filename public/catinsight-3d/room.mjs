@@ -590,7 +590,7 @@ function updateZoom(dt) {
   if (focusArcade && arcadeAnchor) {
     arcadeAnchor.getWorldPosition(scrPos);
     arcadeAnchor.getWorldDirection(scrNormal);                             // 街機正面朝向,機台外框一起入鏡
-    dist = 1.7;
+    dist = 1.32;
   } else {
     screenMesh.getWorldPosition(scrPos);
     screenMesh.getWorldDirection(scrNormal);                               // 平面 +z = 法線,朝向房間
