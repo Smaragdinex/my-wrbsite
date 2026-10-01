@@ -618,11 +618,13 @@ canvas.addEventListener('pointerup', (e) => {
   else if ((playTag && raycaster.intersectObject(playTag, true).length) || (arcadeScreen && raycaster.intersectObject(arcadeScreen).length) || (arcadeModel && raycaster.intersectObject(arcadeModel, true).length)) { focusArcade = true; zoomGoal = 1; }
 });
 
-// ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入貓咪瑪利歐小遊戲(cat-game?minigame=1) ----------
-const GAME_URL = 'https://smaragdinex.github.io/cat-game/?minigame=1&v=16';   // v 參數用來避開 GitHub Pages 對 index.html 的快取
+// ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
+// 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
+const GAME_URL = './board/?v=20';   // v 參數用來避開 index.html 的快取
+const GAME_W = 1120, GAME_H = 680;
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
-function fitGame() { const k = Math.min((innerWidth - 40) / 960, (innerHeight - 170) / 544, 1.15); gameCab.style.transform = `scale(${k})`; }
+function fitGame() { const k = Math.min((innerWidth - 40) / GAME_W, (innerHeight - 150) / GAME_H, 1.15); gameCab.style.transform = `scale(${k})`; }
 window.addEventListener('resize', fitGame);
 function showGame() {
   gameOn = true;
