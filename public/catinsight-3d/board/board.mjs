@@ -532,6 +532,28 @@ function pickStage() {
     $('pok').onclick = () => { stageOn = false; stage.visible = false; document.body.classList.remove('picking'); res(slots[stageSel].key); };
   });
 }
+// 角色頭像:把模型單獨拍一張正面半身照(離屏渲染到 RenderTarget,讀回像素轉成圖片),給左上角頭像和對手面板用
+const portraitCache = {};
+async function portrait(key) {
+  if (portraitCache[key]) return portraitCache[key];
+  const c = CHARS[key], tpl = await loadModel(c.url, c.h), SZ = 192;
+  const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0xffe9c9, 1.3)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(-1, 2, 3); sc.add(dl);
+  sc.add(tpl.clone(true));
+  const pc = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 10); pc.position.set(0, c.h * 0.66, 3); pc.lookAt(0, c.h * 0.66, 0);
+  const rt = new THREE.WebGLRenderTarget(SZ, SZ); rt.texture.colorSpace = THREE.SRGBColorSpace;
+  const prev = renderer.getRenderTarget(), oc = renderer.getClearColor(new THREE.Color()), oa = renderer.getClearAlpha();
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(sc, pc);
+  const px = new Uint8Array(SZ * SZ * 4); renderer.readRenderTargetPixels(rt, 0, 0, SZ, SZ, px);
+  renderer.setRenderTarget(prev); renderer.setClearColor(oc, oa); rt.dispose();
+  const cv = document.createElement('canvas'); cv.width = cv.height = SZ; const g = cv.getContext('2d'), img = g.createImageData(SZ, SZ);
+  for (let y = 0; y < SZ; y++) img.data.set(px.subarray((SZ - 1 - y) * SZ * 4, (SZ - y) * SZ * 4), y * SZ * 4);   // WebGL 的原點在左下,要上下翻
+  g.putImageData(img, 0, 0);
+  return (portraitCache[key] = cv.toDataURL());
+}
+function setPortraits() {
+  const put = (el, key) => portrait(key).then((url) => { if (el) el.style.backgroundImage = `url(${url})`; }).catch(() => {});
+  put($('avaMe'), S.me); put($('foeAva'), S.foe);
+}
 let focus;
 const ME = { piece, body, off: new THREE.Vector3(-0.3, 0, 0.2) };
 const BEAR = { piece: bearPiece, body: bearBody, off: new THREE.Vector3(0.3, 0, -0.2) };
@@ -689,9 +711,17 @@ function hud() {
         KEYS.filter((k) => S.short[k].n > 0).map((k) => { const pl = (S.short[k].entry - S.price[k]) * S.short[k].n;
           return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${S.short[k].n}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('')
       : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`);
+  // 對手的資產:現金 + 每一檔持股,讓你知道該打哪一檔
+  { const A = S.ai, held = KEYS.filter((k) => A.hold[k].n > 0).sort((x, y) => A.hold[y].n * S.price[y] - A.hold[x].n * S.price[x]);
+    $('foeName').textContent = L(`${CHARS[S.foe].name}'s assets`, `${CHARS[S.foe].name}的資產`);
+    $('foeRows').innerHTML =
+      `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` +
+      (held.length ? held.map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${A.hold[k].n} ${L('sh', '股')}</span><span>${fmt(A.hold[k].n * S.price[k])}</span></div>`).join('')
+        : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
+      (A.bag.length ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : ''); }
   const e = S.lastEvent;
   $('evtBody').innerHTML = e
-    ? `<div>${e.t}</div><div class="why">${e.w}</div>` + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).map((k) => { const d = Math.round((e.m[k] - 1) * 100);
+    ? `<div>${e.t}</div><div class="why">${e.w}</div>` + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
     : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`;
   $('roundTxt').textContent = L(`Round ${S.rolls} / ${MAX_ROLLS}`, `回合 ${S.rolls} / ${MAX_ROLLS}`);
@@ -1013,7 +1043,7 @@ async function start() {
   const me = CHARS[PRESET] ? PRESET : await pickStage();
   const rest = Object.keys(CHARS).filter((k) => k !== me);
   S.me = me; S.foe = rest[Math.floor(Math.random() * rest.length)];
-  setChar(body, S.me); setChar(bearBody, S.foe);
+  setChar(body, S.me); setChar(bearBody, S.foe); setPortraits();
   $('lblBear').textContent = CHARS[S.foe].name;
   hud(); S.busy = false; showCtl(true);
 }
