@@ -27,39 +27,83 @@ const SECTORS = {
   fin:    { name: L('Purr Bank', '咕嚕金控'),       code: L('FINANCE', '金融股'),  color: 0x2a9db5, css: '#1f8aa1', open: 85,  div: 0.03, blurb: L('Likes higher rates. Steady 3% a lap.', '升息時受惠,每圈配息 3%。') },
   trans:  { name: L('Zoomies Shipping', '暴衝航運'), code: L('TRANSPORT', '運輸股'), color: 0x9a7b66, css: '#86654f', open: 75,  div: 0.02, blurb: L('Hurt by fuel costs, lifted by trade booms.', '油價漲就受傷,運價漲就大賺。') },
   bio:    { name: L('Catnip Bio', '貓草生技'),       code: L('BIOTECH', '生技股'),  color: 0xe85d9b, css: '#d44a88', open: 110, div: 0,    blurb: L('No dividends. Drug news makes it soar or crash.', '不配息,新藥消息決定大漲或大跌。') },
+  staples: { name: L('Kibble Foods', '乾糧食品'),      code: L('STAPLES', '民生消費'), color: 0x7fb069, css: '#62964b', open: 65,  div: 0.03, blurb: L('People buy food in any economy. Falls least in a panic.', '景氣再差也要吃飯,恐慌時跌最少。') },
+  disc:    { name: L('Tuna Can Travel', '罐罐旅遊'),   code: L('LEISURE', '觀光餐飲'), color: 0xff8c69, css: '#ef6f48', open: 85,  div: 0.01, blurb: L('People spend here only when times are good.', '有閒錢才會花,景氣好壞差很多。') },
+  util:    { name: L('Whisker Power', '鬍鬚電力'),     code: L('UTILITY', '公用事業'), color: 0x5c7cba, css: '#4a69a8', open: 55,  div: 0.04, blurb: L('Boring and steady. Pays 4% a lap.', '無聊但穩定,每圈配息 4%。') },
+  mat:     { name: L('Scratch Steel', '貓抓鋼鐵'),     code: L('MATERIALS', '原物料'), color: 0x8a8f98, css: '#6f757f', open: 70,  div: 0.02, blurb: L('Rises with inflation and building booms.', '跟著通膨和景氣走。') },
+  gold:    { name: L('Golden Bell', '金鈴鐺'),         code: L('GOLD', '黃金'),       color: 0xe6b422, css: '#c4950c', open: 100, div: 0,    blurb: L('A safe haven. Rises when markets panic.', '避險資產,市場恐慌時反而上漲。') },
+  bond:    { name: L('Nap Bond', '午睡債券'),          code: L('BOND', '債券'),       color: 0x6aa5a9, css: '#4f8c90', open: 100, div: 0.03, blurb: L('Up when rates fall, down when they rise.', '降息漲、升息跌,和股票互補。') },
+  etf:     { name: L('Whole Market ETF', '全市場 ETF'), code: L('ETF', '大盤ETF'),     color: 0x3d5a80, css: '#3d5a80', open: 100, div: 0.02, blurb: L('Owns a bit of every stock sector at once.', '一次買進所有產業,最簡單的分散。') },
+  green:   { name: L('Sunbeam EV', '曬太陽電動車'),    code: L('GREEN', '綠能車'),    color: 0x2ec4b6, css: '#1fa799', open: 95,  div: 0,    blurb: L('Lives on subsidies and cheap loans.', '靠政策補助和低利率成長。') },
+  def:     { name: L('Claw Defense', '利爪軍工'),      code: L('DEFENSE', '軍工'),    color: 0x6b7d3a, css: '#5a6b2c', open: 90,  div: 0.02, blurb: L('Rises when the world gets tense.', '國際情勢緊張時上漲。') },
+  game:    { name: L('Laser Dot Games', '紅點遊戲'),   code: L('GAMES', '遊戲'),      color: 0xb5179e, css: '#a01389', open: 80,  div: 0.01, blurb: L('One hit title can change everything.', '一款大作就能改變一切。') },
+  crypto:  { name: L('MeowCoin', '喵喵幣'),            code: L('CRYPTO', '加密貨幣'), color: 0xf7931a, css: '#dd7d0a', open: 100, div: 0,    vol: 0.14, blurb: L('Not a stock. No earnings behind it, wild swings.', '不是股票,背後沒有獲利,波動極大。') },
 };
 const KEYS = Object.keys(SECTORS);
-// 7x7 外圈共 24 格;四個角是 起點 / 商店 / 手續費 / 商店
-const N = 7;
-const TILES = ['start', 'yield', 'chip', 'chance', 'tech', 'fin', 'shop', 'oil', 'reit', 'chance', 'trans', 'bio',
-  'fee', 'tech', 'health', 'chance', 'fin', 'yield', 'shop', 'chip', 'trans', 'gift', 'bio', 'oil'];
-const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b };
-const EV = (t, w, m) => ({ t, w, m: { tech: 1, chip: 1, yield: 1, oil: 1, health: 1, reit: 1, fin: 1, trans: 1, bio: 1, ...m } });
+// 16x16 外圈共 60 格。四個角:起點 / 商店 / 股息結算 / 商店
+const N = 16;
+const TILES = (() => {
+  const t = new Array(4 * (N - 1)).fill(null);
+  t[0] = 'start'; t[15] = 'shop'; t[30] = 'divi'; t[45] = 'shop';
+  [4, 11, 19, 26, 34, 41, 49, 56].forEach((i) => { t[i] = 'chance'; });
+  [8, 38].forEach((i) => { t[i] = 'fee'; });
+  [22, 52].forEach((i) => { t[i] = 'gift'; });
+  // 剩下 44 格:20 種資產各兩格,最常用的四種多一格
+  const seq = [...KEYS, 'etf', 'tech', ...KEYS, 'chip', 'yield'];
+  let j = 0; for (let i = 0; i < t.length; i++) if (!t[i]) t[i] = seq[j++];
+  return t;
+})();
+const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b, divi: 0x8f7cf0 };
+// 事件卡:只寫「有變動的資產」,沒寫的就是不動。
+// 大盤 ETF 不用自己寫 —— 它等於所有「股票類股」這次漲跌的平均(黃金、債券、加密貨幣不算)
+const NON_EQUITY = new Set(['gold', 'bond', 'crypto', 'etf']);
+const EV = (t, w, m) => {
+  const full = Object.fromEntries(KEYS.map((k) => [k, m[k] ?? 1]));
+  const eq = KEYS.filter((k) => !NON_EQUITY.has(k));
+  full.etf = m.etf ?? Math.round(eq.reduce((a, k) => a + full[k], 0) / eq.length * 100) / 100;
+  return { t, w, m: full };
+};
 const EVENTS = [
-  EV(L('Rate cut announced', '央行宣布降息'), L('Cheaper borrowing lifts growth stocks and property; banks earn less on loans.', '借錢變便宜,成長股和不動產受惠;銀行利差縮小。'),
-    { tech: 1.20, chip: 1.10, yield: 0.97, reit: 1.12, fin: 0.94, trans: 1.04, bio: 1.12 }),
-  EV(L('AI server demand booms', 'AI 伺服器需求爆發'), L('Scarce chips let makers raise prices.', '晶片供不應求,廠商有漲價空間。'),
-    { tech: 1.10, chip: 1.25, oil: 0.95, trans: 1.03 }),
-  EV(L('Oil supply shock', '原油供給吃緊'), L('Energy gains; fuel-hungry shippers and airlines suffer.', '能源股受惠;最吃燃料的運輸業受傷最重。'),
-    { tech: 0.93, chip: 0.95, oil: 1.25, reit: 0.97, fin: 0.98, trans: 0.82 }),
-  EV(L('Black swan', '黑天鵝事件'), L('Panic selling hits the riskiest sectors hardest.', '恐慌賣壓下,風險高的類股跌最多。'),
-    { tech: 0.80, chip: 0.80, yield: 0.95, oil: 0.90, health: 0.98, reit: 0.90, fin: 0.85, trans: 0.85, bio: 0.78 }),
+  EV(L('Rate cut announced', '央行宣布降息'), L('Cheaper borrowing lifts growth stocks, property and bonds; banks earn less on loans.', '借錢變便宜,成長股、不動產、債券受惠;銀行利差縮小。'),
+    { tech: 1.20, chip: 1.10, yield: 0.97, reit: 1.12, fin: 0.94, trans: 1.04, bio: 1.12, bond: 1.08, util: 1.05, gold: 1.04, green: 1.12, disc: 1.06, game: 1.08, mat: 1.03, crypto: 1.15 }),
+  EV(L('AI server demand booms', 'AI 伺服器需求爆發'), L('Scarce chips let makers raise prices. Data centers need more power too.', '晶片供不應求,廠商有漲價空間;資料中心也更吃電。'),
+    { tech: 1.10, chip: 1.25, oil: 0.95, trans: 1.03, game: 1.05, util: 1.04 }),
+  EV(L('Oil supply shock', '原油供給吃緊'), L('Energy gains; fuel-hungry shippers and travel suffer.', '能源股受惠;最吃燃料的運輸和旅遊受傷最重。'),
+    { tech: 0.93, chip: 0.95, oil: 1.25, reit: 0.97, fin: 0.98, trans: 0.82, mat: 1.06, disc: 0.92, staples: 0.97, green: 1.10, gold: 1.04, util: 0.96, def: 1.03 }),
+  EV(L('Black swan', '黑天鵝事件'), L('Panic selling hits the riskiest assets hardest. Gold and bonds are where money hides.', '恐慌賣壓下風險高的跌最多,資金躲進黃金和債券。'),
+    { tech: 0.80, chip: 0.80, yield: 0.95, oil: 0.90, health: 0.98, reit: 0.90, fin: 0.85, trans: 0.85, bio: 0.78, gold: 1.15, bond: 1.06, staples: 0.97, util: 0.97, disc: 0.82, mat: 0.86, green: 0.80, game: 0.88, def: 1.02, crypto: 0.65 }),
   EV(L('Strong earnings season', '財報季優於預期'), L('Profits beat forecasts across the board.', '企業獲利普遍優於預期。'),
-    { tech: 1.12, chip: 1.12, yield: 1.04, oil: 1.04, health: 1.06, reit: 1.03, fin: 1.08, trans: 1.08, bio: 1.05 }),
-  EV(L('Rate hike surprise', '意外升息'), L('Higher rates hurt growth and property, but banks earn more on loans.', '升息壓抑成長股與不動產,銀行利差反而擴大。'),
-    { tech: 0.90, chip: 0.92, yield: 1.03, oil: 1.02, reit: 0.88, fin: 1.12, trans: 0.96, bio: 0.88 }),
-  EV(L('Flu season hits', '流感疫情升溫'), L('Demand for medicine and vaccines jumps; travel slows.', '藥品與疫苗需求大增,出遊與運輸減少。'),
-    { tech: 0.98, oil: 0.96, health: 1.20, trans: 0.94, bio: 1.22 }),
+    { tech: 1.12, chip: 1.12, yield: 1.04, oil: 1.04, health: 1.06, reit: 1.03, fin: 1.08, trans: 1.08, bio: 1.05, staples: 1.03, disc: 1.10, util: 1.02, mat: 1.07, green: 1.08, game: 1.10, def: 1.04, gold: 0.98, bond: 0.99, crypto: 1.05 }),
+  EV(L('Rate hike surprise', '意外升息'), L('Higher rates hurt growth, property and bonds, but banks earn more on loans.', '升息壓抑成長股、不動產和債券,銀行利差反而擴大。'),
+    { tech: 0.90, chip: 0.92, yield: 1.03, oil: 1.02, reit: 0.88, fin: 1.12, trans: 0.96, bio: 0.88, bond: 0.92, util: 0.94, gold: 0.96, green: 0.88, disc: 0.94, game: 0.92, staples: 0.99, mat: 0.97, crypto: 0.82 }),
+  EV(L('Flu season hits', '流感疫情升溫'), L('Demand for medicine jumps; people stay home, travel less and play more games.', '藥品需求大增;大家待在家,少出遊、多打電動。'),
+    { tech: 0.98, oil: 0.96, health: 1.20, trans: 0.94, bio: 1.22, disc: 0.85, staples: 1.06, game: 1.12 }),
   EV(L('New drug approved', '新藥獲准上市'), L('One approval can change everything for a biotech.', '一張藥證就能改變一家生技公司的命運。'),
     { health: 1.08, bio: 1.35 }),
   EV(L('Shipping rates surge', '運價大漲'), L('Ports are jammed and ships are scarce, so freight prices jump.', '港口塞港、運力不足,運費跟著漲。'),
-    { tech: 0.98, oil: 1.05, trans: 1.28 }),
+    { tech: 0.98, oil: 1.05, trans: 1.28, mat: 1.04, staples: 0.98, disc: 0.98 }),
   EV(L('Clinical trial fails', '臨床試驗失敗'), L('Biotech has no profits to fall back on, so bad news hits hard.', '生技公司沒有獲利撐腰,壞消息一來跌很深。'),
     { health: 0.97, bio: 0.70 }),
+  EV(L('Geopolitical tension rises', '國際情勢緊張'), L('Money moves to defense, energy and gold; trade and travel suffer.', '資金流向軍工、能源和黃金;貿易與旅遊受影響。'),
+    { def: 1.28, gold: 1.10, oil: 1.12, trans: 0.92, disc: 0.90, tech: 0.95, chip: 0.93, bond: 1.03, crypto: 0.92 }),
+  EV(L('Green subsidy passed', '綠能補助通過'), L('Policy support matters most for industries that are not yet profitable.', '還沒賺錢的產業,最吃政策支持。'),
+    { green: 1.30, util: 1.05, mat: 1.05, oil: 0.94 }),
+  EV(L('Hit game launches', '遊戲大作上市'), L('A single hit can carry a game company for years.', '一款大作可以養一家遊戲公司好幾年。'),
+    { game: 1.30, tech: 1.04, chip: 1.03 }),
+  EV(L('Inflation runs hot', '通膨升溫'), L('Hard assets hold value; bonds and growth stocks lose it.', '實體資產保值;債券和成長股受壓。'),
+    { gold: 1.10, mat: 1.12, oil: 1.08, staples: 1.04, reit: 1.03, bond: 0.94, tech: 0.93, disc: 0.92, crypto: 1.05 }),
+  EV(L('Holiday shopping boom', '年終消費旺季'), L('When people feel rich, they travel, eat out and shop.', '大家手頭寬裕時,會出遊、聚餐、買東西。'),
+    { disc: 1.22, staples: 1.06, trans: 1.08, fin: 1.03, game: 1.06 }),
+  EV(L('Crypto exchange hacked', '加密貨幣交易所遭駭'), L('With no earnings behind it, confidence is all crypto has.', '加密貨幣背後沒有獲利,信心一垮就崩。'),
+    { crypto: 0.55, fin: 0.98, gold: 1.03 }),
+  EV(L('Crypto mania', '幣圈狂熱'), L('Prices can soar on hype alone, and fall the same way.', '純靠熱度也能暴漲,當然也能同樣暴跌。'),
+    { crypto: 1.60, chip: 1.05, tech: 1.02 }),
+  EV(L('Commodity boom', '原物料行情'), L('Building booms push up steel, cement and energy.', '基礎建設需求推升鋼鐵、水泥和能源。'),
+    { mat: 1.25, oil: 1.08, trans: 1.04 }),
 ];
-const LOT = 10, START_CASH = 10000, SALARY = 500, FEE = 200, MAX_ROLLS = 15;
+const LOT = 10, START_CASH = 10000, SALARY = 500, FEE = 200, MAX_ROLLS = 20;
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
-const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8];    // 商店會賣的事件卡(黑天鵝、升息、試驗失敗不賣)
+const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17];    // 商店會賣的事件卡(壞消息類的不賣)
 const REMOTE_PRICE = 300, CARD_PRICE = 500;
 function itemInfo(id) {
   if (id === 'remote') return { icon: '🎲', name: L('Remote dice', '遙控骰子'), desc: L('Pick any total from 2 to 12 instead of rolling.', '不用擲骰,自己指定走 2 到 12 步。'), price: REMOTE_PRICE };
@@ -75,24 +119,44 @@ let S;
 const assets = () => S.cash + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 const aiAssets = () => S.ai.cash + KEYS.reduce((a, k) => a + S.ai.hold[k].n * S.price[k], 0);
 const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
-const MISSIONS = [
-  { id: 'spread', title: L('Spread it out', '分散投資'),     sub: L('Hold 3 different sectors at once', '同時持有 3 種不同類股'),               ok: () => KEYS.filter((k) => S.hold[k].n > 0).length >= 3 },
-  { id: 'paid',   title: L('Get paid to wait', '領到股利'),  sub: L('Collect $150+ in dividends on one payday', '一次發薪日領到 $150 以上股利'), ok: () => S.lastDividend >= 150 },
-  { id: 'dip',    title: L('Buy the dip', '逢低買進'),       sub: L('Buy a sector trading below its opening price', '買進一檔低於開盤價的類股'),  ok: () => S.flags.dip },
-  { id: 'profit', title: L('Take profit', '獲利了結'),       sub: L('Sell a holding that is up 15% or more', '賣出一檔賺超過 15% 的持股'),       ok: () => S.flags.profit },
-  { id: 'cash',   title: L('Keep dry powder', '保留現金'),   sub: L('Own stock and keep $2,000+ cash for 3 turns', '持有股票且連續 3 回合現金 $2,000 以上'), ok: () => S.cashStreak >= 3 },
-  { id: 'grow',   title: L('Grow the pile', '資產成長'),     sub: L('Reach $11,000 in total assets', '總資產達到 $11,000'),                   ok: () => assets() >= 11000 },
+// 任務:同時有 3 個。完成一個領 $500 獎金並換一個新的,一路玩到回合用完;結算依完成數給星星。
+// 每個任務在「抽出來的當下」才決定目標(例如資產成長的門檻跟著你現在的資產走),所以可以重複抽到
+const REWARD = 500;
+const heldCount = () => KEYS.filter((k) => S.hold[k].n > 0).length;
+const MISSION_DEFS = [
+  { id: 'spread', make: () => { const need = Math.min(7, Math.max(3, heldCount() + 1));
+      return { title: L('Spread it out', '分散投資'), sub: L(`Hold ${need} different assets at once`, `同時持有 ${need} 種不同資產`), ok: () => heldCount() >= need }; } },
+  { id: 'paid', make: () => { S.lastDividend = 0;
+      return { title: L('Get paid to wait', '領到股利'), sub: L('Collect $150+ in dividends at one payout', '一次領到 $150 以上股利'), ok: () => S.lastDividend >= 150 }; } },
+  { id: 'dip', make: () => { S.flags.dip = false;
+      return { title: L('Buy the dip', '逢低買進'), sub: L('Buy an asset trading below its opening price', '買進一檔低於開盤價的資產'), ok: () => S.flags.dip }; } },
+  { id: 'profit', make: () => { S.flags.profit = false;
+      return { title: L('Take profit', '獲利了結'), sub: L('Sell a holding that is up 15% or more', '賣出一檔賺超過 15% 的持股'), ok: () => S.flags.profit }; } },
+  { id: 'cash', make: () => { S.cashStreak = 0;
+      return { title: L('Keep dry powder', '保留現金'), sub: L('Own assets and keep $2,000+ cash for 3 turns', '持有資產且連續 3 回合現金 $2,000 以上'), ok: () => S.cashStreak >= 3 }; } },
+  { id: 'grow', make: () => { const goal = Math.max(11000, Math.ceil(assets() * 1.08 / 500) * 500);
+      return { title: L('Grow the pile', '資產成長'), sub: L(`Reach $${fmt(goal)} in total assets`, `總資產達到 $${fmt(goal)}`), ok: () => assets() >= goal }; } },
+  { id: 'haven', make: () => ({ title: L('Find a safe haven', '準備避險'), sub: L('Hold gold or bonds', '持有黃金或債券'), ok: () => S.hold.gold.n > 0 || S.hold.bond.n > 0 }) },
+  { id: 'index', make: () => ({ title: L('Own the market', '買下整個市場'), sub: L('Hold the whole-market ETF', '持有大盤 ETF'), ok: () => S.hold.etf.n > 0 }) },
+  { id: 'income', make: () => ({ title: L('Build income', '打造現金流'), sub: L('Hold 2 assets that pay 3% or more', '持有 2 種配息 3% 以上的資產'), ok: () => KEYS.filter((k) => S.hold[k].n > 0 && SECTORS[k].div >= 0.03).length >= 2 }) },
 ];
+// 抽一個「現在還沒達成、而且場上沒有」的任務
+function drawMission() {
+  const active = new Set(S.missions.map((m) => m.id));
+  const pool = MISSION_DEFS.filter((d) => !active.has(d.id)).sort(() => Math.random() - 0.5);
+  for (const d of pool) { const m = { id: d.id, done: false, ...d.make() }; if (!m.ok()) return m; }
+  const d = pool[0]; return { id: d.id, done: false, ...d.make() };
+}
 function newState() {
-  const pool = MISSIONS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
   S = {
     pos: 0, cash: START_CASH, rolls: 0, bag: ['remote'], busy: false, over: false,
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])),
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
-    missions: pool.map((m) => ({ ...m, done: false })),
+    missions: [], done: 0,
     ai: { pos: 0, cash: START_CASH, hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])) },
   };
+  for (let i = 0; i < 3; i++) S.missions.push(drawMission());
 }
 
 /* ───────────── Three.js 場景 ───────────── */
@@ -106,24 +170,34 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xc9e8b8);
 
 const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-cam.position.set(12, 11, 12);
-cam.lookAt(0, 0.2, 0);
+// 棋盤很大,鏡頭平常拉近跟著「現在在走的那顆棋子」;按地圖鈕可以拉遠看全貌
+const CAM_OFF = new THREE.Vector3(12, 11, 12), camT = new THREE.Vector3(0, 0.2, 0);
+cam.position.copy(camT).add(CAM_OFF);
+cam.lookAt(camT);
+const view = { half: 5, near: 5, far: 16, overview: false, aspect: 1 };
+function applyFrustum() {
+  const h = view.half, a = view.aspect;
+  cam.left = -h * a; cam.right = h * a; cam.top = h * 0.92; cam.bottom = -h * 1.08;
+  cam.updateProjectionMatrix();
+}
 function resize() {
   const w = innerWidth, h = innerHeight, a = w / h;
   renderer.setSize(w, h, false);
   // 棋盤在等軸測下大約寬 9、高 6;兩個方向都要塞得下,下方再留一點給按鈕
-  const half = Math.max(5.3, 6.6 / a);
-  cam.left = -half * a; cam.right = half * a; cam.top = half * 0.92; cam.bottom = -half * 1.08;
-  cam.updateProjectionMatrix();
+  view.aspect = a;
+  view.near = Math.max(4.6, 5.6 / a);
+  view.far = Math.max(8.6, (N * 1.14 + 1) * 0.74 / a);
+  if (!view.half0) { view.half0 = true; view.half = view.near; }
+  applyFrustum();
 }
 addEventListener('resize', resize);
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0xffe9c9, 1.15));
 const sun = new THREE.DirectionalLight(0xfff2dd, 1.7);
-sun.position.set(-7, 14, 6);
+const SUN_OFF = new THREE.Vector3(-7, 14, 6); sun.position.copy(SUN_OFF); scene.add(sun.target);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 13, bottom: -13, near: 1, far: 50 });
+Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 60 });
 sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
 scene.add(sun);
 
@@ -140,7 +214,7 @@ function box(w, h, d, color, x, y, z, r = 0.06, parent = scene) {
 }
 // 地面、人行道、草地
 {
-  const g = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), mat(0xc9e8b8)); g.material.userData.outlineParameters = { visible: false }; g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), mat(0xc9e8b8)); g.material.userData.outlineParameters = { visible: false }; g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
   box(N * STEP + 0.7, 0.12, N * STEP + 0.7, 0xf6e3c2, 0, 0.06, 0, 0.05);
   box((N - 2) * STEP - 0.12, 0.16, (N - 2) * STEP - 0.12, 0x9bdc7a, 0, 0.10, 0, 0.05);
 }
@@ -169,22 +243,49 @@ function fence(x, z, len, alongX) {
   for (let i = 0; i < len; i++) { const o = (i - (len - 1) / 2) * 0.42;
     box(alongX ? 0.36 : 0.08, 0.34, alongX ? 0.08 : 0.36, 0xd9a86c, x + (alongX ? o : 0), 0.2, z + (alongX ? 0 : o), 0.02); }
 }
-function flowers(n) {
-  const cols = [0xffffff, 0xffd24a, 0xff9ec4, 0xffffff];
-  for (let i = 0; i < n; i++) {
-    const R = (N - 2) * STEP - 0.7, x = (Math.random() - 0.5) * R, z = (Math.random() - 0.5) * R;
-    if (Math.hypot(x - 0.4, z - 0.6) < 1.1) continue;   // 留位置給骰子
-    const f = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), mat(cols[i % cols.length])); f.position.set(x, 0.21, z); scene.add(f);
-    const st = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), mat(0x86c96f)); st.position.set(x + 0.05, 0.19, z + 0.03); st.scale.y = 0.5; scene.add(st);
-  }
-}
 const E = N / 2 * STEP + 0.62;
 [[-E, -E], [E, -E], [-E, E]].forEach(([x, z]) => lamp(x, z));   // 最靠鏡頭的那個角不放,會擋到起點
-fence(-E - 0.5, -1.4, 5, false); fence(-1.4, -E - 0.5, 5, true); fence(1.9, -E - 0.5, 4, true);
-flowers(70);
-[[-4.6, -4.4, 1.2], [-5.4, -1.6, 1], [-4.5, 1.6, 1.1], [-1.4, -5.2, 1], [1.8, -4.8, 1.2], [4.6, -5.3, 0.9], [-5.6, 4.4, 1.1], [5.5, -2.2, 1], [-3.2, -5.6, 1], [0.4, -5.6, 1.1]]
-  .forEach(([x, z, sc]) => tree(x * 1.42, z * 1.42, sc * 1.15));
-house(-7.0, -4.1, 0xfff1dc, 0x6fb7c9, 0.2); house(-4.1, -7.2, 0xffe6ee, 0xf2a35e, -0.15); house(4.7, -7.6, 0xeef4ff, 0xe2726b, 0.1); house(-7.9, 0.3, 0xfdf6e3, 0xd9b24a, 0.3); house(0.6, -7.9, 0xfdf6e3, 0x8fbf6a, 0);
+// 外圍:只在「鏡頭對面」的兩側放樹和房子,靠鏡頭這兩側放了會擋到格子
+{
+  const walls = [0xfff1dc, 0xffe6ee, 0xeef4ff, 0xfdf6e3], roofs = [0x6fb7c9, 0xf2a35e, 0xe2726b, 0xd9b24a, 0x8fbf6a];
+  let k = 0;
+  for (let t = -E; t <= E; t += 2.3) {
+    const far = E + 1.7 + (k % 3) * 0.7;
+    if (k % 4 === 1) { house(-far - 0.8, t, walls[k % 4], roofs[k % 5], Math.PI / 2 + 0.1); house(t, -far - 0.8, walls[(k + 2) % 4], roofs[(k + 3) % 5], 0.1); }
+    else { tree(-far, t, 1 + (k % 3) * 0.15); tree(t, -far, 1 + ((k + 1) % 3) * 0.15); }
+    if (k % 2 === 0) { fence(-E - 0.5, t, 3, false); fence(t, -E - 0.5, 3, true); }
+    k++;
+  }
+}
+// 中間的大草地:一個小公園(池塘、樹、房子、花),都離內圈 3.5 格以上,留給骰子滾
+{
+  const pond = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.06, 40), mat(0x8fd3ff)); pond.position.set(-0.8, 0.2, 0.6); pond.scale.z = 0.7; scene.add(pond);
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.05, 40), mat(0xf6e3c2)); rim.position.set(-0.8, 0.185, 0.6); rim.scale.z = 0.72; scene.add(rim);
+  [[-3.4, -2.6, 1.2], [-2.2, -3.6, 1], [2.6, -3.2, 1.3], [3.6, -1.4, 1], [3.2, 2.6, 1.1], [-3.8, 2.4, 1.1], [1.2, 3.6, 1], [-1.6, 3.4, 1.2], [0.6, -3.9, 1.1]].forEach(([x, z, sc]) => tree(x, z, sc));
+  house(1.9, -0.9, 0xfff1dc, 0xe2726b, 0.4); house(-3.0, -0.4, 0xeef4ff, 0xf2a35e, -0.3);
+  lamp(0.6, 2.2); lamp(-2.4, 1.9);
+}
+// 花很多(幾百朵),每朵各自一個 Mesh 的話一幀要多畫上千次 → 用 InstancedMesh 併成兩次繪製,而且不描邊
+function flowers(n) {
+  const cols = [0xffffff, 0xffd24a, 0xff9ec4, 0xffffff].map((c) => new THREE.Color(c));
+  const R = (N - 2) * STEP - 0.8, pts = [];
+  for (let i = 0; i < n; i++) {
+    const x = (Math.random() - 0.5) * R, z = (Math.random() - 0.5) * R;
+    if (Math.hypot((x + 0.8) / 2.3, (z - 0.6) / 1.7) < 1) continue;   // 不要長在池塘裡
+    pts.push([x, z]);
+  }
+  const noLine = (m) => { m.userData.outlineParameters = { visible: false }; return m; };
+  const petals = new THREE.InstancedMesh(new THREE.SphereGeometry(0.045, 8, 6), noLine(mat(0xffffff)), pts.length);
+  const leaves = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 8, 6), noLine(mat(0x86c96f)), pts.length);
+  const m4 = new THREE.Matrix4();
+  pts.forEach(([x, z], i) => {
+    petals.setMatrixAt(i, m4.makeTranslation(x, 0.21, z)); petals.setColorAt(i, cols[i % cols.length]);
+    leaves.setMatrixAt(i, m4.makeScale(1, 0.5, 1).setPosition(x + 0.05, 0.19, z + 0.03));
+  });
+  petals.instanceColor.needsUpdate = true;
+  scene.add(petals, leaves);
+}
+flowers(320);
 
 /* ───────────── 棋盤 ───────────── */
 // 5x5 外圈,從最靠近鏡頭的角開始逆時針走
@@ -237,6 +338,27 @@ function icon(c, type, x, y, r, color) {
     c.fillRect(-r * 0.5, -r * 0.5, r * 0.75, r * 0.55); c.fillRect(r * 0.32, -r * 0.95, r * 0.2, r * 1.0); c.fillStyle = '#fff'; c.fillRect(-r * 0.36, -r * 0.36, r * 0.2, r * 0.2); c.fillRect(-r * 0.06, -r * 0.36, r * 0.2, r * 0.2); }
   else if (type === 'bio') { c.beginPath(); c.moveTo(-r * 0.24, -r); c.lineTo(r * 0.24, -r); c.lineTo(r * 0.24, -r * 0.3); c.lineTo(r * 0.85, r * 0.78); c.quadraticCurveTo(r * 0.9, r, r * 0.65, r); c.lineTo(-r * 0.65, r); c.quadraticCurveTo(-r * 0.9, r, -r * 0.85, r * 0.78); c.lineTo(-r * 0.24, -r * 0.3); c.closePath(); c.fill();
     c.fillRect(-r * 0.38, -r * 1.02, r * 0.76, r * 0.16); c.fillStyle = '#fff'; c.beginPath(); c.arc(-r * 0.15, r * 0.5, r * 0.14, 0, 7); c.arc(r * 0.25, r * 0.3, r * 0.1, 0, 7); c.fill(); }
+  else if (type === 'staples') { c.beginPath(); c.arc(0, -r * 0.05, r, 0, Math.PI); c.closePath(); c.fill(); c.fillRect(-r * 0.5, r * 0.85, r, r * 0.16);
+    for (const [x, y] of [[-0.5, -0.4], [0, -0.55], [0.5, -0.4], [-0.25, -0.25], [0.25, -0.25]]) { c.beginPath(); c.arc(x * r, y * r, r * 0.17, 0, 7); c.fill(); } }
+  else if (type === 'disc') { rr(-r, -r * 0.5, r * 2, r * 1.4, r * 0.2); c.fill(); c.lineWidth = r * 0.2; rr(-r * 0.4, -r * 0.95, r * 0.8, r * 0.6, r * 0.15); c.stroke();
+    c.fillStyle = '#fff'; c.fillRect(-r, r * 0.05, r * 2, r * 0.16); }
+  else if (type === 'util') { c.beginPath(); c.arc(0, -r * 0.25, r * 0.75, 0, 7); c.fill(); c.fillRect(-r * 0.36, r * 0.35, r * 0.72, r * 0.3); rr(-r * 0.26, r * 0.72, r * 0.52, r * 0.24, r * 0.08); c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); c.moveTo(r * 0.12, -r * 0.7); c.lineTo(-r * 0.28, -r * 0.18); c.lineTo(0, -r * 0.18); c.lineTo(-r * 0.12, r * 0.22); c.lineTo(r * 0.28, -r * 0.34); c.lineTo(0, -r * 0.34); c.closePath(); c.fill(); }
+  else if (type === 'mat') { for (const [x, y] of [[-0.55, 0.45], [0.55, 0.45], [0, -0.45]]) { c.beginPath(); c.moveTo((x - 0.5) * r, (y + 0.4) * r); c.lineTo((x - 0.32) * r, (y - 0.4) * r); c.lineTo((x + 0.32) * r, (y - 0.4) * r); c.lineTo((x + 0.5) * r, (y + 0.4) * r); c.closePath(); c.fill(); } }
+  else if (type === 'gold') { c.beginPath(); c.moveTo(-r, r * 0.6); c.lineTo(-r * 0.6, -r * 0.6); c.lineTo(r * 0.6, -r * 0.6); c.lineTo(r, r * 0.6); c.closePath(); c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); c.moveTo(-r * 0.42, -r * 0.34); c.lineTo(r * 0.1, -r * 0.34); c.lineTo(r * 0.02, -r * 0.1); c.lineTo(-r * 0.5, -r * 0.1); c.closePath(); c.fill(); }
+  else if (type === 'bond') { rr(-r * 0.75, -r, r * 1.5, r * 2, r * 0.14); c.fill(); c.fillStyle = '#fff'; for (let i = 0; i < 3; i++) c.fillRect(-r * 0.48, -r * 0.62 + i * r * 0.38, r * 0.96, r * 0.14);
+    c.beginPath(); c.arc(r * 0.22, r * 0.6, r * 0.2, 0, 7); c.fill(); }
+  else if (type === 'etf') { c.beginPath(); c.arc(0, 0, r, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = r * 0.14;
+    for (const a of [-Math.PI / 2, Math.PI / 6, Math.PI * 5 / 6]) { c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(a) * r, Math.sin(a) * r); c.stroke(); } }
+  else if (type === 'green') { c.beginPath(); c.moveTo(-r * 0.85, r * 0.85); c.quadraticCurveTo(-r, -r, r * 0.9, -r * 0.9); c.quadraticCurveTo(r, r * 0.9, -r * 0.85, r * 0.85); c.fill();
+    c.strokeStyle = '#fff'; c.lineWidth = r * 0.13; c.beginPath(); c.moveTo(-r * 0.6, r * 0.6); c.lineTo(r * 0.45, -r * 0.45); c.stroke(); }
+  else if (type === 'def') { c.beginPath(); c.moveTo(0, -r); c.lineTo(r * 0.9, -r * 0.6); c.lineTo(r * 0.9, r * 0.1); c.quadraticCurveTo(r * 0.7, r * 0.8, 0, r); c.quadraticCurveTo(-r * 0.7, r * 0.8, -r * 0.9, r * 0.1); c.lineTo(-r * 0.9, -r * 0.6); c.closePath(); c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(0, -r * 0.05, r * 0.3, 0, 7); c.fill(); }
+  else if (type === 'game') { rr(-r, -r * 0.55, r * 2, r * 1.2, r * 0.5); c.fill(); c.fillStyle = '#fff'; c.fillRect(-r * 0.68, -r * 0.08, r * 0.5, r * 0.16); c.fillRect(-r * 0.51, -r * 0.25, r * 0.16, r * 0.5);
+    c.beginPath(); c.arc(r * 0.38, -r * 0.12, r * 0.13, 0, 7); c.arc(r * 0.64, r * 0.12, r * 0.13, 0, 7); c.fill(); }
+  else if (type === 'crypto') { c.beginPath(); c.arc(0, 0, r, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = r * 0.1; c.beginPath(); c.arc(0, 0, r * 0.78, 0, 7); c.stroke();
+    c.fillStyle = '#fff'; c.font = `900 ${r * 1.1}px Arial`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('M', 0, r * 0.06); }
   c.restore();
 }
 function drawLabel(i) {
@@ -245,14 +367,14 @@ function drawLabel(i) {
   const F = (px) => `900 ${px}px "Avenir Next","PingFang TC","Helvetica Neue",Arial,sans-serif`;
   if (sec) {
     icon(c, t.type, 128, 62, 34, sec.css);
-    c.fillStyle = sec.css; c.font = F(ZH ? 38 : 34); c.fillText(sec.code, 128, 136);
+    c.fillStyle = sec.css; c.font = F(sec.code.length > 8 ? 28 : ZH ? (sec.code.length > 3 ? 34 : 38) : 34); c.fillText(sec.code, 128, 136);
     c.fillStyle = '#3b2f2a'; c.font = F(62); c.fillText('$' + Math.round(S.price[t.type]), 128, 196);
   } else if (t.type === 'chance') {
     c.fillStyle = '#b0780a'; c.font = F(150); c.fillText('?', 128, 112);
     c.font = F(34); c.fillText(L('EVENT', '市場事件'), 128, 208);
   } else {
-    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], shop: [L('SHOP', '商店'), L('buy items', '買道具')], gift: [L('GIFT', '禮物'), L('free item', '送道具')] }[t.type];
-    c.fillStyle = '#fff'; c.font = F(ZH ? 60 : 72); c.fillText(a, 128, 104);
+    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], shop: [L('SHOP', '商店'), L('buy items', '買道具')], gift: [L('GIFT', '禮物'), L('free item', '送道具')], divi: [L('DIVIDEND', '股息結算'), L('paid here', '在此領股利')] }[t.type];
+    c.fillStyle = '#fff'; c.font = F(a.length > 5 ? 40 : (ZH ? (a.length > 3 ? 50 : 60) : 72)); c.fillText(a, 128, 104);
     c.font = F(ZH ? 34 : 40); c.fillText(b, 128, 168);
   }
   t.tex.needsUpdate = true;
@@ -333,8 +455,10 @@ const bearBody = new THREE.Group(); bearPiece.add(bearBody); bearBody.rotation.y
   [-0.15, 0.15].forEach((x) => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), brown); e.position.set(x, 0.88, 0); ph.add(e); });
   loadPiece('./bear.glb?v=1', 1.25, ph, undefined, bearBody);
 }
+let focus;
 const ME = { piece, body, off: new THREE.Vector3(-0.2, 0, 0.14) };
 const BEAR = { piece: bearPiece, body: bearBody, off: new THREE.Vector3(0.2, 0, -0.14) };
+focus = ME;
 function placePiece(i, P = ME) { const p = tilePos(i); P.piece.position.set(p.x + P.off.x, TOP, p.z + P.off.z); }
 
 /* ───────────── 骰子 ───────────── */
@@ -351,7 +475,16 @@ function pipTex(n) {
 // BoxGeometry 的面順序是 +x,-x,+y,-y,+z,-z;對面加起來是 7
 const FACE = [3, 4, 1, 6, 2, 5];
 const dieMats = FACE.map((n) => new THREE.MeshToonMaterial({ map: pipTex(n), gradientMap: toonRamp }));
-const DIE_REST = [new THREE.Vector3(0.75, 0.18 + DIE / 2, 0.25), new THREE.Vector3(0.05, 0.18 + DIE / 2, 0.95)];
+const DIE_REST = [new THREE.Vector3(), new THREE.Vector3()];
+// 骰子落在「擲的人」旁邊的草地上:從棋子往棋盤中心退 2.6 格
+function diceSpots(P) {
+  const p = P.piece.position, d = new THREE.Vector3(-p.x, 0, -p.z);
+  if (d.lengthSq() < 0.01) d.set(-1, 0, -1);
+  d.normalize();
+  const side = new THREE.Vector3(-d.z, 0, d.x), y = 0.18 + DIE / 2;
+  DIE_REST[0].set(p.x + d.x * 2.6 + side.x * 0.42, y, p.z + d.z * 2.6 + side.z * 0.42);
+  DIE_REST[1].set(p.x + d.x * 2.9 - side.x * 0.42, y, p.z + d.z * 2.9 - side.z * 0.42);
+}
 const dice = DIE_REST.map((p) => { const d = new THREE.Mesh(new RoundedBoxGeometry(DIE, DIE, DIE, 4, 0.08), dieMats); d.castShadow = true; d.position.copy(p); scene.add(d); return d; });
 // 讓點數 n 朝上的姿態
 const UPQ = {
@@ -368,6 +501,7 @@ let T = 0; const tweens = [];
 const tween = (dur, fn) => new Promise((res) => tweens.push({ t0: T, dur, fn, res }));
 const wait = (dur) => tween(dur, () => {});
 const ease = (k) => 1 - Math.pow(1 - k, 3);
+let skipRender = false;
 function step(dt) {
   T += dt;
   for (let i = tweens.length - 1; i >= 0; i--) {
@@ -385,19 +519,31 @@ function step(dt) {
     t.bldH += (target - t.bldH) * Math.min(1, dt * 8);
     t.bld.visible = t.bldH > 0.01; t.bld.scale.y = Math.max(0.001, t.bldH);
   });
-  outline.render(scene, cam);
+  // 鏡頭:跟著現在在走的棋子(全覽模式則看棋盤中心),視野大小平滑過渡
+  const fp = focus.piece.position;
+  // 目標點往棋盤中心偏 1.6 格:棋子在畫面偏下方,前方要走的格子和骰子落點都看得到
+  const fl = Math.hypot(fp.x, fp.z) || 1, ox = -fp.x / fl * 1.6, oz = -fp.z / fl * 1.6;
+  const tx = view.overview ? 0 : fp.x + ox, tz = view.overview ? 0 : fp.z + oz, kf = Math.min(1, dt * 3.2);
+  camT.x += (tx - camT.x) * kf; camT.z += (tz - camT.z) * kf;
+  cam.position.copy(camT).add(CAM_OFF);
+  sun.position.copy(camT).add(SUN_OFF); sun.target.position.copy(camT);
+  const hGoal = view.overview ? view.far : view.near;
+  if (Math.abs(hGoal - view.half) > 0.002) { view.half += (hGoal - view.half) * Math.min(1, dt * 4); applyFrustum(); }
+  if (!skipRender) outline.render(scene, cam);
 }
 let last = performance.now();
 function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; step(dt); requestAnimationFrame(loop); }
-window.__tick = (ms = 16) => { for (let t = 0; t < ms; t += 16) step(0.016); };
+// 測試用:手動推進時間。fast = true 時只算邏輯和動畫、不繪製(跑整局自動測試用)
+window.__tick = (ms = 16, fast = false) => { skipRender = fast; for (let t = 0; t < ms; t += 16) step(0.016); skipRender = false; };
 
 // 兩顆骰子一起擲:各自有自己的起點、旋轉軸和落點,最後停在指定點數朝上
-async function rollDice(vals) {
+async function rollDice(vals, P = ME) {
+  diceSpots(P);
   const plan = dice.map((d, i) => {
     const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
     return { d, rest: DIE_REST[i], final: yaw.multiply(UPQ[vals[i]]),
       axis: new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.4, Math.random() - 0.5).normalize(),
-      from: new THREE.Vector3(-1.6 + i * 0.9, 2.8, -1.6 - i * 0.5), turns: 6 + i * 2, bounce: 2.5 + i * 0.4 };
+      from: new THREE.Vector3(DIE_REST[i].x - 1.8 + i * 0.6, 2.8, DIE_REST[i].z - 1.8 - i * 0.4), turns: 6 + i * 2, bounce: 2.5 + i * 0.4 };
   });
   const spin = new THREE.Quaternion();
   await tween(1.0, (k) => {
@@ -451,14 +597,16 @@ function hud() {
   $('stocks').textContent = fmt(stockValue());
   $('bearAssets').textContent = fmt(aiAssets());
   $('bagCount').textContent = S.bag.length;
-  $('mcount').textContent = S.missions.filter((m) => m.done).length + '/3';
+  $('mcount').textContent = S.done;
   $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left`, `剩 ${MAX_ROLLS - S.rolls} 次`);
   $('miss').innerHTML = S.missions.map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
   $('tip').textContent = advise();
   $('assetRows').innerHTML =
     `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(S.cash)}</span></div>` +
-    KEYS.map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${S.hold[k].n} ${L('sh', '股')}</span><span>${fmt(S.hold[k].n * S.price[k])}</span></div>`).join('');
+    (KEYS.some((k) => S.hold[k].n > 0)
+      ? KEYS.filter((k) => S.hold[k].n > 0).map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${S.hold[k].n} ${L('sh', '股')}</span><span>${fmt(S.hold[k].n * S.price[k])}</span></div>`).join('')
+      : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`);
   const e = S.lastEvent;
   $('evtBody').innerHTML = e
     ? `<div>${e.t}</div><div class="why">${e.w}</div>` + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).map((k) => { const d = Math.round((e.m[k] - 1) * 100);
@@ -471,7 +619,7 @@ function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
   document.title = L('Cat Street Stocks', '貓咪股市大富翁');
   $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值'); $('lblBear').textContent = L('Bear', '小熊');
-  $('bagBtn').textContent = L('Backpack', '背包'); $('rollTxt').textContent = L('ROLL', '擲骰子');
+  $('bagBtn').textContent = L('Backpack', '背包'); $('mapBtn').textContent = L('Map', '地圖'); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   $('note').textContent = L('Fictional companies · for learning, not investment advice', '公司皆為虛構 · 學習用途,非投資建議');
 }
@@ -525,14 +673,17 @@ function cardPanel(title, text, moves = '') {
 }
 
 /* ───────────── 回合流程(狀態機:idle → rolling → moving → landing → idle / over) ───────────── */
-function payday() {
+// 起點:薪水 + 股利;對面的「股息結算」格:只發股利
+function payday(salary = SALARY) {
   const div = KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * SECTORS[k].div, 0);
-  S.lastDividend = div; S.cash += SALARY + div;
-  toast(L('Payday', '發薪日') + ` +$${fmt(SALARY)}${div > 0 ? ` · ${L('dividends', '股利')} +$${fmt(div)}` : ''}`);
+  S.lastDividend = div; S.cash += salary + div;
+  toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)} · ` : '') + `${L('dividends', '股利')} +$${fmt(div)}`);
   hud(); checkMissions();
 }
 function checkMissions() {
-  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; toast(L('Mission complete: ', '任務完成:') + m.title); } });
+  // 上一次完成的任務先換成新的(所以完成的那張會亮綠色停留到下一次檢查)
+  S.missions.forEach((m, i) => { if (m.done) { S.missions[i] = { id: '_' }; S.missions[i] = drawMission(); } });
+  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; S.cash += REWARD; toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
   hud();
 }
 async function playEvent(e) {
@@ -587,7 +738,6 @@ function bagPanel() {
       S.bag.splice(S.bag.indexOf(id), 1);
       await playEvent(itemInfo(id).event);
       checkMissions(); S.busy = false; showCtl(true);
-      if (S.missions.every((m) => m.done)) finish(3);
     }
   });
 }
@@ -596,13 +746,13 @@ const r6 = () => 1 + Math.floor(Math.random() * 6);
 //   賺超過 15% 就賣;價格比開盤低 5% 以上且現金夠就多買;否則留 $1,500 現金後買 10 股
 async function aiTurn() {
   const A = S.ai, who = L('Bear', '小熊');
-  toast(L("Bear's turn", '小熊的回合')); await wait(0.6);
+  focus = BEAR; toast(L("Bear's turn", '小熊的回合')); await wait(0.9);
   const a = r6(), b = r6(), n = a + b;
-  await rollDice([a, b]); toast(`${who}: ${a} + ${b} = ${n}`);
+  await rollDice([a, b], BEAR); toast(`${who}: ${a} + ${b} = ${n}`);
   for (let i = 0; i < n; i++) {
     A.pos = (A.pos + 1) % TILES.length;
     await hopTo(A.pos, BEAR);
-    if (A.pos === 0) { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += SALARY + div; hud(); }
+    if (A.pos === 0 || TILES[A.pos] === 'divi') { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += (A.pos === 0 ? SALARY : 0) + div; hud(); }
   }
   await wait(0.2);
   const type = TILES[A.pos], sec = SECTORS[type];
@@ -619,7 +769,7 @@ async function aiTurn() {
   } else if (type === 'chance') { await wait(0.3); await playEvent(EVENTS[Math.floor(Math.random() * EVENTS.length)]); }
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
-  hud();
+  hud(); focus = ME; await wait(0.5);
 }
 async function turn(forced) {
   if (S.busy || S.over) return;
@@ -632,11 +782,11 @@ async function turn(forced) {
   for (let i = 0; i < n; i++) {
     S.pos = (S.pos + 1) % TILES.length;
     await hopTo(S.pos);
-    if (S.pos === 0) payday();
+    if (S.pos === 0) payday(); else if (TILES[S.pos] === 'divi') payday(0);
   }
   S.rolls++;
   // 每回合小幅隨機波動
-  KEYS.forEach((k) => { S.price[k] = Math.max(15, S.price[k] * (0.97 + Math.random() * 0.06)); });
+  KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2)); });
   drawAll(); hud();
   await wait(0.15);
 
@@ -648,21 +798,21 @@ async function turn(forced) {
   else if (type === 'shop') await shopPanel();
   else if (type === 'gift') { const id = randomItem(), it = itemInfo(id); S.bag.push(id); hud();
     await cardPanel(L('A gift', '收到禮物'), `${it.icon} ${it.name}<br>${it.desc}<br>${L('It is in your backpack.', '已放進背包。')}`); }
+  else if (type === 'divi') await cardPanel(L('Dividend day', '股息結算'), L(`You collected $${fmt(S.lastDividend)} in dividends. Assets that pay nothing, like gold, biotech and crypto, only make money if the price rises.`, `領到股利 $${fmt(S.lastDividend)}。黃金、生技、加密貨幣不配息,只能靠價格上漲賺錢。`));
   else await cardPanel(L('Payday', '發薪日'), L(`Salary $${fmt(SALARY)}${S.lastDividend > 0 ? ` plus $${fmt(S.lastDividend)} in dividends` : ''}. Holding stocks pays you every lap.`, `薪水 $${fmt(SALARY)}${S.lastDividend > 0 ? `,加上股利 $${fmt(S.lastDividend)}` : ''}。持有股票,每繞一圈都會配息。`));
 
   S.cashStreak = (stockValue() > 0 && S.cash >= 2000) ? S.cashStreak + 1 : 0;
   checkMissions();
-  const done = S.missions.filter((m) => m.done).length;
-  if (done === 3) { await wait(0.4); return finish(done); }
   // 換小熊走。牠踩到市場事件也會改變大家的股價,所以走完要再檢查一次任務
   await aiTurn();
   checkMissions();
-  const done2 = S.missions.filter((m) => m.done).length;
-  if (done2 === 3 || S.rolls >= MAX_ROLLS) { await wait(0.4); return finish(done2); }
+  if (S.rolls >= MAX_ROLLS) { await wait(0.4); return finish(); }
   S.busy = false; showCtl(true);
 }
-function finish(done) {
+function finish() {
   S.over = true;
+  // 星星:完成 2 / 4 / 6 個任務
+  const done = S.done >= 6 ? 3 : S.done >= 4 ? 2 : S.done >= 2 ? 1 : 0;
   let top = 'cash', tv = S.cash;
   KEYS.forEach((k) => { const v = S.hold[k].n * S.price[k]; if (v > tv) { tv = v; top = k; } });
   const style = {
@@ -676,6 +826,17 @@ function finish(done) {
     fin: L('Banker. You like steady payers that enjoy higher rates.', '銀行家:偏好配息穩、升息受惠的金融股。'),
     trans: L('Trade watcher. You ride the shipping cycle.', '景氣觀察家:跟著運價循環進出。'),
     bio: L('Moonshot hunter. High risk, no dividends, big dreams.', '夢想獵人:高風險、不配息,賭新藥成功。'),
+    staples: L('Steady hand. You pick what people always need.', '穩健派:選大家一定會買的東西。'),
+    disc: L('Good-times rider. You bet on people spending.', '景氣樂觀派:押注大家願意花錢。'),
+    util: L('Sleep-well investor. Boring, steady, paid every lap.', '安心睡覺派:無聊、穩定、每圈領息。'),
+    mat: L('Builder. You bet on steel, cement and inflation.', '建設派:押注鋼鐵水泥與通膨。'),
+    gold: L('Safe-haven seeker. You prepare for storms.', '避險派:隨時為風暴做準備。'),
+    bond: L('Balancer. You pair stocks with bonds.', '平衡派:用債券平衡股票的波動。'),
+    etf: L('Index investor. You own the whole market and skip the guessing.', '指數投資人:買下整個市場,不猜個股。'),
+    green: L('Future believer. You back industries that are not profitable yet.', '未來信仰者:支持還沒賺錢的新產業。'),
+    def: L('World watcher. You trade on global tension.', '國際觀察家:跟著國際情勢布局。'),
+    game: L('Hit chaser. You wait for the next big title.', '大作獵人:等待下一款熱門作品。'),
+    crypto: L('Thrill seeker. Most of your money rides on hype.', '刺激追求者:大部分資金押在熱度上。'),
   }[top];
   const title = [L('Rough market', '行情不順'), L('Curious rookie', '好奇新手'), L('Sharp analyst', '精明分析師'), L('Top investor', '頂尖投資人')][done];
   const a = assets();
@@ -683,6 +844,7 @@ function finish(done) {
     <div class="stars">${[0, 1, 2].map((i) => i < done ? '<b>★</b>' : '★').join('')}</div>
     <h2>${title}</h2>
     <p>${L('Total assets', '總資產')} <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) · ${L(`${S.rolls} rolls`, `${S.rolls} 回合`)}</p>
+    <p>${L(`${S.done} missions completed`, `完成 ${S.done} 個任務`)}</p>
     <p>${L('Bear', '小熊')} <b>$${fmt(aiAssets())}</b> · ${a >= aiAssets() ? L('you beat the bear', '你贏過小熊') : L('the bear beat you', '小熊贏了')}</p>
     <p>${style}</p>
     <p style="font-size:12.5px">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
@@ -693,12 +855,13 @@ function finish(done) {
 }
 function start() {
   newState(); $('end').classList.add('hide'); closePanel();
-  staticText(); placePiece(0, ME); placePiece(0, BEAR); drawAll(); hud(); showCtl(true);
+  staticText(); placePiece(0, ME); placePiece(0, BEAR); focus = ME; diceSpots(ME); dice.forEach((d, i) => d.position.copy(DIE_REST[i])); drawAll(); hud(); showCtl(true);
 }
 
 $('rollBtn').onclick = () => turn();
 $('bagBtn').onclick = bagPanel;
+$('mapBtn').onclick = () => { view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
 
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, turn, tiles, dice, piece, bearPiece, bagPanel, aiAssets };
+window.__game = { get S() { return S; }, turn, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES };
