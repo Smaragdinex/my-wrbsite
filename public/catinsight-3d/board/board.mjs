@@ -864,6 +864,7 @@ $('rollBtn').onclick = () => turn();
 $('bagBtn').onclick = bagPanel;
 $('mapBtn').onclick = () => { view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
 
+if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
 resize(); start();
 requestAnimationFrame(loop);
 window.__game = { get S() { return S; }, turn, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES };

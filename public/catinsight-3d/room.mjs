@@ -420,7 +420,8 @@ function arcadeButtonAt(x, y) {
   for (const k in ARC_BTN) { const b = ARC_BTN[k]; if (x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 8 && y <= b.y + b.h + 8) return k; }
   return null;
 }
-let arcadeMenu = false;
+let arcadeMenu = false, pushT = 0, pushGoal = 0;
+const pushPos = new THREE.Vector3(), pushNormal = new THREE.Vector3();
 let gameLang = (() => { let v = null; try { v = localStorage.getItem('css.lang'); } catch (e) {} return (v || navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'; })();
 function setGameLang(code) { gameLang = code; try { localStorage.setItem('css.lang', code); } catch (e) {} }
 const ARC_TICKER = 'TECH +12%   GOLD +10%   OIL -4%   CHIPS +25%   BOND -6%   ETF +3%   BIOTECH +35%   CRYPTO -45%   ';
@@ -573,7 +574,7 @@ canvas.addEventListener('wheel', (e) => {
 function updateZoom(dt) {
   zoomT += (zoomGoal - zoomT) * Math.min(1, dt * 2.5);
   if (zoomT < 0.002) {
-    zoomT = 0; focusArcade = false;
+    zoomT = 0; focusArcade = false; pushT = 0; pushGoal = 0;
     controls.enabled = true; controls.autoRotate = true;
     // 自動旋轉到視角邊界就反向,左右來回
     const az = controls.getAzimuthalAngle(), sp = controls.autoRotateSpeed;
@@ -591,6 +592,15 @@ function updateZoom(dt) {
     arcadeAnchor.getWorldPosition(scrPos);
     arcadeAnchor.getWorldDirection(scrNormal);                             // 街機正面朝向,機台外框一起入鏡
     dist = 1.32;
+    // 按下 PLAY 之後再往螢幕推進:從「看得到機台」過渡到「螢幕蓋滿整個視窗」,推到底才換成真正的遊戲畫面
+    pushT += (pushGoal - pushT) * Math.min(1, dt * 4.5);
+    if (pushT > 0.001 && arcadeScreen) {
+      const k = pushT * pushT * (3 - 2 * pushT);
+      arcadeScreen.getWorldPosition(pushPos); arcadeScreen.getWorldDirection(pushNormal);
+      scrPos.lerp(pushPos, k); scrNormal.lerp(pushNormal, k).normalize();
+      dist += (Math.min(0.36 / half, 0.49 / (half * camera.aspect)) * 0.96 - dist) * k;   // 取小的 = 螢幕「蓋滿」視窗,不留機台
+      if (pushGoal === 1 && pushT > 0.97 && !gameOn) openGame();
+    }
   } else {
     screenMesh.getWorldPosition(scrPos);
     screenMesh.getWorldDirection(scrNormal);                               // 平面 +z = 法線,朝向房間
@@ -670,7 +680,7 @@ canvas.addEventListener('pointerup', (e) => {
   pd = null;
   ndc.set((e.clientX / canvas.clientWidth) * 2 - 1, -(e.clientY / canvas.clientHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
-  if (arcadeMenu && arcadeScreen) {                      // 已經停在街機前:點的是機台螢幕上的哪顆按鈕
+  if (arcadeMenu && arcadeScreen && pushGoal === 0) {    // 已經停在街機前:點的是機台螢幕上的哪顆按鈕
     const hit = raycaster.intersectObject(arcadeScreen)[0];
     if (hit && hit.uv) {
       const b = arcadeButtonAt(hit.uv.x * 520, (1 - hit.uv.y) * 385);
@@ -684,30 +694,22 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=23';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=24';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
-// 遊戲畫面幾乎佔滿整個視窗(四周只留外框的厚度)。用真實像素大小而不是縮放,
-// 遊戲自己的版面會依實際寬高重新排,螢幕越大看到的棋盤越多
-function fitGame() {
-  const M = 26, w = Math.max(320, innerWidth - M * 2), h = Math.max(320, innerHeight - M * 2);
-  gameCab.style.width = w + 'px'; gameCab.style.height = h + 'px';
-  gameCab.style.left = M + 'px'; gameCab.style.top = M + 'px';
-}
-window.addEventListener('resize', fitGame);
-// 在機台螢幕上按 PLAY → 開啟遊戲(幾乎滿版的 iframe),語言跟著機台上選的走
-function startGame() {
-  if (gameOn) return;
+// 在機台螢幕上按 PLAY → 鏡頭先推進到螢幕蓋滿畫面(updateZoom 裡的 pushT)→ 推到底時 openGame() 換成真正的遊戲
+function startGame() { if (gameOn || pushGoal === 1) return; pushGoal = 1; }
+function openGame() {
   gameOn = true; arcadeMenu = false;
-  gameFrame = document.createElement('iframe'); gameFrame.src = `${GAME_URL}&lang=${gameLang}`; gameFrame.allow = 'autoplay'; gameFrame.title = 'Cat Street Stocks';
-  gameScr.appendChild(gameFrame); fitGame();
+  gameFrame = document.createElement('iframe'); gameFrame.src = `${GAME_URL}&lang=${gameLang}&embed=1`; gameFrame.allow = 'autoplay'; gameFrame.title = 'Cat Street Stocks';
+  gameScr.appendChild(gameFrame);
   gameUI.classList.add('on'); document.body.classList.add('game-on');
   setTimeout(() => { try { gameFrame.contentWindow.focus(); } catch (e) {} }, 400);
 }
 function hideGame() {
   gameOn = false; gameUI.classList.remove('on'); document.body.classList.remove('game-on');
   if (gameFrame) { gameFrame.remove(); gameFrame = null; }                           // 移除 iframe,音樂一起停
-  zoomGoal = 0; wheelLockUntil = performance.now() + 1000;
+  pushGoal = 0; pushT = 0; zoomGoal = 0; wheelLockUntil = performance.now() + 1000;
 }
 gameUI.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
 document.getElementById('game-exit').onclick = hideGame;

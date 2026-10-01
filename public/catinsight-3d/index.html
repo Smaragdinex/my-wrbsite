@@ -46,13 +46,12 @@
   body.ui-on .pill button.mid .mouse { display: none; }
   body.ui-on .pill button.mid .home { display: block; }
   /* 街機遊戲:點街機後淡入,中間是嵌入貓咪瑪利歐小遊戲的 iframe(960×544,依視窗縮放) */
-  #game-ui { position: fixed; inset: 0; z-index: 6; background: #0b0e17; opacity: 0; pointer-events: none; transition: opacity .55s ease; display: grid; place-items: center; }
+  #game-ui { position: fixed; inset: 0; z-index: 6; background: #c9e8b8; opacity: 0; pointer-events: none; transition: opacity .55s ease; display: grid; place-items: center; }
   #game-ui.on { opacity: 1; pointer-events: auto; }
-  #game-ui .cab { position: absolute; border-radius: 14px; background: #000;
-    box-shadow: 0 0 0 10px #2a1f4e, 0 0 0 13px #f08262, 0 30px 80px rgba(0,0,0,.6); }
-  #game-ui .scr, #game-ui iframe { width: 100%; height: 100%; border: 0; border-radius: 14px; display: block; background: #111; }
-  /* 離開鈕:掛在外框右上角。遊戲模式下把房間的 ‹ 🏠 › 導覽藏起來,不然會蓋到遊戲下方的按鈕 */
-  #game-exit { position: absolute; right: -14px; top: -14px; z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 3px solid #fff;
+  /* 遊戲畫面蓋滿整個視窗,沒有外框(鏡頭已經推進到只剩螢幕) */
+  #game-ui .cab { position: absolute; inset: 0; background: #c9e8b8; }
+  #game-ui .scr, #game-ui iframe { width: 100%; height: 100%; border: 0; display: block; background: #c9e8b8; }
+  #game-exit { position: absolute; right: 12px; top: 14px; z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 3px solid #fff;
     background: #f08262; color: #fff; font-size: 18px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,.35); line-height: 1; }
   #game-exit:hover { background: #e2604f; }
   body.game-on .pill { opacity: 0; pointer-events: none; }
@@ -210,6 +209,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=99"></script>
+<script type="module" src="./room.mjs?v=100"></script>
 </body>
 </html>
