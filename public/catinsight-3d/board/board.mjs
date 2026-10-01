@@ -197,7 +197,7 @@ function resize() {
   view.aspect = a;
   view.near = Math.max(4.6, 5.6 / a);
   view.far = Math.max(8.6, (N * 1.14 + 1) * 0.74 / a);
-  view.stageHalf = Math.max(2.4, 3.9 / a);          // 選角舞台:四個角色排一排要放得下
+  view.stageHalf = Math.max(3.0, 4.1 / a);          // 選角舞台:四個角色和背後的大卡片要放得下
   if (!view.half0) { view.half0 = true; view.half = view.near; }
   applyFrustum();
 }
@@ -477,14 +477,28 @@ function setChar(target, key) {
 // 選角舞台:四個角色的 3D 模型在起點外側的空地排成一排,鏡頭拉過去。點模型或按左右鍵換人,被選到的會跳一下、慢慢自轉
 const STAGE = new THREE.Vector3(10.8, 0, 10.8), STAGE_KEYS = Object.keys(CHARS);
 const stage = new THREE.Group(); stage.position.copy(STAGE); stage.visible = false; scene.add(stage);
+// 每張卡片的 [底色, 強調色](被選到時卡片換成強調色)
+const CARD_COLORS = { cat: [0xffe2c2, 0xff9a3d], bunny: [0xdceaff, 0x4f8ef0], bear: [0xf3dcbd, 0xb9793f], dog: [0xdcf0d4, 0x4aa85c] };
+const _cA = new THREE.Color(), _cB = new THREE.Color();
 const slots = STAGE_KEYS.map((key, i) => {
   const g = new THREE.Group(); const o = (i - (STAGE_KEYS.length - 1) / 2) * 1.55;
   g.position.set(o * Math.SQRT1_2, 0, -o * Math.SQRT1_2);            // 沿著畫面的水平方向排
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.68, 0.14, 40), mat(0xfff8ec)); base.position.y = 0.07; base.receiveShadow = true; base.castShadow = true; g.add(base);
   const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.76, 0.06, 40), mat(0xff7a59)); ring.position.y = 0.03; g.add(ring);
   const holder = new THREE.Group(); holder.position.y = 0.14; holder.rotation.y = Math.PI / 4; g.add(holder);
+  // 角色背後的大卡片:四張並排成一面牆,把後面的棋盤和上一局的棋子擋住。卡片面向鏡頭,上方印角色名字
+  const card = new THREE.Group(); card.position.set(-0.62, 0, -0.62); card.rotation.y = Math.PI / 4; g.add(card);
+  const cardMat = mat(CARD_COLORS[key][0]);
+  const plate = new THREE.Mesh(new RoundedBoxGeometry(1.56, 3.1, 0.1, 3, 0.09), cardMat); plate.position.y = 1.55; plate.castShadow = true; plate.receiveShadow = true; card.add(plate);
+  const inner = new THREE.Mesh(new RoundedBoxGeometry(1.36, 2.9, 0.04, 3, 0.07), mat(0xfffaf0)); inner.position.set(0, 1.55, 0.05); card.add(inner);
+  const lc = document.createElement('canvas'); lc.width = 512; lc.height = 160; const lg = lc.getContext('2d');
+  lg.fillStyle = '#' + CARD_COLORS[key][1].toString(16).padStart(6, '0'); lg.beginPath(); lg.roundRect(16, 20, 480, 120, 60); lg.fill();
+  lg.fillStyle = '#fff'; lg.font = '900 76px "Avenir Next","PingFang TC","Helvetica Neue",Arial,sans-serif'; lg.textAlign = 'center'; lg.textBaseline = 'middle'; lg.fillText(CHARS[key].name, 256, 84);
+  const lt = new THREE.CanvasTexture(lc); lt.colorSpace = THREE.SRGBColorSpace;
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.34), Object.assign(new THREE.MeshBasicMaterial({ map: lt, transparent: true }), { userData: { outlineParameters: { visible: false } } }));
+  label.position.set(0, 2.62, 0.075); card.add(label);
   stage.add(g);
-  return { key, g, holder, ring, hop: 0 };
+  return { key, g, holder, ring, card, cardMat, hop: 0 };
 });
 let stageSel = 0, stageOn = false;
 function stageSelect(i) { stageSel = (i + slots.length) % slots.length; slots[stageSel].hop = 1; paintStage(); }
@@ -503,6 +517,9 @@ function stageStep(dt) {
     if (on) sl.holder.rotation.y += dt * 1.1;
     else { let d = Math.PI / 4 - sl.holder.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); sl.holder.rotation.y += d * Math.min(1, dt * 6); }
     sl.ring.visible = on;
+    // 被選到的那張卡片變成強調色並稍微升起
+    _cA.set(CARD_COLORS[sl.key][0]); _cB.set(CARD_COLORS[sl.key][1]); sl.cardMat.color.lerp(on ? _cB : _cA, Math.min(1, dt * 8));
+    sl.card.position.y += ((on ? 0.18 : 0) - sl.card.position.y) * Math.min(1, dt * 8);
   });
 }
 const pickRay = new THREE.Raycaster(), pickNdc = new THREE.Vector2();
@@ -527,10 +544,11 @@ function pickStage() {
       const h = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), m); h.position.y = 0.68; ph.add(h);
       loadPiece(c.url, c.h, ph, sl.holder); } });
     stage.visible = true; stageOn = true; document.body.classList.add('picking');
-    if (!pickStage.seen) { pickStage.seen = true; camT.x = STAGE.x; camT.z = STAGE.z; view.half = view.stageHalf; applyFrustum(); }   // 第一次直接從舞台開場,不用從起點慢慢滑過來
+    piece.visible = false; bearPiece.visible = false;      // 上一局的棋子先藏起來
+    if (!pickStage.seen) { pickStage.seen = true; camT.x = STAGE.x - 0.9; camT.z = STAGE.z - 0.9; view.half = view.stageHalf; applyFrustum(); }   // 第一次直接從舞台開場,不用從起點慢慢滑過來
     stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1); $('pnext').onclick = () => stageSelect(stageSel + 1);
-    $('pok').onclick = () => { stageOn = false; stage.visible = false; document.body.classList.remove('picking'); res(slots[stageSel].key); };
+    $('pok').onclick = () => { stageOn = false; stage.visible = false; document.body.classList.remove('picking'); piece.visible = true; bearPiece.visible = true; res(slots[stageSel].key); };
   });
 }
 // 角色頭像:把模型單獨拍一張正面半身照(離屏渲染到 RenderTarget,讀回像素轉成圖片),給左上角頭像和對手面板用
@@ -623,7 +641,7 @@ function step(dt) {
   const fp = focus.piece.position;
   // 目標點往棋盤中心偏 1.6 格:棋子在畫面偏下方,前方要走的格子和骰子落點都看得到
   const fl = Math.hypot(fp.x, fp.z) || 1, ox = -fp.x / fl * 1.6, oz = -fp.z / fl * 1.6;
-  const tx = stageOn ? STAGE.x : view.overview ? 0 : fp.x + ox, tz = stageOn ? STAGE.z : view.overview ? 0 : fp.z + oz, kf = Math.min(1, dt * 3.2);
+  const tx = stageOn ? STAGE.x - 0.9 : view.overview ? 0 : fp.x + ox, tz = stageOn ? STAGE.z - 0.9 : view.overview ? 0 : fp.z + oz, kf = Math.min(1, dt * 3.2);
   if (stageOn) stageStep(dt);
   camT.x += (tx - camT.x) * kf; camT.z += (tz - camT.z) * kf;
   cam.position.copy(camT).add(CAM_OFF);
