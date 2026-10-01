@@ -421,7 +421,6 @@ function arcadeButtonAt(x, y) {
   return null;
 }
 let arcadeMenu = false, pushT = 0, pushGoal = 0;
-const pushPos = new THREE.Vector3(), pushNormal = new THREE.Vector3();
 let gameLang = (() => { let v = null; try { v = localStorage.getItem('css.lang'); } catch (e) {} return (v || navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'; })();
 function setGameLang(code) { gameLang = code; try { localStorage.setItem('css.lang', code); } catch (e) {} }
 const ARC_TICKER = 'TECH +12%   GOLD +10%   OIL -4%   CHIPS +25%   BOND -6%   ETF +3%   BIOTECH +35%   CRYPTO -45%   ';
@@ -589,15 +588,14 @@ function updateZoom(dt) {
   const half = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
   let dist;
   if (focusArcade && arcadeAnchor) {
-    arcadeAnchor.getWorldPosition(scrPos);
-    arcadeAnchor.getWorldDirection(scrNormal);                             // 街機正面朝向,機台外框一起入鏡
-    dist = 1.32;
+    // 選單畫面:正對螢幕(沿螢幕法線),拉近到整個螢幕剛好完整放進視窗 —— 螢幕能多大就多大,機台只剩邊緣
+    (arcadeScreen || arcadeAnchor).getWorldPosition(scrPos);
+    (arcadeScreen || arcadeAnchor).getWorldDirection(scrNormal);
+    dist = Math.max(0.36 / half, 0.49 / (half * camera.aspect)) * 1.03;
     // 按下 PLAY 之後再往螢幕推進:從「看得到機台」過渡到「螢幕蓋滿整個視窗」,推到底才換成真正的遊戲畫面
     pushT += (pushGoal - pushT) * Math.min(1, dt * 4.5);
     if (pushT > 0.001 && arcadeScreen) {
       const k = pushT * pushT * (3 - 2 * pushT);
-      arcadeScreen.getWorldPosition(pushPos); arcadeScreen.getWorldDirection(pushNormal);
-      scrPos.lerp(pushPos, k); scrNormal.lerp(pushNormal, k).normalize();
       dist += (Math.min(0.36 / half, 0.49 / (half * camera.aspect)) * 0.96 - dist) * k;   // 取小的 = 螢幕「蓋滿」視窗,不留機台
       if (pushGoal === 1 && pushT > 0.97 && !gameOn) openGame();
     }
@@ -612,6 +610,7 @@ function updateZoom(dt) {
   camera.lookAt(lookTgt);
   // 鏡頭快到街機前(0.9 就算,最後那段收尾很慢不用等):機台螢幕上出現語言 / PLAY 按鈕
   arcadeMenu = zoomGoal >= 1 && zoomT > 0.9 && focusArcade && !gameOn;
+  document.body.classList.toggle('arcade-on', zoomGoal >= 1 && focusArcade && zoomT > 0.5);   // 螢幕放到最大時,房間的 logo 和右下按鈕會蓋在上面 → 收起來
   if (zoomGoal >= 1 && zoomT > 0.985 && !focusArcade && !uiOn) showUI();     // 鏡頭到電腦螢幕 → 淡入介紹介面
 }
 

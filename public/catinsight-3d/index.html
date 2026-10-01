@@ -56,6 +56,8 @@
   #game-exit:hover { background: #e2604f; }
   body.game-on .pill { opacity: 0; pointer-events: none; }
   body.game-on .cta { opacity: 0; pointer-events: none; }
+  .brand, .cta { transition: opacity .35s; }
+  body.arcade-on .cta, body.arcade-on .brand { opacity: 0; pointer-events: none; }
   body.game-on .pill button.mid .mouse { display: none; }
   body.game-on .pill button.mid .home { display: block; }
   /* 螢幕介面:鏡頭定在螢幕後淡入,一頁一頁介紹功能 */
@@ -209,6 +211,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=100"></script>
+<script type="module" src="./room.mjs?v=101"></script>
 </body>
 </html>
