@@ -864,30 +864,6 @@ $('rollBtn').onclick = () => turn();
 $('bagBtn').onclick = bagPanel;
 $('mapBtn').onclick = () => { view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
 
-// 主畫面:選語言 + 開始。文字是載入時就依語言建好的,所以切換語言 = 記住選擇後重新載入
-function showTitle() {
-  document.body.classList.add('intro'); view.overview = true;
-  $('tTitle').textContent = L('Cat Street Stocks', '貓咪股市大富翁');
-  $('tSub').textContent = L('Roll, invest, and out-earn the bear in 20 rounds.', '擲骰子、買資產,20 回合內贏過小熊。');
-  $('tHow').innerHTML = [
-    L('Roll two dice. Land on an asset to buy or sell it.', '擲兩顆骰子前進,走到資產格可以買賣。'),
-    L('Market events move prices. Read them and you profit.', '市場事件會改變價格,看懂它就能賺錢。'),
-    L('Finish missions for bonus cash. Highest total assets wins.', '完成任務拿獎金,最後比總資產。'),
-  ].map((t, i) => `<li><b>${i + 1}</b>${t}</li>`).join('');
-  $('tPlay').textContent = L('PLAY', '開始遊戲');
-  $('tNote').textContent = L('Fictional companies · for learning, not investment advice', '公司皆為虛構 · 學習用途,非投資建議');
-  $('langZh').classList.toggle('on', ZH); $('langEn').classList.toggle('on', !ZH);
-  const setLang = (code) => {
-    if ((code === 'zh') === ZH) return;
-    try { localStorage.setItem('css.lang', code); } catch (e) {}
-    const u = new URL(location.href); u.searchParams.set('lang', code); location.replace(u);
-  };
-  $('langZh').onclick = () => setLang('zh'); $('langEn').onclick = () => setLang('en');
-  $('tPlay').onclick = () => {
-    try { localStorage.setItem('css.lang', ZH ? 'zh' : 'en'); } catch (e) {}
-    document.body.classList.remove('intro'); view.overview = false; $('mapBtn').classList.remove('on');
-  };
-}
-resize(); start(); showTitle();
+resize(); start();
 requestAnimationFrame(loop);
 window.__game = { get S() { return S; }, turn, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES };

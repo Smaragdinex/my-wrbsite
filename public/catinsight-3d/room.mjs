@@ -413,9 +413,20 @@ let catModel = null;
 
 // ---------- 街機螢幕的待機畫面:股票大富翁(一圈彩色格子、兔子繞圈跳、兩顆骰子、跑馬燈報價、閃爍的 PRESS PLAY)----------
 const ARC_COLORS = ['#ff8fc0', '#8b7cff', '#4f8ef0', '#ffd24a', '#f5b942', '#f2796b', '#54c98a', '#5aa9ff', '#c48ad6', '#2a9db5', '#ffd24a', '#e85d9b', '#9aa0ad', '#e6b422', '#3d5a80', '#ffd24a', '#2ec4b6', '#f7931a', '#5aa9ff', '#7fb069', '#b5179e', '#ff9f6b'];
+// 機台螢幕上的按鈕位置(畫布座標 520x385),畫和點擊判定共用
+const ARC_BTN = { zh: { x: 96, y: 301, w: 70, h: 32 }, en: { x: 168, y: 301, w: 70, h: 32 }, play: { x: 286, y: 298, w: 140, h: 38 } };
+function arcadeButtonAt(x, y) {
+  for (const k in ARC_BTN) { const b = ARC_BTN[k]; if (x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 8 && y <= b.y + b.h + 8) return k; }
+  return null;
+}
+let arcadeMenu = false;
+let gameLang = (() => { let v = null; try { v = localStorage.getItem('css.lang'); } catch (e) {} return (v || navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'; })();
+function setGameLang(code) { gameLang = code; try { localStorage.setItem('css.lang', code); } catch (e) {} }
 const ARC_TICKER = 'TECH +12%   GOLD +10%   OIL -4%   CHIPS +25%   BOND -6%   ETF +3%   BIOTECH +35%   CRYPTO -45%   ';
-function drawArcadeScreen(t) {
-  const g = arcadeCanvas.getContext('2d'), W = arcadeCanvas.width, H = arcadeCanvas.height;
+// cv / zoom:可以畫到別的畫布並放大 zoom 倍(進入街機後的選單畫面就是同一張圖的高解析版)
+function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
+  const g = cv.getContext('2d'), W = 520, H = 385;
+  g.setTransform(zoom, 0, 0, zoom, 0, 0);
   g.clearRect(0, 0, W, H);
   g.save();
   g.beginPath(); g.roundRect(0, 0, W, H, 34); g.clip();                    // 圓角螢幕
@@ -462,7 +473,21 @@ function drawArcadeScreen(t) {
   g.textAlign = 'center';
   g.fillStyle = 'rgba(0,0,0,.22)'; g.font = '900 30px Menlo, monospace'; g.fillText('CAT STREET', W / 2 - 40 + 2, 138 + 2); g.fillText('STOCKS', W / 2 - 40 + 2, 172 + 2);
   g.fillStyle = '#fff'; g.fillText('CAT STREET', W / 2 - 40, 138); g.fillStyle = '#ff7a59'; g.fillText('STOCKS', W / 2 - 40, 172);
-  if (Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#3b2f2a'; g.font = '900 18px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2 - 40, 210); }
+  if (zoom === 1 && Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#3b2f2a'; g.font = '900 18px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2 - 40, 210); }
+  // 鏡頭停在街機前時:人行道那一條畫上語言切換和 PLAY(點擊判定見 arcadeButtonAt)
+  if (arcadeMenu) {
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = 'rgba(59,47,42,.16)'; g.beginPath(); g.roundRect(ARC_BTN.zh.x - 4, ARC_BTN.zh.y - 4, ARC_BTN.zh.w + ARC_BTN.en.w + 10, ARC_BTN.zh.h + 8, 20); g.fill();
+    for (const code of ['zh', 'en']) { const b = ARC_BTN[code], on = gameLang === code;
+      if (on) { g.fillStyle = '#fff'; g.beginPath(); g.roundRect(b.x, b.y, b.w, b.h, 16); g.fill(); }
+      g.fillStyle = on ? '#3b2f2a' : '#6b594e'; g.font = '900 15px Menlo, "PingFang TC", monospace'; g.fillText(code === 'zh' ? '中文' : 'EN', b.x + b.w / 2, b.y + b.h / 2 + 1); }
+    const p = ARC_BTN.play, s = 1 + Math.sin(t * 5) * 0.04;
+    g.save(); g.translate(p.x + p.w / 2, p.y + p.h / 2); g.scale(s, s);
+    g.fillStyle = '#d4553a'; g.beginPath(); g.roundRect(-p.w / 2, -p.h / 2 + 4, p.w, p.h, 19); g.fill();
+    g.fillStyle = '#ff7a59'; g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.roundRect(-p.w / 2, -p.h / 2, p.w, p.h, 19); g.fill(); g.stroke();
+    g.fillStyle = '#fff'; g.font = '900 17px Menlo, "PingFang TC", monospace'; g.fillText(gameLang === 'zh' ? '▶ 開始' : '▶ PLAY', 0, 1);
+    g.restore(); g.textBaseline = 'alphabetic';
+  }
   // 底部跑馬燈報價
   g.fillStyle = '#2a1f4e'; g.fillRect(0, H - 40, W, 40);
   g.font = '700 15px Menlo, monospace'; g.textAlign = 'left';
@@ -574,7 +599,8 @@ function updateZoom(dt) {
   camera.position.lerpVectors(orbitPos, endPos, e);
   lookTgt.lerpVectors(orbitTarget, scrPos, e);
   camera.lookAt(lookTgt);
-  if (zoomGoal >= 1 && zoomT > 0.985) { if (focusArcade) { if (!gameOn) showGame(); } else if (!uiOn) showUI(); }   // 鏡頭到位 → 淡入介面 / 遊戲
+  arcadeMenu = zoomGoal >= 1 && zoomT > 0.985 && focusArcade && !gameOn;   // 鏡頭停在街機前:機台螢幕上出現語言 / PLAY 按鈕
+  if (zoomGoal >= 1 && zoomT > 0.985 && !focusArcade && !uiOn) showUI();     // 鏡頭到電腦螢幕 → 淡入介紹介面
 }
 
 // ---------- 螢幕介面:鏡頭定在螢幕後淡入,滾輪一頁一頁介紹功能;第一頁再往上滾 → 退回房間 ----------
@@ -628,6 +654,7 @@ holdButton('next', 1); holdButton('prev', -1);
 document.getElementById('mid').onclick = () => { if (gameOn) hideGame(); else if (uiOn) hideUI(); else { focusArcade = false; zoomGoal = zoomGoal >= 1 ? 0 : 1; } };
 window.addEventListener('keydown', (e) => {
   if (gameOn) { if (e.key === 'Escape') hideGame(); return; }
+  if (arcadeMenu && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); startGame(); return; }
   if (!uiOn) return;
   if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') uiNav(1);
   else if (e.key === 'ArrowUp' || e.key === 'PageUp') uiNav(-1);
@@ -641,13 +668,21 @@ canvas.addEventListener('pointerup', (e) => {
   pd = null;
   ndc.set((e.clientX / canvas.clientWidth) * 2 - 1, -(e.clientY / canvas.clientHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
+  if (arcadeMenu && arcadeScreen) {                      // 已經停在街機前:點的是機台螢幕上的哪顆按鈕
+    const hit = raycaster.intersectObject(arcadeScreen)[0];
+    if (hit && hit.uv) {
+      const b = arcadeButtonAt(hit.uv.x * 520, (1 - hit.uv.y) * 385);
+      if (b === 'play') startGame(); else if (b) setGameLang(b);
+      return;
+    }
+  }
   if (raycaster.intersectObject(screenMesh).length) { focusArcade = false; zoomGoal = 1; }
   else if ((playTag && raycaster.intersectObject(playTag, true).length) || (arcadeScreen && raycaster.intersectObject(arcadeScreen).length) || (arcadeModel && raycaster.intersectObject(arcadeModel, true).length)) { focusArcade = true; zoomGoal = 1; }
 });
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=21';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=23';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 遊戲畫面幾乎佔滿整個視窗(四周只留外框的厚度)。用真實像素大小而不是縮放,
@@ -658,12 +693,14 @@ function fitGame() {
   gameCab.style.left = M + 'px'; gameCab.style.top = M + 'px';
 }
 window.addEventListener('resize', fitGame);
-function showGame() {
-  gameOn = true;
-  gameFrame = document.createElement('iframe'); gameFrame.src = GAME_URL; gameFrame.allow = 'autoplay'; gameFrame.title = 'Cat Arcade';
+// 在機台螢幕上按 PLAY → 開啟遊戲(幾乎滿版的 iframe),語言跟著機台上選的走
+function startGame() {
+  if (gameOn) return;
+  gameOn = true; arcadeMenu = false;
+  gameFrame = document.createElement('iframe'); gameFrame.src = `${GAME_URL}&lang=${gameLang}`; gameFrame.allow = 'autoplay'; gameFrame.title = 'Cat Street Stocks';
   gameScr.appendChild(gameFrame); fitGame();
   gameUI.classList.add('on'); document.body.classList.add('game-on');
-  setTimeout(() => { try { gameFrame.contentWindow.focus(); } catch (e) {} }, 400);   // 鍵盤直接可玩
+  setTimeout(() => { try { gameFrame.contentWindow.focus(); } catch (e) {} }, 400);
 }
 function hideGame() {
   gameOn = false; gameUI.classList.remove('on'); document.body.classList.remove('game-on');
