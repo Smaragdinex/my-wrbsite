@@ -123,6 +123,10 @@
   .fav{width:24px;height:24px;border-radius:50%;background:#dfe8ff center 20%/cover;border:2px solid #fff;flex:none}
   .side{max-height:calc(100vh - 96px)}
   .side .box{flex:0 1 auto;min-height:0;overflow:hidden}
+  .side .box h4{display:flex;align-items:center;gap:8px;pointer-events:auto;cursor:pointer;user-select:none}
+  .tri{margin-left:auto;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #fff;transition:transform .2s}
+  .box.fold .tri{transform:rotate(-90deg)}
+  .box.fold > div{display:none}
   .hide{display:none!important}
   @media(max-width:560px){ .stat.opt{display:none} .ava{width:48px;height:48px} .miss{top:72px} .m{font-size:11.5px;padding:5px 8px} .m small{display:none} }
 </style>
@@ -151,8 +155,8 @@
 <div class="miss" id="miss"></div>
 <div class="side">
   <div class="bubble"><span class="av" style="background-image:url(/assets/app-icon.png)"></span><span id="tip"></span></div>
-  <div class="box"><h4 id="assetTitle"></h4><div id="assetRows"></div></div>
-  <div class="box foe"><h4><span class="fav" id="foeAva"></span><span id="foeName"></span></h4><div id="foeRows"></div></div>
+  <div class="box"><h4><span id="assetTitle"></span><span class="tri"></span></h4><div id="assetRows"></div></div>
+  <div class="box foe"><h4><span class="fav" id="foeAva"></span><span id="foeName"></span><span class="tri"></span></h4><div id="foeRows"></div></div>
 </div>
 <div class="box ev evt"><h4 id="evtTitle"></h4><div class="body" id="evtBody"></div></div>
 <div class="round"><span id="roundTxt"></span><div class="trk"><b id="roundBar"></b></div></div>
@@ -177,6 +181,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=28"></script>
+<script type="module" src="./board.mjs?v=29"></script>
 </body>
 </html>
