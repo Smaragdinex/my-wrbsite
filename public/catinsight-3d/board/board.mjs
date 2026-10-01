@@ -24,25 +24,42 @@ const SECTORS = {
   oil:    { name: L('Purr Energy', '呼嚕能源'),   code: L('ENERGY', '能源股'), color: 0xf2796b, css: '#e2604f', open: 80,  div: 0.02, blurb: L('Moves with world events.', '跟著國際事件走。') },
   health: { name: L('Whisker Health', '鬍鬚醫療'), code: L('HEALTH', '醫療股'), color: 0x54c98a, css: '#35ad6d', open: 70,  div: 0.02, blurb: L('Steady when markets panic.', '市場恐慌時相對抗跌。') },
   reit:   { name: L('Cat Tower REIT', '貓跳台不動產'), code: L('REIT', '不動產'), color: 0xc48ad6, css: '#ad6cc4', open: 100, div: 0.04, blurb: L('Pays 4% a lap. Hates rate hikes.', '每圈配息 4%,最怕升息。') },
+  fin:    { name: L('Purr Bank', '咕嚕金控'),       code: L('FINANCE', '金融股'),  color: 0x2a9db5, css: '#1f8aa1', open: 85,  div: 0.03, blurb: L('Likes higher rates. Steady 3% a lap.', '升息時受惠,每圈配息 3%。') },
+  trans:  { name: L('Zoomies Shipping', '暴衝航運'), code: L('TRANSPORT', '運輸股'), color: 0x9a7b66, css: '#86654f', open: 75,  div: 0.02, blurb: L('Hurt by fuel costs, lifted by trade booms.', '油價漲就受傷,運價漲就大賺。') },
+  bio:    { name: L('Catnip Bio', '貓草生技'),       code: L('BIOTECH', '生技股'),  color: 0xe85d9b, css: '#d44a88', open: 110, div: 0,    blurb: L('No dividends. Drug news makes it soar or crash.', '不配息,新藥消息決定大漲或大跌。') },
 };
 const KEYS = Object.keys(SECTORS);
 // 7x7 外圈共 24 格;四個角是 起點 / 商店 / 手續費 / 商店
 const N = 7;
-const TILES = ['start', 'yield', 'chip', 'chance', 'tech', 'health', 'shop', 'oil', 'reit', 'chance', 'chip', 'yield',
-  'fee', 'tech', 'health', 'chance', 'oil', 'reit', 'shop', 'chip', 'tech', 'gift', 'yield', 'oil'];
+const TILES = ['start', 'yield', 'chip', 'chance', 'tech', 'fin', 'shop', 'oil', 'reit', 'chance', 'trans', 'bio',
+  'fee', 'tech', 'health', 'chance', 'fin', 'yield', 'shop', 'chip', 'trans', 'gift', 'bio', 'oil'];
 const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b };
+const EV = (t, w, m) => ({ t, w, m: { tech: 1, chip: 1, yield: 1, oil: 1, health: 1, reit: 1, fin: 1, trans: 1, bio: 1, ...m } });
 const EVENTS = [
-  { t: L('Rate cut announced', '央行宣布降息'),        m: { tech: 1.20, chip: 1.10, yield: 0.97, oil: 1.00, health: 1.00, reit: 1.12 }, w: L('Cheaper borrowing lifts growth stocks and property.', '借錢變便宜,成長股和不動產最受惠。') },
-  { t: L('AI server demand booms', 'AI 伺服器需求爆發'), m: { tech: 1.10, chip: 1.25, yield: 1.00, oil: 0.95, health: 1.00, reit: 1.00 }, w: L('Scarce chips let makers raise prices.', '晶片供不應求,廠商有漲價空間。') },
-  { t: L('Oil supply shock', '原油供給吃緊'),          m: { tech: 0.93, chip: 0.95, yield: 1.00, oil: 1.25, health: 1.00, reit: 0.97 }, w: L('Energy gains while higher costs hit everyone else.', '能源股受惠,其他產業成本上升。') },
-  { t: L('Black swan', '黑天鵝事件'),                 m: { tech: 0.80, chip: 0.80, yield: 0.95, oil: 0.90, health: 0.98, reit: 0.90 }, w: L('Panic selling hits the riskiest sectors hardest.', '恐慌賣壓下,風險高的類股跌最多。') },
-  { t: L('Strong earnings season', '財報季優於預期'),   m: { tech: 1.12, chip: 1.12, yield: 1.04, oil: 1.04, health: 1.06, reit: 1.03 }, w: L('Profits beat forecasts across the board.', '企業獲利普遍優於預期。') },
-  { t: L('Rate hike surprise', '意外升息'),            m: { tech: 0.90, chip: 0.92, yield: 1.03, oil: 1.02, health: 1.00, reit: 0.88 }, w: L('Higher rates hurt growth and property; steady payers hold up.', '升息壓抑成長股與不動產,穩定配息的相對抗跌。') },
-  { t: L('Flu season hits', '流感疫情升溫'),           m: { tech: 0.98, chip: 0.98, yield: 1.00, oil: 0.96, health: 1.20, reit: 1.00 }, w: L('Demand for medicine and care jumps.', '醫療需求大增。') },
+  EV(L('Rate cut announced', '央行宣布降息'), L('Cheaper borrowing lifts growth stocks and property; banks earn less on loans.', '借錢變便宜,成長股和不動產受惠;銀行利差縮小。'),
+    { tech: 1.20, chip: 1.10, yield: 0.97, reit: 1.12, fin: 0.94, trans: 1.04, bio: 1.12 }),
+  EV(L('AI server demand booms', 'AI 伺服器需求爆發'), L('Scarce chips let makers raise prices.', '晶片供不應求,廠商有漲價空間。'),
+    { tech: 1.10, chip: 1.25, oil: 0.95, trans: 1.03 }),
+  EV(L('Oil supply shock', '原油供給吃緊'), L('Energy gains; fuel-hungry shippers and airlines suffer.', '能源股受惠;最吃燃料的運輸業受傷最重。'),
+    { tech: 0.93, chip: 0.95, oil: 1.25, reit: 0.97, fin: 0.98, trans: 0.82 }),
+  EV(L('Black swan', '黑天鵝事件'), L('Panic selling hits the riskiest sectors hardest.', '恐慌賣壓下,風險高的類股跌最多。'),
+    { tech: 0.80, chip: 0.80, yield: 0.95, oil: 0.90, health: 0.98, reit: 0.90, fin: 0.85, trans: 0.85, bio: 0.78 }),
+  EV(L('Strong earnings season', '財報季優於預期'), L('Profits beat forecasts across the board.', '企業獲利普遍優於預期。'),
+    { tech: 1.12, chip: 1.12, yield: 1.04, oil: 1.04, health: 1.06, reit: 1.03, fin: 1.08, trans: 1.08, bio: 1.05 }),
+  EV(L('Rate hike surprise', '意外升息'), L('Higher rates hurt growth and property, but banks earn more on loans.', '升息壓抑成長股與不動產,銀行利差反而擴大。'),
+    { tech: 0.90, chip: 0.92, yield: 1.03, oil: 1.02, reit: 0.88, fin: 1.12, trans: 0.96, bio: 0.88 }),
+  EV(L('Flu season hits', '流感疫情升溫'), L('Demand for medicine and vaccines jumps; travel slows.', '藥品與疫苗需求大增,出遊與運輸減少。'),
+    { tech: 0.98, oil: 0.96, health: 1.20, trans: 0.94, bio: 1.22 }),
+  EV(L('New drug approved', '新藥獲准上市'), L('One approval can change everything for a biotech.', '一張藥證就能改變一家生技公司的命運。'),
+    { health: 1.08, bio: 1.35 }),
+  EV(L('Shipping rates surge', '運價大漲'), L('Ports are jammed and ships are scarce, so freight prices jump.', '港口塞港、運力不足,運費跟著漲。'),
+    { tech: 0.98, oil: 1.05, trans: 1.28 }),
+  EV(L('Clinical trial fails', '臨床試驗失敗'), L('Biotech has no profits to fall back on, so bad news hits hard.', '生技公司沒有獲利撐腰,壞消息一來跌很深。'),
+    { health: 0.97, bio: 0.70 }),
 ];
 const LOT = 10, START_CASH = 10000, SALARY = 500, FEE = 200, MAX_ROLLS = 15;
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
-const SALE_EVENTS = [0, 1, 2, 4, 6];          // 商店會賣的事件卡(黑天鵝和升息不賣)
+const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8];    // 商店會賣的事件卡(黑天鵝、升息、試驗失敗不賣)
 const REMOTE_PRICE = 300, CARD_PRICE = 500;
 function itemInfo(id) {
   if (id === 'remote') return { icon: '🎲', name: L('Remote dice', '遙控骰子'), desc: L('Pick any total from 2 to 12 instead of rolling.', '不用擲骰,自己指定走 2 到 12 步。'), price: REMOTE_PRICE };
@@ -214,6 +231,12 @@ function icon(c, type, x, y, r, color) {
   else if (type === 'health') { rr(-r, -r, r * 2, r * 2, r * 0.4); c.fill(); c.fillStyle = '#fff'; c.fillRect(-r * 0.2, -r * 0.62, r * 0.4, r * 1.24); c.fillRect(-r * 0.62, -r * 0.2, r * 1.24, r * 0.4); }
   else if (type === 'reit') { c.beginPath(); c.moveTo(0, -r); c.lineTo(r * 1.05, -r * 0.1); c.lineTo(-r * 1.05, -r * 0.1); c.closePath(); c.fill(); c.fillRect(-r * 0.72, -r * 0.1, r * 1.44, r * 1.05);
     c.fillStyle = '#fff'; c.fillRect(-r * 0.2, r * 0.3, r * 0.4, r * 0.65); }
+  else if (type === 'fin') { c.beginPath(); c.moveTo(0, -r); c.lineTo(r * 1.05, -r * 0.35); c.lineTo(-r * 1.05, -r * 0.35); c.closePath(); c.fill();
+    for (let i = -1; i <= 1; i++) c.fillRect(i * r * 0.6 - r * 0.14, -r * 0.2, r * 0.28, r * 0.85); c.fillRect(-r, r * 0.72, r * 2, r * 0.26); }
+  else if (type === 'trans') { c.beginPath(); c.moveTo(-r, r * 0.15); c.lineTo(r, r * 0.15); c.lineTo(r * 0.68, r * 0.85); c.lineTo(-r * 0.68, r * 0.85); c.closePath(); c.fill();
+    c.fillRect(-r * 0.5, -r * 0.5, r * 0.75, r * 0.55); c.fillRect(r * 0.32, -r * 0.95, r * 0.2, r * 1.0); c.fillStyle = '#fff'; c.fillRect(-r * 0.36, -r * 0.36, r * 0.2, r * 0.2); c.fillRect(-r * 0.06, -r * 0.36, r * 0.2, r * 0.2); }
+  else if (type === 'bio') { c.beginPath(); c.moveTo(-r * 0.24, -r); c.lineTo(r * 0.24, -r); c.lineTo(r * 0.24, -r * 0.3); c.lineTo(r * 0.85, r * 0.78); c.quadraticCurveTo(r * 0.9, r, r * 0.65, r); c.lineTo(-r * 0.65, r); c.quadraticCurveTo(-r * 0.9, r, -r * 0.85, r * 0.78); c.lineTo(-r * 0.24, -r * 0.3); c.closePath(); c.fill();
+    c.fillRect(-r * 0.38, -r * 1.02, r * 0.76, r * 0.16); c.fillStyle = '#fff'; c.beginPath(); c.arc(-r * 0.15, r * 0.5, r * 0.14, 0, 7); c.arc(r * 0.25, r * 0.3, r * 0.1, 0, 7); c.fill(); }
   c.restore();
 }
 function drawLabel(i) {
@@ -650,6 +673,9 @@ function finish(done) {
     oil: L('Macro trader. You bet on world events.', '總經交易者:押注國際事件。'),
     health: L('Defender. You like sectors that hold up in a storm.', '防禦派:偏好抗跌的類股。'),
     reit: L('Landlord. You collect rent and watch interest rates.', '包租公:收租配息,緊盯利率。'),
+    fin: L('Banker. You like steady payers that enjoy higher rates.', '銀行家:偏好配息穩、升息受惠的金融股。'),
+    trans: L('Trade watcher. You ride the shipping cycle.', '景氣觀察家:跟著運價循環進出。'),
+    bio: L('Moonshot hunter. High risk, no dividends, big dreams.', '夢想獵人:高風險、不配息,賭新藥成功。'),
   }[top];
   const title = [L('Rough market', '行情不順'), L('Curious rookie', '好奇新手'), L('Sharp analyst', '精明分析師'), L('Top investor', '頂尖投資人')][done];
   const a = assets();
