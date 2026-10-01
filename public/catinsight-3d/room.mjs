@@ -499,8 +499,11 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   die(W / 2 + 98, 168, 1 + (k * 5 + 2) % 6, Math.sin(t * 3) * 0.18); die(W / 2 + 146, 190, 1 + (k * 3 + 4) % 6, Math.sin(t * 3 + 1.4) * 0.18);
   // 標題 + 閃爍提示
   g.textAlign = 'center';
-  g.fillStyle = 'rgba(0,0,0,.22)'; g.font = '900 30px Menlo, monospace'; g.fillText('CAT STREET', W / 2 - 40 + 2, 172 + 2); g.fillText('STOCKS', W / 2 - 40 + 2, 208 + 2);
-  g.fillStyle = '#fff'; g.fillText('CAT STREET', W / 2 - 40, 172); g.fillStyle = '#ff7a59'; g.fillText('STOCKS', W / 2 - 40, 208);
+  // 標題跟著選的語言換:中文字用系統的中文字型(Menlo 沒有中文字)
+  const zhT = gameLang === 'zh', t1 = zhT ? '貓咪股市' : 'CAT STREET', t2 = zhT ? '大富翁' : 'STOCKS';
+  g.font = zhT ? '900 36px "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif' : '900 30px Menlo, monospace';
+  g.fillStyle = 'rgba(0,0,0,.22)'; g.fillText(t1, W / 2 - 40 + 2, 172 + 2); g.fillText(t2, W / 2 - 40 + 2, (zhT ? 214 : 208) + 2);
+  g.fillStyle = '#fff'; g.fillText(t1, W / 2 - 40, 172); g.fillStyle = '#ff7a59'; g.fillText(t2, W / 2 - 40, zhT ? 214 : 208);
   // 鏡頭停在街機前時:最下面一排畫上語言切換(左)和 PLAY(右)(點擊判定見 arcadeButtonAt)
   if (arcadeMenu) {
     g.textAlign = 'center'; g.textBaseline = 'middle';
