@@ -190,44 +190,58 @@ function loadGLB(name, url, onLoad) {
     (err) => { noteLoad(name, 'done'); console.error(`[catinsight-3d] ${name} 載入失敗:`, err); });
 }
 {
+  // 街機:純幾何重做(原本是 AI 生成的 arcade.glb,貼圖有髒污、邊緣不乾淨)。原點在背面底部中央,+z 朝房間
   const a = group(-S / 2 + 0.12 + 0.66, 0, L.z + T / 2);         // 最左邊、背面貼牆
-  loadGLB('arcade', './arcade.glb', (gltf) => {
-    const m = gltf.scene;
-    m.rotation.y = 0;                                            // 正面朝房間(依模型朝向調整)
-    m.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(m);
-    const size = box.getSize(new THREE.Vector3());
-    const k = ARCADE_H / size.y;
-    m.scale.setScalar(k);
-    // 置中 x、底部貼地、背面貼牆(z 最小值對齊群組原點)
-    m.position.set(-(box.min.x + box.max.x) / 2 * k, -box.min.y * k, -box.min.z * k + 0.02);
-    m.traverse((o) => {
-      if (!o.isMesh) return;
-      o.castShadow = true; o.receiveShadow = true;
-      o.material.side = THREE.FrontSide; o.material.metalness = 0;
-    });
-    a.add(m); arcadeModel = m;
-    // 街機上方的漂浮標記:白色「▶ PLAY」牌子 + 橘色倒三角,會上下漂浮並永遠面向鏡頭;點它等於點街機
-    playTag = new THREE.Group(); playTag.position.set(0, ARCADE_H + 0.55, size.z * k * 0.5); a.add(playTag);   // 對齊街機中心
-    const tc = document.createElement('canvas'); tc.width = 512; tc.height = 256;
-    const g = tc.getContext('2d');
-    g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect(8, 8, 496, 240, 70); g.fill();
-    g.fillStyle = '#7b5cf5'; g.font = '800 120px -apple-system, Helvetica, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('▶ PLAY', 256, 136);
-    const tt = new THREE.CanvasTexture(tc); tt.colorSpace = THREE.SRGBColorSpace; tt.anisotropy = 8;
-    const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.3), new THREE.MeshBasicMaterial({ map: tt, transparent: true, side: THREE.DoubleSide }));
-    tag.position.y = 0.27; playTag.add(tag);
-    const tri = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.18, 3), new THREE.MeshStandardMaterial({ color: 0xf08262, roughness: 0.6, flatShading: true }));
-    tri.rotation.x = Math.PI; tri.castShadow = true; playTag.add(tri);
-    // 街機螢幕:模型的螢幕貼圖是空白的,蓋一片會動的 canvas(吸引模式畫面)。位置/傾角是用射線量模型量出來的:
-    // 中心約 (0, 1.82, 1.01)、法線 (0, 0.34, 0.94) → 往後仰 20°
-    arcadeScreenTex = new THREE.CanvasTexture(arcadeCanvas); arcadeScreenTex.colorSpace = THREE.SRGBColorSpace; arcadeScreenTex.anisotropy = 8;
-    arcadeScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.72), new THREE.MeshBasicMaterial({ map: arcadeScreenTex, transparent: true, toneMapped: false }));
-    arcadeScreen.position.set(0, 1.82, 1.022); arcadeScreen.rotation.x = -0.35; a.add(arcadeScreen);
-    // 街機螢幕的位置(給鏡頭飛過去用):正面、離地約 1.75(螢幕中心)
-    arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.75, size.z * k + 0.02); a.add(arcadeAnchor);
-    if (window.__room) window.__room.arcade = m;
-  });
+  const m = new THREE.Group(); a.add(m); arcadeModel = m;
+  const P = { parent: m };
+  const W = 1.3, D = 1.2, IN = 1.12;                              // 外寬、側板深度、兩片側板之間的寬度
+  const DARK = 0x2a2140, RED = 0xe2553d, PURPLE = 0x7b5cf5;
+  // 兩片側板(薰衣草紫)
+  for (const sx of [-1, 1]) box(0.09, ARCADE_H, D, C.arcade, { ...P, x: sx * (W / 2 - 0.045), y: ARCADE_H / 2, z: D / 2, r: 0.04 });
+  // 下半身(橘)+ 中央白條 + 投幣門
+  box(IN, 1.0, 0.98, C.arcadeTop, { ...P, y: 0.5, z: 0.5, r: 0.03 });
+  box(0.24, 0.98, 0.02, C.arcadeStripe, { ...P, y: 0.5, z: 0.995, r: 0.008 });
+  box(0.34, 0.4, 0.03, C.arcade, { ...P, y: 0.52, z: 1.0, r: 0.02 });
+  box(0.05, 0.14, 0.02, DARK, { ...P, x: -0.06, y: 0.56, z: 1.018, r: 0.008 });
+  box(0.1, 0.1, 0.02, C.arcadeTop, { ...P, x: 0.08, y: 0.6, z: 1.018, r: 0.01 });
+  // 操作檯(往玩家這邊斜)+ 白條、搖桿、三顆按鈕
+  const deck = new THREE.Group(); deck.position.set(0, 1.07, 0.86); deck.rotation.x = 0.2; m.add(deck);
+  const DP = { parent: deck };
+  box(IN, 0.12, 0.6, C.arcadeTop, { ...DP, r: 0.03 });
+  box(0.24, 0.02, 0.6, C.arcadeStripe, { ...DP, y: 0.062, r: 0.008 });
+  cyl(0.1, 0.12, 0.04, C.arcade, { ...DP, y: 0.08, z: 0.02 });
+  cyl(0.022, 0.022, 0.2, 0xffffff, { ...DP, y: 0.19, z: 0.02 });
+  { const ball = new THREE.Mesh(new THREE.SphereGeometry(0.075, 24, 18), mat(RED, { roughness: 0.45 })); ball.position.set(0, 0.32, 0.02); ball.castShadow = true; deck.add(ball); }
+  [[-0.4, PURPLE], [-0.24, C.arcadeTop], [0.34, C.plant]].forEach(([x, c]) => { cyl(0.085, 0.085, 0.03, C.arcadeStripe, { ...DP, x, y: 0.07, z: 0.04 }); cyl(0.065, 0.07, 0.05, c, { ...DP, x, y: 0.1, z: 0.04 }); });
+  // 螢幕後面的機身(深紫)+ 往後仰 20° 的螢幕邊框
+  box(IN, 1.06, 0.8, C.arcadeScreen, { ...P, y: 1.66, z: 0.4, r: 0.03 });
+  box(IN, 0.9, 0.06, DARK, { ...P, y: 1.82, z: 0.985, rx: -0.35, r: 0.02 });
+  // 招牌(橘 + 白條 + 發亮的燈箱)
+  // 招牌不能比螢幕邊框的上緣(z≈0.85)更凸出,不然鏡頭正對螢幕時會擋到螢幕最上面一排
+  box(IN, 0.36, 0.82, C.arcadeTop, { ...P, y: ARCADE_H - 0.18, z: 0.41, r: 0.03 });
+  box(0.24, 0.36, 0.02, C.arcadeStripe, { ...P, y: ARCADE_H - 0.18, z: 0.825, r: 0.008 });
+  { const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.2, 0.02), new THREE.MeshStandardMaterial({ color: 0xfff2c8, emissive: 0xffd76a, emissiveIntensity: 0.7 }));
+    for (const sx of [-1, 1]) { const l = lamp.clone(); l.position.set(sx * 0.35, ARCADE_H - 0.18, 0.83); m.add(l); } }
+
+  // 街機上方的漂浮標記:白色「▶ PLAY」牌子 + 橘色倒三角,會上下漂浮並永遠面向鏡頭;點它等於點街機
+  playTag = new THREE.Group(); playTag.position.set(0, ARCADE_H + 0.55, D * 0.5); a.add(playTag);   // 對齊街機中心
+  const tc = document.createElement('canvas'); tc.width = 512; tc.height = 256;
+  const g = tc.getContext('2d');
+  g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect(8, 8, 496, 240, 70); g.fill();
+  g.fillStyle = '#7b5cf5'; g.font = '800 120px -apple-system, Helvetica, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('▶ PLAY', 256, 136);
+  const tt = new THREE.CanvasTexture(tc); tt.colorSpace = THREE.SRGBColorSpace; tt.anisotropy = 8;
+  const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.3), new THREE.MeshBasicMaterial({ map: tt, transparent: true, side: THREE.DoubleSide }));
+  tag.position.y = 0.27; playTag.add(tag);
+  const tri = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.18, 3), new THREE.MeshStandardMaterial({ color: 0xf08262, roughness: 0.6, flatShading: true }));
+  tri.rotation.x = Math.PI; tri.castShadow = true; playTag.add(tri);
+  // 街機螢幕:一片會動的 canvas(待機畫面 + 選單),貼在往後仰 20° 的邊框前面
+  arcadeScreenTex = new THREE.CanvasTexture(arcadeCanvas); arcadeScreenTex.colorSpace = THREE.SRGBColorSpace; arcadeScreenTex.anisotropy = 8;
+  arcadeScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.72), new THREE.MeshBasicMaterial({ map: arcadeScreenTex, transparent: true, toneMapped: false }));
+  arcadeScreen.position.set(0, 1.82, 1.022); arcadeScreen.rotation.x = -0.35; a.add(arcadeScreen);
+  // 街機螢幕的位置(給鏡頭飛過去用):正面、離地約 1.75(螢幕中心)
+  arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.75, D + 0.02); a.add(arcadeAnchor);
+  if (window.__room) window.__room.arcade = m;
 }
 
 // ---------- 攝影機 + 三腳架 ----------
