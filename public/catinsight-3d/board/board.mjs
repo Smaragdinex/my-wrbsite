@@ -56,6 +56,7 @@ const randomItem = () => (Math.random() < 0.5 ? 'remote' : 'ev' + SALE_EVENTS[Ma
 /* ───────────── 狀態 ───────────── */
 let S;
 const assets = () => S.cash + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
+const aiAssets = () => S.ai.cash + KEYS.reduce((a, k) => a + S.ai.hold[k].n * S.price[k], 0);
 const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 const MISSIONS = [
   { id: 'spread', title: L('Spread it out', '分散投資'),     sub: L('Hold 3 different sectors at once', '同時持有 3 種不同類股'),               ok: () => KEYS.filter((k) => S.hold[k].n > 0).length >= 3 },
@@ -73,6 +74,7 @@ function newState() {
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])),
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
     missions: pool.map((m) => ({ ...m, done: false })),
+    ai: { pos: 0, cash: START_CASH, hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])) },
   };
 }
 
@@ -268,8 +270,8 @@ function makeBunny() {
   return g;
 }
 // 載入棋子模型:先放幾何佔位,模型到了再換。貼圖保留,材質換成卡通著色讓它和場景同一種畫風
-function loadPiece(url, height, placeholder, tint) {
-  placeholder.name = 'ph'; body.add(placeholder);
+function loadPiece(url, height, placeholder, tint, target = body) {
+  placeholder.name = 'ph'; target.add(placeholder);
   const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
   const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
   loader.load(url, (gltf) => {
@@ -285,7 +287,7 @@ function loadPiece(url, height, placeholder, tint) {
       // 生成模型在 UV 接縫處法線不連續,描邊會沿接縫裂開變成臉上的髒線 → 這個模型不描邊
       o.material.userData.outlineParameters = { visible: false };
     });
-    body.remove(body.getObjectByName('ph')); body.add(m);
+    target.remove(target.getObjectByName('ph')); target.add(m);
   }, undefined, (e) => console.warn(`[board] ${url} 載入失敗,維持幾何佔位`, e));
 }
 if (PIECE === 'cat') {
@@ -298,7 +300,19 @@ if (PIECE === 'cat') {
   loadPiece('./bunny.glb?v=1', 1.3, ph);
 }
 body.rotation.y = Math.PI / 4;
-function placePiece(i) { const p = tilePos(i); piece.position.set(p.x, TOP, p.z); }
+// 對手:小熊(電腦控制)。和玩家站同一格時各往一邊偏一點才不會疊在一起
+const bearPiece = new THREE.Group(); scene.add(bearPiece);
+const bearBody = new THREE.Group(); bearPiece.add(bearBody); bearBody.rotation.y = Math.PI / 4;
+{
+  const ph = new THREE.Group(), brown = mat(0xb9793f);
+  const b = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), brown); b.position.y = 0.26; b.scale.y = 1.1; ph.add(b);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), brown); h.position.y = 0.68; ph.add(h);
+  [-0.15, 0.15].forEach((x) => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), brown); e.position.set(x, 0.88, 0); ph.add(e); });
+  loadPiece('./bear.glb?v=1', 1.25, ph, undefined, bearBody);
+}
+const ME = { piece, body, off: new THREE.Vector3(-0.2, 0, 0.14) };
+const BEAR = { piece: bearPiece, body: bearBody, off: new THREE.Vector3(0.2, 0, -0.14) };
+function placePiece(i, P = ME) { const p = tilePos(i); P.piece.position.set(p.x + P.off.x, TOP, p.z + P.off.z); }
 
 /* ───────────── 骰子 ───────────── */
 const DIE = 0.56;
@@ -339,7 +353,9 @@ function step(dt) {
     if (k >= 1) { tweens.splice(i, 1); a.res(); }
   }
   // 待機:貓輕輕呼吸;小樓平滑長高
-  if (!S.busy) { body.scale.y = 1 + Math.sin(T * 3) * 0.025; body.rotation.z = Math.sin(T * 1.6) * 0.04; } else body.rotation.z *= 0.85;
+  if (!S.busy) { body.scale.y = 1 + Math.sin(T * 3) * 0.025; body.rotation.z = Math.sin(T * 1.6) * 0.04;
+    bearBody.scale.y = 1 + Math.sin(T * 2.6 + 1) * 0.025; bearBody.rotation.z = Math.sin(T * 1.3 + 2) * 0.04; }
+  else { body.rotation.z *= 0.85; bearBody.rotation.z *= 0.85; }
   tiles.forEach((t) => {
     if (!t.bld) return;
     const target = Math.min(3, S.hold[t.type].n / LOT) * 0.24;
@@ -372,17 +388,17 @@ async function rollDice(vals) {
   });
   await wait(0.25);
 }
-async function hopTo(i) {
-  const a = piece.position.clone(), p = tilePos(i), b = new THREE.Vector3(p.x, TOP, p.z);
+async function hopTo(i, P = ME) {
+  const a = P.piece.position.clone(), p = tilePos(i), b = new THREE.Vector3(p.x + P.off.x, TOP, p.z + P.off.z);
   await tween(0.22, (k) => {
-    piece.position.lerpVectors(a, b, k);
-    piece.position.y = TOP + Math.sin(k * Math.PI) * 0.5;
-    body.scale.y = 1 + Math.sin(k * Math.PI) * 0.18;
+    P.piece.position.lerpVectors(a, b, k);
+    P.piece.position.y = TOP + Math.sin(k * Math.PI) * 0.5;
+    P.body.scale.y = 1 + Math.sin(k * Math.PI) * 0.18;
   });
   // 落地把格子壓一下
   const g = tiles[i].g;
   tween(0.18, (k) => { g.position.y = -Math.sin(k * Math.PI) * 0.06; });
-  body.scale.y = 1;
+  P.body.scale.y = 1;
 }
 
 /* ───────────── 介面 ───────────── */
@@ -410,6 +426,7 @@ function hud() {
   $('cash').textContent = fmt(S.cash);
   $('assets').textContent = fmt(assets());
   $('stocks').textContent = fmt(stockValue());
+  $('bearAssets').textContent = fmt(aiAssets());
   $('bagCount').textContent = S.bag.length;
   $('mcount').textContent = S.missions.filter((m) => m.done).length + '/3';
   $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left`, `剩 ${MAX_ROLLS - S.rolls} 次`);
@@ -430,7 +447,7 @@ function hud() {
 function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
   document.title = L('Cat Street Stocks', '貓咪股市大富翁');
-  $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值');
+  $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值'); $('lblBear').textContent = L('Bear', '小熊');
   $('bagBtn').textContent = L('Backpack', '背包'); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   $('note').textContent = L('Fictional companies · for learning, not investment advice', '公司皆為虛構 · 學習用途,非投資建議');
@@ -551,11 +568,40 @@ function bagPanel() {
     }
   });
 }
+const r6 = () => 1 + Math.floor(Math.random() * 6);
+// 小熊的回合。策略很單純,但都是看得懂的規則:
+//   賺超過 15% 就賣;價格比開盤低 5% 以上且現金夠就多買;否則留 $1,500 現金後買 10 股
+async function aiTurn() {
+  const A = S.ai, who = L('Bear', '小熊');
+  toast(L("Bear's turn", '小熊的回合')); await wait(0.6);
+  const a = r6(), b = r6(), n = a + b;
+  await rollDice([a, b]); toast(`${who}: ${a} + ${b} = ${n}`);
+  for (let i = 0; i < n; i++) {
+    A.pos = (A.pos + 1) % TILES.length;
+    await hopTo(A.pos, BEAR);
+    if (A.pos === 0) { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += SALARY + div; hud(); }
+  }
+  await wait(0.2);
+  const type = TILES[A.pos], sec = SECTORS[type];
+  if (sec) {
+    const h = A.hold[type], price = S.price[type];
+    if (h.n && (price * h.n - h.cost) / h.cost >= 0.15) {
+      A.cash += price * h.n; toast(L(`${who} took profit on ${sec.name}`, `${who}賣出${sec.name}獲利了結`)); h.n = 0; h.cost = 0;
+    } else {
+      const lots = (price < sec.open * 0.95 && A.cash >= price * LOT * 3 + 2000) ? 3 : (A.cash >= price * LOT + 1500 ? 1 : 0);
+      if (lots) { const q = LOT * lots; A.cash -= price * q; h.n += q; h.cost += price * q; toast(L(`${who} bought ${q} ${sec.name}`, `${who}買進${sec.name} ${q} 股`)); }
+      else toast(L(`${who} keeps cash and skips`, `${who}保留現金,跳過`));
+    }
+    hud(); await wait(1.0);
+  } else if (type === 'chance') { await wait(0.3); await playEvent(EVENTS[Math.floor(Math.random() * EVENTS.length)]); }
+  else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
+  else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
+  hud();
+}
 async function turn(forced) {
   if (S.busy || S.over) return;
   S.busy = true; showCtl(false);
   // 兩顆骰子;遙控骰子(forced)則是把指定的步數拆成兩顆的點數
-  const r6 = () => 1 + Math.floor(Math.random() * 6);
   const a = forced ? Math.max(1, Math.min(6, Math.floor(forced / 2))) : r6(), b = forced ? forced - a : r6();
   const n = a + b;
   await rollDice([a, b]);
@@ -584,7 +630,12 @@ async function turn(forced) {
   S.cashStreak = (stockValue() > 0 && S.cash >= 2000) ? S.cashStreak + 1 : 0;
   checkMissions();
   const done = S.missions.filter((m) => m.done).length;
-  if (done === 3 || S.rolls >= MAX_ROLLS) { await wait(0.4); return finish(done); }
+  if (done === 3) { await wait(0.4); return finish(done); }
+  // 換小熊走。牠踩到市場事件也會改變大家的股價,所以走完要再檢查一次任務
+  await aiTurn();
+  checkMissions();
+  const done2 = S.missions.filter((m) => m.done).length;
+  if (done2 === 3 || S.rolls >= MAX_ROLLS) { await wait(0.4); return finish(done2); }
   S.busy = false; showCtl(true);
 }
 function finish(done) {
@@ -600,12 +651,13 @@ function finish(done) {
     health: L('Defender. You like sectors that hold up in a storm.', '防禦派:偏好抗跌的類股。'),
     reit: L('Landlord. You collect rent and watch interest rates.', '包租公:收租配息,緊盯利率。'),
   }[top];
-  const title = [L('Rough market', '行情不順'), L('Curious kitten', '好奇小貓'), L('Sharp analyst', '精明分析師'), L('Top cat investor', '頂尖貓投資人')][done];
+  const title = [L('Rough market', '行情不順'), L('Curious rookie', '好奇新手'), L('Sharp analyst', '精明分析師'), L('Top investor', '頂尖投資人')][done];
   const a = assets();
   $('end').innerHTML = `<div class="card">
     <div class="stars">${[0, 1, 2].map((i) => i < done ? '<b>★</b>' : '★').join('')}</div>
     <h2>${title}</h2>
     <p>${L('Total assets', '總資產')} <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) · ${L(`${S.rolls} rolls`, `${S.rolls} 回合`)}</p>
+    <p>${L('Bear', '小熊')} <b>$${fmt(aiAssets())}</b> · ${a >= aiAssets() ? L('you beat the bear', '你贏過小熊') : L('the bear beat you', '小熊贏了')}</p>
     <p>${style}</p>
     <p style="font-size:12.5px">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`;
@@ -615,7 +667,7 @@ function finish(done) {
 }
 function start() {
   newState(); $('end').classList.add('hide'); closePanel();
-  staticText(); placePiece(0); drawAll(); hud(); showCtl(true);
+  staticText(); placePiece(0, ME); placePiece(0, BEAR); drawAll(); hud(); showCtl(true);
 }
 
 $('rollBtn').onclick = () => turn();
@@ -623,4 +675,4 @@ $('bagBtn').onclick = bagPanel;
 
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, turn, tiles, dice, piece, bagPanel };
+window.__game = { get S() { return S; }, turn, tiles, dice, piece, bearPiece, bagPanel, aiAssets };
