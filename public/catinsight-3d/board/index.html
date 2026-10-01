@@ -98,6 +98,24 @@
   .it button:disabled{background:#d6ccc4;box-shadow:none}
   .steps{flex-wrap:wrap;justify-content:center;max-width:min(520px,94vw)}
   #mapBtn.on{background:#3d9a55!important;box-shadow:0 4px 0 #2a743d!important}
+  /* 主畫面 */
+  body.intro .hud, body.intro .miss, body.intro .side, body.intro .evt, body.intro .round, body.intro .ctl, body.intro .note { display: none !important; }
+  .title{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(255,248,236,.28)}
+  body.intro .title{display:flex}
+  .tcard{width:min(440px,100%);background:var(--cream);border:4px solid #fff;outline:2px solid var(--line);border-radius:28px;padding:24px 22px 18px;text-align:center;
+    box-shadow:0 10px 0 rgba(0,0,0,.14),0 24px 40px rgba(0,0,0,.2)}
+  .tcard h1{font-size:34px;font-weight:900;line-height:1.1;color:#ff7a59;letter-spacing:.01em}
+  .tcard .sub{font-size:14px;font-weight:700;color:#6b594e;margin-top:8px}
+  .tcard ul{list-style:none;text-align:left;margin:14px 0 4px;display:flex;flex-direction:column;gap:7px}
+  .tcard li{display:flex;gap:10px;align-items:center;font-size:13px;font-weight:700;color:#5a4a40;background:#fff;border:2px solid var(--line);border-radius:12px;padding:7px 10px}
+  .tcard li b{flex:none;width:22px;height:22px;border-radius:50%;background:#8b7cff;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .lang{display:inline-flex;background:#eadfce;border-radius:999px;padding:4px;margin-top:14px;gap:4px}
+  .lang button{border:0;background:transparent;border-radius:999px;padding:7px 18px;font-weight:900;font-size:14px;color:#8a786c;cursor:pointer}
+  .lang button.on{background:#fff;color:var(--ink);box-shadow:0 2px 0 rgba(0,0,0,.12)}
+  .tplay{display:block;width:100%;height:58px;margin-top:14px;border:0;border-radius:18px;background:#ff7a59;color:#fff;font-size:21px;font-weight:900;letter-spacing:.06em;
+    box-shadow:0 6px 0 #d4553a;cursor:pointer}
+  .tplay:active{transform:translateY(4px);box-shadow:0 2px 0 #d4553a}
+  .tnote{font-size:10.5px;font-weight:700;color:rgba(59,47,42,.55);margin-top:12px}
   .hide{display:none!important}
   @media(max-width:560px){ .stat.opt{display:none} .ava{width:48px;height:48px} .miss{top:72px} .m{font-size:11.5px;padding:5px 8px} .m small{display:none} }
 </style>
@@ -108,7 +126,7 @@
 } }
 </script>
 </head>
-<body>
+<body class="intro">
 <canvas id="gl"></canvas>
 
 <div class="hud">
@@ -141,9 +159,19 @@
 </div>
 <div class="panel hide" id="panel"></div>
 <div class="toast" id="toast"></div>
+<div class="title" id="title">
+  <div class="tcard">
+    <h1 id="tTitle"></h1>
+    <div class="sub" id="tSub"></div>
+    <ul id="tHow"></ul>
+    <div class="lang"><button id="langZh">中文</button><button id="langEn">English</button></div>
+    <button class="tplay" id="tPlay"></button>
+    <div class="tnote" id="tNote"></div>
+  </div>
+</div>
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=19"></script>
+<script type="module" src="./board.mjs?v=20"></script>
 </body>
 </html>
