@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -68,8 +69,9 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const outline = new OutlineEffect(renderer, { defaultThickness: 0.006, defaultColor: [0.36, 0.25, 0.2], defaultAlpha: 1 });
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xcfe9dc);
+scene.background = new THREE.Color(0xc9e8b8);
 
 const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
 cam.position.set(12, 11, 12);
@@ -84,8 +86,8 @@ function resize() {
 }
 addEventListener('resize', resize);
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0xbfd8c8, 1.15));
-const sun = new THREE.DirectionalLight(0xfff2dd, 1.9);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xffe9c9, 1.15));
+const sun = new THREE.DirectionalLight(0xfff2dd, 1.7);
 sun.position.set(-6, 12, 5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -94,16 +96,21 @@ sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
 scene.add(sun);
 
 const STEP = 1.14, TOP = 0.40;
-const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, metalness: 0, ...o });
+// 卡通渲染:光影不是連續漸層,而是切成三階色塊(gradientMap),再由 OutlineEffect 補上描邊
+const toonRamp = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([150, 150, 150, 255, 215, 215, 215, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
+})();
+const mat = (c, o = {}) => { const { roughness, metalness, ...rest } = o; return new THREE.MeshToonMaterial({ color: c, gradientMap: toonRamp, ...rest }); };
 function box(w, h, d, color, x, y, z, r = 0.06, parent = scene) {
   const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, Math.min(r, h / 2 - 0.001)), mat(color));
   m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
 }
 // 地面、人行道、草地
 {
-  const g = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), mat(0xbfe3c9)); g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
-  box(5 * STEP + 0.7, 0.12, 5 * STEP + 0.7, 0xf4ead8, 0, 0.06, 0, 0.05);
-  box(3 * STEP - 0.12, 0.16, 3 * STEP - 0.12, 0xa8d98f, 0, 0.10, 0, 0.05);
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), mat(0xc9e8b8)); g.material.userData.outlineParameters = { visible: false }; g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
+  box(5 * STEP + 0.7, 0.12, 5 * STEP + 0.7, 0xf6e3c2, 0, 0.06, 0, 0.05);
+  box(3 * STEP - 0.12, 0.16, 3 * STEP - 0.12, 0x9bdc7a, 0, 0.10, 0, 0.05);
 }
 // 小鎮裝飾:樹和房子(純幾何)
 function tree(x, z, s = 1) {
@@ -166,7 +173,7 @@ TILES.forEach((type, i) => {
   const cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const holder = new THREE.Group(); holder.rotation.y = Math.PI / 4; holder.position.y = TOP + 0.004; g.add(holder);
-  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), Object.assign(new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }), { userData: { outlineParameters: { visible: false } } }));
   lab.rotation.x = -Math.PI / 2; holder.add(lab);
   // 持股越多,格子後方的小樓越高
   let bld = null;
@@ -279,7 +286,7 @@ function pipTex(n) {
 }
 // BoxGeometry 的面順序是 +x,-x,+y,-y,+z,-z;對面加起來是 7
 const FACE = [3, 4, 1, 6, 2, 5];
-const die = new THREE.Mesh(new RoundedBoxGeometry(DIE, DIE, DIE, 4, 0.08), FACE.map((n) => new THREE.MeshStandardMaterial({ map: pipTex(n), roughness: 0.6 })));
+const die = new THREE.Mesh(new RoundedBoxGeometry(DIE, DIE, DIE, 4, 0.08), FACE.map((n) => new THREE.MeshToonMaterial({ map: pipTex(n), gradientMap: toonRamp })));
 die.castShadow = true; scene.add(die);
 const DIE_REST = new THREE.Vector3(0.55, 0.18 + DIE / 2, 0.55);
 die.position.copy(DIE_REST);
@@ -313,7 +320,7 @@ function step(dt) {
     t.bldH += (target - t.bldH) * Math.min(1, dt * 8);
     t.bld.visible = t.bldH > 0.01; t.bld.scale.y = Math.max(0.001, t.bldH);
   });
-  renderer.render(scene, cam);
+  outline.render(scene, cam);
 }
 let last = performance.now();
 function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; step(dt); requestAnimationFrame(loop); }
