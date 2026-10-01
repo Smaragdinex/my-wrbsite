@@ -414,7 +414,8 @@ let catModel = null;
 // ---------- 街機螢幕的待機畫面:股票大富翁(一圈彩色格子、兔子繞圈跳、兩顆骰子、跑馬燈報價、閃爍的 PRESS PLAY)----------
 const ARC_COLORS = ['#ff8fc0', '#8b7cff', '#4f8ef0', '#ffd24a', '#f5b942', '#f2796b', '#54c98a', '#5aa9ff', '#c48ad6', '#2a9db5', '#ffd24a', '#e85d9b', '#9aa0ad', '#e6b422', '#3d5a80', '#ffd24a', '#2ec4b6', '#f7931a', '#5aa9ff', '#7fb069', '#b5179e', '#ff9f6b'];
 // 機台螢幕上的按鈕位置(畫布座標 520x385),畫和點擊判定共用
-const ARC_BTN = { zh: { x: 96, y: 301, w: 70, h: 32 }, en: { x: 168, y: 301, w: 70, h: 32 }, play: { x: 286, y: 298, w: 140, h: 38 } };
+// PLAY 放在原本「▶ PRESS PLAY」那行字的位置(選單出現時那行字就不畫),語言切換置中放在下方人行道
+const ARC_BTN = { zh: { x: 187, y: 301, w: 72, h: 32 }, en: { x: 261, y: 301, w: 72, h: 32 }, play: { x: 150, y: 187, w: 140, h: 38 } };
 function arcadeButtonAt(x, y) {
   for (const k in ARC_BTN) { const b = ARC_BTN[k]; if (x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 8 && y <= b.y + b.h + 8) return k; }
   return null;
@@ -429,7 +430,7 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   g.setTransform(zoom, 0, 0, zoom, 0, 0);
   g.clearRect(0, 0, W, H);
   g.save();
-  g.beginPath(); g.roundRect(0, 0, W, H, 34); g.clip();                    // 圓角螢幕
+  g.beginPath(); g.roundRect(0, 0, W, H, 5); g.clip();                     // 圓角螢幕(角不能太圓,拉近滿版時四個角會露出機台)
   g.fillStyle = '#bfe6a8'; g.fillRect(0, 0, W, H);                         // 草地
   g.fillStyle = '#f6e3c2'; g.beginPath(); g.roundRect(14, 14, W - 28, H - 62, 18); g.fill();   // 人行道
   g.fillStyle = '#9bdc7a'; g.beginPath(); g.roundRect(84, 68, W - 168, 178, 12); g.fill();      // 中間草地
@@ -473,7 +474,7 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   g.textAlign = 'center';
   g.fillStyle = 'rgba(0,0,0,.22)'; g.font = '900 30px Menlo, monospace'; g.fillText('CAT STREET', W / 2 - 40 + 2, 138 + 2); g.fillText('STOCKS', W / 2 - 40 + 2, 172 + 2);
   g.fillStyle = '#fff'; g.fillText('CAT STREET', W / 2 - 40, 138); g.fillStyle = '#ff7a59'; g.fillText('STOCKS', W / 2 - 40, 172);
-  if (zoom === 1 && Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#3b2f2a'; g.font = '900 18px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2 - 40, 210); }
+  if (!arcadeMenu && Math.floor(t * 2) % 2 === 0) { g.fillStyle = '#3b2f2a'; g.font = '900 18px Menlo, monospace'; g.fillText('▶ PRESS PLAY', W / 2 - 40, 210); }
   // 鏡頭停在街機前時:人行道那一條畫上語言切換和 PLAY(點擊判定見 arcadeButtonAt)
   if (arcadeMenu) {
     g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -590,7 +591,8 @@ function updateZoom(dt) {
     // 鏡頭正對街機螢幕(螢幕是往後仰的,所以沿著它的法線看),拉近到螢幕剛好填滿畫面,機台本身不入鏡
     arcadeScreen.getWorldPosition(scrPos);
     arcadeScreen.getWorldDirection(scrNormal);
-    dist = Math.max(0.36 / half, 0.49 / (half * camera.aspect)) * 1.01;
+    // 螢幕要剛好對上外框(#arcade-frame)的內側;再貼近 3.5% 讓螢幕的圓角和機台邊緣藏到外框底下
+    dist = 0.36 / half * (innerHeight / arcadeBox().h) * 0.965;
   } else {
     screenMesh.getWorldPosition(scrPos);
     screenMesh.getWorldDirection(scrNormal);                               // 平面 +z = 法線,朝向房間
@@ -603,6 +605,7 @@ function updateZoom(dt) {
   // 鏡頭快到街機螢幕前(0.9 就算,最後那段收尾很慢不用等):螢幕上出現語言 / PLAY 按鈕,房間的 logo 和右下按鈕先收起來
   arcadeMenu = zoomGoal >= 1 && zoomT > 0.9 && focusArcade && !gameOn;
   document.body.classList.toggle('arcade-on', zoomGoal >= 1 && focusArcade && zoomT > 0.5);
+  document.body.classList.toggle('arcade-framed', arcadeMenu);   // 外框:和進遊戲後同一種框,把機台模型的邊緣蓋掉
   if (zoomGoal >= 1 && zoomT > 0.985 && !focusArcade && !uiOn) showUI();     // 鏡頭到電腦螢幕 → 淡入介紹介面
 }
 
@@ -696,6 +699,14 @@ function fitGame() {
   gameCab.style.left = M + 'px'; gameCab.style.top = M + 'px';
 }
 window.addEventListener('resize', fitGame);
+// 街機選單的外框:街機螢幕是 520:385,在視窗裡取最大的同比例方框並置中
+function arcadeBox() {
+  const M = 26, A = 520 / 385, w = Math.min(innerWidth - M * 2, (innerHeight - M * 2) * A), h = w / A;
+  return { w, h, x: (innerWidth - w) / 2, y: (innerHeight - h) / 2 };
+}
+const arcadeFrame = document.getElementById('arcade-frame');
+function fitArcadeFrame() { const b = arcadeBox(); Object.assign(arcadeFrame.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' }); }
+window.addEventListener('resize', fitArcadeFrame); fitArcadeFrame();
 // 在機台螢幕上按 PLAY → 開啟遊戲(幾乎滿版的 iframe),語言跟著機台上選的走
 function startGame() {
   if (gameOn) return;

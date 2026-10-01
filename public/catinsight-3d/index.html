@@ -60,6 +60,10 @@
   /* 鏡頭貼到街機螢幕時,房間的 logo 和右下按鈕會蓋在螢幕上 → 收起來 */
   .brand, .cta { transition: opacity .35s; }
   body.arcade-on .cta, body.arcade-on .brand { opacity: 0; pointer-events: none; }
+  /* 街機選單的外框:樣式和進遊戲後的框一樣;最外層那圈超大的陰影把框外(機台模型)整個蓋成深色。不擋點擊 */
+  #arcade-frame { position: fixed; z-index: 4; border-radius: 14px; pointer-events: none; opacity: 0; transition: opacity .45s ease;
+    box-shadow: 0 0 0 10px #2a1f4e, 0 0 0 13px #f08262, 0 0 0 200vmax #0b0e17; }
+  body.arcade-framed #arcade-frame { opacity: 1; }
   body.game-on .pill button.mid .mouse { display: none; }
   body.game-on .pill button.mid .home { display: block; }
   /* 螢幕介面:鏡頭定在螢幕後淡入,一頁一頁介紹功能 */
@@ -198,6 +202,7 @@
   <div class="num"></div>
   <div class="dots"></div>
 </div>
+<div id="arcade-frame"></div>
 <div id="game-ui">
   <div class="cab">
     <button id="game-exit" aria-label="Exit game" title="Exit (Esc)">✕</button>
@@ -213,6 +218,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=95"></script>
+<script type="module" src="./room.mjs?v=97"></script>
 </body>
 </html>
