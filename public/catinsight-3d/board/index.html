@@ -68,6 +68,28 @@
   .card h2{font-size:24px;font-weight:900;margin-top:4px}
   .card p{font-size:14px;font-weight:600;color:#6b594e;margin-top:8px;line-height:1.5}
   .note{position:fixed;left:0;right:0;bottom:2px;text-align:center;font-size:10.5px;font-weight:700;color:rgba(59,47,42,.55);z-index:4;pointer-events:none}
+
+  .side{position:fixed;right:12px;top:84px;width:236px;z-index:5;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+  .bubble{background:#fff;border:3px solid #3b4a7a;border-radius:18px;padding:10px 12px;font-size:13px;font-weight:800;line-height:1.45;color:#2f3a63;
+    box-shadow:0 3px 0 rgba(0,0,0,.1);display:flex;gap:8px;align-items:flex-start}
+  .bubble .av{width:34px;height:34px;border-radius:50%;background:#ffd9a8 center/cover;flex:none;border:2px solid #fff;box-shadow:0 0 0 2px #3b4a7a}
+  .box{background:var(--cream);border:2px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 3px 0 rgba(0,0,0,.1)}
+  .box h4{background:#8a6f60;color:#fff;font-size:13px;font-weight:900;padding:6px 12px;letter-spacing:.04em}
+  .box.ev h4{background:#f2685a}
+  .row{display:grid;grid-template-columns:20px 1fr auto auto;gap:8px;align-items:center;padding:6px 12px;font-size:12.5px;font-weight:800;border-top:1.5px solid #f1e6d6}
+  .row:first-of-type{border-top:0}
+  .row i{width:18px;height:18px;border-radius:6px;display:block}
+  .row .q{color:#9a8676;font-weight:700}
+  .evt{position:fixed;left:12px;bottom:calc(18px + env(safe-area-inset-bottom));width:250px;z-index:5;pointer-events:none}
+  .evt .body{padding:8px 12px 10px;font-size:12.5px;font-weight:800}
+  .evt .why{font-weight:600;color:#6b594e;font-size:12px;margin-top:3px;line-height:1.4}
+  .evt .mvrow{display:flex;justify-content:space-between;padding:3px 0;font-size:12.5px}
+  .round{position:fixed;right:12px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:5;background:var(--cream);border:2px solid var(--line);border-radius:14px;
+    padding:8px 12px;font-size:12.5px;font-weight:900;box-shadow:0 3px 0 rgba(0,0,0,.1);min-width:170px}
+  .round .trk{height:9px;border-radius:9px;background:#e6dccf;margin-top:6px;overflow:hidden}
+  .round .trk b{display:block;height:100%;background:#4aa8ff;border-radius:9px;transition:width .4s}
+  @media(max-width:900px){ .side .box,.evt,.round{display:none} .side{left:12px;right:12px;width:auto;top:auto;bottom:calc(136px + env(safe-area-inset-bottom));align-items:center}
+    .bubble{max-width:420px;font-size:12px;padding:7px 10px} }
   .hide{display:none!important}
   @media(max-width:560px){ .stat.opt{display:none} .ava{width:48px;height:48px} .miss{top:72px} .m{font-size:11.5px;padding:5px 8px} .m small{display:none} }
 </style>
@@ -85,18 +107,24 @@
   <div class="ava" style="background-image:url(/assets/app-icon.png)"></div>
   <div class="bar">
     <div class="pill"><span class="coin"></span><span id="cash">10,000</span></div>
-    <div class="stat"><span>Total assets</span><b id="assets">10,000</b></div>
-    <div class="stat opt"><span>Stocks</span><b id="stocks">0</b></div>
+    <div class="stat"><span id="lblAssets"></span><b id="assets">10,000</b></div>
+    <div class="stat opt"><span id="lblStocks"></span><b id="stocks">0</b></div>
     <div class="sp"></div>
     <div class="chip"><i style="background:#7cc6ff">P</i><span id="paws">2</span></div>
     <div class="chip"><i style="background:#ffb000">★</i><span id="mcount">0/3</span></div>
   </div>
 </div>
 <div class="miss" id="miss"></div>
+<div class="side">
+  <div class="bubble"><span class="av" style="background-image:url(/assets/app-icon.png)"></span><span id="tip"></span></div>
+  <div class="box"><h4 id="assetTitle"></h4><div id="assetRows"></div></div>
+</div>
+<div class="box ev evt"><h4 id="evtTitle"></h4><div class="body" id="evtBody"></div></div>
+<div class="round"><span id="roundTxt"></span><div class="trk"><b id="roundBar"></b></div></div>
 
 <div class="ctl" id="ctl">
-  <button class="paw" id="pawBtn">Use paw</button>
-  <button class="roll" id="rollBtn">ROLL<small id="rollsLeft"></small></button>
+  <button class="paw" id="pawBtn"></button>
+  <button class="roll" id="rollBtn"><span id="rollTxt"></span><small id="rollsLeft"></small></button>
   <div style="width:96px"></div>
 </div>
 <div class="ctl hide" id="stepCtl">
@@ -105,8 +133,8 @@
 <div class="panel hide" id="panel"></div>
 <div class="toast" id="toast"></div>
 <div class="end hide" id="end"></div>
-<div class="note">Fictional companies · for learning, not investment advice</div>
+<div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=2"></script>
+<script type="module" src="./board.mjs?v=4"></script>
 </body>
 </html>

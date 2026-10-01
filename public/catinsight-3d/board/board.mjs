@@ -10,24 +10,32 @@ const $ = (id) => document.getElementById(id);
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const APP_URL = 'https://apps.apple.com/app/id6763914049';
 
+/* ───────────── 語言 ───────────── */
+// 預設跟瀏覽器語言;網址加 ?lang=en / ?lang=zh 可強制
+const ZH = (new URLSearchParams(location.search).get('lang') || navigator.language || 'en').toLowerCase().startsWith('zh');
+const L = (en, zh) => (ZH ? zh : en);
+
 /* ───────────── 資料 ───────────── */
 const SECTORS = {
-  tech:  { name: 'Meow Tech', code: 'TECH',  color: 0x8b7cff, css: '#8b7cff', open: 120, div: 0.01, blurb: 'Fast growth, big swings.' },
-  chip:  { name: 'Paw Chips', code: 'CHIP',  color: 0x35c2a1, css: '#25a888', open: 90,  div: 0.01, blurb: 'Booms and busts with supply.' },
-  yield: { name: 'Nap Yield', code: 'YIELD', color: 0xf5b942, css: '#d99a12', open: 60,  div: 0.05, blurb: 'Slow mover. Pays 5% every lap.' },
-  oil:   { name: 'Purr Oil',  code: 'OIL',   color: 0xf2796b, css: '#e2604f', open: 80,  div: 0.02, blurb: 'Moves with world events.' },
+  tech:   { name: L('Meow Tech', '喵科技'),       code: L('TECH', '科技股'),   color: 0x8b7cff, css: '#7d6cf0', open: 120, div: 0.01, blurb: L('Fast growth, big swings.', '成長快,波動也大。') },
+  chip:   { name: L('Paw Chips', '貓掌半導體'),   code: L('CHIPS', '半導體'),  color: 0x4f8ef0, css: '#3f7de0', open: 90,  div: 0.01, blurb: L('Booms and busts with supply.', '跟著供需循環大起大落。') },
+  yield:  { name: L('Nap Yield', '午睡高股息'),   code: L('YIELD', '高股息'),  color: 0xf5b942, css: '#d99a12', open: 60,  div: 0.05, blurb: L('Slow mover. Pays 5% every lap.', '漲得慢,但每圈配息 5%。') },
+  oil:    { name: L('Purr Energy', '呼嚕能源'),   code: L('ENERGY', '能源股'), color: 0xf2796b, css: '#e2604f', open: 80,  div: 0.02, blurb: L('Moves with world events.', '跟著國際事件走。') },
+  health: { name: L('Whisker Health', '鬍鬚醫療'), code: L('HEALTH', '醫療股'), color: 0x54c98a, css: '#35ad6d', open: 70,  div: 0.02, blurb: L('Steady when markets panic.', '市場恐慌時相對抗跌。') },
+  reit:   { name: L('Cat Tower REIT', '貓跳台不動產'), code: L('REIT', '不動產'), color: 0xc48ad6, css: '#ad6cc4', open: 100, div: 0.04, blurb: L('Pays 4% a lap. Hates rate hikes.', '每圈配息 4%,最怕升息。') },
 };
 const KEYS = Object.keys(SECTORS);
 // 16 格:四個角是特殊格
-const TILES = ['start', 'tech', 'chip', 'chance', 'fee', 'yield', 'oil', 'tech', 'chance', 'chip', 'yield', 'chance', 'paw', 'oil', 'tech', 'chip'];
+const TILES = ['start', 'yield', 'chip', 'chance', 'fee', 'tech', 'health', 'oil', 'chance', 'reit', 'yield', 'chance', 'paw', 'chip', 'tech', 'oil'];
 const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, paw: 0x7cc6ff };
 const EVENTS = [
-  { t: 'Rate cut announced',     m: { tech: 1.20, chip: 1.10, yield: 0.97, oil: 1.00 }, w: 'Cheaper borrowing lifts growth stocks the most.' },
-  { t: 'Chip shortage',          m: { tech: 0.95, chip: 1.25, yield: 1.00, oil: 1.00 }, w: 'Scarce supply lets chip makers raise prices.' },
-  { t: 'Oil supply shock',       m: { tech: 0.93, chip: 0.95, yield: 1.00, oil: 1.25 }, w: 'Energy gains while higher costs hit everyone else.' },
-  { t: 'Black swan',             m: { tech: 0.80, chip: 0.80, yield: 0.95, oil: 0.90 }, w: 'Panic selling hits the riskiest sectors hardest.' },
-  { t: 'Strong earnings season', m: { tech: 1.12, chip: 1.12, yield: 1.04, oil: 1.04 }, w: 'Profits beat forecasts across the board.' },
-  { t: 'Inflation surprise',     m: { tech: 0.90, chip: 0.92, yield: 1.03, oil: 1.10 }, w: 'Rate fears hurt growth; steady payers hold up.' },
+  { t: L('Rate cut announced', '央行宣布降息'),        m: { tech: 1.20, chip: 1.10, yield: 0.97, oil: 1.00, health: 1.00, reit: 1.12 }, w: L('Cheaper borrowing lifts growth stocks and property.', '借錢變便宜,成長股和不動產最受惠。') },
+  { t: L('AI server demand booms', 'AI 伺服器需求爆發'), m: { tech: 1.10, chip: 1.25, yield: 1.00, oil: 0.95, health: 1.00, reit: 1.00 }, w: L('Scarce chips let makers raise prices.', '晶片供不應求,廠商有漲價空間。') },
+  { t: L('Oil supply shock', '原油供給吃緊'),          m: { tech: 0.93, chip: 0.95, yield: 1.00, oil: 1.25, health: 1.00, reit: 0.97 }, w: L('Energy gains while higher costs hit everyone else.', '能源股受惠,其他產業成本上升。') },
+  { t: L('Black swan', '黑天鵝事件'),                 m: { tech: 0.80, chip: 0.80, yield: 0.95, oil: 0.90, health: 0.98, reit: 0.90 }, w: L('Panic selling hits the riskiest sectors hardest.', '恐慌賣壓下,風險高的類股跌最多。') },
+  { t: L('Strong earnings season', '財報季優於預期'),   m: { tech: 1.12, chip: 1.12, yield: 1.04, oil: 1.04, health: 1.06, reit: 1.03 }, w: L('Profits beat forecasts across the board.', '企業獲利普遍優於預期。') },
+  { t: L('Rate hike surprise', '意外升息'),            m: { tech: 0.90, chip: 0.92, yield: 1.03, oil: 1.02, health: 1.00, reit: 0.88 }, w: L('Higher rates hurt growth and property; steady payers hold up.', '升息壓抑成長股與不動產,穩定配息的相對抗跌。') },
+  { t: L('Flu season hits', '流感疫情升溫'),           m: { tech: 0.98, chip: 0.98, yield: 1.00, oil: 0.96, health: 1.20, reit: 1.00 }, w: L('Demand for medicine and care jumps.', '醫療需求大增。') },
 ];
 const LOT = 10, START_CASH = 10000, SALARY = 500, FEE = 200, MAX_ROLLS = 15;
 
@@ -36,12 +44,12 @@ let S;
 const assets = () => S.cash + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 const MISSIONS = [
-  { id: 'spread', title: 'Spread it out',    sub: 'Hold 3 different sectors at once',        ok: () => KEYS.filter((k) => S.hold[k].n > 0).length >= 3 },
-  { id: 'paid',   title: 'Get paid to wait', sub: 'Collect $150+ in dividends on one payday', ok: () => S.lastDividend >= 150 },
-  { id: 'dip',    title: 'Buy the dip',      sub: 'Buy a sector trading below its opening price', ok: () => S.flags.dip },
-  { id: 'profit', title: 'Take profit',      sub: 'Sell a holding that is up 15% or more',   ok: () => S.flags.profit },
-  { id: 'cash',   title: 'Keep dry powder',  sub: 'Own stock and keep $2,000+ cash for 3 turns', ok: () => S.cashStreak >= 3 },
-  { id: 'grow',   title: 'Grow the pile',    sub: 'Reach $11,000 in total assets',           ok: () => assets() >= 11000 },
+  { id: 'spread', title: L('Spread it out', '分散投資'),     sub: L('Hold 3 different sectors at once', '同時持有 3 種不同類股'),               ok: () => KEYS.filter((k) => S.hold[k].n > 0).length >= 3 },
+  { id: 'paid',   title: L('Get paid to wait', '領到股利'),  sub: L('Collect $150+ in dividends on one payday', '一次發薪日領到 $150 以上股利'), ok: () => S.lastDividend >= 150 },
+  { id: 'dip',    title: L('Buy the dip', '逢低買進'),       sub: L('Buy a sector trading below its opening price', '買進一檔低於開盤價的類股'),  ok: () => S.flags.dip },
+  { id: 'profit', title: L('Take profit', '獲利了結'),       sub: L('Sell a holding that is up 15% or more', '賣出一檔賺超過 15% 的持股'),       ok: () => S.flags.profit },
+  { id: 'cash',   title: L('Keep dry powder', '保留現金'),   sub: L('Own stock and keep $2,000+ cash for 3 turns', '持有股票且連續 3 回合現金 $2,000 以上'), ok: () => S.cashStreak >= 3 },
+  { id: 'grow',   title: L('Grow the pile', '資產成長'),     sub: L('Reach $11,000 in total assets', '總資產達到 $11,000'),                   ok: () => assets() >= 11000 },
 ];
 function newState() {
   const pool = MISSIONS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
@@ -49,7 +57,7 @@ function newState() {
     pos: 0, cash: START_CASH, rolls: 0, paws: 2, busy: false, over: false,
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])),
-    lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false },
+    lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
     missions: pool.map((m) => ({ ...m, done: false })),
   };
 }
@@ -112,6 +120,29 @@ function house(x, z, wall, roof, ry = 0) {
   box(0.3, 0.46, 0.05, 0x9a6b4a, 0.3, 0.24, 0.61, 0.02, g);
   box(0.34, 0.3, 0.05, 0xbfe6ff, -0.35, 0.55, 0.61, 0.02, g);
 }
+function lamp(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.1, 8), mat(0x4a5568)); p.position.y = 0.55; p.castShadow = true; g.add(p);
+  const b = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), new THREE.MeshStandardMaterial({ color: 0xfff2b8, emissive: 0xffd76a, emissiveIntensity: 0.9 })); b.position.y = 1.18; g.add(b);
+  box(0.2, 0.05, 0.2, 0x4a5568, 0, 1.34, 0, 0.02, g);
+}
+function fence(x, z, len, alongX) {
+  for (let i = 0; i < len; i++) { const o = (i - (len - 1) / 2) * 0.42;
+    box(alongX ? 0.36 : 0.08, 0.34, alongX ? 0.08 : 0.36, 0xd9a86c, x + (alongX ? o : 0), 0.2, z + (alongX ? 0 : o), 0.02); }
+}
+function flowers(n) {
+  const cols = [0xffffff, 0xffd24a, 0xff9ec4, 0xffffff];
+  for (let i = 0; i < n; i++) {
+    const x = (Math.random() - 0.5) * 2.9, z = (Math.random() - 0.5) * 2.9;
+    if (Math.hypot(x - 0.55, z - 0.55) < 0.6) continue;   // 留位置給骰子
+    const f = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), mat(cols[i % cols.length])); f.position.set(x, 0.21, z); scene.add(f);
+    const st = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), mat(0x86c96f)); st.position.set(x + 0.05, 0.19, z + 0.03); st.scale.y = 0.5; scene.add(st);
+  }
+}
+const E = 2.5 * STEP + 0.62;
+[[-E, -E], [E, -E], [-E, E]].forEach(([x, z]) => lamp(x, z));   // 最靠鏡頭的那個角不放,會擋到起點
+fence(-E - 0.5, -1.4, 5, false); fence(-1.4, -E - 0.5, 5, true); fence(1.9, -E - 0.5, 4, true);
+flowers(26);
 [[-4.6, -4.4, 1.2], [-5.4, -1.6, 1], [-4.5, 1.6, 1.1], [-1.4, -5.2, 1], [1.8, -4.8, 1.2], [4.6, -5.3, 0.9], [-5.6, 4.4, 1.1], [5.5, -2.2, 1]].forEach((a) => tree(...a));
 house(-4.9, -2.9, 0xfff1dc, 0x6fb7c9, 0.2); house(-2.9, -5.1, 0xffe6ee, 0xf2a35e, -0.15); house(3.3, -5.4, 0xeef4ff, 0xe2726b, 0.1); house(-5.6, 0.2, 0xfdf6e3, 0xd9b24a, 0.3);
 
@@ -140,25 +171,42 @@ TILES.forEach((type, i) => {
   // 持股越多,格子後方的小樓越高
   let bld = null;
   if (sec) {
-    bld = new THREE.Group(); bld.position.set(-0.30, TOP, -0.30); bld.visible = false; g.add(bld);
-    box(0.30, 1, 0.30, sec.color, 0, 0.5, 0, 0.03, bld);
-    box(0.36, 0.08, 0.36, 0xffffff, 0, 1.03, 0, 0.02, bld);
+    bld = new THREE.Group(); bld.position.set(0.36, TOP, -0.36);   // 放在畫面右側那個角,不擋圖示和價格 bld.visible = false; g.add(bld);
+    box(0.22, 1, 0.22, sec.color, 0, 0.5, 0, 0.03, bld);
+    box(0.27, 0.08, 0.27, 0xffffff, 0, 1.03, 0, 0.02, bld);
   }
   tiles.push({ type, g, cv, tex, bld, bldH: 0 });
 });
+// 類股圖示:自己用 canvas 畫的簡單圖形(不用任何真實公司的商標)
+function icon(c, type, x, y, r, color) {
+  c.save(); c.translate(x, y); c.fillStyle = color; c.strokeStyle = color; c.lineWidth = r * 0.16; c.lineJoin = 'round'; c.lineCap = 'round';
+  const rr = (X, Y, W, H, R) => { c.beginPath(); c.roundRect(X, Y, W, H, R); };
+  if (type === 'tech') { rr(-r, -r * 0.78, r * 2, r * 1.3, r * 0.18); c.fill(); c.fillRect(-r * 0.14, r * 0.5, r * 0.28, r * 0.3); rr(-r * 0.55, r * 0.74, r * 1.1, r * 0.2, r * 0.1); c.fill();
+    c.fillStyle = '#fff'; rr(-r * 0.78, -r * 0.58, r * 1.56, r * 0.9, r * 0.08); c.fill(); }
+  else if (type === 'chip') { for (let i = -1; i <= 1; i++) { c.beginPath(); c.moveTo(i * r * 0.45, -r); c.lineTo(i * r * 0.45, r); c.moveTo(-r, i * r * 0.45); c.lineTo(r, i * r * 0.45); c.stroke(); }
+    rr(-r * 0.72, -r * 0.72, r * 1.44, r * 1.44, r * 0.2); c.fill(); c.fillStyle = '#fff'; rr(-r * 0.34, -r * 0.34, r * 0.68, r * 0.68, r * 0.1); c.fill(); }
+  else if (type === 'yield') { c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill(); c.fillStyle = '#fff'; c.font = `900 ${r * 1.4}px Arial`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('$', 0, r * 0.08); }
+  else if (type === 'oil') { c.beginPath(); c.moveTo(r * 0.25, -r); c.lineTo(-r * 0.6, r * 0.15); c.lineTo(-r * 0.05, r * 0.15); c.lineTo(-r * 0.3, r); c.lineTo(r * 0.6, -r * 0.2); c.lineTo(r * 0.05, -r * 0.2); c.closePath(); c.fill(); }
+  else if (type === 'health') { rr(-r, -r, r * 2, r * 2, r * 0.4); c.fill(); c.fillStyle = '#fff'; c.fillRect(-r * 0.2, -r * 0.62, r * 0.4, r * 1.24); c.fillRect(-r * 0.62, -r * 0.2, r * 1.24, r * 0.4); }
+  else if (type === 'reit') { c.beginPath(); c.moveTo(0, -r); c.lineTo(r * 1.05, -r * 0.1); c.lineTo(-r * 1.05, -r * 0.1); c.closePath(); c.fill(); c.fillRect(-r * 0.72, -r * 0.1, r * 1.44, r * 1.05);
+    c.fillStyle = '#fff'; c.fillRect(-r * 0.2, r * 0.3, r * 0.4, r * 0.65); }
+  c.restore();
+}
 function drawLabel(i) {
   const t = tiles[i], c = t.cv.getContext('2d'), sec = SECTORS[t.type];
   c.clearRect(0, 0, 256, 256); c.textAlign = 'center'; c.textBaseline = 'middle';
-  const F = (px) => `900 ${px}px "Avenir Next","Helvetica Neue",Arial,sans-serif`;
+  const F = (px) => `900 ${px}px "Avenir Next","PingFang TC","Helvetica Neue",Arial,sans-serif`;
   if (sec) {
-    c.fillStyle = sec.css; c.font = F(46); c.fillText(sec.code, 128, 84);
-    c.fillStyle = '#3b2f2a'; c.font = F(70); c.fillText('$' + Math.round(S.price[t.type]), 128, 152);
+    icon(c, t.type, 128, 62, 34, sec.css);
+    c.fillStyle = sec.css; c.font = F(ZH ? 38 : 34); c.fillText(sec.code, 128, 136);
+    c.fillStyle = '#3b2f2a'; c.font = F(62); c.fillText('$' + Math.round(S.price[t.type]), 128, 196);
   } else if (t.type === 'chance') {
-    c.fillStyle = '#b0780a'; c.font = F(170); c.fillText('?', 128, 138);
+    c.fillStyle = '#b0780a'; c.font = F(150); c.fillText('?', 128, 112);
+    c.font = F(34); c.fillText(L('EVENT', '市場事件'), 128, 208);
   } else {
-    const [a, b] = { start: ['GO', '+$' + SALARY], fee: ['FEE', '-$' + FEE], paw: ['PAW', '+1'] }[t.type];
-    c.fillStyle = '#fff'; c.font = F(72); c.fillText(a, 128, 104);
-    c.font = F(40); c.fillText(b, 128, 166);
+    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], paw: [L('PAW', '貓掌'), '+1'] }[t.type];
+    c.fillStyle = '#fff'; c.font = F(ZH ? 60 : 72); c.fillText(a, 128, 104);
+    c.font = F(ZH ? 34 : 40); c.fillText(b, 128, 168);
   }
   t.tex.needsUpdate = true;
 }
@@ -270,16 +318,50 @@ async function hopTo(i) {
 }
 
 /* ───────────── 介面 ───────────── */
+// 貓咪顧問:只講棋盤上看得到的事實和任務提示,**不預測漲跌**
+function advise() {
+  const todo = new Set(S.missions.filter((m) => !m.done).map((m) => m.id));
+  const held = KEYS.filter((k) => S.hold[k].n > 0);
+  const cheap = KEYS.filter((k) => S.price[k] < SECTORS[k].open * 0.97);
+  const up = held.find((k) => (S.price[k] * S.hold[k].n - S.hold[k].cost) / S.hold[k].cost >= 0.15);
+  let d = 0; for (let i = 1; i <= 6; i++) if (TILES[(S.pos + i) % TILES.length] === 'chance') { d = i; break; }
+  if (todo.has('profit') && up) return L(`${SECTORS[up].name} is up over 15%. Land on it to take profit.`, `${SECTORS[up].name}已經賺超過 15%,走到它的格子就能獲利了結。`);
+  if (todo.has('dip') && cheap.length) return L(`${SECTORS[cheap[0]].name} is below its opening price. Buying it counts as buying the dip.`, `${SECTORS[cheap[0]].name}現在低於開盤價,買進就算逢低買進。`);
+  if (todo.has('spread') && held.length < 3) return L(`You hold ${held.length} sector${held.length === 1 ? '' : 's'}. Three different ones spread your risk.`, `你現在持有 ${held.length} 種類股,湊滿 3 種可以分散風險。`);
+  if (todo.has('paid')) return L('High-yield and REIT pay the most each lap. Hold them when you pass GO.', '高股息和不動產配息最多,持有它們再繞回起點就能領股利。');
+  if (todo.has('cash') && S.cash < 2000) return L('Cash is low. Keep $2,000 so you can buy when a chance shows up.', '現金偏低。留 $2,000 以上,好機會出現時才買得起。');
+  if (d) return L(`A market event is ${d} step${d > 1 ? 's' : ''} ahead. Every price may move.`, `前方第 ${d} 格是市場事件,所有價格都可能變動。`);
+  return L('No one knows the next roll. Spread out and keep some cash.', '沒有人知道下一步會擲出幾點,分散持股、留點現金最穩。');
+}
 function hud() {
   $('cash').textContent = fmt(S.cash);
   $('assets').textContent = fmt(assets());
   $('stocks').textContent = fmt(stockValue());
   $('paws').textContent = S.paws;
   $('mcount').textContent = S.missions.filter((m) => m.done).length + '/3';
-  $('rollsLeft').textContent = (MAX_ROLLS - S.rolls) + ' left';
+  $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left`, `剩 ${MAX_ROLLS - S.rolls} 次`);
   $('pawBtn').disabled = S.paws <= 0;
   $('miss').innerHTML = S.missions.map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
+  $('tip').textContent = advise();
+  $('assetRows').innerHTML =
+    `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(S.cash)}</span></div>` +
+    KEYS.map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${S.hold[k].n} ${L('sh', '股')}</span><span>${fmt(S.hold[k].n * S.price[k])}</span></div>`).join('');
+  const e = S.lastEvent;
+  $('evtBody').innerHTML = e
+    ? `<div>${e.t}</div><div class="why">${e.w}</div>` + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).map((k) => { const d = Math.round((e.m[k] - 1) * 100);
+        return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
+    : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`;
+  $('roundTxt').textContent = L(`Round ${S.rolls} / ${MAX_ROLLS}`, `回合 ${S.rolls} / ${MAX_ROLLS}`);
+  $('roundBar').style.width = (S.rolls / MAX_ROLLS * 100) + '%';
+}
+function staticText() {
+  document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
+  document.title = L('Cat Street Stocks', '貓咪股市大富翁');
+  $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值');
+  $('pawBtn').textContent = L('Use paw', '使用貓掌'); $('rollTxt').textContent = L('ROLL', '擲骰子');
+  $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
+  $('note').textContent = L('Fictional companies · for learning, not investment advice', '公司皆為虛構 · 學習用途,非投資建議');
 }
 let toastTimer;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
@@ -296,15 +378,15 @@ function buyPanel(k) {
       <h3><span class="tag" style="background:${sec.css}">${sec.code}</span>${sec.name}</h3>
       <p>${sec.blurb}</p>
       <div class="kv">
-        <div>Price<b>$${Math.round(price)}</b></div>
-        <div>Since open<b style="color:${vs >= 0 ? '#1c8a4a' : '#c4472f'}">${vs >= 0 ? '+' : ''}${vs.toFixed(0)}%</b></div>
-        <div>You hold<b>${h.n}${h.n ? ` <span style="font-size:11px;color:${gain >= 0 ? '#1c8a4a' : '#c4472f'}">${gain >= 0 ? '+' : ''}${gain.toFixed(0)}%</span>` : ''}</b></div>
+        <div>${L('Price', '股價')}<b>$${Math.round(price)}</b></div>
+        <div>${L('Since open', '相對開盤')}<b style="color:${vs >= 0 ? '#1c8a4a' : '#c4472f'}">${vs >= 0 ? '+' : ''}${vs.toFixed(0)}%</b></div>
+        <div>${L('You hold', '持有')}<b>${h.n}${h.n ? ` <span style="font-size:11px;color:${gain >= 0 ? '#1c8a4a' : '#c4472f'}">${gain >= 0 ? '+' : ''}${gain.toFixed(0)}%</span>` : ''}</b></div>
       </div>
       <div class="btns">
-        <button class="b-buy" data-a="buy1" ${S.cash < price * LOT ? 'disabled' : ''}>Buy 10<br><span style="font-size:11px">$${fmt(price * LOT)}</span></button>
-        <button class="b-buy" data-a="buy3" ${S.cash < price * LOT * 3 ? 'disabled' : ''}>Buy 30<br><span style="font-size:11px">$${fmt(price * LOT * 3)}</span></button>
-        <button class="b-sell" data-a="sell" ${h.n ? '' : 'disabled'}>Sell all</button>
-        <button class="b-skip" data-a="skip">Skip</button>
+        <button class="b-buy" data-a="buy1" ${S.cash < price * LOT ? 'disabled' : ''}>${L('Buy 10', '買 10 股')}<br><span style="font-size:11px">$${fmt(price * LOT)}</span></button>
+        <button class="b-buy" data-a="buy3" ${S.cash < price * LOT * 3 ? 'disabled' : ''}>${L('Buy 30', '買 30 股')}<br><span style="font-size:11px">$${fmt(price * LOT * 3)}</span></button>
+        <button class="b-sell" data-a="sell" ${h.n ? '' : 'disabled'}>${L('Sell all', '全部賣出')}</button>
+        <button class="b-skip" data-a="skip">${L('Skip', '跳過')}</button>
       </div>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
       const a = b.dataset.a;
@@ -312,11 +394,11 @@ function buyPanel(k) {
         const n = LOT * (a === 'buy1' ? 1 : 3), cost = price * n;
         S.cash -= cost; h.n += n; h.cost += cost;
         if (price < sec.open * 0.97) S.flags.dip = true;
-        toast(`Bought ${n} ${sec.name}`);
+        toast(L(`Bought ${n} ${sec.name}`, `買進 ${sec.name} ${n} 股`));
       } else if (a === 'sell') {
         const value = price * h.n;
         if ((value - h.cost) / h.cost >= 0.15) S.flags.profit = true;
-        toast(`Sold for $${fmt(value)} (${value >= h.cost ? '+' : '-'}$${fmt(Math.abs(value - h.cost))})`);
+        toast(L('Sold for', '賣出得') + ` $${fmt(value)} (${value >= h.cost ? '+' : '-'}$${fmt(Math.abs(value - h.cost))})`);
         S.cash += value; h.n = 0; h.cost = 0;
       }
       closePanel(); res();
@@ -325,7 +407,7 @@ function buyPanel(k) {
 }
 function cardPanel(title, text, moves = '') {
   return new Promise((res) => {
-    const p = panel(`<h3>${title}</h3><p>${text}</p>${moves ? `<div class="moves">${moves}</div>` : ''}<div class="btns"><button class="b-ok">Continue</button></div>`);
+    const p = panel(`<h3>${title}</h3><p>${text}</p>${moves ? `<div class="moves">${moves}</div>` : ''}<div class="btns"><button class="b-ok">${L('Continue', '繼續')}</button></div>`);
     p.querySelector('button').onclick = () => { closePanel(); res(); };
   });
 }
@@ -334,11 +416,11 @@ function cardPanel(title, text, moves = '') {
 function payday() {
   const div = KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * SECTORS[k].div, 0);
   S.lastDividend = div; S.cash += SALARY + div;
-  toast(`Payday +$${fmt(SALARY)}${div > 0 ? ` · dividends +$${fmt(div)}` : ''}`);
+  toast(L('Payday', '發薪日') + ` +$${fmt(SALARY)}${div > 0 ? ` · ${L('dividends', '股利')} +$${fmt(div)}` : ''}`);
   hud(); checkMissions();
 }
 function checkMissions() {
-  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; toast(`Mission complete: ${m.title}`); } });
+  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; toast(L('Mission complete: ', '任務完成:') + m.title); } });
   hud();
 }
 async function turn(forced) {
@@ -362,12 +444,12 @@ async function turn(forced) {
   else if (type === 'chance') {
     const e = EVENTS[Math.floor(Math.random() * EVENTS.length)];
     KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
-    drawAll(); hud();
+    S.lastEvent = e; drawAll(); hud();
     const moves = KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
     await cardPanel(e.t, e.w, moves);
-  } else if (type === 'fee') { S.cash -= FEE; hud(); await cardPanel('Trading fees', `Every trade has a cost. You paid $${FEE}.`); }
-  else if (type === 'paw') { S.paws++; hud(); await cardPanel('Lucky paw', 'You found a paw. Use it to pick how far you walk instead of rolling.'); }
-  else await cardPanel('Payday', `Salary $${fmt(SALARY)}${S.lastDividend > 0 ? ` plus $${fmt(S.lastDividend)} in dividends` : ''}. Holding stocks pays you every lap.`);
+  } else if (type === 'fee') { S.cash -= FEE; hud(); await cardPanel(L('Trading fees', '交易手續費'), L(`Every trade has a cost. You paid $${FEE}.`, `每筆交易都有成本,這次付了 $${FEE}。`)); }
+  else if (type === 'paw') { S.paws++; hud(); await cardPanel(L('Lucky paw', '撿到貓掌'), L('You found a paw. Use it to pick how far you walk instead of rolling.', '得到一個貓掌,可以自己決定走幾步,不用擲骰子。')); }
+  else await cardPanel(L('Payday', '發薪日'), L(`Salary $${fmt(SALARY)}${S.lastDividend > 0 ? ` plus $${fmt(S.lastDividend)} in dividends` : ''}. Holding stocks pays you every lap.`, `薪水 $${fmt(SALARY)}${S.lastDividend > 0 ? `,加上股利 $${fmt(S.lastDividend)}` : ''}。持有股票,每繞一圈都會配息。`));
 
   S.cashStreak = (stockValue() > 0 && S.cash >= 2000) ? S.cashStreak + 1 : 0;
   checkMissions();
@@ -379,24 +461,31 @@ function finish(done) {
   S.over = true;
   let top = 'cash', tv = S.cash;
   KEYS.forEach((k) => { const v = S.hold[k].n * S.price[k]; if (v > tv) { tv = v; top = k; } });
-  const style = { cash: 'Careful saver. Lots of cash, little growth.', tech: 'Growth believer. Big swings, big upside.', chip: 'Cycle rider. You chase supply and demand.',
-    yield: 'Income collector. Steady pay every lap.', oil: 'Macro trader. You bet on world events.' }[top];
-  const title = ['Rough market', 'Curious kitten', 'Sharp analyst', 'Top cat investor'][done];
+  const style = {
+    cash: L('Careful saver. Lots of cash, little growth.', '謹慎存錢派:現金很多,但成長有限。'),
+    tech: L('Growth believer. Big swings, big upside.', '成長信仰派:波動大,潛力也大。'),
+    chip: L('Cycle rider. You chase supply and demand.', '循環騎士:跟著供需循環進出。'),
+    yield: L('Income collector. Steady pay every lap.', '領息一族:每圈穩穩收股利。'),
+    oil: L('Macro trader. You bet on world events.', '總經交易者:押注國際事件。'),
+    health: L('Defender. You like sectors that hold up in a storm.', '防禦派:偏好抗跌的類股。'),
+    reit: L('Landlord. You collect rent and watch interest rates.', '包租公:收租配息,緊盯利率。'),
+  }[top];
+  const title = [L('Rough market', '行情不順'), L('Curious kitten', '好奇小貓'), L('Sharp analyst', '精明分析師'), L('Top cat investor', '頂尖貓投資人')][done];
   const a = assets();
   $('end').innerHTML = `<div class="card">
     <div class="stars">${[0, 1, 2].map((i) => i < done ? '<b>★</b>' : '★').join('')}</div>
     <h2>${title}</h2>
-    <p>Total assets <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) in ${S.rolls} rolls</p>
+    <p>${L('Total assets', '總資產')} <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) · ${L(`${S.rolls} rolls`, `${S.rolls} 回合`)}</p>
     <p>${style}</p>
-    <p style="font-size:12.5px">Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.</p>
-    <div class="btns"><button class="b-skip" id="again">Play again</button><button class="b-ok" id="app">Get the app</button></div></div>`;
+    <p style="font-size:12.5px">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
+    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`;
   $('end').classList.remove('hide');
   $('again').onclick = start;
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
 }
 function start() {
   newState(); $('end').classList.add('hide'); closePanel();
-  placePiece(0); drawAll(); hud(); showCtl(true);
+  staticText(); placePiece(0); drawAll(); hud(); showCtl(true);
 }
 
 $('rollBtn').onclick = () => turn();
