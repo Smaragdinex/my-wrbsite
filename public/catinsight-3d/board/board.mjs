@@ -215,13 +215,41 @@ const drawAll = () => tiles.forEach((_, i) => drawLabel(i));
 /* ───────────── 棋子(貓) ───────────── */
 const piece = new THREE.Group(); scene.add(piece);
 const body = new THREE.Group(); piece.add(body);
-{ // 佔位:模型還沒載到之前先放一隻幾何貓
+// 棋子可選:預設是原創的幾何兔子;網址加 ?piece=cat 換回房間那隻貓的模型
+const PIECE = new URLSearchParams(location.search).get('piece') || 'bunny';
+// 原創兔子(純幾何):奶油色、一隻耳朵折下來、腮紅、粉紅圓點鼻、橘色圍巾。正面朝 +z
+function makeBunny() {
+  const g = new THREE.Group();
+  const fur = mat(0xfff4e2, { roughness: 0.9 }), pink = mat(0xffb3c7), dark = mat(0x2b2420, { roughness: 0.5 }), scarf = mat(0xff8a3d);
+  const add = (geo, m, x, y, z, sx = 1, sy = 1, sz = 1) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.castShadow = true; g.add(o); return o; };
+  const sph = (r) => new THREE.SphereGeometry(r, 24, 18);
+  add(sph(0.22), fur, 0, 0.24, 0, 1, 1.08, 0.92);                    // 身體
+  add(sph(0.075), fur, -0.11, 0.045, 0.07, 1, 0.6, 1.3);             // 腳
+  add(sph(0.075), fur, 0.11, 0.045, 0.07, 1, 0.6, 1.3);
+  add(sph(0.06), fur, -0.2, 0.27, 0.05, 0.8, 1.3, 0.8);              // 手
+  add(sph(0.06), fur, 0.2, 0.27, 0.05, 0.8, 1.3, 0.8);
+  add(sph(0.07), fur, 0, 0.2, -0.2);                                 // 尾巴
+  add(new THREE.TorusGeometry(0.15, 0.05, 10, 24), scarf, 0, 0.43, 0).rotation.x = Math.PI / 2;   // 圍巾
+  add(new THREE.BoxGeometry(0.09, 0.2, 0.04), scarf, 0.1, 0.33, 0.15).rotation.z = -0.25;
+  add(sph(0.24), fur, 0, 0.62, 0, 1.12, 0.95, 1);                    // 頭(偏扁寬)
+  // 耳朵:左耳直立,右耳折下來
+  const earGeo = new THREE.CapsuleGeometry(0.062, 0.26, 6, 14), inGeo = new THREE.CapsuleGeometry(0.032, 0.2, 4, 10);
+  const earL = add(earGeo, fur, -0.11, 0.98, 0); earL.rotation.z = 0.12;
+  const inL = add(inGeo, pink, -0.11, 0.98, 0.04); inL.rotation.z = 0.12; inL.castShadow = false;
+  const earR = add(new THREE.CapsuleGeometry(0.062, 0.12, 6, 14), fur, 0.12, 0.9, 0); earR.rotation.z = -0.2;
+  const tip = add(new THREE.CapsuleGeometry(0.06, 0.13, 6, 14), fur, 0.24, 0.98, 0.02); tip.rotation.z = -1.35;   // 折下來的那一段
+  add(sph(0.028), dark, -0.095, 0.65, 0.215);                        // 眼睛
+  add(sph(0.028), dark, 0.095, 0.65, 0.215);
+  add(sph(0.024), pink, 0, 0.595, 0.24);                             // 粉紅圓點鼻
+  add(sph(0.045), pink, -0.165, 0.575, 0.17, 1, 0.6, 0.5).castShadow = false;   // 腮紅
+  add(sph(0.045), pink, 0.165, 0.575, 0.17, 1, 0.6, 0.5).castShadow = false;
+  return g;
+}
+if (PIECE === 'cat') {
+  // 佔位:模型還沒載到之前先放一隻幾何貓
   const ph = new THREE.Group(); ph.name = 'ph'; body.add(ph);
   const b = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), mat(0xffb057)); b.position.y = 0.26; b.scale.y = 1.1; b.castShadow = true; ph.add(b);
   const h = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 16), mat(0xffb057)); h.position.y = 0.66; h.castShadow = true; ph.add(h);
-  [-0.11, 0.11].forEach((x) => { const e = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.14, 4), mat(0xffb057)); e.position.set(x, 0.86, 0); ph.add(e); });
-}
-{
   const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
   const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
   loader.load('../cat.glb', (gltf) => {
@@ -232,6 +260,8 @@ const body = new THREE.Group(); piece.add(body);
     m.traverse((o) => { if (o.isMesh) { o.castShadow = true; if (o.material) { o.material.emissive = new THREE.Color(0xffb040); o.material.emissiveIntensity = 0.22; } } });
     body.remove(body.getObjectByName('ph')); body.add(m);
   }, undefined, (e) => console.warn('[board] cat.glb 載入失敗,用幾何貓代替', e));
+} else {
+  const bunny = makeBunny(); bunny.scale.setScalar(1.25); body.add(bunny);
 }
 body.rotation.y = Math.PI / 4;
 function placePiece(i) { const p = tilePos(i); piece.position.set(p.x, TOP, p.z); }
