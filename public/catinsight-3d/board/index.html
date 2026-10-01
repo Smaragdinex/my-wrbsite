@@ -99,11 +99,18 @@
   .steps{flex-wrap:wrap;justify-content:center;max-width:min(520px,94vw)}
   #mapBtn.on{background:#3d9a55!important;box-shadow:0 4px 0 #2a743d!important}
   body.embed .hud{right:64px}
-  .pick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
-  .pick button{border:2px solid var(--line);background:#fff;border-radius:16px;padding:10px 4px 8px;font-weight:900;font-size:13px;color:var(--ink);cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.1)}
-  .pick button span{display:block;font-size:34px;line-height:1.1}
-  .pick button:hover{border-color:#ff7a59;background:#fff6f1}
-  .pick button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.1)}
+  /* 3D 選角:畫面中間是模型,上面一行標題,下面是 ◀ 名字 ▶ 和確定鈕 */
+  body.picking .hud, body.picking .miss, body.picking .side, body.picking .evt, body.picking .round, body.picking .ctl { display: none !important; }
+  .pickui{position:fixed;inset:0;z-index:7;display:none;flex-direction:column;justify-content:space-between;align-items:center;padding:22px 16px calc(34px + env(safe-area-inset-bottom));pointer-events:none}
+  body.picking .pickui{display:flex}
+  .pickui h2{font-size:26px;font-weight:900;color:#3b2f2a;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:999px;padding:8px 26px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
+  .pbar{display:flex;flex-direction:column;align-items:center;gap:12px;pointer-events:auto}
+  .pnav{display:flex;align-items:center;gap:14px}
+  .pnav button{width:52px;height:52px;border-radius:50%;border:4px solid #fff;background:#7cc6ff;color:#fff;font-size:22px;font-weight:900;cursor:pointer;box-shadow:0 4px 0 #4f9bd6}
+  .pnav button:active{transform:translateY(3px);box-shadow:0 1px 0 #4f9bd6}
+  .pnav b{min-width:150px;text-align:center;font-size:28px;font-weight:900;color:#3b2f2a;background:var(--cream);border:3px solid #fff;border-radius:18px;padding:6px 18px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
+  .pok{height:60px;padding:0 44px;border-radius:999px;border:5px solid #fff;background:#ff7a59;color:#fff;font-size:20px;font-weight:900;letter-spacing:.04em;cursor:pointer;box-shadow:0 6px 0 #d4553a}
+  .pok:active{transform:translateY(4px);box-shadow:0 2px 0 #d4553a}
   .hide{display:none!important}
   @media(max-width:560px){ .stat.opt{display:none} .ava{width:48px;height:48px} .miss{top:72px} .m{font-size:11.5px;padding:5px 8px} .m small{display:none} }
 </style>
@@ -147,9 +154,16 @@
 </div>
 <div class="panel hide" id="panel"></div>
 <div class="toast" id="toast"></div>
+<div class="pickui">
+  <h2 id="ptitle"></h2>
+  <div class="pbar">
+    <div class="pnav"><button id="pprev" aria-label="previous">‹</button><b id="pname"></b><button id="pnext" aria-label="next">›</button></div>
+    <button class="pok" id="pok"></button>
+  </div>
+</div>
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=24"></script>
+<script type="module" src="./board.mjs?v=25"></script>
 </body>
 </html>

@@ -189,6 +189,7 @@ function resize() {
   view.aspect = a;
   view.near = Math.max(4.6, 5.6 / a);
   view.far = Math.max(8.6, (N * 1.14 + 1) * 0.74 / a);
+  view.stageHalf = Math.max(2.4, 3.9 / a);          // 選角舞台:四個角色排一排要放得下
   if (!view.half0) { view.half0 = true; view.half = view.near; }
   applyFrustum();
 }
@@ -417,13 +418,11 @@ function makeBunny() {
   return g;
 }
 // 載入棋子模型:先放幾何佔位,模型到了再換。貼圖保留,材質換成卡通著色讓它和場景同一種畫風
-function loadPiece(url, height, placeholder, tint, target = body) {
-  placeholder.name = 'ph'; target.add(placeholder);
-  const token = (target.userData.token = (target.userData.token || 0) + 1);   // 之後又換角色的話,舊的載入結果就丟掉
-  const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/');
-  const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
-  loader.load(url, (gltf) => {
-    if (target.userData.token !== token) return;
+// 模型只下載、解壓一次(快取成 Promise),要用的地方拿 clone。貼圖保留,材質換成卡通著色讓它和場景同一種畫風
+const pieceLoader = (() => { const d = new DRACOLoader(); d.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/'); const l = new GLTFLoader(); l.setDRACOLoader(d); return l; })();
+const modelCache = {};
+function loadModel(url, height) {
+  return (modelCache[url] ||= new Promise((res, rej) => pieceLoader.load(url, (gltf) => {
     const m = gltf.scene;
     const bb = new THREE.Box3().setFromObject(m), size = bb.getSize(new THREE.Vector3()), ctr = bb.getCenter(new THREE.Vector3());
     const k = height / size.y;
@@ -432,12 +431,21 @@ function loadPiece(url, height, placeholder, tint, target = body) {
       if (!o.isMesh) return;
       o.castShadow = true;
       const old = o.material;
-      o.material = new THREE.MeshToonMaterial({ map: old.map || null, color: tint ?? 0xffffff, gradientMap: toonRamp, side: old.side });
+      o.material = new THREE.MeshToonMaterial({ map: old.map || null, gradientMap: toonRamp, side: old.side });
       // 生成模型在 UV 接縫處法線不連續,描邊會沿接縫裂開變成臉上的髒線 → 這個模型不描邊
       o.material.userData.outlineParameters = { visible: false };
     });
-    target.remove(target.getObjectByName('ph')); target.add(m);
-  }, undefined, (e) => console.warn(`[board] ${url} 載入失敗,維持幾何佔位`, e));
+    const wrap = new THREE.Group(); wrap.add(m); res(wrap);
+  }, undefined, rej)));
+}
+// 先放幾何佔位,模型到了再換
+function loadPiece(url, height, placeholder, target = body) {
+  placeholder.name = 'ph'; target.add(placeholder);
+  const token = (target.userData.token = (target.userData.token || 0) + 1);   // 之後又換角色的話,舊的載入結果就丟掉
+  loadModel(url, height).then((tpl) => {
+    if (target.userData.token !== token) return;
+    target.remove(target.getObjectByName('ph')); target.add(tpl.clone(true));
+  }).catch((e) => console.warn(`[board] ${url} 載入失敗,維持幾何佔位`, e));
 }
 body.rotation.y = Math.PI / 4;
 // 對手(電腦控制)。和玩家站同一格時各往一邊偏一點才不會疊在一起
@@ -455,7 +463,66 @@ function setChar(target, key) {
   const c = CHARS[key], ph = new THREE.Group(), m = mat(c.color);
   const b = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), m); b.position.y = 0.26; b.scale.y = 1.1; ph.add(b);
   const h = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), m); h.position.y = 0.68; ph.add(h);
-  loadPiece(c.url, c.h, ph, undefined, target);
+  loadPiece(c.url, c.h, ph, target);
+}
+// 選角舞台:四個角色的 3D 模型在起點外側的空地排成一排,鏡頭拉過去。點模型或按左右鍵換人,被選到的會跳一下、慢慢自轉
+const STAGE = new THREE.Vector3(10.8, 0, 10.8), STAGE_KEYS = Object.keys(CHARS);
+const stage = new THREE.Group(); stage.position.copy(STAGE); stage.visible = false; scene.add(stage);
+const slots = STAGE_KEYS.map((key, i) => {
+  const g = new THREE.Group(); const o = (i - (STAGE_KEYS.length - 1) / 2) * 1.55;
+  g.position.set(o * Math.SQRT1_2, 0, -o * Math.SQRT1_2);            // 沿著畫面的水平方向排
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.68, 0.14, 40), mat(0xfff8ec)); base.position.y = 0.07; base.receiveShadow = true; base.castShadow = true; g.add(base);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.76, 0.06, 40), mat(0xff7a59)); ring.position.y = 0.03; g.add(ring);
+  const holder = new THREE.Group(); holder.position.y = 0.14; holder.rotation.y = Math.PI / 4; g.add(holder);
+  stage.add(g);
+  return { key, g, holder, ring, hop: 0 };
+});
+let stageSel = 0, stageOn = false;
+function stageSelect(i) { stageSel = (i + slots.length) % slots.length; slots[stageSel].hop = 1; paintStage(); }
+function paintStage() {
+  const c = CHARS[slots[stageSel].key];
+  $('pname').textContent = c.name; $('ptitle').textContent = L('Choose your character', '選擇你的角色');
+  $('pok').textContent = L(`Play as ${c.name}`, `用${c.name}開始`);
+}
+function stageStep(dt) {
+  slots.forEach((sl, i) => {
+    const on = i === stageSel;
+    sl.hop = Math.max(0, sl.hop - dt * 2.2);
+    const sT = on ? 1.18 : 0.92; sl.holder.scale.x += (sT - sl.holder.scale.x) * Math.min(1, dt * 10); sl.holder.scale.z = sl.holder.scale.y = sl.holder.scale.x;
+    sl.holder.position.y = 0.14 + Math.sin((1 - sl.hop) * Math.PI) * (sl.hop > 0 ? 0.35 : 0);
+    // 被選到的慢慢轉一圈給你看;沒選到的轉回正面
+    if (on) sl.holder.rotation.y += dt * 1.1;
+    else { let d = Math.PI / 4 - sl.holder.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); sl.holder.rotation.y += d * Math.min(1, dt * 6); }
+    sl.ring.visible = on;
+  });
+}
+const pickRay = new THREE.Raycaster(), pickNdc = new THREE.Vector2();
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!stageOn) return;
+  pickNdc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  pickRay.setFromCamera(pickNdc, cam);
+  const hit = pickRay.intersectObjects(slots.map((sl) => sl.g), true)[0];
+  if (!hit) return;
+  const i = slots.findIndex((sl) => { let o = hit.object; while (o) { if (o === sl.g) return true; o = o.parent; } return false; });
+  if (i >= 0) stageSelect(i);
+});
+addEventListener('keydown', (e) => {
+  if (!stageOn) return;
+  if (e.key === 'ArrowLeft') stageSelect(stageSel - 1); else if (e.key === 'ArrowRight') stageSelect(stageSel + 1);
+  else if (e.key === 'Enter' || e.key === ' ') $('pok').click();
+});
+function pickStage() {
+  return new Promise((res) => {
+    slots.forEach((sl) => { if (!sl.holder.children.length) { const c = CHARS[sl.key], ph = new THREE.Group(), m = mat(c.color);
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), m); b.position.y = 0.26; b.scale.y = 1.1; ph.add(b);
+      const h = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), m); h.position.y = 0.68; ph.add(h);
+      loadPiece(c.url, c.h, ph, sl.holder); } });
+    stage.visible = true; stageOn = true; document.body.classList.add('picking');
+    if (!pickStage.seen) { pickStage.seen = true; camT.x = STAGE.x; camT.z = STAGE.z; view.half = view.stageHalf; applyFrustum(); }   // 第一次直接從舞台開場,不用從起點慢慢滑過來
+    stageSelect(stageSel);
+    $('pprev').onclick = () => stageSelect(stageSel - 1); $('pnext').onclick = () => stageSelect(stageSel + 1);
+    $('pok').onclick = () => { stageOn = false; stage.visible = false; document.body.classList.remove('picking'); res(slots[stageSel].key); };
+  });
 }
 let focus;
 const ME = { piece, body, off: new THREE.Vector3(-0.3, 0, 0.2) };
@@ -525,11 +592,12 @@ function step(dt) {
   const fp = focus.piece.position;
   // 目標點往棋盤中心偏 1.6 格:棋子在畫面偏下方,前方要走的格子和骰子落點都看得到
   const fl = Math.hypot(fp.x, fp.z) || 1, ox = -fp.x / fl * 1.6, oz = -fp.z / fl * 1.6;
-  const tx = view.overview ? 0 : fp.x + ox, tz = view.overview ? 0 : fp.z + oz, kf = Math.min(1, dt * 3.2);
+  const tx = stageOn ? STAGE.x : view.overview ? 0 : fp.x + ox, tz = stageOn ? STAGE.z : view.overview ? 0 : fp.z + oz, kf = Math.min(1, dt * 3.2);
+  if (stageOn) stageStep(dt);
   camT.x += (tx - camT.x) * kf; camT.z += (tz - camT.z) * kf;
   cam.position.copy(camT).add(CAM_OFF);
   sun.position.copy(camT).add(SUN_OFF); sun.target.position.copy(camT);
-  const hGoal = view.overview ? view.far : view.near;
+  const hGoal = stageOn ? view.stageHalf : view.overview ? view.far : view.near;
   if (Math.abs(hGoal - view.half) > 0.002) { view.half += (hGoal - view.half) * Math.min(1, dt * 4); applyFrustum(); }
   if (!skipRender) outline.render(scene, cam);
 }
@@ -855,19 +923,12 @@ function finish() {
   $('again').onclick = start;
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
 }
-// 選角:四選一。電腦的對手從剩下三隻裡隨機挑
-function pickPanel() {
-  return new Promise((res) => {
-    const p = panel(`<h3>${L('Choose your character', '選擇你的角色')}</h3><p>${L('The computer plays one of the others.', '電腦會從其他角色裡挑一隻當對手。')}</p>` +
-      `<div class="pick">${Object.keys(CHARS).map((k) => `<button data-k="${k}"><span>${CHARS[k].icon}</span>${CHARS[k].name}</button>`).join('')}</div>`);
-    p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.k); });
-  });
-}
+// 選角:在 3D 舞台上四選一(pickStage)。電腦的對手從剩下三隻裡隨機挑
 async function start() {
   newState(); $('end').classList.add('hide'); closePanel();
   staticText(); placePiece(0, ME); placePiece(0, BEAR); focus = ME; diceSpots(ME); dice.forEach((d, i) => d.position.copy(DIE_REST[i])); drawAll();
   S.busy = true; showCtl(false); hud();
-  const me = CHARS[PRESET] ? PRESET : await pickPanel();
+  const me = CHARS[PRESET] ? PRESET : await pickStage();
   const rest = Object.keys(CHARS).filter((k) => k !== me);
   S.me = me; S.foe = rest[Math.floor(Math.random() * rest.length)];
   setChar(body, S.me); setChar(bearBody, S.foe);
@@ -882,4 +943,4 @@ $('mapBtn').onclick = () => { view.overview = !view.overview; $('mapBtn').classL
 if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, turn, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES };
+window.__game = { get S() { return S; }, turn, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES, slots, stageSelect };
