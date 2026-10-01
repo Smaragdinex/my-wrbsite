@@ -106,19 +106,25 @@ const EVENTS = [
 const LOT = 10, START_CASH = 10000, SALARY = 500, FEE = 200, MAX_ROLLS = 20;
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
 const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17];    // 商店會賣的事件卡(壞消息類的不賣)
-const REMOTE_PRICE = 300, CARD_PRICE = 500;
+const REMOTE_PRICE = 300, CARD_PRICE = 500, ATK_PRICE = 600, ATK_DROP = 0.82;
 function itemInfo(id) {
   if (id === 'remote') return { icon: '🎲', name: L('Remote dice', '遙控骰子'), desc: L('Pick any total from 2 to 12 instead of rolling.', '不用擲骰,自己指定走 2 到 12 步。'), price: REMOTE_PRICE };
+  if (id === 'atk') return { icon: '📉', name: L('Bad news card', '利空消息卡'), price: ATK_PRICE,
+    desc: L('Pick any asset and knock its price down 18%. Whoever holds it takes the hit.', '指定一種資產,價格立刻下跌 18%。誰持有誰受傷。') };
   const e = EVENTS[+id.slice(2)];
   const best = KEYS.reduce((a, k) => (e.m[k] > e.m[a] ? k : a), KEYS[0]);
   return { icon: '🃏', name: L('Event card: ', '事件卡:') + e.t, event: e, best,
     desc: L(`Play it to trigger this event. ${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%.`, `使用後立刻發生這個事件,${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%。`), price: CARD_PRICE };
 }
-const randomItem = () => (Math.random() < 0.5 ? 'remote' : 'ev' + SALE_EVENTS[Math.floor(Math.random() * SALE_EVENTS.length)]);
+const randomItem = () => { const r = Math.random(); return r < 0.4 ? 'remote' : r < 0.6 ? 'atk' : 'ev' + SALE_EVENTS[Math.floor(Math.random() * SALE_EVENTS.length)]; };
 
 /* ───────────── 狀態 ───────────── */
 let S;
-const assets = () => S.cash + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
+// 放空部位的價值 = 保證金(進場價 x 股數)+ 損益((進場價 - 現價) x 股數);最慘賠光保證金
+const shortValue = (k) => { const h = S.short[k]; return h.n ? Math.max(0, h.n * (2 * h.entry - S.price[k])) : 0; };
+const assets = () => S.cash + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] + shortValue(k), 0);
+// 買賣會推動價格(量大推得多):買進推高、賣出和放空壓低。所以賣空對手持有的資產,等於直接打擊對手
+const impact = (k, f) => { S.price[k] = Math.max(8, S.price[k] * f); };
 const aiAssets = () => S.ai.cash + KEYS.reduce((a, k) => a + S.ai.hold[k].n * S.price[k], 0);
 const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 // 任務:同時有 3 個。完成一個領 $500 獎金並換一個新的,一路玩到回合用完;結算依完成數給星星。
@@ -154,9 +160,11 @@ function newState() {
     pos: 0, cash: START_CASH, rolls: 0, bag: ['remote'], busy: false, over: false,
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])),
+    short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
+    shop: { round: -1, stock: [] },
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
     missions: [], done: 0, me: 'cat', foe: 'bear',
-    ai: { pos: 0, cash: START_CASH, hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])) },
+    ai: { pos: 0, cash: START_CASH, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])) },
   };
   for (let i = 0; i < 3; i++) S.missions.push(drawMission());
 }
@@ -653,7 +661,9 @@ function advise() {
   if (todo.has('spread') && held.length < 3) return L(`You hold ${held.length} sector${held.length === 1 ? '' : 's'}. Three different ones spread your risk.`, `你現在持有 ${held.length} 種類股,湊滿 3 種可以分散風險。`);
   if (todo.has('paid')) return L('High-yield and REIT pay the most each lap. Hold them when you pass GO.', '高股息和不動產配息最多,持有它們再繞回起點就能領股利。');
   if (todo.has('cash') && S.cash < 2000) return L('Cash is low. Keep $2,000 so you can buy when a chance shows up.', '現金偏低。留 $2,000 以上,好機會出現時才買得起。');
-  const card = S.bag.find((id) => id !== 'remote');
+  if (S.bag.includes('atk')) { const fk = KEYS.filter((k) => S.ai.hold[k].n > 0).sort((a, b) => S.ai.hold[b].n * S.price[b] - S.ai.hold[a].n * S.price[a])[0];
+    if (fk) return L(`Your rival holds a lot of ${SECTORS[fk].name}. A bad news card would hit it.`, `對手持有不少${SECTORS[fk].name},用利空消息卡可以打擊它。`); }
+  const card = S.bag.find((id) => id.startsWith('ev'));
   if (card) { const it = itemInfo(card), sec = SECTORS[it.best];
     return S.hold[it.best].n > 0
       ? L(`You hold ${sec.name} and a card that lifts it. Open your backpack to play it.`, `你持有${sec.name},背包裡有一張會讓它上漲的事件卡,可以打開背包使用。`)
@@ -674,8 +684,10 @@ function hud() {
   $('tip').textContent = advise();
   $('assetRows').innerHTML =
     `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(S.cash)}</span></div>` +
-    (KEYS.some((k) => S.hold[k].n > 0)
-      ? KEYS.filter((k) => S.hold[k].n > 0).map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${S.hold[k].n} ${L('sh', '股')}</span><span>${fmt(S.hold[k].n * S.price[k])}</span></div>`).join('')
+    (KEYS.some((k) => S.hold[k].n > 0 || S.short[k].n > 0)
+      ? KEYS.filter((k) => S.hold[k].n > 0).map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${S.hold[k].n} ${L('sh', '股')}</span><span>${fmt(S.hold[k].n * S.price[k])}</span></div>`).join('') +
+        KEYS.filter((k) => S.short[k].n > 0).map((k) => { const pl = (S.short[k].entry - S.price[k]) * S.short[k].n;
+          return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${S.short[k].n}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('')
       : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`);
   const e = S.lastEvent;
   $('evtBody').innerHTML = e
@@ -701,37 +713,54 @@ const closePanel = () => $('panel').classList.add('hide');
 
 function buyPanel(k) {
   return new Promise((res) => {
-    const sec = SECTORS[k], h = S.hold[k], price = S.price[k];
+    const sec = SECTORS[k], h = S.hold[k], sh = S.short[k], price = S.price[k];
     const gain = h.n ? (price * h.n - h.cost) / h.cost * 100 : 0;
+    const spl = sh.n ? (sh.entry - price) / sh.entry * 100 : 0;
     const vs = (price / sec.open - 1) * 100;
+    const rival = S.ai.hold[k].n;
     const p = panel(`
       <h3><span class="tag" style="background:${sec.css}">${sec.code}</span>${sec.name}</h3>
-      <p>${sec.blurb}</p>
+      <p>${sec.blurb}${rival ? ` <b style="color:#c4472f">${L(`Your rival holds ${rival}.`, `對手持有 ${rival} 股。`)}</b>` : ''}</p>
       <div class="kv">
         <div>${L('Price', '股價')}<b>$${Math.round(price)}</b></div>
         <div>${L('Since open', '相對開盤')}<b style="color:${vs >= 0 ? '#1c8a4a' : '#c4472f'}">${vs >= 0 ? '+' : ''}${vs.toFixed(0)}%</b></div>
-        <div>${L('You hold', '持有')}<b>${h.n}${h.n ? ` <span style="font-size:11px;color:${gain >= 0 ? '#1c8a4a' : '#c4472f'}">${gain >= 0 ? '+' : ''}${gain.toFixed(0)}%</span>` : ''}</b></div>
+        <div>${sh.n ? L('Short', '放空') : L('You hold', '持有')}<b>${sh.n || h.n}${(sh.n || h.n) ? ` <span style="font-size:11px;color:${(sh.n ? spl : gain) >= 0 ? '#1c8a4a' : '#c4472f'}">${(sh.n ? spl : gain) >= 0 ? '+' : ''}${(sh.n ? spl : gain).toFixed(0)}%</span>` : ''}</b></div>
       </div>
       <div class="btns">
-        <button class="b-buy" data-a="buy1" ${S.cash < price * LOT ? 'disabled' : ''}>${L('Buy 10', '買 10 股')}<br><span style="font-size:11px">$${fmt(price * LOT)}</span></button>
-        <button class="b-buy" data-a="buy3" ${S.cash < price * LOT * 3 ? 'disabled' : ''}>${L('Buy 30', '買 30 股')}<br><span style="font-size:11px">$${fmt(price * LOT * 3)}</span></button>
+        <button class="b-buy" data-a="buy1" ${S.cash < price * LOT || sh.n ? 'disabled' : ''}>${L('Buy 10', '買 10 股')}<br><span style="font-size:11px">$${fmt(price * LOT)}</span></button>
+        <button class="b-buy" data-a="buy3" ${S.cash < price * LOT * 3 || sh.n ? 'disabled' : ''}>${L('Buy 30', '買 30 股')}<br><span style="font-size:11px">$${fmt(price * LOT * 3)}</span></button>
         <button class="b-sell" data-a="sell" ${h.n ? '' : 'disabled'}>${L('Sell all', '全部賣出')}</button>
+      </div>
+      <div class="btns" style="margin-top:8px">
+        ${sh.n
+          ? `<button class="b-ok" data-a="cover">${L('Cover short', '回補空單')}<br><span style="font-size:11px">${spl >= 0 ? '+' : '-'}$${fmt(Math.abs((sh.entry - price) * sh.n))}</span></button>`
+          : `<button class="b-short" data-a="short" ${S.cash < price * LOT || h.n ? 'disabled' : ''}>${L('Short 10', '放空 10 股')}<br><span style="font-size:11px">${L('margin', '保證金')} $${fmt(price * LOT)}</span></button>`}
         <button class="b-skip" data-a="skip">${L('Skip', '跳過')}</button>
-      </div>`);
+      </div>
+      <p style="font-size:11.5px">${L('Shorting: sell borrowed shares now, buy them back later. You win if the price falls and lose if it rises. Selling and shorting push the price down.', '放空:先借股票賣掉,之後再買回來還。跌了你賺、漲了你賠。賣出和放空都會把價格往下壓。')}</p>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
       const a = b.dataset.a;
       if (a === 'buy1' || a === 'buy3') {
         const n = LOT * (a === 'buy1' ? 1 : 3), cost = price * n;
         S.cash -= cost; h.n += n; h.cost += cost;
         if (price < sec.open * 0.97) S.flags.dip = true;
+        impact(k, a === 'buy1' ? 1.015 : 1.045);
         toast(L(`Bought ${n} ${sec.name}`, `買進 ${sec.name} ${n} 股`));
       } else if (a === 'sell') {
         const value = price * h.n;
         if ((value - h.cost) / h.cost >= 0.15) S.flags.profit = true;
         toast(L('Sold for', '賣出得') + ` $${fmt(value)} (${value >= h.cost ? '+' : '-'}$${fmt(Math.abs(value - h.cost))})`);
-        S.cash += value; h.n = 0; h.cost = 0;
+        S.cash += value; h.n = 0; h.cost = 0; impact(k, 0.97);
+      } else if (a === 'short') {
+        S.cash -= price * LOT; sh.entry = (sh.entry * sh.n + price * LOT) / (sh.n + LOT); sh.n += LOT; impact(k, 0.96);
+        toast(L(`Shorted ${LOT} ${sec.name}. The price drops 4%.`, `放空 ${sec.name} ${LOT} 股,股價被壓低 4%`));
+      } else if (a === 'cover') {
+        const back = shortValue(k), pl = (sh.entry - price) * sh.n;
+        if (pl / (sh.entry * sh.n) >= 0.15) S.flags.profit = true;
+        S.cash += back; sh.n = 0; sh.entry = 0; impact(k, 1.02);
+        toast(L('Covered:', '回補:') + ` ${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}`);
       }
-      closePanel(); res();
+      drawAll(); hud(); closePanel(); res();
     });
   });
 }
@@ -762,24 +791,58 @@ async function playEvent(e) {
   const moves = KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
   await cardPanel(e.t, e.w, moves);
 }
-// 商店:每次進來賣遙控骰子 + 兩張隨機事件卡,可以買好幾個
+// 商店:每樣只有一個,你或對手買走就沒了;過一回合才進新貨(新的事件卡)。兩個商店格共用同一批貨
+function shopStock() {
+  if (S.shop.round !== S.rolls) {
+    const cards = SALE_EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 2).map((i) => 'ev' + i);
+    S.shop = { round: S.rolls, stock: ['remote', ...cards, 'atk'] };
+  }
+  return S.shop.stock;
+}
 function shopPanel() {
-  const cards = SALE_EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 2).map((i) => 'ev' + i);
-  const stock = ['remote', ...cards];
+  const stock = shopStock();
   return new Promise((res) => {
     const draw = () => {
-      const p = panel(`<h3>${L('Item shop', '道具商店')}</h3><p>${L('Items go in your backpack. Use them before you roll.', '買的道具會放進背包,輪到你擲骰前可以使用。')}</p>` +
-        stock.map((id, i) => { const it = itemInfo(id);
-          return `<div class="it"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${it.desc}</small></span><button class="b-buy" data-i="${i}" ${S.cash < it.price ? 'disabled' : ''}>$${it.price}</button></div>`; }).join('') +
+      const p = panel(`<h3>${L('Item shop', '道具商店')}</h3><p>${L('One of each. Once you or your rival buys it, it is gone until next round.', '每樣只有一個,你或對手買走就沒了,下一回合才進新貨。')}</p>` +
+        (stock.length ? stock.map((id, i) => { const it = itemInfo(id);
+          return `<div class="it"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${it.desc}</small></span><button class="b-buy" data-i="${i}" ${S.cash < it.price ? 'disabled' : ''}>$${it.price}</button></div>`; }).join('')
+          : `<div class="it"><span class="tx"><small>${L('Sold out. New stock arrives next round.', '賣完了,下一回合進新貨。')}</small></span></div>`) +
         `<div class="btns"><button class="b-skip" data-i="-1">${L('Leave', '離開')}</button></div>`);
       p.querySelectorAll('button').forEach((b) => b.onclick = () => {
         const i = +b.dataset.i;
         if (i < 0) { closePanel(); return res(); }
-        const it = itemInfo(stock[i]); S.cash -= it.price; S.bag.push(stock[i]); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
+        const id = stock[i], it = itemInfo(id); S.cash -= it.price; S.bag.push(id); stock.splice(i, 1); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
       });
     };
     draw();
   });
+}
+// 利空消息卡:挑一種資產讓它下跌。列表先列對手持有的(打擊對手),再列你自己放空的(幫自己賺)
+function attackPanel() {
+  return new Promise((res) => {
+    const foe = KEYS.filter((k) => S.ai.hold[k].n > 0).sort((a, b) => S.ai.hold[b].n * S.price[b] - S.ai.hold[a].n * S.price[a]);
+    const mine = KEYS.filter((k) => S.short[k].n > 0 && !foe.includes(k));
+    const rest = KEYS.filter((k) => !foe.includes(k) && !mine.includes(k));
+    const chip = (k, note) => `<button data-k="${k}" style="border-color:${SECTORS[k].css}"><i style="background:${SECTORS[k].css}"></i>${SECTORS[k].code}${note ? `<small>${note}</small>` : ''}</button>`;
+    const p = panel(`<h3>📉 ${L('Bad news card', '利空消息卡')}</h3><p>${L('Pick the asset to hit. It drops 18%.', '選一種資產,價格下跌 18%。')}</p>` +
+      (foe.length ? `<p><b>${L('Your rival holds', '對手持有')}</b></p><div class="chips">${foe.map((k) => chip(k, `${S.ai.hold[k].n}${L(' sh', ' 股')}`)).join('')}</div>` : `<p>${L('Your rival holds nothing yet.', '對手還沒有持股。')}</p>`) +
+      (mine.length ? `<p><b>${L('You are short', '你放空的')}</b></p><div class="chips">${mine.map((k) => chip(k, `${L('short', '空')} ${S.short[k].n}`)).join('')}</div>` : '') +
+      `<p><b>${L('Other assets', '其他資產')}</b></p><div class="chips">${rest.map((k) => chip(k)).join('')}</div>` +
+      `<div class="btns"><button class="b-skip" data-k="">${L('Cancel', '取消')}</button></div>`);
+    p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.k || null); });
+  });
+}
+// 利空消息生效:價格下跌,並說明誰受傷
+async function badNews(k, byPlayer) {
+  const who = CHARS[S.foe].name, sec = SECTORS[k];
+  const loss = (byPlayer ? S.ai.hold[k].n : S.hold[k].n) * S.price[k] * (1 - ATK_DROP);
+  S.price[k] *= ATK_DROP;
+  S.lastEvent = { t: L(`Bad news about ${sec.name}`, `${sec.name}傳出利空`), w: L('Rumors and bad headlines can sink a price fast.', '壞消息和傳言可以讓股價快速下跌。'), m: Object.fromEntries(KEYS.map((x) => [x, x === k ? ATK_DROP : 1])) };
+  drawAll(); hud();
+  await cardPanel(byPlayer ? L(`You spread bad news about ${sec.name}`, `你放出${sec.name}的利空消息`) : L(`${who} spreads bad news about ${sec.name}`, `${who}放出${sec.name}的利空消息`),
+    (loss > 0 ? (byPlayer ? L(`${who} loses about $${fmt(loss)}.`, `${who}損失約 $${fmt(loss)}。`) : L(`You lose about $${fmt(loss)}.`, `你損失約 $${fmt(loss)}。`)) + ' ' : '') +
+    L('Anyone short this asset profits.', '放空這檔資產的人則會獲利。'),
+    `<span class="mv dn">${sec.name} -${Math.round((1 - ATK_DROP) * 100)}%</span>`);
 }
 // 背包:只有輪到自己、還沒擲骰時能開
 function bagPanel() {
@@ -804,6 +867,10 @@ function bagPanel() {
         if (!n) return showCtl(true);
         S.bag.splice(S.bag.indexOf('remote'), 1); hud(); turn(n);
       });
+    } else if (id === 'atk') {
+      const k = await attackPanel();
+      if (k) { S.bag.splice(S.bag.indexOf('atk'), 1); await badNews(k, true); checkMissions(); }
+      S.busy = false; showCtl(true);
     } else {
       S.bag.splice(S.bag.indexOf(id), 1);
       await playEvent(itemInfo(id).event);
@@ -817,6 +884,13 @@ const r6 = () => 1 + Math.floor(Math.random() * 6);
 async function aiTurn() {
   const A = S.ai, who = CHARS[S.foe].name;
   focus = BEAR; toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
+  // 對手出牌:利空卡打你持有最多的資產;事件卡在牠持有受惠類股時才用
+  if (A.bag.includes('atk')) {
+    const k = KEYS.filter((x) => S.hold[x].n > 0).sort((x, y) => S.hold[y].n * S.price[y] - S.hold[x].n * S.price[x])[0];
+    if (k) { A.bag.splice(A.bag.indexOf('atk'), 1); await badNews(k, false); }
+  }
+  { const id = A.bag.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0);
+    if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event); } }
   const a = r6(), b = r6(), n = a + b;
   await rollDice([a, b], BEAR); toast(`${who}: ${a} + ${b} = ${n}`);
   for (let i = 0; i < n; i++) {
@@ -829,13 +903,21 @@ async function aiTurn() {
   if (sec) {
     const h = A.hold[type], price = S.price[type];
     if (h.n && (price * h.n - h.cost) / h.cost >= 0.15) {
-      A.cash += price * h.n; toast(L(`${who} took profit on ${sec.name}`, `${who}賣出${sec.name}獲利了結`)); h.n = 0; h.cost = 0;
+      A.cash += price * h.n; toast(L(`${who} took profit on ${sec.name}`, `${who}賣出${sec.name}獲利了結`)); h.n = 0; h.cost = 0; impact(type, 0.97);
     } else {
       const lots = (price < sec.open * 0.95 && A.cash >= price * LOT * 3 + 2000) ? 3 : (A.cash >= price * LOT + 1500 ? 1 : 0);
-      if (lots) { const q = LOT * lots; A.cash -= price * q; h.n += q; h.cost += price * q; toast(L(`${who} bought ${q} ${sec.name}`, `${who}買進${sec.name} ${q} 股`)); }
+      if (lots) { const q = LOT * lots; A.cash -= price * q; h.n += q; h.cost += price * q; impact(type, lots === 3 ? 1.045 : 1.015); toast(L(`${who} bought ${q} ${sec.name}`, `${who}買進${sec.name} ${q} 股`)); }
       else toast(L(`${who} keeps cash and skips`, `${who}保留現金,跳過`));
     }
-    hud(); await wait(1.0);
+    drawAll(); hud(); await wait(1.0);
+  } else if (type === 'shop') {
+    // 逛商店:有閒錢就買利空卡;不然買一張對牠持股有利的事件卡。買走的你就買不到了
+    const stock = shopStock(); let got = null;
+    if (stock.includes('atk') && A.cash >= 2500) got = 'atk';
+    else got = stock.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0 && A.cash >= 2000) || null;
+    if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
+    else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
+    hud(); await wait(1.2);
   } else if (type === 'chance') { await wait(0.3); await playEvent(EVENTS[Math.floor(Math.random() * EVENTS.length)]); }
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
