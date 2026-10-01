@@ -648,10 +648,15 @@ canvas.addEventListener('pointerup', (e) => {
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
 const GAME_URL = './board/?v=20';   // v 參數用來避開 index.html 的快取
-const GAME_W = 1120, GAME_H = 680;
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
-function fitGame() { const k = Math.min((innerWidth - 40) / GAME_W, (innerHeight - 150) / GAME_H, 1.15); gameCab.style.transform = `scale(${k})`; }
+// 遊戲畫面幾乎佔滿整個視窗(四周只留外框的厚度)。用真實像素大小而不是縮放,
+// 遊戲自己的版面會依實際寬高重新排,螢幕越大看到的棋盤越多
+function fitGame() {
+  const M = 26, w = Math.max(320, innerWidth - M * 2), h = Math.max(320, innerHeight - M * 2);
+  gameCab.style.width = w + 'px'; gameCab.style.height = h + 'px';
+  gameCab.style.left = M + 'px'; gameCab.style.top = M + 'px';
+}
 window.addEventListener('resize', fitGame);
 function showGame() {
   gameOn = true;
@@ -666,6 +671,7 @@ function hideGame() {
   zoomGoal = 0; wheelLockUntil = performance.now() + 1000;
 }
 gameUI.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
+document.getElementById('game-exit').onclick = hideGame;
 window.addEventListener('message', (e) => { if (e.data && e.data.type === 'catgame-finished') console.log('cat arcade: cleared!'); });
 
 // ---------- 進場動畫 + 迴圈 ----------
