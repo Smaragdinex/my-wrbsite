@@ -430,7 +430,7 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   g.setTransform(zoom, 0, 0, zoom, 0, 0);
   g.clearRect(0, 0, W, H);
   g.save();
-  g.beginPath(); g.roundRect(0, 0, W, H, 5); g.clip();                     // 圓角螢幕(角不能太圓,拉近滿版時四個角會露出機台)
+  g.beginPath(); g.roundRect(0, 0, W, H, 34); g.clip();                    // 圓角螢幕
   g.fillStyle = '#bfe6a8'; g.fillRect(0, 0, W, H);                         // 草地
   g.fillStyle = '#f6e3c2'; g.beginPath(); g.roundRect(14, 14, W - 28, H - 62, 18); g.fill();   // 人行道
   g.fillStyle = '#9bdc7a'; g.beginPath(); g.roundRect(84, 68, W - 168, 178, 12); g.fill();      // 中間草地
@@ -587,12 +587,10 @@ function updateZoom(dt) {
   const e = zoomT * zoomT * (3 - 2 * zoomT);
   const half = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
   let dist;
-  if (focusArcade && arcadeScreen) {
-    // 鏡頭正對街機螢幕(螢幕是往後仰的,所以沿著它的法線看),拉近到螢幕剛好填滿畫面,機台本身不入鏡
-    arcadeScreen.getWorldPosition(scrPos);
-    arcadeScreen.getWorldDirection(scrNormal);
-    // 螢幕要剛好對上外框(#arcade-frame)的內側;再貼近 3.5% 讓螢幕的圓角和機台邊緣藏到外框底下
-    dist = 0.36 / half * (innerHeight / arcadeBox().h) * 0.965;
+  if (focusArcade && arcadeAnchor) {
+    arcadeAnchor.getWorldPosition(scrPos);
+    arcadeAnchor.getWorldDirection(scrNormal);                             // 街機正面朝向,機台外框一起入鏡
+    dist = 1.7;
   } else {
     screenMesh.getWorldPosition(scrPos);
     screenMesh.getWorldDirection(scrNormal);                               // 平面 +z = 法線,朝向房間
@@ -602,10 +600,8 @@ function updateZoom(dt) {
   camera.position.lerpVectors(orbitPos, endPos, e);
   lookTgt.lerpVectors(orbitTarget, scrPos, e);
   camera.lookAt(lookTgt);
-  // 鏡頭快到街機螢幕前(0.9 就算,最後那段收尾很慢不用等):螢幕上出現語言 / PLAY 按鈕,房間的 logo 和右下按鈕先收起來
+  // 鏡頭快到街機前(0.9 就算,最後那段收尾很慢不用等):機台螢幕上出現語言 / PLAY 按鈕
   arcadeMenu = zoomGoal >= 1 && zoomT > 0.9 && focusArcade && !gameOn;
-  document.body.classList.toggle('arcade-on', zoomGoal >= 1 && focusArcade && zoomT > 0.5);
-  document.body.classList.toggle('arcade-framed', arcadeMenu);   // 外框:和進遊戲後同一種框,把機台模型的邊緣蓋掉
   if (zoomGoal >= 1 && zoomT > 0.985 && !focusArcade && !uiOn) showUI();     // 鏡頭到電腦螢幕 → 淡入介紹介面
 }
 
@@ -699,14 +695,6 @@ function fitGame() {
   gameCab.style.left = M + 'px'; gameCab.style.top = M + 'px';
 }
 window.addEventListener('resize', fitGame);
-// 街機選單的外框:街機螢幕是 520:385,在視窗裡取最大的同比例方框並置中
-function arcadeBox() {
-  const M = 26, A = 520 / 385, w = Math.min(innerWidth - M * 2, (innerHeight - M * 2) * A), h = w / A;
-  return { w, h, x: (innerWidth - w) / 2, y: (innerHeight - h) / 2 };
-}
-const arcadeFrame = document.getElementById('arcade-frame');
-function fitArcadeFrame() { const b = arcadeBox(); Object.assign(arcadeFrame.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' }); }
-window.addEventListener('resize', fitArcadeFrame); fitArcadeFrame();
 // 在機台螢幕上按 PLAY → 開啟遊戲(幾乎滿版的 iframe),語言跟著機台上選的走
 function startGame() {
   if (gameOn) return;
