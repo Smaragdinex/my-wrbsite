@@ -449,7 +449,7 @@ function arcadeButtonAt(x, y) {
 }
 let arcadeMenu = false, pushT = 0, pushGoal = 0;
 let gameLang = (() => { let v = null; try { v = localStorage.getItem('css.lang'); } catch (e) {} return (v || navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'; })();
-function setGameLang(code) { gameLang = code; try { localStorage.setItem('css.lang', code); } catch (e) {} }
+function setGameLang(code) { gameLang = code; try { localStorage.setItem('css.lang', code); } catch (e) {} prewarmGame(); }
 const ARC_TICKER = 'TECH +12%   GOLD +10%   OIL -4%   CHIPS +25%   BOND -6%   ETF +3%   BIOTECH +35%   CRYPTO -45%   ';
 // cv / zoom:可以畫到別的畫布並放大 zoom 倍(進入街機後的選單畫面就是同一張圖的高解析版)
 function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
@@ -603,6 +603,7 @@ function updateZoom(dt) {
   zoomT += (zoomGoal - zoomT) * Math.min(1, dt * 2.5);
   if (zoomT < 0.002) {
     zoomT = 0; focusArcade = false; pushT = 0; pushGoal = 0;
+    if (gameFrame && !gameOn) { gameFrame.remove(); gameFrame = null; }   // 沒玩就離開街機:把預載的遊戲收掉,不要在背後一直跑
     controls.enabled = true; controls.autoRotate = true;
     // 自動旋轉到視角邊界就反向,左右來回
     const az = controls.getAzimuthalAngle(), sp = controls.autoRotateSpeed;
@@ -639,6 +640,7 @@ function updateZoom(dt) {
   camera.lookAt(lookTgt);
   // 鏡頭快到街機前(0.9 就算,最後那段收尾很慢不用等):機台螢幕上出現語言 / PLAY 按鈕
   arcadeMenu = zoomGoal >= 1 && zoomT > 0.9 && focusArcade && !gameOn;
+  if (focusArcade && zoomGoal >= 1 && zoomT > 0.35 && !gameOn && !gameFrame) prewarmGame();   // 鏡頭飛向街機的途中就開始預載遊戲
   document.body.classList.toggle('arcade-on', zoomGoal >= 1 && focusArcade && zoomT > 0.5);   // 螢幕放到最大時,房間的 logo 和右下按鈕會蓋在上面 → 收起來
   if (zoomGoal >= 1 && zoomT > 0.985 && !focusArcade && !uiOn) showUI();     // 鏡頭到電腦螢幕 → 淡入介紹介面
 }
@@ -722,15 +724,24 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=29';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=30';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 在機台螢幕上按 PLAY → 鏡頭先推進到螢幕蓋滿畫面(updateZoom 裡的 pushT)→ 推到底時 openGame() 換成真正的遊戲
 function startGame() { if (gameOn || pushGoal === 1) return; pushGoal = 1; }
-function openGame() {
-  gameOn = true; arcadeMenu = false;
-  gameFrame = document.createElement('iframe'); gameFrame.src = `${GAME_URL}&lang=${gameLang}&embed=1`; gameFrame.allow = 'autoplay'; gameFrame.title = 'Cat Street Stocks';
+// 預載:鏡頭一到街機前(還在看選單)就把遊戲的 iframe 先在背後建好。此時 #game-ui 是透明的,
+// 遊戲在裡面自己載程式和四個角色模型;等玩家按 PLAY、鏡頭推進完,直接顯示就是已經載好的選角畫面。
+// 之後又換語言的話,用新語言重載一次(檔案都在快取裡,很快)
+const gameSrc = () => `${GAME_URL}&lang=${gameLang}&embed=1`;
+function prewarmGame() {
+  if (gameOn) return;
+  if (gameFrame && gameFrame.dataset.src === gameSrc()) return;
+  if (gameFrame) gameFrame.remove();
+  gameFrame = document.createElement('iframe'); gameFrame.dataset.src = gameSrc(); gameFrame.src = gameSrc(); gameFrame.allow = 'autoplay'; gameFrame.title = 'Cat Street Stocks';
   gameScr.appendChild(gameFrame);
+}
+function openGame() {
+  arcadeMenu = false; prewarmGame(); gameOn = true;   // 沒預載到(或語言不同)就現在建
   gameUI.classList.add('on'); document.body.classList.add('game-on');
   setTimeout(() => { try { gameFrame.contentWindow.focus(); } catch (e) {} }, 400);
 }
@@ -741,6 +752,10 @@ function hideGame() {
 }
 gameUI.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
 document.getElementById('game-exit').onclick = hideGame;
+// 房間載完後閒置時,先把四個角色模型抓進瀏覽器快取(各約 250 KB),之後遊戲要用時不用再等下載
+(window.requestIdleCallback || ((f) => setTimeout(f, 3000)))(() => {
+  ['kitty', 'bunny', 'bear', 'pup'].forEach((n) => { fetch(`./board/${n}.glb?v=1`).catch(() => {}); });
+});
 window.addEventListener('message', (e) => { if (e.data && e.data.type === 'catgame-finished') console.log('cat arcade: cleared!'); });
 
 // ---------- 進場動畫 + 迴圈 ----------
