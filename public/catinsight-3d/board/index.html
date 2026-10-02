@@ -128,6 +128,36 @@
   .tri{margin-left:auto;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #fff;transition:transform .2s}
   .box.fold .tri{transform:rotate(-90deg)}
   .box.fold > div{display:none}
+  /* 抽市場事件:三張牌背。滑鼠移上去會浮起、傾斜、掃光;點了之後 3D 翻面 */
+  .draw{position:fixed;inset:0;z-index:8;background:rgba(40,30,60,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(18px * var(--fs));padding:16px}
+  .draw h2{font-size:calc(24px * var(--fs));font-weight:900;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+  .dcards{display:flex;gap:calc(18px * var(--fs));perspective:1400px}
+  .dcard{width:min(calc(190px * var(--fs)),28vw);aspect-ratio:5/7;cursor:pointer;position:relative;
+    animation:deal .55s cubic-bezier(.2,1.2,.4,1) both;animation-delay:calc(var(--i) * .12s);transition:transform .25s cubic-bezier(.2,.8,.2,1),filter .3s,opacity .4s}
+  @keyframes deal{from{transform:translateY(60vh) rotate(calc((var(--i) - 1) * 18deg));opacity:0}}
+  .dinner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .75s cubic-bezier(.3,.1,.2,1)}
+  .dcard.flip .dinner{transform:rotateY(180deg)}
+  .dback,.dfront{position:absolute;inset:0;border-radius:16px;backface-visibility:hidden;-webkit-backface-visibility:hidden;border:5px solid #fff;box-shadow:0 10px 24px rgba(0,0,0,.3);overflow:hidden}
+  .dback{background:#5b3fd6;background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.14) 0 10px,transparent 10px 20px),repeating-linear-gradient(-45deg,rgba(255,255,255,.14) 0 10px,transparent 10px 20px);
+    display:flex;align-items:center;justify-content:center}
+  .dback span{width:46%;aspect-ratio:1;border-radius:50%;background:#ffd24a;color:#7a4a00;font-weight:900;font-size:calc(46px * var(--fs));display:flex;align-items:center;justify-content:center;border:5px solid #fff;box-shadow:0 4px 0 rgba(0,0,0,.2)}
+  .dback::after{content:"";position:absolute;inset:-40% -80%;background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.55) 50%,transparent 58%);transform:translateX(-70%);pointer-events:none}
+  .dfront{transform:rotateY(180deg);background:var(--cream);display:flex;flex-direction:column;text-align:left}
+  .dhead{padding:10px 10px 8px;font-size:calc(15px * var(--fs));font-weight:900;color:#fff;line-height:1.25}
+  .dhead.good{background:#35ad6d}.dhead.bad{background:#e2604f}
+  .dwhy{padding:8px 10px 0;font-size:calc(11.5px * var(--fs));font-weight:700;color:#6b594e;line-height:1.4}
+  .dmv{padding:8px 8px 10px;display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
+  .dmv .mv{font-size:calc(11px * var(--fs));padding:2px 7px}
+  @media(hover:hover){
+    .draw:not(.done):not(.auto) .dcard:hover{transform:translateY(-18px) rotate(calc((var(--i) - 1) * 3deg)) scale(1.06);filter:drop-shadow(0 0 18px rgba(255,220,120,.9))}
+    .draw:not(.done):not(.auto) .dcard:hover .dback::after{transform:translateX(70%);transition:transform .7s ease}
+  }
+  .draw:not(.done):not(.auto) .dcard:active{transform:translateY(-8px) scale(1.02)}
+  .draw.auto .dcard{cursor:default}
+  .dcard.picked{transform:translateY(-14px) scale(1.08);z-index:2}
+  .dcard.lost{filter:grayscale(.65) brightness(.8);transform:scale(.93)}
+  .dgo{height:calc(50px * var(--fs));padding:0 calc(40px * var(--fs));border-radius:999px;border:4px solid #fff;background:#8b7cff;color:#fff;font-weight:900;font-size:calc(17px * var(--fs));cursor:pointer;box-shadow:0 5px 0 #6a5bd6}
+  .dgo:active{transform:translateY(3px);box-shadow:0 2px 0 #6a5bd6}
   .hide{display:none!important}
   @media(max-width:560px){ .stat.opt{display:none} .m{font-size:calc(11.5px * var(--fs));padding:5px 8px} .m small{display:none} }
 </style>
@@ -179,9 +209,10 @@
     <button class="pok" id="pok"></button>
   </div>
 </div>
+<div class="draw hide" id="draw"></div>
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=36"></script>
+<script type="module" src="./board.mjs?v=37"></script>
 </body>
 </html>

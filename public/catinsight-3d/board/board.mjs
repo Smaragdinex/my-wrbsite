@@ -882,6 +882,35 @@ function checkMissions() {
   S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; S.cash += REWARD; toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
   hud();
 }
+// 市場事件格:桌上發三張背面朝上的牌,玩家自己挑一張翻開(對手走到時由牠自動挑)。
+// 翻開的那張生效;另外兩張隨後也翻開,讓你看到「本來可能抽到什麼」。計時用遊戲自己的時鐘(wait),測試時可以快轉
+function drawEventCards(auto) {
+  return new Promise((res) => {
+    const picks = EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 3), who = CHARS[S.foe].name;
+    const face = (e) => {
+      const top = KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 6);
+      return `<div class="dhead ${e.m.etf >= 1 ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` +
+        top.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].code} ${d > 0 ? '+' : ''}${d}%</span>`; }).join('') + '</div>';
+    };
+    const ov = $('draw');
+    ov.innerHTML = `<h2>${auto ? L(`${who} draws a market event`, `${who}抽市場事件`) : L('Pick a card', '抽一張市場事件')}</h2>` +
+      `<div class="dcards">${picks.map((e, i) => `<div class="dcard" data-i="${i}" style="--i:${i}"><div class="dinner"><div class="dback"><span>?</span></div><div class="dfront">${face(e)}</div></div></div>`).join('')}</div>` +
+      `<button class="dgo hide" id="dgo">${L('Continue', '繼續')}</button>`;
+    ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto);
+    const cards = [...ov.querySelectorAll('.dcard')]; let chosen = -1;
+    const choose = (i) => {
+      if (chosen >= 0) return;
+      chosen = i; ov.classList.add('done'); cards[i].classList.add('flip', 'picked');
+      const e = picks[i];
+      KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
+      S.lastEvent = e; marginCheck(); drawAll(); hud();
+      wait(0.9).then(() => { cards.forEach((c, j) => { if (j !== i) c.classList.add('flip', 'lost'); }); $('dgo').classList.remove('hide'); });
+    };
+    cards.forEach((c, i) => { c.onclick = () => { if (!auto) choose(i); }; });
+    if (auto) wait(1.2).then(() => choose(Math.floor(Math.random() * 3)));
+    $('dgo').onclick = () => { ov.classList.add('hide'); ov.classList.remove('done'); res(picks[chosen]); };
+  });
+}
 async function playEvent(e) {
   KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
   S.lastEvent = e; marginCheck(); drawAll(); hud();
@@ -1030,7 +1059,7 @@ async function aiTurn() {
     if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
     else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
     hud(); await wait(1.2);
-  } else if (type === 'chance') { await wait(0.3); await playEvent(EVENTS[Math.floor(Math.random() * EVENTS.length)]); }
+  } else if (type === 'chance') { await wait(0.3); await drawEventCards(true); }
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
   hud(); focus = ME; await wait(0.5);
@@ -1058,7 +1087,7 @@ async function turn(forced) {
   const type = TILES[S.pos];
   if (SECTORS[type]) await buyPanel(type);
   else if (type === 'chance') {
-    await playEvent(EVENTS[Math.floor(Math.random() * EVENTS.length)]);
+    await drawEventCards(false);
   } else if (type === 'fee') { S.cash -= FEE; hud(); await cardPanel(L('Trading fees', '交易手續費'), L(`Every trade has a cost. You paid $${FEE}.`, `每筆交易都有成本,這次付了 $${FEE}。`)); }
   else if (type === 'shop') await shopPanel();
   else if (type === 'gift') { const id = randomItem(), it = itemInfo(id); S.bag.push(id); hud();
