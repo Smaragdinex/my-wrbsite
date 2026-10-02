@@ -1080,7 +1080,7 @@ function hud() {
   // 目前名次:依總資產排(同分算同名次)。回合條旁邊顯示;手機沒有回合條,所以擲骰鈕底下也帶一份
   const myA = assets(), rank = 1 + S.players.filter((p) => assetsOf(p) > myA + 0.5).length;
   $('rankTxt').textContent = L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`); $('rankTxt').classList.toggle('top', rank === 1);
-  $('rollsLeft').textContent = L(`${maxRolls() - S.rolls} left · #${rank}`, `剩 ${maxRolls() - S.rolls} 次 · 第 ${rank} 名`);
+  $('rollsLeft').textContent = S.mode === 'bankrupt' ? L(`cost -$${fmt(livingCost(S.rolls + 1))} · #${rank}`, `生活費 -$${fmt(livingCost(S.rolls + 1))} · 第 ${rank} 名`) : L(`${maxRolls() - S.rolls} left · #${rank}`, `剩 ${maxRolls() - S.rolls} 次 · 第 ${rank} 名`);
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
   $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' ? L('FROZEN', '凍結中') : L('STEP', '前進一格')) : L('ROLL', '擲骰子');
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
@@ -1104,7 +1104,9 @@ function hud() {
     ? `<div>${e.t}</div><div class="why">${e.w}</div>` + (e.cash ? `<div class="mvrow"><span>${L('Everyone', '每位玩家')}</span><span style="color:#1c8a4a">+$${fmt(e.cash)}</span></div>` : '') + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
     : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`;
-  $('roundTxt').textContent = L(`Round ${S.rolls} / ${maxRolls()}`, `回合 ${S.rolls} / ${maxRolls()}`);
+  // 回合條:破產制多顯示「下一回合要付多少生活費」,致富制顯示目標,這樣現金為什麼變少、要拚到多少一眼就知道
+  $('roundTxt').textContent = L(`Round ${S.rolls} / ${maxRolls()}`, `回合 ${S.rolls} / ${maxRolls()}`) +
+    (S.mode === 'bankrupt' ? L(` · next living cost -$${fmt(livingCost(S.rolls + 1))}`, ` · 下回合生活費 -$${fmt(livingCost(S.rolls + 1))}`) : S.mode === 'target' ? L(` · goal $${fmt(TARGET)}`, ` · 目標 $${fmt(TARGET)}`) : '');
   $('roundBar').style.width = (S.rolls / maxRolls() * 100) + '%';
 }
 function staticText() {
