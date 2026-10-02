@@ -239,6 +239,8 @@ function applyFrustum() {
 }
 function resize() {
   const w = innerWidth, h = innerHeight, a = w / h;
+  // 文字大小跟著螢幕走:以短邊 640 為基準,手機維持 1 倍,iPad 約 1.2~1.3 倍,最大 1.4 倍
+  document.documentElement.style.setProperty('--fs', Math.max(1, Math.min(1.4, Math.min(w, h) / 640)).toFixed(3));
   renderer.setSize(w, h, false);
   // 棋盤在等軸測下大約寬 9、高 6;兩個方向都要塞得下,下方再留一點給按鈕
   view.aspect = a;
@@ -813,21 +815,21 @@ function buyPanel(k) {
       <div class="kv">
         <div>${L('Price', '股價')}<b>$${Math.round(price)}</b></div>
         <div>${L('Since open', '相對開盤')}<b style="color:${vs >= 0 ? '#1c8a4a' : '#c4472f'}">${vs >= 0 ? '+' : ''}${vs.toFixed(0)}%</b></div>
-        <div>${sh.n ? L('Short', '放空') : h.loan > 0 ? L('Margin', '融資持有') : L('You hold', '持有')}<b>${sh.n || h.n}${(sh.n || h.n) ? ` <span style="font-size:11px;color:${(sh.n ? spl : gain) >= 0 ? '#1c8a4a' : '#c4472f'}">${(sh.n ? spl : gain) >= 0 ? '+' : ''}${(sh.n ? spl : gain).toFixed(0)}%</span>` : ''}${h.loan > 0 ? `<span style="display:block;font-size:11px;color:${ratio < 1.5 ? '#c4472f' : '#8a786c'}">${L('ratio', '維持率')} ${Math.round(ratio * 100)}%</span>` : ''}</b></div>
+        <div>${sh.n ? L('Short', '放空') : h.loan > 0 ? L('Margin', '融資持有') : L('You hold', '持有')}<b>${sh.n || h.n}${(sh.n || h.n) ? ` <span style="font-size:calc(11px * var(--fs));color:${(sh.n ? spl : gain) >= 0 ? '#1c8a4a' : '#c4472f'}">${(sh.n ? spl : gain) >= 0 ? '+' : ''}${(sh.n ? spl : gain).toFixed(0)}%</span>` : ''}${h.loan > 0 ? `<span style="display:block;font-size:calc(11px * var(--fs));color:${ratio < 1.5 ? '#c4472f' : '#8a786c'}">${L('ratio', '維持率')} ${Math.round(ratio * 100)}%</span>` : ''}</b></div>
       </div>
       <div class="btns">
-        <button class="b-buy" data-a="buy1" ${S.cash < price * LOT || sh.n ? 'disabled' : ''}>${L('Buy 10', '買 10 股')}<br><span style="font-size:11px">$${fmt(price * LOT)} · ${pct(buyF(LOT))}</span></button>
-        <button class="b-buy" data-a="buy3" ${S.cash < mCost || sh.n ? 'disabled' : ''}>${L('Buy 30', '買 30 股')}<br><span style="font-size:11px">$${fmt(mCost)} · ${pct(buyF(LOT * 3))}</span></button>
-        <button class="b-margin" data-a="margin" ${S.cash < mDown || sh.n ? 'disabled' : ''}>${L('Margin 30', '融資買 30 股')}<br><span style="font-size:11px">${L('pay', '自備')} $${fmt(mDown)}</span></button>
+        <button class="b-buy" data-a="buy1" ${S.cash < price * LOT || sh.n ? 'disabled' : ''}>${L('Buy 10', '買 10 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(price * LOT)} · ${pct(buyF(LOT))}</span></button>
+        <button class="b-buy" data-a="buy3" ${S.cash < mCost || sh.n ? 'disabled' : ''}>${L('Buy 30', '買 30 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(mCost)} · ${pct(buyF(LOT * 3))}</span></button>
+        <button class="b-margin" data-a="margin" ${S.cash < mDown || sh.n ? 'disabled' : ''}>${L('Margin 30', '融資買 30 股')}<br><span style="font-size:calc(11px * var(--fs))">${L('pay', '自備')} $${fmt(mDown)}</span></button>
       </div>
       <div class="btns" style="margin-top:8px">
-        <button class="b-sell" data-a="sell" ${h.n ? '' : 'disabled'}>${L('Sell all', '全部賣出')}${h.n ? `<br><span style="font-size:11px">${pct(sellF(h.n))}</span>` : ''}</button>
+        <button class="b-sell" data-a="sell" ${h.n ? '' : 'disabled'}>${L('Sell all', '全部賣出')}${h.n ? `<br><span style="font-size:calc(11px * var(--fs))">${pct(sellF(h.n))}</span>` : ''}</button>
         ${sh.n
-          ? `<button class="b-ok" data-a="cover">${L('Cover short', '回補空單')}<br><span style="font-size:11px">${spl >= 0 ? '+' : '-'}$${fmt(Math.abs((sh.entry - price) * sh.n))}</span></button>`
-          : `<button class="b-short" data-a="short" ${S.cash < price * LOT || h.n ? 'disabled' : ''}>${L('Short 10', '放空 10 股')}<br><span style="font-size:11px">${L('margin', '保證金')} $${fmt(price * LOT)}</span></button>`}
+          ? `<button class="b-ok" data-a="cover">${L('Cover short', '回補空單')}<br><span style="font-size:calc(11px * var(--fs))">${spl >= 0 ? '+' : '-'}$${fmt(Math.abs((sh.entry - price) * sh.n))}</span></button>`
+          : `<button class="b-short" data-a="short" ${S.cash < price * LOT || h.n ? 'disabled' : ''}>${L('Short 10', '放空 10 股')}<br><span style="font-size:calc(11px * var(--fs))">${L('margin', '保證金')} $${fmt(price * LOT)}</span></button>`}
         <button class="b-skip" data-a="skip">${L('Skip', '跳過')}</button>
       </div>
-      <p style="font-size:11.5px">${L('Buying pushes the price up, so whoever buys next pays more; selling and shorting push it down.', '買進會推高股價,下一個買的人要付更貴;賣出和放空會壓低股價。')}<br>
+      <p style="font-size:calc(11.5px * var(--fs))">${L('Buying pushes the price up, so whoever buys next pays more; selling and shorting push it down.', '買進會推高股價,下一個買的人要付更貴;賣出和放空會壓低股價。')}<br>
       ${L('Margin: pay 40% and borrow 60%. If the ratio (stock value / loan) falls below 130%, everything is sold for you. Interest is 2% of the loan each lap.', '融資:自備 4 成、借 6 成。維持率(市值÷借款)跌破 130% 會被強迫平倉;每圈付借款 2% 的利息。')}<br>
       ${L('Short: sell borrowed shares, buy back later. You win if the price falls.', '放空:先借股票賣掉、之後買回來還,跌了你賺、漲了你賠。')}</p>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
@@ -1112,7 +1114,7 @@ function finish() {
     <p>${L(`${S.done} missions completed`, `完成 ${S.done} 個任務`)}</p>
     <p>${CHARS[S.foe].icon} ${CHARS[S.foe].name} <b>$${fmt(aiAssets())}</b> · ${a >= aiAssets() ? L(`you beat ${CHARS[S.foe].name}`, `你贏過${CHARS[S.foe].name}`) : L(`${CHARS[S.foe].name} beat you`, `${CHARS[S.foe].name}贏了`)}</p>
     <p>${style}</p>
-    <p style="font-size:12.5px">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
+    <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`;
   $('end').classList.remove('hide');
   $('again').onclick = start;
