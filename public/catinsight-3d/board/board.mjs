@@ -118,6 +118,9 @@ const EVENTS = [
     { bio: 1.30, health: 1.18, game: 1.15, staples: 1.08, tech: 1.06, gold: 1.06, bond: 1.04, disc: 0.70, trans: 0.78, oil: 0.80, reit: 0.88, fin: 0.90, mat: 0.92 }),
   EV(L('Financial crisis', '金融風暴'), L('Banks fail and credit freezes. Nearly everything falls together; only gold and bonds hold.', '銀行倒閉、信用緊縮,幾乎所有資產一起跌,只有黃金和債券撐住。'),
     { gold: 1.20, bond: 1.10, fin: 0.65, crypto: 0.60, reit: 0.75, disc: 0.75, tech: 0.78, chip: 0.78, green: 0.78, mat: 0.80, trans: 0.82, oil: 0.82, bio: 0.82, game: 0.85, yield: 0.90, def: 0.95, staples: 0.95, util: 0.94, health: 0.94 }),
+  // 政府普發現金:除了股價變動,每位玩家還直接拿到現金(cash)
+  Object.assign(EV(L('Government cash handout', '政府普發現金'), L('Everyone gets cash from the government. People spend it, so shops, restaurants and travel do well; the government borrows more, so bonds dip.', '政府發現金給每個人。大家拿到錢會去消費,零售、餐飲、旅遊受惠;政府要多借錢,債券小跌。'),
+    { disc: 1.12, staples: 1.06, game: 1.06, trans: 1.04, fin: 1.03, reit: 1.02, gold: 1.02, bond: 0.96 }), { cash: 1000 }),
 ];
 // 特殊牌:混在市場事件的三張牌裡。抽到不會動股價,而是把你送進棋盤中間的小路
 const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
@@ -136,6 +139,13 @@ const LANES = {
   jail: { exit: 23, cells: [[3, 7], [2, 7], [1, 7]] },
   ipo: { exit: 53, cells: [[12, 8], [13, 8], [14, 8]] },
 };
+// 事件生效:改股價;有些事件(普發現金)還會直接發錢給每一位玩家
+function applyEvent(e) {
+  KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
+  if (e.cash) { S.players.forEach((p) => { p.cash += e.cash; }); sfx('coin'); }
+  S.lastEvent = e; marginCheck();
+}
+const cashChip = (e) => (e.cash ? `<span class="mv up">${L(`Everyone +$${fmt(e.cash)}`, `每人 +$${fmt(e.cash)}`)}</span>` : '');
 const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
 // 玩法(選角畫面可以選):
 //   rounds   回合制:走滿 20 回合,總資產最高的人獲勝
@@ -1091,7 +1101,7 @@ function hud() {
       (A.bag.length && !mine ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : ''); }
   const e = S.lastEvent;
   $('evtBody').innerHTML = e
-    ? `<div>${e.t}</div><div class="why">${e.w}</div>` + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
+    ? `<div>${e.t}</div><div class="why">${e.w}</div>` + (e.cash ? `<div class="mvrow"><span>${L('Everyone', '每位玩家')}</span><span style="color:#1c8a4a">+$${fmt(e.cash)}</span></div>` : '') + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
     : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`;
   $('roundTxt').textContent = L(`Round ${S.rolls} / ${maxRolls()}`, `回合 ${S.rolls} / ${maxRolls()}`);
@@ -1209,7 +1219,7 @@ function drawEventCards(auto) {
       const top = KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 6);
       if (e.special) return `<div class="dhead ${e.special === 'ipo' ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` +
         (e.special === 'ipo' ? `<span class="mv up">${L('IPO lane', '進入 IPO 小路')}</span>` : `<span class="mv dn">${L('Detention lane', '送進拘留小路')}</span>`) + '</div>';
-      return `<div class="dhead ${e.m.etf >= 1 ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` +
+      return `<div class="dhead ${e.m.etf >= 1 ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` + cashChip(e) +
         top.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].code} ${d > 0 ? '+' : ''}${d}%</span>`; }).join('') + '</div>';
     };
     const ov = $('draw');
@@ -1223,7 +1233,7 @@ function drawEventCards(auto) {
       chosen = i; ov.classList.add('done'); cards[i].classList.add('flip', 'picked'); sfx('flip');
       const e = picks[i];
       wait(0.45).then(() => sfx(e.special ? (e.special === 'ipo' ? 'good' : 'bad') : e.m.etf >= 1 ? 'good' : 'bad'));
-      if (!e.special) { KEYS.forEach((k) => { S.price[k] *= e.m[k]; }); S.lastEvent = e; marginCheck(); }
+      if (!e.special) applyEvent(e);
       drawAll(); hud();
       wait(0.9).then(() => {
         cards.forEach((c, j) => { if (j !== i) c.classList.add('flip', 'lost'); }); $('dgo').classList.remove('hide');
@@ -1238,9 +1248,8 @@ function drawEventCards(auto) {
   });
 }
 async function playEvent(e) {
-  KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
-  S.lastEvent = e; marginCheck(); drawAll(); hud(); sfx(e.m.etf >= 1 ? 'good' : 'bad');
-  const moves = KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
+  applyEvent(e); drawAll(); hud(); sfx(e.m.etf >= 1 ? 'good' : 'bad');
+  const moves = cashChip(e) + KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
   await cardPanel(e.t, e.w, moves);
 }
 // 商店:每樣只有一個,你和對手共用同一批貨(兩個商店格也是同一家),誰先買走就沒了。
