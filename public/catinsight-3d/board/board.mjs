@@ -371,8 +371,7 @@ function resize() {
   view.aspect = a;
   view.near = Math.max(4.6, 5.6 / a);
   view.far = Math.max(8.6, (N * 1.14 + 1) * 0.74 / a);
-  view.stageWide = a >= 1.15;                       // 寬螢幕:八個角色一排全部放得下;窄螢幕:只看三個左右,鏡頭跟著選到的走
-  view.stageHalf = view.stageWide ? Math.max(2.4, 5.8 / a) : 2.5 / a;
+  view.stageHalf = Math.max(3.1, 3.5 / a);          // 選角舞台:整個轉盤(直徑約 6 格)要放得下
   if (!view.half0) { view.half0 = true; view.half = view.near; }
   applyFrustum();
 }
@@ -690,22 +689,24 @@ function setChar(target, key) {
   const h = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), m); h.position.y = 0.68; ph.add(h);
   loadPiece(c.url, c.h, ph, target);
 }
-// 選角舞台:八個角色的 3D 模型在起點外側的空地排成一排(底座都一樣),鏡頭拉過去。
-// 寬螢幕一次看到全部;直式的窄螢幕放不下,鏡頭改成跟著選到的角色左右移動(一次看到三個左右)。
-// 點模型或按左右鍵換人,被選到的會跳一下、慢慢自轉
+// 選角舞台:八個角色的 3D 模型在起點外側的空地圍成一圈,站在一個大轉盤上(底座都一樣),鏡頭拉過去。
+// 點模型或按左右鍵換人:整個轉盤會轉,把選到的角色轉到最前面(最靠近鏡頭);被選到的會跳一下、慢慢自轉
 const STAGE = new THREE.Vector3(10.8, 0, 10.8), STAGE_KEYS = Object.keys(CHARS);
 const stage = new THREE.Group(); stage.position.copy(STAGE); stage.visible = false; scene.add(stage);
+const STAGE_R = 2.05, FRONT = Math.PI / 4;          // 轉盤半徑;FRONT:從舞台中心看向鏡頭的方向(世界座標的 +x+z)
+{ const disc = new THREE.Mesh(new THREE.CylinderGeometry(STAGE_R + 0.95, STAGE_R + 1.05, 0.1, 64), mat(0xf3e2c4)); disc.position.y = 0.05; disc.receiveShadow = true; stage.add(disc);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(STAGE_R - 0.9, STAGE_R - 0.9, 0.02, 48), mat(0xffd9a8)); hub.position.y = 0.11; stage.add(hub); }
 const slots = STAGE_KEYS.map((key, i) => {
-  const R = Math.SQRT1_2, top = 0.14;
-  const g = new THREE.Group(); const o = (i - (STAGE_KEYS.length - 1) / 2) * 1.4;
-  g.position.set(o * R, 0, -o * R);                                  // 沿著畫面的水平方向排
+  const top = 0.14, ang = i / STAGE_KEYS.length * Math.PI * 2;
+  const g = new THREE.Group();
+  g.position.set(Math.sin(ang) * STAGE_R, 0.1, Math.cos(ang) * STAGE_R);   // 圍成一圈,站在轉盤(高 0.1)上
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.68, top, 40), mat(0xfff8ec)); base.position.y = top / 2; base.receiveShadow = true; base.castShadow = true; g.add(base);
   const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.76, 0.06, 40), mat(0xff7a59)); ring.position.y = 0.03; g.add(ring);
   const holder = new THREE.Group(); holder.position.y = top; holder.rotation.y = Math.PI / 4; g.add(holder);
   stage.add(g);
-  return { key, g, holder, ring, hop: 0, top };
+  return { key, g, holder, ring, hop: 0, top, ang, spin: 0 };
 });
-let stageSel = 0, stageOn = false; const ZERO3 = new THREE.Vector3();
+let stageSel = 0, stageOn = false;
 function stageSelect(i) { stageSel = (i + slots.length) % slots.length; slots[stageSel].hop = 1; paintStage(); }
 function paintStage() {
   const c = CHARS[slots[stageSel].key];
@@ -718,11 +719,14 @@ function stageStep(dt) {
     sl.hop = Math.max(0, sl.hop - dt * 2.2);
     const sT = on ? 1.18 : 0.92; sl.holder.scale.x += (sT - sl.holder.scale.x) * Math.min(1, dt * 10); sl.holder.scale.z = sl.holder.scale.y = sl.holder.scale.x;
     sl.holder.position.y = sl.top + Math.sin((1 - sl.hop) * Math.PI) * (sl.hop > 0 ? 0.35 : 0);
-    // 被選到的慢慢轉一圈給你看;沒選到的轉回正面
-    if (on) sl.holder.rotation.y += dt * 1.1;
-    else { let d = Math.PI / 4 - sl.holder.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); sl.holder.rotation.y += d * Math.min(1, dt * 6); }
+    // 被選到的慢慢轉一圈給你看;沒選到的轉回正面。轉盤怎麼轉,角色都維持面向鏡頭(所以要扣掉轉盤的角度)
+    if (on) sl.spin += dt * 1.1;
+    else { const d = Math.atan2(Math.sin(-sl.spin), Math.cos(-sl.spin)); sl.spin += d * Math.min(1, dt * 6); }
+    sl.holder.rotation.y = FRONT - stage.rotation.y + sl.spin;
     sl.ring.visible = on;
   });
+  // 轉盤:把選到的角色轉到最靠近鏡頭的位置(走最短的那一邊)
+  { const d = FRONT - slots[stageSel].ang - stage.rotation.y; stage.rotation.y += Math.atan2(Math.sin(d), Math.cos(d)) * Math.min(1, dt * 5); }
 }
 const pickRay = new THREE.Raycaster(), pickNdc = new THREE.Vector2();
 renderer.domElement.addEventListener('pointerup', (e) => {
@@ -846,8 +850,7 @@ function step(dt) {
   const fp = focus.piece.position;
   // 目標點往棋盤中心偏 1.6 格:棋子在畫面偏下方,前方要走的格子和骰子落點都看得到
   const fl = Math.hypot(fp.x, fp.z) || 1, ox = -fp.x / fl * 1.6, oz = -fp.z / fl * 1.6;
-  const sg = stageOn && !view.stageWide ? slots[stageSel].g.position : ZERO3;
-  const tx = stageOn ? STAGE.x + sg.x : (view.overview ? 0 : fp.x + ox) + pan.x, tz = stageOn ? STAGE.z + sg.z : (view.overview ? 0 : fp.z + oz) + pan.z, kf = Math.min(1, dt * 3.2);
+  const tx = stageOn ? STAGE.x : (view.overview ? 0 : fp.x + ox) + pan.x, tz = stageOn ? STAGE.z : (view.overview ? 0 : fp.z + oz) + pan.z, kf = Math.min(1, dt * 3.2);
   if (stageOn) stageStep(dt);
   // 放手後,如果拖到範圍外就彈回來
   if (!panDrag && !stageOn) { const kb = Math.min(1, dt * 7);
