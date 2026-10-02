@@ -831,14 +831,17 @@ function step(dt) {
 }
 /* ───────────── 拖曳看地圖 ─────────────
    按住畫面拖曳 = 平移鏡頭(pan 是加在「跟著棋子」的目標點上的偏移)。下一次擲骰、換對手走、或按地圖鈕時歸零,鏡頭自己滑回棋子 */
-const pan = new THREE.Vector3(), PAN_LIM = N / 2 * STEP + 6;   // 鏡頭中心最遠可以到棋盤外 6 格
+const pan = new THREE.Vector3(), PAN_LIM = N / 2 * STEP + 10;   // 鏡頭中心最遠可以到棋盤外 10 格
 let panDrag = false;
 {
   const cv = $('gl'), R = Math.SQRT1_2, TILT = CAM_OFF.y / CAM_OFF.length();   // TILT:地面往前 1 格,在畫面上只移動這個比例(鏡頭是斜著看的)
   let drag = null;
   cv.style.touchAction = 'none'; cv.style.cursor = 'grab';
-  cv.addEventListener('pointerdown', (e) => { if (stageOn || drag) return; panDrag = true; drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
-  cv.addEventListener('pointermove', (e) => {
+  // 聽整個視窗而不是只聽 canvas:按鈕列、頂端資訊列這些「容器」的空白處蓋在 canvas 上面,從那裡開始拖也要能拖。
+  // 只有真的按在按鈕 / 面板 / 資訊框上才不算拖曳
+  const UI = 'button, a, .bar, .ava, .m, .box, .bubble, .panel, .draw, .end, .pickui, .round, .steps, .dsel, .toast';
+  window.addEventListener('pointerdown', (e) => { if (stageOn || drag || e.target.closest?.(UI)) return; panDrag = true; drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; cv.style.cursor = 'grabbing'; });
+  window.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
     const upp = 2 * view.half / innerHeight, dx = (e.clientX - drag.x) * upp, dy = (e.clientY - drag.y) * upp / TILT;
     drag.x = e.clientX; drag.y = e.clientY;
@@ -850,7 +853,7 @@ let panDrag = false;
     pan.x += mx; pan.z += mz; camT.x += mx; camT.z += mz;                        // camT 也直接動,拖起來才不會有延遲
   });
   const end = (e) => { if (drag && e.pointerId === drag.id) { drag = null; panDrag = false; cv.style.cursor = 'grab'; } };
-  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
 }
 let last = performance.now();
 function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; step(dt); requestAnimationFrame(loop); }

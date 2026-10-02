@@ -10,6 +10,8 @@
   html,body{height:100%;overflow:hidden;background:#c9e8b8;color:var(--ink);
     font-family:"Avenir Next","Nunito","Helvetica Neue",-apple-system,"PingFang TC",sans-serif}
   canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+  html,body{touch-action:none;overscroll-behavior:none}   /* 整個畫面都能拖地圖,不要被瀏覽器當成捲動 */
+  .panel,.end,.box .body,#assetRows,#foeRows{touch-action:pan-y}
   .hud{position:fixed;left:12px;right:12px;top:12px;display:flex;align-items:center;gap:10px;pointer-events:none;z-index:5}
   .ava{width:var(--ava);height:var(--ava);border-radius:50%;border:4px solid #fff;background:#ffd9e8 center/cover;flex:none;
     box-shadow:0 3px 0 rgba(0,0,0,.12)}
@@ -230,6 +232,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=45"></script>
+<script type="module" src="./board.mjs?v=46"></script>
 </body>
 </html>
