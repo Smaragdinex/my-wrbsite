@@ -136,7 +136,7 @@ const LANES = {
   jail: { exit: 23, cells: [[3, 7], [2, 7], [1, 7]] },
   ipo: { exit: 53, cells: [[12, 8], [13, 8], [14, 8]] },
 };
-const LOT = 10, START_CASH = 10000, SALARY = 500, FEE = 200, MAX_ROLLS = 20;
+const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
 const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17, 20, 21];    // 商店會賣的事件卡(壞消息類的不賣)
 const REMOTE_PRICE = 300, CARD_PRICE = 500, ATK_PRICE = 600, ATK_DROP = 0.82;
