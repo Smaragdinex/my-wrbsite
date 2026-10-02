@@ -50,12 +50,13 @@ const TILES = (() => {
   [4, 11, 19, 26, 34, 41, 49, 56].forEach((i) => { t[i] = 'chance'; });
   t[8] = 'fee'; t[38] = 'ipo';      // 38:新股申購入口,走到就進 IPO 小路
   [22, 52].forEach((i) => { t[i] = 'gift'; });
-  // 剩下 44 格:20 種資產各兩格,最常用的四種多一格
-  const seq = [...KEYS, 'etf', 'tech', ...KEYS, 'chip', 'yield'];
+  // 剩下 44 格:20 種資產各兩格,再平均插入 4 個銀行格(每邊大約一個)
+  const seq = [...KEYS, ...KEYS];
+  [6, 17, 28, 39].forEach((i) => seq.splice(i, 0, 'bank'));      // 落在第 9、24、39、54 格(避開兩條小路的出口 23、53)
   let j = 0; for (let i = 0; i < t.length; i++) if (!t[i]) t[i] = seq[j++];
   return t;
 })();
-const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b, divi: 0x8f7cf0, ipo: 0x2fbf9f };
+const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b, divi: 0x8f7cf0, ipo: 0x2fbf9f, bank: 0x4a63b0 };
 // 事件卡:只寫「有變動的資產」,沒寫的就是不動。
 // 大盤 ETF 不用自己寫 —— 它等於所有「股票類股」這次漲跌的平均(黃金、債券、加密貨幣不算)
 const NON_EQUITY = new Set(['gold', 'bond', 'crypto', 'etf']);
@@ -127,6 +128,8 @@ const SPECIAL = {
     w: L('New shares are usually sold below the market price to the people who win the draw. You enter the IPO lane.', '新上市的股票通常用比市價低的「承銷價」賣給中籤的人。你進入 IPO 小路。') },
 };
 const SPECIAL_RATE = 0.8;          // 每次抽牌,三張裡有一張是特殊牌的機率
+// 銀行:走到銀行格可以借現金(最多欠 BANK_MAX),每次經過起點付欠款 5% 的利息;欠的錢會從總資產扣掉
+const BANK_MAX = 5000, BANK_RATE = 0.05;
 const BAIL = 800, IPO_OFF = 0.8;   // 保釋金;IPO 承銷價 = 市價 x 0.8
 // 中間的兩條小路(各 3 格,一回合走一格,走完從 exit 那格回到外圈)。座標是 16x16 格網的 [x, z]
 const LANES = {
@@ -241,7 +244,7 @@ const shortValue = (k, who = S) => { const h = who.short[k]; return h.n ? Math.m
 // 融資:自備 4 成、借 6 成。維持率 = 股票市值 / 借款,跌破 130% 就被強迫平倉(斷頭);每經過起點付借款 2% 的利息
 const MARGIN_LOAN = 0.6, MAINT = 1.3, MARGIN_FEE = 0.02;
 const ratioOf = (h, k) => (h.loan > 0 ? h.n * S.price[k] / h.loan : Infinity);
-const assets = () => S.cash + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] - S.hold[k].loan + shortValue(k), 0);
+const assets = () => S.cash - S.debt + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] - S.hold[k].loan + shortValue(k), 0);
 // 買賣會推動價格(量大推得多):買進推高、賣出和放空壓低。所以賣空對手持有的資產,等於直接打擊對手
 const impact = (k, f) => { S.price[k] = Math.max(8, S.price[k] * f); marginCheck(); };
 // 強迫平倉:任何一次價格變動後都檢查。融資部位的維持率跌破 130% → 全部賣掉還款,剩多少拿回多少;
@@ -273,7 +276,7 @@ async function flushNotices() {
 // 所以先買的人買得便宜,下一個人要用更貴的價格買
 const buyF = (n) => 1 + 0.004 * n, sellF = (n) => Math.max(0.85, 1 - 0.003 * n), SHORT_F = 0.95;
 const pct = (f) => `${f >= 1 ? '+' : ''}${Math.round((f - 1) * 100)}%`;
-const aiAssets = () => S.ai.cash + KEYS.reduce((a, k) => a + S.ai.hold[k].n * S.price[k] - S.ai.hold[k].loan + shortValue(k, S.ai), 0);
+const aiAssets = () => S.ai.cash - S.ai.debt + KEYS.reduce((a, k) => a + S.ai.hold[k].n * S.price[k] - S.ai.hold[k].loan + shortValue(k, S.ai), 0);
 const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 // 任務:同時有 3 個。完成一個領 $500 獎金並換一個新的,一路玩到回合用完;結算依完成數給星星。
 // 每個任務在「抽出來的當下」才決定目標(例如資產成長的門檻跟著你現在的資產走),所以可以重複抽到
@@ -305,14 +308,14 @@ function drawMission() {
 }
 function newState() {
   S = {
-    pos: 0, lane: null, cash: START_CASH, rolls: 0, bag: ['remote'], busy: false, over: false,
+    pos: 0, lane: null, cash: START_CASH, debt: 0, rolls: 0, bag: ['remote'], busy: false, over: false,
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])),
     short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
     shop: { round: -1, stock: [], sold: [] }, notices: [],
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
     missions: [], done: 0, me: 'cat', foe: 'bear', diceN: 2,
-    ai: { pos: 0, lane: null, cash: START_CASH, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) },
+    ai: { pos: 0, lane: null, cash: START_CASH, debt: 0, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) },
   };
   for (let i = 0; i < 3; i++) S.missions.push(drawMission());
 }
@@ -572,7 +575,7 @@ function drawLabel(i) {
     c.fillStyle = '#b0780a'; c.font = F(150); c.fillText('?', 128, 112);
     c.font = F(34); c.fillText(L('EVENT', '市場事件'), 128, 208);
   } else {
-    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], shop: [L('SHOP', '商店'), L('buy items', '買道具')], gift: [L('GIFT', '禮物'), L('free item', '送道具')], ipo: ['IPO', L('enter lane', '新股申購')], divi: [L('DIVIDEND', '股息結算'), L('paid here', '在此領股利')] }[t.type];
+    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], shop: [L('SHOP', '商店'), L('buy items', '買道具')], gift: [L('GIFT', '禮物'), L('free item', '送道具')], bank: [L('BANK', '銀行'), L('loans', '借錢 還錢')], ipo: ['IPO', L('enter lane', '新股申購')], divi: [L('DIVIDEND', '股息結算'), L('paid here', '在此領股利')] }[t.type];
     c.fillStyle = '#fff'; c.font = F(a.length > 5 ? 40 : (ZH && a !== 'IPO' ? (a.length > 3 ? 50 : 60) : 72)); c.fillText(a, 128, 104);
     c.font = F(ZH ? 34 : 40); c.fillText(b, 128, 168);
   }
@@ -927,6 +930,7 @@ function advise() {
 }
 // 融資部位的小標:維持率,低於 150% 用紅字警告
 const marginTag = (h, k) => (h.loan > 0 ? ` <b style="color:${ratioOf(h, k) < 1.5 ? '#c4472f' : '#8a5cf5'}">${L('M', '融')}${Math.round(ratioOf(h, k) * 100)}%</b>` : '');
+const debtRow = (d) => (d > 0 ? `<div class="row"><i style="background:#4a63b0"></i><span>${L('Bank loan', '銀行貸款')}</span><span></span><span style="color:#c4472f">-${fmt(d)}</span></div>` : '');
 function hud() {
   $('cash').textContent = fmt(S.cash);
   $('assets').textContent = fmt(assets());
@@ -942,7 +946,7 @@ function hud() {
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
   $('tip').textContent = advise();
   $('assetRows').innerHTML =
-    `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(S.cash)}</span></div>` +
+    `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(S.cash)}</span></div>` + debtRow(S.debt) +
     (KEYS.some((k) => S.hold[k].n > 0 || S.short[k].n > 0)
       ? KEYS.filter((k) => S.hold[k].n > 0).map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${S.hold[k].n} ${L('sh', '股')}${marginTag(S.hold[k], k)}</span><span>${fmt(S.hold[k].n * S.price[k])}</span></div>`).join('') +
         KEYS.filter((k) => S.short[k].n > 0).map((k) => { const pl = (S.short[k].entry - S.price[k]) * S.short[k].n;
@@ -952,7 +956,7 @@ function hud() {
   { const A = S.ai, held = KEYS.filter((k) => A.hold[k].n > 0).sort((x, y) => A.hold[y].n * S.price[y] - A.hold[x].n * S.price[x]);
     $('foeName').textContent = L(`${CHARS[S.foe].name}'s assets`, `${CHARS[S.foe].name}的資產`);
     $('foeRows').innerHTML =
-      `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` +
+      `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` + debtRow(A.debt) +
       (held.length ? held.map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${A.hold[k].n} ${L('sh', '股')}${marginTag(A.hold[k], k)}</span><span>${fmt(A.hold[k].n * S.price[k])}</span></div>`).join('')
         : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
       KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n;
@@ -1055,8 +1059,9 @@ function cardPanel(title, text, moves = '') {
 function payday(salary = SALARY) {
   const div = KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * SECTORS[k].div, 0);
   const interest = salary ? KEYS.reduce((a, k) => a + S.hold[k].loan * MARGIN_FEE, 0) : 0;   // 融資利息:每經過起點付一次
-  S.lastDividend = div; S.cash += salary + div - interest; sfx('coin');
-  toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)} · ` : '') + `${L('dividends', '股利')} +$${fmt(div)}` + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : ''));
+  const bank = salary ? S.debt * BANK_RATE : 0;                                                // 銀行貸款利息:也是每經過起點付一次
+  S.lastDividend = div; S.cash += salary + div - interest - bank; sfx('coin');
+  toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)} · ` : '') + `${L('dividends', '股利')} +$${fmt(div)}` + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : '') + (bank ? ` · ${L('loan interest', '貸款利息')} -$${fmt(bank)}` : ''));
   hud(); checkMissions();
 }
 function checkMissions() {
@@ -1271,6 +1276,40 @@ async function aiIpo() {
   else toast(L(`${who} skips the IPO`, `${who}沒有申購`));
   drawAll(); hud(); await wait(1.1);
 }
+// 銀行:借現金 / 還錢。面板開著可以連續操作,按離開才走
+function bankPanel() {
+  return new Promise((res) => {
+    const draw = () => {
+      const room = BANK_MAX - S.debt, fee = S.debt * BANK_RATE;
+      const p = panel(`<h3><span class="tag" style="background:#4a63b0">${L('BANK', '銀行')}</span>${L('Cat Street Bank', '貓街銀行')}</h3>
+        <p>${L(`Borrow cash now and pay it back later. Each time you pass GO you pay ${Math.round(BANK_RATE * 100)}% interest on what you owe, and the loan counts against your total assets. Borrowing only pays off if what you buy earns more than the interest.`,
+              `先借現金、之後再還。每次經過起點要付欠款 ${Math.round(BANK_RATE * 100)}% 的利息,欠的錢也會從總資產扣掉。借來的錢賺得比利息多,才划算。`)}</p>
+        <div class="kv">
+          <div>${L('You owe', '目前欠款')}<b style="color:${S.debt ? '#c4472f' : 'inherit'}">$${fmt(S.debt)}</b></div>
+          <div>${L('Interest per lap', '每圈利息')}<b>$${fmt(fee)}</b></div>
+          <div>${L('Can still borrow', '還能借')}<b>$${fmt(room)}</b></div>
+        </div>
+        <div class="btns">
+          <button class="b-buy" data-a="b1" ${room < 1000 ? 'disabled' : ''}>${L('Borrow', '借')} $1,000<br><span style="font-size:calc(11px * var(--fs))">${L('interest', '利息')} $${fmt(1000 * BANK_RATE)}${L(' / lap', ' / 圈')}</span></button>
+          <button class="b-buy" data-a="b3" ${room < 3000 ? 'disabled' : ''}>${L('Borrow', '借')} $3,000<br><span style="font-size:calc(11px * var(--fs))">${L('interest', '利息')} $${fmt(3000 * BANK_RATE)}${L(' / lap', ' / 圈')}</span></button>
+        </div>
+        <div class="btns" style="margin-top:8px">
+          <button class="b-ok" data-a="r1" ${S.debt >= 1000 && S.cash >= 1000 ? '' : 'disabled'}>${L('Repay', '還')} $1,000</button>
+          <button class="b-ok" data-a="ra" ${S.debt > 0 && S.cash >= S.debt ? '' : 'disabled'}>${L('Repay all', '全部還清')}</button>
+          <button class="b-skip" data-a="x">${L('Leave', '離開')}</button>
+        </div>`);
+      p.querySelectorAll('button').forEach((b) => b.onclick = () => {
+        const a = b.dataset.a;
+        if (a === 'x') { closePanel(); return res(); }
+        const amt = a === 'b1' ? 1000 : a === 'b3' ? 3000 : a === 'r1' ? -1000 : -S.debt;
+        S.cash += amt; S.debt += amt; sfx(amt > 0 ? 'coin' : 'sell');
+        toast(amt > 0 ? L(`Borrowed $${fmt(amt)}`, `借了 $${fmt(amt)}`) : L(`Repaid $${fmt(-amt)}`, `還了 $${fmt(-amt)}`));
+        hud(); draw();
+      });
+    };
+    draw();
+  });
+}
 const r6 = () => 1 + Math.floor(Math.random() * 6);
 // 對手決定擲 1 顆還是 2 顆:把「每個可能落點對牠有多好」算成分數,比較兩種擲法的期望值。
 // 一顆骰子走 1~6 格(機率相同),兩顆走 2~12 格(7 最常出現)
@@ -1285,6 +1324,7 @@ function aiDiceChoice() {
       else v += p < sec.open * 0.95 ? 1.5 : 0.5; }                                   // 便宜的比較想買
     else if (t === 'shop') v += A.cash >= 2500 ? 2 : 0.3;
     else if (t === 'ipo') v += 2.5;
+    else if (t === 'bank') v += A.cash < 1500 || (A.debt && A.cash > 6000) ? 1.5 : 0;
     else if (t === 'fee') v -= 2;
     for (let j = 1; j <= i; j++) { const tt = TILES[(A.pos + j) % TILES.length]; if (tt === 'start') v += 2; else if (tt === 'divi') v += 0.8; }   // 經過發薪 / 股息格
     return v;
@@ -1318,7 +1358,7 @@ async function aiTurn() {
   for (let i = 0; i < n; i++) {
     A.pos = (A.pos + 1) % TILES.length;
     await hopTo(A.pos, BEAR);
-    if (A.pos === 0 || TILES[A.pos] === 'divi') { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += (A.pos === 0 ? SALARY : 0) + div - (A.pos === 0 ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) : 0); hud(); }
+    if (A.pos === 0 || TILES[A.pos] === 'divi') { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += (A.pos === 0 ? SALARY : 0) + div - (A.pos === 0 ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) + A.debt * BANK_RATE : 0); hud(); }
   }
   }
   await wait(0.2);
@@ -1360,6 +1400,13 @@ async function aiTurn() {
     else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
     hud(); await wait(1.2);
   } else if (type === 'chance') { await wait(0.3); const c = await drawEventCards(true); if (c.special) await enterLane(false, c.special); }
+  else if (type === 'bank') {
+    // 銀行:現金太少就借 $2,000 來周轉;手頭寬裕又有欠款就先還清,省利息
+    if (A.debt > 0 && A.cash >= A.debt + 4000) { toast(L(`${who} repaid its $${fmt(A.debt)} loan`, `${who}把 $${fmt(A.debt)} 貸款還清了`)); A.cash -= A.debt; A.debt = 0; }
+    else if (A.cash < 1500 && A.debt + 2000 <= BANK_MAX) { A.cash += 2000; A.debt += 2000; toast(L(`${who} borrowed $2,000 from the bank`, `${who}向銀行借了 $2,000`)); }
+    else toast(L(`${who} walks past the bank`, `${who}路過銀行`));
+    hud(); await wait(1.1);
+  }
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
   hud(); focus = ME; pan.set(0, 0, 0); await wait(0.5);
@@ -1401,6 +1448,7 @@ async function turn(forced) {
     if (c.special) await enterLane(true, c.special);
   } else if (type === 'fee') { S.cash -= FEE; hud(); sfx('short'); await cardPanel(L('Trading fees', '交易手續費'), L(`Every trade has a cost. You paid $${FEE}.`, `每筆交易都有成本,這次付了 $${FEE}。`)); }
   else if (type === 'shop') await shopPanel();
+  else if (type === 'bank') await bankPanel();
   else if (type === 'gift') { const id = randomItem(), it = itemInfo(id); S.bag.push(id); hud(); sfx('item');
     await cardPanel(L('A gift', '收到禮物'), `${it.icon} ${it.name}<br>${it.desc}<br>${L('It is in your backpack.', '已放進背包。')}`); }
   else if (type === 'divi') await cardPanel(L('Dividend day', '股息結算'), L(`You collected $${fmt(S.lastDividend)} in dividends. Assets that pay nothing, like gold, biotech and crypto, only make money if the price rises.`, `領到股利 $${fmt(S.lastDividend)}。黃金、生技、加密貨幣不配息,只能靠價格上漲賺錢。`));
