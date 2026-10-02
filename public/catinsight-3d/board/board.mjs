@@ -168,21 +168,51 @@ const AU = (() => {
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f); f.connect(g); g.connect(out); src.start(t, Math.random() * 0.4, dur + 0.02);
   }
-  // 背景音樂:C–Am–F–G 的 8 小節循環(原創旋律),每格是一個八分音符。用「提前排程」的方式一小段一小段排進去
-  const E8 = 60 / 108 / 2;
-  const CH = [[48, 52, 55], [45, 48, 52], [41, 45, 48], [43, 47, 50]];
-  const MEL = [72, 0, 76, 0, 79, 0, 76, 0, 81, 0, 79, 0, 76, 0, 72, 0, 77, 0, 81, 0, 84, 0, 81, 0, 79, 0, 74, 0, 71, 0, 74, 0,
-    72, 76, 79, 0, 84, 0, 79, 0, 81, 0, 84, 0, 81, 79, 76, 0, 77, 0, 76, 0, 74, 0, 72, 0, 74, 0, 71, 0, 72, 0, 0, 0];
+  // 背景音樂:可愛咖啡廳風(輕爵士和弦 + 搖擺節奏 + 音樂盒主旋律),16 小節循環,旋律是自己寫的。
+  // 每小節 8 個八分音符;奇數拍往後拖一點(swing)才有慵懶的感覺。用「提前排程」一小段一小段排進去
+  const Q = 60 / 94, SW = 0.61;
+  // 每小節:[低音根音, 電鋼琴和弦的三個音]
+  const C7 = [48, [64, 67, 71]], Am = [45, [60, 64, 67]], Dm = [50, [60, 65, 69]], G7 = [43, [59, 62, 65]], Em = [52, [62, 67, 71]], F7 = [53, [60, 64, 69]];
+  const BARS = [C7, Am, Dm, G7, Em, Am, Dm, G7, F7, G7, Em, Am, Dm, G7, C7, C7];
+  const MEL = [
+    79, 0, 76, 0, 72, 0, 74, 76, 0, 0, 72, 0, 69, 0, 0, 0, 77, 0, 74, 0, 69, 0, 72, 74, 0, 0, 71, 0, 74, 0, 0, 0,
+    79, 0, 83, 0, 79, 0, 76, 0, 81, 0, 0, 76, 0, 0, 72, 0, 74, 0, 77, 0, 81, 0, 77, 0, 79, 0, 0, 0, 0, 0, 0, 0,
+    84, 0, 81, 0, 77, 0, 81, 0, 83, 0, 79, 0, 74, 0, 0, 0, 79, 0, 76, 0, 79, 83, 0, 0, 81, 0, 0, 0, 76, 0, 72, 0,
+    74, 77, 81, 0, 0, 0, 77, 0, 79, 0, 77, 0, 74, 0, 71, 0, 72, 0, 0, 0, 76, 0, 79, 0, 84, 0, 0, 0, 0, 0, 0, 0];
+  let epBus, bassBus, echo;
+  // 電鋼琴:基音 + 高八度的泛音,敲下去後慢慢變小
+  function ep(m, t, dur, vol) {
+    for (const [mul, v] of [[1, vol], [2, vol * 0.22]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = hz(m) * mul;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.015); g.gain.exponentialRampToValueAtTime(v * 0.35, t + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(epBus); o.start(t); o.stop(t + dur + 0.03);
+    }
+  }
+  // 音樂盒:基音拖長尾巴 + 很短的高泛音當「叮」的那一下,再送進回音
+  function bell(m, t, vol) {
+    for (const [mul, v, d] of [[1, vol, 0.9], [4, vol * 0.25, 0.12], [2, vol * 0.15, 0.4]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = hz(m) * mul;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g); g.connect(mus); g.connect(echo); o.start(t); o.stop(t + d + 0.03);
+    }
+  }
+  function kick(t, vol) {
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.11);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16); o.connect(g); g.connect(mus); o.start(t); o.stop(t + 0.2);
+  }
   function sched() {
     if (!ctx || !on || ctx.state !== 'running') return;
-    if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.06;
+    if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.06;      // nextT:這一拍(四分音符)的起點
     while (nextT < ctx.currentTime + 0.4) {
-      const i = step % 64, e = i & 7, c = CH[(i >> 3) % 4];
-      if (e === 0) tone(c[0], nextT, E8 * 2.6, 'sine', 0.2, null, mus); else if (e === 4) tone(c[2] - 12, nextT, E8 * 1.8, 'sine', 0.15, null, mus);
-      if (e & 1) tone(c[(e >> 1) % 3] + 24, nextT, E8 * 0.9, 'triangle', 0.045, null, mus);
-      if (MEL[i]) tone(MEL[i], nextT, E8 * 1.7, 'triangle', 0.1, null, mus);
-      if (e % 4 === 2) noise(nextT, 0.04, 0.035, 7000, mus);
-      nextT += E8; step++;
+      const i = step % 128, e = i & 7, [root, chord] = BARS[i >> 3], t = nextT + (e & 1 ? Q * SW : 0), E = Q / 2;
+      if (e === 0) chord.forEach((m) => ep(m, t, Q * 2.6, 0.05)); else if (e === 3 || e === 6) chord.forEach((m) => ep(m, t, Q * 0.7, 0.032));
+      if (e === 0 || e === 4) tone(root, t, E * 1.9, 'triangle', 0.3, null, bassBus); else if (e === 3 || e === 7) tone(root + 7, t, E * 0.9, 'triangle', 0.2, null, bassBus);
+      if (MEL[i]) bell(MEL[i], t, 0.085);
+      if (e === 0 || e === 5) kick(t, e ? 0.16 : 0.26);
+      if (e === 2 || e === 6) noise(t, 0.05, 0.05, 1900, mus);          // 輕輕的邊擊
+      noise(t, 0.025, e & 1 ? 0.03 : 0.016, 8500, mus);                 // 沙沙的 hi-hat
+      if (e & 1) nextT += Q;
+      step++;
     }
   }
   function unlock() {
@@ -192,6 +222,10 @@ const AU = (() => {
     ctx = new AC(); ctx.resume();
     master = ctx.createGain(); master.gain.value = on ? 1.4 : 0; master.connect(ctx.destination);
     mus = ctx.createGain(); mus.gain.value = 0.55; mus.connect(master);
+    epBus = ctx.createBiquadFilter(); epBus.type = 'lowpass'; epBus.frequency.value = 1700; epBus.connect(mus);       // 把電鋼琴磨圓一點
+    bassBus = ctx.createBiquadFilter(); bassBus.type = 'lowpass'; bassBus.frequency.value = 420; bassBus.connect(mus);
+    { const d = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(); d.delayTime.value = Q * 0.75; fb.gain.value = 0.3; wet.gain.value = 0.28;
+      echo = d; d.connect(fb); fb.connect(d); d.connect(wet); wet.connect(mus); }
     nbuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
     { const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
     { const b = ctx.createBufferSource(); b.buffer = ctx.createBuffer(1, 1, ctx.sampleRate); b.connect(ctx.destination); b.start(0); }   // 在點擊當下播一個無聲的取樣,Safari 才會真的開始出聲
