@@ -818,6 +818,10 @@ function step(dt) {
   const fl = Math.hypot(fp.x, fp.z) || 1, ox = -fp.x / fl * 1.6, oz = -fp.z / fl * 1.6;
   const tx = stageOn ? STAGE.x : (view.overview ? 0 : fp.x + ox) + pan.x, tz = stageOn ? STAGE.z : (view.overview ? 0 : fp.z + oz) + pan.z, kf = Math.min(1, dt * 3.2);
   if (stageOn) stageStep(dt);
+  // 放手後,如果拖到範圍外就彈回來
+  if (!panDrag && !stageOn) { const kb = Math.min(1, dt * 7);
+    if (Math.abs(tx) > PAN_LIM) pan.x += (Math.sign(tx) * PAN_LIM - tx) * kb;
+    if (Math.abs(tz) > PAN_LIM) pan.z += (Math.sign(tz) * PAN_LIM - tz) * kb; }
   camT.x += (tx - camT.x) * kf; camT.z += (tz - camT.z) * kf;
   cam.position.copy(camT).add(CAM_OFF);
   sun.position.copy(camT).add(SUN_OFF); sun.target.position.copy(camT);
@@ -827,24 +831,25 @@ function step(dt) {
 }
 /* ───────────── 拖曳看地圖 ─────────────
    按住畫面拖曳 = 平移鏡頭(pan 是加在「跟著棋子」的目標點上的偏移)。下一次擲骰、換對手走、或按地圖鈕時歸零,鏡頭自己滑回棋子 */
-const pan = new THREE.Vector3();
+const pan = new THREE.Vector3(), PAN_LIM = N / 2 * STEP + 6;   // 鏡頭中心最遠可以到棋盤外 6 格
+let panDrag = false;
 {
   const cv = $('gl'), R = Math.SQRT1_2, TILT = CAM_OFF.y / CAM_OFF.length();   // TILT:地面往前 1 格,在畫面上只移動這個比例(鏡頭是斜著看的)
-  const LIM = N / 2 * STEP + 2;
   let drag = null;
   cv.style.touchAction = 'none'; cv.style.cursor = 'grab';
-  cv.addEventListener('pointerdown', (e) => { if (stageOn || drag) return; drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+  cv.addEventListener('pointerdown', (e) => { if (stageOn || drag) return; panDrag = true; drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
   cv.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
     const upp = 2 * view.half / innerHeight, dx = (e.clientX - drag.x) * upp, dy = (e.clientY - drag.y) * upp / TILT;
     drag.x = e.clientX; drag.y = e.clientY;
     // 畫面往右 = 世界的 (1,0,-1);畫面往上 = 世界的 (-1,0,-1)。拖曳時地圖跟著手指走,所以目標點往反方向移
     let mx = (-dx - dy) * R, mz = (dx - dy) * R;
-    // 不讓鏡頭拖出棋盤太遠
-    mx = Math.max(-LIM - camT.x, Math.min(LIM - camT.x, mx)); mz = Math.max(-LIM - camT.z, Math.min(LIM - camT.z, mz));
+    // 超出範圍不硬擋:越往外拖越「重」(橡皮筋),放手後 step() 會把鏡頭彈回範圍內
+    const soft = (c, m) => { const over = Math.abs(c + m) - PAN_LIM; return over > 0 && (c + m) * m > 0 ? m / (1 + over * 0.9) : m; };
+    mx = soft(camT.x, mx); mz = soft(camT.z, mz);
     pan.x += mx; pan.z += mz; camT.x += mx; camT.z += mz;                        // camT 也直接動,拖起來才不會有延遲
   });
-  const end = (e) => { if (drag && e.pointerId === drag.id) { drag = null; cv.style.cursor = 'grab'; } };
+  const end = (e) => { if (drag && e.pointerId === drag.id) { drag = null; panDrag = false; cv.style.cursor = 'grab'; } };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
 }
 let last = performance.now();
