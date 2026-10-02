@@ -816,7 +816,7 @@ function step(dt) {
   const fp = focus.piece.position;
   // 目標點往棋盤中心偏 1.6 格:棋子在畫面偏下方,前方要走的格子和骰子落點都看得到
   const fl = Math.hypot(fp.x, fp.z) || 1, ox = -fp.x / fl * 1.6, oz = -fp.z / fl * 1.6;
-  const tx = stageOn ? STAGE.x : view.overview ? 0 : fp.x + ox, tz = stageOn ? STAGE.z : view.overview ? 0 : fp.z + oz, kf = Math.min(1, dt * 3.2);
+  const tx = stageOn ? STAGE.x : (view.overview ? 0 : fp.x + ox) + pan.x, tz = stageOn ? STAGE.z : (view.overview ? 0 : fp.z + oz) + pan.z, kf = Math.min(1, dt * 3.2);
   if (stageOn) stageStep(dt);
   camT.x += (tx - camT.x) * kf; camT.z += (tz - camT.z) * kf;
   cam.position.copy(camT).add(CAM_OFF);
@@ -824,6 +824,28 @@ function step(dt) {
   const hGoal = stageOn ? view.stageHalf : view.overview ? view.far : view.near;
   if (Math.abs(hGoal - view.half) > 0.002) { view.half += (hGoal - view.half) * Math.min(1, dt * 4); applyFrustum(); }
   if (!skipRender) outline.render(scene, cam);
+}
+/* ───────────── 拖曳看地圖 ─────────────
+   按住畫面拖曳 = 平移鏡頭(pan 是加在「跟著棋子」的目標點上的偏移)。下一次擲骰、換對手走、或按地圖鈕時歸零,鏡頭自己滑回棋子 */
+const pan = new THREE.Vector3();
+{
+  const cv = $('gl'), R = Math.SQRT1_2, TILT = CAM_OFF.y / CAM_OFF.length();   // TILT:地面往前 1 格,在畫面上只移動這個比例(鏡頭是斜著看的)
+  const LIM = N / 2 * STEP + 2;
+  let drag = null;
+  cv.style.touchAction = 'none'; cv.style.cursor = 'grab';
+  cv.addEventListener('pointerdown', (e) => { if (stageOn || drag) return; drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+  cv.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const upp = 2 * view.half / innerHeight, dx = (e.clientX - drag.x) * upp, dy = (e.clientY - drag.y) * upp / TILT;
+    drag.x = e.clientX; drag.y = e.clientY;
+    // 畫面往右 = 世界的 (1,0,-1);畫面往上 = 世界的 (-1,0,-1)。拖曳時地圖跟著手指走,所以目標點往反方向移
+    let mx = (-dx - dy) * R, mz = (dx - dy) * R;
+    // 不讓鏡頭拖出棋盤太遠
+    mx = Math.max(-LIM - camT.x, Math.min(LIM - camT.x, mx)); mz = Math.max(-LIM - camT.z, Math.min(LIM - camT.z, mz));
+    pan.x += mx; pan.z += mz; camT.x += mx; camT.z += mz;                        // camT 也直接動,拖起來才不會有延遲
+  });
+  const end = (e) => { if (drag && e.pointerId === drag.id) { drag = null; cv.style.cursor = 'grab'; } };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
 }
 let last = performance.now();
 function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; step(dt); requestAnimationFrame(loop); }
@@ -1259,7 +1281,7 @@ function aiDiceChoice() {
 //   賺超過 15% 就賣;價格比開盤低 5% 以上且現金夠就多買;否則留 $1,500 現金後買 10 股
 async function aiTurn() {
   const A = S.ai, who = CHARS[S.foe].name;
-  focus = BEAR; toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
+  focus = BEAR; pan.set(0, 0, 0); toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
   // 對手出牌:利空卡打你持有最多的資產;事件卡在牠持有受惠類股時才用
   if (A.bag.includes('atk')) {
     const k = KEYS.filter((x) => S.hold[x].n > 0).sort((x, y) => S.hold[y].n * S.price[y] - S.hold[x].n * S.price[x])[0];
@@ -1323,11 +1345,11 @@ async function aiTurn() {
   } else if (type === 'chance') { await wait(0.3); const c = await drawEventCards(true); if (c.special) await enterLane(false, c.special); }
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
-  hud(); focus = ME; await wait(0.5);
+  hud(); focus = ME; pan.set(0, 0, 0); await wait(0.5);
 }
 async function turn(forced) {
   if (S.busy || S.over) return;
-  S.busy = true; showCtl(false);
+  S.busy = true; showCtl(false); pan.set(0, 0, 0);
   // 擲 1 顆或 2 顆由玩家選(S.diceN)。遙控骰子(forced):6 以內用一顆顯示,7 以上拆成兩顆的點數
   if (S.lane) {
     // 在小路上:不擲骰,一回合走一格。被凍結時可以付保釋金一口氣走出來
@@ -1440,7 +1462,7 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
   b.onclick = () => { AU.toggle(); paint(); }; paint(); }
 $('bagBtn').onclick = bagPanel;
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
-$('mapBtn').onclick = () => { view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
+$('mapBtn').onclick = () => { pan.set(0, 0, 0); view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
 
 if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
 // 右側兩個面板的標題可以點:三角箭頭收合 / 展開
