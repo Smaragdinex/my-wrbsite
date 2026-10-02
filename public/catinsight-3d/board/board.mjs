@@ -247,32 +247,32 @@ const MARGIN_LOAN = 0.6, MAINT = 1.3, MARGIN_FEE = 0.02;
 const SQUEEZE = 1.3;
 const squeezeGap = (h, k) => (h.entry * SQUEEZE / S.price[k] - 1) * 100;      // 再漲幾 % 會被軋
 const ratioOf = (h, k) => (h.loan > 0 ? h.n * S.price[k] / h.loan : Infinity);
-const assets = () => S.cash - S.debt + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] - S.hold[k].loan + shortValue(k), 0);
+const assets = () => assetsOf(S.players[S.hi]);
 // 買賣會推動價格(量大推得多):買進推高、賣出和放空壓低。所以賣空對手持有的資產,等於直接打擊對手
 const impact = (k, f) => { S.price[k] = Math.max(8, S.price[k] * f); marginCheck(); };
 // 強迫平倉:任何一次價格變動後都檢查。融資部位的維持率跌破 130% → 全部賣掉還款,剩多少拿回多少;
 // 被迫賣出的賣壓又會把股價往下壓(可能連帶讓別人也斷頭)。結果先記在 S.notices,等流程走到可以停的地方再用卡片告訴玩家
 function marginCheck() {
-  for (const [who, isMe] of [[S, true], [S.ai, false]]) for (const k of KEYS) {
+  for (const who of S.players) for (const k of KEYS) {
     const h = who.hold[k];
     if (!(h.loan > 0) || h.n * S.price[k] / h.loan >= MAINT) continue;
     const n = h.n, back = Math.max(0, n * S.price[k] - h.loan), put = h.cost - h.loan;
     who.cash += back; h.n = 0; h.cost = 0; h.loan = 0;
-    S.notices.push({ isMe, k, n, back, lost: put - back });
+    S.notices.push({ pi: who.i, k, n, back, lost: put - back });
     impact(k, sellF(n));
   }
-  for (const [who, isMe] of [[S, true], [S.ai, false]]) for (const k of KEYS) {
+  for (const who of S.players) for (const k of KEYS) {
     const h = who.short[k];
     if (!h.n || S.price[k] < h.entry * SQUEEZE) continue;
     const n = h.n, back = shortValue(k, who), put = h.entry * n;
     who.cash += back; h.n = 0; h.entry = 0;
-    S.notices.push({ isMe, k, n, back, lost: put - back, squeeze: true });
+    S.notices.push({ pi: who.i, k, n, back, lost: put - back, squeeze: true });
     impact(k, buyF(n));
   }
 }
 async function flushNotices() {
   while (S.notices.length) {
-    const x = S.notices.shift(), sec = SECTORS[x.k], who = CHARS[S.foe].name;
+    const x = S.notices.shift(), sec = SECTORS[x.k], who = nameOf(S.players[x.pi]); x.isMe = isYou(S.players[x.pi]);
     drawAll(); hud(); sfx('liq');
     if (x.squeeze) {
       await cardPanel(x.isMe ? L('Short squeeze: you were forced to cover', '軋空:你被強迫回補') : L(`${who} got squeezed`, `${who}被軋空了`),
@@ -297,7 +297,7 @@ async function flushNotices() {
 // 所以先買的人買得便宜,下一個人要用更貴的價格買
 const buyF = (n) => 1 + 0.004 * n, sellF = (n) => Math.max(0.85, 1 - 0.003 * n), SHORT_F = 0.95;
 const pct = (f) => `${f >= 1 ? '+' : ''}${Math.round((f - 1) * 100)}%`;
-const aiAssets = () => S.ai.cash - S.ai.debt + KEYS.reduce((a, k) => a + S.ai.hold[k].n * S.price[k] - S.ai.hold[k].loan + shortValue(k, S.ai), 0);
+const aiAssets = () => assetsOf(S.ai);
 const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 // 任務:同時有 3 個。完成一個領 $500 獎金並換一個新的,一路玩到回合用完;結算依完成數給星星。
 // 每個任務在「抽出來的當下」才決定目標(例如資產成長的門檻跟著你現在的資產走),所以可以重複抽到
@@ -327,18 +327,35 @@ function drawMission() {
   for (const d of pool) { const m = { id: d.id, done: false, ...d.make() }; if (!m.ok()) return m; }
   const d = pool[0]; return { id: d.id, done: false, ...d.make() };
 }
+// 玩家:最多 4 位(真人最多 2 位,排在最前面;其餘是電腦)。每位都有自己的位置、現金、持股、背包……
+// 為了不用把整份程式都改寫,S 上面留著「目前視角」的捷徑:
+//   S.cash / S.hold / S.bag / S.missions …… → 現在輪到的那位真人(S.hi)
+//   S.ai                                    → 現在在走的那位電腦(S.ci)
+let CFG = (() => { try { const c = JSON.parse(localStorage.getItem('css.players')); if (c && c.n >= 2 && c.n <= 4 && c.humans >= 1 && c.humans <= 2) return c; } catch (e) {} return { n: 2, humans: 1 }; })();
+const P_FIELDS = ['pos', 'lane', 'cash', 'debt', 'bag', 'hold', 'short', 'diceN', 'lastDividend', 'cashStreak', 'flags', 'missions', 'done'];
+const mkPlayer = (i, human, char) => ({ i, human, char, pos: 0, lane: null, cash: START_CASH, debt: 0, bag: human ? ['remote'] : [],
+  hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
+  diceN: 2, lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, missions: [], done: 0 });
+const others = (i = S.hi) => S.players.filter((p) => p.i !== i);
+const nameOf = (p) => CHARS[p.char].name;
+const isYou = (p) => p.human && S.nh === 1;                 // 只有一位真人時才用「你」稱呼;兩位真人一律叫角色名字
+const assetsOf = (p) => p.cash - p.debt + KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k] - p.hold[k].loan + shortValue(k, p), 0);
+function setPlayers(chars, humans) {
+  S.players = chars.map((c, i) => mkPlayer(i, i < humans, c)); S.nh = humans; S.hi = 0; S.ci = Math.min(humans, chars.length - 1);
+  for (let h = 0; h < humans; h++) { S.hi = h; for (let i = 0; i < 3; i++) S.missions.push(drawMission()); }
+  S.hi = 0;
+}
 function newState() {
   S = {
-    pos: 0, lane: null, cash: START_CASH, debt: 0, rolls: 0, bag: ['remote'], busy: false, over: false,
+    rolls: 0, busy: false, over: false, players: [], nh: 1, hi: 0, ci: 1,
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
-    hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])),
-    short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
-    shop: { round: -1, stock: [], sold: [] }, notices: [],
-    lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
-    missions: [], done: 0, me: 'cat', foe: 'bear', diceN: 2,
-    ai: { pos: 0, lane: null, cash: START_CASH, debt: 0, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) },
+    shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null,
   };
-  for (let i = 0; i < 3; i++) S.missions.push(drawMission());
+  for (const f of P_FIELDS) Object.defineProperty(S, f, { get: () => S.players[S.hi][f], set: (v) => { S.players[S.hi][f] = v; } });
+  Object.defineProperty(S, 'ai', { get: () => S.players[S.ci] });
+  Object.defineProperty(S, 'me', { get: () => S.players[S.hi].char });
+  Object.defineProperty(S, 'foe', { get: () => S.players[S.ci].char });
+  setPlayers(['cat', 'bear'], 1);       // 先放兩位佔位,選完角色後 start() 會換成真正的名單
 }
 
 /* ───────────── Three.js 場景 ───────────── */
@@ -707,11 +724,24 @@ const slots = STAGE_KEYS.map((key, i) => {
   return { key, g, holder, ring, hop: 0, top, ang, spin: 0 };
 });
 let stageSel = 0, stageOn = false;
-function stageSelect(i) { stageSel = (i + slots.length) % slots.length; slots[stageSel].hop = 1; paintStage(); }
+let pickWho = 0;                                              // 現在是第幾位真人在選(0 或 1)
+// 選第 i 個;如果那個角色已經被第一位真人選走,就往 dir 方向找下一個
+function stageSelect(i, dir = 1) {
+  const n = slots.length; i = (i % n + n) % n;
+  for (let c = 0; c < n && slots[i].taken; c++) i = (i + dir + n) % n;
+  stageSel = i; slots[i].hop = 1; paintStage();
+}
 function paintStage() {
   const c = CHARS[slots[stageSel].key];
-  $('pname').textContent = c.name; $('ptitle').textContent = L('Choose your character', '選擇你的角色');
-  $('pok').textContent = L(`Play as ${c.name}`, `用${c.name}開始`);
+  $('pname').textContent = c.name;
+  $('ptitle').textContent = CFG.humans > 1 ? L(`Player ${pickWho + 1}: choose a character`, `玩家 ${pickWho + 1} 選擇角色`) : L('Choose your character', '選擇你的角色');
+  $('pok').textContent = CFG.humans > 1 && pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Play as ${c.name}`, `用${c.name}開始`);
+  // 人數設定:只有第一位在選的時候可以改
+  $('pcfg').classList.toggle('hide', pickWho > 0);
+  $('pcN').textContent = L('Players', '人數'); $('pcH').textContent = L('Humans', '真人玩家');
+  $('pcAI').textContent = CFG.n - CFG.humans > 0 ? L(`${CFG.n - CFG.humans} computer rival${CFG.n - CFG.humans > 1 ? 's' : ''}`, `電腦對手 ${CFG.n - CFG.humans} 位`) : L('No computer rivals', '沒有電腦對手');
+  document.querySelectorAll('#pcfg [data-n]').forEach((b) => b.classList.toggle('on', +b.dataset.n === CFG.n));
+  document.querySelectorAll('#pcfg [data-h]').forEach((b) => b.classList.toggle('on', +b.dataset.h === CFG.humans));
 }
 function stageStep(dt) {
   slots.forEach((sl, i) => {
@@ -736,11 +766,11 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   const hit = pickRay.intersectObjects(slots.map((sl) => sl.g), true)[0];
   if (!hit) return;
   const i = slots.findIndex((sl) => { let o = hit.object; while (o) { if (o === sl.g) return true; o = o.parent; } return false; });
-  if (i >= 0) stageSelect(i);
+  if (i >= 0 && !slots[i].taken) stageSelect(i);
 });
 addEventListener('keydown', (e) => {
   if (!stageOn) return;
-  if (e.key === 'ArrowLeft') stageSelect(stageSel - 1); else if (e.key === 'ArrowRight') stageSelect(stageSel + 1);
+  if (e.key === 'ArrowLeft') stageSelect(stageSel - 1, -1); else if (e.key === 'ArrowRight') stageSelect(stageSel + 1);
   else if (e.key === 'Enter' || e.key === ' ') $('pok').click();
 });
 function pickStage() {
@@ -750,11 +780,28 @@ function pickStage() {
       const h = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), m); h.position.y = 0.68; ph.add(h);
       loadPiece(c.url, c.h, ph, sl.holder); } });
     stage.visible = true; stageOn = true; document.body.classList.add('picking');
-    piece.visible = false; bearPiece.visible = false;      // 選角時把棋子藏起來:再玩一次時,上一局的角色不會還站在起點
+    showPieces(false);      // 選角時把棋子藏起來:再玩一次時,上一局的角色不會還站在起點
     if (!pickStage.seen) { pickStage.seen = true; camT.x = STAGE.x; camT.z = STAGE.z; view.half = view.stageHalf; applyFrustum(); }   // 第一次直接從舞台開場,不用從起點慢慢滑過來
+    pickWho = 0; const picked = [];
+    slots.forEach((sl) => { sl.taken = false; sl.holder.visible = true; });
     stageSelect(stageSel);
-    $('pprev').onclick = () => stageSelect(stageSel - 1); $('pnext').onclick = () => stageSelect(stageSel + 1);
-    $('pok').onclick = () => { stageOn = false; stage.visible = false; document.body.classList.remove('picking'); piece.visible = true; bearPiece.visible = true; res(slots[stageSel].key); };
+    $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
+    document.querySelectorAll('#pcfg button').forEach((b) => { b.onclick = () => {
+      if (b.dataset.n) CFG.n = +b.dataset.n; else CFG.humans = +b.dataset.h;
+      try { localStorage.setItem('css.players', JSON.stringify(CFG)); } catch (e) {}
+      paintStage();
+    }; });
+    $('pok').onclick = () => {
+      picked.push(slots[stageSel].key);
+      if (picked.length < CFG.humans) {            // 換第二位真人選:第一位選走的角色從轉盤上拿掉
+        slots[stageSel].taken = true; slots[stageSel].holder.visible = false; pickWho = 1; stageSelect(stageSel + 1); return;
+      }
+      stageOn = false; stage.visible = false; document.body.classList.remove('picking');
+      slots.forEach((sl) => { sl.taken = false; sl.holder.visible = true; });
+      // 電腦對手:從剩下的角色裡隨機挑
+      const rest = Object.keys(CHARS).filter((k) => !picked.includes(k)).sort(() => Math.random() - 0.5);
+      res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length });
+    };
   });
 }
 // 角色頭像:把模型單獨拍一張正面半身照(離屏渲染到 RenderTarget,讀回像素轉成圖片),給左上角頭像和對手面板用
@@ -777,13 +824,18 @@ async function portrait(key) {
 }
 function setPortraits() {
   const put = (el, key) => portrait(key).then((url) => { if (el) el.style.backgroundImage = `url(${url})`; }).catch(() => {});
-  put($('avaMe'), S.me); put($('foeAva'), S.foe);
+  put($('avaMe'), S.me);
+  document.querySelectorAll('#foes .box').forEach((b) => put(b.querySelector('.fav'), S.players[+b.dataset.i].char));
 }
 let focus;
-const ME = { piece, body, off: new THREE.Vector3(-0.3, 0, 0.2) };
-const BEAR = { piece: bearPiece, body: bearBody, off: new THREE.Vector3(0.3, 0, -0.2) };
-focus = ME;
-function placePiece(i, P = ME) { const p = tilePos(i); P.piece.position.set(p.x + P.off.x, TOP, p.z + P.off.z); }
+// 四個棋子(第 3、4 個只有 3~4 人局才會出現)。同一格上四個角落各站一位
+const mkPiece = () => { const piece = new THREE.Group(); scene.add(piece); const body = new THREE.Group(); body.rotation.y = Math.PI / 4; piece.add(body); piece.visible = false; return { piece, body }; };
+const PIECES = [{ piece, body }, { piece: bearPiece, body: bearBody }, mkPiece(), mkPiece()];
+[[-0.3, 0.2], [0.3, -0.2], [0.26, 0.26], [-0.26, -0.26]].forEach(([x, z], i) => { PIECES[i].off = new THREE.Vector3(x, 0, z); });
+const PM = () => PIECES[S.hi], PA = () => PIECES[S.ci];      // 現在這位真人 / 現在這位電腦的棋子
+const showPieces = (on) => PIECES.forEach((P, i) => { P.piece.visible = on && i < S.players.length; });
+focus = PIECES[0];
+function placePiece(i, P = PM()) { const p = tilePos(i); P.piece.position.set(p.x + P.off.x, TOP, p.z + P.off.z); }
 const onLane = (v) => Object.values(LANES).some((d) => d.cells.some(([x, z]) => { const p = cellPos(x, z); return Math.abs(p.x - v.x) < 0.95 && Math.abs(p.z - v.z) < 0.95; }));
 
 /* ───────────── 骰子 ───────────── */
@@ -837,9 +889,10 @@ function step(dt) {
     if (k >= 1) { tweens.splice(i, 1); a.res(); }
   }
   // 待機:貓輕輕呼吸;小樓平滑長高
-  if (!S.busy) { body.scale.y = 1 + Math.sin(T * 3) * 0.025; body.rotation.z = Math.sin(T * 1.6) * 0.04;
-    bearBody.scale.y = 1 + Math.sin(T * 2.6 + 1) * 0.025; bearBody.rotation.z = Math.sin(T * 1.3 + 2) * 0.04; }
-  else { body.rotation.z *= 0.85; bearBody.rotation.z *= 0.85; }
+  PIECES.forEach((P, i) => {
+    if (!S.busy) { P.body.scale.y = 1 + Math.sin(T * (3 - i * 0.3) + i) * 0.025; P.body.rotation.z = Math.sin(T * (1.6 - i * 0.2) + i * 2) * 0.04; }
+    else P.body.rotation.z *= 0.85;
+  });
   tiles.forEach((t) => {
     if (!t.bld) return;
     const target = Math.min(3, S.hold[t.type].n / LOT) * 0.24;
@@ -895,7 +948,7 @@ function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now;
 window.__tick = (ms = 16, fast = false) => { skipRender = fast; for (let t = 0; t < ms; t += 16) step(0.016); skipRender = false; };
 
 // 兩顆骰子一起擲:各自有自己的起點、旋轉軸和落點,最後停在指定點數朝上
-async function rollDice(vals, P = ME) {
+async function rollDice(vals, P = PM()) {
   diceSpots(P); sfx('dice');
   dice.forEach((d, i) => { d.visible = i < vals.length; });      // 只擲一顆時,第二顆收起來
   const plan = dice.slice(0, vals.length).map((d, i) => {
@@ -916,9 +969,9 @@ async function rollDice(vals, P = ME) {
   });
   await wait(0.25);
 }
-const hopTo = (i, P = ME) => hopOnto(tiles[i].g, P);
+const hopTo = (i, P = PM()) => hopOnto(tiles[i].g, P);
 // 跳到某一格上(外圈或小路都用這個)。far = 被送進小路時的大跳躍
-async function hopOnto(g, P = ME, far = false) {
+async function hopOnto(g, P = PM(), far = false) {
   const a = P.piece.position.clone(), p = g.position, b = new THREE.Vector3(p.x + P.off.x, TOP, p.z + P.off.z);
   await tween(far ? 0.8 : 0.22, (k) => {
     P.piece.position.lerpVectors(a, b, k);
@@ -926,7 +979,7 @@ async function hopOnto(g, P = ME, far = false) {
     P.body.scale.y = 1 + Math.sin(k * Math.PI) * 0.18;
   });
   // 落地把格子壓一下
-  sfx(far ? 'coin' : P === ME ? 'hop' : 'hopAi');
+  sfx(far ? 'coin' : S.players[PIECES.indexOf(P)]?.human ? 'hop' : 'hopAi');
   tween(0.18, (k) => { g.position.y = -Math.sin(k * Math.PI) * 0.06; });
   P.body.scale.y = 1;
 }
@@ -946,17 +999,20 @@ function advise() {
   if (todo.has('spread') && held.length < 3) return L(`You hold ${held.length} sector${held.length === 1 ? '' : 's'}. Three different ones spread your risk.`, `你現在持有 ${held.length} 種類股,湊滿 3 種可以分散風險。`);
   if (todo.has('paid')) return L('High-yield and REIT pay the most each lap. Hold them when you pass GO.', '高股息和不動產配息最多,持有它們再繞回起點就能領股利。');
   if (todo.has('cash') && S.cash < 2000) return L('Cash is low. Keep $2,000 so you can buy when a chance shows up.', '現金偏低。留 $2,000 以上,好機會出現時才買得起。');
-  { const mk = KEYS.filter((k) => S.ai.hold[k].loan > 0).sort((a, b) => ratioOf(S.ai.hold[a], a) - ratioOf(S.ai.hold[b], b))[0];
-    if (mk) { const r = ratioOf(S.ai.hold[mk], mk), drop = Math.max(1, Math.ceil((1 - MAINT / r) * 100));
-      return L(`Your rival bought ${SECTORS[mk].name} on margin (ratio ${Math.round(r * 100)}%). A ${drop}% drop forces it to sell.`, `對手用融資買了${SECTORS[mk].name},維持率 ${Math.round(r * 100)}%。再跌 ${drop}% 牠就會被強迫平倉。`); } }
+  { let best = null;                                           // 對手裡融資維持率最低的那一檔
+    for (const p of others()) for (const k of KEYS) if (p.hold[k].loan > 0) { const r = ratioOf(p.hold[k], k); if (!best || r < best.r) best = { p, k, r }; }
+    if (best) { const drop = Math.max(1, Math.ceil((1 - MAINT / best.r) * 100));
+      return L(`${nameOf(best.p)} bought ${SECTORS[best.k].name} on margin (ratio ${Math.round(best.r * 100)}%). A ${drop}% drop forces it to sell.`, `${nameOf(best.p)}用融資買了${SECTORS[best.k].name},維持率 ${Math.round(best.r * 100)}%。再跌 ${drop}% 就會被強迫平倉。`); } }
   { const my = KEYS.filter((k) => S.hold[k].loan > 0 && ratioOf(S.hold[k], k) < 1.5)[0];
     if (my) return L(`Careful: your ${SECTORS[my].name} margin ratio is ${Math.round(ratioOf(S.hold[my], my) * 100)}%. Below 130% it is sold for you.`, `小心:你的${SECTORS[my].name}融資維持率只剩 ${Math.round(ratioOf(S.hold[my], my) * 100)}%,跌破 130% 會被強迫平倉。`); }
   { const sq = KEYS.filter((k) => S.short[k].n > 0 && squeezeGap(S.short[k], k) < 12)[0];
     if (sq) return L(`Careful: your ${SECTORS[sq].name} short is squeezed if it rises ${Math.max(1, Math.ceil(squeezeGap(S.short[sq], sq)))}% more.`, `小心:你放空的${SECTORS[sq].name}再漲 ${Math.max(1, Math.ceil(squeezeGap(S.short[sq], sq)))}% 就會被軋空。`); }
-  { const fs = KEYS.filter((k) => S.ai.short[k].n > 0).sort((a, b) => squeezeGap(S.ai.short[a], a) - squeezeGap(S.ai.short[b], b))[0];
-    if (fs) return L(`Your rival is short ${SECTORS[fs].name}. Push it up ${Math.max(1, Math.ceil(squeezeGap(S.ai.short[fs], fs)))}% (buy it, or play a good-news card) and it is squeezed.`, `對手放空了${SECTORS[fs].name}。把它推高 ${Math.max(1, Math.ceil(squeezeGap(S.ai.short[fs], fs)))}%(買進,或用利多事件卡)就能軋掉牠。`); }
-  if (S.bag.includes('atk')) { const fk = KEYS.filter((k) => S.ai.hold[k].n > 0).sort((a, b) => S.ai.hold[b].n * S.price[b] - S.ai.hold[a].n * S.price[a])[0];
-    if (fk) return L(`Your rival holds a lot of ${SECTORS[fk].name}. A bad news card would hit it.`, `對手持有不少${SECTORS[fk].name},用利空消息卡可以打擊它。`); }
+  { let best = null;                                           // 對手裡最接近被軋空的那一檔
+    for (const p of others()) for (const k of KEYS) if (p.short[k].n > 0) { const g = squeezeGap(p.short[k], k); if (!best || g < best.g) best = { p, k, g }; }
+    if (best) return L(`${nameOf(best.p)} is short ${SECTORS[best.k].name}. Push it up ${Math.max(1, Math.ceil(best.g))}% (buy it, or play a good-news card) and it is squeezed.`, `${nameOf(best.p)}放空了${SECTORS[best.k].name}。把它推高 ${Math.max(1, Math.ceil(best.g))}%(買進,或用利多事件卡)就能軋掉。`); }
+  if (S.bag.includes('atk')) { let best = null;
+    for (const p of others()) for (const k of KEYS) if (p.hold[k].n > 0) { const v = p.hold[k].n * S.price[k]; if (!best || v > best.v) best = { p, k, v }; }
+    if (best) return L(`${nameOf(best.p)} holds a lot of ${SECTORS[best.k].name}. A bad news card would hit it.`, `${nameOf(best.p)}持有不少${SECTORS[best.k].name},用利空消息卡可以打擊。`); }
   const card = S.bag.find((id) => id.startsWith('ev'));
   if (card) { const it = itemInfo(card), sec = SECTORS[it.best];
     return S.hold[it.best].n > 0
@@ -969,11 +1025,23 @@ function advise() {
 const marginTag = (h, k) => (h.loan > 0 ? ` <b style="color:${ratioOf(h, k) < 1.5 ? '#c4472f' : '#8a5cf5'}">${L('M', '融')}${Math.round(ratioOf(h, k) * 100)}%</b>` : '');
 const squeezeTag = (h, k) => { const g = Math.max(0, squeezeGap(h, k)); return ` <b style="color:${g < 10 ? '#c4472f' : '#8a5cf5'}">${L('sq', '軋')}+${Math.ceil(g)}%</b>`; };
 const debtRow = (d) => (d > 0 ? `<div class="row"><i style="background:#4a63b0"></i><span>${L('Bank loan', '銀行貸款')}</span><span></span><span style="color:#c4472f">-${fmt(d)}</span></div>` : '');
+// 右側「其他玩家」的框:每局開始時依人數建一次(收合狀態才不會每次更新都被重設)。對手超過一位時,只展開第一個
+function buildFoes() {
+  const el = $('foes'); el.innerHTML = '';
+  S.players.forEach((p) => {
+    const box = document.createElement('div'); box.className = 'box foe' + (S.players.length > 2 && p.i !== (S.hi === 0 ? 1 : 0) ? ' fold' : ''); box.dataset.i = p.i;
+    box.innerHTML = '<h4><span class="fav"></span><span class="fn"></span><span class="ft"></span><span class="tri"></span></h4><div class="frows"></div>';
+    box.querySelector('h4').onclick = () => box.classList.toggle('fold');
+    el.appendChild(box);
+  });
+}
 function hud() {
   $('cash').textContent = fmt(S.cash);
   $('assets').textContent = fmt(assets());
   $('stocks').textContent = fmt(stockValue());
-  $('bearAssets').textContent = fmt(aiAssets());
+  { const lead = others().sort((a, b) => assetsOf(b) - assetsOf(a))[0];      // 上方資訊列:顯示目前最有錢的那位對手
+    $('lblBear').textContent = nameOf(lead); $('bearAssets').textContent = fmt(assetsOf(lead)); }
+  $('assetTitle').textContent = S.nh > 1 ? L(`${nameOf(S.players[S.hi])}'s assets`, `${nameOf(S.players[S.hi])}的資產`) : L('My assets', '我的資產');
   $('bagCount').textContent = S.bag.length;
   $('mcount').textContent = S.done;
   $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left`, `剩 ${MAX_ROLLS - S.rolls} 次`);
@@ -990,16 +1058,21 @@ function hud() {
         KEYS.filter((k) => S.short[k].n > 0).map((k) => { const pl = (S.short[k].entry - S.price[k]) * S.short[k].n;
           return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${S.short[k].n}${squeezeTag(S.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('')
       : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`);
-  // 對手的資產:現金 + 每一檔持股,讓你知道該打哪一檔
-  { const A = S.ai, held = KEYS.filter((k) => A.hold[k].n > 0).sort((x, y) => A.hold[y].n * S.price[y] - A.hold[x].n * S.price[x]);
-    $('foeName').textContent = L(`${CHARS[S.foe].name}'s assets`, `${CHARS[S.foe].name}的資產`);
-    $('foeRows').innerHTML =
+  // 其他玩家的資產:每位一個框(現金 + 每一檔持股),讓你知道該打哪一檔。標題列有總資產,收合起來也看得到
+  document.querySelectorAll('#foes .box').forEach((box) => {
+    const A = S.players[+box.dataset.i]; if (!A) return;
+    box.style.display = A.i === S.hi ? 'none' : '';
+    const held = KEYS.filter((k) => A.hold[k].n > 0).sort((x, y) => A.hold[y].n * S.price[y] - A.hold[x].n * S.price[x]);
+    box.querySelector('.fn').textContent = nameOf(A) + (A.human ? L(' (player)', '(玩家)') : '');
+    box.querySelector('.ft').textContent = '$' + fmt(assetsOf(A));
+    box.querySelector('.frows').innerHTML =
       `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` + debtRow(A.debt) +
       (held.length ? held.map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${A.hold[k].n} ${L('sh', '股')}${marginTag(A.hold[k], k)}</span><span>${fmt(A.hold[k].n * S.price[k])}</span></div>`).join('')
         : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
       KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n;
         return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${A.short[k].n}${squeezeTag(A.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('') +
-      (A.bag.length ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : ''); }
+      (A.bag.length && !A.human ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : '');
+  });
   const e = S.lastEvent;
   $('evtBody').innerHTML = e
     ? `<div>${e.t}</div><div class="why">${e.w}</div>` + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
@@ -1032,11 +1105,13 @@ function buyPanel(k) {
     const gain = h.n ? (price * h.n - h.cost) / h.cost * 100 : 0;
     const spl = sh.n ? (sh.entry - price) / sh.entry * 100 : 0;
     const vs = (price / sec.open - 1) * 100;
-    const rival = S.ai.hold[k], rivalShort = S.ai.short[k].n;
+    const rivalTxt = others().map((p) => { const rh = p.hold[k], rs = p.short[k], nm = nameOf(p);
+      return (rh.n ? ` <b style="color:#c4472f">${L(`${nm} holds ${rh.n}`, `${nm}持有 ${rh.n} 股`)}${rh.loan > 0 ? L(` on margin (ratio ${Math.round(ratioOf(rh, k) * 100)}%)`, `(融資,維持率 ${Math.round(ratioOf(rh, k) * 100)}%)`) : ''}${L('.', '。')}</b>` : '') +
+        (rs.n ? ` <b style="color:#8a5cf5">${L(`${nm} is short ${rs.n}: a ${Math.max(1, Math.ceil(squeezeGap(rs, k)))}% rise squeezes it out.`, `${nm}放空 ${rs.n} 股,再漲 ${Math.max(1, Math.ceil(squeezeGap(rs, k)))}% 會被軋空。`)}</b>` : ''); }).join('');
     const mCost = price * LOT * 3, mDown = mCost * (1 - MARGIN_LOAN), ratio = ratioOf(h, k);
     const p = panel(`
       <h3><span class="tag" style="background:${sec.css}">${sec.code}</span>${sec.name}</h3>
-      <p>${sec.blurb}${rival.n ? ` <b style="color:#c4472f">${L(`Your rival holds ${rival.n}`, `對手持有 ${rival.n} 股`)}${rival.loan > 0 ? L(` on margin (ratio ${Math.round(ratioOf(rival, k) * 100)}%)`, `(融資,維持率 ${Math.round(ratioOf(rival, k) * 100)}%)`) : ''}${L('.', '。')}</b>` : ''}${rivalShort ? ` <b style="color:#8a5cf5">${L(`Your rival is short ${rivalShort}: a ${Math.max(1, Math.ceil(squeezeGap(S.ai.short[k], k)))}% rise squeezes it out.`, `對手放空 ${rivalShort} 股,再漲 ${Math.max(1, Math.ceil(squeezeGap(S.ai.short[k], k)))}% 牠會被軋空。`)}</b>` : ''}</p>
+      <p>${sec.blurb}${rivalTxt}</p>
       <div class="kv">
         <div>${L('Price', '股價')}<b>$${Math.round(price)}</b></div>
         <div>${L('Since open', '相對開盤')}<b style="color:${vs >= 0 ? '#1c8a4a' : '#c4472f'}">${vs >= 0 ? '+' : ''}${vs.toFixed(0)}%</b></div>
@@ -1174,12 +1249,12 @@ function shopPanel() {
           return `<div class="it"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${it.desc}</small></span><button class="b-buy" data-i="${i}" ${S.cash < it.price ? 'disabled' : ''}>$${it.price}</button></div>`; }).join('')
           : `<div class="it"><span class="tx"><small>${L('Sold out.', '全部賣完了。')}</small></span></div>`) +
         S.shop.sold.map((x) => { const it = itemInfo(x.id);
-          return `<div class="it" style="opacity:.5"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${x.by === 'me' ? L('You bought it', '你買走了') : L(`${who} bought it`, `${who}買走了`)}</small></span><button class="b-skip" disabled>${L('Sold', '售完')}</button></div>`; }).join('') +
+          return `<div class="it" style="opacity:.5"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${x.by === S.hi ? L('You bought it', '你買走了') : L(`${nameOf(S.players[x.by])} bought it`, `${nameOf(S.players[x.by])}買走了`)}</small></span><button class="b-skip" disabled>${L('Sold', '售完')}</button></div>`; }).join('') +
         `<div class="btns"><button class="b-skip" data-i="-1">${L('Leave', '離開')}</button></div>`);
       p.querySelectorAll('button').forEach((b) => b.onclick = () => {
         const i = +b.dataset.i;
         if (i < 0) { closePanel(); return res(); }
-        const id = stock[i], it = itemInfo(id); S.cash -= it.price; S.bag.push(id); stock.splice(i, 1); S.shop.sold.push({ id, by: 'me' }); sfx('item'); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
+        const id = stock[i], it = itemInfo(id); S.cash -= it.price; S.bag.push(id); stock.splice(i, 1); S.shop.sold.push({ id, by: S.hi }); sfx('item'); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
       });
     };
     draw();
@@ -1188,12 +1263,13 @@ function shopPanel() {
 // 利空消息卡:挑一種資產讓它下跌。列表先列對手持有的(打擊對手),再列你自己放空的(幫自己賺)
 function attackPanel() {
   return new Promise((res) => {
-    const foe = KEYS.filter((k) => S.ai.hold[k].n > 0).sort((a, b) => S.ai.hold[b].n * S.price[b] - S.ai.hold[a].n * S.price[a]);
+    const heldBy = (k) => others().reduce((a, p) => a + p.hold[k].n, 0);       // 所有對手合計持有幾股
+    const foe = KEYS.filter((k) => heldBy(k) > 0).sort((a, b) => heldBy(b) * S.price[b] - heldBy(a) * S.price[a]);
     const mine = KEYS.filter((k) => S.short[k].n > 0 && !foe.includes(k));
     const rest = KEYS.filter((k) => !foe.includes(k) && !mine.includes(k));
     const chip = (k, note) => `<button data-k="${k}" style="border-color:${SECTORS[k].css}"><i style="background:${SECTORS[k].css}"></i>${SECTORS[k].code}${note ? `<small>${note}</small>` : ''}</button>`;
     const p = panel(`<h3>📉 ${L('Bad news card', '利空消息卡')}</h3><p>${L('Pick the asset to hit. It drops 18%.', '選一種資產,價格下跌 18%。')}</p>` +
-      (foe.length ? `<p><b>${L('Your rival holds', '對手持有')}</b></p><div class="chips">${foe.map((k) => chip(k, `${S.ai.hold[k].n}${L(' sh', ' 股')}`)).join('')}</div>` : `<p>${L('Your rival holds nothing yet.', '對手還沒有持股。')}</p>`) +
+      (foe.length ? `<p><b>${L('Your rival holds', '對手持有')}</b></p><div class="chips">${foe.map((k) => chip(k, `${heldBy(k)}${L(' sh', ' 股')}`)).join('')}</div>` : `<p>${L('Your rival holds nothing yet.', '對手還沒有持股。')}</p>`) +
       (mine.length ? `<p><b>${L('You are short', '你放空的')}</b></p><div class="chips">${mine.map((k) => chip(k, `${L('short', '空')} ${S.short[k].n}`)).join('')}</div>` : '') +
       `<p><b>${L('Other assets', '其他資產')}</b></p><div class="chips">${rest.map((k) => chip(k)).join('')}</div>` +
       `<div class="btns"><button class="b-skip" data-k="">${L('Cancel', '取消')}</button></div>`);
@@ -1201,14 +1277,16 @@ function attackPanel() {
   });
 }
 // 利空消息生效:價格下跌,並說明誰受傷
-async function badNews(k, byPlayer) {
-  const who = CHARS[S.foe].name, sec = SECTORS[k];
-  const loss = (byPlayer ? S.ai.hold[k].n : S.hold[k].n) * S.price[k] * (1 - ATK_DROP);
+async function badNews(k, by) {
+  const sec = SECTORS[k], byYou = isYou(by), who = nameOf(by);
+  // 受傷的人:出牌的人以外、持有這檔的每一位
+  const hurt = others(by.i).filter((p) => p.hold[k].n > 0).map((p) => { const loss = p.hold[k].n * S.price[k] * (1 - ATK_DROP);
+    return isYou(p) ? L(`You lose about $${fmt(loss)}.`, `你損失約 $${fmt(loss)}。`) : L(`${nameOf(p)} loses about $${fmt(loss)}.`, `${nameOf(p)}損失約 $${fmt(loss)}。`); }).join(' ');
   S.price[k] *= ATK_DROP; marginCheck(); sfx('bad');
   S.lastEvent = { t: L(`Bad news about ${sec.name}`, `${sec.name}傳出利空`), w: L('Rumors and bad headlines can sink a price fast.', '壞消息和傳言可以讓股價快速下跌。'), m: Object.fromEntries(KEYS.map((x) => [x, x === k ? ATK_DROP : 1])) };
   drawAll(); hud();
-  await cardPanel(byPlayer ? L(`You spread bad news about ${sec.name}`, `你放出${sec.name}的利空消息`) : L(`${who} spreads bad news about ${sec.name}`, `${who}放出${sec.name}的利空消息`),
-    (loss > 0 ? (byPlayer ? L(`${who} loses about $${fmt(loss)}.`, `${who}損失約 $${fmt(loss)}。`) : L(`You lose about $${fmt(loss)}.`, `你損失約 $${fmt(loss)}。`)) + ' ' : '') +
+  await cardPanel(byYou ? L(`You spread bad news about ${sec.name}`, `你放出${sec.name}的利空消息`) : L(`${who} spreads bad news about ${sec.name}`, `${who}放出${sec.name}的利空消息`),
+    (hurt ? hurt + ' ' : '') +
     L('Anyone short this asset profits.', '放空這檔資產的人則會獲利。'),
     `<span class="mv dn">${sec.name} -${Math.round((1 - ATK_DROP) * 100)}%</span>`);
 }
@@ -1239,7 +1317,7 @@ function bagPanel() {
       });
     } else if (id === 'atk') {
       const k = await attackPanel();
-      if (k) { S.bag.splice(S.bag.indexOf('atk'), 1); await badNews(k, true); await flushNotices(); checkMissions(); }
+      if (k) { S.bag.splice(S.bag.indexOf('atk'), 1); await badNews(k, S.players[S.hi]); await flushNotices(); checkMissions(); }
       S.busy = false; showCtl(true);
     } else {
       S.bag.splice(S.bag.indexOf(id), 1);
@@ -1251,7 +1329,7 @@ function bagPanel() {
 /* ───────────── 中間的小路 ───────────── */
 // 被送進小路:大跳躍到第一格。拘留小路 = 帳戶凍結(不能買賣、不能用道具);IPO 小路 = 每格都能用承銷價申購新股
 async function enterLane(isMe, type) {
-  const who = isMe ? S : S.ai, P = isMe ? ME : BEAR, name = CHARS[S.foe].name;
+  const who = isMe ? S : S.ai, P = isMe ? PM() : PA(), name = CHARS[S.foe].name;
   who.lane = { type, idx: 0 }; hud();
   await hopOnto(laneTiles[type][0].g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
@@ -1262,7 +1340,7 @@ async function enterLane(isMe, type) {
 }
 // 在小路上往前走一格(all = 一口氣走完)。走出小路回到外圈時回傳 true
 async function laneStep(isMe, all = false) {
-  const who = isMe ? S : S.ai, P = isMe ? ME : BEAR, ln = who.lane, def = LANES[ln.type];
+  const who = isMe ? S : S.ai, P = isMe ? PM() : PA(), ln = who.lane, def = LANES[ln.type];
   do {
     ln.idx++;
     if (ln.idx >= def.cells.length) { who.lane = null; who.pos = def.exit; await hopTo(def.exit, P); hud(); return true; }
@@ -1376,11 +1454,13 @@ function aiDiceChoice() {
 //   賺超過 15% 就賣;價格比開盤低 5% 以上且現金夠就多買;否則留 $1,500 現金後買 10 股
 async function aiTurn() {
   const A = S.ai, who = CHARS[S.foe].name;
-  focus = BEAR; pan.set(0, 0, 0); toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
+  focus = PA(); pan.set(0, 0, 0); toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
   // 對手出牌:利空卡打你持有最多的資產;事件卡在牠持有受惠類股時才用
   if (A.bag.includes('atk')) {
-    const k = KEYS.filter((x) => S.hold[x].n > 0).sort((x, y) => S.hold[y].n * S.price[y] - S.hold[x].n * S.price[x])[0];
-    if (k) { A.bag.splice(A.bag.indexOf('atk'), 1); await badNews(k, false); }
+    // 打「目前最有錢的那位對手」持有最多的資產
+    const T = others(A.i).sort((x, y) => assetsOf(y) - assetsOf(x))[0];
+    const k = KEYS.filter((x) => T.hold[x].n > 0).sort((x, y) => T.hold[y].n * S.price[y] - T.hold[x].n * S.price[x])[0];
+    if (k) { A.bag.splice(A.bag.indexOf('atk'), 1); await badNews(k, A); }
   }
   { const id = A.bag.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0);
     if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event); } }
@@ -1392,10 +1472,10 @@ async function aiTurn() {
   } else {
   const nd = aiDiceChoice(), vals = nd === 1 ? [r6()] : [r6(), r6()], n = vals.reduce((x, y) => x + y, 0);
   toast(L(`${who} rolls ${nd === 1 ? 'one die' : 'two dice'}`, `${who}選擇擲 ${nd} 顆骰子`)); await wait(0.7);
-  await rollDice(vals, BEAR); toast(vals.length === 1 ? `${who}: ${n}` : `${who}: ${vals[0]} + ${vals[1]} = ${n}`);
+  await rollDice(vals, PA()); toast(vals.length === 1 ? `${who}: ${n}` : `${who}: ${vals[0]} + ${vals[1]} = ${n}`);
   for (let i = 0; i < n; i++) {
     A.pos = (A.pos + 1) % TILES.length;
-    await hopTo(A.pos, BEAR);
+    await hopTo(A.pos, PA());
     if (A.pos === 0 || TILES[A.pos] === 'divi') { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += (A.pos === 0 ? SALARY : 0) + div - (A.pos === 0 ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) + A.debt * BANK_RATE : 0); hud(); }
   }
   }
@@ -1405,7 +1485,7 @@ async function aiTurn() {
   else if (type === '_ipo') await aiIpo();
   else if (type === 'ipo') await enterLane(false, 'ipo');
   else if (sec) {
-    const h = A.hold[type], sh = A.short[type], price = S.price[type], mine = S.hold[type].n;
+    const h = A.hold[type], sh = A.short[type], price = S.price[type], mine = Math.max(...others(A.i).map((p) => p.hold[type].n));   // mine:別人最多持有幾股
     if (sh.n) {
       // 有空單:賺 12% 以上就回補落袋,虧 12% 以上就停損,不然續抱
       const r = (sh.entry - price) / sh.entry;
@@ -1418,9 +1498,9 @@ async function aiTurn() {
     } else if (!h.n && A.cash >= price * LOT + 2000 && ((mine >= LOT && price > sec.open * 1.08) || price > sec.open * 1.3)) {
       // 放空:你持有而且已經漲了一段(打擊你),或是漲太多(賭它回檔)
       A.cash -= price * LOT; sh.entry = price; sh.n = LOT; impact(type, SHORT_F);
-      toast(mine >= LOT ? L(`${who} shorts ${sec.name} to hit you. Price ${pct(SHORT_F)}`, `${who}放空${sec.name}打擊你,股價 ${pct(SHORT_F)}`) : L(`${who} shorts ${sec.name}. Price ${pct(SHORT_F)}`, `${who}放空${sec.name},股價 ${pct(SHORT_F)}`));
+      toast(mine >= LOT ? L(`${who} shorts ${sec.name} to hit its holders. Price ${pct(SHORT_F)}`, `${who}放空${sec.name}打擊持有的人,股價 ${pct(SHORT_F)}`) : L(`${who} shorts ${sec.name}. Price ${pct(SHORT_F)}`, `${who}放空${sec.name},股價 ${pct(SHORT_F)}`));
     } else {
-      const lots = ((price < sec.open * 0.95 || S.short[type].n > 0) && A.cash >= price * LOT * 3 + 2000) ? 3 : (A.cash >= price * LOT + 1500 ? 1 : 0);
+      const lots = ((price < sec.open * 0.95 || others(A.i).some((p) => p.short[type].n > 0)) && A.cash >= price * LOT * 3 + 2000) ? 3 : (A.cash >= price * LOT + 1500 ? 1 : 0);
       // 三次裡有一次會貪心用融資買 30 股(只付 4 成)—— 這就是你可以用放空和利空卡逼牠斷頭的機會
       const greedy = lots && !h.loan && Math.random() < 0.35 && A.cash >= price * LOT * 3 * (1 - MARGIN_LOAN) + 1500;
       if (greedy) { const q = LOT * 3, cost = price * q; A.cash -= cost * (1 - MARGIN_LOAN); h.n += q; h.cost += cost; h.loan += cost * MARGIN_LOAN; impact(type, buyF(q));
@@ -1434,7 +1514,7 @@ async function aiTurn() {
     const stock = shopStock(); let got = null;
     if (stock.includes('atk') && A.cash >= 2500) got = 'atk';
     else got = stock.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0 && A.cash >= 2000) || null;
-    if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); S.shop.sold.push({ id: got, by: 'ai' }); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
+    if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); S.shop.sold.push({ id: got, by: A.i }); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
     else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
     hud(); await wait(1.2);
   } else if (type === 'chance') { await wait(0.3); const c = await drawEventCards(true); if (c.special) await enterLane(false, c.special); }
@@ -1447,7 +1527,7 @@ async function aiTurn() {
   }
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
-  hud(); focus = ME; pan.set(0, 0, 0); await wait(0.5);
+  hud(); pan.set(0, 0, 0); await wait(0.5);
 }
 async function turn(forced) {
   if (S.busy || S.over) return;
@@ -1469,9 +1549,10 @@ async function turn(forced) {
     if (S.pos === 0) payday(); else if (TILES[S.pos] === 'divi') payday(0);
   }
   }
-  S.rolls++;
-  // 每回合小幅隨機波動
-  KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2)); });
+  if (S.hi === 0) {           // 第一位走完 = 新的一回合開始:回合數 +1,所有價格小幅隨機波動
+    S.rolls++;
+    KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2)); });
+  }
   marginCheck();
   drawAll(); hud();
   await wait(0.15);
@@ -1495,15 +1576,27 @@ async function turn(forced) {
   await flushNotices();
   S.cashStreak = (stockValue() > 0 && S.cash >= 2000) ? S.cashStreak + 1 : 0;
   checkMissions();
-  // 換小熊走。牠踩到市場事件也會改變大家的股價,所以走完要再檢查一次任務
-  await aiTurn();
-  await flushNotices();
-  checkMissions();
-  if (S.rolls >= MAX_ROLLS) { await wait(0.4); return finish(); }
-  S.busy = false; showCtl(true);
+  await nextTurns();
+}
+// 輪到下一位:電腦自己走完;遇到真人就停下來等他擲骰。繞回第一位時,如果回合數用完就結算
+async function nextTurns() {
+  let i = S.hi;
+  for (;;) {
+    i = (i + 1) % S.players.length;
+    if (i === 0 && S.rolls >= MAX_ROLLS) { await wait(0.4); return finish(); }
+    const p = S.players[i];
+    if (p.human) {
+      S.hi = i; if (S.players.length > S.nh) S.ci = S.players.findIndex((x) => !x.human); else S.ci = (i + 1) % S.players.length;
+      focus = PM(); pan.set(0, 0, 0);
+      if (S.nh > 1) { setPortraits(); toast(L(`${nameOf(p)}'s turn (Player ${i + 1})`, `輪到${nameOf(p)}(玩家 ${i + 1})`)); }
+      checkMissions();          // 別人走的時候股價會變,輪到自己先檢查一次任務
+      S.busy = false; showCtl(true); return;
+    }
+    S.ci = i; await aiTurn(); await flushNotices();
+  }
 }
 function finish() {
-  S.over = true;
+  S.over = true; S.hi = S.players.findIndex((p) => p.human);      // 結算畫面用第一位真人的視角
   // 星星:完成 2 / 4 / 6 個任務
   const done = S.done >= 6 ? 3 : S.done >= 4 ? 2 : S.done >= 2 ? 1 : 0;
   let top = 'cash', tv = S.cash;
@@ -1533,30 +1626,46 @@ function finish() {
   }[top];
   const title = [L('Rough market', '行情不順'), L('Curious rookie', '好奇新手'), L('Sharp analyst', '精明分析師'), L('Top investor', '頂尖投資人')][done];
   const a = assets();
-  $('end').innerHTML = `<div class="card">
+  const rank = S.players.slice().sort((x, y) => assetsOf(y) - assetsOf(x)), medal = ['🥇', '🥈', '🥉', '4'];
+  const table = rank.map((p, i) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-radius:10px;${p.human ? 'background:#fff3d6;' : ''}font-weight:800">
+      <span style="width:1.6em;text-align:center">${medal[i]}</span><span style="flex:1;text-align:left">${CHARS[p.char].icon} ${nameOf(p)}${p.human ? (S.nh > 1 ? ` · ${L('Player', '玩家')} ${p.i + 1}` : L(' (you)', '(你)')) : ''}</span><b>$${fmt(assetsOf(p))}</b></div>`).join('');
+  const won = rank[0].human;
+  $('end').innerHTML = S.nh > 1
+    ? `<div class="card">
+    <h2>🏆 ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}</h2>
+    <div style="margin:10px 0">${table}</div>
+    <p>${S.players.filter((p) => p.human).map((p) => L(`Player ${p.i + 1}: ${p.done} missions`, `玩家 ${p.i + 1} 完成 ${p.done} 個任務`)).join(' · ')} · ${L(`${S.rolls} rounds`, `${S.rolls} 回合`)}</p>
+    <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
+    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`
+    : `<div class="card">
     <div class="stars">${[0, 1, 2].map((i) => i < done ? '<b>★</b>' : '★').join('')}</div>
     <h2>${title}</h2>
-    <p>${L('Total assets', '總資產')} <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) · ${L(`${S.rolls} rolls`, `${S.rolls} 回合`)}</p>
-    <p>${L(`${S.done} missions completed`, `完成 ${S.done} 個任務`)}</p>
-    <p>${CHARS[S.foe].icon} ${CHARS[S.foe].name} <b>$${fmt(aiAssets())}</b> · ${a >= aiAssets() ? L(`you beat ${CHARS[S.foe].name}`, `你贏過${CHARS[S.foe].name}`) : L(`${CHARS[S.foe].name} beat you`, `${CHARS[S.foe].name}贏了`)}</p>
+    <p>${L('Total assets', '總資產')} <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) · ${L(`${S.rolls} rounds`, `${S.rolls} 回合`)} · ${L(`${S.done} missions completed`, `完成 ${S.done} 個任務`)}</p>
+    <div style="margin:10px 0">${table}</div>
     <p>${style}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`;
-  $('end').classList.remove('hide'); sfx(a >= aiAssets() ? 'win' : 'lose');
+  $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose');
   $('again').onclick = start;
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
 }
-// 選角:在 3D 舞台上四選一(pickStage)。電腦的對手從剩下三隻裡隨機挑
+// 選角:在 3D 轉盤上選(pickStage),同時決定人數(2~4)和真人數(1~2)。電腦對手從剩下的角色裡隨機挑。
+// 網址 ?piece=cat 可以跳過選角(測試用),還可以加 &n=4&h=2 指定人數和真人數
 async function start() {
   newState(); $('end').classList.add('hide'); closePanel(); $('toast').classList.remove('on');   // 上一局最後的提示不要留到選角畫面
-  staticText(); placePiece(0, ME); placePiece(0, BEAR); focus = ME; diceSpots(ME); dice.forEach((d, i) => d.position.copy(DIE_REST[i])); drawAll();
+  staticText(); PIECES.forEach((P) => placePiece(0, P)); focus = PIECES[0]; diceSpots(PIECES[0]); dice.forEach((d, i) => d.position.copy(DIE_REST[i])); drawAll();
   S.busy = true; showCtl(false); hud();
-  const me = CHARS[PRESET] ? PRESET : await pickStage();
-  const rest = Object.keys(CHARS).filter((k) => k !== me);
-  S.me = me; S.foe = rest[Math.floor(Math.random() * rest.length)];
-  setChar(body, S.me); setChar(bearBody, S.foe); setPortraits();
-  $('lblBear').textContent = CHARS[S.foe].name;
+  let cfg;
+  if (CHARS[PRESET]) { const q = new URLSearchParams(location.search), n = Math.min(4, Math.max(2, +q.get('n') || 2)), h = Math.min(2, Math.max(1, +q.get('h') || 1));
+    const rest = Object.keys(CHARS).filter((k) => k !== PRESET).sort(() => Math.random() - 0.5);
+    cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h };
+  } else cfg = await pickStage();
+  setPlayers(cfg.chars, cfg.humans);
+  PIECES.forEach((P, i) => { if (i < S.players.length) { setChar(P.body, S.players[i].char); placePiece(0, P); } });
+  showPieces(true); focus = PIECES[0];
+  buildFoes(); setPortraits();
   hud(); S.busy = false; showCtl(true);
+  if (S.nh > 1) toast(L(`${nameOf(S.players[0])} goes first (Player 1)`, `${nameOf(S.players[0])}先走(玩家 1)`));
 }
 
 $('rollBtn').onclick = () => turn();
@@ -1569,7 +1678,7 @@ $('mapBtn').onclick = () => { pan.set(0, 0, 0); view.overview = !view.overview; 
 
 if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
 // 右側兩個面板的標題可以點:三角箭頭收合 / 展開
-document.querySelectorAll('.side .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
+document.querySelectorAll('.side > .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, AU, turn, enterLane, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, AU, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
