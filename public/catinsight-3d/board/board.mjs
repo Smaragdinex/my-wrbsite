@@ -561,12 +561,32 @@ for (const [type, def] of Object.entries(LANES)) laneTiles[type] = def.cells.map
   lab.rotation.x = -Math.PI / 2; holder.add(lab);
   return { g };
 });
-// 小路盡頭的建築:拘留所(灰色、有鐵窗)和交易所(白色、金色的鐘)
+// 小路旁的建築:警察局(拘留小路)和交易所(IPO 小路,白色、金色的鐘)
 {
-  const j = new THREE.Group(); j.position.copy(cellPos(3, 5.9));   // 放在小路「後面」那一側,才不會擋到站在格子上的棋子 scene.add(j);
-  box(1.0, 0.95, 1.0, 0x9aa3b2, 0, 0.66, 0, 0.05, j); box(1.12, 0.14, 1.12, 0x565e6c, 0, 1.2, 0, 0.04, j);
-  box(0.3, 0.5, 0.04, 0x3d4350, 0, 0.5, 0.51, 0.02, j);                                             // 門
-  for (let i = -1; i <= 1; i++) box(0.04, 0.34, 0.05, 0x3d4350, 0.51, 0.72, i * 0.14, 0.01, j);     // 鐵窗
+  // 警察局:放在拘留小路「後面」那一側(才不會擋到站在格子上的棋子)。藍白色的建築、鐵窗、屋頂的紅藍警示燈,
+  // 再立一塊面向鏡頭的招牌寫「警察局 POLICE」,玩家一看就知道被送到哪裡
+  const j = new THREE.Group(); j.position.copy(cellPos(3, 5.75));
+  scene.add(j);
+  box(1.5, 1.0, 1.0, 0xf4f7ff, 0, 0.69, 0, 0.05, j);                                                // 主體(白)
+  box(1.54, 0.2, 1.04, 0x2f5fd0, 0, 0.3, 0, 0.03, j);                                               // 底部藍色腰帶
+  box(1.62, 0.14, 1.12, 0x2f5fd0, 0, 1.26, 0, 0.04, j);                                             // 屋頂(藍)
+  box(0.34, 0.56, 0.04, 0x33415c, 0, 0.47, 0.51, 0.02, j);                                          // 門
+  for (const wx of [-0.5, 0.5]) { box(0.3, 0.3, 0.03, 0x9fd0ff, wx, 0.78, 0.51, 0.02, j);           // 兩扇窗 + 鐵窗
+    for (let i = -1; i <= 1; i++) box(0.03, 0.3, 0.04, 0x33415c, wx + i * 0.09, 0.78, 0.53, 0.01, j); }
+  for (let i = -1; i <= 1; i++) box(0.04, 0.34, 0.05, 0x33415c, 0.76, 0.78, i * 0.14, 0.01, j);     // 側面的鐵窗
+  { const red = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), new THREE.MeshBasicMaterial({ color: 0xff4d4d })); red.position.set(-0.14, 1.43, 0); j.add(red);
+    const blue = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), new THREE.MeshBasicMaterial({ color: 0x4d8dff })); blue.position.set(0.14, 1.43, 0); j.add(blue);
+    box(0.5, 0.06, 0.2, 0x33415c, 0, 1.35, 0, 0.02, j); }
+  { const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160; const c = cv.getContext('2d');
+    c.fillStyle = '#2f5fd0'; c.beginPath(); c.roundRect(0, 0, 512, 160, 26); c.fill();
+    c.strokeStyle = '#fff'; c.lineWidth = 8; c.beginPath(); c.roundRect(8, 8, 496, 144, 20); c.stroke();
+    c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = '900 76px "PingFang TC","Noto Sans TC","Helvetica Neue",Arial,sans-serif'; c.fillText(L('POLICE', '警察局'), 256, ZH ? 64 : 84);
+    if (ZH) { c.font = '900 34px "Helvetica Neue",Arial,sans-serif'; c.fillText('POLICE', 256, 124); }
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), Object.assign(new THREE.MeshBasicMaterial({ map: tex, transparent: true }), { userData: { outlineParameters: { visible: false } } }));
+    sign.position.set(0, 1.86, 0); sign.rotation.y = Math.PI / 4; j.add(sign);                      // 招牌轉 45 度,正對鏡頭
+    box(0.06, 0.34, 0.06, 0x33415c, -0.3, 1.5, 0.3, 0.01, j); box(0.06, 0.34, 0.06, 0x33415c, 0.3, 1.5, -0.3, 0.01, j); }   // 招牌的兩根支柱
   const x = new THREE.Group(); x.position.copy(cellPos(10.95, 8)); scene.add(x);
   box(1.0, 0.7, 1.0, 0xfff8ec, 0, 0.53, 0, 0.05, x); box(1.14, 0.12, 1.14, 0x2fbf9f, 0, 0.94, 0, 0.04, x);
   for (const sx of [-0.32, 0, 0.32]) box(0.1, 0.5, 0.1, 0xffffff, sx, 0.45, 0.52, 0.03, x);         // 柱子
