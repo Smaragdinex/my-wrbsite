@@ -904,11 +904,16 @@ function drawEventCards(auto) {
       const e = picks[i];
       KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
       S.lastEvent = e; marginCheck(); drawAll(); hud();
-      wait(0.9).then(() => { cards.forEach((c, j) => { if (j !== i) c.classList.add('flip', 'lost'); }); $('dgo').classList.remove('hide'); });
+      wait(0.9).then(() => {
+        cards.forEach((c, j) => { if (j !== i) c.classList.add('flip', 'lost'); }); $('dgo').classList.remove('hide');
+        // 對手抽的牌:給你 2 秒看完事件,然後自動按「繼續」(想快一點也可以自己先按)
+        if (auto) wait(2).then(() => { if (!done) $('dgo').click(); });
+      });
     };
     cards.forEach((c, i) => { c.onclick = () => { if (!auto) choose(i); }; });
     if (auto) wait(1.2).then(() => choose(Math.floor(Math.random() * 3)));
-    $('dgo').onclick = () => { ov.classList.add('hide'); ov.classList.remove('done'); res(picks[chosen]); };
+    let done = false;
+    $('dgo').onclick = () => { if (done) return; done = true; ov.classList.add('hide'); ov.classList.remove('done'); res(picks[chosen]); };
   });
 }
 async function playEvent(e) {
