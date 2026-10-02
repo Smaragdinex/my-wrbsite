@@ -145,7 +145,8 @@ const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
 // 後兩種如果一直沒人達成,走到 CAP_ROLLS 回合也會結束,比總資產
 const TARGET = 20000, BUST = 0, CAP_ROLLS = 40;
 const livingCost = (round) => 200 + 100 * (round - 1);          // 第 1 回合 $200,之後每回合多 $100
-const maxRolls = () => (S.mode === 'rounds' ? MAX_ROLLS : CAP_ROLLS);
+const ROUND_OPTS = [20, 25, 30, 35, 40];                       // 回合制可以選的回合數
+const maxRolls = () => (S.mode === 'rounds' ? S.maxRounds : CAP_ROLLS);
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
 const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17, 20, 21];    // 商店會賣的事件卡(壞消息類的不賣)
 const REMOTE_PRICE = 300, CARD_PRICE = 500, ATK_PRICE = 600, ATK_DROP = 0.82;
@@ -356,7 +357,7 @@ function setPlayers(chars, humans) {
 }
 function newState() {
   S = {
-    rolls: 0, busy: false, over: false, mode: CFG.mode || 'rounds', endWhy: '', players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
+    rolls: 0, busy: false, over: false, mode: CFG.mode || 'rounds', maxRounds: MAX_ROLLS, endWhy: '', players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null,
   };
@@ -750,9 +751,13 @@ function paintStage() {
   document.querySelectorAll('#pcfg [data-h]').forEach((b) => b.classList.toggle('on', +b.dataset.h === CFG.humans));
   { const mode = CFG.mode || 'rounds';
     $('pcM').textContent = L('Game', '玩法');
-    const names = { rounds: L(`${MAX_ROLLS} rounds`, `${MAX_ROLLS} 回合`), target: L('Get rich', '致富'), bankrupt: L('Bankruptcy', '破產') };
+    const R = ROUND_OPTS.includes(CFG.rounds) ? CFG.rounds : MAX_ROLLS;
+    // 回合數的上下選擇:只有回合制才顯示;到頭的那一邊按鈕變灰
+    $('pcR').classList.toggle('hide', mode !== 'rounds'); $('pcRv').textContent = R;
+    document.querySelector('#pcR [data-r="-1"]').disabled = R === ROUND_OPTS[0]; document.querySelector('#pcR [data-r="1"]').disabled = R === ROUND_OPTS[ROUND_OPTS.length - 1];
+    const names = { rounds: L('Rounds', '回合'), target: L('Get rich', '致富'), bankrupt: L('Bankruptcy', '破產') };
     document.querySelectorAll('#pcfg [data-m]').forEach((b) => { b.textContent = names[b.dataset.m]; b.classList.toggle('on', b.dataset.m === mode); });
-    $('pcRule').textContent = { rounds: L(`Highest total assets after ${MAX_ROLLS} rounds wins`, `走滿 ${MAX_ROLLS} 回合,總資產最高的獲勝`),
+    $('pcRule').textContent = { rounds: L(`Highest total assets after ${R} rounds wins`, `走滿 ${R} 回合,總資產最高的獲勝`),
       target: L(`First to $${fmt(TARGET)} in total assets wins`, `總資產先達到 $${fmt(TARGET)} 的獲勝`),
       bankrupt: L('Living costs rise every round; ends when someone hits zero', '每回合生活費越來越貴,有人總資產歸零就結束') }[mode]; }
 }
@@ -805,7 +810,9 @@ function pickStage() {
     stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
     document.querySelectorAll('#pcfg button').forEach((b) => { b.onclick = () => {
-      if (b.dataset.n) CFG.n = +b.dataset.n; else if (b.dataset.h) CFG.humans = +b.dataset.h; else CFG.mode = b.dataset.m;
+      if (b.dataset.n) CFG.n = +b.dataset.n; else if (b.dataset.h) CFG.humans = +b.dataset.h;
+      else if (b.dataset.r) { const i = Math.max(0, ROUND_OPTS.indexOf(CFG.rounds || MAX_ROLLS)); CFG.rounds = ROUND_OPTS[Math.min(ROUND_OPTS.length - 1, Math.max(0, i + +b.dataset.r))]; }
+      else CFG.mode = b.dataset.m;
       try { localStorage.setItem('css.players', JSON.stringify(CFG)); } catch (e) {}
       paintStage();
     }; });
@@ -818,7 +825,7 @@ function pickStage() {
       slots.forEach((sl) => { sl.taken = false; sl.holder.visible = true; });
       // 電腦對手:從剩下的角色裡隨機挑
       const rest = Object.keys(CHARS).filter((k) => !picked.includes(k)).sort(() => Math.random() - 0.5);
-      res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length, mode: CFG.mode || 'rounds' });
+      res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length, mode: CFG.mode || 'rounds', rounds: CFG.rounds });
     };
   });
 }
@@ -1676,15 +1683,15 @@ async function start() {
   let cfg;
   if (CHARS[PRESET]) { const q = new URLSearchParams(location.search), n = Math.min(4, Math.max(2, +q.get('n') || 2)), h = Math.min(2, Math.max(1, +q.get('h') || 1));
     const rest = Object.keys(CHARS).filter((k) => k !== PRESET).sort(() => Math.random() - 0.5);
-    cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h, mode: q.get('mode') || 'rounds' };
+    cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h, mode: q.get('mode') || 'rounds', rounds: q.get('rounds') };
   } else cfg = await pickStage();
-  setPlayers(cfg.chars, cfg.humans); S.mode = ['rounds', 'target', 'bankrupt'].includes(cfg.mode) ? cfg.mode : 'rounds';
+  setPlayers(cfg.chars, cfg.humans); S.mode = ['rounds', 'target', 'bankrupt'].includes(cfg.mode) ? cfg.mode : 'rounds'; S.maxRounds = ROUND_OPTS.includes(+cfg.rounds) ? +cfg.rounds : MAX_ROLLS;
   PIECES.forEach((P, i) => { if (i < S.players.length) { setChar(P.body, S.players[i].char); placePiece(0, P); } });
   showPieces(true); focus = PIECES[0];
   buildFoes(); setPortraits();
   hud();
   // 開局先講清楚怎麼算贏
-  const rule = { rounds: L(`After ${MAX_ROLLS} rounds, whoever has the highest total assets wins.`, `${MAX_ROLLS} 回合結束時,總資產最高的人獲勝。`),
+  const rule = { rounds: L(`After ${S.maxRounds} rounds, whoever has the highest total assets wins.`, `${S.maxRounds} 回合結束時,總資產最高的人獲勝。`),
     target: L(`The first player whose total assets reach $${fmt(TARGET)} wins. If nobody gets there in ${CAP_ROLLS} rounds, the highest total assets win.`, `誰的總資產先達到 $${fmt(TARGET)} 就獲勝。如果走滿 ${CAP_ROLLS} 回合還沒有人達到,就比總資產。`),
     bankrupt: L(`Every round everyone pays living costs, starting at $${livingCost(1)} and rising by $100 each round. The game ends as soon as someone's total assets hit zero; of the others, the highest total assets win. Your money has to grow faster than your costs.`, `每回合所有人都要付生活費,第 1 回合 $${livingCost(1)},之後每回合多 $100。只要有人總資產歸零就破產、遊戲結束,其餘的人裡總資產最高的獲勝。你的錢要長得比開銷快才撐得下去。`) }[S.mode];
   await cardPanel(L('How to win', '獲勝條件'),

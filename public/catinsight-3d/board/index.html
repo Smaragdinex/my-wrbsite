@@ -157,6 +157,10 @@
   .pcfg .seg.wide{flex-basis:100%;justify-content:center}
   .pcfg .seg.wide button{width:auto;border-radius:999px;padding:0 calc(14px * var(--fs));font-size:calc(13px * var(--fs))}
   #pcRule{flex-basis:100%;text-align:center}
+  .pcfg .step{display:inline-flex;align-items:center;gap:2px;background:#fff;border:2px solid var(--line);border-radius:999px;padding:2px 4px;margin:0 6px 0 2px}
+  .pcfg .step b{min-width:calc(30px * var(--fs));text-align:center;font-size:calc(15px * var(--fs));color:#3b2f2a}
+  .pcfg .seg.wide .step button{width:calc(28px * var(--fs));height:calc(28px * var(--fs));padding:0;border-radius:50%;background:#ff7a59;color:#fff;font-size:calc(11px * var(--fs))}
+  .pcfg .seg.wide .step button:disabled{background:#e0d6c8;color:#fff;cursor:default}
   .pcfg small{font-weight:800;font-size:calc(12px * var(--fs));color:#9a8676}
   /* 我的資產 / 對手的資產:內容區固定最高約 5 列半,超過就在框裡上下拖(或滾輪)捲動 */
   #assetRows,.frows{max-height:calc(230px * var(--fs));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;pointer-events:auto;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#d9c9b3 transparent}
@@ -259,7 +263,7 @@
       <div class="seg"><span id="pcN"></span><button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></div>
       <div class="seg"><span id="pcH"></span><button data-h="1">1</button><button data-h="2">2</button></div>
       <small id="pcAI"></small>
-      <div class="seg wide"><span id="pcM"></span><button data-m="rounds"></button><button data-m="target"></button><button data-m="bankrupt"></button></div>
+      <div class="seg wide"><span id="pcM"></span><button data-m="rounds"></button><span class="step" id="pcR"><button data-r="-1" aria-label="fewer rounds">▼</button><b id="pcRv">20</b><button data-r="1" aria-label="more rounds">▲</button></span><button data-m="target"></button><button data-m="bankrupt"></button></div>
       <small id="pcRule"></small>
     </div>
   </div>
@@ -272,6 +276,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=64"></script>
+<script type="module" src="./board.mjs?v=65"></script>
 </body>
 </html>
