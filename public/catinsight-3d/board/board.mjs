@@ -347,7 +347,7 @@ function setPlayers(chars, humans) {
 }
 function newState() {
   S = {
-    rolls: 0, busy: false, over: false, players: [], nh: 1, hi: 0, ci: 1,
+    rolls: 0, busy: false, over: false, players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null,
   };
@@ -825,7 +825,7 @@ async function portrait(key) {
 function setPortraits() {
   const put = (el, key) => portrait(key).then((url) => { if (el) el.style.backgroundImage = `url(${url})`; }).catch(() => {});
   put($('avaMe'), S.me);
-  document.querySelectorAll('#foes .box').forEach((b) => put(b.querySelector('.fav'), S.players[+b.dataset.i].char));
+  document.querySelectorAll('#assetTabs button').forEach((b) => put(b, S.players[+b.dataset.i].char));
 }
 let focus;
 // 四個棋子(第 3、4 個只有 3~4 人局才會出現)。同一格上四個角落各站一位
@@ -1025,14 +1025,13 @@ function advise() {
 const marginTag = (h, k) => (h.loan > 0 ? ` <b style="color:${ratioOf(h, k) < 1.5 ? '#c4472f' : '#8a5cf5'}">${L('M', '融')}${Math.round(ratioOf(h, k) * 100)}%</b>` : '');
 const squeezeTag = (h, k) => { const g = Math.max(0, squeezeGap(h, k)); return ` <b style="color:${g < 10 ? '#c4472f' : '#8a5cf5'}">${L('sq', '軋')}+${Math.ceil(g)}%</b>`; };
 const debtRow = (d) => (d > 0 ? `<div class="row"><i style="background:#4a63b0"></i><span>${L('Bank loan', '銀行貸款')}</span><span></span><span style="color:#c4472f">-${fmt(d)}</span></div>` : '');
-// 右側「其他玩家」的框:每局開始時依人數建一次(收合狀態才不會每次更新都被重設)。對手超過一位時,只展開第一個
+// 資產框上面那排頭像:每局開始時依人數建一次。點誰就看誰的資產
 function buildFoes() {
-  const el = $('foes'); el.innerHTML = '';
+  const el = $('assetTabs'); el.innerHTML = '';
   S.players.forEach((p) => {
-    const box = document.createElement('div'); box.className = 'box foe' + (S.players.length > 2 && p.i !== (S.hi === 0 ? 1 : 0) ? ' fold' : ''); box.dataset.i = p.i;
-    box.innerHTML = '<h4><span class="fav"></span><span class="fn"></span><span class="ft"></span><span class="tri"></span></h4><div class="frows"></div>';
-    box.querySelector('h4').onclick = () => box.classList.toggle('fold');
-    el.appendChild(box);
+    const b = document.createElement('button'); b.dataset.i = p.i; b.setAttribute('aria-label', nameOf(p));
+    b.onclick = () => { S.view = p.i; hud(); };
+    el.appendChild(b);
   });
 }
 function hud() {
@@ -1041,7 +1040,6 @@ function hud() {
   $('stocks').textContent = fmt(stockValue());
   { const lead = others().sort((a, b) => assetsOf(b) - assetsOf(a))[0];      // 上方資訊列:顯示目前最有錢的那位對手
     $('lblBear').textContent = nameOf(lead); $('bearAssets').textContent = fmt(assetsOf(lead)); }
-  $('assetTitle').textContent = S.nh > 1 ? L(`${nameOf(S.players[S.hi])}'s assets`, `${nameOf(S.players[S.hi])}的資產`) : L('My assets', '我的資產');
   $('bagCount').textContent = S.bag.length;
   $('mcount').textContent = S.done;
   $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left`, `剩 ${MAX_ROLLS - S.rolls} 次`);
@@ -1051,28 +1049,18 @@ function hud() {
   $('miss').innerHTML = S.missions.map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
   $('tip').textContent = advise();
-  $('assetRows').innerHTML =
-    `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(S.cash)}</span></div>` + debtRow(S.debt) +
-    (KEYS.some((k) => S.hold[k].n > 0 || S.short[k].n > 0)
-      ? KEYS.filter((k) => S.hold[k].n > 0).map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${S.hold[k].n} ${L('sh', '股')}${marginTag(S.hold[k], k)}</span><span>${fmt(S.hold[k].n * S.price[k])}</span></div>`).join('') +
-        KEYS.filter((k) => S.short[k].n > 0).map((k) => { const pl = (S.short[k].entry - S.price[k]) * S.short[k].n;
-          return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${S.short[k].n}${squeezeTag(S.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('')
-      : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`);
-  // 其他玩家的資產:每位一個框(現金 + 每一檔持股),讓你知道該打哪一檔。標題列有總資產,收合起來也看得到
-  document.querySelectorAll('#foes .box').forEach((box) => {
-    const A = S.players[+box.dataset.i]; if (!A) return;
-    box.style.display = A.i === S.hi ? 'none' : '';
+  // 資產框:一次只顯示一位。預設跟著「現在輪到誰」;點上面的頭像可以改看別人(下一位開始走的時候會自動切回去)
+  { const A = S.players[S.view ?? S.turn] || S.players[S.hi], mine = A.i === S.hi;
+    $('assetTitle').textContent = (isYou(A) ? L('My assets', '我的資產') : L(`${nameOf(A)}'s assets`, `${nameOf(A)}的資產`)) + ' · $' + fmt(assetsOf(A));
+    document.querySelectorAll('#assetTabs button').forEach((b) => { b.classList.toggle('on', +b.dataset.i === A.i); b.classList.toggle('turn', +b.dataset.i === S.turn); });
     const held = KEYS.filter((k) => A.hold[k].n > 0).sort((x, y) => A.hold[y].n * S.price[y] - A.hold[x].n * S.price[x]);
-    box.querySelector('.fn').textContent = nameOf(A) + (A.human ? L(' (player)', '(玩家)') : '');
-    box.querySelector('.ft').textContent = '$' + fmt(assetsOf(A));
-    box.querySelector('.frows').innerHTML =
+    $('assetRows').innerHTML =
       `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` + debtRow(A.debt) +
       (held.length ? held.map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${A.hold[k].n} ${L('sh', '股')}${marginTag(A.hold[k], k)}</span><span>${fmt(A.hold[k].n * S.price[k])}</span></div>`).join('')
         : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
       KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n;
         return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${A.short[k].n}${squeezeTag(A.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('') +
-      (A.bag.length && !A.human ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : '');
-  });
+      (A.bag.length && !mine ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : ''); }
   const e = S.lastEvent;
   $('evtBody').innerHTML = e
     ? `<div>${e.t}</div><div class="why">${e.w}</div>` + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
@@ -1586,13 +1574,13 @@ async function nextTurns() {
     if (i === 0 && S.rolls >= MAX_ROLLS) { await wait(0.4); return finish(); }
     const p = S.players[i];
     if (p.human) {
-      S.hi = i; if (S.players.length > S.nh) S.ci = S.players.findIndex((x) => !x.human); else S.ci = (i + 1) % S.players.length;
+      S.turn = i; S.view = null; S.hi = i; if (S.players.length > S.nh) S.ci = S.players.findIndex((x) => !x.human); else S.ci = (i + 1) % S.players.length;
       focus = PM(); pan.set(0, 0, 0);
       if (S.nh > 1) { setPortraits(); toast(L(`${nameOf(p)}'s turn (Player ${i + 1})`, `輪到${nameOf(p)}(玩家 ${i + 1})`)); }
       checkMissions();          // 別人走的時候股價會變,輪到自己先檢查一次任務
       S.busy = false; showCtl(true); return;
     }
-    S.ci = i; await aiTurn(); await flushNotices();
+    S.ci = i; S.turn = i; S.view = null; hud(); await aiTurn(); await flushNotices();
   }
 }
 function finish() {

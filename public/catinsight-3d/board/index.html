@@ -138,7 +138,11 @@
   .tri{margin-left:auto;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #fff;transition:transform .2s}
   .box.fold .tri{transform:rotate(-90deg)}
   .box.fold > div{display:none}
-  #foes{display:contents}
+  /* 資產框上面那排頭像:點誰看誰。橘色外框 = 正在看的;右下角綠點 = 現在輪到的 */
+  .tabs{display:flex;gap:calc(8px * var(--fs));padding:calc(7px * var(--fs)) 12px;border-bottom:1.5px solid #f1e6d6;pointer-events:auto}
+  .tabs button{position:relative;width:calc(34px * var(--fs));height:calc(34px * var(--fs));flex:none;border-radius:50%;border:2px solid #fff;background:#dfe8ff center 20%/cover;box-shadow:0 0 0 2px #e6d9c4;opacity:.6;cursor:pointer;padding:0}
+  .tabs button.on{opacity:1;box-shadow:0 0 0 3px #ff7a59}
+  .tabs button.turn::after{content:'';position:absolute;right:-3px;bottom:-3px;width:calc(11px * var(--fs));height:calc(11px * var(--fs));border-radius:50%;background:#35c26b;border:2px solid #fff}
   .box.foe .fn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .box.foe .ft{margin-left:auto;font-weight:900}
   .box.foe .tri{margin-left:6px}
@@ -152,7 +156,7 @@
   .pcfg .seg button.on{background:#ff7a59;color:#fff;box-shadow:0 3px 0 #d4553a}
   .pcfg small{font-weight:800;font-size:calc(12px * var(--fs));color:#9a8676}
   /* 我的資產 / 對手的資產:內容區固定最高約 5 列半,超過就在框裡上下拖(或滾輪)捲動 */
-  #assetRows,.frows{max-height:calc(150px * var(--fs));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;pointer-events:auto;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#d9c9b3 transparent}
+  #assetRows,.frows{max-height:calc(230px * var(--fs));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;pointer-events:auto;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#d9c9b3 transparent}
   #assetRows::-webkit-scrollbar,.frows::-webkit-scrollbar{width:5px}
   #assetRows::-webkit-scrollbar-thumb,.frows::-webkit-scrollbar-thumb{background:#d9c9b3;border-radius:3px}
   /* 抽市場事件:三張牌背。滑鼠移上去會浮起、傾斜、掃光;點了之後 3D 翻面 */
@@ -225,8 +229,7 @@
 <div class="miss" id="miss"></div>
 <div class="side">
   <div class="bubble"><span class="av" style="background-image:url(/assets/app-icon.png)"></span><span id="tip"></span></div>
-  <div class="box"><h4><span id="assetTitle"></span><span class="tri"></span></h4><div id="assetRows"></div></div>
-  <div id="foes"></div>
+  <div class="box"><h4><span id="assetTitle"></span><span class="tri"></span></h4><div class="tabs" id="assetTabs"></div><div id="assetRows"></div></div>
 </div>
 <div class="box ev evt"><h4 id="evtTitle"></h4><div class="body" id="evtBody"></div></div>
 <div class="round"><span id="roundTxt"></span><div class="trk"><b id="roundBar"></b></div></div>
@@ -262,6 +265,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=59"></script>
+<script type="module" src="./board.mjs?v=60"></script>
 </body>
 </html>
