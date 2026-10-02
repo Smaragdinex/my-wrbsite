@@ -137,14 +137,42 @@ const randomItem = () => { const r = Math.random(); return r < 0.4 ? 'remote' : 
 let S;
 // 放空部位的價值 = 保證金(進場價 x 股數)+ 損益((進場價 - 現價) x 股數);最慘賠光保證金
 const shortValue = (k, who = S) => { const h = who.short[k]; return h.n ? Math.max(0, h.n * (2 * h.entry - S.price[k])) : 0; };
-const assets = () => S.cash + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] + shortValue(k), 0);
+// 融資:自備 4 成、借 6 成。維持率 = 股票市值 / 借款,跌破 130% 就被強迫平倉(斷頭);每經過起點付借款 2% 的利息
+const MARGIN_LOAN = 0.6, MAINT = 1.3, MARGIN_FEE = 0.02;
+const ratioOf = (h, k) => (h.loan > 0 ? h.n * S.price[k] / h.loan : Infinity);
+const assets = () => S.cash + KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] - S.hold[k].loan + shortValue(k), 0);
 // 買賣會推動價格(量大推得多):買進推高、賣出和放空壓低。所以賣空對手持有的資產,等於直接打擊對手
-const impact = (k, f) => { S.price[k] = Math.max(8, S.price[k] * f); };
+const impact = (k, f) => { S.price[k] = Math.max(8, S.price[k] * f); marginCheck(); };
+// 強迫平倉:任何一次價格變動後都檢查。融資部位的維持率跌破 130% → 全部賣掉還款,剩多少拿回多少;
+// 被迫賣出的賣壓又會把股價往下壓(可能連帶讓別人也斷頭)。結果先記在 S.notices,等流程走到可以停的地方再用卡片告訴玩家
+function marginCheck() {
+  for (const [who, isMe] of [[S, true], [S.ai, false]]) for (const k of KEYS) {
+    const h = who.hold[k];
+    if (!(h.loan > 0) || h.n * S.price[k] / h.loan >= MAINT) continue;
+    const n = h.n, back = Math.max(0, n * S.price[k] - h.loan), put = h.cost - h.loan;
+    who.cash += back; h.n = 0; h.cost = 0; h.loan = 0;
+    S.notices.push({ isMe, k, n, back, lost: put - back });
+    impact(k, sellF(n));
+  }
+}
+async function flushNotices() {
+  while (S.notices.length) {
+    const x = S.notices.shift(), sec = SECTORS[x.k], who = CHARS[S.foe].name;
+    drawAll(); hud();
+    await cardPanel(x.isMe ? L('Margin call: you were liquidated', '強迫平倉:你被斷頭了') : L(`${who} was force-liquidated`, `${who}被強迫平倉`),
+      x.isMe
+        ? L(`${sec.name} fell until your margin ratio dropped below 130%. Your ${x.n} shares were sold to repay the loan. You got back $${fmt(x.back)} and lost $${fmt(x.lost)}. Borrowing to buy means being forced to sell at the worst moment.`,
+            `${sec.name}下跌,你的融資維持率跌破 130%。${x.n} 股被全部賣掉還款,只拿回 $${fmt(x.back)},賠掉 $${fmt(x.lost)}。借錢買股票,跌的時候會被迫賣在最低點。`)
+        : L(`${who} bought ${sec.name} on margin and its ratio fell below 130%. Its ${x.n} shares were dumped, losing $${fmt(x.lost)}. The forced selling pushes the price down even more.`,
+            `${who}用融資買的${sec.name}維持率跌破 130%,${x.n} 股被迫全部賣出,賠掉 $${fmt(x.lost)}。這波賣壓又把股價往下壓。`),
+      `<span class="mv dn">${sec.name} ${pct(sellF(x.n))}</span>`);
+  }
+}
 // 買越多推越高、賣越多壓越低:每股 0.4%(買 10 股 +4%、買 30 股 +12%),賣出每股 0.3%、最多 -15%。
 // 所以先買的人買得便宜,下一個人要用更貴的價格買
 const buyF = (n) => 1 + 0.004 * n, sellF = (n) => Math.max(0.85, 1 - 0.003 * n), SHORT_F = 0.95;
 const pct = (f) => `${f >= 1 ? '+' : ''}${Math.round((f - 1) * 100)}%`;
-const aiAssets = () => S.ai.cash + KEYS.reduce((a, k) => a + S.ai.hold[k].n * S.price[k] + shortValue(k, S.ai), 0);
+const aiAssets = () => S.ai.cash + KEYS.reduce((a, k) => a + S.ai.hold[k].n * S.price[k] - S.ai.hold[k].loan + shortValue(k, S.ai), 0);
 const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 // 任務:同時有 3 個。完成一個領 $500 獎金並換一個新的,一路玩到回合用完;結算依完成數給星星。
 // 每個任務在「抽出來的當下」才決定目標(例如資產成長的門檻跟著你現在的資產走),所以可以重複抽到
@@ -178,12 +206,12 @@ function newState() {
   S = {
     pos: 0, cash: START_CASH, rolls: 0, bag: ['remote'], busy: false, over: false,
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
-    hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])),
+    hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])),
     short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
-    shop: { round: -1, stock: [] },
+    shop: { round: -1, stock: [] }, notices: [],
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
     missions: [], done: 0, me: 'cat', foe: 'bear',
-    ai: { pos: 0, cash: START_CASH, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) },
+    ai: { pos: 0, cash: START_CASH, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) },
   };
   for (let i = 0; i < 3; i++) S.missions.push(drawMission());
 }
@@ -704,6 +732,11 @@ function advise() {
   if (todo.has('spread') && held.length < 3) return L(`You hold ${held.length} sector${held.length === 1 ? '' : 's'}. Three different ones spread your risk.`, `你現在持有 ${held.length} 種類股,湊滿 3 種可以分散風險。`);
   if (todo.has('paid')) return L('High-yield and REIT pay the most each lap. Hold them when you pass GO.', '高股息和不動產配息最多,持有它們再繞回起點就能領股利。');
   if (todo.has('cash') && S.cash < 2000) return L('Cash is low. Keep $2,000 so you can buy when a chance shows up.', '現金偏低。留 $2,000 以上,好機會出現時才買得起。');
+  { const mk = KEYS.filter((k) => S.ai.hold[k].loan > 0).sort((a, b) => ratioOf(S.ai.hold[a], a) - ratioOf(S.ai.hold[b], b))[0];
+    if (mk) { const r = ratioOf(S.ai.hold[mk], mk), drop = Math.max(1, Math.ceil((1 - MAINT / r) * 100));
+      return L(`Your rival bought ${SECTORS[mk].name} on margin (ratio ${Math.round(r * 100)}%). A ${drop}% drop forces it to sell.`, `對手用融資買了${SECTORS[mk].name},維持率 ${Math.round(r * 100)}%。再跌 ${drop}% 牠就會被強迫平倉。`); } }
+  { const my = KEYS.filter((k) => S.hold[k].loan > 0 && ratioOf(S.hold[k], k) < 1.5)[0];
+    if (my) return L(`Careful: your ${SECTORS[my].name} margin ratio is ${Math.round(ratioOf(S.hold[my], my) * 100)}%. Below 130% it is sold for you.`, `小心:你的${SECTORS[my].name}融資維持率只剩 ${Math.round(ratioOf(S.hold[my], my) * 100)}%,跌破 130% 會被強迫平倉。`); }
   if (S.bag.includes('atk')) { const fk = KEYS.filter((k) => S.ai.hold[k].n > 0).sort((a, b) => S.ai.hold[b].n * S.price[b] - S.ai.hold[a].n * S.price[a])[0];
     if (fk) return L(`Your rival holds a lot of ${SECTORS[fk].name}. A bad news card would hit it.`, `對手持有不少${SECTORS[fk].name},用利空消息卡可以打擊它。`); }
   const card = S.bag.find((id) => id.startsWith('ev'));
@@ -714,6 +747,8 @@ function advise() {
   if (d) return L(`A market event is ${d} step${d > 1 ? 's' : ''} ahead. Every price may move.`, `前方第 ${d} 格是市場事件,所有價格都可能變動。`);
   return L('No one knows the next roll. Spread out and keep some cash.', '沒有人知道下一步會擲出幾點,分散持股、留點現金最穩。');
 }
+// 融資部位的小標:維持率,低於 150% 用紅字警告
+const marginTag = (h, k) => (h.loan > 0 ? ` <b style="color:${ratioOf(h, k) < 1.5 ? '#c4472f' : '#8a5cf5'}">${L('M', '融')}${Math.round(ratioOf(h, k) * 100)}%</b>` : '');
 function hud() {
   $('cash').textContent = fmt(S.cash);
   $('assets').textContent = fmt(assets());
@@ -728,7 +763,7 @@ function hud() {
   $('assetRows').innerHTML =
     `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(S.cash)}</span></div>` +
     (KEYS.some((k) => S.hold[k].n > 0 || S.short[k].n > 0)
-      ? KEYS.filter((k) => S.hold[k].n > 0).map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${S.hold[k].n} ${L('sh', '股')}</span><span>${fmt(S.hold[k].n * S.price[k])}</span></div>`).join('') +
+      ? KEYS.filter((k) => S.hold[k].n > 0).map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${S.hold[k].n} ${L('sh', '股')}${marginTag(S.hold[k], k)}</span><span>${fmt(S.hold[k].n * S.price[k])}</span></div>`).join('') +
         KEYS.filter((k) => S.short[k].n > 0).map((k) => { const pl = (S.short[k].entry - S.price[k]) * S.short[k].n;
           return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${S.short[k].n}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('')
       : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`);
@@ -737,7 +772,7 @@ function hud() {
     $('foeName').textContent = L(`${CHARS[S.foe].name}'s assets`, `${CHARS[S.foe].name}的資產`);
     $('foeRows').innerHTML =
       `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` +
-      (held.length ? held.map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${A.hold[k].n} ${L('sh', '股')}</span><span>${fmt(A.hold[k].n * S.price[k])}</span></div>`).join('')
+      (held.length ? held.map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${A.hold[k].n} ${L('sh', '股')}${marginTag(A.hold[k], k)}</span><span>${fmt(A.hold[k].n * S.price[k])}</span></div>`).join('')
         : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
       KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n;
         return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${A.short[k].n}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('') +
@@ -770,47 +805,53 @@ function buyPanel(k) {
     const gain = h.n ? (price * h.n - h.cost) / h.cost * 100 : 0;
     const spl = sh.n ? (sh.entry - price) / sh.entry * 100 : 0;
     const vs = (price / sec.open - 1) * 100;
-    const rival = S.ai.hold[k].n, rivalShort = S.ai.short[k].n;
+    const rival = S.ai.hold[k], rivalShort = S.ai.short[k].n;
+    const mCost = price * LOT * 3, mDown = mCost * (1 - MARGIN_LOAN), ratio = ratioOf(h, k);
     const p = panel(`
       <h3><span class="tag" style="background:${sec.css}">${sec.code}</span>${sec.name}</h3>
-      <p>${sec.blurb}${rival ? ` <b style="color:#c4472f">${L(`Your rival holds ${rival}.`, `對手持有 ${rival} 股。`)}</b>` : ''}${rivalShort ? ` <b style="color:#8a5cf5">${L(`Your rival is short ${rivalShort}.`, `對手放空 ${rivalShort} 股。`)}</b>` : ''}</p>
+      <p>${sec.blurb}${rival.n ? ` <b style="color:#c4472f">${L(`Your rival holds ${rival.n}`, `對手持有 ${rival.n} 股`)}${rival.loan > 0 ? L(` on margin (ratio ${Math.round(ratioOf(rival, k) * 100)}%)`, `(融資,維持率 ${Math.round(ratioOf(rival, k) * 100)}%)`) : ''}${L('.', '。')}</b>` : ''}${rivalShort ? ` <b style="color:#8a5cf5">${L(`Your rival is short ${rivalShort}.`, `對手放空 ${rivalShort} 股。`)}</b>` : ''}</p>
       <div class="kv">
         <div>${L('Price', '股價')}<b>$${Math.round(price)}</b></div>
         <div>${L('Since open', '相對開盤')}<b style="color:${vs >= 0 ? '#1c8a4a' : '#c4472f'}">${vs >= 0 ? '+' : ''}${vs.toFixed(0)}%</b></div>
-        <div>${sh.n ? L('Short', '放空') : L('You hold', '持有')}<b>${sh.n || h.n}${(sh.n || h.n) ? ` <span style="font-size:11px;color:${(sh.n ? spl : gain) >= 0 ? '#1c8a4a' : '#c4472f'}">${(sh.n ? spl : gain) >= 0 ? '+' : ''}${(sh.n ? spl : gain).toFixed(0)}%</span>` : ''}</b></div>
+        <div>${sh.n ? L('Short', '放空') : h.loan > 0 ? L('Margin', '融資持有') : L('You hold', '持有')}<b>${sh.n || h.n}${(sh.n || h.n) ? ` <span style="font-size:11px;color:${(sh.n ? spl : gain) >= 0 ? '#1c8a4a' : '#c4472f'}">${(sh.n ? spl : gain) >= 0 ? '+' : ''}${(sh.n ? spl : gain).toFixed(0)}%</span>` : ''}${h.loan > 0 ? `<span style="display:block;font-size:11px;color:${ratio < 1.5 ? '#c4472f' : '#8a786c'}">${L('ratio', '維持率')} ${Math.round(ratio * 100)}%</span>` : ''}</b></div>
       </div>
       <div class="btns">
-        <button class="b-buy" data-a="buy1" ${S.cash < price * LOT || sh.n ? 'disabled' : ''}>${L('Buy 10', '買 10 股')}<br><span style="font-size:11px">$${fmt(price * LOT)} · ${L('price', '股價')} ${pct(buyF(LOT))}</span></button>
-        <button class="b-buy" data-a="buy3" ${S.cash < price * LOT * 3 || sh.n ? 'disabled' : ''}>${L('Buy 30', '買 30 股')}<br><span style="font-size:11px">$${fmt(price * LOT * 3)} · ${L('price', '股價')} ${pct(buyF(LOT * 3))}</span></button>
-        <button class="b-sell" data-a="sell" ${h.n ? '' : 'disabled'}>${L('Sell all', '全部賣出')}${h.n ? `<br><span style="font-size:11px">${L('price', '股價')} ${pct(sellF(h.n))}</span>` : ''}</button>
+        <button class="b-buy" data-a="buy1" ${S.cash < price * LOT || sh.n ? 'disabled' : ''}>${L('Buy 10', '買 10 股')}<br><span style="font-size:11px">$${fmt(price * LOT)} · ${pct(buyF(LOT))}</span></button>
+        <button class="b-buy" data-a="buy3" ${S.cash < mCost || sh.n ? 'disabled' : ''}>${L('Buy 30', '買 30 股')}<br><span style="font-size:11px">$${fmt(mCost)} · ${pct(buyF(LOT * 3))}</span></button>
+        <button class="b-margin" data-a="margin" ${S.cash < mDown || sh.n ? 'disabled' : ''}>${L('Margin 30', '融資買 30 股')}<br><span style="font-size:11px">${L('pay', '自備')} $${fmt(mDown)}</span></button>
       </div>
       <div class="btns" style="margin-top:8px">
+        <button class="b-sell" data-a="sell" ${h.n ? '' : 'disabled'}>${L('Sell all', '全部賣出')}${h.n ? `<br><span style="font-size:11px">${pct(sellF(h.n))}</span>` : ''}</button>
         ${sh.n
           ? `<button class="b-ok" data-a="cover">${L('Cover short', '回補空單')}<br><span style="font-size:11px">${spl >= 0 ? '+' : '-'}$${fmt(Math.abs((sh.entry - price) * sh.n))}</span></button>`
           : `<button class="b-short" data-a="short" ${S.cash < price * LOT || h.n ? 'disabled' : ''}>${L('Short 10', '放空 10 股')}<br><span style="font-size:11px">${L('margin', '保證金')} $${fmt(price * LOT)}</span></button>`}
         <button class="b-skip" data-a="skip">${L('Skip', '跳過')}</button>
       </div>
-      <p style="font-size:11.5px">${L('Buying pushes the price up, so whoever buys next pays more. Selling and shorting push it down. Shorting: sell borrowed shares now and buy them back later; you win if the price falls.', '買進會把股價推高,所以下一個買的人要付更貴;賣出和放空會把股價壓低。放空:先借股票賣掉、之後再買回來還,跌了你賺、漲了你賠。')}</p>`);
+      <p style="font-size:11.5px">${L('Buying pushes the price up, so whoever buys next pays more; selling and shorting push it down.', '買進會推高股價,下一個買的人要付更貴;賣出和放空會壓低股價。')}<br>
+      ${L('Margin: pay 40% and borrow 60%. If the ratio (stock value / loan) falls below 130%, everything is sold for you. Interest is 2% of the loan each lap.', '融資:自備 4 成、借 6 成。維持率(市值÷借款)跌破 130% 會被強迫平倉;每圈付借款 2% 的利息。')}<br>
+      ${L('Short: sell borrowed shares, buy back later. You win if the price falls.', '放空:先借股票賣掉、之後買回來還,跌了你賺、漲了你賠。')}</p>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
       const a = b.dataset.a;
-      if (a === 'buy1' || a === 'buy3') {
-        const n = LOT * (a === 'buy1' ? 1 : 3), cost = price * n;
-        S.cash -= cost; h.n += n; h.cost += cost;
+      if (a === 'buy1' || a === 'buy3' || a === 'margin') {
+        const n = LOT * (a === 'buy1' ? 1 : 3), cost = price * n, loan = a === 'margin' ? cost * MARGIN_LOAN : 0;
+        S.cash -= cost - loan; h.n += n; h.cost += cost; h.loan += loan;
         if (price < sec.open * 0.97) S.flags.dip = true;
         impact(k, buyF(n));
-        toast(L(`Bought ${n} ${sec.name}. Price ${pct(buyF(n))}`, `買進 ${sec.name} ${n} 股,股價被推高 ${pct(buyF(n))}`));
+        toast(a === 'margin' ? L(`Margin-bought ${n} ${sec.name}, borrowed $${fmt(loan)}`, `融資買進 ${sec.name} ${n} 股,借了 $${fmt(loan)}`)
+          : L(`Bought ${n} ${sec.name}. Price ${pct(buyF(n))}`, `買進 ${sec.name} ${n} 股,股價被推高 ${pct(buyF(n))}`));
       } else if (a === 'sell') {
-        const value = price * h.n;
+        const n = h.n, value = price * n, loan = h.loan;
         if ((value - h.cost) / h.cost >= 0.15) S.flags.profit = true;
-        toast(L('Sold for', '賣出得') + ` $${fmt(value)} (${value >= h.cost ? '+' : '-'}$${fmt(Math.abs(value - h.cost))})`);
-        impact(k, sellF(h.n)); S.cash += value; h.n = 0; h.cost = 0;
+        toast(L('Sold for', '賣出得') + ` $${fmt(value)} (${value >= h.cost ? '+' : '-'}$${fmt(Math.abs(value - h.cost))})` + (loan ? L(`, repaid $${fmt(loan)}`, `,還款 $${fmt(loan)}`) : ''));
+        S.cash += value - loan; h.n = 0; h.cost = 0; h.loan = 0;      // 先把部位清掉再動價格,不然自己的賣壓會觸發自己的斷頭檢查
+        impact(k, sellF(n));
       } else if (a === 'short') {
         S.cash -= price * LOT; sh.entry = (sh.entry * sh.n + price * LOT) / (sh.n + LOT); sh.n += LOT; impact(k, SHORT_F);
         toast(L(`Shorted ${LOT} ${sec.name}. Price ${pct(SHORT_F)}`, `放空 ${sec.name} ${LOT} 股,股價被壓低 ${pct(SHORT_F)}`));
       } else if (a === 'cover') {
-        const back = shortValue(k), pl = (sh.entry - price) * sh.n;
-        if (pl / (sh.entry * sh.n) >= 0.15) S.flags.profit = true;
-        impact(k, buyF(sh.n)); S.cash += back; sh.n = 0; sh.entry = 0;
+        const n = sh.n, back = shortValue(k), pl = (sh.entry - price) * n;
+        if (pl / (sh.entry * n) >= 0.15) S.flags.profit = true;
+        S.cash += back; sh.n = 0; sh.entry = 0; impact(k, buyF(n));
         toast(L('Covered:', '回補:') + ` ${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}`);
       }
       drawAll(); hud(); closePanel(); res();
@@ -828,8 +869,9 @@ function cardPanel(title, text, moves = '') {
 // 起點:薪水 + 股利;對面的「股息結算」格:只發股利
 function payday(salary = SALARY) {
   const div = KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * SECTORS[k].div, 0);
-  S.lastDividend = div; S.cash += salary + div;
-  toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)} · ` : '') + `${L('dividends', '股利')} +$${fmt(div)}`);
+  const interest = salary ? KEYS.reduce((a, k) => a + S.hold[k].loan * MARGIN_FEE, 0) : 0;   // 融資利息:每經過起點付一次
+  S.lastDividend = div; S.cash += salary + div - interest;
+  toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)} · ` : '') + `${L('dividends', '股利')} +$${fmt(div)}` + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : ''));
   hud(); checkMissions();
 }
 function checkMissions() {
@@ -840,7 +882,7 @@ function checkMissions() {
 }
 async function playEvent(e) {
   KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
-  S.lastEvent = e; drawAll(); hud();
+  S.lastEvent = e; marginCheck(); drawAll(); hud();
   const moves = KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
   await cardPanel(e.t, e.w, moves);
 }
@@ -889,7 +931,7 @@ function attackPanel() {
 async function badNews(k, byPlayer) {
   const who = CHARS[S.foe].name, sec = SECTORS[k];
   const loss = (byPlayer ? S.ai.hold[k].n : S.hold[k].n) * S.price[k] * (1 - ATK_DROP);
-  S.price[k] *= ATK_DROP;
+  S.price[k] *= ATK_DROP; marginCheck();
   S.lastEvent = { t: L(`Bad news about ${sec.name}`, `${sec.name}傳出利空`), w: L('Rumors and bad headlines can sink a price fast.', '壞消息和傳言可以讓股價快速下跌。'), m: Object.fromEntries(KEYS.map((x) => [x, x === k ? ATK_DROP : 1])) };
   drawAll(); hud();
   await cardPanel(byPlayer ? L(`You spread bad news about ${sec.name}`, `你放出${sec.name}的利空消息`) : L(`${who} spreads bad news about ${sec.name}`, `${who}放出${sec.name}的利空消息`),
@@ -922,11 +964,11 @@ function bagPanel() {
       });
     } else if (id === 'atk') {
       const k = await attackPanel();
-      if (k) { S.bag.splice(S.bag.indexOf('atk'), 1); await badNews(k, true); checkMissions(); }
+      if (k) { S.bag.splice(S.bag.indexOf('atk'), 1); await badNews(k, true); await flushNotices(); checkMissions(); }
       S.busy = false; showCtl(true);
     } else {
       S.bag.splice(S.bag.indexOf(id), 1);
-      await playEvent(itemInfo(id).event);
+      await playEvent(itemInfo(id).event); await flushNotices();
       checkMissions(); S.busy = false; showCtl(true);
     }
   });
@@ -949,7 +991,7 @@ async function aiTurn() {
   for (let i = 0; i < n; i++) {
     A.pos = (A.pos + 1) % TILES.length;
     await hopTo(A.pos, BEAR);
-    if (A.pos === 0 || TILES[A.pos] === 'divi') { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += (A.pos === 0 ? SALARY : 0) + div; hud(); }
+    if (A.pos === 0 || TILES[A.pos] === 'divi') { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += (A.pos === 0 ? SALARY : 0) + div - (A.pos === 0 ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) : 0); hud(); }
   }
   await wait(0.2);
   const type = TILES[A.pos], sec = SECTORS[type];
@@ -958,18 +1000,23 @@ async function aiTurn() {
     if (sh.n) {
       // 有空單:賺 12% 以上就回補落袋,虧 12% 以上就停損,不然續抱
       const r = (sh.entry - price) / sh.entry;
-      if (Math.abs(r) >= 0.12) { const pl = (sh.entry - price) * sh.n; A.cash += shortValue(type, A); impact(type, buyF(sh.n)); sh.n = 0; sh.entry = 0;
+      if (Math.abs(r) >= 0.12) { const pl = (sh.entry - price) * sh.n; A.cash += shortValue(type, A); const cn = sh.n; sh.n = 0; sh.entry = 0; impact(type, buyF(cn));
         toast(L(`${who} covered its ${sec.name} short (${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`, `${who}回補${sec.name}空單(${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`)); }
       else toast(L(`${who} keeps its ${sec.name} short`, `${who}續抱${sec.name}空單`));
     } else if (h.n && (price * h.n - h.cost) / h.cost >= 0.15) {
-      A.cash += price * h.n; toast(L(`${who} took profit on ${sec.name}. Price ${pct(sellF(h.n))}`, `${who}賣出${sec.name}獲利了結,股價 ${pct(sellF(h.n))}`)); impact(type, sellF(h.n)); h.n = 0; h.cost = 0;
+      const n = h.n; A.cash += price * n - h.loan; h.n = 0; h.cost = 0; h.loan = 0;
+      toast(L(`${who} took profit on ${sec.name}. Price ${pct(sellF(n))}`, `${who}賣出${sec.name}獲利了結,股價 ${pct(sellF(n))}`)); impact(type, sellF(n));
     } else if (!h.n && A.cash >= price * LOT + 2000 && ((mine >= LOT && price > sec.open * 1.08) || price > sec.open * 1.3)) {
       // 放空:你持有而且已經漲了一段(打擊你),或是漲太多(賭它回檔)
       A.cash -= price * LOT; sh.entry = price; sh.n = LOT; impact(type, SHORT_F);
       toast(mine >= LOT ? L(`${who} shorts ${sec.name} to hit you. Price ${pct(SHORT_F)}`, `${who}放空${sec.name}打擊你,股價 ${pct(SHORT_F)}`) : L(`${who} shorts ${sec.name}. Price ${pct(SHORT_F)}`, `${who}放空${sec.name},股價 ${pct(SHORT_F)}`));
     } else {
       const lots = (price < sec.open * 0.95 && A.cash >= price * LOT * 3 + 2000) ? 3 : (A.cash >= price * LOT + 1500 ? 1 : 0);
-      if (lots) { const q = LOT * lots; A.cash -= price * q; h.n += q; h.cost += price * q; impact(type, buyF(q)); toast(L(`${who} bought ${q} ${sec.name}. Price ${pct(buyF(q))}`, `${who}買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); }
+      // 三次裡有一次會貪心用融資買 30 股(只付 4 成)—— 這就是你可以用放空和利空卡逼牠斷頭的機會
+      const greedy = lots && !h.loan && Math.random() < 0.35 && A.cash >= price * LOT * 3 * (1 - MARGIN_LOAN) + 1500;
+      if (greedy) { const q = LOT * 3, cost = price * q; A.cash -= cost * (1 - MARGIN_LOAN); h.n += q; h.cost += cost; h.loan += cost * MARGIN_LOAN; impact(type, buyF(q));
+        toast(L(`${who} margin-bought ${q} ${sec.name}. Price ${pct(buyF(q))}`, `${who}融資買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); }
+      else if (lots) { const q = LOT * lots; A.cash -= price * q; h.n += q; h.cost += price * q; impact(type, buyF(q)); toast(L(`${who} bought ${q} ${sec.name}. Price ${pct(buyF(q))}`, `${who}買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); }
       else toast(L(`${who} keeps cash and skips`, `${who}保留現金,跳過`));
     }
     drawAll(); hud(); await wait(1.0);
@@ -1002,6 +1049,7 @@ async function turn(forced) {
   S.rolls++;
   // 每回合小幅隨機波動
   KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2)); });
+  marginCheck();
   drawAll(); hud();
   await wait(0.15);
 
@@ -1016,10 +1064,12 @@ async function turn(forced) {
   else if (type === 'divi') await cardPanel(L('Dividend day', '股息結算'), L(`You collected $${fmt(S.lastDividend)} in dividends. Assets that pay nothing, like gold, biotech and crypto, only make money if the price rises.`, `領到股利 $${fmt(S.lastDividend)}。黃金、生技、加密貨幣不配息,只能靠價格上漲賺錢。`));
   else await cardPanel(L('Payday', '發薪日'), L(`Salary $${fmt(SALARY)}${S.lastDividend > 0 ? ` plus $${fmt(S.lastDividend)} in dividends` : ''}. Holding stocks pays you every lap.`, `薪水 $${fmt(SALARY)}${S.lastDividend > 0 ? `,加上股利 $${fmt(S.lastDividend)}` : ''}。持有股票,每繞一圈都會配息。`));
 
+  await flushNotices();
   S.cashStreak = (stockValue() > 0 && S.cash >= 2000) ? S.cashStreak + 1 : 0;
   checkMissions();
   // 換小熊走。牠踩到市場事件也會改變大家的股價,所以走完要再檢查一次任務
   await aiTurn();
+  await flushNotices();
   checkMissions();
   if (S.rolls >= MAX_ROLLS) { await wait(0.4); return finish(); }
   S.busy = false; showCtl(true);

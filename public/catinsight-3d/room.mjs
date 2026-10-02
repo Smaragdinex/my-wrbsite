@@ -724,7 +724,7 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=36';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=37';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 在機台螢幕上按 PLAY → 鏡頭先推進到螢幕蓋滿畫面(updateZoom 裡的 pushT)→ 推到底時 openGame() 換成真正的遊戲
