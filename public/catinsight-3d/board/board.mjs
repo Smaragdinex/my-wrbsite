@@ -1385,7 +1385,7 @@ async function aiIpo() {
   else toast(L(`${who} skips the IPO`, `${who}沒有申購`));
   drawAll(); hud(); await wait(1.1);
 }
-// 銀行:借現金 / 還錢。面板開著可以連續操作,按離開才走
+// 銀行:借現金 / 還錢。每次走到銀行只做一個動作,選完面板就關掉、換下一位
 function bankPanel() {
   return new Promise((res) => {
     const draw = () => {
@@ -1413,7 +1413,7 @@ function bankPanel() {
         const amt = a === 'b1' ? 1000 : a === 'b3' ? 3000 : a === 'r1' ? -1000 : -S.debt;
         S.cash += amt; S.debt += amt; sfx(amt > 0 ? 'coin' : 'sell');
         toast(amt > 0 ? L(`Borrowed $${fmt(amt)}`, `借了 $${fmt(amt)}`) : L(`Repaid $${fmt(-amt)}`, `還了 $${fmt(-amt)}`));
-        hud(); draw();
+        hud(); closePanel(); res();        // 選一個動作就結束,不用再按離開
       });
     };
     draw();
