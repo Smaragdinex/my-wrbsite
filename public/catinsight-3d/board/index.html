@@ -138,6 +138,10 @@
   .tri{margin-left:auto;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #fff;transition:transform .2s}
   .box.fold .tri{transform:rotate(-90deg)}
   .box.fold > div{display:none}
+  /* 我的資產 / 對手的資產:內容區固定最高約 5 列半,超過就在框裡上下拖(或滾輪)捲動 */
+  #assetRows,#foeRows{max-height:calc(150px * var(--fs));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;pointer-events:auto;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#d9c9b3 transparent}
+  #assetRows::-webkit-scrollbar,#foeRows::-webkit-scrollbar{width:5px}
+  #assetRows::-webkit-scrollbar-thumb,#foeRows::-webkit-scrollbar-thumb{background:#d9c9b3;border-radius:3px}
   /* 抽市場事件:三張牌背。滑鼠移上去會浮起、傾斜、掃光;點了之後 3D 翻面 */
   .draw{position:fixed;inset:0;z-index:8;background:rgba(40,30,60,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(18px * var(--fs));padding:16px}
   .draw h2{font-size:calc(24px * var(--fs));font-weight:900;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.25)}
@@ -238,6 +242,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=50"></script>
+<script type="module" src="./board.mjs?v=51"></script>
 </body>
 </html>
