@@ -441,14 +441,15 @@ let catModel = null;
 // ---------- 街機螢幕的待機畫面:股票大富翁(一圈彩色格子、兔子繞圈跳、兩顆骰子、跑馬燈報價)----------
 const ARC_COLORS = ['#ff8fc0', '#8b7cff', '#4f8ef0', '#ffd24a', '#f5b942', '#f2796b', '#54c98a', '#5aa9ff', '#c48ad6', '#2a9db5', '#ffd24a', '#e85d9b', '#9aa0ad', '#e6b422', '#3d5a80', '#ffd24a', '#2ec4b6', '#f7931a', '#5aa9ff', '#7fb069', '#b5179e', '#ff9f6b'];
 // 機台螢幕上的按鈕位置(畫布座標 520x385),畫和點擊判定共用
-// 版面:格子圈加高一排,把標題、骰子和按鈕都包在圈裡面(按鈕在標題下面:左邊語言切換、右邊 PLAY);
-// 圈的下面留白給房間的 ‹ 🖱 › 導覽列(它疊在畫面正下方)
-const ARC_BTN = { zh: { x: 104, y: 230, w: 70, h: 32 }, en: { x: 176, y: 230, w: 70, h: 32 }, play: { x: 276, y: 227, w: 140, h: 38 } };
+// 版面:格子圈占滿整個螢幕,標題、骰子、按鈕(左邊語言切換、右邊 PLAY)都在圈裡面;
+// 房間的 ‹ 🖱 › 導覽列也搬進圈裡、排在按鈕下面(ARC_PILL_Y)
+const ARC_BTN = { zh: { x: 104, y: 218, w: 70, h: 32 }, en: { x: 176, y: 218, w: 70, h: 32 }, play: { x: 276, y: 215, w: 140, h: 38 } };
 function arcadeButtonAt(x, y) {
   for (const k in ARC_BTN) { const b = ARC_BTN[k]; if (x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 8 && y <= b.y + b.h + 8) return k; }
   return null;
 }
 let arcadeMenu = false, pushT = 0, pushGoal = 0;
+const ARC_PILL_Y = 300, pillV = new THREE.Vector3(), pillEl = document.querySelector('.pill');   // 導覽列在街機螢幕上的位置(畫布 y)
 let gameLang = (() => { let v = null; try { v = localStorage.getItem('css.lang'); } catch (e) {} return (v || navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'; })();
 function setGameLang(code) { gameLang = code; try { localStorage.setItem('css.lang', code); } catch (e) {} prewarmGame(); }
 // cv / zoom:可以畫到別的畫布並放大 zoom 倍(進入街機後的選單畫面就是同一張圖的高解析版)
@@ -459,10 +460,10 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   g.save();
   g.beginPath(); g.roundRect(0, 0, W, H, 34); g.clip();                    // 圓角螢幕
   g.fillStyle = '#bfe6a8'; g.fillRect(0, 0, W, H);                         // 草地
-  g.fillStyle = '#f6e3c2'; g.beginPath(); g.roundRect(14, 6, W - 28, H - 16, 18); g.fill();   // 人行道
-  g.fillStyle = '#9bdc7a'; g.beginPath(); g.roundRect(84, 72, W - 168, 206, 12); g.fill();      // 中間草地
+  g.fillStyle = '#f6e3c2'; g.beginPath(); g.roundRect(14, 14, W - 28, H - 20, 18); g.fill();   // 人行道
+  g.fillStyle = '#9bdc7a'; g.beginPath(); g.roundRect(84, 80, W - 168, 246, 12); g.fill();      // 中間草地
   // 一圈格子:上下各 8 格、左右各 4 格,共 24 格,順時針排
-  const TW = 58, TH = 40, x0 = 22, y0 = 28, cols = 8, rows = 7, cells = [];
+  const TW = 58, TH = 48, x0 = 22, y0 = 28, cols = 8, rows = 7, cells = [];
   for (let i = 0; i < cols; i++) cells.push([x0 + i * (TW + 2), y0]);
   for (let j = 1; j < rows - 1; j++) cells.push([x0 + (cols - 1) * (TW + 2), y0 + j * (TH + 2)]);
   for (let i = cols - 1; i >= 0; i--) cells.push([x0 + i * (TW + 2), y0 + (rows - 1) * (TH + 2)]);
@@ -472,9 +473,9 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
     const c = ARC_COLORS[i % ARC_COLORS.length], lit = i === at;
     g.fillStyle = c; g.beginPath(); g.roundRect(x, y + 5, TW, TH - 5, 7); g.fill();                 // 側邊顏色
     g.fillStyle = lit ? '#fffbe0' : '#fff8ec'; g.beginPath(); g.roundRect(x, y - (lit ? 0 : 0), TW, TH - 9, 7); g.fill();   // 頂面
-    g.fillStyle = c; g.beginPath(); g.arc(x + TW / 2, y + 10, 5.5, 0, Math.PI * 2); g.fill();        // 小圖示
+    g.fillStyle = c; g.beginPath(); g.arc(x + TW / 2, y + 13, 6, 0, Math.PI * 2); g.fill();        // 小圖示
     g.fillStyle = '#3b2f2a'; g.font = '900 11px Menlo, monospace'; g.textAlign = 'center';
-    g.fillText(i === 0 ? 'GO' : (c === '#ffd24a' ? '?' : '$' + (60 + (i * 37) % 70)), x + TW / 2, y + 27);
+    g.fillText(i === 0 ? 'GO' : (c === '#ffd24a' ? '?' : '$' + (60 + (i * 37) % 70)), x + TW / 2, y + 32);
   });
   // 貓:從目前這格跳到下一格
   const [ax, ay] = cells[at], [bx, by] = cells[(at + 1) % n];
@@ -496,14 +497,14 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
     g.restore();
   };
   const k = Math.floor(t * 2);
-  die(W / 2 + 98, 124, 1 + (k * 5 + 2) % 6, Math.sin(t * 3) * 0.18); die(W / 2 + 146, 146, 1 + (k * 3 + 4) % 6, Math.sin(t * 3 + 1.4) * 0.18);
+  die(W / 2 + 98, 130, 1 + (k * 5 + 2) % 6, Math.sin(t * 3) * 0.18); die(W / 2 + 146, 152, 1 + (k * 3 + 4) % 6, Math.sin(t * 3 + 1.4) * 0.18);
   // 標題 + 閃爍提示
   g.textAlign = 'center';
   // 標題跟著選的語言換:中文字用系統的中文字型(Menlo 沒有中文字)
   const zhT = gameLang === 'zh', t1 = zhT ? '貓咪股市' : 'CAT STREET', t2 = zhT ? '大富翁' : 'STOCKS';
   g.font = zhT ? '900 36px "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif' : '900 30px Menlo, monospace';
-  g.fillStyle = 'rgba(0,0,0,.22)'; g.fillText(t1, W / 2 - 40 + 2, 132 + 2); g.fillText(t2, W / 2 - 40 + 2, (zhT ? 174 : 168) + 2);
-  g.fillStyle = '#fff'; g.fillText(t1, W / 2 - 40, 132); g.fillStyle = '#ff7a59'; g.fillText(t2, W / 2 - 40, zhT ? 174 : 168);
+  g.fillStyle = 'rgba(0,0,0,.22)'; g.fillText(t1, W / 2 - 40 + 2, 138 + 2); g.fillText(t2, W / 2 - 40 + 2, (zhT ? 180 : 174) + 2);
+  g.fillStyle = '#fff'; g.fillText(t1, W / 2 - 40, 138); g.fillStyle = '#ff7a59'; g.fillText(t2, W / 2 - 40, zhT ? 180 : 174);
   // 鏡頭停在街機前時:最下面一排畫上語言切換(左)和 PLAY(右)(點擊判定見 arcadeButtonAt)
   if (arcadeMenu) {
     g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -633,6 +634,12 @@ function updateZoom(dt) {
   // 鏡頭快到街機前(0.9 就算,最後那段收尾很慢不用等):機台螢幕上出現語言 / PLAY 按鈕
   arcadeMenu = zoomGoal >= 1 && zoomT > 0.9 && focusArcade && !gameOn;
   if (focusArcade && zoomGoal >= 1 && zoomT > 0.35 && !gameOn && !gameFrame) prewarmGame();   // 鏡頭飛向街機的途中就開始預載遊戲
+  // 街機選單時,房間的 ‹ 🖱 › 導覽列搬進格子圈裡面(語言 / 開始按鈕的下面):把螢幕上那個點投影到視窗座標。
+  // 這樣格子圈可以占滿整個螢幕,貓在最下面一排跳的時候不會被導覽列擋住
+  if (arcadeMenu && arcadeScreen && pushGoal === 0) {
+    pillV.set(0, (0.5 - ARC_PILL_Y / 385) * 0.72, 0); arcadeScreen.localToWorld(pillV).project(camera);
+    pillEl.style.bottom = Math.round(innerHeight - (1 - pillV.y) / 2 * innerHeight - pillEl.offsetHeight / 2) + 'px';
+  } else if (pillEl.style.bottom) pillEl.style.bottom = '';
   setBgm((zoomGoal >= 1 && focusArcade) || gameOn);   // 點了街機(選語言 / PLAY 的畫面)就開始放遊戲音樂,離開街機才停
   document.body.classList.toggle('arcade-on', zoomGoal >= 1 && focusArcade && zoomT > 0.5);   // 螢幕放到最大時,房間的 logo 和右下按鈕會蓋在上面 → 收起來
   if (zoomGoal >= 1 && zoomT > 0.985 && !focusArcade && !uiOn) showUI();     // 鏡頭到電腦螢幕 → 淡入介紹介面
