@@ -151,6 +151,7 @@ const randomItem = () => { const r = Math.random(); return r < 0.4 ? 'remote' : 
 /* ───────────── 音效與音樂 ─────────────
    全部用 WebAudio 即時合成,不載入任何音檔。瀏覽器規定要使用者先點一下才能出聲,
    所以第一次點擊 / 按鍵時才建立 AudioContext 並開始播音樂。右上角 ♪ 可以關掉(會記住) */
+const EMBED = !!new URLSearchParams(location.search).get('embed') && parent !== window;
 const AU = (() => {
   let ctx = null, master, mus, nbuf;
   let on = (() => { try { return localStorage.getItem('css.sound') !== '0'; } catch (e) { return true; } })();
@@ -191,7 +192,7 @@ const AU = (() => {
     nbuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
     { const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
     { const b = ctx.createBufferSource(); b.buffer = ctx.createBuffer(1, 1, ctx.sampleRate); b.connect(ctx.destination); b.start(0); }   // 在點擊當下播一個無聲的取樣,Safari 才會真的開始出聲
-    loadBgm();
+    if (!EMBED) loadBgm();      // 嵌在街機裡時,音樂由外面的房間頁播放(從選單就開始、進遊戲不中斷)
   }
   // Safari 只把 click / mouseup / touchend / keydown 當成「使用者操作」,只聽 pointerdown 的話用滑鼠永遠解不開 → 全部都聽
   ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, { capture: true, passive: true }));
@@ -226,6 +227,7 @@ const AU = (() => {
   function toggle() {
     on = !on; try { localStorage.setItem('css.sound', on ? '1' : '0'); } catch (e) {}
     unlock(); if (ctx) { master.gain.value = on ? 1.4 : 0; if (on) ctx.resume(); }
+    if (EMBED) try { parent.postMessage({ type: 'css-sound', on }, location.origin); } catch (e) {}
     return on;
   }
   return { sfx, toggle, get on() { return on; }, get state() { return ctx ? `${ctx.state} bgm ${bgm ? Math.round(bgm.buffer.duration) : 'loading'}` : 'locked'; } };

@@ -641,6 +641,7 @@ function updateZoom(dt) {
   // 鏡頭快到街機前(0.9 就算,最後那段收尾很慢不用等):機台螢幕上出現語言 / PLAY 按鈕
   arcadeMenu = zoomGoal >= 1 && zoomT > 0.9 && focusArcade && !gameOn;
   if (focusArcade && zoomGoal >= 1 && zoomT > 0.35 && !gameOn && !gameFrame) prewarmGame();   // 鏡頭飛向街機的途中就開始預載遊戲
+  setBgm((zoomGoal >= 1 && focusArcade) || gameOn);   // 點了街機(選語言 / PLAY 的畫面)就開始放遊戲音樂,離開街機才停
   document.body.classList.toggle('arcade-on', zoomGoal >= 1 && focusArcade && zoomT > 0.5);   // 螢幕放到最大時,房間的 logo 和右下按鈕會蓋在上面 → 收起來
   if (zoomGoal >= 1 && zoomT > 0.985 && !focusArcade && !uiOn) showUI();     // 鏡頭到電腦螢幕 → 淡入介紹介面
 }
@@ -724,9 +725,42 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=50';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=51';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
+// 遊戲的背景音樂由房間這一頁來放(不是 iframe 裡的遊戲):這樣從街機選單(切換語言 / PLAY)就有音樂,進遊戲時不會斷。
+// 瀏覽器規定要先有使用者操作才能出聲,所以在房間裡的任何一次點擊 / 按鍵時先把 AudioContext 建好(無聲),要播的時候再淡入
+const bgm = { ctx: null, gain: null, want: false, loading: false, on: (() => { try { return localStorage.getItem('css.sound') !== '0'; } catch (e) { return true; } })() };
+function bgmUnlock() {
+  if (!bgm.ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    bgm.ctx = new AC(); bgm.gain = bgm.ctx.createGain(); bgm.gain.gain.value = 0; bgm.gain.connect(bgm.ctx.destination);
+  }
+  if (bgm.want && bgm.ctx.state !== 'running') bgm.ctx.resume();
+}
+['pointerdown', 'pointerup', 'mouseup', 'touchend', 'click', 'keydown'].forEach((ev) => window.addEventListener(ev, bgmUnlock, { capture: true, passive: true }));
+async function bgmLoad() {
+  if (bgm.loading || !bgm.ctx) return; bgm.loading = true;
+  try {
+    const data = await (await fetch(new URL('./board/bgm.m4a?v=1', import.meta.url))).arrayBuffer();
+    const buf = await new Promise((ok, no) => { const p = bgm.ctx.decodeAudioData(data, ok, no); if (p && p.then) p.then(ok, no); });
+    const src = bgm.ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.loopStart = 0.5; src.loopEnd = 128.5;   // 在檔案「裡面」循環,避開 AAC 頭尾的空白
+    src.connect(bgm.gain); src.start(0, 0.5);
+  } catch (e) { console.warn('bgm', e); bgm.loading = false; }
+}
+function bgmLevel() { if (!bgm.ctx) return; const g = bgm.gain.gain, t = bgm.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(bgm.want && bgm.on ? 0.55 : 0, t + 0.5); }
+let bgmLast = null; window.__bgm = bgm;
+function setBgm(want) {
+  bgm.want = want;
+  if (want && bgm.ctx) { if (!bgm.loading) bgmLoad(); if (bgm.ctx.state !== 'running' && !document.hidden) bgm.ctx.resume(); }
+  if (want === bgmLast && (bgm.ctx || !want)) return;
+  if (!bgm.ctx) return;                                   // 還沒有任何操作 → 等 bgmUnlock 之後下一幀再來
+  bgmLast = want; bgmLevel();
+}
+document.addEventListener('visibilitychange', () => { if (!bgm.ctx) return; if (document.hidden) bgm.ctx.suspend(); else if (bgm.want) bgm.ctx.resume(); });
+// 遊戲裡的 ♪ 靜音鈕會通知這一頁
+window.addEventListener('message', (e) => { if (e.origin !== location.origin || !e.data || e.data.type !== 'css-sound') return; bgm.on = !!e.data.on; bgmLevel(); });
 // 在機台螢幕上按 PLAY → 鏡頭先推進到螢幕蓋滿畫面(updateZoom 裡的 pushT)→ 推到底時 openGame() 換成真正的遊戲
 function startGame() { if (gameOn || pushGoal === 1) return; pushGoal = 1; }
 // 預載:鏡頭一到街機前(還在看選單)就把遊戲的 iframe 先在背後建好。此時 #game-ui 是透明的,
