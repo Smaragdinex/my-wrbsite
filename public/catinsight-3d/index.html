@@ -58,8 +58,6 @@
   body.game-on .cta { opacity: 0; pointer-events: none; }
   .brand, .cta { transition: opacity .35s; }
   body.arcade-on .cta, body.arcade-on .brand { opacity: 0; pointer-events: none; }
-  /* 街機選單的按鈕在畫面最下面一排,房間的 ‹ 🏠 › 導覽列原本在正下方會蓋到 → 移到右上角(蓋在跑馬燈上沒關係) */
-  body.arcade-on .pill { bottom: auto; top: 14px; left: auto; right: 14px; transform: none; padding: 5px 9px; }
   body.game-on .pill button.mid .mouse { display: none; }
   body.game-on .pill button.mid .home { display: block; }
   /* 螢幕介面:鏡頭定在螢幕後淡入,一頁一頁介紹功能 */
@@ -213,6 +211,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=137"></script>
+<script type="module" src="./room.mjs?v=138"></script>
 </body>
 </html>
