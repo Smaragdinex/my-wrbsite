@@ -137,6 +137,15 @@ const LANES = {
   ipo: { exit: 53, cells: [[12, 8], [13, 8], [14, 8]] },
 };
 const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
+// 玩法(選角畫面可以選):
+//   rounds   回合制:走滿 20 回合,總資產最高的人獲勝
+//   target   致富制:誰的總資產先達到 TARGET 就獲勝
+//   bankrupt 破產制:每回合所有人都要付「生活費」,而且一回合比一回合貴(livingCost)。有人總資產歸零就宣告破產、遊戲結束,
+//            其餘的人裡總資產最高的獲勝。(沒有生活費的話,薪水和股利會讓大家越來越有錢,永遠不會有人破產)
+// 後兩種如果一直沒人達成,走到 CAP_ROLLS 回合也會結束,比總資產
+const TARGET = 20000, BUST = 0, CAP_ROLLS = 40;
+const livingCost = (round) => 200 + 100 * (round - 1);          // 第 1 回合 $200,之後每回合多 $100
+const maxRolls = () => (S.mode === 'rounds' ? MAX_ROLLS : CAP_ROLLS);
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
 const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17, 20, 21];    // 商店會賣的事件卡(壞消息類的不賣)
 const REMOTE_PRICE = 300, CARD_PRICE = 500, ATK_PRICE = 600, ATK_DROP = 0.82;
@@ -347,7 +356,7 @@ function setPlayers(chars, humans) {
 }
 function newState() {
   S = {
-    rolls: 0, busy: false, over: false, players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
+    rolls: 0, busy: false, over: false, mode: CFG.mode || 'rounds', endWhy: '', players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null,
   };
@@ -739,6 +748,13 @@ function paintStage() {
   $('pcAI').textContent = CFG.n - CFG.humans > 0 ? L(`${CFG.n - CFG.humans} computer rival${CFG.n - CFG.humans > 1 ? 's' : ''}`, `電腦對手 ${CFG.n - CFG.humans} 位`) : L('No computer rivals', '沒有電腦對手');
   document.querySelectorAll('#pcfg [data-n]').forEach((b) => b.classList.toggle('on', +b.dataset.n === CFG.n));
   document.querySelectorAll('#pcfg [data-h]').forEach((b) => b.classList.toggle('on', +b.dataset.h === CFG.humans));
+  { const mode = CFG.mode || 'rounds';
+    $('pcM').textContent = L('Game', '玩法');
+    const names = { rounds: L(`${MAX_ROLLS} rounds`, `${MAX_ROLLS} 回合`), target: L('Get rich', '致富'), bankrupt: L('Bankruptcy', '破產') };
+    document.querySelectorAll('#pcfg [data-m]').forEach((b) => { b.textContent = names[b.dataset.m]; b.classList.toggle('on', b.dataset.m === mode); });
+    $('pcRule').textContent = { rounds: L(`Highest total assets after ${MAX_ROLLS} rounds wins`, `走滿 ${MAX_ROLLS} 回合,總資產最高的獲勝`),
+      target: L(`First to $${fmt(TARGET)} in total assets wins`, `總資產先達到 $${fmt(TARGET)} 的獲勝`),
+      bankrupt: L('Living costs rise every round; ends when someone hits zero', '每回合生活費越來越貴,有人總資產歸零就結束') }[mode]; }
 }
 function stageStep(dt) {
   const n = slots.length, R = Math.SQRT1_2, wrap = (v) => ((v % n) + n + n / 2) % n - n / 2;      // 繞一圈的最短距離(-n/2 ~ n/2)
@@ -747,7 +763,7 @@ function stageStep(dt) {
     const on = i === stageSel, rel = wrap(i - stageCur), a = Math.abs(rel);
     // 位置:rel = 0 在正中間;±1 在左右兩邊、往後退一點;再遠的縮小到看不見
     const o = rel * 1.95, back = Math.min(a, 2) * 0.75, k = Math.max(0, 1 - Math.max(0, a - 1) * 1.7);
-    const fwd = 0.9 - back;                                           // 整排往鏡頭這邊挪一點,才不會頂到上面的標題
+    const fwd = 1.6 - back;                                           // 整排往鏡頭這邊挪一點,才不會頂到上面的標題
     sl.g.position.set(o * R + fwd * R, 0, -o * R + fwd * R);
     sl.g.visible = k > 0.02; sl.g.scale.setScalar(Math.max(0.001, k));
     sl.hop = Math.max(0, sl.hop - dt * 2.2);
@@ -789,7 +805,7 @@ function pickStage() {
     stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
     document.querySelectorAll('#pcfg button').forEach((b) => { b.onclick = () => {
-      if (b.dataset.n) CFG.n = +b.dataset.n; else CFG.humans = +b.dataset.h;
+      if (b.dataset.n) CFG.n = +b.dataset.n; else if (b.dataset.h) CFG.humans = +b.dataset.h; else CFG.mode = b.dataset.m;
       try { localStorage.setItem('css.players', JSON.stringify(CFG)); } catch (e) {}
       paintStage();
     }; });
@@ -802,7 +818,7 @@ function pickStage() {
       slots.forEach((sl) => { sl.taken = false; sl.holder.visible = true; });
       // 電腦對手:從剩下的角色裡隨機挑
       const rest = Object.keys(CHARS).filter((k) => !picked.includes(k)).sort(() => Math.random() - 0.5);
-      res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length });
+      res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length, mode: CFG.mode || 'rounds' });
     };
   });
 }
@@ -1047,7 +1063,7 @@ function hud() {
   // 目前名次:依總資產排(同分算同名次)。回合條旁邊顯示;手機沒有回合條,所以擲骰鈕底下也帶一份
   const myA = assets(), rank = 1 + S.players.filter((p) => assetsOf(p) > myA + 0.5).length;
   $('rankTxt').textContent = L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`); $('rankTxt').classList.toggle('top', rank === 1);
-  $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left · #${rank}`, `剩 ${MAX_ROLLS - S.rolls} 次 · 第 ${rank} 名`);
+  $('rollsLeft').textContent = L(`${maxRolls() - S.rolls} left · #${rank}`, `剩 ${maxRolls() - S.rolls} 次 · 第 ${rank} 名`);
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
   $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' ? L('FROZEN', '凍結中') : L('STEP', '前進一格')) : L('ROLL', '擲骰子');
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
@@ -1071,8 +1087,8 @@ function hud() {
     ? `<div>${e.t}</div><div class="why">${e.w}</div>` + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
     : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`;
-  $('roundTxt').textContent = L(`Round ${S.rolls} / ${MAX_ROLLS}`, `回合 ${S.rolls} / ${MAX_ROLLS}`);
-  $('roundBar').style.width = (S.rolls / MAX_ROLLS * 100) + '%';
+  $('roundTxt').textContent = L(`Round ${S.rolls} / ${maxRolls()}`, `回合 ${S.rolls} / ${maxRolls()}`);
+  $('roundBar').style.width = (S.rolls / maxRolls() * 100) + '%';
 }
 function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
@@ -1544,6 +1560,8 @@ async function turn(forced) {
   }
   if (S.hi === 0) {           // 第一位走完 = 新的一回合開始:回合數 +1,所有價格小幅隨機波動
     S.rolls++;
+    if (S.mode === 'bankrupt') { const c = livingCost(S.rolls); S.players.forEach((p) => { p.cash -= c; });
+      toast(L(`Living costs this round: -$${fmt(c)} each`, `這回合的生活費:每人 -$${fmt(c)}`)); }
     KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2)); });
   }
   marginCheck();
@@ -1576,7 +1594,12 @@ async function nextTurns() {
   let i = S.hi;
   for (;;) {
     i = (i + 1) % S.players.length;
-    if (i === 0 && S.rolls >= MAX_ROLLS) { await wait(0.4); return finish(); }
+    // 結束條件:每一位走完都檢查一次(致富 / 破產);回合數則在繞回第一位時檢查
+    if (S.mode === 'target') { const w = S.players.filter((p) => assetsOf(p) >= TARGET).sort((a, b) => assetsOf(b) - assetsOf(a))[0];
+      if (w) { S.endWhy = L(`${nameOf(w)} reached $${fmt(TARGET)} first.`, `${nameOf(w)}的總資產先達到 $${fmt(TARGET)}。`); await wait(0.4); return finish(); } }
+    if (S.mode === 'bankrupt') { const b = S.players.filter((p) => assetsOf(p) <= BUST).sort((a, b) => assetsOf(a) - assetsOf(b))[0];
+      if (b) { S.endWhy = L(`${nameOf(b)} went bankrupt: total assets hit zero.`, `${nameOf(b)}破產了,總資產歸零。`); await wait(0.4); return finish(); } }
+    if (i === 0 && S.rolls >= maxRolls()) { S.endWhy = S.mode === 'rounds' ? '' : L(`Nobody got there in ${CAP_ROLLS} rounds, so total assets decide.`, `走滿 ${CAP_ROLLS} 回合還沒有人達成,改比總資產。`); await wait(0.4); return finish(); }
     const p = S.players[i];
     if (p.human) {
       S.turn = i; S.view = null; S.hi = i; if (S.players.length > S.nh) S.ci = S.players.findIndex((x) => !x.human); else S.ci = (i + 1) % S.players.length;
@@ -1621,11 +1644,12 @@ function finish() {
   const a = assets();
   const rank = S.players.slice().sort((x, y) => assetsOf(y) - assetsOf(x)), medal = ['🥇', '🥈', '🥉', '4'];
   const table = rank.map((p, i) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-radius:10px;${p.human ? 'background:#fff3d6;' : ''}font-weight:800">
-      <span style="width:1.6em;text-align:center">${medal[i]}</span><span style="flex:1;text-align:left">${CHARS[p.char].icon} ${nameOf(p)}${p.human ? (S.nh > 1 ? ` · ${L('Player', '玩家')} ${p.i + 1}` : L(' (you)', '(你)')) : ''}</span><b>$${fmt(assetsOf(p))}</b></div>`).join('');
+      <span style="width:1.6em;text-align:center">${medal[i]}</span><span style="flex:1;text-align:left">${CHARS[p.char].icon} ${nameOf(p)}${p.human ? (S.nh > 1 ? ` · ${L('Player', '玩家')} ${p.i + 1}` : L(' (you)', '(你)')) : ''}</span><b>${assetsOf(p) < 0 ? '-' : ''}$${fmt(Math.abs(assetsOf(p)))}</b></div>`).join('');
   const won = rank[0].human;
   $('end').innerHTML = S.nh > 1
     ? `<div class="card">
     <h2>🏆 ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}</h2>
+    ${S.endWhy ? `<p>${S.endWhy}</p>` : ''}
     <div style="margin:10px 0">${table}</div>
     <p>${S.players.filter((p) => p.human).map((p) => L(`Player ${p.i + 1}: ${p.done} missions`, `玩家 ${p.i + 1} 完成 ${p.done} 個任務`)).join(' · ')} · ${L(`${S.rolls} rounds`, `${S.rolls} 回合`)}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
@@ -1634,6 +1658,7 @@ function finish() {
     <div class="stars">${[0, 1, 2].map((i) => i < done ? '<b>★</b>' : '★').join('')}</div>
     <h2>${title}</h2>
     <p>${L('Total assets', '總資產')} <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) · ${L(`${S.rolls} rounds`, `${S.rolls} 回合`)} · ${L(`${S.done} missions completed`, `完成 ${S.done} 個任務`)}</p>
+    ${S.endWhy ? `<p>${S.endWhy}</p>` : ''}
     <div style="margin:10px 0">${table}</div>
     <p>${style}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
@@ -1651,17 +1676,20 @@ async function start() {
   let cfg;
   if (CHARS[PRESET]) { const q = new URLSearchParams(location.search), n = Math.min(4, Math.max(2, +q.get('n') || 2)), h = Math.min(2, Math.max(1, +q.get('h') || 1));
     const rest = Object.keys(CHARS).filter((k) => k !== PRESET).sort(() => Math.random() - 0.5);
-    cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h };
+    cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h, mode: q.get('mode') || 'rounds' };
   } else cfg = await pickStage();
-  setPlayers(cfg.chars, cfg.humans);
+  setPlayers(cfg.chars, cfg.humans); S.mode = ['rounds', 'target', 'bankrupt'].includes(cfg.mode) ? cfg.mode : 'rounds';
   PIECES.forEach((P, i) => { if (i < S.players.length) { setChar(P.body, S.players[i].char); placePiece(0, P); } });
   showPieces(true); focus = PIECES[0];
   buildFoes(); setPortraits();
   hud();
   // 開局先講清楚怎麼算贏
+  const rule = { rounds: L(`After ${MAX_ROLLS} rounds, whoever has the highest total assets wins.`, `${MAX_ROLLS} 回合結束時,總資產最高的人獲勝。`),
+    target: L(`The first player whose total assets reach $${fmt(TARGET)} wins. If nobody gets there in ${CAP_ROLLS} rounds, the highest total assets win.`, `誰的總資產先達到 $${fmt(TARGET)} 就獲勝。如果走滿 ${CAP_ROLLS} 回合還沒有人達到,就比總資產。`),
+    bankrupt: L(`Every round everyone pays living costs, starting at $${livingCost(1)} and rising by $100 each round. The game ends as soon as someone's total assets hit zero; of the others, the highest total assets win. Your money has to grow faster than your costs.`, `每回合所有人都要付生活費,第 1 回合 $${livingCost(1)},之後每回合多 $100。只要有人總資產歸零就破產、遊戲結束,其餘的人裡總資產最高的獲勝。你的錢要長得比開銷快才撐得下去。`) }[S.mode];
   await cardPanel(L('How to win', '獲勝條件'),
-    L(`After ${MAX_ROLLS} rounds, whoever has the highest total assets wins. Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>The missions on the left are a bonus: each one pays $${REWARD}, and the more you finish the more stars you get. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
-      `${MAX_ROLLS} 回合結束時,總資產最高的人獲勝。總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>左邊的任務是加分項:每完成一個得 $${REWARD},完成越多星星越多,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`));
+    rule + L(` Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>The missions on the left are a bonus: each one pays $${REWARD}, and the more you finish the more stars you get. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
+      `總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>左邊的任務是加分項:每完成一個得 $${REWARD},完成越多星星越多,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`));
   S.busy = false; showCtl(true);
   if (S.nh > 1) toast(L(`${nameOf(S.players[0])} goes first (Player 1)`, `${nameOf(S.players[0])}先走(玩家 1)`));
 }

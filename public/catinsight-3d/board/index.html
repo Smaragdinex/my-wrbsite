@@ -149,11 +149,14 @@
   .box.foe .frows{max-height:calc(120px * var(--fs))}
   /* 選角畫面上方:標題 + 人數設定 */
   .ptop{display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:auto}
-  .pcfg{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 14px;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:18px;padding:8px 14px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
+  .pcfg{max-width:min(calc(470px * var(--fs)),92vw);display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 14px;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:18px;padding:8px 14px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
   .pcfg .seg{display:flex;align-items:center;gap:4px;font-weight:900;font-size:calc(14px * var(--fs));color:#6b594e}
   .pcfg .seg span{margin-right:4px}
   .pcfg .seg button{width:calc(34px * var(--fs));height:calc(34px * var(--fs));border-radius:50%;border:0;background:#eadfce;color:#8a786c;font-weight:900;font-size:calc(15px * var(--fs));cursor:pointer}
   .pcfg .seg button.on{background:#ff7a59;color:#fff;box-shadow:0 3px 0 #d4553a}
+  .pcfg .seg.wide{flex-basis:100%;justify-content:center}
+  .pcfg .seg.wide button{width:auto;border-radius:999px;padding:0 calc(14px * var(--fs));font-size:calc(13px * var(--fs))}
+  #pcRule{flex-basis:100%;text-align:center}
   .pcfg small{font-weight:800;font-size:calc(12px * var(--fs));color:#9a8676}
   /* 我的資產 / 對手的資產:內容區固定最高約 5 列半,超過就在框裡上下拖(或滾輪)捲動 */
   #assetRows,.frows{max-height:calc(230px * var(--fs));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;pointer-events:auto;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#d9c9b3 transparent}
@@ -256,6 +259,8 @@
       <div class="seg"><span id="pcN"></span><button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></div>
       <div class="seg"><span id="pcH"></span><button data-h="1">1</button><button data-h="2">2</button></div>
       <small id="pcAI"></small>
+      <div class="seg wide"><span id="pcM"></span><button data-m="rounds"></button><button data-m="target"></button><button data-m="bankrupt"></button></div>
+      <small id="pcRule"></small>
     </div>
   </div>
   <div class="pbar">
@@ -267,6 +272,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=63"></script>
+<script type="module" src="./board.mjs?v=64"></script>
 </body>
 </html>
