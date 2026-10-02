@@ -1188,12 +1188,17 @@ function buyPanel(k) {
     });
   });
 }
-function cardPanel(title, text, moves = '') {
+// auto > 0:這張卡是電腦的動作(牠出的事件卡、利空卡),給你 auto 秒看完後自動按「繼續」;想快一點也可以自己先按
+function cardPanel(title, text, moves = '', auto = 0) {
   return new Promise((res) => {
     const p = panel(`<h3>${title}</h3><p>${text}</p>${moves ? `<div class="moves">${moves}</div>` : ''}<div class="btns"><button class="b-ok">${L('Continue', '繼續')}</button></div>`);
-    p.querySelector('button').onclick = () => { closePanel(); res(); };
+    let done = false;
+    const go = () => { if (done) return; done = true; closePanel(); res(); };
+    p.querySelector('button').onclick = go;
+    if (auto > 0) wait(auto).then(go);
   });
 }
+const AI_CARD_WAIT = 3;       // 電腦出牌後,說明卡停留幾秒
 
 /* ───────────── 回合流程(狀態機:idle → rolling → moving → landing → idle / over) ───────────── */
 // 起點:薪水 + 股利;對面的「股息結算」格:只發股利
@@ -1249,10 +1254,10 @@ function drawEventCards(auto) {
     $('dgo').onclick = () => { if (done) return; done = true; ov.classList.add('hide'); ov.classList.remove('done'); res(picks[chosen]); };
   });
 }
-async function playEvent(e) {
+async function playEvent(e, auto = 0) {
   applyEvent(e); drawAll(); hud(); sfx(e.m.etf >= 1 ? 'good' : 'bad');
   const moves = cashChip(e) + KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
-  await cardPanel(e.t, e.w, moves);
+  await cardPanel(e.t, e.w, moves, auto);
 }
 // 商店:每樣只有一個,你和對手共用同一批貨(兩個商店格也是同一家),誰先買走就沒了。
 // 每 SHOP_EVERY 回合才進一次新貨 —— 以前是每回合進貨,而每回合都是你先走,等於對手買什麼都影響不到你
@@ -1315,7 +1320,7 @@ async function badNews(k, by) {
   await cardPanel(byYou ? L(`You spread bad news about ${sec.name}`, `你放出${sec.name}的利空消息`) : L(`${who} spreads bad news about ${sec.name}`, `${who}放出${sec.name}的利空消息`),
     (hurt ? hurt + ' ' : '') +
     L('Anyone short this asset profits.', '放空這檔資產的人則會獲利。'),
-    `<span class="mv dn">${sec.name} -${Math.round((1 - ATK_DROP) * 100)}%</span>`);
+    `<span class="mv dn">${sec.name} -${Math.round((1 - ATK_DROP) * 100)}%</span>`, by.human ? 0 : AI_CARD_WAIT);
 }
 // 背包:只有輪到自己、還沒擲骰時能開
 function bagPanel() {
@@ -1490,7 +1495,7 @@ async function aiTurn() {
     if (k) { A.bag.splice(A.bag.indexOf('atk'), 1); await badNews(k, A); }
   }
   { const id = A.bag.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0);
-    if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event); } }
+    if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event, AI_CARD_WAIT); } }
   if (A.lane) {
     // 在小路上:不擲骰,一回合走一格。被凍結時錢夠多就付保釋金直接出來
     const bail = A.lane.type === 'jail' && A.cash >= BAIL + 2500;
