@@ -309,7 +309,7 @@ function newState() {
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])),
     short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
-    shop: { round: -1, stock: [] }, notices: [],
+    shop: { round: -1, stock: [], sold: [] }, notices: [],
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
     missions: [], done: 0, me: 'cat', foe: 'bear', diceN: 2,
     ai: { pos: 0, lane: null, cash: START_CASH, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) },
@@ -1109,11 +1109,15 @@ async function playEvent(e) {
   const moves = KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
   await cardPanel(e.t, e.w, moves);
 }
-// 商店:每樣只有一個,你或對手買走就沒了;過一回合才進新貨(新的事件卡)。兩個商店格共用同一批貨
+// 商店:每樣只有一個,你和對手共用同一批貨(兩個商店格也是同一家),誰先買走就沒了。
+// 每 SHOP_EVERY 回合才進一次新貨 —— 以前是每回合進貨,而每回合都是你先走,等於對手買什麼都影響不到你
+const SHOP_EVERY = 4;
+const shopLeft = () => SHOP_EVERY - (S.rolls % SHOP_EVERY);       // 再幾回合進新貨
 function shopStock() {
-  if (S.shop.round !== S.rolls) {
+  const batch = Math.floor(S.rolls / SHOP_EVERY);
+  if (S.shop.round !== batch) {
     const cards = SALE_EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 2).map((i) => 'ev' + i);
-    S.shop = { round: S.rolls, stock: ['remote', ...cards, 'atk'] };
+    S.shop = { round: batch, stock: ['remote', ...cards, 'atk'], sold: [] };
   }
   return S.shop.stock;
 }
@@ -1121,15 +1125,18 @@ function shopPanel() {
   const stock = shopStock();
   return new Promise((res) => {
     const draw = () => {
-      const p = panel(`<h3>${L('Item shop', '道具商店')}</h3><p>${L('One of each. Once you or your rival buys it, it is gone until next round.', '每樣只有一個,你或對手買走就沒了,下一回合才進新貨。')}</p>` +
+      const left = shopLeft(), who = CHARS[S.foe].name;
+      const p = panel(`<h3>${L('Item shop', '道具商店')}</h3><p>${L(`One of each, shared with your rival: whoever buys first gets it. New stock in ${left} round${left > 1 ? 's' : ''}.`, `每樣只有一個,和對手共用同一批貨,誰先買走就沒了。再 ${left} 回合進新貨。`)}</p>` +
         (stock.length ? stock.map((id, i) => { const it = itemInfo(id);
           return `<div class="it"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${it.desc}</small></span><button class="b-buy" data-i="${i}" ${S.cash < it.price ? 'disabled' : ''}>$${it.price}</button></div>`; }).join('')
-          : `<div class="it"><span class="tx"><small>${L('Sold out. New stock arrives next round.', '賣完了,下一回合進新貨。')}</small></span></div>`) +
+          : `<div class="it"><span class="tx"><small>${L('Sold out.', '全部賣完了。')}</small></span></div>`) +
+        S.shop.sold.map((x) => { const it = itemInfo(x.id);
+          return `<div class="it" style="opacity:.5"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${x.by === 'me' ? L('You bought it', '你買走了') : L(`${who} bought it`, `${who}買走了`)}</small></span><button class="b-skip" disabled>${L('Sold', '售完')}</button></div>`; }).join('') +
         `<div class="btns"><button class="b-skip" data-i="-1">${L('Leave', '離開')}</button></div>`);
       p.querySelectorAll('button').forEach((b) => b.onclick = () => {
         const i = +b.dataset.i;
         if (i < 0) { closePanel(); return res(); }
-        const id = stock[i], it = itemInfo(id); S.cash -= it.price; S.bag.push(id); stock.splice(i, 1); sfx('item'); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
+        const id = stock[i], it = itemInfo(id); S.cash -= it.price; S.bag.push(id); stock.splice(i, 1); S.shop.sold.push({ id, by: 'me' }); sfx('item'); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
       });
     };
     draw();
@@ -1349,7 +1356,7 @@ async function aiTurn() {
     const stock = shopStock(); let got = null;
     if (stock.includes('atk') && A.cash >= 2500) got = 'atk';
     else got = stock.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0 && A.cash >= 2000) || null;
-    if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
+    if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); S.shop.sold.push({ id: got, by: 'ai' }); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
     else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
     hud(); await wait(1.2);
   } else if (type === 'chance') { await wait(0.3); const c = await drawEventCards(true); if (c.special) await enterLane(false, c.special); }
