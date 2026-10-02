@@ -186,16 +186,19 @@ const AU = (() => {
     }
   }
   function unlock() {
-    if (ctx) { if (on && ctx.state === 'suspended') ctx.resume(); return; }
+    if (ctx) { if (on && ctx.state !== 'running') ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-    ctx = new AC();
-    master = ctx.createGain(); master.gain.value = on ? 0.9 : 0; master.connect(ctx.destination);
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}   // iPhone / iPad:靜音撥桿開著也要有聲音
+    ctx = new AC(); ctx.resume();
+    master = ctx.createGain(); master.gain.value = on ? 1.4 : 0; master.connect(ctx.destination);
     mus = ctx.createGain(); mus.gain.value = 0.55; mus.connect(master);
     nbuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
     { const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    { const b = ctx.createBufferSource(); b.buffer = ctx.createBuffer(1, 1, ctx.sampleRate); b.connect(ctx.destination); b.start(0); }   // 在點擊當下播一個無聲的取樣,Safari 才會真的開始出聲
     setInterval(sched, 100);
   }
-  ['pointerdown', 'keydown', 'touchend'].forEach((ev) => window.addEventListener(ev, unlock, { passive: true }));
+  // Safari 只把 click / mouseup / touchend / keydown 當成「使用者操作」,只聽 pointerdown 的話用滑鼠永遠解不開 → 全部都聽
+  ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, { capture: true, passive: true }));
   document.addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) ctx.suspend(); else if (on) ctx.resume(); });
   // 每個音效是一小串音:[音高, 幾秒後, 長度, 波形, 音量, 滑到的音高]
   const SEQ = {
@@ -216,7 +219,8 @@ const AU = (() => {
     lose: [[67, 0, 0.3], [64, 0.3, 0.3], [60, 0.6, 0.8]],
   };
   function sfx(name) {
-    if (!ctx || !on || ctx.state !== 'running' || skipRender) return;      // 自動測試快轉時不出聲
+    if (!ctx || !on || skipRender) return;      // 自動測試快轉時不出聲
+    if (ctx.state !== 'running') { ctx.resume(); return; }
     const t = ctx.currentTime;
     if (name === 'dice') { for (let i = 0; i < 9; i++) noise(t + i * 0.1 + Math.random() * 0.04, 0.035, 0.16 - i * 0.008, 2200 + Math.random() * 1200); return; }
     if (name === 'flip') { noise(t, 0.18, 0.12, 1400); noise(t + 0.08, 0.12, 0.08, 2600); return; }
@@ -225,7 +229,7 @@ const AU = (() => {
   }
   function toggle() {
     on = !on; try { localStorage.setItem('css.sound', on ? '1' : '0'); } catch (e) {}
-    unlock(); if (ctx) { master.gain.value = on ? 0.9 : 0; if (on) ctx.resume(); }
+    unlock(); if (ctx) { master.gain.value = on ? 1.4 : 0; if (on) ctx.resume(); }
     return on;
   }
   return { sfx, toggle, get on() { return on; }, get state() { return ctx ? `${ctx.state} step ${step}` : 'locked'; } };
