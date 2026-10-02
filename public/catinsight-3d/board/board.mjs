@@ -970,7 +970,11 @@ function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
   document.title = L('Cat Street Stocks', '貓咪股市大富翁');
   $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值'); 
-  $('bagBtn').textContent = L('Backpack', '背包'); $('d1').textContent = L('1 die', '1 顆'); $('d2').textContent = L('2 dice', '2 顆'); $('mapBtn').textContent = L('Map', '地圖'); $('rollTxt').textContent = L('ROLL', '擲骰子');
+  $('bagBtn').textContent = L('Backpack', '背包'); { // 擲幾顆骰子的切換:直接畫骰子圖(一顆 = 一個骰子,兩顆 = 兩個骰子),比文字直覺
+    const die = (x, pips) => `<rect x="${x + 1.5}" y="1.5" width="19" height="19" rx="5" fill="none" stroke="currentColor" stroke-width="2.4"/>` + pips.map(([px, py]) => `<circle cx="${x + px}" cy="${py}" r="2.1" fill="currentColor"/>`).join('');
+    $('d1').innerHTML = `<svg viewBox="0 0 22 22" aria-hidden="true">${die(0, [[11, 11]])}</svg>`;
+    $('d2').innerHTML = `<svg viewBox="0 0 48 22" aria-hidden="true">${die(0, [[7, 7], [15, 15]])}${die(26, [[7, 7], [11, 11], [15, 15]])}</svg>`;
+    $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('mapBtn').textContent = L('Map', '地圖'); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   $('note').textContent = L('Fictional companies · for learning, not investment advice · Music: Sharou', '公司皆為虛構 · 學習用途,非投資建議 · 音樂:しゃろう');
 }

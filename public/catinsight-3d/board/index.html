@@ -173,6 +173,12 @@
   .dsel{display:flex;background:var(--cream);border:3px solid #fff;border-radius:999px;padding:3px;gap:3px;box-shadow:0 3px 0 rgba(0,0,0,.12)}
   .dsel button{border:0;background:transparent;border-radius:999px;padding:calc(5px * var(--fs)) calc(14px * var(--fs));font-weight:900;font-size:calc(13px * var(--fs));color:#9a8676;cursor:pointer}
   .dsel button.on{background:#ff7a59;color:#fff}
+  .dsel button{display:flex;align-items:center;justify-content:center}
+  .dsel svg{height:calc(20px * var(--fs));width:auto;display:block}
+  /* 手機 / 平板點按鈕時,瀏覽器會在按鈕外面閃一個方形的灰色反白和對焦框 → 關掉 */
+  *{-webkit-tap-highlight-color:transparent}
+  button{outline:none;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-appearance:none;appearance:none}
+  button:focus,button:focus-visible{outline:none}
   .hide{display:none!important}
   @media(max-width:560px){ .stat.opt{display:none} .m{font-size:calc(11.5px * var(--fs));padding:5px 8px} .m small{display:none} }
 </style>
@@ -232,6 +238,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=49"></script>
+<script type="module" src="./board.mjs?v=50"></script>
 </body>
 </html>
