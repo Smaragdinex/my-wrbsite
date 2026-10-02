@@ -441,8 +441,9 @@ let catModel = null;
 // ---------- 街機螢幕的待機畫面:股票大富翁(一圈彩色格子、兔子繞圈跳、兩顆骰子、跑馬燈報價)----------
 const ARC_COLORS = ['#ff8fc0', '#8b7cff', '#4f8ef0', '#ffd24a', '#f5b942', '#f2796b', '#54c98a', '#5aa9ff', '#c48ad6', '#2a9db5', '#ffd24a', '#e85d9b', '#9aa0ad', '#e6b422', '#3d5a80', '#ffd24a', '#2ec4b6', '#f7931a', '#5aa9ff', '#7fb069', '#b5179e', '#ff9f6b'];
 // 機台螢幕上的按鈕位置(畫布座標 520x385),畫和點擊判定共用
-// 版面:格子圈貼著上緣,下面一排左邊是語言切換、右邊是 PLAY;最底下留白給房間的 ‹ 🖱 › 導覽列(它疊在畫面正下方)
-const ARC_BTN = { zh: { x: 107, y: 300, w: 70, h: 32 }, en: { x: 179, y: 300, w: 70, h: 32 }, play: { x: 273, y: 297, w: 140, h: 38 } };
+// 版面:格子圈加高一排,把標題、骰子和按鈕都包在圈裡面(按鈕在標題下面:左邊語言切換、右邊 PLAY);
+// 圈的下面留白給房間的 ‹ 🖱 › 導覽列(它疊在畫面正下方)
+const ARC_BTN = { zh: { x: 104, y: 230, w: 70, h: 32 }, en: { x: 176, y: 230, w: 70, h: 32 }, play: { x: 276, y: 227, w: 140, h: 38 } };
 function arcadeButtonAt(x, y) {
   for (const k in ARC_BTN) { const b = ARC_BTN[k]; if (x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 8 && y <= b.y + b.h + 8) return k; }
   return null;
@@ -459,9 +460,9 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   g.beginPath(); g.roundRect(0, 0, W, H, 34); g.clip();                    // 圓角螢幕
   g.fillStyle = '#bfe6a8'; g.fillRect(0, 0, W, H);                         // 草地
   g.fillStyle = '#f6e3c2'; g.beginPath(); g.roundRect(14, 6, W - 28, H - 16, 18); g.fill();   // 人行道
-  g.fillStyle = '#9bdc7a'; g.beginPath(); g.roundRect(84, 62, W - 168, 178, 12); g.fill();      // 中間草地
+  g.fillStyle = '#9bdc7a'; g.beginPath(); g.roundRect(84, 72, W - 168, 206, 12); g.fill();      // 中間草地
   // 一圈格子:上下各 8 格、左右各 4 格,共 24 格,順時針排
-  const TW = 58, TH = 44, x0 = 22, y0 = 14, cols = 8, rows = 6, cells = [];
+  const TW = 58, TH = 40, x0 = 22, y0 = 28, cols = 8, rows = 7, cells = [];
   for (let i = 0; i < cols; i++) cells.push([x0 + i * (TW + 2), y0]);
   for (let j = 1; j < rows - 1; j++) cells.push([x0 + (cols - 1) * (TW + 2), y0 + j * (TH + 2)]);
   for (let i = cols - 1; i >= 0; i--) cells.push([x0 + i * (TW + 2), y0 + (rows - 1) * (TH + 2)]);
@@ -471,9 +472,9 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
     const c = ARC_COLORS[i % ARC_COLORS.length], lit = i === at;
     g.fillStyle = c; g.beginPath(); g.roundRect(x, y + 5, TW, TH - 5, 7); g.fill();                 // 側邊顏色
     g.fillStyle = lit ? '#fffbe0' : '#fff8ec'; g.beginPath(); g.roundRect(x, y - (lit ? 0 : 0), TW, TH - 9, 7); g.fill();   // 頂面
-    g.fillStyle = c; g.beginPath(); g.arc(x + TW / 2, y + 12, 6, 0, Math.PI * 2); g.fill();        // 小圖示
+    g.fillStyle = c; g.beginPath(); g.arc(x + TW / 2, y + 10, 5.5, 0, Math.PI * 2); g.fill();        // 小圖示
     g.fillStyle = '#3b2f2a'; g.font = '900 11px Menlo, monospace'; g.textAlign = 'center';
-    g.fillText(i === 0 ? 'GO' : (c === '#ffd24a' ? '?' : '$' + (60 + (i * 37) % 70)), x + TW / 2, y + 30);
+    g.fillText(i === 0 ? 'GO' : (c === '#ffd24a' ? '?' : '$' + (60 + (i * 37) % 70)), x + TW / 2, y + 27);
   });
   // 貓:從目前這格跳到下一格
   const [ax, ay] = cells[at], [bx, by] = cells[(at + 1) % n];
@@ -495,14 +496,14 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
     g.restore();
   };
   const k = Math.floor(t * 2);
-  die(W / 2 + 98, 132, 1 + (k * 5 + 2) % 6, Math.sin(t * 3) * 0.18); die(W / 2 + 146, 154, 1 + (k * 3 + 4) % 6, Math.sin(t * 3 + 1.4) * 0.18);
+  die(W / 2 + 98, 124, 1 + (k * 5 + 2) % 6, Math.sin(t * 3) * 0.18); die(W / 2 + 146, 146, 1 + (k * 3 + 4) % 6, Math.sin(t * 3 + 1.4) * 0.18);
   // 標題 + 閃爍提示
   g.textAlign = 'center';
   // 標題跟著選的語言換:中文字用系統的中文字型(Menlo 沒有中文字)
   const zhT = gameLang === 'zh', t1 = zhT ? '貓咪股市' : 'CAT STREET', t2 = zhT ? '大富翁' : 'STOCKS';
   g.font = zhT ? '900 36px "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif' : '900 30px Menlo, monospace';
-  g.fillStyle = 'rgba(0,0,0,.22)'; g.fillText(t1, W / 2 - 40 + 2, 136 + 2); g.fillText(t2, W / 2 - 40 + 2, (zhT ? 178 : 172) + 2);
-  g.fillStyle = '#fff'; g.fillText(t1, W / 2 - 40, 136); g.fillStyle = '#ff7a59'; g.fillText(t2, W / 2 - 40, zhT ? 178 : 172);
+  g.fillStyle = 'rgba(0,0,0,.22)'; g.fillText(t1, W / 2 - 40 + 2, 132 + 2); g.fillText(t2, W / 2 - 40 + 2, (zhT ? 174 : 168) + 2);
+  g.fillStyle = '#fff'; g.fillText(t1, W / 2 - 40, 132); g.fillStyle = '#ff7a59'; g.fillText(t2, W / 2 - 40, zhT ? 174 : 168);
   // 鏡頭停在街機前時:最下面一排畫上語言切換(左)和 PLAY(右)(點擊判定見 arcadeButtonAt)
   if (arcadeMenu) {
     g.textAlign = 'center'; g.textBaseline = 'middle';
