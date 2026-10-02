@@ -29,7 +29,8 @@
   .m.done{background:#e3f7ea;border-color:#9ad9b0;transform:scale(1.02)}
   .m.done .ck{background:#35c26b;border-color:#35c26b}
   .m small{display:block;font-weight:600;color:#9a8676;font-size:calc(11px * var(--fs))}
-  .ctl{position:fixed;left:0;right:0;bottom:calc(46px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:center;gap:14px;z-index:6}
+  .ctl{position:fixed;left:0;right:0;bottom:calc(46px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:flex-end;gap:14px;z-index:6}
+  .ctl > .paw{margin-bottom:calc((var(--roll) - var(--btn)) / 2)}   /* 背包、地圖和擲骰子按鈕的中心對齊(上面多了骰子數量切換) */
   .roll{width:var(--roll);height:var(--roll);border-radius:50%;border:6px solid #fff;background:#ff7a59;color:#fff;font-size:calc(var(--roll) * .2);font-weight:900;
     letter-spacing:.04em;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2);cursor:pointer;transition:transform .08s,box-shadow .08s}
   .roll:active{transform:translateY(4px);box-shadow:0 2px 0 #d4553a,0 4px 8px rgba(0,0,0,.2)}
@@ -88,7 +89,7 @@
     padding:8px 12px;font-size:calc(12.5px * var(--fs));font-weight:900;box-shadow:0 3px 0 rgba(0,0,0,.1);min-width:calc(170px * var(--fs))}
   .round .trk{height:9px;border-radius:9px;background:#e6dccf;margin-top:6px;overflow:hidden}
   .round .trk b{display:block;height:100%;background:#4aa8ff;border-radius:9px;transition:width .4s}
-  @media(max-width:900px){ .side .box,.evt,.round{display:none} .side{left:12px;right:12px;width:auto;top:auto;bottom:calc(var(--roll) + 62px + env(safe-area-inset-bottom));align-items:center}
+  @media(max-width:900px){ .side .box,.evt,.round{display:none} .side{left:12px;right:12px;width:auto;top:auto;bottom:calc(var(--roll) + 110px + env(safe-area-inset-bottom));align-items:center}
     .bubble{max-width:420px;font-size:calc(12px * var(--fs));padding:7px 10px} }
   .it{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid var(--line);border-radius:14px;padding:8px 10px;margin-top:8px}
   .it .ic{font-size:calc(26px * var(--fs));flex:none}
@@ -158,6 +159,11 @@
   .dcard.lost{filter:grayscale(.65) brightness(.8);transform:scale(.93)}
   .dgo{height:calc(50px * var(--fs));padding:0 calc(40px * var(--fs));border-radius:999px;border:4px solid #fff;background:#8b7cff;color:#fff;font-weight:900;font-size:calc(17px * var(--fs));cursor:pointer;box-shadow:0 5px 0 #6a5bd6}
   .dgo:active{transform:translateY(3px);box-shadow:0 2px 0 #6a5bd6}
+  /* 擲 1 顆 / 2 顆的切換,放在擲骰子按鈕正上方 */
+  .rollcol{display:flex;flex-direction:column;align-items:center;gap:calc(8px * var(--fs))}
+  .dsel{display:flex;background:var(--cream);border:3px solid #fff;border-radius:999px;padding:3px;gap:3px;box-shadow:0 3px 0 rgba(0,0,0,.12)}
+  .dsel button{border:0;background:transparent;border-radius:999px;padding:calc(5px * var(--fs)) calc(14px * var(--fs));font-weight:900;font-size:calc(13px * var(--fs));color:#9a8676;cursor:pointer}
+  .dsel button.on{background:#ff7a59;color:#fff}
   .hide{display:none!important}
   @media(max-width:560px){ .stat.opt{display:none} .m{font-size:calc(11.5px * var(--fs));padding:5px 8px} .m small{display:none} }
 </style>
@@ -194,7 +200,10 @@
 
 <div class="ctl" id="ctl">
   <button class="paw" id="bagBtn"></button>
-  <button class="roll" id="rollBtn"><span id="rollTxt"></span><small id="rollsLeft"></small></button>
+  <div class="rollcol">
+    <div class="dsel" id="dsel"><button data-n="1" id="d1"></button><button data-n="2" id="d2" class="on"></button></div>
+    <button class="roll" id="rollBtn"><span id="rollTxt"></span><small id="rollsLeft"></small></button>
+  </div>
   <button class="paw" id="mapBtn" style="background:#8bd17c;box-shadow:0 4px 0 #5fa651"></button>
 </div>
 <div class="ctl hide" id="stepCtl">
@@ -213,6 +222,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=38"></script>
+<script type="module" src="./board.mjs?v=39"></script>
 </body>
 </html>

@@ -210,7 +210,7 @@ function newState() {
     short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
     shop: { round: -1, stock: [] }, notices: [],
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
-    missions: [], done: 0, me: 'cat', foe: 'bear',
+    missions: [], done: 0, me: 'cat', foe: 'bear', diceN: 2,
     ai: { pos: 0, cash: START_CASH, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) },
   };
   for (let i = 0; i < 3; i++) S.missions.push(drawMission());
@@ -690,7 +690,8 @@ window.__tick = (ms = 16, fast = false) => { skipRender = fast; for (let t = 0; 
 // 兩顆骰子一起擲:各自有自己的起點、旋轉軸和落點,最後停在指定點數朝上
 async function rollDice(vals, P = ME) {
   diceSpots(P);
-  const plan = dice.map((d, i) => {
+  dice.forEach((d, i) => { d.visible = i < vals.length; });      // 只擲一顆時,第二顆收起來
+  const plan = dice.slice(0, vals.length).map((d, i) => {
     const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
     return { d, rest: DIE_REST[i], final: yaw.multiply(UPQ[vals[i]]),
       axis: new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.4, Math.random() - 0.5).normalize(),
@@ -759,6 +760,7 @@ function hud() {
   $('bagCount').textContent = S.bag.length;
   $('mcount').textContent = S.done;
   $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left`, `剩 ${MAX_ROLLS - S.rolls} 次`);
+  document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
   $('miss').innerHTML = S.missions.map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
   $('tip').textContent = advise();
@@ -791,7 +793,7 @@ function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
   document.title = L('Cat Street Stocks', '貓咪股市大富翁');
   $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值'); 
-  $('bagBtn').textContent = L('Backpack', '背包'); $('mapBtn').textContent = L('Map', '地圖'); $('rollTxt').textContent = L('ROLL', '擲骰子');
+  $('bagBtn').textContent = L('Backpack', '背包'); $('d1').textContent = L('1 die', '1 顆'); $('d2').textContent = L('2 dice', '2 顆'); $('mapBtn').textContent = L('Map', '地圖'); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   $('note').textContent = L('Fictional companies · for learning, not investment advice', '公司皆為虛構 · 學習用途,非投資建議');
 }
@@ -991,7 +993,7 @@ function bagPanel() {
     if (!id) return close();
     closePanel();
     if (id === 'remote') {
-      $('steps').innerHTML = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `<button data-n="${n}">${n}</button>`).join('') + '<button data-n="0" style="background:#a99b90;box-shadow:0 4px 0 #857a70">×</button>';
+      $('steps').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `<button data-n="${n}">${n}</button>`).join('') + '<button data-n="0" style="background:#a99b90;box-shadow:0 4px 0 #857a70">×</button>';
       $('stepCtl').classList.remove('hide');
       $('steps').querySelectorAll('button').forEach((x) => x.onclick = () => {
         const n = +x.dataset.n; $('stepCtl').classList.add('hide'); S.busy = false;
@@ -1010,6 +1012,27 @@ function bagPanel() {
   });
 }
 const r6 = () => 1 + Math.floor(Math.random() * 6);
+// 對手決定擲 1 顆還是 2 顆:把「每個可能落點對牠有多好」算成分數,比較兩種擲法的期望值。
+// 一顆骰子走 1~6 格(機率相同),兩顆走 2~12 格(7 最常出現)
+function aiDiceChoice() {
+  const A = S.ai;
+  const score = (i) => {
+    const t = TILES[(A.pos + i) % TILES.length], sec = SECTORS[t]; let v = 0;
+    if (sec) { const h = A.hold[t], sh = A.short[t], p = S.price[t];
+      if (h.n && (p * h.n - h.cost) / h.cost >= 0.15) v += 3;                       // 可以獲利了結
+      else if (sh.n && Math.abs((sh.entry - p) / sh.entry) >= 0.12) v += 2;          // 空單該回補了
+      else if (h.loan > 0 && ratioOf(h, t) < 1.5) v += 2;                            // 融資快斷頭,想去處理
+      else v += p < sec.open * 0.95 ? 1.5 : 0.5; }                                   // 便宜的比較想買
+    else if (t === 'shop') v += A.cash >= 2500 ? 2 : 0.3;
+    else if (t === 'fee') v -= 2;
+    for (let j = 1; j <= i; j++) { const tt = TILES[(A.pos + j) % TILES.length]; if (tt === 'start') v += 2; else if (tt === 'divi') v += 0.8; }   // 經過發薪 / 股息格
+    return v;
+  };
+  let e1 = 0, e2 = 0.3;                                                              // 兩顆走得遠,給一點基本分
+  for (let i = 1; i <= 6; i++) e1 += score(i) / 6;
+  for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) e2 += score(a + b) / 36;
+  return e1 > e2 ? 1 : 2;
+}
 // 小熊的回合。策略很單純,但都是看得懂的規則:
 //   賺超過 15% 就賣;價格比開盤低 5% 以上且現金夠就多買;否則留 $1,500 現金後買 10 股
 async function aiTurn() {
@@ -1022,8 +1045,9 @@ async function aiTurn() {
   }
   { const id = A.bag.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0);
     if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event); } }
-  const a = r6(), b = r6(), n = a + b;
-  await rollDice([a, b], BEAR); toast(`${who}: ${a} + ${b} = ${n}`);
+  const nd = aiDiceChoice(), vals = nd === 1 ? [r6()] : [r6(), r6()], n = vals.reduce((x, y) => x + y, 0);
+  toast(L(`${who} rolls ${nd === 1 ? 'one die' : 'two dice'}`, `${who}選擇擲 ${nd} 顆骰子`)); await wait(0.7);
+  await rollDice(vals, BEAR); toast(vals.length === 1 ? `${who}: ${n}` : `${who}: ${vals[0]} + ${vals[1]} = ${n}`);
   for (let i = 0; i < n; i++) {
     A.pos = (A.pos + 1) % TILES.length;
     await hopTo(A.pos, BEAR);
@@ -1072,11 +1096,11 @@ async function aiTurn() {
 async function turn(forced) {
   if (S.busy || S.over) return;
   S.busy = true; showCtl(false);
-  // 兩顆骰子;遙控骰子(forced)則是把指定的步數拆成兩顆的點數
-  const a = forced ? Math.max(1, Math.min(6, Math.floor(forced / 2))) : r6(), b = forced ? forced - a : r6();
-  const n = a + b;
-  await rollDice([a, b]);
-  toast(`${a} + ${b} = ${n}`);
+  // 擲 1 顆或 2 顆由玩家選(S.diceN)。遙控骰子(forced):6 以內用一顆顯示,7 以上拆成兩顆的點數
+  const vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : (S.diceN === 1 ? [r6()] : [r6(), r6()]);
+  const n = vals.reduce((x, y) => x + y, 0);
+  await rollDice(vals);
+  toast(vals.length === 1 ? `${n}` : `${vals[0]} + ${vals[1]} = ${n}`);
   for (let i = 0; i < n; i++) {
     S.pos = (S.pos + 1) % TILES.length;
     await hopTo(S.pos);
@@ -1169,6 +1193,7 @@ async function start() {
 
 $('rollBtn').onclick = () => turn();
 $('bagBtn').onclick = bagPanel;
+document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
 $('mapBtn').onclick = () => { view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
 
 if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
