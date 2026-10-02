@@ -48,14 +48,14 @@ const TILES = (() => {
   const t = new Array(4 * (N - 1)).fill(null);
   t[0] = 'start'; t[15] = 'shop'; t[30] = 'divi'; t[45] = 'shop';
   [4, 11, 19, 26, 34, 41, 49, 56].forEach((i) => { t[i] = 'chance'; });
-  [8, 38].forEach((i) => { t[i] = 'fee'; });
+  t[8] = 'fee'; t[38] = 'ipo';      // 38:新股申購入口,走到就進 IPO 小路
   [22, 52].forEach((i) => { t[i] = 'gift'; });
   // 剩下 44 格:20 種資產各兩格,最常用的四種多一格
   const seq = [...KEYS, 'etf', 'tech', ...KEYS, 'chip', 'yield'];
   let j = 0; for (let i = 0; i < t.length; i++) if (!t[i]) t[i] = seq[j++];
   return t;
 })();
-const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b, divi: 0x8f7cf0 };
+const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b, divi: 0x8f7cf0, ipo: 0x2fbf9f };
 // 事件卡:只寫「有變動的資產」,沒寫的就是不動。
 // 大盤 ETF 不用自己寫 —— 它等於所有「股票類股」這次漲跌的平均(黃金、債券、加密貨幣不算)
 const NON_EQUITY = new Set(['gold', 'bond', 'crypto', 'etf']);
@@ -118,6 +118,21 @@ const EVENTS = [
   EV(L('Financial crisis', '金融風暴'), L('Banks fail and credit freezes. Nearly everything falls together; only gold and bonds hold.', '銀行倒閉、信用緊縮,幾乎所有資產一起跌,只有黃金和債券撐住。'),
     { gold: 1.20, bond: 1.10, fin: 0.65, crypto: 0.60, reit: 0.75, disc: 0.75, tech: 0.78, chip: 0.78, green: 0.78, mat: 0.80, trans: 0.82, oil: 0.82, bio: 0.82, game: 0.85, yield: 0.90, def: 0.95, staples: 0.95, util: 0.94, health: 0.94 }),
 ];
+// 特殊牌:混在市場事件的三張牌裡。抽到不會動股價,而是把你送進棋盤中間的小路
+const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
+const SPECIAL = {
+  jail: { special: 'jail', m: ONES, t: L('Insider trading probe', '涉嫌內線交易'),
+    w: L('Trading on information the public does not have is illegal. Your account is frozen: you go to the detention lane and cannot trade until you walk out.', '用還沒公開的消息買賣股票是違法的。帳戶被凍結:送進拘留小路,走出來之前都不能買賣。') },
+  ipo: { special: 'ipo', m: ONES, t: L('You won the IPO lottery', '新股抽籤中籤'),
+    w: L('New shares are usually sold below the market price to the people who win the draw. You enter the IPO lane.', '新上市的股票通常用比市價低的「承銷價」賣給中籤的人。你進入 IPO 小路。') },
+};
+const SPECIAL_RATE = 0.8;          // 每次抽牌,三張裡有一張是特殊牌的機率
+const BAIL = 800, IPO_OFF = 0.8;   // 保釋金;IPO 承銷價 = 市價 x 0.8
+// 中間的兩條小路(各 3 格,一回合走一格,走完從 exit 那格回到外圈)。座標是 16x16 格網的 [x, z]
+const LANES = {
+  jail: { exit: 23, cells: [[3, 7], [2, 7], [1, 7]] },
+  ipo: { exit: 53, cells: [[12, 8], [13, 8], [14, 8]] },
+};
 const LOT = 10, START_CASH = 10000, SALARY = 500, FEE = 200, MAX_ROLLS = 20;
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
 const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17, 20, 21];    // 商店會賣的事件卡(壞消息類的不賣)
@@ -204,14 +219,14 @@ function drawMission() {
 }
 function newState() {
   S = {
-    pos: 0, cash: START_CASH, rolls: 0, bag: ['remote'], busy: false, over: false,
+    pos: 0, lane: null, cash: START_CASH, rolls: 0, bag: ['remote'], busy: false, over: false,
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])),
     short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
     shop: { round: -1, stock: [] }, notices: [],
     lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, lastEvent: null,
     missions: [], done: 0, me: 'cat', foe: 'bear', diceN: 2,
-    ai: { pos: 0, cash: START_CASH, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) },
+    ai: { pos: 0, lane: null, cash: START_CASH, bag: [], hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) },
   };
   for (let i = 0; i < 3; i++) S.missions.push(drawMission());
 }
@@ -322,7 +337,7 @@ const E = N / 2 * STEP + 0.62;
   const pond = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.06, 40), mat(0x8fd3ff)); pond.position.set(-0.8, 0.2, 0.6); pond.scale.z = 0.7; scene.add(pond);
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.05, 40), mat(0xf6e3c2)); rim.position.set(-0.8, 0.185, 0.6); rim.scale.z = 0.72; scene.add(rim);
   [[-3.4, -2.6, 1.2], [-2.2, -3.6, 1], [2.6, -3.2, 1.3], [3.6, -1.4, 1], [3.2, 2.6, 1.1], [-3.8, 2.4, 1.1], [1.2, 3.6, 1], [-1.6, 3.4, 1.2], [0.6, -3.9, 1.1]].forEach(([x, z, sc]) => tree(x, z, sc));
-  house(1.9, -0.9, 0xfff1dc, 0xe2726b, 0.4); house(-3.0, -0.4, 0xeef4ff, 0xf2a35e, -0.3);
+  house(1.9, -0.9, 0xfff1dc, 0xe2726b, 0.4);
   lamp(0.6, 2.2); lamp(-2.4, 1.9);
 }
 // 花很多(幾百朵),每朵各自一個 Mesh 的話一幀要多畫上千次 → 用 InstancedMesh 併成兩次繪製,而且不描邊
@@ -380,6 +395,43 @@ TILES.forEach((type, i) => {
   }
   tiles.push({ type, g, cv, tex, bld, bldH: 0 });
 });
+// 中間的小路:拘留小路(灰)和 IPO 小路(綠)。格子做法和外圈一樣,標籤是固定的所以只畫一次
+const cellPos = (x, z) => new THREE.Vector3((x - M / 2) * STEP, 0, (z - M / 2) * STEP);
+const LANE_COLOR = { jail: 0x7b8494, ipo: 0x2fbf9f };
+const laneTiles = {};
+for (const [type, def] of Object.entries(LANES)) laneTiles[type] = def.cells.map(([x, z], i) => {
+  const g = new THREE.Group(); g.position.copy(cellPos(x, z)); scene.add(g);
+  box(1.04, 0.30, 1.04, type === 'jail' ? 0x565e6c : 0x1f9a80, 0, 0.21, 0, 0.09, g);
+  box(1.0, 0.10, 1.0, LANE_COLOR[type], 0, TOP - 0.05, 0, 0.045, g);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256; const c = cv.getContext('2d');
+  const F = (px) => `900 ${px}px "Avenir Next","PingFang TC","Helvetica Neue",Arial,sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.strokeStyle = '#fff';
+  if (type === 'jail') {
+    c.lineWidth = 13; c.beginPath(); c.arc(128, 76, 27, Math.PI, 0); c.lineTo(155, 96); c.moveTo(101, 76); c.lineTo(101, 96); c.stroke();   // 鎖頭
+    c.beginPath(); c.roundRect(84, 92, 88, 62, 12); c.fill();
+    c.font = F(ZH ? 40 : 34); c.fillText(L('FROZEN', '帳戶凍結'), 128, 202);
+  } else {
+    c.font = F(84); c.fillText('IPO', 128, 96);
+    c.font = F(44); c.fillText(`-${Math.round((1 - IPO_OFF) * 100)}%`, 128, 186);
+  }
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const holder = new THREE.Group(); holder.rotation.y = Math.PI / 4; holder.position.y = TOP + 0.004; g.add(holder);
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), Object.assign(new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }), { userData: { outlineParameters: { visible: false } } }));
+  lab.rotation.x = -Math.PI / 2; holder.add(lab);
+  return { g };
+});
+// 小路盡頭的建築:拘留所(灰色、有鐵窗)和交易所(白色、金色的鐘)
+{
+  const j = new THREE.Group(); j.position.copy(cellPos(3, 5.9));   // 放在小路「後面」那一側,才不會擋到站在格子上的棋子 scene.add(j);
+  box(1.0, 0.95, 1.0, 0x9aa3b2, 0, 0.66, 0, 0.05, j); box(1.12, 0.14, 1.12, 0x565e6c, 0, 1.2, 0, 0.04, j);
+  box(0.3, 0.5, 0.04, 0x3d4350, 0, 0.5, 0.51, 0.02, j);                                             // 門
+  for (let i = -1; i <= 1; i++) box(0.04, 0.34, 0.05, 0x3d4350, 0.51, 0.72, i * 0.14, 0.01, j);     // 鐵窗
+  const x = new THREE.Group(); x.position.copy(cellPos(10.95, 8)); scene.add(x);
+  box(1.0, 0.7, 1.0, 0xfff8ec, 0, 0.53, 0, 0.05, x); box(1.14, 0.12, 1.14, 0x2fbf9f, 0, 0.94, 0, 0.04, x);
+  for (const sx of [-0.32, 0, 0.32]) box(0.1, 0.5, 0.1, 0xffffff, sx, 0.45, 0.52, 0.03, x);         // 柱子
+  box(0.5, 0.3, 0.5, 0xfff8ec, 0, 1.15, 0, 0.04, x);
+  const bell = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 14), mat(0xffc93c)); bell.position.y = 1.5; bell.castShadow = true; x.add(bell);
+}
 // 類股圖示:自己用 canvas 畫的簡單圖形(不用任何真實公司的商標)
 function icon(c, type, x, y, r, color) {
   c.save(); c.translate(x, y); c.fillStyle = color; c.strokeStyle = color; c.lineWidth = r * 0.16; c.lineJoin = 'round'; c.lineCap = 'round';
@@ -434,8 +486,8 @@ function drawLabel(i) {
     c.fillStyle = '#b0780a'; c.font = F(150); c.fillText('?', 128, 112);
     c.font = F(34); c.fillText(L('EVENT', '市場事件'), 128, 208);
   } else {
-    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], shop: [L('SHOP', '商店'), L('buy items', '買道具')], gift: [L('GIFT', '禮物'), L('free item', '送道具')], divi: [L('DIVIDEND', '股息結算'), L('paid here', '在此領股利')] }[t.type];
-    c.fillStyle = '#fff'; c.font = F(a.length > 5 ? 40 : (ZH ? (a.length > 3 ? 50 : 60) : 72)); c.fillText(a, 128, 104);
+    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], shop: [L('SHOP', '商店'), L('buy items', '買道具')], gift: [L('GIFT', '禮物'), L('free item', '送道具')], ipo: ['IPO', L('enter lane', '新股申購')], divi: [L('DIVIDEND', '股息結算'), L('paid here', '在此領股利')] }[t.type];
+    c.fillStyle = '#fff'; c.font = F(a.length > 5 ? 40 : (ZH && a !== 'IPO' ? (a.length > 3 ? 50 : 60) : 72)); c.fillText(a, 128, 104);
     c.font = F(ZH ? 34 : 40); c.fillText(b, 128, 168);
   }
   t.tex.needsUpdate = true;
@@ -610,6 +662,7 @@ const ME = { piece, body, off: new THREE.Vector3(-0.3, 0, 0.2) };
 const BEAR = { piece: bearPiece, body: bearBody, off: new THREE.Vector3(0.3, 0, -0.2) };
 focus = ME;
 function placePiece(i, P = ME) { const p = tilePos(i); P.piece.position.set(p.x + P.off.x, TOP, p.z + P.off.z); }
+const onLane = (v) => Object.values(LANES).some((d) => d.cells.some(([x, z]) => { const p = cellPos(x, z); return Math.abs(p.x - v.x) < 0.95 && Math.abs(p.z - v.z) < 0.95; }));
 
 /* ───────────── 骰子 ───────────── */
 const DIE = 0.56;
@@ -634,6 +687,8 @@ function diceSpots(P) {
   const side = new THREE.Vector3(-d.z, 0, d.x), y = 0.18 + DIE / 2;
   DIE_REST[0].set(p.x + d.x * 2.6 + side.x * 0.42, y, p.z + d.z * 2.6 + side.z * 0.42);
   DIE_REST[1].set(p.x + d.x * 2.9 - side.x * 0.42, y, p.z + d.z * 2.9 - side.z * 0.42);
+  // 落點剛好在小路的格子上 → 往旁邊挪,不然骰子會陷進格子裡
+  for (let n = 0; n < 2 && DIE_REST.some(onLane); n++) DIE_REST.forEach((v) => { v.x += side.x * 1.7; v.z += side.z * 1.7; });
 }
 const dice = DIE_REST.map((p) => { const d = new THREE.Mesh(new RoundedBoxGeometry(DIE, DIE, DIE, 4, 0.08), dieMats); d.castShadow = true; d.position.copy(p); scene.add(d); return d; });
 // 讓點數 n 朝上的姿態
@@ -709,15 +764,16 @@ async function rollDice(vals, P = ME) {
   });
   await wait(0.25);
 }
-async function hopTo(i, P = ME) {
-  const a = P.piece.position.clone(), p = tilePos(i), b = new THREE.Vector3(p.x + P.off.x, TOP, p.z + P.off.z);
-  await tween(0.22, (k) => {
+const hopTo = (i, P = ME) => hopOnto(tiles[i].g, P);
+// 跳到某一格上(外圈或小路都用這個)。far = 被送進小路時的大跳躍
+async function hopOnto(g, P = ME, far = false) {
+  const a = P.piece.position.clone(), p = g.position, b = new THREE.Vector3(p.x + P.off.x, TOP, p.z + P.off.z);
+  await tween(far ? 0.8 : 0.22, (k) => {
     P.piece.position.lerpVectors(a, b, k);
-    P.piece.position.y = TOP + Math.sin(k * Math.PI) * 0.5;
+    P.piece.position.y = TOP + Math.sin(k * Math.PI) * (far ? 2.4 : 0.5);
     P.body.scale.y = 1 + Math.sin(k * Math.PI) * 0.18;
   });
   // 落地把格子壓一下
-  const g = tiles[i].g;
   tween(0.18, (k) => { g.position.y = -Math.sin(k * Math.PI) * 0.06; });
   P.body.scale.y = 1;
 }
@@ -729,6 +785,8 @@ function advise() {
   const held = KEYS.filter((k) => S.hold[k].n > 0);
   const cheap = KEYS.filter((k) => S.price[k] < SECTORS[k].open * 0.97);
   const up = held.find((k) => (S.price[k] * S.hold[k].n - S.hold[k].cost) / S.hold[k].cost >= 0.15);
+  if (S.lane?.type === 'jail') return L('Your account is frozen. You cannot sell, so a margin position can still be force-liquidated if prices fall.', '帳戶凍結中,不能賣出也不能回補。這時候股價大跌,融資部位一樣會被強迫平倉。');
+  if (S.lane?.type === 'ipo') return L('IPO lane: each tile offers new shares 20% below the market price.', 'IPO 小路:每一格都能用比市價便宜 20% 的承銷價申購新股。');
   let d = 0; for (let i = 1; i <= 6; i++) if (TILES[(S.pos + i) % TILES.length] === 'chance') { d = i; break; }
   if (todo.has('profit') && up) return L(`${SECTORS[up].name} is up over 15%. Land on it to take profit.`, `${SECTORS[up].name}已經賺超過 15%,走到它的格子就能獲利了結。`);
   if (todo.has('dip') && cheap.length) return L(`${SECTORS[cheap[0]].name} is below its opening price. Buying it counts as buying the dip.`, `${SECTORS[cheap[0]].name}現在低於開盤價,買進就算逢低買進。`);
@@ -761,6 +819,8 @@ function hud() {
   $('mcount').textContent = S.done;
   $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left`, `剩 ${MAX_ROLLS - S.rolls} 次`);
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
+  $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' ? L('FROZEN', '凍結中') : L('STEP', '前進一格')) : L('ROLL', '擲骰子');
+  $('dsel').style.visibility = S.lane ? 'hidden' : '';
   $('miss').innerHTML = S.missions.map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
   $('tip').textContent = advise();
@@ -889,8 +949,11 @@ function checkMissions() {
 function drawEventCards(auto) {
   return new Promise((res) => {
     const picks = EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 3), who = CHARS[S.foe].name;
+    if (Math.random() < SPECIAL_RATE) picks[Math.floor(Math.random() * 3)] = SPECIAL[Math.random() < 0.5 ? 'jail' : 'ipo'];
     const face = (e) => {
       const top = KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 6);
+      if (e.special) return `<div class="dhead ${e.special === 'ipo' ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` +
+        (e.special === 'ipo' ? `<span class="mv up">${L('IPO lane', '進入 IPO 小路')}</span>` : `<span class="mv dn">${L('Detention lane', '送進拘留小路')}</span>`) + '</div>';
       return `<div class="dhead ${e.m.etf >= 1 ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` +
         top.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].code} ${d > 0 ? '+' : ''}${d}%</span>`; }).join('') + '</div>';
     };
@@ -904,8 +967,8 @@ function drawEventCards(auto) {
       if (chosen >= 0) return;
       chosen = i; ov.classList.add('done'); cards[i].classList.add('flip', 'picked');
       const e = picks[i];
-      KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
-      S.lastEvent = e; marginCheck(); drawAll(); hud();
+      if (!e.special) { KEYS.forEach((k) => { S.price[k] *= e.m[k]; }); S.lastEvent = e; marginCheck(); }
+      drawAll(); hud();
       wait(0.9).then(() => {
         cards.forEach((c, j) => { if (j !== i) c.classList.add('flip', 'lost'); }); $('dgo').classList.remove('hide');
         // 對手抽的牌:給你 2 秒看完事件,然後自動按「繼續」(想快一點也可以自己先按)
@@ -980,6 +1043,7 @@ async function badNews(k, byPlayer) {
 // 背包:只有輪到自己、還沒擲骰時能開
 function bagPanel() {
   if (S.busy || S.over) return;
+  if (S.lane?.type === 'jail') return toast(L('Account frozen: items cannot be used', '帳戶凍結中,不能使用道具'));
   S.busy = true; $('ctl').classList.add('hide');
   const close = () => { closePanel(); S.busy = false; showCtl(true); };
   const kinds = [...new Set(S.bag)];
@@ -992,7 +1056,8 @@ function bagPanel() {
     const id = b.dataset.id;
     if (!id) return close();
     closePanel();
-    if (id === 'remote') {
+    if (id === 'remote' && S.lane) { toast(L('The lane is one tile per turn', '小路上一回合只能走一格')); S.busy = false; showCtl(true); }
+    else if (id === 'remote') {
       $('steps').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `<button data-n="${n}">${n}</button>`).join('') + '<button data-n="0" style="background:#a99b90;box-shadow:0 4px 0 #857a70">×</button>';
       $('stepCtl').classList.remove('hide');
       $('steps').querySelectorAll('button').forEach((x) => x.onclick = () => {
@@ -1011,6 +1076,72 @@ function bagPanel() {
     }
   });
 }
+/* ───────────── 中間的小路 ───────────── */
+// 被送進小路:大跳躍到第一格。拘留小路 = 帳戶凍結(不能買賣、不能用道具);IPO 小路 = 每格都能用承銷價申購新股
+async function enterLane(isMe, type) {
+  const who = isMe ? S : S.ai, P = isMe ? ME : BEAR, name = CHARS[S.foe].name;
+  who.lane = { type, idx: 0 }; hud();
+  await hopOnto(laneTiles[type][0].g, P, true);
+  if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
+  if (isMe) await cardPanel(L('Account frozen', '帳戶被凍結'),
+    L(`You move one tile per turn and reach the main road again in ${LANES.jail.cells.length} turns. Until then you cannot buy, sell, cover or use items, but prices keep moving: if a margin position falls below 130% it is still sold for you. You can pay $${BAIL} bail on your turn to walk out at once.`,
+      `在這裡一回合只能走一格,${LANES.jail.cells.length} 回合後才回到外圈。這段時間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${BAIL} 保釋金立刻出來。`));
+  else { toast(L(`${name}'s account is frozen`, `${name}的帳戶被凍結了`)); await wait(1.1); }
+}
+// 在小路上往前走一格(all = 一口氣走完)。走出小路回到外圈時回傳 true
+async function laneStep(isMe, all = false) {
+  const who = isMe ? S : S.ai, P = isMe ? ME : BEAR, ln = who.lane, def = LANES[ln.type];
+  do {
+    ln.idx++;
+    if (ln.idx >= def.cells.length) { who.lane = null; who.pos = def.exit; await hopTo(def.exit, P); hud(); return true; }
+    await hopOnto(laneTiles[ln.type][ln.idx].g, P);
+  } while (all);
+  return false;
+}
+function jailPanel() {
+  return new Promise((res) => {
+    const left = LANES.jail.cells.length - S.lane.idx, risky = KEYS.filter((k) => S.hold[k].loan > 0);
+    const p = panel(`<h3><span class="tag" style="background:#7b8494">${L('FROZEN', '凍結中')}</span>${L('Detention lane', '拘留小路')}</h3>
+      <p>${L(`${left} more turn${left > 1 ? 's' : ''} until you are back on the main road. You cannot trade in here.`, `再 ${left} 回合才會回到外圈,在這裡不能買賣。`)}${risky.length ? ` <b style="color:#c4472f">${L(`Margin at risk: ${risky.map((k) => `${SECTORS[k].code} ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join(', ')}`, `融資部位有風險:${risky.map((k) => `${SECTORS[k].code} 維持率 ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join('、')}`)}</b>` : ''}</p>
+      <div class="btns">
+        <button class="b-ok" data-a="bail" ${S.cash < BAIL ? 'disabled' : ''}>${L('Pay bail', '付保釋金')}<br><span style="font-size:calc(11px * var(--fs))">$${BAIL} · ${L('out now', '立刻出來')}</span></button>
+        <button class="b-skip" data-a="wait">${L('Wait', '等一回合')}<br><span style="font-size:calc(11px * var(--fs))">${L('move 1 tile', '前進一格')}</span></button>
+      </div>`);
+    p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.a === 'bail'); });
+  });
+}
+// IPO:隨機一檔股票,用承銷價(市價 8 折)申購。新股是公司新發行的,所以不會推高市價
+const ipoPick = (who) => { const pool = KEYS.filter((k) => !NON_EQUITY.has(k) && !who.short[k].n); return pool[Math.floor(Math.random() * pool.length)]; };
+function ipoPanel() {
+  return new Promise((res) => {
+    const k = ipoPick(S), sec = SECTORS[k], h = S.hold[k], mkt = S.price[k], price = mkt * IPO_OFF;
+    const p = panel(`<h3><span class="tag" style="background:#2fbf9f">IPO</span>${L('New shares: ', '新股申購:')}${sec.name}</h3>
+      <p>${L('New shares are priced below the market so that they sell out. That gap is why people line up for IPOs, but the price can still fall afterwards.', '新股為了順利賣完,承銷價會訂得比市價低,這個價差就是大家搶著抽籤的原因。不過買到之後股價還是可能下跌。')}</p>
+      <div class="kv">
+        <div>${L('Market price', '市價')}<b>$${Math.round(mkt)}</b></div>
+        <div>${L('IPO price', '承銷價')}<b style="color:#1c8a4a">$${Math.round(price)}</b></div>
+        <div>${L('You hold', '持有')}<b>${h.n}</b></div>
+      </div>
+      <div class="btns">
+        <button class="b-buy" data-n="1" ${S.cash < price * LOT ? 'disabled' : ''}>${L('Subscribe 10', '申購 10 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(price * LOT)}</span></button>
+        <button class="b-buy" data-n="3" ${S.cash < price * LOT * 3 ? 'disabled' : ''}>${L('Subscribe 30', '申購 30 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(price * LOT * 3)}</span></button>
+        <button class="b-skip" data-n="0">${L('Skip', '跳過')}</button>
+      </div>`);
+    p.querySelectorAll('button').forEach((b) => b.onclick = () => {
+      const n = LOT * +b.dataset.n;
+      if (n) { S.cash -= price * n; h.n += n; h.cost += price * n; toast(L(`Subscribed ${n} ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 申購 ${sec.name} ${n} 股`)); }
+      drawAll(); hud(); closePanel(); res();
+    });
+  });
+}
+async function aiIpo() {
+  const A = S.ai, who = CHARS[S.foe].name, k = ipoPick(A), sec = SECTORS[k], price = S.price[k] * IPO_OFF;
+  const lots = A.cash >= price * LOT * 3 + 1500 ? 3 : A.cash >= price * LOT + 500 ? 1 : 0;
+  if (lots) { const n = LOT * lots; A.cash -= price * n; A.hold[k].n += n; A.hold[k].cost += price * n;
+    toast(L(`${who} subscribed ${n} ${sec.name} at the IPO price`, `${who}用承銷價申購${sec.name} ${n} 股`)); }
+  else toast(L(`${who} skips the IPO`, `${who}沒有申購`));
+  drawAll(); hud(); await wait(1.1);
+}
 const r6 = () => 1 + Math.floor(Math.random() * 6);
 // 對手決定擲 1 顆還是 2 顆:把「每個可能落點對牠有多好」算成分數,比較兩種擲法的期望值。
 // 一顆骰子走 1~6 格(機率相同),兩顆走 2~12 格(7 最常出現)
@@ -1024,6 +1155,7 @@ function aiDiceChoice() {
       else if (h.loan > 0 && ratioOf(h, t) < 1.5) v += 2;                            // 融資快斷頭,想去處理
       else v += p < sec.open * 0.95 ? 1.5 : 0.5; }                                   // 便宜的比較想買
     else if (t === 'shop') v += A.cash >= 2500 ? 2 : 0.3;
+    else if (t === 'ipo') v += 2.5;
     else if (t === 'fee') v -= 2;
     for (let j = 1; j <= i; j++) { const tt = TILES[(A.pos + j) % TILES.length]; if (tt === 'start') v += 2; else if (tt === 'divi') v += 0.8; }   // 經過發薪 / 股息格
     return v;
@@ -1045,6 +1177,12 @@ async function aiTurn() {
   }
   { const id = A.bag.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0);
     if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event); } }
+  if (A.lane) {
+    // 在小路上:不擲骰,一回合走一格。被凍結時錢夠多就付保釋金直接出來
+    const bail = A.lane.type === 'jail' && A.cash >= BAIL + 2500;
+    if (bail) { A.cash -= BAIL; toast(L(`${who} pays $${BAIL} bail`, `${who}付了 $${BAIL} 保釋金`)); await wait(0.8); }
+    await laneStep(false, bail);
+  } else {
   const nd = aiDiceChoice(), vals = nd === 1 ? [r6()] : [r6(), r6()], n = vals.reduce((x, y) => x + y, 0);
   toast(L(`${who} rolls ${nd === 1 ? 'one die' : 'two dice'}`, `${who}選擇擲 ${nd} 顆骰子`)); await wait(0.7);
   await rollDice(vals, BEAR); toast(vals.length === 1 ? `${who}: ${n}` : `${who}: ${vals[0]} + ${vals[1]} = ${n}`);
@@ -1053,9 +1191,13 @@ async function aiTurn() {
     await hopTo(A.pos, BEAR);
     if (A.pos === 0 || TILES[A.pos] === 'divi') { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += (A.pos === 0 ? SALARY : 0) + div - (A.pos === 0 ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) : 0); hud(); }
   }
+  }
   await wait(0.2);
-  const type = TILES[A.pos], sec = SECTORS[type];
-  if (sec) {
+  const type = A.lane ? '_' + A.lane.type : TILES[A.pos], sec = SECTORS[type];
+  if (type === '_jail') { toast(L(`${who} is still frozen`, `${who}還在凍結中,不能交易`)); await wait(0.9); }
+  else if (type === '_ipo') await aiIpo();
+  else if (type === 'ipo') await enterLane(false, 'ipo');
+  else if (sec) {
     const h = A.hold[type], sh = A.short[type], price = S.price[type], mine = S.hold[type].n;
     if (sh.n) {
       // 有空單:賺 12% 以上就回補落袋,虧 12% 以上就停損,不然續抱
@@ -1088,7 +1230,7 @@ async function aiTurn() {
     if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
     else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
     hud(); await wait(1.2);
-  } else if (type === 'chance') { await wait(0.3); await drawEventCards(true); }
+  } else if (type === 'chance') { await wait(0.3); const c = await drawEventCards(true); if (c.special) await enterLane(false, c.special); }
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
   hud(); focus = ME; await wait(0.5);
@@ -1097,6 +1239,12 @@ async function turn(forced) {
   if (S.busy || S.over) return;
   S.busy = true; showCtl(false);
   // 擲 1 顆或 2 顆由玩家選(S.diceN)。遙控骰子(forced):6 以內用一顆顯示,7 以上拆成兩顆的點數
+  if (S.lane) {
+    // 在小路上:不擲骰,一回合走一格。被凍結時可以付保釋金一口氣走出來
+    const bail = S.lane.type === 'jail' && await jailPanel();
+    if (bail) { S.cash -= BAIL; hud(); toast(L(`Paid $${BAIL} bail`, `付了 $${BAIL} 保釋金`)); }
+    await laneStep(true, bail);
+  } else {
   const vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : (S.diceN === 1 ? [r6()] : [r6(), r6()]);
   const n = vals.reduce((x, y) => x + y, 0);
   await rollDice(vals);
@@ -1106,6 +1254,7 @@ async function turn(forced) {
     await hopTo(S.pos);
     if (S.pos === 0) payday(); else if (TILES[S.pos] === 'divi') payday(0);
   }
+  }
   S.rolls++;
   // 每回合小幅隨機波動
   KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2)); });
@@ -1113,10 +1262,14 @@ async function turn(forced) {
   drawAll(); hud();
   await wait(0.15);
 
-  const type = TILES[S.pos];
-  if (SECTORS[type]) await buyPanel(type);
+  const type = S.lane ? '_' + S.lane.type : TILES[S.pos];
+  if (type === '_jail') { toast(L('Account frozen: no trading this turn', '帳戶凍結中,這回合不能交易')); await wait(0.9); }
+  else if (type === '_ipo') await ipoPanel();
+  else if (type === 'ipo') await enterLane(true, 'ipo');
+  else if (SECTORS[type]) await buyPanel(type);
   else if (type === 'chance') {
-    await drawEventCards(false);
+    const c = await drawEventCards(false);
+    if (c.special) await enterLane(true, c.special);
   } else if (type === 'fee') { S.cash -= FEE; hud(); await cardPanel(L('Trading fees', '交易手續費'), L(`Every trade has a cost. You paid $${FEE}.`, `每筆交易都有成本,這次付了 $${FEE}。`)); }
   else if (type === 'shop') await shopPanel();
   else if (type === 'gift') { const id = randomItem(), it = itemInfo(id); S.bag.push(id); hud();
@@ -1201,4 +1354,4 @@ if (new URLSearchParams(location.search).get('embed')) document.body.classList.a
 document.querySelectorAll('.side .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, turn, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, turn, enterLane, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES, slots, stageSelect };
