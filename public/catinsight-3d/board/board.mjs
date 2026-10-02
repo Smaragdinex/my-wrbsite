@@ -148,6 +148,90 @@ function itemInfo(id) {
 }
 const randomItem = () => { const r = Math.random(); return r < 0.4 ? 'remote' : r < 0.6 ? 'atk' : 'ev' + SALE_EVENTS[Math.floor(Math.random() * SALE_EVENTS.length)]; };
 
+/* ───────────── 音效與音樂 ─────────────
+   全部用 WebAudio 即時合成,不載入任何音檔。瀏覽器規定要使用者先點一下才能出聲,
+   所以第一次點擊 / 按鍵時才建立 AudioContext 並開始播音樂。右上角 ♪ 可以關掉(會記住) */
+const AU = (() => {
+  let ctx = null, master, mus, nbuf, step = 0, nextT = 0;
+  let on = (() => { try { return localStorage.getItem('css.sound') !== '0'; } catch (e) { return true; } })();
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  // 一個音:m 是 MIDI 音高,t 是絕對時間;to 有給的話音高會滑過去
+  function tone(m, t, dur, type = 'triangle', vol = 0.15, to = null, out = master) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(hz(m), t); if (to != null) o.frequency.exponentialRampToValueAtTime(hz(to), t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.03);
+  }
+  function noise(t, dur, vol = 0.15, freq = 3000, out = master) {
+    const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = nbuf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1.2;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(out); src.start(t, Math.random() * 0.4, dur + 0.02);
+  }
+  // 背景音樂:C–Am–F–G 的 8 小節循環(原創旋律),每格是一個八分音符。用「提前排程」的方式一小段一小段排進去
+  const E8 = 60 / 108 / 2;
+  const CH = [[48, 52, 55], [45, 48, 52], [41, 45, 48], [43, 47, 50]];
+  const MEL = [72, 0, 76, 0, 79, 0, 76, 0, 81, 0, 79, 0, 76, 0, 72, 0, 77, 0, 81, 0, 84, 0, 81, 0, 79, 0, 74, 0, 71, 0, 74, 0,
+    72, 76, 79, 0, 84, 0, 79, 0, 81, 0, 84, 0, 81, 79, 76, 0, 77, 0, 76, 0, 74, 0, 72, 0, 74, 0, 71, 0, 72, 0, 0, 0];
+  function sched() {
+    if (!ctx || !on || ctx.state !== 'running') return;
+    if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.06;
+    while (nextT < ctx.currentTime + 0.4) {
+      const i = step % 64, e = i & 7, c = CH[(i >> 3) % 4];
+      if (e === 0) tone(c[0], nextT, E8 * 2.6, 'sine', 0.2, null, mus); else if (e === 4) tone(c[2] - 12, nextT, E8 * 1.8, 'sine', 0.15, null, mus);
+      if (e & 1) tone(c[(e >> 1) % 3] + 24, nextT, E8 * 0.9, 'triangle', 0.045, null, mus);
+      if (MEL[i]) tone(MEL[i], nextT, E8 * 1.7, 'triangle', 0.1, null, mus);
+      if (e % 4 === 2) noise(nextT, 0.04, 0.035, 7000, mus);
+      nextT += E8; step++;
+    }
+  }
+  function unlock() {
+    if (ctx) { if (on && ctx.state === 'suspended') ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    ctx = new AC();
+    master = ctx.createGain(); master.gain.value = on ? 0.9 : 0; master.connect(ctx.destination);
+    mus = ctx.createGain(); mus.gain.value = 0.55; mus.connect(master);
+    nbuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+    { const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    setInterval(sched, 100);
+  }
+  ['pointerdown', 'keydown', 'touchend'].forEach((ev) => window.addEventListener(ev, unlock, { passive: true }));
+  document.addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) ctx.suspend(); else if (on) ctx.resume(); });
+  // 每個音效是一小串音:[音高, 幾秒後, 長度, 波形, 音量, 滑到的音高]
+  const SEQ = {
+    click: [[88, 0, 0.04, 'square', 0.035]],
+    hop: [[69, 0, 0.1, 'sine', 0.13, 76]], hopAi: [[62, 0, 0.1, 'sine', 0.07, 69]],
+    buy: [[76, 0, 0.08, 'triangle', 0.16], [81, 0.07, 0.12, 'triangle', 0.16]],
+    sell: [[88, 0, 0.06, 'square', 0.05], [93, 0.06, 0.06, 'square', 0.05], [100, 0.12, 0.14, 'square', 0.05]],
+    short: [[67, 0, 0.2, 'sawtooth', 0.06, 58]],
+    coin: [[84, 0, 0.07, 'triangle', 0.14], [91, 0.07, 0.2, 'triangle', 0.14]],
+    item: [[83, 0, 0.07, 'triangle', 0.13], [88, 0.07, 0.07, 'triangle', 0.13], [95, 0.14, 0.16, 'triangle', 0.13]],
+    good: [[72, 0, 0.1], [76, 0.08, 0.1], [79, 0.16, 0.1], [84, 0.24, 0.3]],
+    bad: [[64, 0, 0.18, 'sawtooth', 0.07, 60], [57, 0.18, 0.4, 'sawtooth', 0.07, 50]],
+    jail: [[40, 0, 0.5, 'square', 0.1, 36], [47, 0.02, 0.45, 'square', 0.05, 43]],
+    bell: [[96, 0, 0.9, 'sine', 0.13], [103, 0, 0.6, 'sine', 0.05], [96, 0.3, 0.9, 'sine', 0.11], [103, 0.3, 0.6, 'sine', 0.04]],
+    mission: [[79, 0, 0.08], [84, 0.07, 0.08], [88, 0.14, 0.08], [91, 0.21, 0.08], [96, 0.28, 0.35]],
+    liq: [[70, 0, 0.16, 'square', 0.07, 64], [70, 0.2, 0.16, 'square', 0.07, 64], [70, 0.4, 0.3, 'square', 0.07, 60]],
+    win: [[72, 0, 0.14], [76, 0.14, 0.14], [79, 0.28, 0.14], [84, 0.42, 0.2], [79, 0.62, 0.12], [84, 0.74, 0.7]],
+    lose: [[67, 0, 0.3], [64, 0.3, 0.3], [60, 0.6, 0.8]],
+  };
+  function sfx(name) {
+    if (!ctx || !on || ctx.state !== 'running' || skipRender) return;      // 自動測試快轉時不出聲
+    const t = ctx.currentTime;
+    if (name === 'dice') { for (let i = 0; i < 9; i++) noise(t + i * 0.1 + Math.random() * 0.04, 0.035, 0.16 - i * 0.008, 2200 + Math.random() * 1200); return; }
+    if (name === 'flip') { noise(t, 0.18, 0.12, 1400); noise(t + 0.08, 0.12, 0.08, 2600); return; }
+    if (name === 'jail') noise(t, 0.35, 0.14, 900);
+    for (const [m, at, dur, type = 'triangle', vol = 0.15, to = null] of SEQ[name]) tone(m, t + at, dur, type, vol, to);
+  }
+  function toggle() {
+    on = !on; try { localStorage.setItem('css.sound', on ? '1' : '0'); } catch (e) {}
+    unlock(); if (ctx) { master.gain.value = on ? 0.9 : 0; if (on) ctx.resume(); }
+    return on;
+  }
+  return { sfx, toggle, get on() { return on; }, get state() { return ctx ? `${ctx.state} step ${step}` : 'locked'; } };
+})();
+const sfx = AU.sfx;
+
 /* ───────────── 狀態 ───────────── */
 let S;
 // 放空部位的價值 = 保證金(進場價 x 股數)+ 損益((進場價 - 現價) x 股數);最慘賠光保證金
@@ -173,7 +257,7 @@ function marginCheck() {
 async function flushNotices() {
   while (S.notices.length) {
     const x = S.notices.shift(), sec = SECTORS[x.k], who = CHARS[S.foe].name;
-    drawAll(); hud();
+    drawAll(); hud(); sfx('liq');
     await cardPanel(x.isMe ? L('Margin call: you were liquidated', '強迫平倉:你被斷頭了') : L(`${who} was force-liquidated`, `${who}被強迫平倉`),
       x.isMe
         ? L(`${sec.name} fell until your margin ratio dropped below 130%. Your ${x.n} shares were sold to repay the loan. You got back $${fmt(x.back)} and lost $${fmt(x.lost)}. Borrowing to buy means being forced to sell at the worst moment.`,
@@ -744,7 +828,7 @@ window.__tick = (ms = 16, fast = false) => { skipRender = fast; for (let t = 0; 
 
 // 兩顆骰子一起擲:各自有自己的起點、旋轉軸和落點,最後停在指定點數朝上
 async function rollDice(vals, P = ME) {
-  diceSpots(P);
+  diceSpots(P); sfx('dice');
   dice.forEach((d, i) => { d.visible = i < vals.length; });      // 只擲一顆時,第二顆收起來
   const plan = dice.slice(0, vals.length).map((d, i) => {
     const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
@@ -774,6 +858,7 @@ async function hopOnto(g, P = ME, far = false) {
     P.body.scale.y = 1 + Math.sin(k * Math.PI) * 0.18;
   });
   // 落地把格子壓一下
+  sfx(far ? 'coin' : P === ME ? 'hop' : 'hopAi');
   tween(0.18, (k) => { g.position.y = -Math.sin(k * Math.PI) * 0.06; });
   P.body.scale.y = 1;
 }
@@ -900,7 +985,7 @@ function buyPanel(k) {
         const n = LOT * (a === 'buy1' ? 1 : 3), cost = price * n, loan = a === 'margin' ? cost * MARGIN_LOAN : 0;
         S.cash -= cost - loan; h.n += n; h.cost += cost; h.loan += loan;
         if (price < sec.open * 0.97) S.flags.dip = true;
-        impact(k, buyF(n));
+        impact(k, buyF(n)); sfx('buy');
         toast(a === 'margin' ? L(`Margin-bought ${n} ${sec.name}, borrowed $${fmt(loan)}`, `融資買進 ${sec.name} ${n} 股,借了 $${fmt(loan)}`)
           : L(`Bought ${n} ${sec.name}. Price ${pct(buyF(n))}`, `買進 ${sec.name} ${n} 股,股價被推高 ${pct(buyF(n))}`));
       } else if (a === 'sell') {
@@ -908,14 +993,14 @@ function buyPanel(k) {
         if ((value - h.cost) / h.cost >= 0.15) S.flags.profit = true;
         toast(L('Sold for', '賣出得') + ` $${fmt(value)} (${value >= h.cost ? '+' : '-'}$${fmt(Math.abs(value - h.cost))})` + (loan ? L(`, repaid $${fmt(loan)}`, `,還款 $${fmt(loan)}`) : ''));
         S.cash += value - loan; h.n = 0; h.cost = 0; h.loan = 0;      // 先把部位清掉再動價格,不然自己的賣壓會觸發自己的斷頭檢查
-        impact(k, sellF(n));
+        impact(k, sellF(n)); sfx('sell');
       } else if (a === 'short') {
-        S.cash -= price * LOT; sh.entry = (sh.entry * sh.n + price * LOT) / (sh.n + LOT); sh.n += LOT; impact(k, SHORT_F);
+        S.cash -= price * LOT; sh.entry = (sh.entry * sh.n + price * LOT) / (sh.n + LOT); sh.n += LOT; impact(k, SHORT_F); sfx('short');
         toast(L(`Shorted ${LOT} ${sec.name}. Price ${pct(SHORT_F)}`, `放空 ${sec.name} ${LOT} 股,股價被壓低 ${pct(SHORT_F)}`));
       } else if (a === 'cover') {
         const n = sh.n, back = shortValue(k), pl = (sh.entry - price) * n;
         if (pl / (sh.entry * n) >= 0.15) S.flags.profit = true;
-        S.cash += back; sh.n = 0; sh.entry = 0; impact(k, buyF(n));
+        S.cash += back; sh.n = 0; sh.entry = 0; impact(k, buyF(n)); sfx('sell');
         toast(L('Covered:', '回補:') + ` ${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}`);
       }
       drawAll(); hud(); closePanel(); res();
@@ -934,14 +1019,14 @@ function cardPanel(title, text, moves = '') {
 function payday(salary = SALARY) {
   const div = KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * SECTORS[k].div, 0);
   const interest = salary ? KEYS.reduce((a, k) => a + S.hold[k].loan * MARGIN_FEE, 0) : 0;   // 融資利息:每經過起點付一次
-  S.lastDividend = div; S.cash += salary + div - interest;
+  S.lastDividend = div; S.cash += salary + div - interest; sfx('coin');
   toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)} · ` : '') + `${L('dividends', '股利')} +$${fmt(div)}` + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : ''));
   hud(); checkMissions();
 }
 function checkMissions() {
   // 上一次完成的任務先換成新的(所以完成的那張會亮綠色停留到下一次檢查)
   S.missions.forEach((m, i) => { if (m.done) { S.missions[i] = { id: '_' }; S.missions[i] = drawMission(); } });
-  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; S.cash += REWARD; toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
+  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; S.cash += REWARD; sfx('mission'); toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
   hud();
 }
 // 市場事件格:桌上發三張背面朝上的牌,玩家自己挑一張翻開(對手走到時由牠自動挑)。
@@ -965,8 +1050,9 @@ function drawEventCards(auto) {
     const cards = [...ov.querySelectorAll('.dcard')]; let chosen = -1;
     const choose = (i) => {
       if (chosen >= 0) return;
-      chosen = i; ov.classList.add('done'); cards[i].classList.add('flip', 'picked');
+      chosen = i; ov.classList.add('done'); cards[i].classList.add('flip', 'picked'); sfx('flip');
       const e = picks[i];
+      wait(0.45).then(() => sfx(e.special ? (e.special === 'ipo' ? 'good' : 'bad') : e.m.etf >= 1 ? 'good' : 'bad'));
       if (!e.special) { KEYS.forEach((k) => { S.price[k] *= e.m[k]; }); S.lastEvent = e; marginCheck(); }
       drawAll(); hud();
       wait(0.9).then(() => {
@@ -983,7 +1069,7 @@ function drawEventCards(auto) {
 }
 async function playEvent(e) {
   KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
-  S.lastEvent = e; marginCheck(); drawAll(); hud();
+  S.lastEvent = e; marginCheck(); drawAll(); hud(); sfx(e.m.etf >= 1 ? 'good' : 'bad');
   const moves = KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
   await cardPanel(e.t, e.w, moves);
 }
@@ -1007,7 +1093,7 @@ function shopPanel() {
       p.querySelectorAll('button').forEach((b) => b.onclick = () => {
         const i = +b.dataset.i;
         if (i < 0) { closePanel(); return res(); }
-        const id = stock[i], it = itemInfo(id); S.cash -= it.price; S.bag.push(id); stock.splice(i, 1); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
+        const id = stock[i], it = itemInfo(id); S.cash -= it.price; S.bag.push(id); stock.splice(i, 1); sfx('item'); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
       });
     };
     draw();
@@ -1032,7 +1118,7 @@ function attackPanel() {
 async function badNews(k, byPlayer) {
   const who = CHARS[S.foe].name, sec = SECTORS[k];
   const loss = (byPlayer ? S.ai.hold[k].n : S.hold[k].n) * S.price[k] * (1 - ATK_DROP);
-  S.price[k] *= ATK_DROP; marginCheck();
+  S.price[k] *= ATK_DROP; marginCheck(); sfx('bad');
   S.lastEvent = { t: L(`Bad news about ${sec.name}`, `${sec.name}傳出利空`), w: L('Rumors and bad headlines can sink a price fast.', '壞消息和傳言可以讓股價快速下跌。'), m: Object.fromEntries(KEYS.map((x) => [x, x === k ? ATK_DROP : 1])) };
   drawAll(); hud();
   await cardPanel(byPlayer ? L(`You spread bad news about ${sec.name}`, `你放出${sec.name}的利空消息`) : L(`${who} spreads bad news about ${sec.name}`, `${who}放出${sec.name}的利空消息`),
@@ -1081,7 +1167,7 @@ function bagPanel() {
 async function enterLane(isMe, type) {
   const who = isMe ? S : S.ai, P = isMe ? ME : BEAR, name = CHARS[S.foe].name;
   who.lane = { type, idx: 0 }; hud();
-  await hopOnto(laneTiles[type][0].g, P, true);
+  await hopOnto(laneTiles[type][0].g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
   if (isMe) await cardPanel(L('Account frozen', '帳戶被凍結'),
     L(`You move one tile per turn and reach the main road again in ${LANES.jail.cells.length} turns. Until then you cannot buy, sell, cover or use items, but prices keep moving: if a margin position falls below 130% it is still sold for you. You can pay $${BAIL} bail on your turn to walk out at once.`,
@@ -1129,7 +1215,7 @@ function ipoPanel() {
       </div>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
       const n = LOT * +b.dataset.n;
-      if (n) { S.cash -= price * n; h.n += n; h.cost += price * n; toast(L(`Subscribed ${n} ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 申購 ${sec.name} ${n} 股`)); }
+      if (n) { S.cash -= price * n; h.n += n; h.cost += price * n; sfx('buy'); toast(L(`Subscribed ${n} ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 申購 ${sec.name} ${n} 股`)); }
       drawAll(); hud(); closePanel(); res();
     });
   });
@@ -1242,7 +1328,7 @@ async function turn(forced) {
   if (S.lane) {
     // 在小路上:不擲骰,一回合走一格。被凍結時可以付保釋金一口氣走出來
     const bail = S.lane.type === 'jail' && await jailPanel();
-    if (bail) { S.cash -= BAIL; hud(); toast(L(`Paid $${BAIL} bail`, `付了 $${BAIL} 保釋金`)); }
+    if (bail) { S.cash -= BAIL; hud(); sfx('sell'); toast(L(`Paid $${BAIL} bail`, `付了 $${BAIL} 保釋金`)); }
     await laneStep(true, bail);
   } else {
   const vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : (S.diceN === 1 ? [r6()] : [r6(), r6()]);
@@ -1270,9 +1356,9 @@ async function turn(forced) {
   else if (type === 'chance') {
     const c = await drawEventCards(false);
     if (c.special) await enterLane(true, c.special);
-  } else if (type === 'fee') { S.cash -= FEE; hud(); await cardPanel(L('Trading fees', '交易手續費'), L(`Every trade has a cost. You paid $${FEE}.`, `每筆交易都有成本,這次付了 $${FEE}。`)); }
+  } else if (type === 'fee') { S.cash -= FEE; hud(); sfx('short'); await cardPanel(L('Trading fees', '交易手續費'), L(`Every trade has a cost. You paid $${FEE}.`, `每筆交易都有成本,這次付了 $${FEE}。`)); }
   else if (type === 'shop') await shopPanel();
-  else if (type === 'gift') { const id = randomItem(), it = itemInfo(id); S.bag.push(id); hud();
+  else if (type === 'gift') { const id = randomItem(), it = itemInfo(id); S.bag.push(id); hud(); sfx('item');
     await cardPanel(L('A gift', '收到禮物'), `${it.icon} ${it.name}<br>${it.desc}<br>${L('It is in your backpack.', '已放進背包。')}`); }
   else if (type === 'divi') await cardPanel(L('Dividend day', '股息結算'), L(`You collected $${fmt(S.lastDividend)} in dividends. Assets that pay nothing, like gold, biotech and crypto, only make money if the price rises.`, `領到股利 $${fmt(S.lastDividend)}。黃金、生技、加密貨幣不配息,只能靠價格上漲賺錢。`));
   else await cardPanel(L('Payday', '發薪日'), L(`Salary $${fmt(SALARY)}${S.lastDividend > 0 ? ` plus $${fmt(S.lastDividend)} in dividends` : ''}. Holding stocks pays you every lap.`, `薪水 $${fmt(SALARY)}${S.lastDividend > 0 ? `,加上股利 $${fmt(S.lastDividend)}` : ''}。持有股票,每繞一圈都會配息。`));
@@ -1327,7 +1413,7 @@ function finish() {
     <p>${style}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`;
-  $('end').classList.remove('hide');
+  $('end').classList.remove('hide'); sfx(a >= aiAssets() ? 'win' : 'lose');
   $('again').onclick = start;
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
 }
@@ -1345,6 +1431,9 @@ async function start() {
 }
 
 $('rollBtn').onclick = () => turn();
+document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx('click'); });
+{ const b = $('sndBtn'), paint = () => { b.classList.toggle('off', !AU.on); b.setAttribute('aria-label', AU.on ? 'sound on' : 'sound off'); };
+  b.onclick = () => { AU.toggle(); paint(); }; paint(); }
 $('bagBtn').onclick = bagPanel;
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
 $('mapBtn').onclick = () => { view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
@@ -1354,4 +1443,4 @@ if (new URLSearchParams(location.search).get('embed')) document.body.classList.a
 document.querySelectorAll('.side .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, turn, enterLane, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, AU, turn, enterLane, tiles, dice, piece, bearPiece, bagPanel, aiAssets, view, TILES, slots, stageSelect };
