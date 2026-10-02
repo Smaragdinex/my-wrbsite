@@ -1044,7 +1044,10 @@ function hud() {
     $('lblBear').textContent = nameOf(lead); $('bearAssets').textContent = fmt(assetsOf(lead)); }
   $('bagCount').textContent = S.bag.length;
   $('mcount').textContent = S.done;
-  $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left`, `剩 ${MAX_ROLLS - S.rolls} 次`);
+  // 目前名次:依總資產排(同分算同名次)。回合條旁邊顯示;手機沒有回合條,所以擲骰鈕底下也帶一份
+  const myA = assets(), rank = 1 + S.players.filter((p) => assetsOf(p) > myA + 0.5).length;
+  $('rankTxt').textContent = L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`); $('rankTxt').classList.toggle('top', rank === 1);
+  $('rollsLeft').textContent = L(`${MAX_ROLLS - S.rolls} left · #${rank}`, `剩 ${MAX_ROLLS - S.rolls} 次 · 第 ${rank} 名`);
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
   $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' ? L('FROZEN', '凍結中') : L('STEP', '前進一格')) : L('ROLL', '擲骰子');
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
@@ -1654,7 +1657,12 @@ async function start() {
   PIECES.forEach((P, i) => { if (i < S.players.length) { setChar(P.body, S.players[i].char); placePiece(0, P); } });
   showPieces(true); focus = PIECES[0];
   buildFoes(); setPortraits();
-  hud(); S.busy = false; showCtl(true);
+  hud();
+  // 開局先講清楚怎麼算贏
+  await cardPanel(L('How to win', '獲勝條件'),
+    L(`After ${MAX_ROLLS} rounds, whoever has the highest total assets wins. Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>The missions on the left are a bonus: each one pays $${REWARD}, and the more you finish the more stars you get. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
+      `${MAX_ROLLS} 回合結束時,總資產最高的人獲勝。總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>左邊的任務是加分項:每完成一個得 $${REWARD},完成越多星星越多,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`));
+  S.busy = false; showCtl(true);
   if (S.nh > 1) toast(L(`${nameOf(S.players[0])} goes first (Player 1)`, `${nameOf(S.players[0])}先走(玩家 1)`));
 }
 

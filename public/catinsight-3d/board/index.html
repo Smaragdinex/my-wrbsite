@@ -200,6 +200,8 @@
   *{-webkit-tap-highlight-color:transparent}
   button{outline:none;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-appearance:none;appearance:none}
   button:focus,button:focus-visible{outline:none}
+  .rank{float:right;background:#8a6f60;color:#fff;border-radius:999px;padding:1px 9px;font-weight:900;font-size:calc(12px * var(--fs))}
+  .rank.top{background:#ffb000}
   .hide{display:none!important}
   @media(max-width:560px){ .stat.opt{display:none} .m{font-size:calc(11.5px * var(--fs));padding:5px 8px} .m small{display:none} }
 </style>
@@ -232,7 +234,7 @@
   <div class="box"><h4><span id="assetTitle"></span><span class="tri"></span></h4><div class="tabs" id="assetTabs"></div><div id="assetRows"></div></div>
 </div>
 <div class="box ev evt"><h4 id="evtTitle"></h4><div class="body" id="evtBody"></div></div>
-<div class="round"><span id="roundTxt"></span><div class="trk"><b id="roundBar"></b></div></div>
+<div class="round"><span id="roundTxt"></span><span id="rankTxt" class="rank"></span><div class="trk"><b id="roundBar"></b></div></div>
 
 <div class="ctl" id="ctl">
   <button class="paw" id="bagBtn"></button>
@@ -265,6 +267,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=61"></script>
+<script type="module" src="./board.mjs?v=62"></script>
 </body>
 </html>
