@@ -124,16 +124,17 @@ const EVENTS = [
 ];
 // 特殊牌:混在市場事件的三張牌裡。抽到不會動股價,而是把你送進棋盤中間的小路
 const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
+const BAIL = 2000, JAIL_FINE = 1000;      // 保釋金;被送進拘留小路時當場扣的罰款
+const IPO_OFF = 0.8, IPO_FREE = 10;       // IPO 小路:每一格先免費送 IPO_FREE 股,想多買再用承銷價(市價 x 0.8)加購
 const SPECIAL = {
   jail: { special: 'jail', m: ONES, t: L('Insider trading probe', '涉嫌內線交易'),
-    w: L('Trading on information the public does not have is illegal. Your account is frozen: you go to the detention lane and cannot trade until you walk out.', '用還沒公開的消息買賣股票是違法的。帳戶被凍結:送進拘留小路,走出來之前都不能買賣。') },
+    w: L(`Trading on information the public does not have is illegal. You are fined $${fmt(JAIL_FINE)} and your account is frozen: you go to the detention lane and cannot trade until you walk out.`, `用還沒公開的消息買賣股票是違法的。罰款 $${fmt(JAIL_FINE)},帳戶被凍結:送進拘留小路,走出來之前都不能買賣。`) },
   ipo: { special: 'ipo', m: ONES, t: L('You won the IPO lottery', '新股抽籤中籤'),
-    w: L('New shares are usually sold below the market price to the people who win the draw. You enter the IPO lane.', '新上市的股票通常用比市價低的「承銷價」賣給中籤的人。你進入 IPO 小路。') },
+    w: L(`You enter the IPO lane: every tile gives you ${IPO_FREE} free shares of a new listing, and you can buy more below the market price.`, `你進入 IPO 小路:每一格都免費獲得 ${IPO_FREE} 股新股,還能用比市價低的「承銷價」加購。`) },
 };
 const SPECIAL_RATE = 0.8;          // 每次抽牌,三張裡有一張是特殊牌的機率
 // 銀行:走到銀行格可以借現金(最多欠 BANK_MAX),每次經過起點付欠款 5% 的利息;欠的錢會從總資產扣掉
 const BANK_MAX = 5000, BANK_RATE = 0.05;
-const BAIL = 800, IPO_OFF = 0.8;   // 保釋金;IPO 承銷價 = 市價 x 0.8
 // 中間的兩條小路(各 3 格,一回合走一格,走完從 exit 那格回到外圈)。座標是 16x16 格網的 [x, z]
 const LANES = {
   jail: { exit: 23, cells: [[3, 7], [2, 7], [1, 7]] },
@@ -552,7 +553,7 @@ for (const [type, def] of Object.entries(LANES)) laneTiles[type] = def.cells.map
     c.font = F(ZH ? 40 : 34); c.fillText(L('FROZEN', '帳戶凍結'), 128, 202);
   } else {
     c.font = F(84); c.fillText('IPO', 128, 96);
-    c.font = F(44); c.fillText(`-${Math.round((1 - IPO_OFF) * 100)}%`, 128, 186);
+    c.font = F(ZH ? 40 : 36); c.fillText(L(`${IPO_FREE} FREE`, `送 ${IPO_FREE} 股`), 128, 186);
   }
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const holder = new THREE.Group(); holder.rotation.y = Math.PI / 4; holder.position.y = TOP + 0.004; g.add(holder);
@@ -1013,7 +1014,7 @@ function advise() {
   const cheap = KEYS.filter((k) => S.price[k] < SECTORS[k].open * 0.97);
   const up = held.find((k) => (S.price[k] * S.hold[k].n - S.hold[k].cost) / S.hold[k].cost >= 0.15);
   if (S.lane?.type === 'jail') return L('Your account is frozen. You cannot sell, so a margin position can still be force-liquidated if prices fall.', '帳戶凍結中,不能賣出也不能回補。這時候股價大跌,融資部位一樣會被強迫平倉。');
-  if (S.lane?.type === 'ipo') return L('IPO lane: each tile offers new shares 20% below the market price.', 'IPO 小路:每一格都能用比市價便宜 20% 的承銷價申購新股。');
+  if (S.lane?.type === 'ipo') return L(`IPO lane: each tile gives you ${IPO_FREE} free shares, and you can buy more 20% below the market price.`, `IPO 小路:每一格都免費送你 ${IPO_FREE} 股,想多買還能用比市價便宜 20% 的承銷價加購。`);
   let d = 0; for (let i = 1; i <= 6; i++) if (TILES[(S.pos + i) % TILES.length] === 'chance') { d = i; break; }
   if (todo.has('profit') && up) return L(`${SECTORS[up].name} is up over 15%. Land on it to take profit.`, `${SECTORS[up].name}已經賺超過 15%,走到它的格子就能獲利了結。`);
   if (todo.has('dip') && cheap.length) return L(`${SECTORS[cheap[0]].name} is below its opening price. Buying it counts as buying the dip.`, `${SECTORS[cheap[0]].name}現在低於開盤價,買進就算逢低買進。`);
@@ -1349,10 +1350,11 @@ async function enterLane(isMe, type) {
   who.lane = { type, idx: 0 }; hud();
   await hopOnto(laneTiles[type][0].g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
-  if (isMe) await cardPanel(L('Account frozen', '帳戶被凍結'),
-    L(`You move one tile per turn and reach the main road again in ${LANES.jail.cells.length} turns. Until then you cannot buy, sell, cover or use items, but prices keep moving: if a margin position falls below 130% it is still sold for you. You can pay $${BAIL} bail on your turn to walk out at once.`,
-      `在這裡一回合只能走一格,${LANES.jail.cells.length} 回合後才回到外圈。這段時間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${BAIL} 保釋金立刻出來。`));
-  else { toast(L(`${name}'s account is frozen`, `${name}的帳戶被凍結了`)); await wait(1.1); }
+  who.cash -= JAIL_FINE; hud();                    // 一進去先罰款
+  if (isMe) await cardPanel(L('Fined and frozen', '罰款,帳戶被凍結'),
+    L(`You were fined $${fmt(JAIL_FINE)}. You move one tile per turn and reach the main road again in ${LANES.jail.cells.length} turns. Until then you cannot buy, sell, cover or use items, but prices keep moving: if a margin position falls below 130% it is still sold for you. You can pay $${fmt(BAIL)} bail on your turn to walk out at once.`,
+      `你被罰款 $${fmt(JAIL_FINE)}。在這裡一回合只能走一格,${LANES.jail.cells.length} 回合後才回到外圈。這段時間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${fmt(BAIL)} 保釋金立刻出來。`));
+  else { toast(L(`${name} is fined $${fmt(JAIL_FINE)} and frozen`, `${name}被罰款 $${fmt(JAIL_FINE)},帳戶被凍結了`)); await wait(1.3); }
 }
 // 在小路上往前走一格(all = 一口氣走完)。走出小路回到外圈時回傳 true
 async function laneStep(isMe, all = false) {
@@ -1370,7 +1372,7 @@ function jailPanel() {
     const p = panel(`<h3><span class="tag" style="background:#7b8494">${L('FROZEN', '凍結中')}</span>${L('Detention lane', '拘留小路')}</h3>
       <p>${L(`${left} more turn${left > 1 ? 's' : ''} until you are back on the main road. You cannot trade in here.`, `再 ${left} 回合才會回到外圈,在這裡不能買賣。`)}${risky.length ? ` <b style="color:#c4472f">${L(`Margin at risk: ${risky.map((k) => `${SECTORS[k].code} ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join(', ')}`, `融資部位有風險:${risky.map((k) => `${SECTORS[k].code} 維持率 ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join('、')}`)}</b>` : ''}</p>
       <div class="btns">
-        <button class="b-ok" data-a="bail" ${S.cash < BAIL ? 'disabled' : ''}>${L('Pay bail', '付保釋金')}<br><span style="font-size:calc(11px * var(--fs))">$${BAIL} · ${L('out now', '立刻出來')}</span></button>
+        <button class="b-ok" data-a="bail" ${S.cash < BAIL ? 'disabled' : ''}>${L('Pay bail', '付保釋金')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(BAIL)} · ${L('out now', '立刻出來')}</span></button>
         <button class="b-skip" data-a="wait">${L('Wait', '等一回合')}<br><span style="font-size:calc(11px * var(--fs))">${L('move 1 tile', '前進一格')}</span></button>
       </div>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.a === 'bail'); });
@@ -1378,24 +1380,27 @@ function jailPanel() {
 }
 // IPO:隨機一檔股票,用承銷價(市價 8 折)申購。新股是公司新發行的,所以不會推高市價
 const ipoPick = (who) => { const pool = KEYS.filter((k) => !NON_EQUITY.has(k) && !who.short[k].n); return pool[Math.floor(Math.random() * pool.length)]; };
+// 送的股票成本算承銷價(只是不用付錢),這樣損益百分比才有意義
+function ipoGrant(who, k) { const h = who.hold[k]; h.n += IPO_FREE; h.cost += S.price[k] * IPO_OFF * IPO_FREE; }
 function ipoPanel() {
   return new Promise((res) => {
     const k = ipoPick(S), sec = SECTORS[k], h = S.hold[k], mkt = S.price[k], price = mkt * IPO_OFF;
-    const p = panel(`<h3><span class="tag" style="background:#2fbf9f">IPO</span>${L('New shares: ', '新股申購:')}${sec.name}</h3>
-      <p>${L('New shares are priced below the market so that they sell out. That gap is why people line up for IPOs, but the price can still fall afterwards.', '新股為了順利賣完,承銷價會訂得比市價低,這個價差就是大家搶著抽籤的原因。不過買到之後股價還是可能下跌。')}</p>
+    ipoGrant(S, k); sfx('coin'); drawAll(); hud();
+    const p = panel(`<h3><span class="tag" style="background:#2fbf9f">IPO</span>${L('New shares: ', '新股中籤:')}${sec.name}</h3>
+      <p><b style="color:#1c8a4a">${L(`You get ${IPO_FREE} shares for free (worth $${fmt(mkt * IPO_FREE)}).`, `免費獲得 ${IPO_FREE} 股(市值 $${fmt(mkt * IPO_FREE)})。`)}</b> ${L('You can also buy more at the IPO price, which is set below the market so the shares sell out. The price can still fall afterwards.', '想多買還可以用承銷價加購:新股為了順利賣完,承銷價會訂得比市價低。不過之後股價還是可能下跌。')}</p>
       <div class="kv">
         <div>${L('Market price', '市價')}<b>$${Math.round(mkt)}</b></div>
         <div>${L('IPO price', '承銷價')}<b style="color:#1c8a4a">$${Math.round(price)}</b></div>
         <div>${L('You hold', '持有')}<b>${h.n}</b></div>
       </div>
       <div class="btns">
-        <button class="b-buy" data-n="1" ${S.cash < price * LOT ? 'disabled' : ''}>${L('Subscribe 10', '申購 10 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(price * LOT)}</span></button>
-        <button class="b-buy" data-n="3" ${S.cash < price * LOT * 3 ? 'disabled' : ''}>${L('Subscribe 30', '申購 30 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(price * LOT * 3)}</span></button>
-        <button class="b-skip" data-n="0">${L('Skip', '跳過')}</button>
+        <button class="b-buy" data-n="1" ${S.cash < price * LOT ? 'disabled' : ''}>${L('Buy 10 more', '加購 10 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(price * LOT)}</span></button>
+        <button class="b-buy" data-n="3" ${S.cash < price * LOT * 3 ? 'disabled' : ''}>${L('Buy 30 more', '加購 30 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(price * LOT * 3)}</span></button>
+        <button class="b-skip" data-n="0">${L('Continue', '繼續')}</button>
       </div>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
       const n = LOT * +b.dataset.n;
-      if (n) { S.cash -= price * n; h.n += n; h.cost += price * n; sfx('buy'); toast(L(`Subscribed ${n} ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 申購 ${sec.name} ${n} 股`)); }
+      if (n) { S.cash -= price * n; h.n += n; h.cost += price * n; sfx('buy'); toast(L(`Bought ${n} more ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 加購 ${sec.name} ${n} 股`)); }
       drawAll(); hud(); closePanel(); res();
     });
   });
@@ -1403,9 +1408,10 @@ function ipoPanel() {
 async function aiIpo() {
   const A = S.ai, who = CHARS[S.foe].name, k = ipoPick(A), sec = SECTORS[k], price = S.price[k] * IPO_OFF;
   const lots = A.cash >= price * LOT * 3 + 1500 ? 3 : A.cash >= price * LOT + 500 ? 1 : 0;
+  ipoGrant(A, k);
   if (lots) { const n = LOT * lots; A.cash -= price * n; A.hold[k].n += n; A.hold[k].cost += price * n;
-    toast(L(`${who} subscribed ${n} ${sec.name} at the IPO price`, `${who}用承銷價申購${sec.name} ${n} 股`)); }
-  else toast(L(`${who} skips the IPO`, `${who}沒有申購`));
+    toast(L(`${who} got ${IPO_FREE} free ${sec.name} shares and bought ${n} more`, `${who}免費獲得${sec.name} ${IPO_FREE} 股,又加購 ${n} 股`)); }
+  else toast(L(`${who} got ${IPO_FREE} free ${sec.name} shares`, `${who}免費獲得${sec.name} ${IPO_FREE} 股`));
   drawAll(); hud(); await wait(1.1);
 }
 // 銀行:借現金 / 還錢。每次走到銀行只做一個動作,選完面板就關掉、換下一位
@@ -1483,7 +1489,7 @@ async function aiTurn() {
   if (A.lane) {
     // 在小路上:不擲骰,一回合走一格。被凍結時錢夠多就付保釋金直接出來
     const bail = A.lane.type === 'jail' && A.cash >= BAIL + 2500;
-    if (bail) { A.cash -= BAIL; toast(L(`${who} pays $${BAIL} bail`, `${who}付了 $${BAIL} 保釋金`)); await wait(0.8); }
+    if (bail) { A.cash -= BAIL; toast(L(`${who} pays $${fmt(BAIL)} bail`, `${who}付了 $${fmt(BAIL)} 保釋金`)); await wait(0.8); }
     await laneStep(false, bail);
   } else {
   const nd = aiDiceChoice(), vals = nd === 1 ? [r6()] : [r6(), r6()], n = vals.reduce((x, y) => x + y, 0);
@@ -1552,7 +1558,7 @@ async function turn(forced) {
   if (S.lane) {
     // 在小路上:不擲骰,一回合走一格。被凍結時可以付保釋金一口氣走出來
     const bail = S.lane.type === 'jail' && await jailPanel();
-    if (bail) { S.cash -= BAIL; hud(); sfx('sell'); toast(L(`Paid $${BAIL} bail`, `付了 $${BAIL} 保釋金`)); }
+    if (bail) { S.cash -= BAIL; hud(); sfx('sell'); toast(L(`Paid $${fmt(BAIL)} bail`, `付了 $${fmt(BAIL)} 保釋金`)); }
     await laneStep(true, bail);
   } else {
   const vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : (S.diceN === 1 ? [r6()] : [r6(), r6()]);
