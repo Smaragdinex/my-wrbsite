@@ -371,7 +371,7 @@ function resize() {
   view.aspect = a;
   view.near = Math.max(4.6, 5.6 / a);
   view.far = Math.max(8.6, (N * 1.14 + 1) * 0.74 / a);
-  view.stageHalf = Math.max(2.4, 3.9 / a);          // 選角舞台:四個角色排一排要放得下
+  view.stageHalf = Math.max(2.9, 4.3 / a);          // 選角舞台:八個角色排兩排要放得下
   if (!view.half0) { view.half0 = true; view.half = view.near; }
   applyFrustum();
 }
@@ -677,6 +677,10 @@ const CHARS = {
   bunny: { url: './bunny.glb?v=1', h: 1.3,  name: L('Bunny', '兔子'), icon: '🐰', color: 0xfff4e2 },
   bear:  { url: './bear.glb?v=1',  h: 1.25, name: L('Bear', '小熊'),  icon: '🐻', color: 0xb9793f },
   dog:   { url: './pup.glb?v=1',   h: 1.25, name: L('Pup', '狗狗'),   icon: '🐶', color: 0xe8c9a0 },
+  penguin: { url: './penguin.glb?v=1', h: 1.2,  name: L('Penguin', '小企鵝'),   icon: '🐧', color: 0x4a5a78 },
+  guinea:  { url: './guinea.glb?v=1',  h: 1.15, name: L('Guinea pig', '天竺鼠'), icon: '🐹', color: 0xe9b97a },
+  fox:     { url: './fox.glb?v=1',     h: 1.25, name: L('Fox', '小狐狸'),       icon: '🦊', color: 0xf08a3c },
+  pony:    { url: './pony.glb?v=1',    h: 1.3,  name: L('Pony', '小馬'),        icon: '🐴', color: 0xd9b48a },
 };
 function setChar(target, key) {
   while (target.children.length) target.remove(target.children[0]);
@@ -685,17 +689,19 @@ function setChar(target, key) {
   const h = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), m); h.position.y = 0.68; ph.add(h);
   loadPiece(c.url, c.h, ph, target);
 }
-// 選角舞台:四個角色的 3D 模型在起點外側的空地排成一排,鏡頭拉過去。點模型或按左右鍵換人,被選到的會跳一下、慢慢自轉
+// 選角舞台:八個角色的 3D 模型在起點外側的空地排成前後兩排(每排四個,後排站在比較高的台子上、左右錯開半格),鏡頭拉過去。
+// 點模型或按左右鍵換人,被選到的會跳一下、慢慢自轉
 const STAGE = new THREE.Vector3(10.8, 0, 10.8), STAGE_KEYS = Object.keys(CHARS);
 const stage = new THREE.Group(); stage.position.copy(STAGE); stage.visible = false; scene.add(stage);
 const slots = STAGE_KEYS.map((key, i) => {
-  const g = new THREE.Group(); const o = (i - (STAGE_KEYS.length - 1) / 2) * 1.55;
-  g.position.set(o * Math.SQRT1_2, 0, -o * Math.SQRT1_2);            // 沿著畫面的水平方向排
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.68, 0.14, 40), mat(0xfff8ec)); base.position.y = 0.07; base.receiveShadow = true; base.castShadow = true; g.add(base);
+  const PER = 4, row = Math.floor(i / PER), col = i % PER, R = Math.SQRT1_2;
+  const g = new THREE.Group(); const o = (col - (PER - 1) / 2 + (row ? 0.5 : 0)) * 1.55, d = row ? 0.3 : -1.6, top = row ? 0.75 : 0.14;
+  g.position.set(o * R - d * R, 0, -o * R - d * R);                  // o:沿著畫面的水平方向;d:往畫面後方(遠離鏡頭)
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.68, top, 40), mat(row ? 0xf3e2c4 : 0xfff8ec)); base.position.y = top / 2; base.receiveShadow = true; base.castShadow = true; g.add(base);
   const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.76, 0.06, 40), mat(0xff7a59)); ring.position.y = 0.03; g.add(ring);
-  const holder = new THREE.Group(); holder.position.y = 0.14; holder.rotation.y = Math.PI / 4; g.add(holder);
+  const holder = new THREE.Group(); holder.position.y = top; holder.rotation.y = Math.PI / 4; g.add(holder);
   stage.add(g);
-  return { key, g, holder, ring, hop: 0 };
+  return { key, g, holder, ring, hop: 0, top };
 });
 let stageSel = 0, stageOn = false;
 function stageSelect(i) { stageSel = (i + slots.length) % slots.length; slots[stageSel].hop = 1; paintStage(); }
@@ -709,7 +715,7 @@ function stageStep(dt) {
     const on = i === stageSel;
     sl.hop = Math.max(0, sl.hop - dt * 2.2);
     const sT = on ? 1.18 : 0.92; sl.holder.scale.x += (sT - sl.holder.scale.x) * Math.min(1, dt * 10); sl.holder.scale.z = sl.holder.scale.y = sl.holder.scale.x;
-    sl.holder.position.y = 0.14 + Math.sin((1 - sl.hop) * Math.PI) * (sl.hop > 0 ? 0.35 : 0);
+    sl.holder.position.y = sl.top + Math.sin((1 - sl.hop) * Math.PI) * (sl.hop > 0 ? 0.35 : 0);
     // 被選到的慢慢轉一圈給你看;沒選到的轉回正面
     if (on) sl.holder.rotation.y += dt * 1.1;
     else { let d = Math.PI / 4 - sl.holder.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); sl.holder.rotation.y += d * Math.min(1, dt * 6); }

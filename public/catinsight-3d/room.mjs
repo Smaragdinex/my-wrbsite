@@ -724,7 +724,7 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=57';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=58';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 遊戲的背景音樂由房間這一頁來放(不是 iframe 裡的遊戲):這樣從街機選單(切換語言 / PLAY)就有音樂,進遊戲時不會斷。
@@ -787,7 +787,7 @@ gameUI.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: fals
 document.getElementById('game-exit').onclick = hideGame;
 // 房間載完後閒置時,先把四個角色模型抓進瀏覽器快取(各約 250 KB),之後遊戲要用時不用再等下載
 (window.requestIdleCallback || ((f) => setTimeout(f, 3000)))(() => {
-  ['kitty', 'bunny', 'bear', 'pup'].forEach((n) => { fetch(`./board/${n}.glb?v=1`).catch(() => {}); });
+  ['kitty', 'bunny', 'bear', 'pup', 'penguin', 'guinea', 'fox', 'pony'].forEach((n) => { fetch(`./board/${n}.glb?v=1`).catch(() => {}); });
 });
 window.addEventListener('message', (e) => { if (e.data && e.data.type === 'catgame-finished') console.log('cat arcade: cleared!'); });
 
