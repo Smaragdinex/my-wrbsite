@@ -44,7 +44,7 @@ export default {
       await env.DB.prepare('INSERT INTO records (name, char, assets, rounds, players, ai, lang, ip_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?)')
         .bind(name, char, assets, rounds, players, ai, lang, ipHash, now).run();
       const rank = 1 + (await env.DB.prepare('SELECT COUNT(*) AS n FROM records WHERE assets > ?').bind(assets).first('n'));
-      return json({ rank, top: await top(env, 10) }, 200, cors);
+      return json({ rank, top: await top(env, 20) }, 200, cors);
     }
     return json({ error: 'not found' }, 404);
   },

@@ -1916,11 +1916,12 @@ async function nextTurns() {
     S.ci = i; S.turn = i; S.view = null; hud(); setPortraits(); await aiTurn(); await flushNotices();
   }
 }
-// 本機排行榜:每局結束存一筆到瀏覽器(只有第一位真人的成績),留最好的 10 筆(依總資產)
+// 本機排行榜:每局結束存一筆到瀏覽器(只有第一位真人的成績),留最好的 20 筆(依總資產)
+const rankMark = (i) => (i < 3 ? ['🥇', '🥈', '🥉'][i] : String(i + 1));      // 前三名用獎牌,其餘數字
 const loadRecords = () => { try { return JSON.parse(localStorage.getItem('css.records')) || []; } catch (e) { return []; } };
 function saveRecord(r) {
   const list = loadRecords(); list.push(r); list.sort((a, b) => b.assets - a.assets);
-  try { localStorage.setItem('css.records', JSON.stringify(list.slice(0, 10))); } catch (e) {}
+  try { localStorage.setItem('css.records', JSON.stringify(list.slice(0, 20))); } catch (e) {}
 }
 // 這一局在排行榜裡的那一筆(用內容比對,因為存進去再讀出來已經不是同一個物件)
 const findRecord = (r) => loadRecords().find((x) => x.date === r.date && x.assets === r.assets && x.char === r.char && x.rounds === r.rounds) || null;
@@ -1941,32 +1942,31 @@ async function submitGlobal(rec) {
   const box = document.getElementById('lbGlobal'); if (box) box.innerHTML = globalBox();
 }
 async function fetchGlobal() {
-  try { const r = await fetch(`${LB_API}/top?limit=10`); const d = await r.json(); lbState.top = d.top; if (lbState.status !== 'ok') lbState.status = 'ok'; } catch (e) { lbState.status = 'error'; }
+  try { const r = await fetch(`${LB_API}/top?limit=20`); const d = await r.json(); lbState.top = d.top; if (lbState.status !== 'ok' && lbState.status !== 'off') lbState.status = 'ok'; } catch (e) { lbState.status = 'error'; }
   const box = document.getElementById('lbGlobal'); if (box) box.innerHTML = globalBox();
 }
 function globalBox() {
   const st = lbState, when = (t) => new Date(t * 1000).toISOString().slice(5, 10);
   const head = `<h4>🌍 ${L('Global leaderboard', '全球排行榜')}</h4>`;
-  if (st.status === 'off') return `${head}<p>${L('Not sent from local test builds.', '本機測試不會上傳成績。')}</p>`;
-  if (st.status === 'sending' || (st.status === 'idle' && !st.top)) return `${head}<p>${L('Loading…', '載入中…')}</p>`;
+  if (st.status === 'sending' || ((st.status === 'idle' || st.status === 'off') && !st.top)) return `${head}<p>${L('Loading…', '載入中…')}</p>`;
   if (st.status === 'error' && !st.top) return `${head}<p>${L('Could not reach the leaderboard. Check your connection.', '連不上排行榜,請檢查網路。')}</p>`;
   const rows = (st.top || []).map((r, i) => `<div class="rrow ${st.rank === i + 1 && st.mine && r.assets === st.mine.assets && r.name === st.mine.name ? 'me' : ''}">
-      <span class="rk">${i + 1}</span><span class="ic">${CHARS[r.char]?.icon || ''}</span>
+      <span class="rk">${rankMark(i)}</span><span class="ic">${CHARS[r.char]?.icon || ''}</span>
       <div class="c"><b>${r.name} · $${fmt(r.assets)}</b><small>${r.rounds}${L(' rd', ' 回合')} · ${r.players}${L('p', ' 人')} · ${{ easy: L('easy', '簡單'), normal: L('normal', '一般'), hard: L('hard', '兇狠') }[r.ai] || r.ai} · ${when(r.created_at)}</small></div></div>`).join('');
-  return `${head}<p>${st.rank ? L(`This game ranks #${st.rank} worldwide`, `這一局在全球排第 ${st.rank} 名`) : L('Top 10 players worldwide', '全球前 10 名')}</p>
+  return `${head}<p>${st.rank ? L(`This game ranks #${st.rank} worldwide`, `這一局在全球排第 ${st.rank} 名`) : st.status === 'off' ? L('Local test: score not sent.', '本機測試,成績不上傳。') : L('Top 20 players worldwide', '全球前 20 名')}</p>
     ${rows || `<p>${L('No scores yet. Be the first!', '還沒有人上榜,來當第一個!')}</p>`}
-    <small class="note2">${L('Top 10 by total assets across all players.', '所有玩家依總資產排前 10 名。')}</small>`;
+    <small class="note2">${L('Top 20 by total assets across all players.', '所有玩家依總資產排前 20 名。')}</small>`;
 }
 // 排行榜面板:本機 / 全球 兩個分頁
 function leaderboardPanel(myRec) {
   const p = panel(`<div class="lbtabs"><button class="on" data-t="local">🏆 ${L('This device', '本機')}</button><button data-t="global">🌍 ${L('Global', '全球')}</button></div>
-    <div id="lbLocal">${recordsBox(myRec)}</div><div id="lbGlobal" class="rbox hide">${globalBox()}</div>
+    <div id="lbLocal" class="lblist">${recordsBox(myRec)}</div><div id="lbGlobal" class="rbox lblist hide">${globalBox()}</div>
     <div class="btns"><button class="b-skip" id="recClose">${L('Close', '關閉')}</button></div>`);
   p.querySelector('#recClose').onclick = closePanel;
   p.querySelectorAll('.lbtabs button').forEach((b) => b.onclick = () => {
     p.querySelectorAll('.lbtabs button').forEach((x) => x.classList.toggle('on', x === b));
     p.querySelector('#lbLocal').classList.toggle('hide', b.dataset.t !== 'local'); p.querySelector('#lbGlobal').classList.toggle('hide', b.dataset.t !== 'global');
-    if (b.dataset.t === 'global' && LB_ON && lbState.status !== 'sending') fetchGlobal();
+    if (b.dataset.t === 'global' && lbState.status !== 'sending') fetchGlobal();
   });
 }
 // 結算畫面右側的排行榜:1~10 名,這一局的那筆會亮起來
@@ -1974,13 +1974,13 @@ function recordsBox(cur) {
   const list = loadRecords(), best = bestOf();
   const same = (a, b) => a && b && a.date === b.date && a.assets === b.assets && a.char === b.char && a.rounds === b.rounds;
   const rows = list.map((r, i) => `<div class="rrow ${same(r, cur) ? 'me' : ''}">
-      <span class="rk">${i + 1}</span><span class="ic">${CHARS[r.char]?.icon || ''}</span>
+      <span class="rk">${rankMark(i)}</span><span class="ic">${CHARS[r.char]?.icon || ''}</span>
       <div class="c"><b>${r.name ? `${r.name} · ` : ''}$${fmt(r.assets)}</b><small>${r.rounds}${L(' rd', ' 回合')} · ${r.n}${L('p', ' 人')} · ${L('#', '第 ')}${r.rank}${L('', ' 名')} · ${r.date.slice(5)}</small></div>
       <span class="st">${'★'.repeat(r.stars)}<i>${'★'.repeat(3 - r.stars)}</i></span></div>`).join('');
   return `<div class="rbox"><h4>🏆 ${L('Leaderboard', '排行榜')}</h4>
     <p>${L(`${best.games} game${best.games > 1 ? 's' : ''} · ${best.wins} win${best.wins === 1 ? '' : 's'} · ${best.stars3} three-star`, `已記錄 ${best.games} 局 · 第一名 ${best.wins} 次 · 三顆星 ${best.stars3} 次`)}</p>
     ${rows || `<p>${L('No games finished yet.', '還沒有完成過的對局。')}</p>`}
-    <small class="note2">${L('Top 10 by total assets, saved in this browser.', '依總資產排前 10 名,只存在這個瀏覽器裡。')}</small></div>`;
+    <small class="note2">${L('Top 20 by total assets, saved in this browser.', '依總資產排前 20 名,只存在這個瀏覽器裡。')}</small></div>`;
 }
 function finish() {
   S.over = true; S.hi = S.players.findIndex((p) => p.human);      // 結算畫面用第一位真人的視角

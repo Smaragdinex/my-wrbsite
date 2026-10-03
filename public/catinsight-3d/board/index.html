@@ -78,6 +78,8 @@
     box-shadow:0 10px 0 rgba(0,0,0,.15);animation:pop2 .35s cubic-bezier(.2,1.4,.4,1)}
   @keyframes pop2{from{transform:scale(.85);opacity:0}}
   /* 結算:成績卡上的「看排行榜」按鈕 → 疊一塊 1~10 名的排行榜(用 .panel 顯示,內容是 .rbox) */
+  /* 排行榜清單:固定高度,20 名用拖移 / 滾輪看,分頁和關閉鈕留在外面不動 */
+  .lblist{max-height:min(calc(52vh),calc(420px * var(--fs)));overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-right:2px}
   .lbtabs{display:flex;gap:8px;margin-bottom:10px}.lbtabs button{flex:1;border:2px solid #e6d9c4;background:#fff;border-radius:999px;padding:7px 0;font-weight:900;font-size:calc(13px * var(--fs));color:#9a8676;cursor:pointer}.lbtabs button.on{background:#ff7a59;border-color:#ff7a59;color:#fff}
   .lnk{border:0;background:transparent;color:#8a5cf5;font-weight:900;font-size:inherit;cursor:pointer;text-decoration:underline;padding:0}
   .panel .rbox{width:auto;border:0;box-shadow:none;padding:0;background:transparent}
@@ -85,7 +87,7 @@
   .rbox h4{font-size:calc(16px * var(--fs));font-weight:900;color:#3b2f2a;margin:0 0 4px}
   .rbox p{margin:0 0 8px;font-size:calc(12px * var(--fs));font-weight:700;color:#9a8676}
   .rrow{display:flex;align-items:center;gap:8px;padding:5px 6px;border-top:1.5px solid #f1e6d6;font-size:calc(12.5px * var(--fs));font-weight:800;color:#3b2f2a}
-  .rrow .rk{width:1.4em;text-align:center;color:#9a8676;flex:none}.rrow:nth-child(-n+5) .rk{color:#3b2f2a}
+  .rrow .rk{width:1.5em;text-align:center;color:#9a8676;flex:none}.rrow:nth-child(-n+3) .rk{font-size:1.25em}.rrow:nth-child(-n+5) .rk{color:#3b2f2a}
   .rrow .ic{flex:none}
   .rrow .c{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
   .rrow b{font-size:calc(13.5px * var(--fs))}
@@ -318,6 +320,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=114"></script>
+<script type="module" src="./board.mjs?v=115"></script>
 </body>
 </html>
