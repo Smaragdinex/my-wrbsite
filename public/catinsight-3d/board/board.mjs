@@ -2362,8 +2362,7 @@ function lobbyPaint() {
   $('lobby').classList.toggle('hide', !NET.on);      // 設定卡裡也放一份 QR / 房號(按下多人連線就看得到)
   if (!NET.on) return;
   const gs = NET.guests.filter((g) => g.online);
-  const html = `<div class="qr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b>
-    <small>${L('Scan the QR code or open', '手機掃 QR,或打開')} <span class="url">${joinUrl(NET.code).replace(/^https?:\/\//, '')}</span></small></div>`;
+  const html = `<div class="qr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b></div>`;   // 只放 QR 和房號,不再印網址那行
   box.innerHTML = html; $('lobby').innerHTML = html;
   const draw = () => { try { const q = qrLib(0, 'M'); q.addData(joinUrl(NET.code)); q.make(); const svg = q.createSvgTag({ cellSize: 3, margin: 1, scalable: true }); document.querySelectorAll('#lobbyCard .qr, #lobby .qr').forEach((el) => { el.innerHTML = svg; }); } catch (e) {} };
   if (qrLib) draw();
