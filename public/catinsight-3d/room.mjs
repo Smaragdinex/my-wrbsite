@@ -774,8 +774,8 @@ window.addEventListener('message', (e) => { if (e.origin !== location.origin || 
     if (isFs()) (doc.exitFullscreen || doc.webkitExitFullscreen)?.call(doc); else (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el); });
   const report = () => { try { gameFrame?.contentWindow?.postMessage({ type: 'css-fullscreen-state', on: isFs() }, location.origin); } catch (e) {} };
   doc.addEventListener('fullscreenchange', report); doc.addEventListener('webkitfullscreenchange', report); }
-// 在機台螢幕上按 PLAY → 鏡頭先推進到螢幕蓋滿畫面(updateZoom 裡的 pushT)→ 推到底時 openGame() 換成真正的遊戲
-function startGame() { if (gameOn || pushGoal === 1) return; pushGoal = 1; }
+// 在機台螢幕上按 PLAY → 直接 openGame()(以前會先把鏡頭推進螢幕,現在不推了)
+function startGame() { if (gameOn) return; openGame(); }      // 不再把鏡頭推進螢幕(手機上比例會不對),按 PLAY 直接淡入遊戲的選角畫面
 // 預載:鏡頭一到街機前(還在看選單)就把遊戲的 iframe 先在背後建好。此時 #game-ui 是透明的,
 // 遊戲在裡面自己載程式和四個角色模型;等玩家按 PLAY、鏡頭推進完,直接顯示就是已經載好的選角畫面。
 // 之後又換語言的話,用新語言重載一次(檔案都在快取裡,很快)
