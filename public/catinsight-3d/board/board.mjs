@@ -1357,7 +1357,7 @@ function hud() {
     $('assets').textContent = fmt(assetsOf(T));
     $('stocks').textContent = fmt(KEYS.reduce((a, k) => a + T.hold[k].n * S.price[k], 0));
     $('bagCount').textContent = T.bag.length;
-    $('mcount').textContent = T.done; }
+  }
   // 目前名次:依總資產排(同分算同名次)。回合條旁邊顯示;手機沒有回合條,所以擲骰鈕底下也帶一份
   const myA = assets(), rank = 1 + S.players.filter((p) => assetsOf(p) > myA + 0.5).length;
   $('rankTxt').textContent = L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`); $('rankTxt').classList.toggle('top', rank === 1);

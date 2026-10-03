@@ -45,7 +45,7 @@ function onMsg(m) {
 // ---- 遊戲中的 HUD(主機算好這支手機視角的資料送過來)----
 function paintHud() {
   const h = ST.hud; if (!h) return;
-  $('cash').textContent = h.cash; $('assets').textContent = h.assets; $('stocks').textContent = h.stocks; $('mcount').textContent = h.mcount;
+  $('cash').textContent = h.cash; $('assets').textContent = h.assets; $('stocks').textContent = h.stocks;
   $('rankTxt').textContent = h.rank; $('rankTxt').classList.toggle('top', !!h.top);
   if ($('tip').textContent !== h.tip) { $('tip').textContent = h.tip; const tb = $('tipbar'); tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); }
   $('missTitle').textContent = h.missTitle; $('missBadge').textContent = h.missBadge; $('miss').innerHTML = h.miss;
