@@ -164,9 +164,9 @@ const LANE_LEN = 6;                       // 警察局 / IPO 出來的小路有�
 const IPO_OFF = 0.8, IPO_FREE = 10;       // IPO 小路:每一格先免費送 IPO_FREE 股,想多買再用承銷價(市價 x 0.8)加購
 const SPECIAL = {
   jail: { special: 'jail', m: ONES, t: L('Insider trading probe', '涉嫌內線交易'),
-    w: L(`Trading on information the public does not have is illegal. You are sent to the police station: rest ${JAIL_WAIT} rounds (or pay $${fmt(BAIL)} bail), then roll one die each turn along the ${LANE_LEN}-tile exit path.`, `用還沒公開的消息買賣股票是違法的。被送進警察局:休息 ${JAIL_WAIT} 回合(或付 $${fmt(BAIL)} 保釋金),再擲一顆骰子沿 ${LANE_LEN} 格小路走出來。`) },
+    w: L(`Trading on information the public does not have is illegal. You are sent to the police station: rest ${JAIL_WAIT} rounds, or pay $${fmt(BAIL)} bail.`, `用還沒公開的消息買賣股票是違法的。被送進警察局:休息 ${JAIL_WAIT} 回合,或付 $${fmt(BAIL)} 保釋金。`) },
   ipo: { special: 'ipo', m: ONES, t: L('You won the IPO lottery', '新股抽籤中籤'),
-    w: L(`You go to the IPO booth: ${IPO_FREE} free shares of a random new listing, and you can buy more below the market price. Next turn you roll one die along the ${LANE_LEN}-tile path back to the road.`, `你去 IPO 攤位:免費獲得隨機一檔新股 ${IPO_FREE} 股,還能用比市價低的「承銷價」加購。下一回合擲一顆骰子沿 ${LANE_LEN} 格小路走回外圈。`) },
+    w: L(`You go to the IPO booth: ${IPO_FREE} free shares of a random new listing, and you can buy more below the market price.`, `你去 IPO 攤位:免費獲得隨機一檔新股 ${IPO_FREE} 股,還能用比市價低的「承銷價」加購。`) },
 };
 const SPECIAL_RATE = 0.8;          // 每次抽牌,三張裡有一張是特殊牌的機率
 // 銀行:走到銀行格可以借現金(最多欠 BANK_MAX),每次經過起點付欠款 5% 的利息;欠的錢會從總資產扣掉
