@@ -932,7 +932,7 @@ function fitStage(dt) {
   const card = $('pcfg').getBoundingClientRect(), bar = document.querySelector('.pbar').getBoundingClientRect(), sl = slots[stageSel];
   sl.g.getWorldPosition(_fv); const y0 = _fv.y;
   const px = (y) => { _fv.y = y; const q = _fv.clone().project(cam); return (1 - q.y) / 2 * innerHeight; };
-  const head = px(y0 + sl.top + 1.9 * sl.holder.scale.y), foot = px(y0 - 0.15), unit = px(y0) - px(y0 + 1);   // 世界往上 1 單位 = 畫面往上幾 px
+  const head = px(y0 + sl.top + 1.45 * sl.holder.scale.y), foot = px(y0 - 0.15), unit = px(y0) - px(y0 + 1);   // 世界往上 1 單位 = 畫面往上幾 px
   if (!(unit > 0)) return;
   const needDown = (card.bottom + 12) - head, room = (bar.top - 10) - foot, k = Math.min(1, dt * 5);
   if (needDown > 0) { if (room > needDown) stageLift += needDown / unit * k; else stageZoom += 0.15 * k; }
@@ -2340,4 +2340,4 @@ if (matchMedia('(max-width:900px)').matches) $('assetBox').classList.add('fold')
   $('evtLbl').textContent = L('Events', '事件'); $('missLbl').textContent = L('Tasks', '任務'); }
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, fitStage, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
