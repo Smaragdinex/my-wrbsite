@@ -449,7 +449,7 @@ function arcadeButtonAt(x, y) {
   return null;
 }
 let arcadeMenu = false, pushT = 0, pushGoal = 0;
-const ARC_PILL_Y = 300, pillV = new THREE.Vector3(), pillEl = document.querySelector('.pill');   // 導覽列在街機螢幕上的位置(畫布 y)
+const ARC_PILL_Y = 342, pillV = new THREE.Vector3(), pillEl = document.querySelector('.pill');   // 導覽列在街機螢幕上的位置(畫布 y)
 let gameLang = (() => { let v = null; try { v = localStorage.getItem('css.lang'); } catch (e) {} return (v || navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'; })();
 function setGameLang(code) { gameLang = code; try { localStorage.setItem('css.lang', code); } catch (e) {} prewarmGame(); }
 // cv / zoom:可以畫到別的畫布並放大 zoom 倍(進入街機後的選單畫面就是同一張圖的高解析版)
@@ -637,8 +637,9 @@ function updateZoom(dt) {
   // 街機選單時,房間的 ‹ 🖱 › 導覽列搬進格子圈裡面(語言 / 開始按鈕的下面):把螢幕上那個點投影到視窗座標。
   // 這樣格子圈可以占滿整個螢幕,貓在最下面一排跳的時候不會被導覽列擋住
   if (arcadeMenu && arcadeScreen && pushGoal === 0) {
-    pillV.set(0, (0.5 - ARC_PILL_Y / 385) * 0.72, 0); arcadeScreen.localToWorld(pillV).project(camera);
-    pillEl.style.bottom = Math.round(innerHeight - (1 - pillV.y) / 2 * innerHeight - pillEl.offsetHeight / 2) + 'px';
+    if (innerHeight > innerWidth) pillEl.style.bottom = '';      // 手機直拿:街機螢幕只占中間一條,導覽列直接留在畫面最底下
+    else { pillV.set(0, (0.5 - ARC_PILL_Y / 385) * 0.72, 0); arcadeScreen.localToWorld(pillV).project(camera);
+      pillEl.style.bottom = Math.max(14, Math.round(innerHeight - (1 - pillV.y) / 2 * innerHeight - pillEl.offsetHeight / 2)) + 'px'; }
   } else if (pillEl.style.bottom) pillEl.style.bottom = '';
   setBgm((zoomGoal >= 1 && focusArcade) || gameOn);   // 點了街機(選語言 / PLAY 的畫面)就開始放遊戲音樂,離開街機才停
   document.body.classList.toggle('arcade-on', zoomGoal >= 1 && focusArcade && zoomT > 0.5);   // 螢幕放到最大時,房間的 logo 和右下按鈕會蓋在上面 → 收起來
