@@ -1,6 +1,6 @@
-// 貓咪股市大富翁 · 手機遙控頁
-// 連到主機開的房間(Cloudflare Durable Object 轉送)。主機把擲骰、買賣、翻牌這些面板的 HTML 鏡射過來,
-// 這裡只負責顯示、把按了哪個按鈕 / 拉桿拉到多少回傳。遊戲規則全部在主機跑。
+// 貓咪股市大富翁 · 手機加入頁(大廳)
+// 連到主機開的房間(Cloudflare Durable Object 轉送),選角色、取名字、按加入;主機按開始後就跳到棋盤頁
+// (../?client=房號)自己畫棋盤。遊戲規則全部在主機跑。
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -8,18 +8,16 @@ const $ = (id) => document.getElementById(id);
 const API = 'wss://xarts.games/api/board';
 const q = new URLSearchParams(location.search);
 const gid = sessionStorage.gid || (sessionStorage.gid = 'p' + Math.random().toString(36).slice(2, 10));   // 同一支手機重整頁面還能認回座位
-const ST = { ws: null, code: (q.get('r') || '').toUpperCase().slice(0, 4), name: localStorage.getItem('css.jname') || '', char: null, chars: [], joined: false, started: false, mine: false, retry: 0, hostOn: true };
-let toastTimer = 0;
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2200); }
+const ST = { ws: null, code: (q.get('r') || '').toUpperCase().slice(0, 4), name: localStorage.getItem('css.jname') || '', char: null, chars: [], joined: false, started: false, retry: 0, hostOn: true };
 const send = (m) => { if (ST.ws && ST.ws.readyState === 1) ST.ws.send(JSON.stringify(m)); };
 
 // ---- 連線 ----
 function connect() {
   if (!ST.code) return;
   const ws = new WebSocket(`${API}/room/${ST.code}/ws?role=guest`); ST.ws = ws;
-  ws.onopen = () => { if (ST.joined || ST.started) send({ t: 'join', gid, name: ST.name, char: ST.char }); setStatus(); };
-  ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } if (window.__j && window.__j.log.length < 300) window.__j.log.push(m.t + ':' + (m.box || '')); onMsg(m); };
-  ws.onclose = (e) => { if (ST.ws !== ws) return; ST.ws = null; setStatus(); if (e.code === 1006 || e.reason !== 'expired') ST.retry = setTimeout(connect, 2000); else $('jmsg').textContent = '房間已過期'; };
+  ws.onopen = () => { if (ST.joined || ST.started) send({ t: 'join', gid, name: ST.name, char: ST.char }); $('jmsg').textContent = ''; };
+  ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } onMsg(m); };
+  ws.onclose = (e) => { if (ST.ws !== ws) return; ST.ws = null; if (e.code === 1006 || e.reason !== 'expired') { $('jmsg').textContent = '連線中斷,重新連線中…'; ST.retry = setTimeout(connect, 2000); } else $('jmsg').textContent = '房間已過期'; };
   ws.onerror = () => {};
 }
 function onMsg(m) {
@@ -31,79 +29,9 @@ function onMsg(m) {
     return;
   }
   if (m.t === 'start') { ST.started = true; sessionStorage.setItem('css.jchar', ST.char || ''); location.href = `../?client=${encodeURIComponent(m.code || ST.code)}&gid=${encodeURIComponent(gid)}&lang=zh`; return; }   // 開始:換到棋盤頁(手機自己畫棋盤)
-  if (m.t === 'host') { ST.hostOn = !!m.on; setStatus(); return; }
-  if (m.t === 'reset') {        // 主機按了再玩一次:回到大廳,等下一局
-    ST.started = false; ST.mine = false; if (pc) { try { pc.close(); } catch (e) {} pc = null; } document.body.classList.remove('game'); $('jgame').classList.add('hide'); ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { $(id).className = $(id).className.replace(/\bhide\b/, '') + ' hide'; $(id).innerHTML = ''; });
-    $('jform').classList.remove('hide'); $('jstatus').classList.add('hide'); paintChars(); return; }
-  if (!ST.started) return;
-  if (m.t === 'rtc') { rtcOnMsg(m); return; }
-  if (m.t === 'toast') { toast(m.msg); return; }
-  if (m.t === 'portraits') { ST.portraits = m.map; paintTabs(); return; }
-  if (m.t === 'hud') { ST.hud = m; ST.mine = !!m.mine; ST.over = !!m.over; paintHud(); applyMine(); return; }
-  if (m.t === 'ui') { const el = $(m.box); if (!el) return; el.className = m.cls; morph(el, m.html); if (m.box === 'ctl') $('tipbar').classList.toggle('hide', el.classList.contains('hide') || !ST.mine); applyMine(); }
+  if (m.t === 'host') { ST.hostOn = !!m.on; $('jmsg').textContent = ST.hostOn ? '' : '主機離線了,等它回來…'; return; }
+  if (m.t === 'reset') { ST.started = false; $('jform').classList.remove('hide'); paintChars(); return; }   // 主機按了再玩一次:回到大廳,等下一局
 }
-// ---- 遊戲中的 HUD(主機算好這支手機視角的資料送過來)----
-function paintHud() {
-  const h = ST.hud; if (!h) return;
-  $('cash').textContent = h.cash; $('assets').textContent = h.assets; $('stocks').textContent = h.stocks;
-  $('rankTxt').textContent = h.rank; $('rankTxt').classList.toggle('top', !!h.top); $('crown').classList.toggle('hide', !h.top);
-  if ($('tip').textContent !== h.tip) { $('tip').textContent = h.tip; const tb = $('tipbar'); tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); }
-  $('missTitle').textContent = h.missTitle; $('missBadge').textContent = h.missBadge; $('miss').innerHTML = h.miss;
-  $('evtTitle').textContent = h.evtTitle; if ($('evtBody').innerHTML !== h.evt) { $('evtBody').innerHTML = h.evt; if ($('evtBox').classList.contains('fold') && ST.hadEvt) $('evtBadge').classList.remove('hide'); ST.hadEvt = true; }
-  if (ST.view == null || !h.players.some((q) => q.i === ST.view)) ST.view = h.me;
-  const v = h.players.find((q) => q.i === ST.view); if (v) { $('assetTitle').textContent = v.title; $('assetRows').innerHTML = v.rows; }
-  paintTabs();
-}
-function paintTabs() {
-  const h = ST.hud; if (!h) return; const el = $('assetTabs');
-  const foes = h.players.filter((q) => q.i !== h.me);      // 直排只放對手
-  if (el.children.length !== foes.length) { el.innerHTML = ''; foes.forEach((q) => { const b = document.createElement('button'); b.dataset.i = q.i; b.onclick = () => { const box = $('assetBox'); if (!box.classList.contains('fold') && ST.view === q.i) box.classList.add('fold'); else { ST.view = q.i; box.classList.remove('fold'); } paintHud(); }; el.appendChild(b); }); }
-  h.players.forEach((q) => { const b = el.querySelector(`[data-i="${q.i}"]`); if (!b) return; b.classList.toggle('on', q.i === ST.view); b.classList.toggle('turn', q.i === h.turn);
-    let rk = b.querySelector('.rk'); if (!rk) { rk = document.createElement('b'); rk.className = 'rk'; b.appendChild(rk); } rk.textContent = q.rank; rk.classList.toggle('top', !!q.top);
-    const url = ST.portraits && ST.portraits[q.char]; if (url && !b.dataset.img) { b.style.backgroundImage = `url(${url})`; b.dataset.img = '1'; } });
-  const me = h.players.find((q) => q.i === h.me), url = me && ST.portraits && ST.portraits[me.char]; if (url) $('avaMe').style.backgroundImage = `url(${url})`;
-  $('avaMe').classList.toggle('turn', h.turn === h.me);
-}
-{ // 右邊兩顆鈕、資產框標題、提示泡泡的收合
-  const pair = { evtBtn: 'evtBox', missBtn: 'missBox' };
-  const toggle = (id) => { const want = $(pair[id]).classList.contains('fold'); Object.values(pair).forEach((b) => $(b).classList.add('fold')); Object.keys(pair).forEach((k) => $(k).classList.remove('on'));
-    if (want) { $(pair[id]).classList.remove('fold'); $(id).classList.add('on'); if (id === 'evtBtn') $('evtBadge').classList.add('hide'); } };
-  Object.keys(pair).forEach((id) => { $(id).onclick = () => toggle(id); $(pair[id]).querySelector('h4').onclick = () => toggle(id); });
-  $('assetBox').querySelector('h4').onclick = () => $('assetBox').classList.toggle('fold');
-  $('avaMe').onclick = $('stockBtn').onclick = () => { if (!ST.hud) return; const box = $('assetBox'); if (!box.classList.contains('fold') && ST.view === ST.hud.me) box.classList.add('fold'); else { ST.view = ST.hud.me; box.classList.remove('fold'); } paintHud(); };
-  $('tipbar').querySelector('.bubble').onclick = () => $('tipbar').classList.toggle('min');
-}
-function setStatus() {
-  const s = $('jstatus'); if (!ST.started) return;
-  const on = ST.ws && ST.ws.readyState === 1;
-  s.classList.toggle('hide', on && ST.hostOn); s.classList.toggle('off', !on || !ST.hostOn);
-  s.textContent = !on ? '連線中斷,重新連線中…' : !ST.hostOn ? '主機離線了,等它回來…' : '';
-}
-// 只有輪到自己時才能操作擲骰 / 面板;翻牌和結算畫面大家都看得到但不能按
-function applyMine() {
-  ['stepCtl', 'panel'].forEach((id) => { $(id).style.visibility = ST.mine ? '' : 'hidden'; });
-  $('ctl').style.visibility = ''; $('ctl').style.pointerEvents = ST.mine ? '' : 'none'; $('ctl').style.opacity = ST.mine ? '' : '.55';   // 不是自己的回合:按鈕留著但變淡、不能按
-  $('tipbar').classList.toggle('hide', $('ctl').classList.contains('hide') || !ST.mine);
-  ['draw', 'end'].forEach((id) => { $(id).style.pointerEvents = ST.mine && id !== 'end' ? '' : 'none'; });
-}
-// 收主機的棋盤直播
-let pc = null;
-async function rtcOnMsg(m) {
-  try {
-    if (m.sdp && m.sdp.type === 'offer') {
-      if (pc) { try { pc.close(); } catch (e) {} }
-      pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-      pc.onicecandidate = (e) => { if (e.candidate) send({ t: 'rtc', ice: e.candidate }); };
-      pc.ontrack = (e) => { const v = $('jvid'); v.srcObject = e.streams[0]; v.play().catch(() => {}); };
-      await pc.setRemoteDescription(m.sdp); const a = await pc.createAnswer(); await pc.setLocalDescription(a); send({ t: 'rtc', sdp: pc.localDescription });
-    } else if (m.ice && pc) await pc.addIceCandidate(m.ice);
-  } catch (e) { console.warn('[rtc]', e); }
-}
-function showGame() {
-  document.body.classList.add('game'); $('jgame').classList.remove('hide'); $('jstatus').classList.remove('hide'); setStatus();
-  try { navigator.wakeLock?.request('screen').catch(() => {}); } catch (e) {}
-}
-
 // ---- 大廳:3D 角色轉盤(和主機同一套模型,左右切換;被主機 / 別人選走的會跳過)----
 const stage = (() => {
   const cv = $('jgl'), renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: false });
@@ -182,40 +110,3 @@ $('jgo').onclick = () => {
   $('jmsg').textContent = '';
 };
 if (ST.code.length === 4) connect();
-
-// ---- 鏡射區塊的操作:按鈕 → 第幾顆;拉桿 → 第幾條、數值 ----
-['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => {
-  const el = $(id);
-  el.addEventListener('click', (e) => {
-    const b = e.target.closest('button, .dcard'); if (!b || !el.contains(b) || b.disabled) return;
-    e.preventDefault(); send({ t: 'click', box: id, idx: [...el.querySelectorAll('button, .dcard')].indexOf(b) });
-  });
-  let last = 0;
-  el.addEventListener('input', (e) => { const inp = e.target; if (inp.tagName !== 'INPUT') return; const now = Date.now(); const fire = () => send({ t: 'input', box: id, idx: [...el.querySelectorAll('input')].indexOf(inp), value: inp.value });
-    if (now - last > 60) { last = now; fire(); } else { clearTimeout(inp._t); inp._t = setTimeout(fire, 70); } });
-});
-// 拉桿拖到一半時主機會一直送新的 HTML 回來:拖的時候先不更新那條拉桿的值,放手再套用最後一次
-let dragging = null;
-document.addEventListener('pointerdown', (e) => { if (e.target.tagName === 'INPUT') dragging = e.target; });
-document.addEventListener('pointerup', () => { dragging = null; });
-document.addEventListener('pointercancel', () => { dragging = null; });
-// 最小的 DOM 合併:同位置同標籤就更新屬性和文字,不一樣才整個換掉。這樣翻牌的動畫和拉桿狀態不會被重畫打斷
-function morph(from, html) {
-  const tpl = document.createElement('template'); tpl.innerHTML = html; morphChildren(from, tpl.content);
-}
-function morphChildren(a, b) {
-  const an = [...a.childNodes], bn = [...b.childNodes];
-  for (let i = 0; i < bn.length; i++) {
-    const x = an[i], y = bn[i];
-    if (!x) { a.appendChild(y.cloneNode(true)); continue; }
-    if (x.nodeType !== y.nodeType || (x.nodeType === 1 && x.tagName !== y.tagName)) { a.replaceChild(y.cloneNode(true), x); continue; }
-    if (x.nodeType === 3) { if (x.data !== y.data) x.data = y.data; continue; }
-    if (x.nodeType !== 1) continue;
-    for (const at of [...x.attributes]) if (!y.hasAttribute(at.name)) x.removeAttribute(at.name);
-    for (const at of y.attributes) { if (x.getAttribute(at.name) !== at.value) { if (at.name === 'value' && x === dragging) continue; x.setAttribute(at.name, at.value); } }
-    if (x.tagName === 'INPUT' && x !== dragging && y.hasAttribute('value') && x.value !== y.getAttribute('value')) x.value = y.getAttribute('value');
-    morphChildren(x, y);
-  }
-  for (let i = an.length - 1; i >= bn.length; i--) a.removeChild(an[i]);
-}
-window.__j = { ST, send, log: [] };

@@ -334,8 +334,6 @@ body.remote #ctl, body.remote #tipbar{visibility:hidden}
 .lobby .who span{animation:lobbyIn .35s ease}
 @keyframes lobbyIn{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
 
-/* 手機遙控頁:主機棋盤直播當背景,HUD 疊在上面 */
-.jbg{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;background:#c9e8b8}
 
 /* 金錢列拿掉:右上只剩音樂 / 全螢幕兩顆小鈕;左上頭像 + 名次 */
 .topbtns{position:fixed;right:12px;top:14px;z-index:6;display:flex;gap:8px;pointer-events:auto}

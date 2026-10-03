@@ -1102,7 +1102,7 @@ function pickStage() {
     }; });
     $('pcOnline').onclick = () => { if (NET.on) netClose(); else netOpen(); };
     // 再玩一次:房間留著,手機回到大廳(可以換角色),離線的位子清掉
-    if (NET.on) { NET.started = false; NET.guests.forEach((g) => rtcStop(g)); NET.guests = NET.guests.filter((g) => g.online); netSend({ t: 'reset' }); }
+    if (NET.on) { NET.started = false; NET.guests = NET.guests.filter((g) => g.online); netSend({ t: 'reset' }); }
     document.body.classList.remove('remote'); $('remoteBanner').classList.add('hide'); lobbyPaint(); netLobby();
     const enterLobby = (on) => {      // 第二步:人數格大廳(多人連線)。on=false 回到選角
       lobbyPhase = on; $('lobbyUI').classList.toggle('hide', !on); document.querySelector('.ptop').classList.toggle('hide', on); document.querySelector('.pbar').classList.toggle('hide', on);
@@ -2312,7 +2312,7 @@ async function netOpen() {
   } catch (e) { toast(L('Could not create a room', '開房間失敗,請檢查網路')); }
   $('pcOnline').disabled = false;
 }
-function netClose() { NET.guests.forEach((g) => rtcStop(g)); NET.on = false; if (lobbyPhase) { lobbyPhase = false; $('lobbyUI').classList.add('hide'); document.querySelector('.ptop').classList.remove('hide'); document.querySelector('.pbar').classList.remove('hide'); lobbySeats.forEach((st) => { st.g.visible = false; }); } clearTimeout(NET.retry); if (NET.ws) { try { NET.ws.close(); } catch (e) {} } NET.ws = null; NET.guests = []; NET.started = false; NET.code = null; lobbyPaint(); }
+function netClose() { NET.on = false; if (lobbyPhase) { lobbyPhase = false; $('lobbyUI').classList.add('hide'); document.querySelector('.ptop').classList.remove('hide'); document.querySelector('.pbar').classList.remove('hide'); lobbySeats.forEach((st) => { st.g.visible = false; }); } clearTimeout(NET.retry); if (NET.ws) { try { NET.ws.close(); } catch (e) {} } NET.ws = null; NET.guests = []; NET.started = false; NET.code = null; lobbyPaint(); }
 function netConnect() {
   if (!NET.on) return;
   const ws = new WebSocket(`${LB_API.replace(/^http/, 'ws')}/room/${NET.code}/ws?role=host`); NET.ws = ws;
@@ -2324,7 +2324,7 @@ const hostChar = () => slots[stageSel].key;
 const charTakenBy = (k, except) => (k === hostChar() ? 'host' : NET.guests.find((g) => g !== except && g.char === k) || null);
 function netOnMsg(m) {
   if (m.t === 'conn') { netLobby(m.from); return; }
-  if (m.t === 'gone') { const g = guestByConn(m.from); if (!g) return; g.online = false; g.conn = null; rtcStop(g);
+  if (m.t === 'gone') { const g = guestByConn(m.from); if (!g) return; g.online = false; g.conn = null;
     if (!NET.started) { NET.guests.splice(NET.guests.indexOf(g), 1); toast(L(`${g.name} left the room`, `${g.name} 離開了房間`)); } else toast(L(`${g.name} disconnected`, `${g.name}斷線了`));
     lobbyPaint(); netLobby(); remoteBanner(); return; }
   if (m.t === 'join') {
@@ -2341,7 +2341,6 @@ function netOnMsg(m) {
     netSend({ t: 'joined', ok: true, gid, char, name }, m.from); lobbyPaint(); paintStage(); netLobby(); return;
   }
   const g = guestByConn(m.from); if (!g || !NET.started || !S) return;
-  if (m.t === 'rtc') { rtcOnMsg(g, m); return; }
   const p = S.players[S.turn]; if (!p || !p.human || p.remote !== g.gid) return;      // 只有輪到的那支手機可以操作
   if (m.t === 'click' && m.box !== 'end') { const b = $(m.box)?.querySelectorAll('button, .dcard')[m.idx | 0]; if (b && !b.disabled) b.click(); }
   else if (m.t === 'input') { const inp = $(m.box)?.querySelectorAll('input')[m.idx | 0]; if (inp) { inp.value = m.value; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } }
@@ -2398,39 +2397,12 @@ function netHudNow(to) {
       evtTitle: $('evtTitle').textContent, evt: $('evtBody').innerHTML, round: $('roundTxt').textContent,
       holds: S.players.map((q) => Object.fromEntries(KEYS.filter((k) => q.hold[k].n > 0).map((k) => [k, q.hold[k].n]))) }, g.conn); }
 }
-// 頭像圖(離屏渲染出來的 PNG data URL),每支手機送一次
-async function netPortraits(g) {
-  const out = {}; for (const p of S.players) { try { out[p.char] = await portrait(p.char); } catch (e) {} }
-  if (g.conn) netSend({ t: 'portraits', map: out }, g.conn);
-}
 function netInit(g) {
   if (!S || !NET.started) return; const me = S.players.findIndex((p) => p.remote === g.gid);
   netSend({ t: 'init', chars: S.players.map((p) => p.char), names: S.players.map((p) => p.name || ''), humans: S.nh, remote: S.players.map((p) => p.remote || null), me, turn: S.turn,
     pos: S.players.map((p) => p.pos), lane: S.players.map((p) => p.lane), price: S.price, lanePath: S.lanePath, rolls: S.rolls, maxRounds: S.maxRounds }, g.conn);
 }
 function netPushAll(g) { netInit(g); netHud(g); netUiFlush(g.conn); }
-// 把主機的棋盤畫面(WebGL canvas)用 WebRTC 直播到每支手機:手機就看得到棋盤和動畫。信令走房間轉送,影像走 P2P(同一個 WiFi 最順)
-let rtcStream = null;
-const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-function rtcStart(g) {
-  if (!g.conn || !NET.started || !renderer.domElement.captureStream) return;
-  rtcStop(g);
-  try {
-    rtcStream = rtcStream || renderer.domElement.captureStream(20);
-    const pc = new RTCPeerConnection(RTC_CFG); g.pc = pc;
-    rtcStream.getTracks().forEach((t) => pc.addTrack(t, rtcStream));
-    pc.getSenders().forEach((sn) => { try { const p = sn.getParameters(); p.encodings = [{ maxBitrate: 1500000, maxFramerate: 20 }]; sn.setParameters(p); } catch (e) {} });
-    pc.onicecandidate = (e) => { if (e.candidate) netSend({ t: 'rtc', ice: e.candidate }, g.conn); };
-    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' && g.pc === pc) setTimeout(() => rtcStart(g), 2000); };
-    pc.createOffer().then((o) => pc.setLocalDescription(o)).then(() => netSend({ t: 'rtc', sdp: pc.localDescription }, g.conn)).catch(() => {});
-  } catch (e) { console.warn('[rtc]', e); }
-}
-function rtcStop(g) { if (g.pc) { try { g.pc.close(); } catch (e) {} g.pc = null; } }
-function rtcOnMsg(g, m) {
-  const pc = g.pc; if (!pc) return;
-  if (m.sdp) pc.setRemoteDescription(m.sdp).catch(() => {});
-  else if (m.ice) pc.addIceCandidate(m.ice).catch(() => {});
-}
 // 輪到手機上的玩家:主機畫面上的按鈕鎖住(不然主機可以幫他按),顯示等待提示。那支手機斷線的話就解鎖讓主機代打
 function remoteBanner() {
   const p = S && S.players[S.turn], g = p && p.remote && NET.guests.find((x) => x.gid === p.remote), on = !!(g && g.online && !S.over);
@@ -2512,11 +2484,11 @@ function clientInit() {
   newState(); S.busy = true; staticText();
   let ws = null, me = 0; const queues = [];
   const send = (m) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
-  const enqueue = (p, fn) => { queues[p] = (queues[p] || Promise.resolve()).then(fn).catch((e) => { (window.__cerr ||= []).push(String(e && e.stack || e).slice(0, 200)); }); };
+  const enqueue = (p, fn) => { queues[p] = (queues[p] || Promise.resolve()).then(fn).catch((e) => console.warn('[client]', e)); };
   const connect = () => {
     ws = new WebSocket(`${LB_API.replace(/^http/, 'ws')}/room/${code}/ws?role=guest`);
     ws.onopen = () => { send({ t: 'join', gid, name: localStorage.getItem('css.jname') || '', char: sessionStorage.getItem('css.jchar') || '' }); };
-    ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } (window.__cmsgs ||= []).push(m.t + (m.tgt ? JSON.stringify(m.tgt) : '')); onMsg(m); };
+    ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } onMsg(m); };
     ws.onclose = () => setTimeout(connect, 2000);
   };
   function onMsg(m) {

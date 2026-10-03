@@ -10,9 +10,8 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#c9e8b8">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<title>貓咪股市大富翁 · 手機遙控</title>
-<link rel="preload" as="image" href="../card-event.webp"><link rel="preload" as="image" href="../card-fate.webp"><link rel="preload" as="image" href="../card-gift.webp">
-<link rel="stylesheet" href="../style.css?v=33">
+<title>貓咪股市大富翁 · 加入房間</title>
+<link rel="stylesheet" href="../style.css?v=34">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -20,10 +19,10 @@
 } }
 </script>
 <style>
-  /* 手機遙控頁:沒有 3D 棋盤,只有自己的資產和主機鏡射過來的面板 */
+  /* 手機加入頁:房號、3D 角色轉盤、名字;開始後跳到棋盤頁 */
   html,body{height:100%}
   body{background:#c9e8b8;overflow:auto;-webkit-overflow-scrolling:touch}
-  .jwrap{min-height:100%;display:flex;flex-direction:column;gap:14px;padding:14px 14px calc(var(--roll) + 60px);max-width:520px;margin:0 auto;box-sizing:border-box}
+  .jwrap{min-height:100%;display:flex;flex-direction:column;gap:14px;padding:14px 14px 40px;max-width:520px;margin:0 auto;box-sizing:border-box}
   /* 加入卡:和主機設定卡同一個插畫外框(九宮格拉伸 + 貓耳肉球) */
   .jcard{position:relative;margin-top:34px;padding:2px 2px 6px;border:30px solid transparent;border-image:url(../frame-card.webp?v=1) 60 fill / 30px stretch;border-radius:0;background:none;filter:drop-shadow(0 10px 18px rgba(0,0,0,.18))}
   .jcard::before{content:'';position:absolute;left:50%;top:-30px;margin-top:-31px;transform:translateX(-50%);width:130px;height:47px;background:url(../frame-ears.webp?v=1) center/contain no-repeat;pointer-events:none}
@@ -34,10 +33,6 @@
   .jcard label{display:block;font-size:13px;font-weight:900;color:#8a786c;margin:10px 0 4px}
   .jcard input{width:100%;box-sizing:border-box;border:2px solid var(--line);border-radius:12px;padding:10px 12px;font:inherit;font-size:18px;font-weight:800;background:#fff;color:var(--ink)}
   .jcard input.code{text-transform:uppercase;letter-spacing:6px;font-family:"SF Mono",Menlo,monospace;text-align:center}
-  .chars{display:flex;flex-wrap:wrap;gap:8px}
-  .chars button{border:2px solid var(--line);background:#fff;border-radius:14px;padding:8px 10px;font:inherit;font-weight:900;font-size:15px;color:var(--ink);display:flex;align-items:center;gap:6px}
-  .chars button .big{font-size:24px}.chars button.on{border-color:#ff7a59;background:#fff3d6;box-shadow:0 0 0 2px #ff7a59}
-  .chars button:disabled{opacity:.4}.chars button small{font-size:11px;color:#9a8676}
   .jstage{position:relative;width:100%;height:230px;border-radius:18px;overflow:hidden;background:#c9e8b8;border:2px solid var(--line)}
   .jstage canvas{width:100%;height:100%;display:block}
   .jhint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#6b594e;text-align:center;padding:0 20px;pointer-events:none}
@@ -48,23 +43,6 @@
   .jnav button{width:44px;height:44px}
   .jgo{width:100%;margin-top:14px;border:0;border-radius:999px;padding:14px;background:#ff7a59;color:#fff;font:inherit;font-weight:900;font-size:18px;box-shadow:0 4px 0 #d4553a}
   .jgo:disabled{background:#c9bcae;box-shadow:0 4px 0 #a99b90}
-  .jhead{display:flex;align-items:center;gap:12px;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:10px 14px}
-  .jhead .ico{font-size:34px;line-height:1}
-  .jhead .nm{font-weight:900;font-size:16px;color:var(--ink)}
-  .jhead .st{font-size:12px;font-weight:800;color:#8a786c}.jhead .st.mine{color:#1c8a4a}
-  .jhead .money{margin-left:auto;text-align:right;font-weight:900;color:var(--ink);font-size:15px;line-height:1.2}.jhead .money small{display:block;font-size:11px;color:#9a8676;font-weight:800}
-  .jvidwrap{border-radius:18px;overflow:hidden;background:#b9d9a8;border:3px solid #fff;outline:2px solid var(--line);aspect-ratio:16/10}
-  .jvidwrap video{width:100%;height:100%;object-fit:cover;display:block}
-  .jassets{background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:6px 0}
-  .jassets .row:first-of-type{border-top:0}
-  .jstatus{position:fixed;left:50%;top:calc(var(--ava) + 64px);transform:translateX(-50%);z-index:9;background:#3b2f2a;color:#fff;border-radius:999px;padding:6px 14px;font-weight:900;font-size:13px;white-space:nowrap}
-  .jstatus.off{background:#c4472f}
-  .jstatus:empty{display:none}
-  /* 鏡射區塊:沿用棋盤頁的樣式(固定在底部 / 蓋在上面),只是不要被鎖住 */
-  body.game .jwrap{display:none}
-  .jgame{position:fixed;inset:0;z-index:1}
-  .jgame .hud,.jgame .ranktag,.jgame .tipbar,.jgame .lcol,.jgame .rcol{z-index:5}
-  body.game{overflow:hidden}
   .hide{display:none!important}
 </style>
 </head>
@@ -82,41 +60,6 @@
     <p id="jmsg" style="margin:10px 0 0;color:#c4472f"></p>
   </div>
 </div>
-<div class="jstatus hide" id="jstatus"></div>
-<!-- 遊戲中:主機棋盤直播當背景,上面疊和主機一樣的 HUD(自己的視角) -->
-<div class="jgame hide" id="jgame">
-  <video id="jvid" class="jbg" autoplay muted playsinline></video>
-  <div class="hud">
-    <div class="ava" id="avaMe"><i class="crown hide" id="crown">👑</i></div>
-    <div class="mecol"><div class="cashpill"><span class="coin"></span><span id="cash">0</span></div><div class="merow"><button class="stockbtn" id="stockBtn" aria-label="my assets"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="5" height="10" rx="1.5"/><rect x="9.5" y="5" width="5" height="16" rx="1.5"/><rect x="16" y="9" width="5" height="12" rx="1.5"/></svg></button><div class="ranktag" id="rankTxt"></div></div></div>
-    <div class="bar hide">
-      <div class="stat"><span id="lblAssets">總資產</span><b id="assets">0</b></div>
-      <div class="stat opt"><span id="lblStocks">股票市值</span><b id="stocks">0</b></div>
-    </div>
-  </div>
-  <div class="tipbar min" id="tipbar"><div class="bubble"><span class="av ex">!</span><span id="tip"></span></div></div>
-  <div class="lcol">
-    <div class="tabs col" id="assetTabs"></div>
-    <div class="box assets fold" id="assetBox"><h4><span id="assetTitle"></span><span class="tri"></span></h4><div id="assetRows"></div></div>
-  </div>
-  <div class="rcol">
-    <div class="rbtns">
-      <button class="rb" id="evtBtn" aria-label="events"><img src="../ico-event.webp?v=2" alt=""><i class="bd hide" id="evtBadge">!</i><span id="evtLbl">事件</span></button>
-      <button class="rb" id="missBtn" aria-label="tasks"><img src="../ico-task.webp?v=2" alt=""><i class="bd" id="missBadge">3</i><span id="missLbl">任務</span></button>
-    </div>
-    <div class="rpop">
-      <div class="box ev evt fold" id="evtBox"><h4><span id="evtTitle">市場事件</span><span class="tri"></span></h4><div class="body" id="evtBody"></div></div>
-      <div class="box missbox fold" id="missBox"><h4><span id="missTitle">任務</span><span class="tri"></span></h4><div class="miss" id="miss"></div></div>
-    </div>
-  </div>
-</div>
-<!-- 下面這幾個和棋盤頁同名:主機把它們的 HTML 鏡射過來,按鈕按了就回傳給主機 -->
-<div class="toast" id="toast"></div>
-<div class="ctl hide" id="ctl"></div>
-<div class="ctl hide" id="stepCtl"></div>
-<div class="panel hide" id="panel"></div>
-<div class="draw hide" id="draw"></div>
-<div class="end hide" id="end"></div>
-<script type="module" src="../join.mjs?v=14"></script>
+<script type="module" src="../join.mjs?v=15"></script>
 </body>
 </html>
