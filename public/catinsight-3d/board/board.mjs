@@ -842,8 +842,7 @@ function pickStage() {
     slots.forEach((sl) => { sl.taken = false; sl.holder.visible = true; });
     stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
-    $('pcRec').onclick = () => recordsPanel();
-    document.querySelectorAll('#pcfg button').forEach((b) => { if (b.id === 'pcRec') return; b.onclick = () => {
+    document.querySelectorAll('#pcfg button').forEach((b) => { b.onclick = () => {
       if (b.dataset.n) CFG.n = +b.dataset.n; else if (b.dataset.h) CFG.humans = +b.dataset.h;
       else if (b.dataset.d) CFG.ai = b.dataset.d;
       else if (b.dataset.r) { const i = Math.max(0, ROUND_OPTS.indexOf(CFG.rounds || MAX_ROLLS)); CFG.rounds = ROUND_OPTS[Math.min(ROUND_OPTS.length - 1, Math.max(0, i + +b.dataset.r))]; }
