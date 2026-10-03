@@ -724,9 +724,16 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=128';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=129';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
+// 手機直拿(觸控、短邊 ≤ 1100px、直的)就把遊戲畫面轉 90° 變橫向;轉成橫拿或平板、電腦就正常顯示
+function fitGameRot() {
+  const portrait = innerHeight > innerWidth && Math.max(innerWidth, innerHeight) <= 1100 && matchMedia('(pointer: coarse)').matches;
+  gameUI.classList.toggle('rot', portrait);
+  gameScr.style.width = portrait ? innerHeight + 'px' : ''; gameScr.style.height = portrait ? innerWidth + 'px' : '';
+}
+addEventListener('resize', fitGameRot); addEventListener('orientationchange', () => setTimeout(fitGameRot, 150)); fitGameRot();
 // 遊戲的背景音樂由房間這一頁來放(不是 iframe 裡的遊戲):這樣從街機選單(切換語言 / PLAY)就有音樂,進遊戲時不會斷。
 // 瀏覽器規定要先有使用者操作才能出聲,所以在房間裡的任何一次點擊 / 按鍵時先把 AudioContext 建好(無聲),要播的時候再淡入
 const bgm = { ctx: null, gain: null, want: false, loading: false, on: (() => { try { return localStorage.getItem('css.sound') !== '0'; } catch (e) { return true; } })() };
@@ -780,7 +787,7 @@ function prewarmGame() {
   gameScr.appendChild(gameFrame);
 }
 function openGame() {
-  arcadeMenu = false; prewarmGame(); gameOn = true;   // 沒預載到(或語言不同)就現在建
+  arcadeMenu = false; prewarmGame(); gameOn = true; fitGameRot();   // 沒預載到(或語言不同)就現在建
   gameUI.classList.add('on'); document.body.classList.add('game-on');
   setTimeout(() => { try { gameFrame.contentWindow.focus(); } catch (e) {} }, 400);
 }
@@ -886,4 +893,4 @@ const loadT0 = performance.now();
   if ((pending.size === 0 && performance.now() - loadT0 > 400) || performance.now() - loadT0 > 6000) loadingEl.classList.add('done');
   else setTimeout(waitModels, 100);
 })();
-window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, get arcade() { return arcadeModel; }, frames: 0, camera, controls, THREE, catUniforms, get zoomT() { return zoomT; }, setZoom(v) { zoomGoal = v; } };
+window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, get arcade() { return arcadeModel; }, frames: 0, camera, controls, THREE, catUniforms, get zoomT() { return zoomT; }, setZoom(v) { zoomGoal = v; }, openGame, hideGame, fitGameRot };

@@ -52,6 +52,9 @@
   /* 遊戲畫面蓋滿整個視窗,沒有外框(鏡頭已經推進到只剩螢幕) */
   #game-ui .cab { position: absolute; inset: 0; background: #c9e8b8; }
   #game-ui .scr, #game-ui iframe { width: 100%; height: 100%; border: 0; display: block; background: #c9e8b8; }
+  /* 手機直拿時把遊戲轉成橫向(iframe 整個轉 90°,裡面的遊戲看到的就是橫的視窗,觸控座標瀏覽器會自己換算) */
+  #game-ui.rot .scr { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(90deg); transform-origin: center; }
+  #game-ui.rot #game-exit { right: auto; left: 14px; top: 12px; transform: rotate(90deg); }
   #game-exit { position: absolute; right: 12px; top: 14px; z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 3px solid #fff;
     background: #f08262; color: #fff; font-size: 18px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,.35); line-height: 1; }
   #game-exit:hover { background: #e2604f; }
@@ -212,6 +215,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=217"></script>
+<script type="module" src="./room.mjs?v=218"></script>
 </body>
 </html>
