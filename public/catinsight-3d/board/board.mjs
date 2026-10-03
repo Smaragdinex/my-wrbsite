@@ -1733,9 +1733,10 @@ function finish() {
   const me0 = S.players[S.hi], myRank = 1 + rank.findIndex((p) => p === me0), rec = { date: new Date().toISOString().slice(0, 10), char: me0.char, n: S.players.length, rounds: S.rolls, assets: Math.round(assetsOf(me0)), done: S.done, stars: done, rank: myRank };
   const prev = bestOf(); saveRecord(rec); const after = bestOf();
   const newBest = !prev.best || rec.assets > prev.best.assets;
-  const recLine = newBest ? `<p style="font-size:calc(12.5px * var(--fs))">🏆 <b>${L('New personal best!', '新的個人最佳紀錄!')}</b></p>` : '';
-  const rbox = recordsBox(findRecord(rec));
-  $('end').innerHTML = `<div class="endwrap">` + (S.nh > 1
+  // 成績卡上一個「看排行榜」按鈕,點了才疊一塊 1~10 名的排行榜(內容和右側版一樣)
+  const recLine = `<p style="font-size:calc(12.5px * var(--fs))">${newBest ? `🏆 <b>${L('New personal best!', '新的個人最佳紀錄!')}</b> ` : ''}<button class="lnk" id="recBtn">🏆 ${L('Leaderboard', '看排行榜')}</button></p>`;
+  const myRec = findRecord(rec);
+  $('end').innerHTML = (S.nh > 1
     ? `<div class="card">
     <h2>🏆 ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}</h2>
     <div style="margin:10px 0">${table}</div>${recLine}
@@ -1749,9 +1750,13 @@ function finish() {
     <div style="margin:10px 0">${table}</div>${recLine}
     <p>${style}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
-    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`) + rbox + '</div>';
+    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`);
   $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose');
   $('again').onclick = start;
+  $('recBtn').onclick = () => {
+    const p = panel(recordsBox(myRec) + `<div class="btns"><button class="b-skip" id="recClose">${L('Close', '關閉')}</button></div>`);
+    p.querySelector('#recClose').onclick = closePanel;
+  };
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
 }
 // 選角:在 3D 轉盤上選(pickStage),同時決定人數(2~4)和真人數(1~2)。電腦對手從剩下的角色裡隨機挑。
