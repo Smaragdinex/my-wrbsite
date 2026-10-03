@@ -693,6 +693,9 @@ function drawLane(type) {
   });
 }
 const drawLanes = () => Object.keys(LANES).forEach(drawLane);
+// 小路內容變了也要告訴手機(drawLane 本身在上面;這裡包一層廣播)
+const _drawLane0 = drawLane;
+function drawLaneNet(type) { _drawLane0(type); if (NET.on && NET.started) netSend({ t: 'lane', type, path: S.lanePath[type] }); }
 // 小路旁的建築:警察局(拘留小路)和交易所(IPO 小路,白色、金色的鐘)
 {
   // 警察局:放在警察局格的後面(離鏡頭更遠的那側,不會擋到格子和小路上的棋子)。藍白色的建築、鐵窗、屋頂的紅藍警示燈,
@@ -810,7 +813,8 @@ function drawLabel(i) {
   }
   t.tex.needsUpdate = true;
 }
-const drawAll = () => tiles.forEach((_, i) => drawLabel(i));
+let pricesQueued = false;
+const drawAll = () => { tiles.forEach((_, i) => drawLabel(i)); if (NET.on && NET.started && !pricesQueued) { pricesQueued = true; setTimeout(() => { pricesQueued = false; netSend({ t: 'prices', price: S.price }); }, 0); } };
 
 /* ───────────── 棋子(貓) ───────────── */
 const piece = new THREE.Group(); scene.add(piece);
@@ -1114,7 +1118,7 @@ function pickStage() {
         // 4 支手機都加入時,主機只當螢幕(不下場);否則主機自己也是一位玩家
         const hostPlays = gs.length < 4, chars = [...(hostPlays ? [slots[stageSel].key] : []), ...gs.map((g) => g.char)], humans = chars.length, n = Math.max(CFG.n, humans);
         const rest = Object.keys(CHARS).filter((k) => !chars.includes(k)).sort(() => Math.random() - 0.5);
-        netSend({ t: 'start' }); NET.started = true; setTimeout(() => gs.forEach((g) => { rtcStart(g); netPortraits(g); }), 800);
+        netSend({ t: 'start', code: NET.code }); NET.started = true;
         res({ chars: [...chars, ...rest.slice(0, n - humans)], humans, rounds: CFG.rounds, ai: CFG.ai, names: [...(hostPlays ? [nameIn.value.trim().slice(0, 12)] : []), ...gs.map((g) => g.name)], remote: gs.map((g) => g.gid), hostPlays });
       }
     };
@@ -1293,6 +1297,7 @@ window.__tick = (ms = 16, fast = false) => { skipRender = fast; for (let t = 0; 
 
 // 兩顆骰子一起擲:各自有自己的起點、旋轉軸和落點,最後停在指定點數朝上
 async function rollDice(vals, P = PM()) {
+  if (NET.on && NET.started) netSend({ t: 'dice', p: PIECES.indexOf(P), vals });
   diceSpots(P); sfx('dice');
   dice.forEach((d, i) => { d.visible = i < vals.length; });      // 只擲一顆時,第二顆收起來
   const plan = dice.slice(0, vals.length).map((d, i) => {
@@ -1315,7 +1320,15 @@ async function rollDice(vals, P = PM()) {
 }
 const hopTo = (i, P = PM()) => hopOnto(tiles[i].g, P);
 // 跳到某一格上(外圈或小路都用這個)。far = 被送進小路時的大跳躍
+// 線上同樂:手機自己畫棋盤,所以主機每次移動棋子 / 擲骰 / 改價都要廣播給手機照著做
+function hopTarget(g) {
+  const ti = tiles.findIndex((t) => t.g === g); if (ti >= 0) return { k: 't', i: ti };
+  for (const type in laneTiles) { const lt = laneTiles[type]; if (lt.cell.g === g) return { k: 'c', type }; const pi = lt.path.findIndex((x) => x.g === g); if (pi >= 0) return { k: 'p', type, at: pi + 1 }; }
+  return null;
+}
+const hopGroup = (tgt) => (tgt.k === 't' ? tiles[tgt.i].g : tgt.k === 'c' ? laneTiles[tgt.type].cell.g : laneTiles[tgt.type].path[tgt.at - 1].g);
 async function hopOnto(g, P = PM(), far = false) {
+  if (NET.on && NET.started) { const tgt = hopTarget(g); if (tgt) netSend({ t: 'hop', p: PIECES.indexOf(P), tgt, far }); }
   const a = P.piece.position.clone(), p = g.position, b = new THREE.Vector3(p.x + P.off.x, TOP, p.z + P.off.z);
   await tween(far ? 0.8 : 0.22, (k) => {
     P.piece.position.lerpVectors(a, b, k);
@@ -1371,7 +1384,8 @@ const squeezeTag = (h, k) => { const g = Math.max(0, squeezeGap(h, k)); return `
 const debtRow = (d) => (d > 0 ? `<div class="row"><i style="background:#4a63b0"></i><span>${L('Bank loan', '銀行貸款')}</span><span></span><span style="color:#c4472f">-${fmt(d)}</span></div>` : '');
 // 資產框上面那排頭像:每局開始時依人數建一次。點誰就看誰的資產
 // 「我」:這台裝置上的真人(主機自己);4 支手機都加入、主機只當螢幕時就是第一位
-const meP = () => S.players.find((p) => p.human && !p.remote) || S.players[0];
+let CLIENT_ME = -1;      // 手機端:自己是第幾位
+const meP = () => (CLIENT_ME >= 0 && S.players[CLIENT_ME]) || S.players.find((p) => p.human && !p.remote) || S.players[0];
 function buildFoes() {
   const el = $('assetTabs'); el.innerHTML = '';
   S.players.filter((p) => p !== meP()).forEach((p) => {      // 直排只放對手;自己是左上那顆頭像
@@ -1706,7 +1720,7 @@ function bagPanel() {
 async function enterLane(isMe, type) {
   const who = isMe ? S : S.ai, P = isMe ? PM() : PA(), name = CHARS[S.foe].name;
   // 每次有人進來,這條小路重新隨機生成(除非還有別人正走在上面)
-  if (!S.players.some((p) => p !== who && p.lane && p.lane.type === type && p.lane.at > 0)) { S.lanePath[type] = genLanePath(type); drawLane(type); }
+  if (!S.players.some((p) => p !== who && p.lane && p.lane.type === type && p.lane.at > 0)) { S.lanePath[type] = genLanePath(type); drawLaneNet(type); }
   who.lane = { type, wait: type === 'jail' ? JAIL_WAIT : 0, at: 0 }; hud();      // at:0 = 在攤位 / 警察局,1~6 = 小路第幾格
   await hopOnto(laneTiles[type].cell.g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
@@ -2382,14 +2396,20 @@ function netHudNow(to) {
       tip: S.hi === p.i ? advise() : L(`${nameOf(cur)}'s turn`, `現在是${nameOf(cur)}的回合`),
       players: S.players.map((q) => ({ i: q.i, char: q.char, rank: ordinal(rankOf(q)), top: rankOf(q) === 1, title: (q === p ? L('My assets', '我的資產') : L(`${nameOf(q)}'s assets`, `${nameOf(q)}的資產`)) + ' · $' + fmt(assetsOf(q)), rows: assetRowsHtml(q, q === p) })),
       missTitle: L(`Missions · ${p.done} done`, `任務 · 完成 ${p.done}`), missBadge: (p.missions || []).filter((m) => !m.done).length, miss: missHtml(p),
-      evtTitle: $('evtTitle').textContent, evt: $('evtBody').innerHTML, round: $('roundTxt').textContent }, g.conn); }
+      evtTitle: $('evtTitle').textContent, evt: $('evtBody').innerHTML, round: $('roundTxt').textContent,
+      holds: S.players.map((q) => Object.fromEntries(KEYS.filter((k) => q.hold[k].n > 0).map((k) => [k, q.hold[k].n]))) }, g.conn); }
 }
 // 頭像圖(離屏渲染出來的 PNG data URL),每支手機送一次
 async function netPortraits(g) {
   const out = {}; for (const p of S.players) { try { out[p.char] = await portrait(p.char); } catch (e) {} }
   if (g.conn) netSend({ t: 'portraits', map: out }, g.conn);
 }
-function netPushAll(g) { netHud(g); netUiFlush(g.conn); rtcStart(g); netPortraits(g); }
+function netInit(g) {
+  if (!S || !NET.started) return; const me = S.players.findIndex((p) => p.remote === g.gid);
+  netSend({ t: 'init', chars: S.players.map((p) => p.char), names: S.players.map((p) => p.name || ''), humans: S.nh, remote: S.players.map((p) => p.remote || null), me, turn: S.turn,
+    pos: S.players.map((p) => p.pos), lane: S.players.map((p) => p.lane), price: S.price, lanePath: S.lanePath, rolls: S.rolls, maxRounds: S.maxRounds }, g.conn);
+}
+function netPushAll(g) { netInit(g); netHud(g); netUiFlush(g.conn); }
 // 把主機的棋盤畫面(WebGL canvas)用 WebRTC 直播到每支手機:手機就看得到棋盤和動畫。信令走房間轉送,影像走 P2P(同一個 WiFi 最順)
 let rtcStream = null;
 const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -2483,6 +2503,93 @@ $('assetBox').classList.add('fold');   // 資產框預設收起,點頭像展開�
     if (want) { $(pair[id]).classList.remove('fold'); $(id).classList.add('on'); if (id === 'evtBtn') $('evtBadge').classList.add('hide'); } };
   Object.keys(pair).forEach((id) => { $(id).onclick = () => toggle(id); $(pair[id]).querySelector('h4').onclick = () => toggle(id); });
   $('evtLbl').textContent = L('Events', '事件'); $('missLbl').textContent = L('Tasks', '任務'); }
-resize(); start();
+
+/* ───────────── 線上同樂:手機端(自己畫棋盤) ─────────────
+   手機用同一份棋盤程式,但不跑規則:主機廣播「誰跳到哪一格、擲到幾點、股價、小路、面板 HTML、自己的 HUD」,
+   這裡照著演。鏡頭跟著自己的棋子,拖曳 / 縮放都是本機的。 */
+function clientInit() {
+  const q = new URLSearchParams(location.search), code = CLIENT.toUpperCase(), gid = q.get('gid') || sessionStorage.gid || ('p' + Math.random().toString(36).slice(2, 10));
+  sessionStorage.gid = gid;
+  document.body.classList.add('client'); document.body.classList.remove('picking'); stage.visible = false; stageOn = false;
+  newState(); S.busy = true; staticText();
+  let ws = null, me = 0; const queues = [];
+  const send = (m) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
+  const enqueue = (p, fn) => { queues[p] = (queues[p] || Promise.resolve()).then(fn).catch((e) => { (window.__cerr ||= []).push(String(e && e.stack || e).slice(0, 200)); }); };
+  const connect = () => {
+    ws = new WebSocket(`${LB_API.replace(/^http/, 'ws')}/room/${code}/ws?role=guest`);
+    ws.onopen = () => { send({ t: 'join', gid, name: localStorage.getItem('css.jname') || '', char: sessionStorage.getItem('css.jchar') || '' }); };
+    ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } (window.__cmsgs ||= []).push(m.t + (m.tgt ? JSON.stringify(m.tgt) : '')); onMsg(m); };
+    ws.onclose = () => setTimeout(connect, 2000);
+  };
+  function onMsg(m) {
+    if (m.t === 'init') {
+      setPlayers(m.chars, m.humans, m.names); m.remote.forEach((g, i) => { if (g) S.players[i].remote = g; });
+      me = Math.max(0, m.me); CLIENT_ME = me; S.hi = me; S.turn = m.turn; S.rolls = m.rolls; S.maxRounds = m.maxRounds;
+      S.price = m.price; S.lanePath = m.lanePath; drawAll(); drawLanes();
+      S.players.forEach((p, i) => { p.pos = m.pos[i]; p.lane = m.lane[i]; const P = PIECES[i]; if (!P) return;
+        if (p.lane) { const g = p.lane.at ? laneTiles[p.lane.type].path[p.lane.at - 1].g : laneTiles[p.lane.type].cell.g; P.piece.position.set(g.position.x + P.off.x, TOP, g.position.z + P.off.z); } else placePiece(p.pos, P); });
+      showPieces(true); focus = PIECES[me]; diceSpots(PIECES[me]); dice.forEach((d, i) => d.position.copy(DIE_REST[i]));
+      buildFoes(); setPortraits(); S.view = null; return;
+    }
+    if (m.t === 'hop') { const P = PIECES[m.p]; if (P) enqueue(m.p, () => hopOnto(hopGroup(m.tgt), P, m.far)); return; }
+    if (m.t === 'dice') { const P = PIECES[m.p]; if (P) enqueue(m.p, () => rollDice(m.vals, P)); return; }
+    if (m.t === 'prices') { S.price = m.price; drawAll(); return; }
+    if (m.t === 'lane') { S.lanePath[m.type] = m.path; _drawLane0(m.type); return; }
+    if (m.t === 'toast') { toast(m.msg); return; }
+    if (m.t === 'reset') { location.href = `join/?r=${code}`; return; }
+    if (m.t === 'ui') { const el = $(m.box); if (!el) return; el.className = m.cls; morph(el, m.html); applyMine(); return; }
+    if (m.t === 'hud') { HUD = m; mine = !!m.mine; S.turn = m.turn; (m.holds || []).forEach((h, i) => { const p = S.players[i]; if (!p) return; KEYS.forEach((k) => { p.hold[k].n = h[k] || 0; }); }); paintHud(); applyMine(); return; }
+  }
+  let HUD = null, mine = false, aview = null;
+  function paintHud() {
+    const h = HUD; if (!h) return;
+    $('cash').textContent = h.cash; $('rankTxt').textContent = h.rank; $('rankTxt').classList.toggle('top', !!h.top); $('crown').classList.toggle('hide', !h.top);
+    $('avaMe').classList.toggle('turn', h.turn === h.me);
+    if ($('tip').textContent !== h.tip) { $('tip').textContent = h.tip; const tb = $('tipbar'); tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); }
+    $('missTitle').textContent = h.missTitle; $('missBadge').textContent = h.missBadge; $('miss').innerHTML = h.miss;
+    $('evtTitle').textContent = h.evtTitle; if ($('evtBody').innerHTML !== h.evt) { if ($('evtBody').innerHTML && $('evtBox').classList.contains('fold')) $('evtBadge').classList.remove('hide'); $('evtBody').innerHTML = h.evt; }
+    if (aview == null || !h.players.some((p) => p.i === aview)) aview = h.me;
+    const v = h.players.find((p) => p.i === aview); if (v) { $('assetTitle').textContent = v.title; $('assetRows').innerHTML = v.rows; }
+    document.querySelectorAll('#assetTabs button').forEach((b) => { const i = +b.dataset.i, p = h.players.find((x) => x.i === i); b.classList.toggle('on', i === aview); b.classList.toggle('turn', i === h.turn);
+      let rk = b.querySelector('.rk'); if (!rk) { rk = document.createElement('b'); rk.className = 'rk'; b.appendChild(rk); } if (p) { rk.textContent = p.rank; rk.classList.toggle('top', !!p.top); } });
+  }
+  // 頭像點擊:看誰的資產(本機切換,不用問主機)
+  const pickView = (i) => { const box = $('assetBox'); if (!box.classList.contains('fold') && aview === i) box.classList.add('fold'); else { aview = i; box.classList.remove('fold'); } paintHud(); };
+  $('avaMe').onclick = $('stockBtn').onclick = () => pickView(me);
+  new MutationObserver(() => { document.querySelectorAll('#assetTabs button').forEach((b) => { b.onclick = () => pickView(+b.dataset.i); }); }).observe($('assetTabs'), { childList: true });
+  function applyMine() {
+    ['stepCtl', 'panel'].forEach((id) => { $(id).style.visibility = mine ? '' : 'hidden'; });
+    $('ctl').style.pointerEvents = mine ? '' : 'none'; $('ctl').style.opacity = mine ? '' : '.55';
+    $('tipbar').classList.toggle('hide', $('ctl').classList.contains('hide') || !mine);
+    ['draw', 'end'].forEach((id) => { $(id).style.pointerEvents = mine && id !== 'end' ? '' : 'none'; });
+  }
+  // 鏡射區塊的操作回傳主機;地圖鈕是本機的(切全覽 / 歸零縮放)
+  ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { const el = $(id);
+    el.addEventListener('click', (e) => { const b = e.target.closest('button, .dcard'); if (!b || !el.contains(b) || b.disabled) return; e.preventDefault();
+      if (b.id === 'mapBtn') { pan.set(0, 0, 0); view.zoomMul = 1; view.overview = !view.overview; b.classList.toggle('on', view.overview); return; }
+      send({ t: 'click', box: id, idx: [...el.querySelectorAll('button, .dcard')].indexOf(b) }); });
+    let last = 0; el.addEventListener('input', (e) => { const inp = e.target; if (inp.tagName !== 'INPUT') return; const now = Date.now(); const fire = () => send({ t: 'input', box: id, idx: [...el.querySelectorAll('input')].indexOf(inp), value: inp.value });
+      if (now - last > 60) { last = now; fire(); } else { clearTimeout(inp._t); inp._t = setTimeout(fire, 70); } }); });
+  // DOM 合併(翻牌動畫、拉桿狀態不會被整段重畫打斷)
+  let dragging = null; document.addEventListener('pointerdown', (e) => { if (e.target.tagName === 'INPUT') dragging = e.target; }); document.addEventListener('pointerup', () => { dragging = null; });
+  function morph(from, html) { const tpl = document.createElement('template'); tpl.innerHTML = html; morphChildren(from, tpl.content); }
+  function morphChildren(a, b) {
+    const an = [...a.childNodes], bn = [...b.childNodes];
+    for (let i = 0; i < bn.length; i++) { const x = an[i], y = bn[i];
+      if (!x) { a.appendChild(y.cloneNode(true)); continue; }
+      if (x.nodeType !== y.nodeType || (x.nodeType === 1 && x.tagName !== y.tagName)) { a.replaceChild(y.cloneNode(true), x); continue; }
+      if (x.nodeType === 3) { if (x.data !== y.data) x.data = y.data; continue; }
+      if (x.nodeType !== 1) continue;
+      for (const at of [...x.attributes]) if (!y.hasAttribute(at.name)) x.removeAttribute(at.name);
+      for (const at of y.attributes) { if (x.getAttribute(at.name) !== at.value) { if (at.name === 'value' && x === dragging) continue; x.setAttribute(at.name, at.value); } }
+      if (x.tagName === 'INPUT' && x !== dragging && y.hasAttribute('value') && x.value !== y.getAttribute('value')) x.value = y.getAttribute('value');
+      morphChildren(x, y); }
+    for (let i = an.length - 1; i >= bn.length; i--) a.removeChild(an[i]);
+  }
+  connect();
+}
+
+const CLIENT = new URLSearchParams(location.search).get('client');      // 手機端:?client=房號 → 自己畫棋盤、跟著主機的狀態走
+resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
 window.__game = { get S() { return S; }, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };

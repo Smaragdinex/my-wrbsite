@@ -27,10 +27,10 @@ function onMsg(m) {
   if (m.t === 'joined') {
     if (!m.ok) { $('jmsg').textContent = m.reason === 'full' ? '房間已滿(最多 3 支手機)' : m.reason === 'started' ? '這一局已經開始,等下一局再加入' : '加入失敗'; ST.joined = false; return; }
     ST.joined = true; ST.char = m.char; ST.name = m.name; paintChars();
-    if (m.started) { ST.started = true; showGame(); }
+    if (m.started) { ST.started = true; sessionStorage.setItem('css.jchar', ST.char || ''); location.href = `../?client=${encodeURIComponent(ST.code)}&gid=${encodeURIComponent(gid)}&lang=zh`; }
     return;
   }
-  if (m.t === 'start') { ST.started = true; showGame(); return; }
+  if (m.t === 'start') { ST.started = true; sessionStorage.setItem('css.jchar', ST.char || ''); location.href = `../?client=${encodeURIComponent(m.code || ST.code)}&gid=${encodeURIComponent(gid)}&lang=zh`; return; }   // 開始:換到棋盤頁(手機自己畫棋盤)
   if (m.t === 'host') { ST.hostOn = !!m.on; setStatus(); return; }
   if (m.t === 'reset') {        // 主機按了再玩一次:回到大廳,等下一局
     ST.started = false; ST.mine = false; if (pc) { try { pc.close(); } catch (e) {} pc = null; } document.body.classList.remove('game'); $('jgame').classList.add('hide'); ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { $(id).className = $(id).className.replace(/\bhide\b/, '') + ' hide'; $(id).innerHTML = ''; });
