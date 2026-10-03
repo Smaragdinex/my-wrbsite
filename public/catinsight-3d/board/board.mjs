@@ -1210,7 +1210,7 @@ function step(dt) {
   sun.position.copy(camT).add(SUN_OFF); sun.target.position.copy(camT);
   if (stageOn) fitStage(dt);
   camT.y += ((stageOn ? 0.2 + stageLift : 0.2) - camT.y) * Math.min(1, dt * 4);
-  const hGoal = stageOn ? view.stageHalf + stageZoom : view.overview ? view.far : view.near;
+  const hGoal = stageOn ? view.stageHalf + stageZoom : (view.overview ? view.far : view.near) * view.zoomMul;   // zoomMul:玩家用滾輪 / 雙指縮放的倍率(只動地圖,UI 不變)
   if (Math.abs(hGoal - view.half) > 0.002) { view.half += (hGoal - view.half) * Math.min(1, dt * 4); applyFrustum(); }
   if (!skipRender) outline.render(scene, cam);
 }
@@ -1218,16 +1218,27 @@ function step(dt) {
    按住畫面拖曳 = 平移鏡頭(pan 是加在「跟著棋子」的目標點上的偏移)。下一次擲骰、換對手走、或按地圖鈕時歸零,鏡頭自己滑回棋子 */
 const pan = new THREE.Vector3(), PAN_LIM = N / 2 * STEP + 10;   // 鏡頭中心最遠可以到棋盤外 10 格
 let panDrag = false;
+view.zoomMul = 1;
 {
   const cv = $('gl'), R = Math.SQRT1_2, TILT = CAM_OFF.y / CAM_OFF.length();   // TILT:地面往前 1 格,在畫面上只移動這個比例(鏡頭是斜著看的)
   let drag = null;
+  const UI = 'button, a, .bar, .ava, .m, .box, .bubble, .panel, .draw, .end, .pickui, .round, .steps, .dsel, .toast, .rb, .stockbtn, .tabs';
+  // 縮放:電腦滾輪、手機雙指。只改鏡頭的視野大小(view.zoomMul),介面不受影響;範圍 0.55x ~ 2.2x
+  const setZoom = (m) => { view.zoomMul = Math.max(0.55, Math.min(2.2, m)); };
+  window.addEventListener('wheel', (e) => { if (stageOn || e.target.closest?.(UI)) return; e.preventDefault(); setZoom(view.zoomMul * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
+  const touches = new Map(); let pinch = null;      // pinch:{ d0, m0 } 開始時的兩指距離和倍率
+  window.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch' || stageOn || e.target.closest?.(UI)) return; touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), m0: view.zoomMul }; drag = null; panDrag = false; } });
+  window.addEventListener('pointermove', (e) => { if (!touches.has(e.pointerId)) return; touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && touches.size === 2) { const [a, b] = [...touches.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (d > 10) setZoom(pinch.m0 * pinch.d0 / d); } });
+  const tEnd = (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch = null; };
+  window.addEventListener('pointerup', tEnd); window.addEventListener('pointercancel', tEnd);
   cv.style.touchAction = 'none'; cv.style.cursor = 'grab';
   // 聽整個視窗而不是只聽 canvas:按鈕列、頂端資訊列這些「容器」的空白處蓋在 canvas 上面,從那裡開始拖也要能拖。
   // 只有真的按在按鈕 / 面板 / 資訊框上才不算拖曳
-  const UI = 'button, a, .bar, .ava, .m, .box, .bubble, .panel, .draw, .end, .pickui, .round, .steps, .dsel, .toast';
-  window.addEventListener('pointerdown', (e) => { if (stageOn || drag || e.target.closest?.(UI)) return; panDrag = true; drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; cv.style.cursor = 'grabbing'; });
+  window.addEventListener('pointerdown', (e) => { if (stageOn || drag || pinch || touches.size > 1 || e.target.closest?.(UI)) return; panDrag = true; drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; cv.style.cursor = 'grabbing'; });
   window.addEventListener('pointermove', (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag || e.pointerId !== drag.id || pinch) return;
     const upp = 2 * view.half / innerHeight, dx = (e.clientX - drag.x) * upp, dy = (e.clientY - drag.y) * upp / TILT;
     drag.x = e.clientX; drag.y = e.clientY;
     // 畫面往右 = 世界的 (1,0,-1);畫面往上 = 世界的 (-1,0,-1)。拖曳時地圖跟著手指走,所以目標點往反方向移
@@ -2424,7 +2435,7 @@ $('avaMe').onclick = $('stockBtn').onclick = () => { if (!S || !S.players.length
 { const tb = $('tipbar'); if (matchMedia('(max-width:900px)').matches) tb.classList.add('min'); tb.querySelector('.bubble').onclick = () => tb.classList.toggle('min'); }
 
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
-$('mapBtn').onclick = () => { pan.set(0, 0, 0); view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
+$('mapBtn').onclick = () => { pan.set(0, 0, 0); view.zoomMul = 1; view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
 
 if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
 // 右側兩個面板的標題可以點:三角箭頭收合 / 展開
