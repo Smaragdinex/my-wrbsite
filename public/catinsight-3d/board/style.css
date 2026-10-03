@@ -29,12 +29,12 @@
   .m.done{background:#e3f7ea;border-color:#9ad9b0;transform:scale(1.02)}
   .m.done .ck{background:#35c26b;border-color:#35c26b}
   .m small{display:block;font-weight:600;color:#9a8676;font-size:calc(11px * var(--fs))}
-  .ctl{position:fixed;left:0;right:0;bottom:calc(46px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:flex-end;gap:14px;z-index:6}
+  .ctl{position:fixed;left:0;right:0;bottom:calc(46px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:flex-end;gap:calc(14px + var(--roll) * .1);z-index:6}
   /* 背包鈕:只放背包圖示,右上角一個小數字是手上的道具數 */
   .paw.bag{position:relative;font-size:calc(var(--btn) * .5);padding:0 calc(var(--btn) * .28)}
   .paw.bag b{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#ff7a59;border:2px solid #fff;color:#fff;font-size:calc(12px * var(--fs));font-weight:900;display:flex;align-items:center;justify-content:center}
   .snd.fs svg{width:60%;height:60%;display:block;margin:auto;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-  .ctl > .paw{margin-bottom:calc((var(--roll) - var(--btn)) / 2)}   /* 背包、地圖和擲骰子按鈕的中心對齊(上面多了骰子數量切換) */
+  .ctl > .paw{margin-bottom:calc((var(--roll) - var(--btn)) / 2)}   /* 背包、地圖和擲骰子按鈕的中心對齊 */
   .roll{width:var(--roll);height:var(--roll);border-radius:50%;border:6px solid #fff;background:#ff7a59;color:#fff;font-size:calc(var(--roll) * .2);font-weight:900;
     letter-spacing:.04em;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2);cursor:pointer;transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;isolation:isolate}
   /* iPad Safari 會把按鈕裡的字另外畫一層,顏色和底色差一點點,看起來像文字外面有個淡淡的方框 → 不用轉場動畫、把整顆按鈕固定成一層,字就跟按鈕畫在一起 */
@@ -246,19 +246,18 @@
   .dgo{height:calc(50px * var(--fs));padding:0 calc(40px * var(--fs));border-radius:999px;border:4px solid #fff;background:#8b7cff;color:#fff;font-weight:900;font-size:calc(17px * var(--fs));cursor:pointer;box-shadow:0 5px 0 #6a5bd6}
   .dgo:active{transform:translateY(3px);box-shadow:0 2px 0 #6a5bd6}
   /* 擲 1 顆 / 2 顆的切換,放在擲骰子按鈕正上方 */
-  .rollcol{display:flex;flex-direction:column;align-items:center;gap:calc(12px * var(--fs))}
-  .rollcol .roll{position:relative;z-index:2}   /* 擲骰鈕在最上層,骰子數切換的框不會壓到它的白邊 */
-  .rollcol .dsel{position:relative;z-index:1}
-  .ctl,.ctl *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+  /* 骰子數切換:兩顆小圓鈕掛在擲骰鈕的左上、右上弧線上(不另外占一排的高度) */
+  .rollcol{position:relative;display:flex;flex-direction:column;align-items:center}
+  .rollcol .roll{position:relative;z-index:2}
+  .rollcol .dsel{position:absolute;inset:0;z-index:3;pointer-events:none}
   .dsel button,.dsel button:focus,.dsel button:active{outline:none;box-shadow:none;-webkit-tap-highlight-color:transparent}
-  .dsel{display:flex;background:var(--cream);border:3px solid #fff;border-radius:999px;padding:3px;gap:3px;box-shadow:0 3px 0 rgba(0,0,0,.12)}
-  .dsel button{border:0;background:transparent;border-radius:999px;padding:calc(5px * var(--fs)) calc(14px * var(--fs));font-weight:900;font-size:calc(13px * var(--fs));color:#9a8676;cursor:pointer}
-  .dsel button.on{background:#ff7a59;color:#fff}
-  .dsel button{display:flex;align-items:center;justify-content:center}
-  .dsel svg{height:calc(22px * var(--fs));width:auto;display:block;overflow:visible}
-  .dsel button{color:#dccfbd}
+  .dsel button{position:absolute;top:2%;width:calc(var(--roll) * .33);height:calc(var(--roll) * .33);border-radius:50%;border:3px solid #fff;background:var(--cream);box-shadow:0 3px 0 rgba(0,0,0,.14);
+    display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;pointer-events:auto;color:#dccfbd}
+  .dsel button[data-n="1"]{left:calc(var(--roll) * -.12)}
+  .dsel button[data-n="2"]{right:calc(var(--roll) * -.12)}
+  .dsel svg{height:calc(var(--roll) * .16);width:auto;display:block;overflow:visible}
   .dsel button .pip{fill:#8a786c}
-  .dsel button.on{color:#fff}
+  .dsel button.on{background:#ff7a59;color:#fff}
   .dsel button.on .pip{fill:#ff7a59}
   /* 手機 / 平板點按鈕時,瀏覽器會在按鈕外面閃一個方形的灰色反白和對焦框 → 關掉 */
   *{-webkit-tap-highlight-color:transparent}
