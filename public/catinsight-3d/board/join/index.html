@@ -24,7 +24,10 @@
   html,body{height:100%}
   body{background:#c9e8b8;overflow:auto;-webkit-overflow-scrolling:touch}
   .jwrap{min-height:100%;display:flex;flex-direction:column;gap:14px;padding:14px 14px calc(var(--roll) + 60px);max-width:520px;margin:0 auto;box-sizing:border-box}
-  .jcard{background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.15)}
+  /* 加入卡:和主機設定卡同一個插畫外框(九宮格拉伸 + 貓耳肉球) */
+  .jcard{position:relative;margin-top:34px;padding:2px 2px 6px;border:30px solid transparent;border-image:url(../frame-card.webp?v=1) 60 fill / 30px stretch;border-radius:0;background:none;filter:drop-shadow(0 10px 18px rgba(0,0,0,.18))}
+  .jcard::before{content:'';position:absolute;left:50%;top:-30px;margin-top:-31px;transform:translateX(-50%);width:130px;height:47px;background:url(../frame-ears.webp?v=1) center/contain no-repeat;pointer-events:none}
+  .jcard h1{padding-top:4px}
   .jcard h1{margin:0 0 6px;font-size:22px;color:var(--ink)}
   .jcard p{margin:0 0 10px;font-size:14px;color:#6b594e;font-weight:700;line-height:1.5}
   .jcard label{display:block;font-size:13px;font-weight:900;color:#8a786c;margin:10px 0 4px}
