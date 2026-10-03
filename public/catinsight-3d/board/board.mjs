@@ -1279,7 +1279,7 @@ function staticText() {
       pips.map(([px, py]) => `<circle cx="${x + px}" cy="${py}" r="2.2" class="pip"/>`).join('') + '</g>';
     $('d1').innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${die(1, [[6.5, 6.5], [15.5, 6.5], [11, 11], [6.5, 15.5], [15.5, 15.5]], -8)}</svg>`;
     $('d2').innerHTML = `<svg viewBox="0 0 50 24" aria-hidden="true">${die(1, [[7, 7], [15, 15]], -10)}${die(27, [[7, 7], [11, 11], [15, 15]], 8)}</svg>`;
-    $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('mapBtn').textContent = L('Map', '地圖'); $('rollTxt').textContent = L('ROLL', '擲骰子');
+    $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('mapBtn').setAttribute('aria-label', L('Map', '地圖')); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   // 頁尾加上版本號(取 board.mjs?v=N 的 N),方便確認拿到的是不是最新版
   const ver = (new URL(import.meta.url).searchParams.get('v') || '?');
