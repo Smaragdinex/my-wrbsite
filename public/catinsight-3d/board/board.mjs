@@ -844,9 +844,8 @@ function pickStage() {
     showPieces(false);      // 選角時把棋子藏起來:再玩一次時,上一局的角色不會還站在起點
     if (!pickStage.seen) { pickStage.seen = true; camT.x = STAGE.x; camT.z = STAGE.z; view.half = view.stageHalf; applyFrustum(); }   // 第一次直接從舞台開場,不用從起點慢慢滑過來
     pickWho = 0; const picked = [], names = [];
-    // 名字欄:記住上次打的;第二位真人要重新打
-    const nameIn = $('pnameIn'); nameIn.placeholder = L('Your name', '你的名字');
-    try { nameIn.value = localStorage.getItem('css.name') || ''; } catch (e) { nameIn.value = ''; }
+    // 名字欄:每局都重新打(不記住上次的,因為可能換人玩)
+    const nameIn = $('pnameIn'); nameIn.placeholder = L('Your name', '你的名字'); nameIn.value = '';
     slots.forEach((sl) => { sl.taken = false; });
     stageCur = stageSel; stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
@@ -859,9 +858,7 @@ function pickStage() {
     }; });
     $('pok').onclick = () => {
       picked.push(slots[stageSel].key);
-      const nm = nameIn.value.trim().slice(0, 12); names.push(nm);
-      if (picked.length === 1) { try { if (nm) localStorage.setItem('css.name', nm); } catch (e) {} }
-      nameIn.value = '';
+      names.push(nameIn.value.trim().slice(0, 12)); nameIn.value = '';
       if (picked.length < CFG.humans) {            // 換第二位真人選:第一位選走的角色從轉盤上拿掉
         slots[stageSel].taken = true; pickWho = 1; stageSelect(stageSel + 1);
         stageCur = slots.map((_, i) => i).filter((i) => !slots[i].taken).indexOf(stageSel); return;
