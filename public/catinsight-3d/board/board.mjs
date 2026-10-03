@@ -49,7 +49,8 @@ const N = 17;   // 17x17 外圈 = 64 格
 const TILES = (() => {
   const t = new Array(4 * (N - 1)).fill(null);
   t[0] = 'start'; t[16] = 'shop'; t[32] = 'divi'; t[48] = 'shop';     // 四個角
-  [4, 10, 13, 19, 27, 35, 43, 50, 54, 61].forEach((i) => { t[i] = 'chance'; });
+  [4, 10, 19, 35, 50, 61].forEach((i) => { t[i] = 'chance'; });      // 市場事件
+  [13, 27, 43, 54].forEach((i) => { t[i] = 'fate'; });                // 命運(只影響踩到的人)
   t[40] = 'ipo';      // 新股申購入口,走到就進 IPO 小路
   [22, 58].forEach((i) => { t[i] = 'gift'; });
   // 剩下 47 格:22 種資產各兩格,再插入 3 個銀行格
@@ -58,7 +59,7 @@ const TILES = (() => {
   let j = 0; for (let i = 0; i < t.length; i++) if (!t[i]) t[i] = seq[j++];
   return t;
 })();
-const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b, divi: 0x8f7cf0, ipo: 0x2fbf9f, bank: 0x4a63b0 };
+const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fate: 0xc08cf5, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b, divi: 0x8f7cf0, ipo: 0x2fbf9f, bank: 0x4a63b0 };
 // 事件卡:只寫「有變動的資產」,沒寫的就是不動。
 // 大盤 ETF 不用自己寫 —— 它等於所有「股票類股」這次漲跌的平均(黃金、債券、加密貨幣不算)
 const NON_EQUITY = new Set(['gold', 'bond', 'crypto', 'etf', 'agri']);
@@ -159,21 +160,21 @@ const EVENTS = [
 ];
 // 特殊牌:混在市場事件的三張牌裡。抽到不會動股價,而是把你送進棋盤中間的小路
 const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
-const BAIL = 2000, JAIL_FINE = 1000;      // 保釋金;被送進拘留小路時當場扣的罰款
+const BAIL = 1000, JAIL_WAIT = 3;         // 警察局:休息 JAIL_WAIT 回合才能出來,或付保釋金 BAIL 直接出來(出來都要擲一顆骰子決定走幾格)
 const IPO_OFF = 0.8, IPO_FREE = 10;       // IPO 小路:每一格先免費送 IPO_FREE 股,想多買再用承銷價(市價 x 0.8)加購
 const SPECIAL = {
   jail: { special: 'jail', m: ONES, t: L('Insider trading probe', '涉嫌內線交易'),
-    w: L(`Trading on information the public does not have is illegal. You are fined $${fmt(JAIL_FINE)} and your account is frozen: you go to the detention lane and cannot trade until you walk out.`, `用還沒公開的消息買賣股票是違法的。罰款 $${fmt(JAIL_FINE)},帳戶被凍結:送進拘留小路,走出來之前都不能買賣。`) },
+    w: L(`Trading on information the public does not have is illegal. You are sent to the police station: rest ${JAIL_WAIT} rounds (or pay $${fmt(BAIL)} bail), then roll one die to get out.`, `用還沒公開的消息買賣股票是違法的。被送進警察局:休息 ${JAIL_WAIT} 回合(或付 $${fmt(BAIL)} 保釋金),再擲一顆骰子走出來。`) },
   ipo: { special: 'ipo', m: ONES, t: L('You won the IPO lottery', '新股抽籤中籤'),
-    w: L(`You enter the IPO lane: every tile gives you ${IPO_FREE} free shares of a new listing, and you can buy more below the market price.`, `你進入 IPO 小路:每一格都免費獲得 ${IPO_FREE} 股新股,還能用比市價低的「承銷價」加購。`) },
+    w: L(`You go to the IPO booth: ${IPO_FREE} free shares of a random new listing, and you can buy more below the market price. Next turn you roll one die to get back on the road.`, `你去 IPO 攤位:免費獲得隨機一檔新股 ${IPO_FREE} 股,還能用比市價低的「承銷價」加購。下一回合擲一顆骰子走回外圈。`) },
 };
 const SPECIAL_RATE = 0.8;          // 每次抽牌,三張裡有一張是特殊牌的機率
 // 銀行:走到銀行格可以借現金(最多欠 BANK_MAX),每次經過起點付欠款 5% 的利息;欠的錢會從總資產扣掉
 const BANK_MAX = 5000, BANK_RATE = 0.05;
-// 中間的兩條小路(各 3 格,一回合走一格,走完從 exit 那格回到外圈)。座標是 16x16 格網的 [x, z]
+// 棋盤裡面的兩個特殊格(各一格):警察局、IPO 攤位。離開時擲一顆骰子,從 exit 那格起算走幾格回到外圈。座標是格網的 [x, z]
 const LANES = {
-  jail: { exit: 25, cells: [[3, 7], [2, 7], [1, 7]] },
-  ipo: { exit: 56, cells: [[13, 8], [14, 8], [15, 8]] },
+  jail: { exit: 25, cell: [2, 7] },
+  ipo: { exit: 56, cell: [14, 8] },
 };
 // 事件生效:改股價;有些事件(普發現金)還會直接發錢給每一位玩家
 function applyEvent(e) {
@@ -604,7 +605,7 @@ TILES.forEach((type, i) => {
 const cellPos = (x, z) => new THREE.Vector3((x - M / 2) * STEP, 0, (z - M / 2) * STEP);
 const LANE_COLOR = { jail: 0x7b8494, ipo: 0x2fbf9f };
 const laneTiles = {};
-for (const [type, def] of Object.entries(LANES)) laneTiles[type] = def.cells.map(([x, z], i) => {
+for (const [type, def] of Object.entries(LANES)) laneTiles[type] = [def.cell].map(([x, z]) => {
   const g = new THREE.Group(); g.position.copy(cellPos(x, z)); scene.add(g);
   box(1.04, 0.30, 1.04, type === 'jail' ? 0x565e6c : 0x1f9a80, 0, 0.21, 0, 0.09, g);
   box(1.0, 0.10, 1.0, LANE_COLOR[type], 0, TOP - 0.05, 0, 0.045, g);
@@ -614,7 +615,7 @@ for (const [type, def] of Object.entries(LANES)) laneTiles[type] = def.cells.map
   if (type === 'jail') {
     c.lineWidth = 13; c.beginPath(); c.arc(128, 76, 27, Math.PI, 0); c.lineTo(155, 96); c.moveTo(101, 76); c.lineTo(101, 96); c.stroke();   // 鎖頭
     c.beginPath(); c.roundRect(84, 92, 88, 62, 12); c.fill();
-    c.font = F(ZH ? 40 : 34); c.fillText(L('FROZEN', '帳戶凍結'), 128, 202);
+    c.font = F(ZH ? 40 : 34); c.fillText(L('POLICE', '警察局'), 128, 202);
   } else {
     c.font = F(84); c.fillText('IPO', 128, 96);
     c.font = F(ZH ? 40 : 36); c.fillText(L(`${IPO_FREE} FREE`, `送 ${IPO_FREE} 股`), 128, 186);
@@ -629,7 +630,7 @@ for (const [type, def] of Object.entries(LANES)) laneTiles[type] = def.cells.map
 {
   // 警察局:放在拘留小路「後面」那一側(才不會擋到站在格子上的棋子)。藍白色的建築、鐵窗、屋頂的紅藍警示燈,
   // 再立一塊面向鏡頭的招牌寫「警察局 POLICE」,玩家一看就知道被送到哪裡
-  const j = new THREE.Group(); j.position.copy(cellPos(3, 5.75));
+  const j = new THREE.Group(); j.position.copy(cellPos(2, 5.75));
   scene.add(j);
   box(1.5, 1.0, 1.0, 0xf4f7ff, 0, 0.69, 0, 0.05, j);                                                // 主體(白)
   box(1.54, 0.2, 1.04, 0x2f5fd0, 0, 0.3, 0, 0.03, j);                                               // 底部藍色腰帶
@@ -651,7 +652,7 @@ for (const [type, def] of Object.entries(LANES)) laneTiles[type] = def.cells.map
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), Object.assign(new THREE.MeshBasicMaterial({ map: tex, transparent: true }), { userData: { outlineParameters: { visible: false } } }));
     sign.position.set(0, 1.86, 0); sign.rotation.y = Math.PI / 4; j.add(sign);                      // 招牌轉 45 度,正對鏡頭
     box(0.06, 0.34, 0.06, 0x33415c, -0.3, 1.5, 0.3, 0.01, j); box(0.06, 0.34, 0.06, 0x33415c, 0.3, 1.5, -0.3, 0.01, j); }   // 招牌的兩根支柱
-  const x = new THREE.Group(); x.position.copy(cellPos(11.95, 8)); scene.add(x);
+  const x = new THREE.Group(); x.position.copy(cellPos(12.95, 8)); scene.add(x);
   box(1.0, 0.7, 1.0, 0xfff8ec, 0, 0.53, 0, 0.05, x); box(1.14, 0.12, 1.14, 0x2fbf9f, 0, 0.94, 0, 0.04, x);
   for (const sx of [-0.32, 0, 0.32]) box(0.1, 0.5, 0.1, 0xffffff, sx, 0.45, 0.52, 0.03, x);         // 柱子
   box(0.5, 0.3, 0.5, 0xfff8ec, 0, 1.15, 0, 0.04, x);
@@ -716,8 +717,11 @@ function drawLabel(i) {
   } else if (t.type === 'chance') {
     c.fillStyle = '#b0780a'; c.font = F(150); c.fillText('?', 128, 112);
     c.font = F(34); c.fillText(L('EVENT', '市場事件'), 128, 208);
+  } else if (t.type === 'fate') {
+    c.fillStyle = '#fff'; c.font = F(130); c.fillText('★', 128, 112);
+    c.font = F(ZH ? 44 : 40); c.fillText(L('FATE', '命運'), 128, 208);
   } else {
-    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], shop: [L('SHOP', '商店'), L('buy items', '買道具')], gift: [L('GIFT', '禮物'), L('free item', '送道具')], bank: [L('BANK', '銀行'), L('loans', '借錢 還錢')], ipo: ['IPO', L('enter lane', '新股申購')], divi: [L('DIVIDEND', '股息結算'), L('paid here', '在此領股利')] }[t.type];
+    const [a, b] = { start: [L('GO', '起點'), L('+$' + SALARY, '領薪水股利')], fee: [L('FEE', '手續費'), '-$' + FEE], shop: [L('SHOP', '商店'), L('buy items', '買道具')], gift: [L('GIFT', '禮物'), L('free item', '送道具')], fate: [L('FATE', '命運'), L('flip a card', '翻一張牌')], bank: [L('BANK', '銀行'), L('loans', '借錢 還錢')], ipo: ['IPO', L('enter lane', '新股申購')], divi: [L('DIVIDEND', '股息結算'), L('paid here', '在此領股利')] }[t.type];
     c.fillStyle = '#fff'; c.font = F(a.length > 5 ? 40 : (ZH && a !== 'IPO' ? (a.length > 3 ? 50 : 60) : 72)); c.fillText(a, 128, 104);
     c.font = F(ZH ? 34 : 40); c.fillText(b, 128, 168);
   }
@@ -959,7 +963,7 @@ const PM = () => PIECES[S.hi], PA = () => PIECES[S.ci];      // 現在這位真�
 const showPieces = (on) => PIECES.forEach((P, i) => { P.piece.visible = on && i < S.players.length; });
 focus = PIECES[0];
 function placePiece(i, P = PM()) { const p = tilePos(i); P.piece.position.set(p.x + P.off.x, TOP, p.z + P.off.z); }
-const onLane = (v) => Object.values(LANES).some((d) => d.cells.some(([x, z]) => { const p = cellPos(x, z); return Math.abs(p.x - v.x) < 0.95 && Math.abs(p.z - v.z) < 0.95; }));
+const onLane = (v) => Object.values(LANES).some((d) => [d.cell].some(([x, z]) => { const p = cellPos(x, z); return Math.abs(p.x - v.x) < 0.95 && Math.abs(p.z - v.z) < 0.95; }));
 
 /* ───────────── 骰子 ───────────── */
 const DIE = 0.56;
@@ -1115,8 +1119,8 @@ function advise() {
   const held = KEYS.filter((k) => S.hold[k].n > 0);
   const cheap = KEYS.filter((k) => S.price[k] < SECTORS[k].open * 0.97);
   const up = held.find((k) => (S.price[k] * S.hold[k].n - S.hold[k].cost) / S.hold[k].cost >= 0.15);
-  if (S.lane?.type === 'jail') return L('Your account is frozen. You cannot sell, so a margin position can still be force-liquidated if prices fall.', '帳戶凍結中,不能賣出也不能回補。這時候股價大跌,融資部位一樣會被強迫平倉。');
-  if (S.lane?.type === 'ipo') return L(`IPO lane: each tile gives you ${IPO_FREE} free shares, and you can buy more 20% below the market price.`, `IPO 小路:每一格都免費送你 ${IPO_FREE} 股,想多買還能用比市價便宜 20% 的承銷價加購。`);
+  if (S.lane?.type === 'jail') return L(`Resting at the police station (${S.lane.wait} rounds left, or pay $${fmt(BAIL)} bail). You cannot trade, but a margin position can still be liquidated.`, `在警察局休息(再 ${S.lane.wait} 回合,或付 $${fmt(BAIL)} 保釋金)。不能買賣,但融資部位一樣可能被斷頭。`);
+  if (S.lane?.type === 'ipo') return L('At the IPO booth. Roll one die to get back on the road.', '在 IPO 攤位。擲一顆骰子走回外圈。');
   let d = 0; for (let i = 1; i <= 6; i++) if (TILES[(S.pos + i) % TILES.length] === 'chance') { d = i; break; }
   if (todo.has('profit') && up) return L(`${SECTORS[up].name} is up over 15%. Land on it to take profit.`, `${SECTORS[up].name}已經賺超過 15%,走到它的格子就能獲利了結。`);
   if (todo.has('dip') && cheap.length) return L(`${SECTORS[cheap[0]].name} is below its opening price. Buying it counts as buying the dip.`, `${SECTORS[cheap[0]].name}現在低於開盤價,買進就算逢低買進。`);
@@ -1171,7 +1175,7 @@ function hud() {
   $('rankTxt').textContent = L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`); $('rankTxt').classList.toggle('top', rank === 1);
 
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
-  $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' ? L('FROZEN', '凍結中') : L('STEP', '前進一格')) : L('ROLL', '擲骰子');
+  $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' && S.lane.wait > 0 ? L('REST', '休息中') : L('ROLL OUT', '擲骰出去')) : L('ROLL', '擲骰子');
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
   $('miss').innerHTML = S.missions.map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
@@ -1304,10 +1308,11 @@ const AI_CARD_WAIT = 3;       // 電腦出牌後,說明卡停留幾秒
 
 /* ───────────── 回合流程(狀態機:idle → rolling → moving → landing → idle / over) ───────────── */
 // 起點:薪水 + 股利;對面的「股息結算」格:只發股利
-function payday(salary = SALARY) {
+function payday(atStart = true) {
+  const salary = atStart ? SALARY * (S.salary2 ? 2 : 1) : 0; if (atStart) S.salary2 = false;   // 升職加薪(命運牌)時下一次薪水加倍
   const div = KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * SECTORS[k].div, 0);
-  const interest = salary ? KEYS.reduce((a, k) => a + S.hold[k].loan * MARGIN_FEE, 0) : 0;   // 融資利息:每經過起點付一次
-  const bank = salary ? S.debt * BANK_RATE : 0;                                                // 銀行貸款利息:也是每經過起點付一次
+  const interest = atStart ? KEYS.reduce((a, k) => a + S.hold[k].loan * MARGIN_FEE, 0) : 0;   // 融資利息:每經過起點付一次
+  const bank = atStart ? S.debt * BANK_RATE : 0;                                                // 銀行貸款利息:也是每經過起點付一次
   S.lastDividend = div; S.cash += salary + div - interest - bank; sfx('coin');
   toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)} · ` : '') + `${L('dividends', '股利')} +$${fmt(div)}` + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : '') + (bank ? ` · ${L('loan interest', '貸款利息')} -$${fmt(bank)}` : ''));
   hud(); checkMissions();
@@ -1428,7 +1433,7 @@ async function badNews(k, by) {
 // 背包:只有輪到自己、還沒擲骰時能開
 function bagPanel() {
   if (S.busy || S.over) return;
-  if (S.lane?.type === 'jail') return toast(L('Account frozen: items cannot be used', '帳戶凍結中,不能使用道具'));
+  if (S.lane?.type === 'jail') return toast(L('At the police station: items cannot be used', '在警察局裡不能使用道具'));
   S.busy = true; $('ctl').classList.add('hide');
   const close = () => { closePanel(); S.busy = false; showCtl(true); };
   const kinds = [...new Set(S.bag)];
@@ -1441,7 +1446,7 @@ function bagPanel() {
     const id = b.dataset.id;
     if (!id) return close();
     closePanel();
-    if (id === 'remote' && S.lane) { toast(L('The lane is one tile per turn', '小路上一回合只能走一格')); S.busy = false; showCtl(true); }
+    if (id === 'remote' && S.lane) { toast(L('You leave with a normal die roll', '離開這裡要擲真的骰子')); S.busy = false; showCtl(true); }
     else if (id === 'remote') {
       $('steps').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `<button data-n="${n}">${n}</button>`).join('') + '<button data-n="0" style="background:#a99b90;box-shadow:0 4px 0 #857a70">×</button>';
       $('stepCtl').classList.remove('hide');
@@ -1465,33 +1470,39 @@ function bagPanel() {
 // 被送進小路:大跳躍到第一格。拘留小路 = 帳戶凍結(不能買賣、不能用道具);IPO 小路 = 每格都能用承銷價申購新股
 async function enterLane(isMe, type) {
   const who = isMe ? S : S.ai, P = isMe ? PM() : PA(), name = CHARS[S.foe].name;
-  who.lane = { type, idx: 0 }; hud();
+  who.lane = { type, wait: type === 'jail' ? JAIL_WAIT : 0 }; hud();
   await hopOnto(laneTiles[type][0].g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
-  who.cash -= JAIL_FINE; hud();                    // 一進去先罰款
-  if (isMe) await cardPanel(L('Fined and frozen', '罰款,帳戶被凍結'),
-    L(`You were fined $${fmt(JAIL_FINE)}. You move one tile per turn and reach the main road again in ${LANES.jail.cells.length} turns. Until then you cannot buy, sell, cover or use items, but prices keep moving: if a margin position falls below 130% it is still sold for you. You can pay $${fmt(BAIL)} bail on your turn to walk out at once.`,
-      `你被罰款 $${fmt(JAIL_FINE)}。在這裡一回合只能走一格,${LANES.jail.cells.length} 回合後才回到外圈。這段時間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${fmt(BAIL)} 保釋金立刻出來。`));
-  else { toast(L(`${name} is fined $${fmt(JAIL_FINE)} and frozen`, `${name}被罰款 $${fmt(JAIL_FINE)},帳戶被凍結了`)); await wait(1.3); }
+  if (isMe) await cardPanel(L('Sent to the police station', '被送進警察局'),
+    L(`Rest here ${JAIL_WAIT} rounds. You cannot buy, sell, cover or use items, but prices keep moving: a margin position below 130% is still sold for you. On your turn you can pay $${fmt(BAIL)} bail to leave at once. Leaving, you roll one die and walk that many tiles from the station exit.`,
+      `在這裡休息 ${JAIL_WAIT} 回合。期間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${fmt(BAIL)} 保釋金立刻離開。離開時擲一顆骰子,從警察局出口走幾格回到外圈。`));
+  else { toast(L(`${name} is sent to the police station`, `${name}被送進警察局了`)); await wait(1.3); }
 }
-// 在小路上往前走一格(all = 一口氣走完)。走出小路回到外圈時回傳 true
-async function laneStep(isMe, all = false) {
-  const who = isMe ? S : S.ai, P = isMe ? PM() : PA(), ln = who.lane, def = LANES[ln.type];
-  do {
-    ln.idx++;
-    if (ln.idx >= def.cells.length) { who.lane = null; who.pos = def.exit; await hopTo(def.exit, P); hud(); return true; }
-    await hopOnto(laneTiles[ln.type][ln.idx].g, P);
-  } while (all);
-  return false;
+// 沿著外圈走 n 格(經過起點 / 股息結算格會結算)。真人和電腦都用這個
+async function stepAlong(isMe, n) {
+  const who = isMe ? S : S.ai, P = isMe ? PM() : PA();
+  for (let i = 0; i < n; i++) {
+    who.pos = (who.pos + 1) % TILES.length;
+    await hopTo(who.pos, P);
+    if (who.pos === 0 || TILES[who.pos] === 'divi') { if (isMe) payday(who.pos === 0); else aiPayday(who, who.pos === 0); }
+  }
+}
+// 離開警察局 / IPO 攤位:擲一顆骰子,先跳到出口那格,再往前走骰子的點數
+async function leaveLane(isMe) {
+  const who = isMe ? S : S.ai, P = isMe ? PM() : PA(), def = LANES[who.lane.type], d = r6(), name = isMe ? L('You', '你') : CHARS[S.foe].name;
+  toast(L(`${name} roll${isMe ? '' : 's'} one die to leave`, `${name}擲一顆骰子離開`)); await wait(0.5);
+  await rollDice([d], P); toast(`${name}: ${d}`);
+  who.lane = null; who.pos = def.exit; await hopTo(def.exit, P); hud();
+  await stepAlong(isMe, d);
 }
 function jailPanel() {
   return new Promise((res) => {
-    const left = LANES.jail.cells.length - S.lane.idx, risky = KEYS.filter((k) => S.hold[k].loan > 0);
-    const p = panel(`<h3><span class="tag" style="background:#7b8494">${L('FROZEN', '凍結中')}</span>${L('Detention lane', '拘留小路')}</h3>
-      <p>${L(`${left} more turn${left > 1 ? 's' : ''} until you are back on the main road. You cannot trade in here.`, `再 ${left} 回合才會回到外圈,在這裡不能買賣。`)}${risky.length ? ` <b style="color:#c4472f">${L(`Margin at risk: ${risky.map((k) => `${SECTORS[k].code} ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join(', ')}`, `融資部位有風險:${risky.map((k) => `${SECTORS[k].code} 維持率 ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join('、')}`)}</b>` : ''}</p>
+    const left = S.lane.wait, risky = KEYS.filter((k) => S.hold[k].loan > 0);
+    const p = panel(`<h3><span class="tag" style="background:#7b8494">${L('POLICE', '警察局')}</span>${L('Resting', '休息中')}</h3>
+      <p>${L(`${left} more round${left > 1 ? 's' : ''} before you can roll out. You cannot trade in here.`, `再休息 ${left} 回合才能擲骰子出去,在這裡不能買賣。`)}${risky.length ? ` <b style="color:#c4472f">${L(`Margin at risk: ${risky.map((k) => `${SECTORS[k].code} ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join(', ')}`, `融資部位有風險:${risky.map((k) => `${SECTORS[k].code} 維持率 ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join('、')}`)}</b>` : ''}</p>
       <div class="btns">
-        <button class="b-ok" data-a="bail" ${S.cash < BAIL ? 'disabled' : ''}>${L('Pay bail', '付保釋金')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(BAIL)} · ${L('out now', '立刻出來')}</span></button>
-        <button class="b-skip" data-a="wait">${L('Wait', '等一回合')}<br><span style="font-size:calc(11px * var(--fs))">${L('move 1 tile', '前進一格')}</span></button>
+        <button class="b-ok" data-a="bail" ${S.cash < BAIL ? 'disabled' : ''}>${L('Pay bail', '付保釋金')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(BAIL)} · ${L('roll out now', '立刻擲骰出去')}</span></button>
+        <button class="b-skip" data-a="wait">${L('Rest', '休息')}<br><span style="font-size:calc(11px * var(--fs))">${L('one more round', '再等一回合')}</span></button>
       </div>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.a === 'bail'); });
   });
@@ -1505,20 +1516,22 @@ function ipoPanel() {
     const k = ipoPick(S), sec = SECTORS[k], h = S.hold[k], mkt = S.price[k], price = mkt * IPO_OFF;
     ipoGrant(S, k); sfx('coin'); drawAll(); hud();
     const p = panel(`<h3><span class="tag" style="background:#2fbf9f">IPO</span>${L('New shares: ', '新股中籤:')}${sec.name}</h3>
-      <p><b style="color:#1c8a4a">${L(`You get ${IPO_FREE} shares for free (worth $${fmt(mkt * IPO_FREE)}).`, `免費獲得 ${IPO_FREE} 股(市值 $${fmt(mkt * IPO_FREE)})。`)}</b> ${L('You can also buy more at the IPO price, which is set below the market so the shares sell out. The price can still fall afterwards.', '想多買還可以用承銷價加購:新股為了順利賣完,承銷價會訂得比市價低。不過之後股價還是可能下跌。')}</p>
+      <p><b style="color:#1c8a4a">${L(`You get ${IPO_FREE} shares for free (worth $${fmt(mkt * IPO_FREE)}).`, `免費獲得 ${IPO_FREE} 股(市值 $${fmt(mkt * IPO_FREE)})。`)}</b> ${L('You can also buy more at the IPO price, which is set below the market so the shares sell out. The price can still fall afterwards. Next turn you roll one die to get back on the road.', '想多買還可以用承銷價加購:新股為了順利賣完,承銷價會訂得比市價低。不過之後股價還是可能下跌。下一回合擲一顆骰子走回外圈。')}</p>
       <div class="kv">
         <div>${L('Market price', '市價')}<b>$${Math.round(mkt)}</b></div>
         <div>${L('IPO price', '承銷價')}<b style="color:#1c8a4a">$${Math.round(price)}</b></div>
         <div>${L('You hold', '持有')}<b>${h.n}</b></div>
       </div>
+      <div class="slider"><span>${L('Buy more', '加購')}</span><input type="range" id="ipoQty" min="10" max="50" step="10" value="10"><b id="ipoVal"></b></div>
       <div class="btns">
-        <button class="b-buy" data-n="1" ${S.cash < price * LOT ? 'disabled' : ''}>${L('Buy 10 more', '加購 10 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(price * LOT)}</span></button>
-        <button class="b-buy" data-n="3" ${S.cash < price * LOT * 3 ? 'disabled' : ''}>${L('Buy 30 more', '加購 30 股')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(price * LOT * 3)}</span></button>
-        <button class="b-skip" data-n="0">${L('Continue', '繼續')}</button>
+        <button class="b-buy" data-a="buy">${L('Buy more', '加購')}<br><span id="ipoBtn"></span></button>
+        <button class="b-skip" data-a="x">${L('Continue', '繼續')}</button>
       </div>`);
+    const qty = $('ipoQty');
+    const paint = () => { const q = +qty.value; $('ipoVal').textContent = `${q} ${L('sh', '股')} · $${fmt(price * q)}`; $('ipoBtn').textContent = `$${fmt(price * q)}`; p.querySelector('[data-a=buy]').disabled = S.cash < price * q; };
+    qty.oninput = paint; paint();
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
-      const n = LOT * +b.dataset.n;
-      if (n) { S.cash -= price * n; h.n += n; h.cost += price * n; sfx('buy'); toast(L(`Bought ${n} more ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 加購 ${sec.name} ${n} 股`)); }
+      if (b.dataset.a === 'buy') { const n = +qty.value; S.cash -= price * n; h.n += n; h.cost += price * n; sfx('buy'); toast(L(`Bought ${n} more ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 加購 ${sec.name} ${n} 股`)); }
       drawAll(); hud(); closePanel(); res();
     });
   });
@@ -1573,6 +1586,63 @@ function bankPanel() {
     draw();
   });
 }
+// 命運牌:只影響踩到的那個人(市場事件是影響所有人的股價)。有好有壞,有些會把你移到別的地方
+const FATE = [
+  { id: 'lottery', good: true, t: L('You won the lottery', '中樂透'), w: L('Pure luck. Luck is not a strategy, but take it.', '純運氣。運氣不是策略,但該拿還是拿。'), fx: L('+$1,500', '+$1,500') },
+  { id: 'tax', good: false, t: L('Tax season', '報稅季'), w: L('Profits get taxed. Keep some cash for it.', '賺的錢要繳稅,手上要留一點現金。'), fx: L('−5% of your cash', '現金 −5%') },
+  { id: 'birthday', good: true, t: L('Birthday', '生日'), w: L('Every other player chips in.', '其他每位玩家各包一個紅包給你。'), fx: L('+$200 from each player', '每人給你 +$200') },
+  { id: 'gostart', good: true, t: L('Shortcut to GO', '抄捷徑回起點'), w: L('Collect your salary and dividends early.', '提早領薪水和股利。'), fx: L('Move to GO', '直接移到起點') },
+  { id: 'back3', good: false, t: L('Missed the bus', '錯過公車'), w: L('Three tiles back. Whatever is there, you land on it.', '退三格,那一格是什麼就算什麼。'), fx: L('Back 3 tiles', '退後 3 格') },
+  { id: 'jail', good: false, t: L('Insider tip gone wrong', '收到內線消息'), w: L('You traded on it. Straight to the police station.', '你照著買了,直接送警察局。'), fx: L('Go to the police station', '送去警察局') },
+  { id: 'ipo', good: true, t: L('IPO lottery win', '新股抽籤中籤'), w: L('Off to the IPO booth for free shares.', '去 IPO 攤位領免費新股。'), fx: L('Go to the IPO booth', '前往 IPO 攤位') },
+  { id: 'remote', good: true, t: L('Found a remote dice', '撿到遙控骰子'), w: L('A dice you can set. It is in your backpack.', '可以指定點數的骰子,放進背包了。'), fx: L('+1 Remote dice', '+1 遙控骰子') },
+  { id: 'atk', good: true, t: L('A rumor to spread', '聽到一個八卦'), w: L('A bad-news card for your backpack. Use it on a rival.', '一張利空消息卡進背包,拿去打對手。'), fx: L('+1 Bad news card', '+1 利空消息卡') },
+  { id: 'divi', good: true, t: L('Special dividend', '特別股利'), w: L('All your holdings pay out once, right now.', '你所有持股立刻配息一次。'), fx: L('Dividends now', '立刻領一次股利') },
+  { id: 'phone', good: false, t: L('Dropped your phone', '手機掉進水裡'), w: L('Life happens. Emergency fund matters.', '生活總有意外,所以要有緊急預備金。'), fx: L('−$300', '−$300') },
+  { id: 'richest', good: true, t: L('The leader treats', '第一名請客'), w: L('The richest other player buys you dinner.', '最有錢的對手請你吃飯。'), fx: L('+$500 from the leader', '第一名給你 +$500') },
+  { id: 'fine', good: false, t: L('Parking ticket', '違規停車罰單'), w: L('Small, annoying, unavoidable.', '小錢,但很煩。'), fx: L('−$500', '−$500') },
+  { id: 'salary2', good: true, t: L('Promotion', '升職加薪'), w: L('Your next salary is doubled.', '下一次經過起點薪水加倍。'), fx: L('Next salary ×2', '下次薪水 ×2') },
+];
+// 翻命運牌:三張背面朝上挑一張(電腦自動挑)。回傳抽到的牌,效果由 applyFate 處理
+function drawFateCards(auto) {
+  return new Promise((res) => {
+    const picks = FATE.slice().sort(() => Math.random() - 0.5).slice(0, 3), who = CHARS[S.foe].name;
+    const face = (c) => `<div class="dhead ${c.good ? 'good' : 'bad'}">${c.t}</div><div class="dwhy">${c.w}</div><div class="dmv"><span class="mv ${c.good ? 'up' : 'dn'}">${c.fx}</span></div>`;
+    const ov = $('draw');
+    ov.innerHTML = `<h2>★ ${auto ? L(`${who} flips a fate card`, `${who}翻命運牌`) : L('Flip a fate card', '翻一張命運牌')}</h2>` +
+      `<div class="dcards">${picks.map((c, i) => `<div class="dcard" data-i="${i}" style="--i:${i}"><div class="dinner"><div class="dback" style="background:#c08cf5"><span>★</span></div><div class="dfront">${face(c)}</div></div></div>`).join('')}</div>` +
+      `<button class="dgo hide" id="dgo">${L('Continue', '繼續')}</button>`;
+    ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto);
+    const cards = [...ov.querySelectorAll('.dcard')]; let chosen = -1, done = false;
+    const choose = (i) => {
+      if (chosen >= 0) return;
+      chosen = i; ov.classList.add('done'); cards[i].classList.add('flip', 'picked'); sfx('flip');
+      wait(0.45).then(() => sfx(picks[i].good ? 'good' : 'bad'));
+      wait(0.9).then(() => { cards.forEach((c, j) => { if (j !== i) c.classList.add('flip', 'lost'); }); $('dgo').classList.remove('hide'); if (auto) wait(2).then(() => { if (!done) $('dgo').click(); }); });
+    };
+    cards.forEach((c, i) => { c.onclick = () => { if (!auto) choose(i); }; });
+    if (auto) wait(1.2).then(() => choose(Math.floor(Math.random() * 3)));
+    $('dgo').onclick = () => { if (done) return; done = true; ov.classList.add('hide'); ov.classList.remove('done'); res(picks[chosen]); };
+  });
+}
+// 命運牌生效。會移動的牌(回起點、退三格、警察局、IPO)在這裡處理;退三格之後要重新結算那一格
+async function applyFate(c, isMe) {
+  const who = isMe ? S : S.ai, name = isMe ? L('You', '你') : CHARS[S.foe].name;
+  const say = (en, zh) => toast(L(en, zh));
+  if (c.id === 'lottery') { who.cash += 1500; sfx('coin'); say(`${name} +$1,500`, `${name} +$1,500`); }
+  else if (c.id === 'tax') { const t = Math.round(Math.max(0, who.cash) * 0.05); who.cash -= t; sfx('short'); say(`${name} paid $${fmt(t)} tax`, `${name}繳稅 $${fmt(t)}`); }
+  else if (c.id === 'birthday') { let got = 0; others(who.i).forEach((p) => { p.cash -= 200; got += 200; }); who.cash += got; sfx('coin'); say(`${name} +$${fmt(got)} in gifts`, `${name}收到紅包 +$${fmt(got)}`); }
+  else if (c.id === 'phone') { who.cash -= 300; sfx('short'); say(`${name} −$300`, `${name} −$300`); }
+  else if (c.id === 'fine') { who.cash -= 500; sfx('short'); say(`${name} −$500`, `${name} −$500`); }
+  else if (c.id === 'richest') { const r = others(who.i).sort((a, b) => assetsOf(b) - assetsOf(a))[0]; r.cash -= 500; who.cash += 500; sfx('coin'); say(`${nameOf(r)} pays ${name} $500`, `${nameOf(r)}請客,${name} +$500`); }
+  else if (c.id === 'remote' || c.id === 'atk') { who.bag.push(c.id); sfx('item'); say(`${name}: ${itemInfo(c.id).name} added`, `${name}獲得${itemInfo(c.id).name}`); }
+  else if (c.id === 'divi') { if (isMe) payday(false); else aiPayday(who, false); }
+  else if (c.id === 'salary2') { who.salary2 = true; say(`${name}: next salary doubled`, `${name}下次薪水加倍`); }
+  else if (c.id === 'gostart') { const P = isMe ? PM() : PA(); who.pos = 0; await hopOnto(tiles[0].g, P, true); if (isMe) payday(true); else aiPayday(who, true); }
+  else if (c.id === 'back3') { const P = isMe ? PM() : PA(); for (let i = 0; i < 3; i++) { who.pos = (who.pos + TILES.length - 1) % TILES.length; await hopTo(who.pos, P); } hud(); await wait(0.2); return isMe ? landOn() : aiLand(); }
+  else if (c.id === 'jail' || c.id === 'ipo') { await enterLane(isMe, c.id); }
+  hud(); await wait(0.6);
+}
 const r6 = () => 1 + Math.floor(Math.random() * 6);
 // 對手決定擲 1 顆還是 2 顆:把「每個可能落點對牠有多好」算成分數,比較兩種擲法的期望值。
 // 一顆骰子走 1~6 格(機率相同),兩顆走 2~12 格(7 最常出現)
@@ -1587,6 +1657,7 @@ function aiDiceChoice() {
       else v += p < sec.open * 0.95 ? 1.5 : 0.5; }                                   // 便宜的比較想買
     else if (t === 'shop') v += A.cash >= 2500 ? 2 : 0.3;
     else if (t === 'ipo') v += 2.5;
+    else if (t === 'fate') v += 0.5;
     else if (t === 'bank') v += A.cash < 1500 || (A.debt && A.cash > 6000) ? 1.5 : 0;
     else if (t === 'fee') v -= 2;
     for (let j = 1; j <= i; j++) { const tt = TILES[(A.pos + j) % TILES.length]; if (tt === 'start') v += 2; else if (tt === 'divi') v += 0.8; }   // 經過發薪 / 股息格
@@ -1599,6 +1670,12 @@ function aiDiceChoice() {
 }
 // 小熊的回合。策略很單純,但都是看得懂的規則:
 //   賺超過 15% 就賣;價格比開盤低 5% 以上且現金夠就多買;否則留 $1,500 現金後買 10 股
+// 電腦經過起點 / 股息結算:薪水(升職加薪時加倍)、股利、融資與貸款利息
+function aiPayday(A, atStart) {
+  const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0);
+  const salary = atStart ? SALARY * (A.salary2 ? 2 : 1) : 0; if (atStart) A.salary2 = false;
+  A.cash += salary + div - (atStart ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) + A.debt * BANK_RATE : 0); hud();
+}
 async function aiTurn() {
   const A = S.ai, who = CHARS[S.foe].name;
   focus = PA(); pan.set(0, 0, 0); toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
@@ -1612,25 +1689,29 @@ async function aiTurn() {
   { const id = A.bag.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0);
     if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event, AI_CARD_WAIT); } }
   if (A.lane) {
-    // 在小路上:不擲骰,一回合走一格。被凍結時錢夠多就付保釋金直接出來
-    const bail = A.lane.type === 'jail' && A.cash >= BAIL + 2500;
-    if (bail) { A.cash -= BAIL; toast(L(`${who} pays $${fmt(BAIL)} bail`, `${who}付了 $${fmt(BAIL)} 保釋金`)); await wait(0.8); }
-    await laneStep(false, bail);
+    // 在警察局:錢夠多就付保釋金,不然休息一回合;能走了就擲一顆骰子出去。IPO 攤位:下一回合直接擲骰出去
+    if (A.lane.type === 'jail' && A.lane.wait > 0) {
+      if (A.cash >= BAIL + 2500) { A.cash -= BAIL; A.lane.wait = 0; toast(L(`${who} pays $${fmt(BAIL)} bail`, `${who}付了 $${fmt(BAIL)} 保釋金`)); await wait(0.8); await leaveLane(false); }
+      else { A.lane.wait--; toast(L(`${who} rests at the police station (${A.lane.wait} left)`, `${who}在警察局休息(再 ${A.lane.wait} 回合)`)); await wait(0.9); }
+    } else await leaveLane(false);
   } else {
   const nd = aiDiceChoice(), vals = nd === 1 ? [r6()] : [r6(), r6()], n = vals.reduce((x, y) => x + y, 0);
   toast(L(`${who} rolls ${nd === 1 ? 'one die' : 'two dice'}`, `${who}選擇擲 ${nd} 顆骰子`)); await wait(0.7);
   await rollDice(vals, PA()); toast(vals.length === 1 ? `${who}: ${n}` : `${who}: ${vals[0]} + ${vals[1]} = ${n}`);
-  for (let i = 0; i < n; i++) {
-    A.pos = (A.pos + 1) % TILES.length;
-    await hopTo(A.pos, PA());
-    if (A.pos === 0 || TILES[A.pos] === 'divi') { const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0); A.cash += (A.pos === 0 ? SALARY : 0) + div - (A.pos === 0 ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) + A.debt * BANK_RATE : 0); hud(); }
-  }
+  await stepAlong(false, n);
   }
   await wait(0.2);
+  await aiLand();
+  hud(); pan.set(0, 0, 0); await wait(0.5);
+}
+// 電腦踩到的那一格要做什麼
+async function aiLand() {
+  const A = S.ai, who = CHARS[S.foe].name;
   const type = A.lane ? '_' + A.lane.type : TILES[A.pos], sec = SECTORS[type];
-  if (type === '_jail') { toast(L(`${who} is still frozen`, `${who}還在凍結中,不能交易`)); await wait(0.9); }
-  else if (type === '_ipo') await aiIpo();
+  if (type === '_jail') { await wait(0.2); }
+  else if (type === '_ipo') { await wait(0.2); }
   else if (type === 'ipo') await enterLane(false, 'ipo');
+  else if (type === 'fate') { await wait(0.3); const c = await drawFateCards(true); await applyFate(c, false); }
   else if (sec) {
     const h = A.hold[type], sh = A.short[type], price = S.price[type], mine = Math.max(...others(A.i).map((p) => p.hold[type].n));   // mine:別人最多持有幾股
     if (sh.n) {
@@ -1674,27 +1755,23 @@ async function aiTurn() {
   }
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
-  hud(); pan.set(0, 0, 0); await wait(0.5);
 }
 async function turn(forced) {
   if (S.busy || S.over) return;
   S.busy = true; showCtl(false); pan.set(0, 0, 0);
   // 擲 1 顆或 2 顆由玩家選(S.diceN)。遙控骰子(forced):6 以內用一顆顯示,7 以上拆成兩顆的點數
   if (S.lane) {
-    // 在小路上:不擲骰,一回合走一格。被凍結時可以付保釋金一口氣走出來
-    const bail = S.lane.type === 'jail' && await jailPanel();
-    if (bail) { S.cash -= BAIL; hud(); sfx('sell'); toast(L(`Paid $${fmt(BAIL)} bail`, `付了 $${fmt(BAIL)} 保釋金`)); }
-    await laneStep(true, bail);
+    // 在警察局:付保釋金或再休息一回合;能走了(或在 IPO 攤位)就擲一顆骰子出去
+    if (S.lane.type === 'jail' && S.lane.wait > 0) {
+      if (await jailPanel()) { S.cash -= BAIL; S.lane.wait = 0; hud(); sfx('sell'); toast(L(`Paid $${fmt(BAIL)} bail`, `付了 $${fmt(BAIL)} 保釋金`)); await leaveLane(true); }
+      else { S.lane.wait--; S.lane.rested = true; hud(); toast(L(`Resting (${S.lane.wait} left)`, `休息中(再 ${S.lane.wait} 回合)`)); await wait(0.6); }
+    } else await leaveLane(true);      // 休息夠了(或在 IPO 攤位):擲一顆骰子出去
   } else {
   const vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : (S.diceN === 1 ? [r6()] : [r6(), r6()]);
   const n = vals.reduce((x, y) => x + y, 0);
   await rollDice(vals);
   toast(vals.length === 1 ? `${n}` : `${vals[0]} + ${vals[1]} = ${n}`);
-  for (let i = 0; i < n; i++) {
-    S.pos = (S.pos + 1) % TILES.length;
-    await hopTo(S.pos);
-    if (S.pos === 0) payday(); else if (TILES[S.pos] === 'divi') payday(0);
-  }
+  await stepAlong(true, n);
   }
   if (S.hi === 0) {           // 第一位走完 = 新的一回合開始:回合數 +1,所有價格小幅隨機波動
     S.rolls++;
@@ -1705,10 +1782,21 @@ async function turn(forced) {
   drawAll(); hud();
   await wait(0.15);
 
+  await landOn();
+
+  await flushNotices();
+  S.cashStreak = (stockValue() > 0 && S.cash >= 2000) ? S.cashStreak + 1 : 0;
+  checkMissions();
+  await nextTurns();
+}
+// 輪到下一位:電腦自己走完;遇到真人就停下來等他擲骰。繞回第一位時,如果回合數用完就結算
+// 玩家踩到的那一格要做什麼(命運牌「退三格」之後也會再呼叫一次)
+async function landOn() {
   const type = S.lane ? '_' + S.lane.type : TILES[S.pos];
-  if (type === '_jail') { toast(L('Account frozen: no trading this turn', '帳戶凍結中,這回合不能交易')); await wait(0.9); }
-  else if (type === '_ipo') await ipoPanel();
+  if (type === '_jail') { toast(L('Resting at the police station: no trading this turn', '在警察局休息,這回合不能交易')); await wait(0.9); }
+  else if (type === '_ipo') { await wait(0.2); }
   else if (type === 'ipo') await enterLane(true, 'ipo');
+  else if (type === 'fate') { const c = await drawFateCards(false); await applyFate(c, true); }
   else if (SECTORS[type]) await buyPanel(type);
   else if (type === 'chance') {
     const c = await drawEventCards(false);
@@ -1720,13 +1808,7 @@ async function turn(forced) {
     await cardPanel(L('A gift', '收到禮物'), `${it.icon} ${it.name}<br>${it.desc}<br>${L('It is in your backpack.', '已放進背包。')}`); }
   else if (type === 'divi') await cardPanel(L('Dividend day', '股息結算'), L(`You collected $${fmt(S.lastDividend)} in dividends. Assets that pay nothing, like gold, biotech and crypto, only make money if the price rises.`, `領到股利 $${fmt(S.lastDividend)}。黃金、生技、加密貨幣不配息,只能靠價格上漲賺錢。`));
   else await cardPanel(L('Payday', '發薪日'), L(`Salary $${fmt(SALARY)}${S.lastDividend > 0 ? ` plus $${fmt(S.lastDividend)} in dividends` : ''}. Holding stocks pays you every lap.`, `薪水 $${fmt(SALARY)}${S.lastDividend > 0 ? `,加上股利 $${fmt(S.lastDividend)}` : ''}。持有股票,每繞一圈都會配息。`));
-
-  await flushNotices();
-  S.cashStreak = (stockValue() > 0 && S.cash >= 2000) ? S.cashStreak + 1 : 0;
-  checkMissions();
-  await nextTurns();
 }
-// 輪到下一位:電腦自己走完;遇到真人就停下來等他擲骰。繞回第一位時,如果回合數用完就結算
 async function nextTurns() {
   let i = S.hi;
   for (;;) {
