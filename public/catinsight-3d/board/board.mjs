@@ -2340,12 +2340,13 @@ function lobbyPaint() {
   syncJoined(NET.on && !NET.started ? NET.guests : []);
   $('pcOnT').textContent = NET.on ? L('Close room', '關閉房間') : L('Play with phones', '多人連線'); $('pcOnS').textContent = NET.on ? L(`Room ${NET.code} is open`, `房間 ${NET.code} 開著`) : L('Scan a QR code to join', '掃描 QR Code 加入房間');
   $('pcOnline').classList.toggle('on', NET.on);
-  $('lobby').classList.add('hide');
+  $('lobby').classList.toggle('hide', !NET.on);      // 設定卡裡也放一份 QR / 房號(按下多人連線就看得到)
   if (!NET.on) return;
   const gs = NET.guests.filter((g) => g.online);
-  box.innerHTML = `<div class="qr" id="lobbyQr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b>
+  const html = `<div class="qr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b>
     <small>${L('Scan the QR code or open', '手機掃 QR,或打開')} <span class="url">${joinUrl(NET.code).replace(/^https?:\/\//, '')}</span></small></div>`;
-  const draw = () => { try { const q = qrLib(0, 'M'); q.addData(joinUrl(NET.code)); q.make(); $('lobbyQr').innerHTML = q.createSvgTag({ cellSize: 3, margin: 1, scalable: true }); } catch (e) {} };
+  box.innerHTML = html; $('lobby').innerHTML = html;
+  const draw = () => { try { const q = qrLib(0, 'M'); q.addData(joinUrl(NET.code)); q.make(); const svg = q.createSvgTag({ cellSize: 3, margin: 1, scalable: true }); document.querySelectorAll('#lobbyCard .qr, #lobby .qr').forEach((el) => { el.innerHTML = svg; }); } catch (e) {} };
   if (qrLib) draw();
   else if (window.qrcode) { qrLib = window.qrcode; draw(); }
   else if (!document.getElementById('qrlib')) { const sc = document.createElement('script'); sc.id = 'qrlib'; sc.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js'; sc.onload = () => { qrLib = window.qrcode; draw(); }; document.head.appendChild(sc); }
