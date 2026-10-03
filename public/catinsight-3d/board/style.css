@@ -365,7 +365,8 @@ body.embed .topbtns{right:64px}
 .stockbtn{width:calc(46px * var(--fs));height:calc(30px * var(--fs));border-radius:999px;border:2px solid #f2b23c;background:#fff8ec;box-shadow:0 3px 0 rgba(0,0,0,.12);cursor:pointer;pointer-events:auto;display:flex;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent}
 .stockbtn svg{width:calc(22px * var(--fs));height:calc(22px * var(--fs));fill:#d98a2b}
 .stockbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.12)}
-.hud{align-items:flex-start}
+.hud{align-items:center}   /* 現金 + 名次那排和股票鈕,整組對齊頭像的垂直中心 */
+.mecol{justify-content:center}
 
 .merow{display:flex;align-items:center;gap:8px}
 /* 右上的音樂 / 全螢幕鈕放大到和離開鈕一樣(48px),手機也一樣 */
