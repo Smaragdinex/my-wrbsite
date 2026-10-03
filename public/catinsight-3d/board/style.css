@@ -279,8 +279,8 @@ body.remote #ctl .roll{opacity:.55}
 .rollcol .roundTxt{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:6px;white-space:nowrap;background:var(--cream);border:2px solid var(--line);border-radius:999px;padding:2px 10px;font-weight:900;font-size:calc(12px * var(--fs));color:#6b594e;pointer-events:none}
 @media(max-width:900px){
   /* 手機:左欄只留頭像直排,點頭像才浮出資產框;右欄任務和事件預設收起只剩標題 */
-  .lcol{top:calc(var(--ava) + 76px)}
-  .rcol{top:calc(var(--ava) + 76px)}
+  .lcol{top:calc(var(--ava) + 46px)}
+  .rcol{top:calc(var(--ava) + 46px)}
   .rb{width:calc(52px * var(--fs))}.rpop{width:calc(190px * var(--fs))}
   .box.assets{width:calc(200px * var(--fs))}
   .lcol{z-index:6}   /* 資產框展開時蓋在右欄上面 */
@@ -335,3 +335,8 @@ body.remote #ctl .roll{opacity:.55}
 
 /* 手機遙控頁:主機棋盤直播當背景,HUD 疊在上面 */
 .jbg{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;background:#c9e8b8}
+
+/* 金錢列拿掉:右上只剩音樂 / 全螢幕兩顆小鈕;左上頭像 + 名次 */
+.topbtns{position:fixed;right:12px;top:14px;z-index:6;display:flex;gap:8px;pointer-events:auto}
+body.embed .topbtns{right:64px}
+.hud{pointer-events:none}
