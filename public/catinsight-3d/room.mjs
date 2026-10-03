@@ -724,12 +724,12 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=130';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=131';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 手機直拿(觸控、短邊 ≤ 1100px、直的)就把遊戲畫面轉 90° 變橫向;轉成橫拿或平板、電腦就正常顯示
 function fitGameRot() {
-  const portrait = innerHeight > innerWidth && Math.max(innerWidth, innerHeight) <= 1100 && matchMedia('(pointer: coarse)').matches;
+  const portrait = false;      // 先關掉自動轉橫向:玩家自己把網站加到主畫面、把手機轉橫就好(要再開把這行改回判斷式)
   gameUI.classList.toggle('rot', portrait);
   gameScr.style.width = portrait ? innerHeight + 'px' : ''; gameScr.style.height = portrait ? innerWidth + 'px' : '';
 }
