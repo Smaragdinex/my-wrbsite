@@ -49,7 +49,7 @@ const N = 17;   // 17x17 外圈 = 64 格
 const TILES = (() => {
   const t = new Array(4 * (N - 1)).fill(null);
   t[0] = 'start'; t[16] = 'shop'; t[32] = 'divi'; t[48] = 'shop';     // 四個角
-  [4, 10, 13, 19, 27, 35, 43, 50, 54, 61].forEach((i) => { t[i] = 'chance'; });      // 市場事件
+  [4, 10, 13, 19, 28, 35, 43, 50, 54, 60].forEach((i) => { t[i] = 'chance'; });      // 市場事件(28、60 是兩條小路的出口,一出來就抽事件)
   t[40] = 'ipo';      // 新股申購入口,走到就進 IPO 小路
   [22, 58].forEach((i) => { t[i] = 'gift'; });
   // 剩下 47 格:22 種資產各兩格,再插入 3 個銀行格
@@ -188,11 +188,13 @@ const PATH_INFO = {
   interest: { color: 0x4a63b0, base: 0x37508f, a: L('INTEREST', '利息'), b: L('+3% cash', '現金 +3%') },
   coin: { color: 0x57b86b, base: 0x3f9a52, a: L('CASH', '撿到錢'), b: '+$300' },
 };
+const PATH_FIXED = { jail: { 2: 'chance' } };      // 固定位置的格子:警察局小路第 3 格一定是市場事件
 function genLanePath(type) {
-  const t = new Array(LANE_LEN).fill(null);
-  const a = Math.floor(Math.random() * LANE_LEN); let b; do { b = Math.floor(Math.random() * LANE_LEN); } while (b === a);
-  t[a] = 'fate'; t[b] = 'fate';
-  const pool = PATH_POOL[type].slice().sort(() => Math.random() - 0.5);      // 其他 4 格從池子裡抽、不重複
+  const t = new Array(LANE_LEN).fill(null), fixed = PATH_FIXED[type] || {};
+  for (const i in fixed) t[i] = fixed[i];
+  const free = () => t.map((v, i) => (v ? -1 : i)).filter((i) => i >= 0);
+  for (let n = 0; n < 2; n++) { const f = free(); t[f[Math.floor(Math.random() * f.length)]] = 'fate'; }     // 2 格命運,位置隨機
+  const pool = PATH_POOL[type].filter((k) => !Object.values(fixed).includes(k)).sort(() => Math.random() - 0.5);      // 其他格從池子裡抽、不重複
   for (let i = 0; i < LANE_LEN; i++) if (!t[i]) t[i] = pool.pop();
   return t;
 }
