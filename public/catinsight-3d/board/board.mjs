@@ -924,15 +924,41 @@ const slots = STAGE_KEYS.map((key, i) => {
   return { key, g, holder, ring, hop: 0, top, spin: 0 };
 });
 let stageSel = 0, stageOn = false, stageCur = 0;
+// 線上同樂:手機玩家一加入,他選的角色就從轉盤拿掉、跳到轉盤前面一排(像大亂鬥),不用文字
+const joinedRow = new THREE.Group(); stage.add(joinedRow);
+const joined = [];      // [{ gid, char, g, holder, hop }]
+function syncJoined(guests) {
+  const live = guests.filter((g) => g.online), R = Math.SQRT1_2;
+  // 移除已離開的
+  for (let i = joined.length - 1; i >= 0; i--) if (!live.some((g) => g.gid === joined[i].gid)) { joinedRow.remove(joined[i].g); joined.splice(i, 1); }
+  live.forEach((g) => {
+    let j = joined.find((x) => x.gid === g.gid);
+    if (!j) { const grp = new THREE.Group(); joinedRow.add(grp);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.55, 0.12, 36), mat(0xfff8ec)); base.position.y = 0.06; base.receiveShadow = true; base.castShadow = true; grp.add(base);
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.57, 0.62, 0.05, 36), mat(0x7cc6ff)); ring.position.y = 0.025; grp.add(ring);
+      const holder = new THREE.Group(); holder.position.y = 0.12; holder.rotation.y = FRONT; holder.scale.setScalar(0.78); grp.add(holder);
+      j = { gid: g.gid, char: null, g: grp, holder, hop: 0 }; joined.push(j); }
+    if (j.char !== g.char) { j.char = g.char; const c = CHARS[g.char]; j.holder.clear(); const ph = new THREE.Group(); loadPiece(c.url, c.h, ph, j.holder); j.hop = 1; sfx('item'); }
+  });
+  // 排成一排在轉盤前面,置中
+  const n = joined.length;
+  joined.forEach((j, i) => { const o = (i - (n - 1) / 2) * 1.5, fwd = 3.2; j.g.position.set(o * R + fwd * R, 0, -o * R + fwd * R); });
+  // 轉盤上把被選走的拿掉;主機正停在被選走的角色上就自動跳下一個
+  slots.forEach((sl) => { sl.taken = live.some((g) => g.char === sl.key); });
+  if (slots[stageSel] && slots[stageSel].taken) stageSelect(stageSel + 1);
+}
+function joinedStep(dt) { joined.forEach((j) => { j.hop = Math.max(0, j.hop - dt * 2); j.holder.position.y = 0.12 + Math.sin((1 - j.hop) * Math.PI) * (j.hop > 0 ? 0.5 : 0); j.holder.rotation.y = FRONT + Math.sin(performance.now() / 900 + j.g.position.x) * 0.25; }); }
 // 選角畫面的動態排版:上面的設定卡不能擋到角色的頭,底座也不能被下面的名字 / 開始鈕擠到。
 // 做法:先把鏡頭目標往上抬(場景整個往下移),不夠再把鏡頭拉遠一點
-let stageLift = 0, stageZoom = 0;
+let stageLift = 0, stageZoom = 0, cardZoom = 1;
 const _fv = new THREE.Vector3();
 function stageMetrics() {
   const card = $('pcfg').getBoundingClientRect(), bar = document.querySelector('.pbar').getBoundingClientRect(), sl = slots[stageSel];
   sl.g.getWorldPosition(_fv); const y0 = _fv.y;
   const px = (y) => { _fv.y = y; const q = _fv.clone().project(cam); return (1 - q.y) / 2 * innerHeight; };
-  const head = px(y0 + sl.top + 1.45 * sl.holder.scale.y), foot = px(y0 - 0.15), unit = px(y0) - px(y0 + 1);   // 世界往上 1 單位 = 畫面往上幾 px
+  let foot = px(y0 - 0.15);
+  if (joined.length) { joined[0].g.getWorldPosition(_fv); foot = Math.max(foot, px(_fv.y - 0.1)); sl.g.getWorldPosition(_fv); }
+  const head = px(y0 + sl.top + 1.45 * sl.holder.scale.y), unit = px(y0) - px(y0 + 1);   // 世界往上 1 單位 = 畫面往上幾 px
   return { head, foot, unit, cardBottom: card.bottom, barTop: bar.top };
 }
 function fitStage(dt) {
@@ -942,9 +968,14 @@ function fitStage(dt) {
   if (needDown > 0) {
     const lift = Math.min(needDown, Math.max(0, room));          // 先把能用的空間用掉(整體往下移)
     if (lift > 1) stageLift += lift / unit * k;
-    if (needDown - lift > 1) stageZoom = Math.min(4, stageZoom + 0.15 * k);   // 還不夠就拉遠(角色變小)
-  } else if (needDown < -16) {   // 空間很多:先把鏡頭拉回來,再把場景移回去
-    if (stageZoom > 0) stageZoom = Math.max(0, stageZoom - 0.15 * k); else stageLift = Math.max(0, stageLift + needDown / unit * k * 0.5);
+    if (needDown - lift > 1) {
+      if (stageZoom < 1.2) stageZoom = Math.min(4, stageZoom + 0.15 * k);          // 再來把鏡頭拉遠一點(角色變小)
+      else if (cardZoom > 0.68) { cardZoom = Math.max(0.68, cardZoom - 0.25 * k); document.documentElement.style.setProperty('--cardZoom', cardZoom.toFixed(3)); }   // 還是擠:設定卡縮小
+      else stageZoom = Math.min(4, stageZoom + 0.15 * k);
+    }
+  } else if (needDown < -16) {   // 空間很多:設定卡放回原大小、鏡頭拉回來、場景移回去
+    if (cardZoom < 1) { cardZoom = Math.min(1, cardZoom + 0.25 * k); document.documentElement.style.setProperty('--cardZoom', cardZoom.toFixed(3)); }
+    else if (stageZoom > 0) stageZoom = Math.max(0, stageZoom - 0.15 * k); else stageLift = Math.max(0, stageLift + needDown / unit * k * 0.5);
   }
 }                 // stageCur:目前滑到第幾個(小數),慢慢追上 stageSel
 let pickWho = 0;                                              // 現在是第幾位真人在選(0 或 1)
@@ -1166,7 +1197,7 @@ function step(dt) {
   // 目標點往棋盤中心偏 1.6 格:棋子在畫面偏下方,前方要走的格子和骰子落點都看得到
   const fl = Math.hypot(fp.x, fp.z) || 1, ox = -fp.x / fl * 1.6, oz = -fp.z / fl * 1.6;
   const tx = stageOn ? STAGE.x : (view.overview ? 0 : fp.x + ox) + pan.x, tz = stageOn ? STAGE.z : (view.overview ? 0 : fp.z + oz) + pan.z, kf = Math.min(1, dt * 3.2);
-  if (stageOn) stageStep(dt);
+  if (stageOn) { stageStep(dt); joinedStep(dt); }
   // 放手後,如果拖到範圍外就彈回來
   if (!panDrag && !stageOn) { const kb = Math.min(1, dt * 7);
     if (Math.abs(tx) > PAN_LIM) pan.x += (Math.sign(tx) * PAN_LIM - tx) * kb;
@@ -2233,9 +2264,6 @@ function netOnMsg(m) {
     if (!g && NET.guests.filter((x) => x.online).length >= 3) { netSend({ t: 'joined', ok: false, reason: 'full' }, m.from); return; }
     let char = m.char; if (!CHARS[char] || charTakenBy(char, g)) char = Object.keys(CHARS).find((k) => !charTakenBy(k, g));
     // 主機畫面上提示:誰用什麼角色加入了 / 換了角色 / 改了名字
-    if (!g || !g.online) { toast(L(`${CHARS[char].icon} ${name} joined as ${CHARS[char].name}!`, `${CHARS[char].icon} ${name} 用${CHARS[char].name}加入了!`)); sfx('item'); }
-    else if (g.char !== char) { toast(L(`${name} switched to ${CHARS[char].name}`, `${name} 換成了${CHARS[char].name}`)); }
-    else if (g.name !== name) { toast(L(`${g.name} is now ${name}`, `${g.name} 改名為 ${name}`)); }
     if (g) Object.assign(g, { conn: m.from, online: true, name, char }); else { g = { gid, conn: m.from, name, char, online: true }; NET.guests.push(g); }
     netSend({ t: 'joined', ok: true, gid, char, name }, m.from); lobbyPaint(); paintStage(); netLobby(); return;
   }
@@ -2254,13 +2282,14 @@ function netLobby(to) {
 let qrLib = null;
 function lobbyPaint() {
   const box = $('lobby'); if (!box) return;
+  syncJoined(NET.on && !NET.started ? NET.guests : []);
   $('pcOnT').textContent = NET.on ? L('Close room', '關閉房間') : L('Play with phones', '多人連線'); $('pcOnS').textContent = NET.on ? L(`Room ${NET.code} is open`, `房間 ${NET.code} 開著`) : L('Scan a QR code to join', '掃描 QR Code 加入房間');
   $('pcOnline').classList.toggle('on', NET.on); $('pcHrow').classList.toggle('hide', NET.on);
   box.classList.toggle('hide', !NET.on); if (!NET.on) return;
   const gs = NET.guests.filter((g) => g.online);
   box.innerHTML = `<div class="qr" id="lobbyQr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b>
     <small>${L('Scan the QR code or open', '手機掃 QR,或打開')} <span class="url">${joinUrl(NET.code).replace(/^https?:\/\//, '')}</span></small>
-    <div class="who">${gs.length ? gs.map((g) => `<span>${CHARS[g.char].icon} <b>${g.name}</b> · ${CHARS[g.char].name} ✓</span>`).join('') : `<span class="none">${L('Waiting for players…', '等待玩家加入…')}</span>`}</div></div>`;
+    ${gs.length ? '' : `<div class="who"><span class="none">${L('Waiting for players…', '等待玩家加入…')}</span></div>`}</div>`;
   const draw = () => { try { const q = qrLib(0, 'M'); q.addData(joinUrl(NET.code)); q.make(); $('lobbyQr').innerHTML = q.createSvgTag({ cellSize: 3, margin: 1, scalable: true }); } catch (e) {} };
   if (qrLib) draw();
   else if (window.qrcode) { qrLib = window.qrcode; draw(); }

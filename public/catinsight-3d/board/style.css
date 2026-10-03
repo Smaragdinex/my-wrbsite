@@ -323,8 +323,7 @@ body.remote #ctl .roll{opacity:.55}
 .pnameIn::placeholder{color:#b5a593;font-weight:800}
 .pnameIn:focus{outline-color:#ff7a59}
 @media(max-width:560px){ .prow .ico{width:calc(34px * var(--fs));font-size:calc(20px * var(--fs))} .prow .opts button{min-width:calc(34px * var(--fs));height:calc(34px * var(--fs))} .pcfg{padding:0 0 2px;gap:6px} .pname2{min-width:0;width:calc(100vw - 140px);padding-left:12px} .pname2 b{font-size:calc(18px * var(--fs))} .pnav{gap:8px} .pnav button{width:44px;height:44px} }
-/* 視窗很矮(例如橫拿的手機、小筆電)時設定卡整個縮小一點 */
-@media(max-height:760px){ .pcfg{zoom:.86} }
-@media(max-height:620px){ .pcfg{zoom:.74} }
+/* 設定卡的縮放由 fitStage 動態決定(空間不夠就縮小) */
+.pcfg{zoom:var(--cardZoom,1)}
 .lobby .who span{animation:lobbyIn .35s ease}
 @keyframes lobbyIn{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
