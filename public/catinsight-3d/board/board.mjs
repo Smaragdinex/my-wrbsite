@@ -1096,8 +1096,6 @@ function hud() {
   $('cash').textContent = fmt(S.cash);
   $('assets').textContent = fmt(assets());
   $('stocks').textContent = fmt(stockValue());
-  { const lead = others().sort((a, b) => assetsOf(b) - assetsOf(a))[0];      // 上方資訊列:顯示目前最有錢的那位對手
-    $('lblBear').textContent = nameOf(lead); $('bearAssets').textContent = fmt(assetsOf(lead)); }
   $('bagCount').textContent = S.bag.length;
   $('mcount').textContent = S.done;
   // 目前名次:依總資產排(同分算同名次)。回合條旁邊顯示;手機沒有回合條,所以擲骰鈕底下也帶一份
