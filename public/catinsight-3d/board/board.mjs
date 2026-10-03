@@ -1110,7 +1110,7 @@ function hud() {
   // 目前名次:依總資產排(同分算同名次)。回合條旁邊顯示;手機沒有回合條,所以擲骰鈕底下也帶一份
   const myA = assets(), rank = 1 + S.players.filter((p) => assetsOf(p) > myA + 0.5).length;
   $('rankTxt').textContent = L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`); $('rankTxt').classList.toggle('top', rank === 1);
-  $('rollsLeft').textContent = L(`${maxRolls() - S.rolls} left · #${rank}`, `剩 ${maxRolls() - S.rolls} 次 · 第 ${rank} 名`);
+
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
   $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' ? L('FROZEN', '凍結中') : L('STEP', '前進一格')) : L('ROLL', '擲骰子');
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
