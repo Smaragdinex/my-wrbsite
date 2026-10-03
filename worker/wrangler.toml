@@ -10,4 +10,4 @@ routes = [{ pattern = "xarts.games/api/board/*", zone_name = "xarts.games" }]
 [[d1_databases]]
 binding = "DB"
 database_name = "catstreet-board"
-database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+database_id = "8aba5f4f-5244-4e98-a252-898cd593ffac"

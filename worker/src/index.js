@@ -7,7 +7,9 @@ const AI = new Set(['easy', 'normal', 'hard']);
 const MAX_ASSETS = 300000;        // 20~40 回合、起始 $10,000,正常玩不可能超過這個數
 const MAX_PER_HOUR = 12;          // 同一個 IP 一小時最多送幾筆
 
-const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+// 正式站是同網域不需要 CORS;開放 localhost 是為了本機測試(網址加 ?lb=1)
+const corsHeaders = (req) => { const o = req.headers.get('origin') || ''; return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o) || o === 'https://xarts.games' ? { 'access-control-allow-origin': o, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'vary': 'origin' } : {}; };
+const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extra } });
 
 async function sha256(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -22,26 +24,27 @@ async function top(env, limit) {
 
 export default {
   async fetch(req, env) {
-    const url = new URL(req.url);
+    const url = new URL(req.url), cors = corsHeaders(req);
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (req.method === 'GET' && url.pathname === '/api/board/top') {
       const limit = Math.min(50, Math.max(1, +url.searchParams.get('limit') || 10));
-      return json({ top: await top(env, limit) });
+      return json({ top: await top(env, limit) }, 200, cors);
     }
     if (req.method === 'POST' && url.pathname === '/api/board/submit') {
-      let b; try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
+      let b; try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400, cors); }
       const name = clean(b.name, 12), char = String(b.char || ''), ai = String(b.ai || 'normal'), lang = clean(b.lang, 5) || 'zh';
       const assets = Math.round(+b.assets), rounds = +b.rounds, players = +b.players;
-      if (!name) return json({ error: 'name' }, 400);
-      if (!CHARS.has(char) || !AI.has(ai)) return json({ error: 'char/ai' }, 400);
-      if (!Number.isFinite(assets) || assets < 0 || assets > MAX_ASSETS) return json({ error: 'assets' }, 400);
-      if (![20, 25, 30, 35, 40].includes(rounds) || players < 2 || players > 4) return json({ error: 'rounds/players' }, 400);
+      if (!name) return json({ error: 'name' }, 400, cors);
+      if (!CHARS.has(char) || !AI.has(ai)) return json({ error: 'char/ai' }, 400, cors);
+      if (!Number.isFinite(assets) || assets < 0 || assets > MAX_ASSETS) return json({ error: 'assets' }, 400, cors);
+      if (![20, 25, 30, 35, 40].includes(rounds) || players < 2 || players > 4) return json({ error: 'rounds/players' }, 400, cors);
       const ip = req.headers.get('cf-connecting-ip') || '0', ipHash = await sha256(ip + (env.SALT || 'catstreet')), now = Math.floor(Date.now() / 1000);
       const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM records WHERE ip_hash = ? AND created_at > ?').bind(ipHash, now - 3600).first('n');
-      if (recent >= MAX_PER_HOUR) return json({ error: 'too many' }, 429);
+      if (recent >= MAX_PER_HOUR) return json({ error: 'too many' }, 429, cors);
       await env.DB.prepare('INSERT INTO records (name, char, assets, rounds, players, ai, lang, ip_hash, created_at) VALUES (?,?,?,?,?,?,?,?,?)')
         .bind(name, char, assets, rounds, players, ai, lang, ipHash, now).run();
       const rank = 1 + (await env.DB.prepare('SELECT COUNT(*) AS n FROM records WHERE assets > ?').bind(assets).first('n'));
-      return json({ rank, top: await top(env, 10) });
+      return json({ rank, top: await top(env, 10) }, 200, cors);
     }
     return json({ error: 'not found' }, 404);
   },

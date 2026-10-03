@@ -1925,6 +1925,50 @@ function saveRecord(r) {
 // 這一局在排行榜裡的那一筆(用內容比對,因為存進去再讀出來已經不是同一個物件)
 const findRecord = (r) => loadRecords().find((x) => x.date === r.date && x.assets === r.assets && x.char === r.char && x.rounds === r.rounds) || null;
 const bestOf = () => { const l = loadRecords(); return { games: l.length, best: l[0] || null, stars3: l.filter((r) => r.stars === 3).length, wins: l.filter((r) => r.rank === 1).length }; };
+// 全球排行榜:Cloudflare Worker + D1(程式在 repo 的 worker/)。本機測試(localhost)預設不送,網址加 ?lb=1 才送
+const LB_API = 'https://xarts.games/api/board';
+const LB_ON = !/^(localhost|127\.|\[::1\])/.test(location.hostname) || new URLSearchParams(location.search).get('lb') === '1';
+let lbState = { status: 'idle', rank: null, top: null };      // status: idle | sending | ok | error
+async function submitGlobal(rec) {
+  if (!LB_ON) { lbState = { ...lbState, status: 'off' }; return; }
+  lbState = { ...lbState, status: 'sending', rank: null, top: null };
+  try {
+    const r = await fetch(`${LB_API}/submit`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: rec.name || CHARS[rec.char].name, char: rec.char, assets: rec.assets, rounds: rec.rounds, players: rec.n, ai: S.aiLevel, lang: ZH ? 'zh' : 'en' }) });
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json(); lbState = { ...lbState, status: 'ok', rank: d.rank, top: d.top };
+  } catch (e) { lbState = { ...lbState, status: 'error', rank: null, top: null }; }
+  const box = document.getElementById('lbGlobal'); if (box) box.innerHTML = globalBox();
+}
+async function fetchGlobal() {
+  try { const r = await fetch(`${LB_API}/top?limit=10`); const d = await r.json(); lbState.top = d.top; if (lbState.status !== 'ok') lbState.status = 'ok'; } catch (e) { lbState.status = 'error'; }
+  const box = document.getElementById('lbGlobal'); if (box) box.innerHTML = globalBox();
+}
+function globalBox() {
+  const st = lbState, when = (t) => new Date(t * 1000).toISOString().slice(5, 10);
+  const head = `<h4>🌍 ${L('Global leaderboard', '全球排行榜')}</h4>`;
+  if (st.status === 'off') return `${head}<p>${L('Not sent from local test builds.', '本機測試不會上傳成績。')}</p>`;
+  if (st.status === 'sending' || (st.status === 'idle' && !st.top)) return `${head}<p>${L('Loading…', '載入中…')}</p>`;
+  if (st.status === 'error' && !st.top) return `${head}<p>${L('Could not reach the leaderboard. Check your connection.', '連不上排行榜,請檢查網路。')}</p>`;
+  const rows = (st.top || []).map((r, i) => `<div class="rrow ${st.rank === i + 1 && st.mine && r.assets === st.mine.assets && r.name === st.mine.name ? 'me' : ''}">
+      <span class="rk">${i + 1}</span><span class="ic">${CHARS[r.char]?.icon || ''}</span>
+      <div class="c"><b>${r.name} · $${fmt(r.assets)}</b><small>${r.rounds}${L(' rd', ' 回合')} · ${r.players}${L('p', ' 人')} · ${{ easy: L('easy', '簡單'), normal: L('normal', '一般'), hard: L('hard', '兇狠') }[r.ai] || r.ai} · ${when(r.created_at)}</small></div></div>`).join('');
+  return `${head}<p>${st.rank ? L(`This game ranks #${st.rank} worldwide`, `這一局在全球排第 ${st.rank} 名`) : L('Top 10 players worldwide', '全球前 10 名')}</p>
+    ${rows || `<p>${L('No scores yet. Be the first!', '還沒有人上榜,來當第一個!')}</p>`}
+    <small class="note2">${L('Top 10 by total assets across all players.', '所有玩家依總資產排前 10 名。')}</small>`;
+}
+// 排行榜面板:本機 / 全球 兩個分頁
+function leaderboardPanel(myRec) {
+  const p = panel(`<div class="lbtabs"><button class="on" data-t="local">🏆 ${L('This device', '本機')}</button><button data-t="global">🌍 ${L('Global', '全球')}</button></div>
+    <div id="lbLocal">${recordsBox(myRec)}</div><div id="lbGlobal" class="rbox hide">${globalBox()}</div>
+    <div class="btns"><button class="b-skip" id="recClose">${L('Close', '關閉')}</button></div>`);
+  p.querySelector('#recClose').onclick = closePanel;
+  p.querySelectorAll('.lbtabs button').forEach((b) => b.onclick = () => {
+    p.querySelectorAll('.lbtabs button').forEach((x) => x.classList.toggle('on', x === b));
+    p.querySelector('#lbLocal').classList.toggle('hide', b.dataset.t !== 'local'); p.querySelector('#lbGlobal').classList.toggle('hide', b.dataset.t !== 'global');
+    if (b.dataset.t === 'global' && LB_ON && lbState.status !== 'sending') fetchGlobal();
+  });
+}
 // 結算畫面右側的排行榜:1~10 名,這一局的那筆會亮起來
 function recordsBox(cur) {
   const list = loadRecords(), best = bestOf();
@@ -1978,6 +2022,7 @@ function finish() {
   // 存紀錄(第一位真人),並拿歷史最佳來比
   const me0 = S.players[S.hi], myRank = 1 + rank.findIndex((p) => p === me0), rec = { date: new Date().toISOString().slice(0, 10), char: me0.char, name: me0.name || '', n: S.players.length, rounds: S.rolls, assets: Math.round(assetsOf(me0)), done: S.done, stars: done, rank: myRank };
   const prev = bestOf(); saveRecord(rec); const after = bestOf();
+  lbState = { status: 'idle', rank: null, top: null, mine: { name: rec.name || CHARS[rec.char].name, assets: rec.assets } }; submitGlobal(rec);      // 同時上傳到全球排行榜(背景進行)
   const newBest = !prev.best || rec.assets > prev.best.assets;
   // 成績卡上一個「看排行榜」按鈕,點了才疊一塊 1~10 名的排行榜(內容和右側版一樣)
   const recLine = `<p style="font-size:calc(12.5px * var(--fs))">${newBest ? `🏆 <b>${L('New personal best!', '新的個人最佳紀錄!')}</b> ` : ''}<button class="lnk" id="recBtn">🏆 ${L('Leaderboard', '看排行榜')}</button></p>`;
@@ -1999,10 +2044,7 @@ function finish() {
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`);
   $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose');
   $('again').onclick = start;
-  $('recBtn').onclick = () => {
-    const p = panel(recordsBox(myRec) + `<div class="btns"><button class="b-skip" id="recClose">${L('Close', '關閉')}</button></div>`);
-    p.querySelector('#recClose').onclick = closePanel;
-  };
+  $('recBtn').onclick = () => leaderboardPanel(myRec);
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
 }
 // 選角:在 3D 轉盤上選(pickStage),同時決定人數(2~4)和真人數(1~2)。電腦對手從剩下的角色裡隨機挑。
