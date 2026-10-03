@@ -229,10 +229,11 @@ const ROUND_OPTS = [20, 25, 30, 35, 40];
 //   normal 一般:原本的策略(偶爾融資、漲多才放空、有閒錢買利空卡)
 //   hard   兇狠:專打第一名 —— 常用融資、只要有人持有就放空、利空卡一有錢就買、現金留得少
 //   shortP:符合放空條件時真的放空的機率;atkP:商店有利空卡時買、手上有利空卡時用的機率;greedy:買股時改用融資的機率
+// 電腦的個性:lots = 主攻股一次最多買幾手(每手 10 股);buyP = 想買 / 想逛商店時真的動手的機率;shortP = 符合條件時放空的機率
 const AI_LEVELS = {
-  easy:   { shortP: 0.35, atkP: 0.3, greedy: 0.12, reserve: 2500, shortAny: false },
-  normal: { shortP: 1,    atkP: 1,   greedy: 0.35, reserve: 2000, shortAny: false },
-  hard:   { shortP: 1,    atkP: 1,   greedy: 0.6,  reserve: 800,  shortAny: true },
+  easy:   { shortP: 0.15, atkP: 0.3, greedy: 0.1,  reserve: 2500, shortAny: false, lots: 2, buyP: 0.6 },
+  normal: { shortP: 0.35, atkP: 0.8, greedy: 0.3,  reserve: 1500, shortAny: false, lots: 3, buyP: 1 },
+  hard:   { shortP: 0.5,  atkP: 1,   greedy: 0.5,  reserve: 800,  shortAny: true,  lots: 5, buyP: 1 },
 };
 const AI = () => AI_LEVELS[S.aiLevel] || AI_LEVELS.normal;
 const maxRolls = () => S.maxRounds;
@@ -1797,26 +1798,39 @@ async function applyFate(c, isMe) {
 const r6 = () => 1 + Math.floor(Math.random() * 6);
 // 對手決定擲 1 顆還是 2 顆:把「每個可能落點對牠有多好」算成分數,比較兩種擲法的期望值。
 // 一顆骰子走 1~6 格(機率相同),兩顆走 2~12 格(7 最常出現)
+// 電腦的「主攻股」:挑一檔集中火力——便宜、有配息、已經持有、手上有能炒它的事件卡、別人在放空(買進可以軋他)都加分。
+// 賣掉獲利了結後會重新挑;挑了很久都沒買到也換一檔
+function aiFocus(A) {
+  if (A.plan && (A.hold[A.plan.k].n > 0 || S.rolls - A.plan.since < 6)) return A.plan.k;
+  const score = (k) => { const sec = SECTORS[k], p = S.price[k]; let v = (sec.open / p - 1) * 10 + sec.div * 40;
+    if (A.hold[k].n) v += 2 + Math.min(3, A.hold[k].n / 10);
+    if (A.bag.some((id) => id.startsWith('ev') && itemInfo(id).best === k)) v += 4;
+    if (NON_EQUITY.has(k)) v -= 1.5;
+    if (others(A.i).some((q) => q.short[k].n > 0)) v += 1;
+    return v + Math.random(); };
+  const k = KEYS.slice().sort((a, b) => score(b) - score(a))[0]; A.plan = { k, since: S.rolls }; return k;
+}
+// 走到前方第 i 格有多好(擲幾顆骰子、要不要用遙控骰子都看這個)
+function aiTileScore(A, i) {
+  const t = TILES[(A.pos + i) % TILES.length], sec = SECTORS[t], F = aiFocus(A), lv = AI(); let v = 0;
+  if (sec) { const h = A.hold[t], sh = A.short[t], p = S.price[t];
+    if (h.n && (p * h.n - h.cost) / h.cost >= (t === F ? 0.35 : 0.15)) v += 3;      // 可以獲利了結
+    else if (sh.n && Math.abs((sh.entry - p) / sh.entry) >= 0.12) v += 2;          // 空單該回補了
+    else if (h.loan > 0 && ratioOf(h, t) < 1.5) v += 2;                            // 融資快斷頭,想去處理
+    else if (t === F) v += A.cash >= p * LOT + lv.reserve ? 4.5 : 1;               // 主攻股:最想去
+    else v += p < sec.open * 0.95 ? 1.5 : 0.5; }                                   // 便宜的比較想買
+  else if (t === 'shop') v += A.cash >= 2500 ? (A.bag.includes('remote') ? 1.5 : 2.5) : 0.3;
+  else if (t === 'ipo') v += 2.5;
+  else if (t === 'gift') v += 1.5;
+  else if (t === 'bank') v += A.cash < 1500 || (A.debt && A.cash > 6000) ? 1.5 : 0;
+  for (let j = 1; j <= i; j++) { const tt = TILES[(A.pos + j) % TILES.length]; if (tt === 'start') v += 2; else if (tt === 'divi') v += 0.8; }   // 經過發薪 / 股息格
+  return v;
+}
 function aiDiceChoice() {
   const A = S.ai;
-  const score = (i) => {
-    const t = TILES[(A.pos + i) % TILES.length], sec = SECTORS[t]; let v = 0;
-    if (sec) { const h = A.hold[t], sh = A.short[t], p = S.price[t];
-      if (h.n && (p * h.n - h.cost) / h.cost >= 0.15) v += 3;                       // 可以獲利了結
-      else if (sh.n && Math.abs((sh.entry - p) / sh.entry) >= 0.12) v += 2;          // 空單該回補了
-      else if (h.loan > 0 && ratioOf(h, t) < 1.5) v += 2;                            // 融資快斷頭,想去處理
-      else v += p < sec.open * 0.95 ? 1.5 : 0.5; }                                   // 便宜的比較想買
-    else if (t === 'shop') v += A.cash >= 2500 ? 2 : 0.3;
-    else if (t === 'ipo') v += 2.5;
-    else if (t === 'fate') v += 0.5;
-    else if (t === 'bank') v += A.cash < 1500 || (A.debt && A.cash > 6000) ? 1.5 : 0;
-    else if (t === 'fee') v -= 2;
-    for (let j = 1; j <= i; j++) { const tt = TILES[(A.pos + j) % TILES.length]; if (tt === 'start') v += 2; else if (tt === 'divi') v += 0.8; }   // 經過發薪 / 股息格
-    return v;
-  };
   let e1 = 0, e2 = 0.3;                                                              // 兩顆走得遠,給一點基本分
-  for (let i = 1; i <= 6; i++) e1 += score(i) / 6;
-  for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) e2 += score(a + b) / 36;
+  for (let i = 1; i <= 6; i++) e1 += aiTileScore(A, i) / 6;
+  for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) e2 += aiTileScore(A, a + b) / 36;
   return e1 > e2 ? 1 : 2;
 }
 // 小熊的回合。策略很單純,但都是看得懂的規則:
@@ -1837,8 +1851,15 @@ async function aiTurn() {
     const k = KEYS.filter((x) => T.hold[x].n > 0).sort((x, y) => T.hold[y].n * S.price[y] - T.hold[x].n * S.price[x])[0];
     if (k) { A.bag.splice(A.bag.indexOf('atk'), 1); await badNews(k, A); }
   }
-  { const id = A.bag.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0);
+  // 事件卡:等受惠的那檔買到 20 股以上再打(炒自己的持股);快結束了就有多少打多少
+  { const id = A.bag.find((x) => x.startsWith('ev') && (A.hold[itemInfo(x).best].n >= 20 || (A.hold[itemInfo(x).best].n > 0 && maxRolls() - S.rolls <= 3)));
     if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event, AI_CARD_WAIT); } }
+  // 遙控骰子:前方 2~12 格裡有很想去的格子(主攻股、商店、IPO…)就指定步數走過去
+  let forced = 0;
+  if (!A.lane && A.bag.includes('remote')) {
+    let best = { i: 0, v: 3.8 }; for (let i = 2; i <= 12; i++) { const v = aiTileScore(A, i); if (v > best.v) best = { i, v }; }
+    if (best.i) { A.bag.splice(A.bag.indexOf('remote'), 1); forced = best.i; hud(); toast(L(`${who} uses a remote dice: ${forced} steps`, `${who}使用遙控骰子:走 ${forced} 步`)); await wait(1.0); }
+  }
   if (A.lane) {
     // 在警察局:錢夠多就付保釋金,不然休息一回合;能走了就擲一顆骰子出去。IPO 攤位:下一回合直接擲骰出去
     if (A.lane.type === 'jail' && A.lane.wait > 0) {
@@ -1846,8 +1867,8 @@ async function aiTurn() {
       else { A.lane.wait--; toast(L(`${who} rests at the police station (${A.lane.wait} left)`, `${who}在警察局休息(再 ${A.lane.wait} 回合)`)); await wait(0.9); }
     } else await leaveLane(false);
   } else {
-  const nd = aiDiceChoice(), vals = nd === 1 ? [r6()] : [r6(), r6()], n = vals.reduce((x, y) => x + y, 0);
-  toast(L(`${who} rolls ${nd === 1 ? 'one die' : 'two dice'}`, `${who}選擇擲 ${nd} 顆骰子`)); await wait(0.7);
+  const nd = forced ? (forced <= 6 ? 1 : 2) : aiDiceChoice(), vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : nd === 1 ? [r6()] : [r6(), r6()], n = vals.reduce((x, y) => x + y, 0);
+  if (!forced) { toast(L(`${who} rolls ${nd === 1 ? 'one die' : 'two dice'}`, `${who}選擇擲 ${nd} 顆骰子`)); await wait(0.7); }
   await rollDice(vals, PA()); toast(vals.length === 1 ? `${who}: ${n}` : `${who}: ${vals[0]} + ${vals[1]} = ${n}`);
   await stepAlong(false, n);
   }
@@ -1865,43 +1886,54 @@ async function aiLand() {
   else if (type === 'ipo') await enterLane(false, 'ipo');
   else if (type === 'fate') { await wait(0.3); const c = await drawFateCards(true); await applyFate(c, false); }
   else if (sec) {
-    const h = A.hold[type], sh = A.short[type], price = S.price[type], mine = Math.max(...others(A.i).map((p) => p.hold[type].n));   // mine:別人最多持有幾股
+    const h = A.hold[type], sh = A.short[type], price = S.price[type], mine = Math.max(...others(A.i).map((p) => p.hold[type].n)), F = aiFocus(A), lv = AI();   // mine:別人最多持有幾股;F:主攻股
     if (sh.n) {
       // 有空單:賺 12% 以上就回補落袋,虧 12% 以上就停損,不然續抱
       const r = (sh.entry - price) / sh.entry;
       if (Math.abs(r) >= 0.12) { const pl = (sh.entry - price) * sh.n; A.cash += shortValue(type, A); const cn = sh.n; sh.n = 0; sh.entry = 0; impact(type, buyF(cn));
         toast(L(`${who} covered its ${sec.name} short (${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`, `${who}回補${sec.name}空單(${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`)); }
       else toast(L(`${who} keeps its ${sec.name} short`, `${who}續抱${sec.name}空單`));
-    } else if (h.n && (price * h.n - h.cost) / h.cost >= 0.15) {
-      const n = h.n; A.cash += price * n - h.loan; h.n = 0; h.cost = 0; h.loan = 0;
+    } else if (h.n && (price * h.n - h.cost) / h.cost >= (type === F ? 0.35 : 0.15)) {
+      // 獲利了結:順手買的賺 15% 就賣;主攻股要賺 35% 才賣(賣掉後重新挑主攻股)
+      const n = h.n; A.cash += price * n - h.loan; h.n = 0; h.cost = 0; h.loan = 0; if (type === F) A.plan = null;
       toast(L(`${who} took profit on ${sec.name}. Price ${pct(sellF(n))}`, `${who}賣出${sec.name}獲利了結,股價 ${pct(sellF(n))}`)); impact(type, sellF(n));
-    } else if (!h.n && A.cash >= price * LOT + AI().reserve && Math.random() < AI().shortP && ((mine >= LOT && (AI().shortAny || price > sec.open * 1.08)) || price > sec.open * 1.3)) {
-      // 放空:你持有而且已經漲了一段(打擊你),或是漲太多(賭它回檔)
+    } else if (type === F) {
+      // 主攻股:留下底線現金,能買幾手買幾手(最多 lots 手);兇狠的偶爾融資多買
+      const buy = (q, loan) => { const cost = price * q; A.cash -= loan ? cost * (1 - MARGIN_LOAN) : cost; h.n += q; h.cost += cost; if (loan) h.loan += cost * MARGIN_LOAN; impact(type, buyF(q));
+        toast(loan ? L(`${who} margin-bought ${q} ${sec.name} (its favourite). Price ${pct(buyF(q))}`, `${who}融資加碼主攻的${sec.name} ${q} 股,股價 ${pct(buyF(q))}`) : L(`${who} bought ${q} more ${sec.name} (its favourite). Price ${pct(buyF(q))}`, `${who}加碼主攻的${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); };
+      const can = Math.floor((A.cash - lv.reserve) / (price * LOT)), lots = Math.min(lv.lots, can);
+      if (lots < lv.lots && !h.loan && Math.random() < lv.greedy && A.cash >= price * LOT * lv.lots * (1 - MARGIN_LOAN) + 500) buy(LOT * lv.lots, true);
+      else if (lots > 0) buy(LOT * lots, false);
+      else toast(L(`${who} wants ${sec.name} but is short on cash`, `${who}想買${sec.name}但現金不夠`));
+    } else if (!h.n && A.cash >= price * LOT + lv.reserve && Math.random() < lv.shortP && mine >= 30 && price > sec.open * (lv.shortAny ? 1.05 : 1.15)) {
+      // 放空:只打「對手重押而且已經漲一段」的股票
       A.cash -= price * LOT; sh.entry = price; sh.n = LOT; impact(type, SHORT_F);
-      toast(mine >= LOT ? L(`${who} shorts ${sec.name} to hit its holders. Price ${pct(SHORT_F)}`, `${who}放空${sec.name}打擊持有的人,股價 ${pct(SHORT_F)}`) : L(`${who} shorts ${sec.name}. Price ${pct(SHORT_F)}`, `${who}放空${sec.name},股價 ${pct(SHORT_F)}`));
+      toast(L(`${who} shorts ${sec.name} to hit its holders. Price ${pct(SHORT_F)}`, `${who}放空${sec.name}打擊持有的人,股價 ${pct(SHORT_F)}`));
     } else {
-      const lots = ((price < sec.open * 0.95 || others(A.i).some((p) => p.short[type].n > 0)) && A.cash >= price * LOT * 3 + 2000) ? 3 : (A.cash >= price * LOT + 1500 ? 1 : 0);
-      // 三次裡有一次會貪心用融資買 30 股(只付 4 成)—— 這就是你可以用放空和利空卡逼牠斷頭的機會
-      const greedy = lots && !h.loan && Math.random() < AI().greedy && A.cash >= price * LOT * 3 * (1 - MARGIN_LOAN) + 1500;
-      if (greedy) { const q = LOT * 3, cost = price * q; A.cash -= cost * (1 - MARGIN_LOAN); h.n += q; h.cost += cost; h.loan += cost * MARGIN_LOAN; impact(type, buyF(q));
-        toast(L(`${who} margin-bought ${q} ${sec.name}. Price ${pct(buyF(q))}`, `${who}融資買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); }
-      else if (lots) { const q = LOT * lots; A.cash -= price * q; h.n += q; h.cost += price * q; impact(type, buyF(q)); toast(L(`${who} bought ${q} ${sec.name}. Price ${pct(buyF(q))}`, `${who}買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); }
-      else toast(L(`${who} keeps cash and skips`, `${who}保留現金,跳過`));
+      // 不是主攻股:便宜就多買一點、沒漲太多就順手買一手(現金很多時再加一手),漲太多就把現金留給主攻股
+      const rich = A.cash >= 6000, lots = price < sec.open * 0.93 && A.cash >= price * LOT * 2 + lv.reserve + 1500 ? (rich ? 3 : 2) : price < sec.open * 1.05 && A.cash >= price * LOT + lv.reserve + 1500 ? (rich && h.n ? 2 : 1) : 0;
+      if (lots && Math.random() < lv.buyP) { const q = LOT * lots; A.cash -= price * q; h.n += q; h.cost += price * q; impact(type, buyF(q)); toast(L(`${who} bought ${q} ${sec.name} on the dip. Price ${pct(buyF(q))}`, `${who}逢低買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); }
+      else toast(L(`${who} saves cash for ${SECTORS[F].name}`, `${who}把現金留給${SECTORS[F].name},跳過`));
     }
     drawAll(); hud(); await wait(1.0);
   } else if (type === 'shop') {
     // 逛商店:有閒錢就買利空卡;不然買一張對牠持股有利的事件卡。買走的你就買不到了
-    const stock = shopStock(); let got = null;
-    if (stock.includes('atk') && A.cash >= ATK_PRICE + AI().reserve && Math.random() < AI().atkP) got = 'atk';
-    else got = stock.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0 && A.cash >= 2000) || null;
+    // 優先順序:炒主攻股的事件卡 → 遙控骰子(拿來走到主攻股)→ 利空卡 → 其他有持股受惠的事件卡
+    const stock = shopStock(), F = aiFocus(A), lv = AI(); let got = null;
+    const evF = stock.find((x) => x.startsWith('ev') && itemInfo(x).best === F);
+    if (evF && A.cash >= CARD_PRICE + lv.reserve && Math.random() < lv.buyP) got = evF;
+    else if (stock.includes('remote') && !A.bag.includes('remote') && A.cash >= REMOTE_PRICE + lv.reserve + 800 && Math.random() < lv.buyP) got = 'remote';
+    else if (stock.includes('atk') && A.cash >= ATK_PRICE + lv.reserve && Math.random() < lv.atkP) got = 'atk';
+    else got = stock.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n >= LOT && A.cash >= CARD_PRICE + lv.reserve) || null;
     if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); S.shop.sold.push({ id: got, by: A.i }); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
     else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
     hud(); await wait(1.2);
   } else if (type === 'chance') { await wait(0.3); const c = await drawEventCards(true); if (c.special) await enterLane(false, c.special); }
   else if (type === 'bank') {
     // 銀行:現金太少就借 $2,000 來周轉;手頭寬裕又有欠款就先還清,省利息
+    const F = aiFocus(A), need = S.price[F] * LOT * AI().lots + AI().reserve;
     if (A.debt > 0 && A.cash >= A.debt + 4000) { toast(L(`${who} repaid its $${fmt(A.debt)} loan`, `${who}把 $${fmt(A.debt)} 貸款還清了`)); A.cash -= A.debt; A.debt = 0; }
-    else if (A.cash < 1500 && A.debt + 2000 <= BANK_MAX) { A.cash += 2000; A.debt += 2000; toast(L(`${who} borrowed $2,000 from the bank`, `${who}向銀行借了 $2,000`)); }
+    else if ((A.cash < 1500 || (A.cash < need && S.aiLevel !== 'easy' && maxRolls() - S.rolls > 4)) && A.debt + 2000 <= BANK_MAX) { const amt = Math.min(3000, BANK_MAX - A.debt); A.cash += amt; A.debt += amt; toast(L(`${who} borrowed $${fmt(amt)} to buy more ${SECTORS[F].name}`, `${who}向銀行借 $${fmt(amt)},準備加碼${SECTORS[F].name}`)); }
     else toast(L(`${who} walks past the bank`, `${who}路過銀行`));
     hud(); await wait(1.1);
   }
