@@ -363,11 +363,11 @@ const mkPlayer = (i, human, char) => ({ i, human, char, pos: 0, lane: null, cash
   hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
   diceN: 2, lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, missions: [], done: 0 });
 const others = (i = S.hi) => S.players.filter((p) => p.i !== i);
-const nameOf = (p) => CHARS[p.char].name;
+const nameOf = (p) => p.name || CHARS[p.char].name;      // 真人可以在選角時取名字;沒取就用角色名
 const isYou = (p) => p.human && S.nh === 1;                 // 只有一位真人時才用「你」稱呼;兩位真人一律叫角色名字
 const assetsOf = (p) => p.cash - p.debt + KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k] - p.hold[k].loan + shortValue(k, p), 0);
-function setPlayers(chars, humans) {
-  S.players = chars.map((c, i) => mkPlayer(i, i < humans, c)); S.nh = humans; S.hi = 0; S.ci = Math.min(humans, chars.length - 1);
+function setPlayers(chars, humans, names = []) {
+  S.players = chars.map((c, i) => mkPlayer(i, i < humans, c)); names.forEach((nm, i) => { if (nm && S.players[i]) S.players[i].name = nm; }); S.nh = humans; S.hi = 0; S.ci = Math.min(humans, chars.length - 1);
   for (let h = 0; h < humans; h++) { S.hi = h; for (let i = 0; i < 3; i++) S.missions.push(drawMission()); }
   S.hi = 0;
 }
@@ -830,7 +830,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (i >= 0 && !slots[i].taken) stageSelect(i);
 });
 addEventListener('keydown', (e) => {
-  if (!stageOn) return;
+  if (!stageOn || e.target.tagName === 'INPUT') return;      // 在名字欄打字時,空白鍵和方向鍵不要當成選角操作
   if (e.key === 'ArrowLeft') stageSelect(stageSel - 1, -1); else if (e.key === 'ArrowRight') stageSelect(stageSel + 1);
   else if (e.key === 'Enter' || e.key === ' ') $('pok').click();
 });
@@ -843,7 +843,10 @@ function pickStage() {
     stage.visible = true; stageOn = true; document.body.classList.add('picking');
     showPieces(false);      // 選角時把棋子藏起來:再玩一次時,上一局的角色不會還站在起點
     if (!pickStage.seen) { pickStage.seen = true; camT.x = STAGE.x; camT.z = STAGE.z; view.half = view.stageHalf; applyFrustum(); }   // 第一次直接從舞台開場,不用從起點慢慢滑過來
-    pickWho = 0; const picked = [];
+    pickWho = 0; const picked = [], names = [];
+    // 名字欄:記住上次打的;第二位真人要重新打
+    const nameIn = $('pnameIn'); nameIn.placeholder = L('Your name', '你的名字');
+    try { nameIn.value = localStorage.getItem('css.name') || ''; } catch (e) { nameIn.value = ''; }
     slots.forEach((sl) => { sl.taken = false; });
     stageCur = stageSel; stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
@@ -856,6 +859,9 @@ function pickStage() {
     }; });
     $('pok').onclick = () => {
       picked.push(slots[stageSel].key);
+      const nm = nameIn.value.trim().slice(0, 12); names.push(nm);
+      if (picked.length === 1) { try { if (nm) localStorage.setItem('css.name', nm); } catch (e) {} }
+      nameIn.value = '';
       if (picked.length < CFG.humans) {            // 換第二位真人選:第一位選走的角色從轉盤上拿掉
         slots[stageSel].taken = true; pickWho = 1; stageSelect(stageSel + 1);
         stageCur = slots.map((_, i) => i).filter((i) => !slots[i].taken).indexOf(stageSel); return;
@@ -864,7 +870,7 @@ function pickStage() {
       slots.forEach((sl) => { sl.taken = false; });
       // 電腦對手:從剩下的角色裡隨機挑
       const rest = Object.keys(CHARS).filter((k) => !picked.includes(k)).sort(() => Math.random() - 0.5);
-      res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length, rounds: CFG.rounds, ai: CFG.ai });
+      res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length, rounds: CFG.rounds, ai: CFG.ai, names });
     };
   });
 }
@@ -1687,7 +1693,7 @@ function recordsBox(cur) {
   const same = (a, b) => a && b && a.date === b.date && a.assets === b.assets && a.char === b.char && a.rounds === b.rounds;
   const rows = list.map((r, i) => `<div class="rrow ${same(r, cur) ? 'me' : ''}">
       <span class="rk">${i + 1}</span><span class="ic">${CHARS[r.char]?.icon || ''}</span>
-      <div class="c"><b>$${fmt(r.assets)}</b><small>${r.rounds}${L(' rd', ' 回合')} · ${r.n}${L('p', ' 人')} · ${L('#', '第 ')}${r.rank}${L('', ' 名')} · ${r.date.slice(5)}</small></div>
+      <div class="c"><b>${r.name ? `${r.name} · ` : ''}$${fmt(r.assets)}</b><small>${r.rounds}${L(' rd', ' 回合')} · ${r.n}${L('p', ' 人')} · ${L('#', '第 ')}${r.rank}${L('', ' 名')} · ${r.date.slice(5)}</small></div>
       <span class="st">${'★'.repeat(r.stars)}<i>${'★'.repeat(3 - r.stars)}</i></span></div>`).join('');
   return `<div class="rbox"><h4>🏆 ${L('Leaderboard', '排行榜')}</h4>
     <p>${L(`${best.games} game${best.games > 1 ? 's' : ''} · ${best.wins} win${best.wins === 1 ? '' : 's'} · ${best.stars3} three-star`, `已記錄 ${best.games} 局 · 第一名 ${best.wins} 次 · 三顆星 ${best.stars3} 次`)}</p>
@@ -1727,10 +1733,10 @@ function finish() {
   const a = assets();
   const rank = S.players.slice().sort((x, y) => assetsOf(y) - assetsOf(x)), medal = ['🥇', '🥈', '🥉', '4'];
   const table = rank.map((p, i) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-radius:10px;${p.human ? 'background:#fff3d6;' : ''}font-weight:800">
-      <span style="width:1.6em;text-align:center">${medal[i]}</span><span style="flex:1;text-align:left">${CHARS[p.char].icon} ${nameOf(p)}${p.human ? (S.nh > 1 ? ` · ${L('Player', '玩家')} ${p.i + 1}` : L(' (you)', '(你)')) : ''}</span><b>${assetsOf(p) < 0 ? '-' : ''}$${fmt(Math.abs(assetsOf(p)))}</b></div>`).join('');
+      <span style="width:1.6em;text-align:center">${medal[i]}</span><span style="flex:1;text-align:left">${CHARS[p.char].icon} ${nameOf(p)}${p.name ? `(${CHARS[p.char].name})` : ''}${p.human ? (S.nh > 1 ? ` · ${L('Player', '玩家')} ${p.i + 1}` : (p.name ? '' : L(' (you)', '(你)'))) : ''}</span><b>${assetsOf(p) < 0 ? '-' : ''}$${fmt(Math.abs(assetsOf(p)))}</b></div>`).join('');
   const won = rank[0].human;
   // 存紀錄(第一位真人),並拿歷史最佳來比
-  const me0 = S.players[S.hi], myRank = 1 + rank.findIndex((p) => p === me0), rec = { date: new Date().toISOString().slice(0, 10), char: me0.char, n: S.players.length, rounds: S.rolls, assets: Math.round(assetsOf(me0)), done: S.done, stars: done, rank: myRank };
+  const me0 = S.players[S.hi], myRank = 1 + rank.findIndex((p) => p === me0), rec = { date: new Date().toISOString().slice(0, 10), char: me0.char, name: me0.name || '', n: S.players.length, rounds: S.rolls, assets: Math.round(assetsOf(me0)), done: S.done, stars: done, rank: myRank };
   const prev = bestOf(); saveRecord(rec); const after = bestOf();
   const newBest = !prev.best || rec.assets > prev.best.assets;
   // 成績卡上一個「看排行榜」按鈕,點了才疊一塊 1~10 名的排行榜(內容和右側版一樣)
@@ -1768,9 +1774,9 @@ async function start() {
   let cfg;
   if (CHARS[PRESET]) { const q = new URLSearchParams(location.search), n = Math.min(4, Math.max(2, +q.get('n') || 2)), h = Math.min(2, Math.max(1, +q.get('h') || 1));
     const rest = Object.keys(CHARS).filter((k) => k !== PRESET).sort(() => Math.random() - 0.5);
-    cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h, rounds: q.get('rounds'), ai: q.get('ai') };
+    cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h, rounds: q.get('rounds'), ai: q.get('ai'), names: [q.get('name') || ''] };
   } else cfg = await pickStage();
-  setPlayers(cfg.chars, cfg.humans); S.maxRounds = ROUND_OPTS.includes(+cfg.rounds) ? +cfg.rounds : MAX_ROLLS; S.aiLevel = AI_LEVELS[cfg.ai] ? cfg.ai : 'normal';
+  setPlayers(cfg.chars, cfg.humans, cfg.names || []); S.maxRounds = ROUND_OPTS.includes(+cfg.rounds) ? +cfg.rounds : MAX_ROLLS; S.aiLevel = AI_LEVELS[cfg.ai] ? cfg.ai : 'normal';
   PIECES.forEach((P, i) => { if (i < S.players.length) { setChar(P.body, S.players[i].char); placePiece(0, P); } });
   showPieces(true); focus = PIECES[0];
   buildFoes(); setPortraits();

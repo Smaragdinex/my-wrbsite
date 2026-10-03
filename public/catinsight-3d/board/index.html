@@ -136,6 +136,9 @@
   .pnav button{width:52px;height:52px;border-radius:50%;border:4px solid #fff;background:#7cc6ff;color:#fff;font-size:calc(22px * var(--fs));font-weight:900;cursor:pointer;box-shadow:0 4px 0 #4f9bd6}
   .pnav button:active{transform:translateY(3px);box-shadow:0 1px 0 #4f9bd6}
   .pnav b{min-width:150px;text-align:center;font-size:calc(28px * var(--fs));font-weight:900;color:#3b2f2a;background:var(--cream);border:3px solid #fff;border-radius:18px;padding:6px 18px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
+  .pnameIn{width:min(260px,80vw);text-align:center;font:900 calc(16px * var(--fs)) inherit;font-family:inherit;color:#3b2f2a;background:#fff;border:3px solid #fff;outline:2px solid var(--line);border-radius:999px;padding:8px 16px;box-shadow:0 3px 0 rgba(0,0,0,.1);-webkit-user-select:text;user-select:text}
+  .pnameIn::placeholder{color:#b5a593;font-weight:800}
+  .pnameIn:focus{outline-color:#ff7a59}
   .pok{height:60px;padding:0 44px;border-radius:999px;border:5px solid #fff;background:#ff7a59;color:#fff;font-size:calc(20px * var(--fs));font-weight:900;letter-spacing:.04em;cursor:pointer;box-shadow:0 6px 0 #d4553a}
   .pok:active{transform:translateY(4px);box-shadow:0 2px 0 #d4553a}
   .b-short{background:#8a5cf5}
@@ -303,6 +306,7 @@
   </div>
   <div class="pbar">
     <div class="pnav"><button id="pprev" aria-label="previous">‹</button><b id="pname"></b><button id="pnext" aria-label="next">›</button></div>
+    <input class="pnameIn" id="pnameIn" type="text" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false">
     <button class="pok" id="pok"></button>
   </div>
 </div>
@@ -310,6 +314,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=89"></script>
+<script type="module" src="./board.mjs?v=90"></script>
 </body>
 </html>
