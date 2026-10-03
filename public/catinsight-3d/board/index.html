@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#c9e8b8">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=29">
+<link rel="stylesheet" href="style.css?v=30">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -80,6 +80,11 @@
       <div class="prow"><span class="ico"><img src="ic-rounds.webp?v=1" alt=""></span><span class="lbl"><b id="pcM"></b><small id="pcRule"></small></span><span class="step" id="pcR"><button data-r="-1" aria-label="fewer rounds">−</button><b id="pcRv">20</b><button data-r="1" aria-label="more rounds">+</button></span></div>
     </div>
   </div>
+  <!-- 第二步(多人連線):人數格大廳 — QR / 房號在上,中間 2~4 個位子,下面 返回 / 開始 -->
+  <div class="lobbyui hide" id="lobbyUI">
+    <div class="lobbycard" id="lobbyCard"></div>
+    <div class="lobbybar"><button class="pback" id="lobbyBack">‹</button><button class="pok" id="lobbyGo"></button></div>
+  </div>
   <div class="pbar">
     <!-- 角色名和「你的名字」同一格:左邊角色名,右邊打名字 -->
     <div class="pnav"><button id="pprev" aria-label="previous">‹</button><span class="pname2"><b id="pname"></b><input class="pnameIn" id="pnameIn" type="text" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false"></span><button id="pnext" aria-label="next">›</button></div>
@@ -90,6 +95,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=160"></script>
+<script type="module" src="./board.mjs?v=161"></script>
 </body>
 </html>

@@ -926,9 +926,31 @@ const slots = STAGE_KEYS.map((key, i) => {
 let stageSel = 0, stageOn = false, stageCur = 0;
 // 線上同樂:手機玩家一加入,他選的角色就從轉盤拿掉、跳到轉盤前面一排(像大亂鬥),不用文字
 const joinedRow = new THREE.Group(); stage.add(joinedRow);
+// 第二步「人數格」:2~4 個位子排一排。位子 0 是主機自己,其餘等手機加入;空位是灰圈的底座
+let lobbyPhase = false;
+const lobbySeats = [0, 1, 2, 3].map(() => { const g = new THREE.Group(); g.visible = false; stage.add(g);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.68, 0.14, 40), mat(0xfff8ec)); base.position.y = 0.07; base.receiveShadow = true; base.castShadow = true; g.add(base);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.76, 0.06, 40), mat(0xd9cbb6)); ring.position.y = 0.03; g.add(ring);
+  const holder = new THREE.Group(); holder.position.y = 0.14; holder.rotation.y = FRONT; g.add(holder);
+  return { g, ring, holder, char: null, hop: 0 }; });
+function seatSet(i, char) {
+  const st = lobbySeats[i]; if (st.char === char) return; st.char = char; st.holder.clear();
+  if (char) { const c = CHARS[char]; loadPiece(c.url, c.h, new THREE.Group(), st.holder); st.hop = 1; sfx('item'); st.ring.material.color.setHex(0xff7a59); }
+  else st.ring.material.color.setHex(0xd9cbb6);
+}
+function lobbySeatsPaint() {
+  const gs = NET.guests.filter((g) => g.online), n = Math.min(4, Math.max(CFG.n, 1 + gs.length)), R = Math.SQRT1_2;
+  lobbySeats.forEach((st, i) => { st.g.visible = lobbyPhase && i < n; const o = (i - (n - 1) / 2) * 1.9, fwd = 1.2; st.g.position.set(o * R + fwd * R, 0, -o * R + fwd * R); });
+  if (!lobbyPhase) return;
+  seatSet(0, slots[stageSel].key);
+  for (let i = 1; i < 4; i++) seatSet(i, gs[i - 1] ? gs[i - 1].char : null);
+  $('lobbyGo').textContent = gs.length ? L(`Start · ${1 + gs.length} players`, `開始(${1 + gs.length} 位真人)`) : L('Waiting for players…', '等待玩家加入…');
+}
+function lobbySeatsStep(dt) { lobbySeats.forEach((st) => { st.hop = Math.max(0, st.hop - dt * 2); st.holder.position.y = 0.14 + Math.sin((1 - st.hop) * Math.PI) * (st.hop > 0 ? 0.5 : 0); if (st.char) st.holder.rotation.y = FRONT + Math.sin(performance.now() / 900 + st.g.position.x) * 0.25; }); }
 const joined = [];      // [{ gid, char, g, holder, hop }]
 function syncJoined(guests) {
   const live = guests.filter((g) => g.online);
+  if (lobbyPhase) { joined.forEach((j) => joinedRow.remove(j.g)); joined.length = 0; lobbySeatsPaint(); slots.forEach((sl) => { sl.taken = live.some((g) => g.char === sl.key); }); return; }
   // 移除已離開的
   for (let i = joined.length - 1; i >= 0; i--) if (!live.some((g) => g.gid === joined[i].gid)) { joinedRow.remove(joined[i].g); joined.splice(i, 1); }
   live.forEach((g) => {
@@ -955,7 +977,7 @@ function joinedStep(dt) {
 let stageLift = 0, stageZoom = 0, cardZoom = 1;
 const _fv = new THREE.Vector3();
 function stageMetrics() {
-  const card = $('pcfg').getBoundingClientRect(), bar = document.querySelector('.pbar').getBoundingClientRect(), sl = slots[stageSel];
+  const card = (lobbyPhase ? $('lobbyCard') : $('pcfg')).getBoundingClientRect(), bar = (lobbyPhase ? document.querySelector('.lobbybar') : document.querySelector('.pbar')).getBoundingClientRect(), sl = lobbyPhase ? { g: lobbySeats[0].g, top: 0.14, holder: lobbySeats[0].holder } : slots[stageSel];
   sl.g.getWorldPosition(_fv); const y0 = _fv.y;
   const px = (y) => { _fv.y = y; const q = _fv.clone().project(cam); return (1 - q.y) / 2 * innerHeight; };
   let foot = px(y0 - 0.15);
@@ -991,7 +1013,7 @@ function paintStage() {
   const c = CHARS[slots[stageSel].key];
   $('pname').textContent = c.name; $('pnameIn').placeholder = c.name;      // 名字欄的預設字就是角色名,不打就用它
   // 沒有標題,所以兩位真人時用按鈕文字說明現在是誰在選
-  { const gN = NET.guests.filter((g) => g.online).length; $('pok').textContent = NET.on ? (gN >= 4 ? L('Start · 4 phones (this screen only shows the board)', '開始(4 支手機,主機只當螢幕)') : L(`Start · ${1 + gN} players`, `開始(${1 + gN} 位真人)`)) : CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`); }
+  { const gN = NET.guests.filter((g) => g.online).length; $('pok').textContent = NET.on ? L(`Confirm ${c.name}`, `確認用${c.name}`) : CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`); }
   // 人數設定:只有第一位在選的時候可以改
   $('pcfg').classList.toggle('hide', pickWho > 0);
   $('pcN').textContent = L('Players', '人數'); $('pcNs').textContent = L('Total players', '遊戲總人數');
@@ -1034,7 +1056,7 @@ function stageStep(dt) {
 }
 const pickRay = new THREE.Raycaster(), pickNdc = new THREE.Vector2();
 renderer.domElement.addEventListener('pointerup', (e) => {
-  if (!stageOn) return;
+  if (!stageOn || lobbyPhase) return;
   pickNdc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   pickRay.setFromCamera(pickNdc, cam);
   const hit = pickRay.intersectObjects(slots.map((sl) => sl.g), true)[0];
@@ -1043,7 +1065,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (i >= 0 && !slots[i].taken) stageSelect(i);
 });
 addEventListener('keydown', (e) => {
-  if (!stageOn || e.target.tagName === 'INPUT') return;      // 在名字欄打字時,空白鍵和方向鍵不要當成選角操作
+  if (!stageOn || lobbyPhase || e.target.tagName === 'INPUT') return;      // 在名字欄打字時,空白鍵和方向鍵不要當成選角操作
   if (e.key === 'ArrowLeft') stageSelect(stageSel - 1, -1); else if (e.key === 'ArrowRight') stageSelect(stageSel + 1);
   else if (e.key === 'Enter' || e.key === ' ') $('pok').click();
 });
@@ -1073,18 +1095,26 @@ function pickStage() {
     // 再玩一次:房間留著,手機回到大廳(可以換角色),離線的位子清掉
     if (NET.on) { NET.started = false; NET.guests.forEach((g) => rtcStop(g)); NET.guests = NET.guests.filter((g) => g.online); netSend({ t: 'reset' }); }
     document.body.classList.remove('remote'); $('remoteBanner').classList.add('hide'); lobbyPaint(); netLobby();
-    $('pok').onclick = () => {
-      if (NET.on) {              // 線上同樂:主機 + 手機上的玩家都是真人,不夠的人數用電腦補
+    const enterLobby = (on) => {      // 第二步:人數格大廳(多人連線)。on=false 回到選角
+      lobbyPhase = on; $('lobbyUI').classList.toggle('hide', !on); document.querySelector('.ptop').classList.toggle('hide', on); document.querySelector('.pbar').classList.toggle('hide', on);
+      slots.forEach((sl) => { sl.g.visible = !on && !sl.taken; }); joinedRow.visible = !on;
+      lobbySeats.forEach((st) => { st.g.visible = on; }); lobbyPaint(); netLobby(); if (!on) stageSelect(stageSel);
+    };
+    $('lobbyBack').onclick = () => enterLobby(false);
+    $('lobbyGo').onclick = () => {
+      {              // 線上同樂:主機 + 手機上的玩家都是真人,不夠的人數用電腦補
         const gs = NET.guests.filter((g) => g.online);
         if (!gs.length) { toast(L('No one has joined yet', '還沒有人加入')); return; }
-        NET.guests = gs; NET.started = true; stageOn = false; stage.visible = false; document.body.classList.remove('picking'); slots.forEach((sl) => { sl.taken = false; });
+        NET.guests = gs; NET.started = true; stageOn = false; stage.visible = false; document.body.classList.remove('picking'); slots.forEach((sl) => { sl.taken = false; }); enterLobby(false);
         // 4 支手機都加入時,主機只當螢幕(不下場);否則主機自己也是一位玩家
         const hostPlays = gs.length < 4, chars = [...(hostPlays ? [slots[stageSel].key] : []), ...gs.map((g) => g.char)], humans = chars.length, n = Math.max(CFG.n, humans);
         const rest = Object.keys(CHARS).filter((k) => !chars.includes(k)).sort(() => Math.random() - 0.5);
         netSend({ t: 'start' }); NET.started = true; setTimeout(() => gs.forEach((g) => { rtcStart(g); netPortraits(g); }), 800);
         res({ chars: [...chars, ...rest.slice(0, n - humans)], humans, rounds: CFG.rounds, ai: CFG.ai, names: [...(hostPlays ? [nameIn.value.trim().slice(0, 12)] : []), ...gs.map((g) => g.name)], remote: gs.map((g) => g.gid), hostPlays });
-        return;
       }
+    };
+    $('pok').onclick = () => {
+      if (NET.on) { enterLobby(true); return; }      // 多人連線:先確認角色,再到人數格等大家加入
       picked.push(slots[stageSel].key);
       names.push(nameIn.value.trim().slice(0, 12)); nameIn.value = '';
       if (picked.length < CFG.humans) {            // 換第二位真人選:第一位選走的角色從轉盤上拿掉
@@ -1200,7 +1230,7 @@ function step(dt) {
   // 目標點往棋盤中心偏 1.6 格:棋子在畫面偏下方,前方要走的格子和骰子落點都看得到
   const fl = Math.hypot(fp.x, fp.z) || 1, ox = -fp.x / fl * 1.6, oz = -fp.z / fl * 1.6;
   const tx = stageOn ? STAGE.x : (view.overview ? 0 : fp.x + ox) + pan.x, tz = stageOn ? STAGE.z : (view.overview ? 0 : fp.z + oz) + pan.z, kf = Math.min(1, dt * 3.2);
-  if (stageOn) { stageStep(dt); joinedStep(dt); }
+  if (stageOn) { if (lobbyPhase) lobbySeatsStep(dt); else { stageStep(dt); joinedStep(dt); } }
   // 放手後,如果拖到範圍外就彈回來
   if (!panDrag && !stageOn) { const kb = Math.min(1, dt * 7);
     if (Math.abs(tx) > PAN_LIM) pan.x += (Math.sign(tx) * PAN_LIM - tx) * kb;
@@ -2263,7 +2293,7 @@ async function netOpen() {
   } catch (e) { toast(L('Could not create a room', '開房間失敗,請檢查網路')); }
   $('pcOnline').disabled = false;
 }
-function netClose() { NET.guests.forEach((g) => rtcStop(g)); NET.on = false; clearTimeout(NET.retry); if (NET.ws) { try { NET.ws.close(); } catch (e) {} } NET.ws = null; NET.guests = []; NET.started = false; NET.code = null; lobbyPaint(); }
+function netClose() { NET.guests.forEach((g) => rtcStop(g)); NET.on = false; if (lobbyPhase) { lobbyPhase = false; $('lobbyUI').classList.add('hide'); document.querySelector('.ptop').classList.remove('hide'); document.querySelector('.pbar').classList.remove('hide'); lobbySeats.forEach((st) => { st.g.visible = false; }); } clearTimeout(NET.retry); if (NET.ws) { try { NET.ws.close(); } catch (e) {} } NET.ws = null; NET.guests = []; NET.started = false; NET.code = null; lobbyPaint(); }
 function netConnect() {
   if (!NET.on) return;
   const ws = new WebSocket(`${LB_API.replace(/^http/, 'ws')}/room/${NET.code}/ws?role=host`); NET.ws = ws;
@@ -2306,15 +2336,15 @@ function netLobby(to) {
 }
 let qrLib = null;
 function lobbyPaint() {
-  const box = $('lobby'); if (!box) return;
+  const box = $('lobbyCard'); if (!box) return;
   syncJoined(NET.on && !NET.started ? NET.guests : []);
   $('pcOnT').textContent = NET.on ? L('Close room', '關閉房間') : L('Play with phones', '多人連線'); $('pcOnS').textContent = NET.on ? L(`Room ${NET.code} is open`, `房間 ${NET.code} 開著`) : L('Scan a QR code to join', '掃描 QR Code 加入房間');
   $('pcOnline').classList.toggle('on', NET.on);
-  box.classList.toggle('hide', !NET.on); if (!NET.on) return;
+  $('lobby').classList.add('hide');
+  if (!NET.on) return;
   const gs = NET.guests.filter((g) => g.online);
   box.innerHTML = `<div class="qr" id="lobbyQr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b>
-    <small>${L('Scan the QR code or open', '手機掃 QR,或打開')} <span class="url">${joinUrl(NET.code).replace(/^https?:\/\//, '')}</span></small>
-    ${gs.length ? '' : `<div class="who"><span class="none">${L('Waiting for players…', '等待玩家加入…')}</span></div>`}</div>`;
+    <small>${L('Scan the QR code or open', '手機掃 QR,或打開')} <span class="url">${joinUrl(NET.code).replace(/^https?:\/\//, '')}</span></small></div>`;
   const draw = () => { try { const q = qrLib(0, 'M'); q.addData(joinUrl(NET.code)); q.make(); $('lobbyQr').innerHTML = q.createSvgTag({ cellSize: 3, margin: 1, scalable: true }); } catch (e) {} };
   if (qrLib) draw();
   else if (window.qrcode) { qrLib = window.qrcode; draw(); }

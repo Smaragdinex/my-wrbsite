@@ -377,3 +377,16 @@ body.embed .topbtns{right:64px}
 /* 名字欄:前面不放角色名,角色名當預設字 */
 .pname2 b{display:none}
 .pname2{padding-left:6px}
+
+/* 多人連線第二步:人數格大廳 */
+.lobbyui{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:12px 12px calc(16px + env(safe-area-inset-bottom));pointer-events:none}
+.lobbyui.hide{display:none}
+.lobbycard{display:flex;gap:12px;align-items:center;background:#fff8ec;border:3px solid #fff;outline:2px solid var(--line);border-radius:18px;padding:10px 12px;pointer-events:auto;max-width:min(470px,92vw);box-shadow:0 8px 22px rgba(0,0,0,.15)}
+.lobbycard .qr{width:calc(96px * var(--fs));height:calc(96px * var(--fs));flex:none;background:#fff}.lobbycard .qr svg{width:100%;height:100%;display:block}
+.lobbycard .info{display:flex;flex-direction:column;gap:4px;font-size:calc(12px * var(--fs));color:#6b594e;font-weight:700;min-width:0}
+.lobbycard .info b{font-size:calc(14px * var(--fs));color:#3b2f2a}.lobbycard .code{font-family:"SF Mono",Menlo,monospace;letter-spacing:3px;background:#fff3d6;border-radius:8px;padding:2px 8px;color:#d4553a;font-size:calc(18px * var(--fs))}
+.lobbycard .url{word-break:break-all;color:#8b7cff}
+.lobbybar{display:flex;align-items:center;gap:12px;pointer-events:auto}
+.pback{width:52px;height:52px;border-radius:50%;border:4px solid #fff;background:#7cc6ff;color:#fff;font-size:calc(22px * var(--fs));font-weight:900;cursor:pointer;box-shadow:0 4px 0 #4f9bd6}
+body.picking .lobbyui{display:flex}
+body.picking .lobbyui.hide{display:none}
