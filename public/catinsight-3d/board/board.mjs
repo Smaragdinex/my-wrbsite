@@ -433,7 +433,7 @@ function drawMission() {
 // 為了不用把整份程式都改寫,S 上面留著「目前視角」的捷徑:
 //   S.cash / S.hold / S.bag / S.missions …… → 現在輪到的那位真人(S.hi)
 //   S.ai                                    → 現在在走的那位電腦(S.ci)
-let CFG = (() => { try { const c = JSON.parse(localStorage.getItem('css.players')); if (c && c.n >= 2 && c.n <= 4 && c.humans >= 1 && c.humans <= 2) return c; } catch (e) {} return { n: 2, humans: 1 }; })();
+let CFG = (() => { try { const c = JSON.parse(localStorage.getItem('css.players')); if (c && c.n >= 2 && c.n <= 4) { c.humans = 1; return c; } } catch (e) {} return { n: 2, humans: 1 }; })();
 const P_FIELDS = ['pos', 'lane', 'cash', 'debt', 'bag', 'hold', 'short', 'diceN', 'lastDividend', 'cashStreak', 'flags', 'missions', 'done'];
 const mkPlayer = (i, human, char) => ({ i, human, char, pos: 0, lane: null, cash: START_CASH, debt: 0, bag: human ? ['remote'] : [],
   hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
@@ -928,7 +928,7 @@ let stageSel = 0, stageOn = false, stageCur = 0;
 const joinedRow = new THREE.Group(); stage.add(joinedRow);
 const joined = [];      // [{ gid, char, g, holder, hop }]
 function syncJoined(guests) {
-  const live = guests.filter((g) => g.online), R = Math.SQRT1_2;
+  const live = guests.filter((g) => g.online);
   // 移除已離開的
   for (let i = joined.length - 1; i >= 0; i--) if (!live.some((g) => g.gid === joined[i].gid)) { joinedRow.remove(joined[i].g); joined.splice(i, 1); }
   live.forEach((g) => {
@@ -940,14 +940,16 @@ function syncJoined(guests) {
       j = { gid: g.gid, char: null, g: grp, holder, hop: 0 }; joined.push(j); }
     if (j.char !== g.char) { j.char = g.char; const c = CHARS[g.char]; j.holder.clear(); const ph = new THREE.Group(); loadPiece(c.url, c.h, ph, j.holder); j.hop = 1; sfx('item'); }
   });
-  // 排成一排在轉盤前面,置中
-  const n = joined.length;
-  joined.forEach((j, i) => { const o = (i - (n - 1) / 2) * 1.5, fwd = 3.2; j.g.position.set(o * R + fwd * R, 0, -o * R + fwd * R); });
+  // 放在轉盤左右兩側(第 1 位右、第 2 位左、第 3、4 位在後面一排),不會擋到轉盤
+  joined.forEach((j, i) => { j.side = i % 2 ? -1 : 1; j.row = i < 2 ? 0 : 1; });
   // 轉盤上把被選走的拿掉;主機正停在被選走的角色上就自動跳下一個
   slots.forEach((sl) => { sl.taken = live.some((g) => g.char === sl.key); });
   if (slots[stageSel] && slots[stageSel].taken) stageSelect(stageSel + 1);
 }
-function joinedStep(dt) { joined.forEach((j) => { j.hop = Math.max(0, j.hop - dt * 2); j.holder.position.y = 0.12 + Math.sin((1 - j.hop) * Math.PI) * (j.hop > 0 ? 0.5 : 0); j.holder.rotation.y = FRONT + Math.sin(performance.now() / 900 + j.g.position.x) * 0.25; }); }
+function joinedStep(dt) {
+  const R = Math.SQRT1_2, hw = (view.half + stageZoom) * view.aspect, o0 = Math.min(3.1, Math.max(2.5, hw - 0.6));   // 畫面窄的時候往內靠
+  joined.forEach((j) => { const o = j.side * (o0 - j.row * 0.35), fwd = 1.5 - j.row * 1.6; j.g.position.set(o * R + fwd * R, 0, -o * R + fwd * R); });
+  joined.forEach((j) => { j.hop = Math.max(0, j.hop - dt * 2); j.holder.position.y = 0.12 + Math.sin((1 - j.hop) * Math.PI) * (j.hop > 0 ? 0.5 : 0); j.holder.rotation.y = FRONT + Math.sin(performance.now() / 900 + j.g.position.x) * 0.25; }); }
 // 選角畫面的動態排版:上面的設定卡不能擋到角色的頭,底座也不能被下面的名字 / 開始鈕擠到。
 // 做法:先把鏡頭目標往上抬(場景整個往下移),不夠再把鏡頭拉遠一點
 let stageLift = 0, stageZoom = 0, cardZoom = 1;
@@ -989,15 +991,15 @@ function paintStage() {
   const c = CHARS[slots[stageSel].key];
   $('pname').textContent = c.name;
   // 沒有標題,所以兩位真人時用按鈕文字說明現在是誰在選
-  $('pok').textContent = NET.on ? L(`Start · ${1 + NET.guests.filter((g) => g.online).length} players`, `開始(${1 + NET.guests.filter((g) => g.online).length} 位真人)`) : CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`);
+  { const gN = NET.guests.filter((g) => g.online).length; $('pok').textContent = NET.on ? (gN >= 4 ? L('Start · 4 phones (this screen only shows the board)', '開始(4 支手機,主機只當螢幕)') : L(`Start · ${1 + gN} players`, `開始(${1 + gN} 位真人)`)) : CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`); }
   // 人數設定:只有第一位在選的時候可以改
   $('pcfg').classList.toggle('hide', pickWho > 0);
-  $('pcN').textContent = L('Players', '人數'); $('pcNs').textContent = L('Total players', '遊戲總人數'); $('pcH').textContent = L('Humans', '真人玩家'); $('pcHs').textContent = L('On this device', '這台裝置上的真人數');
+  $('pcN').textContent = L('Players', '人數'); $('pcNs').textContent = L('Total players', '遊戲總人數');
   $('pcD').textContent = L('Computer', '電腦'); document.getElementById('pcDrow').classList.toggle('hide', CFG.n - (NET.on ? 1 + NET.guests.filter((g) => g.online).length : CFG.humans) <= 0);
   { const names = { easy: L('Easy', '簡單'), normal: L('Normal', '一般'), hard: L('Hard', '兇狠') };
     document.querySelectorAll('#pcfg [data-d]').forEach((b) => { b.textContent = names[b.dataset.d]; b.classList.toggle('on', b.dataset.d === (CFG.ai || 'normal')); }); }
-  if (NET.on) { const h = 1 + NET.guests.filter((g) => g.online).length; if (CFG.n < h) CFG.n = Math.min(4, h); }
-  const H = NET.on ? 1 + NET.guests.filter((g) => g.online).length : CFG.humans;
+  if (NET.on) { const h = Math.min(4, 1 + NET.guests.filter((g) => g.online).length); if (CFG.n < h) CFG.n = h; }
+  const H = NET.on ? Math.min(4, 1 + NET.guests.filter((g) => g.online).length) : CFG.humans;
   $('pcAI').textContent = CFG.n - H > 0 ? L(`${CFG.n - H} computer rival${CFG.n - H > 1 ? 's' : ''}`, `電腦對手 ${CFG.n - H} 位`) : L('No computer rivals', '沒有電腦對手');
   document.querySelectorAll('#pcfg [data-n]').forEach((b) => b.classList.toggle('on', +b.dataset.n === CFG.n));
   document.querySelectorAll('#pcfg [data-h]').forEach((b) => b.classList.toggle('on', +b.dataset.h === CFG.humans));
@@ -1076,10 +1078,11 @@ function pickStage() {
         const gs = NET.guests.filter((g) => g.online);
         if (!gs.length) { toast(L('No one has joined yet', '還沒有人加入')); return; }
         NET.guests = gs; NET.started = true; stageOn = false; stage.visible = false; document.body.classList.remove('picking'); slots.forEach((sl) => { sl.taken = false; });
-        const hostChar = slots[stageSel].key, chars = [hostChar, ...gs.map((g) => g.char)], humans = chars.length, n = Math.max(CFG.n, humans);
+        // 4 支手機都加入時,主機只當螢幕(不下場);否則主機自己也是一位玩家
+        const hostPlays = gs.length < 4, chars = [...(hostPlays ? [slots[stageSel].key] : []), ...gs.map((g) => g.char)], humans = chars.length, n = Math.max(CFG.n, humans);
         const rest = Object.keys(CHARS).filter((k) => !chars.includes(k)).sort(() => Math.random() - 0.5);
         netSend({ t: 'start' });
-        res({ chars: [...chars, ...rest.slice(0, n - humans)], humans, rounds: CFG.rounds, ai: CFG.ai, names: [nameIn.value.trim().slice(0, 12), ...gs.map((g) => g.name)], remote: gs.map((g) => g.gid) });
+        res({ chars: [...chars, ...rest.slice(0, n - humans)], humans, rounds: CFG.rounds, ai: CFG.ai, names: [...(hostPlays ? [nameIn.value.trim().slice(0, 12)] : []), ...gs.map((g) => g.name)], remote: gs.map((g) => g.gid), hostPlays });
         return;
       }
       picked.push(slots[stageSel].key);
@@ -2261,7 +2264,7 @@ function netOnMsg(m) {
       if (!g) { netSend({ t: 'joined', ok: false, reason: 'started' }, m.from); return; }
       g.conn = m.from; g.online = true; netSend({ t: 'joined', ok: true, gid, char: g.char, name: g.name, started: true }, m.from); netPushAll(g); remoteBanner(); return;
     }
-    if (!g && NET.guests.filter((x) => x.online).length >= 3) { netSend({ t: 'joined', ok: false, reason: 'full' }, m.from); return; }
+    if (!g && NET.guests.filter((x) => x.online).length >= 4) { netSend({ t: 'joined', ok: false, reason: 'full' }, m.from); return; }
     let char = m.char; if (!CHARS[char] || charTakenBy(char, g)) char = Object.keys(CHARS).find((k) => !charTakenBy(k, g));
     // 主機畫面上提示:誰用什麼角色加入了 / 換了角色 / 改了名字
     if (g) Object.assign(g, { conn: m.from, online: true, name, char }); else { g = { gid, conn: m.from, name, char, online: true }; NET.guests.push(g); }
@@ -2284,7 +2287,7 @@ function lobbyPaint() {
   const box = $('lobby'); if (!box) return;
   syncJoined(NET.on && !NET.started ? NET.guests : []);
   $('pcOnT').textContent = NET.on ? L('Close room', '關閉房間') : L('Play with phones', '多人連線'); $('pcOnS').textContent = NET.on ? L(`Room ${NET.code} is open`, `房間 ${NET.code} 開著`) : L('Scan a QR code to join', '掃描 QR Code 加入房間');
-  $('pcOnline').classList.toggle('on', NET.on); $('pcHrow').classList.toggle('hide', NET.on);
+  $('pcOnline').classList.toggle('on', NET.on);
   box.classList.toggle('hide', !NET.on); if (!NET.on) return;
   const gs = NET.guests.filter((g) => g.online);
   box.innerHTML = `<div class="qr" id="lobbyQr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b>
@@ -2330,7 +2333,7 @@ async function start() {
     const rest = Object.keys(CHARS).filter((k) => k !== PRESET).sort(() => Math.random() - 0.5);
     cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h, rounds: q.get('rounds'), ai: q.get('ai'), names: [q.get('name') || ''] };
   } else cfg = await pickStage();
-  setPlayers(cfg.chars, cfg.humans, cfg.names || []); (cfg.remote || []).forEach((gid, j) => { if (S.players[1 + j]) S.players[1 + j].remote = gid; }); S.maxRounds = ROUND_OPTS.includes(+cfg.rounds) ? +cfg.rounds : MAX_ROLLS; S.aiLevel = AI_LEVELS[cfg.ai] ? cfg.ai : 'normal';
+  setPlayers(cfg.chars, cfg.humans, cfg.names || []); { const off = cfg.hostPlays === false ? 0 : 1; (cfg.remote || []).forEach((gid, j) => { if (S.players[off + j]) S.players[off + j].remote = gid; }); } S.maxRounds = ROUND_OPTS.includes(+cfg.rounds) ? +cfg.rounds : MAX_ROLLS; S.aiLevel = AI_LEVELS[cfg.ai] ? cfg.ai : 'normal';
   PIECES.forEach((P, i) => { if (i < S.players.length) { setChar(P.body, S.players[i].char); placePiece(0, P); } });
   showPieces(true); focus = PIECES[0];
   buildFoes(); setPortraits();
