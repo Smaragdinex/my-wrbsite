@@ -178,7 +178,7 @@ const LANES = {
   jail: { exit: 28, cell: [7, 4], path: [[6, 4], [5, 4], [4, 4], [3, 4], [2, 4], [1, 4]] },
   ipo: { exit: 60, cell: [9, 12], path: [[10, 12], [11, 12], [12, 12], [13, 12], [14, 12], [15, 12]] },
 };
-// 小路格子的種類:命運只有小路上才有(每條固定 2 格),其他 4 格從 PATH_POOL 隨機抽(可重複,沒有空格)
+// 小路格子的種類:命運只有小路上才有(每條固定 2 格),其他 4 格從 PATH_POOL 隨機抽(不重複,沒有空格)
 const PATH_POOL = ['chance', 'gift', 'fee', 'interest', 'coin'];
 const PATH_INFO = {
   fate: { color: 0xc08cf5, base: 0x9a6ad8, a: '★', b: L('FATE', '命運') },
@@ -192,7 +192,8 @@ function genLanePath() {
   const t = new Array(LANE_LEN).fill(null);
   const a = Math.floor(Math.random() * LANE_LEN); let b; do { b = Math.floor(Math.random() * LANE_LEN); } while (b === a);
   t[a] = 'fate'; t[b] = 'fate';
-  for (let i = 0; i < LANE_LEN; i++) if (!t[i]) t[i] = PATH_POOL[Math.floor(Math.random() * PATH_POOL.length)];
+  const pool = PATH_POOL.slice().sort(() => Math.random() - 0.5);      // 其他 4 格從池子裡抽、不重複
+  for (let i = 0; i < LANE_LEN; i++) if (!t[i]) t[i] = pool.pop();
   return t;
 }
 // 事件生效:改股價;有些事件(普發現金)還會直接發錢給每一位玩家
