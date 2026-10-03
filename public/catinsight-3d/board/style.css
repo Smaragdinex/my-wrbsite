@@ -268,7 +268,8 @@ body.remote #ctl .roll{opacity:.55}
 .rb img{width:100%;aspect-ratio:1;display:block;filter:drop-shadow(0 3px 0 rgba(0,0,0,.14));transition:transform .15s}
 .rb:active img{transform:scale(.94)}
 .rb.on img{transform:scale(1.06)}
-.rb span{background:#fff;border:2px solid var(--line);border-radius:999px;padding:1px 9px;font-weight:900;font-size:calc(11px * var(--fs));color:#6b594e;white-space:nowrap;margin-top:-6px}
+.rb span{background:#fff6dc;border:2px solid #f2b23c;border-radius:999px;padding:1px 10px;font-weight:900;font-size:calc(11px * var(--fs));color:#6b4a1e;white-space:nowrap;margin-top:-12px;position:relative;z-index:1;box-shadow:0 2px 0 rgba(0,0,0,.12)}
+#missBtn span{border-color:#f0869a;color:#8a3b4a;background:#fff0f3}
 .rb .bd{position:absolute;top:-2px;right:-2px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#ff5a4f;color:#fff;font-style:normal;font-weight:900;font-size:calc(12px * var(--fs));display:flex;align-items:center;justify-content:center;border:2px solid #fff}
 .rb .bd.hide{display:none}
 .rpop{display:flex;flex-direction:column;gap:10px;width:calc(236px * var(--fs));min-height:0}
