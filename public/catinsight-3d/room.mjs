@@ -724,7 +724,7 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=122';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=123';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 遊戲的背景音樂由房間這一頁來放(不是 iframe 裡的遊戲):這樣從街機選單(切換語言 / PLAY)就有音樂,進遊戲時不會斷。
@@ -760,6 +760,12 @@ function setBgm(want) {
 document.addEventListener('visibilitychange', () => { if (!bgm.ctx) return; if (document.hidden) bgm.ctx.suspend(); else if (bgm.want) bgm.ctx.resume(); });
 // 遊戲裡的 ♪ 靜音鈕會通知這一頁
 window.addEventListener('message', (e) => { if (e.origin !== location.origin || !e.data || e.data.type !== 'css-sound') return; bgm.on = !!e.data.on; bgmLevel(); });
+// 遊戲裡按「全螢幕」:把整個房間頁放到全螢幕(iframe 裡做不到),狀態變化再回報給遊戲更新按鈕
+{ const doc = document, el = doc.documentElement, isFs = () => !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+  window.addEventListener('message', (e) => { if (e.origin !== location.origin || !e.data || e.data.type !== 'css-fullscreen') return;
+    if (isFs()) (doc.exitFullscreen || doc.webkitExitFullscreen)?.call(doc); else (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el); });
+  const report = () => { try { gameFrame?.contentWindow?.postMessage({ type: 'css-fullscreen-state', on: isFs() }, location.origin); } catch (e) {} };
+  doc.addEventListener('fullscreenchange', report); doc.addEventListener('webkitfullscreenchange', report); }
 // 在機台螢幕上按 PLAY → 鏡頭先推進到螢幕蓋滿畫面(updateZoom 裡的 pushT)→ 推到底時 openGame() 換成真正的遊戲
 function startGame() { if (gameOn || pushGoal === 1) return; pushGoal = 1; }
 // 預載:鏡頭一到街機前(還在看選單)就把遊戲的 iframe 先在背後建好。此時 #game-ui 是透明的,
@@ -770,7 +776,7 @@ function prewarmGame() {
   if (gameOn) return;
   if (gameFrame && gameFrame.dataset.src === gameSrc()) return;
   if (gameFrame) gameFrame.remove();
-  gameFrame = document.createElement('iframe'); gameFrame.dataset.src = gameSrc(); gameFrame.src = gameSrc(); gameFrame.allow = 'autoplay'; gameFrame.title = 'Cat Street Stocks';
+  gameFrame = document.createElement('iframe'); gameFrame.dataset.src = gameSrc(); gameFrame.src = gameSrc(); gameFrame.allow = 'autoplay; fullscreen'; gameFrame.allowFullscreen = true; gameFrame.title = 'Cat Street Stocks';
   gameScr.appendChild(gameFrame);
 }
 function openGame() {

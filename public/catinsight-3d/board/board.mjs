@@ -2115,6 +2115,21 @@ $('rollBtn').onclick = () => turn();
 document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx('click'); });
 { const b = $('sndBtn'), paint = () => { b.classList.toggle('off', !AU.on); b.setAttribute('aria-label', AU.on ? 'sound on' : 'sound off'); };
   b.onclick = () => { AU.toggle(); paint(); }; paint(); }
+// 全螢幕:嵌在街機裡時請外面的房間頁把整個網站放到全螢幕(iframe 自己不能);單獨開遊戲就直接全螢幕。
+// iPhone 的 Safari 沒有全螢幕 API,按鈕就不顯示(iPad、電腦都有)
+{ const b = $('fsBtn'), doc = document, el = doc.documentElement;
+  const can = EMBED || !!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled);
+  if (can) b.classList.remove('hide');
+  const isFs = () => !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+  b.onclick = () => {
+    if (EMBED) { try { parent.postMessage({ type: 'css-fullscreen' }, location.origin); } catch (e) {} return; }
+    if (isFs()) (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
+    else (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+  };
+  const paint = () => { b.textContent = isFs() ? '✕' : '⛶'; };
+  doc.addEventListener('fullscreenchange', paint); doc.addEventListener('webkitfullscreenchange', paint);
+  window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') b.textContent = e.data.on ? '✕' : '⛶'; });
+}
 $('bagBtn').onclick = bagPanel;
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
 $('mapBtn').onclick = () => { pan.set(0, 0, 0); view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };

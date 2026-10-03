@@ -23,6 +23,7 @@
   .stat{font-size:calc(12px * var(--fs));font-weight:700;color:#8a6f60;line-height:1.15;white-space:nowrap}
   .stat b{display:block;font-size:calc(15px * var(--fs));color:var(--ink)}
   .sp{flex:1}
+  .snd.fs{background:#8a5cf5;font-size:calc(15px * var(--fs))}
   .snd{width:calc(30px * var(--fs));height:calc(30px * var(--fs));flex:none;border-radius:50%;border:0;background:#ff9ec4;color:#fff;font-weight:900;font-size:calc(16px * var(--fs));line-height:1;cursor:pointer;box-shadow:0 2px 0 rgba(0,0,0,.15);position:relative}
   .snd.off{background:#c9bfb5}
   .snd.off::after{content:'';position:absolute;left:15%;right:15%;top:50%;height:3px;border-radius:2px;background:#fff;transform:rotate(-45deg)}
@@ -275,6 +276,7 @@
     <div class="stat opt"><span id="lblStocks"></span><b id="stocks">0</b></div>
     <div class="sp"></div>
     <button class="snd" id="sndBtn">♪</button>
+    <button class="snd fs hide" id="fsBtn" aria-label="fullscreen">⛶</button>
     <div class="chip"><i style="background:#7cc6ff">🎒</i><span id="bagCount">1</span></div>
     <div class="chip"><i style="background:#ffb000">★</i><span id="mcount">0</span></div>
   </div>
@@ -321,6 +323,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=120"></script>
+<script type="module" src="./board.mjs?v=121"></script>
 </body>
 </html>
