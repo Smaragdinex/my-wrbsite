@@ -1147,7 +1147,9 @@ function staticText() {
     $('d2').innerHTML = `<svg viewBox="0 0 48 22" aria-hidden="true">${die(0, [[7, 7], [15, 15]])}${die(26, [[7, 7], [11, 11], [15, 15]])}</svg>`;
     $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('mapBtn').textContent = L('Map', '地圖'); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
-  $('note').textContent = L('Fictional companies · for learning, not investment advice · Music: Sharou', '公司皆為虛構 · 學習用途,非投資建議 · 音樂:しゃろう');
+  // 頁尾加上版本號(取 board.mjs?v=N 的 N),方便確認拿到的是不是最新版
+  const ver = (new URL(import.meta.url).searchParams.get('v') || '?');
+  $('note').textContent = L('Fictional companies · for learning, not investment advice · Music: Sharou', '公司皆為虛構 · 學習用途,非投資建議 · 音樂:しゃろう') + ` · v${ver}`;
 }
 let toastTimer;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
