@@ -366,3 +366,8 @@ body.embed .topbtns{right:64px}
 .stockbtn svg{width:calc(22px * var(--fs));height:calc(22px * var(--fs));fill:#d98a2b}
 .stockbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.12)}
 .hud{align-items:flex-start}
+
+.merow{display:flex;align-items:center;gap:8px}
+/* 右上的音樂 / 全螢幕鈕放大到和離開鈕一樣(48px),手機也一樣 */
+.topbtns .snd{width:48px;height:48px;font-size:24px;border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.25)}
+@media(max-width:900px){ .topbtns .snd{width:48px;height:48px;font-size:24px} .topbtns{top:12px} }
