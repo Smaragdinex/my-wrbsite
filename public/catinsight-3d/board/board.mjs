@@ -1679,7 +1679,7 @@ function drawFateCards(auto) {
     const face = (c) => `<div class="dhead ${c.good ? 'good' : 'bad'}">${c.t}</div><div class="dwhy">${c.w}</div><div class="dmv"><span class="mv ${c.good ? 'up' : 'dn'}">${c.fx}</span></div>`;
     const ov = $('draw');
     ov.innerHTML = `<h2>★ ${auto ? L(`${who} flips a fate card`, `${who}翻命運牌`) : L('Flip a fate card', '翻一張命運牌')}</h2>` +
-      `<div class="dcards">${picks.map((c, i) => `<div class="dcard" data-i="${i}" style="--i:${i}"><div class="dinner"><div class="dback" style="background:#c08cf5"><span>★</span></div><div class="dfront">${face(c)}</div></div></div>`).join('')}</div>` +
+      `<div class="dcards">${picks.map((c, i) => `<div class="dcard" data-i="${i}" style="--i:${i}"><div class="dinner"><div class="dback fate"></div><div class="dfront">${face(c)}</div></div></div>`).join('')}</div>` +
       `<button class="dgo hide" id="dgo">${L('Continue', '繼續')}</button>`;
     ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto);
     const cards = [...ov.querySelectorAll('.dcard')]; let chosen = -1, done = false;
