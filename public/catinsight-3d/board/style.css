@@ -22,14 +22,13 @@
   .snd.off::after{content:'';position:absolute;left:15%;right:15%;top:50%;height:3px;border-radius:2px;background:#fff;transform:rotate(-45deg)}
   .chip{display:flex;align-items:center;gap:5px;font-weight:800;font-size:calc(15px * var(--fs));white-space:nowrap}
   .chip i{font-style:normal;display:inline-flex;width:24px;height:24px;border-radius:50%;align-items:center;justify-content:center;color:#fff;font-size:calc(13px * var(--fs))}
-  .miss{position:fixed;left:12px;top:calc(var(--ava) + 30px);z-index:5;display:flex;flex-direction:column;gap:6px;max-width:min(calc(300px * var(--fs)),62vw)}
   .m{background:var(--cream);border:2px solid var(--line);border-radius:12px;padding:6px 10px;font-size:calc(12.5px * var(--fs));font-weight:700;
     display:flex;gap:8px;align-items:center;box-shadow:0 2px 0 rgba(0,0,0,.08);transition:background .3s,transform .3s}
   .m .ck{width:18px;height:18px;border-radius:50%;border:2px solid #c9b79f;flex:none;display:flex;align-items:center;justify-content:center;font-size:calc(11px * var(--fs));color:#fff}
   .m.done{background:#e3f7ea;border-color:#9ad9b0;transform:scale(1.02)}
   .m.done .ck{background:#35c26b;border-color:#35c26b}
   .m small{display:block;font-weight:600;color:#9a8676;font-size:calc(11px * var(--fs))}
-  .ctl{position:fixed;left:0;right:0;bottom:calc(46px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:flex-end;gap:calc(14px + var(--roll) * .1);z-index:6}
+  .ctl{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:flex-end;gap:calc(14px + var(--roll) * .1);z-index:6}
   /* 背包鈕:只放背包圖示,右上角一個小數字是手上的道具數 */
   .paw.bag{position:relative;font-size:calc(var(--btn) * .5);padding:0 calc(var(--btn) * .28)}
   .paw.bag b{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#ff7a59;border:2px solid #fff;color:#fff;font-size:calc(12px * var(--fs));font-weight:900;display:flex;align-items:center;justify-content:center}
@@ -98,12 +97,10 @@
   .card p{font-size:calc(14px * var(--fs));font-weight:600;color:#6b594e;margin-top:8px;line-height:1.5}
   .note{position:fixed;left:0;right:0;bottom:2px;text-align:center;font-size:calc(10.5px * var(--fs));font-weight:700;color:rgba(59,47,42,.55);z-index:4;pointer-events:none}
 
-  .side{position:fixed;right:12px;top:calc(var(--ava) + 30px);width:calc(236px * var(--fs));z-index:5;display:flex;flex-direction:column;gap:10px;pointer-events:none}
   .bubble{background:#fff;border:3px solid #3b4a7a;border-radius:18px;padding:10px 12px;font-size:calc(13px * var(--fs));font-weight:800;line-height:1.45;color:#2f3a63;
     box-shadow:0 3px 0 rgba(0,0,0,.1);display:flex;gap:8px;align-items:flex-start}
   .bubble .av{width:30px;height:30px;border-radius:50%;flex:none;border:2px solid #fff;box-shadow:0 0 0 2px #3b4a7a}
   .bubble .av.ex{background:#ff7a59;color:#fff;font-weight:900;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center}
-  .bar .more{display:none}
   .box{background:var(--cream);border:2px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 3px 0 rgba(0,0,0,.1)}
   .box h4{background:#8a6f60;color:#fff;font-size:calc(13px * var(--fs));font-weight:900;padding:6px 12px;letter-spacing:.04em}
   .box.ev h4{background:#f2685a}
@@ -111,36 +108,9 @@
   .row:first-of-type{border-top:0}
   .row i{width:18px;height:18px;border-radius:6px;display:block}
   .row .q{color:#9a8676;font-weight:700}
-  .evt{position:fixed;left:12px;bottom:calc(18px + env(safe-area-inset-bottom));width:calc(250px * var(--fs));z-index:5;pointer-events:none}
   .evt .body{padding:8px 12px 10px;font-size:calc(12.5px * var(--fs));font-weight:800}
   .evt .why{font-weight:600;color:#6b594e;font-size:calc(12px * var(--fs));margin-top:3px;line-height:1.4}
   .evt .mvrow{display:flex;justify-content:space-between;padding:3px 0;font-size:calc(12.5px * var(--fs))}
-  .round{position:fixed;right:12px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:5;background:var(--cream);border:2px solid var(--line);border-radius:14px;
-    padding:8px 12px;font-size:calc(12.5px * var(--fs));font-weight:900;box-shadow:0 3px 0 rgba(0,0,0,.1);min-width:calc(170px * var(--fs))}
-  .round .trk{height:9px;border-radius:9px;background:#e6dccf;margin-top:6px;overflow:hidden}
-  .round .trk b{display:block;height:100%;background:#4aa8ff;border-radius:9px;transition:width .4s}
-  @media(max-width:900px){ .side .box,.evt,.round{display:none} .side{left:12px;right:12px;width:auto;top:auto;bottom:calc(var(--roll) + 96px + env(safe-area-inset-bottom));align-items:center}
-    /* 手機:提示縮成一條小的;資產和市場事件收進上方的抽屜(點上面的錢或 ▾ 展開) */
-    .bubble{max-width:420px;font-size:calc(11.5px * var(--fs));padding:5px 9px;line-height:1.35;border-width:2px;gap:6px;align-items:center}
-    .bubble .av{width:22px;height:22px;box-shadow:0 0 0 1.5px #3b4a7a}.bubble .av.ex{font-size:15px}
-    .bar{cursor:pointer}
-    .bar .more{display:inline-flex;align-items:center;justify-content:center;width:calc(26px * var(--fs));height:calc(26px * var(--fs));border-radius:50%;border:0;background:#eadfce;color:#6b594e;font-weight:900;font-size:calc(14px * var(--fs));flex:none;transition:transform .2s}
-    body.sheet .bar .more{transform:rotate(180deg)}
-    .msheet{position:fixed;left:12px;right:12px;top:calc(var(--ava) + 28px);z-index:7;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - var(--ava) - var(--roll) - 150px - env(safe-area-inset-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch;pointer-events:auto}
-    .msheet .box{display:block;width:auto;pointer-events:auto}
-    .msheet .evt{display:block;position:static;width:auto}
-    .msheet .box.evt .body{max-height:none}
-    body.sheet .miss{display:none}
-    /* 手機:提示移到上方正中(任務卡上面),任務卡往下讓位;上方金錢列縮小讓 ▾ 和 ♪ 放得下,嵌在街機時右邊留給離開鈕 */
-    .side{top:calc(var(--ava) + 24px);bottom:auto;left:12px;right:12px}
-    .bubble{max-width:none;width:100%;box-sizing:border-box;font-size:calc(11px * var(--fs));padding:4px 8px}
-    .bubble #tip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-    .miss{top:calc(var(--ava) + 24px + 52px)}
-    .bar{gap:6px;padding:5px 8px}.pill{font-size:calc(14px * var(--fs));padding:3px 9px 3px 4px}.coin{width:18px;height:18px}
-    .stat{font-size:calc(10.5px * var(--fs))}.stat b{font-size:calc(13px * var(--fs))}
-    .chip{font-size:calc(13px * var(--fs))}.chip i{width:20px;height:20px}
-    .snd{width:calc(26px * var(--fs));height:calc(26px * var(--fs));font-size:calc(14px * var(--fs))}
-    body.embed .hud{padding-right:48px} }
   @media(max-width:560px){ .snd.fs{display:none!important} }
   .it{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid var(--line);border-radius:14px;padding:8px 10px;margin-top:8px}
   .it .ic{font-size:calc(26px * var(--fs));flex:none}
@@ -153,7 +123,7 @@
   #mapBtn.on{background:#3d9a55!important;box-shadow:0 4px 0 #2a743d!important}
   body.embed .hud{right:64px}
   /* 3D 選角:畫面中間是模型,上面一行標題,下面是 ◀ 名字 ▶ 和確定鈕 */
-  body.picking .hud, body.picking .miss, body.picking .side, body.picking .evt, body.picking .round, body.picking .ctl { display: none !important; }
+  body.picking .hud, body.picking .lcol, body.picking .rcol, body.picking .tipbar, body.picking .ranktag, body.picking .rbanner, body.picking .ctl { display: none !important; }
   .pickui{position:fixed;inset:0;z-index:7;display:none;flex-direction:column;justify-content:space-between;align-items:center;padding:22px 16px calc(34px + env(safe-area-inset-bottom));pointer-events:none}
   body.picking .pickui{display:flex}
   .pickui h2{font-size:calc(26px * var(--fs));font-weight:900;color:#3b2f2a;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:999px;padding:8px 26px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
@@ -179,9 +149,6 @@
   .ava{background-color:#ffe9c9;background-size:cover;background-position:center 20%}
   .box.foe h4{background:#5c7cba;display:flex;align-items:center;gap:8px}
   .fav{width:24px;height:24px;border-radius:50%;background:#dfe8ff center 20%/cover;border:2px solid #fff;flex:none}
-  .side{max-height:calc(100vh - var(--ava) - 42px)}
-  .side .box{flex:0 1 auto;min-height:0;overflow:hidden}
-  .side .box h4{display:flex;align-items:center;gap:8px;pointer-events:auto;cursor:pointer;user-select:none}
   .tri{margin-left:auto;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #fff;transition:transform .2s}
   .box.fold .tri{transform:rotate(-90deg)}
   .box.fold > div{display:none}
@@ -263,8 +230,6 @@
   *{-webkit-tap-highlight-color:transparent}
   button{outline:none;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-appearance:none;appearance:none}
   button:focus,button:focus-visible{outline:none}
-  .rank{float:right;background:#8a6f60;color:#fff;border-radius:999px;padding:1px 9px;font-weight:900;font-size:calc(12px * var(--fs))}
-  .rank.top{background:#ffb000}
   /* 銀行的借款 / 還款拉桿 */
   .slider{display:flex;align-items:center;gap:10px;margin-top:10px;font-weight:800;font-size:calc(12.5px * var(--fs));color:#6b594e}
   .slider span{flex:none;width:calc(34px * var(--fs))}
@@ -275,7 +240,7 @@
   .slider input[type=range]::-moz-range-track{height:10px;border-radius:5px;background:#e6dccf}
   .slider input[type=range]::-moz-range-thumb{width:calc(26px * var(--fs));height:calc(26px * var(--fs));border-radius:50%;background:#4a63b0;border:3px solid #fff}
   .hide{display:none!important}
-  @media(max-width:560px){ .stat.opt{display:none} .m{font-size:calc(11.5px * var(--fs));padding:5px 8px} .m small{display:none} }
+  @media(max-width:560px){ .stat.opt{display:none} }
 
 /* ---------- 線上同樂 ---------- */
 .pcfg .online{flex-basis:100%;border:0;border-radius:999px;padding:9px 0;background:#8b7cff;color:#fff;font-weight:900;font-size:calc(14px * var(--fs));cursor:pointer;box-shadow:0 3px 0 #5f52c9}
@@ -290,3 +255,43 @@
 .rbanner{position:fixed;left:50%;top:calc(var(--ava) + 26px);transform:translateX(-50%);z-index:6;background:#3b2f2a;color:#fff;font-weight:900;font-size:calc(14px * var(--fs));padding:8px 16px;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.25);pointer-events:none;white-space:nowrap}
 body.remote #ctl, body.remote #panel, body.remote #draw, body.remote #stepCtl{pointer-events:none}
 body.remote #ctl .roll{opacity:.55}
+
+/* ---------- 版面:左欄(頭像直排 + 資產)、右欄(任務 + 市場事件)、上方正中提示、頭像下名次、擲骰鈕下回合 ---------- */
+.ranktag{position:fixed;left:12px;top:calc(var(--ava) + 18px);z-index:6;background:#8a6f60;color:#fff;border-radius:999px;padding:2px 10px;font-weight:900;font-size:calc(12px * var(--fs));box-shadow:0 2px 0 rgba(0,0,0,.15);white-space:nowrap}
+.ranktag.top{background:#ffb000}
+.tipbar{position:fixed;left:50%;top:calc(var(--ava) + 24px);transform:translateX(-50%);width:min(calc(460px * var(--fs)),calc(100vw - 24px));z-index:5;display:flex;justify-content:center;pointer-events:none}
+.tipbar .bubble{max-width:100%;box-sizing:border-box}
+.lcol{position:fixed;left:12px;top:calc(var(--ava) + 52px);z-index:5;display:flex;gap:8px;align-items:flex-start;pointer-events:none;max-height:calc(100vh - var(--ava) - var(--roll) - 120px)}
+.rcol{position:fixed;right:12px;top:calc(var(--ava) + 52px);z-index:5;display:flex;flex-direction:column;gap:10px;width:calc(236px * var(--fs));pointer-events:none;max-height:calc(100vh - var(--ava) - var(--roll) - 120px)}
+.lcol .box,.rcol .box{pointer-events:auto;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.lcol .box > div,.rcol .box > div{overflow-y:auto;-webkit-overflow-scrolling:touch}
+.box h4{display:flex;align-items:center;gap:8px;pointer-events:auto;cursor:pointer;user-select:none;flex:none}
+.box.assets{width:calc(236px * var(--fs))}
+/* 頭像直排(瑪利歐派對那種):點誰看誰;橘框 = 正在看;綠點 = 現在輪到 */
+.tabs.col{flex-direction:column;padding:6px;border:2px solid var(--line);border-radius:999px;background:var(--cream);box-shadow:0 3px 0 rgba(0,0,0,.1);border-bottom:2px solid var(--line);flex:none}
+.tabs.col button{width:calc(38px * var(--fs));height:calc(38px * var(--fs))}
+/* 任務清單放進框裡:每個任務一列 */
+.missbox h4{background:#ffb000}
+.miss{display:flex;flex-direction:column;gap:6px;padding:8px}
+.miss .m{background:#fff}
+.miss .sub{font-size:calc(11px * var(--fs));font-weight:800;color:#9a8676;padding:4px 2px 0;border-top:1.5px solid #f1e6d6;margin-top:2px}
+.m.old{opacity:.75}
+/* 擲骰鈕下面的回合數 */
+.rollcol .roundTxt{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:6px;white-space:nowrap;background:var(--cream);border:2px solid var(--line);border-radius:999px;padding:2px 10px;font-weight:900;font-size:calc(12px * var(--fs));color:#6b594e;pointer-events:none}
+@media(max-width:900px){
+  /* 手機:左欄只留頭像直排,點頭像才浮出資產框;右欄任務和事件預設收起只剩標題 */
+  .lcol{top:calc(var(--ava) + 76px)}
+  .rcol{top:calc(var(--ava) + 76px);width:calc(150px * var(--fs))}
+  .box.assets{width:calc(200px * var(--fs))}
+  .tipbar{top:calc(var(--ava) + 22px);left:calc(var(--ava) + 24px);right:12px;width:auto;transform:none}
+  .lcol{z-index:6}   /* 資產框展開時蓋在右欄上面 */
+  .tipbar .bubble{font-size:calc(11px * var(--fs));padding:4px 8px;line-height:1.35;border-width:2px;gap:6px;align-items:center}
+  .tipbar .bubble .av{width:22px;height:22px;box-shadow:0 0 0 1.5px #3b4a7a}.tipbar .bubble .av.ex{font-size:15px}
+  .tipbar #tip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .bar{gap:6px;padding:5px 8px}.pill{font-size:calc(14px * var(--fs));padding:3px 9px 3px 4px}.coin{width:18px;height:18px}
+  .stat{font-size:calc(10.5px * var(--fs))}.stat b{font-size:calc(13px * var(--fs))}
+  .chip{font-size:calc(13px * var(--fs))}.chip i{width:20px;height:20px}
+  .snd{width:calc(26px * var(--fs));height:calc(26px * var(--fs));font-size:calc(14px * var(--fs))}
+  body.embed .hud{padding-right:48px}
+  .m{font-size:calc(11.5px * var(--fs));padding:5px 8px}.m small{display:none}
+}

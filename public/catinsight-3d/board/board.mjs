@@ -1249,7 +1249,7 @@ function buildFoes() {
   const el = $('assetTabs'); el.innerHTML = '';
   S.players.forEach((p) => {
     const b = document.createElement('button'); b.dataset.i = p.i; b.setAttribute('aria-label', nameOf(p));
-    b.onclick = () => { S.view = p.i; hud(); };
+    b.onclick = () => { S.view = p.i; if ($('assetBox').classList.contains('fold') || S.view !== p.i) $('assetBox').classList.remove('fold'); hud(); };
     el.appendChild(b);
   });
 }
@@ -1282,8 +1282,10 @@ function hud() {
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
   $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' && S.lane.wait > 0 ? L('REST', '休息中') : L('ROLL 1', '擲一顆')) : L('ROLL', '擲骰子');
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
+  $('missTitle').textContent = L(`Missions · ${S.done} done`, `任務 · 完成 ${S.done}`);
   $('miss').innerHTML = S.missions.map((m) =>
-    `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
+    `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('') +
+    ((S.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + S.doneList.slice().reverse().map((t) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span></div>`).join('') : '');
   $('tip').textContent = advise();
   // 資產框:一次只顯示一位。預設跟著「現在輪到誰」;點上面的頭像可以改看別人(下一位開始走的時候會自動切回去)
   { const A = S.players[S.view ?? S.turn] || S.players[S.hi], mine = A.i === S.hi;
@@ -1298,7 +1300,6 @@ function hud() {
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
     : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`;
   $('roundTxt').textContent = L(`Round ${S.rolls} / ${maxRolls()}`, `回合 ${S.rolls} / ${maxRolls()}`);
-  $('roundBar').style.width = (S.rolls / maxRolls() * 100) + '%';
 }
 function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
@@ -1420,7 +1421,7 @@ function payday(atStart = true) {
 function checkMissions() {
   // 上一次完成的任務先換成新的(所以完成的那張會亮綠色停留到下一次檢查)
   S.missions.forEach((m, i) => { if (m.done) { S.missions[i] = { id: '_' }; S.missions[i] = drawMission(); } });
-  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; S.cash += REWARD; sfx('mission'); toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
+  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; (S.doneList || (S.doneList = [])).push(m.title); S.cash += REWARD; sfx('mission'); toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
   hud();
 }
 // 市場事件格:桌上發三張背面朝上的牌,玩家自己挑一張翻開(對手走到時由牠自動挑)。
@@ -2287,21 +2288,14 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
   window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') paint(!!e.data.on); });
 }
 $('bagBtn').onclick = bagPanel;
-// 手機:點上面的錢或 ▾ 把資產框和市場事件收合在上方抽屜(把兩個框搬進抽屜,收起來再搬回去;桌機不用)
-{ const sheet = $('mSheet'), side = document.querySelector('.side'), ab = side.querySelector('.box'), ev = document.querySelector('.evt');
-  const open = () => { if (document.body.classList.contains('sheet')) return; sheet.append(ab, ev); sheet.classList.remove('hide'); document.body.classList.add('sheet'); };
-  const close = () => { if (!document.body.classList.contains('sheet')) return; side.append(ab); sheet.after(ev); sheet.classList.add('hide'); document.body.classList.remove('sheet'); };
-  const toggle = () => (document.body.classList.contains('sheet') ? close() : open());
-  document.querySelector('.bar').addEventListener('click', (e) => { if (matchMedia('(max-width:900px)').matches && !e.target.closest('.snd')) toggle(); });
-  renderer.domElement.addEventListener('pointerdown', close);
-  $('rollBtn').addEventListener('click', close);
-  addEventListener('resize', () => { if (!matchMedia('(max-width:900px)').matches) close(); }); }
+
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
 $('mapBtn').onclick = () => { pan.set(0, 0, 0); view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
 
 if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
 // 右側兩個面板的標題可以點:三角箭頭收合 / 展開
-document.querySelectorAll('.side > .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
+document.querySelectorAll('.lcol .box h4, .rcol .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
+if (matchMedia('(max-width:900px)').matches) { $('assetBox').classList.add('fold'); $('missBox').classList.add('fold'); $('evtBox').classList.add('fold'); }   // 手機:預設收起,點標題或頭像展開
 resize(); start();
 requestAnimationFrame(loop);
 window.__game = { get S() { return S; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
