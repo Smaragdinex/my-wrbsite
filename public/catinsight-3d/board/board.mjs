@@ -150,6 +150,16 @@ const cashChip = (e) => (e.cash ? `<span class="mv up">${L(`Everyone +$${fmt(e.c
 const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
 // 玩法:走滿選定的回合數(選角畫面可以選 20 / 25 / 30 / 35 / 40),總資產最高的人獲勝
 const ROUND_OPTS = [20, 25, 30, 35, 40];
+// 電腦難度(選角畫面可以選):
+//   easy   簡單:只會買和賣,不放空、不用利空卡、不融資
+//   normal 一般:原本的策略(偶爾融資、漲多才放空、有閒錢買利空卡)
+//   hard   兇狠:專打第一名 —— 常用融資、只要有人持有就放空、利空卡一有錢就買、現金留得少
+const AI_LEVELS = {
+  easy:   { short: false, atk: false, greedy: 0,    reserve: 2500, shortAny: false },
+  normal: { short: true,  atk: true,  greedy: 0.35, reserve: 2000, shortAny: false },
+  hard:   { short: true,  atk: true,  greedy: 0.6,  reserve: 800,  shortAny: true },
+};
+const AI = () => AI_LEVELS[S.aiLevel] || AI_LEVELS.normal;
 const maxRolls = () => S.maxRounds;
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
 const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17, 20, 21];    // 商店會賣的事件卡(壞消息類的不賣)
@@ -361,7 +371,7 @@ function setPlayers(chars, humans) {
 }
 function newState() {
   S = {
-    rolls: 0, busy: false, over: false, maxRounds: MAX_ROLLS, players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
+    rolls: 0, busy: false, over: false, maxRounds: MAX_ROLLS, aiLevel: 'normal', players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null,
   };
@@ -770,6 +780,9 @@ function paintStage() {
   // 人數設定:只有第一位在選的時候可以改
   $('pcfg').classList.toggle('hide', pickWho > 0);
   $('pcN').textContent = L('Players', '人數'); $('pcH').textContent = L('Humans', '真人玩家');
+  $('pcD').textContent = L('Computer', '電腦'); document.getElementById('pcDrow').classList.toggle('hide', CFG.n - CFG.humans <= 0);
+  { const names = { easy: L('Easy', '簡單'), normal: L('Normal', '一般'), hard: L('Hard', '兇狠') };
+    document.querySelectorAll('#pcfg [data-d]').forEach((b) => { b.textContent = names[b.dataset.d]; b.classList.toggle('on', b.dataset.d === (CFG.ai || 'normal')); }); }
   $('pcAI').textContent = CFG.n - CFG.humans > 0 ? L(`${CFG.n - CFG.humans} computer rival${CFG.n - CFG.humans > 1 ? 's' : ''}`, `電腦對手 ${CFG.n - CFG.humans} 位`) : L('No computer rivals', '沒有電腦對手');
   document.querySelectorAll('#pcfg [data-n]').forEach((b) => b.classList.toggle('on', +b.dataset.n === CFG.n));
   document.querySelectorAll('#pcfg [data-h]').forEach((b) => b.classList.toggle('on', +b.dataset.h === CFG.humans));
@@ -827,8 +840,10 @@ function pickStage() {
     slots.forEach((sl) => { sl.taken = false; sl.holder.visible = true; });
     stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
-    document.querySelectorAll('#pcfg button').forEach((b) => { b.onclick = () => {
+    $('pcRec').onclick = () => recordsPanel();
+    document.querySelectorAll('#pcfg button').forEach((b) => { if (b.id === 'pcRec') return; b.onclick = () => {
       if (b.dataset.n) CFG.n = +b.dataset.n; else if (b.dataset.h) CFG.humans = +b.dataset.h;
+      else if (b.dataset.d) CFG.ai = b.dataset.d;
       else if (b.dataset.r) { const i = Math.max(0, ROUND_OPTS.indexOf(CFG.rounds || MAX_ROLLS)); CFG.rounds = ROUND_OPTS[Math.min(ROUND_OPTS.length - 1, Math.max(0, i + +b.dataset.r))]; }
       try { localStorage.setItem('css.players', JSON.stringify(CFG)); } catch (e) {}
       paintStage();
@@ -842,7 +857,7 @@ function pickStage() {
       slots.forEach((sl) => { sl.taken = false; sl.holder.visible = true; });
       // 電腦對手:從剩下的角色裡隨機挑
       const rest = Object.keys(CHARS).filter((k) => !picked.includes(k)).sort(() => Math.random() - 0.5);
-      res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length, rounds: CFG.rounds });
+      res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length, rounds: CFG.rounds, ai: CFG.ai });
     };
   });
 }
@@ -1129,7 +1144,7 @@ function staticText() {
 let toastTimer;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
 function showCtl(on) { $('ctl').classList.toggle('hide', !on); $('stepCtl').classList.add('hide'); }
-function panel(html) { const p = $('panel'); p.innerHTML = html; p.classList.remove('hide'); return p; }
+function panel(html) { const p = $('panel'); p.innerHTML = html; p.classList.remove('hide'); p.classList.toggle('over', !!(S && S.over)); return p; }
 const closePanel = () => $('panel').classList.add('hide');
 
 function buyPanel(k) {
@@ -1498,7 +1513,7 @@ async function aiTurn() {
   const A = S.ai, who = CHARS[S.foe].name;
   focus = PA(); pan.set(0, 0, 0); toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
   // 對手出牌:利空卡打你持有最多的資產;事件卡在牠持有受惠類股時才用
-  if (A.bag.includes('atk')) {
+  if (A.bag.includes('atk') && AI().atk) {
     // 打「目前最有錢的那位對手」持有最多的資產
     const T = others(A.i).sort((x, y) => assetsOf(y) - assetsOf(x))[0];
     const k = KEYS.filter((x) => T.hold[x].n > 0).sort((x, y) => T.hold[y].n * S.price[y] - T.hold[x].n * S.price[x])[0];
@@ -1537,14 +1552,14 @@ async function aiTurn() {
     } else if (h.n && (price * h.n - h.cost) / h.cost >= 0.15) {
       const n = h.n; A.cash += price * n - h.loan; h.n = 0; h.cost = 0; h.loan = 0;
       toast(L(`${who} took profit on ${sec.name}. Price ${pct(sellF(n))}`, `${who}賣出${sec.name}獲利了結,股價 ${pct(sellF(n))}`)); impact(type, sellF(n));
-    } else if (!h.n && A.cash >= price * LOT + 2000 && ((mine >= LOT && price > sec.open * 1.08) || price > sec.open * 1.3)) {
+    } else if (AI().short && !h.n && A.cash >= price * LOT + AI().reserve && ((mine >= LOT && (AI().shortAny || price > sec.open * 1.08)) || price > sec.open * 1.3)) {
       // 放空:你持有而且已經漲了一段(打擊你),或是漲太多(賭它回檔)
       A.cash -= price * LOT; sh.entry = price; sh.n = LOT; impact(type, SHORT_F);
       toast(mine >= LOT ? L(`${who} shorts ${sec.name} to hit its holders. Price ${pct(SHORT_F)}`, `${who}放空${sec.name}打擊持有的人,股價 ${pct(SHORT_F)}`) : L(`${who} shorts ${sec.name}. Price ${pct(SHORT_F)}`, `${who}放空${sec.name},股價 ${pct(SHORT_F)}`));
     } else {
       const lots = ((price < sec.open * 0.95 || others(A.i).some((p) => p.short[type].n > 0)) && A.cash >= price * LOT * 3 + 2000) ? 3 : (A.cash >= price * LOT + 1500 ? 1 : 0);
       // 三次裡有一次會貪心用融資買 30 股(只付 4 成)—— 這就是你可以用放空和利空卡逼牠斷頭的機會
-      const greedy = lots && !h.loan && Math.random() < 0.35 && A.cash >= price * LOT * 3 * (1 - MARGIN_LOAN) + 1500;
+      const greedy = lots && !h.loan && Math.random() < AI().greedy && A.cash >= price * LOT * 3 * (1 - MARGIN_LOAN) + 1500;
       if (greedy) { const q = LOT * 3, cost = price * q; A.cash -= cost * (1 - MARGIN_LOAN); h.n += q; h.cost += cost; h.loan += cost * MARGIN_LOAN; impact(type, buyF(q));
         toast(L(`${who} margin-bought ${q} ${sec.name}. Price ${pct(buyF(q))}`, `${who}融資買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); }
       else if (lots) { const q = LOT * lots; A.cash -= price * q; h.n += q; h.cost += price * q; impact(type, buyF(q)); toast(L(`${who} bought ${q} ${sec.name}. Price ${pct(buyF(q))}`, `${who}買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); }
@@ -1554,7 +1569,7 @@ async function aiTurn() {
   } else if (type === 'shop') {
     // 逛商店:有閒錢就買利空卡;不然買一張對牠持股有利的事件卡。買走的你就買不到了
     const stock = shopStock(); let got = null;
-    if (stock.includes('atk') && A.cash >= 2500) got = 'atk';
+    if (stock.includes('atk') && AI().atk && A.cash >= ATK_PRICE + AI().reserve) got = 'atk';
     else got = stock.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0 && A.cash >= 2000) || null;
     if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); S.shop.sold.push({ id: got, by: A.i }); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
     else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
@@ -1637,6 +1652,24 @@ async function nextTurns() {
     S.ci = i; S.turn = i; S.view = null; hud(); await aiTurn(); await flushNotices();
   }
 }
+// 本機排行榜:每局結束存一筆到瀏覽器(只有第一位真人的成績),留最好的 10 筆(依總資產)
+const loadRecords = () => { try { return JSON.parse(localStorage.getItem('css.records')) || []; } catch (e) { return []; } };
+function saveRecord(r) {
+  const list = loadRecords(); list.push(r); list.sort((a, b) => b.assets - a.assets);
+  try { localStorage.setItem('css.records', JSON.stringify(list.slice(0, 10))); } catch (e) {}
+}
+const bestOf = () => { const l = loadRecords(); return { games: l.length, best: l[0] || null, stars3: l.filter((r) => r.stars === 3).length, wins: l.filter((r) => r.rank === 1).length }; };
+function recordsPanel() {
+  const list = loadRecords();
+  const rows = list.length ? list.map((r, i) => `<div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-top:1.5px solid #f1e6d6;font-size:calc(12.5px * var(--fs));font-weight:800">
+      <span style="width:1.4em">${i + 1}</span><span>${CHARS[r.char]?.icon || ''}</span><span style="flex:1">$${fmt(r.assets)} <small style="color:#9a8676">· ${r.rounds}${L(' rd', ' 回合')} · ${r.n}${L('p', ' 人')} · ${L('#', '第 ')}${r.rank}${L('', ' 名')}</small></span>
+      <span style="color:#ffb000">${'★'.repeat(r.stars)}<span style="color:#d9c9b3">${'★'.repeat(3 - r.stars)}</span></span><small style="color:#9a8676">${r.date}</small></div>`).join('')
+    : `<p>${L('No games finished yet.', '還沒有完成過的對局。')}</p>`;
+  return new Promise((res) => {
+    const p = panel(`<h3>🏆 ${L('Best games', '最佳紀錄')}</h3><p>${L('Top 10 by total assets, saved in this browser.', '依總資產排前 10 名,只存在這個瀏覽器裡。')}</p><div>${rows}</div><div class="btns"><button class="b-skip">${L('Close', '關閉')}</button></div>`);
+    p.querySelector('button').onclick = () => { closePanel(); res(); };
+  });
+}
 function finish() {
   S.over = true; S.hi = S.players.findIndex((p) => p.human);      // 結算畫面用第一位真人的視角
   // 星星:完成 2 / 4 / 6 個任務
@@ -1672,10 +1705,15 @@ function finish() {
   const table = rank.map((p, i) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-radius:10px;${p.human ? 'background:#fff3d6;' : ''}font-weight:800">
       <span style="width:1.6em;text-align:center">${medal[i]}</span><span style="flex:1;text-align:left">${CHARS[p.char].icon} ${nameOf(p)}${p.human ? (S.nh > 1 ? ` · ${L('Player', '玩家')} ${p.i + 1}` : L(' (you)', '(你)')) : ''}</span><b>${assetsOf(p) < 0 ? '-' : ''}$${fmt(Math.abs(assetsOf(p)))}</b></div>`).join('');
   const won = rank[0].human;
+  // 存紀錄(第一位真人),並拿歷史最佳來比
+  const me0 = S.players[S.hi], myRank = 1 + rank.findIndex((p) => p === me0), rec = { date: new Date().toISOString().slice(0, 10), char: me0.char, n: S.players.length, rounds: S.rolls, assets: Math.round(assetsOf(me0)), done: S.done, stars: done, rank: myRank };
+  const prev = bestOf(); saveRecord(rec); const after = bestOf();
+  const newBest = !prev.best || rec.assets > prev.best.assets;
+  const recLine = `<p style="font-size:calc(12.5px * var(--fs))">${newBest ? `🏆 <b>${L('New personal best!', '新的個人最佳紀錄!')}</b> ` : L(`Personal best $${fmt(prev.best.assets)}. `, `個人最佳 $${fmt(prev.best.assets)}。`)}${L(`${after.games} game${after.games > 1 ? 's' : ''} saved · ${after.wins} win${after.wins === 1 ? '' : 's'} · ${after.stars3} three-star`, `已記錄 ${after.games} 局 · 第一名 ${after.wins} 次 · 三顆星 ${after.stars3} 次`)} <a href="#" id="recBtn" style="color:#8a5cf5">${L('View records', '看排行榜')}</a></p>`;
   $('end').innerHTML = S.nh > 1
     ? `<div class="card">
     <h2>🏆 ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}</h2>
-    <div style="margin:10px 0">${table}</div>
+    <div style="margin:10px 0">${table}</div>${recLine}
     <p>${S.players.filter((p) => p.human).map((p) => L(`Player ${p.i + 1}: ${p.done} missions`, `玩家 ${p.i + 1} 完成 ${p.done} 個任務`)).join(' · ')} · ${L(`${S.rolls} rounds`, `${S.rolls} 回合`)}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`
@@ -1683,12 +1721,13 @@ function finish() {
     <div class="stars">${[0, 1, 2].map((i) => i < done ? '<b>★</b>' : '★').join('')}</div>
     <h2>${title}</h2>
     <p>${L('Total assets', '總資產')} <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) · ${L(`${S.rolls} rounds`, `${S.rolls} 回合`)} · ${L(`${S.done} missions completed`, `完成 ${S.done} 個任務`)}</p>
-    <div style="margin:10px 0">${table}</div>
+    <div style="margin:10px 0">${table}</div>${recLine}
     <p>${style}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`;
   $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose');
   $('again').onclick = start;
+  $('recBtn').onclick = (e) => { e.preventDefault(); recordsPanel(); };
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
 }
 // 選角:在 3D 轉盤上選(pickStage),同時決定人數(2~4)和真人數(1~2)。電腦對手從剩下的角色裡隨機挑。
@@ -1700,9 +1739,9 @@ async function start() {
   let cfg;
   if (CHARS[PRESET]) { const q = new URLSearchParams(location.search), n = Math.min(4, Math.max(2, +q.get('n') || 2)), h = Math.min(2, Math.max(1, +q.get('h') || 1));
     const rest = Object.keys(CHARS).filter((k) => k !== PRESET).sort(() => Math.random() - 0.5);
-    cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h, rounds: q.get('rounds') };
+    cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h, rounds: q.get('rounds'), ai: q.get('ai') };
   } else cfg = await pickStage();
-  setPlayers(cfg.chars, cfg.humans); S.maxRounds = ROUND_OPTS.includes(+cfg.rounds) ? +cfg.rounds : MAX_ROLLS;
+  setPlayers(cfg.chars, cfg.humans); S.maxRounds = ROUND_OPTS.includes(+cfg.rounds) ? +cfg.rounds : MAX_ROLLS; S.aiLevel = AI_LEVELS[cfg.ai] ? cfg.ai : 'normal';
   PIECES.forEach((P, i) => { if (i < S.players.length) { setChar(P.body, S.players[i].char); placePiece(0, P); } });
   showPieces(true); focus = PIECES[0];
   buildFoes(); setPortraits();
