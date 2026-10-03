@@ -254,6 +254,7 @@ const randomItem = () => { const r = Math.random(); return r < 0.4 ? 'remote' : 
 /* ───────────── 音效與音樂 ─────────────
    全部用 WebAudio 即時合成,不載入任何音檔。瀏覽器規定要使用者先點一下才能出聲,
    所以第一次點擊 / 按鍵時才建立 AudioContext 並開始播音樂。右上角 ♪ 可以關掉(會記住) */
+const VER = (new URL(import.meta.url).searchParams.get('v') || '?');      // 版本號(來自 board.mjs?v=N),顯示在結算畫面
 const EMBED = !!new URLSearchParams(location.search).get('embed') && parent !== window;
 if (EMBED) document.body.classList.add('embed');      // 嵌在街機裡:手機版右上角要留位置給外面的離開鈕
 const AU = (() => {
@@ -1314,8 +1315,7 @@ function staticText() {
     $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('mapBtn').setAttribute('aria-label', L('Map', '地圖')); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   // 頁尾加上版本號(取 board.mjs?v=N 的 N),方便確認拿到的是不是最新版
-  const ver = (new URL(import.meta.url).searchParams.get('v') || '?');
-  $('note').textContent = L('Fictional companies · for learning, not investment advice · Music: Sharou', '公司皆為虛構 · 學習用途,非投資建議 · 音樂:しゃろう') + ` · v${ver}`;
+  $('note').textContent = '';      // 畫面底下不再放字(省空間);聲明、音樂出處和版本改放在結算畫面
 }
 let toastTimer;
 function toast(msg) { netSend({ t: 'toast', msg }); const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
@@ -2129,13 +2129,14 @@ function finish() {
   // 成績卡上一個「看排行榜」按鈕,點了才疊一塊 1~10 名的排行榜(內容和右側版一樣)
   const recLine = `<p style="font-size:calc(12.5px * var(--fs))">${newBest ? `🏆 <b>${L('New personal best!', '新的個人最佳紀錄!')}</b> ` : ''}<button class="lnk" id="recBtn">🏆 ${L('Leaderboard', '看排行榜')}</button></p>`;
   const myRec = findRecord(rec);
+  const credit = `<p style="margin:10px 0 0;font-size:calc(10.5px * var(--fs));color:#b5a593">${L('Fictional companies · for learning, not investment advice · Music: Sharou', '公司皆為虛構 · 學習用途,非投資建議 · 音樂:しゃろう')} · v${VER}</p>`;
   $('end').innerHTML = (S.nh > 1
     ? `<div class="card">
     <h2>🏆 ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}</h2>
     <div style="margin:10px 0">${table}</div>${recLine}
     <p>${S.players.filter((p) => p.human).map((p) => L(`Player ${p.i + 1}: ${p.done} missions`, `玩家 ${p.i + 1} 完成 ${p.done} 個任務`)).join(' · ')} · ${L(`${S.rolls} rounds`, `${S.rolls} 回合`)}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
-    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`
+    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div>${credit}</div>`
     : `<div class="card">
     <div class="stars">${[0, 1, 2].map((i) => i < done ? '<b>★</b>' : '★').join('')}</div>
     <h2>${title}</h2>
@@ -2143,7 +2144,7 @@ function finish() {
     <div style="margin:10px 0">${table}</div>${recLine}
     <p>${style}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
-    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`);
+    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div>${credit}</div>`);
   $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose'); remoteBanner();
   $('again').onclick = start;
   $('recBtn').onclick = () => leaderboardPanel(myRec);

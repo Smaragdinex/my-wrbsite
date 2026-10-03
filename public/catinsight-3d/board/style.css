@@ -95,7 +95,7 @@
   .stars{font-size:calc(46px * var(--fs));letter-spacing:6px;color:#e2d6c6}.stars b{color:#ffc93c}
   .card h2{font-size:calc(24px * var(--fs));font-weight:900;margin-top:4px}
   .card p{font-size:calc(14px * var(--fs));font-weight:600;color:#6b594e;margin-top:8px;line-height:1.5}
-  .note{position:fixed;left:0;right:0;bottom:2px;text-align:center;font-size:calc(10.5px * var(--fs));font-weight:700;color:rgba(59,47,42,.55);z-index:4;pointer-events:none}
+  .note{display:none}
 
   .bubble{background:#fff;border:3px solid #3b4a7a;border-radius:18px;padding:10px 12px;font-size:calc(13px * var(--fs));font-weight:800;line-height:1.45;color:#2f3a63;
     box-shadow:0 3px 0 rgba(0,0,0,.1);display:flex;gap:8px;align-items:flex-start}
