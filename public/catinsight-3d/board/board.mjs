@@ -1418,7 +1418,7 @@ function staticText() {
 }
 let toastTimer;
 function toast(msg) { netSend({ t: 'toast', msg }); const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
-function showCtl(on) { $('ctl').classList.toggle('hide', !on); $('stepCtl').classList.add('hide'); }
+function showCtl(on) { $('ctl').classList.toggle('hide', !on); $('tipbar').classList.toggle('hide', !on); $('stepCtl').classList.add('hide'); }   // 提示泡泡跟擲骰鈕一起出現 / 隱藏,抽卡時才不會擋到
 function panel(html) { const p = $('panel'); p.innerHTML = html; p.classList.remove('hide'); p.classList.toggle('over', !!(S && S.over)); return p; }
 const closePanel = () => $('panel').classList.add('hide');
 

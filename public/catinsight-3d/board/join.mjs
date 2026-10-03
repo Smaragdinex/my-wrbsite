@@ -40,7 +40,7 @@ function onMsg(m) {
   if (m.t === 'toast') { toast(m.msg); return; }
   if (m.t === 'portraits') { ST.portraits = m.map; paintTabs(); return; }
   if (m.t === 'hud') { ST.hud = m; ST.mine = !!m.mine; ST.over = !!m.over; paintHud(); applyMine(); return; }
-  if (m.t === 'ui') { const el = $(m.box); if (!el) return; el.className = m.cls; morph(el, m.html); applyMine(); }
+  if (m.t === 'ui') { const el = $(m.box); if (!el) return; el.className = m.cls; morph(el, m.html); if (m.box === 'ctl') $('tipbar').classList.toggle('hide', el.classList.contains('hide') || !ST.mine); applyMine(); }
 }
 // ---- 遊戲中的 HUD(主機算好這支手機視角的資料送過來)----
 function paintHud() {
@@ -83,6 +83,7 @@ function setStatus() {
 function applyMine() {
   ['stepCtl', 'panel'].forEach((id) => { $(id).style.visibility = ST.mine ? '' : 'hidden'; });
   $('ctl').style.visibility = ''; $('ctl').style.pointerEvents = ST.mine ? '' : 'none'; $('ctl').style.opacity = ST.mine ? '' : '.55';   // 不是自己的回合:按鈕留著但變淡、不能按
+  $('tipbar').classList.toggle('hide', $('ctl').classList.contains('hide') || !ST.mine);
   ['draw', 'end'].forEach((id) => { $(id).style.pointerEvents = ST.mine && id !== 'end' ? '' : 'none'; });
 }
 // 收主機的棋盤直播
