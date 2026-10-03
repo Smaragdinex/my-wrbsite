@@ -198,7 +198,9 @@
   .dgo{height:calc(50px * var(--fs));padding:0 calc(40px * var(--fs));border-radius:999px;border:4px solid #fff;background:#8b7cff;color:#fff;font-weight:900;font-size:calc(17px * var(--fs));cursor:pointer;box-shadow:0 5px 0 #6a5bd6}
   .dgo:active{transform:translateY(3px);box-shadow:0 2px 0 #6a5bd6}
   /* 擲 1 顆 / 2 顆的切換,放在擲骰子按鈕正上方 */
-  .rollcol{display:flex;flex-direction:column;align-items:center;gap:calc(8px * var(--fs))}
+  .rollcol{display:flex;flex-direction:column;align-items:center;gap:calc(12px * var(--fs))}
+  .rollcol .roll{position:relative;z-index:2}   /* 擲骰鈕在最上層,骰子數切換的框不會壓到它的白邊 */
+  .rollcol .dsel{position:relative;z-index:1}
   .dsel{display:flex;background:var(--cream);border:3px solid #fff;border-radius:999px;padding:3px;gap:3px;box-shadow:0 3px 0 rgba(0,0,0,.12)}
   .dsel button{border:0;background:transparent;border-radius:999px;padding:calc(5px * var(--fs)) calc(14px * var(--fs));font-weight:900;font-size:calc(13px * var(--fs));color:#9a8676;cursor:pointer}
   .dsel button.on{background:#ff7a59;color:#fff}
@@ -289,6 +291,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=83"></script>
+<script type="module" src="./board.mjs?v=84"></script>
 </body>
 </html>
