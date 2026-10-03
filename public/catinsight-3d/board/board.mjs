@@ -188,7 +188,7 @@ const PATH_INFO = {
   interest: { color: 0x4a63b0, base: 0x37508f, a: L('INTEREST', '利息'), b: L('+3% cash', '現金 +3%') },
   coin: { color: 0x57b86b, base: 0x3f9a52, a: L('CASH', '撿到錢'), b: '+$300' },
 };
-const PATH_FIXED = { jail: { 2: 'chance' } };      // 固定位置的格子:警察局小路第 3 格一定是市場事件
+const PATH_FIXED = { jail: { 2: 'chance' }, ipo: { 2: 'chance' } };      // 固定位置的格子:兩條小路第 3 格一定是市場事件
 function genLanePath(type) {
   const t = new Array(LANE_LEN).fill(null), fixed = PATH_FIXED[type] || {};
   for (const i in fixed) t[i] = fixed[i];
