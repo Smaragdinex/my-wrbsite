@@ -1558,7 +1558,6 @@ const laneTileType = (lane) => { if (!lane.at) return '_' + lane.type; const k =
 // 小路專屬格子的效果(真人和電腦共用)。回傳提示文字
 function pathEffect(who, k, isMe) {
   const name = isMe ? L('You', '你') : CHARS[S.foe].name;
-  if (k === '_gift') { const id = randomItem(); who.bag.push(id); sfx('item'); return L(`${name} found ${itemInfo(id).name}`, `${name}撿到${itemInfo(id).name}`); }
   if (k === '_interest') { const g = Math.round(Math.max(0, who.cash) * 0.03); who.cash += g; sfx('coin'); return L(`${name} earned $${fmt(g)} interest`, `${name}領到利息 $${fmt(g)}`); }
   if (k === '_coin') { who.cash += 300; sfx('coin'); return L(`${name} picked up $300`, `${name}撿到 $300`); }
   if (k === '_fee') { who.cash -= 200; sfx('short'); return L(`${name} paid a $200 fee`, `${name}付了 $200 手續費`); }
@@ -1672,6 +1671,29 @@ const FATE = [
   { id: 'fine', good: false, t: L('Parking ticket', '違規停車罰單'), w: L('Small, annoying, unavoidable.', '小錢,但很煩。'), fx: L('−$500', '−$500') },
   { id: 'salary2', good: true, t: L('Promotion', '升職加薪'), w: L('Your next salary is doubled.', '下一次經過起點薪水加倍。'), fx: L('Next salary ×2', '下次薪水 ×2') },
 ];
+// 拿禮物:三個禮物盒挑一個(電腦自動挑),打開是哪個道具就放進背包。三個盒子裡的道具各不相同
+function drawGiftCards(auto) {
+  return new Promise((res) => {
+    const picks = []; while (picks.length < 3) { const id = randomItem(); if (!picks.includes(id)) picks.push(id); }
+    const who = CHARS[S.foe].name;
+    const face = (id) => { const it = itemInfo(id); return `<div class="dhead good">${it.icon} ${it.name}</div><div class="dwhy">${it.desc}</div><div class="dmv"><span class="mv up">${L('Into your backpack', '放進背包')}</span></div>`; };
+    const ov = $('draw');
+    ov.innerHTML = `<h2>🎁 ${auto ? L(`${who} picks a gift`, `${who}挑一個禮物`) : L('Pick a gift', '挑一個禮物')}</h2>` +
+      `<div class="dcards">${picks.map((id, i) => `<div class="dcard" data-i="${i}" style="--i:${i}"><div class="dinner"><div class="dback gift"></div><div class="dfront">${face(id)}</div></div></div>`).join('')}</div>` +
+      `<button class="dgo hide" id="dgo">${L('Continue', '繼續')}</button>`;
+    ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto);
+    const cards = [...ov.querySelectorAll('.dcard')]; let chosen = -1, done = false;
+    const choose = (i) => {
+      if (chosen >= 0) return;
+      chosen = i; ov.classList.add('done'); cards[i].classList.add('flip', 'picked'); sfx('flip');
+      wait(0.45).then(() => sfx('item'));
+      wait(0.9).then(() => { cards.forEach((c, j) => { if (j !== i) c.classList.add('flip', 'lost'); }); $('dgo').classList.remove('hide'); if (auto) wait(2).then(() => { if (!done) $('dgo').click(); }); });
+    };
+    cards.forEach((c, i) => { c.onclick = () => { if (!auto) choose(i); }; });
+    if (auto) wait(1.2).then(() => choose(Math.floor(Math.random() * 3)));
+    $('dgo').onclick = () => { if (done) return; done = true; ov.classList.add('hide'); ov.classList.remove('done'); res(picks[chosen]); };
+  });
+}
 // 翻命運牌:三張背面朝上挑一張(電腦自動挑)。回傳抽到的牌,效果由 applyFate 處理
 function drawFateCards(auto) {
   return new Promise((res) => {
@@ -1793,7 +1815,7 @@ async function aiLand() {
   const type = A.lane ? laneTileType(A.lane) : TILES[A.pos], sec = SECTORS[type];
   if (type === '_jail' || type === '_ipo' || type === '_path') { await wait(0.2); }
   else if (type === '_chance') { await wait(0.3); await drawEventCards(true, false, false); }
-  else if (type.startsWith('_')) { toast(pathEffect(A, type, false)); hud(); await wait(1.0); }
+  else if (type.startsWith('_') && type !== '_gift') { toast(pathEffect(A, type, false)); hud(); await wait(1.0); }
   else if (type === 'ipo') await enterLane(false, 'ipo');
   else if (type === 'fate') { await wait(0.3); const c = await drawFateCards(true); await applyFate(c, false); }
   else if (sec) {
@@ -1837,6 +1859,7 @@ async function aiLand() {
     else toast(L(`${who} walks past the bank`, `${who}路過銀行`));
     hud(); await wait(1.1);
   }
+  else if (type === 'gift' || type === '_gift') { await wait(0.3); const id = await drawGiftCards(true); A.bag.push(id); hud(); toast(L(`${who} got ${itemInfo(id).name}`, `${who}拿到${itemInfo(id).name}`)); await wait(0.6); }
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
 }
@@ -1880,7 +1903,7 @@ async function landOn() {
   if (type === '_jail') { if (S.lane.wait > 0) { toast(L('Resting at the police station: no trading this turn', '在警察局休息,這回合不能交易')); await wait(0.9); } }
   else if (type === '_ipo' || type === '_path') { await wait(0.2); }
   else if (type === '_chance') await drawEventCards(false, false, false);
-  else if (type.startsWith('_')) { toast(pathEffect(S, type, true)); hud(); await wait(0.9); }
+  else if (type.startsWith('_') && type !== '_gift') { toast(pathEffect(S, type, true)); hud(); await wait(0.9); }
   else if (type === 'ipo') await enterLane(true, 'ipo');
   else if (type === 'fate') { const c = await drawFateCards(false); await applyFate(c, true); }
   else if (SECTORS[type]) await buyPanel(type);
@@ -1890,8 +1913,7 @@ async function landOn() {
   } else if (type === 'fee') { S.cash -= FEE; hud(); sfx('short'); await cardPanel(L('Trading fees', '交易手續費'), L(`Every trade has a cost. You paid $${FEE}.`, `每筆交易都有成本,這次付了 $${FEE}。`)); }
   else if (type === 'shop') await shopPanel();
   else if (type === 'bank') await bankPanel();
-  else if (type === 'gift') { const id = randomItem(), it = itemInfo(id); S.bag.push(id); hud(); sfx('item');
-    await cardPanel(L('A gift', '收到禮物'), `${it.icon} ${it.name}<br>${it.desc}<br>${L('It is in your backpack.', '已放進背包。')}`); }
+  else if (type === 'gift' || type === '_gift') { const id = await drawGiftCards(false); S.bag.push(id); hud(); toast(L(`${itemInfo(id).name} added to your backpack`, `${itemInfo(id).name}已放進背包`)); }
   else if (type === 'divi') await cardPanel(L('Dividend day', '股息結算'), L(`You collected $${fmt(S.lastDividend)} in dividends. Assets that pay nothing, like gold, biotech and crypto, only make money if the price rises.`, `領到股利 $${fmt(S.lastDividend)}。黃金、生技、加密貨幣不配息,只能靠價格上漲賺錢。`));
   else await cardPanel(L('Payday', '發薪日'), L(`Salary $${fmt(SALARY)}${S.lastDividend > 0 ? ` plus $${fmt(S.lastDividend)} in dividends` : ''}. Holding stocks pays you every lap.`, `薪水 $${fmt(SALARY)}${S.lastDividend > 0 ? `,加上股利 $${fmt(S.lastDividend)}` : ''}。持有股票,每繞一圈都會配息。`));
 }

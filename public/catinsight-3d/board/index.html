@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Cat Street Stocks</title>
-<link rel="preload" as="image" href="card-event.webp"><link rel="preload" as="image" href="card-fate.webp">
+<link rel="preload" as="image" href="card-event.webp"><link rel="preload" as="image" href="card-fate.webp"><link rel="preload" as="image" href="gift.webp">
 <style>
   :root{--fs:1;--ava:clamp(64px,10.5vmin,116px);--roll:clamp(112px,17vmin,180px);--btn:clamp(58px,9vmin,94px);--ink:#3b2f2a;--cream:#fff8ec;--line:#e8d9c2;--pink:#ff8fc0;--purple:#8b7cff;--teal:#35c2a1;--amber:#f5b942;--coral:#f2796b}
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -205,6 +205,7 @@
   /* 卡背是圖片:市場事件(奶油底、貓咪問號)、命運(紫色、星星)。圖裡已經有圖案,所以不再疊文字 */
   .dback{background:#f6ecd6 url(card-event.webp) center/cover no-repeat}
   .dback.fate{background:#6b4bb8 url(card-fate.webp) center/cover no-repeat}
+  .dback.gift{background:#fff3d6 url(gift.webp) center/78% no-repeat}
   .dback span{display:none}
   .dback::after{content:"";position:absolute;inset:-40% -80%;background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.55) 50%,transparent 58%);transform:translateX(-70%);pointer-events:none}
   .dfront{transform:rotateY(180deg);background:var(--cream);display:flex;flex-direction:column;text-align:left}
@@ -320,6 +321,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=115"></script>
+<script type="module" src="./board.mjs?v=116"></script>
 </body>
 </html>
