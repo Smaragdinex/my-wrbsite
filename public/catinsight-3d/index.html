@@ -71,9 +71,11 @@
   #pwa-hint button { flex: 1; border: 0; border-radius: 999px; padding: 11px 0; font: inherit; font-weight: 900; font-size: 15px; background: #eadfce; color: #6b594e; }
   #pwa-hint button.go { background: #ff7a59; color: #fff; box-shadow: 0 3px 0 #d4553a; }
   #pwa-hint button.hide { display: none; }
-  #game-exit { position: absolute; right: 12px; top: 14px; z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 3px solid #fff;
-    background: #f08262; color: #fff; font-size: 18px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,.35); line-height: 1; }
-  #game-exit:hover { background: #e2604f; }
+  /* 離開鈕:插畫圖(紅圓 + 白叉) */
+  #game-exit { position: absolute; right: 10px; top: 12px; z-index: 2; width: 48px; height: 48px; border: 0; border-radius: 50%; padding: 0;
+    background: url(btn-close.webp?v=1) center/contain no-repeat; color: transparent; font-size: 0; cursor: pointer; filter: drop-shadow(0 4px 6px rgba(0,0,0,.3)); transition: transform .12s; }
+  #game-exit:hover { transform: scale(1.06); }
+  #game-exit:active { transform: scale(.94); }
   body.game-on .pill { opacity: 0; pointer-events: none; }
   body.game-on .cta { opacity: 0; pointer-events: none; }
   .brand, .cta { transition: opacity .35s; }
@@ -239,6 +241,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=229"></script>
+<script type="module" src="./room.mjs?v=230"></script>
 </body>
 </html>
