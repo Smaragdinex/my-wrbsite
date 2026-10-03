@@ -255,6 +255,7 @@ const randomItem = () => { const r = Math.random(); return r < 0.4 ? 'remote' : 
    全部用 WebAudio 即時合成,不載入任何音檔。瀏覽器規定要使用者先點一下才能出聲,
    所以第一次點擊 / 按鍵時才建立 AudioContext 並開始播音樂。右上角 ♪ 可以關掉(會記住) */
 const EMBED = !!new URLSearchParams(location.search).get('embed') && parent !== window;
+if (EMBED) document.body.classList.add('embed');      // 嵌在街機裡:手機版右上角要留位置給外面的離開鈕
 const AU = (() => {
   let ctx = null, master, mus, nbuf;
   let on = (() => { try { return localStorage.getItem('css.sound') !== '0'; } catch (e) { return true; } })();
