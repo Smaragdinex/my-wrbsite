@@ -27,7 +27,8 @@
   /* 加入卡:和主機設定卡同一個插畫外框(九宮格拉伸 + 貓耳肉球) */
   .jcard{position:relative;margin-top:34px;padding:2px 2px 6px;border:30px solid transparent;border-image:url(../frame-card.webp?v=1) 60 fill / 30px stretch;border-radius:0;background:none;filter:drop-shadow(0 10px 18px rgba(0,0,0,.18))}
   .jcard::before{content:'';position:absolute;left:50%;top:-30px;margin-top:-31px;transform:translateX(-50%);width:130px;height:47px;background:url(../frame-ears.webp?v=1) center/contain no-repeat;pointer-events:none}
-  .jcard h1{padding-top:4px}
+  .jcard h1{padding-top:4px;display:flex;align-items:center;gap:8px}
+  .jcard h1 .h1ico{height:40px;width:auto;filter:drop-shadow(0 2px 2px rgba(0,0,0,.15))}
   .jcard h1{margin:0 0 6px;font-size:22px;color:var(--ink)}
   .jcard p{margin:0 0 10px;font-size:14px;color:#6b594e;font-weight:700;line-height:1.5}
   .jcard label{display:block;font-size:13px;font-weight:900;color:#8a786c;margin:10px 0 4px}
@@ -64,7 +65,7 @@
 <body>
 <div class="jwrap">
   <div class="jcard" id="jform">
-    <h1>📱 加入房間</h1>
+    <h1><img class="h1ico" src="../ic-phone.webp?v=1" alt="">加入房間</h1>
     <p>在主機畫面的「線上同樂」看房號,輸入後選一個角色就能一起玩。</p>
     <label>房號</label><input class="code" id="jcode" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD">
     <label>角色</label>
