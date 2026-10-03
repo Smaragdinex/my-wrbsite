@@ -1142,9 +1142,11 @@ function staticText() {
   document.title = L('Cat Street Stocks', '貓咪股市大富翁');
   $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值'); 
   $('bagBtn').textContent = L('Backpack', '背包'); { // 擲幾顆骰子的切換:直接畫骰子圖(一顆 = 一個骰子,兩顆 = 兩個骰子),比文字直覺
-    const die = (x, pips) => `<rect x="${x + 1.5}" y="1.5" width="19" height="19" rx="5" fill="none" stroke="currentColor" stroke-width="2.4"/>` + pips.map(([px, py]) => `<circle cx="${x + px}" cy="${py}" r="2.1" fill="currentColor"/>`).join('');
-    $('d1').innerHTML = `<svg viewBox="0 0 22 22" aria-hidden="true">${die(0, [[11, 11]])}</svg>`;
-    $('d2').innerHTML = `<svg viewBox="0 0 48 22" aria-hidden="true">${die(0, [[7, 7], [15, 15]])}${die(26, [[7, 7], [11, 11], [15, 15]])}</svg>`;
+    // 骰子圖示:實心的骰子(選中時白底橘點、未選時淺底),點數用 5 和 2 / 3,看起來才像骰子而不是一個方框
+    const die = (x, pips, tilt) => `<g transform="rotate(${tilt} ${x + 11} 11)"><rect x="${x + 1.5}" y="1.5" width="19" height="19" rx="5.5" fill="currentColor" opacity=".95"/>` +
+      pips.map(([px, py]) => `<circle cx="${x + px}" cy="${py}" r="2.2" class="pip"/>`).join('') + '</g>';
+    $('d1').innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${die(1, [[6.5, 6.5], [15.5, 6.5], [11, 11], [6.5, 15.5], [15.5, 15.5]], -8)}</svg>`;
+    $('d2').innerHTML = `<svg viewBox="0 0 50 24" aria-hidden="true">${die(1, [[7, 7], [15, 15]], -10)}${die(27, [[7, 7], [11, 11], [15, 15]], 8)}</svg>`;
     $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('mapBtn').textContent = L('Map', '地圖'); $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   // 頁尾加上版本號(取 board.mjs?v=N 的 N),方便確認拿到的是不是最新版
