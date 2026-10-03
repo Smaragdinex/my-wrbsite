@@ -525,6 +525,7 @@ for (let x = 1; x <= M; x++) COORD.push([x, 0]);
 for (let z = 1; z <= M - 1; z++) COORD.push([M, z]);
 const tilePos = (i) => new THREE.Vector3((COORD[i][0] - M / 2) * STEP, 0, (COORD[i][1] - M / 2) * STEP);
 
+const COIN_GEO = new THREE.CylinderGeometry(0.17, 0.17, 0.065, 20), COIN_MAT = mat(0xffd24a), COIN_MAT2 = mat(0xf5b82e);
 const tiles = [];
 TILES.forEach((type, i) => {
   const p = tilePos(i), sec = SECTORS[type];
@@ -538,13 +539,14 @@ TILES.forEach((type, i) => {
   const holder = new THREE.Group(); holder.rotation.y = Math.PI / 4; holder.position.y = TOP + 0.004; g.add(holder);
   const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), Object.assign(new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }), { userData: { outlineParameters: { visible: false } } }));
   lab.rotation.x = -Math.PI / 2; holder.add(lab);
-  // 持股越多,格子後方的小樓越高
+  // 你的持股:格子角落疊金幣,每 10 股一枚(最多 6 枚)。以前是一根方柱加白色頂蓋,從介面後面露出來像破圖
   let bld = null;
   if (sec) {
     bld = new THREE.Group(); bld.position.set(0.36, TOP, -0.36);   // 放在畫面右側那個角,不擋圖示和價格
     bld.visible = false; g.add(bld);
-    box(0.22, 1, 0.22, sec.color, 0, 0.5, 0, 0.03, bld);
-    box(0.27, 0.08, 0.27, 0xffffff, 0, 1.03, 0, 0.02, bld);
+    for (let i = 0; i < 6; i++) {
+      const coin = new THREE.Mesh(COIN_GEO, i % 2 ? COIN_MAT2 : COIN_MAT); coin.position.set((i % 2) * 0.02, 0.035 + i * 0.07, (i % 3) * 0.015); coin.castShadow = true; bld.add(coin);
+    }
   }
   tiles.push({ type, g, cv, tex, bld, bldH: 0 });
 });
@@ -957,9 +959,10 @@ function step(dt) {
   });
   tiles.forEach((t) => {
     if (!t.bld) return;
-    const target = Math.min(3, S.hold[t.type].n / LOT) * 0.24;
+    const coins = Math.min(6, Math.round(S.hold[t.type].n / LOT)), target = coins > 0 ? 1 : 0;
     t.bldH += (target - t.bldH) * Math.min(1, dt * 8);
-    t.bld.visible = t.bldH > 0.01; t.bld.scale.y = Math.max(0.001, t.bldH);
+    t.bld.visible = t.bldH > 0.01; t.bld.scale.setScalar(Math.max(0.001, t.bldH));
+    t.bld.children.forEach((c, i) => { c.visible = i < coins; });
   });
   // 鏡頭:跟著現在在走的棋子(全覽模式則看棋盤中心),視野大小平滑過渡
   const fp = focus.piece.position;
