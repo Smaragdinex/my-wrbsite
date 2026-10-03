@@ -37,8 +37,10 @@
   .ctl{position:fixed;left:0;right:0;bottom:calc(46px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:flex-end;gap:14px;z-index:6}
   .ctl > .paw{margin-bottom:calc((var(--roll) - var(--btn)) / 2)}   /* 背包、地圖和擲骰子按鈕的中心對齊(上面多了骰子數量切換) */
   .roll{width:var(--roll);height:var(--roll);border-radius:50%;border:6px solid #fff;background:#ff7a59;color:#fff;font-size:calc(var(--roll) * .2);font-weight:900;
-    letter-spacing:.04em;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2);cursor:pointer;transition:transform .08s,box-shadow .08s}
-  .roll:active{transform:translateY(4px);box-shadow:0 2px 0 #d4553a,0 4px 8px rgba(0,0,0,.2)}
+    letter-spacing:.04em;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2);cursor:pointer;transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;isolation:isolate}
+  /* iPad Safari 會把按鈕裡的字另外畫一層,顏色和底色差一點點,看起來像文字外面有個淡淡的方框 → 不用轉場動畫、把整顆按鈕固定成一層,字就跟按鈕畫在一起 */
+  .roll span{display:block;background:transparent;transform:translateZ(0)}
+  .roll:active{transform:translateY(4px) translateZ(0);box-shadow:0 2px 0 #d4553a,0 4px 8px rgba(0,0,0,.2)}
   .roll small{display:block;font-size:calc(var(--roll) * .105);font-weight:700;opacity:.9;letter-spacing:0}
   .paw{height:var(--btn);padding:0 calc(var(--btn) * .34);border-radius:999px;border:4px solid #fff;background:#7cc6ff;color:#fff;font-weight:900;font-size:calc(var(--btn) * .27);
     box-shadow:0 4px 0 #4f9bd6;cursor:pointer}
@@ -293,6 +295,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=85"></script>
+<script type="module" src="./board.mjs?v=86"></script>
 </body>
 </html>
