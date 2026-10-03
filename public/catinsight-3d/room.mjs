@@ -505,8 +505,9 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   g.font = zhT ? '900 36px "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif' : '900 30px Menlo, monospace';
   g.fillStyle = 'rgba(0,0,0,.22)'; g.fillText(t1, W / 2 - 40 + 2, 138 + 2); g.fillText(t2, W / 2 - 40 + 2, (zhT ? 180 : 174) + 2);
   g.fillStyle = '#fff'; g.fillText(t1, W / 2 - 40, 138); g.fillStyle = '#ff7a59'; g.fillText(t2, W / 2 - 40, zhT ? 180 : 174);
-  // 鏡頭停在街機前時:最下面一排畫上語言切換(左)和 PLAY(右)(點擊判定見 arcadeButtonAt)
-  if (arcadeMenu) {
+  // 語言切換(左)和 PLAY(右)永遠畫在螢幕上(房間遠看也看得到,取代以前漂浮的 PLAY 牌子);
+  // 只有鏡頭停在街機前才能按(點擊判定見 arcadeButtonAt),遠看時點機台是先飛過去
+  {
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(59,47,42,.16)'; g.beginPath(); g.roundRect(ARC_BTN.zh.x - 4, ARC_BTN.zh.y - 4, ARC_BTN.zh.w + ARC_BTN.en.w + 10, ARC_BTN.zh.h + 8, 20); g.fill();
     for (const code of ['zh', 'en']) { const b = ARC_BTN[code], on = gameLang === code;
