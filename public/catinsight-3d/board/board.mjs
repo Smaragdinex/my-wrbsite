@@ -2221,7 +2221,7 @@ const charTakenBy = (k, except) => (k === hostChar() ? 'host' : NET.guests.find(
 function netOnMsg(m) {
   if (m.t === 'conn') { netLobby(m.from); return; }
   if (m.t === 'gone') { const g = guestByConn(m.from); if (!g) return; g.online = false; g.conn = null;
-    if (!NET.started) NET.guests.splice(NET.guests.indexOf(g), 1); else toast(L(`${g.name} disconnected`, `${g.name}斷線了`));
+    if (!NET.started) { NET.guests.splice(NET.guests.indexOf(g), 1); toast(L(`${g.name} left the room`, `${g.name} 離開了房間`)); } else toast(L(`${g.name} disconnected`, `${g.name}斷線了`));
     lobbyPaint(); netLobby(); remoteBanner(); return; }
   if (m.t === 'join') {
     const name = String(m.name || '').replace(/[<>]/g, '').trim().slice(0, 12) || L('Player', '玩家'), gid = String(m.gid || '').slice(0, 24);
@@ -2232,6 +2232,10 @@ function netOnMsg(m) {
     }
     if (!g && NET.guests.filter((x) => x.online).length >= 3) { netSend({ t: 'joined', ok: false, reason: 'full' }, m.from); return; }
     let char = m.char; if (!CHARS[char] || charTakenBy(char, g)) char = Object.keys(CHARS).find((k) => !charTakenBy(k, g));
+    // 主機畫面上提示:誰用什麼角色加入了 / 換了角色 / 改了名字
+    if (!g || !g.online) { toast(L(`${CHARS[char].icon} ${name} joined as ${CHARS[char].name}!`, `${CHARS[char].icon} ${name} 用${CHARS[char].name}加入了!`)); sfx('item'); }
+    else if (g.char !== char) { toast(L(`${name} switched to ${CHARS[char].name}`, `${name} 換成了${CHARS[char].name}`)); }
+    else if (g.name !== name) { toast(L(`${g.name} is now ${name}`, `${g.name} 改名為 ${name}`)); }
     if (g) Object.assign(g, { conn: m.from, online: true, name, char }); else { g = { gid, conn: m.from, name, char, online: true }; NET.guests.push(g); }
     netSend({ t: 'joined', ok: true, gid, char, name }, m.from); lobbyPaint(); paintStage(); netLobby(); return;
   }
@@ -2256,7 +2260,7 @@ function lobbyPaint() {
   const gs = NET.guests.filter((g) => g.online);
   box.innerHTML = `<div class="qr" id="lobbyQr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b>
     <small>${L('Scan the QR code or open', '手機掃 QR,或打開')} <span class="url">${joinUrl(NET.code).replace(/^https?:\/\//, '')}</span></small>
-    <div class="who">${gs.length ? gs.map((g) => `<span>${CHARS[g.char].icon} ${g.name}</span>`).join('') : `<span class="none">${L('Waiting for players…', '等待玩家加入…')}</span>`}</div></div>`;
+    <div class="who">${gs.length ? gs.map((g) => `<span>${CHARS[g.char].icon} <b>${g.name}</b> · ${CHARS[g.char].name} ✓</span>`).join('') : `<span class="none">${L('Waiting for players…', '等待玩家加入…')}</span>`}</div></div>`;
   const draw = () => { try { const q = qrLib(0, 'M'); q.addData(joinUrl(NET.code)); q.make(); $('lobbyQr').innerHTML = q.createSvgTag({ cellSize: 3, margin: 1, scalable: true }); } catch (e) {} };
   if (qrLib) draw();
   else if (window.qrcode) { qrLib = window.qrcode; draw(); }

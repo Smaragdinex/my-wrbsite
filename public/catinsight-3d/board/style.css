@@ -326,3 +326,5 @@ body.remote #ctl .roll{opacity:.55}
 /* 視窗很矮(例如橫拿的手機、小筆電)時設定卡整個縮小一點 */
 @media(max-height:760px){ .pcfg{zoom:.86} }
 @media(max-height:620px){ .pcfg{zoom:.74} }
+.lobby .who span{animation:lobbyIn .35s ease}
+@keyframes lobbyIn{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
