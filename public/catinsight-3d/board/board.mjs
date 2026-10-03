@@ -1678,17 +1678,21 @@ function saveRecord(r) {
   const list = loadRecords(); list.push(r); list.sort((a, b) => b.assets - a.assets);
   try { localStorage.setItem('css.records', JSON.stringify(list.slice(0, 10))); } catch (e) {}
 }
+// 這一局在排行榜裡的那一筆(用內容比對,因為存進去再讀出來已經不是同一個物件)
+const findRecord = (r) => loadRecords().find((x) => x.date === r.date && x.assets === r.assets && x.char === r.char && x.rounds === r.rounds) || null;
 const bestOf = () => { const l = loadRecords(); return { games: l.length, best: l[0] || null, stars3: l.filter((r) => r.stars === 3).length, wins: l.filter((r) => r.rank === 1).length }; };
-function recordsPanel() {
-  const list = loadRecords();
-  const rows = list.length ? list.map((r, i) => `<div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-top:1.5px solid #f1e6d6;font-size:calc(12.5px * var(--fs));font-weight:800">
-      <span style="width:1.4em">${i + 1}</span><span>${CHARS[r.char]?.icon || ''}</span><span style="flex:1">$${fmt(r.assets)} <small style="color:#9a8676">· ${r.rounds}${L(' rd', ' 回合')} · ${r.n}${L('p', ' 人')} · ${L('#', '第 ')}${r.rank}${L('', ' 名')}</small></span>
-      <span style="color:#ffb000">${'★'.repeat(r.stars)}<span style="color:#d9c9b3">${'★'.repeat(3 - r.stars)}</span></span><small style="color:#9a8676">${r.date}</small></div>`).join('')
-    : `<p>${L('No games finished yet.', '還沒有完成過的對局。')}</p>`;
-  return new Promise((res) => {
-    const p = panel(`<h3>🏆 ${L('Best games', '最佳紀錄')}</h3><p>${L('Top 10 by total assets, saved in this browser.', '依總資產排前 10 名,只存在這個瀏覽器裡。')}</p><div>${rows}</div><div class="btns"><button class="b-skip">${L('Close', '關閉')}</button></div>`);
-    p.querySelector('button').onclick = () => { closePanel(); res(); };
-  });
+// 結算畫面右側的排行榜:1~10 名,這一局的那筆會亮起來
+function recordsBox(cur) {
+  const list = loadRecords(), best = bestOf();
+  const same = (a, b) => a && b && a.date === b.date && a.assets === b.assets && a.char === b.char && a.rounds === b.rounds;
+  const rows = list.map((r, i) => `<div class="rrow ${same(r, cur) ? 'me' : ''}">
+      <span class="rk">${i + 1}</span><span class="ic">${CHARS[r.char]?.icon || ''}</span>
+      <div class="c"><b>$${fmt(r.assets)}</b><small>${r.rounds}${L(' rd', ' 回合')} · ${r.n}${L('p', ' 人')} · ${L('#', '第 ')}${r.rank}${L('', ' 名')} · ${r.date.slice(5)}</small></div>
+      <span class="st">${'★'.repeat(r.stars)}<i>${'★'.repeat(3 - r.stars)}</i></span></div>`).join('');
+  return `<div class="rbox"><h4>🏆 ${L('Leaderboard', '排行榜')}</h4>
+    <p>${L(`${best.games} game${best.games > 1 ? 's' : ''} · ${best.wins} win${best.wins === 1 ? '' : 's'} · ${best.stars3} three-star`, `已記錄 ${best.games} 局 · 第一名 ${best.wins} 次 · 三顆星 ${best.stars3} 次`)}</p>
+    ${rows || `<p>${L('No games finished yet.', '還沒有完成過的對局。')}</p>`}
+    <small class="note2">${L('Top 10 by total assets, saved in this browser.', '依總資產排前 10 名,只存在這個瀏覽器裡。')}</small></div>`;
 }
 function finish() {
   S.over = true; S.hi = S.players.findIndex((p) => p.human);      // 結算畫面用第一位真人的視角
@@ -1729,8 +1733,9 @@ function finish() {
   const me0 = S.players[S.hi], myRank = 1 + rank.findIndex((p) => p === me0), rec = { date: new Date().toISOString().slice(0, 10), char: me0.char, n: S.players.length, rounds: S.rolls, assets: Math.round(assetsOf(me0)), done: S.done, stars: done, rank: myRank };
   const prev = bestOf(); saveRecord(rec); const after = bestOf();
   const newBest = !prev.best || rec.assets > prev.best.assets;
-  const recLine = `<p style="font-size:calc(12.5px * var(--fs))">${newBest ? `🏆 <b>${L('New personal best!', '新的個人最佳紀錄!')}</b> ` : L(`Personal best $${fmt(prev.best.assets)}. `, `個人最佳 $${fmt(prev.best.assets)}。`)}${L(`${after.games} game${after.games > 1 ? 's' : ''} saved · ${after.wins} win${after.wins === 1 ? '' : 's'} · ${after.stars3} three-star`, `已記錄 ${after.games} 局 · 第一名 ${after.wins} 次 · 三顆星 ${after.stars3} 次`)} <a href="#" id="recBtn" style="color:#8a5cf5">${L('View records', '看排行榜')}</a></p>`;
-  $('end').innerHTML = S.nh > 1
+  const recLine = newBest ? `<p style="font-size:calc(12.5px * var(--fs))">🏆 <b>${L('New personal best!', '新的個人最佳紀錄!')}</b></p>` : '';
+  const rbox = recordsBox(findRecord(rec));
+  $('end').innerHTML = `<div class="endwrap">` + (S.nh > 1
     ? `<div class="card">
     <h2>🏆 ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}</h2>
     <div style="margin:10px 0">${table}</div>${recLine}
@@ -1744,10 +1749,9 @@ function finish() {
     <div style="margin:10px 0">${table}</div>${recLine}
     <p>${style}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
-    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`;
+    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`) + rbox + '</div>';
   $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose');
   $('again').onclick = start;
-  $('recBtn').onclick = (e) => { e.preventDefault(); recordsPanel(); };
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
 }
 // 選角:在 3D 轉盤上選(pickStage),同時決定人數(2~4)和真人數(1~2)。電腦對手從剩下的角色裡隨機挑。
