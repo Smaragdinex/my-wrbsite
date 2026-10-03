@@ -777,8 +777,8 @@ function stageSelect(i, dir = 1) {
 function paintStage() {
   const c = CHARS[slots[stageSel].key];
   $('pname').textContent = c.name;
-  $('ptitle').textContent = CFG.humans > 1 ? L(`Player ${pickWho + 1}: choose a character`, `玩家 ${pickWho + 1} 選擇角色`) : L('Choose your character', '選擇你的角色');
-  $('pok').textContent = CFG.humans > 1 && pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Play as ${c.name}`, `用${c.name}開始`);
+  // 沒有標題,所以兩位真人時用按鈕文字說明現在是誰在選
+  $('pok').textContent = CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`);
   // 人數設定:只有第一位在選的時候可以改
   $('pcfg').classList.toggle('hide', pickWho > 0);
   $('pcN').textContent = L('Players', '人數'); $('pcH').textContent = L('Humans', '真人玩家');
