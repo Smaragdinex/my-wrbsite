@@ -1337,7 +1337,10 @@ function assetRowsHtml(A, mine) {
   const held = KEYS.filter((k) => A.hold[k].n > 0).sort((x, y) => A.hold[y].n * S.price[y] - A.hold[x].n * S.price[x]);
   const plTxt = (pl) => `<small style="display:block;font-size:.85em;color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</small>`;
   let totPL = 0;
-  return `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` + debtRow(A.debt) +
+  const stockV = KEYS.reduce((a, k) => a + A.hold[k].n * S.price[k], 0);
+  return `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` +
+    `<div class="row"><i style="background:#4aa8ff"></i><span>${L('Stocks', '股票市值')}</span><span></span><span>${fmt(stockV)}</span></div>` +
+    `<div class="row"><i style="background:#ffb000"></i><span>${L('Total assets', '總資產')}</span><span></span><b>${fmt(assetsOf(A))}</b></div>` + debtRow(A.debt) +
       (held.length ? held.map((k) => { const h = A.hold[k], pl = h.n * S.price[k] - h.cost; totPL += pl;
         return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${h.n} ${L('sh', '股')}${marginTag(h, k)}</span><span style="text-align:right">${fmt(h.n * S.price[k])}${plTxt(pl)}</span></div>`; }).join('')
         : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
