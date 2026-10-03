@@ -172,11 +172,28 @@ const SPECIAL_RATE = 0.8;          // 每次抽牌,三張裡有一張是特殊�
 // 銀行:走到銀行格可以借現金(最多欠 BANK_MAX),每次經過起點付欠款 5% 的利息;欠的錢會從總資產扣掉
 const BANK_MAX = 5000, BANK_RATE = 0.05;
 // 棋盤裡面的兩個特殊格:警察局、IPO 攤位(各一格 cell),離開時擲一顆骰子,沿著 6 格的小路(path)走回外圈;
-// 走過最後一格就踩上外圈的 exit 那格,多的點數繼續往前走。小路上 fate 指定的格子是「命運」(踩到翻一張命運牌)。座標是格網的 [x, z]
+// 走過最後一格就踩上外圈的 exit 那格,多的點數繼續往前走。小路上每一格是什麼(命運、道具、利息…)每次有人進來都重新隨機生成。座標是格網的 [x, z]
 const LANES = {
-  jail: { exit: 31, cell: [2, 7], path: [[1, 7], [1, 6], [1, 5], [1, 4], [1, 3], [1, 2]], fate: [1, 4] },
-  ipo: { exit: 62, cell: [14, 8], path: [[15, 8], [15, 9], [15, 10], [15, 11], [15, 12], [15, 13]], fate: [1, 4] },
+  jail: { exit: 31, cell: [2, 7], path: [[1, 7], [1, 6], [1, 5], [1, 4], [1, 3], [1, 2]] },
+  ipo: { exit: 62, cell: [14, 8], path: [[15, 8], [15, 9], [15, 10], [15, 11], [15, 12], [15, 13]] },
 };
+// 小路格子的種類:命運只有小路上才有(每條固定 2 格),其他 4 格從 PATH_POOL 隨機抽(可重複)
+const PATH_POOL = ['gift', 'interest', 'coin', 'fine', 'blank', 'blank'];
+const PATH_INFO = {
+  fate: { color: 0xc08cf5, base: 0x9a6ad8, a: '★', b: L('FATE', '命運') },
+  gift: { color: 0xff9f6b, base: 0xd9814f, a: L('GIFT', '禮物'), b: L('free item', '送道具') },
+  interest: { color: 0x4a63b0, base: 0x37508f, a: L('INTEREST', '利息'), b: L('+3% cash', '現金 +3%') },
+  coin: { color: 0xffd24a, base: 0xd9ad2a, a: L('CASH', '撿到錢'), b: '+$300' },
+  fine: { color: 0x9aa0ad, base: 0x7b8290, a: L('FINE', '罰單'), b: '-$200' },
+  blank: null,
+};
+function genLanePath() {
+  const t = new Array(LANE_LEN).fill(null);
+  const a = Math.floor(Math.random() * LANE_LEN); let b; do { b = Math.floor(Math.random() * LANE_LEN); } while (b === a);
+  t[a] = 'fate'; t[b] = 'fate';
+  for (let i = 0; i < LANE_LEN; i++) if (!t[i]) t[i] = PATH_POOL[Math.floor(Math.random() * PATH_POOL.length)];
+  return t;
+}
 // 事件生效:改股價;有些事件(普發現金)還會直接發錢給每一位玩家
 function applyEvent(e) {
   KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
@@ -428,6 +445,7 @@ function newState() {
     rolls: 0, busy: false, over: false, maxRounds: MAX_ROLLS, aiLevel: 'normal', players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null, after: null,
+    lanePath: { jail: genLanePath(), ipo: genLanePath() },      // 兩條小路現在各格是什麼
   };
   for (const f of P_FIELDS) Object.defineProperty(S, f, { get: () => S.players[S.hi][f], set: (v) => { S.players[S.hi][f] = v; } });
   Object.defineProperty(S, 'ai', { get: () => S.players[S.ci] });
@@ -611,15 +629,15 @@ for (const [type, def] of Object.entries(LANES)) {
   // 一格小路:底座 + 面板 + 畫在 canvas 上的標籤(轉 45 度正對鏡頭)
   const cellTile = (x, z, base, top, draw) => {
     const g = new THREE.Group(); g.position.copy(cellPos(x, z)); scene.add(g);
-    box(1.04, 0.30, 1.04, base, 0, 0.21, 0, 0.09, g);
-    box(1.0, 0.10, 1.0, top, 0, TOP - 0.05, 0, 0.045, g);
+    const bm = box(1.04, 0.30, 1.04, base, 0, 0.21, 0, 0.09, g);
+    const tm = box(1.0, 0.10, 1.0, top, 0, TOP - 0.05, 0, 0.045, g);
     const cv = document.createElement('canvas'); cv.width = cv.height = 256; const c = cv.getContext('2d');
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.strokeStyle = '#fff'; draw(c);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     const holder = new THREE.Group(); holder.rotation.y = Math.PI / 4; holder.position.y = TOP + 0.004; g.add(holder);
     const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), Object.assign(new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }), { userData: { outlineParameters: { visible: false } } }));
     lab.rotation.x = -Math.PI / 2; holder.add(lab);
-    return { g };
+    const t = { g, cv, tex, bm, tm, redraw(fn) { c.clearRect(0, 0, 256, 256); c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.globalAlpha = 1; fn(c); tex.needsUpdate = true; } };
+    t.redraw(draw); return t;
   };
   const cell = cellTile(def.cell[0], def.cell[1], type === 'jail' ? 0x565e6c : 0x1f9a80, LANE_COLOR[type], (c) => {
     if (type === 'jail') {
@@ -631,12 +649,25 @@ for (const [type, def] of Object.entries(LANES)) {
       c.font = F(ZH ? 40 : 36); c.fillText(L(`${IPO_FREE} FREE`, `送 ${IPO_FREE} 股`), 128, 186);
     }
   });
-  // 小路:普通格寫第幾步(淡色),命運格是紫色、寫「★ 命運」
-  const path = def.path.map(([x, z], i) => def.fate.includes(i)
-    ? cellTile(x, z, 0x9a6ad8, TILE_COLOR.fate, (c) => { c.font = F(96); c.fillText('★', 128, 96); c.font = F(ZH ? 44 : 40); c.fillText(L('FATE', '命運'), 128, 196); })
-    : cellTile(x, z, type === 'jail' ? 0x8c95a5 : 0x3fcfae, type === 'jail' ? 0xb3bac6 : 0x7fe3c9, (c) => { c.globalAlpha = 0.85; c.font = F(110); c.fillText(String(i + 1), 128, 128); }));
-  laneTiles[type] = { cell, path };
+  // 小路的 6 格:先做空白格,內容由 drawLane 依 S.lanePath 畫上去(每次重新生成都會重畫)
+  const path = def.path.map(([x, z]) => cellTile(x, z, 0x8c95a5, 0xb3bac6, () => {}));
+  laneTiles[type] = { cell, path, F };
 }
+// 把小路每一格畫成現在的種類:空白格寫第幾步,其他格換顏色、寫名稱和效果
+function drawLane(type) {
+  const lt = laneTiles[type], F = lt.F, blankTop = type === 'jail' ? 0xb3bac6 : 0x7fe3c9, blankBase = type === 'jail' ? 0x8c95a5 : 0x3fcfae;
+  S.lanePath[type].forEach((k, i) => {
+    const t = lt.path[i], info = PATH_INFO[k];
+    t.tm.material.color.setHex(info ? info.color : blankTop); t.bm.material.color.setHex(info ? info.base : blankBase);
+    t.redraw((c) => {
+      if (!info) { c.globalAlpha = 0.85; c.font = F(110); c.fillText(String(i + 1), 128, 128); return; }
+      if (k === 'fate') { c.font = F(96); c.fillText('★', 128, 96); c.font = F(ZH ? 44 : 40); c.fillText(info.b, 128, 196); return; }
+      c.font = F(info.a.length > 4 ? 44 : (ZH ? 56 : 48)); c.fillText(info.a, 128, 100);
+      c.font = F(ZH ? 34 : 32); c.fillText(info.b, 128, 172);
+    });
+  });
+}
+const drawLanes = () => Object.keys(LANES).forEach(drawLane);
 // 小路旁的建築:警察局(拘留小路)和交易所(IPO 小路,白色、金色的鐘)
 {
   // 警察局:放在警察局格的內側(鏡頭看過去不會擋到格子和小路上的棋子)。藍白色的建築、鐵窗、屋頂的紅藍警示燈,
@@ -1486,12 +1517,14 @@ function bagPanel() {
 // 被送進小路:大跳躍到第一格。拘留小路 = 帳戶凍結(不能買賣、不能用道具);IPO 小路 = 每格都能用承銷價申購新股
 async function enterLane(isMe, type) {
   const who = isMe ? S : S.ai, P = isMe ? PM() : PA(), name = CHARS[S.foe].name;
+  // 每次有人進來,這條小路重新隨機生成(除非還有別人正走在上面)
+  if (!S.players.some((p) => p !== who && p.lane && p.lane.type === type && p.lane.at > 0)) { S.lanePath[type] = genLanePath(); drawLane(type); }
   who.lane = { type, wait: type === 'jail' ? JAIL_WAIT : 0, at: 0 }; hud();      // at:0 = 在攤位 / 警察局,1~6 = 小路第幾格
   await hopOnto(laneTiles[type].cell.g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
   if (isMe) await cardPanel(L('Sent to the police station', '被送進警察局'),
-    L(`Rest here ${JAIL_WAIT} rounds. You cannot buy, sell, cover or use items, but prices keep moving: a margin position below 130% is still sold for you. On your turn you can pay $${fmt(BAIL)} bail to leave at once. Leaving, you roll one die each turn along the ${LANE_LEN}-tile path; the ★ tiles flip a fate card.`,
-      `在這裡休息 ${JAIL_WAIT} 回合。期間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${fmt(BAIL)} 保釋金立刻離開。離開時每回合擲一顆骰子,沿 ${LANE_LEN} 格小路走回外圈,踩到 ★ 要翻命運牌。`));
+    L(`Rest here ${JAIL_WAIT} rounds. You cannot buy, sell, cover or use items, but prices keep moving: a margin position below 130% is still sold for you. On your turn you can pay $${fmt(BAIL)} bail to leave at once. Leaving, you roll one die each turn along the ${LANE_LEN}-tile path: ★ tiles flip a fate card, and the rest are random (items, interest, fines…).`,
+      `在這裡休息 ${JAIL_WAIT} 回合。期間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${fmt(BAIL)} 保釋金立刻離開。離開時每回合擲一顆骰子,沿 ${LANE_LEN} 格小路走回外圈:踩到 ★ 翻命運牌,其他格是隨機的(道具、利息、罰單…)。`));
   else { toast(L(`${name} is sent to the police station`, `${name}被送進警察局了`)); await wait(1.3); }
 }
 // 沿著外圈走 n 格(經過起點 / 股息結算格會結算)。真人和電腦都用這個
@@ -1515,8 +1548,17 @@ async function leaveLane(isMe) {
   }
   hud();
 }
-// 小路上踩到的格子是什麼:'fate' 命運、'_path' 普通的一步、'_jail' / '_ipo' 還在攤位上
-const laneTileType = (lane) => (lane.at > 0 ? (LANES[lane.type].fate.includes(lane.at - 1) ? 'fate' : '_path') : '_' + lane.type);
+// 小路上踩到的格子是什麼:'fate' 命運、'_gift' / '_interest' / '_coin' / '_fine' 小路專屬的格子、'_path' 空白的一步、'_jail' / '_ipo' 還在攤位上
+const laneTileType = (lane) => { if (!lane.at) return '_' + lane.type; const k = S.lanePath[lane.type][lane.at - 1]; return k === 'fate' ? 'fate' : k === 'blank' ? '_path' : '_' + k; };
+// 小路專屬格子的效果(真人和電腦共用)。回傳提示文字
+function pathEffect(who, k, isMe) {
+  const name = isMe ? L('You', '你') : CHARS[S.foe].name;
+  if (k === '_gift') { const id = randomItem(); who.bag.push(id); sfx('item'); return L(`${name} found ${itemInfo(id).name}`, `${name}撿到${itemInfo(id).name}`); }
+  if (k === '_interest') { const g = Math.round(Math.max(0, who.cash) * 0.03); who.cash += g; sfx('coin'); return L(`${name} earned $${fmt(g)} interest`, `${name}領到利息 $${fmt(g)}`); }
+  if (k === '_coin') { who.cash += 300; sfx('coin'); return L(`${name} picked up $300`, `${name}撿到 $300`); }
+  if (k === '_fine') { who.cash -= 200; sfx('short'); return L(`${name} got a $200 fine`, `${name}吃了一張 $200 罰單`); }
+  return '';
+}
 function jailPanel() {
   return new Promise((res) => {
     const left = S.lane.wait, risky = KEYS.filter((k) => S.hold[k].loan > 0);
@@ -1734,6 +1776,7 @@ async function aiLand() {
   const A = S.ai, who = CHARS[S.foe].name;
   const type = A.lane ? laneTileType(A.lane) : TILES[A.pos], sec = SECTORS[type];
   if (type === '_jail' || type === '_ipo' || type === '_path') { await wait(0.2); }
+  else if (type.startsWith('_')) { toast(pathEffect(A, type, false)); hud(); await wait(1.0); }
   else if (type === 'ipo') await enterLane(false, 'ipo');
   else if (type === 'fate') { await wait(0.3); const c = await drawFateCards(true); await applyFate(c, false); }
   else if (sec) {
@@ -1819,6 +1862,7 @@ async function landOn() {
   const type = S.lane ? laneTileType(S.lane) : TILES[S.pos];
   if (type === '_jail') { if (S.lane.wait > 0) { toast(L('Resting at the police station: no trading this turn', '在警察局休息,這回合不能交易')); await wait(0.9); } }
   else if (type === '_ipo' || type === '_path') { await wait(0.2); }
+  else if (type.startsWith('_')) { toast(pathEffect(S, type, true)); hud(); await wait(0.9); }
   else if (type === 'ipo') await enterLane(true, 'ipo');
   else if (type === 'fate') { const c = await drawFateCards(false); await applyFate(c, true); }
   else if (SECTORS[type]) await buyPanel(type);
@@ -1947,7 +1991,7 @@ function finish() {
 // 網址 ?piece=cat 可以跳過選角(測試用),還可以加 &n=4&h=2 指定人數和真人數
 async function start() {
   newState(); $('end').classList.add('hide'); closePanel(); $('toast').classList.remove('on');   // 上一局最後的提示不要留到選角畫面
-  staticText(); PIECES.forEach((P) => placePiece(0, P)); focus = PIECES[0]; diceSpots(PIECES[0]); dice.forEach((d, i) => d.position.copy(DIE_REST[i])); drawAll();
+  staticText(); PIECES.forEach((P) => placePiece(0, P)); focus = PIECES[0]; diceSpots(PIECES[0]); dice.forEach((d, i) => d.position.copy(DIE_REST[i])); drawAll(); drawLanes();
   S.busy = true; showCtl(false); hud();
   let cfg;
   if (CHARS[PRESET]) { const q = new URLSearchParams(location.search), n = Math.min(4, Math.max(2, +q.get('n') || 2)), h = Math.min(2, Math.max(1, +q.get('h') || 1));
