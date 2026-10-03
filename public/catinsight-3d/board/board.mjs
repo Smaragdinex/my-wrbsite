@@ -1071,7 +1071,7 @@ function pickStage() {
     }; });
     $('pcOnline').onclick = () => { if (NET.on) netClose(); else netOpen(); };
     // 再玩一次:房間留著,手機回到大廳(可以換角色),離線的位子清掉
-    if (NET.on) { NET.started = false; NET.guests = NET.guests.filter((g) => g.online); netSend({ t: 'reset' }); }
+    if (NET.on) { NET.started = false; NET.guests.forEach((g) => rtcStop(g)); NET.guests = NET.guests.filter((g) => g.online); netSend({ t: 'reset' }); }
     document.body.classList.remove('remote'); $('remoteBanner').classList.add('hide'); lobbyPaint(); netLobby();
     $('pok').onclick = () => {
       if (NET.on) {              // 線上同樂:主機 + 手機上的玩家都是真人,不夠的人數用電腦補
@@ -1081,7 +1081,7 @@ function pickStage() {
         // 4 支手機都加入時,主機只當螢幕(不下場);否則主機自己也是一位玩家
         const hostPlays = gs.length < 4, chars = [...(hostPlays ? [slots[stageSel].key] : []), ...gs.map((g) => g.char)], humans = chars.length, n = Math.max(CFG.n, humans);
         const rest = Object.keys(CHARS).filter((k) => !chars.includes(k)).sort(() => Math.random() - 0.5);
-        netSend({ t: 'start' });
+        netSend({ t: 'start' }); NET.started = true; setTimeout(() => gs.forEach((g) => rtcStart(g)), 800);
         res({ chars: [...chars, ...rest.slice(0, n - humans)], humans, rounds: CFG.rounds, ai: CFG.ai, names: [...(hostPlays ? [nameIn.value.trim().slice(0, 12)] : []), ...gs.map((g) => g.name)], remote: gs.map((g) => g.gid), hostPlays });
         return;
       }
@@ -2242,7 +2242,7 @@ async function netOpen() {
   } catch (e) { toast(L('Could not create a room', '開房間失敗,請檢查網路')); }
   $('pcOnline').disabled = false;
 }
-function netClose() { NET.on = false; clearTimeout(NET.retry); if (NET.ws) { try { NET.ws.close(); } catch (e) {} } NET.ws = null; NET.guests = []; NET.started = false; NET.code = null; lobbyPaint(); }
+function netClose() { NET.guests.forEach((g) => rtcStop(g)); NET.on = false; clearTimeout(NET.retry); if (NET.ws) { try { NET.ws.close(); } catch (e) {} } NET.ws = null; NET.guests = []; NET.started = false; NET.code = null; lobbyPaint(); }
 function netConnect() {
   if (!NET.on) return;
   const ws = new WebSocket(`${LB_API.replace(/^http/, 'ws')}/room/${NET.code}/ws?role=host`); NET.ws = ws;
@@ -2254,7 +2254,7 @@ const hostChar = () => slots[stageSel].key;
 const charTakenBy = (k, except) => (k === hostChar() ? 'host' : NET.guests.find((g) => g !== except && g.char === k) || null);
 function netOnMsg(m) {
   if (m.t === 'conn') { netLobby(m.from); return; }
-  if (m.t === 'gone') { const g = guestByConn(m.from); if (!g) return; g.online = false; g.conn = null;
+  if (m.t === 'gone') { const g = guestByConn(m.from); if (!g) return; g.online = false; g.conn = null; rtcStop(g);
     if (!NET.started) { NET.guests.splice(NET.guests.indexOf(g), 1); toast(L(`${g.name} left the room`, `${g.name} 離開了房間`)); } else toast(L(`${g.name} disconnected`, `${g.name}斷線了`));
     lobbyPaint(); netLobby(); remoteBanner(); return; }
   if (m.t === 'join') {
@@ -2271,6 +2271,7 @@ function netOnMsg(m) {
     netSend({ t: 'joined', ok: true, gid, char, name }, m.from); lobbyPaint(); paintStage(); netLobby(); return;
   }
   const g = guestByConn(m.from); if (!g || !NET.started || !S) return;
+  if (m.t === 'rtc') { rtcOnMsg(g, m); return; }
   const p = S.players[S.turn]; if (!p || !p.human || p.remote !== g.gid) return;      // 只有輪到的那支手機可以操作
   if (m.t === 'click' && m.box !== 'end') { const b = $(m.box)?.querySelectorAll('button, .dcard')[m.idx | 0]; if (b && !b.disabled) b.click(); }
   else if (m.t === 'input') { const inp = $(m.box)?.querySelectorAll('input')[m.idx | 0]; if (inp) { inp.value = m.value; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } }
@@ -2314,7 +2315,29 @@ function netMe(to) {
   for (const g of NET.guests) { if (!g.online || (to && g !== to)) continue; const p = S.players.find((x) => x.remote === g.gid); if (!p) continue;
     netSend({ t: 'me', name: nameOf(p), icon: CHARS[p.char].icon, cash: fmt(p.cash), assets: fmt(assetsOf(p)), rows: assetRowsHtml(p, true), mine: cur === p, turn: cur ? nameOf(cur) : '', round: $('roundTxt').textContent, over: !!S.over }, g.conn); }
 }
-function netPushAll(g) { netMe(g); netUiFlush(g.conn); }
+function netPushAll(g) { netMe(g); netUiFlush(g.conn); rtcStart(g); }
+// 把主機的棋盤畫面(WebGL canvas)用 WebRTC 直播到每支手機:手機就看得到棋盤和動畫。信令走房間轉送,影像走 P2P(同一個 WiFi 最順)
+let rtcStream = null;
+const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+function rtcStart(g) {
+  if (!g.conn || !NET.started || !renderer.domElement.captureStream) return;
+  rtcStop(g);
+  try {
+    rtcStream = rtcStream || renderer.domElement.captureStream(20);
+    const pc = new RTCPeerConnection(RTC_CFG); g.pc = pc;
+    rtcStream.getTracks().forEach((t) => pc.addTrack(t, rtcStream));
+    pc.getSenders().forEach((sn) => { try { const p = sn.getParameters(); p.encodings = [{ maxBitrate: 1500000, maxFramerate: 20 }]; sn.setParameters(p); } catch (e) {} });
+    pc.onicecandidate = (e) => { if (e.candidate) netSend({ t: 'rtc', ice: e.candidate }, g.conn); };
+    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' && g.pc === pc) setTimeout(() => rtcStart(g), 2000); };
+    pc.createOffer().then((o) => pc.setLocalDescription(o)).then(() => netSend({ t: 'rtc', sdp: pc.localDescription }, g.conn)).catch(() => {});
+  } catch (e) { console.warn('[rtc]', e); }
+}
+function rtcStop(g) { if (g.pc) { try { g.pc.close(); } catch (e) {} g.pc = null; } }
+function rtcOnMsg(g, m) {
+  const pc = g.pc; if (!pc) return;
+  if (m.sdp) pc.setRemoteDescription(m.sdp).catch(() => {});
+  else if (m.ice) pc.addIceCandidate(m.ice).catch(() => {});
+}
 // 輪到手機上的玩家:主機畫面上的按鈕鎖住(不然主機可以幫他按),顯示等待提示。那支手機斷線的話就解鎖讓主機代打
 function remoteBanner() {
   const p = S && S.players[S.turn], g = p && p.remote && NET.guests.find((x) => x.gid === p.remote), on = !!(g && g.online && !S.over);

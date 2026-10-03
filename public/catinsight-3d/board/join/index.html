@@ -53,6 +53,8 @@
   .jhead .nm{font-weight:900;font-size:16px;color:var(--ink)}
   .jhead .st{font-size:12px;font-weight:800;color:#8a786c}.jhead .st.mine{color:#1c8a4a}
   .jhead .money{margin-left:auto;text-align:right;font-weight:900;color:var(--ink);font-size:15px;line-height:1.2}.jhead .money small{display:block;font-size:11px;color:#9a8676;font-weight:800}
+  .jvidwrap{border-radius:18px;overflow:hidden;background:#b9d9a8;border:3px solid #fff;outline:2px solid var(--line);aspect-ratio:16/10}
+  .jvidwrap video{width:100%;height:100%;object-fit:cover;display:block}
   .jassets{background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:6px 0}
   .jassets .row:first-of-type{border-top:0}
   .jstatus{text-align:center;font-weight:900;color:#6b594e;font-size:14px;padding:6px 0}
@@ -75,6 +77,8 @@
     <button class="jgo" id="jgo">加入</button>
     <p id="jmsg" style="margin:10px 0 0;color:#c4472f"></p>
   </div>
+  <!-- 主機棋盤的即時畫面(WebRTC) -->
+  <div class="jvidwrap hide" id="jvidwrap"><video id="jvid" autoplay muted playsinline></video></div>
   <div class="jhead hide" id="jhead"><span class="ico" id="jico">🐱</span><div><div class="nm" id="jnm"></div><div class="st" id="jst"></div></div><div class="money"><span id="jcash">$0</span><small id="jassets2">總資產 $0</small></div></div>
   <div class="jassets hide" id="jrows"></div>
   <div class="jstatus hide" id="jstatus"></div>
@@ -86,6 +90,6 @@
 <div class="panel hide" id="panel"></div>
 <div class="draw hide" id="draw"></div>
 <div class="end hide" id="end"></div>
-<script type="module" src="../join.mjs?v=2"></script>
+<script type="module" src="../join.mjs?v=3"></script>
 </body>
 </html>

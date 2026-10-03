@@ -33,9 +33,10 @@ function onMsg(m) {
   if (m.t === 'start') { ST.started = true; showGame(); return; }
   if (m.t === 'host') { ST.hostOn = !!m.on; setStatus(); return; }
   if (m.t === 'reset') {        // 主機按了再玩一次:回到大廳,等下一局
-    ST.started = false; ST.mine = false; ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { $(id).className = $(id).className.replace(/\bhide\b/, '') + ' hide'; $(id).innerHTML = ''; });
+    ST.started = false; ST.mine = false; if (pc) { try { pc.close(); } catch (e) {} pc = null; } $('jvidwrap').classList.add('hide'); ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { $(id).className = $(id).className.replace(/\bhide\b/, '') + ' hide'; $(id).innerHTML = ''; });
     $('jform').classList.remove('hide'); $('jhead').classList.add('hide'); $('jrows').classList.add('hide'); $('jstatus').classList.add('hide'); paintChars(); return; }
   if (!ST.started) return;
+  if (m.t === 'rtc') { rtcOnMsg(m); return; }
   if (m.t === 'toast') { toast(m.msg); return; }
   if (m.t === 'me') { $('jico').textContent = m.icon; $('jnm').textContent = m.name; $('jcash').textContent = '$' + m.cash; $('jassets2').textContent = '總資產 $' + m.assets; $('jrows').innerHTML = m.rows;
     ST.mine = !!m.mine; ST.over = !!m.over; $('jst').textContent = m.over ? '遊戲結束' : m.mine ? '輪到你了!' : `現在是 ${m.turn} 的回合 · ${m.round}`; $('jst').classList.toggle('mine', ST.mine); applyMine(); return; }
@@ -51,6 +52,19 @@ function setStatus() {
 function applyMine() {
   ['ctl', 'stepCtl', 'panel'].forEach((id) => { $(id).style.visibility = ST.mine ? '' : 'hidden'; });
   ['draw', 'end'].forEach((id) => { $(id).style.pointerEvents = ST.mine && id !== 'end' ? '' : 'none'; });
+}
+// 收主機的棋盤直播
+let pc = null;
+async function rtcOnMsg(m) {
+  try {
+    if (m.sdp && m.sdp.type === 'offer') {
+      if (pc) { try { pc.close(); } catch (e) {} }
+      pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      pc.onicecandidate = (e) => { if (e.candidate) send({ t: 'rtc', ice: e.candidate }); };
+      pc.ontrack = (e) => { const v = $('jvid'); v.srcObject = e.streams[0]; $('jvidwrap').classList.remove('hide'); v.play().catch(() => {}); };
+      await pc.setRemoteDescription(m.sdp); const a = await pc.createAnswer(); await pc.setLocalDescription(a); send({ t: 'rtc', sdp: pc.localDescription });
+    } else if (m.ice && pc) await pc.addIceCandidate(m.ice);
+  } catch (e) { console.warn('[rtc]', e); }
 }
 function showGame() {
   $('jform').classList.add('hide'); $('jhead').classList.remove('hide'); $('jrows').classList.remove('hide'); $('jstatus').classList.remove('hide'); setStatus();
