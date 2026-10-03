@@ -1330,7 +1330,7 @@ function buildFoes() {
   const el = $('assetTabs'); el.innerHTML = '';
   S.players.filter((p) => p !== meP()).forEach((p) => {      // 直排只放對手;自己是左上那顆頭像
     const b = document.createElement('button'); b.dataset.i = p.i; b.setAttribute('aria-label', nameOf(p));
-    b.onclick = () => { S.view = p.i; if ($('assetBox').classList.contains('fold') || S.view !== p.i) $('assetBox').classList.remove('fold'); hud(); };
+    b.onclick = () => { const box = $('assetBox'); if (!box.classList.contains('fold') && S.view === p.i) box.classList.add('fold'); else { S.view = p.i; box.classList.remove('fold'); } hud(); };   // 點同一個再點一次就收起
     el.appendChild(b);
   });
 }
@@ -2417,7 +2417,7 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
   window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') paint(!!e.data.on); });
 }
 $('bagBtn').onclick = bagPanel;
-$('avaMe').onclick = () => { if (!S || !S.players.length) return; S.view = meP().i; $('assetBox').classList.remove('fold'); hud(); };
+$('avaMe').onclick = () => { if (!S || !S.players.length) return; const box = $('assetBox'); if (!box.classList.contains('fold') && (S.view ?? meP().i) === meP().i) box.classList.add('fold'); else { S.view = meP().i; box.classList.remove('fold'); } hud(); };
 // 提示泡泡:手機預設縮成「!」,點一下展開 / 收起
 { const tb = $('tipbar'); if (matchMedia('(max-width:900px)').matches) tb.classList.add('min'); tb.querySelector('.bubble').onclick = () => tb.classList.toggle('min'); }
 
@@ -2427,7 +2427,7 @@ $('mapBtn').onclick = () => { pan.set(0, 0, 0); view.overview = !view.overview; 
 if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
 // 右側兩個面板的標題可以點:三角箭頭收合 / 展開
 document.querySelectorAll('.lcol .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
-if (matchMedia('(max-width:900px)').matches) $('assetBox').classList.add('fold');   // 手機:資產框預設收起,點頭像展開
+$('assetBox').classList.add('fold');   // 資產框預設收起,點頭像展開、再點收起
 // 右邊兩顆圖示鈕:點了在旁邊彈出市場事件 / 任務框(一次只開一個;點標題或再點一次收起)
 { const pair = { evtBtn: 'evtBox', missBtn: 'missBox' };
   const toggle = (id) => { const want = $(pair[id]).classList.contains('fold'); Object.values(pair).forEach((b) => $(b).classList.add('fold')); Object.keys(pair).forEach((k) => $(k).classList.remove('on'));

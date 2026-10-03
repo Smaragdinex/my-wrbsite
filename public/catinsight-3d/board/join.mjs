@@ -57,7 +57,7 @@ function paintHud() {
 function paintTabs() {
   const h = ST.hud; if (!h) return; const el = $('assetTabs');
   const foes = h.players.filter((q) => q.i !== h.me);      // 直排只放對手
-  if (el.children.length !== foes.length) { el.innerHTML = ''; foes.forEach((q) => { const b = document.createElement('button'); b.dataset.i = q.i; b.onclick = () => { ST.view = q.i; $('assetBox').classList.remove('fold'); paintHud(); }; el.appendChild(b); }); }
+  if (el.children.length !== foes.length) { el.innerHTML = ''; foes.forEach((q) => { const b = document.createElement('button'); b.dataset.i = q.i; b.onclick = () => { const box = $('assetBox'); if (!box.classList.contains('fold') && ST.view === q.i) box.classList.add('fold'); else { ST.view = q.i; box.classList.remove('fold'); } paintHud(); }; el.appendChild(b); }); }
   h.players.forEach((q) => { const b = el.querySelector(`[data-i="${q.i}"]`); if (!b) return; b.classList.toggle('on', q.i === ST.view); b.classList.toggle('turn', q.i === h.turn);
     const url = ST.portraits && ST.portraits[q.char]; if (url && !b.dataset.img) { b.style.backgroundImage = `url(${url})`; b.dataset.img = '1'; } });
   const me = h.players.find((q) => q.i === h.me), url = me && ST.portraits && ST.portraits[me.char]; if (url) $('avaMe').style.backgroundImage = `url(${url})`;
@@ -69,7 +69,7 @@ function paintTabs() {
     if (want) { $(pair[id]).classList.remove('fold'); $(id).classList.add('on'); if (id === 'evtBtn') $('evtBadge').classList.add('hide'); } };
   Object.keys(pair).forEach((id) => { $(id).onclick = () => toggle(id); $(pair[id]).querySelector('h4').onclick = () => toggle(id); });
   $('assetBox').querySelector('h4').onclick = () => $('assetBox').classList.toggle('fold');
-  $('avaMe').onclick = () => { if (ST.hud) { ST.view = ST.hud.me; $('assetBox').classList.remove('fold'); paintHud(); } };
+  $('avaMe').onclick = () => { if (!ST.hud) return; const box = $('assetBox'); if (!box.classList.contains('fold') && ST.view === ST.hud.me) box.classList.add('fold'); else { ST.view = ST.hud.me; box.classList.remove('fold'); } paintHud(); };
   $('tipbar').querySelector('.bubble').onclick = () => $('tipbar').classList.toggle('min');
 }
 function setStatus() {

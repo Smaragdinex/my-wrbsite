@@ -268,7 +268,7 @@ body.remote #ctl .roll{opacity:.55}
 .box.assets{width:calc(236px * var(--fs))}
 /* 頭像直排(瑪利歐派對那種):點誰看誰;橘框 = 正在看;綠點 = 現在輪到 */
 .tabs.col{flex-direction:column;padding:6px;border:2px solid var(--line);border-radius:999px;background:var(--cream);box-shadow:0 3px 0 rgba(0,0,0,.1);border-bottom:2px solid var(--line);flex:none}
-.tabs.col button{width:calc(38px * var(--fs));height:calc(38px * var(--fs))}
+.tabs.col button{width:calc(52px * var(--fs));height:calc(52px * var(--fs))}
 /* 任務清單放進框裡:每個任務一列 */
 .missbox h4{background:#ffb000}
 .miss{display:flex;flex-direction:column;gap:6px;padding:8px}
@@ -352,3 +352,4 @@ body.embed .topbtns{right:64px}
 .ava .crown{position:absolute;left:-8px;top:-14px;font-style:normal;font-size:calc(26px * var(--fs));transform:rotate(-22deg);filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));pointer-events:none}
 .ava .crown.hide{display:none}
 @media(max-width:900px){ .ava .crown{font-size:calc(22px * var(--fs))} .lcol{top:calc(var(--ava) + 24px)} .rcol{top:calc(var(--ava) + 24px)} }
+@media(max-width:900px){ .tabs.col button{width:calc(46px * var(--fs));height:calc(46px * var(--fs))} }
