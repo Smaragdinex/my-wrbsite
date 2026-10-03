@@ -37,6 +37,10 @@
   .m.done .ck{background:#35c26b;border-color:#35c26b}
   .m small{display:block;font-weight:600;color:#9a8676;font-size:calc(11px * var(--fs))}
   .ctl{position:fixed;left:0;right:0;bottom:calc(46px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:flex-end;gap:14px;z-index:6}
+  /* 背包鈕:只放背包圖示,右上角一個小數字是手上的道具數 */
+  .paw.bag{position:relative;font-size:calc(var(--btn) * .5);padding:0 calc(var(--btn) * .28)}
+  .paw.bag b{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#ff7a59;border:2px solid #fff;color:#fff;font-size:calc(12px * var(--fs));font-weight:900;display:flex;align-items:center;justify-content:center}
+  .snd.fs svg{width:60%;height:60%;display:block;margin:auto;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
   .ctl > .paw{margin-bottom:calc((var(--roll) - var(--btn)) / 2)}   /* 背包、地圖和擲骰子按鈕的中心對齊(上面多了骰子數量切換) */
   .roll{width:var(--roll);height:var(--roll);border-radius:50%;border:6px solid #fff;background:#ff7a59;color:#fff;font-size:calc(var(--roll) * .2);font-weight:900;
     letter-spacing:.04em;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2);cursor:pointer;transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;isolation:isolate}
@@ -274,11 +278,10 @@
     <div class="pill"><span class="coin"></span><span id="cash">10,000</span></div>
     <div class="stat"><span id="lblAssets"></span><b id="assets">10,000</b></div>
     <div class="stat opt"><span id="lblStocks"></span><b id="stocks">0</b></div>
+    <div class="chip"><i style="background:#ffb000">★</i><span id="mcount">0</span></div>
     <div class="sp"></div>
     <button class="snd" id="sndBtn">♪</button>
-    <button class="snd fs hide" id="fsBtn" aria-label="fullscreen">⛶</button>
-    <div class="chip"><i style="background:#7cc6ff">🎒</i><span id="bagCount">1</span></div>
-    <div class="chip"><i style="background:#ffb000">★</i><span id="mcount">0</span></div>
+    <button class="snd fs hide" id="fsBtn" aria-label="fullscreen"></button>
   </div>
 </div>
 <div class="miss" id="miss"></div>
@@ -290,7 +293,7 @@
 <div class="round"><span id="roundTxt"></span><span id="rankTxt" class="rank"></span><div class="trk"><b id="roundBar"></b></div></div>
 
 <div class="ctl" id="ctl">
-  <button class="paw" id="bagBtn"></button>
+  <button class="paw bag" id="bagBtn" aria-label="backpack">🎒<b id="bagCount">1</b></button>
   <div class="rollcol">
     <div class="dsel" id="dsel"><button data-n="1" id="d1"></button><button data-n="2" id="d2" class="on"></button></div>
     <button class="roll" id="rollBtn"><span id="rollTxt"></span></button>
@@ -323,6 +326,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=121"></script>
+<script type="module" src="./board.mjs?v=122"></script>
 </body>
 </html>

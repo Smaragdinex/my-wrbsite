@@ -1273,7 +1273,7 @@ function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
   document.title = L('Cat Street Stocks', '貓咪股市大富翁');
   $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值'); 
-  $('bagBtn').textContent = L('Backpack', '背包'); { // 擲幾顆骰子的切換:直接畫骰子圖(一顆 = 一個骰子,兩顆 = 兩個骰子),比文字直覺
+  { // 擲幾顆骰子的切換:直接畫骰子圖(一顆 = 一個骰子,兩顆 = 兩個骰子),比文字直覺
     // 骰子圖示:實心的骰子(選中時白底橘點、未選時淺底),點數用 5 和 2 / 3,看起來才像骰子而不是一個方框
     const die = (x, pips, tilt) => `<g transform="rotate(${tilt} ${x + 11} 11)"><rect x="${x + 1.5}" y="1.5" width="19" height="19" rx="5.5" fill="currentColor" opacity=".95"/>` +
       pips.map(([px, py]) => `<circle cx="${x + px}" cy="${py}" r="2.2" class="pip"/>`).join('') + '</g>';
@@ -2126,9 +2126,11 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
     if (isFs()) (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
     else (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
   };
-  const paint = () => { b.textContent = isFs() ? '✕' : '⛶'; };
-  doc.addEventListener('fullscreenchange', paint); doc.addEventListener('webkitfullscreenchange', paint);
-  window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') b.textContent = e.data.on ? '✕' : '⛶'; });
+  // 圖示:進全螢幕是四角往外的箭頭,退出是往內的箭頭(不用 ✕,免得和離開遊戲的 ✕ 搞混)
+  const ICON = { out: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>', in: '<svg viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5"/></svg>' };
+  const paint = (on = isFs()) => { b.innerHTML = on ? ICON.in : ICON.out; b.setAttribute('aria-label', on ? 'exit fullscreen' : 'fullscreen'); }; paint();
+  doc.addEventListener('fullscreenchange', () => paint()); doc.addEventListener('webkitfullscreenchange', () => paint());
+  window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') paint(!!e.data.on); });
 }
 $('bagBtn').onclick = bagPanel;
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
