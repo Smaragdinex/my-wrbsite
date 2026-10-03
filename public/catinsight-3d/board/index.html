@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#c9e8b8">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -31,6 +31,7 @@
     <div class="stat opt"><span id="lblStocks"></span><b id="stocks">0</b></div>
     <div class="chip"><i style="background:#ffb000">★</i><span id="mcount">0</span></div>
     <div class="sp"></div>
+    <button class="more" id="barMore" aria-label="assets">▾</button>
     <button class="snd" id="sndBtn">♪</button>
     <button class="snd fs hide" id="fsBtn" aria-label="fullscreen"></button>
   </div>
@@ -38,10 +39,11 @@
 <div class="miss" id="miss"></div>
 <div class="rbanner hide" id="remoteBanner"></div>
 <div class="side">
-  <div class="bubble"><span class="av" style="background-image:url(/assets/app-icon.png)"></span><span id="tip"></span></div>
+  <div class="bubble"><span class="av ex">!</span><span id="tip"></span></div>
   <div class="box"><h4><span id="assetTitle"></span><span class="tri"></span></h4><div class="tabs" id="assetTabs"></div><div id="assetRows"></div></div>
 </div>
 <div class="box ev evt"><h4 id="evtTitle"></h4><div class="body" id="evtBody"></div></div>
+<div class="msheet hide" id="mSheet"></div>
 <div class="round"><span id="roundTxt"></span><span id="rankTxt" class="rank"></span><div class="trk"><b id="roundBar"></b></div></div>
 
 <div class="ctl" id="ctl">
@@ -80,6 +82,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=127"></script>
+<script type="module" src="./board.mjs?v=128"></script>
 </body>
 </html>

@@ -101,7 +101,9 @@
   .side{position:fixed;right:12px;top:calc(var(--ava) + 30px);width:calc(236px * var(--fs));z-index:5;display:flex;flex-direction:column;gap:10px;pointer-events:none}
   .bubble{background:#fff;border:3px solid #3b4a7a;border-radius:18px;padding:10px 12px;font-size:calc(13px * var(--fs));font-weight:800;line-height:1.45;color:#2f3a63;
     box-shadow:0 3px 0 rgba(0,0,0,.1);display:flex;gap:8px;align-items:flex-start}
-  .bubble .av{width:34px;height:34px;border-radius:50%;background:#ffd9a8 center/cover;flex:none;border:2px solid #fff;box-shadow:0 0 0 2px #3b4a7a}
+  .bubble .av{width:30px;height:30px;border-radius:50%;flex:none;border:2px solid #fff;box-shadow:0 0 0 2px #3b4a7a}
+  .bubble .av.ex{background:#ff7a59;color:#fff;font-weight:900;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center}
+  .bar .more{display:none}
   .box{background:var(--cream);border:2px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 3px 0 rgba(0,0,0,.1)}
   .box h4{background:#8a6f60;color:#fff;font-size:calc(13px * var(--fs));font-weight:900;padding:6px 12px;letter-spacing:.04em}
   .box.ev h4{background:#f2685a}
@@ -117,8 +119,18 @@
     padding:8px 12px;font-size:calc(12.5px * var(--fs));font-weight:900;box-shadow:0 3px 0 rgba(0,0,0,.1);min-width:calc(170px * var(--fs))}
   .round .trk{height:9px;border-radius:9px;background:#e6dccf;margin-top:6px;overflow:hidden}
   .round .trk b{display:block;height:100%;background:#4aa8ff;border-radius:9px;transition:width .4s}
-  @media(max-width:900px){ .side .box,.evt,.round{display:none} .side{left:12px;right:12px;width:auto;top:auto;bottom:calc(var(--roll) + 110px + env(safe-area-inset-bottom));align-items:center}
-    .bubble{max-width:420px;font-size:calc(12px * var(--fs));padding:7px 10px} }
+  @media(max-width:900px){ .side .box,.evt,.round{display:none} .side{left:12px;right:12px;width:auto;top:auto;bottom:calc(var(--roll) + 96px + env(safe-area-inset-bottom));align-items:center}
+    /* 手機:提示縮成一條小的;資產和市場事件收進上方的抽屜(點上面的錢或 ▾ 展開) */
+    .bubble{max-width:420px;font-size:calc(11.5px * var(--fs));padding:5px 9px;line-height:1.35;border-width:2px;gap:6px;align-items:center}
+    .bubble .av{width:22px;height:22px;box-shadow:0 0 0 1.5px #3b4a7a}.bubble .av.ex{font-size:15px}
+    .bar{cursor:pointer}
+    .bar .more{display:inline-flex;align-items:center;justify-content:center;width:calc(26px * var(--fs));height:calc(26px * var(--fs));border-radius:50%;border:0;background:#eadfce;color:#6b594e;font-weight:900;font-size:calc(14px * var(--fs));flex:none;transition:transform .2s}
+    body.sheet .bar .more{transform:rotate(180deg)}
+    .msheet{position:fixed;left:12px;right:12px;top:calc(var(--ava) + 28px);z-index:7;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - var(--ava) - var(--roll) - 150px - env(safe-area-inset-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch;pointer-events:auto}
+    .msheet .box{display:block;width:auto;pointer-events:auto}
+    .msheet .evt{display:block;position:static;width:auto}
+    .msheet .box.evt .body{max-height:none}
+    body.sheet .miss{display:none} }
   .it{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid var(--line);border-radius:14px;padding:8px 10px;margin-top:8px}
   .it .ic{font-size:calc(26px * var(--fs));flex:none}
   .cardico{height:1.45em;width:1.04em;object-fit:cover;border-radius:3px;vertical-align:middle;box-shadow:0 1px 2px rgba(0,0,0,.25)}

@@ -2286,6 +2286,15 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
   window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') paint(!!e.data.on); });
 }
 $('bagBtn').onclick = bagPanel;
+// 手機:點上面的錢或 ▾ 把資產框和市場事件收合在上方抽屜(把兩個框搬進抽屜,收起來再搬回去;桌機不用)
+{ const sheet = $('mSheet'), side = document.querySelector('.side'), ab = side.querySelector('.box'), ev = document.querySelector('.evt');
+  const open = () => { if (document.body.classList.contains('sheet')) return; sheet.append(ab, ev); sheet.classList.remove('hide'); document.body.classList.add('sheet'); };
+  const close = () => { if (!document.body.classList.contains('sheet')) return; side.append(ab); sheet.after(ev); sheet.classList.add('hide'); document.body.classList.remove('sheet'); };
+  const toggle = () => (document.body.classList.contains('sheet') ? close() : open());
+  document.querySelector('.bar').addEventListener('click', (e) => { if (matchMedia('(max-width:900px)').matches && !e.target.closest('.snd')) toggle(); });
+  renderer.domElement.addEventListener('pointerdown', close);
+  $('rollBtn').addEventListener('click', close);
+  addEventListener('resize', () => { if (!matchMedia('(max-width:900px)').matches) close(); }); }
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
 $('mapBtn').onclick = () => { pan.set(0, 0, 0); view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
 
