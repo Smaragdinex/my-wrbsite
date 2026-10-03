@@ -78,6 +78,12 @@
   @keyframes pop2{from{transform:scale(.85);opacity:0}}
   /* 結算:中間是成績卡,右邊另一塊是排行榜;螢幕不夠寬就上下排 */
   .endwrap{display:flex;gap:16px;align-items:flex-start;justify-content:center;flex-wrap:wrap;max-height:100%;overflow-y:auto;width:100%}
+  /* 夠寬的螢幕:成績卡在正中間,排行榜靠右邊貼齊;不夠寬就上下排(上面那行) */
+  @media(min-width:980px){
+    .endwrap{position:absolute;inset:0;overflow:visible;display:block}
+    .endwrap .card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-height:calc(100vh - 32px);overflow-y:auto}
+    .endwrap .rbox{position:absolute;right:16px;top:50%;transform:translateY(-50%);max-height:calc(100vh - 32px);overflow-y:auto;width:min(calc(330px * var(--fs)),27vw)}   /* 寬度上限 27vw,才不會疊到正中間的成績卡 */
+  }
   .rbox{width:min(calc(330px * var(--fs)),100%);background:var(--cream);border:4px solid #fff;border-radius:22px;padding:14px 14px 12px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   .rbox h4{font-size:calc(16px * var(--fs));font-weight:900;color:#3b2f2a;margin:0 0 4px}
   .rbox p{margin:0 0 8px;font-size:calc(12px * var(--fs));font-weight:700;color:#9a8676}
@@ -309,6 +315,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=87"></script>
+<script type="module" src="./board.mjs?v=88"></script>
 </body>
 </html>
