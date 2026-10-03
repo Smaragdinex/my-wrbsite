@@ -1661,8 +1661,7 @@ const FATE = [
   { id: 'tax', good: false, t: L('Tax season', '報稅季'), w: L('Profits get taxed. Keep some cash for it.', '賺的錢要繳稅,手上要留一點現金。'), fx: L('−5% of your cash', '現金 −5%') },
   { id: 'birthday', good: true, t: L('Birthday', '生日'), w: L('Every other player chips in.', '其他每位玩家各包一個紅包給你。'), fx: L('+$200 from each player', '每人給你 +$200') },
   { id: 'gostart', good: true, t: L('Shortcut to GO', '抄捷徑回起點'), w: L('Collect your salary and dividends early.', '提早領薪水和股利。'), fx: L('Move to GO', '直接移到起點') },
-  { id: 'back3', good: false, t: L('Missed the bus', '錯過公車'), w: L('Three tiles back. Whatever is there, you land on it.', '退三格,那一格是什麼就算什麼。'), fx: L('Back 3 tiles', '退後 3 格') },
-  { id: 'jail', good: false, t: L('Insider tip gone wrong', '收到內線消息'), w: L('You traded on it. Straight to the police station.', '你照著買了,直接送警察局。'), fx: L('Go to the police station', '送去警察局') },
+  { id: 'fat', good: false, t: L('Fat-finger trade', '不小心按錯'), w: L('You tapped the wrong button and dumped a whole position at market price. Double-check before you confirm.', '手滑按錯鍵,把一檔股票整筆用市價賣掉了。下單前要再看一眼。'), fx: L('Sell one holding, all of it', '隨機一檔持股全部賣出') },
   { id: 'ipo', good: true, t: L('IPO lottery win', '新股抽籤中籤'), w: L('Off to the IPO booth for free shares.', '去 IPO 攤位領免費新股。'), fx: L('Go to the IPO booth', '前往 IPO 攤位') },
   { id: 'remote', good: true, t: L('Found a remote dice', '撿到遙控骰子'), w: L('A dice you can set. It is in your backpack.', '可以指定點數的骰子,放進背包了。'), fx: L('+1 Remote dice', '+1 遙控骰子') },
   { id: 'atk', good: true, t: L('A rumor to spread', '聽到一個八卦'), w: L('A bad-news card for your backpack. Use it on a rival.', '一張利空消息卡進背包,拿去打對手。'), fx: L('+1 Bad news card', '+1 利空消息卡') },
@@ -1694,7 +1693,7 @@ function drawFateCards(auto) {
     $('dgo').onclick = () => { if (done) return; done = true; ov.classList.add('hide'); ov.classList.remove('done'); res(picks[chosen]); };
   });
 }
-// 命運牌生效。會移動的牌(回起點、退三格、警察局、IPO)在這裡處理;退三格之後要重新結算那一格
+// 命運牌生效。會移動的牌(回起點、IPO)在這裡處理
 async function applyFate(c, isMe) {
   const who = isMe ? S : S.ai, name = isMe ? L('You', '你') : CHARS[S.foe].name;
   const say = (en, zh) => toast(L(en, zh));
@@ -1708,11 +1707,14 @@ async function applyFate(c, isMe) {
   else if (c.id === 'divi') { if (isMe) payday(false); else aiPayday(who, false); }
   else if (c.id === 'salary2') { who.salary2 = true; say(`${name}: next salary doubled`, `${name}下次薪水加倍`); }
   else if (c.id === 'gostart') { const P = isMe ? PM() : PA(); who.lane = null; who.pos = 0; await hopOnto(tiles[0].g, P, true); if (isMe) payday(true); else aiPayday(who, true); }
-  else if (c.id === 'back3') { const P = isMe ? PM() : PA();
-    if (who.lane) { const lt = laneTiles[who.lane.type]; for (let i = 0; i < 3 && who.lane.at > 0; i++) { who.lane.at--; await hopOnto(who.lane.at ? lt.path[who.lane.at - 1].g : lt.cell.g, P); } }   // 在小路上:沿小路退回去(最多退到攤位)
-    else for (let i = 0; i < 3; i++) { who.pos = (who.pos + TILES.length - 1) % TILES.length; await hopTo(who.pos, P); }
-    hud(); await wait(0.2); return isMe ? landOn() : aiLand(); }
-  else if (c.id === 'jail' || c.id === 'ipo') { await enterLane(isMe, c.id); }
+  else if (c.id === 'fat') {
+    // 隨機挑一檔持股,整筆用市價賣掉(融資的借款一起還),賣壓會壓低股價。沒有持股就只是虛驚一場
+    const held = KEYS.filter((k) => who.hold[k].n > 0);
+    if (!held.length) say(`${name} has nothing to sell. Phew.`, `${name}沒有持股,虛驚一場`);
+    else { const k = held[Math.floor(Math.random() * held.length)], h = who.hold[k], n = h.n, value = S.price[k] * n, pl = value - h.cost;
+      who.cash += value - h.loan; h.n = 0; h.cost = 0; h.loan = 0; impact(k, sellF(n)); sfx('sell');
+      say(`${name} sold all ${n} ${SECTORS[k].name} for $${fmt(value)} (${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`, `${name}把${SECTORS[k].name} ${n} 股全部賣掉,得 $${fmt(value)}(${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`); } }
+  else if (c.id === 'ipo') { await enterLane(isMe, c.id); }
   hud(); await wait(0.6);
 }
 const r6 = () => 1 + Math.floor(Math.random() * 6);
@@ -2032,4 +2034,4 @@ if (new URLSearchParams(location.search).get('embed')) document.body.classList.a
 document.querySelectorAll('.side > .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, AU, EVENTS, applyEvent, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
