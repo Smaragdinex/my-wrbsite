@@ -46,7 +46,7 @@ function onMsg(m) {
 function paintHud() {
   const h = ST.hud; if (!h) return;
   $('cash').textContent = h.cash; $('assets').textContent = h.assets; $('stocks').textContent = h.stocks;
-  $('rankTxt').textContent = h.rank; $('rankTxt').classList.toggle('top', !!h.top);
+  $('rankTxt').textContent = h.rank; $('rankTxt').classList.toggle('top', !!h.top); $('crown').classList.toggle('hide', !h.top);
   if ($('tip').textContent !== h.tip) { $('tip').textContent = h.tip; const tb = $('tipbar'); tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); }
   $('missTitle').textContent = h.missTitle; $('missBadge').textContent = h.missBadge; $('miss').innerHTML = h.miss;
   $('evtTitle').textContent = h.evtTitle; if ($('evtBody').innerHTML !== h.evt) { $('evtBody').innerHTML = h.evt; if ($('evtBox').classList.contains('fold') && ST.hadEvt) $('evtBadge').classList.remove('hide'); ST.hadEvt = true; }

@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#c9e8b8">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -24,8 +24,8 @@
 <canvas id="gl"></canvas>
 
 <div class="hud">
-  <div class="ava" id="avaMe" style="background-image:url(/assets/app-icon.png)"></div>
-  <div class="cashpill"><span class="coin"></span><span id="cash">10,000</span></div>
+  <div class="ava" id="avaMe" style="background-image:url(/assets/app-icon.png)"><i class="crown hide" id="crown">👑</i></div>
+  <div class="mecol"><div class="cashpill"><span class="coin"></span><span id="cash">10,000</span></div><div class="ranktag" id="rankTxt"></div></div>
   <div class="bar hide">
     <div class="pill"><span class="coin"></span><span id="cash2">10,000</span></div>
     <div class="stat"><span id="lblAssets"></span><b id="assets">10,000</b></div>
@@ -35,7 +35,6 @@
 </div>
 <!-- 右上角:音樂、全螢幕(金錢列拿掉了,數字都在資產框裡) -->
 <div class="topbtns"><button class="snd" id="sndBtn">♪</button><button class="snd fs hide" id="fsBtn" aria-label="fullscreen"></button></div>
-<div class="ranktag" id="rankTxt"></div>
 <div class="tipbar" id="tipbar"><div class="bubble"><span class="av ex">!</span><span id="tip"></span></div></div>
 <div class="rbanner hide" id="remoteBanner"></div>
 <!-- 左:玩家頭像直排(點誰看誰的資產)+ 資產框。右:任務(可收合,展開看全部)+ 市場事件 -->
@@ -91,6 +90,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=153"></script>
+<script type="module" src="./board.mjs?v=154"></script>
 </body>
 </html>

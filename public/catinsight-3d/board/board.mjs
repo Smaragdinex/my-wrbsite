@@ -1355,6 +1355,7 @@ function assetRowsHtml(A, mine) {
 const missHtml = (p) => (p.missions || []).map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('') +
     ((p.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + p.doneList.slice().reverse().map((t) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span></div>`).join('') : '');
+const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][n % 10 > 3 ? 0 : n % 10] || 'th');      // 1st 2nd 3rd 4th
 function hud() {
   // 上方資訊列跟著「現在輪到誰」:電腦在走的時候顯示牠的現金、總資產、股票市值和背包(左上頭像也會換成牠)
   { const T = meP();      // 左上頭像 + 現金永遠是自己的
@@ -1365,7 +1366,7 @@ function hud() {
   }
   // 目前名次:依總資產排(同分算同名次)。回合條旁邊顯示;手機沒有回合條,所以擲骰鈕底下也帶一份
   const myA = assets(), rank = 1 + S.players.filter((p) => assetsOf(p) > myA + 0.5).length;
-  $('rankTxt').textContent = L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`); $('rankTxt').classList.toggle('top', rank === 1);
+  $('rankTxt').textContent = ordinal(rank); $('rankTxt').classList.toggle('top', rank === 1); $('crown').classList.toggle('hide', rank !== 1);
 
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
   $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' && S.lane.wait > 0 ? L('REST', '休息中') : L('ROLL 1', '擲一顆')) : L('ROLL', '擲骰子');
@@ -2328,7 +2329,7 @@ function netHudNow(to) {
     const myA = assetsOf(p), rank = 1 + S.players.filter((q) => assetsOf(q) > myA + 0.5).length;
     netSend({ t: 'hud', me: p.i, turn: S.turn, mine: cur === p, over: !!S.over,
       cash: fmt(p.cash), assets: fmt(myA), stocks: fmt(KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0)), mcount: p.done, bag: p.bag.length,
-      rank: L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`), top: rank === 1,
+      rank: ordinal(rank), top: rank === 1,
       tip: S.hi === p.i ? advise() : L(`${nameOf(cur)}'s turn`, `現在是${nameOf(cur)}的回合`),
       players: S.players.map((q) => ({ i: q.i, char: q.char, title: (q === p ? L('My assets', '我的資產') : L(`${nameOf(q)}'s assets`, `${nameOf(q)}的資產`)) + ' · $' + fmt(assetsOf(q)), rows: assetRowsHtml(q, q === p) })),
       missTitle: L(`Missions · ${p.done} done`, `任務 · 完成 ${p.done}`), missBadge: (p.missions || []).filter((m) => !m.done).length, miss: missHtml(p),

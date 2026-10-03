@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
 <title>貓咪股市大富翁 · 手機遙控</title>
 <link rel="preload" as="image" href="../card-event.webp"><link rel="preload" as="image" href="../card-fate.webp"><link rel="preload" as="image" href="../card-gift.webp">
-<link rel="stylesheet" href="../style.css?v=20">
+<link rel="stylesheet" href="../style.css?v=21">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -87,14 +87,13 @@
 <div class="jgame hide" id="jgame">
   <video id="jvid" class="jbg" autoplay muted playsinline></video>
   <div class="hud">
-    <div class="ava" id="avaMe"></div>
-    <div class="cashpill"><span class="coin"></span><span id="cash">0</span></div>
+    <div class="ava" id="avaMe"><i class="crown hide" id="crown">👑</i></div>
+    <div class="mecol"><div class="cashpill"><span class="coin"></span><span id="cash">0</span></div><div class="ranktag" id="rankTxt"></div></div>
     <div class="bar hide">
       <div class="stat"><span id="lblAssets">總資產</span><b id="assets">0</b></div>
       <div class="stat opt"><span id="lblStocks">股票市值</span><b id="stocks">0</b></div>
     </div>
   </div>
-  <div class="ranktag" id="rankTxt"></div>
   <div class="tipbar min" id="tipbar"><div class="bubble"><span class="av ex">!</span><span id="tip"></span></div></div>
   <div class="lcol">
     <div class="tabs col" id="assetTabs"></div>
@@ -118,6 +117,6 @@
 <div class="panel hide" id="panel"></div>
 <div class="draw hide" id="draw"></div>
 <div class="end hide" id="end"></div>
-<script type="module" src="../join.mjs?v=7"></script>
+<script type="module" src="../join.mjs?v=8"></script>
 </body>
 </html>
