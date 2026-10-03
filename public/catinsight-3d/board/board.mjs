@@ -580,12 +580,19 @@ const E = N / 2 * STEP + 0.62;
   lamp(0.6, 2.2); lamp(-2.4, 1.9);
 }
 // 花很多(幾百朵),每朵各自一個 Mesh 的話一幀要多畫上千次 → 用 InstancedMesh 併成兩次繪製,而且不描邊
-function flowers(n) {
+function flowers(n, outer = false) {
   const cols = [0xffffff, 0xffd24a, 0xff9ec4, 0xffffff].map((c) => new THREE.Color(c));
   const R = (N - 2) * STEP - 0.8, pts = [];
   for (let i = 0; i < n; i++) {
-    const x = (Math.random() - 0.5) * R, z = (Math.random() - 0.5) * R;
-    if (Math.hypot((x + 0.8) / 2.3, (z - 0.6) / 1.7) < 1) continue;   // 不要長在池塘裡
+    let x, z;
+    if (outer) {      // 外圈草地:人行道外 0.8~4 格的帶狀區域,避開選角舞台
+      const side = Math.floor(Math.random() * 4), t = (Math.random() - 0.5) * 2 * (E + 4), d = E + 0.8 + Math.random() * 3.2;
+      [x, z] = side === 0 ? [d, t] : side === 1 ? [-d, t] : side === 2 ? [t, d] : [t, -d];
+      if (Math.hypot(x - STAGE.x, z - STAGE.z) < 4.5) continue;
+    } else {
+      x = (Math.random() - 0.5) * R; z = (Math.random() - 0.5) * R;
+      if (Math.hypot((x + 0.8) / 2.3, (z - 0.6) / 1.7) < 1) continue;   // 不要長在池塘裡
+    }
     pts.push([x, z]);
   }
   const noLine = (m) => { m.userData.outlineParameters = { visible: false }; return m; };
@@ -893,9 +900,10 @@ function setChar(target, key) {
 // 選角舞台:在起點外側的空地。選到的角色站在正中間、最大;左右各露出一個「上一個 / 下一個」,比較小、退後一點;
 // 其他的收起來看不到。按左右(或直接點旁邊那個)時整排滑過去,像翻唱片封面。被選到的會跳一下、慢慢自轉
 const STAGE = new THREE.Vector3(11.6, 0, 11.6), STAGE_KEYS = Object.keys(CHARS);
+flowers(260, true);      // 外圈草地也撒花
 const stage = new THREE.Group(); stage.position.copy(STAGE); stage.visible = false; scene.add(stage);
-// 舞台的地板和花草:一條長長的奶油色平台(角色底座放在上面),周圍撒花、後面幾棵樹。都掛在 stage 底下,選角結束一起隱藏
-{ const R = Math.SQRT1_2, floor = new THREE.Mesh(new RoundedBoxGeometry(8.6, 0.12, 2.6, 3, 0.05), mat(0xf6e9d2)); floor.rotation.y = Math.PI / 4; floor.position.set(1.6 * R, 0.06, 1.6 * R); floor.receiveShadow = true; stage.add(floor);
+// 舞台周圍的花草和樹(掛在 stage 底下,選角結束一起隱藏)
+{ const R = Math.SQRT1_2;
   const cols = [0xffffff, 0xffd24a, 0xff9ec4].map((c) => new THREE.Color(c)), pts = [];
   for (let i = 0; i < 90; i++) { const a = Math.random() * Math.PI * 2, d = 2.2 + Math.random() * 2.6; const x = Math.cos(a) * d, z = Math.sin(a) * d; if (Math.abs((x - z) * R) < 4.6 && Math.abs((x + z) * R - 1.6) < 1.5) continue; pts.push([x, z]); }
   const noLine = (m) => { m.userData.outlineParameters = { visible: false }; return m; };
@@ -915,7 +923,21 @@ const slots = STAGE_KEYS.map((key, i) => {
   stage.add(g);
   return { key, g, holder, ring, hop: 0, top, spin: 0 };
 });
-let stageSel = 0, stageOn = false, stageCur = 0;                 // stageCur:目前滑到第幾個(小數),慢慢追上 stageSel
+let stageSel = 0, stageOn = false, stageCur = 0;
+// 選角畫面的動態排版:上面的設定卡不能擋到角色的頭,底座也不能被下面的名字 / 開始鈕擠到。
+// 做法:先把鏡頭目標往上抬(場景整個往下移),不夠再把鏡頭拉遠一點
+let stageLift = 0, stageZoom = 0;
+const _fv = new THREE.Vector3();
+function fitStage(dt) {
+  const card = $('pcfg').getBoundingClientRect(), bar = document.querySelector('.pbar').getBoundingClientRect(), sl = slots[stageSel];
+  sl.g.getWorldPosition(_fv); const y0 = _fv.y;
+  const px = (y) => { _fv.y = y; const q = _fv.clone().project(cam); return (1 - q.y) / 2 * innerHeight; };
+  const head = px(y0 + sl.top + 1.9 * sl.holder.scale.y), foot = px(y0 - 0.15), unit = px(y0) - px(y0 + 1);   // 世界往上 1 單位 = 畫面往上幾 px
+  if (!(unit > 0)) return;
+  const needDown = (card.bottom + 12) - head, room = (bar.top - 10) - foot, k = Math.min(1, dt * 5);
+  if (needDown > 0) { if (room > needDown) stageLift += needDown / unit * k; else stageZoom += 0.15 * k; }
+  else if (needDown < -16) { if (stageZoom > 0) stageZoom = Math.max(0, stageZoom - 0.15 * k); else stageLift = Math.max(0, stageLift + needDown / unit * k * 0.5); }
+}                 // stageCur:目前滑到第幾個(小數),慢慢追上 stageSel
 let pickWho = 0;                                              // 現在是第幾位真人在選(0 或 1)
 // 選第 i 個;如果那個角色已經被第一位真人選走,就往 dir 方向找下一個
 function stageSelect(i, dir = 1) {
@@ -1143,7 +1165,9 @@ function step(dt) {
   camT.x += (tx - camT.x) * kf; camT.z += (tz - camT.z) * kf;
   cam.position.copy(camT).add(CAM_OFF);
   sun.position.copy(camT).add(SUN_OFF); sun.target.position.copy(camT);
-  const hGoal = stageOn ? view.stageHalf : view.overview ? view.far : view.near;
+  if (stageOn) fitStage(dt);
+  camT.y += ((stageOn ? 0.2 + stageLift : 0.2) - camT.y) * Math.min(1, dt * 4);
+  const hGoal = stageOn ? view.stageHalf + stageZoom : view.overview ? view.far : view.near;
   if (Math.abs(hGoal - view.half) > 0.002) { view.half += (hGoal - view.half) * Math.min(1, dt * 4); applyFrustum(); }
   if (!skipRender) outline.render(scene, cam);
 }
@@ -2316,4 +2340,4 @@ if (matchMedia('(max-width:900px)').matches) $('assetBox').classList.add('fold')
   $('evtLbl').textContent = L('Events', '事件'); $('missLbl').textContent = L('Tasks', '任務'); }
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
