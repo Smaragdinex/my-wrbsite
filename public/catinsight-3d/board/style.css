@@ -267,7 +267,7 @@ body.remote #ctl .roll{opacity:.55}
 .box h4{display:flex;align-items:center;gap:8px;pointer-events:auto;cursor:pointer;user-select:none;flex:none}
 .box.assets{width:calc(236px * var(--fs))}
 /* 頭像直排(瑪利歐派對那種):點誰看誰;橘框 = 正在看;綠點 = 現在輪到 */
-.tabs.col{flex-direction:column;padding:6px;border:2px solid var(--line);border-radius:999px;background:var(--cream);box-shadow:0 3px 0 rgba(0,0,0,.1);border-bottom:2px solid var(--line);flex:none}
+.tabs.col{flex-direction:column;padding:0;border:0;background:none;box-shadow:none;gap:calc(12px * var(--fs));flex:none}   /* 對手頭像:一顆一顆單獨的,沒有後面的板子 */
 .tabs.col button{width:calc(52px * var(--fs));height:calc(52px * var(--fs))}
 /* 任務清單放進框裡:每個任務一列 */
 .missbox h4{background:#ffb000}
@@ -355,8 +355,14 @@ body.embed .topbtns{right:64px}
 @media(max-width:900px){ .tabs.col button{width:calc(46px * var(--fs));height:calc(46px * var(--fs))} }
 
 /* 對手頭像右邊的名次 */
-.tabs.col{padding-right:calc(46px * var(--fs));align-items:flex-start}
+.tabs.col{padding-right:calc(46px * var(--fs));align-items:flex-start;margin-top:6px}
 .tabs.col button{overflow:visible}
 .tabs.col button .rk{position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%);background:#8a6f60;color:#fff;border-radius:999px;padding:1px 8px;font-size:calc(11px * var(--fs));font-weight:900;white-space:nowrap;pointer-events:none;opacity:1}
 .tabs.col button .rk.top{background:#ffb000}
 .lcol .box.assets.fold{display:none}
+
+/* 自己的「股票」鈕:點開自己的資產清單 */
+.stockbtn{width:calc(46px * var(--fs));height:calc(30px * var(--fs));border-radius:999px;border:2px solid #f2b23c;background:#fff8ec;box-shadow:0 3px 0 rgba(0,0,0,.12);cursor:pointer;pointer-events:auto;display:flex;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent}
+.stockbtn svg{width:calc(22px * var(--fs));height:calc(22px * var(--fs));fill:#d98a2b}
+.stockbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.12)}
+.hud{align-items:flex-start}

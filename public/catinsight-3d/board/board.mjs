@@ -2419,7 +2419,7 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
   window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') paint(!!e.data.on); });
 }
 $('bagBtn').onclick = bagPanel;
-$('avaMe').onclick = () => { if (!S || !S.players.length) return; const box = $('assetBox'); if (!box.classList.contains('fold') && (S.view ?? meP().i) === meP().i) box.classList.add('fold'); else { S.view = meP().i; box.classList.remove('fold'); } hud(); };
+$('avaMe').onclick = $('stockBtn').onclick = () => { if (!S || !S.players.length) return; const box = $('assetBox'); if (!box.classList.contains('fold') && (S.view ?? meP().i) === meP().i) box.classList.add('fold'); else { S.view = meP().i; box.classList.remove('fold'); } hud(); };
 // 提示泡泡:手機預設縮成「!」,點一下展開 / 收起
 { const tb = $('tipbar'); if (matchMedia('(max-width:900px)').matches) tb.classList.add('min'); tb.querySelector('.bubble').onclick = () => tb.classList.toggle('min'); }
 

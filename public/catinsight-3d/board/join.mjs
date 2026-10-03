@@ -70,7 +70,7 @@ function paintTabs() {
     if (want) { $(pair[id]).classList.remove('fold'); $(id).classList.add('on'); if (id === 'evtBtn') $('evtBadge').classList.add('hide'); } };
   Object.keys(pair).forEach((id) => { $(id).onclick = () => toggle(id); $(pair[id]).querySelector('h4').onclick = () => toggle(id); });
   $('assetBox').querySelector('h4').onclick = () => $('assetBox').classList.toggle('fold');
-  $('avaMe').onclick = () => { if (!ST.hud) return; const box = $('assetBox'); if (!box.classList.contains('fold') && ST.view === ST.hud.me) box.classList.add('fold'); else { ST.view = ST.hud.me; box.classList.remove('fold'); } paintHud(); };
+  $('avaMe').onclick = $('stockBtn').onclick = () => { if (!ST.hud) return; const box = $('assetBox'); if (!box.classList.contains('fold') && ST.view === ST.hud.me) box.classList.add('fold'); else { ST.view = ST.hud.me; box.classList.remove('fold'); } paintHud(); };
   $('tipbar').querySelector('.bubble').onclick = () => $('tipbar').classList.toggle('min');
 }
 function setStatus() {
