@@ -928,15 +928,24 @@ let stageSel = 0, stageOn = false, stageCur = 0;
 // 做法:先把鏡頭目標往上抬(場景整個往下移),不夠再把鏡頭拉遠一點
 let stageLift = 0, stageZoom = 0;
 const _fv = new THREE.Vector3();
-function fitStage(dt) {
+function stageMetrics() {
   const card = $('pcfg').getBoundingClientRect(), bar = document.querySelector('.pbar').getBoundingClientRect(), sl = slots[stageSel];
   sl.g.getWorldPosition(_fv); const y0 = _fv.y;
   const px = (y) => { _fv.y = y; const q = _fv.clone().project(cam); return (1 - q.y) / 2 * innerHeight; };
   const head = px(y0 + sl.top + 1.45 * sl.holder.scale.y), foot = px(y0 - 0.15), unit = px(y0) - px(y0 + 1);   // 世界往上 1 單位 = 畫面往上幾 px
+  return { head, foot, unit, cardBottom: card.bottom, barTop: bar.top };
+}
+function fitStage(dt) {
+  const { head, foot, unit, cardBottom, barTop } = stageMetrics();
   if (!(unit > 0)) return;
-  const needDown = (card.bottom + 12) - head, room = (bar.top - 10) - foot, k = Math.min(1, dt * 5);
-  if (needDown > 0) { if (room > needDown) stageLift += needDown / unit * k; else stageZoom += 0.15 * k; }
-  else if (needDown < -16) { if (stageZoom > 0) stageZoom = Math.max(0, stageZoom - 0.15 * k); else stageLift = Math.max(0, stageLift + needDown / unit * k * 0.5); }
+  const needDown = (cardBottom + 12) - head, room = (barTop - 10) - foot, k = Math.min(1, dt * 5);
+  if (needDown > 0) {
+    const lift = Math.min(needDown, Math.max(0, room));          // 先把能用的空間用掉(整體往下移)
+    if (lift > 1) stageLift += lift / unit * k;
+    if (needDown - lift > 1) stageZoom = Math.min(4, stageZoom + 0.15 * k);   // 還不夠就拉遠(角色變小)
+  } else if (needDown < -16) {   // 空間很多:先把鏡頭拉回來,再把場景移回去
+    if (stageZoom > 0) stageZoom = Math.max(0, stageZoom - 0.15 * k); else stageLift = Math.max(0, stageLift + needDown / unit * k * 0.5);
+  }
 }                 // stageCur:目前滑到第幾個(小數),慢慢追上 stageSel
 let pickWho = 0;                                              // 現在是第幾位真人在選(0 或 1)
 // 選第 i 個;如果那個角色已經被第一位真人選走,就往 dir 方向找下一個
@@ -2340,4 +2349,4 @@ if (matchMedia('(max-width:900px)').matches) $('assetBox').classList.add('fold')
   $('evtLbl').textContent = L('Events', '事件'); $('missLbl').textContent = L('Tasks', '任務'); }
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, fitStage, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };

@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#c9e8b8">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=14">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -73,7 +73,7 @@
   <div class="ptop">
     <!-- 設定卡:每一列 = 圖示 + 標題 / 副標 + 右邊的選項 -->
     <div class="pcfg" id="pcfg">
-      <div class="pawtag">🐾</div>
+      <div class="pawtag"></div>
       <div class="prow"><span class="ico"><img src="ic-players.webp?v=1" alt=""></span><span class="lbl"><b id="pcN"></b><small id="pcNs"></small></span><span class="opts"><button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></span></div>
       <button class="online" id="pcOnline"><span class="oic"><img src="ic-online.webp?v=1" alt=""></span><span class="otx"><b id="pcOnT"></b><small id="pcOnS"></small></span><span class="chev">›</span></button>
       <div class="lobby hide" id="lobby"></div>
@@ -92,6 +92,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=136"></script>
+<script type="module" src="./board.mjs?v=139"></script>
 </body>
 </html>
