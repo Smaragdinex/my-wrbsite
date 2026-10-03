@@ -61,7 +61,7 @@
   /* 按鈕高度跟著內容長:有些按鈕是兩行(名稱 + 金額),字放大後固定高度會裝不下 */
   .btns button{flex:1 1 0;min-width:0;height:auto;min-height:calc(48px * var(--fs));padding:calc(7px * var(--fs)) 6px calc(8px * var(--fs));line-height:1.25;
     border-radius:14px;border:0;font-weight:900;font-size:calc(14px * var(--fs));color:#fff;cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.18)}
-  .btns button span{display:inline-block;margin-top:2px;font-weight:800;opacity:.95;white-space:nowrap}
+  .btns button span{display:block;margin-top:2px;font-weight:800;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .btns{align-items:stretch}
   .btns button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.18)}
   .b-buy{background:#35c26b}.b-sell{background:#f2796b}.b-skip{background:#a99b90}.b-ok{background:#8b7cff}
@@ -314,6 +314,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=91"></script>
+<script type="module" src="./board.mjs?v=92"></script>
 </body>
 </html>
