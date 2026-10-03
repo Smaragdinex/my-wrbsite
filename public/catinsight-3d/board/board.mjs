@@ -886,7 +886,7 @@ async function portrait(key) {
 }
 function setPortraits() {
   const put = (el, key) => portrait(key).then((url) => { if (el) el.style.backgroundImage = `url(${url})`; }).catch(() => {});
-  put($('avaMe'), S.me);
+  put($('avaMe'), (S.players[S.turn] || S.players[S.hi]).char);
   document.querySelectorAll('#assetTabs button').forEach((b) => put(b, S.players[+b.dataset.i].char));
 }
 let focus;
@@ -1097,11 +1097,13 @@ function buildFoes() {
   });
 }
 function hud() {
-  $('cash').textContent = fmt(S.cash);
-  $('assets').textContent = fmt(assets());
-  $('stocks').textContent = fmt(stockValue());
-  $('bagCount').textContent = S.bag.length;
-  $('mcount').textContent = S.done;
+  // 上方資訊列跟著「現在輪到誰」:電腦在走的時候顯示牠的現金、總資產、股票市值和背包(左上頭像也會換成牠)
+  { const T = S.players[S.turn] || S.players[S.hi];
+    $('cash').textContent = fmt(T.cash);
+    $('assets').textContent = fmt(assetsOf(T));
+    $('stocks').textContent = fmt(KEYS.reduce((a, k) => a + T.hold[k].n * S.price[k], 0));
+    $('bagCount').textContent = T.bag.length;
+    $('mcount').textContent = T.done; }
   // 目前名次:依總資產排(同分算同名次)。回合條旁邊顯示;手機沒有回合條,所以擲骰鈕底下也帶一份
   const myA = assets(), rank = 1 + S.players.filter((p) => assetsOf(p) > myA + 0.5).length;
   $('rankTxt').textContent = L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`); $('rankTxt').classList.toggle('top', rank === 1);
@@ -1648,11 +1650,12 @@ async function nextTurns() {
     if (p.human) {
       S.turn = i; S.view = null; S.hi = i; if (S.players.length > S.nh) S.ci = S.players.findIndex((x) => !x.human); else S.ci = (i + 1) % S.players.length;
       focus = PM(); pan.set(0, 0, 0);
-      if (S.nh > 1) { setPortraits(); toast(L(`${nameOf(p)}'s turn (Player ${i + 1})`, `輪到${nameOf(p)}(玩家 ${i + 1})`)); }
+      setPortraits();
+      if (S.nh > 1) { toast(L(`${nameOf(p)}'s turn (Player ${i + 1})`, `輪到${nameOf(p)}(玩家 ${i + 1})`)); }
       checkMissions();          // 別人走的時候股價會變,輪到自己先檢查一次任務
       S.busy = false; showCtl(true); return;
     }
-    S.ci = i; S.turn = i; S.view = null; hud(); await aiTurn(); await flushNotices();
+    S.ci = i; S.turn = i; S.view = null; hud(); setPortraits(); await aiTurn(); await flushNotices();
   }
 }
 // 本機排行榜:每局結束存一筆到瀏覽器(只有第一位真人的成績),留最好的 10 筆(依總資產)
