@@ -422,10 +422,11 @@ const MISSION_DEFS = [
   { id: 'index', make: () => ({ title: L('Own the market', '買下整個市場'), sub: L('Hold the whole-market ETF', '持有大盤 ETF'), ok: () => S.hold.etf.n > 0 }) },
   { id: 'income', make: () => ({ title: L('Build income', '打造現金流'), sub: L('Hold 2 assets that pay 3% or more', '持有 2 種配息 3% 以上的資產'), ok: () => KEYS.filter((k) => S.hold[k].n > 0 && SECTORS[k].div >= 0.03).length >= 2 }) },
 ];
-// 抽一個「現在還沒達成、而且場上沒有」的任務
+// 抽一個「現在還沒達成、而且自己手上沒有」的任務;別的玩家手上也有的排後面,大家的清單才不會長得一樣
 function drawMission() {
   const active = new Set(S.missions.map((m) => m.id));
-  const pool = MISSION_DEFS.filter((d) => !active.has(d.id)).sort(() => Math.random() - 0.5);
+  const others = new Set(S.players.filter((p) => p !== S.players[S.hi]).flatMap((p) => (p.missions || []).map((m) => m.id)));
+  const pool = MISSION_DEFS.filter((d) => !active.has(d.id)).sort(() => Math.random() - 0.5).sort((x, y) => others.has(x.id) - others.has(y.id));
   for (const d of pool) { const m = { id: d.id, done: false, ...d.make() }; if (!m.ok()) return m; }
   const d = pool[0]; return { id: d.id, done: false, ...d.make() };
 }
@@ -1426,14 +1427,15 @@ function hud() {
     $('bagCount').textContent = T.bag.length;
   }
   // 目前名次:依總資產排(同分算同名次)。回合條旁邊顯示;手機沒有回合條,所以擲骰鈕底下也帶一份
-  const myA = assets(), rank = 1 + S.players.filter((p) => assetsOf(p) > myA + 0.5).length;
+  const myA = assetsOf(meP()), rank = 1 + S.players.filter((p) => assetsOf(p) > myA + 0.5).length;   // 名次也是自己的,不跟著輪到誰
   $('rankTxt').textContent = ordinal(rank); $('rankTxt').classList.toggle('top', rank === 1); $('crown').classList.toggle('hide', rank !== 1);
 
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
   $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' && S.lane.wait > 0 ? L('REST', '休息中') : L('ROLL 1', '擲一顆')) : L('ROLL', '擲骰子');
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
-  $('missTitle').textContent = L(`Missions · ${S.done} done`, `任務 · 完成 ${S.done}`); $('missBadge').textContent = S.missions.filter((m) => !m.done).length;
-  $('miss').innerHTML = missHtml(S.players[S.hi]);
+  { const T = meP();    // 任務清單永遠是自己的(每位玩家各自抽 3 個;以前跟著輪到誰,手機玩家走的時候主機會看到他的)
+    $('missTitle').textContent = L(`Missions · ${T.done} done`, `任務 · 完成 ${T.done}`); $('missBadge').textContent = (T.missions || []).filter((m) => !m.done).length;
+    $('miss').innerHTML = missHtml(T); }
   { const t = advise(); if ($('tip').textContent !== t) { $('tip').textContent = t; const tb = $('tipbar'); if (tb) { tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); } } }
   // 資產框:一次只顯示一位。預設跟著「現在輪到誰」;點上面的頭像可以改看別人(下一位開始走的時候會自動切回去)
   { const A = S.players[S.view ?? meP().i] || S.players[S.hi], mine = A.i === S.hi;      // 資產框預設看自己,點對手頭像才看他
