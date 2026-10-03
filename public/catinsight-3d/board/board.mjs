@@ -795,10 +795,13 @@ function paintStage() {
     $('pcRule').textContent = L(`Highest total assets after ${R} rounds wins`, `走滿 ${R} 回合,總資產最高的獲勝`); }
 }
 function stageStep(dt) {
-  const n = slots.length, R = Math.SQRT1_2, wrap = (v) => ((v % n) + n + n / 2) % n - n / 2;      // 繞一圈的最短距離(-n/2 ~ n/2)
-  stageCur += wrap(stageSel - stageCur) * Math.min(1, dt * 7);
+  // 被玩家 1 選走的角色整個(連底座)從輪播拿掉:輪播只排剩下的角色,位置用「在剩下名單裡的第幾個」算
+  const order = slots.map((_, i) => i).filter((i) => !slots[i].taken), n = order.length, R = Math.SQRT1_2;
+  const wrap = (v) => ((v % n) + n + n / 2) % n - n / 2;      // 繞一圈的最短距離(-n/2 ~ n/2)
+  stageCur += wrap(order.indexOf(stageSel) - stageCur) * Math.min(1, dt * 7);
   slots.forEach((sl, i) => {
-    const on = i === stageSel, rel = wrap(i - stageCur), a = Math.abs(rel);
+    if (sl.taken) { sl.g.visible = false; return; }
+    const on = i === stageSel, rel = wrap(order.indexOf(i) - stageCur), a = Math.abs(rel);
     // 位置:rel = 0 在正中間;±1 在左右兩邊、往後退一點;再遠的縮小到看不見
     const o = rel * 1.95, back = Math.min(a, 2) * 0.75, k = Math.max(0, 1 - Math.max(0, a - 1) * 1.7);
     const fwd = 1.6 - back;                                           // 整排往鏡頭這邊挪一點,才不會頂到上面的標題
@@ -839,8 +842,8 @@ function pickStage() {
     showPieces(false);      // 選角時把棋子藏起來:再玩一次時,上一局的角色不會還站在起點
     if (!pickStage.seen) { pickStage.seen = true; camT.x = STAGE.x; camT.z = STAGE.z; view.half = view.stageHalf; applyFrustum(); }   // 第一次直接從舞台開場,不用從起點慢慢滑過來
     pickWho = 0; const picked = [];
-    slots.forEach((sl) => { sl.taken = false; sl.holder.visible = true; });
-    stageSelect(stageSel);
+    slots.forEach((sl) => { sl.taken = false; });
+    stageCur = stageSel; stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
     document.querySelectorAll('#pcfg button').forEach((b) => { b.onclick = () => {
       if (b.dataset.n) CFG.n = +b.dataset.n; else if (b.dataset.h) CFG.humans = +b.dataset.h;
@@ -852,10 +855,11 @@ function pickStage() {
     $('pok').onclick = () => {
       picked.push(slots[stageSel].key);
       if (picked.length < CFG.humans) {            // 換第二位真人選:第一位選走的角色從轉盤上拿掉
-        slots[stageSel].taken = true; slots[stageSel].holder.visible = false; pickWho = 1; stageSelect(stageSel + 1); return;
+        slots[stageSel].taken = true; pickWho = 1; stageSelect(stageSel + 1);
+        stageCur = slots.map((_, i) => i).filter((i) => !slots[i].taken).indexOf(stageSel); return;
       }
       stageOn = false; stage.visible = false; document.body.classList.remove('picking');
-      slots.forEach((sl) => { sl.taken = false; sl.holder.visible = true; });
+      slots.forEach((sl) => { sl.taken = false; });
       // 電腦對手:從剩下的角色裡隨機挑
       const rest = Object.keys(CHARS).filter((k) => !picked.includes(k)).sort(() => Math.random() - 0.5);
       res({ chars: [...picked, ...rest.slice(0, CFG.n - picked.length)], humans: picked.length, rounds: CFG.rounds, ai: CFG.ai });
