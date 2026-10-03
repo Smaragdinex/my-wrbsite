@@ -33,7 +33,8 @@
   .paw.bag{position:relative;font-size:calc(var(--btn) * .5);padding:0 calc(var(--btn) * .28)}
   .paw.bag b{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#ff7a59;border:2px solid #fff;color:#fff;font-size:calc(12px * var(--fs));font-weight:900;display:flex;align-items:center;justify-content:center}
   .snd.fs svg{width:60%;height:60%;display:block;margin:auto;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-  .ctl > .paw{margin-bottom:calc((var(--roll) - var(--btn)) / 2)}   /* 背包、地圖和擲骰子按鈕的中心對齊 */
+  /* 背包鈕靠在擲骰鈕左邊(絕對定位,擲骰鈕才會留在正中間),中心和擲骰鈕對齊 */
+  .ctl > .paw{position:absolute;right:calc(50% + var(--roll) * .6 + 14px);bottom:calc((var(--roll) - var(--btn)) / 2)}
   .roll{width:var(--roll);height:var(--roll);border-radius:50%;border:6px solid #fff;background:#ff7a59;color:#fff;font-size:calc(var(--roll) * .2);font-weight:900;
     letter-spacing:.04em;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2);cursor:pointer;transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;isolation:isolate}
   /* iPad Safari 會把按鈕裡的字另外畫一層,顏色和底色差一點點,看起來像文字外面有個淡淡的方框 → 不用轉場動畫、把整顆按鈕固定成一層,字就跟按鈕畫在一起 */
@@ -120,7 +121,6 @@
   .it button{flex:none;height:38px;padding:0 14px;border-radius:12px;border:0;color:#fff;font-weight:900;font-size:calc(13px * var(--fs));cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.18)}
   .it button:disabled{background:#d6ccc4;box-shadow:none}
   .steps{flex-wrap:wrap;justify-content:center;max-width:min(520px,94vw)}
-  #mapBtn.on{background:#3d9a55!important;box-shadow:0 4px 0 #2a743d!important}
   body.embed .hud{right:64px}
   /* 3D 選角:畫面中間是模型,上面一行標題,下面是 ◀ 名字 ▶ 和確定鈕 */
   body.picking .hud, body.picking .lcol, body.picking .rcol, body.picking .tipbar, body.picking .ranktag, body.picking .rbanner, body.picking .ctl { display: none !important; }

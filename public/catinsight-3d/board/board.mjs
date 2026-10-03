@@ -1262,8 +1262,8 @@ view.zoomMul = 1;
   const cv = $('gl'), R = Math.SQRT1_2, TILT = CAM_OFF.y / CAM_OFF.length();   // TILT:地面往前 1 格,在畫面上只移動這個比例(鏡頭是斜著看的)
   let drag = null;
   const UI = 'button, a, .bar, .ava, .m, .box, .bubble, .panel, .draw, .end, .pickui, .round, .steps, .dsel, .toast, .rb, .stockbtn, .tabs';
-  // 縮放:電腦滾輪、手機雙指。只改鏡頭的視野大小(view.zoomMul),介面不受影響;範圍 0.55x ~ 2.2x
-  const setZoom = (m) => { view.zoomMul = Math.max(0.55, Math.min(2.2, m)); };
+  // 縮放:電腦滾輪、手機雙指。只改鏡頭的視野大小(view.zoomMul),介面不受影響;範圍 0.55x ~ 3.3x(拉到最遠可以看到整張地圖,所以不用地圖鈕了)
+  const setZoom = (m) => { view.zoomMul = Math.max(0.55, Math.min(3.3, m)); };   // 3.3x 差不多等於以前地圖鈕的全覽
   window.addEventListener('wheel', (e) => { if (stageOn || e.target.closest?.(UI)) return; e.preventDefault(); setZoom(view.zoomMul * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
   const touches = new Map(); let pinch = null;      // pinch:{ d0, m0 } 開始時的兩指距離和倍率
   window.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch' || stageOn || e.target.closest?.(UI)) return; touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1460,7 +1460,7 @@ function staticText() {
       pips.map(([px, py]) => `<circle cx="${x + px}" cy="${py}" r="2.2" class="pip"/>`).join('') + '</g>';
     $('d1').innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${die(1, [[6.5, 6.5], [15.5, 6.5], [11, 11], [6.5, 15.5], [15.5, 15.5]], -8)}</svg>`;
     $('d2').innerHTML = `<svg viewBox="0 0 50 24" aria-hidden="true">${die(1, [[7, 7], [15, 15]], -10)}${die(27, [[7, 7], [11, 11], [15, 15]], 8)}</svg>`;
-    $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('mapBtn').setAttribute('aria-label', L('Map', '地圖')); $('rollTxt').textContent = L('ROLL', '擲骰子');
+    $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('rollTxt').textContent = L('ROLL', '擲骰子');
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   // 頁尾加上版本號(取 board.mjs?v=N 的 N),方便確認拿到的是不是最新版
   $('note').textContent = '';      // 畫面底下不再放字(省空間);聲明、音樂出處和版本改放在結算畫面
@@ -2491,7 +2491,6 @@ $('avaMe').onclick = $('stockBtn').onclick = () => { if (!S || !S.players.length
 { const tb = $('tipbar'); if (matchMedia('(max-width:900px)').matches) tb.classList.add('min'); tb.querySelector('.bubble').onclick = () => tb.classList.toggle('min'); }
 
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
-$('mapBtn').onclick = () => { pan.set(0, 0, 0); view.zoomMul = 1; view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
 
 if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
 // 右側兩個面板的標題可以點:三角箭頭收合 / 展開
@@ -2526,7 +2525,7 @@ function clientInit() {
       setPlayers(m.chars, m.humans, m.names); m.remote.forEach((g, i) => { if (g) S.players[i].remote = g; });
       me = Math.max(0, m.me); CLIENT_ME = me; S.hi = me; S.turn = m.turn; S.rolls = m.rolls; S.maxRounds = m.maxRounds;
       S.price = m.price; S.lanePath = m.lanePath; drawAll(); drawLanes();
-      S.players.forEach((p, i) => { p.pos = m.pos[i]; p.lane = m.lane[i]; const P = PIECES[i]; if (!P) return;
+      S.players.forEach((p, i) => { p.pos = m.pos[i]; p.lane = m.lane[i]; const P = PIECES[i]; if (!P) return; setChar(P.body, p.char);   // 手機這邊棋子還是空的,要自己掛上角色模型
         if (p.lane) { const g = p.lane.at ? laneTiles[p.lane.type].path[p.lane.at - 1].g : laneTiles[p.lane.type].cell.g; P.piece.position.set(g.position.x + P.off.x, TOP, g.position.z + P.off.z); } else placePiece(p.pos, P); });
       showPieces(true); focus = PIECES[me]; diceSpots(PIECES[me]); dice.forEach((d, i) => d.position.copy(DIE_REST[i]));
       buildFoes(); setPortraits(); S.view = null; return;
@@ -2563,10 +2562,9 @@ function clientInit() {
     $('tipbar').classList.toggle('hide', $('ctl').classList.contains('hide') || !mine);
     ['draw', 'end'].forEach((id) => { $(id).style.pointerEvents = mine && id !== 'end' ? '' : 'none'; });
   }
-  // 鏡射區塊的操作回傳主機;地圖鈕是本機的(切全覽 / 歸零縮放)
+  // 鏡射區塊的操作回傳主機
   ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { const el = $(id);
     el.addEventListener('click', (e) => { const b = e.target.closest('button, .dcard'); if (!b || !el.contains(b) || b.disabled) return; e.preventDefault();
-      if (b.id === 'mapBtn') { pan.set(0, 0, 0); view.zoomMul = 1; view.overview = !view.overview; b.classList.toggle('on', view.overview); return; }
       send({ t: 'click', box: id, idx: [...el.querySelectorAll('button, .dcard')].indexOf(b) }); });
     let last = 0; el.addEventListener('input', (e) => { const inp = e.target; if (inp.tagName !== 'INPUT') return; const now = Date.now(); const fire = () => send({ t: 'input', box: id, idx: [...el.querySelectorAll('input')].indexOf(inp), value: inp.value });
       if (now - last > 60) { last = now; fire(); } else { clearTimeout(inp._t); inp._t = setTimeout(fire, 70); } }); });
