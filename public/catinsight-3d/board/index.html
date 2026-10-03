@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#c9e8b8">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="style.css?v=20">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -25,8 +25,9 @@
 
 <div class="hud">
   <div class="ava" id="avaMe" style="background-image:url(/assets/app-icon.png)"></div>
+  <div class="cashpill"><span class="coin"></span><span id="cash">10,000</span></div>
   <div class="bar hide">
-    <div class="pill"><span class="coin"></span><span id="cash">10,000</span></div>
+    <div class="pill"><span class="coin"></span><span id="cash2">10,000</span></div>
     <div class="stat"><span id="lblAssets"></span><b id="assets">10,000</b></div>
     <div class="stat opt"><span id="lblStocks"></span><b id="stocks">0</b></div>
     <div class="sp"></div>
@@ -90,6 +91,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=152"></script>
+<script type="module" src="./board.mjs?v=153"></script>
 </body>
 </html>

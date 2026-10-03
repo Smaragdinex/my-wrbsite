@@ -340,3 +340,9 @@ body.remote #ctl .roll{opacity:.55}
 .topbtns{position:fixed;right:12px;top:14px;z-index:6;display:flex;gap:8px;pointer-events:auto}
 body.embed .topbtns{right:64px}
 .hud{pointer-events:none}
+
+/* 左上:自己的頭像 + 現金;輪到自己時頭像右下角綠點 */
+.cashpill{display:flex;align-items:center;gap:6px;background:#8a6f60;color:#fff;border:3px solid #fff;border-radius:999px;padding:4px 12px 4px 6px;font-weight:900;font-size:calc(16px * var(--fs));box-shadow:0 3px 0 rgba(0,0,0,.12);pointer-events:none;white-space:nowrap}
+.ava{position:relative;pointer-events:auto;cursor:pointer}
+.ava.turn::after{content:'';position:absolute;right:2px;bottom:2px;width:calc(14px * var(--fs));height:calc(14px * var(--fs));border-radius:50%;background:#35c26b;border:3px solid #fff}
+@media(max-width:900px){ .cashpill{font-size:calc(14px * var(--fs));padding:3px 10px 3px 5px}.cashpill .coin{width:18px;height:18px} }

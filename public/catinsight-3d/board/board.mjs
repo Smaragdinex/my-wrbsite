@@ -1119,7 +1119,7 @@ async function portrait(key) {
 }
 function setPortraits() {
   const put = (el, key) => portrait(key).then((url) => { if (el) el.style.backgroundImage = `url(${url})`; }).catch(() => {});
-  put($('avaMe'), (S.players[S.turn] || S.players[S.hi]).char);
+  put($('avaMe'), meP().char);
   document.querySelectorAll('#assetTabs button').forEach((b) => put(b, S.players[+b.dataset.i].char));
 }
 let focus;
@@ -1324,9 +1324,11 @@ const marginTag = (h, k) => (h.loan > 0 ? ` <b style="color:${ratioOf(h, k) < 1.
 const squeezeTag = (h, k) => { const g = Math.max(0, squeezeGap(h, k)); return ` <b style="color:${g < 10 ? '#c4472f' : '#8a5cf5'}">${L('sq', '軋')}+${Math.ceil(g)}%</b>`; };
 const debtRow = (d) => (d > 0 ? `<div class="row"><i style="background:#4a63b0"></i><span>${L('Bank loan', '銀行貸款')}</span><span></span><span style="color:#c4472f">-${fmt(d)}</span></div>` : '');
 // 資產框上面那排頭像:每局開始時依人數建一次。點誰就看誰的資產
+// 「我」:這台裝置上的真人(主機自己);4 支手機都加入、主機只當螢幕時就是第一位
+const meP = () => S.players.find((p) => p.human && !p.remote) || S.players[0];
 function buildFoes() {
   const el = $('assetTabs'); el.innerHTML = '';
-  S.players.forEach((p) => {
+  S.players.filter((p) => p !== meP()).forEach((p) => {      // 直排只放對手;自己是左上那顆頭像
     const b = document.createElement('button'); b.dataset.i = p.i; b.setAttribute('aria-label', nameOf(p));
     b.onclick = () => { S.view = p.i; if ($('assetBox').classList.contains('fold') || S.view !== p.i) $('assetBox').classList.remove('fold'); hud(); };
     el.appendChild(b);
@@ -1355,8 +1357,8 @@ const missHtml = (p) => (p.missions || []).map((m) =>
     ((p.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + p.doneList.slice().reverse().map((t) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span></div>`).join('') : '');
 function hud() {
   // 上方資訊列跟著「現在輪到誰」:電腦在走的時候顯示牠的現金、總資產、股票市值和背包(左上頭像也會換成牠)
-  { const T = S.players[S.turn] || S.players[S.hi];
-    $('cash').textContent = fmt(T.cash);
+  { const T = meP();      // 左上頭像 + 現金永遠是自己的
+    $('cash').textContent = fmt(T.cash); $('avaMe').classList.toggle('turn', S.turn === T.i);
     $('assets').textContent = fmt(assetsOf(T));
     $('stocks').textContent = fmt(KEYS.reduce((a, k) => a + T.hold[k].n * S.price[k], 0));
     $('bagCount').textContent = T.bag.length;
@@ -1372,7 +1374,7 @@ function hud() {
   $('miss').innerHTML = missHtml(S.players[S.hi]);
   { const t = advise(); if ($('tip').textContent !== t) { $('tip').textContent = t; const tb = $('tipbar'); if (tb) { tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); } } }
   // 資產框:一次只顯示一位。預設跟著「現在輪到誰」;點上面的頭像可以改看別人(下一位開始走的時候會自動切回去)
-  { const A = S.players[S.view ?? S.turn] || S.players[S.hi], mine = A.i === S.hi;
+  { const A = S.players[S.view ?? meP().i] || S.players[S.hi], mine = A.i === S.hi;      // 資產框預設看自己,點對手頭像才看他
     $('assetTitle').textContent = (isYou(A) ? L('My assets', '我的資產') : L(`${nameOf(A)}'s assets`, `${nameOf(A)}的資產`)) + ' · $' + fmt(assetsOf(A));
     document.querySelectorAll('#assetTabs button').forEach((b) => { b.classList.toggle('on', +b.dataset.i === A.i); b.classList.toggle('turn', +b.dataset.i === S.turn); });
     $('assetRows').innerHTML = assetRowsHtml(A, mine); }
@@ -2414,6 +2416,7 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
   window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') paint(!!e.data.on); });
 }
 $('bagBtn').onclick = bagPanel;
+$('avaMe').onclick = () => { if (!S || !S.players.length) return; S.view = meP().i; $('assetBox').classList.remove('fold'); hud(); };
 // 提示泡泡:手機預設縮成「!」,點一下展開 / 收起
 { const tb = $('tipbar'); if (matchMedia('(max-width:900px)').matches) tb.classList.add('min'); tb.querySelector('.bubble').onclick = () => tb.classList.toggle('min'); }
 
