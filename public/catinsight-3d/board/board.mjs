@@ -558,6 +558,15 @@ const E = N / 2 * STEP + 0.62;
     if (k % 2 === 0) { fence(-E - 0.5, t, 3, false); fence(t, -E - 0.5, 3, true); }
     k++;
   }
+  // 靠鏡頭的兩側(畫面右下、左下)也放,但要離外圈遠一點(至少 2.4 格外),樹和房子的高度才不會從鏡頭方向遮到格子
+  k = 1;
+  for (let t = -E + 1.1; t <= E - 0.4; t += 2.3) {
+    const near = E + 2.4 + (k % 3) * 0.6;
+    if (k % 4 === 2) { house(near + 0.8, t, walls[(k + 1) % 4], roofs[(k + 2) % 5], -Math.PI / 2 - 0.1); house(t, near + 0.8, walls[(k + 3) % 4], roofs[(k + 4) % 5], Math.PI + 0.1); }
+    else { tree(near, t, 1 + ((k + 2) % 3) * 0.15); tree(t, near, 1 + (k % 3) * 0.15); }
+    if (k % 2 === 1) { fence(E + 0.5, t, 3, false); fence(t, E + 0.5, 3, true); }
+    k++;
+  }
 }
 // 中間的大草地:一個小公園(池塘、樹、房子、花)。樹和房子都避開兩條小路(z=4 那排和 z=12 那排)和兩棟建築
 {
