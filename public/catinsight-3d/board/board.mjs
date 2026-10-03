@@ -124,6 +124,32 @@ const EVENTS = [
     {soft: 0.70,  tech: 0.65, chip: 0.75, game: 0.80, crypto: 0.70, green: 0.85, fin: 0.94, disc: 0.95, bond: 1.06, gold: 1.05, staples: 1.03, util: 1.04, health: 1.02, yield: 1.02 }),
   EV(L('Subprime mortgage crisis', '次級房貸風暴'), L('Banks lent to people who could not pay, packaged the loans and sold them on. When house prices fell, property and banks collapsed together and dragged everything that depends on borrowing.', '銀行把錢借給還不起的人,再把房貸包裝成商品賣出去。房價一跌,不動產和銀行一起崩,靠借錢運作的產業全被拖下水。'),
     {soft: 0.90,  reit: 0.65, fin: 0.65, disc: 0.85, mat: 0.88, trans: 0.90, tech: 0.90, chip: 0.90, green: 0.90, crypto: 0.85, yield: 0.92, gold: 1.12, bond: 1.08, staples: 1.02, util: 1.01 }),
+  // ── 更多金融史上的事件 ──
+  // 黑色星期一:恐慌一天崩盤,但下一回合會自動反彈一半(rebound)—— 教「恐慌殺低不一定是對的」
+  Object.assign(EV(L('Black Monday', '黑色星期一'), L('In 1987 program trading sold into a falling market and stocks dropped 22% in one day. Panic feeds on itself, and part of the drop came back soon after.', '1987 年程式交易在下跌中自動賣出,股市一天崩 22%。恐慌會自我放大,但之後有一部分很快就漲回來了。'),
+    { tech: 0.82, soft: 0.82, chip: 0.82, yield: 0.88, oil: 0.85, health: 0.88, reit: 0.85, fin: 0.80, trans: 0.84, bio: 0.82, staples: 0.90, disc: 0.82, util: 0.90, mat: 0.85, green: 0.82, def: 0.88, game: 0.82, crypto: 0.80, gold: 1.05, bond: 1.03 }), { rebound: 0.5 }),
+  EV(L('Asian financial crisis', '亞洲金融風暴'), L('In 1997 hot money fled Thailand and Korea, currencies collapsed and anything tied to Asian trade fell with them.', '1997 年熱錢撤出泰國、韓國,貨幣崩盤,跟亞洲貿易有關的全被拖下水。'),
+    { trans: 0.85, mat: 0.88, fin: 0.88, disc: 0.90, chip: 0.93, tech: 0.95, gold: 1.06, bond: 1.05 }),
+  EV(L('European debt crisis', '歐債危機'), L('From 2010 Greece could not pay its debts. Even government bonds can default, and the banks holding them bleed.', '2010 年起希臘還不出國債。連國債都可能違約,抱著國債的銀行跟著失血。'),
+    { bond: 0.88, fin: 0.85, reit: 0.92, disc: 0.95, gold: 1.08, def: 1.02 }),
+  EV(L('Bank run', '銀行擠兌'), L('In 2023 a bank serving tech startups lost its deposits in two days. Confidence is all a bank has.', '2023 年一家服務科技新創的銀行兩天內被提光存款。銀行靠的就是信心。'),
+    { fin: 0.80, soft: 0.90, tech: 0.92, bio: 0.94, bond: 1.06, gold: 1.03 }),
+  EV(L('Trade war and tariffs', '中美貿易戰'), L('From 2018 tariffs hit chips, metals and shipping; the extra cost gets passed to consumers.', '2018 年起關稅打到晶片、原物料和航運,多出來的成本轉嫁給消費者。'),
+    { chip: 0.88, mat: 0.90, trans: 0.92, staples: 0.96, tech: 0.95, def: 1.05, gold: 1.02 }),
+  EV(L('Chip shortage', '晶片荒'), L('In 2021 there were not enough chips: chip makers raised prices while car and console makers waited.', '2021 年晶片不夠用:晶片廠漲價,汽車和遊戲機廠只能等。'),
+    { chip: 1.20, tech: 0.95, green: 0.88, game: 0.94 }),
+  // 迷因股軋空:挑「場上被放空最多」的那檔暴漲 50%,所有空單強迫回補(meme:抽到時才決定是哪一檔)
+  Object.assign(EV(L('Meme stock squeeze', '迷因股軋空'), L('In 2021 retail traders piled into the most-shorted stock and squeezed the short sellers out. Every short on it is forced to buy back.', '2021 年散戶一起買被放空最多的股票,把放空的人全部軋出場。這檔的空單全部強迫回補。'), {}), { meme: true }),
+  EV(L('Antitrust fine', '反壟斷巨額罰款'), L('Regulators fine a platform giant for abusing its position. Big tech carries regulatory risk.', '監管機關對平台巨頭開出巨額罰款。大型科技公司有監管風險。'),
+    { tech: 0.88, soft: 0.90, game: 0.97 }),
+  EV(L('Massive data breach', '大型資安事件'), L('Personal data of millions leaks. Trust is expensive to rebuild, and security costs go up for everyone.', '數百萬人的個資外洩。信任很難重建,所有公司的資安成本都上升。'),
+    { soft: 0.90, fin: 0.94, tech: 0.96 }),
+  EV(L('Infrastructure bill passes', '基礎建設法案通過'), L('Government spending on roads, grids and ports flows to materials, transport and utilities; more borrowing weighs on bonds.', '政府砸錢修路、電網、港口,原物料、運輸和公用事業受惠;多借錢讓債券承壓。'),
+    { mat: 1.15, trans: 1.08, util: 1.05, green: 1.06, bond: 0.97 }),
+  EV(L('Nuclear accident', '核災事故'), L('In 2011 the Fukushima disaster turned countries away from nuclear power and toward renewables and fossil fuels.', '2011 年福島核災讓各國遠離核電,轉向再生能源和化石燃料。'),
+    { util: 0.85, green: 1.12, oil: 1.06, gold: 1.04, reit: 0.97 }),
+  EV(L('Property bubble bursts', '房市泡沫破裂'), L('Japan in 1990, China in 2021: when borrowed money stops flowing into property, prices fall and banks and builders fall with them.', '1990 年的日本、2021 年的中國:借來的錢不再流進房地產,房價一跌,銀行和建商跟著倒。'),
+    { reit: 0.75, fin: 0.90, mat: 0.92, staples: 0.97, disc: 0.96, gold: 1.04, bond: 1.03 }),
   // 政府普發現金:除了股價變動,每位玩家還直接拿到現金(cash)
   Object.assign(EV(L('Government cash handout', '政府普發現金'), L('Everyone gets cash from the government. People spend it, so shops, restaurants and travel do well; the government borrows more, so bonds dip.', '政府發現金給每個人。大家拿到錢會去消費,零售、餐飲、旅遊受惠;政府要多借錢,債券小跌。'),
     {soft: 1.02,  disc: 1.12, staples: 1.06, game: 1.06, trans: 1.04, fin: 1.03, reit: 1.02, gold: 1.02, bond: 0.96 }), { cash: 1000 }),
@@ -150,7 +176,22 @@ const LANES = {
 function applyEvent(e) {
   KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
   if (e.cash) { S.players.forEach((p) => { p.cash += e.cash; }); sfx('coin'); }
+  // 黑色星期一這類:記下「下一回合要反彈多少」,新的一回合開始時套用(見 turn)
+  if (e.rebound) { const m = Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])); S.after = { t: L(`Rebound after: ${e.t}`, `${e.t}後的反彈`), w: L('Part of a panic drop comes back once the panic passes. Selling at the bottom locks in the loss.', '恐慌過去後,跌掉的會漲回來一部分。在最低點賣掉,就是把虧損鎖死。'), m }; }
   S.lastEvent = e; marginCheck();
+  // 迷因股軋空:這檔的空單不管進場價多少,全部強迫回補
+  if (e.squeezeAll) for (const who of S.players) { const h = who.short[e.squeezeAll]; if (!h.n) continue;
+    const n = h.n, back = shortValue(e.squeezeAll, who), put = h.entry * n; who.cash += back; h.n = 0; h.entry = 0;
+    S.notices.push({ pi: who.i, k: e.squeezeAll, n, back, lost: put - back, squeeze: true }); impact(e.squeezeAll, buyF(n)); }
+}
+// 有些事件要「抽到的當下」才決定內容:迷因股軋空挑場上被放空最多的那檔(沒人放空就隨機挑一檔股票)
+function instantiate(e) {
+  if (!e.meme) return e;
+  const tot = (k) => S.players.reduce((a, p) => a + p.short[k].n, 0);
+  const pool = KEYS.filter((k) => !NON_EQUITY.has(k));
+  const k = pool.some((x) => tot(x) > 0) ? pool.sort((a, b) => tot(b) - tot(a))[0] : pool[Math.floor(Math.random() * pool.length)];
+  const eq = KEYS.filter((x) => !NON_EQUITY.has(x)).length;
+  return { ...e, m: { ...ONES, [k]: 1.5, etf: Math.round((1 + 0.5 / eq) * 100) / 100 }, squeezeAll: k, t: `${e.t}:${SECTORS[k].name}` };
 }
 const cashChip = (e) => (e.cash ? `<span class="mv up">${L(`Everyone +$${fmt(e.cash)}`, `每人 +$${fmt(e.cash)}`)}</span>` : '');
 const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
@@ -381,7 +422,7 @@ function newState() {
   S = {
     rolls: 0, busy: false, over: false, maxRounds: MAX_ROLLS, aiLevel: 'normal', players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
-    shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null,
+    shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null, after: null,
   };
   for (const f of P_FIELDS) Object.defineProperty(S, f, { get: () => S.players[S.hi][f], set: (v) => { S.players[S.hi][f] = v; } });
   Object.defineProperty(S, 'ai', { get: () => S.players[S.ci] });
@@ -1275,7 +1316,7 @@ function checkMissions() {
 // auto = 電腦抽(自動挑、自動繼續);round = 一輪結束系統抽(同樣自動,但不會出特殊牌,因為沒有「誰」被送進小路)
 function drawEventCards(auto, round = false) {
   return new Promise((res) => {
-    const picks = EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 3), who = CHARS[S.foe].name;
+    const picks = EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 3).map(instantiate), who = CHARS[S.foe].name;
     if (!round && Math.random() < SPECIAL_RATE) picks[Math.floor(Math.random() * 3)] = SPECIAL[Math.random() < 0.5 ? 'jail' : 'ipo'];
     const face = (e) => {
       const top = KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 6);
@@ -1408,7 +1449,7 @@ function bagPanel() {
       S.busy = false; showCtl(true);
     } else {
       S.bag.splice(S.bag.indexOf(id), 1);
-      await playEvent(itemInfo(id).event); await flushNotices();
+      await playEvent(instantiate(itemInfo(id).event)); await flushNotices();
       checkMissions(); S.busy = false; showCtl(true);
     }
   });
@@ -1650,6 +1691,7 @@ async function turn(forced) {
   }
   if (S.hi === 0) {           // 第一位走完 = 新的一回合開始:回合數 +1,所有價格小幅隨機波動
     S.rolls++;
+    if (S.after) { const a = S.after; S.after = null; applyEvent(a); drawAll(); hud(); toast(a.t); sfx('good'); }
     KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2)); });
   }
   marginCheck();
@@ -1825,4 +1867,4 @@ if (new URLSearchParams(location.search).get('embed')) document.body.classList.a
 document.querySelectorAll('.side > .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, AU, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, AU, EVENTS, applyEvent, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
