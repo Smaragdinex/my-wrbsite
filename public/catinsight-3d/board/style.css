@@ -353,3 +353,10 @@ body.embed .topbtns{right:64px}
 .ava .crown.hide{display:none}
 @media(max-width:900px){ .ava .crown{font-size:calc(22px * var(--fs))} .lcol{top:calc(var(--ava) + 24px)} .rcol{top:calc(var(--ava) + 24px)} }
 @media(max-width:900px){ .tabs.col button{width:calc(46px * var(--fs));height:calc(46px * var(--fs))} }
+
+/* 對手頭像右邊的名次 */
+.tabs.col{padding-right:calc(46px * var(--fs));align-items:flex-start}
+.tabs.col button{overflow:visible}
+.tabs.col button .rk{position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%);background:#8a6f60;color:#fff;border-radius:999px;padding:1px 8px;font-size:calc(11px * var(--fs));font-weight:900;white-space:nowrap;pointer-events:none;opacity:1}
+.tabs.col button .rk.top{background:#ffb000}
+.lcol .box.assets.fold{display:none}

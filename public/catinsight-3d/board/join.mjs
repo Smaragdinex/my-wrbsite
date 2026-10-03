@@ -59,6 +59,7 @@ function paintTabs() {
   const foes = h.players.filter((q) => q.i !== h.me);      // 直排只放對手
   if (el.children.length !== foes.length) { el.innerHTML = ''; foes.forEach((q) => { const b = document.createElement('button'); b.dataset.i = q.i; b.onclick = () => { const box = $('assetBox'); if (!box.classList.contains('fold') && ST.view === q.i) box.classList.add('fold'); else { ST.view = q.i; box.classList.remove('fold'); } paintHud(); }; el.appendChild(b); }); }
   h.players.forEach((q) => { const b = el.querySelector(`[data-i="${q.i}"]`); if (!b) return; b.classList.toggle('on', q.i === ST.view); b.classList.toggle('turn', q.i === h.turn);
+    let rk = b.querySelector('.rk'); if (!rk) { rk = document.createElement('b'); rk.className = 'rk'; b.appendChild(rk); } rk.textContent = q.rank; rk.classList.toggle('top', !!q.top);
     const url = ST.portraits && ST.portraits[q.char]; if (url && !b.dataset.img) { b.style.backgroundImage = `url(${url})`; b.dataset.img = '1'; } });
   const me = h.players.find((q) => q.i === h.me), url = me && ST.portraits && ST.portraits[me.char]; if (url) $('avaMe').style.backgroundImage = `url(${url})`;
   $('avaMe').classList.toggle('turn', h.turn === h.me);

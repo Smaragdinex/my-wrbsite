@@ -1356,6 +1356,7 @@ const missHtml = (p) => (p.missions || []).map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('') +
     ((p.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + p.doneList.slice().reverse().map((t) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span></div>`).join('') : '');
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][n % 10 > 3 ? 0 : n % 10] || 'th');      // 1st 2nd 3rd 4th
+const rankOf = (p) => { const a = assetsOf(p); return 1 + S.players.filter((q) => assetsOf(q) > a + 0.5).length; };
 function hud() {
   // 上方資訊列跟著「現在輪到誰」:電腦在走的時候顯示牠的現金、總資產、股票市值和背包(左上頭像也會換成牠)
   { const T = meP();      // 左上頭像 + 現金永遠是自己的
@@ -1377,7 +1378,8 @@ function hud() {
   // 資產框:一次只顯示一位。預設跟著「現在輪到誰」;點上面的頭像可以改看別人(下一位開始走的時候會自動切回去)
   { const A = S.players[S.view ?? meP().i] || S.players[S.hi], mine = A.i === S.hi;      // 資產框預設看自己,點對手頭像才看他
     $('assetTitle').textContent = (isYou(A) ? L('My assets', '我的資產') : L(`${nameOf(A)}'s assets`, `${nameOf(A)}的資產`)) + ' · $' + fmt(assetsOf(A));
-    document.querySelectorAll('#assetTabs button').forEach((b) => { b.classList.toggle('on', +b.dataset.i === A.i); b.classList.toggle('turn', +b.dataset.i === S.turn); });
+    document.querySelectorAll('#assetTabs button').forEach((b) => { const q = S.players[+b.dataset.i]; b.classList.toggle('on', q.i === A.i); b.classList.toggle('turn', q.i === S.turn);
+      const r = rankOf(q); let rk = b.querySelector('.rk'); if (!rk) { rk = document.createElement('b'); rk.className = 'rk'; b.appendChild(rk); } rk.textContent = ordinal(r); rk.classList.toggle('top', r === 1); });
     $('assetRows').innerHTML = assetRowsHtml(A, mine); }
   const e = S.lastEvent;
 
@@ -2331,7 +2333,7 @@ function netHudNow(to) {
       cash: fmt(p.cash), assets: fmt(myA), stocks: fmt(KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0)), mcount: p.done, bag: p.bag.length,
       rank: ordinal(rank), top: rank === 1,
       tip: S.hi === p.i ? advise() : L(`${nameOf(cur)}'s turn`, `現在是${nameOf(cur)}的回合`),
-      players: S.players.map((q) => ({ i: q.i, char: q.char, title: (q === p ? L('My assets', '我的資產') : L(`${nameOf(q)}'s assets`, `${nameOf(q)}的資產`)) + ' · $' + fmt(assetsOf(q)), rows: assetRowsHtml(q, q === p) })),
+      players: S.players.map((q) => ({ i: q.i, char: q.char, rank: ordinal(rankOf(q)), top: rankOf(q) === 1, title: (q === p ? L('My assets', '我的資產') : L(`${nameOf(q)}'s assets`, `${nameOf(q)}的資產`)) + ' · $' + fmt(assetsOf(q)), rows: assetRowsHtml(q, q === p) })),
       missTitle: L(`Missions · ${p.done} done`, `任務 · 完成 ${p.done}`), missBadge: (p.missions || []).filter((m) => !m.done).length, miss: missHtml(p),
       evtTitle: $('evtTitle').textContent, evt: $('evtBody').innerHTML, round: $('roundTxt').textContent }, g.conn); }
 }
