@@ -754,11 +754,19 @@ function icon(c, type, x, y, r, color) {
     c.fillStyle = '#fff'; c.font = `900 ${r * 1.1}px Arial`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('M', 0, r * 0.06); }
   c.restore();
 }
-// 禮物格的圖:和抽禮物的牌背同一張禮物盒插畫,載入完成後把禮物格(外圈 + 小路)重畫一次
-const GIFT_IMG = new Image(); GIFT_IMG.src = 'gift.webp';
-GIFT_IMG.onload = () => { tiles.forEach((t, i) => { if (t.type === 'gift') drawLabel(i); }); if (typeof drawLanes === 'function' && S?.lanePath) drawLanes(); };
+// 禮物格的圖示:和其他格子一樣用單色線條畫(白色禮物盒,緞帶用挖空的方式露出格子底色)
 const drawGiftLabel = (c, F) => {
-  if (GIFT_IMG.complete && GIFT_IMG.naturalWidth) c.drawImage(GIFT_IMG, 48, 14, 160, 154);
+  c.save(); c.translate(128, 96); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineJoin = 'round'; c.lineCap = 'round';
+  c.beginPath(); c.roundRect(-52, -6, 104, 72, 10); c.fill();                       // 盒身
+  c.beginPath(); c.roundRect(-62, -30, 124, 30, 9); c.fill();                       // 蓋子
+  c.globalCompositeOperation = 'destination-out';                                   // 緞帶:挖空
+  c.fillRect(-8, -30, 16, 96); c.fillRect(-62, -4, 124, 5);
+  c.globalCompositeOperation = 'source-over';
+  c.lineWidth = 9;                                                                  // 蝴蝶結:兩個圈
+  c.beginPath(); c.ellipse(-22, -46, 18, 12, -0.5, 0, Math.PI * 2); c.stroke();
+  c.beginPath(); c.ellipse(22, -46, 18, 12, 0.5, 0, Math.PI * 2); c.stroke();
+  c.beginPath(); c.arc(0, -42, 8, 0, Math.PI * 2); c.fill();
+  c.restore();
   c.fillStyle = '#fff'; c.font = F(ZH ? 50 : 44); c.fillText(L('GIFT', '禮物'), 128, 212);
 };
 function drawLabel(i) {
