@@ -178,8 +178,8 @@ const LANES = {
   jail: { exit: 28, cell: [7, 4], path: [[6, 4], [5, 4], [4, 4], [3, 4], [2, 4], [1, 4]] },
   ipo: { exit: 60, cell: [9, 12], path: [[10, 12], [11, 12], [12, 12], [13, 12], [14, 12], [15, 12]] },
 };
-// 小路格子的種類:命運只有小路上才有(每條固定 2 格),其他 4 格從 PATH_POOL 隨機抽(不重複,沒有空格)
-const PATH_POOL = ['chance', 'gift', 'fee', 'interest', 'coin'];
+// 小路格子的種類:命運只有小路上才有(每條固定 2 格),其他 4 格從各自的池子隨機排(不重複,沒有空格)。警察局那條有手續費、IPO 那條有利息
+const PATH_POOL = { jail: ['chance', 'gift', 'fee', 'coin'], ipo: ['chance', 'gift', 'interest', 'coin'] };
 const PATH_INFO = {
   fate: { color: 0xc08cf5, base: 0x9a6ad8, a: '★', b: L('FATE', '命運') },
   chance: { color: 0xffd24a, base: 0xd9ad2a, a: '?', b: L('EVENT', '市場事件') },
@@ -188,11 +188,11 @@ const PATH_INFO = {
   interest: { color: 0x4a63b0, base: 0x37508f, a: L('INTEREST', '利息'), b: L('+3% cash', '現金 +3%') },
   coin: { color: 0x57b86b, base: 0x3f9a52, a: L('CASH', '撿到錢'), b: '+$300' },
 };
-function genLanePath() {
+function genLanePath(type) {
   const t = new Array(LANE_LEN).fill(null);
   const a = Math.floor(Math.random() * LANE_LEN); let b; do { b = Math.floor(Math.random() * LANE_LEN); } while (b === a);
   t[a] = 'fate'; t[b] = 'fate';
-  const pool = PATH_POOL.slice().sort(() => Math.random() - 0.5);      // 其他 4 格從池子裡抽、不重複
+  const pool = PATH_POOL[type].slice().sort(() => Math.random() - 0.5);      // 其他 4 格從池子裡抽、不重複
   for (let i = 0; i < LANE_LEN; i++) if (!t[i]) t[i] = pool.pop();
   return t;
 }
@@ -447,7 +447,7 @@ function newState() {
     rolls: 0, busy: false, over: false, maxRounds: MAX_ROLLS, aiLevel: 'normal', players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
     shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null, after: null,
-    lanePath: { jail: genLanePath(), ipo: genLanePath() },      // 兩條小路現在各格是什麼
+    lanePath: { jail: genLanePath('jail'), ipo: genLanePath('ipo') },      // 兩條小路現在各格是什麼
   };
   for (const f of P_FIELDS) Object.defineProperty(S, f, { get: () => S.players[S.hi][f], set: (v) => { S.players[S.hi][f] = v; } });
   Object.defineProperty(S, 'ai', { get: () => S.players[S.ci] });
@@ -1521,7 +1521,7 @@ function bagPanel() {
 async function enterLane(isMe, type) {
   const who = isMe ? S : S.ai, P = isMe ? PM() : PA(), name = CHARS[S.foe].name;
   // 每次有人進來,這條小路重新隨機生成(除非還有別人正走在上面)
-  if (!S.players.some((p) => p !== who && p.lane && p.lane.type === type && p.lane.at > 0)) { S.lanePath[type] = genLanePath(); drawLane(type); }
+  if (!S.players.some((p) => p !== who && p.lane && p.lane.type === type && p.lane.at > 0)) { S.lanePath[type] = genLanePath(type); drawLane(type); }
   who.lane = { type, wait: type === 'jail' ? JAIL_WAIT : 0, at: 0 }; hud();      // at:0 = 在攤位 / 警察局,1~6 = 小路第幾格
   await hopOnto(laneTiles[type].cell.g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
