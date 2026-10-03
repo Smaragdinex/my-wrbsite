@@ -1185,12 +1185,17 @@ function hud() {
     $('assetTitle').textContent = (isYou(A) ? L('My assets', '我的資產') : L(`${nameOf(A)}'s assets`, `${nameOf(A)}的資產`)) + ' · $' + fmt(assetsOf(A));
     document.querySelectorAll('#assetTabs button').forEach((b) => { b.classList.toggle('on', +b.dataset.i === A.i); b.classList.toggle('turn', +b.dataset.i === S.turn); });
     const held = KEYS.filter((k) => A.hold[k].n > 0).sort((x, y) => A.hold[y].n * S.price[y] - A.hold[x].n * S.price[x]);
+    // 每檔持股在市值底下帶一行「+/- 多少」(市值 − 買進成本),放空則直接顯示損益;最後再加一行全部加總的未實現損益
+    const plTxt = (pl) => `<small style="display:block;font-size:.85em;color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</small>`;
+    let totPL = 0;
     $('assetRows').innerHTML =
       `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` + debtRow(A.debt) +
-      (held.length ? held.map((k) => `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${A.hold[k].n} ${L('sh', '股')}${marginTag(A.hold[k], k)}</span><span>${fmt(A.hold[k].n * S.price[k])}</span></div>`).join('')
+      (held.length ? held.map((k) => { const h = A.hold[k], pl = h.n * S.price[k] - h.cost; totPL += pl;
+        return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${h.n} ${L('sh', '股')}${marginTag(h, k)}</span><span style="text-align:right">${fmt(h.n * S.price[k])}${plTxt(pl)}</span></div>`; }).join('')
         : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
-      KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n;
+      KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n; totPL += pl;
         return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${A.short[k].n}${squeezeTag(A.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('') +
+      (held.length || KEYS.some((k) => A.short[k].n > 0) ? `<div class="row"><i style="background:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}"></i><span>${L('Unrealized P/L', '未實現損益')}</span><span></span><span style="color:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}">${totPL >= 0 ? '+' : '-'}${fmt(Math.abs(totPL))}</span></div>` : '') +
       (A.bag.length && !mine ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : ''); }
   const e = S.lastEvent;
   $('evtBody').innerHTML = e
