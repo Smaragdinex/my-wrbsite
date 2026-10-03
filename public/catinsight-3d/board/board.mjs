@@ -1662,6 +1662,7 @@ const FATE = [
   { id: 'birthday', good: true, t: L('Birthday', '生日'), w: L('Every other player chips in.', '其他每位玩家各包一個紅包給你。'), fx: L('+$200 from each player', '每人給你 +$200') },
   { id: 'gostart', good: true, t: L('Shortcut to GO', '抄捷徑回起點'), w: L('Collect your salary and dividends early.', '提早領薪水和股利。'), fx: L('Move to GO', '直接移到起點') },
   { id: 'fat', good: false, t: L('Fat-finger trade', '不小心按錯'), w: L('You tapped the wrong button and dumped a whole position at market price. Double-check before you confirm.', '手滑按錯鍵,把一檔股票整筆用市價賣掉了。下單前要再看一眼。'), fx: L('Sell one holding, all of it', '隨機一檔持股全部賣出') },
+  { id: 'swap', good: true, t: L('Teleport', '瞬間移動'), w: L('You swap places with a random rival. Wherever you land, you land.', '和隨機一位對手互換位置。換到哪一格,就算踩到那一格。'), fx: L('Swap places with a rival', '和一位對手互換位置') },
   { id: 'ipo', good: true, t: L('IPO lottery win', '新股抽籤中籤'), w: L('Off to the IPO booth for free shares.', '去 IPO 攤位領免費新股。'), fx: L('Go to the IPO booth', '前往 IPO 攤位') },
   { id: 'remote', good: true, t: L('Found a remote dice', '撿到遙控骰子'), w: L('A dice you can set. It is in your backpack.', '可以指定點數的骰子,放進背包了。'), fx: L('+1 Remote dice', '+1 遙控骰子') },
   { id: 'atk', good: true, t: L('A rumor to spread', '聽到一個八卦'), w: L('A bad-news card for your backpack. Use it on a rival.', '一張利空消息卡進背包,拿去打對手。'), fx: L('+1 Bad news card', '+1 利空消息卡') },
@@ -1714,6 +1715,14 @@ async function applyFate(c, isMe) {
     else { const k = held[Math.floor(Math.random() * held.length)], h = who.hold[k], n = h.n, value = S.price[k] * n, pl = value - h.cost;
       who.cash += value - h.loan; h.n = 0; h.cost = 0; h.loan = 0; impact(k, sellF(n)); sfx('sell');
       say(`${name} sold all ${n} ${SECTORS[k].name} for $${fmt(value)} (${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`, `${name}把${SECTORS[k].name} ${n} 股全部賣掉,得 $${fmt(value)}(${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`); } }
+  else if (c.id === 'swap') {
+    // 和隨機一位對手交換位置(連同在小路上的狀態一起換),兩隻棋子各自跳過去;自己換到的那一格要重新結算
+    const o = others(who.i), r = o[Math.floor(Math.random() * o.length)], PW = PIECES[who.i], PR = PIECES[r.i];
+    [who.pos, r.pos] = [r.pos, who.pos]; [who.lane, r.lane] = [r.lane, who.lane];
+    const spot = (p) => (p.lane ? (p.lane.at ? laneTiles[p.lane.type].path[p.lane.at - 1].g : laneTiles[p.lane.type].cell.g) : tiles[p.pos].g);
+    say(`${name} swap${isMe ? '' : 's'} places with ${nameOf(r)}`, `${name}和${nameOf(r)}互換位置`); sfx('item');
+    await hopOnto(spot(r), PR, true); await hopOnto(spot(who), PW, true);
+    hud(); await wait(0.2); return isMe ? landOn() : aiLand(); }
   else if (c.id === 'ipo') { await enterLane(isMe, c.id); }
   hud(); await wait(0.6);
 }
