@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#c9e8b8">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -43,9 +43,16 @@
   <div class="tabs col" id="assetTabs"></div>
   <div class="box assets" id="assetBox"><h4><span id="assetTitle"></span><span class="tri"></span></h4><div id="assetRows"></div></div>
 </div>
+<!-- 右邊:兩顆圖示按鈕(市場事件 / 任務),點了在旁邊彈出對應的框 -->
 <div class="rcol">
-  <div class="box missbox" id="missBox"><h4><span id="missTitle"></span><span class="tri"></span></h4><div class="miss" id="miss"></div></div>
-  <div class="box ev evt" id="evtBox"><h4><span id="evtTitle"></span><span class="tri"></span></h4><div class="body" id="evtBody"></div></div>
+  <div class="rbtns">
+    <button class="rb" id="evtBtn" aria-label="events"><img src="ico-event.webp" alt=""><i class="bd hide" id="evtBadge">!</i><span id="evtLbl"></span></button>
+    <button class="rb" id="missBtn" aria-label="tasks"><img src="ico-task.webp" alt=""><i class="bd" id="missBadge">3</i><span id="missLbl"></span></button>
+  </div>
+  <div class="rpop">
+    <div class="box ev evt fold" id="evtBox"><h4><span id="evtTitle"></span><span class="tri"></span></h4><div class="body" id="evtBody"></div></div>
+    <div class="box missbox fold" id="missBox"><h4><span id="missTitle"></span><span class="tri"></span></h4><div class="miss" id="miss"></div></div>
+  </div>
 </div>
 
 <div class="ctl" id="ctl">
@@ -85,6 +92,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=132"></script>
+<script type="module" src="./board.mjs?v=133"></script>
 </body>
 </html>

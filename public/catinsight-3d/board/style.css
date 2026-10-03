@@ -262,7 +262,17 @@ body.remote #ctl .roll{opacity:.55}
 .tipbar{position:fixed;left:50%;top:calc(var(--ava) + 24px);transform:translateX(-50%);width:min(calc(460px * var(--fs)),calc(100vw - 24px));z-index:5;display:flex;justify-content:center;pointer-events:none}
 .tipbar .bubble{max-width:100%;box-sizing:border-box}
 .lcol{position:fixed;left:12px;top:calc(var(--ava) + 52px);z-index:5;display:flex;gap:8px;align-items:flex-start;pointer-events:none;max-height:calc(100vh - var(--ava) - var(--roll) - 120px)}
-.rcol{position:fixed;right:12px;top:calc(var(--ava) + 52px);z-index:5;display:flex;flex-direction:column;gap:10px;width:calc(236px * var(--fs));pointer-events:none;max-height:calc(100vh - var(--ava) - var(--roll) - 120px)}
+.rcol{position:fixed;right:12px;top:calc(var(--ava) + 52px);z-index:5;display:flex;flex-direction:row-reverse;gap:10px;align-items:flex-start;pointer-events:none;max-height:calc(100vh - var(--ava) - var(--roll) - 120px)}
+.rbtns{display:flex;flex-direction:column;gap:10px;flex:none}
+.rb{position:relative;width:calc(64px * var(--fs));border:0;background:transparent;padding:0;cursor:pointer;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:2px;-webkit-tap-highlight-color:transparent}
+.rb img{width:100%;aspect-ratio:1;display:block;filter:drop-shadow(0 3px 0 rgba(0,0,0,.14));transition:transform .15s}
+.rb:active img{transform:scale(.94)}
+.rb.on img{transform:scale(1.06)}
+.rb span{background:#fff;border:2px solid var(--line);border-radius:999px;padding:1px 9px;font-weight:900;font-size:calc(11px * var(--fs));color:#6b594e;white-space:nowrap;margin-top:-6px}
+.rb .bd{position:absolute;top:-2px;right:-2px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#ff5a4f;color:#fff;font-style:normal;font-weight:900;font-size:calc(12px * var(--fs));display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+.rb .bd.hide{display:none}
+.rpop{display:flex;flex-direction:column;gap:10px;width:calc(236px * var(--fs));min-height:0}
+.rpop .box.fold{display:none}
 .lcol .box,.rcol .box{pointer-events:auto;min-height:0;overflow:hidden;display:flex;flex-direction:column}
 .lcol .box > div,.rcol .box > div{overflow-y:auto;-webkit-overflow-scrolling:touch}
 .box h4{display:flex;align-items:center;gap:8px;pointer-events:auto;cursor:pointer;user-select:none;flex:none}
@@ -281,7 +291,8 @@ body.remote #ctl .roll{opacity:.55}
 @media(max-width:900px){
   /* 手機:左欄只留頭像直排,點頭像才浮出資產框;右欄任務和事件預設收起只剩標題 */
   .lcol{top:calc(var(--ava) + 76px)}
-  .rcol{top:calc(var(--ava) + 76px);width:calc(150px * var(--fs))}
+  .rcol{top:calc(var(--ava) + 76px)}
+  .rb{width:calc(52px * var(--fs))}.rpop{width:calc(190px * var(--fs))}
   .box.assets{width:calc(200px * var(--fs))}
   .tipbar{top:calc(var(--ava) + 22px);left:calc(var(--ava) + 24px);right:12px;width:auto;transform:none}
   .lcol{z-index:6}   /* 資產框展開時蓋在右欄上面 */

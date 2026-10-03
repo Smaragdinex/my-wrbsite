@@ -204,7 +204,7 @@ function applyEvent(e) {
   if (e.cash) { S.players.forEach((p) => { p.cash += e.cash; }); sfx('coin'); }
   // 黑色星期一這類:記下「下一回合要反彈多少」,新的一回合開始時套用(見 turn)
   if (e.rebound) { const m = Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])); S.after = { t: L(`Rebound after: ${e.t}`, `${e.t}後的反彈`), w: L('Part of a panic drop comes back once the panic passes. Selling at the bottom locks in the loss.', '恐慌過去後,跌掉的會漲回來一部分。在最低點賣掉,就是把虧損鎖死。'), m }; }
-  S.lastEvent = e; marginCheck();
+  S.lastEvent = e; marginCheck(); if ($('evtBox').classList.contains('fold')) $('evtBadge').classList.remove('hide');      // 新事件:右邊的事件鈕亮「!」
   // 迷因股軋空:這檔的空單不管進場價多少,全部強迫回補
   if (e.squeezeAll) for (const who of S.players) { const h = who.short[e.squeezeAll]; if (!h.n) continue;
     const n = h.n, back = shortValue(e.squeezeAll, who), put = h.entry * n; who.cash += back; h.n = 0; h.entry = 0;
@@ -1283,7 +1283,7 @@ function hud() {
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
   $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' && S.lane.wait > 0 ? L('REST', '休息中') : L('ROLL 1', '擲一顆')) : L('ROLL', '擲骰子');
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
-  $('missTitle').textContent = L(`Missions · ${S.done} done`, `任務 · 完成 ${S.done}`);
+  $('missTitle').textContent = L(`Missions · ${S.done} done`, `任務 · 完成 ${S.done}`); $('missBadge').textContent = S.missions.filter((m) => !m.done).length;
   $('miss').innerHTML = S.missions.map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('') +
     ((S.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + S.doneList.slice().reverse().map((t) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span></div>`).join('') : '');
@@ -2295,8 +2295,14 @@ $('mapBtn').onclick = () => { pan.set(0, 0, 0); view.overview = !view.overview; 
 
 if (new URLSearchParams(location.search).get('embed')) document.body.classList.add('embed');   // 嵌在街機裡:右上角留位置給離開鈕
 // 右側兩個面板的標題可以點:三角箭頭收合 / 展開
-document.querySelectorAll('.lcol .box h4, .rcol .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
-if (matchMedia('(max-width:900px)').matches) { $('assetBox').classList.add('fold'); $('missBox').classList.add('fold'); $('evtBox').classList.add('fold'); }   // 手機:預設收起,點標題或頭像展開
+document.querySelectorAll('.lcol .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
+if (matchMedia('(max-width:900px)').matches) $('assetBox').classList.add('fold');   // 手機:資產框預設收起,點頭像展開
+// 右邊兩顆圖示鈕:點了在旁邊彈出市場事件 / 任務框(一次只開一個;點標題或再點一次收起)
+{ const pair = { evtBtn: 'evtBox', missBtn: 'missBox' };
+  const toggle = (id) => { const want = $(pair[id]).classList.contains('fold'); Object.values(pair).forEach((b) => $(b).classList.add('fold')); Object.keys(pair).forEach((k) => $(k).classList.remove('on'));
+    if (want) { $(pair[id]).classList.remove('fold'); $(id).classList.add('on'); if (id === 'evtBtn') $('evtBadge').classList.add('hide'); } };
+  Object.keys(pair).forEach((id) => { $(id).onclick = () => toggle(id); $(pair[id]).querySelector('h4').onclick = () => toggle(id); });
+  $('evtLbl').textContent = L('Events', '事件'); $('missLbl').textContent = L('Tasks', '任務'); }
 resize(); start();
 requestAnimationFrame(loop);
 window.__game = { get S() { return S; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
