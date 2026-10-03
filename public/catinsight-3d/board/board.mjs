@@ -907,20 +907,22 @@ let pickWho = 0;                                              // 現在是第幾
 function stageSelect(i, dir = 1) {
   const n = slots.length; i = (i % n + n) % n;
   for (let c = 0; c < n && slots[i].taken; c++) i = (i + dir + n) % n;
-  stageSel = i; slots[i].hop = 1; paintStage();
+  stageSel = i; slots[i].hop = 1; paintStage(); if (NET.on && !NET.started) netLobby();
 }
 function paintStage() {
   const c = CHARS[slots[stageSel].key];
   $('pname').textContent = c.name;
   // 沒有標題,所以兩位真人時用按鈕文字說明現在是誰在選
-  $('pok').textContent = CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`);
+  $('pok').textContent = NET.on ? L(`Start · ${1 + NET.guests.filter((g) => g.online).length} players`, `開始(${1 + NET.guests.filter((g) => g.online).length} 位真人)`) : CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`);
   // 人數設定:只有第一位在選的時候可以改
   $('pcfg').classList.toggle('hide', pickWho > 0);
   $('pcN').textContent = L('Players', '人數'); $('pcH').textContent = L('Humans', '真人玩家');
-  $('pcD').textContent = L('Computer', '電腦'); document.getElementById('pcDrow').classList.toggle('hide', CFG.n - CFG.humans <= 0);
+  $('pcD').textContent = L('Computer', '電腦'); document.getElementById('pcDrow').classList.toggle('hide', CFG.n - (NET.on ? 1 + NET.guests.filter((g) => g.online).length : CFG.humans) <= 0);
   { const names = { easy: L('Easy', '簡單'), normal: L('Normal', '一般'), hard: L('Hard', '兇狠') };
     document.querySelectorAll('#pcfg [data-d]').forEach((b) => { b.textContent = names[b.dataset.d]; b.classList.toggle('on', b.dataset.d === (CFG.ai || 'normal')); }); }
-  $('pcAI').textContent = CFG.n - CFG.humans > 0 ? L(`${CFG.n - CFG.humans} computer rival${CFG.n - CFG.humans > 1 ? 's' : ''}`, `電腦對手 ${CFG.n - CFG.humans} 位`) : L('No computer rivals', '沒有電腦對手');
+  if (NET.on) { const h = 1 + NET.guests.filter((g) => g.online).length; if (CFG.n < h) CFG.n = Math.min(4, h); }
+  const H = NET.on ? 1 + NET.guests.filter((g) => g.online).length : CFG.humans;
+  $('pcAI').textContent = CFG.n - H > 0 ? L(`${CFG.n - H} computer rival${CFG.n - H > 1 ? 's' : ''}`, `電腦對手 ${CFG.n - H} 位`) : L('No computer rivals', '沒有電腦對手');
   document.querySelectorAll('#pcfg [data-n]').forEach((b) => b.classList.toggle('on', +b.dataset.n === CFG.n));
   document.querySelectorAll('#pcfg [data-h]').forEach((b) => b.classList.toggle('on', +b.dataset.h === CFG.humans));
   { const R = ROUND_OPTS.includes(CFG.rounds) ? CFG.rounds : MAX_ROLLS;
@@ -982,14 +984,28 @@ function pickStage() {
     slots.forEach((sl) => { sl.taken = false; });
     stageCur = stageSel; stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
-    document.querySelectorAll('#pcfg button').forEach((b) => { b.onclick = () => {
+    document.querySelectorAll('#pcfg button').forEach((b) => { if (b.id === 'pcOnline') return; b.onclick = () => {
       if (b.dataset.n) CFG.n = +b.dataset.n; else if (b.dataset.h) CFG.humans = +b.dataset.h;
       else if (b.dataset.d) CFG.ai = b.dataset.d;
       else if (b.dataset.r) { const i = Math.max(0, ROUND_OPTS.indexOf(CFG.rounds || MAX_ROLLS)); CFG.rounds = ROUND_OPTS[Math.min(ROUND_OPTS.length - 1, Math.max(0, i + +b.dataset.r))]; }
       try { localStorage.setItem('css.players', JSON.stringify(CFG)); } catch (e) {}
       paintStage();
     }; });
+    $('pcOnline').onclick = () => { if (NET.on) netClose(); else netOpen(); };
+    // 再玩一次:房間留著,手機回到大廳(可以換角色),離線的位子清掉
+    if (NET.on) { NET.started = false; NET.guests = NET.guests.filter((g) => g.online); netSend({ t: 'reset' }); }
+    document.body.classList.remove('remote'); $('remoteBanner').classList.add('hide'); lobbyPaint(); netLobby();
     $('pok').onclick = () => {
+      if (NET.on) {              // 線上同樂:主機 + 手機上的玩家都是真人,不夠的人數用電腦補
+        const gs = NET.guests.filter((g) => g.online);
+        if (!gs.length) { toast(L('No one has joined yet', '還沒有人加入')); return; }
+        NET.guests = gs; NET.started = true; stageOn = false; stage.visible = false; document.body.classList.remove('picking'); slots.forEach((sl) => { sl.taken = false; });
+        const hostChar = slots[stageSel].key, chars = [hostChar, ...gs.map((g) => g.char)], humans = chars.length, n = Math.max(CFG.n, humans);
+        const rest = Object.keys(CHARS).filter((k) => !chars.includes(k)).sort(() => Math.random() - 0.5);
+        netSend({ t: 'start' });
+        res({ chars: [...chars, ...rest.slice(0, n - humans)], humans, rounds: CFG.rounds, ai: CFG.ai, names: [nameIn.value.trim().slice(0, 12), ...gs.map((g) => g.name)], remote: gs.map((g) => g.gid) });
+        return;
+      }
       picked.push(slots[stageSel].key);
       names.push(nameIn.value.trim().slice(0, 12)); nameIn.value = '';
       if (picked.length < CFG.humans) {            // 換第二位真人選:第一位選走的角色從轉盤上拿掉
@@ -1235,6 +1251,20 @@ function buildFoes() {
     el.appendChild(b);
   });
 }
+// 資產清單的 HTML(資產框和手機遙控頁共用)。每檔持股在市值底下帶一行「+/- 多少」(市值 − 買進成本),放空則直接顯示損益;最後一行是全部加總的未實現損益
+function assetRowsHtml(A, mine) {
+  const held = KEYS.filter((k) => A.hold[k].n > 0).sort((x, y) => A.hold[y].n * S.price[y] - A.hold[x].n * S.price[x]);
+  const plTxt = (pl) => `<small style="display:block;font-size:.85em;color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</small>`;
+  let totPL = 0;
+  return `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` + debtRow(A.debt) +
+      (held.length ? held.map((k) => { const h = A.hold[k], pl = h.n * S.price[k] - h.cost; totPL += pl;
+        return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${h.n} ${L('sh', '股')}${marginTag(h, k)}</span><span style="text-align:right">${fmt(h.n * S.price[k])}${plTxt(pl)}</span></div>`; }).join('')
+        : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
+      KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n; totPL += pl;
+        return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${A.short[k].n}${squeezeTag(A.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('') +
+      (held.length || KEYS.some((k) => A.short[k].n > 0) ? `<div class="row"><i style="background:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}"></i><span>${L('Unrealized P/L', '未實現損益')}</span><span></span><span style="color:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}">${totPL >= 0 ? '+' : '-'}${fmt(Math.abs(totPL))}</span></div>` : '') +
+      (A.bag.length && !mine ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : '');
+}
 function hud() {
   // 上方資訊列跟著「現在輪到誰」:電腦在走的時候顯示牠的現金、總資產、股票市值和背包(左上頭像也會換成牠)
   { const T = S.players[S.turn] || S.players[S.hi];
@@ -1257,20 +1287,10 @@ function hud() {
   { const A = S.players[S.view ?? S.turn] || S.players[S.hi], mine = A.i === S.hi;
     $('assetTitle').textContent = (isYou(A) ? L('My assets', '我的資產') : L(`${nameOf(A)}'s assets`, `${nameOf(A)}的資產`)) + ' · $' + fmt(assetsOf(A));
     document.querySelectorAll('#assetTabs button').forEach((b) => { b.classList.toggle('on', +b.dataset.i === A.i); b.classList.toggle('turn', +b.dataset.i === S.turn); });
-    const held = KEYS.filter((k) => A.hold[k].n > 0).sort((x, y) => A.hold[y].n * S.price[y] - A.hold[x].n * S.price[x]);
-    // 每檔持股在市值底下帶一行「+/- 多少」(市值 − 買進成本),放空則直接顯示損益;最後再加一行全部加總的未實現損益
-    const plTxt = (pl) => `<small style="display:block;font-size:.85em;color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</small>`;
-    let totPL = 0;
-    $('assetRows').innerHTML =
-      `<div class="row"><i style="background:#57b86b"></i><span>${L('Cash', '現金')}</span><span></span><span>${fmt(A.cash)}</span></div>` + debtRow(A.debt) +
-      (held.length ? held.map((k) => { const h = A.hold[k], pl = h.n * S.price[k] - h.cost; totPL += pl;
-        return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${h.n} ${L('sh', '股')}${marginTag(h, k)}</span><span style="text-align:right">${fmt(h.n * S.price[k])}${plTxt(pl)}</span></div>`; }).join('')
-        : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
-      KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n; totPL += pl;
-        return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${A.short[k].n}${squeezeTag(A.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('') +
-      (held.length || KEYS.some((k) => A.short[k].n > 0) ? `<div class="row"><i style="background:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}"></i><span>${L('Unrealized P/L', '未實現損益')}</span><span></span><span style="color:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}">${totPL >= 0 ? '+' : '-'}${fmt(Math.abs(totPL))}</span></div>` : '') +
-      (A.bag.length && !mine ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : ''); }
+    $('assetRows').innerHTML = assetRowsHtml(A, mine); }
+  netMe();
   const e = S.lastEvent;
+
   $('evtBody').innerHTML = e
     ? `<div>${e.t}</div><div class="why">${e.w}</div>` + (e.cash ? `<div class="mvrow"><span>${L('Everyone', '每位玩家')}</span><span style="color:#1c8a4a">+$${fmt(e.cash)}</span></div>` : '') + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
@@ -1295,7 +1315,7 @@ function staticText() {
   $('note').textContent = L('Fictional companies · for learning, not investment advice · Music: Sharou', '公司皆為虛構 · 學習用途,非投資建議 · 音樂:しゃろう') + ` · v${ver}`;
 }
 let toastTimer;
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
+function toast(msg) { netSend({ t: 'toast', msg }); const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
 function showCtl(on) { $('ctl').classList.toggle('hide', !on); $('stepCtl').classList.add('hide'); }
 function panel(html) { const p = $('panel'); p.innerHTML = html; p.classList.remove('hide'); p.classList.toggle('over', !!(S && S.over)); return p; }
 const closePanel = () => $('panel').classList.add('hide');
@@ -1959,9 +1979,9 @@ async function nextTurns() {
       setPortraits();
       if (S.nh > 1) { toast(L(`${nameOf(p)}'s turn (Player ${i + 1})`, `輪到${nameOf(p)}(玩家 ${i + 1})`)); }
       checkMissions();          // 別人走的時候股價會變,輪到自己先檢查一次任務
-      S.busy = false; showCtl(true); return;
+      S.busy = false; showCtl(true); remoteBanner(); return;
     }
-    S.ci = i; S.turn = i; S.view = null; hud(); setPortraits(); await aiTurn(); await flushNotices();
+    S.ci = i; S.turn = i; S.view = null; hud(); setPortraits(); remoteBanner(); await aiTurn(); await flushNotices();
   }
 }
 // 本機排行榜:每局結束存一筆到瀏覽器(只有第一位真人的成績),留最好的 20 筆(依總資產)
@@ -2090,10 +2110,102 @@ function finish() {
     <p>${style}</p>
     <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div></div>`);
-  $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose');
+  $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose'); remoteBanner();
   $('again').onclick = start;
   $('recBtn').onclick = () => leaderboardPanel(myRec);
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
+}
+/* ───────────── 線上同樂(主機端) ─────────────
+   這台是主機:遊戲照常在這裡跑。手機掃 QR 進房間後只是「遙控器」:主機把面板(擲骰、買賣、翻牌…)的 HTML 鏡射到手機,
+   手機上按了哪個鈕就回傳給主機,主機再當成自己被點了。房間是 Cloudflare Durable Object,只轉送訊息。 */
+const NET = { on: false, code: null, ws: null, guests: [], started: false, retry: 0 };      // guests: { gid, conn, name, char, online }
+const netSend = (msg, to) => { if (NET.on && NET.ws && NET.ws.readyState === 1) { try { NET.ws.send(JSON.stringify(to ? { ...msg, to } : msg)); } catch (e) {} } };
+const joinUrl = (code) => { const u = new URL('join/', location.href); u.search = `?r=${code}`; return u.href; };
+async function netOpen() {
+  try {
+    $('pcOnline').disabled = true;
+    const r = await fetch(`${LB_API}/room/new`, { method: 'POST' }); const d = await r.json();
+    NET.code = d.code; NET.on = true; NET.guests = []; NET.started = false; netConnect(); lobbyPaint(); paintStage();
+  } catch (e) { toast(L('Could not create a room', '開房間失敗,請檢查網路')); }
+  $('pcOnline').disabled = false;
+}
+function netClose() { NET.on = false; clearTimeout(NET.retry); if (NET.ws) { try { NET.ws.close(); } catch (e) {} } NET.ws = null; NET.guests = []; NET.started = false; NET.code = null; lobbyPaint(); }
+function netConnect() {
+  if (!NET.on) return;
+  const ws = new WebSocket(`${LB_API.replace(/^http/, 'ws')}/room/${NET.code}/ws?role=host`); NET.ws = ws;
+  ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } netOnMsg(m); };
+  ws.onclose = () => { if (NET.on && NET.ws === ws) NET.retry = setTimeout(netConnect, 1500); };
+}
+const guestByConn = (c) => NET.guests.find((g) => g.conn === c);
+const hostChar = () => slots[stageSel].key;
+const charTakenBy = (k, except) => (k === hostChar() ? 'host' : NET.guests.find((g) => g !== except && g.char === k) || null);
+function netOnMsg(m) {
+  if (m.t === 'conn') { netLobby(m.from); return; }
+  if (m.t === 'gone') { const g = guestByConn(m.from); if (!g) return; g.online = false; g.conn = null;
+    if (!NET.started) NET.guests.splice(NET.guests.indexOf(g), 1); else toast(L(`${g.name} disconnected`, `${g.name}斷線了`));
+    lobbyPaint(); netLobby(); remoteBanner(); return; }
+  if (m.t === 'join') {
+    const name = String(m.name || '').replace(/[<>]/g, '').trim().slice(0, 12) || L('Player', '玩家'), gid = String(m.gid || '').slice(0, 24);
+    let g = NET.guests.find((x) => x.gid === gid);
+    if (NET.started) {         // 遊戲中重連:認 gid 找回座位
+      if (!g) { netSend({ t: 'joined', ok: false, reason: 'started' }, m.from); return; }
+      g.conn = m.from; g.online = true; netSend({ t: 'joined', ok: true, gid, char: g.char, name: g.name, started: true }, m.from); netPushAll(g); remoteBanner(); return;
+    }
+    if (!g && NET.guests.filter((x) => x.online).length >= 3) { netSend({ t: 'joined', ok: false, reason: 'full' }, m.from); return; }
+    let char = m.char; if (!CHARS[char] || charTakenBy(char, g)) char = Object.keys(CHARS).find((k) => !charTakenBy(k, g));
+    if (g) Object.assign(g, { conn: m.from, online: true, name, char }); else { g = { gid, conn: m.from, name, char, online: true }; NET.guests.push(g); }
+    netSend({ t: 'joined', ok: true, gid, char, name }, m.from); lobbyPaint(); paintStage(); netLobby(); return;
+  }
+  const g = guestByConn(m.from); if (!g || !NET.started || !S) return;
+  const p = S.players[S.turn]; if (!p || !p.human || p.remote !== g.gid) return;      // 只有輪到的那支手機可以操作
+  if (m.t === 'click' && m.box !== 'end') { const b = $(m.box)?.querySelectorAll('button, .dcard')[m.idx | 0]; if (b && !b.disabled) b.click(); }
+  else if (m.t === 'input') { const inp = $(m.box)?.querySelectorAll('input')[m.idx | 0]; if (inp) { inp.value = m.value; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } }
+}
+// 大廳:告訴手機房號、哪些角色還能選、誰已經加入。主機換角色時,被撞到的手機自動換成別的角色
+function netLobby(to) {
+  if (!NET.on || NET.started) return;
+  NET.guests.forEach((g) => { if (g.char === hostChar() || NET.guests.some((o) => o !== g && o.char === g.char && NET.guests.indexOf(o) < NET.guests.indexOf(g))) { g.char = Object.keys(CHARS).find((k) => !charTakenBy(k, g)); if (g.conn) netSend({ t: 'joined', ok: true, gid: g.gid, char: g.char, name: g.name }, g.conn); } });
+  netSend({ t: 'lobby', code: NET.code, chars: Object.keys(CHARS).map((k) => { const by = charTakenBy(k); return { k, name: CHARS[k].name, icon: CHARS[k].icon, taken: by ? (by === 'host' ? 'host' : by.gid) : null }; }),
+    guests: NET.guests.filter((g) => g.online).map((g) => ({ gid: g.gid, name: g.name, char: g.char })), host: { char: hostChar(), name: $('pnameIn').value.trim().slice(0, 12) } }, to);
+}
+let qrLib = null;
+function lobbyPaint() {
+  const box = $('lobby'); if (!box) return;
+  $('pcOnline').textContent = NET.on ? L('✕ Close room', '✕ 關閉房間') : L('📱 Play with phones', '📱 線上同樂');
+  $('pcOnline').classList.toggle('on', NET.on); $('pcHrow').classList.toggle('hide', NET.on);
+  box.classList.toggle('hide', !NET.on); if (!NET.on) return;
+  const gs = NET.guests.filter((g) => g.online);
+  box.innerHTML = `<div class="qr" id="lobbyQr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b>
+    <small>${L('Scan the QR code or open', '手機掃 QR,或打開')} <span class="url">${joinUrl(NET.code).replace(/^https?:\/\//, '')}</span></small>
+    <div class="who">${gs.length ? gs.map((g) => `<span>${CHARS[g.char].icon} ${g.name}</span>`).join('') : `<span class="none">${L('Waiting for players…', '等待玩家加入…')}</span>`}</div></div>`;
+  const draw = () => { try { const q = qrLib(0, 'M'); q.addData(joinUrl(NET.code)); q.make(); $('lobbyQr').innerHTML = q.createSvgTag({ cellSize: 3, margin: 1, scalable: true }); } catch (e) {} };
+  if (qrLib) draw();
+  else if (window.qrcode) { qrLib = window.qrcode; draw(); }
+  else if (!document.getElementById('qrlib')) { const sc = document.createElement('script'); sc.id = 'qrlib'; sc.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js'; sc.onload = () => { qrLib = window.qrcode; draw(); }; document.head.appendChild(sc); }
+  else document.getElementById('qrlib').addEventListener('load', () => { qrLib = window.qrcode; draw(); });
+}
+// 鏡射:這幾個區塊一有變動就把 HTML 送到手機(同一幀內合併成一次)
+const MIRROR = ['ctl', 'stepCtl', 'panel', 'draw', 'end'], uiLast = {}; let uiQueued = false;
+function netUiFlush(to) {
+  uiQueued = false; if (!NET.on || !NET.started) return;
+  for (const id of MIRROR) { const el = $(id), key = el.className + '\u0001' + el.innerHTML; if (!to && uiLast[id] === key) continue; if (!to) uiLast[id] = key; netSend({ t: 'ui', box: id, cls: el.className, html: el.innerHTML }, to); }
+}
+const netUi = () => { if (!uiQueued && NET.on && NET.started) { uiQueued = true; setTimeout(() => netUiFlush(), 0); } };   // 用 setTimeout 不用 rAF:主機分頁在背景時 rAF 不會跑
+{ const mo = new MutationObserver(netUi); MIRROR.forEach((id) => mo.observe($(id), { childList: true, subtree: true, attributes: true, characterData: true })); }
+// 每支手機自己的資產和「現在輪到誰」
+function netMe(to) {
+  if (!NET.on || !NET.started || !S) return;
+  const cur = S.players[S.turn];
+  for (const g of NET.guests) { if (!g.online || (to && g !== to)) continue; const p = S.players.find((x) => x.remote === g.gid); if (!p) continue;
+    netSend({ t: 'me', name: nameOf(p), icon: CHARS[p.char].icon, cash: fmt(p.cash), assets: fmt(assetsOf(p)), rows: assetRowsHtml(p, true), mine: cur === p, turn: cur ? nameOf(cur) : '', round: $('roundTxt').textContent, over: !!S.over }, g.conn); }
+}
+function netPushAll(g) { netMe(g); netUiFlush(g.conn); }
+// 輪到手機上的玩家:主機畫面上的按鈕鎖住(不然主機可以幫他按),顯示等待提示。那支手機斷線的話就解鎖讓主機代打
+function remoteBanner() {
+  const p = S && S.players[S.turn], g = p && p.remote && NET.guests.find((x) => x.gid === p.remote), on = !!(g && g.online && !S.over);
+  document.body.classList.toggle('remote', on);
+  const b = $('remoteBanner'); b.classList.toggle('hide', !on); if (on) b.textContent = L(`📱 Waiting for ${nameOf(p)} on their phone…`, `📱 等待 ${nameOf(p)} 在手機上操作…`);
+  netMe();
 }
 // 選角:在 3D 轉盤上選(pickStage),同時決定人數(2~4)和真人數(1~2)。電腦對手從剩下的角色裡隨機挑。
 // 網址 ?piece=cat 可以跳過選角(測試用),還可以加 &n=4&h=2 指定人數和真人數
@@ -2106,7 +2218,7 @@ async function start() {
     const rest = Object.keys(CHARS).filter((k) => k !== PRESET).sort(() => Math.random() - 0.5);
     cfg = { chars: [PRESET, ...rest.slice(0, n - 1)], humans: h, rounds: q.get('rounds'), ai: q.get('ai'), names: [q.get('name') || ''] };
   } else cfg = await pickStage();
-  setPlayers(cfg.chars, cfg.humans, cfg.names || []); S.maxRounds = ROUND_OPTS.includes(+cfg.rounds) ? +cfg.rounds : MAX_ROLLS; S.aiLevel = AI_LEVELS[cfg.ai] ? cfg.ai : 'normal';
+  setPlayers(cfg.chars, cfg.humans, cfg.names || []); (cfg.remote || []).forEach((gid, j) => { if (S.players[1 + j]) S.players[1 + j].remote = gid; }); S.maxRounds = ROUND_OPTS.includes(+cfg.rounds) ? +cfg.rounds : MAX_ROLLS; S.aiLevel = AI_LEVELS[cfg.ai] ? cfg.ai : 'normal';
   PIECES.forEach((P, i) => { if (i < S.players.length) { setChar(P.body, S.players[i].char); placePiece(0, P); } });
   showPieces(true); focus = PIECES[0];
   buildFoes(); setPortraits();
@@ -2150,4 +2262,4 @@ if (new URLSearchParams(location.search).get('embed')) document.body.classList.a
 document.querySelectorAll('.side > .box h4').forEach((h) => { h.onclick = () => h.parentElement.classList.toggle('fold'); });
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };

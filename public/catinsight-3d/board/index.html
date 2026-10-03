@@ -5,263 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Cat Street Stocks</title>
 <link rel="preload" as="image" href="card-event.webp"><link rel="preload" as="image" href="card-fate.webp"><link rel="preload" as="image" href="card-gift.webp">
-<style>
-  :root{--fs:1;--ava:clamp(64px,10.5vmin,116px);--roll:clamp(112px,17vmin,180px);--btn:clamp(58px,9vmin,94px);--ink:#3b2f2a;--cream:#fff8ec;--line:#e8d9c2;--pink:#ff8fc0;--purple:#8b7cff;--teal:#35c2a1;--amber:#f5b942;--coral:#f2796b}
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;overflow:hidden;background:#c9e8b8;color:var(--ink);
-    font-family:"Avenir Next","Nunito","Helvetica Neue",-apple-system,"PingFang TC",sans-serif}
-  canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
-  html,body{touch-action:none;overscroll-behavior:none}   /* 整個畫面都能拖地圖,不要被瀏覽器當成捲動 */
-  .panel,.end,.box .body,#assetRows,.frows{touch-action:pan-y}
-  .hud{position:fixed;left:12px;right:12px;top:12px;display:flex;align-items:center;gap:10px;pointer-events:none;z-index:5}
-  .ava{width:var(--ava);height:var(--ava);border-radius:50%;border:4px solid #fff;background:#ffd9e8 center/cover;flex:none;
-    box-shadow:0 3px 0 rgba(0,0,0,.12)}
-  .bar{flex:1;display:flex;align-items:center;gap:10px;background:var(--cream);border:2px solid var(--line);border-radius:16px;
-    padding:7px 12px;box-shadow:0 3px 0 rgba(0,0,0,.1);pointer-events:auto;min-width:0}
-  .pill{display:flex;align-items:center;gap:6px;background:#8a6f60;color:#fff;border-radius:999px;padding:4px 12px 4px 5px;font-weight:800;font-size:calc(16px * var(--fs))}
-  .coin{width:22px;height:22px;border-radius:50%;background:#ffd24a;border:2px solid #e2a51c;display:inline-block}
-  .stat{font-size:calc(12px * var(--fs));font-weight:700;color:#8a6f60;line-height:1.15;white-space:nowrap}
-  .stat b{display:block;font-size:calc(15px * var(--fs));color:var(--ink)}
-  .sp{flex:1}
-  .snd.fs{background:#8a5cf5;font-size:calc(15px * var(--fs))}
-  .snd{width:calc(30px * var(--fs));height:calc(30px * var(--fs));flex:none;border-radius:50%;border:0;background:#ff9ec4;color:#fff;font-weight:900;font-size:calc(16px * var(--fs));line-height:1;cursor:pointer;box-shadow:0 2px 0 rgba(0,0,0,.15);position:relative}
-  .snd.off{background:#c9bfb5}
-  .snd.off::after{content:'';position:absolute;left:15%;right:15%;top:50%;height:3px;border-radius:2px;background:#fff;transform:rotate(-45deg)}
-  .chip{display:flex;align-items:center;gap:5px;font-weight:800;font-size:calc(15px * var(--fs));white-space:nowrap}
-  .chip i{font-style:normal;display:inline-flex;width:24px;height:24px;border-radius:50%;align-items:center;justify-content:center;color:#fff;font-size:calc(13px * var(--fs))}
-  .miss{position:fixed;left:12px;top:calc(var(--ava) + 30px);z-index:5;display:flex;flex-direction:column;gap:6px;max-width:min(calc(300px * var(--fs)),62vw)}
-  .m{background:var(--cream);border:2px solid var(--line);border-radius:12px;padding:6px 10px;font-size:calc(12.5px * var(--fs));font-weight:700;
-    display:flex;gap:8px;align-items:center;box-shadow:0 2px 0 rgba(0,0,0,.08);transition:background .3s,transform .3s}
-  .m .ck{width:18px;height:18px;border-radius:50%;border:2px solid #c9b79f;flex:none;display:flex;align-items:center;justify-content:center;font-size:calc(11px * var(--fs));color:#fff}
-  .m.done{background:#e3f7ea;border-color:#9ad9b0;transform:scale(1.02)}
-  .m.done .ck{background:#35c26b;border-color:#35c26b}
-  .m small{display:block;font-weight:600;color:#9a8676;font-size:calc(11px * var(--fs))}
-  .ctl{position:fixed;left:0;right:0;bottom:calc(46px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:flex-end;gap:14px;z-index:6}
-  /* 背包鈕:只放背包圖示,右上角一個小數字是手上的道具數 */
-  .paw.bag{position:relative;font-size:calc(var(--btn) * .5);padding:0 calc(var(--btn) * .28)}
-  .paw.bag b{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#ff7a59;border:2px solid #fff;color:#fff;font-size:calc(12px * var(--fs));font-weight:900;display:flex;align-items:center;justify-content:center}
-  .snd.fs svg{width:60%;height:60%;display:block;margin:auto;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-  .ctl > .paw{margin-bottom:calc((var(--roll) - var(--btn)) / 2)}   /* 背包、地圖和擲骰子按鈕的中心對齊(上面多了骰子數量切換) */
-  .roll{width:var(--roll);height:var(--roll);border-radius:50%;border:6px solid #fff;background:#ff7a59;color:#fff;font-size:calc(var(--roll) * .2);font-weight:900;
-    letter-spacing:.04em;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2);cursor:pointer;transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;isolation:isolate}
-  /* iPad Safari 會把按鈕裡的字另外畫一層,顏色和底色差一點點,看起來像文字外面有個淡淡的方框 → 不用轉場動畫、把整顆按鈕固定成一層,字就跟按鈕畫在一起 */
-  .roll span{display:block;background:transparent;transform:translateZ(0)}
-  .roll:active{transform:translateY(4px) translateZ(0);box-shadow:0 2px 0 #d4553a,0 4px 8px rgba(0,0,0,.2)}
-  .roll small{display:block;font-size:calc(var(--roll) * .105);font-weight:700;opacity:.9;letter-spacing:0}
-  .paw{height:var(--btn);padding:0 calc(var(--btn) * .34);border-radius:999px;border:4px solid #fff;background:#7cc6ff;color:#fff;font-weight:900;font-size:calc(var(--btn) * .27);
-    box-shadow:0 4px 0 #4f9bd6;cursor:pointer}
-  .paw:disabled{background:#c9d3da;box-shadow:0 4px 0 #a9b3ba}
-  .steps{display:flex;gap:8px}
-  .steps button{width:54px;height:54px;border-radius:16px;border:4px solid #fff;background:#7cc6ff;color:#fff;font-weight:900;font-size:calc(20px * var(--fs));box-shadow:0 4px 0 #4f9bd6;cursor:pointer}
-  .panel{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(calc(430px * var(--fs)),calc(100vw - 24px));
-    background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:14px 16px 16px;z-index:7;
-    box-shadow:0 8px 0 rgba(0,0,0,.12),0 18px 30px rgba(0,0,0,.18);animation:pop .28s cubic-bezier(.2,1.4,.4,1)}
-  @keyframes pop{from{transform:translateX(-50%) translateY(30px) scale(.94);opacity:0}}
-  .panel h3{font-size:calc(19px * var(--fs));font-weight:900;display:flex;align-items:center;gap:8px}
-  .tag{font-size:calc(11px * var(--fs));font-weight:800;color:#fff;border-radius:999px;padding:2px 9px}
-  .panel p{font-size:calc(13.5px * var(--fs));line-height:1.45;margin-top:6px;font-weight:600;color:#6b594e}
-  .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
-  .kv div{background:#fff;border:2px solid var(--line);border-radius:12px;padding:6px 8px;font-size:calc(11px * var(--fs));font-weight:700;color:#9a8676}
-  .kv b{display:block;font-size:calc(15px * var(--fs));color:var(--ink)}
-  .btns{display:flex;gap:8px;margin-top:12px}
-  /* 按鈕高度跟著內容長:有些按鈕是兩行(名稱 + 金額),字放大後固定高度會裝不下 */
-  .btns button{flex:1 1 0;min-width:0;height:auto;min-height:calc(48px * var(--fs));padding:calc(7px * var(--fs)) 6px calc(8px * var(--fs));line-height:1.25;
-    border-radius:14px;border:0;font-weight:900;font-size:calc(14px * var(--fs));color:#fff;cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.18)}
-  .btns button span{display:block;margin-top:2px;font-weight:800;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .btns{align-items:stretch}
-  .btns button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.18)}
-  .b-buy{background:#35c26b}.b-sell{background:#f2796b}.b-skip{background:#a99b90}.b-ok{background:#8b7cff}
-  .btns button:disabled{background:#d6ccc4;box-shadow:none;color:#fff}
-  .moves{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-  .mv{font-size:calc(12px * var(--fs));font-weight:800;border-radius:999px;padding:3px 10px}
-  .up{background:#e3f7ea;color:#1c8a4a}.dn{background:#fde7e3;color:#c4472f}
-  .toast{position:fixed;left:50%;top:150px;transform:translateX(-50%);background:#3b2f2a;color:#fff;font-weight:800;font-size:calc(14px * var(--fs));
-    border-radius:999px;padding:8px 16px;z-index:8;opacity:0;transition:opacity .25s,top .25s;pointer-events:none;white-space:nowrap}
-  .toast.on{opacity:1;top:140px}
-  .end{position:fixed;inset:0;background:rgba(59,47,42,.45);z-index:9;display:flex;align-items:center;justify-content:center;padding:16px}
-  .card{width:min(400px,100%);background:var(--cream);border:4px solid #fff;border-radius:26px;padding:22px 20px;text-align:center;
-    box-shadow:0 10px 0 rgba(0,0,0,.15);animation:pop2 .35s cubic-bezier(.2,1.4,.4,1)}
-  @keyframes pop2{from{transform:scale(.85);opacity:0}}
-  /* 結算:成績卡上的「看排行榜」按鈕 → 疊一塊 1~10 名的排行榜(用 .panel 顯示,內容是 .rbox) */
-  /* 排行榜清單:固定高度,20 名用拖移 / 滾輪看,分頁和關閉鈕留在外面不動 */
-  .lblist{max-height:min(calc(52vh),calc(420px * var(--fs)));overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-right:2px}
-  .lbtabs{display:flex;gap:8px;margin-bottom:10px}.lbtabs button{flex:1;border:2px solid #e6d9c4;background:#fff;border-radius:999px;padding:7px 0;font-weight:900;font-size:calc(13px * var(--fs));color:#9a8676;cursor:pointer}.lbtabs button.on{background:#ff7a59;border-color:#ff7a59;color:#fff}
-  .lnk{border:0;background:transparent;color:#8a5cf5;font-weight:900;font-size:inherit;cursor:pointer;text-decoration:underline;padding:0}
-  .panel .rbox{width:auto;border:0;box-shadow:none;padding:0;background:transparent}
-  .rbox{width:min(calc(330px * var(--fs)),100%);background:var(--cream);border:4px solid #fff;border-radius:22px;padding:14px 14px 12px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-  .rbox h4{font-size:calc(16px * var(--fs));font-weight:900;color:#3b2f2a;margin:0 0 4px}
-  .rbox p{margin:0 0 8px;font-size:calc(12px * var(--fs));font-weight:700;color:#9a8676}
-  .rrow{display:flex;align-items:center;gap:8px;padding:5px 6px;border-top:1.5px solid #f1e6d6;font-size:calc(12.5px * var(--fs));font-weight:800;color:#3b2f2a}
-  .rrow .rk{width:1.5em;text-align:center;color:#9a8676;flex:none}.rrow:nth-child(-n+3) .rk{font-size:1.25em}.rrow:nth-child(-n+5) .rk{color:#3b2f2a}
-  .rrow .ic{flex:none}
-  .rrow .c{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
-  .rrow b{font-size:calc(13.5px * var(--fs))}
-  .rrow small{font-weight:700;color:#9a8676;font-size:calc(10.5px * var(--fs));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .rrow .st{flex:none;color:#ffb000;letter-spacing:1px}.rrow .st i{font-style:normal;color:#e2d6c6}
-  .rrow.me{background:#fff3d6;border-radius:10px;border-top-color:transparent}
-  .rbox .note2{display:block;margin-top:8px;font-size:calc(10.5px * var(--fs));font-weight:700;color:#b5a593;text-align:center}
-  .stars{font-size:calc(46px * var(--fs));letter-spacing:6px;color:#e2d6c6}.stars b{color:#ffc93c}
-  .card h2{font-size:calc(24px * var(--fs));font-weight:900;margin-top:4px}
-  .card p{font-size:calc(14px * var(--fs));font-weight:600;color:#6b594e;margin-top:8px;line-height:1.5}
-  .note{position:fixed;left:0;right:0;bottom:2px;text-align:center;font-size:calc(10.5px * var(--fs));font-weight:700;color:rgba(59,47,42,.55);z-index:4;pointer-events:none}
-
-  .side{position:fixed;right:12px;top:calc(var(--ava) + 30px);width:calc(236px * var(--fs));z-index:5;display:flex;flex-direction:column;gap:10px;pointer-events:none}
-  .bubble{background:#fff;border:3px solid #3b4a7a;border-radius:18px;padding:10px 12px;font-size:calc(13px * var(--fs));font-weight:800;line-height:1.45;color:#2f3a63;
-    box-shadow:0 3px 0 rgba(0,0,0,.1);display:flex;gap:8px;align-items:flex-start}
-  .bubble .av{width:34px;height:34px;border-radius:50%;background:#ffd9a8 center/cover;flex:none;border:2px solid #fff;box-shadow:0 0 0 2px #3b4a7a}
-  .box{background:var(--cream);border:2px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 3px 0 rgba(0,0,0,.1)}
-  .box h4{background:#8a6f60;color:#fff;font-size:calc(13px * var(--fs));font-weight:900;padding:6px 12px;letter-spacing:.04em}
-  .box.ev h4{background:#f2685a}
-  .row{display:grid;grid-template-columns:20px 1fr auto auto;gap:8px;align-items:center;padding:4px 12px;font-size:calc(12.5px * var(--fs));font-weight:800;border-top:1.5px solid #f1e6d6}
-  .row:first-of-type{border-top:0}
-  .row i{width:18px;height:18px;border-radius:6px;display:block}
-  .row .q{color:#9a8676;font-weight:700}
-  .evt{position:fixed;left:12px;bottom:calc(18px + env(safe-area-inset-bottom));width:calc(250px * var(--fs));z-index:5;pointer-events:none}
-  .evt .body{padding:8px 12px 10px;font-size:calc(12.5px * var(--fs));font-weight:800}
-  .evt .why{font-weight:600;color:#6b594e;font-size:calc(12px * var(--fs));margin-top:3px;line-height:1.4}
-  .evt .mvrow{display:flex;justify-content:space-between;padding:3px 0;font-size:calc(12.5px * var(--fs))}
-  .round{position:fixed;right:12px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:5;background:var(--cream);border:2px solid var(--line);border-radius:14px;
-    padding:8px 12px;font-size:calc(12.5px * var(--fs));font-weight:900;box-shadow:0 3px 0 rgba(0,0,0,.1);min-width:calc(170px * var(--fs))}
-  .round .trk{height:9px;border-radius:9px;background:#e6dccf;margin-top:6px;overflow:hidden}
-  .round .trk b{display:block;height:100%;background:#4aa8ff;border-radius:9px;transition:width .4s}
-  @media(max-width:900px){ .side .box,.evt,.round{display:none} .side{left:12px;right:12px;width:auto;top:auto;bottom:calc(var(--roll) + 110px + env(safe-area-inset-bottom));align-items:center}
-    .bubble{max-width:420px;font-size:calc(12px * var(--fs));padding:7px 10px} }
-  .it{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid var(--line);border-radius:14px;padding:8px 10px;margin-top:8px}
-  .it .ic{font-size:calc(26px * var(--fs));flex:none}
-  .cardico{height:1.45em;width:1.04em;object-fit:cover;border-radius:3px;vertical-align:middle;box-shadow:0 1px 2px rgba(0,0,0,.25)}
-  .it .tx{flex:1;min-width:0;font-size:calc(13.5px * var(--fs));font-weight:900}
-  .it .tx small{display:block;font-size:calc(11.5px * var(--fs));font-weight:600;color:#8a786c;line-height:1.35}
-  .it button{flex:none;height:38px;padding:0 14px;border-radius:12px;border:0;color:#fff;font-weight:900;font-size:calc(13px * var(--fs));cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.18)}
-  .it button:disabled{background:#d6ccc4;box-shadow:none}
-  .steps{flex-wrap:wrap;justify-content:center;max-width:min(520px,94vw)}
-  #mapBtn.on{background:#3d9a55!important;box-shadow:0 4px 0 #2a743d!important}
-  body.embed .hud{right:64px}
-  /* 3D 選角:畫面中間是模型,上面一行標題,下面是 ◀ 名字 ▶ 和確定鈕 */
-  body.picking .hud, body.picking .miss, body.picking .side, body.picking .evt, body.picking .round, body.picking .ctl { display: none !important; }
-  .pickui{position:fixed;inset:0;z-index:7;display:none;flex-direction:column;justify-content:space-between;align-items:center;padding:22px 16px calc(34px + env(safe-area-inset-bottom));pointer-events:none}
-  body.picking .pickui{display:flex}
-  .pickui h2{font-size:calc(26px * var(--fs));font-weight:900;color:#3b2f2a;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:999px;padding:8px 26px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
-  .pbar{display:flex;flex-direction:column;align-items:center;gap:12px;pointer-events:auto}
-  .pnav{display:flex;align-items:center;gap:14px}
-  .pnav button{width:52px;height:52px;border-radius:50%;border:4px solid #fff;background:#7cc6ff;color:#fff;font-size:calc(22px * var(--fs));font-weight:900;cursor:pointer;box-shadow:0 4px 0 #4f9bd6}
-  .pnav button:active{transform:translateY(3px);box-shadow:0 1px 0 #4f9bd6}
-  .pnav b{min-width:150px;text-align:center;font-size:calc(28px * var(--fs));font-weight:900;color:#3b2f2a;background:var(--cream);border:3px solid #fff;border-radius:18px;padding:6px 18px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
-  .pnameIn{width:min(260px,80vw);text-align:center;font:900 calc(16px * var(--fs)) inherit;font-family:inherit;color:#3b2f2a;background:#fff;border:3px solid #fff;outline:2px solid var(--line);border-radius:999px;padding:8px 16px;box-shadow:0 3px 0 rgba(0,0,0,.1);-webkit-user-select:text;user-select:text}
-  .pnameIn::placeholder{color:#b5a593;font-weight:800}
-  .pnameIn:focus{outline-color:#ff7a59}
-  .pok{height:60px;padding:0 44px;border-radius:999px;border:5px solid #fff;background:#ff7a59;color:#fff;font-size:calc(20px * var(--fs));font-weight:900;letter-spacing:.04em;cursor:pointer;box-shadow:0 6px 0 #d4553a}
-  .pok:active{transform:translateY(4px);box-shadow:0 2px 0 #d4553a}
-  .b-short{background:#8a5cf5}
-  .b-margin{background:#e0902a}
-  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-  .chips button{display:flex;align-items:center;gap:6px;border:2px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;font-weight:900;font-size:calc(12.5px * var(--fs));color:var(--ink);cursor:pointer}
-  .chips button i{width:10px;height:10px;border-radius:50%;display:block}
-  .chips button small{font-weight:700;color:#9a8676;font-size:calc(11px * var(--fs))}
-  .chips button:hover{background:#fff1ec}
-  .panel{max-height:calc(100vh - 40px);overflow-y:auto}
-  .panel.over{z-index:10}   /* 結算畫面(z 9)上面再開的面板,例如排行榜 */
-  .ava{background-color:#ffe9c9;background-size:cover;background-position:center 20%}
-  .box.foe h4{background:#5c7cba;display:flex;align-items:center;gap:8px}
-  .fav{width:24px;height:24px;border-radius:50%;background:#dfe8ff center 20%/cover;border:2px solid #fff;flex:none}
-  .side{max-height:calc(100vh - var(--ava) - 42px)}
-  .side .box{flex:0 1 auto;min-height:0;overflow:hidden}
-  .side .box h4{display:flex;align-items:center;gap:8px;pointer-events:auto;cursor:pointer;user-select:none}
-  .tri{margin-left:auto;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #fff;transition:transform .2s}
-  .box.fold .tri{transform:rotate(-90deg)}
-  .box.fold > div{display:none}
-  /* 資產框上面那排頭像:點誰看誰。橘色外框 = 正在看的;右下角綠點 = 現在輪到的 */
-  .tabs{display:flex;gap:calc(8px * var(--fs));padding:calc(7px * var(--fs)) 12px;border-bottom:1.5px solid #f1e6d6;pointer-events:auto}
-  .tabs button{position:relative;width:calc(34px * var(--fs));height:calc(34px * var(--fs));flex:none;border-radius:50%;border:2px solid #fff;background:#dfe8ff center 20%/cover;box-shadow:0 0 0 2px #e6d9c4;opacity:.6;cursor:pointer;padding:0}
-  .tabs button.on{opacity:1;box-shadow:0 0 0 3px #ff7a59}
-  .tabs button.turn::after{content:'';position:absolute;right:-3px;bottom:-3px;width:calc(11px * var(--fs));height:calc(11px * var(--fs));border-radius:50%;background:#35c26b;border:2px solid #fff}
-  .box.foe .fn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .box.foe .ft{margin-left:auto;font-weight:900}
-  .box.foe .tri{margin-left:6px}
-  .box.foe .frows{max-height:calc(120px * var(--fs))}
-  /* 選角畫面上方:標題 + 人數設定 */
-  .ptop{display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:auto}
-  .pcfg{max-width:min(calc(470px * var(--fs)),92vw);display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 14px;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:18px;padding:8px 14px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
-  .pcfg .seg{display:flex;align-items:center;gap:4px;font-weight:900;font-size:calc(14px * var(--fs));color:#6b594e}
-  .pcfg .seg span{margin-right:4px}
-  .pcfg .seg button{width:calc(34px * var(--fs));height:calc(34px * var(--fs));border-radius:50%;border:0;background:#eadfce;color:#8a786c;font-weight:900;font-size:calc(15px * var(--fs));cursor:pointer}
-  .pcfg .seg button.on{background:#ff7a59;color:#fff;box-shadow:0 3px 0 #d4553a}
-  .pcfg .seg.wide{flex-basis:100%;justify-content:center}
-  .pcfg .seg.wide button{width:auto;border-radius:999px;padding:0 calc(14px * var(--fs));font-size:calc(13px * var(--fs))}
-  #pcRule{flex-basis:100%;text-align:center}
-  .pcfg .step{display:inline-flex;align-items:center;gap:2px;background:#fff;border:2px solid var(--line);border-radius:999px;padding:2px 4px;margin:0 6px 0 2px}
-  .pcfg .step b{min-width:calc(30px * var(--fs));text-align:center;font-size:calc(15px * var(--fs));color:#3b2f2a}
-  .pcfg .seg.wide .step button{width:calc(28px * var(--fs));height:calc(28px * var(--fs));padding:0;border-radius:50%;background:#ff7a59;color:#fff;font-size:calc(11px * var(--fs))}
-  .pcfg .seg.wide .step button:disabled{background:#e0d6c8;color:#fff;cursor:default}
-  .pcfg small{font-weight:800;font-size:calc(12px * var(--fs));color:#9a8676}
-  /* 我的資產 / 對手的資產:內容區固定最高約 5 列半,超過就在框裡上下拖(或滾輪)捲動 */
-  #assetRows,.frows{max-height:calc(230px * var(--fs));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;pointer-events:auto;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#d9c9b3 transparent}
-  #assetRows::-webkit-scrollbar,.frows::-webkit-scrollbar{width:5px}
-  #assetRows::-webkit-scrollbar-thumb,.frows::-webkit-scrollbar-thumb{background:#d9c9b3;border-radius:3px}
-  /* 抽市場事件:三張牌背。滑鼠移上去會浮起、傾斜、掃光;點了之後 3D 翻面 */
-  .draw{position:fixed;inset:0;z-index:8;background:rgba(40,30,60,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(18px * var(--fs));padding:16px}
-  .draw h2{font-size:calc(24px * var(--fs));font-weight:900;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.25)}
-  .dcards{display:flex;gap:calc(18px * var(--fs));perspective:1400px}
-  .dcard{width:min(calc(190px * var(--fs)),28vw);aspect-ratio:5/7;cursor:pointer;position:relative;
-    animation:deal .55s cubic-bezier(.2,1.2,.4,1) both;animation-delay:calc(var(--i) * .12s);transition:transform .25s cubic-bezier(.2,.8,.2,1),filter .3s,opacity .4s}
-  @keyframes deal{from{transform:translateY(60vh) rotate(calc((var(--i) - 1) * 18deg));opacity:0}}
-  .dinner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .75s cubic-bezier(.3,.1,.2,1)}
-  .dcard.flip .dinner{transform:rotateY(180deg)}
-  .dback,.dfront{position:absolute;inset:0;border-radius:16px;backface-visibility:hidden;-webkit-backface-visibility:hidden;border:5px solid #fff;box-shadow:0 10px 24px rgba(0,0,0,.3);overflow:hidden}
-  /* 卡背是圖片:市場事件(奶油底、貓咪問號)、命運(紫色、星星)。圖裡已經有圖案,所以不再疊文字 */
-  .dback{background:#f6ecd6 url(card-event.webp) center/cover no-repeat}
-  .dback.fate{background:#6b4bb8 url(card-fate.webp) center/cover no-repeat}
-  .dback.gift{background:#f7a6b8 url(card-gift.webp) center/cover no-repeat}
-  .dback span{display:none}
-  .dback::after{content:"";position:absolute;inset:-40% -80%;background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.55) 50%,transparent 58%);transform:translateX(-70%);pointer-events:none}
-  .dfront{transform:rotateY(180deg);background:var(--cream);display:flex;flex-direction:column;text-align:left}
-  .dhead{padding:10px 10px 8px;font-size:calc(15px * var(--fs));font-weight:900;color:#fff;line-height:1.25}
-  .dhead.good{background:#35ad6d}.dhead.bad{background:#e2604f}
-  .dwhy{padding:8px 10px 0;font-size:calc(11.5px * var(--fs));font-weight:700;color:#6b594e;line-height:1.4}
-  .dmv{padding:8px 8px 10px;display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
-  .dmv .mv{font-size:calc(11px * var(--fs));padding:2px 7px}
-  @media(hover:hover){
-    .draw:not(.done):not(.auto) .dcard:hover{transform:translateY(-18px) rotate(calc((var(--i) - 1) * 3deg)) scale(1.06);filter:drop-shadow(0 0 18px rgba(255,220,120,.9))}
-    .draw:not(.done):not(.auto) .dcard:hover .dback::after{transform:translateX(70%);transition:transform .7s ease}
-  }
-  .draw:not(.done):not(.auto) .dcard:active{transform:translateY(-8px) scale(1.02)}
-  .draw.auto .dcard{cursor:default}
-  .dcard.picked{transform:translateY(-14px) scale(1.08);z-index:2}
-  .dcard.lost{filter:grayscale(.65) brightness(.8);transform:scale(.93)}
-  .dgo{height:calc(50px * var(--fs));padding:0 calc(40px * var(--fs));border-radius:999px;border:4px solid #fff;background:#8b7cff;color:#fff;font-weight:900;font-size:calc(17px * var(--fs));cursor:pointer;box-shadow:0 5px 0 #6a5bd6}
-  .dgo:active{transform:translateY(3px);box-shadow:0 2px 0 #6a5bd6}
-  /* 擲 1 顆 / 2 顆的切換,放在擲骰子按鈕正上方 */
-  .rollcol{display:flex;flex-direction:column;align-items:center;gap:calc(12px * var(--fs))}
-  .rollcol .roll{position:relative;z-index:2}   /* 擲骰鈕在最上層,骰子數切換的框不會壓到它的白邊 */
-  .rollcol .dsel{position:relative;z-index:1}
-  .ctl,.ctl *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
-  .dsel button,.dsel button:focus,.dsel button:active{outline:none;box-shadow:none;-webkit-tap-highlight-color:transparent}
-  .dsel{display:flex;background:var(--cream);border:3px solid #fff;border-radius:999px;padding:3px;gap:3px;box-shadow:0 3px 0 rgba(0,0,0,.12)}
-  .dsel button{border:0;background:transparent;border-radius:999px;padding:calc(5px * var(--fs)) calc(14px * var(--fs));font-weight:900;font-size:calc(13px * var(--fs));color:#9a8676;cursor:pointer}
-  .dsel button.on{background:#ff7a59;color:#fff}
-  .dsel button{display:flex;align-items:center;justify-content:center}
-  .dsel svg{height:calc(22px * var(--fs));width:auto;display:block;overflow:visible}
-  .dsel button{color:#dccfbd}
-  .dsel button .pip{fill:#8a786c}
-  .dsel button.on{color:#fff}
-  .dsel button.on .pip{fill:#ff7a59}
-  /* 手機 / 平板點按鈕時,瀏覽器會在按鈕外面閃一個方形的灰色反白和對焦框 → 關掉 */
-  *{-webkit-tap-highlight-color:transparent}
-  button{outline:none;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-appearance:none;appearance:none}
-  button:focus,button:focus-visible{outline:none}
-  .rank{float:right;background:#8a6f60;color:#fff;border-radius:999px;padding:1px 9px;font-weight:900;font-size:calc(12px * var(--fs))}
-  .rank.top{background:#ffb000}
-  /* 銀行的借款 / 還款拉桿 */
-  .slider{display:flex;align-items:center;gap:10px;margin-top:10px;font-weight:800;font-size:calc(12.5px * var(--fs));color:#6b594e}
-  .slider span{flex:none;width:calc(34px * var(--fs))}
-  .slider b{flex:none;min-width:calc(150px * var(--fs));text-align:right;color:var(--ink);font-size:calc(12px * var(--fs))}
-  .slider input[type=range]{flex:1;min-width:0;height:calc(28px * var(--fs));-webkit-appearance:none;appearance:none;background:transparent;margin:0}
-  .slider input[type=range]::-webkit-slider-runnable-track{height:10px;border-radius:5px;background:#e6dccf}
-  .slider input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:calc(26px * var(--fs));height:calc(26px * var(--fs));border-radius:50%;background:#4a63b0;border:3px solid #fff;box-shadow:0 2px 0 rgba(0,0,0,.2);margin-top:calc(5px - 13px * var(--fs))}
-  .slider input[type=range]::-moz-range-track{height:10px;border-radius:5px;background:#e6dccf}
-  .slider input[type=range]::-moz-range-thumb{width:calc(26px * var(--fs));height:calc(26px * var(--fs));border-radius:50%;background:#4a63b0;border:3px solid #fff}
-  .hide{display:none!important}
-  @media(max-width:560px){ .stat.opt{display:none} .m{font-size:calc(11.5px * var(--fs));padding:5px 8px} .m small{display:none} }
-</style>
+<link rel="stylesheet" href="style.css?v=1">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -285,6 +29,7 @@
   </div>
 </div>
 <div class="miss" id="miss"></div>
+<div class="rbanner hide" id="remoteBanner"></div>
 <div class="side">
   <div class="bubble"><span class="av" style="background-image:url(/assets/app-icon.png)"></span><span id="tip"></span></div>
   <div class="box"><h4><span id="assetTitle"></span><span class="tri"></span></h4><div class="tabs" id="assetTabs"></div><div id="assetRows"></div></div>
@@ -309,7 +54,9 @@
   <div class="ptop">
     <div class="pcfg" id="pcfg">
       <div class="seg"><span id="pcN"></span><button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></div>
-      <div class="seg"><span id="pcH"></span><button data-h="1">1</button><button data-h="2">2</button></div>
+      <div class="seg" id="pcHrow"><span id="pcH"></span><button data-h="1">1</button><button data-h="2">2</button></div>
+      <button class="online" id="pcOnline"></button>
+      <div class="lobby hide" id="lobby"></div>
       <small id="pcAI"></small>
       <div class="seg wide" id="pcDrow"><span id="pcD"></span><button data-d="easy"></button><button data-d="normal"></button><button data-d="hard"></button></div>
       <div class="seg wide"><span id="pcM"></span><span class="step" id="pcR"><button data-r="-1" aria-label="fewer rounds">▼</button><b id="pcRv">20</b><button data-r="1" aria-label="more rounds">▲</button></span></div>
@@ -326,6 +73,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=124"></script>
+<script type="module" src="./board.mjs?v=125"></script>
 </body>
 </html>

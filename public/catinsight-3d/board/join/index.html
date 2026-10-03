@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>貓咪股市大富翁 · 手機遙控</title>
+<link rel="preload" as="image" href="../card-event.webp"><link rel="preload" as="image" href="../card-fate.webp"><link rel="preload" as="image" href="../card-gift.webp">
+<link rel="stylesheet" href="../style.css?v=1">
+<style>
+  /* 手機遙控頁:沒有 3D 棋盤,只有自己的資產和主機鏡射過來的面板 */
+  html,body{height:100%}
+  body{background:#c9e8b8;overflow:auto;-webkit-overflow-scrolling:touch}
+  .jwrap{min-height:100%;display:flex;flex-direction:column;gap:14px;padding:14px 14px calc(var(--roll) + 60px);max-width:520px;margin:0 auto;box-sizing:border-box}
+  .jcard{background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.15)}
+  .jcard h1{margin:0 0 6px;font-size:22px;color:var(--ink)}
+  .jcard p{margin:0 0 10px;font-size:14px;color:#6b594e;font-weight:700;line-height:1.5}
+  .jcard label{display:block;font-size:13px;font-weight:900;color:#8a786c;margin:10px 0 4px}
+  .jcard input{width:100%;box-sizing:border-box;border:2px solid var(--line);border-radius:12px;padding:10px 12px;font:inherit;font-size:18px;font-weight:800;background:#fff;color:var(--ink)}
+  .jcard input.code{text-transform:uppercase;letter-spacing:6px;font-family:"SF Mono",Menlo,monospace;text-align:center}
+  .chars{display:flex;flex-wrap:wrap;gap:8px}
+  .chars button{border:2px solid var(--line);background:#fff;border-radius:14px;padding:8px 10px;font:inherit;font-weight:900;font-size:15px;color:var(--ink);display:flex;align-items:center;gap:6px}
+  .chars button .big{font-size:24px}.chars button.on{border-color:#ff7a59;background:#fff3d6;box-shadow:0 0 0 2px #ff7a59}
+  .chars button:disabled{opacity:.4}.chars button small{font-size:11px;color:#9a8676}
+  .jgo{width:100%;margin-top:14px;border:0;border-radius:999px;padding:14px;background:#ff7a59;color:#fff;font:inherit;font-weight:900;font-size:18px;box-shadow:0 4px 0 #d4553a}
+  .jgo:disabled{background:#c9bcae;box-shadow:0 4px 0 #a99b90}
+  .jhead{display:flex;align-items:center;gap:12px;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:10px 14px}
+  .jhead .ico{font-size:34px;line-height:1}
+  .jhead .nm{font-weight:900;font-size:16px;color:var(--ink)}
+  .jhead .st{font-size:12px;font-weight:800;color:#8a786c}.jhead .st.mine{color:#1c8a4a}
+  .jhead .money{margin-left:auto;text-align:right;font-weight:900;color:var(--ink);font-size:15px;line-height:1.2}.jhead .money small{display:block;font-size:11px;color:#9a8676;font-weight:800}
+  .jassets{background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:6px 0}
+  .jassets .row:first-of-type{border-top:0}
+  .jstatus{text-align:center;font-weight:900;color:#6b594e;font-size:14px;padding:6px 0}
+  .jstatus.off{color:#c4472f}
+  /* 鏡射區塊:沿用棋盤頁的樣式(固定在底部 / 蓋在上面),只是不要被鎖住 */
+  .ctl{bottom:calc(14px + env(safe-area-inset-bottom))}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="jwrap">
+  <div class="jcard" id="jform">
+    <h1>📱 加入房間</h1>
+    <p>在主機畫面的「線上同樂」看房號,輸入後選一個角色就能一起玩。</p>
+    <label>房號</label><input class="code" id="jcode" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD">
+    <label>你的名字</label><input id="jname" maxlength="12" autocomplete="off" placeholder="名字">
+    <label>角色</label><div class="chars" id="jchars"><small>連上房間後會顯示可以選的角色</small></div>
+    <button class="jgo" id="jgo">加入</button>
+    <p id="jmsg" style="margin:10px 0 0;color:#c4472f"></p>
+  </div>
+  <div class="jhead hide" id="jhead"><span class="ico" id="jico">🐱</span><div><div class="nm" id="jnm"></div><div class="st" id="jst"></div></div><div class="money"><span id="jcash">$0</span><small id="jassets2">總資產 $0</small></div></div>
+  <div class="jassets hide" id="jrows"></div>
+  <div class="jstatus hide" id="jstatus"></div>
+</div>
+<!-- 下面這幾個和棋盤頁同名:主機把它們的 HTML 鏡射過來,按鈕按了就回傳給主機 -->
+<div class="toast" id="toast"></div>
+<div class="ctl hide" id="ctl"></div>
+<div class="ctl hide" id="stepCtl"></div>
+<div class="panel hide" id="panel"></div>
+<div class="draw hide" id="draw"></div>
+<div class="end hide" id="end"></div>
+<script type="module" src="../join.mjs?v=1"></script>
+</body>
+</html>

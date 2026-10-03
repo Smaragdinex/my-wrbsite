@@ -22,10 +22,51 @@ async function top(env, limit) {
   return results;
 }
 
+// ---------- 線上同樂:房間(Durable Object)----------
+// 主機(跑遊戲的那台)和手機都用 WebSocket 連到同一個房間;房間只負責轉送訊息,不懂遊戲規則。
+//   POST /api/board/room/new            → { code }
+//   GET  /api/board/room/:code/ws?role=host|guest   → WebSocket
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';     // 去掉容易看錯的 I O 0 1
+const genCode = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
+export class Room {
+  constructor(state) { this.state = state; }
+  async fetch(req) {
+    const url = new URL(req.url);
+    if (url.pathname === '/init') { await this.state.storage.put('created', Date.now()); await this.state.storage.setAlarm(Date.now() + 8 * 3600e3); return new Response('ok'); }
+    if (req.headers.get('upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
+    if (!(await this.state.storage.get('created'))) return new Response('no such room', { status: 404 });
+    const role = url.searchParams.get('role') === 'host' ? 'host' : 'guest';
+    if (role === 'host') for (const ws of this.state.getWebSockets('host')) { try { ws.close(1000, 'replaced'); } catch (e) {} }   // 主機重連:舊的連線踢掉
+    const pair = new WebSocketPair(), [client, server] = Object.values(pair);
+    const id = role === 'host' ? 'host' : 'g' + Math.random().toString(36).slice(2, 8);
+    this.state.acceptWebSocket(server, [role, id]); server.serializeAttachment({ role, id });
+    if (role === 'guest') this.toHost({ t: 'conn', from: id }); else this.toGuests({ t: 'host', on: true });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+  send(ws, msg) { try { ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg)); } catch (e) {} }
+  toHost(msg) { for (const ws of this.state.getWebSockets('host')) this.send(ws, msg); }
+  toGuests(msg, to) { const s = JSON.stringify(msg); for (const ws of this.state.getWebSockets('guest')) { if (!to || ws.deserializeAttachment().id === to) this.send(ws, s); } }
+  async webSocketMessage(ws, data) {
+    const { role, id } = ws.deserializeAttachment(); let msg; try { msg = JSON.parse(data); } catch (e) { return; }
+    if (!msg || typeof msg !== 'object') return;
+    if (role === 'guest') { msg.from = id; this.toHost(msg); }
+    else { const to = msg.to; delete msg.to; this.toGuests(msg, to); }
+  }
+  async webSocketClose(ws) { const a = ws.deserializeAttachment(); if (a.role === 'guest') this.toHost({ t: 'gone', from: a.id }); else if (!this.state.getWebSockets('host').length) this.toGuests({ t: 'host', on: false }); }
+  async webSocketError(ws) { return this.webSocketClose(ws); }
+  async alarm() { for (const ws of this.state.getWebSockets()) { try { ws.close(1000, 'expired'); } catch (e) {} } await this.state.storage.deleteAll(); }
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url), cors = corsHeaders(req);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    if (req.method === 'POST' && url.pathname === '/api/board/room/new') {
+      const code = genCode(); await env.ROOM.get(env.ROOM.idFromName(code)).fetch('https://room/init', { method: 'POST' });
+      return json({ code }, 200, cors);
+    }
+    { const m = url.pathname.match(/^\/api\/board\/room\/([A-Z0-9]{4})\/ws$/);
+      if (m) return env.ROOM.get(env.ROOM.idFromName(m[1])).fetch(req); }
     if (req.method === 'GET' && url.pathname === '/api/board/top') {
       const limit = Math.min(50, Math.max(1, +url.searchParams.get('limit') || 10));
       return json({ top: await top(env, limit) }, 200, cors);

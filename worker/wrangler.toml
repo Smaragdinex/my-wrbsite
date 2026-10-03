@@ -11,3 +11,11 @@ routes = [{ pattern = "xarts.games/api/board/*", zone_name = "xarts.games" }]
 binding = "DB"
 database_name = "catstreet-board"
 database_id = "8aba5f4f-5244-4e98-a252-898cd593ffac"
+
+# 線上同樂的房間:每個房間一個 Durable Object(免費方案要用 SQLite 版)
+[durable_objects]
+bindings = [{ name = "ROOM", class_name = "Room" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
