@@ -521,8 +521,8 @@ function box(w, h, d, color, x, y, z, r = 0.06, parent = scene) {
 // 地面、人行道、草地
 {
   const g = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), mat(0xc9e8b8)); g.material.userData.outlineParameters = { visible: false }; g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
-  box(N * STEP + 0.7, 0.12, N * STEP + 0.7, 0xf6e3c2, 0, 0.06, 0, 0.05);
-  box((N - 2) * STEP - 0.12, 0.16, (N - 2) * STEP - 0.12, 0x9bdc7a, 0, 0.10, 0, 0.05);
+  // 格子直接放在草地上(以前底下有一塊米色人行道板);中間那塊草地和外面同一個綠,只是微微墊高
+  box((N - 2) * STEP - 0.12, 0.16, (N - 2) * STEP - 0.12, 0xc9e8b8, 0, 0.10, 0, 0.05);
 }
 // 小鎮裝飾:樹和房子(純幾何)
 function tree(x, z, s = 1) {
@@ -625,7 +625,7 @@ TILES.forEach((type, i) => {
   const p = tilePos(i), sec = SECTORS[type];
   const g = new THREE.Group(); g.position.copy(p); scene.add(g);
   const special = !sec;
-  box(1.04, 0.30, 1.04, sec ? sec.color : TILE_COLOR[type], 0, 0.21, 0, 0.09, g);
+  box(1.04, 0.36, 1.04, sec ? sec.color : TILE_COLOR[type], 0, 0.18, 0, 0.09, g);   // 底座從地面長到 0.36
   box(1.0, 0.10, 1.0, special ? TILE_COLOR[type] : 0xfff8ec, 0, TOP - 0.05, 0, 0.045, g);
   // 標籤:畫在 canvas 上貼在格子頂面,朝鏡頭方向轉 45° 讓字是正的
   const cv = document.createElement('canvas'); cv.width = cv.height = 256;
@@ -653,7 +653,7 @@ for (const [type, def] of Object.entries(LANES)) {
   // 一格小路:底座 + 面板 + 畫在 canvas 上的標籤(轉 45 度正對鏡頭)
   const cellTile = (x, z, base, top, draw) => {
     const g = new THREE.Group(); g.position.copy(cellPos(x, z)); scene.add(g);
-    const bm = box(1.04, 0.30, 1.04, base, 0, 0.21, 0, 0.09, g);
+    const bm = box(1.04, 0.36, 1.04, base, 0, 0.18, 0, 0.09, g);
     const tm = box(1.0, 0.10, 1.0, top, 0, TOP - 0.05, 0, 0.045, g);
     const cv = document.createElement('canvas'); cv.width = cv.height = 256; const c = cv.getContext('2d');
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
