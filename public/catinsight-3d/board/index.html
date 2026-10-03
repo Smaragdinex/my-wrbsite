@@ -210,6 +210,15 @@
   button:focus,button:focus-visible{outline:none}
   .rank{float:right;background:#8a6f60;color:#fff;border-radius:999px;padding:1px 9px;font-weight:900;font-size:calc(12px * var(--fs))}
   .rank.top{background:#ffb000}
+  /* 銀行的借款 / 還款拉桿 */
+  .slider{display:flex;align-items:center;gap:10px;margin-top:10px;font-weight:800;font-size:calc(12.5px * var(--fs));color:#6b594e}
+  .slider span{flex:none;width:calc(34px * var(--fs))}
+  .slider b{flex:none;min-width:calc(150px * var(--fs));text-align:right;color:var(--ink);font-size:calc(12px * var(--fs))}
+  .slider input[type=range]{flex:1;min-width:0;height:calc(28px * var(--fs));-webkit-appearance:none;appearance:none;background:transparent;margin:0}
+  .slider input[type=range]::-webkit-slider-runnable-track{height:10px;border-radius:5px;background:#e6dccf}
+  .slider input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:calc(26px * var(--fs));height:calc(26px * var(--fs));border-radius:50%;background:#4a63b0;border:3px solid #fff;box-shadow:0 2px 0 rgba(0,0,0,.2);margin-top:calc(5px - 13px * var(--fs))}
+  .slider input[type=range]::-moz-range-track{height:10px;border-radius:5px;background:#e6dccf}
+  .slider input[type=range]::-moz-range-thumb{width:calc(26px * var(--fs));height:calc(26px * var(--fs));border-radius:50%;background:#4a63b0;border:3px solid #fff}
   .hide{display:none!important}
   @media(max-width:560px){ .stat.opt{display:none} .m{font-size:calc(11.5px * var(--fs));padding:5px 8px} .m small{display:none} }
 </style>
@@ -276,6 +285,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=80"></script>
+<script type="module" src="./board.mjs?v=81"></script>
 </body>
 </html>

@@ -1470,21 +1470,28 @@ function bankPanel() {
           <div>${L('Interest per lap', '每圈利息')}<b>$${fmt(fee)}</b></div>
           <div>${L('Can still borrow', '還能借')}<b>$${fmt(room)}</b></div>
         </div>
+        ${room >= 1000 ? `<div class="slider"><span>${L('Borrow', '借款')}</span><input type="range" id="bkAmt" min="1000" max="${Math.floor(room / 500) * 500}" step="500" value="${Math.min(2000, Math.floor(room / 500) * 500)}"><b id="bkVal"></b></div>` : ''}
+        ${S.debt > 0 ? `<div class="slider"><span>${L('Repay', '還款')}</span><input type="range" id="bkRep" min="500" max="${Math.max(500, Math.min(S.debt, Math.floor(S.cash / 500) * 500))}" step="500" value="${Math.max(500, Math.min(S.debt, Math.floor(S.cash / 500) * 500))}"><b id="bkRepVal"></b></div>` : ''}
         <div class="btns">
-          <button class="b-buy" data-a="b1" ${room < 1000 ? 'disabled' : ''}>${L('Borrow', '借')} $1,000<br><span style="font-size:calc(11px * var(--fs))">${L('interest', '利息')} $${fmt(1000 * BANK_RATE)}${L(' / lap', ' / 圈')}</span></button>
-          <button class="b-buy" data-a="b3" ${room < 3000 ? 'disabled' : ''}>${L('Borrow', '借')} $3,000<br><span style="font-size:calc(11px * var(--fs))">${L('interest', '利息')} $${fmt(3000 * BANK_RATE)}${L(' / lap', ' / 圈')}</span></button>
-        </div>
-        <div class="btns" style="margin-top:8px">
-          <button class="b-ok" data-a="r1" ${S.debt >= 1000 && S.cash >= 1000 ? '' : 'disabled'}>${L('Repay', '還')} $1,000</button>
-          <button class="b-ok" data-a="ra" ${S.debt > 0 && S.cash >= S.debt ? '' : 'disabled'}>${L('Repay all', '全部還清')}</button>
+          <button class="b-buy" data-a="borrow" ${room < 1000 ? 'disabled' : ''}>${L('Borrow', '借')} <span id="bkBtn"></span></button>
+          <button class="b-ok" data-a="repay" ${S.debt > 0 && S.cash >= 500 ? '' : 'disabled'}>${L('Repay', '還')} <span id="bkRepBtn"></span></button>
           <button class="b-skip" data-a="x">${L('Leave', '離開')}</button>
         </div>`);
+      // 拉桿:借 1,000 ~ 5,000(每 500 一格),還款 500 ~ 欠款(受現金限制)。拉動時即時顯示金額和利息
+      const amt = $('bkAmt'), rep = $('bkRep');
+      const paint = () => {
+        if (amt) { const v = +amt.value; $('bkVal').textContent = `$${fmt(v)} · ${L('interest', '利息')} $${fmt(v * BANK_RATE)}${L(' / lap', ' / 圈')}`; $('bkBtn').textContent = `$${fmt(v)}`; }
+        else $('bkBtn').textContent = '—';
+        if (rep) { const v = +rep.value; $('bkRepVal').textContent = `$${fmt(v)}${v >= S.debt ? L(' (all)', '(全部還清)') : ''}`; $('bkRepBtn').textContent = `$${fmt(v)}`; }
+        else $('bkRepBtn').textContent = '—';
+      };
+      if (amt) amt.oninput = paint; if (rep) rep.oninput = paint; paint();
       p.querySelectorAll('button').forEach((b) => b.onclick = () => {
         const a = b.dataset.a;
         if (a === 'x') { closePanel(); return res(); }
-        const amt = a === 'b1' ? 1000 : a === 'b3' ? 3000 : a === 'r1' ? -1000 : -S.debt;
-        S.cash += amt; S.debt += amt; sfx(amt > 0 ? 'coin' : 'sell');
-        toast(amt > 0 ? L(`Borrowed $${fmt(amt)}`, `借了 $${fmt(amt)}`) : L(`Repaid $${fmt(-amt)}`, `還了 $${fmt(-amt)}`));
+        const d = a === 'borrow' ? +amt.value : -Math.min(S.debt, +rep.value);
+        S.cash += d; S.debt += d; sfx(d > 0 ? 'coin' : 'sell');
+        toast(d > 0 ? L(`Borrowed $${fmt(d)}`, `借了 $${fmt(d)}`) : L(`Repaid $${fmt(-d)}`, `還了 $${fmt(-d)}`));
         hud(); closePanel(); res();        // 選一個動作就結束,不用再按離開
       });
     };
