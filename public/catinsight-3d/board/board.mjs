@@ -894,6 +894,17 @@ function setChar(target, key) {
 // 其他的收起來看不到。按左右(或直接點旁邊那個)時整排滑過去,像翻唱片封面。被選到的會跳一下、慢慢自轉
 const STAGE = new THREE.Vector3(11.6, 0, 11.6), STAGE_KEYS = Object.keys(CHARS);
 const stage = new THREE.Group(); stage.position.copy(STAGE); stage.visible = false; scene.add(stage);
+// 舞台的地板和花草:一條長長的奶油色平台(角色底座放在上面),周圍撒花、後面幾棵樹。都掛在 stage 底下,選角結束一起隱藏
+{ const R = Math.SQRT1_2, floor = new THREE.Mesh(new RoundedBoxGeometry(8.6, 0.12, 2.6, 3, 0.05), mat(0xf6e9d2)); floor.rotation.y = Math.PI / 4; floor.position.set(1.6 * R, 0.06, 1.6 * R); floor.receiveShadow = true; stage.add(floor);
+  const cols = [0xffffff, 0xffd24a, 0xff9ec4].map((c) => new THREE.Color(c)), pts = [];
+  for (let i = 0; i < 90; i++) { const a = Math.random() * Math.PI * 2, d = 2.2 + Math.random() * 2.6; const x = Math.cos(a) * d, z = Math.sin(a) * d; if (Math.abs((x - z) * R) < 4.6 && Math.abs((x + z) * R - 1.6) < 1.5) continue; pts.push([x, z]); }
+  const noLine = (m) => { m.userData.outlineParameters = { visible: false }; return m; };
+  const petals = new THREE.InstancedMesh(new THREE.SphereGeometry(0.045, 8, 6), noLine(mat(0xffffff)), pts.length), leaves = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 8, 6), noLine(mat(0x86c96f)), pts.length), m4 = new THREE.Matrix4();
+  pts.forEach(([x, z], i) => { petals.setMatrixAt(i, m4.makeTranslation(x, 0.07, z)); petals.setColorAt(i, cols[i % cols.length]); leaves.setMatrixAt(i, m4.makeScale(1, 0.5, 1).setPosition(x + 0.05, 0.05, z + 0.03)); });
+  petals.instanceColor.needsUpdate = true; stage.add(petals, leaves);
+  [[-2.6, -1.4, 1.1], [-1.2, -2.8, 0.9], [2.4, -2.9, 1.0], [-3.2, 0.6, 0.8]].forEach(([x, z, sc]) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(sc); stage.add(g);
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.45, 8), mat(0x9a6b4a)); t.position.y = 0.22; t.castShadow = true; g.add(t);
+    [[0.48, 0.62, 0.7], [0.38, 0.52, 1.05], [0.26, 0.42, 1.36]].forEach(([r, h, y], i) => { const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), mat(i % 2 ? 0x5fb87a : 0x4fa86c)); c.position.y = y; c.castShadow = true; g.add(c); }); }); }
 const FRONT = Math.PI / 4;          // 從舞台中心看向鏡頭的方向(世界座標的 +x+z)
 const slots = STAGE_KEYS.map((key, i) => {
   const top = 0.14;
@@ -919,7 +930,7 @@ function paintStage() {
   $('pok').textContent = NET.on ? L(`Start · ${1 + NET.guests.filter((g) => g.online).length} players`, `開始(${1 + NET.guests.filter((g) => g.online).length} 位真人)`) : CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`);
   // 人數設定:只有第一位在選的時候可以改
   $('pcfg').classList.toggle('hide', pickWho > 0);
-  $('pcN').textContent = L('Players', '人數'); $('pcH').textContent = L('Humans', '真人玩家');
+  $('pcN').textContent = L('Players', '人數'); $('pcNs').textContent = L('Total players', '遊戲總人數'); $('pcH').textContent = L('Humans', '真人玩家'); $('pcHs').textContent = L('On this device', '這台裝置上的真人數');
   $('pcD').textContent = L('Computer', '電腦'); document.getElementById('pcDrow').classList.toggle('hide', CFG.n - (NET.on ? 1 + NET.guests.filter((g) => g.online).length : CFG.humans) <= 0);
   { const names = { easy: L('Easy', '簡單'), normal: L('Normal', '一般'), hard: L('Hard', '兇狠') };
     document.querySelectorAll('#pcfg [data-d]').forEach((b) => { b.textContent = names[b.dataset.d]; b.classList.toggle('on', b.dataset.d === (CFG.ai || 'normal')); }); }
@@ -932,7 +943,7 @@ function paintStage() {
     // 回合數的上下選擇;到頭的那一邊按鈕變灰
     $('pcM').textContent = L('Rounds', '回合數'); $('pcRv').textContent = R;
     document.querySelector('#pcR [data-r="-1"]').disabled = R === ROUND_OPTS[0]; document.querySelector('#pcR [data-r="1"]').disabled = R === ROUND_OPTS[ROUND_OPTS.length - 1];
-    $('pcRule').textContent = L(`Highest total assets after ${R} rounds wins`, `走滿 ${R} 回合,總資產最高的獲勝`); }
+    $('pcRule').textContent = L(`Highest assets after ${R} rounds wins`, `走滿 ${R} 回合,總資產最高者勝`); }
 }
 function stageStep(dt) {
   // 被玩家 1 選走的角色整個(連底座)從輪播拿掉:輪播只排剩下的角色,位置用「在剩下名單裡的第幾個」算
@@ -2206,7 +2217,7 @@ function netLobby(to) {
 let qrLib = null;
 function lobbyPaint() {
   const box = $('lobby'); if (!box) return;
-  $('pcOnline').textContent = NET.on ? L('✕ Close room', '✕ 關閉房間') : L('📱 Play with phones', '📱 線上同樂');
+  $('pcOnT').textContent = NET.on ? L('Close room', '關閉房間') : L('Play with phones', '多人連線'); $('pcOnS').textContent = NET.on ? L(`Room ${NET.code} is open`, `房間 ${NET.code} 開著`) : L('Scan a QR code to join', '掃描 QR Code 加入房間');
   $('pcOnline').classList.toggle('on', NET.on); $('pcHrow').classList.toggle('hide', NET.on);
   box.classList.toggle('hide', !NET.on); if (!NET.on) return;
   const gs = NET.guests.filter((g) => g.online);

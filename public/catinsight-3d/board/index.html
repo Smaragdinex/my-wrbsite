@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#c9e8b8">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -71,20 +71,20 @@
 <div class="toast" id="toast"></div>
 <div class="pickui">
   <div class="ptop">
+    <!-- 設定卡:每一列 = 圖示 + 標題 / 副標 + 右邊的選項 -->
     <div class="pcfg" id="pcfg">
-      <div class="seg"><span id="pcN"></span><button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></div>
-      <div class="seg" id="pcHrow"><span id="pcH"></span><button data-h="1">1</button><button data-h="2">2</button></div>
-      <button class="online" id="pcOnline"></button>
+      <div class="pawtag">🐾</div>
+      <div class="prow"><span class="ico">🐱🐻</span><span class="lbl"><b id="pcN"></b><small id="pcNs"></small></span><span class="opts"><button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></span></div>
+      <button class="online" id="pcOnline"><span class="oic">📱</span><span class="otx"><b id="pcOnT"></b><small id="pcOnS"></small></span><span class="chev">›</span></button>
       <div class="lobby hide" id="lobby"></div>
-      <small id="pcAI"></small>
-      <div class="seg wide" id="pcDrow"><span id="pcD"></span><button data-d="easy"></button><button data-d="normal"></button><button data-d="hard"></button></div>
-      <div class="seg wide"><span id="pcM"></span><span class="step" id="pcR"><button data-r="-1" aria-label="fewer rounds">▼</button><b id="pcRv">20</b><button data-r="1" aria-label="more rounds">▲</button></span></div>
-      <small id="pcRule"></small>
+      <div class="prow" id="pcHrow"><span class="ico">🐱</span><span class="lbl"><b id="pcH"></b><small id="pcHs"></small></span><span class="opts"><button data-h="1">1</button><button data-h="2">2</button></span></div>
+      <div class="prow" id="pcDrow"><span class="ico">🤖</span><span class="lbl"><b id="pcD"></b><small id="pcAI"></small></span><span class="opts"><button data-d="easy"></button><button data-d="normal"></button><button data-d="hard"></button></span></div>
+      <div class="prow"><span class="ico">🎲</span><span class="lbl"><b id="pcM"></b><small id="pcRule"></small></span><span class="step" id="pcR"><button data-r="-1" aria-label="fewer rounds">−</button><b id="pcRv">20</b><button data-r="1" aria-label="more rounds">+</button></span></div>
     </div>
   </div>
   <div class="pbar">
-    <div class="pnav"><button id="pprev" aria-label="previous">‹</button><b id="pname"></b><button id="pnext" aria-label="next">›</button></div>
-    <input class="pnameIn" id="pnameIn" type="text" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <!-- 角色名和「你的名字」同一格:左邊角色名,右邊打名字 -->
+    <div class="pnav"><button id="pprev" aria-label="previous">‹</button><span class="pname2"><b id="pname"></b><input class="pnameIn" id="pnameIn" type="text" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false"></span><button id="pnext" aria-label="next">›</button></div>
     <button class="pok" id="pok"></button>
   </div>
 </div>
@@ -92,6 +92,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=133"></script>
+<script type="module" src="./board.mjs?v=134"></script>
 </body>
 </html>

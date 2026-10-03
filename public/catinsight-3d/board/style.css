@@ -131,10 +131,6 @@
   .pnav{display:flex;align-items:center;gap:14px}
   .pnav button{width:52px;height:52px;border-radius:50%;border:4px solid #fff;background:#7cc6ff;color:#fff;font-size:calc(22px * var(--fs));font-weight:900;cursor:pointer;box-shadow:0 4px 0 #4f9bd6}
   .pnav button:active{transform:translateY(3px);box-shadow:0 1px 0 #4f9bd6}
-  .pnav b{min-width:150px;text-align:center;font-size:calc(28px * var(--fs));font-weight:900;color:#3b2f2a;background:var(--cream);border:3px solid #fff;border-radius:18px;padding:6px 18px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
-  .pnameIn{width:min(260px,80vw);text-align:center;font:900 calc(16px * var(--fs)) inherit;font-family:inherit;color:#3b2f2a;background:#fff;border:3px solid #fff;outline:2px solid var(--line);border-radius:999px;padding:8px 16px;box-shadow:0 3px 0 rgba(0,0,0,.1);-webkit-user-select:text;user-select:text}
-  .pnameIn::placeholder{color:#b5a593;font-weight:800}
-  .pnameIn:focus{outline-color:#ff7a59}
   .pok{height:60px;padding:0 44px;border-radius:999px;border:5px solid #fff;background:#ff7a59;color:#fff;font-size:calc(20px * var(--fs));font-weight:900;letter-spacing:.04em;cursor:pointer;box-shadow:0 6px 0 #d4553a}
   .pok:active{transform:translateY(4px);box-shadow:0 2px 0 #d4553a}
   .b-short{background:#8a5cf5}
@@ -163,19 +159,7 @@
   .box.foe .frows{max-height:calc(120px * var(--fs))}
   /* 選角畫面上方:標題 + 人數設定 */
   .ptop{display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:auto}
-  .pcfg{max-width:min(calc(470px * var(--fs)),92vw);display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 14px;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:18px;padding:8px 14px;box-shadow:0 4px 0 rgba(0,0,0,.1)}
-  .pcfg .seg{display:flex;align-items:center;gap:4px;font-weight:900;font-size:calc(14px * var(--fs));color:#6b594e}
-  .pcfg .seg span{margin-right:4px}
-  .pcfg .seg button{width:calc(34px * var(--fs));height:calc(34px * var(--fs));border-radius:50%;border:0;background:#eadfce;color:#8a786c;font-weight:900;font-size:calc(15px * var(--fs));cursor:pointer}
-  .pcfg .seg button.on{background:#ff7a59;color:#fff;box-shadow:0 3px 0 #d4553a}
-  .pcfg .seg.wide{flex-basis:100%;justify-content:center}
-  .pcfg .seg.wide button{width:auto;border-radius:999px;padding:0 calc(14px * var(--fs));font-size:calc(13px * var(--fs))}
   #pcRule{flex-basis:100%;text-align:center}
-  .pcfg .step{display:inline-flex;align-items:center;gap:2px;background:#fff;border:2px solid var(--line);border-radius:999px;padding:2px 4px;margin:0 6px 0 2px}
-  .pcfg .step b{min-width:calc(30px * var(--fs));text-align:center;font-size:calc(15px * var(--fs));color:#3b2f2a}
-  .pcfg .seg.wide .step button{width:calc(28px * var(--fs));height:calc(28px * var(--fs));padding:0;border-radius:50%;background:#ff7a59;color:#fff;font-size:calc(11px * var(--fs))}
-  .pcfg .seg.wide .step button:disabled{background:#e0d6c8;color:#fff;cursor:default}
-  .pcfg small{font-weight:800;font-size:calc(12px * var(--fs));color:#9a8676}
   /* 我的資產 / 對手的資產:內容區固定最高約 5 列半,超過就在框裡上下拖(或滾輪)捲動 */
   #assetRows,.frows{max-height:calc(230px * var(--fs));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;pointer-events:auto;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#d9c9b3 transparent}
   #assetRows::-webkit-scrollbar,.frows::-webkit-scrollbar{width:5px}
@@ -243,9 +227,6 @@
   @media(max-width:560px){ .stat.opt{display:none} }
 
 /* ---------- 線上同樂 ---------- */
-.pcfg .online{flex-basis:100%;border:0;border-radius:999px;padding:9px 0;background:#8b7cff;color:#fff;font-weight:900;font-size:calc(14px * var(--fs));cursor:pointer;box-shadow:0 3px 0 #5f52c9}
-.pcfg .online.on{background:#9a8676;box-shadow:0 3px 0 #6f5f52}
-.lobby{flex-basis:100%;display:flex;gap:12px;align-items:center;background:#fff;border:2px solid var(--line);border-radius:14px;padding:10px}
 .lobby .qr{width:calc(104px * var(--fs));height:calc(104px * var(--fs));flex:none;background:#fff}.lobby .qr svg{width:100%;height:100%;display:block}
 .lobby .info{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;text-align:left;font-size:calc(12px * var(--fs));color:#6b594e;font-weight:700}
 .lobby .info b{font-size:calc(14px * var(--fs));color:#3b2f2a}.lobby .code{font-family:"SF Mono",Menlo,monospace;letter-spacing:3px;background:#fff3d6;border-radius:8px;padding:2px 8px;color:#d4553a;font-size:calc(18px * var(--fs))}
@@ -307,3 +288,37 @@ body.remote #ctl .roll{opacity:.55}
   body.embed .hud{padding-right:48px}
   .m{font-size:calc(11.5px * var(--fs));padding:5px 8px}.m small{display:none}
 }
+
+/* ---------- 選角設定卡 ---------- */
+.pcfg{position:relative;width:min(calc(470px * var(--fs)),92vw);box-sizing:border-box;display:flex;flex-direction:column;gap:8px;background:#fff8ec;border:4px solid #f2b23c;outline:3px solid #fff;border-radius:26px;padding:16px 12px 12px;box-shadow:0 10px 30px rgba(0,0,0,.18);pointer-events:auto;text-align:left}
+.pcfg .pawtag{position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:#fff8ec;border:3px solid #f2b23c;border-radius:999px;width:34px;height:28px;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1}
+.prow{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid #f3e3c8;border-radius:16px;padding:7px 10px}
+.prow .ico{font-size:calc(24px * var(--fs));line-height:1;flex:none;width:calc(44px * var(--fs));text-align:center}
+.prow .lbl{display:flex;flex-direction:column;line-height:1.15;min-width:0;flex:1}
+.prow .lbl b{font-size:calc(16px * var(--fs));font-weight:900;color:#5a2a2a}
+.prow .lbl small{font-size:calc(11px * var(--fs));font-weight:700;color:#9a8676;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .opts{display:flex;gap:6px;flex:none}
+.prow .opts button{min-width:calc(38px * var(--fs));height:calc(38px * var(--fs));padding:0 calc(10px * var(--fs));border-radius:999px;border:0;background:#eadfce;color:#8a786c;font-weight:900;font-size:calc(14px * var(--fs));cursor:pointer;-webkit-tap-highlight-color:transparent}
+.prow .opts button.on{background:#ff7a59;color:#fff;box-shadow:0 3px 0 #d4553a}
+.prow .step{display:inline-flex;align-items:center;gap:4px;background:#f6ecd6;border-radius:999px;padding:3px;flex:none}
+.prow .step button{width:calc(34px * var(--fs));height:calc(34px * var(--fs));border-radius:50%;border:0;background:#eadfce;color:#8a786c;font-weight:900;font-size:calc(18px * var(--fs));cursor:pointer;line-height:1}
+.prow .step button[data-r="1"]{background:#ff7a59;color:#fff}
+.prow .step button:disabled{opacity:.4}
+.prow .step b{min-width:calc(44px * var(--fs));text-align:center;font-size:calc(17px * var(--fs));color:#3b2f2a}
+.pcfg .online{display:flex;align-items:center;gap:12px;border:0;border-radius:18px;padding:10px 14px;background:linear-gradient(90deg,#8f7bff,#6f5be6);color:#fff;cursor:pointer;text-align:left;box-shadow:0 4px 0 #5447b3;-webkit-tap-highlight-color:transparent}
+.pcfg .online .oic{font-size:calc(30px * var(--fs));line-height:1;flex:none}
+.pcfg .online .otx{display:flex;flex-direction:column;line-height:1.15;flex:1;min-width:0}
+.pcfg .online .otx b{font-size:calc(19px * var(--fs));font-weight:900}
+.pcfg .online .otx small{font-size:calc(11.5px * var(--fs));font-weight:700;opacity:.9}
+.pcfg .online .chev{font-size:calc(26px * var(--fs));font-weight:900;flex:none;opacity:.9}
+.pcfg .online.on{background:linear-gradient(90deg,#a8998c,#8a786c);box-shadow:0 4px 0 #6f5f52}
+.lobby{display:flex;gap:12px;align-items:center;background:#fff;border:2px solid #f3e3c8;border-radius:16px;padding:10px}
+/* 角色名 + 名字輸入同一格 */
+.pname2{display:flex;align-items:center;gap:8px;background:var(--cream);border:3px solid #fff;border-radius:18px;padding:4px 6px 4px 16px;box-shadow:0 3px 0 rgba(0,0,0,.1);min-width:min(300px,70vw)}
+.pname2 b{font-size:calc(24px * var(--fs));font-weight:900;color:#3b2f2a;white-space:nowrap}
+.pnameIn{flex:1;min-width:0;width:calc(120px * var(--fs));font:900 calc(15px * var(--fs)) inherit;font-family:inherit;color:#3b2f2a;background:#fff;border:0;border-radius:12px;padding:8px 10px;outline:2px solid var(--line)}
+.pnameIn::placeholder{color:#b5a593;font-weight:800}
+.pnameIn:focus{outline-color:#ff7a59}
+@media(max-width:560px){ .prow .ico{width:calc(34px * var(--fs));font-size:calc(20px * var(--fs))} .prow .opts button{min-width:calc(34px * var(--fs));height:calc(34px * var(--fs))} .pcfg{padding:14px 10px 10px;gap:6px} .pname2{min-width:0;width:calc(100vw - 140px);padding-left:12px} .pname2 b{font-size:calc(18px * var(--fs))} .pnav{gap:8px} .pnav button{width:44px;height:44px} }
+/* 桌機視窗不高時把設定卡縮小一點,角色才不會被蓋住 */
+@media(min-width:901px) and (max-height:900px){ .pcfg{transform:scale(.84);transform-origin:top center;margin-bottom:calc(-16% + 0px)} }
