@@ -2244,7 +2244,7 @@ function netOnMsg(m) {
 function netLobby(to) {
   if (!NET.on || NET.started) return;
   NET.guests.forEach((g) => { if (g.char === hostChar() || NET.guests.some((o) => o !== g && o.char === g.char && NET.guests.indexOf(o) < NET.guests.indexOf(g))) { g.char = Object.keys(CHARS).find((k) => !charTakenBy(k, g)); if (g.conn) netSend({ t: 'joined', ok: true, gid: g.gid, char: g.char, name: g.name }, g.conn); } });
-  netSend({ t: 'lobby', code: NET.code, chars: Object.keys(CHARS).map((k) => { const by = charTakenBy(k); return { k, name: CHARS[k].name, icon: CHARS[k].icon, taken: by ? (by === 'host' ? 'host' : by.gid) : null }; }),
+  netSend({ t: 'lobby', code: NET.code, chars: Object.keys(CHARS).map((k) => { const by = charTakenBy(k); return { k, name: CHARS[k].name, icon: CHARS[k].icon, url: CHARS[k].url, h: CHARS[k].h, color: CHARS[k].color, taken: by ? (by === 'host' ? 'host' : by.gid) : null }; }),
     guests: NET.guests.filter((g) => g.online).map((g) => ({ gid: g.gid, name: g.name, char: g.char })), host: { char: hostChar(), name: $('pnameIn').value.trim().slice(0, 12) } }, to);
 }
 let qrLib = null;

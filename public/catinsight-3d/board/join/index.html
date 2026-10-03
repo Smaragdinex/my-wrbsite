@@ -13,6 +13,12 @@
 <title>貓咪股市大富翁 · 手機遙控</title>
 <link rel="preload" as="image" href="../card-event.webp"><link rel="preload" as="image" href="../card-fate.webp"><link rel="preload" as="image" href="../card-gift.webp">
 <link rel="stylesheet" href="../style.css?v=14">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+} }
+</script>
 <style>
   /* 手機遙控頁:沒有 3D 棋盤,只有自己的資產和主機鏡射過來的面板 */
   html,body{height:100%}
@@ -28,6 +34,14 @@
   .chars button{border:2px solid var(--line);background:#fff;border-radius:14px;padding:8px 10px;font:inherit;font-weight:900;font-size:15px;color:var(--ink);display:flex;align-items:center;gap:6px}
   .chars button .big{font-size:24px}.chars button.on{border-color:#ff7a59;background:#fff3d6;box-shadow:0 0 0 2px #ff7a59}
   .chars button:disabled{opacity:.4}.chars button small{font-size:11px;color:#9a8676}
+  .jstage{position:relative;width:100%;height:230px;border-radius:18px;overflow:hidden;background:#c9e8b8;border:2px solid var(--line)}
+  .jstage canvas{width:100%;height:100%;display:block}
+  .jhint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#6b594e;text-align:center;padding:0 20px;pointer-events:none}
+  .jhint.hide{display:none}
+  .jnav{justify-content:center;margin-top:10px;gap:8px}
+  .jnav .pname2{min-width:0;flex:1;padding-left:12px}
+  .jnav .pname2 b{font-size:19px}
+  .jnav button{width:44px;height:44px}
   .jgo{width:100%;margin-top:14px;border:0;border-radius:999px;padding:14px;background:#ff7a59;color:#fff;font:inherit;font-weight:900;font-size:18px;box-shadow:0 4px 0 #d4553a}
   .jgo:disabled{background:#c9bcae;box-shadow:0 4px 0 #a99b90}
   .jhead{display:flex;align-items:center;gap:12px;background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:10px 14px}
@@ -50,8 +64,10 @@
     <h1>📱 加入房間</h1>
     <p>在主機畫面的「線上同樂」看房號,輸入後選一個角色就能一起玩。</p>
     <label>房號</label><input class="code" id="jcode" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD">
-    <label>你的名字</label><input id="jname" maxlength="12" autocomplete="off" placeholder="名字">
-    <label>角色</label><div class="chars" id="jchars"><small>連上房間後會顯示可以選的角色</small></div>
+    <label>角色</label>
+    <!-- 3D 角色轉盤:和主機一樣,左右切換、中間那隻是你的 -->
+    <div class="jstage"><canvas id="jgl"></canvas><div class="jhint" id="jhint">連上房間後會顯示可以選的角色</div></div>
+    <div class="pnav jnav"><button id="jprev" aria-label="previous">‹</button><span class="pname2"><b id="jcharName">—</b><input class="pnameIn" id="jname" type="text" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="你的名字"></span><button id="jnext" aria-label="next">›</button></div>
     <button class="jgo" id="jgo">加入</button>
     <p id="jmsg" style="margin:10px 0 0;color:#c4472f"></p>
   </div>
@@ -66,6 +82,6 @@
 <div class="panel hide" id="panel"></div>
 <div class="draw hide" id="draw"></div>
 <div class="end hide" id="end"></div>
-<script type="module" src="../join.mjs?v=1"></script>
+<script type="module" src="../join.mjs?v=2"></script>
 </body>
 </html>
