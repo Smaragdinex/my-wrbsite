@@ -245,7 +245,7 @@ function itemInfo(id) {
     desc: L('Pick any asset and knock its price down 18%. Whoever holds it takes the hit.', '指定一種資產,價格立刻下跌 18%。誰持有誰受傷。') };
   const e = EVENTS[+id.slice(2)];
   const best = KEYS.reduce((a, k) => (e.m[k] > e.m[a] ? k : a), KEYS[0]);
-  return { icon: '🃏', name: L('Event card: ', '事件卡:') + e.t, event: e, best,
+  return { icon: '<img class="cardico" src="card-event.webp" alt="">', name: L('Event card: ', '事件卡:') + e.t, event: e, best,
     desc: L(`Play it to trigger this event. ${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%.`, `使用後立刻發生這個事件,${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%。`), price: CARD_PRICE };
 }
 const randomItem = () => { const r = Math.random(); return r < 0.4 ? 'remote' : r < 0.6 ? 'atk' : 'ev' + SALE_EVENTS[Math.floor(Math.random() * SALE_EVENTS.length)]; };
