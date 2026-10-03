@@ -151,13 +151,15 @@ const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
 // 玩法:走滿選定的回合數(選角畫面可以選 20 / 25 / 30 / 35 / 40),總資產最高的人獲勝
 const ROUND_OPTS = [20, 25, 30, 35, 40];
 // 電腦難度(選角畫面可以選):
-//   easy   簡單:只會買和賣,不放空、不用利空卡、不融資
+//   三種都會買卡、放空、融資,差別在「機率」和「多狠」:
+//   easy   簡單:放空、買卡、用卡的機率都低,很少融資,現金留得多
 //   normal 一般:原本的策略(偶爾融資、漲多才放空、有閒錢買利空卡)
 //   hard   兇狠:專打第一名 —— 常用融資、只要有人持有就放空、利空卡一有錢就買、現金留得少
+//   shortP:符合放空條件時真的放空的機率;atkP:商店有利空卡時買、手上有利空卡時用的機率;greedy:買股時改用融資的機率
 const AI_LEVELS = {
-  easy:   { short: false, atk: false, greedy: 0,    reserve: 2500, shortAny: false },
-  normal: { short: true,  atk: true,  greedy: 0.35, reserve: 2000, shortAny: false },
-  hard:   { short: true,  atk: true,  greedy: 0.6,  reserve: 800,  shortAny: true },
+  easy:   { shortP: 0.35, atkP: 0.3, greedy: 0.12, reserve: 2500, shortAny: false },
+  normal: { shortP: 1,    atkP: 1,   greedy: 0.35, reserve: 2000, shortAny: false },
+  hard:   { shortP: 1,    atkP: 1,   greedy: 0.6,  reserve: 800,  shortAny: true },
 };
 const AI = () => AI_LEVELS[S.aiLevel] || AI_LEVELS.normal;
 const maxRolls = () => S.maxRounds;
@@ -1513,7 +1515,7 @@ async function aiTurn() {
   const A = S.ai, who = CHARS[S.foe].name;
   focus = PA(); pan.set(0, 0, 0); toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
   // 對手出牌:利空卡打你持有最多的資產;事件卡在牠持有受惠類股時才用
-  if (A.bag.includes('atk') && AI().atk) {
+  if (A.bag.includes('atk') && Math.random() < AI().atkP) {
     // 打「目前最有錢的那位對手」持有最多的資產
     const T = others(A.i).sort((x, y) => assetsOf(y) - assetsOf(x))[0];
     const k = KEYS.filter((x) => T.hold[x].n > 0).sort((x, y) => T.hold[y].n * S.price[y] - T.hold[x].n * S.price[x])[0];
@@ -1552,7 +1554,7 @@ async function aiTurn() {
     } else if (h.n && (price * h.n - h.cost) / h.cost >= 0.15) {
       const n = h.n; A.cash += price * n - h.loan; h.n = 0; h.cost = 0; h.loan = 0;
       toast(L(`${who} took profit on ${sec.name}. Price ${pct(sellF(n))}`, `${who}賣出${sec.name}獲利了結,股價 ${pct(sellF(n))}`)); impact(type, sellF(n));
-    } else if (AI().short && !h.n && A.cash >= price * LOT + AI().reserve && ((mine >= LOT && (AI().shortAny || price > sec.open * 1.08)) || price > sec.open * 1.3)) {
+    } else if (!h.n && A.cash >= price * LOT + AI().reserve && Math.random() < AI().shortP && ((mine >= LOT && (AI().shortAny || price > sec.open * 1.08)) || price > sec.open * 1.3)) {
       // 放空:你持有而且已經漲了一段(打擊你),或是漲太多(賭它回檔)
       A.cash -= price * LOT; sh.entry = price; sh.n = LOT; impact(type, SHORT_F);
       toast(mine >= LOT ? L(`${who} shorts ${sec.name} to hit its holders. Price ${pct(SHORT_F)}`, `${who}放空${sec.name}打擊持有的人,股價 ${pct(SHORT_F)}`) : L(`${who} shorts ${sec.name}. Price ${pct(SHORT_F)}`, `${who}放空${sec.name},股價 ${pct(SHORT_F)}`));
@@ -1569,7 +1571,7 @@ async function aiTurn() {
   } else if (type === 'shop') {
     // 逛商店:有閒錢就買利空卡;不然買一張對牠持股有利的事件卡。買走的你就買不到了
     const stock = shopStock(); let got = null;
-    if (stock.includes('atk') && AI().atk && A.cash >= ATK_PRICE + AI().reserve) got = 'atk';
+    if (stock.includes('atk') && A.cash >= ATK_PRICE + AI().reserve && Math.random() < AI().atkP) got = 'atk';
     else got = stock.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n > 0 && A.cash >= 2000) || null;
     if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); S.shop.sold.push({ id: got, by: A.i }); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
     else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
