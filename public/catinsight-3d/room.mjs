@@ -237,7 +237,7 @@ function loadGLB(name, url, onLoad) {
     l.position.set(sx * 0.28, ARCADE_H - 0.125, 1.305); m.add(l); }
 
   // 街機上方的漂浮標記:白色「▶ PLAY」牌子 + 橘色倒三角,會上下漂浮並永遠面向鏡頭;點它等於點街機
-  playTag = new THREE.Group(); playTag.position.set(0, ARCADE_H + 0.55, 0.7); a.add(playTag);   // 對齊街機中心
+  playTag = new THREE.Group(); playTag.position.set(0, ARCADE_H + 0.55, 0.7); playTag.visible = false; a.add(playTag);   // 標記已拿掉(不顯示、不擋點擊),點街機本體就能進
   const tc = document.createElement('canvas'); tc.width = 512; tc.height = 256;
   const g = tc.getContext('2d');
   g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect(8, 8, 496, 240, 70); g.fill();
@@ -720,7 +720,7 @@ canvas.addEventListener('pointerup', (e) => {
     }
   }
   if (raycaster.intersectObject(screenMesh).length) { focusArcade = false; zoomGoal = 1; }
-  else if ((playTag && raycaster.intersectObject(playTag, true).length) || (arcadeScreen && raycaster.intersectObject(arcadeScreen).length) || (arcadeModel && raycaster.intersectObject(arcadeModel, true).length)) { focusArcade = true; zoomGoal = 1; }
+  else if ((arcadeScreen && raycaster.intersectObject(arcadeScreen).length) || (arcadeModel && raycaster.intersectObject(arcadeModel, true).length)) { focusArcade = true; zoomGoal = 1; }
 });
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
