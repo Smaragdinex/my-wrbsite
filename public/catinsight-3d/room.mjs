@@ -724,7 +724,7 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=129';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=130';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 手機直拿(觸控、短邊 ≤ 1100px、直的)就把遊戲畫面轉 90° 變橫向;轉成橫拿或平板、電腦就正常顯示
@@ -786,7 +786,27 @@ function prewarmGame() {
   gameFrame = document.createElement('iframe'); gameFrame.dataset.src = gameSrc(); gameFrame.src = gameSrc(); gameFrame.allow = 'autoplay; fullscreen'; gameFrame.allowFullscreen = true; gameFrame.title = 'Cat Street Stocks';
   gameScr.appendChild(gameFrame);
 }
+// 全螢幕提示:手機瀏覽器開(不是從主畫面開)的話,進遊戲前提示一次「加入主畫面」。Android Chrome 會拿到安裝事件,可以一鍵安裝;iOS 只能教使用者按分享
+let installEvt = null; addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+function pwaHint() {
+  const phone = matchMedia('(pointer: coarse)').matches && Math.max(innerWidth, innerHeight) <= 1400;
+  let snoozed = 0; try { snoozed = +localStorage.getItem('pwa-hint-ts') || 0; } catch (e) {}
+  if (!phone || isStandalone() || Date.now() - snoozed < 3 * 86400e3) return;
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const box = document.getElementById('pwa-hint'), zh = gameLang === 'zh';
+  document.getElementById('pwa-title').textContent = zh ? '📱 想要全螢幕玩?' : '📱 Want it full screen?';
+  document.getElementById('pwa-text').textContent = ios
+    ? (zh ? '把這個網站加到主畫面,從主畫面打開就不會有網址列:\n按下方的「分享」⬆️ → 「加入主畫面」→ 再從主畫面開啟。' : 'Add this site to your Home Screen and open it from there:\ntap Share ⬆️ → "Add to Home Screen".')
+    : installEvt ? (zh ? '安裝成主畫面 App,打開就是全螢幕。' : 'Install it as an app for a full-screen view.') : (zh ? '用瀏覽器選單的「加到主畫面」或「安裝應用程式」,從主畫面開啟就是全螢幕。' : 'Use the browser menu → "Add to Home screen" / "Install app".');
+  const ins = document.getElementById('pwa-install'); ins.classList.toggle('hide', !installEvt || ios); ins.textContent = zh ? '安裝' : 'Install';
+  ins.onclick = async () => { try { installEvt.prompt(); await installEvt.userChoice; } catch (e) {} installEvt = null; box.classList.add('hide'); };
+  const ok = document.getElementById('pwa-ok'); ok.textContent = zh ? '知道了' : 'Got it';
+  ok.onclick = () => { box.classList.add('hide'); try { localStorage.setItem('pwa-hint-ts', String(Date.now())); } catch (e) {} };
+  box.classList.remove('hide');
+}
 function openGame() {
+  pwaHint();
   arcadeMenu = false; prewarmGame(); gameOn = true; fitGameRot();   // 沒預載到(或語言不同)就現在建
   gameUI.classList.add('on'); document.body.classList.add('game-on');
   setTimeout(() => { try { gameFrame.contentWindow.focus(); } catch (e) {} }, 400);

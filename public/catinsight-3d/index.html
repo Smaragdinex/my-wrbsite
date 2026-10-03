@@ -6,6 +6,13 @@
 <title>CatInsight Stock — Room</title>
 <meta name="description" content="CatInsight Stock — step into the room. AI stock research for US and Taiwan markets." />
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
+<link rel="manifest" href="/catinsight-3d/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CatInsight">
+<meta name="theme-color" content="#c9e8b8">
+<link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,6 +62,15 @@
   /* 手機直拿時把遊戲轉成橫向(iframe 整個轉 90°,裡面的遊戲看到的就是橫的視窗,觸控座標瀏覽器會自己換算) */
   #game-ui.rot .scr { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(90deg); transform-origin: center; }
   #game-ui.rot #game-exit { right: auto; left: 14px; top: 12px; transform: rotate(90deg); }
+  #pwa-hint { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; justify-content: center; padding: 0 14px calc(18px + env(safe-area-inset-bottom)); background: rgba(40,30,25,.45); }
+  #pwa-hint.hide { display: none; }
+  #pwa-hint .box { width: min(440px, 100%); background: #fff8ec; border: 3px solid #fff; border-radius: 22px; padding: 16px 18px; box-shadow: 0 14px 40px rgba(0,0,0,.3); color: #3b2f2a; font-family: "Avenir Next", "PingFang TC", "Noto Sans TC", system-ui, sans-serif; }
+  #pwa-hint b { display: block; font-size: 17px; font-weight: 900; margin-bottom: 6px; }
+  #pwa-hint p { margin: 0 0 12px; font-size: 14px; line-height: 1.55; font-weight: 700; color: #6b594e; white-space: pre-line; }
+  #pwa-hint .row { display: flex; gap: 10px; }
+  #pwa-hint button { flex: 1; border: 0; border-radius: 999px; padding: 11px 0; font: inherit; font-weight: 900; font-size: 15px; background: #eadfce; color: #6b594e; }
+  #pwa-hint button.go { background: #ff7a59; color: #fff; box-shadow: 0 3px 0 #d4553a; }
+  #pwa-hint button.hide { display: none; }
   #game-exit { position: absolute; right: 12px; top: 14px; z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 3px solid #fff;
     background: #f08262; color: #fff; font-size: 18px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,.35); line-height: 1; }
   #game-exit:hover { background: #e2604f; }
@@ -206,6 +222,14 @@
     <div class="scr"></div>
   </div>
 </div>
+<!-- 手機沒有從主畫面開啟時的提示:加入主畫面就能全螢幕(iOS 只能由使用者自己加;Android 可以直接跳安裝) -->
+<div id="pwa-hint" class="hide">
+  <div class="box">
+    <b id="pwa-title"></b>
+    <p id="pwa-text"></p>
+    <div class="row"><button id="pwa-install" class="go hide"></button><button id="pwa-ok"></button></div>
+  </div>
+</div>
 <div class="pill">
   <button id="prev" aria-label="back">‹</button>
   <button id="mid" class="mid" aria-label="toggle screen">
@@ -215,6 +239,6 @@
   <button id="next" aria-label="forward">›</button>
 </div>
 <div id="loading">building the room…</div>
-<script type="module" src="./room.mjs?v=218"></script>
+<script type="module" src="./room.mjs?v=219"></script>
 </body>
 </html>
