@@ -235,7 +235,8 @@
 /* 輪到手機上的玩家:主機這邊的操作鎖住,上方顯示等待提示 */
 .rbanner{position:fixed;left:50%;top:calc(var(--ava) + 26px);transform:translateX(-50%);z-index:6;background:#3b2f2a;color:#fff;font-weight:900;font-size:calc(14px * var(--fs));padding:8px 16px;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.25);pointer-events:none;white-space:nowrap}
 body.remote #ctl, body.remote #panel, body.remote #draw, body.remote #stepCtl{pointer-events:none}
-body.remote #ctl .roll{opacity:.55}
+/* 輪到手機玩家時,主機這邊的背包 / 擲骰鈕 / 提示整個藏起來(和看電腦走的時候一樣),只留他的買賣面板看得到 */
+body.remote #ctl, body.remote #tipbar{visibility:hidden}
 
 /* ---------- 版面:左欄(頭像直排 + 資產)、右欄(任務 + 市場事件)、上方正中提示、頭像下名次、擲骰鈕下回合 ---------- */
 .ranktag{background:#8a6f60;color:#fff;border-radius:999px;padding:2px 12px;font-weight:900;font-size:calc(13px * var(--fs));box-shadow:0 2px 0 rgba(0,0,0,.15);white-space:nowrap;align-self:flex-start;letter-spacing:.02em}

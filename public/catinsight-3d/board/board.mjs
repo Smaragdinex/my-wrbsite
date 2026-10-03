@@ -2560,7 +2560,7 @@ function clientInit() {
     document.body.classList.toggle('watch', !mine);
     const cur = S.players[S.turn]; $('panel').dataset.watch = cur && !mine ? L(`${nameOf(cur)} is playing`, `${nameOf(cur)}操作中`) : '';
     ['stepCtl', 'panel', 'draw', 'ctl', 'end'].forEach((id) => { $(id).style.pointerEvents = mine && id !== 'end' ? '' : 'none'; });
-    $('ctl').style.opacity = mine ? '' : '.55';
+    $('ctl').style.visibility = mine ? '' : 'hidden';   // 別人的背包 / 擲骰鈕不顯示(和看電腦走一樣),面板才看得到
     $('tipbar').classList.toggle('hide', $('ctl').classList.contains('hide') || !mine);
   }
   // 鏡射區塊的操作回傳主機
