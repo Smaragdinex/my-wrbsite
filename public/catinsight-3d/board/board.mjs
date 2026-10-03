@@ -989,7 +989,7 @@ function stageSelect(i, dir = 1) {
 }
 function paintStage() {
   const c = CHARS[slots[stageSel].key];
-  $('pname').textContent = c.name;
+  $('pname').textContent = c.name; $('pnameIn').placeholder = c.name;      // 名字欄的預設字就是角色名,不打就用它
   // 沒有標題,所以兩位真人時用按鈕文字說明現在是誰在選
   { const gN = NET.guests.filter((g) => g.online).length; $('pok').textContent = NET.on ? (gN >= 4 ? L('Start · 4 phones (this screen only shows the board)', '開始(4 支手機,主機只當螢幕)') : L(`Start · ${1 + gN} players`, `開始(${1 + gN} 位真人)`)) : CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`); }
   // 人數設定:只有第一位在選的時候可以改
@@ -1058,7 +1058,7 @@ function pickStage() {
     if (!pickStage.seen) { pickStage.seen = true; camT.x = STAGE.x; camT.z = STAGE.z; view.half = view.stageHalf; applyFrustum(); }   // 第一次直接從舞台開場,不用從起點慢慢滑過來
     pickWho = 0; const picked = [], names = [];
     // 名字欄:每局都重新打(不記住上次的,因為可能換人玩)
-    const nameIn = $('pnameIn'); nameIn.placeholder = L('Your name', '你的名字'); nameIn.value = '';
+    const nameIn = $('pnameIn'); nameIn.value = '';
     slots.forEach((sl) => { sl.taken = false; });
     stageCur = stageSel; stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);

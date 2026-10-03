@@ -373,3 +373,7 @@ body.embed .topbtns{right:64px}
 /* 右上的音樂 / 全螢幕鈕放大到和離開鈕一樣(48px),手機也一樣 */
 .topbtns .snd{width:48px;height:48px;font-size:24px;border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.25)}
 @media(max-width:900px){ .topbtns .snd{width:48px;height:48px;font-size:24px} .topbtns{top:12px} }
+
+/* 名字欄:前面不放角色名,角色名當預設字 */
+.pname2 b{display:none}
+.pname2{padding-left:6px}

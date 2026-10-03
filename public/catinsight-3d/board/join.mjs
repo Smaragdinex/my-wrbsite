@@ -165,7 +165,7 @@ function paintChars() {
   const idx = ST.chars.findIndex((c) => c.k === ST.char);
   const k = stage.select(idx >= 0 ? idx : 0);            // 自己選的被別人搶走就自動跳到下一個
   if (k && k !== ST.char) { ST.char = k; if (ST.joined) send({ t: 'join', gid, name: ST.name, char: ST.char }); }
-  const c = ST.chars.find((x) => x.k === ST.char); $('jcharName').textContent = c ? c.name : '—';
+  const c = ST.chars.find((x) => x.k === ST.char); $('jcharName').textContent = c ? c.name : '—'; $('jname').placeholder = c ? c.name : '你的名字';
   $('jgo').textContent = ST.joined ? `✓ 已加入(${c ? c.name : ''}),等主機開始` : (c ? `用${c.name}加入` : '加入');
 }
 const step = (d) => { if (!ST.chars.length) return; const k = stage.select(stage.sel + d, d); if (k) { ST.char = k; paintChars(); if (ST.joined) send({ t: 'join', gid, name: ST.name, char: ST.char }); } };
@@ -173,7 +173,7 @@ $('jprev').onclick = () => step(-1); $('jnext').onclick = () => step(1);
 $('jcode').value = ST.code; $('jname').value = ST.name;
 $('jcode').oninput = () => { ST.code = $('jcode').value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4); $('jcode').value = ST.code; if (ST.code.length === 4 && !ST.ws) connect(); };
 $('jgo').onclick = () => {
-  ST.name = $('jname').value.trim().slice(0, 12) || '玩家'; localStorage.setItem('css.jname', ST.name);
+  ST.name = $('jname').value.trim().slice(0, 12) || ($('jname').placeholder !== '你的名字' ? $('jname').placeholder : '玩家'); localStorage.setItem('css.jname', ST.name);
   if (ST.code.length !== 4) { $('jmsg').textContent = '請輸入 4 碼房號'; return; }
   if (!ST.ws) connect();
   const go = () => send({ t: 'join', gid, name: ST.name, char: ST.char });
