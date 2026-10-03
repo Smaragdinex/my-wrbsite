@@ -950,7 +950,12 @@ function lobbySeatsStep(dt) { lobbySeats.forEach((st) => { st.hop = Math.max(0, 
 const joined = [];      // [{ gid, char, g, holder, hop }]
 function syncJoined(guests) {
   const live = guests.filter((g) => g.online);
-  if (lobbyPhase) { joined.forEach((j) => joinedRow.remove(j.g)); joined.length = 0; lobbySeatsPaint(); slots.forEach((sl) => { sl.taken = live.some((g) => g.char === sl.key); }); return; }
+  // 選角階段不顯示其他玩家(只把他們選走的角色從轉盤拿掉);到了人數格大廳才把他們放到位子上
+  joined.forEach((j) => joinedRow.remove(j.g)); joined.length = 0;
+  slots.forEach((sl) => { sl.taken = live.some((g) => g.char === sl.key); });
+  if (slots[stageSel] && slots[stageSel].taken) stageSelect(stageSel + 1);
+  if (lobbyPhase) lobbySeatsPaint();
+  return;
   // 移除已離開的
   for (let i = joined.length - 1; i >= 0; i--) if (!live.some((g) => g.gid === joined[i].gid)) { joinedRow.remove(joined[i].g); joined.splice(i, 1); }
   live.forEach((g) => {
