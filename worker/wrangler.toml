@@ -1,0 +1,13 @@
+# 貓咪股市大富翁 全球排行榜 API(Cloudflare Workers + D1)
+# 部署:cd worker && npx wrangler deploy
+name = "catstreet-board-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# 掛在官網同一個網域底下(xarts.games 已走 Cloudflare 代理),前端直接呼叫 /api/board/...,不用處理 CORS
+routes = [{ pattern = "xarts.games/api/board/*", zone_name = "xarts.games" }]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "catstreet-board"
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
