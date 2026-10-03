@@ -54,7 +54,7 @@ const TILES = (() => {
   [22, 58].forEach((i) => { t[i] = 'gift'; });
   // 剩下 47 格:22 種資產各兩格,再插入 3 個銀行格
   const seq = [...KEYS, ...KEYS];
-  [7, 22, 37].forEach((i) => seq.splice(i, 0, 'bank'));      // 落在第 9、30、51 格(避開兩條小路的出口 31、62)
+  [7, 22, 37].forEach((i) => seq.splice(i, 0, 'bank'));      // 落在第 9、30、51 格(避開兩條小路的出口 28、60)
   let j = 0; for (let i = 0; i < t.length; i++) if (!t[i]) t[i] = seq[j++];
   return t;
 })();
@@ -173,9 +173,10 @@ const SPECIAL_RATE = 0.8;          // 每次抽牌,三張裡有一張是特殊�
 const BANK_MAX = 5000, BANK_RATE = 0.05;
 // 棋盤裡面的兩個特殊格:警察局、IPO 攤位(各一格 cell),離開時擲一顆骰子,沿著 6 格的小路(path)走回外圈;
 // 走過最後一格就踩上外圈的 exit 那格,多的點數繼續往前走。小路上每一格是什麼(命運、道具、利息…)每次有人進來都重新隨機生成。座標是格網的 [x, z]
+// 兩條小路都是「從裡面直直走出來」:警察局在後面(z=4 那排),往左邊的外圈走;IPO 攤位在前面(z=12 那排),往右邊的外圈走
 const LANES = {
-  jail: { exit: 31, cell: [2, 7], path: [[1, 7], [1, 6], [1, 5], [1, 4], [1, 3], [1, 2]] },
-  ipo: { exit: 62, cell: [14, 8], path: [[15, 8], [15, 9], [15, 10], [15, 11], [15, 12], [15, 13]] },
+  jail: { exit: 28, cell: [7, 4], path: [[6, 4], [5, 4], [4, 4], [3, 4], [2, 4], [1, 4]] },
+  ipo: { exit: 60, cell: [9, 12], path: [[10, 12], [11, 12], [12, 12], [13, 12], [14, 12], [15, 12]] },
 };
 // 小路格子的種類:命運只有小路上才有(每條固定 2 格),其他 4 格從 PATH_POOL 隨機抽(可重複)
 const PATH_POOL = ['gift', 'interest', 'coin', 'fine', 'blank', 'blank'];
@@ -555,11 +556,11 @@ const E = N / 2 * STEP + 0.62;
     k++;
   }
 }
-// 中間的大草地:一個小公園(池塘、樹、房子、花),都離內圈 3.5 格以上,留給骰子滾
+// 中間的大草地:一個小公園(池塘、樹、房子、花)。樹和房子都避開兩條小路(z=4 那排和 z=12 那排)和兩棟建築
 {
   const pond = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.06, 40), mat(0x8fd3ff)); pond.position.set(-0.8, 0.2, 0.6); pond.scale.z = 0.7; scene.add(pond);
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.05, 40), mat(0xf6e3c2)); rim.position.set(-0.8, 0.185, 0.6); rim.scale.z = 0.72; scene.add(rim);
-  [[-3.4, -2.6, 1.2], [-2.2, -3.6, 1], [2.6, -3.2, 1.3], [3.6, -1.4, 1], [3.2, 2.6, 1.1], [-3.8, 2.4, 1.1], [1.2, 3.6, 1], [-1.6, 3.4, 1.2], [0.6, -3.9, 1.1]].forEach(([x, z, sc]) => tree(x, z, sc));
+  [[-3.4, -2.6, 1.2], [-2.2, -2.2, 1], [2.6, -3.2, 1.3], [3.6, -1.4, 1], [3.2, 2.6, 1.1], [-3.8, 2.4, 1.1], [2.4, 2.2, 1], [-2.6, 3.0, 1.2], [3.0, -2.4, 1.1]].forEach(([x, z, sc]) => tree(x, z, sc));
   house(1.9, -0.9, 0xfff1dc, 0xe2726b, 0.4);
   lamp(0.6, 2.2); lamp(-2.4, 1.9);
 }
@@ -670,9 +671,9 @@ function drawLane(type) {
 const drawLanes = () => Object.keys(LANES).forEach(drawLane);
 // 小路旁的建築:警察局(拘留小路)和交易所(IPO 小路,白色、金色的鐘)
 {
-  // 警察局:放在警察局格的內側(鏡頭看過去不會擋到格子和小路上的棋子)。藍白色的建築、鐵窗、屋頂的紅藍警示燈,
+  // 警察局:放在警察局格的後面(離鏡頭更遠的那側,不會擋到格子和小路上的棋子)。藍白色的建築、鐵窗、屋頂的紅藍警示燈,
   // 再立一塊面向鏡頭的招牌寫「警察局 POLICE」,玩家一看就知道被送到哪裡
-  const j = new THREE.Group(); j.position.copy(cellPos(3.5, 6.9));
+  const j = new THREE.Group(); j.position.copy(cellPos(7, 2.65));
   scene.add(j);
   box(1.5, 1.0, 1.0, 0xf4f7ff, 0, 0.69, 0, 0.05, j);                                                // 主體(白)
   box(1.54, 0.2, 1.04, 0x2f5fd0, 0, 0.3, 0, 0.03, j);                                               // 底部藍色腰帶
@@ -694,7 +695,7 @@ const drawLanes = () => Object.keys(LANES).forEach(drawLane);
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), Object.assign(new THREE.MeshBasicMaterial({ map: tex, transparent: true }), { userData: { outlineParameters: { visible: false } } }));
     sign.position.set(0, 1.86, 0); sign.rotation.y = Math.PI / 4; j.add(sign);                      // 招牌轉 45 度,正對鏡頭
     box(0.06, 0.34, 0.06, 0x33415c, -0.3, 1.5, 0.3, 0.01, j); box(0.06, 0.34, 0.06, 0x33415c, 0.3, 1.5, -0.3, 0.01, j); }   // 招牌的兩根支柱
-  const x = new THREE.Group(); x.position.copy(cellPos(12.95, 8)); scene.add(x);
+  const x = new THREE.Group(); x.position.copy(cellPos(7.75, 12)); scene.add(x);   // IPO 交易所:攤位格的後面(左側)
   box(1.0, 0.7, 1.0, 0xfff8ec, 0, 0.53, 0, 0.05, x); box(1.14, 0.12, 1.14, 0x2fbf9f, 0, 0.94, 0, 0.04, x);
   for (const sx of [-0.32, 0, 0.32]) box(0.1, 0.5, 0.1, 0xffffff, sx, 0.45, 0.52, 0.03, x);         // 柱子
   box(0.5, 0.3, 0.5, 0xfff8ec, 0, 1.15, 0, 0.04, x);
