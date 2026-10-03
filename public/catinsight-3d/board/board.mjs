@@ -514,6 +514,18 @@ function box(w, h, d, color, x, y, z, r = 0.06, parent = scene) {
   const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, Math.min(r, h / 2 - 0.001)), mat(color));
   m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
 }
+// 小禮物盒(禮物格上放一個):紫色盒身、奶油蓋子、黃色緞帶和蝴蝶結。放在畫面右側那個角(和持股金幣同一角),不會被棋子擋住
+function giftBox(parent, x = 0.33, z = -0.33) {
+  const g = new THREE.Group(); g.position.set(x, TOP, z); g.rotation.y = 0.35; parent.add(g);
+  box(0.32, 0.24, 0.32, 0x7b6fd6, 0, 0.12, 0, 0.04, g);                      // 盒身
+  box(0.34, 0.25, 0.08, 0xffc93c, 0, 0.125, 0, 0.02, g); box(0.08, 0.25, 0.34, 0xffc93c, 0, 0.125, 0, 0.02, g);   // 直的緞帶
+  box(0.37, 0.08, 0.37, 0xfff3d6, 0, 0.28, 0, 0.03, g);                      // 蓋子
+  box(0.39, 0.09, 0.08, 0xffc93c, 0, 0.285, 0, 0.02, g); box(0.08, 0.09, 0.39, 0xffc93c, 0, 0.285, 0, 0.02, g);   // 蓋子上的緞帶
+  const bow = mat(0xffc93c);
+  for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.065, 14, 10), bow); m.position.set(sx * 0.075, 0.38, 0); m.scale.set(1.3, 0.75, 0.8); m.castShadow = true; g.add(m); }
+  const knot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 10), bow); knot.position.y = 0.385; g.add(knot);
+  return g;
+}
 // 地面、人行道、草地
 {
   const g = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), mat(0xc9e8b8)); g.material.userData.outlineParameters = { visible: false }; g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
@@ -615,6 +627,7 @@ TILES.forEach((type, i) => {
   lab.rotation.x = -Math.PI / 2; holder.add(lab);
   // 你的持股:格子角落疊金幣,每 10 股一枚(最多 6 枚)。以前是一根方柱加白色頂蓋,從介面後面露出來像破圖
   let bld = null;
+  if (type === 'gift') giftBox(g);
   if (sec) {
     bld = new THREE.Group(); bld.position.set(0.36, TOP, -0.36);   // 放在畫面右側那個角,不擋圖示和價格
     bld.visible = false; g.add(bld);
@@ -654,7 +667,7 @@ for (const [type, def] of Object.entries(LANES)) {
     }
   });
   // 小路的 6 格:先做空白格,內容由 drawLane 依 S.lanePath 畫上去(每次重新生成都會重畫)
-  const path = def.path.map(([x, z]) => cellTile(x, z, 0x8c95a5, 0xb3bac6, () => {}));
+  const path = def.path.map(([x, z]) => { const t = cellTile(x, z, 0x8c95a5, 0xb3bac6, () => {}); t.gift = giftBox(t.g); t.gift.visible = false; return t; });
   laneTiles[type] = { cell, path, F };
 }
 // 把小路每一格畫成現在的種類:空白格寫第幾步,其他格換顏色、寫名稱和效果
@@ -662,6 +675,7 @@ function drawLane(type) {
   const lt = laneTiles[type], F = lt.F, blankTop = type === 'jail' ? 0xb3bac6 : 0x7fe3c9, blankBase = type === 'jail' ? 0x8c95a5 : 0x3fcfae;
   S.lanePath[type].forEach((k, i) => {
     const t = lt.path[i], info = PATH_INFO[k];
+    t.gift.visible = k === 'gift';
     t.tm.material.color.setHex(info ? info.color : blankTop); t.bm.material.color.setHex(info ? info.base : blankBase);
     t.redraw((c) => {
       if (!info) { c.globalAlpha = 0.85; c.font = F(110); c.fillText(String(i + 1), 128, 128); return; }
