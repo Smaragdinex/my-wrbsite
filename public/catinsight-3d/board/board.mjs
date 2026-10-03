@@ -1081,7 +1081,7 @@ function pickStage() {
         // 4 支手機都加入時,主機只當螢幕(不下場);否則主機自己也是一位玩家
         const hostPlays = gs.length < 4, chars = [...(hostPlays ? [slots[stageSel].key] : []), ...gs.map((g) => g.char)], humans = chars.length, n = Math.max(CFG.n, humans);
         const rest = Object.keys(CHARS).filter((k) => !chars.includes(k)).sort(() => Math.random() - 0.5);
-        netSend({ t: 'start' }); NET.started = true; setTimeout(() => gs.forEach((g) => rtcStart(g)), 800);
+        netSend({ t: 'start' }); NET.started = true; setTimeout(() => gs.forEach((g) => { rtcStart(g); netPortraits(g); }), 800);
         res({ chars: [...chars, ...rest.slice(0, n - humans)], humans, rounds: CFG.rounds, ai: CFG.ai, names: [...(hostPlays ? [nameIn.value.trim().slice(0, 12)] : []), ...gs.map((g) => g.name)], remote: gs.map((g) => g.gid), hostPlays });
         return;
       }
@@ -1346,6 +1346,10 @@ function assetRowsHtml(A, mine) {
       (held.length || KEYS.some((k) => A.short[k].n > 0) ? `<div class="row"><i style="background:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}"></i><span>${L('Unrealized P/L', '未實現損益')}</span><span></span><span style="color:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}">${totPL >= 0 ? '+' : '-'}${fmt(Math.abs(totPL))}</span></div>` : '') +
       (A.bag.length && !mine ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : '');
 }
+// 任務清單的 HTML(主機自己和手機都用)
+const missHtml = (p) => (p.missions || []).map((m) =>
+    `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('') +
+    ((p.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + p.doneList.slice().reverse().map((t) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span></div>`).join('') : '');
 function hud() {
   // 上方資訊列跟著「現在輪到誰」:電腦在走的時候顯示牠的現金、總資產、股票市值和背包(左上頭像也會換成牠)
   { const T = S.players[S.turn] || S.players[S.hi];
@@ -1362,16 +1366,13 @@ function hud() {
   $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' && S.lane.wait > 0 ? L('REST', '休息中') : L('ROLL 1', '擲一顆')) : L('ROLL', '擲骰子');
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
   $('missTitle').textContent = L(`Missions · ${S.done} done`, `任務 · 完成 ${S.done}`); $('missBadge').textContent = S.missions.filter((m) => !m.done).length;
-  $('miss').innerHTML = S.missions.map((m) =>
-    `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('') +
-    ((S.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + S.doneList.slice().reverse().map((t) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span></div>`).join('') : '');
-  $('tip').textContent = advise();
+  $('miss').innerHTML = missHtml(S.players[S.hi]);
+  { const t = advise(); if ($('tip').textContent !== t) { $('tip').textContent = t; const tb = $('tipbar'); if (tb) { tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); } } }
   // 資產框:一次只顯示一位。預設跟著「現在輪到誰」;點上面的頭像可以改看別人(下一位開始走的時候會自動切回去)
   { const A = S.players[S.view ?? S.turn] || S.players[S.hi], mine = A.i === S.hi;
     $('assetTitle').textContent = (isYou(A) ? L('My assets', '我的資產') : L(`${nameOf(A)}'s assets`, `${nameOf(A)}的資產`)) + ' · $' + fmt(assetsOf(A));
     document.querySelectorAll('#assetTabs button').forEach((b) => { b.classList.toggle('on', +b.dataset.i === A.i); b.classList.toggle('turn', +b.dataset.i === S.turn); });
     $('assetRows').innerHTML = assetRowsHtml(A, mine); }
-  netMe();
   const e = S.lastEvent;
 
   $('evtBody').innerHTML = e
@@ -1379,6 +1380,7 @@ function hud() {
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
     : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`;
   $('roundTxt').textContent = L(`Round ${S.rolls} / ${maxRolls()}`, `回合 ${S.rolls} / ${maxRolls()}`);
+  netHud();
 }
 function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
@@ -1499,7 +1501,7 @@ function payday(atStart = true) {
 function checkMissions() {
   // 上一次完成的任務先換成新的(所以完成的那張會亮綠色停留到下一次檢查)
   S.missions.forEach((m, i) => { if (m.done) { S.missions[i] = { id: '_' }; S.missions[i] = drawMission(); } });
-  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; (S.doneList || (S.doneList = [])).push(m.title); S.cash += REWARD; sfx('mission'); toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
+  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; (S.players[S.hi].doneList ||= []).push(m.title); S.cash += REWARD; sfx('mission'); toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
   hud();
 }
 // 市場事件格:桌上發三張背面朝上的牌,玩家自己挑一張翻開(對手走到時由牠自動挑)。
@@ -2309,13 +2311,30 @@ function netUiFlush(to) {
 const netUi = () => { if (!uiQueued && NET.on && NET.started) { uiQueued = true; setTimeout(() => netUiFlush(), 0); } };   // 用 setTimeout 不用 rAF:主機分頁在背景時 rAF 不會跑
 { const mo = new MutationObserver(netUi); MIRROR.forEach((id) => mo.observe($(id), { childList: true, subtree: true, attributes: true, characterData: true })); }
 // 每支手機自己的資產和「現在輪到誰」
-function netMe(to) {
+// 每支手機自己視角的 HUD(金錢列、名次、提示、頭像欄、每位玩家的資產、任務、事件)。hud() 每次更新都送;同一幀內合併
+let hudQueued = false;
+function netHud(to) {
   if (!NET.on || !NET.started || !S) return;
+  if (!to) { if (hudQueued) return; hudQueued = true; setTimeout(() => { hudQueued = false; netHudNow(); }, 0); } else netHudNow(to);
+}
+function netHudNow(to) {
   const cur = S.players[S.turn];
   for (const g of NET.guests) { if (!g.online || (to && g !== to)) continue; const p = S.players.find((x) => x.remote === g.gid); if (!p) continue;
-    netSend({ t: 'me', name: nameOf(p), icon: CHARS[p.char].icon, cash: fmt(p.cash), assets: fmt(assetsOf(p)), rows: assetRowsHtml(p, true), mine: cur === p, turn: cur ? nameOf(cur) : '', round: $('roundTxt').textContent, over: !!S.over }, g.conn); }
+    const myA = assetsOf(p), rank = 1 + S.players.filter((q) => assetsOf(q) > myA + 0.5).length;
+    netSend({ t: 'hud', me: p.i, turn: S.turn, mine: cur === p, over: !!S.over,
+      cash: fmt(p.cash), assets: fmt(myA), stocks: fmt(KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0)), mcount: p.done, bag: p.bag.length,
+      rank: L(`#${rank} of ${S.players.length}`, `目前第 ${rank} 名`), top: rank === 1,
+      tip: S.hi === p.i ? advise() : L(`${nameOf(cur)}'s turn`, `現在是${nameOf(cur)}的回合`),
+      players: S.players.map((q) => ({ i: q.i, char: q.char, title: (q === p ? L('My assets', '我的資產') : L(`${nameOf(q)}'s assets`, `${nameOf(q)}的資產`)) + ' · $' + fmt(assetsOf(q)), rows: assetRowsHtml(q, q === p) })),
+      missTitle: L(`Missions · ${p.done} done`, `任務 · 完成 ${p.done}`), missBadge: (p.missions || []).filter((m) => !m.done).length, miss: missHtml(p),
+      evtTitle: $('evtTitle').textContent, evt: $('evtBody').innerHTML, round: $('roundTxt').textContent }, g.conn); }
 }
-function netPushAll(g) { netMe(g); netUiFlush(g.conn); rtcStart(g); }
+// 頭像圖(離屏渲染出來的 PNG data URL),每支手機送一次
+async function netPortraits(g) {
+  const out = {}; for (const p of S.players) { try { out[p.char] = await portrait(p.char); } catch (e) {} }
+  if (g.conn) netSend({ t: 'portraits', map: out }, g.conn);
+}
+function netPushAll(g) { netHud(g); netUiFlush(g.conn); rtcStart(g); netPortraits(g); }
 // 把主機的棋盤畫面(WebGL canvas)用 WebRTC 直播到每支手機:手機就看得到棋盤和動畫。信令走房間轉送,影像走 P2P(同一個 WiFi 最順)
 let rtcStream = null;
 const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -2343,7 +2362,7 @@ function remoteBanner() {
   const p = S && S.players[S.turn], g = p && p.remote && NET.guests.find((x) => x.gid === p.remote), on = !!(g && g.online && !S.over);
   document.body.classList.toggle('remote', on);
   $('remoteBanner').classList.add('hide');      // 不顯示「等待 ○○ 在手機上操作」那行字,只鎖按鈕
-  netMe();
+  netHud();
 }
 // 選角:在 3D 轉盤上選(pickStage),同時決定人數(2~4)和真人數(1~2)。電腦對手從剩下的角色裡隨機挑。
 // 網址 ?piece=cat 可以跳過選角(測試用),還可以加 &n=4&h=2 指定人數和真人數
@@ -2392,6 +2411,8 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
   window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') paint(!!e.data.on); });
 }
 $('bagBtn').onclick = bagPanel;
+// 提示泡泡:手機預設縮成「!」,點一下展開 / 收起
+{ const tb = $('tipbar'); if (matchMedia('(max-width:900px)').matches) tb.classList.add('min'); tb.querySelector('.bubble').onclick = () => tb.classList.toggle('min'); }
 
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
 $('mapBtn').onclick = () => { pan.set(0, 0, 0); view.overview = !view.overview; $('mapBtn').classList.toggle('on', view.overview); };
@@ -2408,4 +2429,4 @@ if (matchMedia('(max-width:900px)').matches) $('assetBox').classList.add('fold')
   $('evtLbl').textContent = L('Events', '事件'); $('missLbl').textContent = L('Tasks', '任務'); }
 resize(); start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netMe, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };

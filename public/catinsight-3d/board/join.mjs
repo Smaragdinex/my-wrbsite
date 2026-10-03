@@ -33,14 +33,41 @@ function onMsg(m) {
   if (m.t === 'start') { ST.started = true; showGame(); return; }
   if (m.t === 'host') { ST.hostOn = !!m.on; setStatus(); return; }
   if (m.t === 'reset') {        // 主機按了再玩一次:回到大廳,等下一局
-    ST.started = false; ST.mine = false; if (pc) { try { pc.close(); } catch (e) {} pc = null; } $('jvidwrap').classList.add('hide'); ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { $(id).className = $(id).className.replace(/\bhide\b/, '') + ' hide'; $(id).innerHTML = ''; });
-    $('jform').classList.remove('hide'); $('jhead').classList.add('hide'); $('jrows').classList.add('hide'); $('jstatus').classList.add('hide'); paintChars(); return; }
+    ST.started = false; ST.mine = false; if (pc) { try { pc.close(); } catch (e) {} pc = null; } document.body.classList.remove('game'); $('jgame').classList.add('hide'); ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { $(id).className = $(id).className.replace(/\bhide\b/, '') + ' hide'; $(id).innerHTML = ''; });
+    $('jform').classList.remove('hide'); $('jstatus').classList.add('hide'); paintChars(); return; }
   if (!ST.started) return;
   if (m.t === 'rtc') { rtcOnMsg(m); return; }
   if (m.t === 'toast') { toast(m.msg); return; }
-  if (m.t === 'me') { $('jico').textContent = m.icon; $('jnm').textContent = m.name; $('jcash').textContent = '$' + m.cash; $('jassets2').textContent = '總資產 $' + m.assets; $('jrows').innerHTML = m.rows;
-    ST.mine = !!m.mine; ST.over = !!m.over; $('jst').textContent = m.over ? '遊戲結束' : m.mine ? '輪到你了!' : `現在是 ${m.turn} 的回合 · ${m.round}`; $('jst').classList.toggle('mine', ST.mine); applyMine(); return; }
+  if (m.t === 'portraits') { ST.portraits = m.map; paintTabs(); return; }
+  if (m.t === 'hud') { ST.hud = m; ST.mine = !!m.mine; ST.over = !!m.over; paintHud(); applyMine(); return; }
   if (m.t === 'ui') { const el = $(m.box); if (!el) return; el.className = m.cls; morph(el, m.html); applyMine(); }
+}
+// ---- 遊戲中的 HUD(主機算好這支手機視角的資料送過來)----
+function paintHud() {
+  const h = ST.hud; if (!h) return;
+  $('cash').textContent = h.cash; $('assets').textContent = h.assets; $('stocks').textContent = h.stocks; $('mcount').textContent = h.mcount;
+  $('rankTxt').textContent = h.rank; $('rankTxt').classList.toggle('top', !!h.top);
+  if ($('tip').textContent !== h.tip) { $('tip').textContent = h.tip; const tb = $('tipbar'); tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); }
+  $('missTitle').textContent = h.missTitle; $('missBadge').textContent = h.missBadge; $('miss').innerHTML = h.miss;
+  $('evtTitle').textContent = h.evtTitle; if ($('evtBody').innerHTML !== h.evt) { $('evtBody').innerHTML = h.evt; if ($('evtBox').classList.contains('fold') && ST.hadEvt) $('evtBadge').classList.remove('hide'); ST.hadEvt = true; }
+  if (ST.view == null || !h.players.some((q) => q.i === ST.view)) ST.view = h.me;
+  const v = h.players.find((q) => q.i === ST.view); if (v) { $('assetTitle').textContent = v.title; $('assetRows').innerHTML = v.rows; }
+  paintTabs();
+}
+function paintTabs() {
+  const h = ST.hud; if (!h) return; const el = $('assetTabs');
+  if (el.children.length !== h.players.length) { el.innerHTML = ''; h.players.forEach((q) => { const b = document.createElement('button'); b.dataset.i = q.i; b.onclick = () => { ST.view = q.i; $('assetBox').classList.remove('fold'); paintHud(); }; el.appendChild(b); }); }
+  h.players.forEach((q) => { const b = el.querySelector(`[data-i="${q.i}"]`); if (!b) return; b.classList.toggle('on', q.i === ST.view); b.classList.toggle('turn', q.i === h.turn);
+    const url = ST.portraits && ST.portraits[q.char]; if (url && !b.dataset.img) { b.style.backgroundImage = `url(${url})`; b.dataset.img = '1'; } });
+  const me = h.players.find((q) => q.i === h.me), url = me && ST.portraits && ST.portraits[me.char]; if (url) $('avaMe').style.backgroundImage = `url(${url})`;
+}
+{ // 右邊兩顆鈕、資產框標題、提示泡泡的收合
+  const pair = { evtBtn: 'evtBox', missBtn: 'missBox' };
+  const toggle = (id) => { const want = $(pair[id]).classList.contains('fold'); Object.values(pair).forEach((b) => $(b).classList.add('fold')); Object.keys(pair).forEach((k) => $(k).classList.remove('on'));
+    if (want) { $(pair[id]).classList.remove('fold'); $(id).classList.add('on'); if (id === 'evtBtn') $('evtBadge').classList.add('hide'); } };
+  Object.keys(pair).forEach((id) => { $(id).onclick = () => toggle(id); $(pair[id]).querySelector('h4').onclick = () => toggle(id); });
+  $('assetBox').querySelector('h4').onclick = () => $('assetBox').classList.toggle('fold');
+  $('tipbar').querySelector('.bubble').onclick = () => $('tipbar').classList.toggle('min');
 }
 function setStatus() {
   const s = $('jstatus'); if (!ST.started) return;
@@ -50,7 +77,8 @@ function setStatus() {
 }
 // 只有輪到自己時才能操作擲骰 / 面板;翻牌和結算畫面大家都看得到但不能按
 function applyMine() {
-  ['ctl', 'stepCtl', 'panel'].forEach((id) => { $(id).style.visibility = ST.mine ? '' : 'hidden'; });
+  ['stepCtl', 'panel'].forEach((id) => { $(id).style.visibility = ST.mine ? '' : 'hidden'; });
+  $('ctl').style.visibility = ''; $('ctl').style.pointerEvents = ST.mine ? '' : 'none'; $('ctl').style.opacity = ST.mine ? '' : '.55';   // 不是自己的回合:按鈕留著但變淡、不能按
   ['draw', 'end'].forEach((id) => { $(id).style.pointerEvents = ST.mine && id !== 'end' ? '' : 'none'; });
 }
 // 收主機的棋盤直播
@@ -61,14 +89,14 @@ async function rtcOnMsg(m) {
       if (pc) { try { pc.close(); } catch (e) {} }
       pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       pc.onicecandidate = (e) => { if (e.candidate) send({ t: 'rtc', ice: e.candidate }); };
-      pc.ontrack = (e) => { const v = $('jvid'); v.srcObject = e.streams[0]; $('jvidwrap').classList.remove('hide'); v.play().catch(() => {}); };
+      pc.ontrack = (e) => { const v = $('jvid'); v.srcObject = e.streams[0]; v.play().catch(() => {}); };
       await pc.setRemoteDescription(m.sdp); const a = await pc.createAnswer(); await pc.setLocalDescription(a); send({ t: 'rtc', sdp: pc.localDescription });
     } else if (m.ice && pc) await pc.addIceCandidate(m.ice);
   } catch (e) { console.warn('[rtc]', e); }
 }
 function showGame() {
-  $('jform').classList.add('hide'); $('jhead').classList.remove('hide'); $('jrows').classList.remove('hide'); $('jstatus').classList.remove('hide'); setStatus();
-  try { navigator.wakeLock?.request('screen'); } catch (e) {}
+  document.body.classList.add('game'); $('jgame').classList.remove('hide'); $('jstatus').classList.remove('hide'); setStatus();
+  try { navigator.wakeLock?.request('screen').catch(() => {}); } catch (e) {}
 }
 
 // ---- 大廳:3D 角色轉盤(和主機同一套模型,左右切換;被主機 / 別人選走的會跳過)----

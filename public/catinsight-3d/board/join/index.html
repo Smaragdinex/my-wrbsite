@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
 <title>貓咪股市大富翁 · 手機遙控</title>
 <link rel="preload" as="image" href="../card-event.webp"><link rel="preload" as="image" href="../card-fate.webp"><link rel="preload" as="image" href="../card-gift.webp">
-<link rel="stylesheet" href="../style.css?v=16">
+<link rel="stylesheet" href="../style.css?v=17">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -57,10 +57,14 @@
   .jvidwrap video{width:100%;height:100%;object-fit:cover;display:block}
   .jassets{background:var(--cream);border:3px solid #fff;outline:2px solid var(--line);border-radius:22px;padding:6px 0}
   .jassets .row:first-of-type{border-top:0}
-  .jstatus{text-align:center;font-weight:900;color:#6b594e;font-size:14px;padding:6px 0}
-  .jstatus.off{color:#c4472f}
+  .jstatus{position:fixed;left:50%;top:calc(var(--ava) + 64px);transform:translateX(-50%);z-index:9;background:#3b2f2a;color:#fff;border-radius:999px;padding:6px 14px;font-weight:900;font-size:13px;white-space:nowrap}
+  .jstatus.off{background:#c4472f}
+  .jstatus:empty{display:none}
   /* 鏡射區塊:沿用棋盤頁的樣式(固定在底部 / 蓋在上面),只是不要被鎖住 */
-  .ctl{bottom:calc(14px + env(safe-area-inset-bottom))}
+  body.game .jwrap{display:none}
+  .jgame{position:fixed;inset:0;z-index:1}
+  .jgame .hud,.jgame .ranktag,.jgame .tipbar,.jgame .lcol,.jgame .rcol{z-index:5}
+  body.game{overflow:hidden}
   .hide{display:none!important}
 </style>
 </head>
@@ -77,11 +81,36 @@
     <button class="jgo" id="jgo">加入</button>
     <p id="jmsg" style="margin:10px 0 0;color:#c4472f"></p>
   </div>
-  <!-- 主機棋盤的即時畫面(WebRTC) -->
-  <div class="jvidwrap hide" id="jvidwrap"><video id="jvid" autoplay muted playsinline></video></div>
-  <div class="jhead hide" id="jhead"><span class="ico" id="jico">🐱</span><div><div class="nm" id="jnm"></div><div class="st" id="jst"></div></div><div class="money"><span id="jcash">$0</span><small id="jassets2">總資產 $0</small></div></div>
-  <div class="jassets hide" id="jrows"></div>
-  <div class="jstatus hide" id="jstatus"></div>
+</div>
+<div class="jstatus hide" id="jstatus"></div>
+<!-- 遊戲中:主機棋盤直播當背景,上面疊和主機一樣的 HUD(自己的視角) -->
+<div class="jgame hide" id="jgame">
+  <video id="jvid" class="jbg" autoplay muted playsinline></video>
+  <div class="hud">
+    <div class="ava" id="avaMe"></div>
+    <div class="bar">
+      <div class="pill"><span class="coin"></span><span id="cash">0</span></div>
+      <div class="stat"><span id="lblAssets">總資產</span><b id="assets">0</b></div>
+      <div class="stat opt"><span id="lblStocks">股票市值</span><b id="stocks">0</b></div>
+      <div class="chip"><i style="background:#ffb000">★</i><span id="mcount">0</span></div>
+    </div>
+  </div>
+  <div class="ranktag" id="rankTxt"></div>
+  <div class="tipbar min" id="tipbar"><div class="bubble"><span class="av ex">!</span><span id="tip"></span></div></div>
+  <div class="lcol">
+    <div class="tabs col" id="assetTabs"></div>
+    <div class="box assets fold" id="assetBox"><h4><span id="assetTitle"></span><span class="tri"></span></h4><div id="assetRows"></div></div>
+  </div>
+  <div class="rcol">
+    <div class="rbtns">
+      <button class="rb" id="evtBtn" aria-label="events"><img src="../ico-event.webp?v=2" alt=""><i class="bd hide" id="evtBadge">!</i><span id="evtLbl">事件</span></button>
+      <button class="rb" id="missBtn" aria-label="tasks"><img src="../ico-task.webp?v=2" alt=""><i class="bd" id="missBadge">3</i><span id="missLbl">任務</span></button>
+    </div>
+    <div class="rpop">
+      <div class="box ev evt fold" id="evtBox"><h4><span id="evtTitle">市場事件</span><span class="tri"></span></h4><div class="body" id="evtBody"></div></div>
+      <div class="box missbox fold" id="missBox"><h4><span id="missTitle">任務</span><span class="tri"></span></h4><div class="miss" id="miss"></div></div>
+    </div>
+  </div>
 </div>
 <!-- 下面這幾個和棋盤頁同名:主機把它們的 HTML 鏡射過來,按鈕按了就回傳給主機 -->
 <div class="toast" id="toast"></div>
@@ -90,6 +119,6 @@
 <div class="panel hide" id="panel"></div>
 <div class="draw hide" id="draw"></div>
 <div class="end hide" id="end"></div>
-<script type="module" src="../join.mjs?v=3"></script>
+<script type="module" src="../join.mjs?v=5"></script>
 </body>
 </html>
