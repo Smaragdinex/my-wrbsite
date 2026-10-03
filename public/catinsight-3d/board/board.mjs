@@ -2342,7 +2342,7 @@ function rtcOnMsg(g, m) {
 function remoteBanner() {
   const p = S && S.players[S.turn], g = p && p.remote && NET.guests.find((x) => x.gid === p.remote), on = !!(g && g.online && !S.over);
   document.body.classList.toggle('remote', on);
-  const b = $('remoteBanner'); b.classList.toggle('hide', !on); if (on) b.textContent = L(`📱 Waiting for ${nameOf(p)} on their phone…`, `📱 等待 ${nameOf(p)} 在手機上操作…`);
+  $('remoteBanner').classList.add('hide');      // 不顯示「等待 ○○ 在手機上操作」那行字,只鎖按鈕
   netMe();
 }
 // 選角:在 3D 轉盤上選(pickStage),同時決定人數(2~4)和真人數(1~2)。電腦對手從剩下的角色裡隨機挑。
