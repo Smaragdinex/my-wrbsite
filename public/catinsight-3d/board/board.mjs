@@ -58,7 +58,7 @@ const TILES = (() => {
   let j = 0; for (let i = 0; i < t.length; i++) if (!t[i]) t[i] = seq[j++];
   return t;
 })();
-const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fate: 0xc08cf5, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xff9f6b, divi: 0x8f7cf0, ipo: 0x2fbf9f, bank: 0x4a63b0 };
+const TILE_COLOR = { start: 0xff8fc0, chance: 0xffd24a, fate: 0xc08cf5, fee: 0x9aa0ad, shop: 0x5aa9ff, gift: 0xf27a98, divi: 0x8f7cf0, ipo: 0x2fbf9f, bank: 0x4a63b0 };
 // 事件卡:只寫「有變動的資產」,沒寫的就是不動。
 // 大盤 ETF 不用自己寫 —— 它等於所有「股票類股」這次漲跌的平均(黃金、債券、加密貨幣不算)
 const NON_EQUITY = new Set(['gold', 'bond', 'crypto', 'etf', 'agri']);
@@ -183,7 +183,7 @@ const PATH_POOL = { jail: ['chance', 'gift', 'fee', 'coin'], ipo: ['chance', 'gi
 const PATH_INFO = {
   fate: { color: 0xc08cf5, base: 0x9a6ad8, a: '★', b: L('FATE', '命運') },
   chance: { color: 0xffd24a, base: 0xd9ad2a, a: '?', b: L('EVENT', '市場事件') },
-  gift: { color: 0xff9f6b, base: 0xd9814f, a: L('GIFT', '禮物'), b: L('free item', '送道具') },
+  gift: { color: 0xf27a98, base: 0xc9587a, a: L('GIFT', '禮物'), b: L('free item', '送道具') },
   fee: { color: 0x9aa0ad, base: 0x7b8290, a: L('FEE', '手續費'), b: '-$200' },
   interest: { color: 0x4a63b0, base: 0x37508f, a: L('INTEREST', '利息'), b: L('+3% cash', '現金 +3%') },
   coin: { color: 0x57b86b, base: 0x3f9a52, a: L('CASH', '撿到錢'), b: '+$300' },
