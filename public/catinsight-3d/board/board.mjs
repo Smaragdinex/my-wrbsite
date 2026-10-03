@@ -178,15 +178,15 @@ const LANES = {
   jail: { exit: 28, cell: [7, 4], path: [[6, 4], [5, 4], [4, 4], [3, 4], [2, 4], [1, 4]] },
   ipo: { exit: 60, cell: [9, 12], path: [[10, 12], [11, 12], [12, 12], [13, 12], [14, 12], [15, 12]] },
 };
-// 小路格子的種類:命運只有小路上才有(每條固定 2 格),其他 4 格從 PATH_POOL 隨機抽(可重複)
-const PATH_POOL = ['gift', 'interest', 'coin', 'fine', 'blank', 'blank'];
+// 小路格子的種類:命運只有小路上才有(每條固定 2 格),其他 4 格從 PATH_POOL 隨機抽(可重複,沒有空格)
+const PATH_POOL = ['chance', 'gift', 'fee', 'interest', 'coin'];
 const PATH_INFO = {
   fate: { color: 0xc08cf5, base: 0x9a6ad8, a: '★', b: L('FATE', '命運') },
+  chance: { color: 0xffd24a, base: 0xd9ad2a, a: '?', b: L('EVENT', '市場事件') },
   gift: { color: 0xff9f6b, base: 0xd9814f, a: L('GIFT', '禮物'), b: L('free item', '送道具') },
+  fee: { color: 0x9aa0ad, base: 0x7b8290, a: L('FEE', '手續費'), b: '-$200' },
   interest: { color: 0x4a63b0, base: 0x37508f, a: L('INTEREST', '利息'), b: L('+3% cash', '現金 +3%') },
-  coin: { color: 0xffd24a, base: 0xd9ad2a, a: L('CASH', '撿到錢'), b: '+$300' },
-  fine: { color: 0x9aa0ad, base: 0x7b8290, a: L('FINE', '罰單'), b: '-$200' },
-  blank: null,
+  coin: { color: 0x57b86b, base: 0x3f9a52, a: L('CASH', '撿到錢'), b: '+$300' },
 };
 function genLanePath() {
   const t = new Array(LANE_LEN).fill(null);
@@ -663,6 +663,7 @@ function drawLane(type) {
     t.redraw((c) => {
       if (!info) { c.globalAlpha = 0.85; c.font = F(110); c.fillText(String(i + 1), 128, 128); return; }
       if (k === 'fate') { c.font = F(96); c.fillText('★', 128, 96); c.font = F(ZH ? 44 : 40); c.fillText(info.b, 128, 196); return; }
+      if (k === 'chance') { c.fillStyle = '#b0780a'; c.font = F(120); c.fillText('?', 128, 100); c.font = F(ZH ? 36 : 34); c.fillText(info.b, 128, 196); return; }
       c.font = F(info.a.length > 4 ? 44 : (ZH ? 56 : 48)); c.fillText(info.a, 128, 100);
       c.font = F(ZH ? 34 : 32); c.fillText(info.b, 128, 172);
     });
@@ -1374,10 +1375,10 @@ function checkMissions() {
 // 市場事件格:桌上發三張背面朝上的牌,玩家自己挑一張翻開(對手走到時由牠自動挑)。
 // 翻開的那張生效;另外兩張隨後也翻開,讓你看到「本來可能抽到什麼」。計時用遊戲自己的時鐘(wait),測試時可以快轉
 // auto = 電腦抽(自動挑、自動繼續);round = 一輪結束系統抽(同樣自動,但不會出特殊牌,因為沒有「誰」被送進小路)
-function drawEventCards(auto, round = false) {
+function drawEventCards(auto, round = false, special = !round) {     // special=false:這次不混特殊牌(回合事件、小路上的事件)
   return new Promise((res) => {
     const picks = EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 3).map(instantiate), who = CHARS[S.foe].name;
-    if (!round && Math.random() < SPECIAL_RATE) picks[Math.floor(Math.random() * 3)] = SPECIAL[Math.random() < 0.5 ? 'jail' : 'ipo'];
+    if (special && Math.random() < SPECIAL_RATE) picks[Math.floor(Math.random() * 3)] = SPECIAL[Math.random() < 0.5 ? 'jail' : 'ipo'];
     const face = (e) => {
       const top = KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 6);
       if (e.special) return `<div class="dhead ${e.special === 'ipo' ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` +
@@ -1524,8 +1525,8 @@ async function enterLane(isMe, type) {
   await hopOnto(laneTiles[type].cell.g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
   if (isMe) await cardPanel(L('Sent to the police station', '被送進警察局'),
-    L(`Rest here ${JAIL_WAIT} rounds. You cannot buy, sell, cover or use items, but prices keep moving: a margin position below 130% is still sold for you. On your turn you can pay $${fmt(BAIL)} bail to leave at once. Leaving, you roll one die each turn along the ${LANE_LEN}-tile path: ★ tiles flip a fate card, and the rest are random (items, interest, fines…).`,
-      `在這裡休息 ${JAIL_WAIT} 回合。期間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${fmt(BAIL)} 保釋金立刻離開。離開時每回合擲一顆骰子,沿 ${LANE_LEN} 格小路走回外圈:踩到 ★ 翻命運牌,其他格是隨機的(道具、利息、罰單…)。`));
+    L(`Rest here ${JAIL_WAIT} rounds. You cannot buy, sell, cover or use items, but prices keep moving: a margin position below 130% is still sold for you. On your turn you can pay $${fmt(BAIL)} bail to leave at once. Leaving, you roll one die each turn along the ${LANE_LEN}-tile path: ★ tiles flip a fate card, and the rest are random (market events, items, fees…).`,
+      `在這裡休息 ${JAIL_WAIT} 回合。期間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${fmt(BAIL)} 保釋金立刻離開。離開時每回合擲一顆骰子,沿 ${LANE_LEN} 格小路走回外圈:踩到 ★ 翻命運牌,其他格是隨機的(市場事件、道具、手續費…)。`));
   else { toast(L(`${name} is sent to the police station`, `${name}被送進警察局了`)); await wait(1.3); }
 }
 // 沿著外圈走 n 格(經過起點 / 股息結算格會結算)。真人和電腦都用這個
@@ -1557,7 +1558,7 @@ function pathEffect(who, k, isMe) {
   if (k === '_gift') { const id = randomItem(); who.bag.push(id); sfx('item'); return L(`${name} found ${itemInfo(id).name}`, `${name}撿到${itemInfo(id).name}`); }
   if (k === '_interest') { const g = Math.round(Math.max(0, who.cash) * 0.03); who.cash += g; sfx('coin'); return L(`${name} earned $${fmt(g)} interest`, `${name}領到利息 $${fmt(g)}`); }
   if (k === '_coin') { who.cash += 300; sfx('coin'); return L(`${name} picked up $300`, `${name}撿到 $300`); }
-  if (k === '_fine') { who.cash -= 200; sfx('short'); return L(`${name} got a $200 fine`, `${name}吃了一張 $200 罰單`); }
+  if (k === '_fee') { who.cash -= 200; sfx('short'); return L(`${name} paid a $200 fee`, `${name}付了 $200 手續費`); }
   return '';
 }
 function jailPanel() {
@@ -1777,6 +1778,7 @@ async function aiLand() {
   const A = S.ai, who = CHARS[S.foe].name;
   const type = A.lane ? laneTileType(A.lane) : TILES[A.pos], sec = SECTORS[type];
   if (type === '_jail' || type === '_ipo' || type === '_path') { await wait(0.2); }
+  else if (type === '_chance') { await wait(0.3); await drawEventCards(true, false, false); }
   else if (type.startsWith('_')) { toast(pathEffect(A, type, false)); hud(); await wait(1.0); }
   else if (type === 'ipo') await enterLane(false, 'ipo');
   else if (type === 'fate') { await wait(0.3); const c = await drawFateCards(true); await applyFate(c, false); }
@@ -1863,6 +1865,7 @@ async function landOn() {
   const type = S.lane ? laneTileType(S.lane) : TILES[S.pos];
   if (type === '_jail') { if (S.lane.wait > 0) { toast(L('Resting at the police station: no trading this turn', '在警察局休息,這回合不能交易')); await wait(0.9); } }
   else if (type === '_ipo' || type === '_path') { await wait(0.2); }
+  else if (type === '_chance') await drawEventCards(false, false, false);
   else if (type.startsWith('_')) { toast(pathEffect(S, type, true)); hud(); await wait(0.9); }
   else if (type === 'ipo') await enterLane(true, 'ipo');
   else if (type === 'fate') { const c = await drawFateCards(false); await applyFate(c, true); }
