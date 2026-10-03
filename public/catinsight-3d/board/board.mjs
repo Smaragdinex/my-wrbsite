@@ -2556,11 +2556,13 @@ function clientInit() {
   const pickView = (i) => { const box = $('assetBox'); if (!box.classList.contains('fold') && aview === i) box.classList.add('fold'); else { aview = i; box.classList.remove('fold'); } paintHud(); };
   $('avaMe').onclick = $('stockBtn').onclick = () => pickView(me);
   new MutationObserver(() => { document.querySelectorAll('#assetTabs button').forEach((b) => { b.onclick = () => pickView(+b.dataset.i); }); }).observe($('assetTabs'), { childList: true });
+  // 不是自己的回合:別人的買賣面板、分步選單、抽卡畫面照樣看得到(只是不能按),右上角標「○○操作中」
   function applyMine() {
-    ['stepCtl', 'panel'].forEach((id) => { $(id).style.visibility = mine ? '' : 'hidden'; });
-    $('ctl').style.pointerEvents = mine ? '' : 'none'; $('ctl').style.opacity = mine ? '' : '.55';
+    document.body.classList.toggle('watch', !mine);
+    const cur = S.players[S.turn]; $('panel').dataset.watch = cur && !mine ? L(`${nameOf(cur)} is playing`, `${nameOf(cur)}操作中`) : '';
+    ['stepCtl', 'panel', 'draw', 'ctl', 'end'].forEach((id) => { $(id).style.pointerEvents = mine && id !== 'end' ? '' : 'none'; });
+    $('ctl').style.opacity = mine ? '' : '.55';
     $('tipbar').classList.toggle('hide', $('ctl').classList.contains('hide') || !mine);
-    ['draw', 'end'].forEach((id) => { $(id).style.pointerEvents = mine && id !== 'end' ? '' : 'none'; });
   }
   // 鏡射區塊的操作回傳主機
   ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { const el = $(id);
@@ -2590,4 +2592,4 @@ function clientInit() {
 const CLIENT = new URLSearchParams(location.search).get('client');      // 手機端:?client=房號 → 自己畫棋盤、跟著主機的狀態走
 resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
