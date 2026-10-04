@@ -609,17 +609,17 @@ const E = N / 2 * STEP + 0.62;
 }
 // 中間的大草地:一個小公園(池塘、樹、房子、花)。樹和房子都避開兩條小路(z=4 那排和 z=12 那排)和兩棟建築
 {
-  const pond = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.06, 40), mat(0x8fd3ff)); pond.position.set(-0.8, 0.2, 0.6); pond.scale.z = 0.7; scene.add(pond);
+  const pond = new THREE.Mesh(new THREE.CylinderGeometry(1.85, 1.85, 0.06, 40), mat(0x8fd3ff)); pond.position.set(-0.8, 0.2, 0.6); pond.scale.z = 0.7; pond.material.userData.outlineParameters = { visible: false }; scene.add(pond);
   // 水面:中間深、邊邊淺的放射漸層(畫在 canvas 上),再加一塊偏一邊的亮斑慢慢轉,看起來像水在動
   { const cv = document.createElement('canvas'); cv.width = cv.height = 256; const c = cv.getContext('2d');
-    const g = c.createRadialGradient(128, 128, 10, 128, 128, 128); g.addColorStop(0, '#3d93d6'); g.addColorStop(0.55, '#62b4ea'); g.addColorStop(0.85, '#9ad8fb'); g.addColorStop(1, '#c6ecff');
+    // 外圈(0.86 以後)慢慢透明:水直接融進草地,沒有硬邊也沒有米色岸
+    const g = c.createRadialGradient(128, 128, 10, 128, 128, 128); g.addColorStop(0, '#3d93d6'); g.addColorStop(0.5, '#62b4ea'); g.addColorStop(0.78, '#9ad8fb'); g.addColorStop(0.86, 'rgba(198,236,255,1)'); g.addColorStop(1, 'rgba(198,236,255,0)');
     c.fillStyle = g; c.fillRect(0, 0, 256, 256);
     const h = c.createRadialGradient(170, 96, 4, 170, 96, 90); h.addColorStop(0, 'rgba(255,255,255,.22)'); h.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = h; c.fillRect(0, 0, 256, 256);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.center.set(0.5, 0.5);
-    const wmat = new THREE.MeshBasicMaterial({ map: tex }); wmat.userData.outlineParameters = { visible: false };
-    const top = new THREE.Mesh(new THREE.CircleGeometry(1.9, 48), wmat); top.rotation.x = -Math.PI / 2; top.position.set(-0.8, 0.232, 0.6); top.scale.y = 0.7; scene.add(top);
+    const wmat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }); wmat.userData.outlineParameters = { visible: false };
+    const top = new THREE.Mesh(new THREE.CircleGeometry(2.2, 48), wmat); top.rotation.x = -Math.PI / 2; top.position.set(-0.8, 0.232, 0.6); top.scale.y = 0.7; top.renderOrder = 1; scene.add(top);
     POND_TEX = tex; }
-  const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.05, 40), mat(0xf6e3c2)); rim.position.set(-0.8, 0.185, 0.6); rim.scale.z = 0.72; scene.add(rim);
   // 水面的波紋:順著池塘形狀的弧線,從中心往外擴散、越靠岸越亮,到岸邊淡掉(像真的水被風吹)。
   // 每條是一段「沿橢圓的緞帶」:在單位圓上建一段弧,放進一個縮放成橢圓的群組裡,每一幀改半徑就是往外擴
   { const grp = new THREE.Group(); grp.position.set(-0.8, 0.236, 0.6); grp.scale.set(1.9, 1, 1.33); scene.add(grp);
