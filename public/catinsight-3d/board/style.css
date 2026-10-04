@@ -402,8 +402,9 @@ body.embed .topbtns{right:64px}
 .merow{display:flex;align-items:center;gap:8px}
 .merow .ranktag{align-self:center}
 /* 右上的音樂 / 全螢幕鈕放大到和離開鈕一樣(48px),手機也一樣 */
-.topbtns .snd{width:48px;height:48px;font-size:24px;border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.25)}
-@media(max-width:900px){ .topbtns .snd{width:54px;height:54px;font-size:27px} .topbtns{top:9px} body.embed .topbtns{right:68px} }   /* 手機:和外面的離開 ✕(48px 的圖含白邊和光暈)看起來一樣大 */
+.topbtns .snd{width:54px;height:54px;font-size:27px;border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.25)}   /* ♪ 和全螢幕鈕都和外面的離開 ✕ 一樣大(電腦、手機都是) */
+.topbtns{top:9px}
+body.embed .topbtns{right:68px}
 
 /* 名字欄:前面不放角色名,角色名當預設字 */
 .pname2 b{display:none}
