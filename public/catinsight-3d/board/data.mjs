@@ -139,6 +139,28 @@ const EVENTS = [
   Object.assign(EV(L('Government cash handout', '政府普發現金'), L('Everyone gets cash from the government. People spend it, so shops, restaurants and travel do well; the government borrows more, so bonds dip.', '政府發現金給每個人。大家拿到錢會去消費,零售、餐飲、旅遊受惠;政府要多借錢,債券小跌。'),
     {agri: 1.03, soft: 1.02,  disc: 1.12, staples: 1.06, game: 1.06, trans: 1.04, fin: 1.03, reit: 1.02, gold: 1.02, bond: 0.96 }), { cash: 1000 }),
 ];
+// 牌組平衡:原本每檔資產在整副牌裡的漲跌不對稱(黃金平均每張 +3.5%、金融 −4.5%),玩越久越固定往一邊走,
+// 看懂牌組的人(或電腦)只要固定做多 / 放空就贏。這裡在載入時把每檔資產調成「整副牌的漲跌互相抵消」(幾何平均 = 1):
+//   上漲的卡 log 漲幅 × s、下跌的卡 ÷ s,s = √(−下跌總和 / 上漲總和) → 每張卡的方向不變,只有幅度變
+//   黑色星期一的「下回合反彈」也算進去;單張卡被放大時不超過 −22% / +25%(加密貨幣 −40% / +40%),原本就更大的不動
+//   大盤 ETF 用平衡後的股票類股平均重算,再平衡一次。迷因股軋空是抽到才決定的,不算
+{
+  const deck = EVENTS.filter((e) => !e.meme), eq = KEYS.filter((k) => !NON_EQUITY.has(k));
+  const eff = (e, k) => { let l = Math.log(e.m[k]); if (e.rebound && e.m[k] < 1) l += Math.log(1 + (1 / e.m[k] - 1) * e.rebound); return l; };
+  const balance = (k) => {
+    const [lo, hi] = k === 'crypto' ? [0.6, 1.4] : [0.78, 1.25];
+    for (let it = 0; it < 60; it++) {
+      let up = 0, dn = 0; for (const e of deck) { const l = eff(e, k); if (l > 0) up += l; else dn += l; }
+      if (up <= 0 || dn >= 0) return;
+      const s = Math.sqrt(-dn / up); if (Math.abs(s - 1) < 1e-5) return;
+      for (const e of deck) { const l = Math.log(e.m[k]);
+        if (l > 0) e.m[k] = Math.min(Math.max(hi, e.m[k]), Math.exp(l * s)); else if (l < 0) e.m[k] = Math.max(Math.min(lo, e.m[k]), Math.exp(l / s)); }
+    }
+  };
+  for (const k of KEYS) if (k !== 'etf') balance(k);
+  for (const e of deck) e.m.etf = eq.reduce((a, k) => a + e.m[k], 0) / eq.length;
+  balance('etf');
+}
 // 特殊牌:混在市場事件的三張牌裡。抽到不會動股價,而是把你送進棋盤中間的小路
 const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
 const BAIL = 1000, JAIL_WAIT = 3;         // 警察局:休息 JAIL_WAIT 回合才能出來,或付保釋金 BAIL 直接出來(出來都要擲一顆骰子決定走幾格)

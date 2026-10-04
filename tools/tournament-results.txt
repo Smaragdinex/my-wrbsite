@@ -1,18 +1,24 @@
-rule,ev  (100 games × 20 rounds, 0.0s)
-  rule  win  11%   avg assets $12,553
-  ev    win  89%   avg assets $16,655
-ev,mc  (100 games × 20 rounds, 58.4s)
-  ev    win  25%   avg assets $17,369
-  mc    win  75%   avg assets $20,462
-rule,mc  (100 games × 20 rounds, 55.8s)
-  rule  win   3%   avg assets $12,806
-  mc    win  97%   avg assets $19,328
-rule,ev,mc  (100 games × 20 rounds, 94.7s)
-  rule  win   1%   avg assets $12,301
-  ev    win  30%   avg assets $17,309
-  mc    win  69%   avg assets $19,548
-rule,rule,ev,mc  (100 games × 20 rounds, 145.2s)
-  rule  win   6%   avg assets $13,149
-  rule  win   1%   avg assets $13,317
-  ev    win  27%   avg assets $17,924
-  mc    win  66%   avg assets $21,206
+規則:成交價 = 推動後的價格、牌組已平衡(2026-10-05)。每局 20 回合、座位隨機、全部 normal 難度參數。
+蒙地卡羅 n=120、depth=3、z=1.5(只有比期望值建議好超過 1.5 個標準誤才換動作)。
+指令:tools/ladder.sh <行程數> <每行程局數> "<對戰組合>"、tools/par.sh(MC 對 EV)
+
+rule vs ev (700 games)
+  rule  win  38.6%  avg $14,170
+  ev    win  61.4%  avg $15,881
+
+ev vs mc (1,400 games, n=80 z=2 / 700 games, n=120 z=1.5)
+  mc    win  57.4% ± 1.3 / 60.4% ± 1.8
+
+rule vs ev vs mc (350 games)
+  rule  win  17.7%  avg $14,246
+  ev    win  31.1%  avg $15,863
+  mc    win  51.1%  avg $17,035
+
+rule, rule, ev, mc (700 games)
+  rule  win  14.9%  avg $14,575
+  rule  win  15.6%  avg $14,643
+  ev    win  28.0%  avg $16,375
+  mc    win  41.6%  avg $17,143
+
+對照(規則修正前,舊參數):rule vs ev 11% / 89%、ev vs mc 25% / 75% —— 舊規則下買進立刻有帳面獲利、牌組偏多偏空,
+策略差距被放大;修正後差距變小但順序不變,而且是真的「玩得比較好」而不是抓規則漏洞。

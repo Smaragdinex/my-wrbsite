@@ -7,8 +7,8 @@ const games = +process.argv[2] || 100, rounds = +process.argv[3] || 20;
 const mcN = +process.argv[4] || 120, mcDepth = +process.argv[5] || 3;
 const D = gameData((en, zh) => en, (n) => String(Math.round(n)));
 const score = process.argv[6] || 'lead';
-const slippage = process.env.SLIP === '1';   // SLIP=1 用「推動後的價格」成交(測試規則修正用)
-const sim = makeSim(D, { seed: 12345, slippage, mc: { n: mcN, depth: mcDepth, score } });   // 固定種子,結果可重現
+const slippage = process.env.SLIP !== '0';   // 預設照遊戲規則用「推動後的價格」成交;SLIP=0 切回舊規則做對照
+const sim = makeSim(D, { seed: +process.env.SEED || 12345, slippage, mc: { n: mcN, depth: mcDepth, score } });   // 固定種子,結果可重現
 const rand = sim.rand;
 
 function table(algs, label) {
