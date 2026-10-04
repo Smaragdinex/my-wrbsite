@@ -239,9 +239,11 @@ const AI = () => AI_LEVELS[S.aiLevel] || AI_LEVELS.normal;
 const maxRolls = () => S.maxRounds;
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
 const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17, 20, 21];    // 商店會賣的事件卡(壞消息類的不賣)
-const REMOTE_PRICE = 300, CARD_PRICE = 500, ATK_PRICE = 600, ATK_DROP = 0.82, SPY_PRICE = 400, SPY_ROUNDS = 3;
+const REMOTE_PRICE = 300, CARD_PRICE = 500, ATK_PRICE = 600, ATK_DROP = 0.82, SPY_PRICE = 400, SPY_ROUNDS = 3, DICE3_PRICE = 350;
+const ITEM_IDS = ['remote', 'atk', 'spy', 'dice3'];   // 商店每次必有其中一樣
 function itemInfo(id) {
   if (id === 'remote') return { icon: '🎲', name: L('Remote dice', '遙控骰子'), desc: L('Pick any total from 2 to 12 instead of rolling.', '不用擲骰,自己指定走 2 到 12 步。'), price: REMOTE_PRICE };
+  if (id === 'dice3') return { icon: '🎲🎲🎲', name: L('Third die', '三顆骰子'), price: DICE3_PRICE, desc: L('Roll three dice this turn: move 3 to 18 steps.', '這回合擲三顆骰子,一次走 3 到 18 步。') };
   if (id === 'spy') return { icon: '🔍', name: L('Spy report', '偵查報告'), price: SPY_PRICE,
     desc: L(`Pick a rival: for ${SPY_ROUNDS} rounds you can open their full holdings and assets.`, `選一位對手,接下來 ${SPY_ROUNDS} 回合可以打開他的完整持股和資產。`) };
   if (id === 'atk') return { icon: '📉', name: L('Bad news card', '利空消息卡'), price: ATK_PRICE,
@@ -251,7 +253,7 @@ function itemInfo(id) {
   return { icon: '<img class="cardico" src="card-event.webp" alt="">', name: L('Event card: ', '事件卡:') + e.t, event: e, best,
     desc: L(`Play it to trigger this event. ${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%.`, `使用後立刻發生這個事件,${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%。`), price: CARD_PRICE };
 }
-const randomItem = () => { const r = Math.random(); return r < 0.35 ? 'remote' : r < 0.55 ? 'atk' : r < 0.7 ? 'spy' : 'ev' + SALE_EVENTS[Math.floor(Math.random() * SALE_EVENTS.length)]; };
+const randomItem = () => { const r = Math.random(); return r < 0.7 ? ITEM_IDS[Math.floor(Math.random() * ITEM_IDS.length)] : 'ev' + SALE_EVENTS[Math.floor(Math.random() * SALE_EVENTS.length)]; };
 // 偵查:viewer 用了偵查報告指定 q,而且還在期限內 → 看得到 q 的完整資產
 const spyOn = (viewer, q) => !!(viewer && viewer.spy && viewer.spy.target === q.i && S.rolls < viewer.spy.until);
 const spyLeft = (viewer) => (viewer && viewer.spy ? Math.max(0, viewer.spy.until - S.rolls) : 0);
@@ -457,7 +459,7 @@ function newState() {
   S = {
     rolls: 0, busy: false, over: false, maxRounds: MAX_ROLLS, aiLevel: 'normal', players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
-    shop: { round: -1, stock: [], sold: [] }, notices: [], lastEvent: null, after: null,
+    notices: [], lastEvent: null, after: null,
     lanePath: { jail: genLanePath('jail'), ipo: genLanePath('ipo') },      // 兩條小路現在各格是什麼
   };
   for (const f of P_FIELDS) Object.defineProperty(S, f, { get: () => S.players[S.hi][f], set: (v) => { S.players[S.hi][f] = v; } });
@@ -1192,7 +1194,7 @@ function pipTex(n) {
 // BoxGeometry 的面順序是 +x,-x,+y,-y,+z,-z;對面加起來是 7
 const FACE = [3, 4, 1, 6, 2, 5];
 const dieMats = FACE.map((n) => new THREE.MeshToonMaterial({ map: pipTex(n), gradientMap: toonRamp }));
-const DIE_REST = [new THREE.Vector3(), new THREE.Vector3()];
+const DIE_REST = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];   // 第三顆只有用「三顆骰子」道具時才出現
 // 骰子落在「擲的人」旁邊的草地上:從棋子往棋盤中心退 2.6 格
 function diceSpots(P) {
   const p = P.piece.position, d = new THREE.Vector3(-p.x, 0, -p.z);
@@ -1201,10 +1203,11 @@ function diceSpots(P) {
   const side = new THREE.Vector3(-d.z, 0, d.x), y = 0.18 + DIE / 2;
   DIE_REST[0].set(p.x + d.x * 2.6 + side.x * 0.42, y, p.z + d.z * 2.6 + side.z * 0.42);
   DIE_REST[1].set(p.x + d.x * 2.9 - side.x * 0.42, y, p.z + d.z * 2.9 - side.z * 0.42);
+  DIE_REST[2].set(p.x + d.x * 3.5, y, p.z + d.z * 3.5);
   // 落點剛好在小路的格子上 → 往旁邊挪,不然骰子會陷進格子裡
   for (let n = 0; n < 2 && DIE_REST.some(onLane); n++) DIE_REST.forEach((v) => { v.x += side.x * 1.7; v.z += side.z * 1.7; });
 }
-const dice = DIE_REST.map((p) => { const d = new THREE.Mesh(new RoundedBoxGeometry(DIE, DIE, DIE, 4, 0.08), dieMats); d.castShadow = true; d.position.copy(p); scene.add(d); return d; });
+const dice = DIE_REST.map((p, i) => { const d = new THREE.Mesh(new RoundedBoxGeometry(DIE, DIE, DIE, 4, 0.08), dieMats); d.castShadow = true; d.position.copy(p); d.visible = i < 2; scene.add(d); return d; });
 // 讓點數 n 朝上的姿態
 const UPQ = {
   1: new THREE.Quaternion(),
@@ -1305,7 +1308,7 @@ window.__tick = (ms = 16, fast = false) => { skipRender = fast; for (let t = 0; 
 async function rollDice(vals, P = PM()) {
   if (NET.on && NET.started) netSend({ t: 'dice', p: PIECES.indexOf(P), vals });
   diceSpots(P); sfx('dice');
-  dice.forEach((d, i) => { d.visible = i < vals.length; });      // 只擲一顆時,第二顆收起來
+  dice.forEach((d, i) => { d.visible = i < vals.length; });      // 只擲一顆時,第二顆收起來;三顆骰子道具才會有第三顆
   const plan = dice.slice(0, vals.length).map((d, i) => {
     const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
     return { d, rest: DIE_REST[i], final: yaw.multiply(UPQ[vals[i]]),
@@ -1627,36 +1630,23 @@ async function playEvent(e, auto = 0) {
   await cardPanel(e.t, e.w, moves, auto);
 }
 // 商店:每樣只有一個,你和對手共用同一批貨(兩個商店格也是同一家),誰先買走就沒了。
-// 每 SHOP_EVERY 回合才進一次新貨 —— 以前是每回合進貨,而每回合都是你先走,等於對手買什麼都影響不到你
-const SHOP_EVERY = 4;
-const shopLeft = () => SHOP_EVERY - (S.rolls % SHOP_EVERY);       // 再幾回合進新貨
+// 商店:每次進門隨機擺 3 樣 —— 道具 1 樣(遙控骰子 / 利空卡 / 偵查報告 / 三顆骰子)+ 事件卡 2 張,只能買一樣
 function shopStock() {
-  const batch = Math.floor(S.rolls / SHOP_EVERY);
-  if (S.shop.round !== batch) {
-    const cards = SALE_EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 2).map((i) => 'ev' + i);
-    S.shop = { round: batch, stock: ['remote', ...cards, 'atk', 'spy'], sold: [] };
-  }
-  return S.shop.stock;
+  const cards = SALE_EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 2).map((i) => 'ev' + i);
+  return [ITEM_IDS[Math.floor(Math.random() * ITEM_IDS.length)], ...cards];
 }
 function shopPanel() {
   const stock = shopStock();
   return new Promise((res) => {
-    const draw = () => {
-      const left = shopLeft(), who = CHARS[S.foe].name;
-      const p = panel(`<h3>${L('Item shop', '道具商店')}</h3><p>${L(`One of each, shared with your rival: whoever buys first gets it. New stock in ${left} round${left > 1 ? 's' : ''}.`, `每樣只有一個,和對手共用同一批貨,誰先買走就沒了。再 ${left} 回合進新貨。`)}</p>` +
-        (stock.length ? stock.map((id, i) => { const it = itemInfo(id);
-          return `<div class="it"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${it.desc}</small></span><button class="b-buy" data-i="${i}" ${S.cash < it.price ? 'disabled' : ''}>$${it.price}</button></div>`; }).join('')
-          : `<div class="it"><span class="tx"><small>${L('Sold out.', '全部賣完了。')}</small></span></div>`) +
-        S.shop.sold.map((x) => { const it = itemInfo(x.id);
-          return `<div class="it" style="opacity:.5"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${x.by === S.hi ? L('You bought it', '你買走了') : L(`${nameOf(S.players[x.by])} bought it`, `${nameOf(S.players[x.by])}買走了`)}</small></span><button class="b-skip" disabled>${L('Sold', '售完')}</button></div>`; }).join('') +
-        `<div class="btns"><button class="b-skip" data-i="-1">${L('Leave', '離開')}</button></div>`);
-      p.querySelectorAll('button').forEach((b) => b.onclick = () => {
-        const i = +b.dataset.i;
-        if (i < 0) { closePanel(); return res(); }
-        const id = stock[i], it = itemInfo(id); S.cash -= it.price; S.bag.push(id); stock.splice(i, 1); S.shop.sold.push({ id, by: S.hi }); sfx('item'); toast(L('Bought ', '買了 ') + it.name); hud(); draw();
-      });
-    };
-    draw();
+    const p = panel(`<h3>${L('Item shop', '道具商店')}</h3><p>${L('Three on the shelf today: pick one to buy.', '今天架上這 3 樣,只能買一樣。')}</p>` +
+      stock.map((id, i) => { const it = itemInfo(id);
+        return `<div class="it"><span class="ic">${it.icon}</span><span class="tx"><b>${it.name}</b><small>${it.desc}</small></span><button class="b-buy" data-i="${i}" ${S.cash < it.price ? 'disabled' : ''}>$${it.price}</button></div>`; }).join('') +
+      `<div class="btns"><button class="b-skip" data-i="-1">${L('Leave', '離開')}</button></div>`);
+    p.querySelectorAll('button').forEach((b) => b.onclick = () => {
+      const i = +b.dataset.i; closePanel();
+      if (i >= 0) { const id = stock[i], it = itemInfo(id); S.cash -= it.price; S.bag.push(id); sfx('item'); toast(L('Bought ', '買了 ') + it.name); hud(); }
+      res();
+    });
   });
 }
 // 利空消息卡:挑一種資產讓它下跌。列表先列對手持有的(打擊對手),再列你自己放空的(幫自己賺)
@@ -1727,6 +1717,8 @@ function bagPanel() {
       const k = await attackPanel();
       if (k) { S.bag.splice(S.bag.indexOf('atk'), 1); await badNews(k, S.players[S.hi]); await flushNotices(); checkMissions(); }
       S.busy = false; showCtl(true);
+    } else if (id === 'dice3') {
+      S.bag.splice(S.bag.indexOf('dice3'), 1); S.busy = false; hud(); turn(undefined, 3);   // 直接用三顆骰子擲這一回合
     } else if (id === 'spy') {
       const t = await spyPanel();
       if (t != null) { S.bag.splice(S.bag.indexOf('spy'), 1); const me = S.players[S.hi]; me.spy = { target: t, until: S.rolls + SPY_ROUNDS }; if (me === meP()) { S.view = t; $('assetBox').classList.remove('fold'); } sfx('item');
@@ -2030,6 +2022,8 @@ async function aiTurn() {
     if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event, AI_CARD_WAIT); } }
   // 遙控骰子:前方 2~12 格裡有很想去的格子(主攻股、商店、IPO…)就指定步數走過去
   let forced = 0;
+  let three = false;
+  if (!A.lane && !A.bag.includes('remote') && A.bag.includes('dice3') && Math.random() < 0.6) { A.bag.splice(A.bag.indexOf('dice3'), 1); three = true; hud(); toast(L(`${who} uses a third die`, `${who}使用三顆骰子`)); await wait(0.9); }
   if (!A.lane && A.bag.includes('remote')) {
     let best = { i: 0, v: 3.8 }; for (let i = 2; i <= 12; i++) { const v = aiTileScore(A, i); if (v > best.v) best = { i, v }; }
     if (best.i) { A.bag.splice(A.bag.indexOf('remote'), 1); forced = best.i; hud(); toast(L(`${who} uses a remote dice: ${forced} steps`, `${who}使用遙控骰子:走 ${forced} 步`)); await wait(1.0); }
@@ -2041,9 +2035,9 @@ async function aiTurn() {
       else { A.lane.wait--; toast(L(`${who} rests at the police station (${A.lane.wait} left)`, `${who}在警察局休息(再 ${A.lane.wait} 回合)`)); await wait(0.9); }
     } else await leaveLane(false);
   } else {
-  const nd = forced ? (forced <= 6 ? 1 : 2) : aiDiceChoice(), vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : nd === 1 ? [r6()] : [r6(), r6()], n = vals.reduce((x, y) => x + y, 0);
-  if (!forced) { toast(L(`${who} rolls ${nd === 1 ? 'one die' : 'two dice'}`, `${who}選擇擲 ${nd} 顆骰子`)); await wait(0.7); }
-  await rollDice(vals, PA()); toast(vals.length === 1 ? `${who}: ${n}` : `${who}: ${vals[0]} + ${vals[1]} = ${n}`);
+  const nd = forced ? (forced <= 6 ? 1 : 2) : three ? 3 : aiDiceChoice(), vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : nd === 3 ? [r6(), r6(), r6()] : nd === 1 ? [r6()] : [r6(), r6()], n = vals.reduce((x, y) => x + y, 0);
+  if (!forced && !three) { toast(L(`${who} rolls ${nd === 1 ? 'one die' : 'two dice'}`, `${who}選擇擲 ${nd} 顆骰子`)); await wait(0.7); }
+  await rollDice(vals, PA()); toast(vals.length === 1 ? `${who}: ${n}` : `${who}: ${vals.join(' + ')} = ${n}`);
   await stepAlong(false, n);
   }
   await wait(0.2);
@@ -2098,8 +2092,9 @@ async function aiLand() {
     if (evF && A.cash >= CARD_PRICE + lv.reserve && Math.random() < lv.buyP) got = evF;
     else if (stock.includes('remote') && !A.bag.includes('remote') && A.cash >= REMOTE_PRICE + lv.reserve + 800 && Math.random() < lv.buyP) got = 'remote';
     else if (stock.includes('atk') && A.cash >= ATK_PRICE + lv.reserve && Math.random() < lv.atkP) got = 'atk';
+    else if (stock.includes('dice3') && A.cash >= DICE3_PRICE + lv.reserve + 800 && Math.random() < lv.buyP * 0.5) got = 'dice3';
     else got = stock.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n >= LOT && A.cash >= CARD_PRICE + lv.reserve) || null;
-    if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); stock.splice(stock.indexOf(got), 1); S.shop.sold.push({ id: got, by: A.i }); toast(L(`${who} bought: ${it.name}`, `${who}買走了:${it.name}`)); }
+    if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); toast(L(`${who} bought: ${it.name}`, `${who}買了:${it.name}`)); }
     else toast(L(`${who} looks around the shop`, `${who}逛了逛商店`));
     hud(); await wait(1.2);
   } else if (type === 'chance') { await wait(0.3); const c = await drawEventCards(true); if (c.special) await enterLane(false, c.special); }
@@ -2115,7 +2110,7 @@ async function aiLand() {
   else if (type === 'fee') { A.cash -= FEE; toast(L(`${who} paid $${FEE} in fees`, `${who}付了 $${FEE} 手續費`)); hud(); await wait(0.9); }
   else { toast(L(`${who} takes a break`, `${who}休息一下`)); await wait(0.7); }
 }
-async function turn(forced) {
+async function turn(forced, nDice = 0) {      // nDice = 3:用了「三顆骰子」道具
   if (S.busy || S.over) return;
   S.busy = true; showCtl(false); pan.set(0, 0, 0);
   // 擲 1 顆或 2 顆由玩家選(S.diceN)。遙控骰子(forced):6 以內用一顆顯示,7 以上拆成兩顆的點數
@@ -2126,10 +2121,10 @@ async function turn(forced) {
       else { S.lane.wait--; S.lane.rested = true; hud(); toast(L(`Resting (${S.lane.wait} left)`, `休息中(再 ${S.lane.wait} 回合)`)); await wait(0.6); }
     } else await leaveLane(true);      // 休息夠了(或在 IPO 攤位):擲一顆骰子出去
   } else {
-  const vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : (S.diceN === 1 ? [r6()] : [r6(), r6()]);
+  const vals = forced ? (forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)]) : nDice === 3 ? [r6(), r6(), r6()] : (S.diceN === 1 ? [r6()] : [r6(), r6()]);
   const n = vals.reduce((x, y) => x + y, 0);
   await rollDice(vals);
-  toast(vals.length === 1 ? `${n}` : `${vals[0]} + ${vals[1]} = ${n}`);
+  toast(vals.length === 1 ? `${n}` : `${vals.join(' + ')} = ${n}`);
   await stepAlong(true, n);
   }
   if (S.hi === 0) {           // 第一位走完 = 新的一回合開始:回合數 +1,所有價格小幅隨機波動
@@ -2588,4 +2583,4 @@ function clientInit() {
 const CLIENT = new URLSearchParams(location.search).get('client');      // 手機端:?client=房號 → 自己畫棋盤、跟著主機的狀態走
 resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
