@@ -144,36 +144,6 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
   cyl(0.09, 0.07, 0.14, 0xf3c9db, { x: WX - 0.21, y: 2.35 + 0.11, z: 1.6 });
   sphere(0.13, 0x3fc9c0, { x: WX - 0.21, y: 2.35 + 0.3, z: 1.6 });
   sphere(0.11, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.15, z: 2.1 }); sphere(0.07, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.3, z: 2.1 });   // 招財貓(簡化)
-  // 霓虹貓臉燈(3D 燈管版):貓臉的線條用向量曲線寫死(對照插畫描的:頭、耳、耳內短線、眼睛、鼻嘴、鬍鬚),
-  // 每條曲線用 TubeGeometry 做成有厚度的圓管,暖黃自發光;外面再套一圈加色混合的半透明「光暈管」當 bloom,牆上一片柔光當反射。
-  // 座標 (u, v):u 沿著牆的 z 方向、v 向上,頭寬 = 1,之後整組放大 1.5 倍
-  const neon = new THREE.Group(); neon.position.set(WX - 0.1, 3.3, -0.45); neon.scale.setScalar(1.5); root.add(neon);
-  const V = (u, v) => new THREE.Vector3(0, v, u);
-  const curves = [];
-  curves.push(new THREE.CurvePath());                                                   // 頭:略扁的橢圓
-  curves[0].add(new THREE.EllipseCurve(0, -0.04, 0.5, 0.34, 0, Math.PI * 2, false, 0)); curves[0].ellipse = true;
-  for (const sx of [-1, 1]) {
-    curves.push(new THREE.CatmullRomCurve3([V(sx * 0.43, 0.14), V(sx * 0.47, 0.42), V(sx * 0.2, 0.285)], false, 'catmullrom', 0.0));   // 耳朵(兩條邊,兩端都落在頭的輪廓上)
-    curves.push(new THREE.LineCurve3(V(sx * 0.37, 0.3), V(sx * 0.365, 0.22)));                                                        // 耳內短線
-    const e = new THREE.CurvePath(); e.add(new THREE.EllipseCurve(sx * 0.22, -0.06, 0.048, 0.075, 0, Math.PI * 2, false, 0)); e.ellipse = true; curves.push(e);   // 眼睛
-    curves.push(new THREE.QuadraticBezierCurve3(V(0, -0.17), V(sx * 0.05, -0.26), V(sx * 0.12, -0.2)));                                // 嘴(ω 的一邊)
-    curves.push(new THREE.QuadraticBezierCurve3(V(sx * 0.4, -0.145), V(sx * 0.5, -0.135), V(sx * 0.62, -0.125)));                     // 鬍鬚上(從臉邊往外)
-    curves.push(new THREE.QuadraticBezierCurve3(V(sx * 0.4, -0.2), V(sx * 0.5, -0.225), V(sx * 0.6, -0.25)));                         // 鬍鬚下
-  }
-  curves.push(new THREE.CatmullRomCurve3([V(-0.055, -0.095), V(0.055, -0.095), V(0, -0.165)], true, 'catmullrom', 0.35));   // 鼻子(圓角三角,3 個點閉合)
-  const CORE = new THREE.MeshStandardMaterial({ color: 0xffd45a, emissive: 0xffb02e, emissiveIntensity: 0.85, roughness: 0.35, toneMapped: false });   // 亮度壓低:黃色燈管,不要白掉
-  const HALO = new THREE.MeshBasicMaterial({ color: 0xff8a2e, transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  const to3 = (c) => c.ellipse ? new THREE.CatmullRomCurve3(c.getPoints(48).map((p) => V(p.x, p.y)), true) : c;   // 2D 橢圓轉成 3D 閉合曲線
-  for (const c of curves) { const path = to3(c), closed = !!(c.ellipse || c.closed);
-    const core = new THREE.Mesh(new THREE.TubeGeometry(path, 48, 0.022, 8, closed), CORE); neon.add(core);
-    const halo = new THREE.Mesh(new THREE.TubeGeometry(path, 48, 0.038, 8, closed), HALO); neon.add(halo); }
-  { // 牆上的柔光(放射狀漸層、加色)
-    const cv = document.createElement('canvas'); cv.width = cv.height = 256; const g = cv.getContext('2d'); const gr = g.createRadialGradient(128, 128, 10, 128, 128, 128);
-    gr.addColorStop(0, 'rgba(255,170,70,.22)'); gr.addColorStop(0.5, 'rgba(255,140,80,.1)'); gr.addColorStop(1, 'rgba(255,120,90,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
-    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
-    const wallGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.5), new THREE.MeshBasicMaterial({ map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-    wallGlow.rotation.y = -Math.PI / 2; wallGlow.position.set(0.055, 0.02, 0); neon.add(wallGlow); }
-  const neonLight = new THREE.PointLight(0xffb070, 1.8, 3.2, 2); neonLight.position.set(-0.3, 0, 0); neon.add(neonLight);
 }
 // ---------- 窗外:2.5D 夜景 —— 天空漸層 + 月亮星星、遠 / 近兩層用 BoxGeometry 做的高樓(InstancedMesh,窗戶用 emissive 貼圖),
 //            城市底部一層柔和的橘紫光、開口前一片淡玻璃、再從窗戶打一盞藍紫 RectAreaLight 讓房間吃到夜景的冷光。全部只畫在開口範圍內(stencil)----------
