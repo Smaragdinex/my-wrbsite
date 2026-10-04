@@ -1887,7 +1887,7 @@ function bankPanel() {
         if (a === 'x') { closePanel(); return res(); }
         const d = a === 'borrow' ? +amt.value : -Math.min(S.debt, +rep.value);
         S.cash += d; S.debt += d; sfx(d > 0 ? 'coin' : 'sell');
-        toast(d > 0 ? L(`Borrowed $${fmt(d)}`, `借了 $${fmt(d)}`) : L(`Repaid $${fmt(-d)}`, `還了 $${fmt(-d)}`));
+        { const nm = nameOf(S.players[S.hi]); toast(d > 0 ? L(`${nm} took a bank loan`, `${nm}向銀行貸款了`) : L(`${nm} paid back the bank`, `${nm}還了銀行貸款`)); }   // 公告不寫金額(大家都看得到)
         hud(); closePanel(); res();        // 選一個動作就結束,不用再按離開
       });
     };
@@ -2126,8 +2126,8 @@ async function aiLand() {
   else if (type === 'bank') {
     // 銀行:現金太少就借 $2,000 來周轉;手頭寬裕又有欠款就先還清,省利息
     const F = aiFocus(A), need = S.price[F] * LOT * AI().lots + AI().reserve;
-    if (A.debt > 0 && A.cash >= A.debt + 4000) { toast(L(`${who} repaid its $${fmt(A.debt)} loan`, `${who}把 $${fmt(A.debt)} 貸款還清了`)); A.cash -= A.debt; A.debt = 0; }
-    else if ((A.cash < 1500 || (A.cash < need && S.aiLevel !== 'easy' && maxRolls() - S.rolls > 4)) && A.debt + 2000 <= BANK_MAX) { const amt = Math.min(3000, BANK_MAX - A.debt); A.cash += amt; A.debt += amt; toast(L(`${who} borrowed $${fmt(amt)} to buy more ${SECTORS[F].name}`, `${who}向銀行借 $${fmt(amt)},準備加碼${SECTORS[F].name}`)); }
+    if (A.debt > 0 && A.cash >= A.debt + 4000) { toast(L(`${who} paid back the bank`, `${who}還了銀行貸款`)); A.cash -= A.debt; A.debt = 0; }
+    else if ((A.cash < 1500 || (A.cash < need && S.aiLevel !== 'easy' && maxRolls() - S.rolls > 4)) && A.debt + 2000 <= BANK_MAX) { const amt = Math.min(3000, BANK_MAX - A.debt); A.cash += amt; A.debt += amt; toast(L(`${who} took a bank loan`, `${who}向銀行貸款了`)); }
     else toast(L(`${who} walks past the bank`, `${who}路過銀行`));
     hud(); await wait(1.1);
   }
