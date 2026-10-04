@@ -287,6 +287,21 @@ const AU = (() => {
   // 第一次點擊後才下載(約 1.5 MB)和解碼,好了就開始播
   const BGM_URL = new URL('./bgm.m4a?v=1', import.meta.url).href, LOOP_A = 0.5, LOOP_LEN = 128;
   let bgm = null;
+  // 森林鳥鳴環境音(Mixkit「Forest birds ambience」,Mixkit License 免費商用):進入遊戲才淡入、循環播,壓在音樂底下;選角畫面淡出
+  let amb = null, ambGain = null, ambWant = false, ambLoading = false;
+  const AMB_URL = new URL('./ambience.m4a?v=1', import.meta.url);
+  async function loadAmb() {
+    if (ambLoading || !ctx) return; ambLoading = true;
+    try {
+      const data = await (await fetch(AMB_URL)).arrayBuffer();
+      const buf = await new Promise((ok, no) => { const p = ctx.decodeAudioData(data, ok, no); if (p && p.then) p.then(ok, no); });
+      ambGain = ctx.createGain(); ambGain.gain.value = 0; ambGain.connect(master);
+      amb = ctx.createBufferSource(); amb.buffer = buf; amb.loop = true; amb.loopStart = 1.5; amb.loopEnd = buf.duration - 2.5; amb.connect(ambGain); amb.start(0, 1.5);
+      ambLevel();
+    } catch (e) { console.warn('ambience', e); ambLoading = false; }
+  }
+  function ambLevel() { if (!ambGain) return; const g = ambGain.gain, t = ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(ambWant ? 0.5 : 0, t + 2.5); }
+  function ambience(want) { ambWant = want; if (!ctx) return; if (want && !amb) loadAmb(); else ambLevel(); }
   async function loadBgm() {
     try {
       const data = await (await fetch(BGM_URL)).arrayBuffer();
@@ -306,6 +321,7 @@ const AU = (() => {
     { const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
     { const b = ctx.createBufferSource(); b.buffer = ctx.createBuffer(1, 1, ctx.sampleRate); b.connect(ctx.destination); b.start(0); }   // 在點擊當下播一個無聲的取樣,Safari 才會真的開始出聲
     if (!EMBED) loadBgm();      // 嵌在街機裡時,音樂由外面的房間頁播放(從選單就開始、進遊戲不中斷)
+    if (ambWant) loadAmb();      // 遊戲已經開始但那時還沒解鎖音訊:現在補載環境音
   }
   // Safari 只把 click / mouseup / touchend / keydown 當成「使用者操作」,只聽 pointerdown 的話用滑鼠永遠解不開 → 全部都聽
   ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, { capture: true, passive: true }));
@@ -344,7 +360,7 @@ const AU = (() => {
     if (EMBED) try { parent.postMessage({ type: 'css-sound', on }, location.origin); } catch (e) {}
     return on;
   }
-  return { sfx, toggle, get on() { return on; }, get state() { return ctx ? `${ctx.state} bgm ${bgm ? Math.round(bgm.buffer.duration) : 'loading'}` : 'locked'; } };
+  return { sfx, toggle, ambience, get on() { return on; }, get state() { return ctx ? `${ctx.state} bgm ${bgm ? Math.round(bgm.buffer.duration) : 'loading'}` : 'locked'; } };
 })();
 // 音效:主機播自己的,同時轉送給手機(手機看到的翻牌、繼續、道具、好壞消息才有聲)。
 // 骰子 / 走格子手機自己會播(跟著 dice / hop 訊息),hover 是本機的,不轉送
@@ -2489,7 +2505,7 @@ function remoteBanner() {
 async function start() {
   newState(); $('end').classList.add('hide'); closePanel(); $('toast').classList.remove('on');   // 上一局最後的提示不要留到選角畫面
   staticText(); PIECES.forEach((P) => placePiece(0, P)); focus = PIECES[0]; diceSpots(PIECES[0]); dice.forEach((d, i) => d.position.copy(DIE_REST[i])); drawAll(); drawLanes();
-  S.busy = true; showCtl(false); hud();
+  S.busy = true; showCtl(false); hud(); AU.ambience(false);   // 選角畫面:環境音淡出
   let cfg;
   if (CHARS[PRESET]) { const q = new URLSearchParams(location.search), n = Math.min(4, Math.max(2, +q.get('n') || 2)), h = Math.min(2, Math.max(1, +q.get('h') || 1));
     const rest = Object.keys(CHARS).filter((k) => k !== PRESET).sort(() => Math.random() - 0.5);
@@ -2499,7 +2515,7 @@ async function start() {
   PIECES.forEach((P, i) => { if (i < S.players.length) { setChar(P.body, S.players[i].char); placePiece(0, P); } });
   showPieces(true); focus = PIECES[0];
   buildFoes(); setPortraits();
-  hud();
+  hud(); AU.ambience(true);   // 進入遊戲:森林鳥鳴淡入
   // 開局先講清楚怎麼算贏
   const rule = L(`After ${S.maxRounds} rounds, whoever has the highest total assets wins.`, `${S.maxRounds} 回合結束時,總資產最高的人獲勝。`);
   const rulesTitle = L('How to win', '獲勝條件'), rulesBody = rule + L(` Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>The missions on the left are a bonus: each one pays $${REWARD}, and the more you finish the more stars you get. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
@@ -2583,7 +2599,7 @@ function clientInit() {
       S.players.forEach((p, i) => { p.pos = m.pos[i]; p.lane = m.lane[i]; const P = PIECES[i]; if (!P) return; setChar(P.body, p.char);   // 手機這邊棋子還是空的,要自己掛上角色模型
         if (p.lane) { const g = p.lane.at ? laneTiles[p.lane.type].path[p.lane.at - 1].g : laneTiles[p.lane.type].cell.g; P.piece.position.set(g.position.x + P.off.x, TOP, g.position.z + P.off.z); } else placePiece(p.pos, P); });
       showPieces(true); focus = PIECES[me]; diceSpots(PIECES[me]); dice.forEach((d, i) => d.position.copy(DIE_REST[i]));
-      buildFoes(); setPortraits(); S.view = null; return;
+      buildFoes(); setPortraits(); S.view = null; AU.ambience(true); return;
     }
     // 鏡頭和主機一樣跟著「正在走的人」:誰擲骰 / 誰在跳就跟誰(玩家自己的縮放不受影響)
     if (m.t === 'hop') { const P = PIECES[m.p]; if (P) enqueue(m.p, () => { focus = P; return hopOnto(hopGroup(m.tgt), P, m.far); }); return; }
