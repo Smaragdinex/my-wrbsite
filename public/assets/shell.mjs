@@ -18,6 +18,15 @@ const WORKS = [
 const cursor = document.getElementById('cursor');
 const catemo = document.getElementById('catemo');
 const cat = { lx: 0, ly: 0, speed: 0, dir: 1, walk: false };
+/* 分頁標題也有一隻貓(像 bruno-simon.com 的車子):滑鼠在動的時候,風景往右捲、貓看起來就像往左走;停下來就靜止 */
+const tabTitle = (() => {
+  const BLANK = '\u2003', W = 9, CAT = 4;      // 9 格風景,貓固定在第 4 格;空格用 em space 寬度才接近 emoji
+  const scenery = Array.from({ length: W }, (_, i) => (i % 3 === 1 ? ['🌳', '🌲', '🌴'][(i / 3 | 0) % 3] : BLANK));
+  let last = 0;
+  const draw = () => { document.title = `X-Arts ${scenery.map((c, i) => (i === CAT ? '🐈' : c)).join('')}`; };
+  draw();
+  return (walking, now) => { if (!walking || now - last < 160) return; last = now; scenery.unshift(scenery.pop()); draw(); };
+})();
 /* hover ABOUT/CONTACT 時圓點縮成 40px */
 document.querySelectorAll('.topnav a').forEach(a => {
   a.addEventListener('mouseenter', () => cursor.classList.add('onnav'));
@@ -589,6 +598,7 @@ function frame(){
   { const mv = Math.hypot(cur.tx - cat.lx, cur.ty - cat.ly); cat.lx = cur.tx; cat.ly = cur.ty;
     cat.speed = cat.speed * 0.85 + mv; const walking = cat.speed > 1.5;
     if (walking !== cat.walk) { cat.walk = walking; catemo.classList.toggle('walk', walking); }
+    tabTitle(walking, performance.now());
     const dir = cur.tx > fc.x + 10 ? -1 : cur.tx < fc.x - 10 ? 1 : cat.dir; if (dir !== cat.dir) { cat.dir = dir; catemo.firstElementChild.style.transform = `scaleX(${dir})`; } }
   // 貓眼注視
   { const dx=cur.tx-fc.x, dy=cur.ty-fc.y, d=Math.hypot(dx,dy)||1, k=Math.min(1,d/260)*4.6;
