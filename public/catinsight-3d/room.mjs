@@ -78,6 +78,7 @@ const root = new THREE.Group();
 root.rotation.y = Math.PI / 2;   // 讓淡紫框牆在左、粉牆在右(鏡頭從前方 45° 看)
 scene.add(root);
 const animated = [];   // 進場動畫用:每個物件 scale 從 0 長出來
+let livePoster = null, liveN = 0;   // 牆上會動的照片:每幀重畫的函式
 
 function box(w, h, d, color, { x = 0, y = 0, z = 0, r = 0.06, parent = root, shadow = true, seg = 3, ry = 0, rz = 0, rx = 0 } = {}) {
   const g = r > 0 ? new RoundedBoxGeometry(w, h, d, seg, Math.min(r, w / 2, h / 2, d / 2)) : new THREE.BoxGeometry(w, h, d);
@@ -142,7 +143,33 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
     box(0.03, h + 0.08, w + 0.08, 0xfff6f0, { x: WX - 0.015, y, z, r: 0.005, seg: 1, shadow: false });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })); m.rotation.y = -Math.PI / 2; m.position.set(WX - 0.035, y, z); root.add(m); };
   posterImg(-1.7, 3.1, 0.75, 0.5, './poster-city.webp?v=1');   // 夜景城市:用圖
-  posterImg(-0.95, 3.1, 0.5, 0.74, './poster-cat.webp?v=2');    // 太空貓:用圖,掛在城市右邊
+  // 太空貓:會動的照片(哈利波特那種)—— 畫在 canvas 上,整張輕輕呼吸 / 搖晃,貓咪會眨眼,天上星星閃爍
+  { const W = 512, Hh = 768, cv = document.createElement('canvas'); cv.width = W; cv.height = Hh; const g = cv.getContext('2d');
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter;
+    const w = 0.7, h = 1.05, y = 3.15, z = -0.45;
+    box(0.03, h + 0.08, w + 0.08, 0xfff6f0, { x: WX - 0.015, y, z, r: 0.005, seg: 1, shadow: false });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })); m.rotation.y = -Math.PI / 2; m.position.set(WX - 0.035, y, z); root.add(m);
+    const img = new Image(); img.src = './poster-cat.webp?v=2';
+    const EYES = [[203, 326, 24, 25], [295, 348, 24, 25]];                                     // 兩隻眼睛在 512×768 貼圖上的位置 / 半徑
+    const STARS = [[40, 60], [180, 30], [300, 70], [470, 20], [80, 330], [480, 300], [360, 160], [230, 120], [130, 230]];
+    let blinkAt = 3, blinkDur = 0.18, forced = 0;
+    livePoster = (t) => {
+      if (!img.complete || !img.naturalWidth) return;
+      if (forced) { blinkAt = t; blinkDur = forced; forced = 0; }
+      g.clearRect(0, 0, W, Hh); g.save(); g.translate(W / 2, Hh / 2);
+      g.rotate(0.012 * Math.sin(t * 0.5)); const sc = 1.05 + 0.015 * Math.sin(t * 0.8); g.scale(sc, sc);          // 整張微晃 + 呼吸
+      g.translate(0, 4 * Math.sin(t * 1.1)); g.drawImage(img, -W / 2, -Hh / 2, W, Hh);
+      // 眨眼:把眼睛上方的毛「拉下來」蓋住眼睛(顏色自然就對),閉上再張開
+      const ph = (t - blinkAt) / blinkDur;
+      if (ph >= 0) { if (ph > 1) { blinkDur = 0.18; blinkAt = t + 2.5 + Math.random() * 3.5; if (Math.random() < 0.25) blinkAt = t + 0.35; }
+        else { const k = Math.sin(ph * Math.PI); for (const [ex, ey, rx, ry] of EYES) { g.save(); g.beginPath(); g.ellipse(ex - W / 2, ey - Hh / 2, rx + 3, ry + 3, 0, 0, Math.PI * 2); g.clip();
+          g.drawImage(img, ex - rx - 6, ey - ry - 70, (rx + 6) * 2, 60, ex - rx - 6 - W / 2, ey - ry - 3 - Hh / 2, (rx + 6) * 2, (ry + 3) * 2 * k); g.restore(); } } }
+      g.restore();
+      // 星星閃爍(四角星,亮度各自用不同頻率的 sin)
+      for (let i = 0; i < STARS.length; i++) { const [sx, sy] = STARS[i], a = 0.5 + 0.5 * Math.sin(t * (1.3 + i * 0.37) + i), r = 5 + 3 * a; g.globalAlpha = a * 0.9; g.fillStyle = '#fff6d0';
+        g.beginPath(); g.moveTo(sx, sy - r); g.lineTo(sx + r * 0.3, sy - r * 0.3); g.lineTo(sx + r, sy); g.lineTo(sx + r * 0.3, sy + r * 0.3); g.lineTo(sx, sy + r); g.lineTo(sx - r * 0.3, sy + r * 0.3); g.lineTo(sx - r, sy); g.lineTo(sx - r * 0.3, sy - r * 0.3); g.closePath(); g.fill(); }
+      g.globalAlpha = 1; tex.needsUpdate = true; };
+    livePoster.blinkNow = (dur) => { forced = dur || 0.18; }; }   // 測試用:馬上眨一次(可指定秒數)
   // 植物:角落一棵龜背芋(白盆 + 幾片大葉子),層板上一盆垂下來的常春藤
   { const p = group(2.42, 0, 1.25); cyl(0.2, 0.17, 0.3, 0xf7f1f2, { y: 0.15, parent: p }); cyl(0.17, 0.17, 0.02, 0x5a4330, { y: 0.3, parent: p });
     const leafMat = new THREE.MeshStandardMaterial({ color: 0x3f9a5a, roughness: 0.8, side: THREE.DoubleSide });
@@ -1053,6 +1080,7 @@ function loop() {
   tickSeries(performance.now());
   drawScreen(t);
   if (arcadeScreen && (frameNo++ % 2 === 0)) { drawArcadeScreen(t); arcadeScreenTex.needsUpdate = true; }   // 街機螢幕每 2 幀更新
+  if (livePoster && (liveN++ % 2 === 1)) livePoster(t);                                                       // 會動的照片每 2 幀更新(和街機錯開)
   updateZoom(dt);
   renderer.render(scene, camera);
 }
@@ -1063,4 +1091,4 @@ const loadT0 = performance.now();
   if ((pending.size === 0 && performance.now() - loadT0 > 400) || performance.now() - loadT0 > 6000) loadingEl.classList.add('done');
   else setTimeout(waitModels, 100);
 })();
-window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, get arcade() { return arcadeModel; }, frames: 0, camera, controls, THREE, catUniforms, get zoomT() { return zoomT; }, setZoom(v) { zoomGoal = v; }, openGame, hideGame, fitGameRot };
+window.__room = { get camHeadY() { return camHead ? camHead.rotation.y : null; }, get arcade() { return arcadeModel; }, frames: 0, camera, controls, THREE, catUniforms, get zoomT() { return zoomT; }, setZoom(v) { zoomGoal = v; }, openGame, hideGame, fitGameRot, get poster() { return livePoster; } };
