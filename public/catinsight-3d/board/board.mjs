@@ -2377,9 +2377,22 @@ function netOnMsg(m) {
     netSend({ t: 'joined', ok: true, gid, char, name }, m.from); lobbyPaint(); paintStage(); netLobby(); return;
   }
   const g = guestByConn(m.from); if (!g || !NET.started || !S) return;
+  if (m.t === 'ready') { g.ready = true; if (readyCheck) readyCheck(); return; }      // 手機看完規則卡
   const p = S.players[S.turn]; if (!p || !p.human || p.remote !== g.gid) return;      // 只有輪到的那支手機可以操作
   if (m.t === 'click' && m.box !== 'end') { const b = $(m.box)?.querySelectorAll('button, .dcard')[m.idx | 0]; if (b && !b.disabled) b.click(); }
   else if (m.t === 'input') { const inp = $(m.box)?.querySelectorAll('input')[m.idx | 0]; if (inp) { inp.value = m.value; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } }
+}
+// 等所有在線的手機按完規則卡的「繼續」;主機也可以按「直接開始」不等
+let readyCheck = null;
+function netWaitReady() {
+  return new Promise((res) => {
+    const pending = () => NET.guests.filter((g) => g.online && !g.ready);
+    const draw = () => { const ps = pending(); if (!ps.length) return done();
+      panel(`<h3>${L('Waiting for players', '等待其他玩家')}</h3><p>${L(`Still reading the rules: ${ps.map((g) => g.name).join(', ')}`, `還在看規則:${ps.map((g) => g.name).join('、')}`)}</p><div class="btns"><button class="b-skip">${L('Start anyway', '直接開始')}</button></div>`)
+        .querySelector('button').onclick = done; };
+    const done = () => { if (!readyCheck) return; readyCheck = null; closePanel(); res(); };
+    readyCheck = draw; draw();
+  });
 }
 // 大廳:告訴手機房號、哪些角色還能選、誰已經加入。主機換角色時,被撞到的手機自動換成別的角色
 function netLobby(to) {
@@ -2409,7 +2422,7 @@ function lobbyPaint() {
 const MIRROR = ['ctl', 'stepCtl', 'panel', 'draw', 'end'], uiLast = {}; let uiQueued = false;
 function netUiFlush(to) {
   uiQueued = false; if (!NET.on || !NET.started) return;
-  for (const id of MIRROR) { const el = $(id), key = el.className + '\u0001' + el.innerHTML; if (!to && uiLast[id] === key) continue; if (!to) uiLast[id] = key; netSend({ t: 'ui', box: id, cls: el.className, html: el.innerHTML }, to); }
+  for (const id of MIRROR) { const el = $(id); if (el.classList.contains('nomirror')) continue; const key = el.className + '\u0001' + el.innerHTML; if (!to && uiLast[id] === key) continue; if (!to) uiLast[id] = key; netSend({ t: 'ui', box: id, cls: el.className, html: el.innerHTML }, to); }
 }
 const netUi = () => { if (!uiQueued && NET.on && NET.started) { uiQueued = true; setTimeout(() => netUiFlush(), 0); } };   // 用 setTimeout 不用 rAF:主機分頁在背景時 rAF 不會跑
 { const mo = new MutationObserver(netUi); MIRROR.forEach((id) => mo.observe($(id), { childList: true, subtree: true, attributes: true, characterData: true })); }
@@ -2438,7 +2451,7 @@ function netInit(g) {
   netSend({ t: 'init', chars: S.players.map((p) => p.char), names: S.players.map((p) => p.name || ''), humans: S.nh, remote: S.players.map((p) => p.remote || null), me, turn: S.turn,
     pos: S.players.map((p) => p.pos), lane: S.players.map((p) => p.lane), price: S.price, lanePath: S.lanePath, rolls: S.rolls, maxRounds: S.maxRounds }, g.conn);
 }
-function netPushAll(g) { netInit(g); netHud(g); netUiFlush(g.conn); }
+function netPushAll(g) { netInit(g); netHud(g); netUiFlush(g.conn); if (NET.rules && !g.ready) netSend({ t: 'rules', ...NET.rules }, g.conn); }
 // 輪到手機上的玩家:主機畫面上的按鈕鎖住(不然主機可以幫他按),顯示等待提示。那支手機斷線的話就解鎖讓主機代打
 function remoteBanner() {
   const p = S && S.players[S.turn], g = p && p.remote && NET.guests.find((x) => x.gid === p.remote), on = !!(g && g.online && !S.over);
@@ -2464,9 +2477,16 @@ async function start() {
   hud();
   // 開局先講清楚怎麼算贏
   const rule = L(`After ${S.maxRounds} rounds, whoever has the highest total assets wins.`, `${S.maxRounds} 回合結束時,總資產最高的人獲勝。`);
-  await cardPanel(L('How to win', '獲勝條件'),
-    rule + L(` Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>The missions on the left are a bonus: each one pays $${REWARD}, and the more you finish the more stars you get. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
-      `總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>左邊的任務是加分項:每完成一個得 $${REWARD},完成越多星星越多,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`));
+  const rulesTitle = L('How to win', '獲勝條件'), rulesBody = rule + L(` Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>The missions on the left are a bonus: each one pays $${REWARD}, and the more you finish the more stars you get. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
+      `總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>左邊的任務是加分項:每完成一個得 $${REWARD},完成越多星星越多,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`);
+  // 線上同樂:規則卡每個人在自己裝置上看、自己按繼續(閱讀速度不同);主機按完後等所有手機都確認了才開始
+  if (NET.on && NET.started) {
+    NET.rules = { title: rulesTitle, body: rulesBody }; NET.guests.forEach((g) => { g.ready = false; });
+    netSend({ t: 'rules', title: rulesTitle, body: rulesBody });
+    const pr = cardPanel(rulesTitle, rulesBody); $('panel').classList.add('nomirror'); await pr; $('panel').classList.remove('nomirror');   // 主機自己的規則卡不鏡射給手機(手機有自己的)
+    await netWaitReady();
+    NET.rules = null;
+  } else await cardPanel(rulesTitle, rulesBody);
   S.busy = false; showCtl(true);
   if (S.nh > 1) toast(L(`${nameOf(S.players[0])} goes first (Player 1)`, `${nameOf(S.players[0])}先走(玩家 1)`));
 }
@@ -2549,11 +2569,16 @@ function clientInit() {
     if (m.t === 'lane') { S.lanePath[m.type] = m.path; _drawLane0(m.type); return; }
     if (m.t === 'toast') { toast(m.msg); return; }
     if (m.t === 'sfx') { AU.sfx(m.name); return; }
+    if (m.t === 'rules') {     // 規則卡:自己這台顯示、自己按繼續,按了才告訴主機;期間主機鏡射過來的面板先存著
+      rulesOpen = true; const el = $('panel'); el.className = 'panel';
+      el.innerHTML = `<h3>${m.title}</h3><p>${m.body}</p><div class="btns"><button class="b-ok" data-local="1">${L('Continue', '繼續')}</button></div>`;
+      el.querySelector('button').onclick = () => { rulesOpen = false; AU.sfx('click'); send({ t: 'ready' }); if (pendingPanel) { const q = pendingPanel; pendingPanel = null; onMsg(q); } else { el.className = 'panel hide'; el.innerHTML = ''; } };
+      return; }
     if (m.t === 'reset') { location.href = `join/?r=${code}`; return; }
-    if (m.t === 'ui') { const el = $(m.box); if (!el) return; el.className = m.cls; morph(el, m.html); applyMine(); return; }
+    if (m.t === 'ui') { if (m.box === 'panel' && rulesOpen) { pendingPanel = m; return; } const el = $(m.box); if (!el) return; el.className = m.cls; morph(el, m.html); applyMine(); return; }
     if (m.t === 'hud') { HUD = m; mine = !!m.mine; if (S.turn !== m.turn && PIECES[m.turn]) { focus = PIECES[m.turn]; pan.set(0, 0, 0); } S.turn = m.turn; /* 換人:鏡頭切到那位、平移歸零 */ (m.holds || []).forEach((h, i) => { const p = S.players[i]; if (!p) return; KEYS.forEach((k) => { p.hold[k].n = h[k] || 0; }); }); paintHud(); applyMine(); return; }
   }
-  let HUD = null, mine = false, aview = null;
+  let HUD = null, mine = false, aview = null, rulesOpen = false, pendingPanel = null;
   function paintHud() {
     const h = HUD; if (!h) return;
     $('cash').textContent = h.cash; $('rankTxt').textContent = h.rank; $('rankTxt').classList.toggle('top', !!h.top); $('crown').classList.toggle('hide', !h.top);
@@ -2574,13 +2599,13 @@ function clientInit() {
   function applyMine() {
     document.body.classList.toggle('watch', !mine);
     const cur = S.players[S.turn]; $('panel').dataset.watch = cur && !mine ? L(`${nameOf(cur)} is playing`, `${nameOf(cur)}操作中`) : '';
-    ['stepCtl', 'panel', 'draw', 'ctl', 'end'].forEach((id) => { $(id).style.pointerEvents = mine && id !== 'end' ? '' : 'none'; });
+    ['stepCtl', 'panel', 'draw', 'ctl', 'end'].forEach((id) => { $(id).style.pointerEvents = (mine && id !== 'end') || (id === 'panel' && rulesOpen) ? '' : 'none'; });
     $('ctl').style.visibility = mine ? '' : 'hidden';   // 別人的背包 / 擲骰鈕不顯示(和看電腦走一樣),面板才看得到
     $('tipbar').classList.toggle('hide', $('ctl').classList.contains('hide') || !mine);
   }
   // 鏡射區塊的操作回傳主機
   ['ctl', 'stepCtl', 'panel', 'draw', 'end'].forEach((id) => { const el = $(id);
-    el.addEventListener('click', (e) => { const b = e.target.closest('button, .dcard'); if (!b || !el.contains(b) || b.disabled) return; e.preventDefault();
+    el.addEventListener('click', (e) => { const b = e.target.closest('button, .dcard'); if (!b || !el.contains(b) || b.disabled || b.dataset.local) return; e.preventDefault();
       send({ t: 'click', box: id, idx: [...el.querySelectorAll('button, .dcard')].indexOf(b) }); });
     let last = 0; el.addEventListener('input', (e) => { const inp = e.target; if (inp.tagName !== 'INPUT') return; const now = Date.now(); const fire = () => send({ t: 'input', box: id, idx: [...el.querySelectorAll('input')].indexOf(inp), value: inp.value });
       if (now - last > 60) { last = now; fire(); } else { clearTimeout(inp._t); inp._t = setTimeout(fire, 70); } }); });
