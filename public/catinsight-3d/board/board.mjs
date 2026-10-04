@@ -263,6 +263,7 @@ const spyLeft = (viewer) => (viewer && viewer.spy ? Math.max(0, viewer.spy.until
    所以第一次點擊 / 按鍵時才建立 AudioContext 並開始播音樂。右上角 ♪ 可以關掉(會記住) */
 const VER = (new URL(import.meta.url).searchParams.get('v') || '?');      // 版本號(來自 board.mjs?v=N),顯示在結算畫面
 const EMBED = !!new URLSearchParams(location.search).get('embed') && parent !== window;
+const CLIENT = new URLSearchParams(location.search).get('client');      // 手機端:?client=房號 → 自己畫棋盤、跟著主機的狀態走
 if (EMBED) document.body.classList.add('embed');      // 嵌在街機裡:手機版右上角要留位置給外面的離開鈕
 const AU = (() => {
   let ctx = null, master, mus, nbuf;
@@ -345,7 +346,10 @@ const AU = (() => {
   }
   return { sfx, toggle, get on() { return on; }, get state() { return ctx ? `${ctx.state} bgm ${bgm ? Math.round(bgm.buffer.duration) : 'loading'}` : 'locked'; } };
 })();
-const sfx = AU.sfx;
+// 音效:主機播自己的,同時轉送給手機(手機看到的翻牌、繼續、道具、好壞消息才有聲)。
+// 骰子 / 走格子手機自己會播(跟著 dice / hop 訊息),hover 是本機的,不轉送
+const NET_SFX_SKIP = new Set(['hover', 'dice', 'hop', 'hopAi']);
+const sfx = (name) => { AU.sfx(name); if (!NET_SFX_SKIP.has(name) && !CLIENT && NET.on && NET.started) netSend({ t: 'sfx', name }); };
 
 /* ───────────── 狀態 ───────────── */
 let S;
@@ -2468,7 +2472,7 @@ async function start() {
 }
 
 $('rollBtn').onclick = () => turn();
-document.addEventListener('click', (e) => { if (e.target.closest('button, .dcard, .bubble')) sfx('click'); });   // 任何按鈕 / 牌 / 提示泡泡按下都有聲
+document.addEventListener('click', (e) => { if (CLIENT && e.target.closest('#ctl, #stepCtl, #panel, #draw, #end')) return; if (e.target.closest('button, .dcard, .bubble')) sfx('click'); });   // 任何按鈕 / 牌 / 提示泡泡按下都有聲(手機上鏡射區的按鈕由主機轉送點擊聲,不重複)
 // 滑鼠移到任何按鈕 / 卡片上都有一聲(只有有滑鼠的裝置;同一顆按鈕不重複響)
 if (matchMedia('(hover:hover)').matches) { let lastHover = null;
   document.addEventListener('mouseover', (e) => { const b = e.target.closest('button, .dcard, .rb, .stockbtn, .bubble'); if (!b || b === lastHover) { if (!b) lastHover = null; return; } lastHover = b; if (b.disabled) return; sfx('hover'); });
@@ -2543,6 +2547,7 @@ function clientInit() {
     if (m.t === 'prices') { S.price = m.price; drawAll(); return; }
     if (m.t === 'lane') { S.lanePath[m.type] = m.path; _drawLane0(m.type); return; }
     if (m.t === 'toast') { toast(m.msg); return; }
+    if (m.t === 'sfx') { AU.sfx(m.name); return; }
     if (m.t === 'reset') { location.href = `join/?r=${code}`; return; }
     if (m.t === 'ui') { const el = $(m.box); if (!el) return; el.className = m.cls; morph(el, m.html); applyMine(); return; }
     if (m.t === 'hud') { HUD = m; mine = !!m.mine; S.turn = m.turn; (m.holds || []).forEach((h, i) => { const p = S.players[i]; if (!p) return; KEYS.forEach((k) => { p.hold[k].n = h[k] || 0; }); }); paintHud(); applyMine(); return; }
@@ -2597,7 +2602,6 @@ function clientInit() {
   connect();
 }
 
-const CLIENT = new URLSearchParams(location.search).get('client');      // 手機端:?client=房號 → 自己畫棋盤、跟著主機的狀態走
 resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
 window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
