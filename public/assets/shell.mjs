@@ -16,8 +16,7 @@ const WORKS = [
 
 /* ===== 游標 ===== */
 const cursor = document.getElementById('cursor');
-const catemo = document.getElementById('catemo');
-const cat = { lx: 0, ly: 0, speed: 0, dir: 1, walk: false };
+const cat = { lx: 0, ly: 0, speed: 0 };
 /* 分頁標題也有一隻貓(像 bruno-simon.com 的車子):滑鼠在動的時候,風景往右捲、貓看起來就像往左走;停下來就靜止 */
 const tabTitle = (() => {
   const BLANK = '\u2003', W = 9, CAT = 4;      // 9 格風景,貓固定在第 4 格;空格用 em space 寬度才接近 emoji
@@ -594,12 +593,9 @@ function frame(){
   // 游標球
   cur.x += (cur.tx-cur.x)*.18; cur.y += (cur.ty-cur.y)*.18;
   cursor.style.transform = `translate(${cur.x}px,${cur.y}px) translate(-50%,-50%)`;
-  // logo 上的小貓:滑鼠在動就走路;面向滑鼠那一邊(🐈 本身朝左,滑鼠在右邊就鏡射)
+  // 分頁標題的小貓:滑鼠在動時風景捲動
   { const mv = Math.hypot(cur.tx - cat.lx, cur.ty - cat.ly); cat.lx = cur.tx; cat.ly = cur.ty;
-    cat.speed = cat.speed * 0.85 + mv; const walking = cat.speed > 1.5;
-    if (walking !== cat.walk) { cat.walk = walking; catemo.classList.toggle('walk', walking); }
-    tabTitle(walking, performance.now());
-    const dir = cur.tx > fc.x + 10 ? -1 : cur.tx < fc.x - 10 ? 1 : cat.dir; if (dir !== cat.dir) { cat.dir = dir; catemo.firstElementChild.style.transform = `scaleX(${dir})`; } }
+    cat.speed = cat.speed * 0.85 + mv; tabTitle(cat.speed > 1.5, performance.now()); }
   // 貓眼注視
   { const dx=cur.tx-fc.x, dy=cur.ty-fc.y, d=Math.hypot(dx,dy)||1, k=Math.min(1,d/260)*4.6;
     const ox=(dx/d*k).toFixed(1), oy=(dy/d*k).toFixed(1);
