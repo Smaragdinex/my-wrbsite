@@ -386,9 +386,10 @@ body.embed .topbtns{right:64px}
 
 /* 左上整合:頭像 | 現金 + 名次;第一名頭像戴皇冠 */
 .mecol{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
-.ava .crown{position:absolute;left:-8px;top:-14px;font-style:normal;font-size:calc(26px * var(--fs));transform:rotate(-22deg);filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));pointer-events:none}
+.ava .crown{position:absolute;left:-10px;top:-18px;width:calc(40px * var(--fs));transform:rotate(-22deg);filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));pointer-events:none;z-index:2}
+.ava .crown img{width:100%;height:auto;display:block}
 .ava .crown.hide{display:none}
-@media(max-width:900px){ .ava .crown{font-size:calc(22px * var(--fs))} .lcol{top:calc(var(--ava) + 24px)} .rcol{top:calc(var(--ava) + 24px)} }
+@media(max-width:900px){ .ava .crown{width:calc(34px * var(--fs))} .lcol{top:calc(var(--ava) + 24px)} .rcol{top:calc(var(--ava) + 24px)} }
 @media(max-width:900px){ .tabs.col .pava{width:calc(54px * var(--fs));height:calc(54px * var(--fs))} }
 
 /* 對手頭像右邊的名次 */
@@ -473,3 +474,6 @@ body.watch #panel[data-watch=""]::after{display:none}
 .endcard .endlb{width:auto;border:2px solid #f1e6d6;box-shadow:none;padding:10px 10px 8px;margin:10px 0 2px;max-height:min(42vh,calc(360px * var(--fs)));text-align:left}
 .endcard .btns button{font-size:calc(14px * var(--fs))}
 @media(max-height:620px){ .endcard .endlb{max-height:32vh} }
+
+/* 排行榜列上的小頭像 */
+.rrow .ic.mini{width:calc(26px * var(--fs));height:calc(26px * var(--fs));flex:none;border-radius:50%;border:2px solid #fff;background:#dfe8ff center 20%/cover;box-shadow:0 0 0 1.5px #e6d9c4}

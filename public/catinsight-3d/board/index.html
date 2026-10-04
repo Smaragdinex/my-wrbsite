@@ -19,7 +19,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#9bdc7a">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=59">
+<link rel="stylesheet" href="style.css?v=60">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -31,7 +31,7 @@
 <canvas id="gl"></canvas>
 
 <div class="hud">
-  <div class="ava" id="avaMe" style="background-image:url(/assets/app-icon.png)"><i class="crown hide" id="crown">👑</i><div class="ranktag" id="rankTxt"></div></div>
+  <div class="ava" id="avaMe" style="background-image:url(/assets/app-icon.png)"><i class="crown hide" id="crown"><img src="crown.webp?v=1" alt=""></i><div class="ranktag" id="rankTxt"></div></div>
   <div class="mecol"><div class="cashpill"><span class="coin"></span><span id="cash">10,000</span></div><div class="merow"><button class="stockbtn" id="stockBtn" aria-label="my assets"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="5" height="10" rx="1.5"/><rect x="9.5" y="5" width="5" height="16" rx="1.5"/><rect x="16" y="9" width="5" height="12" rx="1.5"/></svg></button></div></div>
   <div class="bar hide">
     <div class="pill"><span class="coin"></span><span id="cash2">10,000</span></div>
@@ -112,6 +112,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=208"></script>
+<script type="module" src="./board.mjs?v=209"></script>
 </body>
 </html>

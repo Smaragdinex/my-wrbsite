@@ -1240,11 +1240,13 @@ async function portrait(key) {
   g.putImageData(img, 0, 0);
   return (portraitCache[key] = cv.toDataURL());
 }
+const putPortrait = (el, key) => portrait(key).then((url) => { if (el) el.style.backgroundImage = `url(${url})`; }).catch(() => {});
 function setPortraits() {
-  const put = (el, key) => portrait(key).then((url) => { if (el) el.style.backgroundImage = `url(${url})`; }).catch(() => {});
-  put($('avaMe'), meP().char);
-  document.querySelectorAll('#assetTabs .pava').forEach((b) => put(b, S.players[+b.dataset.i].char));
+  putPortrait($('avaMe'), meP().char);
+  document.querySelectorAll('#assetTabs .pava').forEach((b) => putPortrait(b, S.players[+b.dataset.i].char));
 }
+// 排行榜列上的小頭像(和左上的頭像同一套 3D 渲染圖)
+function paintPortraits(root = document) { root.querySelectorAll('.mini[data-char]').forEach((el) => { if (!el.dataset.done && CHARS[el.dataset.char]) { el.dataset.done = '1'; putPortrait(el, el.dataset.char); } }); }
 let focus;
 // 四個棋子(第 3、4 個只有 3~4 人局才會出現)。同一格上四個角落各站一位
 const mkPiece = () => { const piece = new THREE.Group(); scene.add(piece); const body = new THREE.Group(); body.rotation.y = Math.PI / 4; piece.add(body); piece.visible = false; return { piece, body }; };
@@ -2285,11 +2287,11 @@ async function submitGlobal(rec) {
     if (!r.ok) throw new Error(r.status);
     const d = await r.json(); lbState = { ...lbState, status: 'ok', rank: d.rank, top: d.top };
   } catch (e) { lbState = { ...lbState, status: 'error', rank: null, top: null }; }
-  const box = document.getElementById('lbGlobal'); if (box) box.innerHTML = globalBox();
+  const box = document.getElementById('lbGlobal'); if (box) { box.innerHTML = globalBox(); paintPortraits(box); }
 }
 async function fetchGlobal() {
   try { const r = await fetch(`${LB_API}/top?limit=20`); const d = await r.json(); lbState.top = d.top; if (lbState.status !== 'ok' && lbState.status !== 'off') lbState.status = 'ok'; } catch (e) { lbState.status = 'error'; }
-  const box = document.getElementById('lbGlobal'); if (box) box.innerHTML = globalBox();
+  const box = document.getElementById('lbGlobal'); if (box) { box.innerHTML = globalBox(); paintPortraits(box); }
 }
 function globalBox() {
   const st = lbState, when = (t) => new Date(t * 1000).toISOString().slice(5, 10);
@@ -2297,7 +2299,7 @@ function globalBox() {
   if (st.status === 'sending' || ((st.status === 'idle' || st.status === 'off') && !st.top)) return `${head}<p>${L('Loading…', '載入中…')}</p>`;
   if (st.status === 'error' && !st.top) return `${head}<p>${L('Could not reach the leaderboard. Check your connection.', '連不上排行榜,請檢查網路。')}</p>`;
   const rows = (st.top || []).map((r, i) => `<div class="rrow ${st.rank === i + 1 && st.mine && r.assets === st.mine.assets && r.name === st.mine.name ? 'me' : ''}">
-      <span class="rk">${rankMark(i)}</span><span class="ic">${CHARS[r.char]?.icon || ''}</span>
+      <span class="rk">${rankMark(i)}</span><span class="ic mini" data-char="${r.char}"></span>
       <div class="c"><b>${r.name} · $${fmt(r.assets)}</b><small>${r.rounds}${L(' rd', ' 回合')} · ${r.players}${L('p', ' 人')} · ${{ easy: L('easy', '簡單'), normal: L('normal', '一般'), hard: L('hard', '兇狠') }[r.ai] || r.ai} · ${when(r.created_at)}</small></div></div>`).join('');
   return `${head}<p>${st.rank ? L(`This game ranks #${st.rank} worldwide`, `這一局在全球排第 ${st.rank} 名`) : st.status === 'off' ? L('Local test: score not sent.', '本機測試,成績不上傳。') : L('Top 20 players worldwide', '全球前 20 名')}</p>
     ${rows || `<p>${L('No scores yet. Be the first!', '還沒有人上榜,來當第一個!')}</p>`}
@@ -2320,7 +2322,7 @@ function recordsBox(cur) {
   const list = loadRecords(), best = bestOf();
   const same = (a, b) => a && b && a.date === b.date && a.assets === b.assets && a.char === b.char && a.rounds === b.rounds;
   const rows = list.map((r, i) => `<div class="rrow ${same(r, cur) ? 'me' : ''}">
-      <span class="rk">${rankMark(i)}</span><span class="ic">${CHARS[r.char]?.icon || ''}</span>
+      <span class="rk">${rankMark(i)}</span><span class="ic mini" data-char="${r.char}"></span>
       <div class="c"><b>${r.name ? `${r.name} · ` : ''}$${fmt(r.assets)}</b><small>${r.rounds}${L(' rd', ' 回合')} · ${r.n}${L('p', ' 人')} · ${L('#', '第 ')}${r.rank}${L('', ' 名')} · ${r.date.slice(5)}</small></div>
       <span class="st">${'★'.repeat(r.stars)}<i>${'★'.repeat(3 - r.stars)}</i></span></div>`).join('');
   return `<div class="rbox"><h4>🏆 ${L('Leaderboard', '排行榜')}</h4>
@@ -2349,7 +2351,7 @@ function finish() {
     <p>${L(`You: #${myRank} · $${fmt(meA)} · ${S.rolls} rounds`, `你:第 ${myRank} 名 · $${fmt(meA)} · ${S.rolls} 回合`)}${newBest ? ` · 🏆 <b>${L('New best!', '新紀錄!')}</b>` : ''}</p>
     <div id="lbGlobal" class="rbox lblist endlb">${globalBox()}</div>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button><button class="b-sell" id="quit">${L('Exit', '退出')}</button></div>${credit}</div>`;
-  $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose'); remoteBanner();
+  $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose'); remoteBanner(); paintPortraits($('end'));
   $('again').onclick = start;
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
   // 退出:嵌在街機裡就請外面的房間頁把遊戲關掉;單獨開的就回房間頁
