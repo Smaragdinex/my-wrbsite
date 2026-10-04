@@ -37,7 +37,7 @@ const SECTORS = {
   agri:    { name: L('Dairy Cow Farms', '乳牛農產'),  code: L('AGRI', '農產品'),   color: 0xa3c45a, css: '#7fa33a', open: 60,  div: 0.02, blurb: L('Grain, meat and milk. Moves with inflation, weather and war, not with the stock market.', '穀物、肉、奶。跟著通膨、天氣和戰爭走,跟股市關聯不大。') },
   gold:    { name: L('Goldfish Gold', '金魚黃金'),         code: L('GOLD', '黃金'),       color: 0xe6b422, css: '#c4950c', open: 100, div: 0,    blurb: L('A safe haven. Rises when markets panic.', '避險資產,市場恐慌時反而上漲。') },
   bond:    { name: L('Tortoise Bond', '烏龜債券'),          code: L('BOND', '債券'),       color: 0x6aa5a9, css: '#4f8c90', open: 100, div: 0.03, blurb: L('Up when rates fall, down when they rise.', '降息漲、升息跌,和股票互補。') },
-  etf:     { name: L('Zoo ETF', '動物園 ETF'), code: L('ETF', '大盤ETF'),     color: 0x3d5a80, css: '#3d5a80', open: 100, div: 0.02, blurb: L('Owns a bit of every stock sector at once.', '一次買進所有產業,最簡單的分散。') },
+  etf:     { name: L('Zoo ETF', '動物園 ETF'), code: L('ETF', '大盤ETF'),     color: 0x3d5a80, css: '#3d5a80', open: 100, div: 0.035, blurb: L('Owns a bit of every stock sector at once.', '一次買進所有產業,最簡單的分散。') },
   green:   { name: L('Hummingbird EV', '蜂鳥電動車'),    code: L('GREEN', '綠能車'),    color: 0x2ec4b6, css: '#1fa799', open: 95,  div: 0,    blurb: L('Lives on subsidies and cheap loans.', '靠政策補助和低利率成長。') },
   def:     { name: L('Eagle Defense', '老鷹軍工'),      code: L('DEFENSE', '軍工'),    color: 0x6b7d3a, css: '#5a6b2c', open: 90,  div: 0.02, blurb: L('Rises when the world gets tense.', '國際情勢緊張時上漲。') },
   game:    { name: L('Fox Games', '狐狸遊戲'),   code: L('GAMES', '遊戲'),      color: 0xb5179e, css: '#a01389', open: 80,  div: 0.01, blurb: L('One hit title can change everything.', '一款大作就能改變一切。') },
