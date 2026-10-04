@@ -549,6 +549,12 @@ function tree(x, z, s = 1, parent = scene) {
   SWAY.push({ crown, phase: x * 0.7 + z * 1.3, amp: 0.045 + Math.random() * 0.025, speed: 0.9 + Math.random() * 0.4 });
   return g;
 }
+// 池塘波紋:慢慢往 +x 飄、中段最亮,週期結束就換個位置重來
+const RIPPLES = [];
+function rippleStep(dt) {
+  for (const r of RIPPLES) { r.t += dt; if (r.t >= r.dur) { r.t = 0; const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * 0.72; r.m.position.set(-0.8 + Math.cos(a) * d * 1.9, 0.235, 0.6 + Math.sin(a) * d * 1.33); r.m.rotation.y = (Math.random() - 0.5) * 0.5; r.len = 0.45 + Math.random() * 0.5; r.m.scale.x = r.len; r.dur = 3 + Math.random() * 2.5; r.speed = 0.08 + Math.random() * 0.08; }
+    const k = r.t / r.dur; r.m.material.opacity = Math.sin(k * Math.PI) * 0.55; r.m.position.x += r.speed * dt; r.m.scale.x = r.len * (0.7 + 0.3 * Math.sin(k * Math.PI)); }
+}
 // 風:所有樹冠一起慢慢搖,各自錯開相位;偶爾來一陣比較大的風
 function windStep() {
   const gust = 1 + Math.max(0, Math.sin(T * 0.23)) * 0.9;
@@ -600,6 +606,13 @@ const E = N / 2 * STEP + 0.62;
 {
   const pond = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.06, 40), mat(0x8fd3ff)); pond.position.set(-0.8, 0.2, 0.6); pond.scale.z = 0.7; scene.add(pond);
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.05, 40), mat(0xf6e3c2)); rim.position.set(-0.8, 0.185, 0.6); rim.scale.z = 0.72; scene.add(rim);
+  // 水面的白色波紋:幾條細細的白線在池塘上慢慢往一邊飄、淡入淡出,像被風吹的漣漪
+  { const PC = { x: -0.8, z: 0.6, rx: 1.9, rz: 1.33 };
+    const wm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }); wm.userData.outlineParameters = { visible: false };
+    const spawn = (r) => { const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * 0.72;   // 落在橢圓內側,留邊
+      r.m.position.set(PC.x + Math.cos(a) * d * PC.rx, 0.235, PC.z + Math.sin(a) * d * PC.rz); r.m.rotation.y = (Math.random() - 0.5) * 0.5; r.len = 0.45 + Math.random() * 0.5; r.m.scale.x = r.len; r.t = 0; r.dur = 3 + Math.random() * 2.5; r.speed = 0.08 + Math.random() * 0.08; };
+    for (let i = 0; i < 12; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.05), wm.clone()); m.rotation.order = 'YXZ'; m.rotation.x = -Math.PI / 2; m.renderOrder = 2; scene.add(m);
+      const r = { m, t: 0, dur: 1, len: 1, speed: 0.1 }; spawn(r); r.t = Math.random() * r.dur; RIPPLES.push(r); } }
   [[-3.4, -2.6, 1.2], [-2.2, -2.2, 1], [2.6, -3.2, 1.3], [3.6, -1.4, 1], [3.2, 2.6, 1.1], [-3.8, 2.4, 1.1], [2.4, 2.2, 1], [-2.6, 3.0, 1.2], [3.0, -2.4, 1.1]].forEach(([x, z, sc]) => tree(x, z, sc));
   house(1.9, -0.9, 0xfff1dc, 0xe2726b, 0.4);
   lamp(0.6, 2.2); lamp(-2.4, 1.9);
@@ -1242,7 +1255,7 @@ const ease = (k) => 1 - Math.pow(1 - k, 3);
 let skipRender = false;
 function step(dt) {
   T += dt;
-  windStep();
+  windStep(); rippleStep(dt);
   for (let i = tweens.length - 1; i >= 0; i--) {
     const a = tweens[i], k = Math.min(1, (T - a.t0) / a.dur);
     a.fn(k);
