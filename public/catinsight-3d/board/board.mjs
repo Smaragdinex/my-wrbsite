@@ -2542,15 +2542,16 @@ function clientInit() {
       showPieces(true); focus = PIECES[me]; diceSpots(PIECES[me]); dice.forEach((d, i) => d.position.copy(DIE_REST[i]));
       buildFoes(); setPortraits(); S.view = null; return;
     }
-    if (m.t === 'hop') { const P = PIECES[m.p]; if (P) enqueue(m.p, () => hopOnto(hopGroup(m.tgt), P, m.far)); return; }
-    if (m.t === 'dice') { const P = PIECES[m.p]; if (P) enqueue(m.p, () => rollDice(m.vals, P)); return; }
+    // 鏡頭和主機一樣跟著「正在走的人」:誰擲骰 / 誰在跳就跟誰(玩家自己的縮放不受影響)
+    if (m.t === 'hop') { const P = PIECES[m.p]; if (P) enqueue(m.p, () => { focus = P; return hopOnto(hopGroup(m.tgt), P, m.far); }); return; }
+    if (m.t === 'dice') { const P = PIECES[m.p]; if (P) enqueue(m.p, () => { focus = P; return rollDice(m.vals, P); }); return; }
     if (m.t === 'prices') { S.price = m.price; drawAll(); return; }
     if (m.t === 'lane') { S.lanePath[m.type] = m.path; _drawLane0(m.type); return; }
     if (m.t === 'toast') { toast(m.msg); return; }
     if (m.t === 'sfx') { AU.sfx(m.name); return; }
     if (m.t === 'reset') { location.href = `join/?r=${code}`; return; }
     if (m.t === 'ui') { const el = $(m.box); if (!el) return; el.className = m.cls; morph(el, m.html); applyMine(); return; }
-    if (m.t === 'hud') { HUD = m; mine = !!m.mine; S.turn = m.turn; (m.holds || []).forEach((h, i) => { const p = S.players[i]; if (!p) return; KEYS.forEach((k) => { p.hold[k].n = h[k] || 0; }); }); paintHud(); applyMine(); return; }
+    if (m.t === 'hud') { HUD = m; mine = !!m.mine; if (S.turn !== m.turn && PIECES[m.turn]) { focus = PIECES[m.turn]; pan.set(0, 0, 0); } S.turn = m.turn; /* 換人:鏡頭切到那位、平移歸零 */ (m.holds || []).forEach((h, i) => { const p = S.players[i]; if (!p) return; KEYS.forEach((k) => { p.hold[k].n = h[k] || 0; }); }); paintHud(); applyMine(); return; }
   }
   let HUD = null, mine = false, aview = null;
   function paintHud() {
