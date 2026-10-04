@@ -338,9 +338,10 @@ const heldCount = () => KEYS.filter((k) => S.hold[k].n > 0).length;
 // 記下這位玩家用過哪幾「種」道具(道具達人成就用);事件卡全部算一種
 const usedItem = (id) => { const p = S.players[S.hi], kind = id.startsWith('ev') ? 'ev' : id; (p.used ||= []); if (!p.used.includes(kind)) p.used.push(kind); };
 const MISSION_DEFS = [
+  // 階梯式成就(chain):同一系列用等級 Lv.1、Lv.2… 表示,已完成分頁只顯示做到的最高等級
   // 分散投資三階:3 → 5 → 7 種
-  ...[[3, null], [5, 'spread'], [7, 'spread5']].map(([need, after], i) => ({ id: i ? 'spread' + need : 'spread', after,
-    make: () => ({ title: i ? L('Full spread', '五檔齊發') : L('Spread it out', '分散投資'), sub: L(`Hold ${need} different assets at once`, `同時持有 ${need} 種不同資產`), ok: () => heldCount() >= need }) })),
+  ...[[3, null], [5, 'spread'], [7, 'spread5']].map(([need, after], i) => ({ id: i ? 'spread' + need : 'spread', after, chain: 'spread', lv: i + 1,
+    make: () => ({ title: `${L('Spread it out', '分散投資')} Lv.${i + 1}`, sub: L(`Hold ${need} different assets at once`, `同時持有 ${need} 種不同資產`), ok: () => heldCount() >= need }) })),
   { id: 'paid', make: () => { S.lastDividend = 0;
       return { title: L('Get paid to wait', '領到股利'), sub: L('Collect $100+ in dividends in one round', '一回合領到 $100 以上股利'), ok: () => S.lastDividend >= 100 }; } },
   { id: 'dip', make: () => { S.flags.dip = false;
@@ -350,15 +351,15 @@ const MISSION_DEFS = [
   { id: 'cash', make: () => { S.cashStreak = 0;
       return { title: L('Keep dry powder', '保留現金'), sub: L('Own assets and keep $2,000+ cash for 3 turns', '持有資產且連續 3 回合現金 $2,000 以上'), ok: () => S.cashStreak >= 3 }; } },
   // 資產成長是階梯式的成就:11,000 → 15,000 → 20,000 → 30,000 → 40,000 → 50,000 → 100,000,上一階完成了下一階才會出現
-  ...[11000, 15000, 20000, 30000, 40000, 50000, 100000].map((goal, i, arr) => ({ id: 'g' + goal / 1000, after: i ? 'g' + arr[i - 1] / 1000 : null,
-    make: () => ({ title: goal >= 100000 ? L('Stock god', '股神') : L('Grow the pile', '資產成長'), sub: goal >= 100000 ? L('Total assets 10× your starting cash ($100,000)', '總資產達到起始資金 10 倍($100,000)') : L(`Reach $${fmt(goal)} in total assets`, `總資產達到 $${fmt(goal)}`), ok: () => assets() >= goal }) })),
+  ...[11000, 15000, 20000, 30000, 40000, 50000, 100000].map((goal, i, arr) => ({ id: 'g' + goal / 1000, after: i ? 'g' + arr[i - 1] / 1000 : null, chain: goal >= 100000 ? null : 'grow', lv: i + 1,
+    make: () => ({ title: goal >= 100000 ? L('Stock god', '股神') : `${L('Grow the pile', '資產成長')} Lv.${i + 1}`, sub: goal >= 100000 ? L('Total assets 10× your starting cash ($100,000)', '總資產達到起始資金 10 倍($100,000)') : L(`Reach $${fmt(goal)} in total assets`, `總資產達到 $${fmt(goal)}`), ok: () => assets() >= goal }) })),
   { id: 'coin2x', make: () => ({ title: L('Crypto whale', '炒幣達人'), sub: L('Be up 100%+ on ParrotCoin', '鸚鵡幣(加密貨幣)未實現獲利超過 100%'),
       ok: () => { const h = S.hold.crypto; return h.n > 0 && h.cost > 0 && (h.n * S.price.crypto - h.cost) / h.cost >= 1; } }) },
   { id: 'shortWin', make: () => ({ title: L('Short seller', '空軍總司令'), sub: L('Cover a short with 20%+ profit', '放空後回補,獲利 20% 以上'), ok: () => S.flags.shortWin }) },
   { id: 'marginWin', make: () => ({ title: L('Leverage pro', '借力使力'), sub: L('Sell a margin position at a profit', '融資買的股票獲利賣出(沒被斷頭)'), ok: () => S.flags.marginWin }) },
   // 股息大戶兩階:累積領到 $1,000 → $3,000
-  ...[[1000, null], [3000, 'div1k']].map(([goal, after]) => ({ id: goal === 1000 ? 'div1k' : 'div3k', after,
-    make: () => ({ title: L('Dividend king', '股息大戶'), sub: L(`Collect $${fmt(goal)} in dividends over the game`, `整局累積領到 $${fmt(goal)} 股利`), ok: () => (S.players[S.hi].divTotal || 0) >= goal }) })),
+  ...[[1000, null], [3000, 'div1k']].map(([goal, after], i) => ({ id: goal === 1000 ? 'div1k' : 'div3k', after, chain: 'div', lv: i + 1,
+    make: () => ({ title: `${L('Dividend king', '股息大戶')} Lv.${i + 1}`, sub: L(`Collect $${fmt(goal)} in dividends over the game`, `整局累積領到 $${fmt(goal)} 股利`), ok: () => (S.players[S.hi].divTotal || 0) >= goal }) })),
   { id: 'dodge', make: () => ({ title: L('Storm proof', '躲過黑天鵝'), sub: L('Your holdings gain value during a market crash', '壞消息事件發生時,你的持股市值反而上漲'), ok: () => S.flags.dodge }) },
   { id: 'comeback', make: () => ({ title: L('Comeback', '逆風翻盤'), sub: L('Fall below $8,000, then climb back to $12,000', '總資產跌破 $8,000 後再回到 $12,000'), ok: () => S.flags.low && assets() >= 12000 }) },
   { id: 'steel', make: () => ({ title: L('Diamond hands', '鑽石手'), sub: L('Keep holding a stock that is down 50%', '一檔持股跌了 50% 還抱著'),
@@ -366,8 +367,8 @@ const MISSION_DEFS = [
   { id: 'liquidator', make: () => ({ title: L('Margin call', '斷頭高手'), sub: L('Push a price down until a rival\'s margin position is liquidated', '把股價打到讓對手的融資部位被強迫平倉'), ok: () => S.flags.liquidator }) },
   { id: 'squeezer', make: () => ({ title: L('Squeeze master', '軋空高手'), sub: L('Push the price up until a rival\'s short is squeezed', '把股價拉到讓對手的空單被軋空'), ok: () => S.flags.squeezer }) },
   // 抱住股票也是階梯:一檔持股未實現獲利 300% → 500% → 800% → 1000%
-  ...[3, 5, 8, 10].map((x, i, arr) => ({ id: 'hold' + x + 'x', after: i ? 'hold' + arr[i - 1] + 'x' : null,
-    make: () => ({ title: L('Hold tight', '抱住股票'), sub: L(`Hold one stock until it is up ${x * 100}%`, `一檔持股未實現獲利達 ${x * 100}%`),
+  ...[3, 5, 8, 10].map((x, i, arr) => ({ id: 'hold' + x + 'x', after: i ? 'hold' + arr[i - 1] + 'x' : null, chain: 'hold', lv: i + 1,
+    make: () => ({ title: `${L('Hold tight', '抱住股票')} Lv.${i + 1}`, sub: L(`Hold one stock until it is up ${x * 100}%`, `一檔持股未實現獲利達 ${x * 100}%`),
       ok: () => KEYS.some((k) => { const h = S.hold[k]; return h.n > 0 && h.cost > 0 && (h.n * S.price[k] - h.cost) / h.cost >= x; }) }) })),
   // 道具達人:用過 3 種不同的道具(遙控骰子、利空卡、偵查報告、三顆骰子、事件卡,事件卡不管哪張都算同一種)
   { id: 'items3', make: () => ({ title: L('Item master', '道具達人'), sub: L('Use 3 different kinds of items (remote dice, bad news, spy report, third die, event card)', '使用 3 種不同的道具(遙控骰子、利空卡、偵查報告、三顆骰子、事件卡)'),
@@ -377,6 +378,7 @@ const MISSION_DEFS = [
   { id: 'income', make: () => ({ title: L('Build income', '打造現金流'), sub: L('Hold 2 assets that pay 3% or more', '持有 2 種配息 3% 以上的資產'), ok: () => KEYS.filter((k) => S.hold[k].n > 0 && SECTORS[k].div >= 0.03).length >= 2 }) },
 ];
 // 任務是成就:每種只能完成一次,全部一次列出來;階梯式的(資產成長、抱住股票)只列出下一階,完成了再補下一階
+const MISSION_BY_ID = Object.fromEntries(MISSION_DEFS.map((d) => [d.id, d]));
 function refillMissions(p) {
   p.missions = p.missions || []; const doneIds = new Set(p.doneIds || []), have = new Set(p.missions.map((m) => m.id));
   for (const d of MISSION_DEFS) if (!doneIds.has(d.id) && !have.has(d.id) && (!d.after || doneIds.has(d.after))) p.missions.push({ id: d.id, done: false, ...d.make() });
@@ -1419,8 +1421,10 @@ function assetRowsHtml(A, mine) {
 // 任務清單的 HTML(主機自己和手機都用)
 const missHtml = (p) => {
   const pend = (p.missions || []).map((m) => `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
-  const seen = new Map(); (p.doneList || []).slice().reverse().forEach((t) => seen.set(t, (seen.get(t) || 0) + 1));   // 同名任務合併成一列標 ×N(最新的排前面)
-  const done = [...seen].map(([t, n]) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span>${n > 1 ? `<b class="cnt">×${n}</b>` : ''}</div>`).join('') || `<div class="sub">${L('Nothing completed yet', '還沒有完成的成就')}</div>`;
+  // 已完成:最新的排前面;同一系列(chain)只留一列,顯示做到的最高等級(依完成順序,最新的那筆就是最高等級)
+  const ids = (p.doneIds || []).slice().reverse(), titles = (p.doneList || []).slice().reverse(), seenChain = new Set(), rows = [];
+  ids.forEach((id, i) => { const d = MISSION_BY_ID[id]; if (d && d.chain) { if (seenChain.has(d.chain)) return; seenChain.add(d.chain); } rows.push(titles[i]); });   // 標題完成時就存好了(含 Lv.N);不要呼叫 make(),有些會重設旗標
+  const done = rows.map((t) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span></div>`).join('') || `<div class="sub">${L('Nothing completed yet', '還沒有完成的成就')}</div>`;
   const pendOrAll = pend || `<div class="sub">${L('All achievements done!', '所有成就都完成了!')}</div>`;
   // 上面兩個分頁:進行中 / 已完成(哪一頁開著記在 #missBox 的 data-tab,重畫不會跳掉)
   return `<div class="mtabs"><button data-mt="pend">${L('Active', '進行中')}</button><button data-mt="done">${L('Done', '已完成')} ${(p.doneList || []).length ? `<i>${(p.doneList || []).length}</i>` : ''}</button></div><div class="mpend">${pendOrAll}</div><div class="mdone">${done}</div>`;
