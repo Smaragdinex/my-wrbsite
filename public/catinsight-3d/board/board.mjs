@@ -1104,7 +1104,7 @@ function paintStage() {
   { const gN = NET.guests.filter((g) => g.online).length; $('pok').textContent = NET.on ? L(`Confirm ${c.name}`, `確認用${c.name}`) : CFG.humans > 1 ? (pickWho === 0 ? L(`Player 1 takes ${c.name}`, `玩家 1 選${c.name}`) : L(`Player 2 takes ${c.name} · start`, `玩家 2 選${c.name},開始`)) : L(`Play as ${c.name}`, `用${c.name}開始`); }
   // 人數設定:只有第一位在選的時候可以改
   $('pcfg').classList.toggle('hide', pickWho > 0);
-  $('pcN').textContent = L('Players', '人數'); $('pcNs').textContent = L('Total players', '遊戲總人數');
+  $('pcN').textContent = L('Players', '人數');
   $('pcD').textContent = L('Bot', '電腦'); document.getElementById('pcDrow').classList.toggle('hide', CFG.n - (NET.on ? 1 + NET.guests.filter((g) => g.online).length : CFG.humans) <= 0);
   { const names = { easy: L('Easy', '簡單'), normal: L('Normal', '一般'), hard: L('Hard', '兇狠') };
     const di = AI_ORDER.indexOf(CFG.ai || 'normal'); $('pcDv').textContent = names[AI_ORDER[di]];
