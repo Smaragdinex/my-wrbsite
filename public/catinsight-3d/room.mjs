@@ -27,7 +27,7 @@ const C = {
 };
 
 const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, stencil: true });   // stencil:窗外夜景只畫在開口範圍內
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -182,13 +182,10 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
   layers.forEach(([tex, depth, isSky], i) => { const W = S - 0.5, Hh = H - 0.9;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: !isSky, depthWrite: !!isSky }));
     m.position.set(-T / 2, Hh / 2 + 0.2, L.z - 0.3 - depth); m.renderOrder = -10 + i; root.add(m); });
-  // 窗景外面罩一個同色的「窗箱」(左右上下四片 + 底),從側面看就是牆變厚,不會看到剪影露在房子外
-  const WD = 2.2, WZ = L.z - T / 2 - WD / 2;
-  box(T, H, WD, C.wallLSide, { x: -S / 2 + T / 2, y: H / 2, z: WZ, r: 0.02, seg: 1, shadow: false });
-  box(T, H, WD, C.wallLSide, { x: S / 2 - T / 2, y: H / 2, z: WZ, r: 0.02, seg: 1, shadow: false });
-  box(S, T, WD, C.wallLSide, { x: 0, y: H - T / 2, z: WZ, r: 0.02, seg: 1, shadow: false });
-  box(S, 0.55, WD, C.slabSide, { x: 0, y: -0.275, z: WZ, r: 0.02, seg: 1, shadow: false });
-  box(S, T, WD, C.wallLSide, { x: 0, y: T / 2, z: WZ, r: 0.02, seg: 1, shadow: false });
+  // 剪影只能透過牆上的開口看到:先用一片看不見的「開口遮罩」寫入 stencil,夜景各層只畫在遮罩範圍內 → 從側面不會露在房子外,牆也不用加厚
+  const mask = new THREE.Mesh(new THREE.PlaneGeometry(S - T - 1.8, H - 1.4), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, stencilWrite: true, stencilRef: 1, stencilZPass: THREE.ReplaceStencilOp }));
+  mask.position.set(-T / 2, 0.5 + (H - 1.4) / 2, L.z + T / 2 + 0.01); mask.renderOrder = -20; root.add(mask);
+  root.traverse((o) => { if (o.isMesh && o.renderOrder >= -10 && o.renderOrder < 0 && o.material.map) { o.material.stencilWrite = true; o.material.stencilRef = 1; o.material.stencilFunc = THREE.EqualStencilFunc; } });
   const cityGlow = new THREE.PointLight(0xb08cff, 1.6, 6, 2); cityGlow.position.set(-T / 2, 2.4, L.z - 0.2); root.add(cityGlow);
 }
 // ---------- 層架上的東西 ----------
