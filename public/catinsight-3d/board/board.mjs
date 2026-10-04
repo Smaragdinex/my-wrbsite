@@ -451,19 +451,22 @@ const MISSION_DEFS = [
       return { title: L('Take profit', '獲利了結'), sub: L('Sell a holding that is up 15% or more', '賣出一檔賺超過 15% 的持股'), ok: () => S.flags.profit }; } },
   { id: 'cash', make: () => { S.cashStreak = 0;
       return { title: L('Keep dry powder', '保留現金'), sub: L('Own assets and keep $2,000+ cash for 3 turns', '持有資產且連續 3 回合現金 $2,000 以上'), ok: () => S.cashStreak >= 3 }; } },
-  { id: 'grow', make: () => { const goal = START_CASH * 2;
-      return { title: L('Double up', '資產翻倍'), sub: L(`Reach $${fmt(goal)} in total assets`, `總資產達到 $${fmt(goal)}`), ok: () => assets() >= goal }; } },
+  // 資產成長是階梯式的成就:11,000 → 15,000 → 20,000 → 30,000,上一階完成了下一階才會出現
+  ...[[11000, null], [15000, 'g11'], [20000, 'g15'], [30000, 'g20']].map(([goal, after]) => ({ id: 'g' + goal / 1000, after,
+    make: () => ({ title: L('Grow the pile', '資產成長'), sub: L(`Reach $${fmt(goal)} in total assets`, `總資產達到 $${fmt(goal)}`), ok: () => assets() >= goal }) })),
   { id: 'hold3x', make: () => ({ title: L('Diamond hands', '抱住股票'), sub: L('Hold one stock until it is up 300%', '一檔持股未實現獲利達 300%'),
       ok: () => KEYS.some((k) => { const h = S.hold[k]; return h.n > 0 && h.cost > 0 && (h.n * S.price[k] - h.cost) / h.cost >= 3; }) }) },
   { id: 'haven', make: () => ({ title: L('Find a safe haven', '準備避險'), sub: L('Hold gold or bonds', '持有黃金或債券'), ok: () => S.hold.gold.n > 0 || S.hold.bond.n > 0 }) },
   { id: 'index', make: () => ({ title: L('Own the market', '買下整個市場'), sub: L('Hold the whole-market ETF', '持有大盤 ETF'), ok: () => S.hold.etf.n > 0 }) },
   { id: 'income', make: () => ({ title: L('Build income', '打造現金流'), sub: L('Hold 2 assets that pay 3% or more', '持有 2 種配息 3% 以上的資產'), ok: () => KEYS.filter((k) => S.hold[k].n > 0 && SECTORS[k].div >= 0.03).length >= 2 }) },
 ];
-// 抽一個「現在還沒達成、而且自己手上沒有」的任務;別的玩家手上也有的排後面,大家的清單才不會長得一樣
+// 任務是成就:每種只能完成一次。抽一個「還沒完成、自己手上沒有、前置成就已完成」的;別的玩家手上也有的排後面,大家的清單才不會長得一樣
+// 全部完成就抽不到(回傳 null),清單會變短
 function drawMission() {
-  const active = new Set(S.missions.map((m) => m.id));
-  const others = new Set(S.players.filter((p) => p !== S.players[S.hi]).flatMap((p) => (p.missions || []).map((m) => m.id)));
-  const pool = MISSION_DEFS.filter((d) => !active.has(d.id)).sort(() => Math.random() - 0.5).sort((x, y) => others.has(x.id) - others.has(y.id));
+  const me = S.players[S.hi], doneIds = new Set(me.doneIds || []), active = new Set(S.missions.filter(Boolean).map((m) => m.id));
+  const others = new Set(S.players.filter((p) => p !== me).flatMap((p) => (p.missions || []).filter(Boolean).map((m) => m.id)));
+  const pool = MISSION_DEFS.filter((d) => !active.has(d.id) && !doneIds.has(d.id) && (!d.after || doneIds.has(d.after))).sort(() => Math.random() - 0.5).sort((x, y) => others.has(x.id) - others.has(y.id));
+  if (!pool.length) return null;
   for (const d of pool) { const m = { id: d.id, done: false, ...d.make() }; if (!m.ok()) return m; }
   const d = pool[0]; return { id: d.id, done: false, ...d.make() };
 }
@@ -482,7 +485,7 @@ const isYou = (p) => p.human && S.nh === 1;                 // 只有一位真�
 const assetsOf = (p) => p.cash - p.debt + KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k] - p.hold[k].loan + shortValue(k, p), 0);
 function setPlayers(chars, humans, names = []) {
   S.players = chars.map((c, i) => mkPlayer(i, i < humans, c)); names.forEach((nm, i) => { if (nm && S.players[i]) S.players[i].name = nm; }); S.nh = humans; S.hi = 0; S.ci = Math.min(humans, chars.length - 1);
-  for (let h = 0; h < humans; h++) { S.hi = h; for (let i = 0; i < 3; i++) S.missions.push(drawMission()); }
+  for (let h = 0; h < humans; h++) { S.hi = h; for (let i = 0; i < 3; i++) { const m = drawMission(); if (m) S.missions.push(m); } }
   S.hi = 0;
 }
 function newState() {
@@ -1506,9 +1509,10 @@ function assetRowsHtml(A, mine) {
 const missHtml = (p) => {
   const pend = (p.missions || []).map((m) => `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
   const seen = new Map(); (p.doneList || []).slice().reverse().forEach((t) => seen.set(t, (seen.get(t) || 0) + 1));   // 同名任務合併成一列標 ×N(最新的排前面)
-  const done = [...seen].map(([t, n]) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span>${n > 1 ? `<b class="cnt">×${n}</b>` : ''}</div>`).join('') || `<div class="sub">${L('Nothing completed yet', '還沒有完成的任務')}</div>`;
+  const done = [...seen].map(([t, n]) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span>${n > 1 ? `<b class="cnt">×${n}</b>` : ''}</div>`).join('') || `<div class="sub">${L('Nothing completed yet', '還沒有完成的成就')}</div>`;
+  const pendOrAll = pend || `<div class="sub">${L('All achievements done!', '所有成就都完成了!')}</div>`;
   // 上面兩個分頁:進行中 / 已完成(哪一頁開著記在 #missBox 的 data-tab,重畫不會跳掉)
-  return `<div class="mtabs"><button data-mt="pend">${L('Active', '進行中')}</button><button data-mt="done">${L('Done', '已完成')} ${(p.doneList || []).length ? `<i>${(p.doneList || []).length}</i>` : ''}</button></div><div class="mpend">${pend}</div><div class="mdone">${done}</div>`;
+  return `<div class="mtabs"><button data-mt="pend">${L('Active', '進行中')}</button><button data-mt="done">${L('Done', '已完成')} ${(p.doneList || []).length ? `<i>${(p.doneList || []).length}</i>` : ''}</button></div><div class="mpend">${pendOrAll}</div><div class="mdone">${done}</div>`;
 };
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][n % 10 > 3 ? 0 : n % 10] || 'th');      // 1st 2nd 3rd 4th
 const rankOf = (p) => { const a = assetsOf(p); return 1 + S.players.filter((q) => assetsOf(q) > a + 0.5).length; };
@@ -1666,8 +1670,8 @@ function payday(atStart = true) {
 }
 function checkMissions() {
   // 上一次完成的任務先換成新的(所以完成的那張會亮綠色停留到下一次檢查)
-  S.missions.forEach((m, i) => { if (m.done) { S.missions[i] = { id: '_' }; S.missions[i] = drawMission(); } });
-  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; (S.players[S.hi].doneList ||= []).push(m.title); S.cash += REWARD; sfx('mission'); toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
+  S.missions.forEach((m, i) => { if (m.done) { S.missions[i] = { id: '_' }; S.missions[i] = drawMission(); } }); S.missions = S.missions.filter(Boolean);   // 全部成就都完成了就不補
+  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; const me = S.players[S.hi]; (me.doneList ||= []).push(m.title); (me.doneIds ||= []).push(m.id); S.cash += REWARD; sfx('mission'); toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
   hud();
 }
 // 市場事件格:桌上發三張背面朝上的牌,玩家自己挑一張翻開(對手走到時由牠自動挑)。
@@ -2654,4 +2658,4 @@ function clientInit() {
 
 resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, marginCheck, acctRatio, finish, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, marginCheck, acctRatio, finish, checkMissions, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
