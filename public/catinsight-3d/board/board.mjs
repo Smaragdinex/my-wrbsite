@@ -1543,32 +1543,33 @@ function buyPanel(k) {
     };
     qty.oninput = paint; paint();
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
-      const a = b.dataset.a, q = n();
+      const a = b.dataset.a, q = n(), nm = nameOf(S.players[S.hi]);
       if (a === 'buy' || a === 'margin') {
         const cost = fillAt(k, buyF(q)) * q, loan = a === 'margin' ? cost * MARGIN_LOAN : 0;
         S.cash -= cost - loan; h.n += q; h.cost += cost; h.loan += loan;
         if (price < sec.open * 0.97) S.flags.dip = true;
         impact(k, buyF(q)); sfx('buy');
-        toast(a === 'margin' ? L(`Margin-bought ${q} ${sec.name}, borrowed $${fmt(loan)}`, `融資買進 ${sec.name} ${q} 股,借了 $${fmt(loan)}`)
-          : L(`Bought ${q} ${sec.name}. Price ${pct(buyF(q))}`, `買進 ${sec.name} ${q} 股,股價被推高 ${pct(buyF(q))}`));
+        // 公告大家都看得到:只說做了什麼,不寫股數和金額
+        toast(a === 'margin' ? L(`${nm} margin-bought ${sec.name}. Price ${pct(buyF(q))}`, `${nm}融資買進${sec.name},股價被推高 ${pct(buyF(q))}`)
+          : L(`${nm} bought ${sec.name}. Price ${pct(buyF(q))}`, `${nm}買進${sec.name},股價被推高 ${pct(buyF(q))}`));
       } else if (a === 'sell') {
         // 賣拉桿上的股數(不夠就全賣);借款按賣掉的比例一起還
         const sn = Math.min(q, h.n), part = sn / h.n, value = fillAt(k, sellF(sn)) * sn, cost = h.cost * part, loan = h.loan * part;
         if ((value - cost) / cost >= 0.15) S.flags.profit = true;
         if (loan > 0 && value > cost) S.flags.marginWin = true;   // 融資部位獲利出場
-        toast(L('Sold for', '賣出得') + ` $${fmt(value)} (${value >= cost ? '+' : '-'}$${fmt(Math.abs(value - cost))})` + (loan ? L(`, repaid $${fmt(loan)}`, `,還款 $${fmt(loan)}`) : ''));
+        toast(L(`${nm} sold ${sec.name}. Price ${pct(sellF(sn))}`, `${nm}賣出${sec.name},股價 ${pct(sellF(sn))}`));
         S.cash += value - loan; h.n -= sn; h.cost -= cost; h.loan -= loan;
         if (h.n <= 0) { h.n = 0; h.cost = 0; h.loan = 0; }
         impact(k, sellF(sn)); sfx('sell');      // 先把部位清掉再動價格,不然自己的賣壓會觸發自己的斷頭檢查
       } else if (a === 'short') {
         const e = fillAt(k, shortF(q)); S.cash -= e * q; sh.entry = e; sh.n = q; impact(k, shortF(q)); sfx('short');
-        toast(L(`Shorted ${q} ${sec.name}. Price ${pct(shortF(q))}`, `放空 ${sec.name} ${q} 股,股價被壓低 ${pct(shortF(q))}`));
+        toast(L(`${nm} shorted ${sec.name}. Price ${pct(shortF(q))}`, `${nm}放空${sec.name},股價被壓低 ${pct(shortF(q))}`));
       } else if (a === 'cover') {
         const cn = sh.n, back = coverBack(k, sh), pl = back - sh.entry * cn;
         if (pl / (sh.entry * cn) >= 0.15) S.flags.profit = true;
         if (pl / (sh.entry * cn) >= 0.2) S.flags.shortWin = true;
         S.cash += back; sh.n = 0; sh.entry = 0; impact(k, buyF(cn)); sfx('sell');
-        toast(L('Covered:', '回補:') + ` ${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}`);
+        toast(L(`${nm} covered the ${sec.name} short. Price ${pct(buyF(cn))}`, `${nm}回補${sec.name}空單,股價 ${pct(buyF(cn))}`));
       }
       pubNote(S.players[S.hi], k);                                   // 交易都有公告,記進公開帳本
       drawAll(); hud(); closePanel(); res();
@@ -1839,7 +1840,7 @@ function ipoPanel() {
     const paint = () => { const q = +qty.value; $('ipoVal').textContent = `${q} ${L('sh', '股')} · $${fmt(price * q)}`; $('ipoBtn').textContent = `$${fmt(price * q)}`; p.querySelector('[data-a=buy]').disabled = S.cash < price * q; };
     qty.oninput = paint; paint();
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
-      if (b.dataset.a === 'buy') { const n = +qty.value; S.cash -= price * n; h.n += n; h.cost += price * n; pubNote(S.players[S.hi], k); sfx('buy'); toast(L(`Bought ${n} more ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 加購 ${sec.name} ${n} 股`)); }
+      if (b.dataset.a === 'buy') { const n = +qty.value; S.cash -= price * n; h.n += n; h.cost += price * n; pubNote(S.players[S.hi], k); sfx('buy'); { const nm = nameOf(S.players[S.hi]); toast(L(`${nm} bought more ${sec.name} at the IPO price`, `${nm}用承銷價加購${sec.name}`)); } }
       drawAll(); hud(); closePanel(); res();
     });
   });
@@ -1849,7 +1850,7 @@ async function aiIpo() {
   const lots = A.cash >= price * LOT * 3 + 1500 ? 3 : A.cash >= price * LOT + 500 ? 1 : 0;
   ipoGrant(A, k);
   if (lots) { const n = LOT * lots; A.cash -= price * n; A.hold[k].n += n; A.hold[k].cost += price * n; pubNote(A, k);
-    toast(L(`${who} got ${IPO_FREE} free ${sec.name} shares and bought ${n} more`, `${who}免費獲得${sec.name} ${IPO_FREE} 股,又加購 ${n} 股`)); }
+    toast(L(`${who} got ${IPO_FREE} free ${sec.name} shares and bought more`, `${who}免費獲得${sec.name} ${IPO_FREE} 股,又加購了`)); }
   else toast(L(`${who} got ${IPO_FREE} free ${sec.name} shares`, `${who}免費獲得${sec.name} ${IPO_FREE} 股`));
   drawAll(); hud(); await wait(1.1);
 }
@@ -1960,7 +1961,7 @@ async function applyFate(c, isMe) {
     if (!held.length) say(`${name} has nothing to sell. Phew.`, `${name}沒有持股,虛驚一場`);
     else { const k = held[Math.floor(Math.random() * held.length)], h = who.hold[k], n = h.n, value = fillAt(k, sellF(n)) * n, pl = value - h.cost;
       who.cash += value - h.loan; h.n = 0; h.cost = 0; h.loan = 0; pubNote(who, k); impact(k, sellF(n)); sfx('sell');
-      say(`${name} sold all ${n} ${SECTORS[k].name} for $${fmt(value)} (${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`, `${name}把${SECTORS[k].name} ${n} 股全部賣掉,得 $${fmt(value)}(${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`); } }
+      say(`${name} accidentally sold all of ${SECTORS[k].name}`, `${name}手滑把${SECTORS[k].name}全部賣掉了`); } }
   else if (c.id === 'swap') {
     // 和隨機一位對手交換位置(連同在小路上的狀態一起換),兩隻棋子各自跳過去;自己換到的那一格要重新結算
     const o = others(who.i), r = o[Math.floor(Math.random() * o.length)], PW = PIECES[who.i], PR = PIECES[r.i];
@@ -2099,11 +2100,11 @@ async function aiLand() {
       act.why = aiAlg() === 'mc' ? '' : L(`(expects ${ep} per round)`, `(期望每回合 ${ep})`); }   // 困難(蒙地卡羅)的公告不寫決策方式
     const why = act.why || '';
     if (act.a === 'cover') { const back = coverBack(type, sh), pl = back - sh.entry * sh.n; A.cash += back; const cn = sh.n; sh.n = 0; sh.entry = 0; impact(type, buyF(cn));
-      toast(L(`${who} covered its ${sec.name} short (${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}) ${why}`, `${who}回補${sec.name}空單(${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})${why}`)); }
+      toast(L(`${who} covered its ${sec.name} short. Price ${pct(buyF(cn))} ${why}`, `${who}回補${sec.name}空單,股價 ${pct(buyF(cn))}${why}`)); }
     else if (act.a === 'sell') { const n = h.n, px = fillAt(type, sellF(n)), pl = px * n - h.cost; A.cash += px * n - h.loan; h.n = 0; h.cost = 0; h.loan = 0; if (type === F) A.plan = null;
-      toast(L(`${who} sold ${sec.name} (${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}). Price ${pct(sellF(n))} ${why}`, `${who}賣出${sec.name}(${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}),股價 ${pct(sellF(n))}${why}`)); impact(type, sellF(n)); }
+      toast(L(`${who} sold ${sec.name}. Price ${pct(sellF(n))} ${why}`, `${who}賣出${sec.name},股價 ${pct(sellF(n))}${why}`)); impact(type, sellF(n)); }
     else if (act.a === 'buy' || act.a === 'margin') { const q = act.q, loan = act.a === 'margin', cost = fillAt(type, buyF(q)) * q; A.cash -= loan ? cost * (1 - MARGIN_LOAN) : cost; h.n += q; h.cost += cost; if (loan) h.loan += cost * MARGIN_LOAN; impact(type, buyF(q));
-      toast(loan ? L(`${who} margin-bought ${q} ${sec.name}. Price ${pct(buyF(q))} ${why}`, `${who}融資買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}${why}`) : L(`${who} bought ${q} ${sec.name}. Price ${pct(buyF(q))} ${why}`, `${who}買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}${why}`)); }
+      toast(loan ? L(`${who} margin-bought ${sec.name}. Price ${pct(buyF(q))} ${why}`, `${who}融資買進${sec.name},股價 ${pct(buyF(q))}${why}`) : L(`${who} bought ${sec.name}. Price ${pct(buyF(q))} ${why}`, `${who}買進${sec.name},股價 ${pct(buyF(q))}${why}`)); }
     else if (act.a === 'short') { const q = act.q || LOT, e = fillAt(type, shortF(q)); A.cash -= e * q; sh.entry = e; sh.n = q; impact(type, shortF(q));
       toast(L(`${who} shorts ${sec.name}. Price ${pct(shortF(q))} ${why}`, `${who}放空${sec.name},股價 ${pct(shortF(q))}${why}`)); }
     else toast(sh.n ? L(`${who} keeps its ${sec.name} short ${why}`, `${who}續抱${sec.name}空單${why}`) : h.n ? L(`${who} holds ${sec.name} ${why}`, `${who}續抱${sec.name}${why}`) : L(`${who} passes on ${sec.name} ${why}`, `${who}跳過${sec.name}${why}`));
