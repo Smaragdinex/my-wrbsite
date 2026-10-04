@@ -2377,22 +2377,10 @@ function netOnMsg(m) {
     netSend({ t: 'joined', ok: true, gid, char, name }, m.from); lobbyPaint(); paintStage(); netLobby(); return;
   }
   const g = guestByConn(m.from); if (!g || !NET.started || !S) return;
-  if (m.t === 'ready') { g.ready = true; if (readyCheck) readyCheck(); return; }      // 手機看完規則卡
+  if (m.t === 'ready') { g.ready = true; return; }      // 手機看完規則卡(重連時就不再補送)
   const p = S.players[S.turn]; if (!p || !p.human || p.remote !== g.gid) return;      // 只有輪到的那支手機可以操作
   if (m.t === 'click' && m.box !== 'end') { const b = $(m.box)?.querySelectorAll('button, .dcard')[m.idx | 0]; if (b && !b.disabled) b.click(); }
   else if (m.t === 'input') { const inp = $(m.box)?.querySelectorAll('input')[m.idx | 0]; if (inp) { inp.value = m.value; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } }
-}
-// 等所有在線的手機按完規則卡的「繼續」;主機也可以按「直接開始」不等
-let readyCheck = null;
-function netWaitReady() {
-  return new Promise((res) => {
-    const pending = () => NET.guests.filter((g) => g.online && !g.ready);
-    const draw = () => { const ps = pending(); if (!ps.length) return done();
-      panel(`<h3>${L('Waiting for players', '等待其他玩家')}</h3><p>${L(`Still reading the rules: ${ps.map((g) => g.name).join(', ')}`, `還在看規則:${ps.map((g) => g.name).join('、')}`)}</p><div class="btns"><button class="b-skip">${L('Start anyway', '直接開始')}</button></div>`)
-        .querySelector('button').onclick = done; };
-    const done = () => { if (!readyCheck) return; readyCheck = null; closePanel(); res(); };
-    readyCheck = draw; draw();
-  });
 }
 // 大廳:告訴手機房號、哪些角色還能選、誰已經加入。主機換角色時,被撞到的手機自動換成別的角色
 function netLobby(to) {
@@ -2479,13 +2467,11 @@ async function start() {
   const rule = L(`After ${S.maxRounds} rounds, whoever has the highest total assets wins.`, `${S.maxRounds} 回合結束時,總資產最高的人獲勝。`);
   const rulesTitle = L('How to win', '獲勝條件'), rulesBody = rule + L(` Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>The missions on the left are a bonus: each one pays $${REWARD}, and the more you finish the more stars you get. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
       `總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>左邊的任務是加分項:每完成一個得 $${REWARD},完成越多星星越多,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`);
-  // 線上同樂:規則卡每個人在自己裝置上看、自己按繼續(閱讀速度不同);主機按完後等所有手機都確認了才開始
+  // 線上同樂:規則卡每個人在自己裝置上看、自己按繼續(閱讀速度不同);主機按完就開始,不等別人(別人沒按完也擲不了骰)
   if (NET.on && NET.started) {
     NET.rules = { title: rulesTitle, body: rulesBody }; NET.guests.forEach((g) => { g.ready = false; });
     netSend({ t: 'rules', title: rulesTitle, body: rulesBody });
     const pr = cardPanel(rulesTitle, rulesBody); $('panel').classList.add('nomirror'); await pr; $('panel').classList.remove('nomirror');   // 主機自己的規則卡不鏡射給手機(手機有自己的)
-    await netWaitReady();
-    NET.rules = null;
   } else await cardPanel(rulesTitle, rulesBody);
   S.busy = false; showCtl(true);
   if (S.nh > 1) toast(L(`${nameOf(S.players[0])} goes first (Player 1)`, `${nameOf(S.players[0])}先走(玩家 1)`));
