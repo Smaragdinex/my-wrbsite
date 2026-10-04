@@ -448,7 +448,7 @@ function arcadeButtonAt(x, y) {
   for (const k in ARC_BTN) { const b = ARC_BTN[k]; if (x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 8 && y <= b.y + b.h + 8) return k; }
   return null;
 }
-let arcadeMenu = false, pushT = 0, pushGoal = 0;
+let arcadeMenu = false, pushT = 0, pushGoal = 0, arcHover = null;   // arcHover:滑鼠現在停在機台螢幕的哪顆按鈕上(zh / en / play)
 const ARC_PILL_Y = 342, pillV = new THREE.Vector3(), pillEl = document.querySelector('.pill');   // 導覽列在街機螢幕上的位置(畫布 y)
 let gameLang = (() => { let v = null; try { v = localStorage.getItem('css.lang'); } catch (e) {} return (v || navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'; })();
 function setGameLang(code) { gameLang = code; try { localStorage.setItem('css.lang', code); } catch (e) {} prewarmGame(); }
@@ -510,13 +510,14 @@ function drawArcadeScreen(t, cv = arcadeCanvas, zoom = 1) {
   {
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(59,47,42,.16)'; g.beginPath(); g.roundRect(ARC_BTN.zh.x - 4, ARC_BTN.zh.y - 4, ARC_BTN.zh.w + ARC_BTN.en.w + 10, ARC_BTN.zh.h + 8, 20); g.fill();
-    for (const code of ['zh', 'en']) { const b = ARC_BTN[code], on = gameLang === code;
-      if (on) { g.fillStyle = '#fff'; g.beginPath(); g.roundRect(b.x, b.y, b.w, b.h, 16); g.fill(); }
-      g.fillStyle = on ? '#3b2f2a' : '#6b594e'; g.font = '900 15px Menlo, "PingFang TC", monospace'; g.fillText(code === 'zh' ? '中文' : 'EN', b.x + b.w / 2, b.y + b.h / 2 + 1); }
-    const p = ARC_BTN.play, s = 1 + Math.sin(t * 5) * 0.04;
+    for (const code of ['zh', 'en']) { const b = ARC_BTN[code], on = gameLang === code, hv = arcHover === code;
+      g.save(); g.translate(b.x + b.w / 2, b.y + b.h / 2); if (hv) g.scale(1.08, 1.08); g.translate(-(b.x + b.w / 2), -(b.y + b.h / 2));
+      if (on || hv) { g.fillStyle = on ? '#fff' : 'rgba(255,255,255,.55)'; g.beginPath(); g.roundRect(b.x, b.y, b.w, b.h, 16); g.fill(); }
+      g.fillStyle = on ? '#3b2f2a' : hv ? '#3b2f2a' : '#6b594e'; g.font = '900 15px Menlo, "PingFang TC", monospace'; g.fillText(code === 'zh' ? '中文' : 'EN', b.x + b.w / 2, b.y + b.h / 2 + 1); g.restore(); }
+    const p = ARC_BTN.play, hvP = arcHover === 'play', s = (hvP ? 1.1 : 1) + Math.sin(t * 5) * 0.04;
     g.save(); g.translate(p.x + p.w / 2, p.y + p.h / 2); g.scale(s, s);
-    g.fillStyle = '#d4553a'; g.beginPath(); g.roundRect(-p.w / 2, -p.h / 2 + 4, p.w, p.h, 19); g.fill();
-    g.fillStyle = '#ff7a59'; g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.roundRect(-p.w / 2, -p.h / 2, p.w, p.h, 19); g.fill(); g.stroke();
+    g.fillStyle = hvP ? '#c94a30' : '#d4553a'; g.beginPath(); g.roundRect(-p.w / 2, -p.h / 2 + 4, p.w, p.h, 19); g.fill();
+    g.fillStyle = hvP ? '#ff9a7c' : '#ff7a59'; g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.roundRect(-p.w / 2, -p.h / 2, p.w, p.h, 19); g.fill(); g.stroke();
     g.fillStyle = '#fff'; g.font = '900 17px Menlo, "PingFang TC", monospace'; g.fillText(gameLang === 'zh' ? '▶ 開始' : '▶ PLAY', 0, 1);
     g.restore(); g.textBaseline = 'alphabetic';
   }
@@ -716,6 +717,7 @@ canvas.addEventListener('pointerup', (e) => {
     const hit = raycaster.intersectObject(arcadeScreen)[0];
     if (hit && hit.uv) {
       const b = arcadeButtonAt(hit.uv.x * 520, (1 - hit.uv.y) * 385);
+      if (b) uiSfx('click');
       if (b === 'play') startGame(); else if (b) setGameLang(b);
       return;
     }
@@ -767,6 +769,26 @@ function setBgm(want) {
   bgmLast = want; bgmLevel();
 }
 document.addEventListener('visibilitychange', () => { if (!bgm.ctx) return; if (document.hidden) bgm.ctx.suspend(); else if (bgm.want) bgm.ctx.resume(); });
+// 機台螢幕按鈕的小音效(和遊戲裡一樣用合成音):hover 一聲「嘀」、按下一聲「嗒」
+function uiSfx(kind) {
+  if (!bgm.ctx || !bgm.on || bgm.ctx.state !== 'running') return;
+  const c = bgm.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+  const [f0, f1, dur, vol, type] = kind === 'hover' ? [2637, 2960, 0.03, 0.06, 'sine'] : [5274, 5274, 0.04, 0.035, 'square'];
+  o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.02);
+  o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.03);
+}
+// 滑鼠在機台螢幕上移動:算出停在哪顆按鈕,換按鈕時響一聲、游標變成手
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch') return;
+  let hv = null;
+  if (arcadeMenu && arcadeScreen && pushGoal === 0) {
+    ndc.set((e.clientX / canvas.clientWidth) * 2 - 1, -(e.clientY / canvas.clientHeight) * 2 + 1); raycaster.setFromCamera(ndc, camera);
+    const hit = raycaster.intersectObject(arcadeScreen)[0];
+    if (hit && hit.uv) hv = arcadeButtonAt(hit.uv.x * 520, (1 - hit.uv.y) * 385);
+  }
+  if (hv !== arcHover) { arcHover = hv; if (hv) uiSfx('hover'); canvas.style.cursor = hv ? 'pointer' : ''; }
+});
 // 遊戲裡的 ♪ 靜音鈕會通知這一頁
 window.addEventListener('message', (e) => { if (e.origin !== location.origin || !e.data || e.data.type !== 'css-sound') return; bgm.on = !!e.data.on; bgmLevel(); });
 // 遊戲裡按「全螢幕」:把整個房間頁放到全螢幕(iframe 裡做不到),狀態變化再回報給遊戲更新按鈕
