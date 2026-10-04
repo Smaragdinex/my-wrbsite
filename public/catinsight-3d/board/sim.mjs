@@ -9,9 +9,10 @@
 //   ev    期望值:擲骰用「前方每格的分數 × 機率」算期望值;買賣用「事件卡的平均漲跌 + 配息 − 風險」算每檔的期望報酬
 //   mc    蒙地卡羅:每個決策(擲幾顆、買賣多少)對每個候選動作模擬後面 D 回合 × N 次,取平均資產領先幅度最高的
 export function makeSim(D, opts = {}) {
-  const { DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE,
+  const { MARKET_DRIFT = 0, DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE,
     SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE } = D;
   const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));
+  const DRIFT = opts.drift ?? MARKET_DRIFT, DRIFTS = (k) => k === 'etf' || !NON_EQUITY.has(k);
   const DIV_PAYERS = KEYS.filter((k) => SECTORS[k].div > 0 && k !== 'etf' && k !== 'bond');   // 原本就有配息的公司
   const LANE_EXIT = { jail: 28, ipo: 60 };
   const PATH_POOL = { jail: ['chance', 'gift', 'fee', 'coin'], ipo: ['chance', 'gift', 'interest', 'coin'] };
@@ -228,7 +229,7 @@ export function makeSim(D, opts = {}) {
       st.rolls++;
       for (const q of st.players) q.cash += Math.round(KEYS.reduce((a, k) => a + q.hold[k].n * st.price[k] * st.div[k] * DIV_ROUND, 0));
       if (st.after) { const a = st.after; st.after = null; applyEvent(st, a); }
-      KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; st.price[k] = Math.max(8, st.price[k] * (1 - v + rand() * v * 2)); });
+      KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; st.price[k] = Math.max(8, st.price[k] * (1 - v + rand() * v * 2) * (DRIFTS(k) ? 1 + DRIFT : 1)); });   // 股票和大盤 ETF 長期慢慢漲(opts.drift 可以覆蓋做實驗)
     }
     marginCheck(st);
   }
@@ -289,7 +290,7 @@ export function makeSim(D, opts = {}) {
     const drift = s.mu * ev, div = st.div[k] * DIV_ROUND * left, risk = EVP.risk * s.sd * Math.sqrt(ev) / Math.sqrt(Math.max(1, left));
     const cheap = (SECTORS[k].open / st.price[k] - 1) * EVP.cheap;
     const reb = EVP.rebound && st.after ? st.after.m[k] - 1 : 0;                              // 下回合確定會反彈的部分(黑色星期一)
-    return drift + div - risk + cheap + reb;
+    return drift + div - risk + cheap + reb + (DRIFTS(k) ? DRIFT * left : 0);   // 大盤長期漲幅也算進去
   }
   function evTrade(st, p, k) {
     const h = p.hold[k], sh = p.short[k], price = st.price[k], lv = p.lv, e = evOf(st, k, p), left = st.maxRounds - st.rolls, reserve = EVP.reserve ?? lv.reserve;

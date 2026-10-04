@@ -19,9 +19,9 @@ const ZH = (new URLSearchParams(location.search).get('lang') || savedLang || nav
 const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
-import { gameData } from './data.mjs?v=5';
-import { makeSim } from './sim.mjs?v=5';
-const { DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = gameData(L, fmt);
+import { gameData } from './data.mjs?v=6';
+import { makeSim } from './sim.mjs?v=6';
+const { MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = gameData(L, fmt);
 // 棋盤裡面的兩個特殊格:警察局、IPO 攤位(各一格 cell),離開時擲一顆骰子,沿著 6 格的小路(path)走回外圈;
 // 走過最後一格就踩上外圈的 exit 那格,多的點數繼續往前走。小路上每一格是什麼(命運、道具、利息…)每次有人進來都重新隨機生成。座標是格網的 [x, z]
 // 兩條小路都是「從裡面直直走出來」:警察局在後面(z=4 那排),往左邊的外圈走;IPO 攤位在前面(z=12 那排),往右邊的外圈走
@@ -53,7 +53,7 @@ function genLanePath(type) {
 function applyEvent(e) {
   const bad = (e.m.etf || 1) < 0.97, before = bad ? S.players.map((p) => KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0)) : null;
   KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
-  if (bad) S.players.forEach((p, i) => { if (p.human && before[i] > 0 && KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0) > before[i]) p.flags.dodge = true; });   // 壞事件裡持股反而漲:躲過黑天鵝
+  if (bad) S.players.forEach((p, i) => { if (before[i] > 0 && KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0) > before[i]) p.flags.dodge = true; });   // 壞事件裡持股反而漲:躲過黑天鵝
   if (e.cash) { S.players.forEach((p) => { p.cash += e.cash; }); sfx('coin'); }
   if (e.divTo) e.divKeys.forEach((k) => { S.div[k] = e.divTo[k][1]; });
   // 黑色星期一這類:記下「下一回合要反彈多少」,新的一回合開始時套用(見 turn)
@@ -117,13 +117,14 @@ const AI_LEVELS = {
   hard:   { shortP: 0.5,  atkP: 1,   greedy: 0.5,  reserve: 800,  shortAny: true,  lots: 5, buyP: 1,   memory: 99 },
 };
 const AI = () => AI_LEVELS[S.aiLevel] || AI_LEVELS.normal;
+const DRIFTS = (k) => k === 'etf' || !NON_EQUITY.has(k);      // 會跟著大盤長期上漲的:股票類股 + 大盤 ETF(黃金、債券、幣、農產品不算)
 // 三種難度 = 三種演算法:簡單 = 規則式(rule)、普通 = 期望值(ev)、困難 = 蒙地卡羅模擬(mc)。細節在 sim.mjs
 const AI_ALG = { easy: 'rule', normal: 'ev', hard: 'mc' };
 const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
-const SIM = makeSim({ DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE },
+const SIM = makeSim({ MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE },
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=6', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=7', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -316,7 +317,7 @@ function marginCheck() {
       const h = who.hold[k], n = h.n, back = Math.max(0, n * fillAt(k, sellF(n)) - h.loan), put = h.cost - h.loan;
       who.cash += back; h.n = 0; h.cost = 0; h.loan = 0; pubNote(who, k);
       S.notices.push({ pi: who.i, k, n, back, lost: put - back });
-      const by = S.players[S.turn]; if (by && by !== who && by.human) by.flags.liquidator = true;   // 這回合在走的人把價格打下去,算他害的
+      const by = S.players[S.turn]; if (by && by !== who) by.flags.liquidator = true;   // 這回合在走的人把價格打下去,算他害的
       impact(k, sellF(n));
     }
   }
@@ -326,7 +327,7 @@ function marginCheck() {
     const n = h.n, back = coverBack(k, h), put = h.entry * n;
     who.cash += back; h.n = 0; h.entry = 0; pubNote(who, k);
     S.notices.push({ pi: who.i, k, n, back, lost: put - back, squeeze: true });
-    const by = S.players[S.turn]; if (by && by !== who && by.human) by.flags.squeezer = true;   // 這回合在走的人把價格拉上去,算他軋的
+    const by = S.players[S.turn]; if (by && by !== who) by.flags.squeezer = true;   // 這回合在走的人把價格拉上去,算他軋的
     impact(k, buyF(n));
   }
 }
@@ -363,7 +364,8 @@ const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 const REWARD = 500;
 const heldCount = () => KEYS.filter((k) => S.hold[k].n > 0).length;
 // 記下這位玩家用過哪幾「種」道具(道具達人成就用);事件卡全部算一種
-const usedItem = (id) => { const p = S.players[S.hi], kind = id.startsWith('ev') ? 'ev' : id; (p.used ||= []); if (!p.used.includes(kind)) p.used.push(kind); };
+const usedBy = (p, id) => { const kind = id.startsWith('ev') ? 'ev' : id; (p.used ||= []); if (!p.used.includes(kind)) p.used.push(kind); };
+const usedItem = (id) => usedBy(S.players[S.hi], id);
 const MISSION_DEFS = [
   // 階梯式成就(chain):同一系列用等級 Lv.1、Lv.2… 表示,已完成分頁只顯示做到的最高等級
   // 分散投資三階:3 → 5 → 7 種
@@ -425,7 +427,7 @@ const isYou = (p) => p.human && S.nh === 1;                 // 只有一位真�
 const assetsOf = (p) => p.cash - p.debt + KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k] - p.hold[k].loan + shortValue(k, p), 0);
 function setPlayers(chars, humans, names = []) {
   S.players = chars.map((c, i) => mkPlayer(i, i < humans, c)); names.forEach((nm, i) => { if (nm && S.players[i]) S.players[i].name = nm; }); S.nh = humans; S.hi = 0; S.ci = Math.min(humans, chars.length - 1);
-  for (let h = 0; h < humans; h++) { S.hi = h; refillMissions(S.players[h]); }      // make() 會讀 S.hold 等捷徑,所以要先把 S.hi 指到那位
+  for (let h = 0; h < S.players.length; h++) { S.hi = h; refillMissions(S.players[h]); }      // 電腦也有成就。make() 會讀 S.hold 等捷徑,所以要先把 S.hi 指到那位
   S.hi = 0;
 }
 function newState() {
@@ -1639,13 +1641,30 @@ function payday(atStart = true) {
   toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)}` : `${L('dividends', '股利')} +$${fmt(div)}`) + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : '') + (bank ? ` · ${L('loan interest', '貸款利息')} -$${fmt(bank)}` : ''));
   hud(); checkMissions();
 }
-function checkMissions() {
+// 檢查 S.hi 那位玩家的成就(S.cash / S.hold / S.missions 等捷徑都指向他)。回傳這次新達成的標題
+function evalMissions() {
   // 上一次完成的任務先換成新的(所以完成的那張會亮綠色停留到下一次檢查)
   if (assets() < 8000) S.flags.low = true;   // 逆風翻盤用:曾經跌破 $8,000
   S.missions = S.missions.filter((m) => !m.done);   // 上一次完成的(綠色那張)這時才拿掉
-  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; const me = S.players[S.hi]; (me.doneList ||= []).push(m.title); (me.doneIds ||= []).push(m.id); S.cash += REWARD; sfx('mission'); showAchv(me, m.title); } });
+  const got = [];
+  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; const me = S.players[S.hi]; (me.doneList ||= []).push(m.title); (me.doneIds ||= []).push(m.id); S.cash += REWARD; got.push(m.title); } });
   refillMissions(S.players[S.hi]);   // 階梯式的下一階在這裡補進來
+  return got;
+}
+function checkMissions() {
+  const me = S.players[S.hi], got = evalMissions();
+  got.forEach((t) => { sfx('mission'); showAchv(me, t); });
   hud();
+}
+// 電腦也照同樣規則拿成就(每個 +$500):把 S.hi 暫時指到牠檢查,一次達成好幾個就合併成一則公告
+function checkBotMissions(only) {
+  const keep = S.hi; let total = 0;
+  for (const p of S.players) { if (p.human || (only && p !== only)) continue;
+    S.hi = p.i; let got; try { got = evalMissions(); } finally { S.hi = keep; }
+    if (got.length === 1) showAchv(p, got[0]);
+    else if (got.length > 1) toast(L(`${nameOf(p)} unlocked ${got.length} achievements +$${fmt(REWARD * got.length)}`, `${nameOf(p)}達成 ${got.length} 個成就 +$${fmt(REWARD * got.length)}`));
+    total += got.length; }
+  hud(); return total;
 }
 // 市場事件格:桌上發三張背面朝上的牌,玩家自己挑一張翻開(對手走到時由牠自動挑)。
 // 翻開的那張生效;另外兩張隨後也翻開,讓你看到「本來可能抽到什麼」。計時用遊戲自己的時鐘(wait),測試時可以快轉
@@ -2046,7 +2065,9 @@ async function aiDiceChoice() {
 function aiPayday(A, atStart) {
   const div = atStart ? 0 : KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * S.div[k], 0);
   const salary = atStart ? SALARY * (A.salary2 ? 2 : 1) : 0; if (atStart) A.salary2 = false;
-  A.cash += salary + div - (atStart ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) + A.debt * BANK_RATE : 0); hud();
+  A.cash += salary + div - (atStart ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) + A.debt * BANK_RATE : 0);
+  if (!atStart) { A.lastDividend = div; A.divTotal = (A.divTotal || 0) + div; }   // 股息格的股利也算進成就(領到股利、股息大戶)
+  hud();
 }
 async function aiTurn() {
   const A = S.ai, who = CHARS[S.foe].name;
@@ -2056,24 +2077,24 @@ async function aiTurn() {
     // 打「名次最高的那位對手」(名次是公開的)牠所知道持有最多的資產:只看公開帳本 / 偵查結果,不知道的就先留著卡
     const T = others(A.i).sort((x, y) => assetsOf(y) - assetsOf(x))[0];
     const k = KEYS.filter((x) => pubView(A, T, x).n > 0).sort((x, y) => pubView(A, T, y).n * S.price[y] - pubView(A, T, x).n * S.price[x])[0];
-    if (k) { A.bag.splice(A.bag.indexOf('atk'), 1); await badNews(k, A); }
+    if (k) { A.bag.splice(A.bag.indexOf('atk'), 1); usedBy(A, 'atk'); await badNews(k, A); }
   }
   // 偵查報告:手上有利空卡(或困難模式)而且還沒在偵查,就對名次最高的對手用,接下來 3 回合看得到他的真實持股
   if (A.bag.includes('spy') && !(A.spy && S.rolls < A.spy.until) && (A.bag.includes('atk') || S.aiLevel === 'hard')) {
     const T = others(A.i).sort((x, y) => assetsOf(y) - assetsOf(x))[0];
-    A.bag.splice(A.bag.indexOf('spy'), 1); A.spy = { target: T.i, until: S.rolls + SPY_ROUNDS }; hud();
+    A.bag.splice(A.bag.indexOf('spy'), 1); usedBy(A, 'spy'); A.spy = { target: T.i, until: S.rolls + SPY_ROUNDS }; hud();
     toast(L(`${who} spies on ${nameOf(T)}`, `${who}對${nameOf(T)}使用偵查報告`)); await wait(0.9);
   }
   // 事件卡:等受惠的那檔買到 20 股以上再打(炒自己的持股);快結束了就有多少打多少
   { const id = A.bag.find((x) => x.startsWith('ev') && (A.hold[itemInfo(x).best].n >= 20 || (A.hold[itemInfo(x).best].n > 0 && maxRolls() - S.rolls <= 3)));
-    if (id) { A.bag.splice(A.bag.indexOf(id), 1); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event, AI_CARD_WAIT); } }
+    if (id) { A.bag.splice(A.bag.indexOf(id), 1); usedBy(A, id); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event, AI_CARD_WAIT); } }
   // 遙控骰子:前方 2~12 格裡有很想去的格子(主攻股、商店、IPO…)就指定步數走過去
   let forced = 0;
   let three = false;
-  if (!A.lane && !A.bag.includes('remote') && A.bag.includes('dice3') && Math.random() < 0.6) { A.bag.splice(A.bag.indexOf('dice3'), 1); three = true; hud(); toast(L(`${who} uses a third die`, `${who}使用三顆骰子`)); await wait(0.9); }
+  if (!A.lane && !A.bag.includes('remote') && A.bag.includes('dice3') && Math.random() < 0.6) { A.bag.splice(A.bag.indexOf('dice3'), 1); usedBy(A, 'dice3'); three = true; hud(); toast(L(`${who} uses a third die`, `${who}使用三顆骰子`)); await wait(0.9); }
   if (!A.lane && A.bag.includes('remote')) {
     let best = { i: 0, v: 3.8 }; for (let i = 2; i <= 12; i++) { const v = aiTileScore(A, i); if (v > best.v) best = { i, v }; }
-    if (best.i) { A.bag.splice(A.bag.indexOf('remote'), 1); forced = best.i; hud(); toast(L(`${who} uses a remote dice: ${forced} steps`, `${who}使用遙控骰子:走 ${forced} 步`)); await wait(1.0); }
+    if (best.i) { A.bag.splice(A.bag.indexOf('remote'), 1); usedBy(A, 'remote'); forced = best.i; hud(); toast(L(`${who} uses a remote dice: ${forced} steps`, `${who}使用遙控骰子:走 ${forced} 步`)); await wait(1.0); }
   }
   if (A.lane) {
     // 在警察局:錢夠多就付保釋金,不然休息一回合;能走了就擲一顆骰子出去。IPO 攤位:下一回合直接擲骰出去
@@ -2127,11 +2148,11 @@ async function aiLand() {
       const e = SIM.evOf(st, type, p) / Math.max(1, S.maxRounds - S.rolls), ep = `${e >= 0 ? '+' : ''}${Math.round(e * 100)}%`;   // 換算成每回合的期望報酬
       act.why = aiAlg() === 'mc' ? '' : L(`(expects ${ep} per round)`, `(期望每回合 ${ep})`); }   // 困難(蒙地卡羅)的公告不寫決策方式
     const why = act.why || '';
-    if (act.a === 'cover') { const back = coverBack(type, sh), pl = back - sh.entry * sh.n; A.cash += back; const cn = sh.n; sh.n = 0; sh.entry = 0; impact(type, buyF(cn));
+    if (act.a === 'cover') { const back = coverBack(type, sh), pl = back - sh.entry * sh.n; if (pl / (sh.entry * sh.n) >= 0.15) A.flags.profit = true; if (pl / (sh.entry * sh.n) >= 0.2) A.flags.shortWin = true; A.cash += back; const cn = sh.n; sh.n = 0; sh.entry = 0; impact(type, buyF(cn));
       toast(L(`${who} covered its ${sec.name} short. Price ${pct(buyF(cn))} ${why}`, `${who}回補${sec.name}空單,股價 ${pct(buyF(cn))}${why}`)); }
-    else if (act.a === 'sell') { const n = h.n, px = fillAt(type, sellF(n)), pl = px * n - h.cost; A.cash += px * n - h.loan; h.n = 0; h.cost = 0; h.loan = 0; if (type === F) A.plan = null;
+    else if (act.a === 'sell') { const n = h.n, px = fillAt(type, sellF(n)), pl = px * n - h.cost; if (h.cost > 0 && pl / h.cost >= 0.15) A.flags.profit = true; if (h.loan > 0 && pl > 0) A.flags.marginWin = true; A.cash += px * n - h.loan; h.n = 0; h.cost = 0; h.loan = 0; if (type === F) A.plan = null;
       toast(L(`${who} sold ${sec.name}. Price ${pct(sellF(n))} ${why}`, `${who}賣出${sec.name},股價 ${pct(sellF(n))}${why}`)); impact(type, sellF(n)); }
-    else if (act.a === 'buy' || act.a === 'margin') { const q = act.q, loan = act.a === 'margin', cost = fillAt(type, buyF(q)) * q; A.cash -= loan ? cost * (1 - MARGIN_LOAN) : cost; h.n += q; h.cost += cost; if (loan) h.loan += cost * MARGIN_LOAN; impact(type, buyF(q));
+    else if (act.a === 'buy' || act.a === 'margin') { const q = act.q, loan = act.a === 'margin', cost = fillAt(type, buyF(q)) * q; if (price < sec.open * 0.97) A.flags.dip = true; A.cash -= loan ? cost * (1 - MARGIN_LOAN) : cost; h.n += q; h.cost += cost; if (loan) h.loan += cost * MARGIN_LOAN; impact(type, buyF(q));
       toast(loan ? L(`${who} margin-bought ${sec.name}. Price ${pct(buyF(q))} ${why}`, `${who}融資買進${sec.name},股價 ${pct(buyF(q))}${why}`) : L(`${who} bought ${sec.name}. Price ${pct(buyF(q))} ${why}`, `${who}買進${sec.name},股價 ${pct(buyF(q))}${why}`)); }
     else if (act.a === 'short') { const q = act.q || LOT, e = fillAt(type, shortF(q)); A.cash -= e * q; sh.entry = e; sh.n = q; impact(type, shortF(q));
       toast(L(`${who} shorts ${sec.name}. Price ${pct(shortF(q))} ${why}`, `${who}放空${sec.name},股價 ${pct(shortF(q))}${why}`)); }
@@ -2184,7 +2205,7 @@ async function turn(forced, nDice = 0) {      // nDice = 3:用了「三顆骰子
   if (S.hi === 0) {           // 第一位走完 = 新的一回合開始:回合數 +1,所有價格小幅隨機波動
     S.rolls++; roundDividends();
     if (S.after) { const a = S.after; S.after = null; applyEvent(a); drawAll(); hud(); toast(a.t); sfx('good'); }
-    KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2)); });
+    KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2) * (DRIFTS(k) ? 1 + MARKET_DRIFT : 1)); });   // 股票和大盤 ETF 長期慢慢漲
   }
   marginCheck();
   drawAll(); hud();
@@ -2224,7 +2245,7 @@ async function nextTurns() {
     i = (i + 1) % S.players.length;
     if (i === 0) {
       // 大家都走完一輪:系統自動抽一張市場事件(事件才不會太久才出現一次),再檢查有沒有人被斷頭 / 軋空
-      await wait(0.3); await drawEventCards(true, true); await flushNotices(); checkMissions();
+      await wait(0.3); await drawEventCards(true, true); await flushNotices(); checkMissions(); checkBotMissions();
       if (S.rolls >= maxRolls()) { await wait(0.4); return finish(); }
     }
     const p = S.players[i];
@@ -2237,6 +2258,8 @@ async function nextTurns() {
       S.busy = false; showCtl(true); remoteBanner(); return;
     }
     S.ci = i; S.turn = i; S.view = null; hud(); setPortraits(); remoteBanner(); await aiTurn(); await flushNotices();
+    { const A = S.players[i]; A.cashStreak = (KEYS.some((k) => A.hold[k].n > 0) && A.cash >= 2000) ? (A.cashStreak || 0) + 1 : 0; }   // 保留現金成就用
+    if (checkBotMissions(S.players[i])) await wait(1.2);   // 有達成就停一下讓公告看得到
   }
 }
 // 本機排行榜:每局結束存一筆到瀏覽器(只有第一位真人的成績),留最好的 20 筆(依總資產)
