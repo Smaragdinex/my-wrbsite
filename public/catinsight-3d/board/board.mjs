@@ -2332,38 +2332,7 @@ function finish() {
   S.over = true; S.hi = S.players.findIndex((p) => p.human);      // 結算畫面用第一位真人的視角
   // 星星:完成 2 / 4 / 6 個任務
   const done = S.done >= 6 ? 3 : S.done >= 4 ? 2 : S.done >= 2 ? 1 : 0;
-  let top = 'cash', tv = S.cash;
-  KEYS.forEach((k) => { const v = S.hold[k].n * S.price[k]; if (v > tv) { tv = v; top = k; } });
-  const style = {
-    cash: L('Careful saver. Lots of cash, little growth.', '謹慎存錢派:現金很多,但成長有限。'),
-    tech: L('Growth believer. Big swings, big upside.', '成長信仰派:波動大,潛力也大。'),
-    soft: L('Subscription fan. You pay up for steady, growing profits.', '訂閱信徒:願意為穩定成長的獲利付高估值。'),
-    chip: L('Cycle rider. You chase supply and demand.', '循環騎士:跟著供需循環進出。'),
-    yield: L('Income collector. Telecom pays steadily every lap.', '領息一族:電信股每圈穩穩收股利。'),
-    agri: L('Farmer at heart. You hedge with things people must eat.', '農夫派:用大家一定要吃的東西避險。'),
-    oil: L('Macro trader. You bet on world events.', '總經交易者:押注國際事件。'),
-    health: L('Defender. You like sectors that hold up in a storm.', '防禦派:偏好抗跌的類股。'),
-    reit: L('Landlord. You collect rent and watch interest rates.', '包租公:收租配息,緊盯利率。'),
-    fin: L('Banker. You like steady payers that enjoy higher rates.', '銀行家:偏好配息穩、升息受惠的金融股。'),
-    trans: L('Trade watcher. You ride the shipping cycle.', '景氣觀察家:跟著運價循環進出。'),
-    bio: L('Moonshot hunter. High risk, no dividends, big dreams.', '夢想獵人:高風險、不配息,賭新藥成功。'),
-    staples: L('Steady hand. You pick what people always need.', '穩健派:選大家一定會買的東西。'),
-    disc: L('Good-times rider. You bet on people spending.', '景氣樂觀派:押注大家願意花錢。'),
-    util: L('Sleep-well investor. Boring, steady, paid every lap.', '安心睡覺派:無聊、穩定、每圈領息。'),
-    mat: L('Builder. You bet on steel, cement and inflation.', '建設派:押注鋼鐵水泥與通膨。'),
-    gold: L('Safe-haven seeker. You prepare for storms.', '避險派:隨時為風暴做準備。'),
-    bond: L('Balancer. You pair stocks with bonds.', '平衡派:用債券平衡股票的波動。'),
-    etf: L('Index investor. You own the whole market and skip the guessing.', '指數投資人:買下整個市場,不猜個股。'),
-    green: L('Future believer. You back industries that are not profitable yet.', '未來信仰者:支持還沒賺錢的新產業。'),
-    def: L('World watcher. You trade on global tension.', '國際觀察家:跟著國際情勢布局。'),
-    game: L('Hit chaser. You wait for the next big title.', '大作獵人:等待下一款熱門作品。'),
-    crypto: L('Thrill seeker. Most of your money rides on hype.', '刺激追求者:大部分資金押在熱度上。'),
-  }[top];
-  const title = [L('Rough market', '行情不順'), L('Curious rookie', '好奇新手'), L('Sharp analyst', '精明分析師'), L('Top investor', '頂尖投資人')][done];
-  const a = assets();
   const rank = S.players.slice().sort((x, y) => assetsOf(y) - assetsOf(x)), medal = ['🥇', '🥈', '🥉', '4'];
-  const table = rank.map((p, i) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-radius:10px;${p.human ? 'background:#fff3d6;' : ''}font-weight:800">
-      <span style="width:1.6em;text-align:center">${medal[i]}</span><span style="flex:1;text-align:left">${CHARS[p.char].icon} ${nameOf(p)}${p.name ? `(${CHARS[p.char].name})` : ''}${p.human ? (S.nh > 1 ? ` · ${L('Player', '玩家')} ${p.i + 1}` : (p.name ? '' : L(' (you)', '(你)'))) : ''}</span><b>${assetsOf(p) < 0 ? '-' : ''}$${fmt(Math.abs(assetsOf(p)))}</b></div>`).join('');
   const won = rank[0].human;
   // 存紀錄(第一位真人),並拿歷史最佳來比
   const me0 = S.players[S.hi], myRank = 1 + rank.findIndex((p) => p === me0), rec = { date: new Date().toISOString().slice(0, 10), char: me0.char, name: me0.name || '', n: S.players.length, rounds: S.rolls, assets: Math.round(assetsOf(me0)), done: S.done, stars: done, rank: myRank };
@@ -2372,27 +2341,20 @@ function finish() {
   const newBest = !prev.best || rec.assets > prev.best.assets;
   // 成績卡上一個「看排行榜」按鈕,點了才疊一塊 1~10 名的排行榜(內容和右側版一樣)
   const recLine = `<p style="font-size:calc(12.5px * var(--fs))">${newBest ? `🏆 <b>${L('New personal best!', '新的個人最佳紀錄!')}</b> ` : ''}<button class="lnk" id="recBtn">🏆 ${L('Leaderboard', '看排行榜')}</button></p>`;
-  const myRec = findRecord(rec);
-  const credit = `<p style="margin:10px 0 0;font-size:calc(10.5px * var(--fs));color:#b5a593">${L('Fictional companies · for learning, not investment advice · Music: Sharou', '公司皆為虛構 · 學習用途,非投資建議 · 音樂:しゃろう')} · v${VER}</p>`;
-  $('end').innerHTML = (S.nh > 1
-    ? `<div class="card">
-    <h2>🏆 ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}</h2>
-    <div style="margin:10px 0">${table}</div>${recLine}
-    <p>${S.players.filter((p) => p.human).map((p) => L(`Player ${p.i + 1}: ${p.done} missions`, `玩家 ${p.i + 1} 完成 ${p.done} 個任務`)).join(' · ')} · ${L(`${S.rolls} rounds`, `${S.rolls} 回合`)}</p>
-    <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
-    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div>${credit}</div>`
-    : `<div class="card">
-    <div class="stars">${[0, 1, 2].map((i) => i < done ? '<b>★</b>' : '★').join('')}</div>
-    <h2>${title}</h2>
-    <p>${L('Total assets', '總資產')} <b>$${fmt(a)}</b> (${a >= START_CASH ? '+' : ''}${((a / START_CASH - 1) * 100).toFixed(0)}%) · ${L(`${S.rolls} rounds`, `${S.rolls} 回合`)} · ${L(`${S.done} missions completed`, `完成 ${S.done} 個任務`)}</p>
-    <div style="margin:10px 0">${table}</div>${recLine}
-    <p>${style}</p>
-    <p style="font-size:calc(12.5px * var(--fs))">${L('Want real charts, rankings, and an AI you can talk to? CatInsight Stock has them.', '想看真實線圖、排行,還有能對話的 AI?CatInsight Stock 都有。')}</p>
-    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button></div>${credit}</div>`);
+  // 結算畫面:標題(你獲勝 / ○○獲勝)+ 自己這局的總資產 + 可捲動的全球排行榜 + 再玩一次 / 下載 App / 退出
+  const credit = `<p style="margin:10px 0 0;font-size:calc(10.5px * var(--fs));color:#b5a593">${L('Fictional companies · for learning, not investment advice · Music & SFX: Mixkit', '公司皆為虛構 · 學習用途,非投資建議 · 音樂 / 音效:Mixkit')} · v${VER}</p>`;
+  const meA = assetsOf(me0), youWon = rank[0] === me0;
+  $('end').innerHTML = `<div class="card endcard">
+    <h2>${youWon ? `🏆 ${L('You win!', '你獲勝!')}` : `🏆 ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}`}</h2>
+    <p>${L(`You: #${myRank} · $${fmt(meA)} · ${S.rolls} rounds`, `你:第 ${myRank} 名 · $${fmt(meA)} · ${S.rolls} 回合`)}${newBest ? ` · 🏆 <b>${L('New best!', '新紀錄!')}</b>` : ''}</p>
+    <div id="lbGlobal" class="rbox lblist endlb">${globalBox()}</div>
+    <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button><button class="b-sell" id="quit">${L('Exit', '退出')}</button></div>${credit}</div>`;
   $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose'); remoteBanner();
   $('again').onclick = start;
-  $('recBtn').onclick = () => leaderboardPanel(myRec);
   $('app').onclick = () => window.open(APP_URL, '_blank', 'noopener');
+  // 退出:嵌在街機裡就請外面的房間頁把遊戲關掉;單獨開的就回房間頁
+  $('quit').onclick = () => { if (EMBED) { try { parent.postMessage({ type: 'css-exit' }, location.origin); } catch (e) {} } else location.href = '../'; };
+  if (lbState.status !== 'sending') fetchGlobal();
 }
 /* ───────────── 線上同樂(主機端) ─────────────
    這台是主機:遊戲照常在這裡跑。手機掃 QR 進房間後只是「遙控器」:主機把面板(擲骰、買賣、翻牌…)的 HTML 鏡射到手機,
@@ -2683,4 +2645,4 @@ function clientInit() {
 
 resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, marginCheck, acctRatio, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, marginCheck, acctRatio, finish, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };

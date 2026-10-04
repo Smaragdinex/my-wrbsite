@@ -467,3 +467,9 @@ body.watch #panel[data-watch=""]::after{display:none}
 .panel h3 .help .tip{display:none;position:absolute;right:0;top:calc(100% + 8px);width:min(300px,78vw);background:#3b2f2a;color:#fff;border-radius:12px;padding:10px 12px;font-size:calc(12px * var(--fs));font-weight:600;line-height:1.5;z-index:5;box-shadow:0 8px 20px rgba(0,0,0,.25);text-align:left}
 .panel h3 .help .tip b{color:#ffd9a3}
 .panel h3 .help:hover .tip,.panel h3 .help:focus .tip,.panel h3 .help.open .tip{display:block}
+
+/* 結算畫面:全球排行榜直接放在卡片裡,可以上下捲 */
+.endcard{width:min(440px,100%)}
+.endcard .endlb{width:auto;border:2px solid #f1e6d6;box-shadow:none;padding:10px 10px 8px;margin:10px 0 2px;max-height:min(42vh,calc(360px * var(--fs)));text-align:left}
+.endcard .btns button{font-size:calc(14px * var(--fs))}
+@media(max-height:620px){ .endcard .endlb{max-height:32vh} }

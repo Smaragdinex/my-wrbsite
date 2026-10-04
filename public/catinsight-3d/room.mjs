@@ -728,7 +728,7 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=229';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=230';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 手機直拿(觸控、短邊 ≤ 1100px、直的)就把遊戲畫面轉 90° 變橫向;轉成橫拿或平板、電腦就正常顯示
@@ -793,6 +793,7 @@ canvas.addEventListener('pointermove', (e) => {
 window.addEventListener('message', (e) => { if (e.origin !== location.origin || !e.data || e.data.type !== 'css-sound') return; bgm.on = !!e.data.on; bgmLevel(); });
 // 遊戲裡按「全螢幕」:把整個房間頁放到全螢幕(iframe 裡做不到),狀態變化再回報給遊戲更新按鈕
 { const doc = document, el = doc.documentElement, isFs = () => !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+  window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-exit') hideGame(); });   // 遊戲結算畫面的「退出」
   window.addEventListener('message', (e) => { if (e.origin !== location.origin || !e.data || e.data.type !== 'css-fullscreen') return;
     if (isFs()) (doc.exitFullscreen || doc.webkitExitFullscreen)?.call(doc); else (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el); });
   const report = () => { try { gameFrame?.contentWindow?.postMessage({ type: 'css-fullscreen-state', on: isFs() }, location.origin); } catch (e) {} };
