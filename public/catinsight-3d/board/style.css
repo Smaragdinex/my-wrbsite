@@ -40,6 +40,14 @@
   /* iPad Safari 會把按鈕裡的字另外畫一層,顏色和底色差一點點,看起來像文字外面有個淡淡的方框 → 不用轉場動畫、把整顆按鈕固定成一層,字就跟按鈕畫在一起 */
   .roll span{display:block;background:transparent;transform:translateZ(0)}
   .roll:active{transform:translateY(4px) translateZ(0);box-shadow:0 2px 0 #d4553a,0 4px 8px rgba(0,0,0,.2)}
+  /* 骰子往上拋再落下(每 2.2 秒一次),文字縮小放在骰子下面;滑鼠移上去橘色變亮一點 */
+  .roll{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(var(--roll) * .02);padding:0}
+  .roll .die{width:calc(var(--roll) * .40);height:calc(var(--roll) * .40);filter:drop-shadow(0 3px 0 rgba(0,0,0,.18));animation:dieToss 2.2s cubic-bezier(.3,.6,.4,1) infinite}
+  .roll .die svg{width:100%;height:100%;display:block}
+  .roll #rollTxt{font-size:calc(var(--roll) * .15)}
+  .roll:disabled .die{animation:none}
+  @media(hover:hover){ .roll:hover{background:#ff8f6e;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2),0 0 0 4px rgba(255,255,255,.35)} .roll:hover .die{animation-duration:1.1s} }
+  @keyframes dieToss{0%,55%,100%{transform:translateY(0) rotate(0deg)}20%{transform:translateY(calc(var(--roll) * -.16)) rotate(140deg)}35%{transform:translateY(calc(var(--roll) * -.06)) rotate(300deg)}45%{transform:translateY(0) rotate(360deg)}50%{transform:translateY(calc(var(--roll) * -.03)) rotate(360deg)}}
   .roll small{display:block;font-size:calc(var(--roll) * .105);font-weight:700;opacity:.9;letter-spacing:0}
   .paw{height:var(--btn);padding:0 calc(var(--btn) * .34);border-radius:999px;border:4px solid #fff;background:#7cc6ff;color:#fff;font-weight:900;font-size:calc(var(--btn) * .27);
     box-shadow:0 4px 0 #4f9bd6;cursor:pointer}

@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#9bdc7a">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=37">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -58,7 +58,8 @@
   <button class="paw bag" id="bagBtn" aria-label="backpack">🎒<b id="bagCount">1</b></button>
   <div class="rollcol">
     <div class="dsel" id="dsel"><button data-n="1" id="d1"></button><button data-n="2" id="d2" class="on"></button></div>
-    <button class="roll" id="rollBtn"><span id="rollTxt"></span></button>
+    <!-- 擲骰鈕:一顆骰子往上拋的動畫 + 小字 -->
+    <button class="roll" id="rollBtn"><span class="die" aria-hidden="true"><svg viewBox="0 0 48 48"><rect x="4" y="4" width="40" height="40" rx="11" fill="#fff"/><g fill="#ff7a59"><circle cx="15" cy="15" r="4.2"/><circle cx="33" cy="15" r="4.2"/><circle cx="24" cy="24" r="4.2"/><circle cx="15" cy="33" r="4.2"/><circle cx="33" cy="33" r="4.2"/></g></svg></span><span id="rollTxt"></span></button>
     <span class="roundTxt" id="roundTxt"></span>
   </div>
 </div>
@@ -94,6 +95,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=175"></script>
+<script type="module" src="./board.mjs?v=176"></script>
 </body>
 </html>
