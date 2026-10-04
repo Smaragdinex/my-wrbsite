@@ -2096,7 +2096,7 @@ async function aiLand() {
     if (aiAlg() === 'rule') act = aiRuleAct(A, type, h, sh, price, mine, F, lv);
     else { const st = simSnapshot(A), p = st.players[A.i]; act = await simDecide('trade', st, A.i, type);
       const e = SIM.evOf(st, type, p) / Math.max(1, S.maxRounds - S.rolls), ep = `${e >= 0 ? '+' : ''}${Math.round(e * 100)}%`;   // 換算成每回合的期望報酬
-      act.why = aiAlg() === 'mc' ? L(`(simulated ${SIM.MC.n} futures)`, `(模擬了 ${SIM.MC.n} 種未來)`) : L(`(expects ${ep} per round)`, `(期望每回合 ${ep})`); }
+      act.why = aiAlg() === 'mc' ? '' : L(`(expects ${ep} per round)`, `(期望每回合 ${ep})`); }   // 困難(蒙地卡羅)的公告不寫決策方式
     const why = act.why || '';
     if (act.a === 'cover') { const back = coverBack(type, sh), pl = back - sh.entry * sh.n; A.cash += back; const cn = sh.n; sh.n = 0; sh.entry = 0; impact(type, buyF(cn));
       toast(L(`${who} covered its ${sec.name} short (${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}) ${why}`, `${who}回補${sec.name}空單(${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})${why}`)); }
