@@ -285,7 +285,8 @@ const AU = (() => {
   // 背景音樂:しゃろう「3:03 PM」(免費 BGM)。bgm.m4a 是從 30 分鐘版剪出來的一輪(剛好 128 秒)前後各多留 0.5 秒,
   // 用 loopStart / loopEnd 在檔案「裡面」循環 —— AAC 檔頭尾會被編碼器塞一點空白,直接整檔 loop 會聽到斷點。
   // 第一次點擊後才下載(約 1.5 MB)和解碼,好了就開始播
-  const BGM_URL = new URL('./bgm.m4a?v=1', import.meta.url).href, LOOP_A = 0.5, LOOP_LEN = 128;
+  // 背景音樂:Mixkit「Serene View」(免費商用),已剪成 92 秒無接縫循環(檔頭是尾巴和開頭的交叉淡化)
+  const BGM_URL = new URL('./bgm.m4a?v=2', import.meta.url).href, LOOP_A = 0.05;
   let bgm = null;
   // 森林鳥鳴環境音(Mixkit「Forest birds ambience」,Mixkit License 免費商用):進入遊戲才淡入、循環播,壓在音樂底下;選角畫面淡出
   let amb = null, ambGain = null, ambWant = false, ambLoading = false;
@@ -306,7 +307,7 @@ const AU = (() => {
     try {
       const data = await (await fetch(BGM_URL)).arrayBuffer();
       const buf = await new Promise((ok, no) => { const p = ctx.decodeAudioData(data, ok, no); if (p && p.then) p.then(ok, no); });
-      bgm = ctx.createBufferSource(); bgm.buffer = buf; bgm.loop = true; bgm.loopStart = LOOP_A; bgm.loopEnd = LOOP_A + LOOP_LEN;
+      bgm = ctx.createBufferSource(); bgm.buffer = buf; bgm.loop = true; bgm.loopStart = LOOP_A; bgm.loopEnd = buf.duration - 0.05;
       bgm.connect(mus); bgm.start(0, LOOP_A);
     } catch (e) { console.warn('bgm', e); }
   }

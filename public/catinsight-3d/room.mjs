@@ -728,7 +728,7 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- 街機遊戲:點街機 → 鏡頭飛到街機螢幕 → iframe 載入股票大富翁(./board/) ----------
 // 之前接的是貓咪瑪利歐:https://smaragdinex.github.io/cat-game/?minigame=1&v=16
-const GAME_URL = './board/?v=216';   // v 參數用來避開 index.html 的快取
+const GAME_URL = './board/?v=217';   // v 參數用來避開 index.html 的快取
 const gameUI = document.getElementById('game-ui'), gameCab = gameUI.querySelector('.cab'), gameScr = gameUI.querySelector('.scr');
 let gameFrame = null, gameOn = false;
 // 手機直拿(觸控、短邊 ≤ 1100px、直的)就把遊戲畫面轉 90° 變橫向;轉成橫拿或平板、電腦就正常顯示
@@ -753,10 +753,10 @@ function bgmUnlock() {
 async function bgmLoad() {
   if (bgm.loading || !bgm.ctx) return; bgm.loading = true;
   try {
-    const data = await (await fetch(new URL('./board/bgm.m4a?v=1', import.meta.url))).arrayBuffer();
+    const data = await (await fetch(new URL('./board/bgm.m4a?v=2', import.meta.url))).arrayBuffer();   // Mixkit「Serene View」,92 秒無接縫循環
     const buf = await new Promise((ok, no) => { const p = bgm.ctx.decodeAudioData(data, ok, no); if (p && p.then) p.then(ok, no); });
-    const src = bgm.ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.loopStart = 0.5; src.loopEnd = 128.5;   // 在檔案「裡面」循環,避開 AAC 頭尾的空白
-    src.connect(bgm.gain); src.start(0, 0.5);
+    const src = bgm.ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.loopStart = 0.05; src.loopEnd = buf.duration - 0.05;   // 整檔循環(檔案本身已做成無接縫),只避開 AAC 頭尾幾個取樣
+    src.connect(bgm.gain); src.start(0, 0.05);
   } catch (e) { console.warn('bgm', e); bgm.loading = false; }
 }
 function bgmLevel() { if (!bgm.ctx) return; const g = bgm.gain.gain, t = bgm.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(bgm.want && bgm.on ? 0.55 : 0, t + 0.5); }
