@@ -145,7 +145,7 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
   poster(-1.75, 3.05, 0.55, 0.72, (g, w, h) => { const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#2a1f4e'); sky.addColorStop(1, '#ff8fb0'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
     g.fillStyle = '#fff1c4'; g.beginPath(); g.arc(w * 0.72, h * 0.22, 16, 0, 7); g.fill(); g.fillStyle = '#1d1540'; let x = 0; while (x < w) { const bw = 20 + Math.random() * 30, bh = h * (0.25 + Math.random() * 0.4); g.fillRect(x, h - bh, bw, bh); x += bw + 4; } });
   poster(-0.95, 3.45, 0.42, 0.52, (g, w, h) => { g.fillStyle = '#fff8ec'; g.fillRect(0, 0, w, h); [[0.2, 0.35, '#f27a5a'], [0.42, 0.55, '#f5b942'], [0.64, 0.78, '#35c2a1']].forEach(([x, bh, c]) => { g.fillStyle = c; g.fillRect(w * x, h * (0.9 - bh * 0.75), w * 0.16, h * bh * 0.75); }); g.fillStyle = '#3b2f2a'; g.fillRect(w * 0.12, h * 0.9, w * 0.76, 4); });
-  { const tex = new THREE.TextureLoader().load('./poster-cat.webp?v=1'); tex.colorSpace = THREE.SRGBColorSpace;   // 太空貓:直接用圖
+  { const tex = new THREE.TextureLoader().load('./poster-cat.webp?v=2'); tex.colorSpace = THREE.SRGBColorSpace;   // 太空貓:直接用圖
     box(0.03, 0.74 + 0.08, 0.5 + 0.08, 0xfff6f0, { x: WX - 0.015, y: 3.25, z: 2.8, r: 0.005, seg: 1, shadow: false });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.74), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })); m.rotation.y = -Math.PI / 2; m.position.set(WX - 0.035, 3.25, 2.8); root.add(m); }
   // 植物:角落一棵龜背芋(白盆 + 幾片大葉子),層板上一盆垂下來的常春藤
