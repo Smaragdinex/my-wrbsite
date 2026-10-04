@@ -1501,7 +1501,9 @@ function buyPanel(k) {
     const gain = h.n ? (price * h.n - h.cost) / h.cost * 100 : 0;
     const spl = sh.n ? (sh.entry - price) / sh.entry * 100 : 0;
     const vs = (price / sec.open - 1) * 100, ratio = acctRatio(S.players[S.hi]);
-    const rivalTxt = others().map((p) => { const rh = p.hold[k], rs = p.short[k], nm = nameOf(p);
+    // 對手的持股只有「正在偵查的那位」看得到(其他人的持股是秘密)
+    const me = S.players[S.hi], spied = (p) => me.spy && S.rolls < me.spy.until && me.spy.target === p.i;
+    const rivalTxt = others().filter(spied).map((p) => { const rh = p.hold[k], rs = p.short[k], nm = nameOf(p);
       return (rh.n ? ` <b style="color:#c4472f">${L(`${nm} holds ${rh.n}`, `${nm}持有 ${rh.n} 股`)}${rh.loan > 0 ? L(` on margin (ratio ${Math.round(acctRatio(p) * 100)}%)`, `(融資,維持率 ${Math.round(acctRatio(p) * 100)}%)`) : ''}${L('.', '。')}</b>` : '') +
         (rs.n ? ` <b style="color:#8a5cf5">${L(`${nm} is short ${rs.n}: a ${Math.max(1, Math.ceil(squeezeGap(rs, k)))}% rise squeezes it out.`, `${nm}放空 ${rs.n} 股,再漲 ${Math.max(1, Math.ceil(squeezeGap(rs, k)))}% 會被軋空。`)}</b>` : ''); }).join('');
     const p = panel(`
@@ -1678,16 +1680,14 @@ function shopPanel() {
 }
 // 利空消息卡:挑一種資產讓它下跌。列表先列對手持有的(打擊對手),再列你自己放空的(幫自己賺)
 function attackPanel() {
+  // 看不到對手持有什麼:列出「自己沒有持有」的資產讓你挑(打自己的持股沒意義),自己放空的排前面(打下去你賺)
   return new Promise((res) => {
-    const heldBy = (k) => others().reduce((a, p) => a + p.hold[k].n, 0);       // 所有對手合計持有幾股
-    const foe = KEYS.filter((k) => heldBy(k) > 0).sort((a, b) => heldBy(b) * S.price[b] - heldBy(a) * S.price[a]);
-    const mine = KEYS.filter((k) => S.short[k].n > 0 && !foe.includes(k));
-    const rest = KEYS.filter((k) => !foe.includes(k) && !mine.includes(k));
+    const mine = KEYS.filter((k) => S.short[k].n > 0);
+    const rest = KEYS.filter((k) => !S.hold[k].n && !S.short[k].n);
     const chip = (k, note) => `<button data-k="${k}" style="border-color:${SECTORS[k].css}"><i style="background:${SECTORS[k].css}"></i>${SECTORS[k].code}${note ? `<small>${note}</small>` : ''}</button>`;
-    const p = panel(`<h3>📉 ${L('Bad news card', '利空消息卡')}</h3><p>${L('Pick the asset to hit. It drops 18%.', '選一種資產,價格下跌 18%。')}</p>` +
-      (foe.length ? `<p><b>${L('Your rival holds', '對手持有')}</b></p><div class="chips">${foe.map((k) => chip(k, `${heldBy(k)}${L(' sh', ' 股')}`)).join('')}</div>` : `<p>${L('Your rival holds nothing yet.', '對手還沒有持股。')}</p>`) +
+    const p = panel(`<h3>📉 ${L('Bad news card', '利空消息卡')}</h3><p>${L('Pick an asset you do not own. Its price drops 18%. You cannot see who holds what, so guess from what rivals have been buying.', '選一種你沒有持有的資產,價格下跌 18%。你看不到對手持有什麼,只能從他們之前買了什麼來猜。')}</p>` +
       (mine.length ? `<p><b>${L('You are short', '你放空的')}</b></p><div class="chips">${mine.map((k) => chip(k, `${L('short', '空')} ${S.short[k].n}`)).join('')}</div>` : '') +
-      `<p><b>${L('Other assets', '其他資產')}</b></p><div class="chips">${rest.map((k) => chip(k)).join('')}</div>` +
+      `<p><b>${L('Assets you do not own', '你沒有持有的資產')}</b></p><div class="chips">${rest.map((k) => chip(k)).join('')}</div>` +
       `<div class="btns"><button class="b-skip" data-k="">${L('Cancel', '取消')}</button></div>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.k || null); });
   });
@@ -1696,7 +1696,7 @@ function attackPanel() {
 function spyPanel() {
   return new Promise((res) => {
     const p = panel(`<h3>🔍 ${L('Spy report', '偵查報告')}</h3><p>${L(`Pick a rival. For ${SPY_ROUNDS} rounds the stock button next to their avatar opens their full assets.`, `選一位對手。接下來 ${SPY_ROUNDS} 回合,他頭像旁的股票鈕可以打開他的完整資產。`)}</p>` +
-      `<div class="chips">${others().map((q) => `<button data-t="${q.i}">${CHARS[q.char].icon} ${nameOf(q)}<small>$${fmt(assetsOf(q))}</small></button>`).join('')}</div>` +
+      `<div class="chips">${others().map((q) => `<button data-t="${q.i}">${CHARS[q.char].icon} ${nameOf(q)}</button>`).join('')}</div>` +
       `<div class="btns"><button class="b-skip" data-t="">${L('Cancel', '取消')}</button></div>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.t === '' ? null : +b.dataset.t); });
   });
@@ -1704,15 +1704,11 @@ function spyPanel() {
 // 利空消息生效:價格下跌,並說明誰受傷
 async function badNews(k, by) {
   const sec = SECTORS[k], byYou = isYou(by), who = nameOf(by);
-  // 受傷的人:出牌的人以外、持有這檔的每一位
-  const hurt = others(by.i).filter((p) => p.hold[k].n > 0).map((p) => { const loss = p.hold[k].n * S.price[k] * (1 - ATK_DROP);
-    return isYou(p) ? L(`You lose about $${fmt(loss)}.`, `你損失約 $${fmt(loss)}。`) : L(`${nameOf(p)} loses about $${fmt(loss)}.`, `${nameOf(p)}損失約 $${fmt(loss)}。`); }).join(' ');
   S.price[k] *= ATK_DROP; marginCheck(); sfx('bad');
   S.lastEvent = { t: L(`Bad news about ${sec.name}`, `${sec.name}傳出利空`), w: L('Rumors and bad headlines can sink a price fast.', '壞消息和傳言可以讓股價快速下跌。'), m: Object.fromEntries(KEYS.map((x) => [x, x === k ? ATK_DROP : 1])) };
   drawAll(); hud();
   await cardPanel(byYou ? L(`You spread bad news about ${sec.name}`, `你放出${sec.name}的利空消息`) : L(`${who} spreads bad news about ${sec.name}`, `${who}放出${sec.name}的利空消息`),
-    (hurt ? hurt + ' ' : '') +
-    L('Anyone short this asset profits.', '放空這檔資產的人則會獲利。'),
+    L('Anyone holding it loses 18% of its value; anyone short profits. Who got hit stays secret.', '持有這檔的人市值少 18%,放空的人則會獲利。誰被打到不會公開。'),
     `<span class="mv dn">${sec.name} -${Math.round((1 - ATK_DROP) * 100)}%</span>`, by.human ? 0 : AI_CARD_WAIT);
 }
 // 背包:只有輪到自己、還沒擲骰時能開
