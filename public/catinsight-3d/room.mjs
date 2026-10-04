@@ -168,19 +168,23 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
   glow.position.set(cx, 0.6, L.z - 3.1); glow.renderOrder = -9; root.add(glow);
   // 4. 高樓:窗戶貼圖(暖黃亮窗,隨機有亮有暗),當 emissiveMap 貼在深色方塊上;遠近兩層各一個 InstancedMesh,高度 / 寬度隨機
   // 窗戶貼圖:一格 32px 一扇窗,大約 1/3 亮著(真的夜景大多數窗是暗的);每棟樓只重複 1×2 → 一棟 4~8 扇,不會密到像雜訊
-  const winTex = (lit) => { const t = mk(64, 128, (g, w, h) => { g.fillStyle = '#000'; g.fillRect(0, 0, w, h); for (let y = 10; y < h - 10; y += 32) for (let x = 10; x < w - 10; x += 32) if (Math.random() < lit) { g.fillStyle = Math.random() < 0.8 ? '#ffd27a' : '#ffe9b0'; g.fillRect(x, y, 12, 14); } });
+  // 每張貼圖至少 3 扇亮窗(不然整棟黑掉);每層用 3 張不同圖案輪流,樓看起來才不會一模一樣
+  const winTex = (lit) => { const t = mk(64, 128, (g, w, h) => { g.fillStyle = '#000'; g.fillRect(0, 0, w, h); const cells = []; for (let y = 10; y < h - 10; y += 32) for (let x = 10; x < w - 10; x += 32) cells.push([x, y]);
+      let on = cells.map(() => Math.random() < lit); while (on.filter(Boolean).length < 3) on[Math.floor(Math.random() * on.length)] = true;
+      cells.forEach(([x, y], i) => { if (on[i]) { g.fillStyle = Math.random() < 0.8 ? '#ffd27a' : '#ffe9b0'; g.fillRect(x, y, 12, 14); } }); });
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 2); return t; };
   const cityLayer = (count, z, hMin, hMax, color, lit, spread) => {
     const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
-    const side = new THREE.MeshStandardMaterial({ color, emissive: 0xffffff, emissiveMap: winTex(lit), emissiveIntensity: 1.1, roughness: 0.9, ...STENCIL });
     const roof = new THREE.MeshStandardMaterial({ color, roughness: 0.95, ...STENCIL });   // 屋頂 / 底面沒有窗戶
-    const im = new THREE.InstancedMesh(geo, [side, side, roof, roof, side, side], count); im.renderOrder = -8; const M = new THREE.Matrix4();   // BoxGeometry 面的順序:+x -x +y -y +z -z
-    // 從左到右一棟接一棟排,中間留縫,排滿就停(多出來的 instance 縮成 0),不會疊在一起
+    const K = 3, per = Math.ceil(count / K), ims = [], M = new THREE.Matrix4();
+    for (let k = 0; k < K; k++) { const side = new THREE.MeshStandardMaterial({ color, emissive: 0xffffff, emissiveMap: winTex(lit), emissiveIntensity: 1.1, roughness: 0.9, ...STENCIL });
+      const im = new THREE.InstancedMesh(geo, [side, side, roof, roof, side, side], per); im.renderOrder = -8; im.count = 0; root.add(im); ims.push(im); }   // BoxGeometry 面的順序:+x -x +y -y +z -z
+    // 從左到右一棟接一棟排,中間留縫,排滿就停,不會疊在一起;三組貼圖輪流用
     let x = cx - spread / 2;
     for (let i = 0; i < count; i++) { const w = rnd(0.3, 0.6), h = rnd(hMin, hMax), d = rnd(0.4, 0.7);
-      if (x + w > cx + spread / 2) { M.makeScale(0.001, 0.001, 0.001); im.setMatrixAt(i, M); continue; }
-      M.makeScale(w, h, d); M.setPosition(x + w / 2, -0.4, z - d / 2); im.setMatrixAt(i, M); x += w + rnd(0.08, 0.3); }
-    im.instanceMatrix.needsUpdate = true; root.add(im); return im;
+      if (x + w > cx + spread / 2) break;
+      const im = ims[i % K]; M.makeScale(w, h, d); M.setPosition(x + w / 2, -0.4, z - d / 2); im.setMatrixAt(im.count++, M); x += w + rnd(0.08, 0.3); }
+    ims.forEach((im) => { im.instanceMatrix.needsUpdate = true; }); return ims;
   };
   cityLayer(40, L.z - 2.6, 1.2, 2.9, 0x3b2b6e, 0.3, S * 3.2);      // 遠景:較高、偏紫、亮窗少(排很寬,斜看也有樓)
   cityLayer(28, L.z - 1.5, 0.5, 1.5, 0x221a48, 0.4, S * 2.4);       // 近景:矮一截、更深色(上半部留給天空和月亮)
