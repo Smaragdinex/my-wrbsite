@@ -1431,7 +1431,8 @@ function hud() {
   $('rankTxt').textContent = ordinal(rank); $('rankTxt').classList.toggle('top', rank === 1); $('crown').classList.toggle('hide', rank !== 1);
 
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
-  $('rollTxt').textContent = S.lane ? (S.lane.type === 'jail' && S.lane.wait > 0 ? L('REST', '休息中') : L('ROLL 1', '擲一顆')) : L('ROLL', '擲骰子');
+  { const rest = S.lane && S.lane.type === 'jail' && S.lane.wait > 0;   // 擲骰鈕:沒有字,骰子顆數跟著選擇(小路上固定一顆);休息中才顯示文字
+    $('rollTxt').textContent = rest ? L('REST', '休息中') : ''; $('rollDice').className = 'dice ' + (rest ? 'rest' : (S.lane || S.diceN === 1) ? 'one' : 'two'); }
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
   { const T = meP();    // 任務清單永遠是自己的(每位玩家各自抽 3 個;以前跟著輪到誰,手機玩家走的時候主機會看到他的)
     $('missTitle').textContent = L(`Missions · ${T.done} done`, `任務 · 完成 ${T.done}`); $('missBadge').textContent = (T.missions || []).filter((m) => !m.done).length;
@@ -1462,7 +1463,7 @@ function staticText() {
       pips.map(([px, py]) => `<circle cx="${x + px}" cy="${py}" r="2.2" class="pip"/>`).join('') + '</g>';
     $('d1').innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${die(1, [[6.5, 6.5], [15.5, 6.5], [11, 11], [6.5, 15.5], [15.5, 15.5]], -8)}</svg>`;
     $('d2').innerHTML = `<svg viewBox="0 0 50 24" aria-hidden="true">${die(1, [[7, 7], [15, 15]], -10)}${die(27, [[7, 7], [11, 11], [15, 15]], 8)}</svg>`;
-    $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('rollTxt').textContent = L('ROLL', '擲骰子');
+    $('d1').setAttribute('aria-label', L('Roll 1 die', '擲 1 顆骰子')); $('d2').setAttribute('aria-label', L('Roll 2 dice', '擲 2 顆骰子')); } $('rollBtn').setAttribute('aria-label', L('Roll', '擲骰子'));
   $('assetTitle').textContent = L('My assets', '我的資產'); $('evtTitle').textContent = L('Market event', '市場事件');
   // 頁尾加上版本號(取 board.mjs?v=N 的 N),方便確認拿到的是不是最新版
   $('note').textContent = '';      // 畫面底下不再放字(省空間);聲明、音樂出處和版本改放在結算畫面
