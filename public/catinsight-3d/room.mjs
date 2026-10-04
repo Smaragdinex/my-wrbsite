@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { buildSlides, activateSlide, deactivate } from './intro.mjs?v=11';
 
 // ---------- 配色(參考圖) ----------
@@ -150,35 +151,46 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
     sign.rotation.y = -Math.PI / 2; neon.add(sign); }
   const neonLight = new THREE.PointLight(0xffb070, 3.2, 3.6, 2); neonLight.position.set(-0.4, 0, 0); neon.add(neonLight);
 }
-// ---------- 窗外:有深度的夜景 —— 天空(最遠)+ 三層高樓剪影(遠 / 中 / 近,各自一張 canvas 貼圖),鏡頭轉動時會有視差 ----------
+// ---------- 窗外:2.5D 夜景 —— 天空漸層 + 月亮星星、遠 / 近兩層用 BoxGeometry 做的高樓(InstancedMesh,窗戶用 emissive 貼圖),
+//            城市底部一層柔和的橘紫光、開口前一片淡玻璃、再從窗戶打一盞藍紫 RectAreaLight 讓房間吃到夜景的冷光。全部只畫在開口範圍內(stencil)----------
 {
   const mk = (w, h, draw) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; draw(cv.getContext('2d'), w, h); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; };
   const rnd = (a, b) => a + Math.random() * (b - a);
-  // 天空:深紫 → 粉紫地平線,星星和月亮
-  const skyTex = mk(1024, 640, (g, w, h) => { const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#1d1540'); sky.addColorStop(0.6, '#4a3484'); sky.addColorStop(1, '#ff85b5'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
-    g.fillStyle = 'rgba(255,255,255,.9)'; for (let i = 0; i < 110; i++) { g.beginPath(); g.arc(Math.random() * w, Math.random() * h * 0.5, Math.random() * 1.6 + 0.4, 0, 7); g.fill(); }
-    g.fillStyle = '#ffe3a8'; g.beginPath(); g.arc(760, 120, 46, 0, 7); g.fill(); g.fillStyle = '#3d2a70'; g.beginPath(); g.arc(780, 108, 40, 0, 7); g.fill(); });
-  // 一層高樓剪影:透明背景,樓的顏色越遠越偏紫、越近越深;窗戶亮點
-  const cityTex = (col, winCol, hMin, hMax, density) => mk(1024, 640, (g, w, h) => { let x = -20;
-    while (x < w) { const bw = rnd(40, 110), bh = rnd(hMin, hMax); g.fillStyle = col; g.fillRect(x, h - bh, bw, bh);
-      if (Math.random() < 0.3) g.fillRect(x + bw * 0.3, h - bh - rnd(10, 40), bw * 0.4, 40);   // 屋頂小塔
-      g.fillStyle = winCol; for (let wy = h - bh + 12; wy < h - 10; wy += 22) for (let wx = x + 8; wx < x + bw - 10; wx += 18) if (Math.random() < density) g.fillRect(wx, wy, 8, 11);
-      x += bw + rnd(4, 16); } });
-  const layers = [
-    [skyTex, 1.7, 1.0],
-    [cityTex('#3b2b6e', '#c9a8ff', 120, 300, 0.35), 1.15, 0.0],
-    [cityTex('#2a1d52', '#ffd27a', 160, 380, 0.5), 0.7, 0.0],
-    [cityTex('#1a1238', '#ffe09a', 200, 430, 0.55), 0.3, 0.0],
-  ];
-  // 三層剪影放在開口後面不同距離,鏡頭轉動時近的動得多、遠的動得少 → 視差。寬度維持在牆的範圍內,從側面看不會突出房子外
-  layers.forEach(([tex, depth, isSky], i) => { const W = S - 0.5, Hh = H - 0.9;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: !isSky, depthWrite: !!isSky }));
-    m.position.set(-T / 2, Hh / 2 + 0.2, L.z - 0.3 - depth); m.renderOrder = -10 + i; root.add(m); });
-  // 剪影只能透過牆上的開口看到:先用一片看不見的「開口遮罩」寫入 stencil,夜景各層只畫在遮罩範圍內 → 從側面不會露在房子外,牆也不用加厚
-  const mask = new THREE.Mesh(new THREE.PlaneGeometry(S - T - 1.8, H - 1.4), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, stencilWrite: true, stencilRef: 1, stencilZPass: THREE.ReplaceStencilOp }));
-  mask.position.set(-T / 2, 0.5 + (H - 1.4) / 2, L.z + T / 2 + 0.01); mask.renderOrder = -20; root.add(mask);
-  root.traverse((o) => { if (o.isMesh && o.renderOrder >= -10 && o.renderOrder < 0 && o.material.map) { o.material.stencilWrite = true; o.material.stencilRef = 1; o.material.stencilFunc = THREE.EqualStencilFunc; } });
-  const cityGlow = new THREE.PointLight(0xb08cff, 1.6, 6, 2); cityGlow.position.set(-T / 2, 2.4, L.z - 0.2); root.add(cityGlow);
+  const STENCIL = { stencilWrite: true, stencilRef: 1, stencilFunc: THREE.EqualStencilFunc };
+  const openW = S - T - 1.8, openH = H - 1.4, cx = -T / 2;
+  // 1. 開口遮罩:看不見,只寫 stencil
+  const mask = new THREE.Mesh(new THREE.PlaneGeometry(openW, openH), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, stencilWrite: true, stencilRef: 1, stencilZPass: THREE.ReplaceStencilOp }));
+  mask.position.set(cx, 0.5 + openH / 2, L.z + T / 2 + 0.01); mask.renderOrder = -20; root.add(mask);
+  // 2. 天空:藍紫 → 粉紫垂直漸層,星星、月亮
+  const skyTex = mk(512, 512, (g, w, h) => { const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#1b1442'); sky.addColorStop(0.55, '#4a3690'); sky.addColorStop(1, '#f07cb6'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255,255,255,.9)'; for (let i = 0; i < 70; i++) { g.beginPath(); g.arc(Math.random() * w, Math.random() * h * 0.5, Math.random() * 1.5 + 0.4, 0, 7); g.fill(); }
+    g.fillStyle = '#fff1c4'; g.beginPath(); g.arc(380, 90, 30, 0, 7); g.fill(); g.fillStyle = '#2b1f5c'; g.beginPath(); g.arc(394, 82, 26, 0, 7); g.fill(); });
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(S + 2, H + 2), new THREE.MeshBasicMaterial({ map: skyTex, ...STENCIL }));
+  sky.position.set(cx, H / 2 - 0.2, L.z - 3.2); sky.renderOrder = -10; root.add(sky);
+  // 3. 城市底部的柔和橘紫光(加色混合的漸層面)
+  const glowTex = mk(256, 128, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,140,90,0)'); gr.addColorStop(1, 'rgba(255,120,110,.55)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(S + 2, 2.2), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, ...STENCIL }));
+  glow.position.set(cx, 0.6, L.z - 3.1); glow.renderOrder = -9; root.add(glow);
+  // 4. 高樓:窗戶貼圖(暖黃亮窗,隨機有亮有暗),當 emissiveMap 貼在深色方塊上;遠近兩層各一個 InstancedMesh,高度 / 寬度隨機
+  const winTex = (lit) => { const t = mk(64, 128, (g, w, h) => { g.fillStyle = '#000'; g.fillRect(0, 0, w, h); for (let y = 6; y < h - 6; y += 16) for (let x = 6; x < w - 6; x += 16) if (Math.random() < lit) { g.fillStyle = Math.random() < 0.8 ? '#ffd27a' : '#ffe9b0'; g.fillRect(x, y, 8, 10); } });
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 7); return t; };
+  const cityLayer = (count, z, hMin, hMax, color, lit, spread) => {
+    const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
+    const m = new THREE.MeshStandardMaterial({ color, emissive: 0xffffff, emissiveMap: winTex(lit), emissiveIntensity: 1.1, roughness: 0.9, ...STENCIL });
+    const im = new THREE.InstancedMesh(geo, m, count); im.renderOrder = -8; const M = new THREE.Matrix4();
+    let x = cx - spread / 2;
+    for (let i = 0; i < count; i++) { const w = rnd(0.3, 0.7), h = rnd(hMin, hMax), d = rnd(0.4, 0.8);
+      M.makeScale(w, h, d); M.setPosition(x + w / 2, -0.4, z - d / 2); im.setMatrixAt(i, M); x += w + rnd(0.05, 0.22); if (x > cx + spread / 2) x = cx - spread / 2 + rnd(0, 0.3); }
+    im.instanceMatrix.needsUpdate = true; root.add(im); return im;
+  };
+  cityLayer(20, L.z - 2.6, 1.2, 2.9, 0x3b2b6e, 0.4, S + 2.0);      // 遠景:較高、偏紫、窗少一點
+  cityLayer(14, L.z - 1.5, 0.5, 1.5, 0x221a48, 0.6, S + 1.0);       // 近景:矮一截、更深色、窗多(上半部留給天空和月亮)
+  // 5. 開口前一片玻璃:很淡、很光滑,室內的燈會在上面留一點反光
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(openW, openH), new THREE.MeshStandardMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.07, roughness: 0.05, metalness: 0.35, depthWrite: false }));
+  glass.position.set(cx, 0.5 + openH / 2, L.z + T / 2 + 0.02); glass.renderOrder = 5; root.add(glass);
+  // 6. 夜景的冷光:從窗戶往房間打一盞低強度藍紫 RectAreaLight(窗框、層板、街機都會吃到)
+  RectAreaLightUniformsLib.init();
+  const cold = new THREE.RectAreaLight(0x8f80ff, 1.4, openW, openH); cold.position.set(cx, 0.5 + openH / 2, L.z + T / 2 + 0.05); cold.lookAt(cx, 1.6, 2); root.add(cold);
 }
 // ---------- 層架上的東西 ----------
 {
