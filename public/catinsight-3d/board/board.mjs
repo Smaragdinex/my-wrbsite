@@ -473,8 +473,8 @@ const MISSION_DEFS = [
       ok: () => KEYS.some((k) => { const h = S.hold[k]; return h.n > 0 && h.cost > 0 && (h.n * S.price[k] - h.cost) / h.cost <= -0.5; }) }) },
   { id: 'liquidator', make: () => ({ title: L('Margin call', '斷頭高手'), sub: L('Push a price down until a rival\'s margin position is liquidated', '把股價打到讓對手的融資部位被強迫平倉'), ok: () => S.flags.liquidator }) },
   { id: 'squeezer', make: () => ({ title: L('Squeeze master', '軋空高手'), sub: L('Push the price up until a rival\'s short is squeezed', '把股價拉到讓對手的空單被軋空'), ok: () => S.flags.squeezer }) },
-  // 抱住股票也是階梯:一檔持股未實現獲利 200% → 300% → 400% → 500%
-  ...[2, 3, 4, 5].map((x, i) => ({ id: 'hold' + x + 'x', after: i ? 'hold' + (x - 1) + 'x' : null,
+  // 抱住股票也是階梯:一檔持股未實現獲利 300% → 500% → 800% → 1000%
+  ...[3, 5, 8, 10].map((x, i, arr) => ({ id: 'hold' + x + 'x', after: i ? 'hold' + arr[i - 1] + 'x' : null,
     make: () => ({ title: L('Hold tight', '抱住股票'), sub: L(`Hold one stock until it is up ${x * 100}%`, `一檔持股未實現獲利達 ${x * 100}%`),
       ok: () => KEYS.some((k) => { const h = S.hold[k]; return h.n > 0 && h.cost > 0 && (h.n * S.price[k] - h.cost) / h.cost >= x; }) }) })),
   { id: 'haven', make: () => ({ title: L('Find a safe haven', '準備避險'), sub: L('Hold gold or bonds', '持有黃金或債券'), ok: () => S.hold.gold.n > 0 || S.hold.bond.n > 0 }) },
