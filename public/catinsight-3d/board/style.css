@@ -278,15 +278,15 @@ body.remote #ctl, body.remote #tipbar{visibility:hidden}
 .lcol{position:fixed;left:12px;top:calc(var(--ava) + 52px);z-index:5;display:flex;gap:8px;align-items:flex-start;pointer-events:none;max-height:calc(100vh - var(--ava) - var(--roll) - 120px)}
 .rcol{position:fixed;right:12px;top:calc(var(--ava) + 52px);z-index:5;display:flex;flex-direction:row-reverse;gap:10px;align-items:flex-start;pointer-events:none;max-height:calc(100vh - var(--ava) - var(--roll) - 120px)}
 .rbtns{display:flex;flex-direction:column;gap:10px;flex:none}
-.rb{position:relative;width:calc(64px * var(--fs));border:0;background:transparent;padding:0;cursor:pointer;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:2px;-webkit-tap-highlight-color:transparent}
-.rb .ic{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:50%;border:5px solid #fff;box-sizing:border-box;transition:transform .15s,background .15s}
+.rb{position:relative;flex:none;width:calc(64px * var(--fs));border:0;background:transparent;padding:0;cursor:pointer;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:2px;-webkit-tap-highlight-color:transparent}
+.rb .ic{width:100%;aspect-ratio:1;flex:none;display:flex;align-items:center;justify-content:center;border-radius:50%;border:5px solid #fff;box-sizing:border-box;transition:transform .15s,background .15s}
 .rb .ic svg{width:84%;height:84%;display:block;filter:drop-shadow(0 2px 0 rgba(0,0,0,.12))}
 .rb.evt .ic{background:#f5b942;box-shadow:0 5px 0 #cf9426,0 8px 14px rgba(0,0,0,.18)}
-.rb.miss .ic{background:#ff8fc0;box-shadow:0 5px 0 #d66ea0,0 8px 14px rgba(0,0,0,.18)}
+.rb.tsk .ic{background:#ff8fc0;box-shadow:0 5px 0 #d66ea0,0 8px 14px rgba(0,0,0,.18)}
 .rb:active .ic{transform:translateY(3px)}
-.rb.evt:active .ic{box-shadow:0 2px 0 #cf9426,0 4px 8px rgba(0,0,0,.18)}.rb.miss:active .ic{box-shadow:0 2px 0 #d66ea0,0 4px 8px rgba(0,0,0,.18)}
+.rb.evt:active .ic{box-shadow:0 2px 0 #cf9426,0 4px 8px rgba(0,0,0,.18)}.rb.tsk:active .ic{box-shadow:0 2px 0 #d66ea0,0 4px 8px rgba(0,0,0,.18)}
 .rb.on .ic{transform:scale(1.06)}
-.rb.evt.on .ic{box-shadow:0 5px 0 #cf9426,0 8px 14px rgba(0,0,0,.18),0 0 0 4px rgba(255,255,255,.45)}.rb.miss.on .ic{box-shadow:0 5px 0 #d66ea0,0 8px 14px rgba(0,0,0,.18),0 0 0 4px rgba(255,255,255,.45)}
+.rb.evt.on .ic{box-shadow:0 5px 0 #cf9426,0 8px 14px rgba(0,0,0,.18),0 0 0 4px rgba(255,255,255,.45)}.rb.tsk.on .ic{box-shadow:0 5px 0 #d66ea0,0 8px 14px rgba(0,0,0,.18),0 0 0 4px rgba(255,255,255,.45)}
 .rb span{background:#fff8ec;border:2px solid #e8d9c2;border-radius:999px;padding:1px 10px;font-weight:900;font-size:calc(11px * var(--fs));color:#6b594e;white-space:nowrap;margin-top:-8px;position:relative;z-index:1;box-shadow:0 2px 0 rgba(0,0,0,.12)}
 #missBtn span{border-color:#f0869a;color:#8a3b4a;background:#fff0f3}
 .rb .bd{position:absolute;top:-2px;right:-2px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#ff5a4f;color:#fff;font-style:normal;font-weight:900;font-size:calc(12px * var(--fs));display:flex;align-items:center;justify-content:center;border:2px solid #fff}
@@ -443,7 +443,7 @@ body.watch #panel[data-watch=""]::after{display:none}
 /* 有滑鼠的裝置:所有按鈕移上去都變亮一點(.roll 和抽卡的牌有自己的 hover 效果) */
 @media(hover:hover){
   button:not(:disabled):not(.roll):hover{filter:brightness(1.08) saturate(1.08)}
-  .rb.evt:not(:disabled):hover .ic{background:#ffc95a}.rb.miss:not(:disabled):hover .ic{background:#ffa3cd}.rb:not(:disabled):hover{filter:none}
+  .rb.evt:not(:disabled):hover .ic{background:#ffc95a}.rb.tsk:not(:disabled):hover .ic{background:#ffa3cd}.rb:not(:disabled):hover{filter:none}
   .stockbtn:not(:disabled):hover,.chips button:hover,.pnav button:hover,.prow button:hover,.lobbybar button:hover{filter:brightness(1.1)}
 }
 
