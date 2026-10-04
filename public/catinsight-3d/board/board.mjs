@@ -378,20 +378,25 @@ const MARGIN_LOAN = 0.6, MAINT = 1.3, MARGIN_FEE = 0.02;
 // 軋空:放空的股票比進場價漲超過 30% 就被強迫回補(買回來還)。被迫買回的買盤又會把股價推得更高
 const SQUEEZE = 1.3;
 const squeezeGap = (h, k) => (h.entry * SQUEEZE / S.price[k] - 1) * 100;      // 再漲幾 % 會被軋
-const ratioOf = (h, k) => (h.loan > 0 ? h.n * S.price[k] / h.loan : Infinity);
+const ratioOf = (h, k) => (h.loan > 0 ? h.n * S.price[k] / h.loan : Infinity);   // 單一檔的維持率(只拿來排「先砍哪一檔」)
+// 維持率看整個帳戶:所有持股市值加起來 ÷ 所有融資借款。早買的賺很多,晚買的那檔跌了也不會被單獨斷頭
+const acctRatio = (p) => { let v = 0, l = 0; for (const k of KEYS) { v += p.hold[k].n * S.price[k]; l += p.hold[k].loan; } return l > 0 ? v / l : Infinity; };
 const assets = () => assetsOf(S.players[S.hi]);
 // 買賣會推動價格(量大推得多):買進推高、賣出和放空壓低。所以賣空對手持有的資產,等於直接打擊對手
 const impact = (k, f) => { S.price[k] = Math.max(8, S.price[k] * f); marginCheck(); };
 // 強迫平倉:任何一次價格變動後都檢查。融資部位的維持率跌破 130% → 全部賣掉還款,剩多少拿回多少;
 // 被迫賣出的賣壓又會把股價往下壓(可能連帶讓別人也斷頭)。結果先記在 S.notices,等流程走到可以停的地方再用卡片告訴玩家
 function marginCheck() {
-  for (const who of S.players) for (const k of KEYS) {
-    const h = who.hold[k];
-    if (!(h.loan > 0) || h.n * S.price[k] / h.loan >= MAINT) continue;
-    const n = h.n, back = Math.max(0, n * S.price[k] - h.loan), put = h.cost - h.loan;
-    who.cash += back; h.n = 0; h.cost = 0; h.loan = 0;
-    S.notices.push({ pi: who.i, k, n, back, lost: put - back });
-    impact(k, sellF(n));
+  for (const who of S.players) {
+    // 整個帳戶的維持率跌破 130% 才強迫平倉:從維持率最差的那檔融資部位開始砍,砍到回到 130% 以上為止
+    for (let guard = 0; guard < KEYS.length && acctRatio(who) < MAINT; guard++) {
+      let k = null; for (const x of KEYS) { if (who.hold[x].loan > 0 && (k === null || ratioOf(who.hold[x], x) < ratioOf(who.hold[k], k))) k = x; }
+      if (k === null) break;
+      const h = who.hold[k], n = h.n, back = Math.max(0, n * S.price[k] - h.loan), put = h.cost - h.loan;
+      who.cash += back; h.n = 0; h.cost = 0; h.loan = 0;
+      S.notices.push({ pi: who.i, k, n, back, lost: put - back });
+      impact(k, sellF(n));
+    }
   }
   for (const who of S.players) for (const k of KEYS) {
     const h = who.short[k];
@@ -1438,11 +1443,11 @@ function advise() {
   if (todo.has('paid')) return L('Telecom and REIT pay the most each lap. Hold them when you pass GO.', '電信和不動產配息最多,持有它們再繞回起點就能領股利。');
   if (todo.has('cash') && S.cash < 2000) return L('Cash is low. Keep $2,000 so you can buy when a chance shows up.', '現金偏低。留 $2,000 以上,好機會出現時才買得起。');
   { let best = null;                                           // 對手裡融資維持率最低的那一檔
-    for (const p of others()) for (const k of KEYS) if (p.hold[k].loan > 0) { const r = ratioOf(p.hold[k], k); if (!best || r < best.r) best = { p, k, r }; }
+    for (const p of others()) for (const k of KEYS) if (p.hold[k].loan > 0) { const r = acctRatio(p); if (!best || r < best.r) best = { p, k, r }; }
     if (best) { const drop = Math.max(1, Math.ceil((1 - MAINT / best.r) * 100));
       return L(`${nameOf(best.p)} bought ${SECTORS[best.k].name} on margin (ratio ${Math.round(best.r * 100)}%). A ${drop}% drop forces it to sell.`, `${nameOf(best.p)}用融資買了${SECTORS[best.k].name},維持率 ${Math.round(best.r * 100)}%。再跌 ${drop}% 就會被強迫平倉。`); } }
-  { const my = KEYS.filter((k) => S.hold[k].loan > 0 && ratioOf(S.hold[k], k) < 1.5)[0];
-    if (my) return L(`Careful: your ${SECTORS[my].name} margin ratio is ${Math.round(ratioOf(S.hold[my], my) * 100)}%. Below 130% it is sold for you.`, `小心:你的${SECTORS[my].name}融資維持率只剩 ${Math.round(ratioOf(S.hold[my], my) * 100)}%,跌破 130% 會被強迫平倉。`); }
+  { const my = KEYS.filter((k) => S.hold[k].loan > 0)[0], ar = acctRatio(S.players[S.hi]); if (my && ar < 1.5)
+    return L(`Careful: your margin ratio is ${Math.round(ar * 100)}%. Below 130% your margin positions are sold for you.`, `小心:你的融資維持率只剩 ${Math.round(ar * 100)}%,跌破 130% 會被強迫平倉。`); }
   { const sq = KEYS.filter((k) => S.short[k].n > 0 && squeezeGap(S.short[k], k) < 12)[0];
     if (sq) return L(`Careful: your ${SECTORS[sq].name} short is squeezed if it rises ${Math.max(1, Math.ceil(squeezeGap(S.short[sq], sq)))}% more.`, `小心:你放空的${SECTORS[sq].name}再漲 ${Math.max(1, Math.ceil(squeezeGap(S.short[sq], sq)))}% 就會被軋空。`); }
   { let best = null;                                           // 對手裡最接近被軋空的那一檔
@@ -1460,7 +1465,7 @@ function advise() {
   return L('No one knows the next roll. Spread out and keep some cash.', '沒有人知道下一步會擲出幾點,分散持股、留點現金最穩。');
 }
 // 融資部位的小標:維持率,低於 150% 用紅字警告
-const marginTag = (h, k) => (h.loan > 0 ? ` <b style="color:${ratioOf(h, k) < 1.5 ? '#c4472f' : '#8a5cf5'}">${L('M', '融')}${Math.round(ratioOf(h, k) * 100)}%</b>` : '');
+const marginTag = (h, k, p) => { if (!(h.loan > 0)) return ''; const r = p ? acctRatio(p) : ratioOf(h, k); return ` <b style="color:${r < 1.5 ? '#c4472f' : '#8a5cf5'}">${L('M', '融')}${Math.round(r * 100)}%</b>`; };
 const squeezeTag = (h, k) => { const g = Math.max(0, squeezeGap(h, k)); return ` <b style="color:${g < 10 ? '#c4472f' : '#8a5cf5'}">${L('sq', '軋')}+${Math.ceil(g)}%</b>`; };
 const debtRow = (d) => (d > 0 ? `<div class="row"><i style="background:#4a63b0"></i><span>${L('Bank loan', '銀行貸款')}</span><span></span><span style="color:#c4472f">-${fmt(d)}</span></div>` : '');
 // 資產框上面那排頭像:每局開始時依人數建一次。點誰就看誰的資產
@@ -1486,7 +1491,7 @@ function assetRowsHtml(A, mine) {
     `<div class="row"><i style="background:#4aa8ff"></i><span>${L('Stocks', '股票市值')}</span><span></span><span>${fmt(stockV)}</span></div>` +
     `<div class="row"><i style="background:#ffb000"></i><span>${L('Total assets', '總資產')}</span><span></span><b>${fmt(assetsOf(A))}</b></div>` + debtRow(A.debt) +
       (held.length ? held.map((k) => { const h = A.hold[k], pl = h.n * S.price[k] - h.cost; totPL += pl;
-        return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${h.n} ${L('sh', '股')}${marginTag(h, k)}</span><span style="text-align:right">${fmt(h.n * S.price[k])}${plTxt(pl)}</span></div>`; }).join('')
+        return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${h.n} ${L('sh', '股')}${marginTag(h, k, A)}</span><span style="text-align:right">${fmt(h.n * S.price[k])}${plTxt(pl)}</span></div>`; }).join('')
         : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
       KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n; totPL += pl;
         return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${A.short[k].n}${squeezeTag(A.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('') +
@@ -1563,14 +1568,14 @@ function buyPanel(k) {
     const sec = SECTORS[k], h = S.hold[k], sh = S.short[k], price = S.price[k];
     const gain = h.n ? (price * h.n - h.cost) / h.cost * 100 : 0;
     const spl = sh.n ? (sh.entry - price) / sh.entry * 100 : 0;
-    const vs = (price / sec.open - 1) * 100, ratio = ratioOf(h, k);
+    const vs = (price / sec.open - 1) * 100, ratio = acctRatio(S.players[S.hi]);
     const rivalTxt = others().map((p) => { const rh = p.hold[k], rs = p.short[k], nm = nameOf(p);
-      return (rh.n ? ` <b style="color:#c4472f">${L(`${nm} holds ${rh.n}`, `${nm}持有 ${rh.n} 股`)}${rh.loan > 0 ? L(` on margin (ratio ${Math.round(ratioOf(rh, k) * 100)}%)`, `(融資,維持率 ${Math.round(ratioOf(rh, k) * 100)}%)`) : ''}${L('.', '。')}</b>` : '') +
+      return (rh.n ? ` <b style="color:#c4472f">${L(`${nm} holds ${rh.n}`, `${nm}持有 ${rh.n} 股`)}${rh.loan > 0 ? L(` on margin (ratio ${Math.round(acctRatio(p) * 100)}%)`, `(融資,維持率 ${Math.round(acctRatio(p) * 100)}%)`) : ''}${L('.', '。')}</b>` : '') +
         (rs.n ? ` <b style="color:#8a5cf5">${L(`${nm} is short ${rs.n}: a ${Math.max(1, Math.ceil(squeezeGap(rs, k)))}% rise squeezes it out.`, `${nm}放空 ${rs.n} 股,再漲 ${Math.max(1, Math.ceil(squeezeGap(rs, k)))}% 會被軋空。`)}</b>` : ''); }).join('');
     const p = panel(`
       <h3><span class="tag" style="background:${sec.css}">${sec.code}</span>${sec.name}
         <span class="help" tabindex="0" aria-label="${L('How trading works', '買賣說明')}"><i>?</i><span class="tip">${L('Buying pushes the price up, so whoever buys next pays more; selling and shorting push it down.', '買進會推高股價,下一個買的人要付更貴;賣出和放空會壓低股價。')}<br><br>
-          <b>${L('Margin', '融資')}</b>${L(': pay 40% and borrow 60%. If the ratio (stock value / loan) falls below 130%, everything is sold for you. Interest is 2% of the loan each lap.', ':自備 4 成、借 6 成。維持率(市值÷借款)跌破 130% 會被強迫平倉;每圈付借款 2% 的利息。')}<br><br>
+          <b>${L('Margin', '融資')}</b>${L(': pay 40% and borrow 60%. The ratio is account-wide: all your holdings\' value ÷ all your loans. Only if it falls below 130% are margin positions sold (worst first). Interest is 2% of the loan each lap.', ':自備 4 成、借 6 成。維持率看整個帳戶:全部持股市值 ÷ 全部借款,跌破 130% 才會強迫平倉(先砍最差的那檔);每圈付借款 2% 的利息。')}<br><br>
           <b>${L('Short', '放空')}</b>${L(': sell borrowed shares, buy back later. You win if the price falls. If it rises 30% above your entry you are squeezed: forced to buy back at the high price.', ':先借股票賣掉、之後買回來還,跌了你賺、漲了你賠。比進場價漲超過 30% 會被軋空:強迫用高價買回。')}</span></span></h3>
       <p>${sec.blurb}${rivalTxt}</p>
       <div class="kv">
@@ -1852,7 +1857,7 @@ function jailPanel() {
   return new Promise((res) => {
     const left = S.lane.wait, risky = KEYS.filter((k) => S.hold[k].loan > 0);
     const p = panel(`<h3><span class="tag" style="background:#7b8494">${L('POLICE', '警察局')}</span>${L('Resting', '休息中')}</h3>
-      <p>${L(`${left} more round${left > 1 ? 's' : ''} before you can roll out. You cannot trade in here.`, `再休息 ${left} 回合才能擲骰子出去,在這裡不能買賣。`)}${risky.length ? ` <b style="color:#c4472f">${L(`Margin at risk: ${risky.map((k) => `${SECTORS[k].code} ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join(', ')}`, `融資部位有風險:${risky.map((k) => `${SECTORS[k].code} 維持率 ${Math.round(ratioOf(S.hold[k], k) * 100)}%`).join('、')}`)}</b>` : ''}</p>
+      <p>${L(`${left} more round${left > 1 ? 's' : ''} before you can roll out. You cannot trade in here.`, `再休息 ${left} 回合才能擲骰子出去,在這裡不能買賣。`)}${risky.length ? ` <b style="color:#c4472f">${L(`Margin at risk: ${risky.map((k) => SECTORS[k].code).join(', ')} (ratio ${Math.round(acctRatio(S.players[S.hi]) * 100)}%)`, `融資部位有風險:${risky.map((k) => SECTORS[k].code).join('、')},維持率 ${Math.round(acctRatio(S.players[S.hi]) * 100)}%`)}</b>` : ''}</p>
       <div class="btns">
         <button class="b-ok" data-a="bail" ${S.cash < BAIL ? 'disabled' : ''}>${L('Pay bail', '付保釋金')}<br><span style="font-size:calc(11px * var(--fs))">$${fmt(BAIL)} · ${L('roll out now', '立刻擲骰出去')}</span></button>
         <button class="b-skip" data-a="wait">${L('Rest', '休息')}<br><span style="font-size:calc(11px * var(--fs))">${L('one more round', '再等一回合')}</span></button>
@@ -2054,7 +2059,7 @@ function aiTileScore(A, i) {
   if (sec) { const h = A.hold[t], sh = A.short[t], p = S.price[t];
     if (h.n && (p * h.n - h.cost) / h.cost >= (t === F ? 0.35 : 0.15)) v += 3;      // 可以獲利了結
     else if (sh.n && Math.abs((sh.entry - p) / sh.entry) >= 0.12) v += 2;          // 空單該回補了
-    else if (h.loan > 0 && ratioOf(h, t) < 1.5) v += 2;                            // 融資快斷頭,想去處理
+    else if (h.loan > 0 && acctRatio(A) < 1.5) v += 2;                            // 融資快斷頭,想去處理
     else if (t === F) v += A.cash >= p * LOT + lv.reserve ? 4.5 : 1;               // 主攻股:最想去
     else v += p < sec.open * 0.95 ? 1.5 : 0.5; }                                   // 便宜的比較想買
   else if (t === 'shop') v += A.cash >= 2500 ? (A.bag.includes('remote') ? 1.5 : 2.5) : 0.3;
@@ -2678,4 +2683,4 @@ function clientInit() {
 
 resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, marginCheck, acctRatio, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
