@@ -452,3 +452,14 @@ body.watch #panel[data-watch=""]::after{display:none}
 /* 大廳 QR 旁的「分享連結」鈕 */
 .lobby .share,.lobbycard .share{margin-top:4px;align-self:flex-start;border:0;border-radius:999px;padding:5px 12px;background:#35c2a1;color:#fff;font:inherit;font-weight:900;font-size:calc(12px * var(--fs));box-shadow:0 3px 0 #249c80;cursor:pointer;pointer-events:auto;white-space:nowrap}
 .lobby .share:active,.lobbycard .share:active{transform:translateY(2px);box-shadow:0 1px 0 #249c80}
+
+/* 買賣面板:四顆按鈕兩個一排(字才放得下);說明文字收進標題右邊的「?」,滑鼠移上去 / 點一下才顯示 */
+.btns.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btns.grid2 button{min-height:calc(54px * var(--fs));font-size:calc(15px * var(--fs))}
+.btns.grid2 button span{font-size:calc(13px * var(--fs));white-space:normal}
+.panel h3 .help{position:relative;margin-left:auto;flex:none;pointer-events:auto;cursor:help;outline:none}
+.panel h3 .help i{display:flex;align-items:center;justify-content:center;width:calc(24px * var(--fs));height:calc(24px * var(--fs));border-radius:50%;background:#e8d9c2;color:#6b594e;font-style:normal;font-weight:900;font-size:calc(14px * var(--fs))}
+.panel h3 .help:hover i,.panel h3 .help:focus i{background:#ff7a59;color:#fff}
+.panel h3 .help .tip{display:none;position:absolute;right:0;top:calc(100% + 8px);width:min(300px,78vw);background:#3b2f2a;color:#fff;border-radius:12px;padding:10px 12px;font-size:calc(12px * var(--fs));font-weight:600;line-height:1.5;z-index:5;box-shadow:0 8px 20px rgba(0,0,0,.25);text-align:left}
+.panel h3 .help .tip b{color:#ffd9a3}
+.panel h3 .help:hover .tip,.panel h3 .help:focus .tip,.panel h3 .help.open .tip{display:block}

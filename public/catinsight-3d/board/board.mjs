@@ -1568,7 +1568,10 @@ function buyPanel(k) {
       return (rh.n ? ` <b style="color:#c4472f">${L(`${nm} holds ${rh.n}`, `${nm}持有 ${rh.n} 股`)}${rh.loan > 0 ? L(` on margin (ratio ${Math.round(ratioOf(rh, k) * 100)}%)`, `(融資,維持率 ${Math.round(ratioOf(rh, k) * 100)}%)`) : ''}${L('.', '。')}</b>` : '') +
         (rs.n ? ` <b style="color:#8a5cf5">${L(`${nm} is short ${rs.n}: a ${Math.max(1, Math.ceil(squeezeGap(rs, k)))}% rise squeezes it out.`, `${nm}放空 ${rs.n} 股,再漲 ${Math.max(1, Math.ceil(squeezeGap(rs, k)))}% 會被軋空。`)}</b>` : ''); }).join('');
     const p = panel(`
-      <h3><span class="tag" style="background:${sec.css}">${sec.code}</span>${sec.name}</h3>
+      <h3><span class="tag" style="background:${sec.css}">${sec.code}</span>${sec.name}
+        <span class="help" tabindex="0" aria-label="${L('How trading works', '買賣說明')}"><i>?</i><span class="tip">${L('Buying pushes the price up, so whoever buys next pays more; selling and shorting push it down.', '買進會推高股價,下一個買的人要付更貴;賣出和放空會壓低股價。')}<br><br>
+          <b>${L('Margin', '融資')}</b>${L(': pay 40% and borrow 60%. If the ratio (stock value / loan) falls below 130%, everything is sold for you. Interest is 2% of the loan each lap.', ':自備 4 成、借 6 成。維持率(市值÷借款)跌破 130% 會被強迫平倉;每圈付借款 2% 的利息。')}<br><br>
+          <b>${L('Short', '放空')}</b>${L(': sell borrowed shares, buy back later. You win if the price falls. If it rises 30% above your entry you are squeezed: forced to buy back at the high price.', ':先借股票賣掉、之後買回來還,跌了你賺、漲了你賠。比進場價漲超過 30% 會被軋空:強迫用高價買回。')}</span></span></h3>
       <p>${sec.blurb}${rivalTxt}</p>
       <div class="kv">
         <div>${L('Price', '股價')}<b>$${Math.round(price)}</b></div>
@@ -1576,7 +1579,7 @@ function buyPanel(k) {
         <div>${sh.n ? L('Short', '放空') : h.loan > 0 ? L('Margin', '融資持有') : L('You hold', '持有')}<b>${sh.n || h.n}${(sh.n || h.n) ? ` <span style="font-size:calc(11px * var(--fs));color:${(sh.n ? spl : gain) >= 0 ? '#1c8a4a' : '#c4472f'}">${(sh.n ? spl : gain) >= 0 ? '+' : ''}${(sh.n ? spl : gain).toFixed(0)}%</span>` : ''}${h.loan > 0 ? `<span style="display:block;font-size:calc(11px * var(--fs));color:${ratio < 1.5 ? '#c4472f' : '#8a786c'}">${L('ratio', '維持率')} ${Math.round(ratio * 100)}%</span>` : ''}</b></div>
       </div>
       <div class="slider"><span>${L('Shares', '股數')}</span><input type="range" id="qty" min="10" max="50" step="10" value="10"><b id="qtyVal"></b></div>
-      <div class="btns">
+      <div class="btns grid2">
         <button class="b-buy" data-a="buy" ${sh.n ? 'disabled' : ''}>${L('Buy', '買進')}<br><span id="tBuy"></span></button>
         <button class="b-margin" data-a="margin" ${sh.n ? 'disabled' : ''}>${L('Margin', '融資買')}<br><span id="tMargin"></span></button>
         ${sh.n
@@ -1584,10 +1587,7 @@ function buyPanel(k) {
           : `<button class="b-short" data-a="short" ${h.n ? 'disabled' : ''}>${L('Short', '放空')}<br><span id="tShort"></span></button>`}
         <button class="b-sell" data-a="sell" ${h.n ? '' : 'disabled'}>${L('Sell', '賣出')}<br><span id="tSell"></span></button>
       </div>
-      <div class="btns" style="margin-top:8px"><button class="b-skip" data-a="skip">${L('Skip', '跳過')}</button></div>
-      <p style="font-size:calc(11.5px * var(--fs))">${L('Buying pushes the price up, so whoever buys next pays more; selling and shorting push it down.', '買進會推高股價,下一個買的人要付更貴;賣出和放空會壓低股價。')}<br>
-      ${L('Margin: pay 40% and borrow 60%. If the ratio (stock value / loan) falls below 130%, everything is sold for you. Interest is 2% of the loan each lap.', '融資:自備 4 成、借 6 成。維持率(市值÷借款)跌破 130% 會被強迫平倉;每圈付借款 2% 的利息。')}<br>
-      ${L('Short: sell borrowed shares, buy back later. You win if the price falls. If it rises 30% above your entry you are squeezed: forced to buy back at the high price.', '放空:先借股票賣掉、之後買回來還,跌了你賺、漲了你賠。比進場價漲超過 30% 會被軋空:強迫用高價買回。')}</p>`);
+      <div class="btns" style="margin-top:8px"><button class="b-skip" data-a="skip">${L('Skip', '跳過')}</button></div>`);
     const qty = $('qty'), n = () => +qty.value;
     // 拉桿一動,四顆按鈕的金額、價格影響、能不能按都跟著更新
     const paint = () => {
@@ -2538,7 +2538,9 @@ async function start() {
 }
 
 $('rollBtn').onclick = () => turn();
-document.addEventListener('click', (e) => { if (CLIENT && e.target.closest('#ctl, #stepCtl, #panel, #draw, #end')) return; if (e.target.closest('button, .dcard, .bubble')) sfx('click'); });   // 任何按鈕 / 牌 / 提示泡泡按下都有聲(手機上鏡射區的按鈕由主機轉送點擊聲,不重複)
+document.addEventListener('click', (e) => { if (CLIENT && e.target.closest('#ctl, #stepCtl, #panel, #draw, #end')) return; if (e.target.closest('button, .dcard, .bubble')) sfx('click'); });
+// 面板標題旁的「?」:手機沒有 hover,點一下開 / 關;點別處關掉
+document.addEventListener('click', (e) => { const h = e.target.closest('.panel h3 .help'); document.querySelectorAll('.panel h3 .help.open').forEach((x) => { if (x !== h) x.classList.remove('open'); }); if (h) h.classList.toggle('open'); });   // 任何按鈕 / 牌 / 提示泡泡按下都有聲(手機上鏡射區的按鈕由主機轉送點擊聲,不重複)
 // 滑鼠移到任何按鈕 / 卡片上都有一聲(只有有滑鼠的裝置;同一顆按鈕不重複響)
 if (matchMedia('(hover:hover)').matches) { let lastHover = null;
   document.addEventListener('mouseover', (e) => { const b = e.target.closest('button, .dcard, .rb, .stockbtn, .bubble'); if (!b || b === lastHover) { if (!b) lastHover = null; return; } lastHover = b; if (b.disabled) return; sfx('hover'); });
@@ -2676,4 +2678,4 @@ function clientInit() {
 
 resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
