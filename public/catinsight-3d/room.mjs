@@ -150,26 +150,34 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
     box(0.03, h + 0.08, w + 0.08, 0xfff6f0, { x: WX - 0.015, y, z, r: 0.005, seg: 1, shadow: false });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })); m.rotation.y = -Math.PI / 2; m.position.set(WX - 0.035, y, z); root.add(m);
     const img = new Image(); img.src = './poster-cat.webp?v=2';
-    const EYES = [[203, 326, 24, 25], [295, 348, 24, 25]];                                     // 兩隻眼睛在 512×768 貼圖上的位置 / 半徑
+    // 眨眼:同一張圖的「閉眼版」(poster-cat-blink.webp)。兩張只有眼睛附近不一樣,其他地方是 AI 重畫的細微雜訊,
+    // 所以只切眼睛那一塊(邊緣羽化)疊上去,整張換會讓畫面閃一下
+    const EYE = { x: 160, y: 268, w: 184, h: 120 };                                             // 512×768 貼圖上眼睛的範圍(兩張圖差異最大的區塊再留邊)
+    const patch = document.createElement('canvas'); patch.width = EYE.w; patch.height = EYE.h;
+    const shut = new Image(); shut.onload = () => { const p = patch.getContext('2d'); p.drawImage(shut, EYE.x, EYE.y, EYE.w, EYE.h, 0, 0, EYE.w, EYE.h);
+      p.globalCompositeOperation = 'destination-in'; p.save(); p.translate(EYE.w / 2, EYE.h / 2); p.scale(EYE.w / 2, EYE.h / 2);
+      const gr = p.createRadialGradient(0, 0, 0, 0, 0, 1); gr.addColorStop(0, '#000'); gr.addColorStop(0.72, '#000'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      p.fillStyle = gr; p.beginPath(); p.arc(0, 0, 1, 0, Math.PI * 2); p.fill(); p.restore(); patch.ready = true; };
+    shut.src = './poster-cat-blink.webp?v=1';
     const STARS = [[40, 60], [180, 30], [300, 70], [470, 20], [80, 330], [480, 300], [360, 160], [230, 120], [130, 230]];
-    let blinkAt = 3, blinkDur = 0.18, forced = 0;
+    let blinkAt = 3, blinkDur = 0.22, forced = 0;
     livePoster = (t) => {
       if (!img.complete || !img.naturalWidth) return;
       if (forced) { blinkAt = t; blinkDur = forced; forced = 0; }
       g.clearRect(0, 0, W, Hh); g.save(); g.translate(W / 2, Hh / 2);
       g.rotate(0.012 * Math.sin(t * 0.5)); const sc = 1.05 + 0.015 * Math.sin(t * 0.8); g.scale(sc, sc);          // 整張微晃 + 呼吸
       g.translate(0, 4 * Math.sin(t * 1.1)); g.drawImage(img, -W / 2, -Hh / 2, W, Hh);
-      // 眨眼:把眼睛上方的毛「拉下來」蓋住眼睛(顏色自然就對),閉上再張開
+      // 眨眼:閉眼那一塊淡入 → 停一下 → 淡出。偶爾(約 15%)是「瞇眼笑」,閉著 1.2 秒;偶爾連眨兩下
       const ph = (t - blinkAt) / blinkDur;
-      if (ph >= 0) { if (ph > 1) { blinkDur = 0.18; blinkAt = t + 2.5 + Math.random() * 3.5; if (Math.random() < 0.25) blinkAt = t + 0.35; }
-        else { const k = Math.sin(ph * Math.PI); for (const [ex, ey, rx, ry] of EYES) { g.save(); g.beginPath(); g.ellipse(ex - W / 2, ey - Hh / 2, rx + 3, ry + 3, 0, 0, Math.PI * 2); g.clip();
-          g.drawImage(img, ex - rx - 6, ey - ry - 70, (rx + 6) * 2, 60, ex - rx - 6 - W / 2, ey - ry - 3 - Hh / 2, (rx + 6) * 2, (ry + 3) * 2 * k); g.restore(); } } }
+      if (ph >= 0) { if (ph > 1) { const r = Math.random(); blinkDur = r < 0.15 ? 1.2 : 0.22; blinkAt = t + (r > 0.8 ? 0.3 : 2.5 + Math.random() * 3.5); }
+        else if (patch.ready) { const edge = Math.min(0.08, blinkDur / 3) / blinkDur, a = Math.min(1, ph / edge, (1 - ph) / edge);
+          g.globalAlpha = Math.max(0, a); g.drawImage(patch, EYE.x - W / 2, EYE.y - Hh / 2); g.globalAlpha = 1; } }
       g.restore();
       // 星星閃爍(四角星,亮度各自用不同頻率的 sin)
       for (let i = 0; i < STARS.length; i++) { const [sx, sy] = STARS[i], a = 0.5 + 0.5 * Math.sin(t * (1.3 + i * 0.37) + i), r = 5 + 3 * a; g.globalAlpha = a * 0.9; g.fillStyle = '#fff6d0';
         g.beginPath(); g.moveTo(sx, sy - r); g.lineTo(sx + r * 0.3, sy - r * 0.3); g.lineTo(sx + r, sy); g.lineTo(sx + r * 0.3, sy + r * 0.3); g.lineTo(sx, sy + r); g.lineTo(sx - r * 0.3, sy + r * 0.3); g.lineTo(sx - r, sy); g.lineTo(sx - r * 0.3, sy - r * 0.3); g.closePath(); g.fill(); }
       g.globalAlpha = 1; tex.needsUpdate = true; };
-    livePoster.blinkNow = (dur) => { forced = dur || 0.18; }; }   // 測試用:馬上眨一次(可指定秒數)
+    livePoster.blinkNow = (dur) => { forced = dur || 0.22; }; }   // 測試用:馬上眨一次(可指定秒數)
   // 植物:角落一棵龜背芋(白盆 + 幾片大葉子),層板上一盆垂下來的常春藤
   { const p = group(2.42, 0, 1.25); cyl(0.2, 0.17, 0.3, 0xf7f1f2, { y: 0.15, parent: p }); cyl(0.17, 0.17, 0.02, 0x5a4330, { y: 0.3, parent: p });
     const leafMat = new THREE.MeshStandardMaterial({ color: 0x3f9a5a, roughness: 0.8, side: THREE.DoubleSide });
