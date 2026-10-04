@@ -312,7 +312,7 @@ const AU = (() => {
   // 每個音效是一小串音:[音高, 幾秒後, 長度, 波形, 音量, 滑到的音高]
   const SEQ = {
     click: [[88, 0, 0.04, 'square', 0.035]],
-    hop: [[69, 0, 0.1, 'sine', 0.13, 76]], hopAi: [[62, 0, 0.1, 'sine', 0.07, 69]],
+    hop: [[69, 0, 0.1, 'sine', 0.26, 76]], hopAi: [[62, 0, 0.1, 'sine', 0.16, 69]],     // 走格子的音:大聲一點
     buy: [[76, 0, 0.08, 'triangle', 0.16], [81, 0.07, 0.12, 'triangle', 0.16]],
     sell: [[88, 0, 0.06, 'square', 0.05], [93, 0.06, 0.06, 'square', 0.05], [100, 0.12, 0.14, 'square', 0.05]],
     short: [[67, 0, 0.2, 'sawtooth', 0.06, 58]],
@@ -331,7 +331,7 @@ const AU = (() => {
     if (!ctx || !on || skipRender) return;      // 自動測試快轉時不出聲
     if (ctx.state !== 'running') { ctx.resume(); return; }
     const t = ctx.currentTime;
-    if (name === 'dice') { for (let i = 0; i < 9; i++) noise(t + i * 0.1 + Math.random() * 0.04, 0.035, 0.16 - i * 0.008, 2200 + Math.random() * 1200); return; }
+    if (name === 'dice') { for (let i = 0; i < 9; i++) noise(t + i * 0.1 + Math.random() * 0.04, 0.035, 0.34 - i * 0.016, 2200 + Math.random() * 1200); noise(t + 0.95, 0.12, 0.3, 500); tone(45, t + 0.95, 0.12, 'triangle', 0.18, 40); return; }   // 骰子滾動 + 最後落地一聲
     if (name === 'flip') { noise(t, 0.18, 0.12, 1400); noise(t + 0.08, 0.12, 0.08, 2600); return; }
     if (name === 'jail') noise(t, 0.35, 0.14, 900);
     for (const [m, at, dur, type = 'triangle', vol = 0.15, to = null] of SEQ[name]) tone(m, t + at, dur, type, vol, to);
