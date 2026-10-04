@@ -16,6 +16,13 @@
     <meta name="apple-mobile-web-app-title" content="Tiny Planet">
     <link rel="apple-touch-icon" href="./public/icons/icon-192.png">
     <title>Tiny Planet — Fly around a tiny planet</title>
+    <!-- 分頁標題的小飛機:雲一直往左飄、飛機固定在中間,看起來像在飛(分頁在背景也看得到) -->
+    <script>
+      (() => { const BLANK = '\u2003', W = 9, P = 4;
+        const sky = Array.from({ length: W }, (_, i) => (i % 3 === 1 ? ['☁️', '☁️', '🌤️'][(i / 3 | 0) % 3] : BLANK));
+        const draw = () => { document.title = `Tiny Planet ${sky.map((c, i) => (i === P ? '✈️' : c)).join('')}`; };
+        draw(); setInterval(() => { sky.push(sky.shift()); draw(); }, 220); })();
+    </script>
     <style>
         :root {
             /* 所有懸浮按鈕都跟著畫面短邊縮放,大螢幕才不會顯得很小 */
