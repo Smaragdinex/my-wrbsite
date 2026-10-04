@@ -1501,11 +1501,13 @@ function assetRowsHtml(A, mine) {
       '';   // 對手手上有什麼道具永遠不顯示
 }
 // 任務清單的 HTML(主機自己和手機都用)
-const missHtml = (p) => (p.missions || []).map((m) =>
-    `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('') +
-    ((p.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + (() => {   // 同名任務合併成一列,後面標 ×N(最新完成的排前面)
-      const seen = new Map(); p.doneList.slice().reverse().forEach((t) => seen.set(t, (seen.get(t) || 0) + 1));
-      return [...seen].map(([t, n]) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span>${n > 1 ? `<b class="cnt">×${n}</b>` : ''}</div>`).join(''); })() : '');
+const missHtml = (p) => {
+  const pend = (p.missions || []).map((m) => `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('');
+  const seen = new Map(); (p.doneList || []).slice().reverse().forEach((t) => seen.set(t, (seen.get(t) || 0) + 1));   // 同名任務合併成一列標 ×N(最新的排前面)
+  const done = [...seen].map(([t, n]) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span>${n > 1 ? `<b class="cnt">×${n}</b>` : ''}</div>`).join('') || `<div class="sub">${L('Nothing completed yet', '還沒有完成的任務')}</div>`;
+  // 上面兩個分頁:進行中 / 已完成(哪一頁開著記在 #missBox 的 data-tab,重畫不會跳掉)
+  return `<div class="mtabs"><button data-mt="pend">${L('Active', '進行中')}</button><button data-mt="done">${L('Done', '已完成')} ${(p.doneList || []).length ? `<i>${(p.doneList || []).length}</i>` : ''}</button></div><div class="mpend">${pend}</div><div class="mdone">${done}</div>`;
+};
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][n % 10 > 3 ? 0 : n % 10] || 'th');      // 1st 2nd 3rd 4th
 const rankOf = (p) => { const a = assetsOf(p); return 1 + S.players.filter((q) => assetsOf(q) > a + 0.5).length; };
 function hud() {
@@ -2511,6 +2513,7 @@ async function start() {
 $('rollBtn').onclick = () => turn();
 document.addEventListener('click', (e) => { if (CLIENT && e.target.closest('#ctl, #stepCtl, #panel, #draw, #end')) return; if (e.target.closest('button, .dcard, .bubble')) sfx('click'); });
 // 面板標題旁的「?」:手機沒有 hover,點一下開 / 關;點別處關掉
+document.addEventListener('click', (e) => { const t = e.target.closest('.mtabs button'); if (t) $('missBox').dataset.tab = t.dataset.mt; });   // 任務框分頁(主機和手機都是本機切換)
 document.addEventListener('click', (e) => { const h = e.target.closest('.panel h3 .help'); document.querySelectorAll('.panel h3 .help.open').forEach((x) => { if (x !== h) x.classList.remove('open'); }); if (h) h.classList.toggle('open'); });   // 任何按鈕 / 牌 / 提示泡泡按下都有聲(手機上鏡射區的按鈕由主機轉送點擊聲,不重複)
 // 滑鼠移到任何按鈕 / 卡片上都有一聲(只有有滑鼠的裝置;同一顆按鈕不重複響)
 if (matchMedia('(hover:hover)').matches) { let lastHover = null;
