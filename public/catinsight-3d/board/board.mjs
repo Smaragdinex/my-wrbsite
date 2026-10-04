@@ -1474,9 +1474,9 @@ let CLIENT_ME = -1;      // 手機端:自己是第幾位
 const meP = () => (CLIENT_ME >= 0 && S.players[CLIENT_ME]) || S.players.find((p) => p.human && !p.remote) || S.players[0];
 function buildFoes() {
   const el = $('assetTabs'); el.innerHTML = '';
-  S.players.filter((p) => p !== meP()).forEach((p) => {      // 直排只放對手;自己是左上那顆頭像。每列:頭像 | 名次 | 股票鈕(看他的資產)
+  S.players.filter((p) => p !== meP()).forEach((p) => {      // 直排只放對手;自己是左上那顆頭像。每列:頭像(右下角名次)| 股票鈕(看他的資產)
     const row = document.createElement('div'); row.className = 'otab'; row.dataset.i = p.i;
-    row.innerHTML = `<span class="pava" data-i="${p.i}" title="${nameOf(p)}"></span><b class="rk"></b><button class="stockbtn" data-i="${p.i}" aria-label="${nameOf(p)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="5" height="10" rx="1.5"/><rect x="9.5" y="5" width="5" height="16" rx="1.5"/><rect x="16" y="9" width="5" height="12" rx="1.5"/></svg></button>`;
+    row.innerHTML = `<span class="pava" data-i="${p.i}" title="${nameOf(p)}"><b class="rk"></b></span><button class="stockbtn" data-i="${p.i}" aria-label="${nameOf(p)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="5" height="10" rx="1.5"/><rect x="9.5" y="5" width="5" height="16" rx="1.5"/><rect x="16" y="9" width="5" height="12" rx="1.5"/></svg></button>`;
     row.querySelector('button').onclick = () => { const box = $('assetBox'); if (!box.classList.contains('fold') && S.view === p.i) box.classList.add('fold'); else { S.view = p.i; box.classList.remove('fold'); } hud(); };   // 點同一個再點一次就收起
     el.appendChild(row);
   });

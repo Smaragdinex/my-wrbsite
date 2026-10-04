@@ -171,7 +171,6 @@
   /* 資產框上面那排頭像:點誰看誰。橘色外框 = 正在看的;右下角綠點 = 現在輪到的 */
   .tabs{display:flex;gap:calc(8px * var(--fs));padding:calc(7px * var(--fs)) 12px;border-bottom:1.5px solid #f1e6d6;pointer-events:auto}
   .tabs .pava{position:relative;display:block;width:calc(34px * var(--fs));height:calc(34px * var(--fs));flex:none;border-radius:50%;border:2px solid #fff;background:#dfe8ff center 20%/cover;box-shadow:0 0 0 2px #e6d9c4;padding:0}
-  .tabs .pava.turn::after{content:'';position:absolute;right:-3px;bottom:-3px;width:calc(11px * var(--fs));height:calc(11px * var(--fs));border-radius:50%;background:#35c26b;border:2px solid #fff}
   .box.foe .fn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .box.foe .ft{margin-left:auto;font-weight:900}
   .box.foe .tri{margin-left:6px}
@@ -377,7 +376,12 @@ body.embed .topbtns{right:64px}
 /* 左上:自己的頭像 + 現金;輪到自己時頭像右下角綠點 */
 .cashpill{display:flex;align-items:center;gap:6px;background:#8a6f60;color:#fff;border:3px solid #fff;border-radius:999px;padding:4px 12px 4px 6px;font-weight:900;font-size:calc(16px * var(--fs));box-shadow:0 3px 0 rgba(0,0,0,.12);pointer-events:none;white-space:nowrap}
 .ava{position:relative;pointer-events:none}   /* 自己的頭像只是顯示,點了沒反應(資產用旁邊的股票鈕開) */
-.ava.turn::after{content:'';position:absolute;right:2px;bottom:2px;width:calc(14px * var(--fs));height:calc(14px * var(--fs));border-radius:50%;background:#35c26b;border:3px solid #fff}
+/* 輪到誰:頭像外面一圈綠色光環,像呼吸一樣放大縮小(自己和對手都一樣) */
+.ava.turn,.pava.turn{animation:turnBreath 1.6s ease-in-out infinite}
+@keyframes turnBreath{0%,100%{box-shadow:0 0 0 3px #35c26b,0 0 0 6px rgba(53,194,107,.25)}50%{box-shadow:0 0 0 5px #35c26b,0 0 0 12px rgba(53,194,107,.12)}}
+/* 名次放在頭像右下角(以前綠點的位置) */
+.ava .ranktag{position:absolute;right:-8px;bottom:-4px;padding:1px 8px;font-size:calc(11px * var(--fs));z-index:1}
+.pava .rk{position:absolute;right:-8px;bottom:-4px}
 @media(max-width:900px){ .cashpill{font-size:calc(14px * var(--fs));padding:3px 10px 3px 5px}.cashpill .coin{width:18px;height:18px} }
 
 /* 左上整合:頭像 | 現金 + 名次;第一名頭像戴皇冠 */
@@ -401,7 +405,7 @@ body.embed .topbtns{right:64px}
 .mecol{justify-content:center}
 
 .merow{display:flex;align-items:center;gap:8px}
-.merow .ranktag{align-self:center}
+.merow{min-height:0}
 /* 右上的音樂 / 全螢幕鈕放大到和離開鈕一樣(48px),手機也一樣 */
 .topbtns .snd{width:48px;height:48px;font-size:23px;border:4px solid #fff6e8;box-shadow:0 4px 6px rgba(0,0,0,.3)}   /* ♪ 和全螢幕鈕做成和離開 ✕ 那張圖一樣:48px、奶油色粗白邊、同樣的陰影 */
 .topbtns{top:12px;gap:10px}
