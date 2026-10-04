@@ -2459,7 +2459,7 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
   window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.type === 'css-fullscreen-state') paint(!!e.data.on); });
 }
 $('bagBtn').onclick = bagPanel;
-$('avaMe').onclick = $('stockBtn').onclick = () => { if (!S || !S.players.length) return; const box = $('assetBox'); if (!box.classList.contains('fold') && (S.view ?? meP().i) === meP().i) box.classList.add('fold'); else { S.view = meP().i; box.classList.remove('fold'); } hud(); };
+$('stockBtn').onclick = () => { if (!S || !S.players.length) return; const box = $('assetBox'); if (!box.classList.contains('fold') && (S.view ?? meP().i) === meP().i) box.classList.add('fold'); else { S.view = meP().i; box.classList.remove('fold'); } hud(); };
 // 提示泡泡:手機預設縮成「!」,點一下展開 / 收起
 { const tb = $('tipbar'); if (matchMedia('(max-width:900px)').matches) tb.classList.add('min'); tb.querySelector('.bubble').onclick = () => tb.classList.toggle('min');
   tb.addEventListener('animationend', (e) => { if (e.animationName === 'tipPulse') tb.classList.remove('pulse'); }); }   // 閃完把 pulse 拿掉,平常的小跳動才會回來
@@ -2528,7 +2528,7 @@ function clientInit() {
   }
   // 頭像點擊:看誰的資產(本機切換,不用問主機)
   const pickView = (i) => { const box = $('assetBox'); if (!box.classList.contains('fold') && aview === i) box.classList.add('fold'); else { aview = i; box.classList.remove('fold'); } paintHud(); };
-  $('avaMe').onclick = $('stockBtn').onclick = () => pickView(me);
+  $('stockBtn').onclick = () => pickView(me);
   new MutationObserver(() => { document.querySelectorAll('#assetTabs button').forEach((b) => { b.onclick = () => pickView(+b.dataset.i); }); }).observe($('assetTabs'), { childList: true });
   // 不是自己的回合:別人的買賣面板、分步選單、抽卡畫面照樣看得到(只是不能按),右上角標「○○操作中」
   function applyMine() {

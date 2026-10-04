@@ -283,7 +283,8 @@ body.remote #ctl, body.remote #tipbar{visibility:hidden}
 .box.assets{width:calc(236px * var(--fs))}
 /* 頭像直排(瑪利歐派對那種):點誰看誰;橘框 = 正在看;綠點 = 現在輪到 */
 .tabs.col{flex-direction:column;padding:0;border:0;background:none;box-shadow:none;gap:calc(12px * var(--fs));flex:none}   /* 對手頭像:一顆一顆單獨的,沒有後面的板子 */
-.tabs.col button{width:calc(52px * var(--fs));height:calc(52px * var(--fs))}
+.tabs.col button{width:calc(64px * var(--fs));height:calc(64px * var(--fs));opacity:1;border-width:3px;box-shadow:0 0 0 2px #e6d9c4,0 3px 0 rgba(0,0,0,.12)}   /* 對手頭像:正常顏色不變淡,大一點 */
+.tabs.col button.on{box-shadow:0 0 0 3px #ff7a59,0 3px 0 rgba(0,0,0,.12)}
 /* 任務清單放進框裡:每個任務一列 */
 .missbox h4{background:#ffb000}
 .miss{display:flex;flex-direction:column;gap:6px;padding:8px}
@@ -356,7 +357,7 @@ body.embed .topbtns{right:64px}
 
 /* 左上:自己的頭像 + 現金;輪到自己時頭像右下角綠點 */
 .cashpill{display:flex;align-items:center;gap:6px;background:#8a6f60;color:#fff;border:3px solid #fff;border-radius:999px;padding:4px 12px 4px 6px;font-weight:900;font-size:calc(16px * var(--fs));box-shadow:0 3px 0 rgba(0,0,0,.12);pointer-events:none;white-space:nowrap}
-.ava{position:relative;pointer-events:auto;cursor:pointer}
+.ava{position:relative;pointer-events:none}   /* 自己的頭像只是顯示,點了沒反應(資產用旁邊的股票鈕開) */
 .ava.turn::after{content:'';position:absolute;right:2px;bottom:2px;width:calc(14px * var(--fs));height:calc(14px * var(--fs));border-radius:50%;background:#35c26b;border:3px solid #fff}
 @media(max-width:900px){ .cashpill{font-size:calc(14px * var(--fs));padding:3px 10px 3px 5px}.cashpill .coin{width:18px;height:18px} }
 
@@ -365,7 +366,7 @@ body.embed .topbtns{right:64px}
 .ava .crown{position:absolute;left:-8px;top:-14px;font-style:normal;font-size:calc(26px * var(--fs));transform:rotate(-22deg);filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));pointer-events:none}
 .ava .crown.hide{display:none}
 @media(max-width:900px){ .ava .crown{font-size:calc(22px * var(--fs))} .lcol{top:calc(var(--ava) + 24px)} .rcol{top:calc(var(--ava) + 24px)} }
-@media(max-width:900px){ .tabs.col button{width:calc(46px * var(--fs));height:calc(46px * var(--fs))} }
+@media(max-width:900px){ .tabs.col button{width:calc(54px * var(--fs));height:calc(54px * var(--fs))} }
 
 /* 對手頭像右邊的名次 */
 .tabs.col{padding-right:calc(46px * var(--fs));align-items:flex-start;margin-top:6px}
