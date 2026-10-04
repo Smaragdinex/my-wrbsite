@@ -19,7 +19,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#9bdc7a">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=54">
+<link rel="stylesheet" href="style.css?v=55">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -90,10 +90,10 @@
     <!-- 設定卡:每一列 = 圖示 + 標題 / 副標 + 右邊的選項 -->
     <div class="pcfg" id="pcfg">
       <div class="pawtag"></div>
-      <div class="prow"><span class="ico"><img src="ic-players.webp?v=1" alt=""></span><span class="lbl"><b id="pcN"></b><small id="pcNs"></small></span><span class="opts"><button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></span></div>
+      <div class="prow"><span class="ico"><img src="ic-players.webp?v=1" alt=""></span><span class="lbl"><b id="pcN"></b><small id="pcNs"></small></span><span class="step" id="pcNst"><button data-ns="-1" aria-label="fewer players">−</button><b id="pcNv">2</b><button data-ns="1" aria-label="more players">+</button></span></div>
       <button class="online" id="pcOnline"><span class="oic"><img src="ic-online.webp?v=1" alt=""></span><span class="otx"><b id="pcOnT"></b><small id="pcOnS"></small></span><span class="chev">›</span></button>
       <div class="lobby hide" id="lobby"></div>
-      <div class="prow" id="pcDrow"><span class="ico"><img src="ic-computer.webp?v=1" alt=""></span><span class="lbl"><b id="pcD"></b></span><span class="opts"><button data-d="easy"></button><button data-d="normal"></button><button data-d="hard"></button></span></div>
+      <div class="prow" id="pcDrow"><span class="ico"><img src="ic-computer.webp?v=1" alt=""></span><span class="lbl"><b id="pcD"></b></span><span class="step" id="pcDst"><button data-ds="-1" aria-label="easier">−</button><b id="pcDv"></b><button data-ds="1" aria-label="harder">+</button></span></div>
       <div class="prow"><span class="ico"><img src="ic-rounds.webp?v=1" alt=""></span><span class="lbl"><b id="pcM"></b></span><span class="step" id="pcR"><button data-r="-1" aria-label="fewer rounds">−</button><b id="pcRv">20</b><button data-r="1" aria-label="more rounds">+</button></span></div>
     </div>
   </div>
@@ -112,6 +112,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=202"></script>
+<script type="module" src="./board.mjs?v=203"></script>
 </body>
 </html>

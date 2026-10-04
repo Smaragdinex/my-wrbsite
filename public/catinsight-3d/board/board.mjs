@@ -223,6 +223,7 @@ const cashChip = (e) => (e.cash ? `<span class="mv up">${L(`Everyone +$${fmt(e.c
 const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
 // 玩法:走滿選定的回合數(選角畫面可以選 20 / 25 / 30 / 35 / 40),總資產最高的人獲勝
 const ROUND_OPTS = [20, 25, 30, 35, 40];
+const AI_ORDER = ['easy', 'normal', 'hard'];   // 設定卡的 − / + 依這個順序切難度
 // 電腦難度(選角畫面可以選):
 //   三種都會買卡、放空、融資,差別在「機率」和「多狠」:
 //   easy   簡單:放空、買卡、用卡的機率都低,很少融資,現金留得多
@@ -1106,10 +1107,11 @@ function paintStage() {
   $('pcN').textContent = L('Players', '人數'); $('pcNs').textContent = L('Total players', '遊戲總人數');
   $('pcD').textContent = L('Bot', '電腦'); document.getElementById('pcDrow').classList.toggle('hide', CFG.n - (NET.on ? 1 + NET.guests.filter((g) => g.online).length : CFG.humans) <= 0);
   { const names = { easy: L('Easy', '簡單'), normal: L('Normal', '一般'), hard: L('Hard', '兇狠') };
-    document.querySelectorAll('#pcfg [data-d]').forEach((b) => { b.textContent = names[b.dataset.d]; b.classList.toggle('on', b.dataset.d === (CFG.ai || 'normal')); }); }
+    const di = AI_ORDER.indexOf(CFG.ai || 'normal'); $('pcDv').textContent = names[AI_ORDER[di]];
+    document.querySelector('#pcDst [data-ds="-1"]').disabled = di === 0; document.querySelector('#pcDst [data-ds="1"]').disabled = di === AI_ORDER.length - 1; }
   if (NET.on) { const h = Math.min(4, 1 + NET.guests.filter((g) => g.online).length); if (CFG.n < h) CFG.n = h; }
   const H = NET.on ? Math.min(4, 1 + NET.guests.filter((g) => g.online).length) : CFG.humans;
-  document.querySelectorAll('#pcfg [data-n]').forEach((b) => b.classList.toggle('on', +b.dataset.n === CFG.n));
+  $('pcNv').textContent = CFG.n; document.querySelector('#pcNst [data-ns="-1"]').disabled = CFG.n <= 2; document.querySelector('#pcNst [data-ns="1"]').disabled = CFG.n >= 4;
   document.querySelectorAll('#pcfg [data-h]').forEach((b) => b.classList.toggle('on', +b.dataset.h === CFG.humans));
   { const R = ROUND_OPTS.includes(CFG.rounds) ? CFG.rounds : MAX_ROLLS;
     // 回合數的上下選擇;到頭的那一邊按鈕變灰
@@ -1171,8 +1173,8 @@ function pickStage() {
     stageCur = stageSel; stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
     document.querySelectorAll('#pcfg button').forEach((b) => { if (b.id === 'pcOnline' || b.classList.contains('share')) return; b.onclick = () => {
-      if (b.dataset.n) CFG.n = +b.dataset.n; else if (b.dataset.h) CFG.humans = +b.dataset.h;
-      else if (b.dataset.d) CFG.ai = b.dataset.d;
+      if (b.dataset.ns) CFG.n = Math.min(4, Math.max(2, CFG.n + +b.dataset.ns)); else if (b.dataset.h) CFG.humans = +b.dataset.h;
+      else if (b.dataset.ds) { const i = Math.max(0, AI_ORDER.indexOf(CFG.ai || 'normal')); CFG.ai = AI_ORDER[Math.min(AI_ORDER.length - 1, Math.max(0, i + +b.dataset.ds))]; }
       else if (b.dataset.r) { const i = Math.max(0, ROUND_OPTS.indexOf(CFG.rounds || MAX_ROLLS)); CFG.rounds = ROUND_OPTS[Math.min(ROUND_OPTS.length - 1, Math.max(0, i + +b.dataset.r))]; }
       try { localStorage.setItem('css.players', JSON.stringify(CFG)); } catch (e) {}
       paintStage();

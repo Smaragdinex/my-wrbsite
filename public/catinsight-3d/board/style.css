@@ -346,6 +346,7 @@ body.remote #ctl, body.remote #tipbar{visibility:hidden}
 .prow .step button[data-r="1"]{background:#ff7a59;color:#fff}
 .prow .step button:disabled{opacity:.4}
 .prow .step b{min-width:calc(44px * var(--fs));text-align:center;font-size:calc(17px * var(--fs));color:#3b2f2a}
+.prow .step button[data-ns="1"],.prow .step button[data-ds="1"]{background:#ff7a59;color:#fff}
 .pcfg .online{display:flex;align-items:center;gap:12px;border:0;border-radius:18px;padding:10px 14px;background:linear-gradient(90deg,#8f7bff,#6f5be6);color:#fff;cursor:pointer;text-align:left;box-shadow:0 4px 0 #5447b3;-webkit-tap-highlight-color:transparent}
 .pcfg .online .oic{flex:none;width:calc(96px * var(--fs));display:flex;align-items:center;justify-content:center}
 .pcfg .online .oic img{width:100%;height:auto;display:block;filter:drop-shadow(0 3px 3px rgba(0,0,0,.25))}
