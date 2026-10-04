@@ -446,3 +446,7 @@ body.watch #panel[data-watch=""]::after{display:none}
   .rb.evt:not(:disabled):hover .ic{background:#ffc95a}.rb.miss:not(:disabled):hover .ic{background:#ffa3cd}.rb:not(:disabled):hover{filter:none}
   .stockbtn:not(:disabled):hover,.chips button:hover,.pnav button:hover,.prow button:hover,.lobbybar button:hover{filter:brightness(1.1)}
 }
+
+/* 大廳 QR 旁的「分享連結」鈕 */
+.lobby .share,.lobbycard .share{margin-top:4px;align-self:flex-start;border:0;border-radius:999px;padding:5px 12px;background:#35c2a1;color:#fff;font:inherit;font-weight:900;font-size:calc(12px * var(--fs));box-shadow:0 3px 0 #249c80;cursor:pointer;pointer-events:auto;white-space:nowrap}
+.lobby .share:active,.lobbycard .share:active{transform:translateY(2px);box-shadow:0 1px 0 #249c80}

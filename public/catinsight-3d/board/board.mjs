@@ -1171,7 +1171,7 @@ function pickStage() {
     slots.forEach((sl) => { sl.taken = false; });
     stageCur = stageSel; stageSelect(stageSel);
     $('pprev').onclick = () => stageSelect(stageSel - 1, -1); $('pnext').onclick = () => stageSelect(stageSel + 1);
-    document.querySelectorAll('#pcfg button').forEach((b) => { if (b.id === 'pcOnline') return; b.onclick = () => {
+    document.querySelectorAll('#pcfg button').forEach((b) => { if (b.id === 'pcOnline' || b.classList.contains('share')) return; b.onclick = () => {
       if (b.dataset.n) CFG.n = +b.dataset.n; else if (b.dataset.h) CFG.humans = +b.dataset.h;
       else if (b.dataset.d) CFG.ai = b.dataset.d;
       else if (b.dataset.r) { const i = Math.max(0, ROUND_OPTS.indexOf(CFG.rounds || MAX_ROLLS)); CFG.rounds = ROUND_OPTS[Math.min(ROUND_OPTS.length - 1, Math.max(0, i + +b.dataset.r))]; }
@@ -2452,8 +2452,13 @@ function lobbyPaint() {
   $('lobby').classList.toggle('hide', !NET.on);      // 設定卡裡也放一份 QR / 房號(按下多人連線就看得到)
   if (!NET.on) return;
   const gs = NET.guests.filter((g) => g.online);
-  const html = `<div class="qr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b></div>`;   // 只放 QR 和房號,不再印網址那行
+  // QR + 房號 + 「分享連結」:手機上會跳出系統分享(LINE / Instagram / 訊息…),電腦就複製到剪貼簿
+  const html = `<div class="qr"></div><div class="info"><b>${L('Room', '房號')} <span class="code">${NET.code}</span></b><button class="share" type="button">${L('Share link', '分享連結')}</button></div>`;
   box.innerHTML = html; $('lobby').innerHTML = html;
+  document.querySelectorAll('#lobbyCard .share, #lobby .share').forEach((b) => { b.onclick = async (e) => { e.stopPropagation();
+    const url = joinUrl(NET.code), text = L(`Join my Cat Street Stocks game! Room ${NET.code}`, `來玩貓咪股市大富翁!房號 ${NET.code}`);
+    try { if (navigator.share) { await navigator.share({ title: L('Cat Street Stocks', '貓咪股市大富翁'), text, url }); return; } } catch (err) { if (err && err.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(url); toast(L('Link copied', '連結已複製')); } catch (err) { toast(url); } }; });
   const draw = () => { try { const q = qrLib(0, 'M'); q.addData(joinUrl(NET.code)); q.make(); const svg = q.createSvgTag({ cellSize: 3, margin: 1, scalable: true }); document.querySelectorAll('#lobbyCard .qr, #lobby .qr').forEach((el) => { el.innerHTML = svg; }); } catch (e) {} };
   if (qrLib) draw();
   else if (window.qrcode) { qrLib = window.qrcode; draw(); }
