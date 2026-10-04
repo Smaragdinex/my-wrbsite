@@ -196,19 +196,22 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(S + 2, 2.2), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, ...STENCIL }));
   glow.position.set(cx, 0.6, L.z - 3.1); glow.renderOrder = -9; root.add(glow);
   // 4. 高樓:窗戶貼圖(暖黃亮窗,隨機有亮有暗),當 emissiveMap 貼在深色方塊上;遠近兩層各一個 InstancedMesh,高度 / 寬度隨機
-  const winTex = (lit) => { const t = mk(64, 128, (g, w, h) => { g.fillStyle = '#000'; g.fillRect(0, 0, w, h); for (let y = 6; y < h - 6; y += 16) for (let x = 6; x < w - 6; x += 16) if (Math.random() < lit) { g.fillStyle = Math.random() < 0.8 ? '#ffd27a' : '#ffe9b0'; g.fillRect(x, y, 8, 10); } });
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 7); return t; };
+  // 窗戶貼圖:一格 32px 一扇窗,大約 1/3 亮著(真的夜景大多數窗是暗的);每棟樓只重複 1×2 → 一棟 4~8 扇,不會密到像雜訊
+  const winTex = (lit) => { const t = mk(64, 128, (g, w, h) => { g.fillStyle = '#000'; g.fillRect(0, 0, w, h); for (let y = 10; y < h - 10; y += 32) for (let x = 10; x < w - 10; x += 32) if (Math.random() < lit) { g.fillStyle = Math.random() < 0.8 ? '#ffd27a' : '#ffe9b0'; g.fillRect(x, y, 12, 14); } });
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 2); return t; };
   const cityLayer = (count, z, hMin, hMax, color, lit, spread) => {
     const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
     const m = new THREE.MeshStandardMaterial({ color, emissive: 0xffffff, emissiveMap: winTex(lit), emissiveIntensity: 1.1, roughness: 0.9, ...STENCIL });
     const im = new THREE.InstancedMesh(geo, m, count); im.renderOrder = -8; const M = new THREE.Matrix4();
+    // 從左到右一棟接一棟排,中間留縫,排滿就停(多出來的 instance 縮成 0),不會疊在一起
     let x = cx - spread / 2;
-    for (let i = 0; i < count; i++) { const w = rnd(0.3, 0.7), h = rnd(hMin, hMax), d = rnd(0.4, 0.8);
-      M.makeScale(w, h, d); M.setPosition(x + w / 2, -0.4, z - d / 2); im.setMatrixAt(i, M); x += w + rnd(0.05, 0.22); if (x > cx + spread / 2) x = cx - spread / 2 + rnd(0, 0.3); }
+    for (let i = 0; i < count; i++) { const w = rnd(0.3, 0.6), h = rnd(hMin, hMax), d = rnd(0.4, 0.7);
+      if (x + w > cx + spread / 2) { M.makeScale(0.001, 0.001, 0.001); im.setMatrixAt(i, M); continue; }
+      M.makeScale(w, h, d); M.setPosition(x + w / 2, -0.4, z - d / 2); im.setMatrixAt(i, M); x += w + rnd(0.08, 0.3); }
     im.instanceMatrix.needsUpdate = true; root.add(im); return im;
   };
-  cityLayer(20, L.z - 2.6, 1.2, 2.9, 0x3b2b6e, 0.4, S + 2.0);      // 遠景:較高、偏紫、窗少一點
-  cityLayer(14, L.z - 1.5, 0.5, 1.5, 0x221a48, 0.6, S + 1.0);       // 近景:矮一截、更深色、窗多(上半部留給天空和月亮)
+  cityLayer(16, L.z - 2.6, 1.2, 2.9, 0x3b2b6e, 0.3, S + 2.0);      // 遠景:較高、偏紫、亮窗少
+  cityLayer(12, L.z - 1.5, 0.5, 1.5, 0x221a48, 0.4, S + 1.0);       // 近景:矮一截、更深色(上半部留給天空和月亮)
   // 5. 開口前一片玻璃:很淡、很光滑,室內的燈會在上面留一點反光
   const glass = new THREE.Mesh(new THREE.PlaneGeometry(openW, openH), new THREE.MeshStandardMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.07, roughness: 0.05, metalness: 0.35, depthWrite: false }));
   glass.position.set(cx, 0.5 + openH / 2, L.z + T / 2 + 0.02); glass.renderOrder = 5; root.add(glass);
