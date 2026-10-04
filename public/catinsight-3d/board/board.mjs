@@ -2461,7 +2461,8 @@ document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx(
 $('bagBtn').onclick = bagPanel;
 $('avaMe').onclick = $('stockBtn').onclick = () => { if (!S || !S.players.length) return; const box = $('assetBox'); if (!box.classList.contains('fold') && (S.view ?? meP().i) === meP().i) box.classList.add('fold'); else { S.view = meP().i; box.classList.remove('fold'); } hud(); };
 // 提示泡泡:手機預設縮成「!」,點一下展開 / 收起
-{ const tb = $('tipbar'); if (matchMedia('(max-width:900px)').matches) tb.classList.add('min'); tb.querySelector('.bubble').onclick = () => tb.classList.toggle('min'); }
+{ const tb = $('tipbar'); if (matchMedia('(max-width:900px)').matches) tb.classList.add('min'); tb.querySelector('.bubble').onclick = () => tb.classList.toggle('min');
+  tb.addEventListener('animationend', (e) => { if (e.animationName === 'tipPulse') tb.classList.remove('pulse'); }); }   // 閃完把 pulse 拿掉,平常的小跳動才會回來
 
 document.querySelectorAll('#dsel button').forEach((b) => { b.onclick = () => { if (S.busy) return; S.diceN = +b.dataset.n; hud(); }; });
 

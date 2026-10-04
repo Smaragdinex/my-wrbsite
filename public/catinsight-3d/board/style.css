@@ -248,8 +248,14 @@ body.remote #ctl, body.remote #tipbar{visibility:hidden}
 .tipbar.min .bubble #tip{display:none}
 .tipbar.min{bottom:calc(58px + var(--roll) - 10px + env(safe-area-inset-bottom));transform:translateX(calc(-50% - var(--roll) * .62))}
 .tipbar.min .bubble .av{width:26px;height:26px}
+/* 「!」平常每 2.4 秒小跳兩下,讓人知道那是提示;文字換新的時候再放大閃一下 */
+.tipbar .bubble .av.ex{animation:tipHop 2.4s ease-in-out infinite}
+.tipbar.min .bubble{animation:tipHop 2.4s ease-in-out infinite}
+.tipbar.min .bubble .av.ex{animation:none}
 .tipbar.pulse .bubble .av{animation:tipPulse .6s ease 2}
+.tipbar.min.pulse .bubble{animation:tipPulse .6s ease 2}
 @keyframes tipPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
+@keyframes tipHop{0%,55%,100%{transform:translateY(0)}65%{transform:translateY(-6px) scale(1.06)}75%{transform:translateY(0)}83%{transform:translateY(-3px)}91%{transform:translateY(0)}}
 .lcol{position:fixed;left:12px;top:calc(var(--ava) + 52px);z-index:5;display:flex;gap:8px;align-items:flex-start;pointer-events:none;max-height:calc(100vh - var(--ava) - var(--roll) - 120px)}
 .rcol{position:fixed;right:12px;top:calc(var(--ava) + 52px);z-index:5;display:flex;flex-direction:row-reverse;gap:10px;align-items:flex-start;pointer-events:none;max-height:calc(100vh - var(--ava) - var(--roll) - 120px)}
 .rbtns{display:flex;flex-direction:column;gap:10px;flex:none}
