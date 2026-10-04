@@ -200,7 +200,9 @@ function genLanePath(type) {
 }
 // 事件生效:改股價;有些事件(普發現金)還會直接發錢給每一位玩家
 function applyEvent(e) {
+  const bad = (e.m.etf || 1) < 0.97, before = bad ? S.players.map((p) => KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0)) : null;
   KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
+  if (bad) S.players.forEach((p, i) => { if (p.human && before[i] > 0 && KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0) > before[i]) p.flags.dodge = true; });   // 壞事件裡持股反而漲:躲過黑天鵝
   if (e.cash) { S.players.forEach((p) => { p.cash += e.cash; }); sfx('coin'); }
   // 黑色星期一這類:記下「下一回合要反彈多少」,新的一回合開始時套用(見 turn)
   if (e.rebound) { const m = Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])); S.after = { t: L(`Rebound after: ${e.t}`, `${e.t}後的反彈`), w: L('Part of a panic drop comes back once the panic passes. Selling at the bottom locks in the loss.', '恐慌過去後,跌掉的會漲回來一部分。在最低點賣掉,就是把虧損鎖死。'), m }; }
@@ -404,6 +406,7 @@ function marginCheck() {
     const n = h.n, back = shortValue(k, who), put = h.entry * n;
     who.cash += back; h.n = 0; h.entry = 0;
     S.notices.push({ pi: who.i, k, n, back, lost: put - back, squeeze: true });
+    const by = S.players[S.turn]; if (by && by !== who && by.human) by.flags.squeezer = true;   // 這回合在走的人把價格拉上去,算他軋的
     impact(k, buyF(n));
   }
 }
@@ -441,8 +444,9 @@ const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 const REWARD = 500;
 const heldCount = () => KEYS.filter((k) => S.hold[k].n > 0).length;
 const MISSION_DEFS = [
-  { id: 'spread', make: () => { const need = Math.min(7, Math.max(3, heldCount() + 1));
-      return { title: L('Spread it out', '分散投資'), sub: L(`Hold ${need} different assets at once`, `同時持有 ${need} 種不同資產`), ok: () => heldCount() >= need }; } },
+  // 分散投資三階:3 → 5 → 7 種
+  ...[[3, null], [5, 'spread'], [7, 'spread5']].map(([need, after], i) => ({ id: i ? 'spread' + need : 'spread', after,
+    make: () => ({ title: i ? L('Full spread', '五檔齊發') : L('Spread it out', '分散投資'), sub: L(`Hold ${need} different assets at once`, `同時持有 ${need} 種不同資產`), ok: () => heldCount() >= need }) })),
   { id: 'paid', make: () => { S.lastDividend = 0;
       return { title: L('Get paid to wait', '領到股利'), sub: L('Collect $150+ in dividends at one payout', '一次領到 $150 以上股利'), ok: () => S.lastDividend >= 150 }; } },
   { id: 'dip', make: () => { S.flags.dip = false;
@@ -456,6 +460,14 @@ const MISSION_DEFS = [
     make: () => ({ title: goal >= 100000 ? L('Stock god', '股神') : L('Grow the pile', '資產成長'), sub: goal >= 100000 ? L('Total assets 10× your starting cash ($100,000)', '總資產達到起始資金 10 倍($100,000)') : L(`Reach $${fmt(goal)} in total assets`, `總資產達到 $${fmt(goal)}`), ok: () => assets() >= goal }) })),
   { id: 'coin2x', make: () => ({ title: L('Crypto whale', '炒幣達人'), sub: L('Be up 100%+ on ParrotCoin', '鸚鵡幣(加密貨幣)未實現獲利超過 100%'),
       ok: () => { const h = S.hold.crypto; return h.n > 0 && h.cost > 0 && (h.n * S.price.crypto - h.cost) / h.cost >= 1; } }) },
+  { id: 'shortWin', make: () => ({ title: L('Short seller', '空軍總司令'), sub: L('Cover a short with 20%+ profit', '放空後回補,獲利 20% 以上'), ok: () => S.flags.shortWin }) },
+  { id: 'marginWin', make: () => ({ title: L('Leverage pro', '借力使力'), sub: L('Sell a margin position at a profit', '融資買的股票獲利賣出(沒被斷頭)'), ok: () => S.flags.marginWin }) },
+  // 股息大戶兩階:累積領到 $1,000 → $3,000
+  ...[[1000, null], [3000, 'div1k']].map(([goal, after]) => ({ id: goal === 1000 ? 'div1k' : 'div3k', after,
+    make: () => ({ title: L('Dividend king', '股息大戶'), sub: L(`Collect $${fmt(goal)} in dividends over the game`, `整局累積領到 $${fmt(goal)} 股利`), ok: () => (S.players[S.hi].divTotal || 0) >= goal }) })),
+  { id: 'dodge', make: () => ({ title: L('Storm proof', '躲過黑天鵝'), sub: L('Your holdings gain value during a market crash', '壞消息事件發生時,你的持股市值反而上漲'), ok: () => S.flags.dodge }) },
+  { id: 'comeback', make: () => ({ title: L('Comeback', '逆風翻盤'), sub: L('Fall below $8,000, then climb back to $12,000', '總資產跌破 $8,000 後再回到 $12,000'), ok: () => S.flags.low && assets() >= 12000 }) },
+  { id: 'squeezer', make: () => ({ title: L('Squeeze master', '軋空高手'), sub: L('Push the price up until a rival\'s short is squeezed', '把股價拉到讓對手的空單被軋空'), ok: () => S.flags.squeezer }) },
   // 抱住股票也是階梯:一檔持股未實現獲利 200% → 300% → 400% → 500%
   ...[2, 3, 4, 5].map((x, i) => ({ id: 'hold' + x + 'x', after: i ? 'hold' + (x - 1) + 'x' : null,
     make: () => ({ title: L('Diamond hands', '抱住股票'), sub: L(`Hold one stock until it is up ${x * 100}%`, `一檔持股未實現獲利達 ${x * 100}%`),
@@ -477,7 +489,7 @@ let CFG = (() => { try { const c = JSON.parse(localStorage.getItem('css.players'
 const P_FIELDS = ['pos', 'lane', 'cash', 'debt', 'bag', 'hold', 'short', 'diceN', 'lastDividend', 'cashStreak', 'flags', 'missions', 'done'];
 const mkPlayer = (i, human, char) => ({ i, human, char, pos: 0, lane: null, cash: START_CASH, debt: 0, bag: human ? ['remote'] : [],
   hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
-  diceN: 2, lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, missions: [], done: 0, spy: null });
+  diceN: 2, lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false, shortWin: false, marginWin: false, dodge: false, low: false, squeezer: false }, divTotal: 0, missions: [], done: 0, spy: null });
 const others = (i = S.hi) => S.players.filter((p) => p.i !== i);
 const nameOf = (p) => p.name || CHARS[p.char].name;      // 真人可以在選角時取名字;沒取就用角色名
 const isYou = (p) => p.human && S.nh === 1;                 // 只有一位真人時才用「你」稱呼;兩位真人一律叫角色名字
@@ -1637,6 +1649,7 @@ function buyPanel(k) {
         // 賣拉桿上的股數(不夠就全賣);借款按賣掉的比例一起還
         const sn = Math.min(q, h.n), part = sn / h.n, value = price * sn, cost = h.cost * part, loan = h.loan * part;
         if ((value - cost) / cost >= 0.15) S.flags.profit = true;
+        if (loan > 0 && value > cost) S.flags.marginWin = true;   // 融資部位獲利出場
         toast(L('Sold for', '賣出得') + ` $${fmt(value)} (${value >= cost ? '+' : '-'}$${fmt(Math.abs(value - cost))})` + (loan ? L(`, repaid $${fmt(loan)}`, `,還款 $${fmt(loan)}`) : ''));
         S.cash += value - loan; h.n -= sn; h.cost -= cost; h.loan -= loan;
         if (h.n <= 0) { h.n = 0; h.cost = 0; h.loan = 0; }
@@ -1647,6 +1660,7 @@ function buyPanel(k) {
       } else if (a === 'cover') {
         const cn = sh.n, back = shortValue(k), pl = (sh.entry - price) * cn;
         if (pl / (sh.entry * cn) >= 0.15) S.flags.profit = true;
+        if (pl / (sh.entry * cn) >= 0.2) S.flags.shortWin = true;
         S.cash += back; sh.n = 0; sh.entry = 0; impact(k, buyF(cn)); sfx('sell');
         toast(L('Covered:', '回補:') + ` ${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}`);
       }
@@ -1672,12 +1686,13 @@ function payday(atStart = true) {
   const div = KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * SECTORS[k].div, 0);
   const interest = atStart ? KEYS.reduce((a, k) => a + S.hold[k].loan * MARGIN_FEE, 0) : 0;   // 融資利息:每經過起點付一次
   const bank = atStart ? S.debt * BANK_RATE : 0;                                                // 銀行貸款利息:也是每經過起點付一次
-  S.lastDividend = div; S.cash += salary + div - interest - bank; sfx('coin');
+  S.lastDividend = div; S.players[S.hi].divTotal = (S.players[S.hi].divTotal || 0) + div; S.cash += salary + div - interest - bank; sfx('coin');
   toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)} · ` : '') + `${L('dividends', '股利')} +$${fmt(div)}` + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : '') + (bank ? ` · ${L('loan interest', '貸款利息')} -$${fmt(bank)}` : ''));
   hud(); checkMissions();
 }
 function checkMissions() {
   // 上一次完成的任務先換成新的(所以完成的那張會亮綠色停留到下一次檢查)
+  if (assets() < 8000) S.flags.low = true;   // 逆風翻盤用:曾經跌破 $8,000
   S.missions = S.missions.filter((m) => !m.done);   // 上一次完成的(綠色那張)這時才拿掉
   S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; const me = S.players[S.hi]; (me.doneList ||= []).push(m.title); (me.doneIds ||= []).push(m.id); S.cash += REWARD; sfx('mission'); showAchv(me, m.title); } });
   refillMissions(S.players[S.hi]);   // 階梯式的下一階在這裡補進來
