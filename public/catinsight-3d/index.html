@@ -4,8 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CatInsight Stock — Room</title>
-<!-- 分頁標題:簡單一點,只放 📈 🐱 📉(動的版本太花) -->
-<script>document.title = 'CatInsight 📈 🐱 📉';</script>
+<!-- 分頁標題:只用 📈 🐱 📉 三個 emoji 做動畫 —— 兩邊的走勢圖輪流漲跌(左右互換) -->
+<script>
+  (() => { const F = ['📈 🐱 📉', '📉 🐱 📈', '📈 🐱 📈', '📉 🐱 📉']; let i = 0;
+    const draw = () => { document.title = 'CatInsight ' + F[i]; i = (i + 1) % F.length; }; draw(); setInterval(draw, 700); })();
+</script>
 <meta name="description" content="CatInsight Stock — step into the room. AI stock research for US and Taiwan markets." />
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 <link rel="manifest" href="/catinsight-3d/manifest.webmanifest">
