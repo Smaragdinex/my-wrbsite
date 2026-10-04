@@ -209,7 +209,7 @@ function applyEvent(e) {
   S.lastEvent = e; marginCheck(); if ($('evtBox').classList.contains('fold')) $('evtBadge').classList.remove('hide');      // 新事件:右邊的事件鈕亮「!」
   // 迷因股軋空:這檔的空單不管進場價多少,全部強迫回補
   if (e.squeezeAll) for (const who of S.players) { const h = who.short[e.squeezeAll]; if (!h.n) continue;
-    const n = h.n, back = shortValue(e.squeezeAll, who), put = h.entry * n; who.cash += back; h.n = 0; h.entry = 0;
+    const n = h.n, back = shortValue(e.squeezeAll, who), put = h.entry * n; who.cash += back; h.n = 0; h.entry = 0; pubNote(who, e.squeezeAll);
     S.notices.push({ pi: who.i, k: e.squeezeAll, n, back, lost: put - back, squeeze: true }); impact(e.squeezeAll, buyF(n)); }
 }
 // 有些事件要「抽到的當下」才決定內容:迷因股軋空挑場上被放空最多的那檔(沒人放空就隨機挑一檔股票)
@@ -235,11 +235,20 @@ const AI_ORDER = ['easy', 'normal', 'hard'];   // 設定卡的 − / + 依這個
 //   shortP:符合放空條件時真的放空的機率;atkP:商店有利空卡時買、手上有利空卡時用的機率;greedy:買股時改用融資的機率
 // 電腦的個性:lots = 主攻股一次最多買幾手(每手 10 股);buyP = 想買 / 想逛商店時真的動手的機率;shortP = 符合條件時放空的機率
 const AI_LEVELS = {
-  easy:   { shortP: 0.15, atkP: 0.3, greedy: 0.1,  reserve: 2500, shortAny: false, lots: 2, buyP: 0.6 },
-  normal: { shortP: 0.35, atkP: 0.8, greedy: 0.3,  reserve: 1500, shortAny: false, lots: 3, buyP: 1 },
-  hard:   { shortP: 0.5,  atkP: 1,   greedy: 0.5,  reserve: 800,  shortAny: true,  lots: 5, buyP: 1 },
+  // memory:電腦記得「畫面上公告過的對手交易」幾回合(簡單的很快忘記,困難的全記得)。對手的總資產 / 現金電腦看不到,只能用公開的名次
+  easy:   { shortP: 0.15, atkP: 0.3, greedy: 0.1,  reserve: 2500, shortAny: false, lots: 2, buyP: 0.6, memory: 2 },
+  normal: { shortP: 0.35, atkP: 0.8, greedy: 0.3,  reserve: 1500, shortAny: false, lots: 3, buyP: 1,   memory: 5 },
+  hard:   { shortP: 0.5,  atkP: 1,   greedy: 0.5,  reserve: 800,  shortAny: true,  lots: 5, buyP: 1,   memory: 99 },
 };
 const AI = () => AI_LEVELS[S.aiLevel] || AI_LEVELS.normal;
+// 公開資訊帳本:每筆「畫面上公告過」的持股變化(買、賣、放空、回補、IPO、斷頭…)都記一筆。
+// 電腦只能靠這本帳推測對手持股(還會依難度忘記舊的),除非牠用了偵查報告才看得到真實部位;總資產和現金永遠看不到
+function pubNote(p, k) { if (!S || !p) return; if (p === S) p = S.players[S.hi]; /* 有些地方傳的是 S(現在這位人類的捷徑) */ (S.pub ||= {})[p.i] ||= {}; S.pub[p.i][k] = { n: p.hold[k].n, sh: p.short[k].n, at: S.rolls }; }
+function pubView(A, q, k) {
+  if (A.spy && S.rolls < A.spy.until && A.spy.target === q.i) return { n: q.hold[k].n, sh: q.short[k].n };     // 偵查中:看真的
+  const e = S.pub && S.pub[q.i] && S.pub[q.i][k]; if (!e || S.rolls - e.at > AI().memory) return { n: 0, sh: 0 };   // 沒公告過 / 忘了:當作沒有
+  return { n: e.n, sh: e.sh };
+}
 const maxRolls = () => S.maxRounds;
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
 const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17, 20, 21];    // 商店會賣的事件卡(壞消息類的不賣)
@@ -396,7 +405,7 @@ function marginCheck() {
       let k = null; for (const x of KEYS) { if (who.hold[x].loan > 0 && (k === null || ratioOf(who.hold[x], x) < ratioOf(who.hold[k], k))) k = x; }
       if (k === null) break;
       const h = who.hold[k], n = h.n, back = Math.max(0, n * S.price[k] - h.loan), put = h.cost - h.loan;
-      who.cash += back; h.n = 0; h.cost = 0; h.loan = 0;
+      who.cash += back; h.n = 0; h.cost = 0; h.loan = 0; pubNote(who, k);
       S.notices.push({ pi: who.i, k, n, back, lost: put - back });
       const by = S.players[S.turn]; if (by && by !== who && by.human) by.flags.liquidator = true;   // 這回合在走的人把價格打下去,算他害的
       impact(k, sellF(n));
@@ -406,7 +415,7 @@ function marginCheck() {
     const h = who.short[k];
     if (!h.n || S.price[k] < h.entry * SQUEEZE) continue;
     const n = h.n, back = shortValue(k, who), put = h.entry * n;
-    who.cash += back; h.n = 0; h.entry = 0;
+    who.cash += back; h.n = 0; h.entry = 0; pubNote(who, k);
     S.notices.push({ pi: who.i, k, n, back, lost: put - back, squeeze: true });
     const by = S.players[S.turn]; if (by && by !== who && by.human) by.flags.squeezer = true;   // 這回合在走的人把價格拉上去,算他軋的
     impact(k, buyF(n));
@@ -1669,6 +1678,7 @@ function buyPanel(k) {
         S.cash += back; sh.n = 0; sh.entry = 0; impact(k, buyF(cn)); sfx('sell');
         toast(L('Covered:', '回補:') + ` ${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))}`);
       }
+      pubNote(S.players[S.hi], k);                                   // 交易都有公告,記進公開帳本
       drawAll(); hud(); closePanel(); res();
     });
   });
@@ -1922,7 +1932,7 @@ function jailPanel() {
 // IPO:隨機一檔股票,用承銷價(市價 8 折)申購。新股是公司新發行的,所以不會推高市價
 const ipoPick = (who) => { const pool = KEYS.filter((k) => !NON_EQUITY.has(k) && !who.short[k].n); return pool[Math.floor(Math.random() * pool.length)]; };
 // 送的股票成本算承銷價(只是不用付錢),這樣損益百分比才有意義
-function ipoGrant(who, k) { const h = who.hold[k]; h.n += IPO_FREE; h.cost += S.price[k] * IPO_OFF * IPO_FREE; }
+function ipoGrant(who, k) { const h = who.hold[k]; h.n += IPO_FREE; h.cost += S.price[k] * IPO_OFF * IPO_FREE; pubNote(who, k); }
 function ipoPanel() {
   return new Promise((res) => {
     const k = ipoPick(S), sec = SECTORS[k], h = S.hold[k], mkt = S.price[k], price = mkt * IPO_OFF;
@@ -1943,7 +1953,7 @@ function ipoPanel() {
     const paint = () => { const q = +qty.value; $('ipoVal').textContent = `${q} ${L('sh', '股')} · $${fmt(price * q)}`; $('ipoBtn').textContent = `$${fmt(price * q)}`; p.querySelector('[data-a=buy]').disabled = S.cash < price * q; };
     qty.oninput = paint; paint();
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
-      if (b.dataset.a === 'buy') { const n = +qty.value; S.cash -= price * n; h.n += n; h.cost += price * n; sfx('buy'); toast(L(`Bought ${n} more ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 加購 ${sec.name} ${n} 股`)); }
+      if (b.dataset.a === 'buy') { const n = +qty.value; S.cash -= price * n; h.n += n; h.cost += price * n; pubNote(S.players[S.hi], k); sfx('buy'); toast(L(`Bought ${n} more ${sec.name} at $${Math.round(price)}`, `用承銷價 $${Math.round(price)} 加購 ${sec.name} ${n} 股`)); }
       drawAll(); hud(); closePanel(); res();
     });
   });
@@ -1952,7 +1962,7 @@ async function aiIpo() {
   const A = S.ai, who = CHARS[S.foe].name, k = ipoPick(A), sec = SECTORS[k], price = S.price[k] * IPO_OFF;
   const lots = A.cash >= price * LOT * 3 + 1500 ? 3 : A.cash >= price * LOT + 500 ? 1 : 0;
   ipoGrant(A, k);
-  if (lots) { const n = LOT * lots; A.cash -= price * n; A.hold[k].n += n; A.hold[k].cost += price * n;
+  if (lots) { const n = LOT * lots; A.cash -= price * n; A.hold[k].n += n; A.hold[k].cost += price * n; pubNote(A, k);
     toast(L(`${who} got ${IPO_FREE} free ${sec.name} shares and bought ${n} more`, `${who}免費獲得${sec.name} ${IPO_FREE} 股,又加購 ${n} 股`)); }
   else toast(L(`${who} got ${IPO_FREE} free ${sec.name} shares`, `${who}免費獲得${sec.name} ${IPO_FREE} 股`));
   drawAll(); hud(); await wait(1.1);
@@ -2079,7 +2089,7 @@ async function applyFate(c, isMe) {
     const held = KEYS.filter((k) => who.hold[k].n > 0);
     if (!held.length) say(`${name} has nothing to sell. Phew.`, `${name}沒有持股,虛驚一場`);
     else { const k = held[Math.floor(Math.random() * held.length)], h = who.hold[k], n = h.n, value = S.price[k] * n, pl = value - h.cost;
-      who.cash += value - h.loan; h.n = 0; h.cost = 0; h.loan = 0; impact(k, sellF(n)); sfx('sell');
+      who.cash += value - h.loan; h.n = 0; h.cost = 0; h.loan = 0; pubNote(who, k); impact(k, sellF(n)); sfx('sell');
       say(`${name} sold all ${n} ${SECTORS[k].name} for $${fmt(value)} (${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`, `${name}把${SECTORS[k].name} ${n} 股全部賣掉,得 $${fmt(value)}(${pl >= 0 ? '+' : '-'}$${fmt(Math.abs(pl))})`); } }
   else if (c.id === 'swap') {
     // 和隨機一位對手交換位置(連同在小路上的狀態一起換),兩隻棋子各自跳過去;自己換到的那一格要重新結算
@@ -2103,7 +2113,7 @@ function aiFocus(A) {
     if (A.hold[k].n) v += 2 + Math.min(3, A.hold[k].n / 10);
     if (A.bag.some((id) => id.startsWith('ev') && itemInfo(id).best === k)) v += 4;
     if (NON_EQUITY.has(k)) v -= 1.5;
-    if (others(A.i).some((q) => q.short[k].n > 0)) v += 1;
+    if (others(A.i).some((q) => pubView(A, q, k).sh > 0)) v += 1;                 // 看公開帳本:有人公告過放空它
     return v + Math.random(); };
   const k = KEYS.slice().sort((a, b) => score(b) - score(a))[0]; A.plan = { k, since: S.rolls }; return k;
 }
@@ -2143,10 +2153,16 @@ async function aiTurn() {
   focus = PA(); pan.set(0, 0, 0); toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
   // 對手出牌:利空卡打你持有最多的資產;事件卡在牠持有受惠類股時才用
   if (A.bag.includes('atk') && Math.random() < AI().atkP) {
-    // 打「目前最有錢的那位對手」持有最多的資產
+    // 打「名次最高的那位對手」(名次是公開的)牠所知道持有最多的資產:只看公開帳本 / 偵查結果,不知道的就先留著卡
     const T = others(A.i).sort((x, y) => assetsOf(y) - assetsOf(x))[0];
-    const k = KEYS.filter((x) => T.hold[x].n > 0).sort((x, y) => T.hold[y].n * S.price[y] - T.hold[x].n * S.price[x])[0];
+    const k = KEYS.filter((x) => pubView(A, T, x).n > 0).sort((x, y) => pubView(A, T, y).n * S.price[y] - pubView(A, T, x).n * S.price[x])[0];
     if (k) { A.bag.splice(A.bag.indexOf('atk'), 1); await badNews(k, A); }
+  }
+  // 偵查報告:手上有利空卡(或困難模式)而且還沒在偵查,就對名次最高的對手用,接下來 3 回合看得到他的真實持股
+  if (A.bag.includes('spy') && !(A.spy && S.rolls < A.spy.until) && (A.bag.includes('atk') || S.aiLevel === 'hard')) {
+    const T = others(A.i).sort((x, y) => assetsOf(y) - assetsOf(x))[0];
+    A.bag.splice(A.bag.indexOf('spy'), 1); A.spy = { target: T.i, until: S.rolls + SPY_ROUNDS }; hud();
+    toast(L(`${who} spies on ${nameOf(T)}`, `${who}對${nameOf(T)}使用偵查報告`)); await wait(0.9);
   }
   // 事件卡:等受惠的那檔買到 20 股以上再打(炒自己的持股);快結束了就有多少打多少
   { const id = A.bag.find((x) => x.startsWith('ev') && (A.hold[itemInfo(x).best].n >= 20 || (A.hold[itemInfo(x).best].n > 0 && maxRolls() - S.rolls <= 3)));
@@ -2185,7 +2201,7 @@ async function aiLand() {
   else if (type === 'ipo') await enterLane(false, 'ipo');
   else if (type === 'fate') { await wait(0.3); const c = await drawFateCards(true); await applyFate(c, false); }
   else if (sec) {
-    const h = A.hold[type], sh = A.short[type], price = S.price[type], mine = Math.max(...others(A.i).map((p) => p.hold[type].n)), F = aiFocus(A), lv = AI();   // mine:別人最多持有幾股;F:主攻股
+    const h = A.hold[type], sh = A.short[type], price = S.price[type], mine = Math.max(...others(A.i).map((p) => pubView(A, p, type).n)), F = aiFocus(A), lv = AI();   // mine:牠所知道別人最多持有幾股(公開帳本);F:主攻股
     if (sh.n) {
       // 有空單:賺 12% 以上就回補落袋,虧 12% 以上就停損,不然續抱
       const r = (sh.entry - price) / sh.entry;
@@ -2214,7 +2230,7 @@ async function aiLand() {
       if (lots && Math.random() < lv.buyP) { const q = LOT * lots; A.cash -= price * q; h.n += q; h.cost += price * q; impact(type, buyF(q)); toast(L(`${who} bought ${q} ${sec.name} on the dip. Price ${pct(buyF(q))}`, `${who}逢低買進${sec.name} ${q} 股,股價 ${pct(buyF(q))}`)); }
       else toast(L(`${who} saves cash for ${SECTORS[F].name}`, `${who}把現金留給${SECTORS[F].name},跳過`));
     }
-    drawAll(); hud(); await wait(1.0);
+    pubNote(A, type); drawAll(); hud(); await wait(1.0);
   } else if (type === 'shop') {
     // 逛商店:有閒錢就買利空卡;不然買一張對牠持股有利的事件卡。買走的你就買不到了
     // 優先順序:炒主攻股的事件卡 → 遙控骰子(拿來走到主攻股)→ 利空卡 → 其他有持股受惠的事件卡
@@ -2223,6 +2239,7 @@ async function aiLand() {
     if (evF && A.cash >= CARD_PRICE + lv.reserve && Math.random() < lv.buyP) got = evF;
     else if (stock.includes('remote') && !A.bag.includes('remote') && A.cash >= REMOTE_PRICE + lv.reserve + 800 && Math.random() < lv.buyP) got = 'remote';
     else if (stock.includes('atk') && A.cash >= ATK_PRICE + lv.reserve && Math.random() < lv.atkP) got = 'atk';
+    else if (stock.includes('spy') && !A.bag.includes('spy') && (A.bag.includes('atk') || S.aiLevel === 'hard') && A.cash >= SPY_PRICE + lv.reserve && Math.random() < lv.atkP) got = 'spy';   // 想打人但不知道對手拿什麼:買偵查報告
     else if (stock.includes('dice3') && A.cash >= DICE3_PRICE + lv.reserve + 800 && Math.random() < lv.buyP * 0.5) got = 'dice3';
     else got = stock.find((x) => x.startsWith('ev') && A.hold[itemInfo(x).best].n >= LOT && A.cash >= CARD_PRICE + lv.reserve) || null;
     if (got) { const it = itemInfo(got); A.cash -= it.price; A.bag.push(got); toast(L(`${who} bought: ${it.name}`, `${who}買了:${it.name}`)); }
