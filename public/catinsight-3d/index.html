@@ -4,10 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CatInsight Stock — Room</title>
-<!-- 分頁標題:只用 📈 🐱 📉 三個 emoji 做動畫 —— 兩邊的走勢圖輪流漲跌(左右互換) -->
+<!-- 分頁標題:5 格 —— 📈 在最左、📉 在最右,貓在中間 3 格左右來回走 -->
 <script>
-  (() => { const F = ['📈 🐱 📉', '📉 🐱 📈', '📈 🐱 📈', '📉 🐱 📉']; let i = 0;
-    const draw = () => { document.title = 'CatInsight ' + F[i]; i = (i + 1) % F.length; }; draw(); setInterval(draw, 700); })();
+  (() => { const B = '\u2003'; let pos = 1, dir = 1;
+    const draw = () => { const mid = [B, B, B]; mid[pos] = '🐱'; document.title = 'CatInsight 📈' + mid.join('') + '📉'; pos += dir; if (pos === 2 || pos === 0) dir = -dir; };
+    draw(); setInterval(draw, 500); })();
 </script>
 <meta name="description" content="CatInsight Stock — step into the room. AI stock research for US and Taiwan markets." />
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
