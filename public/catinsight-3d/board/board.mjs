@@ -331,6 +331,8 @@ const stockValue = () => KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k], 0);
 // 每個任務在「抽出來的當下」才決定目標(例如資產成長的門檻跟著你現在的資產走),所以可以重複抽到
 const REWARD = 500;
 const heldCount = () => KEYS.filter((k) => S.hold[k].n > 0).length;
+// 記下這位玩家用過哪幾「種」道具(道具達人成就用);事件卡全部算一種
+const usedItem = (id) => { const p = S.players[S.hi], kind = id.startsWith('ev') ? 'ev' : id; (p.used ||= []); if (!p.used.includes(kind)) p.used.push(kind); };
 const MISSION_DEFS = [
   // 分散投資三階:3 → 5 → 7 種
   ...[[3, null], [5, 'spread'], [7, 'spread5']].map(([need, after], i) => ({ id: i ? 'spread' + need : 'spread', after,
@@ -363,6 +365,9 @@ const MISSION_DEFS = [
   ...[3, 5, 8, 10].map((x, i, arr) => ({ id: 'hold' + x + 'x', after: i ? 'hold' + arr[i - 1] + 'x' : null,
     make: () => ({ title: L('Hold tight', '抱住股票'), sub: L(`Hold one stock until it is up ${x * 100}%`, `一檔持股未實現獲利達 ${x * 100}%`),
       ok: () => KEYS.some((k) => { const h = S.hold[k]; return h.n > 0 && h.cost > 0 && (h.n * S.price[k] - h.cost) / h.cost >= x; }) }) })),
+  // 道具達人:用過 3 種不同的道具(遙控骰子、利空卡、偵查報告、三顆骰子、事件卡,事件卡不管哪張都算同一種)
+  { id: 'items3', make: () => ({ title: L('Item master', '道具達人'), sub: L('Use 3 different kinds of items (remote dice, bad news, spy report, third die, event card)', '使用 3 種不同的道具(遙控骰子、利空卡、偵查報告、三顆骰子、事件卡)'),
+      ok: () => (S.players[S.hi].used || []).length >= 3 }) },
   { id: 'haven', make: () => ({ title: L('Find a safe haven', '準備避險'), sub: L('Hold gold or bonds', '持有黃金或債券'), ok: () => S.hold.gold.n > 0 || S.hold.bond.n > 0 }) },
   { id: 'index', make: () => ({ title: L('Own the market', '買下整個市場'), sub: L('Hold the whole-market ETF', '持有大盤 ETF'), ok: () => S.hold.etf.n > 0 }) },
   { id: 'income', make: () => ({ title: L('Build income', '打造現金流'), sub: L('Hold 2 assets that pay 3% or more', '持有 2 種配息 3% 以上的資產'), ok: () => KEYS.filter((k) => S.hold[k].n > 0 && SECTORS[k].div >= 0.03).length >= 2 }) },
@@ -1729,21 +1734,21 @@ function bagPanel() {
       $('steps').querySelectorAll('button').forEach((x) => x.onclick = () => {
         const n = +x.dataset.n; $('stepCtl').classList.add('hide'); S.busy = false;
         if (!n) return showCtl(true);
-        S.bag.splice(S.bag.indexOf('remote'), 1); hud(); turn(n);
+        S.bag.splice(S.bag.indexOf('remote'), 1); usedItem('remote'); hud(); turn(n);
       });
     } else if (id === 'atk') {
       const k = await attackPanel();
-      if (k) { S.bag.splice(S.bag.indexOf('atk'), 1); await badNews(k, S.players[S.hi]); await flushNotices(); checkMissions(); }
+      if (k) { S.bag.splice(S.bag.indexOf('atk'), 1); usedItem('atk'); await badNews(k, S.players[S.hi]); await flushNotices(); checkMissions(); }
       S.busy = false; showCtl(true);
     } else if (id === 'dice3') {
-      S.bag.splice(S.bag.indexOf('dice3'), 1); S.busy = false; hud(); turn(undefined, 3);   // 直接用三顆骰子擲這一回合
+      S.bag.splice(S.bag.indexOf('dice3'), 1); usedItem('dice3'); S.busy = false; hud(); turn(undefined, 3);   // 直接用三顆骰子擲這一回合
     } else if (id === 'spy') {
       const t = await spyPanel();
       if (t != null) { S.bag.splice(S.bag.indexOf('spy'), 1); const me = S.players[S.hi]; me.spy = { target: t, until: S.rolls + SPY_ROUNDS }; if (me === meP()) { S.view = t; $('assetBox').classList.remove('fold'); } sfx('item');
-        toast(L(`Spying on ${nameOf(S.players[t])} for ${SPY_ROUNDS} rounds`, `開始偵查${nameOf(S.players[t])},${SPY_ROUNDS} 回合內看得到他的資產`)); hud(); }
+        toast(L(`Spying on ${nameOf(S.players[t])} for ${SPY_ROUNDS} rounds`, `開始偵查${nameOf(S.players[t])},${SPY_ROUNDS} 回合內看得到他的資產`)); usedItem('spy'); hud(); checkMissions(); }
       S.busy = false; showCtl(true);
     } else {
-      S.bag.splice(S.bag.indexOf(id), 1);
+      S.bag.splice(S.bag.indexOf(id), 1); usedItem(id);
       await playEvent(instantiate(itemInfo(id).event)); await flushNotices();
       checkMissions(); S.busy = false; showCtl(true);
     }
