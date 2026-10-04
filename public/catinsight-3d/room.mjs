@@ -55,8 +55,9 @@ controls.autoRotate = true;
 controls.autoRotateSpeed = 0.35;
 
 // ---------- 燈光 ----------
-scene.add(new THREE.HemisphereLight(0xffe9f3, 0x5a4a8a, 0.9));
-const key = new THREE.DirectionalLight(0xfff4ea, 2.2);
+// 三層光:粉紫環境光(整體)、暖橘桌燈 / 層板燈(局部、下面跟物件一起加)、青藍螢幕光。主光(日光)調弱,局部光才看得出層次
+scene.add(new THREE.HemisphereLight(0xffd9ee, 0x4a3a86, 0.55));
+const key = new THREE.DirectionalLight(0xfff0e0, 1.3);
 key.position.set(6, 10, 4);
 key.castShadow = true;
 key.shadow.mapSize.set(2048, 2048);
@@ -66,7 +67,7 @@ key.shadow.camera.top = 8; key.shadow.camera.bottom = -8;
 key.shadow.bias = -0.0015;
 key.shadow.normalBias = 0.06;   // 圓角面自遮陰影(acne)容易閃,偏移拉大
 scene.add(key);
-const fill = new THREE.DirectionalLight(0xe0d0ff, 0.6);
+const fill = new THREE.DirectionalLight(0xc9b4ff, 0.35);
 fill.position.set(-6, 5, 6);
 scene.add(fill);
 
@@ -128,6 +129,50 @@ const SHELF_X0 = -1.85, SHELF_X1 = S / 2 - 0.8;
 box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 2.55, z: L.z + 0.15, r: 0.03, seg: 1 });
 box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 1.65, z: L.z + 0.15, r: 0.03, seg: 1 });
 
+// ---------- 粉紅牆:兩片層板(底下各一盞暖光)+ 霓虹招牌(貓掌 + K 線)----------
+{
+  const WX = S / 2 - T;                     // 粉牆內側的 x
+  for (const [y, z0, z1] of [[2.35, 0.55, 2.45], [3.05, 0.9, 2.45]]) {
+    box(0.42, 0.08, z1 - z0, C.shelf, { x: WX - 0.21, y, z: (z0 + z1) / 2, r: 0.02, seg: 1 });
+    const under = new THREE.PointLight(0xffc27a, 1.8, 2.4, 2); under.position.set(WX - 0.3, y - 0.12, (z0 + z1) / 2); root.add(under);
+  }
+  // 層板上的小東西:幾本書、一個小盆栽、一台玩具貓
+  box(0.22, 0.34, 0.06, 0x8b7cff, { x: WX - 0.21, y: 2.35 + 0.21, z: 0.8, r: 0.01, seg: 1 });
+  box(0.22, 0.30, 0.06, 0xf27a5a, { x: WX - 0.21, y: 2.35 + 0.19, z: 0.88, r: 0.01, seg: 1 });
+  box(0.22, 0.38, 0.06, 0x46bfcf, { x: WX - 0.21, y: 2.35 + 0.23, z: 0.96, r: 0.01, seg: 1 });
+  cyl(0.09, 0.07, 0.14, 0xf3c9db, { x: WX - 0.21, y: 2.35 + 0.11, z: 1.6 });
+  sphere(0.13, 0x3fc9c0, { x: WX - 0.21, y: 2.35 + 0.3, z: 1.6 });
+  sphere(0.11, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.15, z: 2.1 }); sphere(0.07, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.3, z: 2.1 });   // 招財貓(簡化)
+  // 霓虹招牌:掛在桌子上方的粉牆上。線條用細圓柱,自發光;旁邊一盞同色點光讓牆面也染色
+  const NEON = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.6, roughness: 0.4, toneMapped: false });
+  const neon = new THREE.Group(); neon.position.set(WX - 0.06, 3.35, -0.55); root.add(neon);   // 牆面在 yz 平面,圖案用 (z, y) 畫
+  const seg = (z0, y0, z1, y1, m, r = 0.025) => { const a = new THREE.Vector3(0, y0, z0), b = new THREE.Vector3(0, y1, z1), d = b.clone().sub(a);
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 10), m); c.position.copy(a).add(b).multiplyScalar(0.5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); neon.add(c); return c; };
+  const PINK = NEON(0xff6fb5), CYAN = NEON(0x4de3ff);
+  // K 線:三根蠟燭(兩青一粉)+ 一條往上的折線
+  for (const [z, lo, hi, m] of [[-0.55, -0.22, 0.05, CYAN], [-0.3, -0.1, 0.18, PINK], [-0.05, 0.0, 0.3, CYAN]]) { seg(z, lo, z, hi, m, 0.012); const body = new THREE.Mesh(new THREE.BoxGeometry(0.03, (hi - lo) * 0.55, 0.11), m); body.position.set(0, (lo + hi) / 2, z); neon.add(body); }
+  seg(-0.7, -0.3, -0.42, -0.05, CYAN); seg(-0.42, -0.05, -0.2, -0.14, CYAN); seg(-0.2, -0.14, 0.12, 0.34, CYAN);
+  // 貓掌:一大四小的圓(粉),放在 K 線右邊
+  const pad = (z, y, rr, sz = 1) => { const p = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.022, 10, 28), PINK); p.position.set(0, y, z); p.rotation.y = Math.PI / 2; p.scale.y = sz; neon.add(p); };
+  pad(0.62, 0.02, 0.17, 0.85); pad(0.42, 0.26, 0.07); pad(0.56, 0.34, 0.07); pad(0.7, 0.33, 0.07); pad(0.83, 0.24, 0.07);
+  const neonLight = new THREE.PointLight(0xff8fd0, 2.6, 3.2, 2); neonLight.position.set(-0.35, 0, 0.15); neon.add(neonLight);
+  const neonLight2 = new THREE.PointLight(0x4de3ff, 1.8, 2.6, 2); neonLight2.position.set(-0.35, 0.05, -0.45); neon.add(neonLight2);
+}
+// ---------- 窗外:淡紫框牆的開口後面放一張夜景(漸層天空 + 城市剪影 + 亮著的窗戶) ----------
+{
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 640; const g = cv.getContext('2d');
+  const sky = g.createLinearGradient(0, 0, 0, 640); sky.addColorStop(0, '#2a1f4e'); sky.addColorStop(0.55, '#5a3f8a'); sky.addColorStop(1, '#ff7fb0'); g.fillStyle = sky; g.fillRect(0, 0, 1024, 640);
+  g.fillStyle = 'rgba(255,255,255,.9)'; for (let i = 0; i < 90; i++) { const x = Math.random() * 1024, y = Math.random() * 300, r = Math.random() * 1.6 + 0.4; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }   // 星星
+  g.fillStyle = '#ffe3a8'; g.beginPath(); g.arc(820, 120, 46, 0, 7); g.fill(); g.fillStyle = '#5a3f8a'; g.beginPath(); g.arc(840, 108, 40, 0, 7); g.fill();   // 月亮
+  let x = 0; const rnd = (a, b) => a + Math.random() * (b - a);
+  while (x < 1024) { const w = rnd(50, 120), h = rnd(140, 360); g.fillStyle = '#231a44'; g.fillRect(x, 640 - h, w, h);
+    g.fillStyle = '#ffd27a'; for (let wy = 640 - h + 14; wy < 626; wy += 24) for (let wx = x + 10; wx < x + w - 12; wx += 20) if (Math.random() < 0.55) g.fillRect(wx, wy, 9, 12);
+    x += w + rnd(6, 18); }
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const win = new THREE.Mesh(new THREE.PlaneGeometry(S - 1.4, H - 1.5), new THREE.MeshBasicMaterial({ map: tex }));
+  win.position.set(-T / 2, (H - 1.5) / 2 + 0.5, L.z - 0.55); root.add(win);          // 開口外面一點,鏡頭透過框和層架看到
+  const cityGlow = new THREE.PointLight(0xb08cff, 1.6, 6, 2); cityGlow.position.set(-T / 2, 2.4, L.z - 0.2); root.add(cityGlow);
+}
 // ---------- 層架上的東西 ----------
 {
   // 粗邊線框:把每條邊做成圓管、頂點放小球(WebGL 的線寬固定 1px,不能加粗,所以用實體)
@@ -254,6 +299,7 @@ function loadGLB(name, url, onLoad) {
   arcadeScreen.position.set(0, 1.82, 1.022); arcadeScreen.rotation.x = -0.35; a.add(arcadeScreen);
   // 街機螢幕的位置(給鏡頭飛過去用):正面、離地約 1.75(螢幕中心)
   arcadeAnchor = new THREE.Object3D(); arcadeAnchor.position.set(0, 1.75, 1.66); a.add(arcadeAnchor);
+  const arcGlow = new THREE.PointLight(0x9ad8ff, 2.2, 3.2, 2); arcGlow.position.set(0, 1.7, 1.5); a.add(arcGlow);   // 機台螢幕的青藍光
   if (window.__room) window.__room.arcade = m;
 }
 
@@ -283,6 +329,23 @@ let camHead = null;
 
 // ---------- 地毯 / 滑板 ----------
 box(3.6, 0.05, 2.7, C.rug, { x: -1.1, y: 0.075, z: 0.9, r: 0.02, seg: 1 });   // 地毯往左移 0.6
+{ // 地毯上的貓臉圖案:畫在 canvas 上貼一片薄面(耳朵、眼睛、鼻子、鬍鬚,淺一號的青色)
+  const cv = document.createElement('canvas'); cv.width = 720; cv.height = 540; const g = cv.getContext('2d');
+  g.fillStyle = '#46bfcf'; g.fillRect(0, 0, 720, 540);
+  g.strokeStyle = '#7fdbe6'; g.lineWidth = 14; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath(); g.roundRect(26, 26, 668, 488, 40); g.stroke();                       // 外框
+  g.fillStyle = '#7fdbe6';
+  g.beginPath(); g.moveTo(250, 250); g.lineTo(295, 130); g.lineTo(360, 230); g.closePath(); g.fill();   // 耳朵
+  g.beginPath(); g.moveTo(470, 250); g.lineTo(425, 130); g.lineTo(360, 230); g.closePath(); g.fill();
+  g.beginPath(); g.ellipse(360, 300, 125, 105, 0, 0, Math.PI * 2); g.fill();          // 臉
+  g.fillStyle = '#46bfcf';
+  g.beginPath(); g.ellipse(318, 290, 14, 20, 0, 0, Math.PI * 2); g.ellipse(402, 290, 14, 20, 0, 0, Math.PI * 2); g.fill();   // 眼睛
+  g.beginPath(); g.moveTo(348, 322); g.lineTo(372, 322); g.lineTo(360, 336); g.closePath(); g.fill();                        // 鼻子
+  g.strokeStyle = '#46bfcf'; g.lineWidth = 8;
+  for (const sx of [-1, 1]) for (const dy of [-10, 12]) { g.beginPath(); g.moveTo(360 + sx * 60, 325 + dy); g.lineTo(360 + sx * 128, 318 + dy * 1.8); g.stroke(); }   // 鬍鬚
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 2.6), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 }));
+  face.rotation.x = -Math.PI / 2; face.position.set(-1.1, 0.102, 0.9); face.receiveShadow = true; root.add(face); }
 {
   const s = group(-1.55, 0.08, 1.75);   // 靠左邊
   s.rotation.y = 0.5;
@@ -332,6 +395,17 @@ let screenMesh;
   box(0.95, 0.03, 0.34, 0xd9c9ef, { x: 0, y: 1.42, z: 0.28, r: 0.01, parent: d, seg: 1, shadow: false });
   box(0.75, 0.05, 0.28, 0xf6eef8, { x: 0, y: 1.44, z: 0.28, r: 0.02, parent: d });
   box(0.16, 0.06, 0.22, 0xf6eef8, { x: 0.65, y: 1.44, z: 0.3, r: 0.04, parent: d });
+  // 桌燈(暖橘):桌面左後角,圓底座 + 斜桿 + 燈罩,燈泡自發光,底下一盞暖色點光照亮桌面和牆
+  const lamp = group(-1.15, 1.41, -0.42, d);
+  cyl(0.14, 0.16, 0.04, 0xf3c9db, { y: 0.02, parent: lamp });
+  const arm = cyl(0.025, 0.025, 0.75, 0xe9d6e8, { y: 0.38, parent: lamp }); arm.rotation.z = -0.35; arm.position.x = 0.12;
+  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.26, 24, 1, true), new THREE.MeshStandardMaterial({ color: 0xf7a24a, roughness: 0.6, side: THREE.DoubleSide }));
+  shade.position.set(0.3, 0.76, 0); shade.rotation.z = -0.35; shade.castShadow = true; lamp.add(shade);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0xffb050, emissiveIntensity: 2.2 }));
+  bulb.position.set(0.32, 0.7, 0); lamp.add(bulb);
+  const lampLight = new THREE.PointLight(0xffb36b, 7, 5.5, 2); lampLight.position.set(0.32, 0.66, 0); lamp.add(lampLight);
+  // 螢幕光(青藍):從螢幕前面照向鍵盤和桌面
+  const scrLight = new THREE.PointLight(0x7fd8ff, 3.5, 3.6, 2); scrLight.position.set(0, 2.2, 0.35); d.add(scrLight);
 }
 
 // ---------- 椅子 ----------
