@@ -1503,7 +1503,9 @@ function assetRowsHtml(A, mine) {
 // 任務清單的 HTML(主機自己和手機都用)
 const missHtml = (p) => (p.missions || []).map((m) =>
     `<div class="m ${m.done ? 'done' : ''}"><span class="ck">${m.done ? '✓' : ''}</span><span>${m.title}<small>${m.sub}</small></span></div>`).join('') +
-    ((p.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + p.doneList.slice().reverse().map((t) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span></div>`).join('') : '');
+    ((p.doneList || []).length ? `<div class="sub">${L('Completed', '已完成')}</div>` + (() => {   // 同名任務合併成一列,後面標 ×N(最新完成的排前面)
+      const seen = new Map(); p.doneList.slice().reverse().forEach((t) => seen.set(t, (seen.get(t) || 0) + 1));
+      return [...seen].map(([t, n]) => `<div class="m done old"><span class="ck">✓</span><span>${t}</span>${n > 1 ? `<b class="cnt">×${n}</b>` : ''}</div>`).join(''); })() : '');
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][n % 10 > 3 ? 0 : n % 10] || 'th');      // 1st 2nd 3rd 4th
 const rankOf = (p) => { const a = assetsOf(p); return 1 + S.players.filter((q) => assetsOf(q) > a + 0.5).length; };
 function hud() {

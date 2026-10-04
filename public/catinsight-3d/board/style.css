@@ -477,3 +477,7 @@ body.watch #panel[data-watch=""]::after{display:none}
 
 /* 排行榜列上的小頭像 */
 .rrow .ic.mini{width:calc(26px * var(--fs));height:calc(26px * var(--fs));flex:none;border-radius:50%;border:2px solid #fff;background:#dfe8ff center 20%/cover;box-shadow:0 0 0 1.5px #e6d9c4}
+
+/* 任務框固定高度,內容多了用捲的;已完成的同名任務合併顯示 ×N */
+.missbox .miss{max-height:min(44vh,calc(300px * var(--fs)));overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.m .cnt{margin-left:auto;flex:none;background:#8a6f60;color:#fff;border-radius:999px;padding:1px 7px;font-size:calc(11px * var(--fs));font-weight:900}
