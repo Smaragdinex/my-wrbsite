@@ -238,6 +238,7 @@ export function makeSim(D, opts = {}) {
     while (!st.over) {
       const p = st.players[st.turn];
       playTurn(st, p, first ? forcedFirst : null); first = false;
+      if (opts.onTurn) opts.onTurn(st, p);
       st.turn = (st.turn + 1) % st.players.length;
       if (st.turn === 0) { applyEvent(st, randomEvent(st)); if (st.rolls >= st.maxRounds) { st.over = true; break; } }
       if (st.rolls >= untilRolls && st.turn === 0) break;
@@ -388,8 +389,11 @@ export function makeSim(D, opts = {}) {
   }
 
   /* ───────── 派發 ───────── */
-  function decideDice(st, p) { return p.alg === 'mc' ? mcDice(st, p) : p.alg === 'ev' ? evDice(st, p) : 2; }
-  function decideTrade(st, p, k) { return p.alg === 'mc' ? mcTrade(st, p, k) : p.alg === 'ev' ? evTrade(st, p, k) : ruleTrade(st, p, k); }
+  function decideDice(st, p) { if (POL[p.alg]) return POL[p.alg].dice ? POL[p.alg].dice(st, p, api) : evDice(st, p); return p.alg === 'mc' ? mcDice(st, p) : p.alg === 'ev' ? evDice(st, p) : 2; }
+  // opts.policies:實驗用的自訂策略 { 名字: (st, p, k, api) => 動作 },玩家的 alg 設成那個名字就會用它(tools/ 的分析腳本用)
+  const POL = opts.policies || {};
+  function decideTrade(st, p, k) { if (POL[p.alg]) return POL[p.alg](st, p, k, api); return p.alg === 'mc' ? mcTrade(st, p, k) : p.alg === 'ev' ? evTrade(st, p, k) : ruleTrade(st, p, k); }
 
+  const api = { fill: (st, k, f) => fill(st, k, f), maxLots, acctRatio, assetsOf, evOf, evTrade, tradeOptions, buyF, sellF, shortF, LOT, MARGIN_LOAN };
   return { newGame, clone, playGame, run, playTurn, land, doTrade, tradeOptions, assetsOf, acctRatio, lead, evOf, EVSTAT, evDice, evTrade, ruleTrade, mcDice, mcTrade, rolloutMean, rolloutAll, tileScore, setSeed, getSeed, rand, MC, EVP, LEVELS, mkPlayer };
 }
