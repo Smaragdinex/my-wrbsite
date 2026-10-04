@@ -492,3 +492,9 @@ body.watch #panel[data-watch=""]::after{display:none}
 .missbox[data-tab="done"] .mtabs [data-mt="done"] i{background:#fff;color:#b57c00}
 .missbox .miss{display:block;padding:0 8px 8px}
 .missbox .miss .m{margin-top:6px}
+
+/* 成就達成跳出卡:從上方滑進來、金色邊 */
+.achv{position:fixed;left:50%;top:calc(var(--ava) + 30px);transform:translate(-50%,-30px);z-index:8;display:flex;flex-direction:column;align-items:center;gap:2px;background:#fff8ec;border:3px solid #ffb000;border-radius:18px;padding:10px 22px;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .25s,transform .35s cubic-bezier(.2,1.2,.4,1)}
+.achv.on{opacity:1;transform:translate(-50%,0)}
+.achv b{font-size:calc(15px * var(--fs));font-weight:900;color:#b57c00}
+.achv span{font-size:calc(13px * var(--fs));font-weight:800;color:#3b2f2a}

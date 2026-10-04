@@ -453,7 +453,9 @@ const MISSION_DEFS = [
       return { title: L('Keep dry powder', '保留現金'), sub: L('Own assets and keep $2,000+ cash for 3 turns', '持有資產且連續 3 回合現金 $2,000 以上'), ok: () => S.cashStreak >= 3 }; } },
   // 資產成長是階梯式的成就:11,000 → 15,000 → 20,000 → 30,000 → 40,000 → 50,000 → 100,000,上一階完成了下一階才會出現
   ...[11000, 15000, 20000, 30000, 40000, 50000, 100000].map((goal, i, arr) => ({ id: 'g' + goal / 1000, after: i ? 'g' + arr[i - 1] / 1000 : null,
-    make: () => ({ title: L('Grow the pile', '資產成長'), sub: L(`Reach $${fmt(goal)} in total assets`, `總資產達到 $${fmt(goal)}`), ok: () => assets() >= goal }) })),
+    make: () => ({ title: goal >= 100000 ? L('Stock god', '股神') : L('Grow the pile', '資產成長'), sub: goal >= 100000 ? L('Total assets 10× your starting cash ($100,000)', '總資產達到起始資金 10 倍($100,000)') : L(`Reach $${fmt(goal)} in total assets`, `總資產達到 $${fmt(goal)}`), ok: () => assets() >= goal }) })),
+  { id: 'coin2x', make: () => ({ title: L('Crypto whale', '炒幣達人'), sub: L('Be up 100%+ on ParrotCoin', '鸚鵡幣(加密貨幣)未實現獲利超過 100%'),
+      ok: () => { const h = S.hold.crypto; return h.n > 0 && h.cost > 0 && (h.n * S.price.crypto - h.cost) / h.cost >= 1; } }) },
   // 抱住股票也是階梯:一檔持股未實現獲利 200% → 300% → 400% → 500%
   ...[2, 3, 4, 5].map((x, i) => ({ id: 'hold' + x + 'x', after: i ? 'hold' + (x - 1) + 'x' : null,
     make: () => ({ title: L('Diamond hands', '抱住股票'), sub: L(`Hold one stock until it is up ${x * 100}%`, `一檔持股未實現獲利達 ${x * 100}%`),
@@ -462,15 +464,10 @@ const MISSION_DEFS = [
   { id: 'index', make: () => ({ title: L('Own the market', '買下整個市場'), sub: L('Hold the whole-market ETF', '持有大盤 ETF'), ok: () => S.hold.etf.n > 0 }) },
   { id: 'income', make: () => ({ title: L('Build income', '打造現金流'), sub: L('Hold 2 assets that pay 3% or more', '持有 2 種配息 3% 以上的資產'), ok: () => KEYS.filter((k) => S.hold[k].n > 0 && SECTORS[k].div >= 0.03).length >= 2 }) },
 ];
-// 任務是成就:每種只能完成一次。抽一個「還沒完成、自己手上沒有、前置成就已完成」的;別的玩家手上也有的排後面,大家的清單才不會長得一樣
-// 全部完成就抽不到(回傳 null),清單會變短
-function drawMission() {
-  const me = S.players[S.hi], doneIds = new Set(me.doneIds || []), active = new Set(S.missions.filter(Boolean).map((m) => m.id));
-  const others = new Set(S.players.filter((p) => p !== me).flatMap((p) => (p.missions || []).filter(Boolean).map((m) => m.id)));
-  const pool = MISSION_DEFS.filter((d) => !active.has(d.id) && !doneIds.has(d.id) && (!d.after || doneIds.has(d.after))).sort(() => Math.random() - 0.5).sort((x, y) => others.has(x.id) - others.has(y.id));
-  if (!pool.length) return null;
-  for (const d of pool) { const m = { id: d.id, done: false, ...d.make() }; if (!m.ok()) return m; }
-  const d = pool[0]; return { id: d.id, done: false, ...d.make() };
+// 任務是成就:每種只能完成一次,全部一次列出來;階梯式的(資產成長、抱住股票)只列出下一階,完成了再補下一階
+function refillMissions(p) {
+  p.missions = p.missions || []; const doneIds = new Set(p.doneIds || []), have = new Set(p.missions.map((m) => m.id));
+  for (const d of MISSION_DEFS) if (!doneIds.has(d.id) && !have.has(d.id) && (!d.after || doneIds.has(d.after))) p.missions.push({ id: d.id, done: false, ...d.make() });
 }
 // 玩家:最多 4 位(真人最多 2 位,排在最前面;其餘是電腦)。每位都有自己的位置、現金、持股、背包……
 // 為了不用把整份程式都改寫,S 上面留著「目前視角」的捷徑:
@@ -487,7 +484,7 @@ const isYou = (p) => p.human && S.nh === 1;                 // 只有一位真�
 const assetsOf = (p) => p.cash - p.debt + KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k] - p.hold[k].loan + shortValue(k, p), 0);
 function setPlayers(chars, humans, names = []) {
   S.players = chars.map((c, i) => mkPlayer(i, i < humans, c)); names.forEach((nm, i) => { if (nm && S.players[i]) S.players[i].name = nm; }); S.nh = humans; S.hi = 0; S.ci = Math.min(humans, chars.length - 1);
-  for (let h = 0; h < humans; h++) { S.hi = h; for (let i = 0; i < 3; i++) { const m = drawMission(); if (m) S.missions.push(m); } }
+  for (let h = 0; h < humans; h++) { S.hi = h; refillMissions(S.players[h]); }      // make() 會讀 S.hold 等捷徑,所以要先把 S.hi 指到那位
   S.hi = 0;
 }
 function newState() {
@@ -1570,6 +1567,15 @@ function staticText() {
   $('note').textContent = '';      // 畫面底下不再放字(省空間);聲明、音樂出處和版本改放在結算畫面
 }
 let toastTimer;
+// 成就達成:畫面上方跳出一張卡(自己的在自己這台;手機玩家的送到他手機上),2.6 秒後收起
+let achvTimer = 0;
+function showAchv(p, title) {
+  const msg = L('Achievement unlocked', '成就達成');
+  if (p.remote) { const g = NET.guests.find((x) => x.gid === p.remote); if (g && g.conn) netSend({ t: 'achv', title }, g.conn); return; }
+  if (p !== meP()) { toast(L(`${nameOf(p)}: ${title} +$${REWARD}`, `${nameOf(p)}達成「${title}」+$${REWARD}`)); return; }
+  achvPop(title);
+}
+function achvPop(title) { const el = $('achv'); el.innerHTML = `<b>🏆 ${L('Achievement unlocked', '成就達成')}</b><span>${title} · +$${REWARD}</span>`; el.classList.add('on'); clearTimeout(achvTimer); achvTimer = setTimeout(() => el.classList.remove('on'), 2600); }
 function toast(msg) { netSend({ t: 'toast', msg }); const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
 function showCtl(on) { $('ctl').classList.toggle('hide', !on); $('tipbar').classList.toggle('hide', !on); $('stepCtl').classList.add('hide'); }   // 提示泡泡跟擲骰鈕一起出現 / 隱藏,抽卡時才不會擋到
 function panel(html) { const p = $('panel'); p.innerHTML = html; p.classList.remove('hide'); p.classList.toggle('over', !!(S && S.over)); return p; }
@@ -1672,8 +1678,9 @@ function payday(atStart = true) {
 }
 function checkMissions() {
   // 上一次完成的任務先換成新的(所以完成的那張會亮綠色停留到下一次檢查)
-  S.missions.forEach((m, i) => { if (m.done) { S.missions[i] = { id: '_' }; S.missions[i] = drawMission(); } }); S.missions = S.missions.filter(Boolean);   // 全部成就都完成了就不補
-  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; const me = S.players[S.hi]; (me.doneList ||= []).push(m.title); (me.doneIds ||= []).push(m.id); S.cash += REWARD; sfx('mission'); toast(L('Mission complete: ', '任務完成:') + m.title + ` +$${REWARD}`); } });
+  S.missions = S.missions.filter((m) => !m.done);   // 上一次完成的(綠色那張)這時才拿掉
+  S.missions.forEach((m) => { if (!m.done && m.ok()) { m.done = true; S.done++; const me = S.players[S.hi]; (me.doneList ||= []).push(m.title); (me.doneIds ||= []).push(m.id); S.cash += REWARD; sfx('mission'); showAchv(me, m.title); } });
+  refillMissions(S.players[S.hi]);   // 階梯式的下一階在這裡補進來
   hud();
 }
 // 市場事件格:桌上發三張背面朝上的牌,玩家自己挑一張翻開(對手走到時由牠自動挑)。
@@ -2599,6 +2606,7 @@ function clientInit() {
     if (m.t === 'lane') { S.lanePath[m.type] = m.path; _drawLane0(m.type); return; }
     if (m.t === 'toast') { toast(m.msg); return; }
     if (m.t === 'sfx') { AU.sfx(m.name); return; }
+    if (m.t === 'achv') { achvPop(m.title); AU.sfx('mission'); return; }
     if (m.t === 'rules') {     // 規則卡:自己這台顯示、自己按繼續,按了才告訴主機;期間主機鏡射過來的面板先存著
       rulesOpen = true; const el = $('panel'); el.className = 'panel';
       el.innerHTML = `<h3>${m.title}</h3><p>${m.body}</p><div class="btns"><button class="b-ok" data-local="1">${L('Continue', '繼續')}</button></div>`;
