@@ -553,7 +553,7 @@ function tree(x, z, s = 1, parent = scene) {
 const RIPPLES = [];
 function rippleStep(dt) {
   for (const r of RIPPLES) { r.t += dt; if (r.t >= r.dur) { r.t = 0; const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * 0.72; r.m.position.set(-0.8 + Math.cos(a) * d * 1.9, 0.235, 0.6 + Math.sin(a) * d * 1.33); r.m.rotation.y = (Math.random() - 0.5) * 0.5; r.len = 0.45 + Math.random() * 0.5; r.m.scale.x = r.len; r.dur = 3 + Math.random() * 2.5; r.speed = 0.08 + Math.random() * 0.08; }
-    const k = r.t / r.dur; r.m.material.opacity = Math.sin(k * Math.PI) * 0.55; r.m.position.x += r.speed * dt; r.m.scale.x = r.len * (0.7 + 0.3 * Math.sin(k * Math.PI)); }
+    const k = r.t / r.dur; r.m.material.opacity = Math.sin(k * Math.PI) * 0.95; r.m.position.x += r.speed * dt; r.m.scale.x = r.len * (0.7 + 0.3 * Math.sin(k * Math.PI)); }
 }
 // 風:所有樹冠一起慢慢搖,各自錯開相位;偶爾來一陣比較大的風
 function windStep() {
@@ -608,10 +608,18 @@ const E = N / 2 * STEP + 0.62;
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.05, 40), mat(0xf6e3c2)); rim.position.set(-0.8, 0.185, 0.6); rim.scale.z = 0.72; scene.add(rim);
   // 水面的白色波紋:幾條細細的白線在池塘上慢慢往一邊飄、淡入淡出,像被風吹的漣漪
   { const PC = { x: -0.8, z: 0.6, rx: 1.9, rz: 1.33 };
-    const wm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }); wm.userData.outlineParameters = { visible: false };
+    // 波紋是畫在 canvas 上的彎曲白線(兩端淡出),三種波形輪流用
+    const waveTex = (amp, periods, w) => { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 48; const c = cv.getContext('2d');
+      c.strokeStyle = '#fff'; c.lineWidth = w; c.lineCap = 'round'; c.beginPath();
+      for (let x = 0; x <= 256; x += 4) { const y = 24 + Math.sin(x / 256 * Math.PI * 2 * periods) * amp; x ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke();
+      const g = c.createLinearGradient(0, 0, 256, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.2, '#000'); g.addColorStop(0.8, '#000'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.globalCompositeOperation = 'destination-in'; c.fillStyle = g; c.fillRect(0, 0, 256, 48);
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; };
+    const WAVES = [waveTex(7, 1.5, 8), waveTex(9, 1, 7), waveTex(6, 2, 8)];
+    const wm = new THREE.MeshBasicMaterial({ color: 0xffffff, map: WAVES[0], transparent: true, opacity: 0, depthWrite: false }); wm.userData.outlineParameters = { visible: false };
     const spawn = (r) => { const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * 0.72;   // 落在橢圓內側,留邊
       r.m.position.set(PC.x + Math.cos(a) * d * PC.rx, 0.235, PC.z + Math.sin(a) * d * PC.rz); r.m.rotation.y = (Math.random() - 0.5) * 0.5; r.len = 0.45 + Math.random() * 0.5; r.m.scale.x = r.len; r.t = 0; r.dur = 3 + Math.random() * 2.5; r.speed = 0.08 + Math.random() * 0.08; };
-    for (let i = 0; i < 12; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.05), wm.clone()); m.rotation.order = 'YXZ'; m.rotation.x = -Math.PI / 2; m.renderOrder = 2; scene.add(m);
+    for (let i = 0; i < 12; i++) { const mat2 = wm.clone(); mat2.map = WAVES[i % 3]; const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.17), mat2); m.rotation.order = 'YXZ'; m.rotation.x = -Math.PI / 2; m.renderOrder = 2; scene.add(m);
       const r = { m, t: 0, dur: 1, len: 1, speed: 0.1 }; spawn(r); r.t = Math.random() * r.dur; RIPPLES.push(r); } }
   [[-3.4, -2.6, 1.2], [-2.2, -2.2, 1], [2.6, -3.2, 1.3], [3.6, -1.4, 1], [3.2, 2.6, 1.1], [-3.8, 2.4, 1.1], [2.4, 2.2, 1], [-2.6, 3.0, 1.2], [3.0, -2.4, 1.1]].forEach(([x, z, sc]) => tree(x, z, sc));
   house(1.9, -0.9, 0xfff1dc, 0xe2726b, 0.4);
