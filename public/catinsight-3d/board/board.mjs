@@ -470,7 +470,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const outline = new OutlineEffect(renderer, { defaultThickness: 0.006, defaultColor: [0.36, 0.25, 0.2], defaultAlpha: 1 });
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xc9e8b8);
+scene.background = new THREE.Color(0x9bdc7a);
 
 const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
 // 棋盤很大,鏡頭平常拉近跟著「現在在走的那顆棋子」;按地圖鈕可以拉遠看全貌
@@ -520,9 +520,9 @@ function box(w, h, d, color, x, y, z, r = 0.06, parent = scene) {
 }
 // 地面、人行道、草地
 {
-  const g = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), mat(0xc9e8b8)); g.material.userData.outlineParameters = { visible: false }; g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
-  // 格子直接放在草地上(以前底下有一塊米色人行道板);中間那塊草地和外面同一個綠,只是微微墊高
-  box((N - 2) * STEP - 0.12, 0.16, (N - 2) * STEP - 0.12, 0xc9e8b8, 0, 0.10, 0, 0.05);
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), mat(0x9bdc7a)); g.material.userData.outlineParameters = { visible: false }; g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
+  // 格子直接放在草地上(以前底下有一塊米色人行道板);整片草地都是同一個深綠(以前只有內圈是),中間微微墊高
+  box((N - 2) * STEP - 0.12, 0.16, (N - 2) * STEP - 0.12, 0x9bdc7a, 0, 0.10, 0, 0.05);
 }
 // 小鎮裝飾:樹和房子(純幾何)
 function tree(x, z, s = 1) {

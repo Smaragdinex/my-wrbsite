@@ -1,7 +1,7 @@
 /* 貓咪股市大富翁:棋盤頁和手機遙控頁共用的樣式 */
   :root{--fs:1;--ava:clamp(64px,10.5vmin,116px);--roll:clamp(112px,17vmin,180px);--btn:clamp(58px,9vmin,94px);--ink:#3b2f2a;--cream:#fff8ec;--line:#e8d9c2;--pink:#ff8fc0;--purple:#8b7cff;--teal:#35c2a1;--amber:#f5b942;--coral:#f2796b}
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;overflow:hidden;background:#c9e8b8;color:var(--ink);
+  html,body{height:100%;overflow:hidden;background:#9bdc7a;color:var(--ink);
     font-family:"Avenir Next","Nunito","Helvetica Neue",-apple-system,"PingFang TC",sans-serif}
   canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
   html,body{touch-action:none;overscroll-behavior:none}   /* 整個畫面都能拖地圖,不要被瀏覽器當成捲動 */
