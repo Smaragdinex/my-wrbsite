@@ -451,11 +451,13 @@ const MISSION_DEFS = [
       return { title: L('Take profit', '獲利了結'), sub: L('Sell a holding that is up 15% or more', '賣出一檔賺超過 15% 的持股'), ok: () => S.flags.profit }; } },
   { id: 'cash', make: () => { S.cashStreak = 0;
       return { title: L('Keep dry powder', '保留現金'), sub: L('Own assets and keep $2,000+ cash for 3 turns', '持有資產且連續 3 回合現金 $2,000 以上'), ok: () => S.cashStreak >= 3 }; } },
-  // 資產成長是階梯式的成就:11,000 → 15,000 → 20,000 → 30,000,上一階完成了下一階才會出現
-  ...[[11000, null], [15000, 'g11'], [20000, 'g15'], [30000, 'g20']].map(([goal, after]) => ({ id: 'g' + goal / 1000, after,
+  // 資產成長是階梯式的成就:11,000 → 15,000 → 20,000 → 30,000 → 40,000 → 50,000 → 100,000,上一階完成了下一階才會出現
+  ...[11000, 15000, 20000, 30000, 40000, 50000, 100000].map((goal, i, arr) => ({ id: 'g' + goal / 1000, after: i ? 'g' + arr[i - 1] / 1000 : null,
     make: () => ({ title: L('Grow the pile', '資產成長'), sub: L(`Reach $${fmt(goal)} in total assets`, `總資產達到 $${fmt(goal)}`), ok: () => assets() >= goal }) })),
-  { id: 'hold3x', make: () => ({ title: L('Diamond hands', '抱住股票'), sub: L('Hold one stock until it is up 300%', '一檔持股未實現獲利達 300%'),
-      ok: () => KEYS.some((k) => { const h = S.hold[k]; return h.n > 0 && h.cost > 0 && (h.n * S.price[k] - h.cost) / h.cost >= 3; }) }) },
+  // 抱住股票也是階梯:一檔持股未實現獲利 200% → 300% → 400% → 500%
+  ...[2, 3, 4, 5].map((x, i) => ({ id: 'hold' + x + 'x', after: i ? 'hold' + (x - 1) + 'x' : null,
+    make: () => ({ title: L('Diamond hands', '抱住股票'), sub: L(`Hold one stock until it is up ${x * 100}%`, `一檔持股未實現獲利達 ${x * 100}%`),
+      ok: () => KEYS.some((k) => { const h = S.hold[k]; return h.n > 0 && h.cost > 0 && (h.n * S.price[k] - h.cost) / h.cost >= x; }) }) })),
   { id: 'haven', make: () => ({ title: L('Find a safe haven', '準備避險'), sub: L('Hold gold or bonds', '持有黃金或債券'), ok: () => S.hold.gold.n > 0 || S.hold.bond.n > 0 }) },
   { id: 'index', make: () => ({ title: L('Own the market', '買下整個市場'), sub: L('Hold the whole-market ETF', '持有大盤 ETF'), ok: () => S.hold.etf.n > 0 }) },
   { id: 'income', make: () => ({ title: L('Build income', '打造現金流'), sub: L('Hold 2 assets that pay 3% or more', '持有 2 種配息 3% 以上的資產'), ok: () => KEYS.filter((k) => S.hold[k].n > 0 && SECTORS[k].div >= 0.03).length >= 2 }) },
