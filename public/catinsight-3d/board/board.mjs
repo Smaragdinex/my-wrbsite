@@ -469,6 +469,8 @@ const MISSION_DEFS = [
     make: () => ({ title: L('Dividend king', '股息大戶'), sub: L(`Collect $${fmt(goal)} in dividends over the game`, `整局累積領到 $${fmt(goal)} 股利`), ok: () => (S.players[S.hi].divTotal || 0) >= goal }) })),
   { id: 'dodge', make: () => ({ title: L('Storm proof', '躲過黑天鵝'), sub: L('Your holdings gain value during a market crash', '壞消息事件發生時,你的持股市值反而上漲'), ok: () => S.flags.dodge }) },
   { id: 'comeback', make: () => ({ title: L('Comeback', '逆風翻盤'), sub: L('Fall below $8,000, then climb back to $12,000', '總資產跌破 $8,000 後再回到 $12,000'), ok: () => S.flags.low && assets() >= 12000 }) },
+  { id: 'steel', make: () => ({ title: L('Steel hands', '鋼鐵手'), sub: L('Keep holding a stock that is down 50%', '一檔持股跌了 50% 還抱著'),
+      ok: () => KEYS.some((k) => { const h = S.hold[k]; return h.n > 0 && h.cost > 0 && (h.n * S.price[k] - h.cost) / h.cost <= -0.5; }) }) },
   { id: 'liquidator', make: () => ({ title: L('Margin call', '斷頭高手'), sub: L('Push a price down until a rival\'s margin position is liquidated', '把股價打到讓對手的融資部位被強迫平倉'), ok: () => S.flags.liquidator }) },
   { id: 'squeezer', make: () => ({ title: L('Squeeze master', '軋空高手'), sub: L('Push the price up until a rival\'s short is squeezed', '把股價拉到讓對手的空單被軋空'), ok: () => S.flags.squeezer }) },
   // 抱住股票也是階梯:一檔持股未實現獲利 200% → 300% → 400% → 500%
