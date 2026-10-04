@@ -550,10 +550,13 @@ function tree(x, z, s = 1, parent = scene) {
   return g;
 }
 // 池塘波紋:慢慢往 +x 飄、中段最亮,週期結束就換個位置重來
-const RIPPLES = [];
+const RIPPLES = []; let POND_TEX = null;
 function rippleStep(dt) {
+  if (POND_TEX) POND_TEX.rotation += dt * 0.08;      // 亮斑慢慢繞著轉
   for (const r of RIPPLES) { r.t += dt; if (r.t >= r.dur) { r.t = 0; const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * 0.72; r.m.position.set(-0.8 + Math.cos(a) * d * 1.9, 0.235, 0.6 + Math.sin(a) * d * 1.33); r.m.rotation.y = (Math.random() - 0.5) * 0.5; r.len = 0.45 + Math.random() * 0.5; r.m.scale.x = r.len; r.dur = 3 + Math.random() * 2.5; r.speed = 0.08 + Math.random() * 0.08; }
-    const k = r.t / r.dur; r.m.material.opacity = Math.sin(k * Math.PI) * 0.95; r.m.position.x += r.speed * dt; r.m.scale.x = r.len * (0.7 + 0.3 * Math.sin(k * Math.PI)); }
+    const k = r.t / r.dur, d = Math.min(1, Math.hypot((r.m.position.x + 0.8) / 1.9, (r.m.position.z - 0.6) / 1.33));   // 離池心多遠(0 中心 ~ 1 邊緣)
+    r.m.material.color.setRGB(1 - d * 0.25, 1 - d * 0.08, 1); r.m.material.opacity = Math.sin(k * Math.PI) * (0.95 - d * 0.45);   // 中間深色處白得清楚,靠邊變淡藍
+    r.m.position.x += r.speed * dt; r.m.scale.x = r.len * (0.7 + 0.3 * Math.sin(k * Math.PI)); }
 }
 // 風:所有樹冠一起慢慢搖,各自錯開相位;偶爾來一陣比較大的風
 function windStep() {
@@ -605,6 +608,15 @@ const E = N / 2 * STEP + 0.62;
 // 中間的大草地:一個小公園(池塘、樹、房子、花)。樹和房子都避開兩條小路(z=4 那排和 z=12 那排)和兩棟建築
 {
   const pond = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.06, 40), mat(0x8fd3ff)); pond.position.set(-0.8, 0.2, 0.6); pond.scale.z = 0.7; scene.add(pond);
+  // 水面:中間深、邊邊淺的放射漸層(畫在 canvas 上),再加一塊偏一邊的亮斑慢慢轉,看起來像水在動
+  { const cv = document.createElement('canvas'); cv.width = cv.height = 256; const c = cv.getContext('2d');
+    const g = c.createRadialGradient(128, 128, 10, 128, 128, 128); g.addColorStop(0, '#3d93d6'); g.addColorStop(0.55, '#62b4ea'); g.addColorStop(0.85, '#9ad8fb'); g.addColorStop(1, '#c6ecff');
+    c.fillStyle = g; c.fillRect(0, 0, 256, 256);
+    const h = c.createRadialGradient(170, 96, 4, 170, 96, 90); h.addColorStop(0, 'rgba(255,255,255,.22)'); h.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = h; c.fillRect(0, 0, 256, 256);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.center.set(0.5, 0.5);
+    const wmat = new THREE.MeshBasicMaterial({ map: tex }); wmat.userData.outlineParameters = { visible: false };
+    const top = new THREE.Mesh(new THREE.CircleGeometry(1.9, 48), wmat); top.rotation.x = -Math.PI / 2; top.position.set(-0.8, 0.232, 0.6); top.scale.y = 0.7; scene.add(top);
+    POND_TEX = tex; }
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.05, 40), mat(0xf6e3c2)); rim.position.set(-0.8, 0.185, 0.6); rim.scale.z = 0.72; scene.add(rim);
   // 水面的白色波紋:幾條細細的白線在池塘上慢慢往一邊飄、淡入淡出,像被風吹的漣漪
   { const PC = { x: -0.8, z: 0.6, rx: 1.9, rz: 1.33 };
