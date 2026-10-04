@@ -1160,7 +1160,7 @@ async function portrait(key) {
 function setPortraits() {
   const put = (el, key) => portrait(key).then((url) => { if (el) el.style.backgroundImage = `url(${url})`; }).catch(() => {});
   put($('avaMe'), meP().char);
-  document.querySelectorAll('#assetTabs button').forEach((b) => put(b, S.players[+b.dataset.i].char));
+  document.querySelectorAll('#assetTabs .pava').forEach((b) => put(b, S.players[+b.dataset.i].char));
 }
 let focus;
 // 四個棋子(第 3、4 個只有 3~4 人局才會出現)。同一格上四個角落各站一位
@@ -1389,10 +1389,11 @@ let CLIENT_ME = -1;      // 手機端:自己是第幾位
 const meP = () => (CLIENT_ME >= 0 && S.players[CLIENT_ME]) || S.players.find((p) => p.human && !p.remote) || S.players[0];
 function buildFoes() {
   const el = $('assetTabs'); el.innerHTML = '';
-  S.players.filter((p) => p !== meP()).forEach((p) => {      // 直排只放對手;自己是左上那顆頭像
-    const b = document.createElement('button'); b.dataset.i = p.i; b.setAttribute('aria-label', nameOf(p));
-    b.onclick = () => { const box = $('assetBox'); if (!box.classList.contains('fold') && S.view === p.i) box.classList.add('fold'); else { S.view = p.i; box.classList.remove('fold'); } hud(); };   // 點同一個再點一次就收起
-    el.appendChild(b);
+  S.players.filter((p) => p !== meP()).forEach((p) => {      // 直排只放對手;自己是左上那顆頭像。每列:頭像 | 股票鈕(看他的資產)| 名次
+    const row = document.createElement('div'); row.className = 'otab'; row.dataset.i = p.i;
+    row.innerHTML = `<span class="pava" data-i="${p.i}" title="${nameOf(p)}"></span><button class="stockbtn" data-i="${p.i}" aria-label="${nameOf(p)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="5" height="10" rx="1.5"/><rect x="9.5" y="5" width="5" height="16" rx="1.5"/><rect x="16" y="9" width="5" height="12" rx="1.5"/></svg></button><b class="rk"></b>`;
+    row.querySelector('button').onclick = () => { const box = $('assetBox'); if (!box.classList.contains('fold') && S.view === p.i) box.classList.add('fold'); else { S.view = p.i; box.classList.remove('fold'); } hud(); };   // 點同一個再點一次就收起
+    el.appendChild(row);
   });
 }
 // 資產清單的 HTML(資產框和手機遙控頁共用)。每檔持股在市值底下帶一行「+/- 多少」(市值 − 買進成本),放空則直接顯示損益;最後一行是全部加總的未實現損益
@@ -1441,8 +1442,8 @@ function hud() {
   // 資產框:一次只顯示一位。預設跟著「現在輪到誰」;點上面的頭像可以改看別人(下一位開始走的時候會自動切回去)
   { const A = S.players[S.view ?? meP().i] || S.players[S.hi], mine = A.i === S.hi;      // 資產框預設看自己,點對手頭像才看他
     $('assetTitle').textContent = (isYou(A) ? L('My assets', '我的資產') : L(`${nameOf(A)}'s assets`, `${nameOf(A)}的資產`)) + ' · $' + fmt(assetsOf(A));
-    document.querySelectorAll('#assetTabs button').forEach((b) => { const q = S.players[+b.dataset.i]; b.classList.toggle('on', q.i === A.i); b.classList.toggle('turn', q.i === S.turn);
-      const r = rankOf(q); let rk = b.querySelector('.rk'); if (!rk) { rk = document.createElement('b'); rk.className = 'rk'; b.appendChild(rk); } rk.textContent = ordinal(r); rk.classList.toggle('top', r === 1); });
+    document.querySelectorAll('#assetTabs .otab').forEach((row) => { const q = S.players[+row.dataset.i]; row.querySelector('button').classList.toggle('on', q.i === A.i); row.querySelector('.pava').classList.toggle('turn', q.i === S.turn);
+      const r = rankOf(q), rk = row.querySelector('.rk'); rk.textContent = ordinal(r); rk.classList.toggle('top', r === 1); });
     $('assetRows').innerHTML = assetRowsHtml(A, mine); }
   const e = S.lastEvent;
 
@@ -2524,10 +2525,10 @@ function clientInit() {
     $('evtTitle').textContent = h.evtTitle; if ($('evtBody').innerHTML !== h.evt) { if ($('evtBody').innerHTML && $('evtBox').classList.contains('fold')) $('evtBadge').classList.remove('hide'); $('evtBody').innerHTML = h.evt; }
     if (aview == null || !h.players.some((p) => p.i === aview)) aview = h.me;
     const v = h.players.find((p) => p.i === aview); if (v) { $('assetTitle').textContent = v.title; $('assetRows').innerHTML = v.rows; }
-    document.querySelectorAll('#assetTabs button').forEach((b) => { const i = +b.dataset.i, p = h.players.find((x) => x.i === i); b.classList.toggle('on', i === aview); b.classList.toggle('turn', i === h.turn);
-      let rk = b.querySelector('.rk'); if (!rk) { rk = document.createElement('b'); rk.className = 'rk'; b.appendChild(rk); } if (p) { rk.textContent = p.rank; rk.classList.toggle('top', !!p.top); } });
+    document.querySelectorAll('#assetTabs .otab').forEach((row) => { const i = +row.dataset.i, p = h.players.find((x) => x.i === i); row.querySelector('button').classList.toggle('on', i === aview); row.querySelector('.pava').classList.toggle('turn', i === h.turn);
+      const rk = row.querySelector('.rk'); if (p) { rk.textContent = p.rank; rk.classList.toggle('top', !!p.top); } });
   }
-  // 頭像點擊:看誰的資產(本機切換,不用問主機)
+  // 股票鈕點擊:看誰的資產(本機切換,不用問主機)
   const pickView = (i) => { const box = $('assetBox'); if (!box.classList.contains('fold') && aview === i) box.classList.add('fold'); else { aview = i; box.classList.remove('fold'); } paintHud(); };
   $('stockBtn').onclick = () => pickView(me);
   new MutationObserver(() => { document.querySelectorAll('#assetTabs button').forEach((b) => { b.onclick = () => pickView(+b.dataset.i); }); }).observe($('assetTabs'), { childList: true });
