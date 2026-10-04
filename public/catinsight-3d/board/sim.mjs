@@ -9,9 +9,10 @@
 //   ev    期望值:擲骰用「前方每格的分數 × 機率」算期望值;買賣用「事件卡的平均漲跌 + 配息 − 風險」算每檔的期望報酬
 //   mc    蒙地卡羅:每個決策(擲幾顆、買賣多少)對每個候選動作模擬後面 D 回合 × N 次,取平均資產領先幅度最高的
 export function makeSim(D, opts = {}) {
-  const { DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_UP_PRICE = 1.04, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE,
+  const { DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE,
     SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE } = D;
   const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));
+  const DIV_PAYERS = KEYS.filter((k) => SECTORS[k].div > 0 && k !== 'etf' && k !== 'bond');   // 原本就有配息的公司
   const LANE_EXIT = { jail: 28, ipo: 60 };
   const PATH_POOL = { jail: ['chance', 'gift', 'fee', 'coin'], ipo: ['chance', 'gift', 'interest', 'coin'] };
   // 自己的亂數(mulberry32):可以重設種子 → 蒙地卡羅比較不同動作時用「同一組未來」(common random numbers),雜訊小很多
@@ -97,8 +98,13 @@ export function makeSim(D, opts = {}) {
 
   /* ───────── 事件、命運 ───────── */
   function instantiate(st, e) {
-    if (e.divUp) { const top = Math.max(...KEYS.map((k) => st.div[k])), pool = KEYS.filter((k) => st.div[k] > 0 && st.div[k] < top - 1e-9 && k !== 'etf' && k !== 'bond').sort(() => rand() - 0.5).slice(0, e.divUp);
-      const m = { ...ONES }; pool.forEach((k) => { m[k] = DIV_UP_PRICE; }); m.etf = EQ.reduce((a, x) => a + m[x], 0) / EQ.length; return { ...e, m, divKeys: pool }; }
+    if (e.divUp || e.divCut) {
+      let keys;
+      if (e.divUp) { const top = Math.max(...DIV_PAYERS.map((k) => st.div[k])); keys = DIV_PAYERS.filter((k) => st.div[k] < top - 1e-9 && st.div[k] < DIV_MAX - 1e-9).sort(() => rand() - 0.5).slice(0, e.divUp); }
+      else { let pool = DIV_PAYERS.filter((k) => st.div[k] > DIV_MIN + 1e-9); if (e.divCut === 'top') { const top = Math.max(...pool.map((k) => st.div[k])); pool = pool.filter((k) => st.div[k] >= top - 1e-9); } keys = pool.length ? [pick(pool)] : []; }
+      const m = { ...ONES }; keys.forEach((k) => { m[k] = e.divUp ? DIV_UP_PRICE : DIV_CUT_PRICE; }); m.etf = EQ.reduce((a, x) => a + m[x], 0) / EQ.length;
+      return { ...e, m, divKeys: keys, divDown: !e.divUp };
+    }
     if (!e.meme) return e;
     const tot = (k) => st.players.reduce((a, p) => a + p.short[k].n, 0);
     const k = EQ.some((x) => tot(x) > 0) ? EQ.slice().sort((a, b) => tot(b) - tot(a))[0] : pick(EQ);
@@ -107,7 +113,7 @@ export function makeSim(D, opts = {}) {
   function applyEvent(st, e) {
     KEYS.forEach((k) => { st.price[k] *= e.m[k]; });
     if (e.cash) st.players.forEach((p) => { p.cash += e.cash; });
-    if (e.divKeys) e.divKeys.forEach((k) => { st.div[k] = Math.min(DIV_MAX, st.div[k] + DIV_STEP); });
+    if (e.divKeys) e.divKeys.forEach((k) => { st.div[k] = e.divDown ? Math.max(DIV_MIN, st.div[k] - DIV_STEP) : Math.min(DIV_MAX, st.div[k] + DIV_STEP); });
     if (e.rebound) st.after = { m: Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])) };
     marginCheck(st);
     if (e.squeezeAll) for (const p of st.players) { const h = p.short[e.squeezeAll]; if (!h.n) continue; const n = h.n; p.cash += coverBack(st, e.squeezeAll, h); h.n = 0; h.entry = 0; impact(st, e.squeezeAll, buyF(n)); }
@@ -267,7 +273,7 @@ export function makeSim(D, opts = {}) {
 
   /* ───────── 策略:期望值 ───────── */
   // 每檔資產「一張事件卡平均會讓它漲跌多少」(μ)和波動(σ),從 EVENTS 資料直接算出來
-  const EVSTAT = Object.fromEntries(KEYS.map((k) => { const xs = EVENTS.map((e) => (e.meme || e.divUp ? 0 : e.m[k] - 1)); const mu = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const EVSTAT = Object.fromEntries(KEYS.map((k) => { const xs = EVENTS.map((e) => (e.meme || e.divUp || e.divCut ? 0 : e.m[k] - 1)); const mu = xs.reduce((a, b) => a + b, 0) / xs.length;
     const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mu) ** 2, 0) / xs.length); return [k, { mu, sd }]; }));
   const EVENTS_PER_ROUND = (st) => 1 + 10 / TILES.length * st.players.length;          // 每回合固定一張 + 踩到事件格的
   // 期望值策略的參數(tools/tournament.mjs 掃過,預設是最好的那組;可以用 opts.ev 覆蓋做實驗)

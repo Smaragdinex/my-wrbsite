@@ -27,3 +27,8 @@ rule, rule, ev, mc (700 games)
 rule vs ev (700 games)        rule 37.6% / ev 62.4%
 rule vs ev vs mc (700 games)  rule 17.4% / ev 34.7% / mc 47.9%
 模擬 400 局:平均每局 3 次 +1 個百分點;29% 的局結束時有其他公司殖利率追平或超過電信
+
+2026-10-06 股利事件改成 5 張(加發 3 張、削減 2 張;只挑原本有配息的公司)之後:
+rule vs ev (700 games)        rule 38.9% / ev 61.1%
+rule vs ev vs mc (700 games)  rule 19.4% / ev 33.9% / mc 46.7%
+模擬 400 局:58% 的局結束時有其他公司殖利率追平或超過電信(只有加發時 29%)

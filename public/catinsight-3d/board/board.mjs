@@ -19,9 +19,9 @@ const ZH = (new URLSearchParams(location.search).get('lang') || savedLang || nav
 const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
-import { gameData } from './data.mjs?v=3';
-import { makeSim } from './sim.mjs?v=4';
-const { DIV_STEP, DIV_MAX, DIV_UP_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = gameData(L, fmt);
+import { gameData } from './data.mjs?v=4';
+import { makeSim } from './sim.mjs?v=5';
+const { DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = gameData(L, fmt);
 // 棋盤裡面的兩個特殊格:警察局、IPO 攤位(各一格 cell),離開時擲一顆骰子,沿著 6 格的小路(path)走回外圈;
 // 走過最後一格就踩上外圈的 exit 那格,多的點數繼續往前走。小路上每一格是什麼(命運、道具、利息…)每次有人進來都重新隨機生成。座標是格網的 [x, z]
 // 兩條小路都是「從裡面直直走出來」:警察局在後面(z=4 那排),往左邊的外圈走;IPO 攤位在前面(z=12 那排),往右邊的外圈走
@@ -65,17 +65,27 @@ function applyEvent(e) {
     S.notices.push({ pi: who.i, k: e.squeezeAll, n, back, lost: put - back, squeeze: true }); impact(e.squeezeAll, buyF(n)); }
 }
 // 有些事件要「抽到的當下」才決定內容:迷因股軋空挑場上被放空最多的那檔(沒人放空就隨機挑一檔股票)
-// 調高股利:從有配息的公司(不含 ETF、債券,還沒到上限的)挑 n 檔
+// 股利事件只挑「原本就有配息」的公司(不含 ETF、債券)
+const DIV_PAYERS = KEYS.filter((k) => SECTORS[k].div > 0 && k !== 'etf' && k !== 'bond');
+const divEvent = (e, keys, up) => {
+  const m = { ...ONES }, eq = KEYS.filter((x) => !NON_EQUITY.has(x)); keys.forEach((k) => { m[k] = up ? DIV_UP_PRICE : DIV_CUT_PRICE; }); m.etf = eq.reduce((a, x) => a + m[x], 0) / eq.length;
+  const divTo = Object.fromEntries(keys.map((k) => [k, [S.div[k], up ? Math.min(DIV_MAX, S.div[k] + DIV_STEP) : Math.max(DIV_MIN, S.div[k] - DIV_STEP)]]));   // 抽到當下就記好「從幾 % 到幾 %」
+  return { ...e, m, divKeys: keys, divTo, t: keys.length ? `${e.t}:${keys.map((k) => SECTORS[k].name).join(L(', ', '、'))}` : e.t };
+};
+// 加發:隨機挑 n 家,但不挑目前配最多的(讓後面的追得上)
 function divHike(e) {
-  const top = Math.max(...KEYS.map((k) => S.div[k]));      // 目前配最多的(可能不只一家)不加
-  const pool = KEYS.filter((k) => S.div[k] > 0 && S.div[k] < top - 1e-9 && k !== 'etf' && k !== 'bond').sort(() => Math.random() - 0.5).slice(0, e.divUp);
-  const m = { ...ONES }; pool.forEach((k) => { m[k] = DIV_UP_PRICE; });
-  const eq = KEYS.filter((x) => !NON_EQUITY.has(x)); m.etf = eq.reduce((a, x) => a + m[x], 0) / eq.length;
-  const divTo = Object.fromEntries(pool.map((k) => [k, [S.div[k], Math.min(DIV_MAX, S.div[k] + DIV_STEP)]]));   // 抽到當下就記好「從幾 % 到幾 %」,卡面在生效前後都顯示一樣
-  return { ...e, m, divKeys: pool, divTo, t: `${e.t}:${pool.map((k) => SECTORS[k].name).join(L(', ', '、'))}` };
+  const top = Math.max(...DIV_PAYERS.map((k) => S.div[k]));
+  return divEvent(e, DIV_PAYERS.filter((k) => S.div[k] < top - 1e-9 && S.div[k] < DIV_MAX - 1e-9).sort(() => Math.random() - 0.5).slice(0, e.divUp), true);
+}
+// 削減:'top' = 目前配最多的那家(同分隨機),'any' = 隨機一家;已經是最低 0.5% 的不再砍
+function divCut(e) {
+  let pool = DIV_PAYERS.filter((k) => S.div[k] > DIV_MIN + 1e-9);
+  if (e.divCut === 'top') { const top = Math.max(...pool.map((k) => S.div[k])); pool = pool.filter((k) => S.div[k] >= top - 1e-9); }
+  return divEvent(e, pool.length ? [pool[Math.floor(Math.random() * pool.length)]] : [], false);
 }
 function instantiate(e) {
   if (e.divUp) return divHike(e);
+  if (e.divCut) return divCut(e);
   if (!e.meme) return e;
   const tot = (k) => S.players.reduce((a, p) => a + p.short[k].n, 0);
   const pool = KEYS.filter((k) => !NON_EQUITY.has(k));
@@ -85,7 +95,7 @@ function instantiate(e) {
 }
 const divPct = (x) => `${+(x * 100).toFixed(1)}%`;      // 殖利率顯示:0.5% / 1.5% / 5%
 const cashChip = (e) => (e.cash ? `<span class="mv up">${L(`Everyone +$${fmt(e.cash)}`, `每人 +$${fmt(e.cash)}`)}</span>` : '') +
-  (e.divTo ? e.divKeys.map((k) => `<span class="mv up">${SECTORS[k].code} ${L('yield', '殖利率')} ${divPct(e.divTo[k][0])}→${divPct(e.divTo[k][1])}</span>`).join('') : '');
+  (e.divTo ? e.divKeys.map((k) => `<span class="mv ${e.divTo[k][1] >= e.divTo[k][0] ? 'up' : 'dn'}">${SECTORS[k].code} ${L('yield', '殖利率')} ${divPct(e.divTo[k][0])}→${divPct(e.divTo[k][1])}</span>`).join('') : '');
 // 玩法:走滿選定的回合數(選角畫面可以選 20 / 25 / 30 / 35 / 40),總資產最高的人獲勝
 const ROUND_OPTS = [20, 25, 30, 35, 40];
 const AI_ORDER = ['easy', 'normal', 'hard'];   // 設定卡的 − / + 依這個順序切難度
@@ -106,10 +116,10 @@ const AI = () => AI_LEVELS[S.aiLevel] || AI_LEVELS.normal;
 // 三種難度 = 三種演算法:簡單 = 規則式(rule)、普通 = 期望值(ev)、困難 = 蒙地卡羅模擬(mc)。細節在 sim.mjs
 const AI_ALG = { easy: 'rule', normal: 'ev', hard: 'mc' };
 const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
-const SIM = makeSim({ DIV_STEP, DIV_MAX, DIV_UP_PRICE, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE },
+const SIM = makeSim({ DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE },
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=4', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=5', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -1529,7 +1539,7 @@ function buyPanel(k) {
         <span class="help" tabindex="0" aria-label="${L('How trading works', '買賣說明')}"><i>?</i><span class="tip">${L('Your own trade moves the price, and you trade at the moved price: buying 30 shares pushes it up 12% and you pay that higher price. Selling and shorting push it down the same way.', '自己的買賣會推動股價,而且是用推動後的價格成交:買 30 股推高 12%,你就付漲 12% 之後的價格。賣出和放空同樣是用壓低後的價格成交。')}<br><br>
           <b>${L('Margin', '融資')}</b>${L(': pay 40% and borrow 60%. The ratio is account-wide: all your holdings\' value ÷ all your loans. Only if it falls below 130% are margin positions sold (worst first). Interest is 2% of the loan each lap.', ':自備 4 成、借 6 成。維持率看整個帳戶:全部持股市值 ÷ 全部借款,跌破 130% 才會強迫平倉(先砍最差的那檔);每圈付借款 2% 的利息。')}<br><br>
           <b>${L('Short', '放空')}</b>${L(': sell borrowed shares, buy back later. You win if the price falls. If it rises 30% above your entry you are squeezed: forced to buy back at the high price.', ':先借股票賣掉、之後買回來還,跌了你賺、漲了你賠。比進場價漲超過 30% 會被軋空:強迫用高價買回。')}</span></span></h3>
-      <p>${sec.blurb}${S.div[k] > sec.div + 1e-9 ? ` <b style="color:#1c8a4a">${L(`Dividend raised: now ${divPct(S.div[k])} a lap.`, `股利已調高,現在每圈配息 ${divPct(S.div[k])}。`)}</b>` : ''}${rivalTxt}</p>
+      <p>${sec.blurb}${S.div[k] > sec.div + 1e-9 ? ` <b style="color:#1c8a4a">${L(`Dividend raised: now ${divPct(S.div[k])} a lap.`, `股利已調高,現在每圈配息 ${divPct(S.div[k])}。`)}</b>` : S.div[k] < sec.div - 1e-9 ? ` <b style="color:#c4472f">${L(`Dividend cut: now ${divPct(S.div[k])} a lap.`, `股利被削減,現在每圈配息 ${divPct(S.div[k])}。`)}</b>` : ''}${rivalTxt}</p>
       <div class="kv">
         <div>${L('Price', '股價')}<b>$${Math.round(price)}</b></div>
         <div>${L('Since open', '相對開盤')}<b style="color:${vs >= 0 ? '#1c8a4a' : '#c4472f'}">${vs >= 0 ? '+' : ''}${vs.toFixed(0)}%</b></div>
