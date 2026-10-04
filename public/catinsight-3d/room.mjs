@@ -201,8 +201,9 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 2); return t; };
   const cityLayer = (count, z, hMin, hMax, color, lit, spread) => {
     const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
-    const m = new THREE.MeshStandardMaterial({ color, emissive: 0xffffff, emissiveMap: winTex(lit), emissiveIntensity: 1.1, roughness: 0.9, ...STENCIL });
-    const im = new THREE.InstancedMesh(geo, m, count); im.renderOrder = -8; const M = new THREE.Matrix4();
+    const side = new THREE.MeshStandardMaterial({ color, emissive: 0xffffff, emissiveMap: winTex(lit), emissiveIntensity: 1.1, roughness: 0.9, ...STENCIL });
+    const roof = new THREE.MeshStandardMaterial({ color, roughness: 0.95, ...STENCIL });   // 屋頂 / 底面沒有窗戶
+    const im = new THREE.InstancedMesh(geo, [side, side, roof, roof, side, side], count); im.renderOrder = -8; const M = new THREE.Matrix4();   // BoxGeometry 面的順序:+x -x +y -y +z -z
     // 從左到右一棟接一棟排,中間留縫,排滿就停(多出來的 instance 縮成 0),不會疊在一起
     let x = cx - spread / 2;
     for (let i = 0; i < count; i++) { const w = rnd(0.3, 0.6), h = rnd(hMin, hMax), d = rnd(0.4, 0.7);
