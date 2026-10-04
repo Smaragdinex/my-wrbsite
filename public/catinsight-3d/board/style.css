@@ -30,11 +30,11 @@
   .m small{display:block;font-weight:600;color:#9a8676;font-size:calc(11px * var(--fs))}
   .ctl{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:flex-end;gap:calc(14px + var(--roll) * .1);z-index:6}
   /* 背包鈕:只放背包圖示,右上角一個小數字是手上的道具數 */
-  /* 背包鈕:和擲骰鈕同一套 —— 橘色圓、白邊、下方深橘影,裡面是白色的扁平背包;數量紅點在右上角 */
-  .paw.bag{position:relative;width:calc(var(--btn) * 1.1);height:calc(var(--btn) * 1.1);padding:0;border:5px solid #fff;background:#ff7a59;box-shadow:0 5px 0 #d4553a,0 8px 14px rgba(0,0,0,.18);border-radius:50%;overflow:visible;display:flex;align-items:center;justify-content:center}
+  /* 背包鈕:和擲骰鈕同一套造型,但用藍色 —— 藍色圓、白邊、下方深藍影,裡面是白色的扁平背包;數量紅點在右上角 */
+  .paw.bag{position:relative;width:calc(var(--btn) * 1.1);height:calc(var(--btn) * 1.1);padding:0;border:5px solid #fff;background:#5ab4ff;box-shadow:0 5px 0 #3b8fd6,0 8px 14px rgba(0,0,0,.18);border-radius:50%;overflow:visible;display:flex;align-items:center;justify-content:center}
   .paw.bag svg{width:94%;height:94%;display:block;filter:drop-shadow(0 2px 0 rgba(0,0,0,.14))}
-  .paw.bag:active{transform:translateY(3px);box-shadow:0 2px 0 #d4553a,0 4px 8px rgba(0,0,0,.18)}
-  @media(hover:hover){ .paw.bag:not(:disabled):hover{background:#ff8f6e;filter:none;box-shadow:0 5px 0 #d4553a,0 8px 14px rgba(0,0,0,.18),0 0 0 4px rgba(255,255,255,.35)} }
+  .paw.bag:active{transform:translateY(3px);box-shadow:0 2px 0 #3b8fd6,0 4px 8px rgba(0,0,0,.18)}
+  @media(hover:hover){ .paw.bag:not(:disabled):hover{background:#74c2ff;filter:none;box-shadow:0 5px 0 #3b8fd6,0 8px 14px rgba(0,0,0,.18),0 0 0 4px rgba(255,255,255,.35)} }
   .paw.bag b{position:absolute;left:88%;top:12%;transform:translate(-50%,-50%);width:36%;height:36%;min-width:0;padding:0;border-radius:50%;background:#fd472a;border:2px solid #fff;color:#fff;font-size:calc(var(--btn) * .26);line-height:1;font-weight:900;display:flex;align-items:center;justify-content:center}
   .snd.fs svg{width:60%;height:60%;display:block;margin:auto;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
   /* 背包鈕靠在擲骰鈕左邊(絕對定位,擲骰鈕才會留在正中間),中心和擲骰鈕對齊 */
