@@ -110,14 +110,13 @@
     font-size:11px;letter-spacing:.16em;color:#000;mix-blend-mode:difference;
     opacity:0;transition:opacity .3s;text-transform:uppercase}
   .cursor.big .view{opacity:1}
-  /* 跟著滑鼠跑的小貓:慢半拍追著游標,移動時會走路(上下彈),停下來就坐著;面向移動方向 */
-  .catpal{position:fixed;top:0;left:0;font-size:34px;line-height:1;pointer-events:none;z-index:49;transform:translate(-50%,-50%);
-    filter:drop-shadow(0 4px 4px rgba(0,0,0,.35));transition:opacity .4s;opacity:0}
-  .catpal.on{opacity:1}
-  .catpal i{display:block;font-style:normal}
-  .catpal.walk{animation:catWalk .34s ease-in-out infinite}
-  @keyframes catWalk{0%,100%{transform:translate(-50%,-50%) rotate(-4deg)}50%{transform:translate(-50%,-62%) rotate(4deg)}}
-  @media (hover:none){ .cursor{display:none} .catpal{display:none} html,body{cursor:auto} }
+  /* logo 上的小貓:疊在粉紅圓上,滑鼠在動就走路(上下彈 + 微晃),面向滑鼠那邊 */
+  .face{position:relative}
+  .catemo{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;display:flex;align-items:center;justify-content:center;font-size:30px;line-height:1;pointer-events:none}
+  .catemo i{display:block;font-style:normal;transition:transform .15s}
+  .catemo.walk{animation:catWalk .32s ease-in-out infinite}
+  @keyframes catWalk{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-4px) rotate(4deg)}}
+  @media (hover:none){ .cursor{display:none} html,body{cursor:auto} }
   @media (min-width:701px){ html,body{cursor:none} a{cursor:none} }
 
   /* ===== 作品區:兩欄網格,像電影院兩片銀幕的 V 形傾斜(JS 依捲動與滑鼠更新 --ry/--rx/--s) ===== */
