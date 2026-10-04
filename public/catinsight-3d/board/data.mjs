@@ -121,6 +121,11 @@ const EVENTS = [
     {agri: 0.90,  chip: 0.88, mat: 0.90, trans: 0.92, staples: 0.96, tech: 0.95, def: 1.05, gold: 1.02 }),
   EV(L('Chip shortage', '晶片荒'), L('In 2021 there were not enough chips: chip makers raised prices while car and console makers waited.', '2021 年晶片不夠用:晶片廠漲價,汽車和遊戲機廠只能等。'),
     { chip: 1.20, tech: 0.95, green: 0.88, game: 0.94 }),
+  // 調高股利:抽到時才決定是哪幾檔(divUp = 幾檔),從「有配息、但不是目前配最多」的公司隨機挑,殖利率各 +1 個百分點、股價小漲。
+  // 配最多的那家已經發很多了,不會再加;這樣後面的公司追得上,配息最高的不會永遠是電信,買高股息也要看時機
+  Object.assign(EV(L('Dividend hike', '公司調高股利'), L('Strong cash flow lets the company pay shareholders more. The yield goes up 1 point and the price usually rises too.', '現金流很充裕,公司決定多發股利給股東。殖利率提高 1 個百分點,股價通常也跟著漲。'), {}), { divUp: 1 }),
+  Object.assign(EV(L('Shareholders win a bigger payout', '股東會通過加發股利'), L('Shareholders vote to pay out more of the profits. The yield goes up 1 point.', '股東會投票通過,把更多盈餘發給股東。殖利率提高 1 個百分點。'), {}), { divUp: 1 }),
+  Object.assign(EV(L('Record profits, bigger payouts', '企業獲利創新高'), L('A strong year: several companies raise their dividends by 1 point at once.', '景氣大好的一年:好幾家公司同時把股利調高 1 個百分點。'), {}), { divUp: 3 }),
   // 迷因股軋空:挑「場上被放空最多」的那檔暴漲 50%,所有空單強迫回補(meme:抽到時才決定是哪一檔)
   Object.assign(EV(L('Meme stock squeeze', '迷因股軋空'), L('In 2021 retail traders piled into the most-shorted stock and squeezed the short sellers out. Every short on it is forced to buy back.', '2021 年散戶一起買被放空最多的股票,把放空的人全部軋出場。這檔的空單全部強迫回補。'), {}), { meme: true }),
   EV(L('Antitrust fine', '反壟斷巨額罰款'), L('Regulators fine a platform giant for abusing its position. Big tech carries regulatory risk.', '監管機關對平台巨頭開出巨額罰款。大型科技公司有監管風險。'),
@@ -145,7 +150,7 @@ const EVENTS = [
 //   黑色星期一的「下回合反彈」也算進去;單張卡被放大時不超過 −22% / +25%(加密貨幣 −40% / +40%),原本就更大的不動
 //   大盤 ETF 用平衡後的股票類股平均重算,再平衡一次。迷因股軋空是抽到才決定的,不算
 {
-  const deck = EVENTS.filter((e) => !e.meme), eq = KEYS.filter((k) => !NON_EQUITY.has(k));
+  const deck = EVENTS.filter((e) => !e.meme && !e.divUp), eq = KEYS.filter((k) => !NON_EQUITY.has(k));
   const eff = (e, k) => { let l = Math.log(e.m[k]); if (e.rebound && e.m[k] < 1) l += Math.log(1 + (1 / e.m[k] - 1) * e.rebound); return l; };
   const balance = (k) => {
     const [lo, hi] = k === 'crypto' ? [0.6, 1.4] : [0.78, 1.25];
@@ -175,6 +180,7 @@ const SPECIAL = {
 const SPECIAL_RATE = 0.8;          // 每次抽牌,三張裡有一張是特殊牌的機率
 // 銀行:走到銀行格可以借現金(最多欠 BANK_MAX),每次經過起點付欠款 5% 的利息;欠的錢會從總資產扣掉
 const BANK_MAX = 5000, BANK_RATE = 0.05;
+const DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_UP_PRICE = 1.04;   // 調高股利:每次 +1 個百分點、最多 8%、股價 +4%
 const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
 const DIV_ROUND = 0.25;   // 股利每一回合配一次(每回合配年率的 1/4;股息格另外多配一次全額),不用等繞回起點
 const REMOTE_PRICE = 300, CARD_PRICE = 500, ATK_PRICE = 600, ATK_DROP = 0.82, SPY_PRICE = 400, SPY_ROUNDS = 3, DICE3_PRICE = 350;
@@ -197,5 +203,5 @@ const FATE = [
   { id: 'fine', good: false, t: L('Parking ticket', '違規停車罰單'), w: L('Small, annoying, unavoidable.', '小錢,但很煩。'), fx: L('−$500', '−$500') },
   { id: 'salary2', good: true, t: L('Promotion', '升職加薪'), w: L('Your next salary is doubled.', '下一次經過起點薪水加倍。'), fx: L('Next salary ×2', '下次薪水 ×2') },
 ];
-return { SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE };
+return { DIV_STEP, DIV_MAX, DIV_UP_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE };
 }

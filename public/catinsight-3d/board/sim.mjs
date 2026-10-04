@@ -9,7 +9,7 @@
 //   ev    期望值:擲骰用「前方每格的分數 × 機率」算期望值;買賣用「事件卡的平均漲跌 + 配息 − 風險」算每檔的期望報酬
 //   mc    蒙地卡羅:每個決策(擲幾顆、買賣多少)對每個候選動作模擬後面 D 回合 × N 次,取平均資產領先幅度最高的
 export function makeSim(D, opts = {}) {
-  const { SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE,
+  const { DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_UP_PRICE = 1.04, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE,
     SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE } = D;
   const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));
   const LANE_EXIT = { jail: 28, ipo: 60 };
@@ -35,13 +35,13 @@ export function makeSim(D, opts = {}) {
   const mkPlayer = (i, alg = 'ev', level = 'normal') => ({ i, alg, lv: LEVELS[level] || LEVELS.normal, cash: START_CASH, debt: 0, pos: 0, lane: null, bag: [], salary2: false, plan: null,
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) });
   const newGame = (algs, maxRounds = 20, levels = []) => ({
-    price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])), rolls: 0, maxRounds, turn: 0, after: null, over: false, lanePath: {},
+    price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])), div: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].div])), rolls: 0, maxRounds, turn: 0, after: null, over: false, lanePath: {},
     players: algs.map((a, i) => mkPlayer(i, a, levels[i] || 'normal')),
   });
   const clonePlayer = (p) => ({ ...p, lane: p.lane ? { ...p.lane } : null, bag: p.bag.slice(), plan: p.plan ? { ...p.plan } : null,
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: p.hold[k].n, cost: p.hold[k].cost, loan: p.hold[k].loan }])),
     short: Object.fromEntries(KEYS.map((k) => [k, { n: p.short[k].n, entry: p.short[k].entry }])) });
-  const clone = (st) => ({ ...st, price: { ...st.price }, after: st.after ? { ...st.after } : null, lanePath: { ...st.lanePath }, players: st.players.map(clonePlayer) });
+  const clone = (st) => ({ ...st, price: { ...st.price }, div: { ...st.div }, after: st.after ? { ...st.after } : null, lanePath: { ...st.lanePath }, players: st.players.map(clonePlayer) });
 
   /* ───────── 基本算式 ───────── */
   const shortValue = (st, p, k) => { const h = p.short[k]; return h.n ? Math.max(0, h.n * (2 * h.entry - st.price[k])) : 0; };
@@ -97,6 +97,8 @@ export function makeSim(D, opts = {}) {
 
   /* ───────── 事件、命運 ───────── */
   function instantiate(st, e) {
+    if (e.divUp) { const top = Math.max(...KEYS.map((k) => st.div[k])), pool = KEYS.filter((k) => st.div[k] > 0 && st.div[k] < top - 1e-9 && k !== 'etf' && k !== 'bond').sort(() => rand() - 0.5).slice(0, e.divUp);
+      const m = { ...ONES }; pool.forEach((k) => { m[k] = DIV_UP_PRICE; }); m.etf = EQ.reduce((a, x) => a + m[x], 0) / EQ.length; return { ...e, m, divKeys: pool }; }
     if (!e.meme) return e;
     const tot = (k) => st.players.reduce((a, p) => a + p.short[k].n, 0);
     const k = EQ.some((x) => tot(x) > 0) ? EQ.slice().sort((a, b) => tot(b) - tot(a))[0] : pick(EQ);
@@ -105,6 +107,7 @@ export function makeSim(D, opts = {}) {
   function applyEvent(st, e) {
     KEYS.forEach((k) => { st.price[k] *= e.m[k]; });
     if (e.cash) st.players.forEach((p) => { p.cash += e.cash; });
+    if (e.divKeys) e.divKeys.forEach((k) => { st.div[k] = Math.min(DIV_MAX, st.div[k] + DIV_STEP); });
     if (e.rebound) st.after = { m: Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])) };
     marginCheck(st);
     if (e.squeezeAll) for (const p of st.players) { const h = p.short[e.squeezeAll]; if (!h.n) continue; const n = h.n; p.cash += coverBack(st, e.squeezeAll, h); h.n = 0; h.entry = 0; impact(st, e.squeezeAll, buyF(n)); }
@@ -117,7 +120,7 @@ export function makeSim(D, opts = {}) {
   }
   function payday(st, p, atStart) {
     const salary = atStart ? SALARY * (p.salary2 ? 2 : 1) : 0; if (atStart) p.salary2 = false;
-    const div = atStart ? 0 : KEYS.reduce((a, k) => a + p.hold[k].n * st.price[k] * SECTORS[k].div, 0);
+    const div = atStart ? 0 : KEYS.reduce((a, k) => a + p.hold[k].n * st.price[k] * st.div[k], 0);
     p.cash += salary + div - (atStart ? KEYS.reduce((a, k) => a + p.hold[k].loan * MARGIN_FEE, 0) + p.debt * BANK_RATE : 0);
   }
   function applyFate(st, p, c) {
@@ -217,7 +220,7 @@ export function makeSim(D, opts = {}) {
   function afterMove(st, p) {
     if (p.i === 0) {       // 第一位走完 = 新回合:回合數 +1、配息、反彈、所有價格小幅隨機波動
       st.rolls++;
-      for (const q of st.players) q.cash += Math.round(KEYS.reduce((a, k) => a + q.hold[k].n * st.price[k] * SECTORS[k].div * DIV_ROUND, 0));
+      for (const q of st.players) q.cash += Math.round(KEYS.reduce((a, k) => a + q.hold[k].n * st.price[k] * st.div[k] * DIV_ROUND, 0));
       if (st.after) { const a = st.after; st.after = null; applyEvent(st, a); }
       KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; st.price[k] = Math.max(8, st.price[k] * (1 - v + rand() * v * 2)); });
     }
@@ -240,7 +243,7 @@ export function makeSim(D, opts = {}) {
   /* ───────── 策略:規則式 ───────── */
   function focus(st, p) {
     if (p.plan && (p.hold[p.plan.k].n > 0 || st.rolls - p.plan.since < 6)) return p.plan.k;
-    const score = (k) => { const sec = SECTORS[k], pr = st.price[k]; let v = (sec.open / pr - 1) * 10 + sec.div * 40;
+    const score = (k) => { const sec = SECTORS[k], pr = st.price[k]; let v = (sec.open / pr - 1) * 10 + st.div[k] * 40;
       if (p.hold[k].n) v += 2 + Math.min(3, p.hold[k].n / 10); if (NON_EQUITY.has(k)) v -= 1.5;
       if (others(st, p).some((q) => q.short[k].n > 0)) v += 1; return v + rand(); };
     const k = KEYS.slice().sort((a, b) => score(b) - score(a))[0]; p.plan = { k, since: st.rolls }; return k;
@@ -264,7 +267,7 @@ export function makeSim(D, opts = {}) {
 
   /* ───────── 策略:期望值 ───────── */
   // 每檔資產「一張事件卡平均會讓它漲跌多少」(μ)和波動(σ),從 EVENTS 資料直接算出來
-  const EVSTAT = Object.fromEntries(KEYS.map((k) => { const xs = EVENTS.map((e) => (e.meme ? 0 : e.m[k] - 1)); const mu = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const EVSTAT = Object.fromEntries(KEYS.map((k) => { const xs = EVENTS.map((e) => (e.meme || e.divUp ? 0 : e.m[k] - 1)); const mu = xs.reduce((a, b) => a + b, 0) / xs.length;
     const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mu) ** 2, 0) / xs.length); return [k, { mu, sd }]; }));
   const EVENTS_PER_ROUND = (st) => 1 + 10 / TILES.length * st.players.length;          // 每回合固定一張 + 踩到事件格的
   // 期望值策略的參數(tools/tournament.mjs 掃過,預設是最好的那組;可以用 opts.ev 覆蓋做實驗)
@@ -276,7 +279,7 @@ export function makeSim(D, opts = {}) {
   // 持有一檔到遊戲結束的期望報酬率(扣掉風險)
   function evOf(st, k, p) {
     const left = Math.max(1, st.maxRounds - st.rolls), ev = EVENTS_PER_ROUND(st) * left, s = EVSTAT[k];
-    const drift = s.mu * ev, div = SECTORS[k].div * DIV_ROUND * left, risk = EVP.risk * s.sd * Math.sqrt(ev) / Math.sqrt(Math.max(1, left));
+    const drift = s.mu * ev, div = st.div[k] * DIV_ROUND * left, risk = EVP.risk * s.sd * Math.sqrt(ev) / Math.sqrt(Math.max(1, left));
     const cheap = (SECTORS[k].open / st.price[k] - 1) * EVP.cheap;
     const reb = EVP.rebound && st.after ? st.after.m[k] - 1 : 0;                              // 下回合確定會反彈的部分(黑色星期一)
     return drift + div - risk + cheap + reb;
@@ -294,7 +297,7 @@ export function makeSim(D, opts = {}) {
         // 融資:這檔每回合的股利 > 借款每回合的利息(每 8 回合左右經過起點付 2%),而且買完整個帳戶的維持率還在 safeRatio 以上才借
         const px = fill(st, k, buyF(LOT * want)), cost = px * LOT * want, loan = cost * MARGIN_LOAN;
         let v = 0, l = 0; for (const x of KEYS) { v += p.hold[x].n * st.price[x]; l += p.hold[x].loan; }
-        const ratioAfter = (v + cost) / (l + loan), carry = SECTORS[k].div * DIV_ROUND - MARGIN_FEE / 8;
+        const ratioAfter = (v + cost) / (l + loan), carry = st.div[k] * DIV_ROUND - MARGIN_FEE / 8;
         if (carry > 0 && ratioAfter >= EVP.safeRatio && p.cash >= cost - loan + reserve) return { a: 'margin', q: LOT * want };
       } else if (e > 0.08 && !h.loan && rand() < lv.greedy && p.cash >= fill(st, k, buyF(LOT * want)) * LOT * want * (1 - MARGIN_LOAN) + lv.reserve) return { a: 'margin', q: LOT * want };
       return { a: 'buy', q: LOT * lots };
