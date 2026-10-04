@@ -2447,7 +2447,7 @@ let qrLib = null;
 function lobbyPaint() {
   const box = $('lobbyCard'); if (!box) return;
   syncJoined(NET.on && !NET.started ? NET.guests : []);
-  $('pcOnT').textContent = NET.on ? L('Close room', '關閉房間') : L('Play with phones', '多人連線'); $('pcOnS').textContent = NET.on ? L(`Room ${NET.code} is open`, `房間 ${NET.code} 開著`) : L('Scan a QR code to join', '掃描 QR Code 加入房間');
+  $('pcOnT').textContent = NET.on ? L('Close room', '關閉房間') : L('Multiplayer', '多人連線'); $('pcOnS').textContent = NET.on ? L(`Room ${NET.code} is open`, `房間 ${NET.code} 開著`) : L('Scan a QR code to join', '掃描 QR Code 加入房間');
   $('pcOnline').classList.toggle('on', NET.on);
   $('lobby').classList.toggle('hide', !NET.on);      // 設定卡裡也放一份 QR / 房號(按下多人連線就看得到)
   if (!NET.on) return;
