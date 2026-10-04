@@ -137,17 +137,12 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
     box(0.42, 0.08, z1 - z0, C.shelf, { x: WX - 0.21, y, z: (z0 + z1) / 2, r: 0.02, seg: 1 });
     const under = new THREE.PointLight(0xffc27a, 1.8, 2.4, 2); under.position.set(WX - 0.3, y - 0.12, (z0 + z1) / 2); root.add(under);
   }
-  // 牆上三張畫(都是 canvas 畫的小海報 + 白框):夜景城市、長條圖、太空貓
-  const poster = (z, y, w, h, draw) => { const cv = document.createElement('canvas'); cv.width = 256; cv.height = Math.round(256 * h / w); const g = cv.getContext('2d'); draw(g, cv.width, cv.height);
-    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-    box(0.03, h + 0.08, w + 0.08, 0xfff6f0, { x: WX - 0.015, y, z, r: 0.005, seg: 1, shadow: false });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })); m.rotation.y = -Math.PI / 2; m.position.set(WX - 0.035, y, z); root.add(m); };
+  // 牆上兩張畫(圖片 + 白框):夜景城市、太空貓,並排掛在桌子上方
   const posterImg = (z, y, w, h, url) => { const tex = new THREE.TextureLoader().load(url); tex.colorSpace = THREE.SRGBColorSpace;
     box(0.03, h + 0.08, w + 0.08, 0xfff6f0, { x: WX - 0.015, y, z, r: 0.005, seg: 1, shadow: false });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })); m.rotation.y = -Math.PI / 2; m.position.set(WX - 0.035, y, z); root.add(m); };
   posterImg(-1.7, 3.1, 0.75, 0.5, './poster-city.webp?v=1');   // 夜景城市:用圖
-  poster(-0.95, 3.45, 0.42, 0.52, (g, w, h) => { g.fillStyle = '#fff8ec'; g.fillRect(0, 0, w, h); [[0.2, 0.35, '#f27a5a'], [0.42, 0.55, '#f5b942'], [0.64, 0.78, '#35c2a1']].forEach(([x, bh, c]) => { g.fillStyle = c; g.fillRect(w * x, h * (0.9 - bh * 0.75), w * 0.16, h * bh * 0.75); }); g.fillStyle = '#3b2f2a'; g.fillRect(w * 0.12, h * 0.9, w * 0.76, 4); });
-  posterImg(2.8, 3.25, 0.5, 0.74, './poster-cat.webp?v=2');      // 太空貓:用圖
+  posterImg(-0.95, 3.1, 0.5, 0.74, './poster-cat.webp?v=2');    // 太空貓:用圖,掛在城市右邊
   // 植物:角落一棵龜背芋(白盆 + 幾片大葉子),層板上一盆垂下來的常春藤
   { const p = group(2.42, 0, 1.25); cyl(0.2, 0.17, 0.3, 0xf7f1f2, { y: 0.15, parent: p }); cyl(0.17, 0.17, 0.02, 0x5a4330, { y: 0.3, parent: p });
     const leafMat = new THREE.MeshStandardMaterial({ color: 0x3f9a5a, roughness: 0.8, side: THREE.DoubleSide });
