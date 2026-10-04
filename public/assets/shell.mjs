@@ -16,6 +16,8 @@ const WORKS = [
 
 /* ===== 游標 ===== */
 const cursor = document.getElementById('cursor');
+const catpal = document.getElementById('catpal'); catpal.innerHTML = '<i>🐈</i>';   // 🐈 本身是朝左的,往右走就鏡射
+const cat = { x: -100, y: -100, dir: 1, walk: false, on: false };
 /* hover ABOUT/CONTACT 時圓點縮成 40px */
 document.querySelectorAll('.topnav a').forEach(a => {
   a.addEventListener('mouseenter', () => cursor.classList.add('onnav'));
@@ -583,6 +585,13 @@ function frame(){
   // 游標球
   cur.x += (cur.tx-cur.x)*.18; cur.y += (cur.ty-cur.y)*.18;
   cursor.style.transform = `translate(${cur.x}px,${cur.y}px) translate(-50%,-50%)`;
+  // 小貓:目標是游標左下方一點,慢慢追;在動就播走路動畫並面向前進方向,停了就坐著
+  { const gx = cur.tx - 44, gy = cur.ty + 30, dx = gx - cat.x, dy = gy - cat.y, d = Math.hypot(dx, dy);
+    if (d > 2) { const sp = Math.min(d, 6 + d * 0.06); cat.x += dx / d * sp; cat.y += dy / d * sp; if (Math.abs(dx) > 4) cat.dir = dx < 0 ? 1 : -1; }
+    const moving = d > 6; if (moving !== cat.walk) { cat.walk = moving; catpal.classList.toggle('walk', moving); }
+    if (!cat.on && (cur.tx || cur.ty)) { cat.on = true; catpal.classList.add('on'); }
+    catpal.style.left = cat.x + 'px'; catpal.style.top = cat.y + 'px';
+    catpal.firstElementChild.style.transform = `scaleX(${cat.dir})`; }
   // 貓眼注視
   { const dx=cur.tx-fc.x, dy=cur.ty-fc.y, d=Math.hypot(dx,dy)||1, k=Math.min(1,d/260)*4.6;
     const ox=(dx/d*k).toFixed(1), oy=(dy/d*k).toFixed(1);
