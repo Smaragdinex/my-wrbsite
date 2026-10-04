@@ -143,34 +143,52 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
   cyl(0.09, 0.07, 0.14, 0xf3c9db, { x: WX - 0.21, y: 2.35 + 0.11, z: 1.6 });
   sphere(0.13, 0x3fc9c0, { x: WX - 0.21, y: 2.35 + 0.3, z: 1.6 });
   sphere(0.11, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.15, z: 2.1 }); sphere(0.07, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.3, z: 2.1 });   // 招財貓(簡化)
-  // 霓虹招牌:掛在桌子上方的粉牆上。線條用細圓柱,自發光;旁邊一盞同色點光讓牆面也染色
-  const NEON = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.6, roughness: 0.4, toneMapped: false });
-  const neon = new THREE.Group(); neon.position.set(WX - 0.06, 3.35, -0.55); root.add(neon);   // 牆面在 yz 平面,圖案用 (z, y) 畫
-  const seg = (z0, y0, z1, y1, m, r = 0.025) => { const a = new THREE.Vector3(0, y0, z0), b = new THREE.Vector3(0, y1, z1), d = b.clone().sub(a);
-    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 10), m); c.position.copy(a).add(b).multiplyScalar(0.5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); neon.add(c); return c; };
-  const PINK = NEON(0xff6fb5), CYAN = NEON(0x4de3ff);
-  // K 線:三根蠟燭(兩青一粉)+ 一條往上的折線
-  for (const [z, lo, hi, m] of [[-0.55, -0.22, 0.05, CYAN], [-0.3, -0.1, 0.18, PINK], [-0.05, 0.0, 0.3, CYAN]]) { seg(z, lo, z, hi, m, 0.012); const body = new THREE.Mesh(new THREE.BoxGeometry(0.03, (hi - lo) * 0.55, 0.11), m); body.position.set(0, (lo + hi) / 2, z); neon.add(body); }
-  seg(-0.7, -0.3, -0.42, -0.05, CYAN); seg(-0.42, -0.05, -0.2, -0.14, CYAN); seg(-0.2, -0.14, 0.12, 0.34, CYAN);
-  // 貓掌:一大四小的圓(粉),放在 K 線右邊
-  const pad = (z, y, rr, sz = 1) => { const p = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.022, 10, 28), PINK); p.position.set(0, y, z); p.rotation.y = Math.PI / 2; p.scale.y = sz; neon.add(p); };
-  pad(0.62, 0.02, 0.17, 0.85); pad(0.42, 0.26, 0.07); pad(0.56, 0.34, 0.07); pad(0.7, 0.33, 0.07); pad(0.83, 0.24, 0.07);
-  const neonLight = new THREE.PointLight(0xff8fd0, 2.6, 3.2, 2); neonLight.position.set(-0.35, 0, 0.15); neon.add(neonLight);
-  const neonLight2 = new THREE.PointLight(0x4de3ff, 1.8, 2.6, 2); neonLight2.position.set(-0.35, 0.05, -0.45); neon.add(neonLight2);
+  // 霓虹貓臉燈:掛在桌子上方的粉牆上。頭是一圈環、耳朵 / 鬍鬚是細管、眼睛鼻子嘴是短管,全部暖橘自發光;旁邊一盞同色點光把牆染暖
+  const NEON = new THREE.MeshStandardMaterial({ color: 0xffc98a, emissive: 0xffa85c, emissiveIntensity: 2.0, roughness: 0.4, toneMapped: false });
+  const neon = new THREE.Group(); neon.position.set(WX - 0.07, 3.3, -0.45); root.add(neon);   // 牆面在 yz 平面,圖案用 (z, y) 畫
+  const seg = (z0, y0, z1, y1, r = 0.022) => { const a = new THREE.Vector3(0, y0, z0), b = new THREE.Vector3(0, y1, z1), d = b.clone().sub(a);
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 10), NEON); c.position.copy(a).add(b).multiplyScalar(0.5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); neon.add(c); return c; };
+  const ring = (z, y, rr, r = 0.022, sy = 1) => { const p = new THREE.Mesh(new THREE.TorusGeometry(rr, r, 10, 40), NEON); p.position.set(0, y, z); p.rotation.y = Math.PI / 2; p.scale.y = sy; neon.add(p); return p; };
+  ring(0, 0, 0.5, 0.024, 0.88);                                                      // 頭(略扁的圓)
+  seg(-0.42, 0.22, -0.52, 0.62); seg(-0.52, 0.62, -0.12, 0.44);                      // 左耳
+  seg(0.42, 0.22, 0.52, 0.62); seg(0.52, 0.62, 0.12, 0.44);                          // 右耳
+  ring(-0.18, 0.06, 0.055, 0.018); ring(0.18, 0.06, 0.055, 0.018);                   // 眼睛
+  seg(-0.06, -0.1, 0.06, -0.1, 0.018); seg(-0.06, -0.1, 0, -0.17, 0.018); seg(0.06, -0.1, 0, -0.17, 0.018);   // 鼻子(小三角)
+  seg(0, -0.17, -0.1, -0.26, 0.018); seg(0, -0.17, 0.1, -0.26, 0.018);               // 嘴
+  for (const sx of [-1, 1]) for (const [dy, dz] of [[0.02, 0.0], [-0.06, 0.03], [-0.14, 0.0]]) seg(sx * 0.26, -0.08 + dy, sx * (0.26 + 0.34 - dz * 2), -0.08 + dy * 1.8, 0.016);   // 鬍鬚
+  const neonLight = new THREE.PointLight(0xffb070, 3.2, 3.6, 2); neonLight.position.set(-0.4, 0, 0); neon.add(neonLight);
 }
-// ---------- 窗外:淡紫框牆的開口後面放一張夜景(漸層天空 + 城市剪影 + 亮著的窗戶) ----------
+// ---------- 窗外:有深度的夜景 —— 天空(最遠)+ 三層高樓剪影(遠 / 中 / 近,各自一張 canvas 貼圖),鏡頭轉動時會有視差 ----------
 {
-  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 640; const g = cv.getContext('2d');
-  const sky = g.createLinearGradient(0, 0, 0, 640); sky.addColorStop(0, '#2a1f4e'); sky.addColorStop(0.55, '#5a3f8a'); sky.addColorStop(1, '#ff7fb0'); g.fillStyle = sky; g.fillRect(0, 0, 1024, 640);
-  g.fillStyle = 'rgba(255,255,255,.9)'; for (let i = 0; i < 90; i++) { const x = Math.random() * 1024, y = Math.random() * 300, r = Math.random() * 1.6 + 0.4; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }   // 星星
-  g.fillStyle = '#ffe3a8'; g.beginPath(); g.arc(820, 120, 46, 0, 7); g.fill(); g.fillStyle = '#5a3f8a'; g.beginPath(); g.arc(840, 108, 40, 0, 7); g.fill();   // 月亮
-  let x = 0; const rnd = (a, b) => a + Math.random() * (b - a);
-  while (x < 1024) { const w = rnd(50, 120), h = rnd(140, 360); g.fillStyle = '#231a44'; g.fillRect(x, 640 - h, w, h);
-    g.fillStyle = '#ffd27a'; for (let wy = 640 - h + 14; wy < 626; wy += 24) for (let wx = x + 10; wx < x + w - 12; wx += 20) if (Math.random() < 0.55) g.fillRect(wx, wy, 9, 12);
-    x += w + rnd(6, 18); }
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-  const win = new THREE.Mesh(new THREE.PlaneGeometry(S - 1.4, H - 1.5), new THREE.MeshBasicMaterial({ map: tex }));
-  win.position.set(-T / 2, (H - 1.5) / 2 + 0.5, L.z - 0.55); root.add(win);          // 開口外面一點,鏡頭透過框和層架看到
+  const mk = (w, h, draw) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; draw(cv.getContext('2d'), w, h); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; };
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  // 天空:深紫 → 粉紫地平線,星星和月亮
+  const skyTex = mk(1024, 640, (g, w, h) => { const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#1d1540'); sky.addColorStop(0.6, '#4a3484'); sky.addColorStop(1, '#ff85b5'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255,255,255,.9)'; for (let i = 0; i < 110; i++) { g.beginPath(); g.arc(Math.random() * w, Math.random() * h * 0.5, Math.random() * 1.6 + 0.4, 0, 7); g.fill(); }
+    g.fillStyle = '#ffe3a8'; g.beginPath(); g.arc(760, 120, 46, 0, 7); g.fill(); g.fillStyle = '#3d2a70'; g.beginPath(); g.arc(780, 108, 40, 0, 7); g.fill(); });
+  // 一層高樓剪影:透明背景,樓的顏色越遠越偏紫、越近越深;窗戶亮點
+  const cityTex = (col, winCol, hMin, hMax, density) => mk(1024, 640, (g, w, h) => { let x = -20;
+    while (x < w) { const bw = rnd(40, 110), bh = rnd(hMin, hMax); g.fillStyle = col; g.fillRect(x, h - bh, bw, bh);
+      if (Math.random() < 0.3) g.fillRect(x + bw * 0.3, h - bh - rnd(10, 40), bw * 0.4, 40);   // 屋頂小塔
+      g.fillStyle = winCol; for (let wy = h - bh + 12; wy < h - 10; wy += 22) for (let wx = x + 8; wx < x + bw - 10; wx += 18) if (Math.random() < density) g.fillRect(wx, wy, 8, 11);
+      x += bw + rnd(4, 16); } });
+  const layers = [
+    [skyTex, 1.7, 1.0],
+    [cityTex('#3b2b6e', '#c9a8ff', 120, 300, 0.35), 1.15, 0.0],
+    [cityTex('#2a1d52', '#ffd27a', 160, 380, 0.5), 0.7, 0.0],
+    [cityTex('#1a1238', '#ffe09a', 200, 430, 0.55), 0.3, 0.0],
+  ];
+  // 三層剪影放在開口後面不同距離,鏡頭轉動時近的動得多、遠的動得少 → 視差。寬度維持在牆的範圍內,從側面看不會突出房子外
+  layers.forEach(([tex, depth, isSky], i) => { const W = S - 0.5, Hh = H - 0.9;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: !isSky, depthWrite: !!isSky }));
+    m.position.set(-T / 2, Hh / 2 + 0.2, L.z - 0.3 - depth); m.renderOrder = -10 + i; root.add(m); });
+  // 窗景外面罩一個同色的「窗箱」(左右上下四片 + 底),從側面看就是牆變厚,不會看到剪影露在房子外
+  const WD = 2.2, WZ = L.z - T / 2 - WD / 2;
+  box(T, H, WD, C.wallLSide, { x: -S / 2 + T / 2, y: H / 2, z: WZ, r: 0.02, seg: 1, shadow: false });
+  box(T, H, WD, C.wallLSide, { x: S / 2 - T / 2, y: H / 2, z: WZ, r: 0.02, seg: 1, shadow: false });
+  box(S, T, WD, C.wallLSide, { x: 0, y: H - T / 2, z: WZ, r: 0.02, seg: 1, shadow: false });
+  box(S, 0.55, WD, C.slabSide, { x: 0, y: -0.275, z: WZ, r: 0.02, seg: 1, shadow: false });
+  box(S, T, WD, C.wallLSide, { x: 0, y: T / 2, z: WZ, r: 0.02, seg: 1, shadow: false });
   const cityGlow = new THREE.PointLight(0xb08cff, 1.6, 6, 2); cityGlow.position.set(-T / 2, 2.4, L.z - 0.2); root.add(cityGlow);
 }
 // ---------- 層架上的東西 ----------
