@@ -143,19 +143,11 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
   cyl(0.09, 0.07, 0.14, 0xf3c9db, { x: WX - 0.21, y: 2.35 + 0.11, z: 1.6 });
   sphere(0.13, 0x3fc9c0, { x: WX - 0.21, y: 2.35 + 0.3, z: 1.6 });
   sphere(0.11, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.15, z: 2.1 }); sphere(0.07, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.3, z: 2.1 });   // 招財貓(簡化)
-  // 霓虹貓臉燈:掛在桌子上方的粉牆上。頭是一圈環、耳朵 / 鬍鬚是細管、眼睛鼻子嘴是短管,全部暖橘自發光;旁邊一盞同色點光把牆染暖
-  const NEON = new THREE.MeshStandardMaterial({ color: 0xffc98a, emissive: 0xffa85c, emissiveIntensity: 2.0, roughness: 0.4, toneMapped: false });
-  const neon = new THREE.Group(); neon.position.set(WX - 0.07, 3.3, -0.45); root.add(neon);   // 牆面在 yz 平面,圖案用 (z, y) 畫
-  const seg = (z0, y0, z1, y1, r = 0.022) => { const a = new THREE.Vector3(0, y0, z0), b = new THREE.Vector3(0, y1, z1), d = b.clone().sub(a);
-    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 10), NEON); c.position.copy(a).add(b).multiplyScalar(0.5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); neon.add(c); return c; };
-  const ring = (z, y, rr, r = 0.022, sy = 1) => { const p = new THREE.Mesh(new THREE.TorusGeometry(rr, r, 10, 40), NEON); p.position.set(0, y, z); p.rotation.y = Math.PI / 2; p.scale.y = sy; neon.add(p); return p; };
-  ring(0, 0, 0.5, 0.024, 0.88);                                                      // 頭(略扁的圓)
-  seg(-0.42, 0.22, -0.52, 0.62); seg(-0.52, 0.62, -0.12, 0.44);                      // 左耳
-  seg(0.42, 0.22, 0.52, 0.62); seg(0.52, 0.62, 0.12, 0.44);                          // 右耳
-  ring(-0.18, 0.06, 0.055, 0.018); ring(0.18, 0.06, 0.055, 0.018);                   // 眼睛
-  seg(-0.06, -0.1, 0.06, -0.1, 0.018); seg(-0.06, -0.1, 0, -0.17, 0.018); seg(0.06, -0.1, 0, -0.17, 0.018);   // 鼻子(小三角)
-  seg(0, -0.17, -0.1, -0.26, 0.018); seg(0, -0.17, 0.1, -0.26, 0.018);               // 嘴
-  for (const sx of [-1, 1]) for (const [dy, dz] of [[0.02, 0.0], [-0.06, 0.03], [-0.14, 0.0]]) seg(sx * 0.26, -0.08 + dy, sx * (0.26 + 0.34 - dz * 2), -0.08 + dy * 1.8, 0.016);   // 鬍鬚
+  // 霓虹貓臉燈:用插畫(neon-cat.webp,白底已去掉)貼在粉牆上,不受光、不做 tone mapping 才會像真的在發光;旁邊一盞暖光把牆染暖
+  const neon = new THREE.Group(); neon.position.set(WX - 0.04, 3.3, -0.45); root.add(neon);
+  { const tex = new THREE.TextureLoader().load('./neon-cat.webp?v=2'); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5 * 467 / 640), new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, depthWrite: false }));
+    sign.rotation.y = -Math.PI / 2; neon.add(sign); }
   const neonLight = new THREE.PointLight(0xffb070, 3.2, 3.6, 2); neonLight.position.set(-0.4, 0, 0); neon.add(neonLight);
 }
 // ---------- 窗外:有深度的夜景 —— 天空(最遠)+ 三層高樓剪影(遠 / 中 / 近,各自一張 canvas 貼圖),鏡頭轉動時會有視差 ----------
