@@ -429,3 +429,10 @@ body.watch #panel[data-watch=""]::after{display:none}
   .dcard.lost .dfront{visibility:hidden}
   .dgo{height:calc(44px * var(--fs));font-size:calc(15px * var(--fs))}
 }
+
+/* 有滑鼠的裝置:所有按鈕移上去都變亮一點(.roll 和抽卡的牌有自己的 hover 效果) */
+@media(hover:hover){
+  button:not(:disabled):not(.roll):hover{filter:brightness(1.08) saturate(1.08)}
+  .rb:not(:disabled):hover img{transform:translateY(-3px) scale(1.04)}
+  .stockbtn:not(:disabled):hover,.chips button:hover,.pnav button:hover,.prow button:hover,.lobbybar button:hover{filter:brightness(1.1)}
+}

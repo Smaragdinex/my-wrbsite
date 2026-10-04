@@ -1035,6 +1035,7 @@ let pickWho = 0;                                              // 現在是第幾
 function stageSelect(i, dir = 1) {
   const n = slots.length; i = (i % n + n) % n;
   for (let c = 0; c < n && slots[i].taken; c++) i = (i + dir + n) % n;
+  if (i !== stageSel) sfx('hop');     // 換角色也有聲(按鈕本身的點擊聲另外有)
   stageSel = i; slots[i].hop = 1; paintStage(); if (NET.on && !NET.started) netLobby();
 }
 function paintStage() {
@@ -2467,7 +2468,7 @@ async function start() {
 }
 
 $('rollBtn').onclick = () => turn();
-document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx('click'); });
+document.addEventListener('click', (e) => { if (e.target.closest('button, .dcard, .bubble')) sfx('click'); });   // 任何按鈕 / 牌 / 提示泡泡按下都有聲
 // 滑鼠移到任何按鈕 / 卡片上都有一聲(只有有滑鼠的裝置;同一顆按鈕不重複響)
 if (matchMedia('(hover:hover)').matches) { let lastHover = null;
   document.addEventListener('mouseover', (e) => { const b = e.target.closest('button, .dcard, .rb, .stockbtn, .bubble'); if (!b || b === lastHover) { if (!b) lastHover = null; return; } lastHover = b; if (b.disabled) return; sfx('hover'); });
