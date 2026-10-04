@@ -1482,7 +1482,7 @@ function hud() {
 }
 function staticText() {
   document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
-  document.title = L('Cat Street Stocks', '貓咪股市大富翁');
+  document.documentElement.dataset.title = L('Cat Street Stocks', '貓咪股市大富翁');   // 分頁標題的動畫(index.html)會接在這段文字後面
   $('lblAssets').textContent = L('Total assets', '總資產'); $('lblStocks').textContent = L('Stocks', '股票市值'); 
   { // 擲幾顆骰子的切換:直接畫骰子圖(一顆 = 一個骰子,兩顆 = 兩個骰子),比文字直覺
     // 骰子圖示:實心的骰子(選中時白底橘點、未選時淺底),點數用 5 和 2 / 3,看起來才像骰子而不是一個方框

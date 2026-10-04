@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Cat Street Stocks</title>
+<!-- 分頁標題的小動畫:貓繞著棋盤走(格子往右捲,貓固定在中間)。標題文字由 board.mjs 依語言放在 data-title -->
+<script>
+  (() => { const BLANK = '\u2003', W = 9, C = 4;
+    const tiles = Array.from({ length: W }, (_, i) => (i % 2 === 1 ? ['🏦', '🎁', '🏪', '⭐', '🏠'][(i / 2 | 0) % 5] : BLANK));
+    const draw = () => { document.title = `${document.documentElement.dataset.title || 'Cat Street Stocks'} ${tiles.map((c, i) => (i === C ? '🐈' : c)).join('')}`; };
+    draw(); setInterval(() => { tiles.unshift(tiles.pop()); draw(); }, 240); })();
+</script>
 <link rel="preload" as="image" href="card-event.webp"><link rel="preload" as="image" href="card-fate.webp"><link rel="preload" as="image" href="card-gift.webp">
 <link rel="manifest" href="/catinsight-3d/manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -104,6 +111,6 @@
 <div class="end hide" id="end"></div>
 <div class="note" id="note"></div>
 
-<script type="module" src="./board.mjs?v=191"></script>
+<script type="module" src="./board.mjs?v=192"></script>
 </body>
 </html>
