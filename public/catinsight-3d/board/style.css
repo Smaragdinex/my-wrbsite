@@ -403,9 +403,9 @@ body.embed .topbtns{right:64px}
 .merow{display:flex;align-items:center;gap:8px}
 .merow .ranktag{align-self:center}
 /* 右上的音樂 / 全螢幕鈕放大到和離開鈕一樣(48px),手機也一樣 */
-.topbtns .snd{width:54px;height:54px;font-size:27px;border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.25)}   /* ♪ 和全螢幕鈕都和外面的離開 ✕ 一樣大(電腦、手機都是) */
-.topbtns{top:9px}
-body.embed .topbtns{right:68px}
+.topbtns .snd{width:48px;height:48px;font-size:23px;border:4px solid #fff6e8;box-shadow:0 4px 6px rgba(0,0,0,.3)}   /* ♪ 和全螢幕鈕做成和離開 ✕ 那張圖一樣:48px、奶油色粗白邊、同樣的陰影 */
+.topbtns{top:12px;gap:10px}
+body.embed .topbtns{right:68px}   /* 離開 ✕ 在 right:10px、48px 寬 → 這排從 68px 開始,間距和鈕之間一樣 */
 
 /* 名字欄:前面不放角色名,角色名當預設字 */
 .pname2 b{display:none}
