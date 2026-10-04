@@ -1104,19 +1104,18 @@ function paintStage() {
   // 人數設定:只有第一位在選的時候可以改
   $('pcfg').classList.toggle('hide', pickWho > 0);
   $('pcN').textContent = L('Players', '人數'); $('pcNs').textContent = L('Total players', '遊戲總人數');
-  $('pcD').textContent = L('Computer', '電腦'); document.getElementById('pcDrow').classList.toggle('hide', CFG.n - (NET.on ? 1 + NET.guests.filter((g) => g.online).length : CFG.humans) <= 0);
+  $('pcD').textContent = L('Bot', '電腦'); document.getElementById('pcDrow').classList.toggle('hide', CFG.n - (NET.on ? 1 + NET.guests.filter((g) => g.online).length : CFG.humans) <= 0);
   { const names = { easy: L('Easy', '簡單'), normal: L('Normal', '一般'), hard: L('Hard', '兇狠') };
     document.querySelectorAll('#pcfg [data-d]').forEach((b) => { b.textContent = names[b.dataset.d]; b.classList.toggle('on', b.dataset.d === (CFG.ai || 'normal')); }); }
   if (NET.on) { const h = Math.min(4, 1 + NET.guests.filter((g) => g.online).length); if (CFG.n < h) CFG.n = h; }
   const H = NET.on ? Math.min(4, 1 + NET.guests.filter((g) => g.online).length) : CFG.humans;
-  $('pcAI').textContent = CFG.n - H > 0 ? L(`${CFG.n - H} computer rival${CFG.n - H > 1 ? 's' : ''}`, `電腦對手 ${CFG.n - H} 位`) : L('No computer rivals', '沒有電腦對手');
   document.querySelectorAll('#pcfg [data-n]').forEach((b) => b.classList.toggle('on', +b.dataset.n === CFG.n));
   document.querySelectorAll('#pcfg [data-h]').forEach((b) => b.classList.toggle('on', +b.dataset.h === CFG.humans));
   { const R = ROUND_OPTS.includes(CFG.rounds) ? CFG.rounds : MAX_ROLLS;
     // 回合數的上下選擇;到頭的那一邊按鈕變灰
     $('pcM').textContent = L('Rounds', '回合數'); $('pcRv').textContent = R;
     document.querySelector('#pcR [data-r="-1"]').disabled = R === ROUND_OPTS[0]; document.querySelector('#pcR [data-r="1"]').disabled = R === ROUND_OPTS[ROUND_OPTS.length - 1];
-    $('pcRule').textContent = L(`Highest assets after ${R} rounds wins`, `走滿 ${R} 回合,總資產最高者勝`); }
+    }
 }
 function stageStep(dt) {
   // 被玩家 1 選走的角色整個(連底座)從輪播拿掉:輪播只排剩下的角色,位置用「在剩下名單裡的第幾個」算
