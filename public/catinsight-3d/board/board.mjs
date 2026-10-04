@@ -239,9 +239,11 @@ const AI = () => AI_LEVELS[S.aiLevel] || AI_LEVELS.normal;
 const maxRolls = () => S.maxRounds;
 // 道具:放在背包裡,輪到自己、擲骰前可以用。商店格可以買,禮物格隨機送一個
 const SALE_EVENTS = [0, 1, 2, 4, 6, 7, 8, 11, 12, 14, 16, 17, 20, 21];    // 商店會賣的事件卡(壞消息類的不賣)
-const REMOTE_PRICE = 300, CARD_PRICE = 500, ATK_PRICE = 600, ATK_DROP = 0.82;
+const REMOTE_PRICE = 300, CARD_PRICE = 500, ATK_PRICE = 600, ATK_DROP = 0.82, SPY_PRICE = 400, SPY_ROUNDS = 3;
 function itemInfo(id) {
   if (id === 'remote') return { icon: '🎲', name: L('Remote dice', '遙控骰子'), desc: L('Pick any total from 2 to 12 instead of rolling.', '不用擲骰,自己指定走 2 到 12 步。'), price: REMOTE_PRICE };
+  if (id === 'spy') return { icon: '🔍', name: L('Spy report', '偵查報告'), price: SPY_PRICE,
+    desc: L(`Pick a rival: for ${SPY_ROUNDS} rounds you can open their full holdings and assets.`, `選一位對手,接下來 ${SPY_ROUNDS} 回合可以打開他的完整持股和資產。`) };
   if (id === 'atk') return { icon: '📉', name: L('Bad news card', '利空消息卡'), price: ATK_PRICE,
     desc: L('Pick any asset and knock its price down 18%. Whoever holds it takes the hit.', '指定一種資產,價格立刻下跌 18%。誰持有誰受傷。') };
   const e = EVENTS[+id.slice(2)];
@@ -249,7 +251,10 @@ function itemInfo(id) {
   return { icon: '<img class="cardico" src="card-event.webp" alt="">', name: L('Event card: ', '事件卡:') + e.t, event: e, best,
     desc: L(`Play it to trigger this event. ${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%.`, `使用後立刻發生這個事件,${SECTORS[best].code} +${Math.round((e.m[best] - 1) * 100)}%。`), price: CARD_PRICE };
 }
-const randomItem = () => { const r = Math.random(); return r < 0.4 ? 'remote' : r < 0.6 ? 'atk' : 'ev' + SALE_EVENTS[Math.floor(Math.random() * SALE_EVENTS.length)]; };
+const randomItem = () => { const r = Math.random(); return r < 0.35 ? 'remote' : r < 0.55 ? 'atk' : r < 0.7 ? 'spy' : 'ev' + SALE_EVENTS[Math.floor(Math.random() * SALE_EVENTS.length)]; };
+// 偵查:viewer 用了偵查報告指定 q,而且還在期限內 → 看得到 q 的完整資產
+const spyOn = (viewer, q) => !!(viewer && viewer.spy && viewer.spy.target === q.i && S.rolls < viewer.spy.until);
+const spyLeft = (viewer) => (viewer && viewer.spy ? Math.max(0, viewer.spy.until - S.rolls) : 0);
 
 /* ───────────── 音效與音樂 ─────────────
    全部用 WebAudio 即時合成,不載入任何音檔。瀏覽器規定要使用者先點一下才能出聲,
@@ -438,7 +443,7 @@ let CFG = (() => { try { const c = JSON.parse(localStorage.getItem('css.players'
 const P_FIELDS = ['pos', 'lane', 'cash', 'debt', 'bag', 'hold', 'short', 'diceN', 'lastDividend', 'cashStreak', 'flags', 'missions', 'done'];
 const mkPlayer = (i, human, char) => ({ i, human, char, pos: 0, lane: null, cash: START_CASH, debt: 0, bag: human ? ['remote'] : [],
   hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
-  diceN: 2, lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, missions: [], done: 0 });
+  diceN: 2, lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false }, missions: [], done: 0, spy: null });
 const others = (i = S.hi) => S.players.filter((p) => p.i !== i);
 const nameOf = (p) => p.name || CHARS[p.char].name;      // 真人可以在選角時取名字;沒取就用角色名
 const isYou = (p) => p.human && S.nh === 1;                 // 只有一位真人時才用「你」稱呼;兩位真人一律叫角色名字
@@ -1411,7 +1416,7 @@ function assetRowsHtml(A, mine) {
       KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n; totPL += pl;
         return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${A.short[k].n}${squeezeTag(A.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('') +
       (held.length || KEYS.some((k) => A.short[k].n > 0) ? `<div class="row"><i style="background:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}"></i><span>${L('Unrealized P/L', '未實現損益')}</span><span></span><span style="color:${totPL >= 0 ? '#1c8a4a' : '#c4472f'}">${totPL >= 0 ? '+' : '-'}${fmt(Math.abs(totPL))}</span></div>` : '') +
-      (A.bag.length && !mine ? `<div class="row" style="display:block;color:#c4472f">${L('Cards in hand: ', '手上的卡:')}${A.bag.map((id) => itemInfo(id).icon).join(' ')}</div>` : '');
+      '';   // 對手手上有什麼道具永遠不顯示
 }
 // 任務清單的 HTML(主機自己和手機都用)
 const missHtml = (p) => (p.missions || []).map((m) =>
@@ -1440,9 +1445,10 @@ function hud() {
     $('miss').innerHTML = missHtml(T); }
   { const t = advise(); if ($('tip').textContent !== t) { $('tip').textContent = t; const tb = $('tipbar'); if (tb) { tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); } } }
   // 資產框:一次只顯示一位。預設跟著「現在輪到誰」;點上面的頭像可以改看別人(下一位開始走的時候會自動切回去)
-  { const A = S.players[S.view ?? meP().i] || S.players[S.hi], mine = A.i === S.hi;      // 資產框預設看自己,點對手頭像才看他
-    $('assetTitle').textContent = (isYou(A) ? L('My assets', '我的資產') : L(`${nameOf(A)}'s assets`, `${nameOf(A)}的資產`)) + ' · $' + fmt(assetsOf(A));
-    document.querySelectorAll('#assetTabs .otab').forEach((row) => { const q = S.players[+row.dataset.i]; row.querySelector('button').classList.toggle('on', q.i === A.i); row.querySelector('.pava').classList.toggle('turn', q.i === S.turn);
+  { const T = meP(); if (S.view != null && S.view !== T.i && !spyOn(T, S.players[S.view])) { S.view = null; $('assetBox').classList.add('fold'); }   // 偵查到期:對手的資產框收起
+    const A = S.players[S.view ?? T.i] || S.players[S.hi], mine = A.i === S.hi;      // 資產框預設看自己,用了偵查報告才能看對手
+    $('assetTitle').textContent = (isYou(A) ? L('My assets', '我的資產') : L(`${nameOf(A)}'s assets`, `${nameOf(A)}的資產`)) + ' · $' + fmt(assetsOf(A)) + (A.i !== T.i ? ` · 🔍${spyLeft(T)}` : '');
+    document.querySelectorAll('#assetTabs .otab').forEach((row) => { const q = S.players[+row.dataset.i]; const sb = row.querySelector('button'); sb.classList.toggle('on', q.i === A.i); sb.classList.toggle('hide', !spyOn(T, q)); row.querySelector('.pava').classList.toggle('turn', q.i === S.turn);
       const r = rankOf(q), rk = row.querySelector('.rk'); rk.textContent = ordinal(r); rk.classList.toggle('top', r === 1); });
     $('assetRows').innerHTML = assetRowsHtml(A, mine); }
   const e = S.lastEvent;
@@ -1628,7 +1634,7 @@ function shopStock() {
   const batch = Math.floor(S.rolls / SHOP_EVERY);
   if (S.shop.round !== batch) {
     const cards = SALE_EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 2).map((i) => 'ev' + i);
-    S.shop = { round: batch, stock: ['remote', ...cards, 'atk'], sold: [] };
+    S.shop = { round: batch, stock: ['remote', ...cards, 'atk', 'spy'], sold: [] };
   }
   return S.shop.stock;
 }
@@ -1667,6 +1673,15 @@ function attackPanel() {
       `<p><b>${L('Other assets', '其他資產')}</b></p><div class="chips">${rest.map((k) => chip(k)).join('')}</div>` +
       `<div class="btns"><button class="b-skip" data-k="">${L('Cancel', '取消')}</button></div>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.k || null); });
+  });
+}
+// 偵查報告:選一位對手
+function spyPanel() {
+  return new Promise((res) => {
+    const p = panel(`<h3>🔍 ${L('Spy report', '偵查報告')}</h3><p>${L(`Pick a rival. For ${SPY_ROUNDS} rounds the stock button next to their avatar opens their full assets.`, `選一位對手。接下來 ${SPY_ROUNDS} 回合,他頭像旁的股票鈕可以打開他的完整資產。`)}</p>` +
+      `<div class="chips">${others().map((q) => `<button data-t="${q.i}">${CHARS[q.char].icon} ${nameOf(q)}<small>$${fmt(assetsOf(q))}</small></button>`).join('')}</div>` +
+      `<div class="btns"><button class="b-skip" data-t="">${L('Cancel', '取消')}</button></div>`);
+    p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.t === '' ? null : +b.dataset.t); });
   });
 }
 // 利空消息生效:價格下跌,並說明誰受傷
@@ -1711,6 +1726,11 @@ function bagPanel() {
     } else if (id === 'atk') {
       const k = await attackPanel();
       if (k) { S.bag.splice(S.bag.indexOf('atk'), 1); await badNews(k, S.players[S.hi]); await flushNotices(); checkMissions(); }
+      S.busy = false; showCtl(true);
+    } else if (id === 'spy') {
+      const t = await spyPanel();
+      if (t != null) { S.bag.splice(S.bag.indexOf('spy'), 1); const me = S.players[S.hi]; me.spy = { target: t, until: S.rolls + SPY_ROUNDS }; if (me === meP()) { S.view = t; $('assetBox').classList.remove('fold'); } sfx('item');
+        toast(L(`Spying on ${nameOf(S.players[t])} for ${SPY_ROUNDS} rounds`, `開始偵查${nameOf(S.players[t])},${SPY_ROUNDS} 回合內看得到他的資產`)); hud(); }
       S.busy = false; showCtl(true);
     } else {
       S.bag.splice(S.bag.indexOf(id), 1);
@@ -2394,7 +2414,7 @@ function netHudNow(to) {
     const myA = assetsOf(p), rank = 1 + S.players.filter((q) => assetsOf(q) > myA + 0.5).length;
     netSend({ t: 'hud', me: p.i, turn: S.turn, mine: cur === p, over: !!S.over,
       cash: fmt(p.cash), assets: fmt(myA), stocks: fmt(KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0)), mcount: p.done, bag: p.bag.length,
-      rank: ordinal(rank), top: rank === 1,
+      rank: ordinal(rank), top: rank === 1, spy: p.spy && S.rolls < p.spy.until ? p.spy.target : -1, spyLeft: spyLeft(p),
       tip: S.hi === p.i ? advise() : L(`${nameOf(cur)}'s turn`, `現在是${nameOf(cur)}的回合`),
       players: S.players.map((q) => ({ i: q.i, char: q.char, rank: ordinal(rankOf(q)), top: rankOf(q) === 1, title: (q === p ? L('My assets', '我的資產') : L(`${nameOf(q)}'s assets`, `${nameOf(q)}的資產`)) + ' · $' + fmt(assetsOf(q)), rows: assetRowsHtml(q, q === p) })),
       missTitle: L(`Missions · ${p.done} done`, `任務 · 完成 ${p.done}`), missBadge: (p.missions || []).filter((m) => !m.done).length, miss: missHtml(p),
@@ -2523,9 +2543,9 @@ function clientInit() {
     if ($('tip').textContent !== h.tip) { $('tip').textContent = h.tip; const tb = $('tipbar'); tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); }
     $('missTitle').textContent = h.missTitle; $('missBadge').textContent = h.missBadge; $('miss').innerHTML = h.miss;
     $('evtTitle').textContent = h.evtTitle; if ($('evtBody').innerHTML !== h.evt) { if ($('evtBody').innerHTML && $('evtBox').classList.contains('fold')) $('evtBadge').classList.remove('hide'); $('evtBody').innerHTML = h.evt; }
-    if (aview == null || !h.players.some((p) => p.i === aview)) aview = h.me;
-    const v = h.players.find((p) => p.i === aview); if (v) { $('assetTitle').textContent = v.title; $('assetRows').innerHTML = v.rows; }
-    document.querySelectorAll('#assetTabs .otab').forEach((row) => { const i = +row.dataset.i, p = h.players.find((x) => x.i === i); row.querySelector('button').classList.toggle('on', i === aview); row.querySelector('.pava').classList.toggle('turn', i === h.turn);
+    if (aview == null || !h.players.some((p) => p.i === aview) || (aview !== h.me && aview !== h.spy)) { if (aview != null && aview !== h.me) $('assetBox').classList.add('fold'); aview = h.me; }   // 只能看自己,或偵查中的那位
+    const v = h.players.find((p) => p.i === aview); if (v) { $('assetTitle').textContent = v.title + (aview !== h.me ? ` · 🔍${h.spyLeft}` : ''); $('assetRows').innerHTML = v.rows; }
+    document.querySelectorAll('#assetTabs .otab').forEach((row) => { const i = +row.dataset.i, p = h.players.find((x) => x.i === i); const sb = row.querySelector('button'); sb.classList.toggle('on', i === aview); sb.classList.toggle('hide', i !== h.spy); row.querySelector('.pava').classList.toggle('turn', i === h.turn);
       const rk = row.querySelector('.rk'); if (p) { rk.textContent = p.rank; rk.classList.toggle('top', !!p.top); } });
   }
   // 股票鈕點擊:看誰的資產(本機切換,不用問主機)
