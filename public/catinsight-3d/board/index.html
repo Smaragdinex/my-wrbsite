@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CatInsight">
 <meta name="theme-color" content="#9bdc7a">
 <link rel="apple-touch-icon" href="/catinsight-3d/icon-192.png">
-<link rel="stylesheet" href="style.css?v=44">
+<link rel="stylesheet" href="style.css?v=45">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
@@ -55,7 +55,8 @@
 </div>
 
 <div class="ctl" id="ctl">
-  <button class="paw bag" id="bagBtn" aria-label="backpack">🎒<b id="bagCount">1</b></button>
+  <!-- 背包:插畫圖示;圖上畫好的紅色小圓就是數量位置,遊戲把真正的道具數疊在同一個位置 -->
+  <button class="paw bag" id="bagBtn" aria-label="backpack"><img src="ic-bag.webp?v=1" alt=""><b id="bagCount">1</b></button>
   <div class="rollcol">
     <div class="dsel" id="dsel"><button data-n="1" id="d1"></button><button data-n="2" id="d2" class="on"></button></div>
     <!-- 擲骰鈕:沒有字,只有往上拋的骰子;選一顆就一顆、兩顆就兩顆。休息中才顯示文字 -->
