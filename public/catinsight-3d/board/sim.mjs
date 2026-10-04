@@ -1,3 +1,4 @@
+import { makeEngine } from './engine.mjs?v=1';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
 //   2. Node 可以直接 import,讓三種電腦(規則 / 期望值 / 蒙地卡羅)互打幾百局,算勝率(tournament.mjs)
@@ -46,46 +47,18 @@ export function makeSim(D, opts = {}) {
   const clone = (st) => ({ ...st, price: { ...st.price }, div: { ...st.div }, after: st.after ? { ...st.after } : null, lanePath: { ...st.lanePath }, players: st.players.map(clonePlayer) });
 
   /* ───────── 基本算式 ───────── */
-  const shortValue = (st, p, k) => { const h = p.short[k]; return h.n ? Math.max(0, h.n * (2 * h.entry - st.price[k])) : 0; };
-  const assetsOf = (st, p) => p.cash - p.debt + KEYS.reduce((a, k) => a + p.hold[k].n * st.price[k] - p.hold[k].loan + shortValue(st, p, k), 0);
-  const acctRatio = (st, p) => { let v = 0, l = 0; for (const k of KEYS) { v += p.hold[k].n * st.price[k]; l += p.hold[k].loan; } return l > 0 ? v / l : Infinity; };
-  const ratioOf = (st, h, k) => (h.loan > 0 ? h.n * st.price[k] / h.loan : Infinity);
+  // 買賣、融資、放空、斷頭 / 軋空、資產計算全部用遊戲引擎(engine.mjs),和真正的遊戲是同一份規則
+  const ENG = makeEngine(D, { slippage: opts.slippage });
+  const { shortValue, assetsOf, acctRatio, marginCheck, impact, coverBack } = ENG;
+  const fill = ENG.fill;
   const others = (st, p) => st.players.filter((q) => q !== p);
   const leader = (st, p) => others(st, p).sort((a, b) => assetsOf(st, b) - assetsOf(st, a))[0];
 
-  // 強迫平倉 / 軋空(和 board.mjs 的 marginCheck 一樣)
-  function marginCheck(st) {
-    for (const p of st.players) {
-      for (let guard = 0; guard < KEYS.length && acctRatio(st, p) < MAINT; guard++) {
-        let k = null; for (const x of KEYS) { if (p.hold[x].loan > 0 && (k === null || ratioOf(st, p.hold[x], x) < ratioOf(st, p.hold[k], k))) k = x; }
-        if (k === null) break;
-        const h = p.hold[k], n = h.n; p.cash += Math.max(0, n * fill(st, k, sellF(n)) - h.loan); h.n = 0; h.cost = 0; h.loan = 0;
-        impact(st, k, sellF(n));
-      }
-    }
-    for (const p of st.players) for (const k of KEYS) {
-      const h = p.short[k]; if (!h.n || st.price[k] < h.entry * SQUEEZE) continue;
-      const n = h.n; p.cash += coverBack(st, k, h); h.n = 0; h.entry = 0; impact(st, k, buyF(n));
-    }
-  }
-  function impact(st, k, f) { st.price[k] = Math.max(8, st.price[k] * f); marginCheck(st); }
-
   /* ───────── 交易動作 ───────── */
   // act = { a: 'buy'|'margin'|'sell'|'short'|'cover'|'skip', q }
-  // 成交價 = 推動之後的價格(和 board.mjs 的 fillAt 一樣):買 50 股把價格推高 20%,就用推高後的價格付錢。
-  // opts.slippage === false 可以切回舊規則(先用舊價成交再推價),對照實驗用
-  const SLIP = opts.slippage !== false;
-  const fill = (st, k, f) => (SLIP ? Math.max(8, st.price[k] * f) : st.price[k]);
   // 現金扣掉 reserve 之後,最多買得起幾手(上限 max 手),用真正的成交價算
   const maxLots = (st, p, k, max, reserve) => { for (let l = max; l > 0; l--) if (p.cash - fill(st, k, buyF(LOT * l)) * LOT * l >= reserve) return l; return 0; };
-  const coverBack = (st, k, h) => Math.max(0, h.n * (2 * h.entry - fill(st, k, buyF(h.n))));
-  function doTrade(st, p, k, act) {
-    const h = p.hold[k], sh = p.short[k];
-    if (act.a === 'buy' || act.a === 'margin') { const cost = fill(st, k, buyF(act.q)) * act.q, loan = act.a === 'margin' ? cost * MARGIN_LOAN : 0; p.cash -= cost - loan; h.n += act.q; h.cost += cost; h.loan += loan; impact(st, k, buyF(act.q)); }
-    else if (act.a === 'sell') { const n = h.n; p.cash += fill(st, k, sellF(n)) * n - h.loan; h.n = 0; h.cost = 0; h.loan = 0; impact(st, k, sellF(n)); }
-    else if (act.a === 'short') { const e = fill(st, k, shortF(act.q)); p.cash -= e * act.q; sh.entry = e; sh.n = act.q; impact(st, k, shortF(act.q)); }
-    else if (act.a === 'cover') { const n = sh.n; p.cash += coverBack(st, k, sh); sh.n = 0; sh.entry = 0; impact(st, k, buyF(n)); }
-  }
+  const doTrade = (st, p, k, act) => { ENG.trade(st, p, k, act); };
   // 這一格可以做哪些動作(給蒙地卡羅列候選用)
   function tradeOptions(st, p, k) {
     const h = p.hold[k], sh = p.short[k], price = st.price[k], out = [{ a: 'skip' }];
@@ -117,7 +90,7 @@ export function makeSim(D, opts = {}) {
     if (e.divKeys) e.divKeys.forEach((k) => { st.div[k] = e.divDown ? Math.max(DIV_MIN, st.div[k] - DIV_STEP) : Math.min(DIV_MAX, st.div[k] + DIV_STEP); });
     if (e.rebound) st.after = { m: Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])) };
     marginCheck(st);
-    if (e.squeezeAll) for (const p of st.players) { const h = p.short[e.squeezeAll]; if (!h.n) continue; const n = h.n; p.cash += coverBack(st, e.squeezeAll, h); h.n = 0; h.entry = 0; impact(st, e.squeezeAll, buyF(n)); }
+    if (e.squeezeAll) for (const p of st.players) { if (p.short[e.squeezeAll].n) ENG.squeeze(st, p, e.squeezeAll); }   // 迷因股:這檔的空單全部強迫回補
   }
   const randomEvent = (st) => instantiate(st, pick(EVENTS));
   // 市場事件格:三張牌裡有 SPECIAL_RATE 的機率混一張特殊牌(警察局 / IPO),電腦隨機挑 → 抽到特殊牌的機率 = SPECIAL_RATE / 3
