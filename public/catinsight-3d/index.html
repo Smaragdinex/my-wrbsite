@@ -4,13 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CatInsight Stock — Room</title>
-<!-- 分頁標題的小動畫:行情板一直往左跑、貓固定看盤(和大富翁那頁用不同的) -->
-<script>
-  (() => { const BLANK = '\u2003', W = 9, C = 4;
-    const tape = Array.from({ length: W }, (_, i) => (i % 2 === 1 ? ['📈', '🪙', '📉', '💰', '📊'][(i / 2 | 0) % 5] : BLANK));
-    const draw = () => { document.title = `CatInsight ${tape.map((c, i) => (i === C ? '🐱' : c)).join('')}`; };
-    draw(); setInterval(() => { tape.push(tape.shift()); draw(); }, 260); })();
-</script>
+<!-- 分頁標題:簡單一點,只放 📈 🐱 📉(動的版本太花) -->
+<script>document.title = 'CatInsight 📈 🐱 📉';</script>
 <meta name="description" content="CatInsight Stock — step into the room. AI stock research for US and Taiwan markets." />
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 <link rel="manifest" href="/catinsight-3d/manifest.webmanifest">
