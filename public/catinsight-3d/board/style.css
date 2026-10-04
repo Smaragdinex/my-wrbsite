@@ -52,7 +52,7 @@
   .roll #rollTxt:empty{display:none}
   .roll .dice.rest{display:none}
   .roll:disabled .die{animation:none}
-  @media(hover:hover){ .roll:hover{background:#ff8f6e;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2),0 0 0 4px rgba(255,255,255,.35)} .roll:hover .die{animation-duration:2.2s} }
+  @media(hover:hover){ .roll:hover{background:#ff8f6e;box-shadow:0 6px 0 #d4553a,0 10px 18px rgba(0,0,0,.2),0 0 0 4px rgba(255,255,255,.35)} }   /* 滑鼠移上去只變色,不動骰子的動畫(改速度會讓它跳一下) */
   /* 慢慢往上飄、轉半圈、再落下彈一下;後半段休息 */
 @keyframes dieToss{0%,62%,100%{transform:translateY(0) rotate(0deg)}22%{transform:translateY(calc(var(--roll) * -.17)) rotate(150deg)}40%{transform:translateY(calc(var(--roll) * -.05)) rotate(320deg)}48%{transform:translateY(0) rotate(360deg)}54%{transform:translateY(calc(var(--roll) * -.03)) rotate(360deg)}}
   .roll small{display:block;font-size:calc(var(--roll) * .105);font-weight:700;opacity:.9;letter-spacing:0}
