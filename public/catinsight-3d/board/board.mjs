@@ -312,6 +312,7 @@ const AU = (() => {
   // 每個音效是一小串音:[音高, 幾秒後, 長度, 波形, 音量, 滑到的音高]
   const SEQ = {
     click: [[88, 0, 0.04, 'square', 0.035]],
+    hover: [[100, 0, 0.03, 'sine', 0.06, 104]],     // 滑鼠移到按鈕上:很短的一聲「嘀」
     hop: [[69, 0, 0.1, 'sine', 0.26, 76]], hopAi: [[62, 0, 0.1, 'sine', 0.16, 69]],     // 走格子的音:大聲一點
     buy: [[76, 0, 0.08, 'triangle', 0.16], [81, 0.07, 0.12, 'triangle', 0.16]],
     sell: [[88, 0, 0.06, 'square', 0.05], [93, 0.06, 0.06, 'square', 0.05], [100, 0.12, 0.14, 'square', 0.05]],
@@ -2467,6 +2468,10 @@ async function start() {
 
 $('rollBtn').onclick = () => turn();
 document.addEventListener('click', (e) => { if (e.target.closest('button')) sfx('click'); });
+// 滑鼠移到任何按鈕 / 卡片上都有一聲(只有有滑鼠的裝置;同一顆按鈕不重複響)
+if (matchMedia('(hover:hover)').matches) { let lastHover = null;
+  document.addEventListener('mouseover', (e) => { const b = e.target.closest('button, .dcard, .rb, .stockbtn, .bubble'); if (!b || b === lastHover) { if (!b) lastHover = null; return; } lastHover = b; if (b.disabled) return; sfx('hover'); });
+  document.addEventListener('mouseout', (e) => { const b = e.target.closest('button, .dcard, .rb, .stockbtn, .bubble'); if (b && b === lastHover && !b.contains(e.relatedTarget)) lastHover = null; }); }
 { const b = $('sndBtn'), paint = () => { b.classList.toggle('off', !AU.on); b.setAttribute('aria-label', AU.on ? 'sound on' : 'sound off'); };
   b.onclick = () => { AU.toggle(); paint(); }; paint(); }
 // 全螢幕:嵌在街機裡時請外面的房間頁把整個網站放到全螢幕(iframe 自己不能);單獨開遊戲就直接全螢幕。
