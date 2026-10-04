@@ -532,12 +532,24 @@ function box(w, h, d, color, x, y, z, r = 0.06, parent = scene) {
   box((N - 2) * STEP - 0.12, 0.16, (N - 2) * STEP - 0.12, 0x9bdc7a, 0, 0.10, 0, 0.05);
 }
 // 小鎮裝飾:樹和房子(純幾何)
-function tree(x, z, s = 1) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g);
+// 樹冠另外掛在一個以樹根為軸心的群組裡,每一幀依風(SWAY)微微搖晃
+const SWAY = [];
+function tree(x, z, s = 1, parent = scene) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); parent.add(g);
   const t = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.45, 8), mat(0x9a6b4a)); t.position.y = 0.22; t.castShadow = true; g.add(t);
+  const crown = new THREE.Group(); g.add(crown);
   [[0.48, 0.62, 0.7], [0.38, 0.52, 1.05], [0.26, 0.42, 1.36]].forEach(([r, h, y], i) => {
-    const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), mat(i % 2 ? 0x5fb87a : 0x4fa86c)); c.position.y = y; c.castShadow = true; g.add(c);
+    const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), mat(i % 2 ? 0x5fb87a : 0x4fa86c)); c.position.y = y; c.castShadow = true; crown.add(c);
   });
+  SWAY.push({ crown, phase: x * 0.7 + z * 1.3, amp: 0.045 + Math.random() * 0.025, speed: 0.9 + Math.random() * 0.4 });
+  return g;
+}
+// 風:所有樹冠一起慢慢搖,各自錯開相位;偶爾來一陣比較大的風
+function windStep() {
+  const gust = 1 + Math.max(0, Math.sin(T * 0.23)) * 0.9;
+  for (const w of SWAY) { const a = w.amp * gust, t = T * w.speed + w.phase;
+    w.crown.rotation.z = Math.sin(t) * a + Math.sin(t * 2.3 + 1) * a * 0.35;
+    w.crown.rotation.x = Math.cos(t * 0.8 + 2) * a * 0.6; }
 }
 function house(x, z, wall, roof, ry = 0) {
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
@@ -922,9 +934,7 @@ const stage = new THREE.Group(); stage.position.copy(STAGE); stage.visible = fal
   const petals = new THREE.InstancedMesh(new THREE.SphereGeometry(0.045, 8, 6), noLine(mat(0xffffff)), pts.length), leaves = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 8, 6), noLine(mat(0x86c96f)), pts.length), m4 = new THREE.Matrix4();
   pts.forEach(([x, z], i) => { petals.setMatrixAt(i, m4.makeTranslation(x, 0.07, z)); petals.setColorAt(i, cols[i % cols.length]); leaves.setMatrixAt(i, m4.makeScale(1, 0.5, 1).setPosition(x + 0.05, 0.05, z + 0.03)); });
   petals.instanceColor.needsUpdate = true; stage.add(petals, leaves);
-  [[-2.6, -1.4, 1.1], [-1.2, -2.8, 0.9], [2.4, -2.9, 1.0], [-3.2, 0.6, 0.8]].forEach(([x, z, sc]) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(sc); stage.add(g);
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.45, 8), mat(0x9a6b4a)); t.position.y = 0.22; t.castShadow = true; g.add(t);
-    [[0.48, 0.62, 0.7], [0.38, 0.52, 1.05], [0.26, 0.42, 1.36]].forEach(([r, h, y], i) => { const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), mat(i % 2 ? 0x5fb87a : 0x4fa86c)); c.position.y = y; c.castShadow = true; g.add(c); }); }); }
+  [[-2.6, -1.4, 1.1], [-1.2, -2.8, 0.9], [2.4, -2.9, 1.0], [-3.2, 0.6, 0.8]].forEach(([x, z, sc]) => tree(x, z, sc, stage)); }
 const FRONT = Math.PI / 4;          // 從舞台中心看向鏡頭的方向(世界座標的 +x+z)
 const slots = STAGE_KEYS.map((key, i) => {
   const top = 0.14;
@@ -1226,6 +1236,7 @@ const ease = (k) => 1 - Math.pow(1 - k, 3);
 let skipRender = false;
 function step(dt) {
   T += dt;
+  windStep();
   for (let i = tweens.length - 1; i >= 0; i--) {
     const a = tweens[i], k = Math.min(1, (T - a.t0) / a.dur);
     a.fn(k);
