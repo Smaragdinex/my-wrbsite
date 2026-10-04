@@ -137,13 +137,39 @@ box(SHELF_X1 - SHELF_X0, 0.12, 0.7, C.shelf, { x: (SHELF_X0 + SHELF_X1) / 2, y: 
     box(0.42, 0.08, z1 - z0, C.shelf, { x: WX - 0.21, y, z: (z0 + z1) / 2, r: 0.02, seg: 1 });
     const under = new THREE.PointLight(0xffc27a, 1.8, 2.4, 2); under.position.set(WX - 0.3, y - 0.12, (z0 + z1) / 2); root.add(under);
   }
-  // 層板上的小東西:幾本書、一個小盆栽、一台玩具貓
+  // 牆上三張畫(都是 canvas 畫的小海報 + 白框):夜景城市、長條圖、太空貓
+  const poster = (z, y, w, h, draw) => { const cv = document.createElement('canvas'); cv.width = 256; cv.height = Math.round(256 * h / w); const g = cv.getContext('2d'); draw(g, cv.width, cv.height);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    box(0.03, h + 0.08, w + 0.08, 0xfff6f0, { x: WX - 0.015, y, z, r: 0.005, seg: 1, shadow: false });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })); m.rotation.y = -Math.PI / 2; m.position.set(WX - 0.035, y, z); root.add(m); };
+  poster(-1.75, 3.05, 0.55, 0.72, (g, w, h) => { const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#2a1f4e'); sky.addColorStop(1, '#ff8fb0'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#fff1c4'; g.beginPath(); g.arc(w * 0.72, h * 0.22, 16, 0, 7); g.fill(); g.fillStyle = '#1d1540'; let x = 0; while (x < w) { const bw = 20 + Math.random() * 30, bh = h * (0.25 + Math.random() * 0.4); g.fillRect(x, h - bh, bw, bh); x += bw + 4; } });
+  poster(-0.95, 3.45, 0.42, 0.52, (g, w, h) => { g.fillStyle = '#fff8ec'; g.fillRect(0, 0, w, h); [[0.2, 0.35, '#f27a5a'], [0.42, 0.55, '#f5b942'], [0.64, 0.78, '#35c2a1']].forEach(([x, bh, c]) => { g.fillStyle = c; g.fillRect(w * x, h * (0.9 - bh * 0.75), w * 0.16, h * bh * 0.75); }); g.fillStyle = '#3b2f2a'; g.fillRect(w * 0.12, h * 0.9, w * 0.76, 4); });
+  poster(2.8, 3.25, 0.5, 0.66, (g, w, h) => { const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#1b1442'); sky.addColorStop(1, '#5a3f8a'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#fff'; for (let i = 0; i < 40; i++) { g.beginPath(); g.arc(Math.random() * w, Math.random() * h, 1.2, 0, 7); g.fill(); }
+    g.strokeStyle = '#cfe6ff'; g.lineWidth = 6; g.beginPath(); g.arc(w / 2, h * 0.52, w * 0.3, 0, 7); g.stroke();                                   // 頭盔
+    g.fillStyle = '#f7b06a'; g.beginPath(); g.arc(w / 2, h * 0.55, w * 0.2, 0, 7); g.fill();                                                      // 貓臉
+    g.beginPath(); g.moveTo(w * 0.34, h * 0.45); g.lineTo(w * 0.38, h * 0.3); g.lineTo(w * 0.46, h * 0.42); g.fill(); g.beginPath(); g.moveTo(w * 0.66, h * 0.45); g.lineTo(w * 0.62, h * 0.3); g.lineTo(w * 0.54, h * 0.42); g.fill();
+    g.fillStyle = '#3b2329'; g.beginPath(); g.arc(w * 0.44, h * 0.54, 3, 0, 7); g.arc(w * 0.56, h * 0.54, 3, 0, 7); g.fill(); });
+  // 植物:角落一棵龜背芋(白盆 + 幾片大葉子),層板上一盆垂下來的常春藤
+  { const p = group(2.42, 0, 1.25); cyl(0.2, 0.17, 0.3, 0xf7f1f2, { y: 0.15, parent: p }); cyl(0.17, 0.17, 0.02, 0x5a4330, { y: 0.3, parent: p });
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x3f9a5a, roughness: 0.8, side: THREE.DoubleSide });
+    [[0.3, 0.75, -0.2, 0.9, 0.5], [-0.25, 0.9, 0.15, 1.3, -0.4], [0.05, 1.1, 0.3, 0.3, 0.9], [-0.1, 0.65, -0.3, 2.4, 0.3], [0.25, 1.0, 0.05, 1.9, -0.7]].forEach(([x, y, z, ry, rz]) => {
+      const stem = cyl(0.012, 0.012, Math.hypot(x, y - 0.3, z), 0x2f7a46, { parent: p }); stem.position.set(x / 2, (y + 0.3) / 2, z / 2); stem.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(x, y - 0.3, z).normalize());
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8), leafMat); leaf.scale.set(1, 0.08, 0.7); leaf.position.set(x, y, z); leaf.rotation.set(0, ry, rz); leaf.castShadow = true; p.add(leaf); }); }
+  { const iv = group(WX - 0.2, 2.35 + 0.04, 2.36); cyl(0.09, 0.07, 0.13, 0xf7a24a, { y: 0.065, parent: iv }); sphere(0.1, 0x3f9a5a, { y: 0.14, parent: iv });
+    [[-0.08, 0.55], [0.02, 0.75], [0.1, 0.45]].forEach(([x, len], k) => {                       // 三條藤蔓從盆邊垂到層板前面,葉子是壓扁的小球
+      const vine = cyl(0.006, 0.006, len, 0x2f7a46, { x, y: 0.12 - len / 2, z: 0.16, parent: iv });
+      for (let i = 0; i < Math.round(len / 0.09); i++) { const leaf = sphere(0.04, i % 2 ? 0x3f9a5a : 0x5fb87a, { x: x + Math.sin(i * 1.7 + k) * 0.035, y: 0.1 - i * 0.09, z: 0.16 + Math.cos(i * 1.3) * 0.03, parent: iv }); leaf.scale.set(1, 0.55, 1); }
+    }); }
+  // 層板上的小東西:幾本書、一個小盆栽、一台玩具貓、掌上遊戲機
   box(0.22, 0.34, 0.06, 0x8b7cff, { x: WX - 0.21, y: 2.35 + 0.21, z: 0.8, r: 0.01, seg: 1 });
   box(0.22, 0.30, 0.06, 0xf27a5a, { x: WX - 0.21, y: 2.35 + 0.19, z: 0.88, r: 0.01, seg: 1 });
   box(0.22, 0.38, 0.06, 0x46bfcf, { x: WX - 0.21, y: 2.35 + 0.23, z: 0.96, r: 0.01, seg: 1 });
   cyl(0.09, 0.07, 0.14, 0xf3c9db, { x: WX - 0.21, y: 2.35 + 0.11, z: 1.6 });
   sphere(0.13, 0x3fc9c0, { x: WX - 0.21, y: 2.35 + 0.3, z: 1.6 });
   sphere(0.11, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.15, z: 2.1 }); sphere(0.07, 0xf7f1f2, { x: WX - 0.21, y: 3.05 + 0.3, z: 2.1 });   // 招財貓(簡化)
+  box(0.16, 0.26, 0.06, 0xf0a7c8, { x: WX - 0.21, y: 3.05 + 0.17, z: 1.35, r: 0.015, seg: 1 }); box(0.1, 0.09, 0.02, 0x6fd9c2, { x: WX - 0.21, y: 3.05 + 0.22, z: 1.33, r: 0.004, seg: 1 });   // 掌上遊戲機
 }
 // ---------- 窗外:2.5D 夜景 —— 天空漸層 + 月亮星星、遠 / 近兩層用 BoxGeometry 做的高樓(InstancedMesh,窗戶用 emissive 貼圖),
 //            城市底部一層柔和的橘紫光、開口前一片淡玻璃、再從窗戶打一盞藍紫 RectAreaLight 讓房間吃到夜景的冷光。全部只畫在開口範圍內(stencil)----------
@@ -420,14 +446,23 @@ let screenMesh;
   box(0.75, 0.05, 0.28, 0xf6eef8, { x: 0, y: 1.44, z: 0.28, r: 0.02, parent: d });
   box(0.16, 0.06, 0.22, 0xf6eef8, { x: 0.65, y: 1.44, z: 0.3, r: 0.04, parent: d });
   // 桌燈(暖橘):桌面左後角,圓底座 + 斜桿 + 燈罩,燈泡自發光,底下一盞暖色點光照亮桌面和牆
+  // 造型:圓底座 → 直桿 → 關節球 → 斜桿 → 橘色半球燈罩(開口朝下偏桌面),罩裡一片發光圓盤
   const lamp = group(-1.15, 1.41, -0.42, d);
-  cyl(0.14, 0.16, 0.04, 0xf3c9db, { y: 0.02, parent: lamp });
-  const arm = cyl(0.025, 0.025, 0.75, 0xe9d6e8, { y: 0.38, parent: lamp }); arm.rotation.z = -0.35; arm.position.x = 0.12;
-  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.26, 24, 1, true), new THREE.MeshStandardMaterial({ color: 0xf7a24a, roughness: 0.6, side: THREE.DoubleSide }));
-  shade.position.set(0.3, 0.76, 0); shade.rotation.z = -0.35; shade.castShadow = true; lamp.add(shade);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0xffb050, emissiveIntensity: 2.2 }));
-  bulb.position.set(0.32, 0.7, 0); lamp.add(bulb);
-  const lampLight = new THREE.PointLight(0xffb36b, 7, 5.5, 2); lampLight.position.set(0.32, 0.66, 0); lamp.add(lampLight);
+  const LAMP = 0xf2962e, LAMP_DARK = 0xd97d1e;
+  cyl(0.13, 0.15, 0.04, LAMP_DARK, { y: 0.02, parent: lamp });
+  cyl(0.022, 0.022, 0.5, LAMP, { y: 0.27, parent: lamp });
+  sphere(0.04, LAMP_DARK, { y: 0.52, parent: lamp });
+  const arm2 = cyl(0.02, 0.02, 0.42, LAMP, { parent: lamp }); arm2.position.set(0.17, 0.7, 0); arm2.rotation.z = -0.95;
+  const shade = new THREE.Mesh(new THREE.SphereGeometry(0.17, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: LAMP, roughness: 0.55, side: THREE.DoubleSide }));
+  shade.position.set(0.36, 0.86, 0); shade.rotation.z = -0.5; shade.castShadow = true; lamp.add(shade);
+  const bulb = new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), new THREE.MeshStandardMaterial({ color: 0xfff1cc, emissive: 0xffc466, emissiveIntensity: 1.8, side: THREE.DoubleSide }));
+  bulb.position.set(0.36, 0.855, 0); bulb.rotation.set(Math.PI / 2, 0, -0.5); lamp.add(bulb);
+  const lampLight = new THREE.PointLight(0xffb36b, 7, 5.5, 2); lampLight.position.set(0.4, 0.76, 0); lamp.add(lampLight);
+  // 桌上小物:筆筒(幾支筆)、貓咪馬克杯
+  cyl(0.06, 0.055, 0.14, 0xf7f1f2, { x: -0.75, y: 1.41 + 0.07, z: 0.05, parent: d });
+  [[-0.77, 0x8b7cff], [-0.73, 0xf27a5a], [-0.75, 0x46bfcf]].forEach(([x, c], i) => cyl(0.008, 0.008, 0.22, c, { x, y: 1.41 + 0.2, z: 0.03 + i * 0.02, parent: d }));
+  { const mug = group(-0.45, 1.41, 0.12, d); cyl(0.065, 0.06, 0.12, 0xf7a24a, { y: 0.06, parent: mug }); const h = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.012, 8, 16, Math.PI), mat(0xf7a24a)); h.position.set(0.07, 0.06, 0); h.rotation.z = -Math.PI / 2; mug.add(h);
+    for (const sx of [-1, 1]) { const ear = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.04, 4), mat(0xf7a24a)); ear.position.set(sx * 0.035, 0.135, 0); mug.add(ear); } }
   // 螢幕光(青藍):從螢幕前面照向鍵盤和桌面
   const scrLight = new THREE.PointLight(0x7fd8ff, 3.5, 3.6, 2); scrLight.position.set(0, 2.2, 0.35); d.add(scrLight);
 }
