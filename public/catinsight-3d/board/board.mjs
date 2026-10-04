@@ -1592,7 +1592,7 @@ function showAchv(p, title) {
   if (p !== meP()) { toast(L(`${nameOf(p)}: ${title} +$${REWARD}`, `${nameOf(p)}達成「${title}」+$${REWARD}`)); return; }
   achvPop(title);
 }
-function achvPop(title) { const el = $('achv'); el.innerHTML = `<b>🏆 ${L('Achievement unlocked', '成就達成')}</b><span>${title} · +$${REWARD}</span>`; el.classList.add('on'); clearTimeout(achvTimer); achvTimer = setTimeout(() => el.classList.remove('on'), 2600); }
+function achvPop(title) { const el = $('achv'); el.innerHTML = `<b><img class="emo" src="ico-trophy.webp?v=1" alt=""> ${L('Achievement unlocked', '成就達成')}</b><span>${title} · +$${REWARD}</span>`; el.classList.add('on'); clearTimeout(achvTimer); achvTimer = setTimeout(() => el.classList.remove('on'), 2600); }
 function toast(msg) { netSend({ t: 'toast', msg }); const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
 function showCtl(on) { $('ctl').classList.toggle('hide', !on); $('tipbar').classList.toggle('hide', !on); $('stepCtl').classList.add('hide'); }   // 提示泡泡跟擲骰鈕一起出現 / 隱藏,抽卡時才不會擋到
 function panel(html) { const p = $('panel'); p.innerHTML = html; p.classList.remove('hide'); p.classList.toggle('over', !!(S && S.over)); return p; }
@@ -2347,7 +2347,7 @@ async function fetchGlobal() {
 }
 function globalBox() {
   const st = lbState, when = (t) => new Date(t * 1000).toISOString().slice(5, 10);
-  const head = `<h4>🌍 ${L('Global leaderboard', '全球排行榜')}</h4>`;
+  const head = `<h4><img class="emo" src="ico-globe.webp?v=1" alt=""> ${L('Global leaderboard', '全球排行榜')}</h4>`;
   if (st.status === 'sending' || ((st.status === 'idle' || st.status === 'off') && !st.top)) return `${head}<p>${L('Loading…', '載入中…')}</p>`;
   if (st.status === 'error' && !st.top) return `${head}<p>${L('Could not reach the leaderboard. Check your connection.', '連不上排行榜,請檢查網路。')}</p>`;
   const rows = (st.top || []).map((r, i) => `<div class="rrow ${st.rank === i + 1 && st.mine && r.assets === st.mine.assets && r.name === st.mine.name ? 'me' : ''}">
@@ -2359,7 +2359,7 @@ function globalBox() {
 }
 // 排行榜面板:本機 / 全球 兩個分頁
 function leaderboardPanel(myRec) {
-  const p = panel(`<div class="lbtabs"><button class="on" data-t="local">🏆 ${L('This device', '本機')}</button><button data-t="global">🌍 ${L('Global', '全球')}</button></div>
+  const p = panel(`<div class="lbtabs"><button class="on" data-t="local"><img class="emo" src="ico-trophy.webp?v=1" alt=""> ${L('This device', '本機')}</button><button data-t="global"><img class="emo" src="ico-globe.webp?v=1" alt=""> ${L('Global', '全球')}</button></div>
     <div id="lbLocal" class="lblist">${recordsBox(myRec)}</div><div id="lbGlobal" class="rbox lblist hide">${globalBox()}</div>
     <div class="btns"><button class="b-skip" id="recClose">${L('Close', '關閉')}</button></div>`);
   p.querySelector('#recClose').onclick = closePanel;
@@ -2377,7 +2377,7 @@ function recordsBox(cur) {
       <span class="rk">${rankMark(i)}</span><span class="ic mini" data-char="${r.char}"></span>
       <div class="c"><b>${r.name ? `${r.name} · ` : ''}$${fmt(r.assets)}</b><small>${r.rounds}${L(' rd', ' 回合')} · ${r.n}${L('p', ' 人')} · ${L('#', '第 ')}${r.rank}${L('', ' 名')} · ${r.date.slice(5)}</small></div>
       <span class="st">${'★'.repeat(r.stars)}<i>${'★'.repeat(3 - r.stars)}</i></span></div>`).join('');
-  return `<div class="rbox"><h4>🏆 ${L('Leaderboard', '排行榜')}</h4>
+  return `<div class="rbox"><h4><img class="emo" src="ico-trophy.webp?v=1" alt=""> ${L('Leaderboard', '排行榜')}</h4>
     <p>${L(`${best.games} game${best.games > 1 ? 's' : ''} · ${best.wins} win${best.wins === 1 ? '' : 's'} · ${best.stars3} three-star`, `已記錄 ${best.games} 局 · 第一名 ${best.wins} 次 · 三顆星 ${best.stars3} 次`)}</p>
     ${rows || `<p>${L('No games finished yet.', '還沒有完成過的對局。')}</p>`}
     <small class="note2">${L('Top 20 by total assets, saved in this browser.', '依總資產排前 20 名,只存在這個瀏覽器裡。')}</small></div>`;
@@ -2394,13 +2394,13 @@ function finish() {
   lbState = { status: 'idle', rank: null, top: null, mine: { name: rec.name || CHARS[rec.char].name, assets: rec.assets } }; submitGlobal(rec);      // 同時上傳到全球排行榜(背景進行)
   const newBest = !prev.best || rec.assets > prev.best.assets;
   // 成績卡上一個「看排行榜」按鈕,點了才疊一塊 1~10 名的排行榜(內容和右側版一樣)
-  const recLine = `<p style="font-size:calc(12.5px * var(--fs))">${newBest ? `🏆 <b>${L('New personal best!', '新的個人最佳紀錄!')}</b> ` : ''}<button class="lnk" id="recBtn">🏆 ${L('Leaderboard', '看排行榜')}</button></p>`;
+  const recLine = `<p style="font-size:calc(12.5px * var(--fs))">${newBest ? `<img class="emo" src="ico-trophy.webp?v=1" alt=""> <b>${L('New personal best!', '新的個人最佳紀錄!')}</b> ` : ''}<button class="lnk" id="recBtn"><img class="emo" src="ico-trophy.webp?v=1" alt=""> ${L('Leaderboard', '看排行榜')}</button></p>`;
   // 結算畫面:標題(你獲勝 / ○○獲勝)+ 自己這局的總資產 + 可捲動的全球排行榜 + 再玩一次 / 下載 App / 退出
   const credit = `<p style="margin:10px 0 0;font-size:calc(10.5px * var(--fs));color:#b5a593">${L('Fictional companies · for learning, not investment advice · Music & SFX: Mixkit', '公司皆為虛構 · 學習用途,非投資建議 · 音樂 / 音效:Mixkit')} · v${VER}</p>`;
   const meA = assetsOf(me0), youWon = rank[0] === me0;
   $('end').innerHTML = `<div class="card endcard">
-    <h2>${youWon ? `🏆 ${L('You win!', '你獲勝!')}` : `🏆 ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}`}</h2>
-    <p>${L(`You: #${myRank} · $${fmt(meA)} · ${S.rolls} rounds`, `你:第 ${myRank} 名 · $${fmt(meA)} · ${S.rolls} 回合`)}${newBest ? ` · 🏆 <b>${L('New best!', '新紀錄!')}</b>` : ''}</p>
+    <h2>${youWon ? `<img class="emo" src="ico-trophy.webp?v=1" alt=""> ${L('You win!', '你獲勝!')}` : `<img class="emo" src="ico-trophy.webp?v=1" alt=""> ${L(`${nameOf(rank[0])} wins`, `${nameOf(rank[0])}獲勝`)}`}</h2>
+    <p>${L(`You: #${myRank} · $${fmt(meA)} · ${S.rolls} rounds`, `你:第 ${myRank} 名 · $${fmt(meA)} · ${S.rolls} 回合`)}${newBest ? ` · <img class="emo" src="ico-trophy.webp?v=1" alt=""> <b>${L('New best!', '新紀錄!')}</b>` : ''}</p>
     <div id="lbGlobal" class="rbox lblist endlb">${globalBox()}</div>
     <div class="btns"><button class="b-skip" id="again">${L('Play again', '再玩一次')}</button><button class="b-ok" id="app">${L('Get the app', '下載 App')}</button><button class="b-sell" id="quit">${L('Exit', '退出')}</button></div>${credit}</div>`;
   $('end').classList.remove('hide'); sfx(won ? 'win' : 'lose'); remoteBanner(); paintPortraits($('end'));

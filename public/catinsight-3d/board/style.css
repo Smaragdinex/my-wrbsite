@@ -498,3 +498,7 @@ body.watch #panel[data-watch=""]::after{display:none}
 .achv.on{opacity:1;transform:translate(-50%,0)}
 .achv b{font-size:calc(15px * var(--fs));font-weight:900;color:#b57c00}
 .achv span{font-size:calc(13px * var(--fs));font-weight:800;color:#3b2f2a}
+
+/* 文字裡的小圖示(獎盃、地球):和字同高、對齊基線 */
+.emo{height:1.25em;width:auto;vertical-align:-0.28em;display:inline-block}
+.endcard h2 .emo{height:1.4em;vertical-align:-0.32em}
