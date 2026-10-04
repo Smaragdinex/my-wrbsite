@@ -502,7 +502,7 @@ function resize() {
   renderer.setSize(w, h, false);
   // 棋盤在等軸測下大約寬 9、高 6;兩個方向都要塞得下,下方再留一點給按鈕
   view.aspect = a;
-  view.near = Math.max(4.6, 5.6 / a);
+  view.near = Math.max(4.6, (a < 0.8 ? 3.8 : 5.6) / a);   // 直拿的手機:預設鏡頭拉近一點(寬度只放 3.8 格的一半),不然太遠;想看全圖再用雙指縮小
   view.far = Math.max(8.6, (N * 1.14 + 1) * 0.74 / a);
   view.stageHalf = Math.max(2.3, 2.9 / a);          // 選角舞台:中間一個 + 左右各一個要放得下
   if (!view.half0) { view.half0 = true; view.half = view.near; }
