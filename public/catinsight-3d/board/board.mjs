@@ -223,6 +223,7 @@ function instantiate(e) {
 }
 const cashChip = (e) => (e.cash ? `<span class="mv up">${L(`Everyone +$${fmt(e.cash)}`, `每人 +$${fmt(e.cash)}`)}</span>` : '');
 const LOT = 10, START_CASH = 10000, SALARY = 1000, FEE = 200, MAX_ROLLS = 20;
+const DIV_ROUND = 0.25;   // 股利每一回合配一次(每回合配年率的 1/4;股息格另外多配一次全額),不用等繞回起點
 // 玩法:走滿選定的回合數(選角畫面可以選 20 / 25 / 30 / 35 / 40),總資產最高的人獲勝
 const ROUND_OPTS = [20, 25, 30, 35, 40];
 const AI_ORDER = ['easy', 'normal', 'hard'];   // 設定卡的 − / + 依這個順序切難度
@@ -448,7 +449,7 @@ const MISSION_DEFS = [
   ...[[3, null], [5, 'spread'], [7, 'spread5']].map(([need, after], i) => ({ id: i ? 'spread' + need : 'spread', after,
     make: () => ({ title: i ? L('Full spread', '五檔齊發') : L('Spread it out', '分散投資'), sub: L(`Hold ${need} different assets at once`, `同時持有 ${need} 種不同資產`), ok: () => heldCount() >= need }) })),
   { id: 'paid', make: () => { S.lastDividend = 0;
-      return { title: L('Get paid to wait', '領到股利'), sub: L('Collect $150+ in dividends at one payout', '一次領到 $150 以上股利'), ok: () => S.lastDividend >= 150 }; } },
+      return { title: L('Get paid to wait', '領到股利'), sub: L('Collect $100+ in dividends in one round', '一回合領到 $100 以上股利'), ok: () => S.lastDividend >= 100 }; } },
   { id: 'dip', make: () => { S.flags.dip = false;
       return { title: L('Buy the dip', '逢低買進'), sub: L('Buy an asset trading below its opening price', '買進一檔低於開盤價的資產'), ok: () => S.flags.dip }; } },
   { id: 'profit', make: () => { S.flags.profit = false;
@@ -1458,7 +1459,7 @@ function advise() {
   if (todo.has('profit') && up) return L(`${SECTORS[up].name} is up over 15%. Land on it to take profit.`, `${SECTORS[up].name}已經賺超過 15%,走到它的格子就能獲利了結。`);
   if (todo.has('dip') && cheap.length) return L(`${SECTORS[cheap[0]].name} is below its opening price. Buying it counts as buying the dip.`, `${SECTORS[cheap[0]].name}現在低於開盤價,買進就算逢低買進。`);
   if (todo.has('spread') && held.length < 3) return L(`You hold ${held.length} sector${held.length === 1 ? '' : 's'}. Three different ones spread your risk.`, `你現在持有 ${held.length} 種類股,湊滿 3 種可以分散風險。`);
-  if (todo.has('paid')) return L('Telecom and REIT pay the most each lap. Hold them when you pass GO.', '電信和不動產配息最多,持有它們再繞回起點就能領股利。');
+  if (todo.has('paid')) return L('Telecom and REIT pay the most. Dividends arrive every round; the dividend tile pays a full extra round.', '電信和不動產配息最多,每回合都會配息;走到股息格再多領一次全額。');
   if (todo.has('cash') && S.cash < 2000) return L('Cash is low. Keep $2,000 so you can buy when a chance shows up.', '現金偏低。留 $2,000 以上,好機會出現時才買得起。');
   { let best = null;                                           // 對手裡融資維持率最低的那一檔
     for (const p of others()) for (const k of KEYS) if (p.hold[k].loan > 0) { const r = acctRatio(p); if (!best || r < best.r) best = { p, k, r }; }
@@ -1681,13 +1682,26 @@ const AI_CARD_WAIT = 3;       // 電腦出牌後,說明卡停留幾秒
 
 /* ───────────── 回合流程(狀態機:idle → rolling → moving → landing → idle / over) ───────────── */
 // 起點:薪水 + 股利;對面的「股息結算」格:只發股利
+// 每回合配息:新的一回合開始時,每位玩家依持股領年率 1/4 的股利(自己的顯示提示,手機玩家各自收到自己的)
+function roundDividends() {
+  for (const p of S.players) {
+    const div = Math.round(KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k] * SECTORS[k].div * DIV_ROUND, 0));
+    if (div <= 0) continue;
+    p.cash += div; p.divTotal = (p.divTotal || 0) + div; p.lastDividend = div;
+    const msg = L(`Dividends +$${fmt(div)}`, `配息 +$${fmt(div)}`);
+    if (p === meP()) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
+    else if (p.remote) { const g = NET.guests.find((x) => x.gid === p.remote); if (g && g.conn) netSend({ t: 'toast', msg }, g.conn); }
+  }
+  if (S.players.some((p) => p.human && KEYS.some((k) => p.hold[k].n > 0))) sfx('coin');
+  hud();
+}
 function payday(atStart = true) {
   const salary = atStart ? SALARY * (S.salary2 ? 2 : 1) : 0; if (atStart) S.salary2 = false;   // 升職加薪(命運牌)時下一次薪水加倍
-  const div = KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * SECTORS[k].div, 0);
+  const div = atStart ? 0 : KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * SECTORS[k].div, 0);   // 起點只發薪水、收利息;股息格才配全額股利(平常每回合都會配)
   const interest = atStart ? KEYS.reduce((a, k) => a + S.hold[k].loan * MARGIN_FEE, 0) : 0;   // 融資利息:每經過起點付一次
   const bank = atStart ? S.debt * BANK_RATE : 0;                                                // 銀行貸款利息:也是每經過起點付一次
   S.lastDividend = div; S.players[S.hi].divTotal = (S.players[S.hi].divTotal || 0) + div; S.cash += salary + div - interest - bank; sfx('coin');
-  toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)} · ` : '') + `${L('dividends', '股利')} +$${fmt(div)}` + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : '') + (bank ? ` · ${L('loan interest', '貸款利息')} -$${fmt(bank)}` : ''));
+  toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)}` : `${L('dividends', '股利')} +$${fmt(div)}`) + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : '') + (bank ? ` · ${L('loan interest', '貸款利息')} -$${fmt(bank)}` : ''));
   hud(); checkMissions();
 }
 function checkMissions() {
@@ -1985,7 +1999,7 @@ const FATE = [
   { id: 'lottery', good: true, t: L('You won the lottery', '中樂透'), w: L('Pure luck. Luck is not a strategy, but take it.', '純運氣。運氣不是策略,但該拿還是拿。'), fx: L('+$1,500', '+$1,500') },
   { id: 'tax', good: false, t: L('Tax season', '報稅季'), w: L('Profits get taxed. Keep some cash for it.', '賺的錢要繳稅,手上要留一點現金。'), fx: L('−5% of your cash', '現金 −5%') },
   { id: 'birthday', good: true, t: L('Birthday', '生日'), w: L('Every other player chips in.', '其他每位玩家各包一個紅包給你。'), fx: L('+$200 from each player', '每人給你 +$200') },
-  { id: 'gostart', good: true, t: L('Shortcut to GO', '抄捷徑回起點'), w: L('Collect your salary and dividends early.', '提早領薪水和股利。'), fx: L('Move to GO', '直接移到起點') },
+  { id: 'gostart', good: true, t: L('Shortcut to GO', '抄捷徑回起點'), w: L('Collect your salary early.', '提早領薪水。'), fx: L('Move to GO', '直接移到起點') },
   { id: 'fat', good: false, t: L('Fat-finger trade', '不小心按錯'), w: L('You tapped the wrong button and dumped a whole position at market price. Double-check before you confirm.', '手滑按錯鍵,把一檔股票整筆用市價賣掉了。下單前要再看一眼。'), fx: L('Sell one holding, all of it', '隨機一檔持股全部賣出') },
   { id: 'swap', good: true, t: L('Teleport', '瞬間移動'), w: L('You swap places with a random rival. Wherever you land, you land.', '和隨機一位對手互換位置。換到哪一格,就算踩到那一格。'), fx: L('Swap places with a rival', '和一位對手互換位置') },
   { id: 'ipo', good: true, t: L('IPO lottery win', '新股抽籤中籤'), w: L('Off to the IPO booth for free shares.', '去 IPO 攤位領免費新股。'), fx: L('Go to the IPO booth', '前往 IPO 攤位') },
@@ -2116,7 +2130,7 @@ function aiDiceChoice() {
 //   賺超過 15% 就賣;價格比開盤低 5% 以上且現金夠就多買;否則留 $1,500 現金後買 10 股
 // 電腦經過起點 / 股息結算:薪水(升職加薪時加倍)、股利、融資與貸款利息
 function aiPayday(A, atStart) {
-  const div = KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0);
+  const div = atStart ? 0 : KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * SECTORS[k].div, 0);
   const salary = atStart ? SALARY * (A.salary2 ? 2 : 1) : 0; if (atStart) A.salary2 = false;
   A.cash += salary + div - (atStart ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) + A.debt * BANK_RATE : 0); hud();
 }
@@ -2241,7 +2255,7 @@ async function turn(forced, nDice = 0) {      // nDice = 3:用了「三顆骰子
   await stepAlong(true, n);
   }
   if (S.hi === 0) {           // 第一位走完 = 新的一回合開始:回合數 +1,所有價格小幅隨機波動
-    S.rolls++;
+    S.rolls++; roundDividends();
     if (S.after) { const a = S.after; S.after = null; applyEvent(a); drawAll(); hud(); toast(a.t); sfx('good'); }
     KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2)); });
   }
