@@ -19,9 +19,9 @@ const ZH = (new URLSearchParams(location.search).get('lang') || savedLang || nav
 const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
-import { gameData } from './data.mjs?v=7';
-import { makeSim } from './sim.mjs?v=11';
-import { makeEngine } from './engine.mjs?v=5';
+import { gameData } from './data.mjs?v=8';
+import { makeSim } from './sim.mjs?v=12';
+import { makeEngine } from './engine.mjs?v=6';
 const GD = gameData(L, fmt);      // 遊戲資料:畫面、遊戲引擎、電腦模擬都用同一份
 const { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = GD;
 const PATH_INFO = {
@@ -48,7 +48,10 @@ function instantiate(e) {
   if (x.squeezeAll) return { ...x, t: `${e.t}${sep}${SECTORS[x.squeezeAll].name}` };
   return x;
 }
-const divPct = (x) => `${+(x * 100).toFixed(1)}%`;      // 殖利率顯示:0.5% / 1.5% / 5%
+const divPct = (x) => `${+(x * 100).toFixed(1)}%`;
+// 大盤趨勢的文字:▲ 每回合 +1% / ▼ 每回合 −2%
+const trendTxt = (t) => `${t >= 0 ? '▲' : '▼'} ${L('per round', '每回合')} ${t >= 0 ? '+' : '−'}${Math.round(Math.abs(t) * 100)}%`;
+const trendChip = (e) => (e.trend == null ? '' : `<span class="mv ${e.trend >= 0 ? 'up' : 'dn'}">${e.trend >= 0 ? L('Market turns up', '大盤轉多') : L('Market turns down', '大盤轉空')} ${trendTxt(e.trend)}</span>`);      // 殖利率顯示:0.5% / 1.5% / 5%
 // 買股面板的配息說明:目前殖利率是動態的(股利事件會調),介紹文字不寫數字,這裡顯示現在的值;調高過綠色、被削減過紅色
 const divNote = (k) => { const now = S.div[k], base = SECTORS[k].div; if (!(now > 0)) return '';
   const c = now > base + 1e-9 ? '#1c8a4a' : now < base - 1e-9 ? '#c4472f' : '#5b4a40', tag = now > base + 1e-9 ? L(' (raised)', '(調高過)') : now < base - 1e-9 ? L(' (cut)', '(被削減過)') : '';
@@ -61,7 +64,7 @@ function fitCardFace(f) {
   while (f.scrollHeight > f.clientHeight + 1 && k > 0.62) { k -= 0.04; f.style.setProperty('--fit', k.toFixed(2)); }
 }
 function fitCards(ov) { ov.querySelectorAll('.dfront').forEach((f) => { fitCardFace(f); if (cardFitRO) cardFitRO.observe(f); }); }
-const cashChip = (e) => (e.cash ? `<span class="mv up">${L(`Everyone +$${fmt(e.cash)}`, `每人 +$${fmt(e.cash)}`)}</span>` : '') +
+const cashChip = (e) => trendChip(e) + (e.cash ? `<span class="mv up">${L(`Everyone +$${fmt(e.cash)}`, `每人 +$${fmt(e.cash)}`)}</span>` : '') +
   (e.divTo ? e.divKeys.map((k) => `<span class="mv ${e.divTo[k][1] >= e.divTo[k][0] ? 'up' : 'dn'}">${SECTORS[k].code} ${pct(e.m[k])} · ${L('yield', '殖利率')} ${divPct(e.divTo[k][0])}→${divPct(e.divTo[k][1])}</span>`).join('') : '');   // 股利事件:漲跌和殖利率合成一顆,不重複列
 // 玩法:走滿選定的回合數(選角畫面可以選 20 / 25 / 30 / 35 / 40),總資產最高的人獲勝
 const ROUND_OPTS = [20, 25, 30, 35, 40];
@@ -86,7 +89,7 @@ const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim(GD,
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=12', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=13', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -102,7 +105,7 @@ function simDecide(kind, st, i, k) {
 // 現金和貸款看不到,用「起始現金 − 已知持股的成本 + 每回合大約的薪水配息」粗估(只影響對手在模擬裡還買不買得起)
 function simSnapshot(A) {
   const st = SIM.newGame(S.players.map(() => aiAlg()), S.maxRounds, S.players.map(() => S.aiLevel));
-  st.price = { ...S.price }; st.div = { ...S.div }; st.rolls = S.rolls; st.turn = A.i; st.after = S.after ? { m: { ...S.after.m } } : null; st.lanePath = { ...S.lanePath };
+  st.price = { ...S.price }; st.div = { ...S.div }; st.trend = S.trend; st.rolls = S.rolls; st.turn = A.i; st.after = S.after ? { m: { ...S.after.m } } : null; st.lanePath = { ...S.lanePath };
   S.players.forEach((q, i) => {
     const p = st.players[i]; p.pos = q.pos; p.lane = q.lane ? { ...q.lane } : null; p.salary2 = !!q.salary2;
     if (q === A) { p.cash = q.cash; p.debt = q.debt; p.bag = q.bag.slice(); p.plan = q.plan ? { ...q.plan } : null;
@@ -370,6 +373,7 @@ function newState() {
   S = {
     rolls: 0, busy: false, over: false, maxRounds: MAX_ROLLS, aiLevel: 'normal', players: [], nh: 1, hi: 0, ci: 1, turn: 0, view: null,      // turn:現在輪到誰;view:資產框手動選看誰(null = 跟著 turn)
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])),
+    trend: MARKET_DRIFT,                                                     // 大盤趨勢(每回合),事件卡會改
     div: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].div])),        // 這一局目前的殖利率(事件卡「調高股利」會改)
     notices: [], lastEvent: null, after: null,
     lanePath: { jail: ENG.genLanePath('jail', Math.random), ipo: ENG.genLanePath('ipo', Math.random) },      // 兩條小路現在各格是什麼
@@ -1495,10 +1499,10 @@ function hud() {
     $('assetRows').innerHTML = assetRowsHtml(A, mine); }
   const e = S.lastEvent;
 
-  $('evtBody').innerHTML = e
+  $('evtBody').innerHTML = `<div class="mvrow trend"><span>${L('Market trend', '目前大盤')}</span><span style="color:${(S.trend ?? MARKET_DRIFT) >= 0 ? '#1c8a4a' : '#c4472f'}">${trendTxt(S.trend ?? MARKET_DRIFT)}</span></div>` + (e
     ? `<div>${e.t}</div><div class="why">${e.w}</div>` + (e.cash ? `<div class="mvrow"><span>${L('Everyone', '每位玩家')}</span><span style="color:#1c8a4a">+$${fmt(e.cash)}</span></div>` : '') + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
-    : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`;
+    : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`);
   $('roundTxt').textContent = L(`Round ${S.rolls} / ${maxRolls()}`, `回合 ${S.rolls} / ${maxRolls()}`);
   netHud();
 }
@@ -2476,8 +2480,8 @@ async function start() {
   hud(); AU.ambience(true);   // 進入遊戲:森林鳥鳴淡入
   // 開局先講清楚怎麼算贏
   const rule = L(`After ${S.maxRounds} rounds, whoever has the highest total assets wins.`, `${S.maxRounds} 回合結束時,總資產最高的人獲勝。`);
-  const rulesTitle = L('How to win', '獲勝條件'), rulesBody = rule + L(` Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>Achievements (on the right) are a bonus: each one pays $${REWARD} and can be earned once. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
-      `總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>右邊的任務是成就:每達成一個得 $${REWARD},每個只能拿一次,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`);
+  const rulesTitle = L('How to win', '獲勝條件'), rulesBody = rule + L(` Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>The whole market drifts every round: it starts going up, big bad news (wars, crises) turns it down, and good news (rate cuts, strong jobs) turns it back up. Company news does not change it.<br><br>Achievements (on the right) are a bonus: each one pays $${REWARD} and can be earned once. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
+      `總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>大盤每回合都會跟著趨勢漲跌:一開始往上,戰爭、金融危機這類大壞消息會讓大盤轉空,降息、就業強勁這類好消息再轉回多頭;個別公司的新聞不影響大盤。<br><br>右邊的任務是成就:每達成一個得 $${REWARD},每個只能拿一次,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`);
   // 線上同樂:規則卡每個人在自己裝置上看、自己按繼續(閱讀速度不同);主機按完就開始,不等別人(別人沒按完也擲不了骰)
   if (NET.on && NET.started) {
     NET.rules = { title: rulesTitle, body: rulesBody }; NET.guests.forEach((g) => { g.ready = false; });

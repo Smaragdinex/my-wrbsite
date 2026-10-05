@@ -166,17 +166,22 @@ export function makeEngine(D, opts = {}) {
     if (bad) st.players.forEach((p, i) => { if (before[i] > 0 && worth(p) > before[i]) flag(p, 'dodge'); });   // 壞消息裡持股反而漲:躲過黑天鵝
     if (e.cash) st.players.forEach((p) => { p.cash += e.cash; });
     if (e.divTo) e.divKeys.forEach((k) => { st.div[k] = e.divTo[k][1]; });
+    if (e.trend != null) st.trend = e.trend;                                // 大盤趨勢轉向(戰爭、危機轉空;降息、景氣好轉多),維持到下一張改趨勢的牌
     if (e.rebound) st.after = { m: Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])), from: e };   // 跌掉的部分下回合漲回 rebound 比例
     marginCheck(st);
     if (e.squeezeAll) for (const p of st.players) { if (p.short[e.squeezeAll].n) squeeze(st, p, e.squeezeAll); }
   }
-  // 新的一回合開始:回合數 +1 → 每回合配息 → 套用上回合留下的反彈 → 所有價格小幅隨機波動(股票和大盤 ETF 再加上長期趨勢)
+  // 目前的大盤趨勢(每回合):事件卡會改;沒設定過就用開局值 MARKET_DRIFT
+  const trendOf = (st) => (opts.drift ?? st.trend ?? DRIFT);
+  // 新的一回合開始:回合數 +1 → 每回合配息 → 套用上回合留下的反彈 → 所有價格小幅隨機波動(股票和大盤 ETF 再加上大盤趨勢)
   // 回傳 { paid: 領到配息的人, after: 套用的反彈事件 } 給畫面顯示
   function newRound(st, rand) {
     st.rolls++;
+    if (opts.recover && st.trend != null && st.trend < DRIFT) st.trend = Math.min(DRIFT, st.trend + opts.recover);   // (實驗)恐慌慢慢退去
     const paid = roundDividends(st), after = st.after;
     if (after) { st.after = null; applyEvent(st, after); }
-    KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; st.price[k] = Math.max(FLOOR, st.price[k] * (1 - v + rand() * v * 2) * (DRIFTS(k) ? 1 + DRIFT : 1)); });
+    const tr = trendOf(st);
+    KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; st.price[k] = Math.max(FLOOR, st.price[k] * (1 - v + rand() * v * 2) * (DRIFTS(k) ? 1 + tr : 1)); });
     return { paid, after };
   }
 
@@ -259,6 +264,6 @@ export function makeEngine(D, opts = {}) {
   // 商店:買一樣道具
   const buyItem = (st, p, id, price) => { p.cash -= price; p.bag.push(id); };
 
-  return { dice, genLanePath, enterLane, advance, tileType, pathEffect, payFee, rest, bail, fate, ipoPick, ipoGrant, ipoBuy, bank, buyItem,
+  return { trendOf, dice, genLanePath, enterLane, advance, tileType, pathEffect, payFee, rest, bail, fate, ipoPick, ipoGrant, ipoBuy, bank, buyItem,
     withActor, instantiate, applyEvent, newRound, roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
 }

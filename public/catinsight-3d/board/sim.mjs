@@ -1,4 +1,4 @@
-import { makeEngine } from './engine.mjs?v=5';
+import { makeEngine } from './engine.mjs?v=6';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
 //   2. Node 可以直接 import,讓三種電腦(規則 / 期望值 / 蒙地卡羅)互打幾百局,算勝率(tournament.mjs)
@@ -34,7 +34,7 @@ export function makeSim(D, opts = {}) {
   const mkPlayer = (i, alg = 'ev', level = 'normal') => ({ i, alg, lv: LEVELS[level] || LEVELS.normal, cash: START_CASH, debt: 0, pos: 0, lane: null, bag: [], salary2: false, plan: null,
     hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) });
   const newGame = (algs, maxRounds = 20, levels = []) => ({
-    price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])), div: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].div])), rolls: 0, maxRounds, turn: 0, after: null, over: false, lanePath: {},
+    price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])), trend: MARKET_DRIFT, div: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].div])), rolls: 0, maxRounds, turn: 0, after: null, over: false, lanePath: {},
     players: algs.map((a, i) => mkPlayer(i, a, levels[i] || 'normal')),
   });
   const clonePlayer = (p) => ({ ...p, lane: p.lane ? { ...p.lane } : null, bag: p.bag.slice(), plan: p.plan ? { ...p.plan } : null,
@@ -44,7 +44,7 @@ export function makeSim(D, opts = {}) {
 
   /* ───────── 基本算式 ───────── */
   // 買賣、融資、放空、斷頭 / 軋空、資產計算全部用遊戲引擎(engine.mjs),和真正的遊戲是同一份規則
-  const ENG = makeEngine(D, { slippage: opts.slippage, drift: opts.drift });
+  const ENG = makeEngine(D, { slippage: opts.slippage, drift: opts.drift, recover: opts.recover });
   const { shortValue, assetsOf, acctRatio, marginCheck, impact, coverBack } = ENG;
   const fill = ENG.fill;
   const others = (st, p) => st.players.filter((q) => q !== p);
@@ -189,6 +189,8 @@ export function makeSim(D, opts = {}) {
 
   /* ───────── 策略:期望值 ───────── */
   // 每檔資產「一張事件卡平均會讓它漲跌多少」(μ)和波動(σ),從 EVENTS 資料直接算出來
+  // 長期平均大盤趨勢 = 所有「會改趨勢」的事件牌的趨勢平均(趨勢每次被改成哪一張牌的值,機會差不多)
+  const TREND_CARDS = EVENTS.filter((e) => e.trend != null), TREND_MEAN = opts.drift ?? (TREND_CARDS.length ? TREND_CARDS.reduce((a, e) => a + e.trend, 0) / TREND_CARDS.length : DRIFT);
   const EVSTAT = Object.fromEntries(KEYS.map((k) => { const xs = EVENTS.map((e) => (e.meme || e.divUp || e.divCut ? 0 : e.m[k] - 1)); const mu = xs.reduce((a, b) => a + b, 0) / xs.length;
     const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mu) ** 2, 0) / xs.length); return [k, { mu, sd }]; }));
   const EVENTS_PER_ROUND = (st) => 1 + 10 / TILES.length * st.players.length;          // 每回合固定一張 + 踩到事件格的
@@ -197,14 +199,16 @@ export function makeSim(D, opts = {}) {
   //   rebound 知道「崩盤後下回合會反彈」、endSell 最後一回合清倉、takeProfit 賺多少就賣(0 = 不因為賺錢賣)
   // 2026-10 規則修正後(成交價含推動、牌組平衡)重新掃過:長期抱著、不因賺錢賣、股利蓋得過利息就融資(維持率留 200% 以上)、
   // 知道崩盤後會反彈。舊參數 { risk 0.35, buyTh 0.025, cheap 0.15, endSell, takeProfit 0.35 } 對規則式勝率 54%,這組約 60%
-  const EVP = Object.assign({ risk: 0.15, buyTh: 0, step: 0.02, cheap: 0, rebound: true, endSell: false, takeProfit: 0, sellTh: -0.01, lever: true, safeRatio: 2.0, reserve: 500, maxLots: 5 }, opts.ev || {});
+  const EVP = Object.assign({ risk: 0.15, buyTh: 0, step: 0.02, cheap: 0, rebound: true, endSell: false, takeProfit: 0, sellTh: -0.01, lever: true, safeRatio: 2.0, reserve: 500, maxLots: 5, trendH: 0 }, opts.ev || {});   // trendH 0:趨勢平均 5 回合就變一次,用長期平均最準(掃過 0/1/3/20)
   // 持有一檔到遊戲結束的期望報酬率(扣掉風險)
   function evOf(st, k, p) {
     const left = Math.max(1, st.maxRounds - st.rolls), ev = EVENTS_PER_ROUND(st) * left, s = EVSTAT[k];
     const drift = s.mu * ev, div = st.div[k] * DIV_ROUND * left, risk = EVP.risk * s.sd * Math.sqrt(ev) / Math.sqrt(Math.max(1, left));
     const cheap = (SECTORS[k].open / st.price[k] - 1) * EVP.cheap;
     const reb = EVP.rebound && st.after ? st.after.m[k] - 1 : 0;                              // 下回合確定會反彈的部分(黑色星期一)
-    return drift + div - risk + cheap + reb + (DRIFTS(k) ? DRIFT * left : 0);   // 大盤長期漲幅也算進去
+    // 大盤趨勢:目前的趨勢大約維持 trendH 回合(事件牌隨時會改),之後用整副牌的長期平均趨勢
+    const h = Math.min(left, EVP.trendH), tr = DRIFTS(k) ? ENG.trendOf(st) * h + TREND_MEAN * (left - h) : 0;
+    return drift + div - risk + cheap + reb + tr;
   }
   function evTrade(st, p, k) {
     const h = p.hold[k], sh = p.short[k], price = st.price[k], lv = p.lv, e = evOf(st, k, p), left = st.maxRounds - st.rolls, reserve = EVP.reserve ?? lv.reserve;
