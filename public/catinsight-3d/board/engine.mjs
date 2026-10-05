@@ -7,7 +7,7 @@
 //        info = { k, n, back, lost }。模擬器不用傳。
 export function makeEngine(D, opts = {}) {
   const { KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE, SALARY, MARGIN_FEE, BANK_RATE, DIV_ROUND,
-    TILES, LANES, PATH_POOL, PATH_FIXED = {}, LANE_LEN, JAIL_WAIT, BAIL, FEE, IPO_OFF, IPO_FREE, LOT, FATE,
+    TILES, LANES, PATH_POOL, PATH_FIXED = {}, LANE_LEN, JAIL_WAIT, BAIL, FEE, IPO_OFF, IPO_LOCK, LOT, FATE,
     NON_EQUITY, MARKET_DRIFT = 0, DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92 } = D;
   const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));                                   // 股票類股(大盤 ETF = 它們的平均)
   const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
@@ -78,13 +78,15 @@ export function makeEngine(D, opts = {}) {
   }
   // 賣出 q 股(不傳就全賣);融資借款按賣掉的比例一起還。先把部位清掉再動價格,自己的賣壓才不會觸發自己的斷頭
   // forced = true:不是自己決定賣的(命運牌「手滑」),不算成就
+  // 內部認購的股票有閉鎖期:鎖住的股數不能自己賣;被斷頭(forced)時照樣會被強制賣掉
+  const lockedN = (st, h) => (h.lockUntil && st.rolls < h.lockUntil ? Math.min(h.locked || 0, h.n) : 0);
   function sell(st, p, k, q = Infinity, forced = false) {
-    const h = p.hold[k], sn = Math.min(q, h.n); if (!sn) return null;
+    const h = p.hold[k], sn = Math.min(q, h.n - (forced ? 0 : lockedN(st, h))); if (!(sn > 0)) return null;
     const part = sn / h.n, value = fill(st, k, sellF(sn)) * sn, cost = h.cost * part, loan = h.loan * part;
     if (!forced && (value - cost) / cost >= 0.15) flag(p, 'profit');   // 獲利了結
     if (!forced && loan > 0 && value > cost) flag(p, 'marginWin');     // 借力使力:融資部位獲利出場
     p.cash += value - loan; h.n -= sn; h.cost -= cost; h.loan -= loan;
-    if (h.n <= 0) { h.n = 0; h.cost = 0; h.loan = 0; }
+    if (h.n <= 0) { h.n = 0; h.cost = 0; h.loan = 0; h.locked = 0; h.lockUntil = 0; } else if (h.locked > h.n) h.locked = h.n;
     withActor(st, p, () => impact(st, k, sellF(sn)));
     return { n: sn, value, cost, loan, pl: value - cost };
   }
@@ -197,7 +199,6 @@ export function makeEngine(D, opts = {}) {
     const t = new Array(LANE_LEN).fill(null), fixed = PATH_FIXED[type] || {};
     for (const i in fixed) t[i] = fixed[i];
     const free = () => t.map((v, i) => (v ? -1 : i)).filter((i) => i >= 0);
-    for (let n = 0; n < 2; n++) { const f = free(); t[f[Math.floor(rand() * f.length)]] = 'fate'; }
     const pool = PATH_POOL[type].filter((k) => !Object.values(fixed).includes(k)).sort(() => rand() - 0.5);
     for (let i = 0; i < LANE_LEN; i++) if (!t[i]) t[i] = pool.pop();
     return t;
@@ -250,20 +251,23 @@ export function makeEngine(D, opts = {}) {
     else if (c.id === 'divi') r.pay = payday(st, p, false);
     else if (c.id === 'salary2') p.salary2 = true;
     else if (c.id === 'gostart') { p.lane = null; p.pos = 0; r.pay = payday(st, p, true); }
-    else if (c.id === 'fat') { const held = KEYS.filter((k) => p.hold[k].n > 0); if (held.length) { r.k = held[Math.floor(rand() * held.length)]; sell(st, p, r.k, Infinity, true); } }
+    else if (c.id === 'fat') { const held = KEYS.filter((k) => p.hold[k].n - lockedN(st, p.hold[k]) > 0); if (held.length) { r.k = held[Math.floor(rand() * held.length)]; sell(st, p, r.k, p.hold[r.k].n - lockedN(st, p.hold[r.k]), true); } }   // 鎖住的內部認購股賣不掉
     else if (c.id === 'swap') { const q = others[Math.floor(rand() * others.length)]; if (q) { [p.pos, q.pos] = [q.pos, p.pos]; [p.lane, q.lane] = [q.lane, p.lane]; r.other = q; } }
     else if (c.id === 'ipo') r.lane = 'ipo';
+    else if (c.id === 'jail') r.lane = 'jail';
     return r;
   }
-  // IPO:隨機一檔(沒在放空的)股票,先送 IPO_FREE 股(成本算承銷價),想多買再用承銷價(市價 8 折)加購。新股不會推動市價
+  // 內部認購:隨機一檔(沒在放空的)股票,用市價 8 折認購,一定買得到;買到的股數鎖 IPO_LOCK 回合不能賣。新股不會推動市價
   const ipoPick = (st, p, rand) => { const pool = EQ.filter((k) => !p.short[k].n); return pool[Math.floor(rand() * pool.length)]; };
-  function ipoGrant(st, p, k) { const h = p.hold[k]; h.n += IPO_FREE; h.cost += st.price[k] * IPO_OFF * IPO_FREE; }
-  function ipoBuy(st, p, k, n) { const h = p.hold[k], price = st.price[k] * IPO_OFF, cost = price * LOT * (n / LOT); p.cash -= cost; h.n += n; h.cost += cost; return cost; }
+  function ipoBuy(st, p, k, n) {
+    const h = p.hold[k], cost = st.price[k] * IPO_OFF * n; p.cash -= cost; h.n += n; h.cost += cost;
+    h.locked = lockedN(st, h) + n; h.lockUntil = st.rolls + IPO_LOCK; return cost;
+  }
   // 銀行:d > 0 借款、d < 0 還款(現金和欠款一起變)
   const bank = (st, p, d) => { p.cash += d; p.debt += d; };
   // 商店:買一樣道具
   const buyItem = (st, p, id, price) => { p.cash -= price; p.bag.push(id); };
 
-  return { trendOf, dice, genLanePath, enterLane, advance, tileType, pathEffect, payFee, rest, bail, fate, ipoPick, ipoGrant, ipoBuy, bank, buyItem,
+  return { trendOf, dice, genLanePath, enterLane, advance, tileType, pathEffect, payFee, rest, bail, fate, ipoPick, ipoBuy, lockedN, bank, buyItem,
     withActor, instantiate, applyEvent, newRound, roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
 }

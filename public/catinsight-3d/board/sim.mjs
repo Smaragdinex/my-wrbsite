@@ -1,4 +1,4 @@
-import { makeEngine } from './engine.mjs?v=6';
+import { makeEngine } from './engine.mjs?v=7';
 import { makePolicy } from './nn.mjs?v=1';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
@@ -12,8 +12,8 @@ import { makePolicy } from './nn.mjs?v=1';
 //   mc    蒙地卡羅:每個決策(擲幾顆、買賣多少)對每個候選動作模擬後面 D 回合 × N 次,取平均資產領先幅度最高的
 export function makeSim(D, opts = {}) {
   const opts_ = opts;   // mcTrade 裡的 opts 是候選動作清單,外層設定用這個名字
-  const { MARKET_DRIFT = 0, DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE,
-    SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE } = D;
+  const { MARKET_DRIFT = 0, DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF,
+    BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE } = D;
   const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));
   const DRIFT = opts.drift ?? MARKET_DRIFT, DRIFTS = (k) => k === 'etf' || !NON_EQUITY.has(k);
   // 自己的亂數(mulberry32):可以重設種子 → 蒙地卡羅比較不同動作時用「同一組未來」(common random numbers),雜訊小很多
@@ -34,13 +34,13 @@ export function makeSim(D, opts = {}) {
 
   /* ───────── 狀態 ───────── */
   const mkPlayer = (i, alg = 'ev', level = 'normal') => ({ i, alg, lv: LEVELS[level] || LEVELS.normal, cash: START_CASH, debt: 0, pos: 0, lane: null, bag: [], salary2: false, plan: null,
-    hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) });
+    hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0, locked: 0, lockUntil: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])) });
   const newGame = (algs, maxRounds = 20, levels = []) => ({
     price: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].open])), trend: MARKET_DRIFT, div: Object.fromEntries(KEYS.map((k) => [k, SECTORS[k].div])), rolls: 0, maxRounds, turn: 0, after: null, over: false, lanePath: {}, pub: {},
     players: algs.map((a, i) => mkPlayer(i, a, levels[i] || 'normal')),
   });
   const clonePlayer = (p) => ({ ...p, lane: p.lane ? { ...p.lane } : null, bag: p.bag.slice(), plan: p.plan ? { ...p.plan } : null,
-    hold: Object.fromEntries(KEYS.map((k) => [k, { n: p.hold[k].n, cost: p.hold[k].cost, loan: p.hold[k].loan }])),
+    hold: Object.fromEntries(KEYS.map((k) => [k, { n: p.hold[k].n, cost: p.hold[k].cost, loan: p.hold[k].loan, locked: p.hold[k].locked || 0, lockUntil: p.hold[k].lockUntil || 0 }])),
     short: Object.fromEntries(KEYS.map((k) => [k, { n: p.short[k].n, entry: p.short[k].entry }])) });
   const clone = (st) => ({ ...st, pub: null, price: { ...st.price }, div: { ...st.div }, after: st.after ? { ...st.after } : null, lanePath: { ...st.lanePath }, players: st.players.map(clonePlayer) });
 
@@ -87,7 +87,7 @@ export function makeSim(D, opts = {}) {
   function tradeOptions(st, p, k) {
     const h = p.hold[k], sh = p.short[k], price = st.price[k], out = [{ a: 'skip' }];
     if (sh.n) { out.push({ a: 'cover' }); return out; }
-    if (h.n) out.push({ a: 'sell' });
+    if (h.n - ENG.lockedN(st, h) > 0) out.push({ a: 'sell' });          // 內部認購鎖住的股數不能賣
     for (const lots of [1, 2, 3, 5]) { if (p.cash >= fill(st, k, buyF(LOT * lots)) * LOT * lots) out.push({ a: 'buy', q: LOT * lots }); }
     if (!h.loan && p.cash >= fill(st, k, buyF(LOT * 3)) * LOT * 3 * (1 - MARGIN_LOAN)) out.push({ a: 'margin', q: LOT * 3 });
     if (!h.n && p.cash >= fill(st, k, shortF(LOT)) * LOT) out.push({ a: 'short', q: LOT });
@@ -99,11 +99,8 @@ export function makeSim(D, opts = {}) {
   const instantiate = (st, e) => ENG.instantiate(st, e, rand);
   const applyEvent = (st, e) => ENG.applyEvent(st, e);
   const randomEvent = (st) => instantiate(st, pick(EVENTS));
-  // 市場事件格:三張牌裡有 SPECIAL_RATE 的機率混一張特殊牌(警察局 / IPO),電腦隨機挑 → 抽到特殊牌的機率 = SPECIAL_RATE / 3
-  function chance(st, p, special) {
-    if (special && rand() < SPECIAL_RATE / 3) { enterLane(st, p, rand() < 0.5 ? 'jail' : 'ipo'); return; }
-    applyEvent(st, randomEvent(st));
-  }
+  // 市場事件格:抽一張事件卡(警察局、內部認購改成命運牌,不會出現在市場事件裡)
+  function chance(st, p) { applyEvent(st, randomEvent(st)); }
   const payday = (st, p, atStart) => { ENG.payday(st, p, atStart); };
 
   // 命運牌:效果在引擎;瞬間移動要重新結算換到的那一格、IPO 要進小路
@@ -117,9 +114,9 @@ export function makeSim(D, opts = {}) {
 
   /* ───────── 小路、移動(規則在引擎,這裡是電腦的決定)───────── */
   function enterLane(st, p, type) { ENG.enterLane(st, p, type, rand); if (type === 'ipo') ipo(st, p); }
-  // 電腦在 IPO 攤位加購幾手:現金夠就買 3 手,不然 1 手(遊戲裡的電腦也用這個)
+  // 電腦在內部認購攤位認購幾手:現金夠就買 3 手,不然 1 手(遊戲裡的電腦也用這個)
   const ipoLots = (st, p, k) => { const price = st.price[k] * IPO_OFF; return p.cash >= price * LOT * 3 + 1500 ? 3 : p.cash >= price * LOT + 500 ? 1 : 0; };
-  function ipo(st, p) { const k = ENG.ipoPick(st, p, rand); ENG.ipoGrant(st, p, k); const lots = ipoLots(st, p, k); if (lots) ENG.ipoBuy(st, p, k, LOT * lots); note(st, p, k); }
+  function ipo(st, p) { const k = ENG.ipoPick(st, p, rand); const lots = ipoLots(st, p, k); if (lots) { ENG.ipoBuy(st, p, k, LOT * lots); note(st, p, k); } }
   function walk(st, p, n) { for (let i = 0; i < n; i++) ENG.advance(st, p); }
   const leaveLane = (st, p) => walk(st, p, ENG.dice(1, 0, rand)[0]);
 
@@ -128,13 +125,13 @@ export function makeSim(D, opts = {}) {
     if (p.lane) {
       if (!p.lane.at) return;                                   // 還在攤位 / 警察局裡
       const k = ENG.tileType(st, p, rand);
-      if (k === '_chance') chance(st, p, false); else if (k === 'fate') applyFate(st, p, pick(FATE));
+      if (k === '_chance') chance(st, p); else if (k === 'fate') applyFate(st, p, pick(FATE));
       else if (k === '_gift') gift(p); else ENG.pathEffect(st, p, k);
       return;
     }
     const t = TILES[p.pos];
     if (SECTORS[t]) { const act = decideTrade(st, p, t); doTrade(st, p, t, act); }
-    else if (t === 'chance') chance(st, p, true);
+    else if (t === 'chance') chance(st, p);
     else if (t === 'fate') applyFate(st, p, pick(FATE));
     else if (t === 'ipo') enterLane(st, p, 'ipo');
     else if (t === 'fee') ENG.payFee(st, p);
@@ -267,7 +264,7 @@ export function makeSim(D, opts = {}) {
       if (h.n && (st.price[t] * h.n - h.cost) / h.cost >= 0.15) v += 3; else if (sh.n && Math.abs((sh.entry - st.price[t]) / sh.entry) >= 0.12) v += 2;
       else if (h.loan > 0 && acctRatio(st, p) < 1.5) v += 2;
       else v += Math.max(0.3, Math.min(4.5, e * 40)) * (p.cash >= st.price[t] * LOT + p.lv.reserve ? 1 : 0.3); }
-    else if (t === 'shop') v += p.cash >= 2500 ? 1.5 : 0.3; else if (t === 'ipo') v += 2.5; else if (t === 'gift') v += 1.5; else if (t === 'chance') v += 0.8;
+    else if (t === 'shop') v += p.cash >= 2500 ? 1.5 : 0.3; else if (t === 'ipo') v += 1.5; else if (t === 'gift') v += 1.5; else if (t === 'chance') v += 0.8;
     else if (t === 'bank') v += p.cash < 1500 ? 1.5 : 0; else if (t === 'fee') v -= 1;
     for (let j = 1; j <= i; j++) { const tt = TILES[(p.pos + j) % TILES.length]; if (tt === 'start') v += 2; else if (tt === 'divi') v += 0.8; }
     return v;
@@ -348,7 +345,9 @@ export function makeSim(D, opts = {}) {
   // 蒙地卡羅在 Node 對戰裡也從「自己眼中的局面」出發(對手部位是推測的),和遊戲裡 board.mjs 交給 Web Worker 的快照一樣
   const asSeen = (st, p) => (opts.belief !== false && st.pub ? beliefOf(st, p.i) : st);
   // 神經網路(nn):模仿蒙地卡羅的策略網路,一次前向計算就決定,不做模擬。候選動作和蒙地卡羅一樣(可做的動作 + 期望值建議)
-  const NN = opts.nn ? makePolicy(opts.nn) : null;
+  // 模型的輸入維度要和現在的特徵一樣(資產種類變了就要重新訓練),不合就不用,免得默默算錯
+  const NN = opts.nn && opts.nn.dim === 5 + 8 + 4 + KEYS.length * 8 + 12 ? makePolicy(opts.nn) : null;
+  if (opts.nn && !NN) console.warn(`nn-policy.json 是 ${opts.nn.dim} 維,現在的特徵是 ${5 + 8 + 4 + KEYS.length * 8 + 12} 維:要重新產生資料、重新訓練`);
   const NN_CONF = opts.nnConf ?? 0;
   function nnTrade(st, p, k) {
     const cand = tradeOptions(st, p, k), evAct = evTrade(st, p, k);

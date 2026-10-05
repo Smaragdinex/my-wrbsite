@@ -19,11 +19,11 @@ const ZH = (new URLSearchParams(location.search).get('lang') || savedLang || nav
 const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
-import { gameData } from './data.mjs?v=9';
-import { makeSim } from './sim.mjs?v=15';
-import { makeEngine } from './engine.mjs?v=6';
+import { gameData } from './data.mjs?v=10';
+import { makeSim } from './sim.mjs?v=16';
+import { makeEngine } from './engine.mjs?v=7';
 const GD = gameData(L, fmt);      // 遊戲資料:畫面、遊戲引擎、電腦模擬都用同一份
-const { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = GD;
+const { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_LOCK, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = GD;
 const PATH_INFO = {
   fate: { color: 0xc08cf5, base: 0x9a6ad8, a: '★', b: L('FATE', '命運') },
   chance: { color: 0xffd24a, base: 0xd9ad2a, a: '?', b: L('EVENT', '市場事件') },
@@ -91,7 +91,7 @@ const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim(GD,
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=17', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=18', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -370,7 +370,7 @@ function refillMissions(p) {
 let CFG = (() => { try { const c = JSON.parse(localStorage.getItem('css.players')); if (c && c.n >= 2 && c.n <= 4) { c.humans = 1; return c; } } catch (e) {} return { n: 2, humans: 1 }; })();
 const P_FIELDS = ['pos', 'lane', 'cash', 'debt', 'bag', 'hold', 'short', 'diceN', 'lastDividend', 'cashStreak', 'flags', 'missions', 'done', 'salary2'];   // salary2:升職加薪,每位玩家各自的
 const mkPlayer = (i, human, char) => ({ i, human, char, pos: 0, lane: null, cash: START_CASH, debt: 0, bag: human ? ['remote'] : [],
-  hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
+  hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0, locked: 0, lockUntil: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
   diceN: 2, lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false, shortWin: false, marginWin: false, dodge: false, low: false, squeezer: false, liquidator: false }, divTotal: 0, missions: [], done: 0, spy: null });
 const others = (i = S.hi) => S.players.filter((p) => p.i !== i);
 const nameOf = (p) => p.name || CHARS[p.char].name;      // 真人可以在選角時取名字;沒取就用角色名
@@ -653,8 +653,8 @@ for (const [type, def] of Object.entries(LANES)) {
       c.beginPath(); c.roundRect(84, 92, 88, 62, 12); c.fill();
       c.font = F(ZH ? 40 : 34); c.fillText(L('POLICE', '警察局'), 128, 202);
     } else {
-      c.font = F(84); c.fillText('IPO', 128, 96);
-      c.font = F(ZH ? 40 : 36); c.fillText(L(`${IPO_FREE} FREE`, `送 ${IPO_FREE} 股`), 128, 186);
+      c.font = F(ZH ? 56 : 46); c.fillText(L('PRIVATE', '內部'), 128, 100);
+      c.font = F(ZH ? 56 : 46); c.fillText(L('OFFER', '認購'), 128, 178);
     }
   });
   // 小路的 6 格:先做空白格,內容由 drawLane 依 S.lanePath 畫上去(每次重新生成都會重畫)
@@ -710,7 +710,7 @@ function drawLaneNet(type) { _drawLane0(type); if (NET.on && NET.started) netSen
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), Object.assign(new THREE.MeshBasicMaterial({ map: tex, transparent: true }), { userData: { outlineParameters: { visible: false } } }));
     sign.position.set(0, 1.86, 0); sign.rotation.y = Math.PI / 4; j.add(sign);                      // 招牌轉 45 度,正對鏡頭
     box(0.06, 0.34, 0.06, 0x33415c, -0.3, 1.5, 0.3, 0.01, j); box(0.06, 0.34, 0.06, 0x33415c, 0.3, 1.5, -0.3, 0.01, j); }   // 招牌的兩根支柱
-  const x = new THREE.Group(); x.position.copy(cellPos(7.75, 12)); scene.add(x);   // IPO 交易所:攤位格的後面(左側)
+  const x = new THREE.Group(); x.position.copy(cellPos(LANES.ipo.cell[0] - 1.25, LANES.ipo.cell[1])); scene.add(x);   // 內部認購的交易所:攤位格的後面(左側)
   box(1.0, 0.7, 1.0, 0xfff8ec, 0, 0.53, 0, 0.05, x); box(1.14, 0.12, 1.14, 0x2fbf9f, 0, 0.94, 0, 0.04, x);
   for (const sx of [-0.32, 0, 0.32]) box(0.1, 0.5, 0.1, 0xffffff, sx, 0.45, 0.52, 0.03, x);         // 柱子
   box(0.5, 0.3, 0.5, 0xfff8ec, 0, 1.15, 0, 0.04, x);
@@ -849,7 +849,7 @@ function drawLabel(i) {
     c.fillStyle = '#3b2f2a'; c.font = F(62); c.fillText('$' + Math.round(S.price[t.type]), 128, 196);
   } else if (t.type === 'gift') { drawGiftLabel(c, F);
   } else if (TILE_ICONS[t.type]) {
-    const lab = { start: [L('GO', '起點')], shop: [L('SHOP', '商店')], divi: [L('DIVIDEND', '股息結算')], ipo: ['IPO', L('new shares', '新股申購')], fee: [L('FEE', '手續費')] }[t.type];   // 金額不寫在格子上,踩到時會有提示
+    const lab = { start: [L('GO', '起點')], shop: [L('SHOP', '商店')], divi: [L('DIVIDEND', '股息結算')], ipo: [L('OFFER', '內部認購')], fee: [L('FEE', '手續費')] }[t.type];   // 金額不寫在格子上,踩到時會有提示
     drawIconTile(c, F, t.type, ...lab);
   } else if (t.type === 'bank') {
     drawBankIcon(c, F, 128, 100);
@@ -1406,7 +1406,7 @@ function advise() {
   const cheap = KEYS.filter((k) => S.price[k] < SECTORS[k].open * 0.97);
   const up = held.find((k) => (S.price[k] * S.hold[k].n - S.hold[k].cost) / S.hold[k].cost >= 0.15);
   if (S.lane?.type === 'jail') return L(`Resting at the police station (${S.lane.wait} rounds left, or pay $${fmt(BAIL)} bail). You cannot trade, but a margin position can still be liquidated.`, `在警察局休息(再 ${S.lane.wait} 回合,或付 $${fmt(BAIL)} 保釋金)。不能買賣,但融資部位一樣可能被斷頭。`);
-  if (S.lane?.type === 'ipo') return L('At the IPO booth. Roll one die to get back on the road.', '在 IPO 攤位。擲一顆骰子走回外圈。');
+  if (S.lane?.type === 'ipo') return L('At the private placement booth. Roll one die to get back on the road.', '在內部認購攤位。擲一顆骰子走回外圈。');
   let d = 0; for (let i = 1; i <= 6; i++) if (TILES[(S.pos + i) % TILES.length] === 'chance') { d = i; break; }
   if (todo.has('profit') && up) return L(`${SECTORS[up].name} is up over 15%. Land on it to take profit.`, `${SECTORS[up].name}已經賺超過 15%,走到它的格子就能獲利了結。`);
   if (todo.has('dip') && cheap.length) return L(`${SECTORS[cheap[0]].name} is below its opening price. Buying it counts as buying the dip.`, `${SECTORS[cheap[0]].name}現在低於開盤價,買進就算逢低買進。`);
@@ -1462,7 +1462,7 @@ function assetRowsHtml(A, mine) {
     `<div class="row"><i style="background:#4aa8ff"></i><span>${L('Stocks', '股票市值')}</span><span></span><span>${fmt(stockV)}</span></div>` +
     `<div class="row"><i style="background:#ffb000"></i><span>${L('Total assets', '總資產')}</span><span></span><b>${fmt(assetsOf(A))}</b></div>` + debtRow(A.debt) +
       (held.length ? held.map((k) => { const h = A.hold[k], pl = h.n * S.price[k] - h.cost; totPL += pl;
-        return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${h.n} ${L('sh', '股')}${marginTag(h, k, A)}</span><span style="text-align:right">${fmt(h.n * S.price[k])}${plTxt(pl)}</span></div>`; }).join('')
+        return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${h.n} ${L('sh', '股')}${marginTag(h, k, A)}${ENG.lockedN(S, h) ? ` 🔒${ENG.lockedN(S, h)}` : ''}</span><span style="text-align:right">${fmt(h.n * S.price[k])}${plTxt(pl)}</span></div>`; }).join('')
         : `<div class="row" style="display:block;color:#9a8676;font-weight:600">${L('No holdings yet', '還沒有持股')}</div>`) +
       KEYS.filter((k) => A.short[k].n > 0).map((k) => { const pl = (A.short[k].entry - S.price[k]) * A.short[k].n; totPL += pl;
         return `<div class="row"><i style="background:${SECTORS[k].css}"></i><span>${SECTORS[k].code}</span><span class="q">${L('short', '空')} ${A.short[k].n}${squeezeTag(A.short[k], k)}</span><span style="color:${pl >= 0 ? '#1c8a4a' : '#c4472f'}">${pl >= 0 ? '+' : '-'}${fmt(Math.abs(pl))}</span></div>`; }).join('') +
@@ -1555,7 +1555,7 @@ const closePanel = () => $('panel').classList.add('hide');
 // 按鈕上的金額和價格影響會跟著拉桿即時變
 function buyPanel(k) {
   return new Promise((res) => {
-    const sec = SECTORS[k], h = S.hold[k], sh = S.short[k], price = S.price[k];
+    const sec = SECTORS[k], h = S.hold[k], sh = S.short[k], price = S.price[k], lockN = ENG.lockedN(S, h), free = h.n - lockN;   // 內部認購鎖住的股數不能賣
     const gain = h.n ? (price * h.n - h.cost) / h.cost * 100 : 0;
     const spl = sh.n ? (sh.entry - price) / sh.entry * 100 : 0;
     const vs = (price / sec.open - 1) * 100, ratio = acctRatio(S.players[S.hi]);
@@ -1582,18 +1582,18 @@ function buyPanel(k) {
         ${sh.n
           ? `<button class="b-ok" data-a="cover">${L('Cover', '回補')}<br><span>${coverBack(k, sh) >= sh.entry * sh.n ? '+' : '-'}$${fmt(Math.abs(coverBack(k, sh) - sh.entry * sh.n))}</span></button>`
           : `<button class="b-short" data-a="short" ${h.n ? 'disabled' : ''}>${L('Short', '放空')}<br><span id="tShort"></span></button>`}
-        <button class="b-sell" data-a="sell" ${h.n ? '' : 'disabled'}>${L('Sell', '賣出')}<br><span id="tSell"></span></button>
+        <button class="b-sell" data-a="sell" ${free ? '' : 'disabled'}>${L('Sell', '賣出')}<br><span id="tSell"></span></button>
       </div>
       <div class="btns" style="margin-top:8px"><button class="b-skip" data-a="skip">${L('Skip', '跳過')}</button></div>`);
     const qty = $('qty'), n = () => +qty.value;
     // 拉桿一動,四顆按鈕的金額、價格影響、能不能按都跟著更新
     const paint = () => {
-      const q = n(), cost = fillAt(k, buyF(q)) * q, sellN = Math.min(q, h.n), shortCost = fillAt(k, shortF(q)) * q;
+      const q = n(), cost = fillAt(k, buyF(q)) * q, sellN = Math.min(q, free), shortCost = fillAt(k, shortF(q)) * q;
       $('qtyVal').textContent = L(`${q} shares · $${fmt(cost)}`, `${q} 股 · $${fmt(cost)}`);
       $('tBuy').textContent = `$${fmt(cost)} ${pct(buyF(q))}`; p.querySelector('[data-a=buy]').disabled = !!sh.n || S.cash < cost;
       $('tMargin').textContent = `${L('pay', '自備')} $${fmt(cost * (1 - MARGIN_LOAN))}`; p.querySelector('[data-a=margin]').disabled = !!sh.n || S.cash < cost * (1 - MARGIN_LOAN);
       if ($('tShort')) { $('tShort').textContent = `$${fmt(shortCost)} ${pct(shortF(q))}`; p.querySelector('[data-a=short]').disabled = !!h.n || S.cash < shortCost; }
-      $('tSell').textContent = h.n ? `${sellN} ${L('sh', '股')} ${pct(sellF(sellN))}` : '—';
+      $('tSell').textContent = free ? `${sellN} ${L('sh', '股')} ${pct(sellF(sellN))}` : lockN ? `🔒 ${h.lockUntil - S.rolls}${L('r', '回合')}` : '—';
     };
     qty.oninput = paint; paint();
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
@@ -1680,11 +1680,10 @@ function checkBotMissions(only) {
 }
 // 市場事件格:桌上發三張背面朝上的牌,玩家自己挑一張翻開(對手走到時由牠自動挑)。
 // 翻開的那張生效;另外兩張隨後也翻開,讓你看到「本來可能抽到什麼」。計時用遊戲自己的時鐘(wait),測試時可以快轉
-// auto = 電腦抽(自動挑、自動繼續);round = 一輪結束系統抽(同樣自動,但不會出特殊牌,因為沒有「誰」被送進小路)
+// auto = 電腦抽(自動挑、自動繼續);round = 一輪結束系統抽(同樣自動)。警察局、內部認購是命運牌,不會出現在這裡
 function drawEventCards(auto, round = false, special = !round) {     // special=false:這次不混特殊牌(回合事件、小路上的事件)
   return new Promise((res) => {
     const picks = EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 3).map(instantiate), who = CHARS[S.foe].name;
-    if (special && Math.random() < SPECIAL_RATE) picks[Math.floor(Math.random() * 3)] = SPECIAL[Math.random() < 0.5 ? 'jail' : 'ipo'];
     const face = (e) => {
       const top = KEYS.filter((k) => Math.round((e.m[k] - 1) * 100) && !(e.divKeys || []).includes(k)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 6);
       if (e.special) return `<div class="dhead ${e.special === 'ipo' ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` +
@@ -1821,7 +1820,7 @@ function bagPanel() {
   });
 }
 /* ───────────── 中間的小路 ───────────── */
-// 被送進小路:大跳躍到第一格。拘留小路 = 帳戶凍結(不能買賣、不能用道具);IPO 小路 = 每格都能用承銷價申購新股
+// 被送進小路:大跳躍到第一格。拘留小路 = 帳戶凍結(不能買賣、不能用道具);內部認購 = 在攤位用市價 8 折認購一檔新股(鎖 IPO_LOCK 回合不能賣)
 async function enterLane(isMe, type) {
   const who = isMe ? S : S.ai, P = isMe ? PM() : PA(), name = CHARS[S.foe].name;
   // 每次有人進來,這條小路重新隨機生成(除非還有別人正走在上面)
@@ -1874,42 +1873,39 @@ function jailPanel() {
     p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.a === 'bail'); });
   });
 }
-// IPO:隨機一檔股票,用承銷價(市價 8 折)申購。新股是公司新發行的,所以不會推高市價
+// 內部認購:隨機一檔股票,受邀用市價 8 折認購,一定買得到;買到的股數鎖 IPO_LOCK 回合不能賣(被斷頭時照樣會被賣掉)。新股不會推高市價
 const ipoPick = (who) => ENG.ipoPick(S, who === S ? S.players[S.hi] : who, Math.random);      // 隨機一檔沒在放空的股票(引擎)
-// 送的股票成本算承銷價(只是不用付錢),這樣損益百分比才有意義
-function ipoGrant(who, k) { ENG.ipoGrant(S, who === S ? S.players[S.hi] : who, k); pubNote(who, k); }
 function ipoPanel() {
   return new Promise((res) => {
     const k = ipoPick(S), sec = SECTORS[k], h = S.hold[k], mkt = S.price[k], price = mkt * IPO_OFF;
-    ipoGrant(S, k); sfx('coin'); drawAll(); hud();
-    const p = panel(`<h3><span class="tag" style="background:#2fbf9f">IPO</span>${L('New shares: ', '新股中籤:')}${sec.name}</h3>
-      <p><b style="color:#1c8a4a">${L(`You get ${IPO_FREE} shares for free (worth $${fmt(mkt * IPO_FREE)}).`, `免費獲得 ${IPO_FREE} 股(市值 $${fmt(mkt * IPO_FREE)})。`)}</b> ${L('You can also buy more at the IPO price, which is set below the market so the shares sell out. The price can still fall afterwards. Next turn you roll one die to get back on the road.', '想多買還可以用承銷價加購:新股為了順利賣完,承銷價會訂得比市價低。不過之後股價還是可能下跌。下一回合擲一顆骰子走回外圈。')}</p>
+    sfx('bell');
+    const p = panel(`<h3><span class="tag" style="background:#2fbf9f">${L('OFFER', '內部認購')}</span>${sec.name}</h3>
+      <p>${L(`You are invited to buy new ${sec.name} shares at 20% below the market price. You are sure to get them. <b>The catch: you cannot sell them for ${IPO_LOCK} rounds</b> (they can still be sold for you if a margin call hits).`,
+        `你受邀用市價 8 折認購${sec.name}的新股,一定買得到。<b>代價是買到後 ${IPO_LOCK} 回合不能賣</b>(融資被斷頭時照樣會被強制賣掉)。這段期間遇到壞消息也只能抱著。`)}</p>
       <div class="kv">
         <div>${L('Market price', '市價')}<b>$${Math.round(mkt)}</b></div>
-        <div>${L('IPO price', '承銷價')}<b style="color:#1c8a4a">$${Math.round(price)}</b></div>
+        <div>${L('Offer price', '認購價')}<b style="color:#1c8a4a">$${Math.round(price)}</b></div>
         <div>${L('You hold', '持有')}<b>${h.n}</b></div>
       </div>
-      <div class="slider"><span>${L('Buy more', '加購')}</span><input type="range" id="ipoQty" min="10" max="50" step="10" value="10"><b id="ipoVal"></b></div>
+      <div class="slider"><span>${L('Buy', '認購')}</span><input type="range" id="ipoQty" min="10" max="50" step="10" value="10"><b id="ipoVal"></b></div>
       <div class="btns">
-        <button class="b-buy" data-a="buy">${L('Buy more', '加購')}<br><span id="ipoBtn"></span></button>
-        <button class="b-skip" data-a="x">${L('Continue', '繼續')}</button>
+        <button class="b-buy" data-a="buy">${L('Buy', '認購')}<br><span id="ipoBtn"></span></button>
+        <button class="b-skip" data-a="x">${L('No thanks', '不認購')}</button>
       </div>`);
     const qty = $('ipoQty');
-    const paint = () => { const q = +qty.value; $('ipoVal').textContent = `${q} ${L('sh', '股')} · $${fmt(price * q)}`; $('ipoBtn').textContent = `$${fmt(price * q)}`; p.querySelector('[data-a=buy]').disabled = S.cash < price * q; };
+    const paint = () => { const q = +qty.value; $('ipoVal').textContent = `${q} ${L('sh', '股')} · $${fmt(price * q)}`; $('ipoBtn').textContent = `$${fmt(price * q)} · 🔒${IPO_LOCK}${L('r', '回合')}`; p.querySelector('[data-a=buy]').disabled = S.cash < price * q; };
     qty.oninput = paint; paint();
     p.querySelectorAll('button').forEach((b) => b.onclick = () => {
-      if (b.dataset.a === 'buy') { const n = +qty.value; ENG.ipoBuy(S, S.players[S.hi], k, n); pubNote(S.players[S.hi], k); sfx('buy'); { const nm = nameOf(S.players[S.hi]); toast(L(`${nm} bought more ${sec.name} at the IPO price`, `${nm}用承銷價加購${sec.name}`)); } }
+      if (b.dataset.a === 'buy') { const n = +qty.value; ENG.ipoBuy(S, S.players[S.hi], k, n); pubNote(S.players[S.hi], k); sfx('buy'); { const nm = nameOf(S.players[S.hi]); toast(L(`${nm} took part in the ${sec.name} private placement`, `${nm}參加了${sec.name}的內部認購`)); } }
       drawAll(); hud(); closePanel(); res();
     });
   });
 }
 async function aiIpo() {
-  const A = S.ai, who = CHARS[S.foe].name, k = ipoPick(A), sec = SECTORS[k], price = S.price[k] * IPO_OFF;
-  const lots = SIM.ipoLots(S, A, k);                               // 電腦加購幾手(和模擬器同一個決定)
-  ipoGrant(A, k);
-  if (lots) { ENG.ipoBuy(S, A, k, LOT * lots); pubNote(A, k);
-    toast(L(`${who} got ${IPO_FREE} free ${sec.name} shares and bought more`, `${who}免費獲得${sec.name} ${IPO_FREE} 股,又加購了`)); }
-  else toast(L(`${who} got ${IPO_FREE} free ${sec.name} shares`, `${who}免費獲得${sec.name} ${IPO_FREE} 股`));
+  const A = S.ai, who = CHARS[S.foe].name, k = ipoPick(A), sec = SECTORS[k];
+  const lots = SIM.ipoLots(S, A, k);                               // 電腦認購幾手(和模擬器同一個決定);公告不寫股數
+  if (lots) { ENG.ipoBuy(S, A, k, LOT * lots); pubNote(A, k); toast(L(`${who} took part in the ${sec.name} private placement`, `${who}參加了${sec.name}的內部認購`)); }
+  else toast(L(`${who} passed on the ${sec.name} private placement`, `${who}沒有參加${sec.name}的內部認購`));
   drawAll(); hud(); await wait(1.1);
 }
 // 銀行:借現金 / 還錢。每次走到銀行只做一個動作,選完面板就關掉、換下一位
@@ -2053,7 +2049,7 @@ function aiTileScore(A, i) {
     else if (t === F) v += A.cash >= p * LOT + lv.reserve ? 4.5 : 1;               // 主攻股:最想去
     else v += p < sec.open * 0.95 ? 1.5 : 0.5; }                                   // 便宜的比較想買
   else if (t === 'shop') v += A.cash >= 2500 ? (A.bag.includes('remote') ? 1.5 : 2.5) : 0.3;
-  else if (t === 'ipo') v += 2.5;
+  else if (t === 'ipo') v += 1.5;
   else if (t === 'gift') v += 1.5;
   else if (t === 'bank') v += A.cash < 1500 || (A.debt && A.cash > 6000) ? 1.5 : 0;
   for (let j = 1; j <= i; j++) { const tt = TILES[(A.pos + j) % TILES.length]; if (tt === 'start') v += 2; else if (tt === 'divi') v += 0.8; }   // 經過發薪 / 股息格
