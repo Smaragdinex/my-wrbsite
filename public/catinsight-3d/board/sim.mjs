@@ -256,6 +256,11 @@ export function makeSim(D, opts = {}) {
   const terminal = (st, p) => (MC.terminal === false ? 0 : KEYS.reduce((a, k) => a + (p.hold[k].n - p.short[k].n) * st.price[k] * evOf(st, k, p), 0));
   const lead = (st, i) => { const me = assetsOf(st, st.players[i]) + terminal(st, st.players[i]); let best = -Infinity;
     st.players.forEach((q, j) => { if (j !== i) best = Math.max(best, assetsOf(st, q) + terminal(st, q)); });
+    // late:模擬跑得到遊戲結束(最後幾回合)才改看輸贏,前面還是看領先差距
+    if (MC.score === 'win' || MC.score === 'winlead' || (MC.score === 'late' && st.over)) {   // 目標是「拿第一」:這次模擬贏了算 1、平手 0.5、輸了 0;winlead 再加一點領先差距當平手時的參考
+      const w = me > best ? 1 : me === best ? 0.5 : 0;
+      return MC.score === 'win' ? w : w + Math.max(-0.25, Math.min(0.25, (me - best) / 40000));
+    }
     return MC.score === 'own' ? me : MC.score === 'mix' ? me - 0.5 * best : me - best; };
   // 從 st(輪到 p、還沒擲骰)用 forced 動作模擬 depth 回合,回傳平均領先。模擬裡所有人都用期望值策略
   const seedsFor = (n) => { const out = []; for (let i = 0; i < n; i++) out.push((rand() * 2 ** 31) | 0); return out; };

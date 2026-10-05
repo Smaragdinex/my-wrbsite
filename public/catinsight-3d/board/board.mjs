@@ -20,7 +20,7 @@ const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
 import { gameData } from './data.mjs?v=9';
-import { makeSim } from './sim.mjs?v=12';
+import { makeSim } from './sim.mjs?v=13';
 import { makeEngine } from './engine.mjs?v=6';
 const GD = gameData(L, fmt);      // 遊戲資料:畫面、遊戲引擎、電腦模擬都用同一份
 const { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = GD;
@@ -89,7 +89,7 @@ const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim(GD,
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=14', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=15', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -117,7 +117,17 @@ function simSnapshot(A) {
 }
 // 公開資訊帳本:每筆「畫面上公告過」的持股變化(買、賣、放空、回補、IPO、斷頭…)都記一筆。
 // 電腦只能靠這本帳推測對手持股(還會依難度忘記舊的),除非牠用了偵查報告才看得到真實部位;總資產和現金永遠看不到
-function pubNote(p, k) { if (!S || !p) return; if (p === S) p = S.players[S.hi]; /* 有些地方傳的是 S(現在這位人類的捷徑) */ (S.pub ||= {})[p.i] ||= {}; S.pub[p.i][k] = { n: p.hold[k].n, sh: p.short[k].n, at: S.rolls }; }
+// 公告只說「買了 / 賣了 / 放空 / 回補」,沒說幾股,所以帳本裡的股數是推測:買一次當作 2 手、賣一次當作賣掉一半;
+// 只有公告寫明「全部」的(斷頭、軋空、手滑全賣)才歸零。tn / tsh 是上次公告時的真實部位,只拿來判斷這次是買還是賣(方向本來就有公告)
+const PUB_GUESS = 2 * LOT;
+function pubNote(p, k, all = false) {
+  if (!S || !p) return; if (p === S) p = S.players[S.hi]; /* 有些地方傳的是 S(現在這位人類的捷徑) */
+  const book = ((S.pub ||= {})[p.i] ||= {}), e = book[k] || { n: 0, sh: 0, tn: 0, tsh: 0 }, tn = p.hold[k].n, tsh = p.short[k].n;
+  const half = (x) => Math.round(x / 2 / LOT) * LOT;
+  const n = all && tn === 0 ? 0 : tn > e.tn ? e.n + PUB_GUESS : tn < e.tn ? half(e.n) : e.n;
+  const sh = all && tsh === 0 ? 0 : tsh > e.tsh ? e.sh + PUB_GUESS : tsh < e.tsh ? half(e.sh) : e.sh;
+  book[k] = { n, sh, tn, tsh, at: S.rolls };
+}
 function pubView(A, q, k) {
   if (A.spy && S.rolls < A.spy.until && A.spy.target === q.i) return { n: q.hold[k].n, sh: q.short[k].n };     // 偵查中:看真的
   const e = S.pub && S.pub[q.i] && S.pub[q.i][k]; if (!e || S.rolls - e.at > AI().memory) return { n: 0, sh: 0 };   // 沒公告過 / 忘了:當作沒有
@@ -259,8 +269,8 @@ let S;
 // 買賣、融資、放空 / 回補、股價推動、斷頭 / 軋空、資產計算都在遊戲引擎(engine.mjs),電腦模擬(sim.mjs)也用同一份。
 // 這裡只接上畫面需要的副作用:被斷頭 / 軋空時記進公開帳本、排一張說明卡(S.notices,流程走到可以停的地方再顯示)
 const ENG = makeEngine(GD, { hooks: {
-  onLiquidate: (st, who, x) => { pubNote(who, x.k); S.notices.push({ pi: who.i, k: x.k, n: x.n, back: x.back, lost: x.lost }); },
-  onSqueeze: (st, who, x) => { pubNote(who, x.k); S.notices.push({ pi: who.i, k: x.k, n: x.n, back: x.back, lost: x.lost, squeeze: true }); },
+  onLiquidate: (st, who, x) => { pubNote(who, x.k, true); S.notices.push({ pi: who.i, k: x.k, n: x.n, back: x.back, lost: x.lost }); },
+  onSqueeze: (st, who, x) => { pubNote(who, x.k, true); S.notices.push({ pi: who.i, k: x.k, n: x.n, back: x.back, lost: x.lost, squeeze: true }); },
 } });
 const shortValue = (k, who = S) => ENG.shortValue(S, who, k);       // 空單現值:保證金 + 損益,最慘賠光保證金
 const squeezeGap = (h, k) => (h.entry * SQUEEZE / S.price[k] - 1) * 100;      // 再漲幾 % 會被軋(30% 就強迫回補)
@@ -2003,7 +2013,7 @@ async function applyFate(c, isMe) {
   else if (c.id === 'fat') {
     // 隨機一檔持股整筆用市價賣掉(融資借款一起還),賣壓會壓低股價。沒有持股就只是虛驚一場
     if (!r.k) say(`${name} has nothing to sell. Phew.`, `${name}沒有持股,虛驚一場`);
-    else { pubNote(who, r.k); sfx('sell'); say(`${name} accidentally sold all of ${SECTORS[r.k].name}`, `${name}手滑把${SECTORS[r.k].name}全部賣掉了`); } }
+    else { pubNote(who, r.k, true); sfx('sell'); say(`${name} accidentally sold all of ${SECTORS[r.k].name}`, `${name}手滑把${SECTORS[r.k].name}全部賣掉了`); } }
   else if (c.id === 'swap' && r.other) {
     // 和隨機一位對手交換位置(連同在小路上的狀態一起換),兩隻棋子各自跳過去;自己換到的那一格要重新結算
     const o = r.other, PW = PIECES[who.i], PR = PIECES[o.i];
