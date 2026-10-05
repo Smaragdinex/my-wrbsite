@@ -1,4 +1,4 @@
-import { makeEngine } from './engine.mjs?v=7';
+import { makeEngine } from './engine.mjs?v=8';
 import { makePolicy } from './nn.mjs?v=1';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
@@ -106,7 +106,7 @@ export function makeSim(D, opts = {}) {
   // 命運牌:效果在引擎;瞬間移動要重新結算換到的那一格、IPO 要進小路
   function applyFate(st, p, c) {
     const r = ENG.fate(st, p, c, rand);
-    if (c.id === 'fat' && r.k) note(st, p, r.k, true);
+    if (c.id === 'fat' && r.k) note(st, p, r.k);
     if (r.other) land(st, p, true);
     if (r.lane) enterLane(st, p, r.lane);
   }

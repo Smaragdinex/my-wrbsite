@@ -19,9 +19,9 @@ const ZH = (new URLSearchParams(location.search).get('lang') || savedLang || nav
 const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
-import { gameData } from './data.mjs?v=10';
-import { makeSim } from './sim.mjs?v=16';
-import { makeEngine } from './engine.mjs?v=7';
+import { gameData } from './data.mjs?v=11';
+import { makeSim } from './sim.mjs?v=17';
+import { makeEngine } from './engine.mjs?v=8';
 const GD = gameData(L, fmt);      // 遊戲資料:畫面、遊戲引擎、電腦模擬都用同一份
 const { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_LOCK, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = GD;
 const PATH_INFO = {
@@ -91,7 +91,7 @@ const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim(GD,
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=18', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=19', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -2012,9 +2012,9 @@ async function applyFate(c, isMe) {
   else if (c.id === 'salary2') say(`${name}: next salary doubled`, `${name}下次薪水加倍`);
   else if (c.id === 'gostart') { await hopOnto(tiles[0].g, P, true); if (isMe) paydayUI(r.pay, true); else hud(); }
   else if (c.id === 'fat') {
-    // 隨機一檔持股整筆用市價賣掉(融資借款一起還),賣壓會壓低股價。沒有持股就只是虛驚一場
-    if (!r.k) say(`${name} has nothing to sell. Phew.`, `${name}沒有持股,虛驚一場`);
-    else { pubNote(who, r.k, true); sfx('sell'); say(`${name} accidentally sold all of ${SECTORS[r.k].name}`, `${name}手滑把${SECTORS[r.k].name}全部賣掉了`); } }
+    // 隨機一檔持股用市價賣掉 LOT 股(持股不到 LOT 股就全賣;融資借款按比例還),賣壓會壓低股價。沒有可賣的持股就只是虛驚一場
+    if (!r.k) say(`${name} has nothing to sell. Phew.`, `${name}沒有可以賣的持股,虛驚一場`);
+    else { pubNote(who, r.k); sfx('sell'); say(`${name} accidentally sold ${r.n} shares of ${SECTORS[r.k].name}`, `${name}手滑賣掉了 ${r.n} 股${SECTORS[r.k].name}`); } }
   else if (c.id === 'swap' && r.other) {
     // 和隨機一位對手交換位置(連同在小路上的狀態一起換),兩隻棋子各自跳過去;自己換到的那一格要重新結算
     const o = r.other, PW = PIECES[who.i], PR = PIECES[o.i];

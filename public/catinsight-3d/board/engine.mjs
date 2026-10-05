@@ -251,7 +251,7 @@ export function makeEngine(D, opts = {}) {
     else if (c.id === 'divi') r.pay = payday(st, p, false);
     else if (c.id === 'salary2') p.salary2 = true;
     else if (c.id === 'gostart') { p.lane = null; p.pos = 0; r.pay = payday(st, p, true); }
-    else if (c.id === 'fat') { const held = KEYS.filter((k) => p.hold[k].n - lockedN(st, p.hold[k]) > 0); if (held.length) { r.k = held[Math.floor(rand() * held.length)]; sell(st, p, r.k, p.hold[r.k].n - lockedN(st, p.hold[r.k]), true); } }   // 鎖住的內部認購股賣不掉
+    else if (c.id === 'fat') { const held = KEYS.filter((k) => p.hold[k].n - lockedN(st, p.hold[k]) > 0); if (held.length) { r.k = held[Math.floor(rand() * held.length)]; const s = sell(st, p, r.k, LOT, true); r.n = s ? s.n : 0; } }   // 隨機一檔賣 LOT 股(不是挑賠錢的);鎖住的內部認購股賣不掉
     else if (c.id === 'swap') { const q = others[Math.floor(rand() * others.length)]; if (q) { [p.pos, q.pos] = [q.pos, p.pos]; [p.lane, q.lane] = [q.lane, p.lane]; r.other = q; } }
     else if (c.id === 'ipo') r.lane = 'ipo';
     else if (c.id === 'jail') r.lane = 'jail';
