@@ -1512,7 +1512,9 @@ function hud() {
   const e = S.lastEvent;
 
   { const up = (S.trend ?? MARKET_DRIFT) >= 0; $('evtBox').classList.toggle('mk-up', up); $('evtBox').classList.toggle('mk-dn', !up); }   // 市場事件框的標題列:大盤漲綠色、跌紅色
-  $('evtBody').innerHTML = `<div class="mvrow trend"><span>${L('Market trend', '目前大盤')}</span><span style="color:${(S.trend ?? MARKET_DRIFT) >= 0 ? '#1c8a4a' : '#c4472f'}">${trendTxt(S.trend ?? MARKET_DRIFT)}</span></div>` + (e
+  // 大盤趨勢(每回合的方向)和這張卡讓 ETF 漲跌多少是兩回事:只有總體大事會改趨勢,產業新聞不改,底下用一行小字講清楚
+  const tnote = !e || e.special ? '' : e.trend != null ? L('This news changed the market trend', '這則新聞改變了大盤趨勢') : L('Only some sectors move; market trend unchanged', '只影響部分產業,大盤趨勢不變');
+  $('evtBody').innerHTML = `<div class="trendbox"><div class="mvrow trend"><span>${L('Market trend', '大盤趨勢')}</span><span style="color:${(S.trend ?? MARKET_DRIFT) >= 0 ? '#1c8a4a' : '#c4472f'}">${trendTxt(S.trend ?? MARKET_DRIFT)}</span></div>${tnote ? `<div class="tnote">${tnote}</div>` : ''}</div>` + (e
     ? `<div>${e.t}</div><div class="why">${e.w}</div>` + (e.cash ? `<div class="mvrow"><span>${L('Everyone', '每位玩家')}</span><span style="color:#1c8a4a">+$${fmt(e.cash)}</span></div>` : '') + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
     : `<div class="why">${L('No event yet. Land on a ? tile to draw one.', '還沒有事件。走到「?」格會抽一張。')}</div>`);
