@@ -656,9 +656,9 @@ function drawLane(type) {
       if (k === 'fate') { c.font = F(96); c.fillText('★', 128, 96); c.font = F(ZH ? 44 : 40); c.fillText(info.b, 128, 196); return; }
       if (k === 'chance') { c.fillStyle = '#b0780a'; c.font = F(120); c.fillText('?', 128, 100); c.font = F(ZH ? 36 : 34); c.fillText(info.b, 128, 196); return; }
       if (k === 'gift') { drawGiftLabel(c, F); return; }
-      if (k === 'coin') { drawIconTile(c, F, 'coin', L('CASH', '撿到錢'), '+$300'); return; }
-      if (k === 'fee') { drawIconTile(c, F, 'fee', L('FEE', '手續費'), '-$200'); return; }
-      if (k === 'interest') { drawInterestIcon(c, F, 128, 96); c.font = F(ZH ? 40 : 29); c.fillText(L('INTEREST +3%', '利息 +3%'), 128, 206); return; }
+      if (k === 'coin') { drawIconTile(c, F, 'coin', L('CASH', '撿到錢')); return; }
+      if (k === 'fee') { drawIconTile(c, F, 'fee', L('FEE', '手續費')); return; }
+      if (k === 'interest') { drawInterestIcon(c, F, 128, 96); c.fillStyle = '#fff'; c.font = F(ZH ? 44 : 38); c.fillText(L('INTEREST', '利息'), 128, 212); return; }
       c.font = F(info.a.length > 4 ? 44 : (ZH ? 56 : 48)); c.fillText(info.a, 128, 100);
       c.font = F(ZH ? 34 : 32); c.fillText(info.b, 128, 172);
     });
@@ -833,7 +833,7 @@ function drawLabel(i) {
     c.fillStyle = '#3b2f2a'; c.font = F(62); c.fillText('$' + Math.round(S.price[t.type]), 128, 196);
   } else if (t.type === 'gift') { drawGiftLabel(c, F);
   } else if (TILE_ICONS[t.type]) {
-    const lab = { start: [L('GO', '起點'), `+$${fmt(SALARY)}`], shop: [L('SHOP', '商店')], divi: [L('DIVIDEND', '股息結算')], ipo: ['IPO', L('new shares', '新股申購')], fee: [L('FEE', '手續費'), `-$${FEE}`] }[t.type];
+    const lab = { start: [L('GO', '起點')], shop: [L('SHOP', '商店')], divi: [L('DIVIDEND', '股息結算')], ipo: ['IPO', L('new shares', '新股申購')], fee: [L('FEE', '手續費')] }[t.type];   // 金額不寫在格子上,踩到時會有提示
     drawIconTile(c, F, t.type, ...lab);
   } else if (t.type === 'bank') {
     drawBankIcon(c, F, 128, 100);
