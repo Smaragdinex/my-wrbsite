@@ -656,6 +656,7 @@ function drawLane(type) {
       if (k === 'fate') { c.font = F(96); c.fillText('★', 128, 96); c.font = F(ZH ? 44 : 40); c.fillText(info.b, 128, 196); return; }
       if (k === 'chance') { c.fillStyle = '#b0780a'; c.font = F(120); c.fillText('?', 128, 100); c.font = F(ZH ? 36 : 34); c.fillText(info.b, 128, 196); return; }
       if (k === 'gift') { drawGiftLabel(c, F); return; }
+      if (k === 'interest') { drawInterestIcon(c, F, 128, 96); c.font = F(ZH ? 40 : 34); c.fillText(L('INTEREST +3%', '利息 +3%'), 128, 206); return; }
       c.font = F(info.a.length > 4 ? 44 : (ZH ? 56 : 48)); c.fillText(info.a, 128, 100);
       c.font = F(ZH ? 34 : 32); c.fillText(info.b, 128, 172);
     });
@@ -746,6 +747,25 @@ function icon(c, type, x, y, r, color) {
   c.restore();
 }
 // 禮物格的圖示:和其他格子一樣用單色線條畫(白色禮物盒,緞帶用挖空的方式露出格子底色)
+// 銀行格的圖示:三角形屋頂(中間一個 $)、四根柱子、台階。白色,和禮物格同樣的畫法
+const drawBankIcon = (c, F, cx, cy) => {
+  c.save(); c.translate(cx, cy); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineJoin = 'round';
+  c.beginPath(); c.moveTo(-66, -26); c.lineTo(0, -66); c.lineTo(66, -26); c.closePath(); c.fill();          // 屋頂
+  c.fillRect(-62, -24, 124, 10);                                                                         // 橫樑
+  for (const x of [-46, -16, 16, 46]) c.fillRect(x - 8, -10, 16, 56);                                     // 柱子
+  c.fillRect(-64, 48, 128, 10); c.fillRect(-72, 60, 144, 10);                                             // 台階
+  c.globalCompositeOperation = 'destination-out'; c.font = F(30); c.fillText('$', 0, -40); c.globalCompositeOperation = 'source-over';   // 屋頂上挖一個 $
+  c.restore();
+};
+// 利息格的圖示:一矮一高兩疊硬幣(錢變多),上面一個往右上的箭頭
+const drawInterestIcon = (c, F, cx, cy) => {
+  c.save(); c.translate(cx, cy); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineCap = 'round'; c.lineJoin = 'round';
+  const stack = (x, n) => { for (let i = 0; i < n; i++) { c.beginPath(); c.roundRect(x - 30, 48 - i * 17, 60, 14, 7); c.fill(); } };
+  stack(-36, 3); stack(36, 6);                                                                           // 矮的一疊、高的一疊
+  c.lineWidth = 10; c.beginPath(); c.moveTo(-58, -6); c.quadraticCurveTo(-30, -40, 14, -54); c.stroke();  // 往右上的箭頭
+  c.beginPath(); c.moveTo(-2, -68); c.lineTo(20, -56); c.lineTo(6, -34); c.stroke();
+  c.restore();
+};
 const drawGiftLabel = (c, F) => {
   c.save(); c.translate(128, 96); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineJoin = 'round'; c.lineCap = 'round';
   c.beginPath(); c.roundRect(-52, -6, 104, 72, 10); c.fill();                       // 盒身
@@ -769,6 +789,9 @@ function drawLabel(i) {
     c.fillStyle = sec.css; c.font = F(sec.code.length > 8 ? 28 : ZH ? (sec.code.length > 3 ? 34 : 38) : 34); c.fillText(sec.code, 128, 136);
     c.fillStyle = '#3b2f2a'; c.font = F(62); c.fillText('$' + Math.round(S.price[t.type]), 128, 196);
   } else if (t.type === 'gift') { drawGiftLabel(c, F);
+  } else if (t.type === 'bank') {
+    drawBankIcon(c, F, 128, 100);
+    c.fillStyle = '#fff'; c.font = F(ZH ? 46 : 42); c.fillText(L('BANK', '銀行'), 128, 212);
   } else if (t.type === 'chance') {
     c.fillStyle = '#b0780a'; c.font = F(150); c.fillText('?', 128, 112);
     c.font = F(34); c.fillText(L('EVENT', '市場事件'), 128, 208);
@@ -2566,4 +2589,4 @@ function clientInit() {
 
 resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, SIM, simSnapshot, playEvent, roundDividends, payday, aiPayday, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, marginCheck, acctRatio, finish, checkMissions, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, SIM, simSnapshot, playEvent, laneTiles, drawLanes, roundDividends, payday, aiPayday, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, marginCheck, acctRatio, finish, checkMissions, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
