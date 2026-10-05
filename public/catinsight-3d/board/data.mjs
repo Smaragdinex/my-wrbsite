@@ -148,6 +148,21 @@ const EVENTS = [
   // 政府普發現金:除了股價變動,每位玩家還直接拿到現金(cash)
   Object.assign(EVT(0.01, L('Government cash handout', '政府普發現金'), L('Everyone gets cash from the government. People spend it, so shops, restaurants and travel do well; the government borrows more, so bonds dip.', '政府發現金給每個人。大家拿到錢會去消費,零售、餐飲、旅遊受惠;政府要多借錢,債券小跌。'),
     {agri: 1.03, soft: 1.02,  disc: 1.12, staples: 1.06, game: 1.06, trans: 1.04, fin: 1.03, reit: 1.02, gold: 1.02, bond: 0.96 }), { cash: 1000 }),
+  // 總體好消息(讓大盤轉多),和上面的總體壞消息一張對一張:停火↔戰爭、疫苗↔疫情、通膨降溫↔通膨升溫、貿易協議↔貿易戰、央行救市↔金融風暴
+  EVT(0.01, L('Ceasefire agreement signed', '停火協議簽署'), L('The fighting stops. Ships and planes run normal routes again and travel recovers; oil and defense lose their war premium.', '戰爭停火。船跟飛機恢復正常航線,旅遊回溫;石油和軍工的戰爭溢價消退。'),
+    {def: 0.80, oil: 0.88, gold: 0.93, bond: 0.98, trans: 1.15, disc: 1.15, fin: 1.06, mat: 1.05, chip: 1.05, tech: 1.05, reit: 1.04, green: 1.05, crypto: 1.05 }),
+  EVT(0.01, L('Vaccine approved worldwide', '疫苗全面施打'), L('People can go out again: travel, shipping and banks bounce back hard. Stay-at-home stocks like games and software cool off.', '大家可以出門了:旅遊、航運、銀行強力反彈;遊戲、軟體這類宅經濟退燒。'),
+    {bio: 1.12, disc: 1.30, trans: 1.20, fin: 1.08, reit: 1.08, oil: 1.12, mat: 1.06, game: 0.88, soft: 0.92, health: 0.95, gold: 0.95, bond: 0.97 }),
+  EVT(0.01, L('Inflation cools down', '通膨降溫'), L('Prices stop rising so fast, so rates can come down later. Growth stocks, property and bonds rise; commodities and gold lose their inflation shield.', '物價漲勢趨緩,之後有機會降息。成長股、不動產、債券上漲;原物料和黃金失去抗通膨題材。'),
+    {tech: 1.10, soft: 1.10, chip: 1.06, reit: 1.10, bond: 1.06, util: 1.04, disc: 1.06, game: 1.04, green: 1.06, crypto: 1.06, gold: 0.92, agri: 0.92, mat: 0.92, oil: 0.93 }),
+  EVT(0.01, L('Trade deal reached', '貿易協議達成'), L('Tariffs come off. Factories can sell abroad again: chips, materials and shipping lead the rally.', '關稅取消,工廠又能外銷:半導體、原物料、航運領漲。'),
+    {chip: 1.14, mat: 1.10, trans: 1.12, agri: 1.06, tech: 1.06, staples: 1.03, disc: 1.04, def: 0.95, gold: 0.97 }),
+  EVT(0.02, L('Central bank to the rescue', '央行出手救市'), L('The central bank buys bonds and pumps money into markets (QE). Almost everything rises, banks and property most; extra money also lifts gold and crypto.', '央行大買債券、把錢灌進市場(量化寬鬆)。幾乎全面上漲,金融、不動產最多;多出來的錢也推升黃金和加密貨幣。'),
+    {fin: 1.15, reit: 1.14, bond: 1.06, tech: 1.08, soft: 1.08, chip: 1.08, disc: 1.08, mat: 1.06, green: 1.08, gold: 1.06, crypto: 1.18, game: 1.04, trans: 1.05 }),
+  EVT(0.01, L('Tax cut bill passes', '減稅法案通過'), L('Companies and families keep more of what they earn. Profits rise across the board, banks and shops most; the government borrows more, so bonds dip.', '企業和家庭少繳稅、多留錢。各行業獲利提升,金融和零售最明顯;政府要多借錢,債券小跌。'),
+    {fin: 1.08, disc: 1.10, staples: 1.04, tech: 1.05, chip: 1.04, mat: 1.05, trans: 1.04, reit: 1.04, game: 1.04, bond: 0.95 }),
+  EVT(0.01, L('Soft landing', '經濟軟著陸'), L('Rate hikes beat inflation without causing a recession. Worry fades and most stocks drift up together.', '升息壓住了通膨,經濟卻沒有衰退。擔心散去,大部分股票一起小漲。'),
+    {tech: 1.05, soft: 1.05, chip: 1.05, fin: 1.06, disc: 1.06, reit: 1.05, trans: 1.04, mat: 1.04, green: 1.04, game: 1.03, staples: 1.02, bond: 1.02, gold: 0.96 }),
 ];
 // 牌組平衡:原本每檔資產在整副牌裡的漲跌不對稱(黃金平均每張 +3.5%、金融 −4.5%),玩越久越固定往一邊走,
 // 看懂牌組的人(或電腦)只要固定做多 / 放空就贏。這裡在載入時把每檔資產調成「整副牌的漲跌互相抵消」(幾何平均 = 1):
