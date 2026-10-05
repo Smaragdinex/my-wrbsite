@@ -1758,14 +1758,16 @@ function shopPanel() {
 }
 // 利空消息卡:挑一種資產讓它下跌。列表先列對手持有的(打擊對手),再列你自己放空的(幫自己賺)
 function attackPanel() {
-  // 看不到對手持有什麼:列出「自己沒有持有」的資產讓你挑(打自己的持股沒意義),自己放空的排前面(打下去你賺)
+  // 看不到對手持有什麼。三組:自己放空的(打下去你賺)、自己沒有持有的、最後是自己持有的(會連自己一起打,但有時候值得,例如想壓低價格再便宜加碼)
   return new Promise((res) => {
     const mine = KEYS.filter((k) => S.short[k].n > 0);
     const rest = KEYS.filter((k) => !S.hold[k].n && !S.short[k].n);
+    const held = KEYS.filter((k) => S.hold[k].n > 0);
     const chip = (k, note) => `<button data-k="${k}" style="border-color:${SECTORS[k].css}"><i style="background:${SECTORS[k].css}"></i>${SECTORS[k].code}${note ? `<small>${note}</small>` : ''}</button>`;
-    const p = panel(`<h3>📉 ${L('Bad news card', '利空消息卡')}</h3><p>${L('Pick an asset you do not own. Its price drops 18%. You cannot see who holds what, so guess from what rivals have been buying.', '選一種你沒有持有的資產,價格下跌 18%。你看不到對手持有什麼,只能從他們之前買了什麼來猜。')}</p>` +
+    const p = panel(`<h3>📉 ${L('Bad news card', '利空消息卡')}</h3><p>${L('Pick an asset. Its price drops 18%. You cannot see who holds what, so guess from what rivals have been buying. You can also hit something you own: your holding falls too, but it can pay off, for example to buy more cheaply.', '選一種資產,價格下跌 18%。你看不到對手持有什麼,只能從他們之前買了什麼來猜。也可以打自己持有的:你的持股也會跟著跌,但有時候值得,例如想壓低價格再便宜加碼。')}</p>` +
       (mine.length ? `<p><b>${L('You are short', '你放空的')}</b></p><div class="chips">${mine.map((k) => chip(k, `${L('short', '空')} ${S.short[k].n}`)).join('')}</div>` : '') +
       `<p><b>${L('Assets you do not own', '你沒有持有的資產')}</b></p><div class="chips">${rest.map((k) => chip(k)).join('')}</div>` +
+      (held.length ? `<p><b>${L('Assets you own', '你持有的資產')}</b></p><div class="chips">${held.map((k) => chip(k, `${L('own', '持有')} ${S.hold[k].n}`)).join('')}</div>` : '') +
       `<div class="btns"><button class="b-skip" data-k="">${L('Cancel', '取消')}</button></div>`);
     p.querySelectorAll('button').forEach((b) => b.onclick = () => { closePanel(); res(b.dataset.k || null); });
   });
