@@ -20,8 +20,8 @@ const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
 import { gameData } from './data.mjs?v=6';
-import { makeSim } from './sim.mjs?v=8';
-import { makeEngine } from './engine.mjs?v=2';
+import { makeSim } from './sim.mjs?v=9';
+import { makeEngine } from './engine.mjs?v=3';
 const { MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = gameData(L, fmt);
 // 棋盤裡面的兩個特殊格:警察局、IPO 攤位(各一格 cell),離開時擲一顆骰子,沿著 6 格的小路(path)走回外圈;
 // 走過最後一格就踩上外圈的 exit 那格,多的點數繼續往前走。小路上每一格是什麼(命運、道具、利息…)每次有人進來都重新隨機生成。座標是格網的 [x, z]
@@ -51,46 +51,20 @@ function genLanePath(type) {
   return t;
 }
 // 事件生效:改股價;有些事件(普發現金)還會直接發錢給每一位玩家
+// 事件生效:規則(股價、發錢、殖利率、反彈、斷頭 / 軋空、躲過黑天鵝)在遊戲引擎;這裡負責音效、反彈的說明文字、事件鈕的「!」
 function applyEvent(e) {
-  const bad = (e.m.etf || 1) < 0.97, before = bad ? S.players.map((p) => KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0)) : null;
-  KEYS.forEach((k) => { S.price[k] *= e.m[k]; });
-  if (bad) S.players.forEach((p, i) => { if (before[i] > 0 && KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k], 0) > before[i]) p.flags.dodge = true; });   // 壞事件裡持股反而漲:躲過黑天鵝
-  if (e.cash) { S.players.forEach((p) => { p.cash += e.cash; }); sfx('coin'); }
-  if (e.divTo) e.divKeys.forEach((k) => { S.div[k] = e.divTo[k][1]; });
-  // 黑色星期一這類:記下「下一回合要反彈多少」,新的一回合開始時套用(見 turn)
-  if (e.rebound) { const m = Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])); S.after = { t: L(`Rebound after: ${e.t}`, `${e.t}後的反彈`), w: L('Part of a panic drop comes back once the panic passes. Selling at the bottom locks in the loss.', '恐慌過去後,跌掉的會漲回來一部分。在最低點賣掉,就是把虧損鎖死。'), m }; }
-  S.lastEvent = e; marginCheck(); if ($('evtBox').classList.contains('fold')) $('evtBadge').classList.remove('hide');      // 新事件:右邊的事件鈕亮「!」
-  // 迷因股軋空:這檔的空單不管進場價多少,全部強迫回補
-  if (e.squeezeAll) for (const who of S.players) { if (who.short[e.squeezeAll].n) ENG.squeeze(S, who, e.squeezeAll); }   // 引擎會記公開帳本、排說明卡
+  ENG.applyEvent(S, e);
+  if (e.cash) sfx('coin');
+  if (e.rebound && S.after) Object.assign(S.after, { t: L(`Rebound after: ${e.t}`, `${e.t}後的反彈`), w: L('Part of a panic drop comes back once the panic passes. Selling at the bottom locks in the loss.', '恐慌過去後,跌掉的會漲回來一部分。在最低點賣掉,就是把虧損鎖死。') });   // 下一回合開始時套用(見 turn)
+  noteEvent(e);
 }
-// 有些事件要「抽到的當下」才決定內容:迷因股軋空挑場上被放空最多的那檔(沒人放空就隨機挑一檔股票)
-// 股利事件只挑「原本就有配息」的公司(不含 ETF、債券)
-const DIV_PAYERS = KEYS.filter((k) => SECTORS[k].div > 0 && k !== 'etf' && k !== 'bond');
-const divEvent = (e, keys, up) => {
-  const m = { ...ONES }, eq = KEYS.filter((x) => !NON_EQUITY.has(x)); keys.forEach((k) => { m[k] = up ? DIV_UP_PRICE : DIV_CUT_PRICE; }); m.etf = eq.reduce((a, x) => a + m[x], 0) / eq.length;
-  const divTo = Object.fromEntries(keys.map((k) => [k, [S.div[k], up ? Math.min(DIV_MAX, S.div[k] + DIV_STEP) : Math.max(DIV_MIN, S.div[k] - DIV_STEP)]]));   // 抽到當下就記好「從幾 % 到幾 %」
-  return { ...e, m, divKeys: keys, divTo, t: keys.length ? `${e.t}${L(': ', ':')}${keys.map((k) => SECTORS[k].name).join(L(', ', '、'))}` : e.t };
-};
-// 加發:隨機挑 n 家,但不挑目前配最多的(讓後面的追得上)
-function divHike(e) {
-  const top = Math.max(...DIV_PAYERS.map((k) => S.div[k]));
-  return divEvent(e, DIV_PAYERS.filter((k) => S.div[k] < top - 1e-9 && S.div[k] < DIV_MAX - 1e-9).sort(() => Math.random() - 0.5).slice(0, e.divUp), true);
-}
-// 削減:'top' = 目前配最多的那家(同分隨機),'any' = 隨機一家;已經是最低 0.5% 的不再砍
-function divCut(e) {
-  let pool = DIV_PAYERS.filter((k) => S.div[k] > DIV_MIN + 1e-9);
-  if (e.divCut === 'top') { const top = Math.max(...pool.map((k) => S.div[k])); pool = pool.filter((k) => S.div[k] >= top - 1e-9); }
-  return divEvent(e, pool.length ? [pool[Math.floor(Math.random() * pool.length)]] : [], false);
-}
+const noteEvent = (e) => { S.lastEvent = e; if ($('evtBox').classList.contains('fold')) $('evtBadge').classList.remove('hide'); };      // 新事件:右邊的事件鈕亮「!」
+// 抽到牌的當下決定內容(哪幾家調股利、迷因股是哪一檔)由遊戲引擎決定;這裡只把公司名稱加進標題
 function instantiate(e) {
-  if (e.divUp) return divHike(e);
-  if (e.divCut) return divCut(e);
-  if (!e.meme) return e;
-  const tot = (k) => S.players.reduce((a, p) => a + p.short[k].n, 0);
-  const pool = KEYS.filter((k) => !NON_EQUITY.has(k));
-  const k = pool.some((x) => tot(x) > 0) ? pool.sort((a, b) => tot(b) - tot(a))[0] : pool[Math.floor(Math.random() * pool.length)];
-  const eq = KEYS.filter((x) => !NON_EQUITY.has(x)).length;
-  return { ...e, m: { ...ONES, [k]: 1.5, etf: Math.round((1 + 0.5 / eq) * 100) / 100 }, squeezeAll: k, t: `${e.t}${L(': ', ':')}${SECTORS[k].name}` };
+  const x = ENG.instantiate(S, e, Math.random), sep = L(': ', ':');
+  if (x.divKeys && x.divKeys.length) return { ...x, t: `${e.t}${sep}${x.divKeys.map((k) => SECTORS[k].name).join(L(', ', '、'))}` };
+  if (x.squeezeAll) return { ...x, t: `${e.t}${sep}${SECTORS[x.squeezeAll].name}` };
+  return x;
 }
 const divPct = (x) => `${+(x * 100).toFixed(1)}%`;      // 殖利率顯示:0.5% / 1.5% / 5%
 // 買股面板的配息說明:目前殖利率是動態的(股利事件會調),介紹文字不寫數字,這裡顯示現在的值;調高過綠色、被削減過紅色
@@ -124,14 +98,13 @@ const AI_LEVELS = {
   hard:   { shortP: 0.5,  atkP: 1,   greedy: 0.5,  reserve: 800,  shortAny: true,  lots: 5, buyP: 1,   memory: 99 },
 };
 const AI = () => AI_LEVELS[S.aiLevel] || AI_LEVELS.normal;
-const DRIFTS = (k) => k === 'etf' || !NON_EQUITY.has(k);      // 會跟著大盤長期上漲的:股票類股 + 大盤 ETF(黃金、債券、幣、農產品不算)
 // 三種難度 = 三種演算法:簡單 = 規則式(rule)、普通 = 期望值(ev)、困難 = 蒙地卡羅模擬(mc)。細節在 sim.mjs
 const AI_ALG = { easy: 'rule', normal: 'ev', hard: 'mc' };
 const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim({ MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE },
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=9', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=10', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -300,7 +273,7 @@ const sfx = (name) => { AU.sfx(name); if (!NET_SFX_SKIP.has(name) && !CLIENT && 
 let S;
 // 買賣、融資、放空 / 回補、股價推動、斷頭 / 軋空、資產計算都在遊戲引擎(engine.mjs),電腦模擬(sim.mjs)也用同一份。
 // 這裡只接上畫面需要的副作用:被斷頭 / 軋空時記進公開帳本、排一張說明卡(S.notices,流程走到可以停的地方再顯示)
-const ENG = makeEngine({ KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE, SALARY, MARGIN_FEE, BANK_RATE, DIV_ROUND }, { hooks: {
+const ENG = makeEngine({ KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE, SALARY, MARGIN_FEE, BANK_RATE, DIV_ROUND, NON_EQUITY, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE }, { hooks: {
   onLiquidate: (st, who, x) => { pubNote(who, x.k); S.notices.push({ pi: who.i, k: x.k, n: x.n, back: x.back, lost: x.lost }); },
   onSqueeze: (st, who, x) => { pubNote(who, x.k); S.notices.push({ pi: who.i, k: x.k, n: x.n, back: x.back, lost: x.lost, squeeze: true }); },
 } });
@@ -1590,8 +1563,10 @@ const AI_CARD_WAIT = 3;       // 電腦出牌後,說明卡停留幾秒
 /* ───────────── 回合流程(狀態機:idle → rolling → moving → landing → idle / over) ───────────── */
 // 起點:薪水 + 股利;對面的「股息結算」格:只發股利
 // 每回合配息:新的一回合開始時,每位玩家依持股領年率 1/4 的股利(自己的顯示提示,手機玩家各自收到自己的)
-function roundDividends() {
-  for (const { p, div } of ENG.roundDividends(S)) {          // 金額由引擎算、入帳;這裡只負責提示
+function roundDividends() { showDividends(ENG.roundDividends(S)); }
+// 每回合配息的提示(金額由引擎算、入帳):自己的跳在畫面上,遠端玩家的送到他的手機
+function showDividends(paid) {
+  for (const { p, div } of paid) {
     const msg = L(`Dividends +$${fmt(div)}`, `配息 +$${fmt(div)}`);
     if (p === meP()) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
     else if (p.remote) { const g = NET.guests.find((x) => x.gid === p.remote); if (g && g.conn) netSend({ t: 'toast', msg }, g.conn); }
@@ -2163,9 +2138,9 @@ async function turn(forced, nDice = 0) {      // nDice = 3:用了「三顆骰子
   await stepAlong(true, n);
   }
   if (S.hi === 0) {           // 第一位走完 = 新的一回合開始:回合數 +1,所有價格小幅隨機波動
-    S.rolls++; roundDividends();
-    if (S.after) { const a = S.after; S.after = null; applyEvent(a); drawAll(); hud(); toast(a.t); sfx('good'); }
-    KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; S.price[k] = Math.max(8, S.price[k] * (1 - v + Math.random() * v * 2) * (DRIFTS(k) ? 1 + MARKET_DRIFT : 1)); });   // 股票和大盤 ETF 長期慢慢漲
+    const r = ENG.newRound(S, Math.random);                  // 回合數 +1、配息、套用反彈、價格隨機波動 + 大盤趨勢(引擎)
+    showDividends(r.paid);
+    if (r.after) { noteEvent(r.after); drawAll(); hud(); toast(r.after.t); sfx('good'); }
   }
   marginCheck();
   drawAll(); hud();

@@ -6,7 +6,12 @@
 // hooks:遊戲畫面需要知道的副作用 —— onLiquidate(st, who, info) / onSqueeze(st, who, info),
 //        info = { k, n, back, lost }。模擬器不用傳。
 export function makeEngine(D, opts = {}) {
-  const { KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE, SALARY, MARGIN_FEE, BANK_RATE, DIV_ROUND } = D;
+  const { KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE, SALARY, MARGIN_FEE, BANK_RATE, DIV_ROUND,
+    NON_EQUITY, MARKET_DRIFT = 0, DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92 } = D;
+  const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));                                   // 股票類股(大盤 ETF = 它們的平均)
+  const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
+  const DIV_PAYERS = KEYS.filter((k) => SECTORS[k].div > 0 && k !== 'etf' && k !== 'bond');   // 股利事件只挑原本就有配息的公司
+  const DRIFT = opts.drift ?? MARKET_DRIFT, DRIFTS = (k) => k === 'etf' || !NON_EQUITY.has(k);   // 大盤長期趨勢:股票和大盤 ETF
   const hooks = opts.hooks || {};
   // slippage === false:舊規則(先用舊價成交再推價),只給對照實驗用
   const SLIP = opts.slippage !== false;
@@ -130,5 +135,46 @@ export function makeEngine(D, opts = {}) {
     return { salary, div, interest, bank };
   }
 
-  return { roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
+  /* ───────── 事件卡 ───────── */
+  // 有些牌要「抽到的當下」才決定內容(rand:亂數來源,遊戲傳 Math.random、模擬器傳自己的種子亂數):
+  //   divUp:隨機挑 n 家有配息、但不是目前配最多的公司,殖利率 +1 個百分點、股價 +4%
+  //   divCut:'top' 配最多的那家(同分隨機)/ 'any' 隨機一家,殖利率 −1 個百分點(最低 0.5%)、股價 −8%
+  //   meme:場上被放空最多的那檔(沒人放空就隨機一檔股票)暴漲 50%,所有空單強迫回補
+  // 回傳新的事件物件;divTo 記好「從幾 % 到幾 %」,牌面顯示和生效用同一組數字。標題由畫面自己加
+  function instantiate(st, e, rand) {
+    if (e.divUp || e.divCut) {
+      let keys;
+      if (e.divUp) { const top = Math.max(...DIV_PAYERS.map((k) => st.div[k])); keys = DIV_PAYERS.filter((k) => st.div[k] < top - 1e-9 && st.div[k] < DIV_MAX - 1e-9).sort(() => rand() - 0.5).slice(0, e.divUp); }
+      else { let pool = DIV_PAYERS.filter((k) => st.div[k] > DIV_MIN + 1e-9); if (e.divCut === 'top') { const top = Math.max(...pool.map((k) => st.div[k])); pool = pool.filter((k) => st.div[k] >= top - 1e-9); } keys = pool.length ? [pool[Math.floor(rand() * pool.length)]] : []; }
+      const up = !!e.divUp, m = { ...ONES }; keys.forEach((k) => { m[k] = up ? DIV_UP_PRICE : DIV_CUT_PRICE; }); m.etf = EQ.reduce((a, x) => a + m[x], 0) / EQ.length;
+      const divTo = Object.fromEntries(keys.map((k) => [k, [st.div[k], up ? Math.min(DIV_MAX, st.div[k] + DIV_STEP) : Math.max(DIV_MIN, st.div[k] - DIV_STEP)]]));
+      return { ...e, m, divKeys: keys, divTo };
+    }
+    if (!e.meme) return e;
+    const tot = (k) => st.players.reduce((a, p) => a + p.short[k].n, 0);
+    const k = EQ.some((x) => tot(x) > 0) ? EQ.slice().sort((a, b) => tot(b) - tot(a))[0] : EQ[Math.floor(rand() * EQ.length)];
+    return { ...e, m: { ...ONES, [k]: 1.5, etf: Math.round((1 + 0.5 / EQ.length) * 100) / 100 }, squeezeAll: k };
+  }
+  // 事件生效:改股價、發錢、改殖利率、記下崩盤後的反彈(st.after,下一回合開始時套用),再檢查斷頭 / 軋空
+  function applyEvent(st, e) {
+    const bad = (e.m.etf || 1) < 0.97, worth = (p) => KEYS.reduce((a, k) => a + p.hold[k].n * st.price[k], 0), before = bad ? st.players.map(worth) : null;
+    KEYS.forEach((k) => { st.price[k] *= e.m[k]; });
+    if (bad) st.players.forEach((p, i) => { if (before[i] > 0 && worth(p) > before[i]) flag(p, 'dodge'); });   // 壞消息裡持股反而漲:躲過黑天鵝
+    if (e.cash) st.players.forEach((p) => { p.cash += e.cash; });
+    if (e.divTo) e.divKeys.forEach((k) => { st.div[k] = e.divTo[k][1]; });
+    if (e.rebound) st.after = { m: Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])), from: e };   // 跌掉的部分下回合漲回 rebound 比例
+    marginCheck(st);
+    if (e.squeezeAll) for (const p of st.players) { if (p.short[e.squeezeAll].n) squeeze(st, p, e.squeezeAll); }
+  }
+  // 新的一回合開始:回合數 +1 → 每回合配息 → 套用上回合留下的反彈 → 所有價格小幅隨機波動(股票和大盤 ETF 再加上長期趨勢)
+  // 回傳 { paid: 領到配息的人, after: 套用的反彈事件 } 給畫面顯示
+  function newRound(st, rand) {
+    st.rolls++;
+    const paid = roundDividends(st), after = st.after;
+    if (after) { st.after = null; applyEvent(st, after); }
+    KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; st.price[k] = Math.max(FLOOR, st.price[k] * (1 - v + rand() * v * 2) * (DRIFTS(k) ? 1 + DRIFT : 1)); });
+    return { paid, after };
+  }
+
+  return { instantiate, applyEvent, newRound, roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
 }

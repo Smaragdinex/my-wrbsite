@@ -1,4 +1,4 @@
-import { makeEngine } from './engine.mjs?v=2';
+import { makeEngine } from './engine.mjs?v=3';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
 //   2. Node 可以直接 import,讓三種電腦(規則 / 期望值 / 蒙地卡羅)互打幾百局,算勝率(tournament.mjs)
@@ -14,7 +14,6 @@ export function makeSim(D, opts = {}) {
     SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE } = D;
   const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));
   const DRIFT = opts.drift ?? MARKET_DRIFT, DRIFTS = (k) => k === 'etf' || !NON_EQUITY.has(k);
-  const DIV_PAYERS = KEYS.filter((k) => SECTORS[k].div > 0 && k !== 'etf' && k !== 'bond');   // 原本就有配息的公司
   const LANE_EXIT = { jail: 28, ipo: 60 };
   const PATH_POOL = { jail: ['chance', 'gift', 'fee', 'coin'], ipo: ['chance', 'gift', 'interest', 'coin'] };
   // 自己的亂數(mulberry32):可以重設種子 → 蒙地卡羅比較不同動作時用「同一組未來」(common random numbers),雜訊小很多
@@ -48,7 +47,7 @@ export function makeSim(D, opts = {}) {
 
   /* ───────── 基本算式 ───────── */
   // 買賣、融資、放空、斷頭 / 軋空、資產計算全部用遊戲引擎(engine.mjs),和真正的遊戲是同一份規則
-  const ENG = makeEngine(D, { slippage: opts.slippage });
+  const ENG = makeEngine(D, { slippage: opts.slippage, drift: opts.drift });
   const { shortValue, assetsOf, acctRatio, marginCheck, impact, coverBack } = ENG;
   const fill = ENG.fill;
   const others = (st, p) => st.players.filter((q) => q !== p);
@@ -71,27 +70,9 @@ export function makeSim(D, opts = {}) {
   }
 
   /* ───────── 事件、命運 ───────── */
-  function instantiate(st, e) {
-    if (e.divUp || e.divCut) {
-      let keys;
-      if (e.divUp) { const top = Math.max(...DIV_PAYERS.map((k) => st.div[k])); keys = DIV_PAYERS.filter((k) => st.div[k] < top - 1e-9 && st.div[k] < DIV_MAX - 1e-9).sort(() => rand() - 0.5).slice(0, e.divUp); }
-      else { let pool = DIV_PAYERS.filter((k) => st.div[k] > DIV_MIN + 1e-9); if (e.divCut === 'top') { const top = Math.max(...pool.map((k) => st.div[k])); pool = pool.filter((k) => st.div[k] >= top - 1e-9); } keys = pool.length ? [pick(pool)] : []; }
-      const m = { ...ONES }; keys.forEach((k) => { m[k] = e.divUp ? DIV_UP_PRICE : DIV_CUT_PRICE; }); m.etf = EQ.reduce((a, x) => a + m[x], 0) / EQ.length;
-      return { ...e, m, divKeys: keys, divDown: !e.divUp };
-    }
-    if (!e.meme) return e;
-    const tot = (k) => st.players.reduce((a, p) => a + p.short[k].n, 0);
-    const k = EQ.some((x) => tot(x) > 0) ? EQ.slice().sort((a, b) => tot(b) - tot(a))[0] : pick(EQ);
-    return { ...e, m: { ...ONES, [k]: 1.5, etf: Math.round((1 + 0.5 / EQ.length) * 100) / 100 }, squeezeAll: k };
-  }
-  function applyEvent(st, e) {
-    KEYS.forEach((k) => { st.price[k] *= e.m[k]; });
-    if (e.cash) st.players.forEach((p) => { p.cash += e.cash; });
-    if (e.divKeys) e.divKeys.forEach((k) => { st.div[k] = e.divDown ? Math.max(DIV_MIN, st.div[k] - DIV_STEP) : Math.min(DIV_MAX, st.div[k] + DIV_STEP); });
-    if (e.rebound) st.after = { m: Object.fromEntries(KEYS.map((k) => [k, e.m[k] < 1 ? 1 + (1 / e.m[k] - 1) * e.rebound : 1])) };
-    marginCheck(st);
-    if (e.squeezeAll) for (const p of st.players) { if (p.short[e.squeezeAll].n) ENG.squeeze(st, p, e.squeezeAll); }   // 迷因股:這檔的空單全部強迫回補
-  }
+  // 事件卡:抽到時決定內容、生效,都用遊戲引擎(和真正的遊戲同一份規則)
+  const instantiate = (st, e) => ENG.instantiate(st, e, rand);
+  const applyEvent = (st, e) => ENG.applyEvent(st, e);
   const randomEvent = (st) => instantiate(st, pick(EVENTS));
   // 市場事件格:三張牌裡有 SPECIAL_RATE 的機率混一張特殊牌(警察局 / IPO),電腦隨機挑 → 抽到特殊牌的機率 = SPECIAL_RATE / 3
   function chance(st, p, special) {
@@ -196,10 +177,7 @@ export function makeSim(D, opts = {}) {
   }
   function afterMove(st, p) {
     if (p.i === 0) {       // 第一位走完 = 新回合:回合數 +1、配息、反彈、所有價格小幅隨機波動
-      st.rolls++;
-      ENG.roundDividends(st);
-      if (st.after) { const a = st.after; st.after = null; applyEvent(st, a); }
-      KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; st.price[k] = Math.max(8, st.price[k] * (1 - v + rand() * v * 2) * (DRIFTS(k) ? 1 + DRIFT : 1)); });   // 股票和大盤 ETF 長期慢慢漲(opts.drift 可以覆蓋做實驗)
+      ENG.newRound(st, rand);                                  // 回合數 +1、配息、反彈、價格隨機波動 + 大盤趨勢(引擎)
     }
     marginCheck(st);
   }
