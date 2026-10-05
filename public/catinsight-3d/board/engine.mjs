@@ -34,8 +34,11 @@ export function makeEngine(D, opts = {}) {
   /* ───────── 股價推動與強制平倉 ───────── */
   // 任何一次價格變動後都檢查:帳戶維持率 < 130% → 從最差的那檔融資部位開始賣,賣到回到 130% 以上(斷頭);
   // 空單比進場價漲 30% 以上 → 強迫回補(軋空)。被迫的買賣盤又會推動價格,可能連鎖
+  // st.actor:這次價格變動是誰「自己的動作」造成的(買賣、利空卡、從背包打出的事件卡)。
+  // 斷頭高手 / 軋空高手只算給 actor;隨機的市場事件、回合價格波動、反彈造成的不算任何人的
+  const withActor = (st, p, fn) => { const keep = st.actor; st.actor = p; try { return fn(); } finally { st.actor = keep; } };
   function marginCheck(st) {
-    const by = st.players[st.turn];                                    // 這回合在走的人:把價格打下去 / 拉上去算他的(成就)
+    const by = st.actor;
     for (const who of st.players) {
       for (let guard = 0; guard < KEYS.length && acctRatio(st, who) < MAINT; guard++) {
         let k = null; for (const x of KEYS) { if (who.hold[x].loan > 0 && (k === null || ratioOf(st, who.hold[x], x) < ratioOf(st, who.hold[k], k))) k = x; }
@@ -69,7 +72,7 @@ export function makeEngine(D, opts = {}) {
     const h = p.hold[k], price = st.price[k], cost = fill(st, k, buyF(q)) * q, loan = margin ? cost * MARGIN_LOAN : 0;
     p.cash -= cost - loan; h.n += q; h.cost += cost; h.loan += loan;
     if (price < SECTORS[k].open * 0.97) flag(p, 'dip');                // 逢低買進
-    impact(st, k, buyF(q));
+    withActor(st, p, () => impact(st, k, buyF(q)));
     return { q, cost, loan, pay: cost - loan };
   }
   // 賣出 q 股(不傳就全賣);融資借款按賣掉的比例一起還。先把部位清掉再動價格,自己的賣壓才不會觸發自己的斷頭
@@ -81,14 +84,14 @@ export function makeEngine(D, opts = {}) {
     if (!forced && loan > 0 && value > cost) flag(p, 'marginWin');     // 借力使力:融資部位獲利出場
     p.cash += value - loan; h.n -= sn; h.cost -= cost; h.loan -= loan;
     if (h.n <= 0) { h.n = 0; h.cost = 0; h.loan = 0; }
-    impact(st, k, sellF(sn));
+    withActor(st, p, () => impact(st, k, sellF(sn)));
     return { n: sn, value, cost, loan, pl: value - cost };
   }
   // 放空 q 股:用壓低後的價格進場,付出等額保證金
   function short(st, p, k, q) {
     const sh = p.short[k], e = fill(st, k, shortF(q));
     p.cash -= e * q; sh.entry = e; sh.n = q;
-    impact(st, k, shortF(q));
+    withActor(st, p, () => impact(st, k, shortF(q)));
     return { q, entry: e, pay: e * q };
   }
   // 自己回補整筆空單
@@ -98,7 +101,7 @@ export function makeEngine(D, opts = {}) {
     if (r >= 0.15) flag(p, 'profit');
     if (r >= 0.2) flag(p, 'shortWin');                                 // 空軍總司令
     p.cash += back; sh.n = 0; sh.entry = 0;
-    impact(st, k, buyF(n));
+    withActor(st, p, () => impact(st, k, buyF(n)));
     return { n, back, pl };
   }
   // act = { a: 'buy'|'margin'|'sell'|'short'|'cover'|'skip', q }
@@ -176,5 +179,5 @@ export function makeEngine(D, opts = {}) {
     return { paid, after };
   }
 
-  return { instantiate, applyEvent, newRound, roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
+  return { withActor, instantiate, applyEvent, newRound, roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
 }

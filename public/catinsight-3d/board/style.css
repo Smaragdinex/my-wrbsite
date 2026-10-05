@@ -503,3 +503,6 @@ body.watch #panel[data-watch=""]::after{display:none}
 /* 文字裡的小圖示(獎盃、地球):和字同高、對齊基線 */
 .emo{height:1.25em;width:auto;vertical-align:-0.28em;display:inline-block}
 .endcard h2 .emo{height:1.4em;vertical-align:-0.32em}
+
+/* 英文「Achievements」比較長:字小一點,而且如果還是超出螢幕右邊,就往左推回來(--lblShift 由 board.mjs 量好設定) */
+.rb span#missLbl{font-size:calc(10px * var(--fs));padding:1px 7px;transform:translateX(var(--lblShift, 0px))}

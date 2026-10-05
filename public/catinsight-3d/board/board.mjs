@@ -20,8 +20,8 @@ const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
 import { gameData } from './data.mjs?v=6';
-import { makeSim } from './sim.mjs?v=9';
-import { makeEngine } from './engine.mjs?v=3';
+import { makeSim } from './sim.mjs?v=10';
+import { makeEngine } from './engine.mjs?v=4';
 const { MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = gameData(L, fmt);
 // 棋盤裡面的兩個特殊格:警察局、IPO 攤位(各一格 cell),離開時擲一顆骰子,沿著 6 格的小路(path)走回外圈;
 // 走過最後一格就踩上外圈的 exit 那格,多的點數繼續往前走。小路上每一格是什麼(命運、道具、利息…)每次有人進來都重新隨機生成。座標是格網的 [x, z]
@@ -104,7 +104,7 @@ const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim({ MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE },
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=10', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=11', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -1432,7 +1432,7 @@ function hud() {
     $('rollTxt').textContent = rest ? L('REST', '休息中') : ''; $('rollDice').className = 'dice ' + (rest ? 'rest' : (S.lane || S.diceN === 1) ? 'one' : 'two'); }
   $('dsel').style.visibility = S.lane ? 'hidden' : '';
   { const T = meP();    // 任務清單永遠是自己的(每位玩家各自抽 3 個;以前跟著輪到誰,手機玩家走的時候主機會看到他的)
-    $('missTitle').textContent = L(`Missions · ${T.done} done`, `任務 · 完成 ${T.done}`); $('missBadge').textContent = (T.missions || []).filter((m) => !m.done).length;
+    $('missTitle').textContent = L(`Achievements · ${T.done} unlocked`, `任務 · 完成 ${T.done}`); $('missBadge').textContent = (T.missions || []).filter((m) => !m.done).length;
     $('miss').innerHTML = missHtml(T); }
   { const t = advise(); if ($('tip').textContent !== t) { $('tip').textContent = t; const tb = $('tipbar'); if (tb) { tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); } } }
   // 資產框:一次只顯示一位。預設跟著「現在輪到誰」;點上面的頭像可以改看別人(下一位開始走的時候會自動切回去)
@@ -1645,8 +1645,10 @@ function drawEventCards(auto, round = false, special = !round) {     // special=
     $('dgo').onclick = () => { if (done) return; done = true; ov.classList.add('hide'); ov.classList.remove('done'); res(picks[chosen]); };
   });
 }
-async function playEvent(e, auto = 0) {
-  applyEvent(e); drawAll(); hud(); sfx(e.m.etf >= 1 ? 'good' : 'bad');
+// actor:從背包打出事件卡的人(這張牌造成的斷頭 / 軋空算他的成就);回合事件、市場事件格不傳
+async function playEvent(e, auto = 0, actor = null) {
+  if (actor) ENG.withActor(S, actor, () => applyEvent(e)); else applyEvent(e);
+  drawAll(); hud(); sfx(e.m.etf >= 1 ? 'good' : 'bad');
   const moves = cashChip(e) + KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d && !(e.divKeys || []).includes(k) ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
   await cardPanel(e.t, e.w, moves, auto);
 }
@@ -1696,7 +1698,7 @@ function spyPanel() {
 // 利空消息生效:價格下跌,並說明誰受傷
 async function badNews(k, by) {
   const sec = SECTORS[k], byYou = isYou(by), who = nameOf(by);
-  S.price[k] *= ATK_DROP; marginCheck(); sfx('bad');
+  S.price[k] *= ATK_DROP; ENG.withActor(S, by, marginCheck); sfx('bad');   // 利空卡是出牌的人自己的動作:造成斷頭算他的
   S.lastEvent = { t: L(`Bad news about ${sec.name}`, `${sec.name}傳出利空`), w: L('Rumors and bad headlines can sink a price fast.', '壞消息和傳言可以讓股價快速下跌。'), m: Object.fromEntries(KEYS.map((x) => [x, x === k ? ATK_DROP : 1])) };
   drawAll(); hud();
   await cardPanel(byYou ? L(`You spread bad news about ${sec.name}`, `你放出${sec.name}的利空消息`) : L(`${who} spreads bad news about ${sec.name}`, `${who}放出${sec.name}的利空消息`),
@@ -1741,7 +1743,7 @@ function bagPanel() {
       S.busy = false; showCtl(true);
     } else {
       S.bag.splice(S.bag.indexOf(id), 1); usedItem(id);
-      await playEvent(instantiate(itemInfo(id).event)); await flushNotices();
+      await playEvent(instantiate(itemInfo(id).event), 0, S.players[S.hi]); await flushNotices();
       checkMissions(); S.busy = false; showCtl(true);
     }
   });
@@ -2021,7 +2023,7 @@ async function aiTurn() {
   }
   // 事件卡:等受惠的那檔買到 20 股以上再打(炒自己的持股);快結束了就有多少打多少
   { const id = A.bag.find((x) => x.startsWith('ev') && (A.hold[itemInfo(x).best].n >= 20 || (A.hold[itemInfo(x).best].n > 0 && maxRolls() - S.rolls <= 3)));
-    if (id) { A.bag.splice(A.bag.indexOf(id), 1); usedBy(A, id); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event, AI_CARD_WAIT); } }
+    if (id) { A.bag.splice(A.bag.indexOf(id), 1); usedBy(A, id); toast(L(`${who} plays an event card`, `${who}使用事件卡`)); await wait(0.6); await playEvent(itemInfo(id).event, AI_CARD_WAIT, A); } }
   // 遙控骰子:前方 2~12 格裡有很想去的格子(主攻股、商店、IPO…)就指定步數走過去
   let forced = 0;
   let three = false;
@@ -2392,7 +2394,7 @@ function netHudNow(to) {
       rank: ordinal(rank), top: rank === 1, spy: p.spy && S.rolls < p.spy.until ? p.spy.target : -1, spyLeft: spyLeft(p),
       tip: S.hi === p.i ? advise() : L(`${nameOf(cur)}'s turn`, `現在是${nameOf(cur)}的回合`),
       players: S.players.map((q) => ({ i: q.i, char: q.char, rank: ordinal(rankOf(q)), top: rankOf(q) === 1, title: (q === p ? L('My assets', '我的資產') : L(`${nameOf(q)}'s assets`, `${nameOf(q)}的資產`)) + ' · $' + fmt(assetsOf(q)), rows: assetRowsHtml(q, q === p) })),
-      missTitle: L(`Missions · ${p.done} done`, `任務 · 完成 ${p.done}`), missBadge: (p.missions || []).filter((m) => !m.done).length, miss: missHtml(p),
+      missTitle: L(`Achievements · ${p.done} unlocked`, `任務 · 完成 ${p.done}`), missBadge: (p.missions || []).filter((m) => !m.done).length, miss: missHtml(p),
       evtTitle: $('evtTitle').textContent, evt: $('evtBody').innerHTML, round: $('roundTxt').textContent,
       holds: S.players.map((q) => Object.fromEntries(KEYS.filter((k) => q.hold[k].n > 0).map((k) => [k, q.hold[k].n]))) }, g.conn); }
 }
@@ -2427,8 +2429,8 @@ async function start() {
   hud(); AU.ambience(true);   // 進入遊戲:森林鳥鳴淡入
   // 開局先講清楚怎麼算贏
   const rule = L(`After ${S.maxRounds} rounds, whoever has the highest total assets wins.`, `${S.maxRounds} 回合結束時,總資產最高的人獲勝。`);
-  const rulesTitle = L('How to win', '獲勝條件'), rulesBody = rule + L(` Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>The missions on the left are a bonus: each one pays $${REWARD}, and the more you finish the more stars you get. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
-      `總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>左邊的任務是加分項:每完成一個得 $${REWARD},完成越多星星越多,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`);
+  const rulesTitle = L('How to win', '獲勝條件'), rulesBody = rule + L(` Total assets = cash + the value of your holdings − loans. Everyone starts with $${fmt(START_CASH)}.<br><br>Achievements (on the right) are a bonus: each one pays $${REWARD} and can be earned once. They do not decide the winner.<br><br>Your current place is shown next to the round bar.`,
+      `總資產 = 現金 + 持有資產的市值 − 貸款,每個人都從 $${fmt(START_CASH)} 開始。<br><br>右邊的任務是成就:每達成一個得 $${REWARD},每個只能拿一次,但不決定輸贏。<br><br>回合條旁邊會顯示你目前第幾名。`);
   // 線上同樂:規則卡每個人在自己裝置上看、自己按繼續(閱讀速度不同);主機按完就開始,不等別人(別人沒按完也擲不了骰)
   if (NET.on && NET.started) {
     NET.rules = { title: rulesTitle, body: rulesBody }; NET.guests.forEach((g) => { g.ready = false; });
@@ -2485,7 +2487,10 @@ $('assetBox').classList.add('fold');   // 資產框預設收起,點頭像展開�
   const toggle = (id) => { const want = $(pair[id]).classList.contains('fold'); Object.values(pair).forEach((b) => $(b).classList.add('fold')); Object.keys(pair).forEach((k) => $(k).classList.remove('on'));
     if (want) { $(pair[id]).classList.remove('fold'); $(id).classList.add('on'); if (id === 'evtBtn') $('evtBadge').classList.add('hide'); } };
   Object.keys(pair).forEach((id) => { $(id).onclick = () => toggle(id); $(pair[id]).querySelector('h4').onclick = () => toggle(id); });
-  $('evtLbl').textContent = L('Events', '事件'); $('missLbl').textContent = L('Tasks', '任務'); }
+  $('evtLbl').textContent = L('Events', '事件'); $('missLbl').textContent = L('Achievements', '任務');
+  // 標籤超出螢幕右邊時往左推(視窗大小改變時重算)
+  const fitLbl = () => { const el = $('missLbl'); el.style.setProperty('--lblShift', '0px'); const over = el.getBoundingClientRect().right - (innerWidth - 6); if (over > 0) el.style.setProperty('--lblShift', `${-Math.ceil(over)}px`); };
+  fitLbl(); addEventListener('resize', fitLbl); }
 
 /* ───────────── 線上同樂:手機端(自己畫棋盤) ─────────────
    手機用同一份棋盤程式,但不跑規則:主機廣播「誰跳到哪一格、擲到幾點、股價、小路、面板 HTML、自己的 HUD」,
