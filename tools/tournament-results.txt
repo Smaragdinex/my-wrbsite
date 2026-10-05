@@ -86,3 +86,7 @@ rule vs ev vs mc (560 games)  rule 21.1% / ev 35.9% / mc 43.6%
 新增 4 張產業新聞:雙十一購物節業績爆發、物流大罷工、人形機器人量產、機器人工安意外(共 59 張)
 rule vs ev (700 games)        rule 33.1% / ev 66.9%
 rule vs ev vs mc (560 games)  rule 18.4% / ev 35.0% / mc 47.1%
+
+2026-10-06 內部認購恢復送 10 股(免費、不鎖、馬上能賣);8 折加碼認購的股數才鎖 3 回合
+rule vs ev (700 games)        rule 30.4% / ev 69.6%   平均資產 $13,265 / $15,483
+rule vs ev vs mc (560 games)  rule 19.9% / ev 31.0% / mc 49.9%

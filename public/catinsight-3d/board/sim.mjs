@@ -1,4 +1,4 @@
-import { makeEngine } from './engine.mjs?v=8';
+import { makeEngine } from './engine.mjs?v=9';
 import { makePolicy } from './nn.mjs?v=1';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
@@ -116,7 +116,7 @@ export function makeSim(D, opts = {}) {
   function enterLane(st, p, type) { ENG.enterLane(st, p, type, rand); if (type === 'ipo') ipo(st, p); }
   // 電腦在內部認購攤位認購幾手:現金夠就買 3 手,不然 1 手(遊戲裡的電腦也用這個)
   const ipoLots = (st, p, k) => { const price = st.price[k] * IPO_OFF; return p.cash >= price * LOT * 3 + 1500 ? 3 : p.cash >= price * LOT + 500 ? 1 : 0; };
-  function ipo(st, p) { const k = ENG.ipoPick(st, p, rand); const lots = ipoLots(st, p, k); if (lots) { ENG.ipoBuy(st, p, k, LOT * lots); note(st, p, k); } }
+  function ipo(st, p) { const k = ENG.ipoPick(st, p, rand); ENG.ipoGrant(st, p, k); const lots = ipoLots(st, p, k); if (lots) ENG.ipoBuy(st, p, k, LOT * lots); note(st, p, k); }
   function walk(st, p, n) { for (let i = 0; i < n; i++) ENG.advance(st, p); }
   const leaveLane = (st, p) => walk(st, p, ENG.dice(1, 0, rand)[0]);
 
@@ -264,7 +264,7 @@ export function makeSim(D, opts = {}) {
       if (h.n && (st.price[t] * h.n - h.cost) / h.cost >= 0.15) v += 3; else if (sh.n && Math.abs((sh.entry - st.price[t]) / sh.entry) >= 0.12) v += 2;
       else if (h.loan > 0 && acctRatio(st, p) < 1.5) v += 2;
       else v += Math.max(0.3, Math.min(4.5, e * 40)) * (p.cash >= st.price[t] * LOT + p.lv.reserve ? 1 : 0.3); }
-    else if (t === 'shop') v += p.cash >= 2500 ? 1.5 : 0.3; else if (t === 'ipo') v += 1.5; else if (t === 'gift') v += 1.5; else if (t === 'chance') v += 0.8;
+    else if (t === 'shop') v += p.cash >= 2500 ? 1.5 : 0.3; else if (t === 'ipo') v += 2.5; else if (t === 'gift') v += 1.5; else if (t === 'chance') v += 0.8;
     else if (t === 'bank') v += p.cash < 1500 ? 1.5 : 0; else if (t === 'fee') v -= 1;
     for (let j = 1; j <= i; j++) { const tt = TILES[(p.pos + j) % TILES.length]; if (tt === 'start') v += 2; else if (tt === 'divi') v += 0.8; }
     return v;

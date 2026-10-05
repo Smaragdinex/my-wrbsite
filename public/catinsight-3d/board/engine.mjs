@@ -7,7 +7,7 @@
 //        info = { k, n, back, lost }。模擬器不用傳。
 export function makeEngine(D, opts = {}) {
   const { KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE, SALARY, MARGIN_FEE, BANK_RATE, DIV_ROUND,
-    TILES, LANES, PATH_POOL, PATH_FIXED = {}, LANE_LEN, JAIL_WAIT, BAIL, FEE, IPO_OFF, IPO_LOCK, LOT, FATE,
+    TILES, LANES, PATH_POOL, PATH_FIXED = {}, LANE_LEN, JAIL_WAIT, BAIL, FEE, IPO_OFF, IPO_LOCK, IPO_FREE, LOT, FATE,
     NON_EQUITY, MARKET_DRIFT = 0, DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92 } = D;
   const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));                                   // 股票類股(大盤 ETF = 它們的平均)
   const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
@@ -257,8 +257,10 @@ export function makeEngine(D, opts = {}) {
     else if (c.id === 'jail') r.lane = 'jail';
     return r;
   }
-  // 內部認購:隨機一檔(沒在放空的)股票,用市價 8 折認購,一定買得到;買到的股數鎖 IPO_LOCK 回合不能賣。新股不會推動市價
+  // 內部認購:隨機一檔(沒在放空的)股票,先送 IPO_FREE 股;再用市價 8 折認購,一定買得到,認購的股數鎖 IPO_LOCK 回合不能賣。新股不會推動市價
   const ipoPick = (st, p, rand) => { const pool = EQ.filter((k) => !p.short[k].n); return pool[Math.floor(rand() * pool.length)]; };
+  // 送的股票成本算認購價(只是不用付錢),這樣損益百分比才有意義;送的不鎖,馬上可以賣
+  function ipoGrant(st, p, k) { const h = p.hold[k]; h.n += IPO_FREE; h.cost += st.price[k] * IPO_OFF * IPO_FREE; }
   function ipoBuy(st, p, k, n) {
     const h = p.hold[k], cost = st.price[k] * IPO_OFF * n; p.cash -= cost; h.n += n; h.cost += cost;
     h.locked = lockedN(st, h) + n; h.lockUntil = st.rolls + IPO_LOCK; return cost;
@@ -268,6 +270,6 @@ export function makeEngine(D, opts = {}) {
   // 商店:買一樣道具
   const buyItem = (st, p, id, price) => { p.cash -= price; p.bag.push(id); };
 
-  return { trendOf, dice, genLanePath, enterLane, advance, tileType, pathEffect, payFee, rest, bail, fate, ipoPick, ipoBuy, lockedN, bank, buyItem,
+  return { trendOf, dice, genLanePath, enterLane, advance, tileType, pathEffect, payFee, rest, bail, fate, ipoPick, ipoGrant, ipoBuy, lockedN, bank, buyItem,
     withActor, instantiate, applyEvent, newRound, roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
 }

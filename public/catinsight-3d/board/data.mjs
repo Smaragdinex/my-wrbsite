@@ -207,8 +207,9 @@ const EVENTS = [
 const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
 const BAIL = 1000, JAIL_WAIT = 3;         // 警察局:休息 JAIL_WAIT 回合才能出來,或付保釋金 BAIL 直接出來(出來都要擲一顆骰子決定走幾格)
 const LANE_LEN = 6;                       // 警察局 / 內部認購出來的小路有幾格(定義在 LANES)
-// 內部認購(私募):受邀的人用市價 8 折認購,一定買得到;代價是閉鎖期 IPO_LOCK 回合不能賣(台灣私募價格不得低於參考價 8 成,且有轉讓限制)
-const IPO_OFF = 0.8, IPO_LOCK = 3;
+// 內部認購(私募):一進攤位公司先送 IPO_FREE 股(免費、馬上可以賣);想多買再用市價 8 折認購,一定買得到,
+// 但加碼認購的股數有閉鎖期 IPO_LOCK 回合不能賣(台灣私募價格不得低於參考價 8 成,且有轉讓限制)
+const IPO_OFF = 0.8, IPO_LOCK = 3, IPO_FREE = 10;
 // 銀行:走到銀行格可以借現金(最多欠 BANK_MAX),每次經過起點付欠款 5% 的利息;欠的錢會從總資產扣掉
 const BANK_MAX = 5000, BANK_RATE = 0.05;
 // 大盤長期趨勢:股票類股和大盤 ETF 每回合平均多漲 1%(20 回合約 +22%)。事件卡平衡過、長期是平的,這一項讓「長期投資股票」比放現金好
@@ -238,7 +239,7 @@ const FATE = [
   { id: 'gostart', good: true, t: L('Shortcut to GO', '抄捷徑回起點'), w: L('Collect your salary early.', '提早領薪水。'), fx: L('Move to GO', '直接移到起點') },
   { id: 'fat', good: false, t: L('Fat-finger trade', '不小心按錯'), w: L(`You tapped the wrong button and sold ${LOT} shares of a random holding at market price. Double-check before you confirm.`, `手滑按錯鍵,把隨機一檔持股用市價賣掉了 ${LOT} 股。下單前要再看一眼。`), fx: L(`Sell ${LOT} shares of one holding`, `隨機一檔持股賣出 ${LOT} 股`) },
   { id: 'swap', good: true, t: L('Teleport', '瞬間移動'), w: L('You swap places with a random rival. Wherever you land, you land.', '和隨機一位對手互換位置。換到哪一格,就算踩到那一格。'), fx: L('Swap places with a rival', '和一位對手互換位置') },
-  { id: 'ipo', good: true, t: L('Private placement invite', '受邀內部認購'), w: L('A company offers you new shares at 20% off. The catch: you cannot sell them for a while.', '有公司邀請你用市價 8 折認購新股。代價是買到後一段時間不能賣。'), fx: L('Go to the placement booth', '前往內部認購攤位') },
+  { id: 'ipo', good: true, t: L('Private placement invite', '受邀內部認購'), w: L(`A company gives you ${IPO_FREE} free shares and offers more at 20% off (those cannot be sold for a while).`, `有公司送你 ${IPO_FREE} 股,還能用市價 8 折加碼認購(加碼的一段時間不能賣)。`), fx: L('Go to the placement booth', '前往內部認購攤位') },
   { id: 'jail', good: false, t: L('Insider trading probe', '涉嫌內線交易'), w: L(`Trading on information the public does not have is illegal. Rest ${JAIL_WAIT} rounds at the police station, or pay $${fmt(BAIL)} bail.`, `用還沒公開的消息買賣股票是違法的。到警察局休息 ${JAIL_WAIT} 回合,或付 $${fmt(BAIL)} 保釋金。`), fx: L('Go to the police station', '前往警察局') },
   { id: 'remote', good: true, t: L('Found a remote dice', '撿到遙控骰子'), w: L('A dice you can set. It is in your backpack.', '可以指定點數的骰子,放進背包了。'), fx: L('+1 Remote dice', '+1 遙控骰子') },
   { id: 'atk', good: true, t: L('A rumor to spread', '聽到一個八卦'), w: L('A bad-news card for your backpack. Use it on a rival.', '一張利空消息卡進背包,拿去打對手。'), fx: L('+1 Bad news card', '+1 利空消息卡') },
@@ -248,5 +249,5 @@ const FATE = [
   { id: 'fine', good: false, t: L('Parking ticket', '違規停車罰單'), w: L('Small, annoying, unavoidable.', '小錢,但很煩。'), fx: L('−$500', '−$500') },
   { id: 'salary2', good: true, t: L('Promotion', '升職加薪'), w: L('Your next salary is doubled.', '下一次經過起點薪水加倍。'), fx: L('Next salary ×2', '下次薪水 ×2') },
 ];
-return { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_LOCK, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE };
+return { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_LOCK, IPO_FREE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE };
 }
