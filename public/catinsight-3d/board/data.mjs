@@ -219,8 +219,9 @@ const LANES = {
   jail: { exit: 32, cell: [7, 4], path: [[6, 4], [5, 4], [4, 4], [3, 4], [2, 4], [1, 4]] },
   ipo: { exit: 68, cell: [11, 14], path: [[12, 14], [13, 14], [14, 14], [15, 14], [16, 14], [17, 14]] },
 };
-// 小路格子的種類:第 3 格固定是市場事件,其他 5 格從各自的池子隨機排(沒有空格;命運改放在外圈)。警察局那條比較多手續費、內部認購那條比較多撿到錢
-const PATH_POOL = { jail: ['chance', 'gift', 'fee', 'fee', 'coin', 'interest'], ipo: ['chance', 'gift', 'gift', 'interest', 'coin', 'coin'] };
+// 小路格子的種類:第 3 格固定是市場事件,其他 5 格從各自的池子隨機排(沒有空格)。兩條小路各有 1 格命運(外圈另外有 2 格);
+// 警察局那條有手續費,內部認購那條比較多撿到錢
+const PATH_POOL = { jail: ['chance', 'gift', 'fee', 'fate', 'coin', 'interest'], ipo: ['chance', 'gift', 'fate', 'interest', 'coin', 'coin'] };
 const PATH_FIXED = { jail: { 2: 'chance' }, ipo: { 2: 'chance' } };      // 固定位置的格子:兩條小路第 3 格一定是市場事件
 const MARKET_DRIFT = 0.01;
 const DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92;   // 調高股利:每次 +1 個百分點、最多 8%、股價 +4%
