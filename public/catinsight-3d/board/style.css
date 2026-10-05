@@ -508,4 +508,5 @@ body.watch #panel[data-watch=""]::after{display:none}
 .rb span#missLbl{font-size:calc(10px * var(--fs));padding:1px 7px;transform:translateX(var(--lblShift, 0px))}
 
 /* 事件面板最上面:目前的大盤趨勢 */
+.box.ev.mk-up h4{background:#3aa864}.box.ev.mk-dn h4{background:#e0533f}
 .evt .mvrow.trend{font-weight:900;border-bottom:1.5px dashed #e8d9c2;padding-bottom:6px;margin-bottom:6px}

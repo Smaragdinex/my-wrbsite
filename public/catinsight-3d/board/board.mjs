@@ -50,6 +50,8 @@ function instantiate(e) {
 }
 const divPct = (x) => `${+(x * 100).toFixed(1)}%`;
 // 大盤趨勢的文字:▲ 每回合 +1% / ▼ 每回合 −2%
+// 事件卡是好是壞:會改大盤趨勢的看趨勢方向(疫情、戰爭雖然有幾檔大漲,大盤是轉空的),其他看大盤 ETF 漲跌
+const evGood = (e) => (e.trend != null ? e.trend > 0 : e.m.etf >= 1);
 const trendTxt = (t) => `${t >= 0 ? '▲' : '▼'} ${L('per round', '每回合')} ${t >= 0 ? '+' : '−'}${Math.round(Math.abs(t) * 100)}%`;
 const trendChip = (e) => (e.trend == null ? '' : `<span class="mv ${e.trend >= 0 ? 'up' : 'dn'}">${e.trend >= 0 ? L('Market turns up', '大盤轉多') : L('Market turns down', '大盤轉空')} ${trendTxt(e.trend)}</span>`);      // 殖利率顯示:0.5% / 1.5% / 5%
 // 買股面板的配息說明:目前殖利率是動態的(股利事件會調),介紹文字不寫數字,這裡顯示現在的值;調高過綠色、被削減過紅色
@@ -1509,6 +1511,7 @@ function hud() {
     $('assetRows').innerHTML = assetRowsHtml(A, mine); }
   const e = S.lastEvent;
 
+  { const up = (S.trend ?? MARKET_DRIFT) >= 0; $('evtBox').classList.toggle('mk-up', up); $('evtBox').classList.toggle('mk-dn', !up); }   // 市場事件框的標題列:大盤漲綠色、跌紅色
   $('evtBody').innerHTML = `<div class="mvrow trend"><span>${L('Market trend', '目前大盤')}</span><span style="color:${(S.trend ?? MARKET_DRIFT) >= 0 ? '#1c8a4a' : '#c4472f'}">${trendTxt(S.trend ?? MARKET_DRIFT)}</span></div>` + (e
     ? `<div>${e.t}</div><div class="why">${e.w}</div>` + (e.cash ? `<div class="mvrow"><span>${L('Everyone', '每位玩家')}</span><span style="color:#1c8a4a">+$${fmt(e.cash)}</span></div>` : '') + KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 7).map((k) => { const d = Math.round((e.m[k] - 1) * 100);   // 只列變動最大的 7 檔,不然面板會蓋到任務
         return `<div class="mvrow"><span>${SECTORS[k].code}</span><span style="color:${d > 0 ? '#1c8a4a' : '#c4472f'}">${d > 0 ? '+' : ''}${d}% ${d > 0 ? '▲' : '▼'}</span></div>`; }).join('')
@@ -1684,7 +1687,7 @@ function drawEventCards(auto, round = false, special = !round) {     // special=
       const top = KEYS.filter((k) => Math.round((e.m[k] - 1) * 100) && !(e.divKeys || []).includes(k)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 6);
       if (e.special) return `<div class="dhead ${e.special === 'ipo' ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` +
         (e.special === 'ipo' ? `<span class="mv up">${L('IPO lane', '進入 IPO 小路')}</span>` : `<span class="mv dn">${L('Detention lane', '送進拘留小路')}</span>`) + '</div>';
-      return `<div class="dhead ${e.m.etf >= 1 ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` + cashChip(e) +
+      return `<div class="dhead ${evGood(e) ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` + cashChip(e) +
         top.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].code} ${d > 0 ? '+' : ''}${d}%</span>`; }).join('') + '</div>';
     };
     const ov = $('draw');
@@ -1697,7 +1700,7 @@ function drawEventCards(auto, round = false, special = !round) {     // special=
       if (chosen >= 0) return;
       chosen = i; ov.classList.add('done'); cards[i].classList.add('flip', 'picked'); sfx('flip');
       const e = picks[i];
-      wait(0.45).then(() => sfx(e.special ? (e.special === 'ipo' ? 'good' : 'bad') : e.m.etf >= 1 ? 'good' : 'bad'));
+      wait(0.45).then(() => sfx(e.special ? (e.special === 'ipo' ? 'good' : 'bad') : evGood(e) ? 'good' : 'bad'));
       if (!e.special) applyEvent(e);
       drawAll(); hud();
       wait(0.9).then(() => {
@@ -1715,7 +1718,7 @@ function drawEventCards(auto, round = false, special = !round) {     // special=
 // actor:從背包打出事件卡的人(這張牌造成的斷頭 / 軋空算他的成就);回合事件、市場事件格不傳
 async function playEvent(e, auto = 0, actor = null) {
   if (actor) ENG.withActor(S, actor, () => applyEvent(e)); else applyEvent(e);
-  drawAll(); hud(); sfx(e.m.etf >= 1 ? 'good' : 'bad');
+  drawAll(); hud(); sfx(evGood(e) ? 'good' : 'bad');
   const moves = cashChip(e) + KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d && !(e.divKeys || []).includes(k) ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
   await cardPanel(e.t, e.w, moves, auto);
 }
@@ -2456,7 +2459,7 @@ function netHudNow(to) {
       tip: S.hi === p.i ? advise() : L(`${nameOf(cur)}'s turn`, `現在是${nameOf(cur)}的回合`),
       players: S.players.map((q) => ({ i: q.i, char: q.char, rank: ordinal(rankOf(q)), top: rankOf(q) === 1, title: (q === p ? L('My assets', '我的資產') : L(`${nameOf(q)}'s assets`, `${nameOf(q)}的資產`)) + ' · $' + fmt(assetsOf(q)), rows: assetRowsHtml(q, q === p) })),
       missTitle: L(`Achievements · ${p.done} unlocked`, `任務 · 完成 ${p.done}`), missBadge: (p.missions || []).filter((m) => !m.done).length, miss: missHtml(p),
-      evtTitle: $('evtTitle').textContent, evt: $('evtBody').innerHTML, round: $('roundTxt').textContent,
+      evtTitle: $('evtTitle').textContent, evt: $('evtBody').innerHTML, evtUp: $('evtBox').classList.contains('mk-up'), round: $('roundTxt').textContent,
       holds: S.players.map((q) => Object.fromEntries(KEYS.filter((k) => q.hold[k].n > 0).map((k) => [k, q.hold[k].n]))) }, g.conn); }
 }
 function netInit(g) {
@@ -2604,6 +2607,7 @@ function clientInit() {
     $('avaMe').classList.toggle('turn', h.turn === h.me);
     if ($('tip').textContent !== h.tip) { $('tip').textContent = h.tip; const tb = $('tipbar'); tb.classList.remove('pulse'); void tb.offsetWidth; tb.classList.add('pulse'); }
     $('missTitle').textContent = h.missTitle; $('missBadge').textContent = h.missBadge; $('miss').innerHTML = h.miss;
+    $('evtBox').classList.toggle('mk-up', !!h.evtUp); $('evtBox').classList.toggle('mk-dn', !h.evtUp);
     $('evtTitle').textContent = h.evtTitle; if ($('evtBody').innerHTML !== h.evt) { if ($('evtBody').innerHTML && $('evtBox').classList.contains('fold')) $('evtBadge').classList.remove('hide'); $('evtBody').innerHTML = h.evt; }
     if (aview == null || !h.players.some((p) => p.i === aview) || (aview !== h.me && aview !== h.spy)) { if (aview != null && aview !== h.me) $('assetBox').classList.add('fold'); aview = h.me; }   // 只能看自己,或偵查中的那位
     const v = h.players.find((p) => p.i === aview); if (v) { $('assetTitle').textContent = v.title + (aview !== h.me ? ` · 🔍${h.spyLeft}` : ''); $('assetRows').innerHTML = v.rows; }
