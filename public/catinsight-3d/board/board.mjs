@@ -69,7 +69,7 @@ const DIV_PAYERS = KEYS.filter((k) => SECTORS[k].div > 0 && k !== 'etf' && k !==
 const divEvent = (e, keys, up) => {
   const m = { ...ONES }, eq = KEYS.filter((x) => !NON_EQUITY.has(x)); keys.forEach((k) => { m[k] = up ? DIV_UP_PRICE : DIV_CUT_PRICE; }); m.etf = eq.reduce((a, x) => a + m[x], 0) / eq.length;
   const divTo = Object.fromEntries(keys.map((k) => [k, [S.div[k], up ? Math.min(DIV_MAX, S.div[k] + DIV_STEP) : Math.max(DIV_MIN, S.div[k] - DIV_STEP)]]));   // 抽到當下就記好「從幾 % 到幾 %」
-  return { ...e, m, divKeys: keys, divTo, t: keys.length ? `${e.t}:${keys.map((k) => SECTORS[k].name).join(L(', ', '、'))}` : e.t };
+  return { ...e, m, divKeys: keys, divTo, t: keys.length ? `${e.t}${L(': ', ':')}${keys.map((k) => SECTORS[k].name).join(L(', ', '、'))}` : e.t };
 };
 // 加發:隨機挑 n 家,但不挑目前配最多的(讓後面的追得上)
 function divHike(e) {
@@ -90,15 +90,23 @@ function instantiate(e) {
   const pool = KEYS.filter((k) => !NON_EQUITY.has(k));
   const k = pool.some((x) => tot(x) > 0) ? pool.sort((a, b) => tot(b) - tot(a))[0] : pool[Math.floor(Math.random() * pool.length)];
   const eq = KEYS.filter((x) => !NON_EQUITY.has(x)).length;
-  return { ...e, m: { ...ONES, [k]: 1.5, etf: Math.round((1 + 0.5 / eq) * 100) / 100 }, squeezeAll: k, t: `${e.t}:${SECTORS[k].name}` };
+  return { ...e, m: { ...ONES, [k]: 1.5, etf: Math.round((1 + 0.5 / eq) * 100) / 100 }, squeezeAll: k, t: `${e.t}${L(': ', ':')}${SECTORS[k].name}` };
 }
 const divPct = (x) => `${+(x * 100).toFixed(1)}%`;      // 殖利率顯示:0.5% / 1.5% / 5%
 // 買股面板的配息說明:目前殖利率是動態的(股利事件會調),介紹文字不寫數字,這裡顯示現在的值;調高過綠色、被削減過紅色
 const divNote = (k) => { const now = S.div[k], base = SECTORS[k].div; if (!(now > 0)) return '';
   const c = now > base + 1e-9 ? '#1c8a4a' : now < base - 1e-9 ? '#c4472f' : '#5b4a40', tag = now > base + 1e-9 ? L(' (raised)', '(調高過)') : now < base - 1e-9 ? L(' (cut)', '(被削減過)') : '';
   return ` <b style="color:${c}">${L(`Pays ${divPct(now)} a lap${tag}.`, `目前每圈配息 ${divPct(now)}${tag}。`)}</b>`; };
+// 牌面字太多(英文的說明比較長、股利事件的標籤比較多)時自動縮小字級,直到整張塞得下;
+// 牌的大小會變(手機上翻開的那張會放大),所以用 ResizeObserver 每次變大小都重算
+const cardFitRO = typeof ResizeObserver !== 'undefined' ? new ResizeObserver((es) => es.forEach((x) => fitCardFace(x.target))) : null;
+function fitCardFace(f) {
+  let k = 1; f.style.setProperty('--fit', 1);
+  while (f.scrollHeight > f.clientHeight + 1 && k > 0.62) { k -= 0.04; f.style.setProperty('--fit', k.toFixed(2)); }
+}
+function fitCards(ov) { ov.querySelectorAll('.dfront').forEach((f) => { fitCardFace(f); if (cardFitRO) cardFitRO.observe(f); }); }
 const cashChip = (e) => (e.cash ? `<span class="mv up">${L(`Everyone +$${fmt(e.cash)}`, `每人 +$${fmt(e.cash)}`)}</span>` : '') +
-  (e.divTo ? e.divKeys.map((k) => `<span class="mv ${e.divTo[k][1] >= e.divTo[k][0] ? 'up' : 'dn'}">${SECTORS[k].code} ${L('yield', '殖利率')} ${divPct(e.divTo[k][0])}→${divPct(e.divTo[k][1])}</span>`).join('') : '');
+  (e.divTo ? e.divKeys.map((k) => `<span class="mv ${e.divTo[k][1] >= e.divTo[k][0] ? 'up' : 'dn'}">${SECTORS[k].code} ${pct(e.m[k])} · ${L('yield', '殖利率')} ${divPct(e.divTo[k][0])}→${divPct(e.divTo[k][1])}</span>`).join('') : '');   // 股利事件:漲跌和殖利率合成一顆,不重複列
 // 玩法:走滿選定的回合數(選角畫面可以選 20 / 25 / 30 / 35 / 40),總資產最高的人獲勝
 const ROUND_OPTS = [20, 25, 30, 35, 40];
 const AI_ORDER = ['easy', 'normal', 'hard'];   // 設定卡的 − / + 依這個順序切難度
@@ -1631,7 +1639,7 @@ function drawEventCards(auto, round = false, special = !round) {     // special=
     const picks = EVENTS.slice().sort(() => Math.random() - 0.5).slice(0, 3).map(instantiate), who = CHARS[S.foe].name;
     if (special && Math.random() < SPECIAL_RATE) picks[Math.floor(Math.random() * 3)] = SPECIAL[Math.random() < 0.5 ? 'jail' : 'ipo'];
     const face = (e) => {
-      const top = KEYS.filter((k) => Math.round((e.m[k] - 1) * 100)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 6);
+      const top = KEYS.filter((k) => Math.round((e.m[k] - 1) * 100) && !(e.divKeys || []).includes(k)).sort((x, y) => Math.abs(e.m[y] - 1) - Math.abs(e.m[x] - 1)).slice(0, 6);
       if (e.special) return `<div class="dhead ${e.special === 'ipo' ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` +
         (e.special === 'ipo' ? `<span class="mv up">${L('IPO lane', '進入 IPO 小路')}</span>` : `<span class="mv dn">${L('Detention lane', '送進拘留小路')}</span>`) + '</div>';
       return `<div class="dhead ${e.m.etf >= 1 ? 'good' : 'bad'}">${e.t}</div><div class="dwhy">${e.w}</div><div class="dmv">` + cashChip(e) +
@@ -1641,7 +1649,7 @@ function drawEventCards(auto, round = false, special = !round) {     // special=
     ov.innerHTML = `<h2>${round ? L(`Round ${S.rolls} is over: market event`, `第 ${S.rolls} 回合結束,市場事件`) : auto ? L(`${who} draws a market event`, `${who}抽市場事件`) : L('Pick a card', '抽一張市場事件')}</h2>` +
       `<div class="dcards">${picks.map((e, i) => `<div class="dcard" data-i="${i}" style="--i:${i}"><div class="dinner"><div class="dback"><span>?</span></div><div class="dfront">${face(e)}</div></div></div>`).join('')}</div>` +
       `<button class="dgo hide" id="dgo">${L('Continue', '繼續')}</button>`;
-    ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto);
+    ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto); fitCards(ov);
     const cards = [...ov.querySelectorAll('.dcard')]; let chosen = -1;
     const choose = (i) => {
       if (chosen >= 0) return;
@@ -1664,7 +1672,7 @@ function drawEventCards(auto, round = false, special = !round) {     // special=
 }
 async function playEvent(e, auto = 0) {
   applyEvent(e); drawAll(); hud(); sfx(e.m.etf >= 1 ? 'good' : 'bad');
-  const moves = cashChip(e) + KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
+  const moves = cashChip(e) + KEYS.map((k) => { const d = Math.round((e.m[k] - 1) * 100); return d && !(e.divKeys || []).includes(k) ? `<span class="mv ${d > 0 ? 'up' : 'dn'}">${SECTORS[k].name} ${d > 0 ? '+' : ''}${d}%</span>` : ''; }).join('');
   await cardPanel(e.t, e.w, moves, auto);
 }
 // 商店:每樣只有一個,你和對手共用同一批貨(兩個商店格也是同一家),誰先買走就沒了。
@@ -1910,7 +1918,7 @@ function drawGiftCards(auto) {
     ov.innerHTML = `<h2>🎁 ${auto ? L(`${who} picks a gift`, `${who}挑一個禮物`) : L('Pick a gift', '挑一個禮物')}</h2>` +
       `<div class="dcards">${picks.map((id, i) => `<div class="dcard" data-i="${i}" style="--i:${i}"><div class="dinner"><div class="dback gift"></div><div class="dfront">${face(id)}</div></div></div>`).join('')}</div>` +
       `<button class="dgo hide" id="dgo">${L('Continue', '繼續')}</button>`;
-    ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto);
+    ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto); fitCards(ov);
     const cards = [...ov.querySelectorAll('.dcard')]; let chosen = -1, done = false;
     const choose = (i) => {
       if (chosen >= 0) return;
@@ -1932,7 +1940,7 @@ function drawFateCards(auto) {
     ov.innerHTML = `<h2>★ ${auto ? L(`${who} flips a fate card`, `${who}翻命運牌`) : L('Flip a fate card', '翻一張命運牌')}</h2>` +
       `<div class="dcards">${picks.map((c, i) => `<div class="dcard" data-i="${i}" style="--i:${i}"><div class="dinner"><div class="dback fate"></div><div class="dfront">${face(c)}</div></div></div>`).join('')}</div>` +
       `<button class="dgo hide" id="dgo">${L('Continue', '繼續')}</button>`;
-    ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto);
+    ov.classList.remove('hide'); ov.classList.toggle('auto', !!auto); fitCards(ov);
     const cards = [...ov.querySelectorAll('.dcard')]; let chosen = -1, done = false;
     const choose = (i) => {
       if (chosen >= 0) return;
