@@ -464,10 +464,11 @@ body.watch #panel[data-watch=""]::after{display:none}
 .btns.grid2 button span{font-size:calc(13px * var(--fs));white-space:normal}
 .panel h3 .help{position:relative;margin-left:auto;flex:none;pointer-events:auto;cursor:help;outline:none}
 .panel h3 .help i{display:flex;align-items:center;justify-content:center;width:calc(24px * var(--fs));height:calc(24px * var(--fs));border-radius:50%;background:#e8d9c2;color:#6b594e;font-style:normal;font-weight:900;font-size:calc(14px * var(--fs))}
-.panel h3 .help:hover i,.panel h3 .help:focus i{background:#ff7a59;color:#fff}
+.panel h3 .help:hover i,.panel h3 .help.open i{background:#ff7a59;color:#fff}
+.panel h3 .help:focus-visible i{outline:2px solid #ff7a59;outline-offset:2px}
 .panel h3 .help .tip{display:none;position:absolute;right:0;top:calc(100% + 8px);width:min(300px,78vw);background:#3b2f2a;color:#fff;border-radius:12px;padding:10px 12px;font-size:calc(12px * var(--fs));font-weight:600;line-height:1.5;z-index:5;box-shadow:0 8px 20px rgba(0,0,0,.25);text-align:left}
 .panel h3 .help .tip b{color:#ffd9a3}
-.panel h3 .help:hover .tip,.panel h3 .help:focus .tip,.panel h3 .help.open .tip{display:block}
+.panel h3 .help.open .tip{display:block}   /* 只靠點擊開關:再按一次「?」或點旁邊就關 */
 
 /* 結算畫面:全球排行榜直接放在卡片裡,可以上下捲 */
 .endcard{width:min(440px,100%)}

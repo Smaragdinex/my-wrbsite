@@ -2460,6 +2460,7 @@ $('rollBtn').onclick = () => turn();
 document.addEventListener('click', (e) => { if (CLIENT && e.target.closest('#ctl, #stepCtl, #panel, #draw, #end')) return; if (e.target.closest('button, .dcard, .bubble')) sfx('click'); });
 // 面板標題旁的「?」:手機沒有 hover,點一下開 / 關;點別處關掉
 document.addEventListener('click', (e) => { const t = e.target.closest('.mtabs button'); if (t) $('missBox').dataset.tab = t.dataset.mt; });   // 任務框分頁(主機和手機都是本機切換)
+document.addEventListener('keydown', (e) => { const h = e.target.closest && e.target.closest('.panel h3 .help'); if (h && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); h.classList.toggle('open'); } });   // 鍵盤也能開關說明
 document.addEventListener('click', (e) => { const h = e.target.closest('.panel h3 .help'); document.querySelectorAll('.panel h3 .help.open').forEach((x) => { if (x !== h) x.classList.remove('open'); }); if (h) h.classList.toggle('open'); });   // 任何按鈕 / 牌 / 提示泡泡按下都有聲(手機上鏡射區的按鈕由主機轉送點擊聲,不重複)
 // 滑鼠移到任何按鈕 / 卡片上都有一聲(只有有滑鼠的裝置;同一顆按鈕不重複響)
 if (matchMedia('(hover:hover)').matches) { let lastHover = null;
