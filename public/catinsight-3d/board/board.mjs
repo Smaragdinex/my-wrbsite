@@ -20,7 +20,7 @@ const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
 import { gameData } from './data.mjs?v=14';
-import { makeSim } from './sim.mjs?v=19';
+import { makeSim } from './sim.mjs?v=20';
 import { makeEngine } from './engine.mjs?v=9';
 const GD = gameData(L, fmt);      // 遊戲資料:畫面、遊戲引擎、電腦模擬都用同一份
 const { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_LOCK, IPO_FREE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = GD;
@@ -91,7 +91,7 @@ const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim(GD,
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=22', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=23', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -1431,7 +1431,7 @@ function advise() {
   const cheap = KEYS.filter((k) => S.price[k] < SECTORS[k].open * 0.97);
   const up = held.find((k) => (S.price[k] * S.hold[k].n - S.hold[k].cost) / S.hold[k].cost >= 0.15);
   if (S.lane?.type === 'jail') return L(`Resting at the police station (${S.lane.wait} rounds left, or pay $${fmt(BAIL)} bail). You cannot trade, but a margin position can still be liquidated.`, `在警察局休息(再 ${S.lane.wait} 回合,或付 $${fmt(BAIL)} 保釋金)。不能買賣,但融資部位一樣可能被斷頭。`);
-  if (S.lane?.type === 'ipo') return L('At the private placement booth. Roll one die to get back on the road.', '在內部認購攤位。擲一顆骰子走回外圈。');
+  if (S.lane?.type === 'ipo') return L('At the private placement booth. Roll to get back on the road.', '在內部認購攤位。擲骰子走回外圈。');
   let d = 0; for (let i = 1; i <= 6; i++) if (TILES[(S.pos + i) % TILES.length] === 'chance') { d = i; break; }
   if (todo.has('profit') && up) return L(`${SECTORS[up].name} is up over 15%. Land on it to take profit.`, `${SECTORS[up].name}已經賺超過 15%,走到它的格子就能獲利了結。`);
   if (todo.has('dip') && cheap.length) return L(`${SECTORS[cheap[0]].name} is below its opening price. Buying it counts as buying the dip.`, `${SECTORS[cheap[0]].name}現在低於開盤價,買進就算逢低買進。`);
@@ -1520,9 +1520,9 @@ function hud() {
   $('rankTxt').textContent = ordinal(rank); $('rankTxt').classList.toggle('top', rank === 1); $('crown').classList.toggle('hide', rank !== 1);
 
   document.querySelectorAll('#dsel button').forEach((b) => b.classList.toggle('on', +b.dataset.n === S.diceN));
-  { const rest = S.lane && S.lane.type === 'jail' && S.lane.wait > 0;   // 擲骰鈕:沒有字,骰子顆數跟著選擇(小路上固定一顆);休息中才顯示文字
-    $('rollTxt').textContent = rest ? L('REST', '休息中') : ''; $('rollDice').className = 'dice ' + (rest ? 'rest' : (S.lane || S.diceN === 1) ? 'one' : 'two'); }
-  $('dsel').style.visibility = S.lane ? 'hidden' : '';
+  { const rest = S.lane && S.lane.type === 'jail' && S.lane.wait > 0;   // 擲骰鈕:沒有字,骰子顆數跟著選擇(小路上也能選);休息中才顯示文字
+    $('rollTxt').textContent = rest ? L('REST', '休息中') : ''; $('rollDice').className = 'dice ' + (rest ? 'rest' : S.diceN === 1 ? 'one' : 'two');
+    $('dsel').style.visibility = rest ? 'hidden' : ''; }
   { const T = meP();    // 任務清單永遠是自己的(每位玩家各自抽 3 個;以前跟著輪到誰,手機玩家走的時候主機會看到他的)
     $('missTitle').textContent = L(`Achievements · ${T.done} unlocked`, `任務 · 完成 ${T.done}`); $('missBadge').textContent = (T.missions || []).filter((m) => !m.done).length;
     $('miss').innerHTML = missHtml(T); }
@@ -1856,8 +1856,8 @@ async function enterLane(isMe, type) {
   await hopOnto(laneTiles[type].cell.g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
   if (isMe) await cardPanel(L('Sent to the police station', '被送進警察局'),
-    L(`Rest here ${JAIL_WAIT} rounds. You cannot buy, sell, cover or use items, but prices keep moving: a margin position below 130% is still sold for you. On your turn you can pay $${fmt(BAIL)} bail to leave at once. Leaving, you roll one die each turn along the ${LANE_LEN}-tile path: ★ tiles flip a fate card, and the rest are random (market events, items, fees…).`,
-      `在這裡休息 ${JAIL_WAIT} 回合。期間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${fmt(BAIL)} 保釋金立刻離開。離開時每回合擲一顆骰子,沿 ${LANE_LEN} 格小路走回外圈:踩到 ★ 翻命運牌,其他格是隨機的(市場事件、道具、手續費…)。`));
+    L(`Rest here ${JAIL_WAIT} rounds. You cannot buy, sell, cover or use items, but prices keep moving: a margin position below 130% is still sold for you. On your turn you can pay $${fmt(BAIL)} bail to leave at once.`,
+      `在這裡休息 ${JAIL_WAIT} 回合。期間不能買賣、不能回補、不能用道具,但股價照樣會動:融資部位跌破 130% 一樣會被強迫平倉。輪到你時可以付 $${fmt(BAIL)} 保釋金立刻離開。`));
   else { toast(L(`${name} is sent to the police station`, `${name}被送進警察局了`)); await wait(1.3); }
 }
 // 沿著外圈走 n 格(經過起點 / 股息結算格會結算)。真人和電腦都用這個
@@ -1869,13 +1869,15 @@ async function stepOnce(isMe) {
   await hopTo(s.pos, P); if (s.kind === 'exit') hud();                      // 踏上外圈的出口格
   if (s.pay) { if (isMe) paydayUI(s.pay, s.pay.atStart); else hud(); }
 }
-// 離開警察局 / IPO 攤位:擲一顆骰子,沿小路走幾格;走過第 ${LANE_LEN} 格就踩上外圈的出口格,剩下的點數繼續往前走
-// 離開警察局 / IPO 攤位:擲一顆骰子,沿小路走;走完小路踏上外圈出口格,剩下的點數繼續往前走(每一步由引擎決定)
+// 離開警察局 / 內部認購攤位:和外圈一樣自己選擲 1 顆或 2 顆,沿小路走;走完小路踏上外圈出口格,剩下的點數繼續往前走(每一步由引擎決定)
+// 真人用擲骰鈕旁邊的選擇(S.diceN);電腦:警察局那條擲 2 顆快點出去(有手續費),內部認購那條擲 1 顆多踩幾格(撿到錢、禮物多)
+const laneDice = (p) => (p.lane && p.lane.type === 'ipo' ? 1 : 2);
 async function leaveLane(isMe) {
-  const P = isMe ? PM() : PA(), d = ENG.dice(1, 0, Math.random)[0], name = isMe ? L('You', '你') : CHARS[S.foe].name;
-  toast(L(`${name} roll${isMe ? '' : 's'} one die on the path`, `${name}擲一顆骰子走小路`)); await wait(0.5);
-  await rollDice([d], P); toast(`${name}: ${d}`);
-  await stepAlong(isMe, d);
+  const P = isMe ? PM() : PA(), who = isMe ? S.players[S.hi] : S.ai, nd = isMe ? S.diceN : laneDice(who), name = isMe ? L('You', '你') : CHARS[S.foe].name;
+  const vals = ENG.dice(nd, 0, Math.random), n = vals.reduce((x, y) => x + y, 0);
+  toast(L(`${name} roll${isMe ? '' : 's'} ${nd === 1 ? 'one die' : 'two dice'} on the path`, `${name}擲 ${nd} 顆骰子走小路`)); await wait(0.5);
+  await rollDice(vals, P); toast(vals.length === 1 ? `${name}: ${n}` : `${name}: ${vals.join(' + ')} = ${n}`);
+  await stepAlong(isMe, n);
   hud();
 }
 // 小路上踩到的格子是什麼:'fate' 命運、'_gift' / '_interest' / '_coin' / '_fine' 小路專屬的格子、'_path' 空白的一步、'_jail' / '_ipo' 還在攤位上
@@ -2124,7 +2126,7 @@ async function aiTurn() {
     if (best.i) { A.bag.splice(A.bag.indexOf('remote'), 1); usedBy(A, 'remote'); forced = best.i; hud(); toast(L(`${who} uses a remote dice: ${forced} steps`, `${who}使用遙控骰子:走 ${forced} 步`)); await wait(1.0); }
   }
   if (A.lane) {
-    // 在警察局:錢夠多就付保釋金,不然休息一回合;能走了就擲一顆骰子出去。IPO 攤位:下一回合直接擲骰出去
+    // 在警察局:錢夠多就付保釋金,不然休息一回合;能走了就擲骰出去。內部認購攤位:下一回合直接擲骰出去
     if (A.lane.type === 'jail' && A.lane.wait > 0) {
       if (A.cash >= BAIL + 2500) { ENG.bail(S, A); toast(L(`${who} pays $${fmt(BAIL)} bail`, `${who}付了 $${fmt(BAIL)} 保釋金`)); await wait(0.8); await leaveLane(false); }
       else { ENG.rest(S, A); toast(L(`${who} rests at the police station (${A.lane.wait} left)`, `${who}在警察局休息(再 ${A.lane.wait} 回合)`)); await wait(0.9); }
@@ -2218,11 +2220,11 @@ async function turn(forced, nDice = 0) {      // nDice = 3:用了「三顆骰子
   S.busy = true; showCtl(false); pan.set(0, 0, 0);
   // 擲 1 顆或 2 顆由玩家選(S.diceN)。遙控骰子(forced):6 以內用一顆顯示,7 以上拆成兩顆的點數
   if (S.lane) {
-    // 在警察局:付保釋金或再休息一回合;能走了(或在 IPO 攤位)就擲一顆骰子出去
+    // 在警察局:付保釋金或再休息一回合;能走了(或在內部認購攤位)就擲骰出去(1 顆或 2 顆照玩家的選擇)
     if (S.lane.type === 'jail' && S.lane.wait > 0) {
       if (await jailPanel()) { ENG.bail(S, S.players[S.hi]); hud(); sfx('sell'); toast(L(`Paid $${fmt(BAIL)} bail`, `付了 $${fmt(BAIL)} 保釋金`)); await leaveLane(true); }
       else { ENG.rest(S, S.players[S.hi]); S.lane.rested = true; hud(); toast(L(`Resting (${S.lane.wait} left)`, `休息中(再 ${S.lane.wait} 回合)`)); await wait(0.6); }
-    } else await leaveLane(true);      // 休息夠了(或在 IPO 攤位):擲一顆骰子出去
+    } else await leaveLane(true);      // 休息夠了(或在內部認購攤位):擲骰出去
   } else {
   const vals = ENG.dice(nDice === 3 ? 3 : S.diceN, forced, Math.random);          // 點數由引擎決定(遙控骰子 / 三顆骰子也是)
   const n = vals.reduce((x, y) => x + y, 0);

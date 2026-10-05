@@ -118,7 +118,8 @@ export function makeSim(D, opts = {}) {
   const ipoLots = (st, p, k) => { const price = st.price[k] * IPO_OFF; return p.cash >= price * LOT * 3 + 1500 ? 3 : p.cash >= price * LOT + 500 ? 1 : 0; };
   function ipo(st, p) { const k = ENG.ipoPick(st, p, rand); ENG.ipoGrant(st, p, k); const lots = ipoLots(st, p, k); if (lots) ENG.ipoBuy(st, p, k, LOT * lots); note(st, p, k); }
   function walk(st, p, n) { for (let i = 0; i < n; i++) ENG.advance(st, p); }
-  const leaveLane = (st, p) => walk(st, p, ENG.dice(1, 0, rand)[0]);
+  // 離開小路:和遊戲裡的電腦一樣,警察局那條擲 2 顆快點出去,內部認購那條擲 1 顆多踩幾格
+  const leaveLane = (st, p) => walk(st, p, ENG.dice(p.lane && p.lane.type === 'ipo' ? 1 : 2, 0, rand).reduce((a, b) => a + b, 0));
 
   /* ───────── 踩格 ───────── */
   function land(st, p, relanding = false) {
