@@ -1,4 +1,5 @@
 import { makeEngine } from './engine.mjs?v=6';
+import { makePolicy } from './nn.mjs?v=1';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
 //   2. Node 可以直接 import,讓三種電腦(規則 / 期望值 / 蒙地卡羅)互打幾百局,算勝率(tournament.mjs)
@@ -346,11 +347,31 @@ export function makeSim(D, opts = {}) {
   /* ───────── 派發 ───────── */
   // 蒙地卡羅在 Node 對戰裡也從「自己眼中的局面」出發(對手部位是推測的),和遊戲裡 board.mjs 交給 Web Worker 的快照一樣
   const asSeen = (st, p) => (opts.belief !== false && st.pub ? beliefOf(st, p.i) : st);
+  // 神經網路(nn):模仿蒙地卡羅的策略網路,一次前向計算就決定,不做模擬。候選動作和蒙地卡羅一樣(可做的動作 + 期望值建議)
+  const NN = opts.nn ? makePolicy(opts.nn) : null;
+  const NN_CONF = opts.nnConf ?? 0;
+  function nnTrade(st, p, k) {
+    const cand = tradeOptions(st, p, k), evAct = evTrade(st, p, k);
+    if (!cand.some((o) => o.a === evAct.a && (o.q || 0) === (evAct.q || 0))) cand.push(evAct);
+    const lg = NN.trade(withBase(features(st, p.i, k), actIndex(evAct)));
+    const best = cand.reduce((x, o) => (lg[actIndex(o)] > lg[actIndex(x)] ? o : x), cand[0]);
+    // 和蒙地卡羅的「好超過 z 個標準誤才換」同一個想法:網路對「不照期望值建議」的把握(候選動作裡的 softmax 機率)要超過 nnConf 才換
+    if (NN_CONF > 0 && actIndex(best) !== actIndex(evAct)) {
+      const mx = Math.max(...cand.map((o) => lg[actIndex(o)])), z = cand.reduce((u, o) => u + Math.exp(lg[actIndex(o)] - mx), 0);
+      if (Math.exp(lg[actIndex(best)] - mx) / z < NN_CONF) return evAct;
+    }
+    return best;
+  }
+  const nnDice = (st, p) => { const lg = NN.dice(withBase(features(st, p.i), evDice(st, p) - 1)); return lg[0] > lg[1] ? 1 : 2; };
+  // 輸入 = 局面特徵 + 期望值建議的 one-hot(10 格)
+  const withBase = (f, bi) => { const x = new Float32Array(f.length + 10); x.set(f); x[f.length + bi] = 1; return x; };
   function decideDice(st, p) { if (POL[p.alg]) return POL[p.alg].dice ? POL[p.alg].dice(st, p, api) : evDice(st, p);
+    if (p.alg === 'nn' && NN) { const b = asSeen(st, p); return nnDice(b, b.players[p.i]); }
     if (p.alg === 'mc') { const b = asSeen(st, p); return mcDice(b, b.players[p.i]); } return p.alg === 'ev' ? evDice(st, p) : 2; }
   // opts.policies:實驗用的自訂策略 { 名字: (st, p, k, api) => 動作 },玩家的 alg 設成那個名字就會用它(tools/ 的分析腳本用)
   const POL = opts.policies || {};
   function decideTrade(st, p, k) { if (POL[p.alg]) return POL[p.alg](st, p, k, api);
+    if (p.alg === 'nn' && NN) { const b = asSeen(st, p); return nnTrade(b, b.players[p.i], k); }
     if (p.alg === 'mc') { const b = asSeen(st, p); return mcTrade(b, b.players[p.i], k); } return p.alg === 'ev' ? evTrade(st, p, k) : ruleTrade(st, p, k); }
 
   /* ───────── 神經網路用的局面特徵 ───────── */
@@ -382,5 +403,5 @@ export function makeSim(D, opts = {}) {
   }
 
   const api = { fill: (st, k, f) => fill(st, k, f), maxLots, acctRatio, assetsOf, evOf, evTrade, tradeOptions, buyF, sellF, shortF, LOT, MARGIN_LOAN };
-  return { features, NN_ACTIONS, NN_DIM, actIndex, newGame, clone, playGame, run, playTurn, land, doTrade, tradeOptions, assetsOf, acctRatio, lead, evOf, beliefOf, view, note, leader, EVSTAT, evDice, evTrade, ruleTrade, mcDice, mcTrade, rolloutMean, rolloutAll, tileScore, ipoLots, setSeed, getSeed, rand, MC, EVP, LEVELS, mkPlayer };
+  return { nnTrade, nnDice, NN, features, NN_ACTIONS, NN_DIM, actIndex, newGame, clone, playGame, run, playTurn, land, doTrade, tradeOptions, assetsOf, acctRatio, lead, evOf, beliefOf, view, note, leader, EVSTAT, evDice, evTrade, ruleTrade, mcDice, mcTrade, rolloutMean, rolloutAll, tileScore, ipoLots, setSeed, getSeed, rand, MC, EVP, LEVELS, mkPlayer };
 }
