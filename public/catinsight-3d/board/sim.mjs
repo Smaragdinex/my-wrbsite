@@ -1,4 +1,4 @@
-import { makeEngine } from './engine.mjs?v=4';
+import { makeEngine } from './engine.mjs?v=5';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
 //   2. Node 可以直接 import,讓三種電腦(規則 / 期望值 / 蒙地卡羅)互打幾百局,算勝率(tournament.mjs)
@@ -14,13 +14,10 @@ export function makeSim(D, opts = {}) {
     SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE } = D;
   const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));
   const DRIFT = opts.drift ?? MARKET_DRIFT, DRIFTS = (k) => k === 'etf' || !NON_EQUITY.has(k);
-  const LANE_EXIT = { jail: 28, ipo: 60 };
-  const PATH_POOL = { jail: ['chance', 'gift', 'fee', 'coin'], ipo: ['chance', 'gift', 'interest', 'coin'] };
   // 自己的亂數(mulberry32):可以重設種子 → 蒙地卡羅比較不同動作時用「同一組未來」(common random numbers),雜訊小很多
   let seed = (opts.seed ?? Math.floor(Math.random() * 2 ** 31)) | 0;
   const rand = () => { seed = (seed + 0x6D2B79F5) | 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const getSeed = () => seed, setSeed = (x) => { seed = x | 0; };
-  const r6 = () => 1 + Math.floor(rand() * 6);
   const pick = (arr) => arr[Math.floor(rand() * arr.length)];
 
   // 難度參數(和 board.mjs 的 AI_LEVELS 一樣):reserve 現金底線、lots 一次最多買幾手、greedy 融資機率、shortP 放空機率…
@@ -81,59 +78,29 @@ export function makeSim(D, opts = {}) {
   }
   const payday = (st, p, atStart) => { ENG.payday(st, p, atStart); };
 
+  // 命運牌:效果在引擎;瞬間移動要重新結算換到的那一格、IPO 要進小路
   function applyFate(st, p, c) {
-    if (c.id === 'lottery') p.cash += 1500;
-    else if (c.id === 'tax') p.cash -= Math.round(Math.max(0, p.cash) * 0.05);
-    else if (c.id === 'birthday') others(st, p).forEach((q) => { q.cash -= 200; p.cash += 200; });
-    else if (c.id === 'phone') p.cash -= 300;
-    else if (c.id === 'fine') p.cash -= 500;
-    else if (c.id === 'richest') { const r = leader(st, p); if (r) { r.cash -= 500; p.cash += 500; } }
-    else if (c.id === 'remote' || c.id === 'atk') p.bag.push(c.id);
-    else if (c.id === 'divi') payday(st, p, false);
-    else if (c.id === 'salary2') p.salary2 = true;
-    else if (c.id === 'gostart') { p.lane = null; p.pos = 0; payday(st, p, true); }
-    else if (c.id === 'fat') { const held = KEYS.filter((k) => p.hold[k].n > 0); if (held.length) doTrade(st, p, pick(held), { a: 'sell' }); }
-    else if (c.id === 'swap') { const r = pick(others(st, p)); if (r) { [p.pos, r.pos] = [r.pos, p.pos]; [p.lane, r.lane] = [r.lane, p.lane]; land(st, p, true); } }
-    else if (c.id === 'ipo') enterLane(st, p, 'ipo');
+    const r = ENG.fate(st, p, c, rand);
+    if (r.other) land(st, p, true);
+    if (r.lane) enterLane(st, p, r.lane);
   }
 
-  /* ───────── 小路 ───────── */
-  function genLanePath(type) {
-    const t = new Array(LANE_LEN).fill(null); t[2] = 'chance';
-    for (let n = 0; n < 2; n++) { const free = t.map((v, i) => (v ? -1 : i)).filter((i) => i >= 0); t[pick(free)] = 'fate'; }
-    const pool = PATH_POOL[type].filter((k) => k !== 'chance').sort(() => rand() - 0.5);
-    for (let i = 0; i < LANE_LEN; i++) if (!t[i]) t[i] = pool.pop();
-    return t;
-  }
-  function enterLane(st, p, type) {
-    if (!st.players.some((q) => q !== p && q.lane && q.lane.type === type && q.lane.at > 0)) st.lanePath[type] = genLanePath(type);
-    p.lane = { type, wait: type === 'jail' ? JAIL_WAIT : 0, at: 0 };
-    if (type === 'ipo') ipo(st, p);
-  }
-  function ipo(st, p) {
-    const pool = EQ.filter((k) => !p.short[k].n), k = pick(pool), h = p.hold[k], price = st.price[k] * IPO_OFF;
-    h.n += IPO_FREE; h.cost += price * IPO_FREE;
-    const lots = p.cash >= price * LOT * 3 + 1500 ? 3 : p.cash >= price * LOT + 500 ? 1 : 0;
-    if (lots) { p.cash -= price * LOT * lots; h.n += LOT * lots; h.cost += price * LOT * lots; }
-  }
-  function stepAlong(st, p, n) {
-    for (let i = 0; i < n; i++) { p.pos = (p.pos + 1) % TILES.length; if (p.pos === 0 || TILES[p.pos] === 'divi') payday(st, p, p.pos === 0); }
-  }
-  function leaveLane(st, p) {
-    const d = r6(), exit = LANE_EXIT[p.lane.type];
-    for (let i = 0; i < d; i++) {
-      if (p.lane.at < LANE_LEN) { p.lane.at++; continue; }
-      p.lane = null; p.pos = exit; stepAlong(st, p, d - i - 1); break;
-    }
-  }
+
+  /* ───────── 小路、移動(規則在引擎,這裡是電腦的決定)───────── */
+  function enterLane(st, p, type) { ENG.enterLane(st, p, type, rand); if (type === 'ipo') ipo(st, p); }
+  // 電腦在 IPO 攤位加購幾手:現金夠就買 3 手,不然 1 手(遊戲裡的電腦也用這個)
+  const ipoLots = (st, p, k) => { const price = st.price[k] * IPO_OFF; return p.cash >= price * LOT * 3 + 1500 ? 3 : p.cash >= price * LOT + 500 ? 1 : 0; };
+  function ipo(st, p) { const k = ENG.ipoPick(st, p, rand); ENG.ipoGrant(st, p, k); const lots = ipoLots(st, p, k); if (lots) ENG.ipoBuy(st, p, k, LOT * lots); }
+  function walk(st, p, n) { for (let i = 0; i < n; i++) ENG.advance(st, p); }
+  const leaveLane = (st, p) => walk(st, p, ENG.dice(1, 0, rand)[0]);
 
   /* ───────── 踩格 ───────── */
   function land(st, p, relanding = false) {
     if (p.lane) {
       if (!p.lane.at) return;                                   // 還在攤位 / 警察局裡
-      const k = (st.lanePath[p.lane.type] || genLanePath(p.lane.type))[p.lane.at - 1];
-      if (k === 'chance') chance(st, p, false); else if (k === 'fate') applyFate(st, p, pick(FATE));
-      else if (k === 'gift') gift(p); else if (k === 'fee') p.cash -= 200; else if (k === 'interest') p.cash += Math.round(Math.max(0, p.cash) * 0.03); else if (k === 'coin') p.cash += 300;
+      const k = ENG.tileType(st, p, rand);
+      if (k === '_chance') chance(st, p, false); else if (k === 'fate') applyFate(st, p, pick(FATE));
+      else if (k === '_gift') gift(p); else ENG.pathEffect(st, p, k);
       return;
     }
     const t = TILES[p.pos];
@@ -141,12 +108,12 @@ export function makeSim(D, opts = {}) {
     else if (t === 'chance') chance(st, p, true);
     else if (t === 'fate') applyFate(st, p, pick(FATE));
     else if (t === 'ipo') enterLane(st, p, 'ipo');
-    else if (t === 'fee') p.cash -= FEE;
+    else if (t === 'fee') ENG.payFee(st, p);
     else if (t === 'gift') gift(p);
-    else if (t === 'shop') { if (p.cash >= ATK_PRICE + p.lv.reserve && rand() < p.lv.atkP * 0.5) { p.cash -= ATK_PRICE; p.bag.push('atk'); } }
+    else if (t === 'shop') { if (p.cash >= ATK_PRICE + p.lv.reserve && rand() < p.lv.atkP * 0.5) ENG.buyItem(st, p, 'atk', ATK_PRICE); }
     else if (t === 'bank') {
-      if (p.debt > 0 && p.cash >= p.debt + 4000) { p.cash -= p.debt; p.debt = 0; }
-      else if (p.cash < 1500 && p.debt + 2000 <= BANK_MAX) { const amt = Math.min(3000, BANK_MAX - p.debt); p.cash += amt; p.debt += amt; }
+      if (p.debt > 0 && p.cash >= p.debt + 4000) ENG.bank(st, p, -p.debt);
+      else if (p.cash < 1500 && p.debt + 2000 <= BANK_MAX) ENG.bank(st, p, Math.min(3000, BANK_MAX - p.debt));
     }
     marginCheck(st);
   }
@@ -163,14 +130,13 @@ export function makeSim(D, opts = {}) {
   function playTurn(st, p, forced = null) {
     if (p.lane) {
       if (p.lane.type === 'jail' && p.lane.wait > 0) {
-        if (p.cash >= BAIL + 2500) { p.cash -= BAIL; p.lane.wait = 0; leaveLane(st, p); }
-        else { p.lane.wait--; afterMove(st, p); return; }
+        if (p.cash >= BAIL + 2500) { ENG.bail(st, p); leaveLane(st, p); }   // 電腦:現金夠多就付保釋金
+        else { ENG.rest(st, p); afterMove(st, p); return; }
       } else leaveLane(st, p);
     } else {
       if (p.bag.includes('atk') && rand() < p.lv.atkP) useAtk(st, p);
       const nd = forced && forced.dice ? forced.dice : decideDice(st, p);
-      const n = nd === 1 ? r6() : r6() + r6();
-      stepAlong(st, p, n);
+      walk(st, p, ENG.dice(nd === 1 ? 1 : 2, 0, rand).reduce((a, b) => a + b, 0));
     }
     afterMove(st, p);
     land(st, p);
@@ -344,5 +310,5 @@ export function makeSim(D, opts = {}) {
   function decideTrade(st, p, k) { if (POL[p.alg]) return POL[p.alg](st, p, k, api); return p.alg === 'mc' ? mcTrade(st, p, k) : p.alg === 'ev' ? evTrade(st, p, k) : ruleTrade(st, p, k); }
 
   const api = { fill: (st, k, f) => fill(st, k, f), maxLots, acctRatio, assetsOf, evOf, evTrade, tradeOptions, buyF, sellF, shortF, LOT, MARGIN_LOAN };
-  return { newGame, clone, playGame, run, playTurn, land, doTrade, tradeOptions, assetsOf, acctRatio, lead, evOf, EVSTAT, evDice, evTrade, ruleTrade, mcDice, mcTrade, rolloutMean, rolloutAll, tileScore, setSeed, getSeed, rand, MC, EVP, LEVELS, mkPlayer };
+  return { newGame, clone, playGame, run, playTurn, land, doTrade, tradeOptions, assetsOf, acctRatio, lead, evOf, EVSTAT, evDice, evTrade, ruleTrade, mcDice, mcTrade, rolloutMean, rolloutAll, tileScore, ipoLots, setSeed, getSeed, rand, MC, EVP, LEVELS, mkPlayer };
 }

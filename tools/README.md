@@ -6,3 +6,5 @@
 - `sweep-ev.mjs` / `eval-ev.mjs` — 掃期望值策略的參數(和規則式對打)。
 - `bench.mjs` — 量一次蒙地卡羅決策要幾毫秒。
 - `tournament-results.txt` — 最近一次 100 局的結果。
+- `checksum.mjs` — 重構驗證:固定種子跑幾局,印出資產 / 現金 / 股價總和,改規則前後必須完全一樣。
+- `refactor-equiv.mjs` — 回合流程搬進遊戲引擎時,舊版規則 vs engine.mjs 的隨機對照測試(55,500 次比對)。

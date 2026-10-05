@@ -7,6 +7,7 @@
 //        info = { k, n, back, lost }。模擬器不用傳。
 export function makeEngine(D, opts = {}) {
   const { KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE, SALARY, MARGIN_FEE, BANK_RATE, DIV_ROUND,
+    TILES, LANES, PATH_POOL, PATH_FIXED = {}, LANE_LEN, JAIL_WAIT, BAIL, FEE, IPO_OFF, IPO_FREE, LOT, FATE,
     NON_EQUITY, MARKET_DRIFT = 0, DIV_STEP = 0.01, DIV_MAX = 0.08, DIV_MIN = 0.005, DIV_UP_PRICE = 1.04, DIV_CUT_PRICE = 0.92 } = D;
   const EQ = KEYS.filter((k) => !NON_EQUITY.has(k));                                   // 股票類股(大盤 ETF = 它們的平均)
   const ONES = Object.fromEntries(KEYS.map((k) => [k, 1]));
@@ -179,5 +180,85 @@ export function makeEngine(D, opts = {}) {
     return { paid, after };
   }
 
-  return { withActor, instantiate, applyEvent, newRound, roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
+  /* ───────── 回合流程:擲骰、移動、小路、格子效果、命運牌、IPO、銀行、商店 ───────── */
+  // 骰子點數:forced = 遙控骰子指定的總點數(6 以內一顆、7 以上拆成兩顆),nDice = 1 / 2 / 3(三顆骰子道具)
+  const r6 = (rand) => 1 + Math.floor(rand() * 6);
+  function dice(nDice, forced, rand) {
+    if (forced) return forced <= 6 ? [forced] : [Math.floor(forced / 2), forced - Math.floor(forced / 2)];
+    return nDice === 3 ? [r6(rand), r6(rand), r6(rand)] : nDice === 1 ? [r6(rand)] : [r6(rand), r6(rand)];
+  }
+  // 小路(警察局 / IPO 出來的 6 格):固定格(第 3 格市場事件)、2 格命運隨機放、其他從池子隨機排、不重複
+  function genLanePath(type, rand) {
+    const t = new Array(LANE_LEN).fill(null), fixed = PATH_FIXED[type] || {};
+    for (const i in fixed) t[i] = fixed[i];
+    const free = () => t.map((v, i) => (v ? -1 : i)).filter((i) => i >= 0);
+    for (let n = 0; n < 2; n++) { const f = free(); t[f[Math.floor(rand() * f.length)]] = 'fate'; }
+    const pool = PATH_POOL[type].filter((k) => !Object.values(fixed).includes(k)).sort(() => rand() - 0.5);
+    for (let i = 0; i < LANE_LEN; i++) if (!t[i]) t[i] = pool.pop();
+    return t;
+  }
+  // 進小路(被送進警察局 / 抽中 IPO):沒有別人正走在這條小路上,就重新生成小路的格子。回傳 { regen }(畫面要重畫小路)
+  function enterLane(st, p, type, rand) {
+    let regen = false;
+    if (!st.players.some((q) => q !== p && q.lane && q.lane.type === type && q.lane.at > 0)) { st.lanePath[type] = genLanePath(type, rand); regen = true; }
+    p.lane = { type, wait: type === 'jail' ? JAIL_WAIT : 0, at: 0 };         // at:0 = 在攤位 / 警察局,1~6 = 小路第幾格
+    return { regen };
+  }
+  // 往前走一步。在小路上:往小路下一格;走完小路:踏上外圈的出口格;外圈:下一格,踩到 / 經過起點、股息格就結算。
+  // 回傳這一步去了哪裡,畫面照著播動畫:{ kind: 'lane', type, at } | { kind: 'exit', pos } | { kind: 'step', pos, pay }
+  function advance(st, p) {
+    if (p.lane) {
+      if (p.lane.at < LANE_LEN) { p.lane.at++; return { kind: 'lane', type: p.lane.type, at: p.lane.at }; }
+      const pos = LANES[p.lane.type].exit; p.lane = null; p.pos = pos; return { kind: 'exit', pos };
+    }
+    p.pos = (p.pos + 1) % TILES.length;
+    const atStart = p.pos === 0, pay = atStart || TILES[p.pos] === 'divi' ? { atStart, ...payday(st, p, atStart) } : null;
+    return { kind: 'step', pos: p.pos, pay };
+  }
+  // 現在站的格子是什麼:外圈就是 TILES 的種類;小路上:'_jail' / '_ipo'(還在攤位)、'fate'、'_chance'、'_gift'、'_fee'、'_interest'、'_coin'
+  function tileType(st, p, rand) {
+    if (!p.lane) return TILES[p.pos];
+    if (!p.lane.at) return '_' + p.lane.type;
+    const k = (st.lanePath[p.lane.type] || genLanePath(p.lane.type, rand))[p.lane.at - 1];
+    return k === 'fate' ? 'fate' : k === 'blank' ? '_path' : '_' + k;
+  }
+  // 小路專屬格子:利息(現金 3%)、撿到錢 $300、手續費 $200。回傳現金變化
+  function pathEffect(st, p, k) {
+    const x = k.replace(/^_/, '');
+    const d = x === 'interest' ? Math.round(Math.max(0, p.cash) * 0.03) : x === 'coin' ? 300 : x === 'fee' ? -200 : 0;
+    p.cash += d; return d;
+  }
+  const payFee = (st, p) => { p.cash -= FEE; return FEE; };                 // 外圈的手續費格
+  const rest = (st, p) => { p.lane.wait--; return p.lane.wait; };          // 警察局:再休息一回合
+  const bail = (st, p) => { p.cash -= BAIL; p.lane.wait = 0; };              // 付保釋金,這回合就能擲骰出去
+  // 命運牌。回傳畫面要做的事:{ id, amount? , from?(請客的人), pay?, k?(手滑賣掉的那檔), other?(瞬間移動的對象), lane?(要進的小路) }
+  // 瞬間移動之後要重新結算換到的那一格、IPO 要進小路,這兩件由呼叫端接著做
+  function fate(st, p, c, rand) {
+    const others = st.players.filter((q) => q !== p), r = { id: c.id };
+    if (c.id === 'lottery') { p.cash += 1500; r.amount = 1500; }
+    else if (c.id === 'tax') { const t = Math.round(Math.max(0, p.cash) * 0.05); p.cash -= t; r.amount = -t; }
+    else if (c.id === 'birthday') { let got = 0; others.forEach((q) => { q.cash -= 200; got += 200; }); p.cash += got; r.amount = got; }
+    else if (c.id === 'phone') { p.cash -= 300; r.amount = -300; }
+    else if (c.id === 'fine') { p.cash -= 500; r.amount = -500; }
+    else if (c.id === 'richest') { const q = others.sort((a, b) => assetsOf(st, b) - assetsOf(st, a))[0]; if (q) { q.cash -= 500; p.cash += 500; r.from = q; } }
+    else if (c.id === 'remote' || c.id === 'atk') p.bag.push(c.id);
+    else if (c.id === 'divi') r.pay = payday(st, p, false);
+    else if (c.id === 'salary2') p.salary2 = true;
+    else if (c.id === 'gostart') { p.lane = null; p.pos = 0; r.pay = payday(st, p, true); }
+    else if (c.id === 'fat') { const held = KEYS.filter((k) => p.hold[k].n > 0); if (held.length) { r.k = held[Math.floor(rand() * held.length)]; sell(st, p, r.k, Infinity, true); } }
+    else if (c.id === 'swap') { const q = others[Math.floor(rand() * others.length)]; if (q) { [p.pos, q.pos] = [q.pos, p.pos]; [p.lane, q.lane] = [q.lane, p.lane]; r.other = q; } }
+    else if (c.id === 'ipo') r.lane = 'ipo';
+    return r;
+  }
+  // IPO:隨機一檔(沒在放空的)股票,先送 IPO_FREE 股(成本算承銷價),想多買再用承銷價(市價 8 折)加購。新股不會推動市價
+  const ipoPick = (st, p, rand) => { const pool = EQ.filter((k) => !p.short[k].n); return pool[Math.floor(rand() * pool.length)]; };
+  function ipoGrant(st, p, k) { const h = p.hold[k]; h.n += IPO_FREE; h.cost += st.price[k] * IPO_OFF * IPO_FREE; }
+  function ipoBuy(st, p, k, n) { const h = p.hold[k], price = st.price[k] * IPO_OFF, cost = price * LOT * (n / LOT); p.cash -= cost; h.n += n; h.cost += cost; return cost; }
+  // 銀行:d > 0 借款、d < 0 還款(現金和欠款一起變)
+  const bank = (st, p, d) => { p.cash += d; p.debt += d; };
+  // 商店:買一樣道具
+  const buyItem = (st, p, id, price) => { p.cash -= price; p.bag.push(id); };
+
+  return { dice, genLanePath, enterLane, advance, tileType, pathEffect, payFee, rest, bail, fate, ipoPick, ipoGrant, ipoBuy, bank, buyItem,
+    withActor, instantiate, applyEvent, newRound, roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
 }
