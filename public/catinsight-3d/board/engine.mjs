@@ -6,7 +6,7 @@
 // hooks:遊戲畫面需要知道的副作用 —— onLiquidate(st, who, info) / onSqueeze(st, who, info),
 //        info = { k, n, back, lost }。模擬器不用傳。
 export function makeEngine(D, opts = {}) {
-  const { KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE } = D;
+  const { KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE, SALARY, MARGIN_FEE, BANK_RATE, DIV_ROUND } = D;
   const hooks = opts.hooks || {};
   // slippage === false:舊規則(先用舊價成交再推價),只給對照實驗用
   const SLIP = opts.slippage !== false;
@@ -105,5 +105,30 @@ export function makeEngine(D, opts = {}) {
     return null;
   }
 
-  return { fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
+  /* ───────── 配息、薪水、利息 ───────── */
+  // 殖利率是每局動態的(st.div,股利事件會改)。dividends:這位玩家持股的「全額」股利(股息格、特別股利牌)
+  const dividendsOf = (st, p) => KEYS.reduce((a, k) => a + p.hold[k].n * st.price[k] * st.div[k], 0);
+  // 每回合配息:每位玩家領年率的 DIV_ROUND(四分之一),四捨五入。回傳有領到錢的 [{ p, div }](畫面拿去跳提示)
+  function roundDividends(st) {
+    const paid = [];
+    for (const p of st.players) {
+      const div = Math.round(KEYS.reduce((a, k) => a + p.hold[k].n * st.price[k] * st.div[k] * DIV_ROUND, 0));
+      if (div <= 0) continue;
+      p.cash += div; p.divTotal = (p.divTotal || 0) + div; p.lastDividend = div;
+      paid.push({ p, div });
+    }
+    return paid;
+  }
+  // 經過起點(atStart):領薪水(升職加薪時加倍,用掉就恢復),付融資利息和銀行貸款利息;
+  // 股息格 / 特別股利(!atStart):領全額股利。回傳各項金額給畫面顯示
+  function payday(st, p, atStart) {
+    const salary = atStart ? SALARY * (p.salary2 ? 2 : 1) : 0; if (atStart) p.salary2 = false;
+    const div = atStart ? 0 : dividendsOf(st, p);
+    const interest = atStart ? KEYS.reduce((a, k) => a + p.hold[k].loan * MARGIN_FEE, 0) : 0, bank = atStart ? p.debt * BANK_RATE : 0;
+    p.cash += salary + div - (interest + bank);
+    if (!atStart) { p.lastDividend = div; p.divTotal = (p.divTotal || 0) + div; }   // 股息格的股利也算進成就(領到股利、股息大戶)
+    return { salary, div, interest, bank };
+  }
+
+  return { roundDividends, payday, dividendsOf, fill, shortValue, coverBack, assetsOf, acctRatio, ratioOf, marginCheck, impact, squeeze, buy, sell, short, cover, trade, SLIP };
 }

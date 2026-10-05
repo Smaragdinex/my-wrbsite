@@ -1,4 +1,4 @@
-import { makeEngine } from './engine.mjs?v=1';
+import { makeEngine } from './engine.mjs?v=2';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
 //   2. Node 可以直接 import,讓三種電腦(規則 / 期望值 / 蒙地卡羅)互打幾百局,算勝率(tournament.mjs)
@@ -98,11 +98,8 @@ export function makeSim(D, opts = {}) {
     if (special && rand() < SPECIAL_RATE / 3) { enterLane(st, p, rand() < 0.5 ? 'jail' : 'ipo'); return; }
     applyEvent(st, randomEvent(st));
   }
-  function payday(st, p, atStart) {
-    const salary = atStart ? SALARY * (p.salary2 ? 2 : 1) : 0; if (atStart) p.salary2 = false;
-    const div = atStart ? 0 : KEYS.reduce((a, k) => a + p.hold[k].n * st.price[k] * st.div[k], 0);
-    p.cash += salary + div - (atStart ? KEYS.reduce((a, k) => a + p.hold[k].loan * MARGIN_FEE, 0) + p.debt * BANK_RATE : 0);
-  }
+  const payday = (st, p, atStart) => { ENG.payday(st, p, atStart); };
+
   function applyFate(st, p, c) {
     if (c.id === 'lottery') p.cash += 1500;
     else if (c.id === 'tax') p.cash -= Math.round(Math.max(0, p.cash) * 0.05);
@@ -200,7 +197,7 @@ export function makeSim(D, opts = {}) {
   function afterMove(st, p) {
     if (p.i === 0) {       // 第一位走完 = 新回合:回合數 +1、配息、反彈、所有價格小幅隨機波動
       st.rolls++;
-      for (const q of st.players) q.cash += Math.round(KEYS.reduce((a, k) => a + q.hold[k].n * st.price[k] * st.div[k] * DIV_ROUND, 0));
+      ENG.roundDividends(st);
       if (st.after) { const a = st.after; st.after = null; applyEvent(st, a); }
       KEYS.forEach((k) => { const v = SECTORS[k].vol ?? 0.03; st.price[k] = Math.max(8, st.price[k] * (1 - v + rand() * v * 2) * (DRIFTS(k) ? 1 + DRIFT : 1)); });   // 股票和大盤 ETF 長期慢慢漲(opts.drift 可以覆蓋做實驗)
     }

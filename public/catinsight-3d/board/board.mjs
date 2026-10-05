@@ -20,8 +20,8 @@ const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
 import { gameData } from './data.mjs?v=6';
-import { makeSim } from './sim.mjs?v=7';
-import { makeEngine } from './engine.mjs?v=1';
+import { makeSim } from './sim.mjs?v=8';
+import { makeEngine } from './engine.mjs?v=2';
 const { MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL, SPECIAL_RATE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = gameData(L, fmt);
 // 棋盤裡面的兩個特殊格:警察局、IPO 攤位(各一格 cell),離開時擲一顆骰子,沿著 6 格的小路(path)走回外圈;
 // 走過最後一格就踩上外圈的 exit 那格,多的點數繼續往前走。小路上每一格是什麼(命運、道具、利息…)每次有人進來都重新隨機生成。座標是格網的 [x, z]
@@ -123,7 +123,7 @@ const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim({ MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, TILES, NON_EQUITY, EVENTS, ONES, FATE, LOT, START_CASH, SALARY, FEE, DIV_ROUND, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_FREE, SPECIAL_RATE, BANK_MAX, BANK_RATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, ATK_DROP, ATK_PRICE },
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=8', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=9', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -292,7 +292,7 @@ const sfx = (name) => { AU.sfx(name); if (!NET_SFX_SKIP.has(name) && !CLIENT && 
 let S;
 // 買賣、融資、放空 / 回補、股價推動、斷頭 / 軋空、資產計算都在遊戲引擎(engine.mjs),電腦模擬(sim.mjs)也用同一份。
 // 這裡只接上畫面需要的副作用:被斷頭 / 軋空時記進公開帳本、排一張說明卡(S.notices,流程走到可以停的地方再顯示)
-const ENG = makeEngine({ KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE }, { hooks: {
+const ENG = makeEngine({ KEYS, SECTORS, buyF, sellF, shortF, MARGIN_LOAN, MAINT, SQUEEZE, SALARY, MARGIN_FEE, BANK_RATE, DIV_ROUND }, { hooks: {
   onLiquidate: (st, who, x) => { pubNote(who, x.k); S.notices.push({ pi: who.i, k: x.k, n: x.n, back: x.back, lost: x.lost }); },
   onSqueeze: (st, who, x) => { pubNote(who, x.k); S.notices.push({ pi: who.i, k: x.k, n: x.n, back: x.back, lost: x.lost, squeeze: true }); },
 } });
@@ -390,7 +390,7 @@ function refillMissions(p) {
 //   S.cash / S.hold / S.bag / S.missions …… → 現在輪到的那位真人(S.hi)
 //   S.ai                                    → 現在在走的那位電腦(S.ci)
 let CFG = (() => { try { const c = JSON.parse(localStorage.getItem('css.players')); if (c && c.n >= 2 && c.n <= 4) { c.humans = 1; return c; } } catch (e) {} return { n: 2, humans: 1 }; })();
-const P_FIELDS = ['pos', 'lane', 'cash', 'debt', 'bag', 'hold', 'short', 'diceN', 'lastDividend', 'cashStreak', 'flags', 'missions', 'done'];
+const P_FIELDS = ['pos', 'lane', 'cash', 'debt', 'bag', 'hold', 'short', 'diceN', 'lastDividend', 'cashStreak', 'flags', 'missions', 'done', 'salary2'];   // salary2:升職加薪,每位玩家各自的
 const mkPlayer = (i, human, char) => ({ i, human, char, pos: 0, lane: null, cash: START_CASH, debt: 0, bag: human ? ['remote'] : [],
   hold: Object.fromEntries(KEYS.map((k) => [k, { n: 0, cost: 0, loan: 0 }])), short: Object.fromEntries(KEYS.map((k) => [k, { n: 0, entry: 0 }])),
   diceN: 2, lastDividend: 0, cashStreak: 0, flags: { dip: false, profit: false, shortWin: false, marginWin: false, dodge: false, low: false, squeezer: false, liquidator: false }, divTotal: 0, missions: [], done: 0, spy: null });
@@ -1583,10 +1583,7 @@ const AI_CARD_WAIT = 3;       // 電腦出牌後,說明卡停留幾秒
 // 起點:薪水 + 股利;對面的「股息結算」格:只發股利
 // 每回合配息:新的一回合開始時,每位玩家依持股領年率 1/4 的股利(自己的顯示提示,手機玩家各自收到自己的)
 function roundDividends() {
-  for (const p of S.players) {
-    const div = Math.round(KEYS.reduce((a, k) => a + p.hold[k].n * S.price[k] * S.div[k] * DIV_ROUND, 0));
-    if (div <= 0) continue;
-    p.cash += div; p.divTotal = (p.divTotal || 0) + div; p.lastDividend = div;
+  for (const { p, div } of ENG.roundDividends(S)) {          // 金額由引擎算、入帳;這裡只負責提示
     const msg = L(`Dividends +$${fmt(div)}`, `配息 +$${fmt(div)}`);
     if (p === meP()) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1900); }
     else if (p.remote) { const g = NET.guests.find((x) => x.gid === p.remote); if (g && g.conn) netSend({ t: 'toast', msg }, g.conn); }
@@ -1594,12 +1591,10 @@ function roundDividends() {
   if (S.players.some((p) => p.human && KEYS.some((k) => p.hold[k].n > 0))) sfx('coin');
   hud();
 }
+// 起點:薪水(升職加薪時加倍)、付融資和貸款利息;股息格:全額股利。金額由引擎算,這裡負責音效和提示
 function payday(atStart = true) {
-  const salary = atStart ? SALARY * (S.salary2 ? 2 : 1) : 0; if (atStart) S.salary2 = false;   // 升職加薪(命運牌)時下一次薪水加倍
-  const div = atStart ? 0 : KEYS.reduce((a, k) => a + S.hold[k].n * S.price[k] * S.div[k], 0);   // 起點只發薪水、收利息;股息格才配全額股利(平常每回合都會配)
-  const interest = atStart ? KEYS.reduce((a, k) => a + S.hold[k].loan * MARGIN_FEE, 0) : 0;   // 融資利息:每經過起點付一次
-  const bank = atStart ? S.debt * BANK_RATE : 0;                                                // 銀行貸款利息:也是每經過起點付一次
-  S.lastDividend = div; S.players[S.hi].divTotal = (S.players[S.hi].divTotal || 0) + div; S.cash += salary + div - interest - bank; sfx('coin');
+  const { salary, div, interest, bank } = ENG.payday(S, S.players[S.hi], atStart); sfx('coin');
+  if (atStart) S.players[S.hi].lastSalary = salary;      // 發薪日卡片顯示實際領到的(升職加薪是兩倍)
   toast((salary ? L('Payday', '發薪日') + ` +$${fmt(salary)}` : `${L('dividends', '股利')} +$${fmt(div)}`) + (interest ? ` · ${L('margin interest', '融資利息')} -$${fmt(interest)}` : '') + (bank ? ` · ${L('loan interest', '貸款利息')} -$${fmt(bank)}` : ''));
   hud(); checkMissions();
 }
@@ -2024,13 +2019,7 @@ async function aiDiceChoice() {
 // 小熊的回合。策略很單純,但都是看得懂的規則:
 //   賺超過 15% 就賣;價格比開盤低 5% 以上且現金夠就多買;否則留 $1,500 現金後買 10 股
 // 電腦經過起點 / 股息結算:薪水(升職加薪時加倍)、股利、融資與貸款利息
-function aiPayday(A, atStart) {
-  const div = atStart ? 0 : KEYS.reduce((x, k) => x + A.hold[k].n * S.price[k] * S.div[k], 0);
-  const salary = atStart ? SALARY * (A.salary2 ? 2 : 1) : 0; if (atStart) A.salary2 = false;
-  A.cash += salary + div - (atStart ? KEYS.reduce((x, k) => x + A.hold[k].loan * MARGIN_FEE, 0) + A.debt * BANK_RATE : 0);
-  if (!atStart) { A.lastDividend = div; A.divTotal = (A.divTotal || 0) + div; }   // 股息格的股利也算進成就(領到股利、股息大戶)
-  hud();
-}
+function aiPayday(A, atStart) { ENG.payday(S, A, atStart); hud(); }
 async function aiTurn() {
   const A = S.ai, who = CHARS[S.foe].name;
   focus = PA(); pan.set(0, 0, 0); toast(L(`${who}'s turn`, `${who}的回合`)); await wait(0.9);
@@ -2200,7 +2189,7 @@ async function landOn() {
   else if (type === 'bank') await bankPanel();
   else if (type === 'gift' || type === '_gift') { const id = await drawGiftCards(false); S.bag.push(id); hud(); toast(L(`${itemInfo(id).name} added to your backpack`, `${itemInfo(id).name}已放進背包`)); }
   else if (type === 'divi') await cardPanel(L('Dividend day', '股息結算'), L(`You collected $${fmt(S.lastDividend)} in dividends. Assets that pay nothing, like gold, biotech and crypto, only make money if the price rises.`, `領到股利 $${fmt(S.lastDividend)}。黃金、生技、加密貨幣不配息,只能靠價格上漲賺錢。`));
-  else await cardPanel(L('Payday', '發薪日'), L(`Salary $${fmt(SALARY)}${S.lastDividend > 0 ? ` plus $${fmt(S.lastDividend)} in dividends` : ''}. Holding stocks pays you every lap.`, `薪水 $${fmt(SALARY)}${S.lastDividend > 0 ? `,加上股利 $${fmt(S.lastDividend)}` : ''}。持有股票,每繞一圈都會配息。`));
+  else await cardPanel(L('Payday', '發薪日'), L(`Salary $${fmt(S.players[S.hi].lastSalary || SALARY)}. Dividends do not wait for a lap: dividend stocks pay you every round.`, `薪水 $${fmt(S.players[S.hi].lastSalary || SALARY)}。股利不用等繞一圈,持有配息股每回合都會領。`));   // 起點只發薪水(升職加薪會是兩倍)
 }
 async function nextTurns() {
   let i = S.hi;
@@ -2610,4 +2599,4 @@ function clientInit() {
 
 resize(); if (CLIENT) clientInit(); else start();
 requestAnimationFrame(loop);
-window.__game = { get S() { return S; }, SIM, simSnapshot, playEvent, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, marginCheck, acctRatio, finish, checkMissions, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
+window.__game = { get S() { return S; }, SIM, simSnapshot, playEvent, roundDividends, payday, aiPayday, drawEventCards, drawFateCards, drawGiftCards, shopPanel, buyPanel, marginCheck, acctRatio, finish, checkMissions, fitStage, stageMetrics, cam, stage, slots, THREE, get stageFit() { return { stageLift, stageZoom, half: view.half, on: stageOn }; }, NET, netUiFlush, netHud, AU, EVENTS, FATE, applyEvent, applyFate, instantiate, turn, enterLane, tiles, dice, piece, bearPiece, PIECES, bagPanel, aiAssets, assetsOf, get CFG() { return CFG; }, view, TILES, slots, stageSelect };
