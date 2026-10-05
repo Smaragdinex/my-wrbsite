@@ -648,14 +648,8 @@ for (const [type, def] of Object.entries(LANES)) {
     t.redraw(draw); return t;
   };
   const cell = cellTile(def.cell[0], def.cell[1], type === 'jail' ? 0x565e6c : 0x1f9a80, LANE_COLOR[type], (c) => {
-    if (type === 'jail') {
-      c.lineWidth = 13; c.beginPath(); c.arc(128, 76, 27, Math.PI, 0); c.lineTo(155, 96); c.moveTo(101, 76); c.lineTo(101, 96); c.stroke();   // 鎖頭
-      c.beginPath(); c.roundRect(84, 92, 88, 62, 12); c.fill();
-      c.font = F(ZH ? 40 : 34); c.fillText(L('POLICE', '警察局'), 128, 202);
-    } else {
-      c.font = F(ZH ? 56 : 46); c.fillText(L('PRIVATE', '內部'), 128, 100);
-      c.font = F(ZH ? 56 : 46); c.fillText(L('OFFER', '認購'), 128, 178);
-    }
+    if (type === 'jail') iconTile(c, F, drawPoliceIcon, L('POLICE', '警察局'));
+    else iconTile(c, F, drawOfferIcon, L('OFFER', '內部認購'));
   });
   // 小路的 6 格:先做空白格,內容由 drawLane 依 S.lanePath 畫上去(每次重新生成都會重畫)
   const path = def.path.map(([x, z]) => cellTile(x, z, 0x8c95a5, 0xb3bac6, () => {}));
@@ -826,12 +820,30 @@ const TILE_ICONS = {
     c.fillRect(-48, -14, 96, 62);
     cut(c, () => { for (let i = 0; i < 2; i++) c.fillRect(-28 + i * 34, -54, 12, 28); c.fillRect(-13, 8, 26, 40); c.fillRect(-40, -4, 20, 18); c.fillRect(20, -4, 20, 18); });
   },
-  ipo: (c) => {                                                                                           // IPO:交易所的鐘
-    c.fillRect(-6, -60, 12, 14); c.beginPath(); c.arc(0, -46, 10, 0, Math.PI * 2); c.fill();
-    c.beginPath(); c.moveTo(-46, 28); c.quadraticCurveTo(-40, 10, -36, -14); c.quadraticCurveTo(-30, -44, 0, -44); c.quadraticCurveTo(30, -44, 36, -14); c.quadraticCurveTo(40, 10, 46, 28); c.closePath(); c.fill();
-    c.beginPath(); c.roundRect(-54, 26, 108, 12, 6); c.fill(); c.beginPath(); c.arc(0, 48, 10, 0, Math.PI * 2); c.fill();
-  },
+  ipo: (c) => drawOfferIcon(c),                                                                           // 內部認購:邀請函
+  police: (c) => drawPoliceIcon(c),                                                                       // 警察局:警徽
 };
+// 警察局、內部認購的圖示:寫成 function(會提升),因為小路的格子在檔案前面就畫了,那時 TILE_ICONS / cut 還沒定義
+function knockOut(c, fn) { c.globalCompositeOperation = 'destination-out'; fn(); c.globalCompositeOperation = 'source-over'; }
+function starPath(c, x, y, R, r) { c.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, d = i % 2 ? r : R; c.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d); } c.closePath(); }
+function shieldPath(c, k) {
+  c.beginPath(); c.moveTo(0, -58 * k); c.quadraticCurveTo(26 * k, -44 * k, 48 * k, -46 * k); c.lineTo(48 * k, -4 * k);
+  c.quadraticCurveTo(46 * k, 36 * k, 0, 58 * k); c.quadraticCurveTo(-46 * k, 36 * k, -48 * k, -4 * k); c.lineTo(-48 * k, -46 * k); c.quadraticCurveTo(-26 * k, -44 * k, 0, -58 * k); c.closePath();
+}
+function drawPoliceIcon(c) {      // 警徽:盾牌,內圈挖一圈細線,中間挖空一顆星
+  shieldPath(c, 1); c.fill();
+  knockOut(c, () => { c.lineWidth = 5; shieldPath(c, 0.78); c.stroke(); starPath(c, 0, -2, 24, 10); c.fill(); });
+}
+function drawOfferIcon(c) {       // 內部認購:邀請函信封,封口畫 V 字,中間一顆封蠟(挖空星星)
+  c.beginPath(); c.roundRect(-56, -38, 112, 80, 10); c.fill();
+  knockOut(c, () => { c.lineWidth = 6; c.beginPath(); c.moveTo(-48, -30); c.lineTo(0, 6); c.lineTo(48, -30); c.stroke(); c.beginPath(); c.arc(0, 8, 24, 0, Math.PI * 2); c.fill(); });
+  c.beginPath(); c.arc(0, 8, 19, 0, Math.PI * 2); c.fill();
+  knockOut(c, () => { starPath(c, 0, 8, 11, 5); c.fill(); });
+}
+function iconTile(c, F, draw, label) {
+  c.save(); c.translate(128, 96); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineJoin = 'round'; draw(c); c.restore();
+  c.fillStyle = '#fff'; c.font = F(label.length > 6 ? 34 : ZH ? 44 : 42); c.fillText(label, 128, 212);
+}
 // 一格的畫法:圖示在上,名稱(和可有可無的一行小字)在下
 function drawIconTile(c, F, kind, label, sub) {
   c.save(); c.translate(128, sub ? 84 : 96); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineJoin = 'round'; if (sub) c.scale(0.86, 0.86); TILE_ICONS[kind](c, F); c.restore();
