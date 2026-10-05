@@ -5,6 +5,7 @@ const SECTORS = {
   tech:   { name: L('Meow Tech', '喵科技'),       code: L('TECH', '科技股'),   color: 0x8b7cff, css: '#7d6cf0', open: 120, div: 0.01, blurb: L('Fast growth, big swings.', '成長快,波動也大。') },
   soft:    { name: L('Hop Bunny Software', '跳跳兔軟體'), code: L('SOFTWARE', '軟體股'), color: 0x5fb3f5, css: '#3f97db', open: 95, div: 0.005, blurb: L('Subscriptions keep profits growing, but high valuations fall hard when rates rise.', '訂閱制讓獲利穩定成長;但估值高,升息時跌得特別多。') },
   chip:   { name: L('Paw Chips', '貓掌半導體'),   code: L('CHIPS', '半導體'),  color: 0x4f8ef0, css: '#3f7de0', open: 90,  div: 0.01, blurb: L('Booms and busts with supply.', '跟著供需循環大起大落。') },
+  robot:   { name: L('Octopus Robotics', '章魚機器人'), code: L('ROBOTICS', '機器人'), color: 0x5c7080, css: '#4f6373', open: 90,  div: 0.005, blurb: L('Factory robots and automation. Wins when workers are scarce and factories move home; firms cut this spending first in a slump.', '工業機器人和自動化。缺工、工廠搬回本國時受惠;景氣差時,企業最先砍的就是設備投資。') },
   yield:   { name: L('Sloth Telecom', '樹懶電信'),   code: L('TELECOM', '電信股'),  color: 0xf5b942, css: '#d99a12', open: 60,  div: 0.05, blurb: L('Everyone pays the phone bill in good times and bad. Slow mover, but a high dividend.', '景氣好壞大家都要繳電話費。漲得慢,但配息高。') },
   oil:     { name: L('Camel Energy', '駱駝能源'),   code: L('ENERGY', '能源股'), color: 0xf2796b, css: '#e2604f', open: 80,  div: 0.02, blurb: L('Moves with world events.', '跟著國際事件走。') },
   health:  { name: L('Penguin Health', '企鵝醫療'), code: L('HEALTH', '醫療股'), color: 0x54c98a, css: '#35ad6d', open: 70,  div: 0.02, blurb: L('Steady when markets panic.', '市場恐慌時相對抗跌。') },
@@ -14,6 +15,7 @@ const SECTORS = {
   bio:    { name: L('Catnip Bio', '貓草生技'),       code: L('BIOTECH', '生技股'),  color: 0xe85d9b, css: '#d44a88', open: 110, div: 0,    blurb: L('No dividends. Drug news makes it soar or crash.', '不配息,新藥消息決定大漲或大跌。') },
   staples: { name: L('Hamster Foods', '倉鼠食品'),      code: L('STAPLES', '民生消費'), color: 0x7fb069, css: '#62964b', open: 65,  div: 0.03, blurb: L('People buy food in any economy. Falls least in a panic.', '景氣再差也要吃飯,恐慌時跌最少。') },
   disc:    { name: L('Seagull Travel', '海鷗旅遊'),   code: L('LEISURE', '觀光餐飲'), color: 0xff8c69, css: '#ef6f48', open: 85,  div: 0.01, blurb: L('People spend here only when times are good.', '有閒錢才會花,景氣好壞差很多。') },
+  ecom:    { name: L('Otter Shop', '水獺電商'), code: L('E-COMMERCE', '電商零售'), color: 0xff7a45, css: '#e8642c', open: 85,  div: 0.005, blurb: L('Online shops and retail chains. Booms when people feel rich enough to spend; shipping and ad costs bite.', '網購和零售通路。大家敢花錢時賺最多;物流和廣告成本是負擔。') },
   util:    { name: L('Eel Power', '電鰻電力'),     code: L('UTILITY', '公用事業'), color: 0x5c7cba, css: '#4a69a8', open: 55,  div: 0.04, blurb: L('Boring and steady, with a high dividend.', '無聊但穩定,配息高。') },
   mat:     { name: L('Rhino Steel', '犀牛鋼鐵'),     code: L('MATERIALS', '原物料'), color: 0x8a8f98, css: '#6f757f', open: 70,  div: 0.02, blurb: L('Rises with inflation and building booms.', '跟著通膨和景氣走。') },
   agri:    { name: L('Dairy Cow Farms', '乳牛農產'),  code: L('AGRI', '農產品'),   color: 0xa3c45a, css: '#7fa33a', open: 60,  div: 0.02, blurb: L('Grain, meat and milk. Moves with inflation, weather and war, not with the stock market.', '穀物、肉、奶。跟著通膨、天氣和戰爭走,跟股市關聯不大。') },
@@ -27,17 +29,17 @@ const SECTORS = {
   crypto:  { name: L('ParrotCoin', '鸚鵡幣'),            code: L('CRYPTO', '加密貨幣'), color: 0xf7931a, css: '#dd7d0a', open: 100, div: 0,    vol: 0.14, blurb: L('Not a stock. No earnings behind it, wild swings.', '不是股票,背後沒有獲利,波動極大。') },
 };
 const KEYS = Object.keys(SECTORS);
-// 外圈 18x18 = 68 格。四個角:起點 / 商店 / 股息結算 / 商店
-const N = 18;
+// 外圈 19x19 = 72 格。四個角:起點 / 商店 / 股息結算 / 商店
+const N = 19;
 const TILES = (() => {
   const t = new Array(4 * (N - 1)).fill(null);
-  t[0] = 'start'; t[17] = 'shop'; t[34] = 'divi'; t[51] = 'shop';     // 四個角
-  [4, 10, 13, 21, 30, 37, 45, 54, 58, 64].forEach((i) => { t[i] = 'chance'; });      // 市場事件(30、64 是兩條小路的出口,一出來就抽事件)
-  t[42] = 'ipo';      // 內部認購入口,走到就進內部認購小路
-  [8, 48].forEach((i) => { t[i] = 'fate'; });          // 命運:只在外圈(小路上沒有)
-  [24, 61].forEach((i) => { t[i] = 'gift'; });
-  [6, 27, 66].forEach((i) => { t[i] = 'bank'; });
-  // 剩下 46 格:23 種資產各兩格
+  t[0] = 'start'; t[18] = 'shop'; t[36] = 'divi'; t[54] = 'shop';     // 四個角
+  [4, 11, 14, 22, 32, 39, 48, 57, 61, 68].forEach((i) => { t[i] = 'chance'; });      // 市場事件(32、68 是兩條小路的出口,一出來就抽事件)
+  t[44] = 'ipo';      // 內部認購入口,走到就進內部認購小路
+  [9, 51].forEach((i) => { t[i] = 'fate'; });          // 命運:只在外圈(小路上沒有)
+  [25, 64].forEach((i) => { t[i] = 'gift'; });
+  [6, 28, 70].forEach((i) => { t[i] = 'bank'; });
+  // 剩下 50 格:25 種資產各兩格
   const seq = [...KEYS, ...KEYS];
   let j = 0; for (let i = 0; i < t.length; i++) if (!t[i]) t[i] = seq[j++];
   return t;
@@ -57,23 +59,23 @@ const EV = (t, w, m) => {
 };
 const EVENTS = [
   EVT(0.02, L('Rate cut announced', '央行宣布降息'), L('Cheaper borrowing lifts growth stocks, property and bonds; banks earn less on loans.', '借錢變便宜,成長股、不動產、債券受惠;銀行利差縮小。'),
-    {space: 1.25, agri: 1.02, soft: 1.16,  tech: 1.20, chip: 1.10, yield: 0.97, reit: 1.12, fin: 0.94, trans: 1.04, bio: 1.12, bond: 1.08, util: 1.05, gold: 1.04, green: 1.12, disc: 1.06, game: 1.08, mat: 1.03, crypto: 1.15 }),
+    {robot: 1.12, ecom: 1.12, space: 1.25, agri: 1.02, soft: 1.16,  tech: 1.20, chip: 1.10, yield: 0.97, reit: 1.12, fin: 0.94, trans: 1.04, bio: 1.12, bond: 1.08, util: 1.05, gold: 1.04, green: 1.12, disc: 1.06, game: 1.08, mat: 1.03, crypto: 1.15 }),
   EVT(0.01, L('AI server demand booms', 'AI 伺服器需求爆發'), L('Scarce chips let makers raise prices. Data centers need more power too.', '晶片供不應求,廠商有漲價空間;資料中心也更吃電。'),
-    {space: 1.06, soft: 1.08,  tech: 1.10, chip: 1.25, oil: 0.95, trans: 1.03, game: 1.05, util: 1.04 }),
+    {robot: 1.12, space: 1.06, soft: 1.08,  tech: 1.10, chip: 1.25, oil: 0.95, trans: 1.03, game: 1.05, util: 1.04 }),
   EV(L('Oil supply shock', '原油供給吃緊'), L('Energy gains; fuel-hungry shippers and travel suffer.', '能源股受惠;最吃燃料的運輸和旅遊受傷最重。'),
-    {soft: 0.96,  tech: 0.93, chip: 0.95, oil: 1.25, reit: 0.97, fin: 0.98, trans: 0.82, mat: 1.06, disc: 0.92, staples: 0.97, green: 1.10, gold: 1.04, util: 0.96, def: 1.03 }),
+    {ecom: 0.95, soft: 0.96,  tech: 0.93, chip: 0.95, oil: 1.25, reit: 0.97, fin: 0.98, trans: 0.82, mat: 1.06, disc: 0.92, staples: 0.97, green: 1.10, gold: 1.04, util: 0.96, def: 1.03 }),
   EVT(-0.02, L('Black swan', '黑天鵝事件'), L('Panic selling hits the riskiest assets hardest. Gold and bonds are where money hides.', '恐慌賣壓下風險高的跌最多,資金躲進黃金和債券。'),
-    {space: 0.8, agri: 0.95, soft: 0.82,  tech: 0.80, chip: 0.80, yield: 0.95, oil: 0.90, health: 0.98, reit: 0.90, fin: 0.85, trans: 0.85, bio: 0.78, gold: 1.15, bond: 1.06, staples: 0.97, util: 0.97, disc: 0.82, mat: 0.86, green: 0.80, game: 0.88, def: 1.02, crypto: 0.65 }),
+    {robot: 0.85, ecom: 0.85, space: 0.8, agri: 0.95, soft: 0.82,  tech: 0.80, chip: 0.80, yield: 0.95, oil: 0.90, health: 0.98, reit: 0.90, fin: 0.85, trans: 0.85, bio: 0.78, gold: 1.15, bond: 1.06, staples: 0.97, util: 0.97, disc: 0.82, mat: 0.86, green: 0.80, game: 0.88, def: 1.02, crypto: 0.65 }),
   EVT(0.01, L('Strong earnings season', '財報季優於預期'), L('Profits beat forecasts across the board.', '企業獲利普遍優於預期。'),
-    {space: 1.08, agri: 1.02, soft: 1.10,  tech: 1.12, chip: 1.12, yield: 1.04, oil: 1.04, health: 1.06, reit: 1.03, fin: 1.08, trans: 1.08, bio: 1.05, staples: 1.03, disc: 1.10, util: 1.02, mat: 1.07, green: 1.08, game: 1.10, def: 1.04, gold: 0.98, bond: 0.99, crypto: 1.05 }),
+    {robot: 1.1, ecom: 1.1, space: 1.08, agri: 1.02, soft: 1.10,  tech: 1.12, chip: 1.12, yield: 1.04, oil: 1.04, health: 1.06, reit: 1.03, fin: 1.08, trans: 1.08, bio: 1.05, staples: 1.03, disc: 1.10, util: 1.02, mat: 1.07, green: 1.08, game: 1.10, def: 1.04, gold: 0.98, bond: 0.99, crypto: 1.05 }),
   EVT(-0.01, L('Rate hike surprise', '意外升息'), L('Higher rates hurt growth, property and bonds, but banks earn more on loans.', '升息壓抑成長股、不動產和債券,銀行利差反而擴大。'),
-    {space: 0.85, agri: 0.97, soft: 0.86,  tech: 0.90, chip: 0.92, yield: 1.03, oil: 1.02, reit: 0.88, fin: 1.12, trans: 0.96, bio: 0.88, bond: 0.92, util: 0.94, gold: 0.96, green: 0.88, disc: 0.94, game: 0.92, staples: 0.99, mat: 0.97, crypto: 0.82 }),
+    {robot: 0.9, ecom: 0.92, space: 0.85, agri: 0.97, soft: 0.86,  tech: 0.90, chip: 0.92, yield: 1.03, oil: 1.02, reit: 0.88, fin: 1.12, trans: 0.96, bio: 0.88, bond: 0.92, util: 0.94, gold: 0.96, green: 0.88, disc: 0.94, game: 0.92, staples: 0.99, mat: 0.97, crypto: 0.82 }),
   EV(L('Flu season hits', '流感疫情升溫'), L('Demand for medicine jumps; people stay home, travel less and play more games.', '藥品需求大增;大家待在家,少出遊、多打電動。'),
-    {soft: 1.06,  tech: 0.98, oil: 0.96, health: 1.20, trans: 0.94, bio: 1.22, disc: 0.85, staples: 1.06, game: 1.12 }),
+    {ecom: 1.06, soft: 1.06,  tech: 0.98, oil: 0.96, health: 1.20, trans: 0.94, bio: 1.22, disc: 0.85, staples: 1.06, game: 1.12 }),
   EV(L('New drug approved', '新藥獲准上市'), L('One approval can change everything for a biotech.', '一張藥證就能改變一家生技公司的命運。'),
     { health: 1.08, bio: 1.35 }),
   EV(L('Shipping rates surge', '運價大漲'), L('Ports are jammed and ships are scarce, so freight prices jump.', '港口塞港、運力不足,運費跟著漲。'),
-    { tech: 0.98, oil: 1.05, trans: 1.28, mat: 1.04, staples: 0.98, disc: 0.98 }),
+    {ecom: 0.94,  tech: 0.98, oil: 1.05, trans: 1.28, mat: 1.04, staples: 0.98, disc: 0.98 }),
   EV(L('Clinical trial fails', '臨床試驗失敗'), L('Biotech has no profits to fall back on, so bad news hits hard.', '生技公司沒有獲利撐腰,壞消息一來跌很深。'),
     { health: 0.97, bio: 0.70 }),
   EV(L('Geopolitical tension rises', '國際情勢緊張'), L('Money moves to defense, energy and gold; trade and travel suffer.', '資金流向軍工、能源和黃金;貿易與旅遊受影響。'),
@@ -83,9 +85,9 @@ const EVENTS = [
   EV(L('Hit game launches', '遊戲大作上市'), L('A single hit can carry a game company for years.', '一款大作可以養一家遊戲公司好幾年。'),
     {soft: 1.03,  game: 1.30, tech: 1.04, chip: 1.03 }),
   EVT(-0.01, L('Inflation runs hot', '通膨升溫'), L('Hard assets hold value; bonds and growth stocks lose it.', '實體資產保值;債券和成長股受壓。'),
-    {agri: 1.12, soft: 0.92,  gold: 1.10, mat: 1.12, oil: 1.08, staples: 1.04, reit: 1.03, bond: 0.94, tech: 0.93, disc: 0.92, crypto: 1.05 }),
-  EVT(0.01, L('Holiday shopping boom', '年終消費旺季'), L('When people feel rich, they travel, eat out and shop.', '大家手頭寬裕時,會出遊、聚餐、買東西。'),
-    { disc: 1.22, staples: 1.06, trans: 1.08, fin: 1.03, game: 1.06 }),
+    {ecom: 0.94, agri: 1.12, soft: 0.92,  gold: 1.10, mat: 1.12, oil: 1.08, staples: 1.04, reit: 1.03, bond: 0.94, tech: 0.93, disc: 0.92, crypto: 1.05 }),
+  EVT(0.01, L('Holiday shopping boom', '年終消費旺季'), L('When people feel rich, they shop online and in stores, eat out and travel. Delivery firms are busy too.', '大家手頭寬裕時會網購、逛街、聚餐、出遊,電商和物流最忙。'),
+    { ecom: 1.25, disc: 1.10, staples: 1.06, trans: 1.08, fin: 1.03, game: 1.06 }),
   EV(L('Crypto exchange hacked', '加密貨幣交易所遭駭'), L('With no earnings behind it, confidence is all crypto has.', '加密貨幣背後沒有獲利,信心一垮就崩。'),
     { crypto: 0.55, fin: 0.98, gold: 1.03 }),
   EV(L('Crypto mania', '幣圈狂熱'), L('Prices can soar on hype alone, and fall the same way.', '純靠熱度也能暴漲,當然也能同樣暴跌。'),
@@ -94,28 +96,28 @@ const EVENTS = [
     { mat: 1.25, oil: 1.08, trans: 1.04 }),
   // ── 戰爭、總經數據、疫情、金融風暴 ──
   EVT(-0.01, L('War breaks out in the Middle East', '中東爆發戰爭'), L('Oil routes are at risk, so crude jumps. Money runs to defense and gold; shipping and travel get hit.', '產油區和航道有風險,油價飆漲。資金湧向軍工和黃金,運輸與旅遊受創。'),
-    {agri: 1.10, soft: 0.94,  oil: 1.30, def: 1.22, gold: 1.12, green: 1.06, mat: 1.05, bond: 1.03, trans: 0.85, disc: 0.88, tech: 0.94, chip: 0.94, fin: 0.96, crypto: 0.92 }),
+    {ecom: 0.95, agri: 1.10, soft: 0.94,  oil: 1.30, def: 1.22, gold: 1.12, green: 1.06, mat: 1.05, bond: 1.03, trans: 0.85, disc: 0.88, tech: 0.94, chip: 0.94, fin: 0.96, crypto: 0.92 }),
   EVT(-0.02, L('A major war breaks out', '大規模戰爭爆發'), L('Almost everything falls. Only defense, gold and energy rise as investors flee risk.', '幾乎所有資產都下跌,只有軍工、黃金、能源上漲,資金全面避險。'),
-    {space: 1.1, agri: 1.15, soft: 0.88,  def: 1.35, gold: 1.18, oil: 1.15, bond: 1.05, mat: 1.04, staples: 1.03, chip: 0.85, tech: 0.88, disc: 0.80, trans: 0.85, fin: 0.90, reit: 0.92, crypto: 0.85, green: 0.92, game: 0.94, bio: 0.95 }),
+    {ecom: 0.88, space: 1.1, agri: 1.15, soft: 0.88,  def: 1.35, gold: 1.18, oil: 1.15, bond: 1.05, mat: 1.04, staples: 1.03, chip: 0.85, tech: 0.88, disc: 0.80, trans: 0.85, fin: 0.90, reit: 0.92, crypto: 0.85, green: 0.92, game: 0.94, bio: 0.95 }),
   EVT(0.01, L('CPI comes in lower than expected', 'CPI 低於預期'), L('Cooling inflation means rate cuts may come sooner. Growth stocks, property and bonds cheer.', '通膨降溫代表可能提早降息,成長股、不動產、債券上漲。'),
-    {space: 1.12, soft: 1.09,  tech: 1.10, crypto: 1.10, chip: 1.08, reit: 1.08, green: 1.08, bio: 1.07, bond: 1.06, game: 1.06, disc: 1.05, fin: 0.97, gold: 0.97, oil: 0.98 }),
+    {robot: 1.08, ecom: 1.08, space: 1.12, soft: 1.09,  tech: 1.10, crypto: 1.10, chip: 1.08, reit: 1.08, green: 1.08, bio: 1.07, bond: 1.06, game: 1.06, disc: 1.05, fin: 0.97, gold: 0.97, oil: 0.98 }),
   EVT(0.01, L('Strong jobs report', '非農就業強勁'), L('More people working means more spending, but rates may stay high for longer.', '就業好代表消費有力,但利率可能維持高檔更久。'),
-    {soft: 0.97,  disc: 1.08, fin: 1.06, trans: 1.05, mat: 1.04, staples: 1.02, bond: 0.95, gold: 0.97, reit: 0.97, tech: 0.98 }),
+    {robot: 1.06, ecom: 1.08, soft: 0.97,  disc: 1.08, fin: 1.06, trans: 1.05, mat: 1.04, staples: 1.02, bond: 0.95, gold: 0.97, reit: 0.97, tech: 0.98 }),
   EVT(-0.01, L('Weak jobs report', '非農就業疲弱'), L('Fewer jobs means less spending. Money moves to bonds, gold and steady payers.', '就業轉弱代表消費降溫,資金轉向債券、黃金和穩定配息的資產。'),
-    {agri: 1.02, soft: 1.02,  bond: 1.06, gold: 1.05, util: 1.03, staples: 1.02, tech: 1.02, disc: 0.92, fin: 0.94, trans: 0.95, mat: 0.96 }),
+    {robot: 0.95, ecom: 0.94, agri: 1.02, soft: 1.02,  bond: 1.06, gold: 1.05, util: 1.03, staples: 1.02, tech: 1.02, disc: 0.92, fin: 0.94, trans: 0.95, mat: 0.96 }),
   EVT(-0.02, L('Global pandemic', '全球疫情爆發'), L('People stay home: medicine, games and groceries rise; travel, transport and oil collapse.', '大家待在家:醫藥、遊戲、民生上漲;旅遊、運輸、油價重挫。'),
-    {space: 0.92, agri: 1.06, soft: 1.12,  bio: 1.30, health: 1.18, game: 1.15, staples: 1.08, tech: 1.06, gold: 1.06, bond: 1.04, disc: 0.70, trans: 0.78, oil: 0.80, reit: 0.88, fin: 0.90, mat: 0.92 }),
+    {ecom: 1.15, space: 0.92, agri: 1.06, soft: 1.12,  bio: 1.30, health: 1.18, game: 1.15, staples: 1.08, tech: 1.06, gold: 1.06, bond: 1.04, disc: 0.70, trans: 0.78, oil: 0.80, reit: 0.88, fin: 0.90, mat: 0.92 }),
   EVT(-0.02, L('Financial crisis', '金融風暴'), L('Banks fail and credit freezes. Nearly everything falls together; only gold and bonds hold.', '銀行倒閉、信用緊縮,幾乎所有資產一起跌,只有黃金和債券撐住。'),
-    {space: 0.75, agri: 0.92, soft: 0.80,  gold: 1.20, bond: 1.10, fin: 0.65, crypto: 0.60, reit: 0.75, disc: 0.75, tech: 0.78, chip: 0.78, green: 0.78, mat: 0.80, trans: 0.82, oil: 0.82, bio: 0.82, game: 0.85, yield: 0.90, def: 0.95, staples: 0.95, util: 0.94, health: 0.94 }),
+    {robot: 0.8, ecom: 0.82, space: 0.75, agri: 0.92, soft: 0.80,  gold: 1.20, bond: 1.10, fin: 0.65, crypto: 0.60, reit: 0.75, disc: 0.75, tech: 0.78, chip: 0.78, green: 0.78, mat: 0.80, trans: 0.82, oil: 0.82, bio: 0.82, game: 0.85, yield: 0.90, def: 0.95, staples: 0.95, util: 0.94, health: 0.94 }),
   // 兩個歷史上真的發生過的泡沫破裂:網路泡沫(2000)、次級房貸風暴(2008)
   EVT(-0.01, L('Dot-com bubble bursts', '網路泡沫破裂'), L('Internet companies with no profits were priced as if they would rule the world. When the money ran out, tech crashed hardest; old-economy and safe assets held up.', '還沒賺錢的網路公司被當成未來霸主炒作。資金一抽走,科技股跌最慘;傳統產業和避險資產撐得住。'),
-    {space: 0.75, soft: 0.70,  tech: 0.65, chip: 0.75, game: 0.80, crypto: 0.70, green: 0.85, fin: 0.94, disc: 0.95, bond: 1.06, gold: 1.05, staples: 1.03, util: 1.04, health: 1.02, yield: 1.02 }),
+    {robot: 0.85, ecom: 0.8, space: 0.75, soft: 0.70,  tech: 0.65, chip: 0.75, game: 0.80, crypto: 0.70, green: 0.85, fin: 0.94, disc: 0.95, bond: 1.06, gold: 1.05, staples: 1.03, util: 1.04, health: 1.02, yield: 1.02 }),
   EVT(-0.02, L('Subprime mortgage crisis', '次級房貸風暴'), L('Banks lent to people who could not pay, packaged the loans and sold them on. When house prices fell, property and banks collapsed together and dragged everything that depends on borrowing.', '銀行把錢借給還不起的人,再把房貸包裝成商品賣出去。房價一跌,不動產和銀行一起崩,靠借錢運作的產業全被拖下水。'),
-    {space: 0.85, soft: 0.90,  reit: 0.65, fin: 0.65, disc: 0.85, mat: 0.88, trans: 0.90, tech: 0.90, chip: 0.90, green: 0.90, crypto: 0.85, yield: 0.92, gold: 1.12, bond: 1.08, staples: 1.02, util: 1.01 }),
+    {robot: 0.88, ecom: 0.88, space: 0.85, soft: 0.90,  reit: 0.65, fin: 0.65, disc: 0.85, mat: 0.88, trans: 0.90, tech: 0.90, chip: 0.90, green: 0.90, crypto: 0.85, yield: 0.92, gold: 1.12, bond: 1.08, staples: 1.02, util: 1.01 }),
   // ── 更多金融史上的事件 ──
   // 黑色星期一:恐慌一天崩盤,但下一回合會自動反彈一半(rebound)—— 教「恐慌殺低不一定是對的」
   Object.assign(EVT(-0.01, L('Black Monday', '黑色星期一'), L('In 1987 program trading sold into a falling market and stocks dropped 22% in one day. Panic feeds on itself, and part of the drop came back soon after.', '1987 年程式交易在下跌中自動賣出,股市一天崩 22%。恐慌會自我放大,但之後有一部分很快就漲回來了。'),
-    {space: 0.82, agri: 0.95,  tech: 0.82, soft: 0.82, chip: 0.82, yield: 0.88, oil: 0.85, health: 0.88, reit: 0.85, fin: 0.80, trans: 0.84, bio: 0.82, staples: 0.90, disc: 0.82, util: 0.90, mat: 0.85, green: 0.82, def: 0.88, game: 0.82, crypto: 0.80, gold: 1.05, bond: 1.03 }), { rebound: 0.5 }),
+    {robot: 0.84, ecom: 0.86, space: 0.82, agri: 0.95,  tech: 0.82, soft: 0.82, chip: 0.82, yield: 0.88, oil: 0.85, health: 0.88, reit: 0.85, fin: 0.80, trans: 0.84, bio: 0.82, staples: 0.90, disc: 0.82, util: 0.90, mat: 0.85, green: 0.82, def: 0.88, game: 0.82, crypto: 0.80, gold: 1.05, bond: 1.03 }), { rebound: 0.5 }),
   EVT(-0.01, L('Asian financial crisis', '亞洲金融風暴'), L('In 1997 hot money fled Thailand and Korea, currencies collapsed and anything tied to Asian trade fell with them.', '1997 年熱錢撤出泰國、韓國,貨幣崩盤,跟亞洲貿易有關的全被拖下水。'),
     {agri: 0.95,  trans: 0.85, mat: 0.88, fin: 0.88, disc: 0.90, chip: 0.93, tech: 0.95, gold: 1.06, bond: 1.05 }),
   EVT(-0.01, L('European debt crisis', '歐債危機'), L('From 2010 Greece could not pay its debts. Even government bonds can default, and the banks holding them bleed.', '2010 年起希臘還不出國債。連國債都可能違約,抱著國債的銀行跟著失血。'),
@@ -123,9 +125,9 @@ const EVENTS = [
   EVT(-0.01, L('Bank run', '銀行擠兌'), L('In 2023 a bank serving tech startups lost its deposits in two days. Confidence is all a bank has.', '2023 年一家服務科技新創的銀行兩天內被提光存款。銀行靠的就是信心。'),
     { fin: 0.80, soft: 0.90, tech: 0.92, bio: 0.94, bond: 1.06, gold: 1.03 }),
   EVT(-0.01, L('Trade war and tariffs', '中美貿易戰'), L('From 2018 tariffs hit chips, metals and shipping; the extra cost gets passed to consumers.', '2018 年起關稅打到晶片、原物料和航運,多出來的成本轉嫁給消費者。'),
-    {space: 0.92, agri: 0.90,  chip: 0.88, mat: 0.90, trans: 0.92, staples: 0.96, tech: 0.95, def: 1.05, gold: 1.02 }),
+    {robot: 0.92, ecom: 0.9, space: 0.92, agri: 0.90,  chip: 0.88, mat: 0.90, trans: 0.92, staples: 0.96, tech: 0.95, def: 1.05, gold: 1.02 }),
   EV(L('Chip shortage', '晶片荒'), L('In 2021 there were not enough chips: chip makers raised prices while car and console makers waited.', '2021 年晶片不夠用:晶片廠漲價,汽車和遊戲機廠只能等。'),
-    {space: 0.9,  chip: 1.20, tech: 0.95, green: 0.88, game: 0.94 }),
+    {robot: 0.9, space: 0.9,  chip: 1.20, tech: 0.95, green: 0.88, game: 0.94 }),
   // 股利事件:只有「原本就有配息」的公司會抽到(不含 ETF、債券),抽到時才決定是哪幾家。殖利率每次 ±1 個百分點,最高 8%、最低 0.5%
   //   divUp:營收變好、配更多(不會挑到目前配最多的那家,讓後面的追得上);divCut:營收變差、配更少('top' = 配最多的那家,'any' = 隨機一家)
   Object.assign(EV(L('Record revenue, bigger dividend', '營收創新高,加發股利'), L('Sales hit a record, so the company pays shareholders more. The yield goes up 1 point and the price rises too.', '營收創下新高,公司決定多配一點股利給股東。殖利率提高 1 個百分點,股價也跟著漲。'), {}), { divUp: 1 }),
@@ -136,11 +138,11 @@ const EVENTS = [
   // 迷因股軋空:挑「場上被放空最多」的那檔暴漲 50%,所有空單強迫回補(meme:抽到時才決定是哪一檔)
   Object.assign(EV(L('Meme stock squeeze', '迷因股軋空'), L('In 2021 retail traders piled into the most-shorted stock and squeezed the short sellers out. Every short on it is forced to buy back.', '2021 年散戶一起買被放空最多的股票,把放空的人全部軋出場。這檔的空單全部強迫回補。'), {}), { meme: true }),
   EV(L('Antitrust fine', '反壟斷巨額罰款'), L('Regulators fine a platform giant for abusing its position. Big tech carries regulatory risk.', '監管機關對平台巨頭開出巨額罰款。大型科技公司有監管風險。'),
-    { tech: 0.88, soft: 0.90, game: 0.97 }),
+    {ecom: 0.92,  tech: 0.88, soft: 0.90, game: 0.97 }),
   EV(L('Massive data breach', '大型資安事件'), L('Personal data of millions leaks. Trust is expensive to rebuild, and security costs go up for everyone.', '數百萬人的個資外洩。信任很難重建,所有公司的資安成本都上升。'),
-    { soft: 0.90, fin: 0.94, tech: 0.96 }),
+    {ecom: 0.95,  soft: 0.90, fin: 0.94, tech: 0.96 }),
   EVT(0.01, L('Infrastructure bill passes', '基礎建設法案通過'), L('Government spending on roads, grids and ports flows to materials, transport and utilities; more borrowing weighs on bonds.', '政府砸錢修路、電網、港口,原物料、運輸和公用事業受惠;多借錢讓債券承壓。'),
-    {agri: 1.02,  mat: 1.15, trans: 1.08, util: 1.05, green: 1.06, bond: 0.97 }),
+    {robot: 1.08, agri: 1.02,  mat: 1.15, trans: 1.08, util: 1.05, green: 1.06, bond: 0.97 }),
   EV(L('Nuclear accident', '核災事故'), L('In 2011 the Fukushima disaster turned countries away from nuclear power and toward renewables and fossil fuels.', '2011 年福島核災讓各國遠離核電,轉向再生能源和化石燃料。'),
     { util: 0.85, green: 1.12, oil: 1.06, gold: 1.04, reit: 0.97 }),
   EVT(-0.01, L('Property bubble bursts', '房市泡沫破裂'), L('Japan in 1990, China in 2021: when borrowed money stops flowing into property, prices fall and banks and builders fall with them.', '1990 年的日本、2021 年的中國:借來的錢不再流進房地產,房價一跌,銀行和建商跟著倒。'),
@@ -149,27 +151,36 @@ const EVENTS = [
     { agri: 1.25, staples: 0.94, disc: 0.96, trans: 1.02 }),
   // 政府普發現金:除了股價變動,每位玩家還直接拿到現金(cash)
   Object.assign(EVT(0.01, L('Government cash handout', '政府普發現金'), L('Everyone gets cash from the government. People spend it, so shops, restaurants and travel do well; the government borrows more, so bonds dip.', '政府發現金給每個人。大家拿到錢會去消費,零售、餐飲、旅遊受惠;政府要多借錢,債券小跌。'),
-    {agri: 1.03, soft: 1.02,  disc: 1.12, staples: 1.06, game: 1.06, trans: 1.04, fin: 1.03, reit: 1.02, gold: 1.02, bond: 0.96 }), { cash: 1000 }),
+    {ecom: 1.15, agri: 1.03, soft: 1.02,  disc: 1.12, staples: 1.06, game: 1.06, trans: 1.04, fin: 1.03, reit: 1.02, gold: 1.02, bond: 0.96 }), { cash: 1000 }),
   // 總體好消息(讓大盤轉多),和上面的總體壞消息一張對一張:停火↔戰爭、疫苗↔疫情、通膨降溫↔通膨升溫、貿易協議↔貿易戰、央行救市↔金融風暴
   EVT(0.01, L('Ceasefire agreement signed', '停火協議簽署'), L('The fighting stops. Ships and planes run normal routes again and travel recovers; oil and defense lose their war premium.', '戰爭停火。船跟飛機恢復正常航線,旅遊回溫;石油和軍工的戰爭溢價消退。'),
     {def: 0.80, oil: 0.88, gold: 0.93, bond: 0.98, trans: 1.15, disc: 1.15, fin: 1.06, mat: 1.05, chip: 1.05, tech: 1.05, reit: 1.04, green: 1.05, crypto: 1.05 }),
   EVT(0.01, L('Vaccine approved worldwide', '疫苗全面施打'), L('People can go out again: travel, shipping and banks bounce back hard. Stay-at-home stocks like games and software cool off.', '大家可以出門了:旅遊、航運、銀行強力反彈;遊戲、軟體這類宅經濟退燒。'),
-    {bio: 1.12, disc: 1.30, trans: 1.20, fin: 1.08, reit: 1.08, oil: 1.12, mat: 1.06, game: 0.88, soft: 0.92, health: 0.95, gold: 0.95, bond: 0.97 }),
+    {ecom: 0.95, bio: 1.12, disc: 1.30, trans: 1.20, fin: 1.08, reit: 1.08, oil: 1.12, mat: 1.06, game: 0.88, soft: 0.92, health: 0.95, gold: 0.95, bond: 0.97 }),
   EVT(0.01, L('Inflation cools down', '通膨降溫'), L('Prices stop rising so fast, so rates can come down later. Growth stocks, property and bonds rise; commodities and gold lose their inflation shield.', '物價漲勢趨緩,之後有機會降息。成長股、不動產、債券上漲;原物料和黃金失去抗通膨題材。'),
-    {space: 1.1, tech: 1.10, soft: 1.10, chip: 1.06, reit: 1.10, bond: 1.06, util: 1.04, disc: 1.06, game: 1.04, green: 1.06, crypto: 1.06, gold: 0.92, agri: 0.92, mat: 0.92, oil: 0.93 }),
+    {robot: 1.05, ecom: 1.08, space: 1.1, tech: 1.10, soft: 1.10, chip: 1.06, reit: 1.10, bond: 1.06, util: 1.04, disc: 1.06, game: 1.04, green: 1.06, crypto: 1.06, gold: 0.92, agri: 0.92, mat: 0.92, oil: 0.93 }),
   EVT(0.01, L('Trade deal reached', '貿易協議達成'), L('Tariffs come off. Factories can sell abroad again: chips, materials and shipping lead the rally.', '關稅取消,工廠又能外銷:半導體、原物料、航運領漲。'),
-    {chip: 1.14, mat: 1.10, trans: 1.12, agri: 1.06, tech: 1.06, staples: 1.03, disc: 1.04, def: 0.95, gold: 0.97 }),
+    {robot: 1.06, ecom: 1.06, chip: 1.14, mat: 1.10, trans: 1.12, agri: 1.06, tech: 1.06, staples: 1.03, disc: 1.04, def: 0.95, gold: 0.97 }),
   EVT(0.02, L('Central bank to the rescue', '央行出手救市'), L('The central bank buys bonds and pumps money into markets (QE). Almost everything rises, banks and property most; extra money also lifts gold and crypto.', '央行大買債券、把錢灌進市場(量化寬鬆)。幾乎全面上漲,金融、不動產最多;多出來的錢也推升黃金和加密貨幣。'),
-    {space: 1.15, fin: 1.15, reit: 1.14, bond: 1.06, tech: 1.08, soft: 1.08, chip: 1.08, disc: 1.08, mat: 1.06, green: 1.08, gold: 1.06, crypto: 1.18, game: 1.04, trans: 1.05 }),
+    {robot: 1.08, ecom: 1.08, space: 1.15, fin: 1.15, reit: 1.14, bond: 1.06, tech: 1.08, soft: 1.08, chip: 1.08, disc: 1.08, mat: 1.06, green: 1.08, gold: 1.06, crypto: 1.18, game: 1.04, trans: 1.05 }),
   EVT(0.01, L('Tax cut bill passes', '減稅法案通過'), L('Companies and families keep more of what they earn. Profits rise across the board, banks and shops most; the government borrows more, so bonds dip.', '企業和家庭少繳稅、多留錢。各行業獲利提升,金融和零售最明顯;政府要多借錢,債券小跌。'),
-    {fin: 1.08, disc: 1.10, staples: 1.04, tech: 1.05, chip: 1.04, mat: 1.05, trans: 1.04, reit: 1.04, game: 1.04, bond: 0.95 }),
+    {robot: 1.06, ecom: 1.1, fin: 1.08, disc: 1.10, staples: 1.04, tech: 1.05, chip: 1.04, mat: 1.05, trans: 1.04, reit: 1.04, game: 1.04, bond: 0.95 }),
   EVT(0.01, L('Soft landing', '經濟軟著陸'), L('Rate hikes beat inflation without causing a recession. Worry fades and most stocks drift up together.', '升息壓住了通膨,經濟卻沒有衰退。擔心散去,大部分股票一起小漲。'),
-    {space: 1.06, tech: 1.05, soft: 1.05, chip: 1.05, fin: 1.06, disc: 1.06, reit: 1.05, trans: 1.04, mat: 1.04, green: 1.04, game: 1.03, staples: 1.02, bond: 1.02, gold: 0.96 }),
+    {robot: 1.06, ecom: 1.06, space: 1.06, tech: 1.05, soft: 1.05, chip: 1.05, fin: 1.06, disc: 1.06, reit: 1.05, trans: 1.04, mat: 1.04, green: 1.04, game: 1.03, staples: 1.02, bond: 1.02, gold: 0.96 }),
   // 太空產業新聞(不改大盤趨勢)
   EV(L('Satellite internet wins a huge contract', '低軌衛星拿下大訂單'), L('Governments and airlines sign up for low-orbit satellite internet. Space stocks jump; old telecoms get a new rival.', '政府和航空公司簽下低軌衛星上網的大訂單,太空股大漲;傳統電信多了競爭對手。'),
     {space: 1.35, chip: 1.04, def: 1.04, tech: 1.03, yield: 0.96 }),
   EV(L('Rocket explodes on launch', '火箭發射失敗'), L('A rocket blows up after liftoff. Launches are delayed and insurance gets pricier. Companies with no profit yet suffer most from delays.', '火箭升空後爆炸,發射計畫延後、保險費變貴。還沒賺錢的公司最怕計畫延誤。'),
     {space: 0.72, def: 0.97 }),
+  // 電商、機器人產業新聞(不改大盤趨勢)
+  EV(L('Singles Day sales smash records', '雙十一購物節業績爆發'), L('Shoppers splurge in one day of online deals. E-commerce soars and delivery firms run full.', '網購節一天的業績破紀錄,電商大漲,物流公司也滿載。'),
+    {ecom: 1.30, trans: 1.06, soft: 1.03, staples: 1.02 }),
+  EV(L('Delivery workers strike', '物流大罷工'), L('Packages pile up for weeks. Online shops cannot deliver, and customers go back to stores.', '包裹堆了好幾週送不出去,電商出不了貨,客人又回到實體店。'),
+    {ecom: 0.82, trans: 0.92, staples: 1.03 }),
+  EV(L('Humanoid robots enter mass production', '人形機器人量產'), L('Robots that can work on ordinary factory lines go on sale. Chip and software makers that power them gain too.', '能直接上產線工作的人形機器人開始量產,供應晶片和軟體的公司也一起受惠。'),
+    {robot: 1.32, chip: 1.05, soft: 1.03, mat: 1.02 }),
+  EV(L('Robot safety accident', '機器人工安意外'), L('A factory robot injures workers. Regulators order inspections and buyers pause orders.', '工廠機器人造成工安意外,政府要求全面檢查,客戶暫停下單。'),
+    {robot: 0.78, chip: 0.98 }),
 ];
 // 牌組平衡:原本每檔資產在整副牌裡的漲跌不對稱(黃金平均每張 +3.5%、金融 −4.5%),玩越久越固定往一邊走,
 // 看懂牌組的人(或電腦)只要固定做多 / 放空就贏。這裡在載入時把每檔資產調成「整副牌的漲跌互相抵消」(幾何平均 = 1):
@@ -203,10 +214,10 @@ const BANK_MAX = 5000, BANK_RATE = 0.05;
 // 大盤長期趨勢:股票類股和大盤 ETF 每回合平均多漲 1%(20 回合約 +22%)。事件卡平衡過、長期是平的,這一項讓「長期投資股票」比放現金好
 // 棋盤裡面的兩個特殊格:警察局、IPO 攤位(各一格 cell),離開時擲一顆骰子,沿著 6 格的小路(path)走回外圈;
 // 走過最後一格就踩上外圈的 exit 那格,多的點數繼續往前走。小路上每一格是什麼(命運、道具、利息…)每次有人進來都重新隨機生成。座標是格網的 [x, z]
-// 兩條小路都是「從裡面直直走出來」:警察局在後面(z=4 那排),往左邊的外圈走;內部認購攤位在前面(z=13 那排),往右邊的外圈走
+// 兩條小路都是「從裡面直直走出來」:警察局在後面(z=4 那排),往左邊的外圈走;內部認購攤位在前面(z=14 那排),往右邊的外圈走
 const LANES = {
-  jail: { exit: 30, cell: [7, 4], path: [[6, 4], [5, 4], [4, 4], [3, 4], [2, 4], [1, 4]] },
-  ipo: { exit: 64, cell: [10, 13], path: [[11, 13], [12, 13], [13, 13], [14, 13], [15, 13], [16, 13]] },
+  jail: { exit: 32, cell: [7, 4], path: [[6, 4], [5, 4], [4, 4], [3, 4], [2, 4], [1, 4]] },
+  ipo: { exit: 68, cell: [11, 14], path: [[12, 14], [13, 14], [14, 14], [15, 14], [16, 14], [17, 14]] },
 };
 // 小路格子的種類:第 3 格固定是市場事件,其他 5 格從各自的池子隨機排(沒有空格;命運改放在外圈)。警察局那條比較多手續費、內部認購那條比較多撿到錢
 const PATH_POOL = { jail: ['chance', 'gift', 'fee', 'fee', 'coin', 'interest'], ipo: ['chance', 'gift', 'gift', 'interest', 'coin', 'coin'] };

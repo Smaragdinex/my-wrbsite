@@ -19,8 +19,8 @@ const ZH = (new URLSearchParams(location.search).get('lang') || savedLang || nav
 const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
-import { gameData } from './data.mjs?v=11';
-import { makeSim } from './sim.mjs?v=17';
+import { gameData } from './data.mjs?v=12';
+import { makeSim } from './sim.mjs?v=18';
 import { makeEngine } from './engine.mjs?v=8';
 const GD = gameData(L, fmt);      // 遊戲資料:畫面、遊戲引擎、電腦模擬都用同一份
 const { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_LOCK, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = GD;
@@ -91,7 +91,7 @@ const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim(GD,
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=19', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=20', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -762,6 +762,19 @@ function icon(c, type, x, y, r, color) {
     c.beginPath(); c.arc(r * 0.38, -r * 0.12, r * 0.13, 0, 7); c.arc(r * 0.64, r * 0.12, r * 0.13, 0, 7); c.fill(); }
   else if (type === 'crypto') { c.beginPath(); c.arc(0, 0, r, 0, 7); c.fill(); c.strokeStyle = '#fff'; c.lineWidth = r * 0.1; c.beginPath(); c.arc(0, 0, r * 0.78, 0, 7); c.stroke();
     c.fillStyle = '#fff'; c.font = `900 ${r * 1.1}px Arial`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('M', 0, r * 0.06); }
+  else if (type === 'space') {      // 火箭:機身 + 鼻錐 + 兩片尾翼,中間挖一個圓窗
+    c.beginPath(); c.moveTo(0, -r); c.quadraticCurveTo(r * 0.5, -r * 0.55, r * 0.38, r * 0.45); c.lineTo(-r * 0.38, r * 0.45); c.quadraticCurveTo(-r * 0.5, -r * 0.55, 0, -r); c.fill();
+    c.beginPath(); c.moveTo(-r * 0.38, r * 0.05); c.lineTo(-r * 0.8, r * 0.75); c.lineTo(-r * 0.3, r * 0.5); c.moveTo(r * 0.38, r * 0.05); c.lineTo(r * 0.8, r * 0.75); c.lineTo(r * 0.3, r * 0.5); c.fill();
+    c.beginPath(); c.moveTo(-r * 0.2, r * 0.55); c.lineTo(0, r); c.lineTo(r * 0.2, r * 0.55); c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(0, -r * 0.2, r * 0.2, 0, 7); c.fill(); }
+  else if (type === 'ecom') {       // 購物車:車籃 + 把手 + 兩個輪子
+    c.lineWidth = r * 0.18; c.beginPath(); c.moveTo(-r, -r * 0.75); c.lineTo(-r * 0.68, -r * 0.75); c.lineTo(-r * 0.4, r * 0.35); c.lineTo(r * 0.72, r * 0.35); c.stroke();
+    c.beginPath(); c.moveTo(-r * 0.6, -r * 0.45); c.lineTo(r * 0.95, -r * 0.45); c.lineTo(r * 0.75, r * 0.15); c.lineTo(-r * 0.46, r * 0.15); c.closePath(); c.fill();
+    for (const x of [-0.3, 0.6]) { c.beginPath(); c.arc(x * r, r * 0.72, r * 0.17, 0, 7); c.fill(); } }
+  else if (type === 'robot') {      // 機器人頭:天線 + 方頭 + 兩隻挖空的眼睛和嘴
+    c.lineWidth = r * 0.14; c.beginPath(); c.moveTo(0, -r * 0.55); c.lineTo(0, -r * 0.85); c.stroke(); c.beginPath(); c.arc(0, -r * 0.92, r * 0.13, 0, 7); c.fill();
+    rr(-r * 0.85, -r * 0.55, r * 1.7, r * 1.35, r * 0.3); c.fill(); c.fillRect(-r, -r * 0.05, r * 0.18, r * 0.4); c.fillRect(r * 0.82, -r * 0.05, r * 0.18, r * 0.4);
+    c.fillStyle = '#fff'; for (const x of [-0.35, 0.35]) { c.beginPath(); c.arc(x * r, -r * 0.05, r * 0.17, 0, 7); c.fill(); } c.fillRect(-r * 0.35, r * 0.4, r * 0.7, r * 0.12); }
   c.restore();
 }
 // 禮物格的圖示:和其他格子一樣用單色線條畫(白色禮物盒,緞帶用挖空的方式露出格子底色)
