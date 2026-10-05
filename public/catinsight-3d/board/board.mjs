@@ -656,7 +656,9 @@ function drawLane(type) {
       if (k === 'fate') { c.font = F(96); c.fillText('★', 128, 96); c.font = F(ZH ? 44 : 40); c.fillText(info.b, 128, 196); return; }
       if (k === 'chance') { c.fillStyle = '#b0780a'; c.font = F(120); c.fillText('?', 128, 100); c.font = F(ZH ? 36 : 34); c.fillText(info.b, 128, 196); return; }
       if (k === 'gift') { drawGiftLabel(c, F); return; }
-      if (k === 'interest') { drawInterestIcon(c, F, 128, 96); c.font = F(ZH ? 40 : 34); c.fillText(L('INTEREST +3%', '利息 +3%'), 128, 206); return; }
+      if (k === 'coin') { drawIconTile(c, F, 'coin', L('CASH', '撿到錢'), '+$300'); return; }
+      if (k === 'fee') { drawIconTile(c, F, 'fee', L('FEE', '手續費'), '-$200'); return; }
+      if (k === 'interest') { drawInterestIcon(c, F, 128, 96); c.font = F(ZH ? 40 : 29); c.fillText(L('INTEREST +3%', '利息 +3%'), 128, 206); return; }
       c.font = F(info.a.length > 4 ? 44 : (ZH ? 56 : 48)); c.fillText(info.a, 128, 100);
       c.font = F(ZH ? 34 : 32); c.fillText(info.b, 128, 172);
     });
@@ -766,6 +768,47 @@ const drawInterestIcon = (c, F, cx, cy) => {
   c.beginPath(); c.moveTo(-2, -68); c.lineTo(20, -56); c.lineTo(6, -34); c.stroke();
   c.restore();
 };
+// 其他特殊格的圖示(都是白色,挖空的部分用 destination-out),大約佔 120×120,中心在 (cx, cy)
+const cut = (c, fn) => { c.globalCompositeOperation = 'destination-out'; fn(); c.globalCompositeOperation = 'source-over'; };
+const TILE_ICONS = {
+  coin: (c, F) => {                                                                                       // 撿到錢:一枚 $ 硬幣 + 閃光
+    c.beginPath(); c.arc(-6, 6, 44, 0, Math.PI * 2); c.fill();
+    cut(c, () => { c.lineWidth = 6; c.beginPath(); c.arc(-6, 6, 34, 0, Math.PI * 2); c.stroke(); c.font = F(52); c.fillText('$', -6, 9); });
+    c.beginPath(); for (let i = 0; i < 8; i++) { const r = i % 2 ? 6 : 18, a = i * Math.PI / 4 - Math.PI / 2; c.lineTo(46 + Math.cos(a) * r, -40 + Math.sin(a) * r); } c.closePath(); c.fill();
+  },
+  fee: (c) => {                                                                                           // 手續費:收據(下緣鋸齒)
+    c.beginPath(); c.moveTo(-36, -52); c.lineTo(36, -52); c.lineTo(36, 40);
+    for (let i = 0; i < 6; i++) c.lineTo(36 - (i + 0.5) * 12, i % 2 ? 40 : 50); c.lineTo(-36, 40); c.closePath(); c.fill();
+    cut(c, () => { c.lineWidth = 7; c.lineCap = 'round'; for (const y of [-32, -14, 4]) { c.beginPath(); c.moveTo(-22, y); c.lineTo(y === 4 ? 4 : 22, y); c.stroke(); } c.beginPath(); c.moveTo(-22, 24); c.lineTo(-6, 24); c.stroke(); });
+  },
+  divi: (c, F) => {                                                                                       // 股息結算:錢袋
+    c.beginPath(); c.ellipse(0, 18, 50, 42, 0, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.moveTo(-18, -22); c.lineTo(-30, -50); c.quadraticCurveTo(0, -38, 30, -50); c.lineTo(18, -22); c.closePath(); c.fill();
+    cut(c, () => { c.lineWidth = 6; c.beginPath(); c.moveTo(-20, -22); c.lineTo(20, -22); c.stroke(); c.font = F(50); c.fillText('$', 0, 22); });
+  },
+  start: (c) => {                                                                                         // 起點:方格旗
+    c.fillRect(-46, -56, 9, 112);
+    c.beginPath(); c.moveTo(-37, -56); c.quadraticCurveTo(0, -66, 46, -52); c.lineTo(46, -6); c.quadraticCurveTo(0, -20, -37, -10); c.closePath(); c.fill();
+    cut(c, () => { for (let r = 0; r < 2; r++) for (let k = 0; k < 4; k++) if ((r + k) % 2) c.fillRect(-37 + k * 21, -52 + r * 21, 21, 21); });
+  },
+  shop: (c) => {                                                                                          // 商店:條紋遮雨棚 + 店面(門、兩扇窗)
+    c.beginPath(); c.moveTo(-58, -26); c.lineTo(-50, -54); c.lineTo(50, -54); c.lineTo(58, -26); c.closePath(); c.fill();
+    for (let i = 0; i < 5; i++) { c.beginPath(); c.arc(-46 + i * 23, -26, 11.5, 0, Math.PI); c.fill(); }
+    c.fillRect(-48, -14, 96, 62);
+    cut(c, () => { for (let i = 0; i < 2; i++) c.fillRect(-28 + i * 34, -54, 12, 28); c.fillRect(-13, 8, 26, 40); c.fillRect(-40, -4, 20, 18); c.fillRect(20, -4, 20, 18); });
+  },
+  ipo: (c) => {                                                                                           // IPO:交易所的鐘
+    c.fillRect(-6, -60, 12, 14); c.beginPath(); c.arc(0, -46, 10, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.moveTo(-46, 28); c.quadraticCurveTo(-40, 10, -36, -14); c.quadraticCurveTo(-30, -44, 0, -44); c.quadraticCurveTo(30, -44, 36, -14); c.quadraticCurveTo(40, 10, 46, 28); c.closePath(); c.fill();
+    c.beginPath(); c.roundRect(-54, 26, 108, 12, 6); c.fill(); c.beginPath(); c.arc(0, 48, 10, 0, Math.PI * 2); c.fill();
+  },
+};
+// 一格的畫法:圖示在上,名稱(和可有可無的一行小字)在下
+function drawIconTile(c, F, kind, label, sub) {
+  c.save(); c.translate(128, sub ? 84 : 96); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineJoin = 'round'; if (sub) c.scale(0.86, 0.86); TILE_ICONS[kind](c, F); c.restore();
+  c.fillStyle = '#fff'; c.font = F(label.length > 6 ? 34 : ZH ? 44 : 42); c.fillText(label, 128, sub ? 182 : 212);
+  if (sub) { c.font = F(ZH ? 32 : 30); c.fillText(sub, 128, 226); }
+}
 const drawGiftLabel = (c, F) => {
   c.save(); c.translate(128, 96); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineJoin = 'round'; c.lineCap = 'round';
   c.beginPath(); c.roundRect(-52, -6, 104, 72, 10); c.fill();                       // 盒身
@@ -789,6 +832,9 @@ function drawLabel(i) {
     c.fillStyle = sec.css; c.font = F(sec.code.length > 8 ? 28 : ZH ? (sec.code.length > 3 ? 34 : 38) : 34); c.fillText(sec.code, 128, 136);
     c.fillStyle = '#3b2f2a'; c.font = F(62); c.fillText('$' + Math.round(S.price[t.type]), 128, 196);
   } else if (t.type === 'gift') { drawGiftLabel(c, F);
+  } else if (TILE_ICONS[t.type]) {
+    const lab = { start: [L('GO', '起點'), `+$${fmt(SALARY)}`], shop: [L('SHOP', '商店')], divi: [L('DIVIDEND', '股息結算')], ipo: ['IPO', L('new shares', '新股申購')], fee: [L('FEE', '手續費'), `-$${FEE}`] }[t.type];
+    drawIconTile(c, F, t.type, ...lab);
   } else if (t.type === 'bank') {
     drawBankIcon(c, F, 128, 100);
     c.fillStyle = '#fff'; c.font = F(ZH ? 46 : 42); c.fillText(L('BANK', '銀行'), 128, 212);
