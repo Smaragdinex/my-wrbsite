@@ -5,6 +5,8 @@
 //   0 交易:蒙地卡羅在股票格的決定 —— 可選動作、每個動作模擬出來的平均分數、選了哪個、期望值策略原本建議哪個
 //   1 擲骰:蒙地卡羅決定擲 1 顆還是 2 顆
 //   2 局面:每位玩家每次走完的局面(給價值網路學「這個局面最後拿第一的機率」)
+//   3 / 4 az 的交易 / 擲骰:q 欄放 MCTS 的搜尋次數分布(自我對弈時策略網路學這個)
+// 環境變數:MIX=az 改成 az 為主的桌(自我對弈);POLICY / VALUE 指定網路權重;AZN 每步模擬次數
 // 每筆一列 Float32,欄位見同名的 .json
 import fs from 'node:fs';
 import { gameData } from '../../public/catinsight-3d/board/data.mjs';
@@ -12,12 +14,20 @@ import { makeSim } from '../../public/catinsight-3d/board/sim.mjs';
 
 const games = +process.argv[2] || 50, seed = +process.argv[3] || 1, out = process.argv[4] || 'tools/nn/data/sample.bin';
 const D = gameData((en) => en, (n) => String(Math.round(n)));
-const ALGS = ['rule', 'ev', 'mc'], LEVEL = { rule: 'easy', ev: 'normal', mc: 'hard' };
+const ALGS = ['rule', 'ev', 'mc', 'az'], LEVEL = { rule: 'easy', ev: 'normal', mc: 'hard', az: 'hard' };
+const MIX = process.env.MIX || 'base', load = (f) => (f ? JSON.parse(fs.readFileSync(f)) : null);
 const NA = 10;
 let main = null, rows = [];
 
 const sim = makeSim(D, {
-  seed,
+  seed, nn: load(process.env.POLICY), nnValue: load(process.env.VALUE), az: { n: +process.env.AZN || 96, noise: MIX === 'az' ? 1 : 0 },
+  onAZ: ({ kind, st, p, k, options, visits, chosen, base }) => {
+    if (!main) return;
+    const mask = new Array(NA).fill(0), q = new Array(NA).fill(0), tot = visits.reduce((a, b) => a + b, 0);
+    const idx = (o) => (kind === 'trade' ? sim.actIndex(o) : o - 1);
+    options.forEach((o, i) => { mask[idx(o)] = 1; q[idx(o)] += visits[i] / tot; });
+    rows.push({ type: kind === 'trade' ? 3 : 4, i: p.i, f: sim.features(st, p.i, kind === 'trade' ? k : null), mask, ci: idx(chosen), bi: kind === 'trade' ? sim.actIndex(base) : base - 1, q });
+  },
   onMC: ({ kind, st, p, k, options, means, chosen, base }) => {
     if (!main) return;
     const mask = new Array(NA).fill(0), q = new Array(NA).fill(0);
@@ -44,8 +54,9 @@ const fd = fs.openSync(out, 'w');
 const t0 = Date.now(); let total = 0;
 for (let g = 0; g < games; g++) {
   const n = 2 + Math.floor(sim.rand() * 3);
-  const algs = Array.from({ length: n }, () => ALGS[Math.floor(sim.rand() * 3)]);
-  if (!algs.includes('mc')) algs[Math.floor(sim.rand() * n)] = 'mc';
+  const pool = MIX === 'az' ? ['az', 'az', 'az', 'ev', 'mc'] : ['rule', 'ev', 'mc'], must = MIX === 'az' ? 'az' : 'mc';
+  const algs = Array.from({ length: n }, () => pool[Math.floor(sim.rand() * pool.length)]);
+  if (!algs.includes(must)) algs[Math.floor(sim.rand() * n)] = must;
   main = sim.newGame(algs, 20, algs.map((a) => LEVEL[a]));
   rows = [];
   sim.playGame(main);

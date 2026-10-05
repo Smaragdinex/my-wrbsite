@@ -10,8 +10,9 @@ const score = process.argv[6] || 'lead';
 const slippage = process.env.SLIP !== '0';   // 預設照遊戲規則用「推動後的價格」成交;SLIP=0 切回舊規則做對照
 // 有 nn(神經網路)座位就讀遊戲用的同一份權重
 import fs from 'node:fs';
-const nn = process.argv[7]?.includes('nn') || process.argv.slice(2).some((a) => /(^|,)nn(,|$)/.test(a)) ? JSON.parse(fs.readFileSync(new URL('./nn/models/nn-policy.json', import.meta.url))) : null;
-const sim = makeSim(D, { seed: +process.env.SEED || 12345, slippage, mc: { n: mcN, depth: mcDepth, score }, nn, nnConf: +process.env.NNC || 0 });   // 固定種子,結果可重現
+const spec7 = process.argv[7] || '', useNN = /(^|,)(nn|az)(,|$)/.test(spec7), model = (f) => JSON.parse(fs.readFileSync(new URL(`./nn/models/${f}`, import.meta.url)));
+const nn = useNN ? model('nn-policy.json') : null, nnValue = /(^|,)az(,|$)/.test(spec7) ? model('nn-value.json') : null;   // az 座位:策略 + 價值網路
+const sim = makeSim(D, { seed: +process.env.SEED || 12345, slippage, mc: { n: mcN, depth: mcDepth, score }, nn, nnValue, nnConf: +process.env.NNC || 0, az: { n: +process.env.AZN || 96, h: +process.env.AZH || 1 } });   // 固定種子,結果可重現
 const rand = sim.rand;
 
 function table(algs, label) {
