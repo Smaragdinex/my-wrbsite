@@ -19,9 +19,9 @@ const ZH = (new URLSearchParams(location.search).get('lang') || savedLang || nav
 const L = (en, zh) => (ZH ? zh : en);
 
 /* ───────────── 資料 ───────────── */
-import { gameData } from './data.mjs?v=14';
-import { makeSim } from './sim.mjs?v=20';
-import { makeEngine } from './engine.mjs?v=9';
+import { gameData } from './data.mjs?v=15';
+import { makeSim } from './sim.mjs?v=21';
+import { makeEngine } from './engine.mjs?v=10';
 const GD = gameData(L, fmt);      // 遊戲資料:畫面、遊戲引擎、電腦模擬都用同一份
 const { LANES, PATH_POOL, PATH_FIXED, MARKET_DRIFT, DIV_STEP, DIV_MAX, DIV_MIN, DIV_UP_PRICE, DIV_CUT_PRICE, SECTORS, KEYS, N, TILES, TILE_COLOR, NON_EQUITY, EV, EVENTS, ONES, BAIL, JAIL_WAIT, LANE_LEN, IPO_OFF, IPO_LOCK, IPO_FREE, BANK_MAX, BANK_RATE, LOT, START_CASH, SALARY, FEE, MAX_ROLLS, DIV_ROUND, FATE, MARGIN_LOAN, MAINT, MARGIN_FEE, SQUEEZE, buyF, sellF, shortF, SHORT_F, REMOTE_PRICE, CARD_PRICE, ATK_PRICE, ATK_DROP, SPY_PRICE, SPY_ROUNDS, DICE3_PRICE } = GD;
 const PATH_INFO = {
@@ -91,7 +91,7 @@ const aiAlg = () => AI_ALG[S.aiLevel] || 'ev';
 const SIM = makeSim(GD,
   { mc: { n: 120, depth: 3 } });
 // 模擬跑在 Web Worker(開不起來就在主執行緒算)。回傳 Promise,aiTurn / aiLand 用 await 等
-const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=23', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
+const AIW = (() => { try { const w = new Worker('./ai-worker.mjs?v=24', { type: 'module' }); w.onerror = () => { AIW_BAD = true; }; return w; } catch (e) { return null; } })();
 let AIW_BAD = false, aiwId = 0; const aiwWait = {};
 if (AIW) AIW.onmessage = (ev) => { const r = aiwWait[ev.data.id]; if (r) { delete aiwWait[ev.data.id]; r(ev.data.act); } };
 function simDecide(kind, st, i, k) {
@@ -463,6 +463,7 @@ function box(w, h, d, color, x, y, z, r = 0.06, parent = scene) {
 // 樹冠另外掛在一個以樹根為軸心的群組裡,每一幀依風(SWAY)微微搖晃
 const SWAY = [];
 function tree(x, z, s = 1, parent = scene) {
+  if (parent === scene && nearBldg(x, z)) return;
   const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); parent.add(g);
   const t = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.45, 8), mat(0x9a6b4a)); t.position.y = 0.22; t.castShadow = true; g.add(t);
   const crown = new THREE.Group(); g.add(crown);
@@ -491,6 +492,7 @@ function windStep() {
     w.crown.rotation.x = Math.cos(t * 0.8 + 2) * a * 0.6; }
 }
 function house(x, z, wall, roof, ry = 0) {
+  if (nearBldg(x, z, 2.2)) return;
   const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
   box(1.5, 0.95, 1.2, wall, 0, 0.48, 0, 0.05, g);
   const r = new THREE.Mesh(new THREE.ConeGeometry(1.18, 0.62, 4), mat(roof)); r.position.y = 1.26; r.rotation.y = Math.PI / 4; r.scale.set(1, 1, 0.82); r.castShadow = true; g.add(r);
@@ -504,11 +506,16 @@ function lamp(x, z) {
   box(0.2, 0.05, 0.2, 0x4a5568, 0, 1.34, 0, 0.02, g);
 }
 function fence(x, z, len, alongX) {
+  if (nearBldg(x, z, 2.2)) return;
   for (let i = 0; i < len; i++) { const o = (i - (len - 1) / 2) * 0.42;
     box(alongX ? 0.36 : 0.08, 0.34, alongX ? 0.08 : 0.36, 0xd9a86c, x + (alongX ? o : 0), 0.2, z + (alongX ? 0 : o), 0.02); }
 }
 const E = N / 2 * STEP + 0.62;
-[[-E, -E], [E, -E], [-E, E]].forEach(([x, z]) => lamp(x, z));   // 最靠鏡頭的那個角不放,會擋到起點
+// 角落的建築:商店、銀行格的對角線往外一點(第 18 / 36 / 54 格;起點那個角靠鏡頭,不放)。外圍的樹、房子、籬笆、花和路燈都避開這些位置
+const BLDG = (() => { const H = (N - 1) / 2 * STEP + 1.85;
+  return [[1, -1, 1], [2, -1, -1], [3, 1, -1]].map(([k, sx, sz]) => ({ type: TILES[k * (N - 1)], x: sx * H, z: sz * H })).filter((b) => b.type === 'shop' || b.type === 'bank'); })();
+const nearBldg = (x, z, r = 1.9) => BLDG.some((b) => Math.hypot(b.x - x, b.z - z) < r);
+[[-E, -E], [E, -E], [-E, E]].filter(([x, z]) => !nearBldg(x, z, 2.6)).forEach(([x, z]) => lamp(x, z));   // 最靠鏡頭的那個角不放,會擋到起點
 // 外圍:只在「鏡頭對面」的兩側放樹和房子,靠鏡頭這兩側放了會擋到格子
 {
   const walls = [0xfff1dc, 0xffe6ee, 0xeef4ff, 0xfdf6e3], roofs = [0x6fb7c9, 0xf2a35e, 0xe2726b, 0xd9b24a, 0x8fbf6a];
@@ -528,6 +535,42 @@ const E = N / 2 * STEP + 0.62;
     else { tree(near, t, 1 + ((k + 2) % 3) * 0.15); tree(t, near, 1 + (k % 3) * 0.15); }
     if (k % 2 === 1) { fence(E + 0.5, t, 3, false); fence(t, E + 0.5, 3, true); }
     k++;
+  }
+}
+// 角落的商店、銀行建築:和警察局同一種做法(方塊 + 面向鏡頭的招牌)。整棟轉向棋盤中心,招牌另外轉回 45 度正對鏡頭
+function signBoard(parent, zh, en, bg, y, w = 1.5) {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160; const c = cv.getContext('2d');
+  c.fillStyle = bg; c.beginPath(); c.roundRect(0, 0, 512, 160, 26); c.fill();
+  c.strokeStyle = '#fff'; c.lineWidth = 8; c.beginPath(); c.roundRect(8, 8, 496, 144, 20); c.stroke();
+  c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = '900 76px "PingFang TC","Noto Sans TC","Helvetica Neue",Arial,sans-serif'; c.fillText(ZH ? zh : en, 256, ZH ? 64 : 84);
+  if (ZH) { c.font = '900 34px "Helvetica Neue",Arial,sans-serif'; c.fillText(en, 256, 124); }
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.3125), Object.assign(new THREE.MeshBasicMaterial({ map: tex, transparent: true }), { userData: { outlineParameters: { visible: false } } }));
+  sign.position.set(0, y, 0); sign.rotation.y = Math.PI / 4 - parent.rotation.y; parent.add(sign);
+  return sign;
+}
+for (const b of BLDG) {
+  const g = new THREE.Group(); g.position.set(b.x, 0, b.z); g.rotation.y = Math.atan2(-b.x, -b.z); scene.add(g);   // 正面(+z)朝棋盤中心
+  if (b.type === 'shop') {
+    // 商店:白色店面、藍色腰帶和屋頂、藍白條紋遮雨棚、大櫥窗和門
+    box(1.64, 0.18, 1.24, 0x5aa9ff, 0, 0.09, 0, 0.03, g);
+    box(1.6, 0.92, 1.2, 0xfff8ec, 0, 0.6, 0, 0.05, g);
+    box(1.72, 0.12, 1.32, 0x3d86d6, 0, 1.1, 0, 0.04, g);
+    for (let i = 0; i < 5; i++) box(0.32, 0.08, 0.34, i % 2 ? 0xffffff : 0x5aa9ff, -0.64 + i * 0.32, 0.92, 0.74, 0.02, g);
+    box(0.86, 0.4, 0.03, 0xbfe6ff, -0.28, 0.55, 0.61, 0.02, g);
+    box(0.3, 0.56, 0.04, 0x9a6b4a, 0.5, 0.36, 0.61, 0.02, g);
+    signBoard(g, '商店', 'SHOP', '#3d86d6', 1.6);
+  } else {
+    // 銀行:兩層台階、白色主體、前面四根柱子、深藍色橫樑和三角屋頂
+    box(1.9, 0.12, 1.5, 0xe9e2d0, 0, 0.06, 0, 0.03, g);
+    box(1.76, 0.12, 1.36, 0xf3eee2, 0, 0.18, 0, 0.03, g);
+    box(1.5, 0.84, 1.0, 0xfff8ec, 0, 0.66, -0.06, 0.05, g);
+    for (const cx of [-0.54, -0.18, 0.18, 0.54]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.84, 12), mat(0xffffff)); c.position.set(cx, 0.66, 0.56); c.castShadow = true; g.add(c); }
+    box(1.66, 0.14, 1.32, 0x4a63b0, 0, 1.14, 0, 0.04, g);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.12, 0.46, 4), mat(0x4a63b0)); roof.position.y = 1.44; roof.rotation.y = Math.PI / 4; roof.scale.set(1, 1, 0.78); roof.castShadow = true; g.add(roof);
+    box(0.32, 0.5, 0.04, 0x33415c, 0, 0.49, 0.45, 0.02, g);
+    signBoard(g, '銀行', 'BANK', '#4a63b0', 1.95);
   }
 }
 // 中間的大草地:一個小公園(池塘、樹、房子、花)。樹和房子都避開兩條小路(z=4 那排和 z=12 那排)和兩棟建築
@@ -573,7 +616,7 @@ function flowers(n, outer = false) {
     if (outer) {      // 外圈草地:人行道外 0.8~4 格的帶狀區域,避開選角舞台
       const side = Math.floor(Math.random() * 4), t = (Math.random() - 0.5) * 2 * (E + 4), d = E + 0.8 + Math.random() * 3.2;
       [x, z] = side === 0 ? [d, t] : side === 1 ? [-d, t] : side === 2 ? [t, d] : [t, -d];
-      if (Math.hypot(x - STAGE.x, z - STAGE.z) < 4.5) continue;
+      if (Math.hypot(x - STAGE.x, z - STAGE.z) < 4.5 || nearBldg(x, z, 1.4)) continue;
     } else {
       x = (Math.random() - 0.5) * R; z = (Math.random() - 0.5) * R;
       if (Math.hypot((x + 0.8) / 2.3, (z - 0.6) / 1.7) < 1) continue;   // 不要長在池塘裡

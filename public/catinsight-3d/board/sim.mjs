@@ -1,5 +1,5 @@
-import { makeEngine } from './engine.mjs?v=9';
-import { makePolicy } from './nn.mjs?v=1';
+import { makeEngine } from './engine.mjs?v=10';
+import { makePolicy, makeValue } from './nn.mjs?v=2';
 // 遊戲模擬器(純邏輯,不碰畫面)。兩個用途:
 //   1. board.mjs 裡的電腦對手用它做「蒙地卡羅模擬」:每個決策把後面幾回合隨機跑很多次,挑平均最好的那個動作
 //   2. Node 可以直接 import,讓三種電腦(規則 / 期望值 / 蒙地卡羅)互打幾百局,算勝率(tournament.mjs)
@@ -365,13 +365,71 @@ export function makeSim(D, opts = {}) {
   const nnDice = (st, p) => { const lg = NN.dice(withBase(features(st, p.i), evDice(st, p) - 1)); return lg[0] > lg[1] ? 1 : 2; };
   // 輸入 = 局面特徵 + 期望值建議的 one-hot(10 格)
   const withBase = (f, bi) => { const x = new Float32Array(f.length + 10); x.set(f); x[f.length + bi] = 1; return x; };
+
+  /* ───────── AlphaZero 式電腦(az):MCTS 的 PUCT 選擇 + 策略網路先驗 + 價值網路評估 ───────── */
+  // 根節點是這次的候選動作。每次模擬用 PUCT 挑一個動作:Q(平均勝率)+ c·P(策略網路先驗)·√總次數 / (1 + 這個動作的次數),
+  // 先驗高、或目前勝率高的動作會被多模擬幾次。一次模擬 = 做這個動作,其他人照期望值策略往後跑 H 回合(骰子、事件卡都是隨機的),
+  // 然後用價值網路估「從這個局面看,我最後拿第一的機率」,不用一路模擬到結束;遊戲已經結束就直接看輸贏。
+  // 第 k 次模擬某個動作時用第 k 個亂數種子,不同動作的第 k 次面對同一個未來(配對比較,雜訊小)。最後選被模擬最多次的動作
+  // 自我對弈時(az.noise)在先驗上加 Dirichlet 雜訊,讓電腦偶爾試試別的動作,產生更多樣的訓練資料
+  const VAL = opts.nnValue && opts.nnValue.dim === 5 + 8 + 4 + KEYS.length * 8 + 12 ? makeValue(opts.nnValue) : null;
+  if (opts.nnValue && !VAL) console.warn('nn-value.json 的維度和現在的特徵不合:要重新訓練');
+  const AZ = Object.assign({ n: 96, h: 1, c: 1.5, noise: 0 }, opts.az || {});
+  const gammaish = (a) => { let x = 0; for (let i = 0; i < 12; i++) x += rand(); return Math.max(1e-3, (x - 6) * Math.sqrt(a) + a); };   // 近似 Gamma,只用來做 Dirichlet 雜訊
+  function leafValue(c, i) {
+    if (c.over) { const fin = c.players.map((q) => assetsOf(c, q)), me = fin[i], best = Math.max(...fin.filter((_, j) => j !== i)); return me > best ? 1 : me === best ? 0.5 : 0; }
+    return VAL ? VAL.win(features(c, i)) : 0.5 + Math.max(-0.5, Math.min(0.5, lead(c, i) / 40000));
+  }
+  function puct(st, p, cand, prior, simulate) {
+    const n = cand.length, N = new Array(n).fill(0), W = new Array(n).fill(0), seeds = seedsFor(AZ.n), keep = getSeed();
+    let P = prior.slice();
+    if (AZ.noise) { const g = P.map(() => gammaish(0.3)), gs = g.reduce((a, b) => a + b, 0); P = P.map((x, i) => 0.75 * x + 0.25 * g[i] / gs); }
+    const fpu = VAL ? VAL.win(features(st, p.i)) : 0.5;
+    for (let t = 0; t < AZ.n; t++) {
+      const tot = Math.sqrt(t + 1); let bi = 0, bs = -Infinity;
+      for (let a = 0; a < n; a++) { const q = N[a] ? W[a] / N[a] : fpu, u = q + AZ.c * P[a] * tot / (1 + N[a]); if (u > bs) { bs = u; bi = a; } }
+      setSeed(seeds[N[bi] % seeds.length]);
+      W[bi] += simulate(cand[bi]); N[bi]++;
+    }
+    setSeed(keep);
+    let best = 0; for (let a = 1; a < n; a++) if (N[a] > N[best] || (N[a] === N[best] && W[a] / N[a] > W[best] / N[best])) best = a;
+    return { best, N, Q: W.map((w, a) => (N[a] ? w / N[a] : 0)) };
+  }
+  const softmax = (v) => { const m = Math.max(...v), e = v.map((x) => Math.exp(x - m)), s = e.reduce((a, b) => a + b, 0); return e.map((x) => x / s); };
+  function azTrade(st, p, k) {
+    const cand = tradeOptions(st, p, k), evAct = evTrade(st, p, k);
+    if (!cand.some((o) => o.a === evAct.a && (o.q || 0) === (evAct.q || 0))) cand.push(evAct);
+    if (cand.length === 1) return cand[0];
+    const lg = NN ? NN.trade(withBase(features(st, p.i, k), actIndex(evAct))) : null;
+    const prior = lg ? softmax(cand.map((o) => lg[actIndex(o)])) : cand.map(() => 1 / cand.length);
+    const r = puct(st, p, cand, prior, (act) => {
+      const c = clone(st), q = c.players[p.i]; c.players.forEach((x) => { x.alg = 'ev'; });
+      doTrade(c, q, k, act); marginCheck(c);
+      c.turn = (p.i + 1) % c.players.length;
+      if (c.turn === 0) { applyEvent(c, randomEvent(c)); if (c.rolls >= c.maxRounds) c.over = true; }
+      if (!c.over) run(c, c.rolls + AZ.h);
+      return leafValue(c, p.i);
+    });
+    if (opts.onAZ) opts.onAZ({ kind: 'trade', st, p, k, options: cand, visits: r.N, chosen: cand[r.best], base: evAct });
+    return cand[r.best];
+  }
+  function azDice(st, p) {
+    const cand = [1, 2], base = evDice(st, p);
+    const lg = NN ? NN.dice(withBase(features(st, p.i), base - 1)) : null;
+    const prior = lg ? softmax([lg[0], lg[1]]) : [0.5, 0.5];
+    const r = puct(st, p, cand, prior, (nd) => { const c = clone(st); c.players.forEach((x) => { x.alg = 'ev'; }); run(c, c.rolls + AZ.h, { dice: nd }); return leafValue(c, p.i); });
+    if (opts.onAZ) opts.onAZ({ kind: 'dice', st, p, options: cand, visits: r.N, chosen: cand[r.best], base });
+    return cand[r.best];
+  }
   function decideDice(st, p) { if (POL[p.alg]) return POL[p.alg].dice ? POL[p.alg].dice(st, p, api) : evDice(st, p);
     if (p.alg === 'nn' && NN) { const b = asSeen(st, p); return nnDice(b, b.players[p.i]); }
+    if (p.alg === 'az') { const b = asSeen(st, p); return azDice(b, b.players[p.i]); }
     if (p.alg === 'mc') { const b = asSeen(st, p); return mcDice(b, b.players[p.i]); } return p.alg === 'ev' ? evDice(st, p) : 2; }
   // opts.policies:實驗用的自訂策略 { 名字: (st, p, k, api) => 動作 },玩家的 alg 設成那個名字就會用它(tools/ 的分析腳本用)
   const POL = opts.policies || {};
   function decideTrade(st, p, k) { if (POL[p.alg]) return POL[p.alg](st, p, k, api);
     if (p.alg === 'nn' && NN) { const b = asSeen(st, p); return nnTrade(b, b.players[p.i], k); }
+    if (p.alg === 'az') { const b = asSeen(st, p); return azTrade(b, b.players[p.i], k); }
     if (p.alg === 'mc') { const b = asSeen(st, p); return mcTrade(b, b.players[p.i], k); } return p.alg === 'ev' ? evTrade(st, p, k) : ruleTrade(st, p, k); }
 
   /* ───────── 神經網路用的局面特徵 ───────── */
@@ -403,5 +461,5 @@ export function makeSim(D, opts = {}) {
   }
 
   const api = { fill: (st, k, f) => fill(st, k, f), maxLots, acctRatio, assetsOf, evOf, evTrade, tradeOptions, buyF, sellF, shortF, LOT, MARGIN_LOAN };
-  return { nnTrade, nnDice, NN, features, NN_ACTIONS, NN_DIM, actIndex, newGame, clone, playGame, run, playTurn, land, doTrade, tradeOptions, assetsOf, acctRatio, lead, evOf, beliefOf, view, note, leader, EVSTAT, evDice, evTrade, ruleTrade, mcDice, mcTrade, rolloutMean, rolloutAll, tileScore, ipoLots, setSeed, getSeed, rand, MC, EVP, LEVELS, mkPlayer };
+  return { nnTrade, nnDice, NN, VAL, AZ, azTrade, azDice, features, NN_ACTIONS, NN_DIM, actIndex, newGame, clone, playGame, run, playTurn, land, doTrade, tradeOptions, assetsOf, acctRatio, lead, evOf, beliefOf, view, note, leader, EVSTAT, evDice, evTrade, ruleTrade, mcDice, mcTrade, rolloutMean, rolloutAll, tileScore, ipoLots, setSeed, getSeed, rand, MC, EVP, LEVELS, mkPlayer };
 }

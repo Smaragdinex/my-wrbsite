@@ -199,7 +199,7 @@ export function makeEngine(D, opts = {}) {
     const t = new Array(LANE_LEN).fill(null), fixed = PATH_FIXED[type] || {};
     for (const i in fixed) t[i] = fixed[i];
     const free = () => t.map((v, i) => (v ? -1 : i)).filter((i) => i >= 0);
-    const pool = PATH_POOL[type].filter((k) => !Object.values(fixed).includes(k)).sort(() => rand() - 0.5);
+    const pool = PATH_POOL[type].slice().sort(() => rand() - 0.5);      // 池子就是剩下那幾格的種類(可以和固定格重複,例如第二格市場事件)
     for (let i = 0; i < LANE_LEN; i++) if (!t[i]) t[i] = pool.pop();
     return t;
   }
