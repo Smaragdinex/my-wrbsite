@@ -366,70 +366,99 @@ export function makeSim(D, opts = {}) {
   // 輸入 = 局面特徵 + 期望值建議的 one-hot(10 格)
   const withBase = (f, bi) => { const x = new Float32Array(f.length + 10); x.set(f); x[f.length + bi] = 1; return x; };
 
-  /* ───────── AlphaZero 式電腦(az):MCTS 的 PUCT 選擇 + 策略網路先驗 + 價值網路評估 ───────── */
-  // 根節點是這次的候選動作。每次模擬用 PUCT 挑一個動作:Q(平均勝率)+ c·P(策略網路先驗)·√總次數 / (1 + 這個動作的次數),
-  // 先驗高、或目前勝率高的動作會被多模擬幾次。一次模擬 = 做這個動作,其他人照期望值策略往後跑 H 回合(骰子、事件卡都是隨機的),
-  // 然後用價值網路估「從這個局面看,我最後拿第一的機率」,不用一路模擬到結束;遊戲已經結束就直接看輸贏。
-  // 第 k 次模擬某個動作時用第 k 個亂數種子,不同動作的第 k 次面對同一個未來(配對比較,雜訊小)。最後選被模擬最多次的動作
-  // 自我對弈時(az.noise)在先驗上加 Dirichlet 雜訊,讓電腦偶爾試試別的動作,產生更多樣的訓練資料
-  const VAL = opts.nnValue && opts.nnValue.dim === 5 + 8 + 4 + KEYS.length * 8 + 12 ? makeValue(opts.nnValue) : null;
+  /* ───────── 參考 AlphaZero 的電腦(az / azb):多層 open-loop MCTS + 策略網路 + 價值網路 ───────── */
+  // 搜尋樹的每個節點 = 「這位電腦自己的一次決策」(股票格的交易、擲幾顆骰子)。一次模擬:
+  //   1. 從根節點開始,遇到自己的決策就用 PUCT 選子節點:Q(平均勝率)+ c·P(策略網路先驗)·√(兄弟節點總次數) / (1 + 這個子節點的次數)
+  //   2. 骰子、事件卡、對手的行動每次模擬都重新抽(open-loop:樹記的是「動作序列」,不是固定的局面),所以同一個節點每次看到的局面可能不同,
+  //      合法動作也可能不同 —— 只在這次合法的子節點裡選,沒見過的合法動作當場用策略網路給先驗、加進樹
+  //   3. 每次模擬只展開一個新節點;走到新節點之後離開樹:自己用策略網路(選機率最高的)、對手用期望值策略繼續走
+  //   4. 往後走 AZ.h 回合後,用價值網路估「從這位電腦的角度,最後拿第一的機率」;遊戲已經結束就直接看輸贏
+  //   5. 把這個值回傳給這次模擬經過的每一個節點(N + 1、W + 值)
+  // 根節點選被模擬最多次的動作。自我對弈時根節點加 Dirichlet 雜訊、並依次數抽樣(AZ.temp),讓資料比較多樣
+  // az 和 azb 可以用不同的網路(opts.nn / nnValue 給 az,opts.nnB / nnValueB 給 azb),新舊兩代才能直接對打
+  const NETDIM = 5 + 8 + 4 + KEYS.length * 8 + 12;
+  const VAL = opts.nnValue && opts.nnValue.dim === NETDIM ? makeValue(opts.nnValue) : null;
   if (opts.nnValue && !VAL) console.warn('nn-value.json 的維度和現在的特徵不合:要重新訓練');
-  const AZ = Object.assign({ n: 96, h: 1, c: 1.5, noise: 0 }, opts.az || {});
+  const NETS = { az: { pol: NN, val: VAL },
+    azb: { pol: opts.nnB && opts.nnB.dim === NETDIM ? makePolicy(opts.nnB) : NN, val: opts.nnValueB && opts.nnValueB.dim === NETDIM ? makeValue(opts.nnValueB) : VAL } };
+  const AZ = Object.assign({ n: 100, h: 2, c: 1.5, noise: 0, temp: 0 }, opts.az || {});
+  const AZSTAT = { searches: 0, sims: 0, maxDepth: 0, depthSum: 0 };   // 樹實際長到幾層(證據用)
   const gammaish = (a) => { let x = 0; for (let i = 0; i < 12; i++) x += rand(); return Math.max(1e-3, (x - 6) * Math.sqrt(a) + a); };   // 近似 Gamma,只用來做 Dirichlet 雜訊
-  function leafValue(c, i) {
-    if (c.over) { const fin = c.players.map((q) => assetsOf(c, q)), me = fin[i], best = Math.max(...fin.filter((_, j) => j !== i)); return me > best ? 1 : me === best ? 0.5 : 0; }
-    return VAL ? VAL.win(features(c, i)) : 0.5 + Math.max(-0.5, Math.min(0.5, lead(c, i) / 40000));
-  }
-  function puct(st, p, cand, prior, simulate) {
-    const n = cand.length, N = new Array(n).fill(0), W = new Array(n).fill(0), seeds = seedsFor(AZ.n), keep = getSeed();
-    let P = prior.slice();
-    if (AZ.noise) { const g = P.map(() => gammaish(0.3)), gs = g.reduce((a, b) => a + b, 0); P = P.map((x, i) => 0.75 * x + 0.25 * g[i] / gs); }
-    const fpu = VAL ? VAL.win(features(st, p.i)) : 0.5;
-    for (let t = 0; t < AZ.n; t++) {
-      const tot = Math.sqrt(t + 1); let bi = 0, bs = -Infinity;
-      for (let a = 0; a < n; a++) { const q = N[a] ? W[a] / N[a] : fpu, u = q + AZ.c * P[a] * tot / (1 + N[a]); if (u > bs) { bs = u; bi = a; } }
-      setSeed(seeds[N[bi] % seeds.length]);
-      W[bi] += simulate(cand[bi]); N[bi]++;
-    }
-    setSeed(keep);
-    let best = 0; for (let a = 1; a < n; a++) if (N[a] > N[best] || (N[a] === N[best] && W[a] / N[a] > W[best] / N[best])) best = a;
-    return { best, N, Q: W.map((w, a) => (N[a] ? w / N[a] : 0)) };
-  }
   const softmax = (v) => { const m = Math.max(...v), e = v.map((x) => Math.exp(x - m)), s = e.reduce((a, b) => a + b, 0); return e.map((x) => x / s); };
-  function azTrade(st, p, k) {
+  function leafValue(c, i, val) {
+    if (c.over) { const fin = c.players.map((q) => assetsOf(c, q)), me = fin[i], best = Math.max(...fin.filter((_, j) => j !== i)); return me > best ? 1 : me === best ? 0.5 : 0; }
+    return val ? val.win(features(c, i)) : 0.5 + Math.max(-0.5, Math.min(0.5, lead(c, i) / 40000));
+  }
+  // 這個局面的候選動作 + 策略網路先驗。交易:可做的動作 + 期望值建議;擲骰:1 或 2 顆
+  function candidates(st, p, kind, k, pol) {
+    if (kind === 'dice') { const base = evDice(st, p), lg = pol ? pol.dice(withBase(features(st, p.i), base - 1)) : null;
+      return { cand: [1, 2], keys: ['d1', 'd2'], prior: lg ? softmax([lg[0], lg[1]]) : [0.5, 0.5], base }; }
     const cand = tradeOptions(st, p, k), evAct = evTrade(st, p, k);
     if (!cand.some((o) => o.a === evAct.a && (o.q || 0) === (evAct.q || 0))) cand.push(evAct);
-    if (cand.length === 1) return cand[0];
-    const lg = NN ? NN.trade(withBase(features(st, p.i, k), actIndex(evAct))) : null;
-    const prior = lg ? softmax(cand.map((o) => lg[actIndex(o)])) : cand.map(() => 1 / cand.length);
-    const r = puct(st, p, cand, prior, (act) => {
-      const c = clone(st), q = c.players[p.i]; c.players.forEach((x) => { x.alg = 'ev'; });
-      doTrade(c, q, k, act); marginCheck(c);
-      c.turn = (p.i + 1) % c.players.length;
-      if (c.turn === 0) { applyEvent(c, randomEvent(c)); if (c.rolls >= c.maxRounds) c.over = true; }
-      if (!c.over) run(c, c.rolls + AZ.h);
-      return leafValue(c, p.i);
-    });
-    if (opts.onAZ) opts.onAZ({ kind: 'trade', st, p, k, options: cand, visits: r.N, chosen: cand[r.best], base: evAct });
-    return cand[r.best];
+    const lg = pol ? pol.trade(withBase(features(st, p.i, k), actIndex(evAct))) : null;
+    return { cand, keys: cand.map((o) => 't' + actIndex(o)), prior: lg ? softmax(cand.map((o) => lg[actIndex(o)])) : cand.map(() => 1 / cand.length), base: evAct };
   }
-  function azDice(st, p) {
-    const cand = [1, 2], base = evDice(st, p);
-    const lg = NN ? NN.dice(withBase(features(st, p.i), base - 1)) : null;
-    const prior = lg ? softmax([lg[0], lg[1]]) : [0.5, 0.5];
-    const r = puct(st, p, cand, prior, (nd) => { const c = clone(st); c.players.forEach((x) => { x.alg = 'ev'; }); run(c, c.rolls + AZ.h, { dice: nd }); return leafValue(c, p.i); });
-    if (opts.onAZ) opts.onAZ({ kind: 'dice', st, p, options: cand, visits: r.N, chosen: cand[r.best], base });
-    return cand[r.best];
+  let SRCH = null;   // 正在進行的這一次模擬:{ cur 目前節點, inTree, path, me, nets, depth }
+  // 模擬裡輪到這位電腦自己做決定(alg = '_tree'):還在樹裡就用 PUCT 選、往下一層;已經離開樹就用策略網路
+  function treePick(st, p, kind, k) {
+    const S = SRCH, { cand, keys, prior } = candidates(st, p, kind, k, S.nets.pol);
+    if (cand.length === 1) return cand[0];                   // 只有一種選擇(例如只能跳過)不算一層
+    if (!S.inTree) { let bi = 0; for (let i = 1; i < cand.length; i++) if (prior[i] > prior[bi]) bi = i; return cand[bi]; }
+    const node = S.cur, isRoot = S.path.length === 1;
+    let P = prior;
+    if (isRoot && AZ.noise && !node.noised) { const g = P.map(() => gammaish(0.3)), gs = g.reduce((a, b) => a + b, 0); node.noise = g.map((x) => x / gs); node.noised = true; }
+    keys.forEach((key, i) => { if (!node.kids.has(key)) node.kids.set(key, { N: 0, W: 0, P: P[i], kids: new Map() }); });
+    let sumN = 0; keys.forEach((key) => { sumN += node.kids.get(key).N; });
+    const fpu = node.N ? node.W / node.N : 0.5;
+    let bi = 0, bs = -Infinity;
+    keys.forEach((key, i) => { const ch = node.kids.get(key), pr = isRoot && node.noise ? 0.75 * ch.P + 0.25 * node.noise[i] : ch.P;
+      const u = (ch.N ? ch.W / ch.N : fpu) + AZ.c * pr * Math.sqrt(sumN + 1) / (1 + ch.N); if (u > bs) { bs = u; bi = i; } });
+    const child = node.kids.get(keys[bi]); S.path.push(child); S.cur = child; S.depth++;
+    if (child.N === 0) S.inTree = false;                     // 剛展開的新節點:這次模擬到這裡離開樹
+    return cand[bi];
   }
+  function mcts(st, p, kind, k, nets) {
+    const root = { N: 0, W: 0, P: 1, kids: new Map() }, keep = getSeed(), seeds = seedsFor(AZ.n);
+    const rootInfo = candidates(st, p, kind, k, nets.pol);
+    if (rootInfo.cand.length === 1) return rootInfo.cand[0];
+    let maxD = 0;
+    for (let t = 0; t < AZ.n; t++) {
+      setSeed(seeds[t]);                                     // 每次模擬一個新的隨機未來(open-loop)
+      const c = clone(st), q = c.players[p.i]; c.players.forEach((x) => { x.alg = 'ev'; }); q.alg = '_tree';
+      SRCH = { cur: root, inTree: true, path: [root], me: p.i, nets, depth: 0 };
+      if (kind === 'trade') {
+        const act = treePick(c, q, 'trade', k); doTrade(c, q, k, act); marginCheck(c);
+        c.turn = (p.i + 1) % c.players.length;
+        if (c.turn === 0) { applyEvent(c, randomEvent(c)); if (c.rolls >= c.maxRounds) c.over = true; }
+        if (!c.over) run(c, c.rolls + AZ.h);
+      } else { const nd = treePick(c, q, 'dice'); run(c, c.rolls + AZ.h, { dice: nd }); }
+      const v = leafValue(c, p.i, nets.val);
+      for (const nd of SRCH.path) { nd.N++; nd.W += v; }
+      maxD = Math.max(maxD, SRCH.depth); SRCH = null;
+    }
+    setSeed(keep);
+    AZSTAT.searches++; AZSTAT.sims += AZ.n; AZSTAT.maxDepth = Math.max(AZSTAT.maxDepth, maxD); AZSTAT.depthSum += maxD;
+    const visits = rootInfo.keys.map((key) => (root.kids.get(key) || { N: 0 }).N);
+    let bi = 0;
+    const temp = AZ.temp && st.rolls < (AZ.tempRounds ?? Infinity) ? AZ.temp : 0;   // 自我對弈前幾回合依次數抽樣,之後選最多次的
+    if (temp > 0) { const w = visits.map((x) => x ** (1 / temp)), s = w.reduce((a, b) => a + b, 0); let r = rand() * s; for (bi = 0; bi < w.length - 1; bi++) { r -= w[bi]; if (r <= 0) break; } }
+    else for (let i = 1; i < visits.length; i++) if (visits[i] > visits[bi]) bi = i;
+    if (opts.onAZ) opts.onAZ({ kind, st, p, k, options: rootInfo.cand, visits, chosen: rootInfo.cand[bi], base: rootInfo.base, depth: maxD });
+    return rootInfo.cand[bi];
+  }
+  const azTrade = (st, p, k, alg = 'az') => mcts(st, p, 'trade', k, NETS[alg]);
+  const azDice = (st, p, alg = 'az') => mcts(st, p, 'dice', null, NETS[alg]);
   function decideDice(st, p) { if (POL[p.alg]) return POL[p.alg].dice ? POL[p.alg].dice(st, p, api) : evDice(st, p);
     if (p.alg === 'nn' && NN) { const b = asSeen(st, p); return nnDice(b, b.players[p.i]); }
-    if (p.alg === 'az') { const b = asSeen(st, p); return azDice(b, b.players[p.i]); }
+    if (p.alg === '_tree') return treePick(st, p, 'dice');
+    if (p.alg === 'az' || p.alg === 'azb') { const b = asSeen(st, p); return azDice(b, b.players[p.i], p.alg); }
     if (p.alg === 'mc') { const b = asSeen(st, p); return mcDice(b, b.players[p.i]); } return p.alg === 'ev' ? evDice(st, p) : 2; }
   // opts.policies:實驗用的自訂策略 { 名字: (st, p, k, api) => 動作 },玩家的 alg 設成那個名字就會用它(tools/ 的分析腳本用)
   const POL = opts.policies || {};
   function decideTrade(st, p, k) { if (POL[p.alg]) return POL[p.alg](st, p, k, api);
     if (p.alg === 'nn' && NN) { const b = asSeen(st, p); return nnTrade(b, b.players[p.i], k); }
-    if (p.alg === 'az') { const b = asSeen(st, p); return azTrade(b, b.players[p.i], k); }
+    if (p.alg === '_tree') return treePick(st, p, 'trade', k);
+    if (p.alg === 'az' || p.alg === 'azb') { const b = asSeen(st, p); return azTrade(b, b.players[p.i], k, p.alg); }
     if (p.alg === 'mc') { const b = asSeen(st, p); return mcTrade(b, b.players[p.i], k); } return p.alg === 'ev' ? evTrade(st, p, k) : ruleTrade(st, p, k); }
 
   /* ───────── 神經網路用的局面特徵 ───────── */
@@ -461,5 +490,5 @@ export function makeSim(D, opts = {}) {
   }
 
   const api = { fill: (st, k, f) => fill(st, k, f), maxLots, acctRatio, assetsOf, evOf, evTrade, tradeOptions, buyF, sellF, shortF, LOT, MARGIN_LOAN };
-  return { nnTrade, nnDice, NN, VAL, AZ, azTrade, azDice, features, NN_ACTIONS, NN_DIM, actIndex, newGame, clone, playGame, run, playTurn, land, doTrade, tradeOptions, assetsOf, acctRatio, lead, evOf, beliefOf, view, note, leader, EVSTAT, evDice, evTrade, ruleTrade, mcDice, mcTrade, rolloutMean, rolloutAll, tileScore, ipoLots, setSeed, getSeed, rand, MC, EVP, LEVELS, mkPlayer };
+  return { nnTrade, nnDice, NN, VAL, AZ, AZSTAT, azTrade, azDice, features, NN_ACTIONS, NN_DIM, actIndex, newGame, clone, playGame, run, playTurn, land, doTrade, tradeOptions, assetsOf, acctRatio, lead, evOf, beliefOf, view, note, leader, EVSTAT, evDice, evTrade, ruleTrade, mcDice, mcTrade, rolloutMean, rolloutAll, tileScore, ipoLots, setSeed, getSeed, rand, MC, EVP, LEVELS, mkPlayer };
 }

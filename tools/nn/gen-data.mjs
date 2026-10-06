@@ -6,7 +6,8 @@
 //   1 擲骰:蒙地卡羅決定擲 1 顆還是 2 顆
 //   2 局面:每位玩家每次走完的局面(給價值網路學「這個局面最後拿第一的機率」)
 //   3 / 4 az 的交易 / 擲骰:q 欄放 MCTS 的搜尋次數分布(自我對弈時策略網路學這個)
-// 環境變數:MIX=az 改成 az 為主的桌(自我對弈);POLICY / VALUE 指定網路權重;AZN 每步模擬次數
+// 環境變數:MIX=self 純自我對弈(全部座位都是 az;根節點加 Dirichlet 雜訊、前 10 回合依搜尋次數抽樣);MIX=az 舊的混合桌;
+//           POLICY / VALUE 指定網路權重;AZN 每步模擬次數、AZH 模擬往後看幾回合
 // 每筆一列 Float32,欄位見同名的 .json
 import fs from 'node:fs';
 import { gameData } from '../../public/catinsight-3d/board/data.mjs';
@@ -20,7 +21,7 @@ const NA = 10;
 let main = null, rows = [];
 
 const sim = makeSim(D, {
-  seed, nn: load(process.env.POLICY), nnValue: load(process.env.VALUE), az: { n: +process.env.AZN || 96, noise: MIX === 'az' ? 1 : 0 },
+  seed, nn: load(process.env.POLICY), nnValue: load(process.env.VALUE), az: { n: +process.env.AZN || 100, h: +process.env.AZH || 2, noise: MIX === 'az' || MIX === 'self' ? 1 : 0, temp: MIX === 'self' ? 1 : 0, tempRounds: 10 },
   onAZ: ({ kind, st, p, k, options, visits, chosen, base }) => {
     if (!main) return;
     const mask = new Array(NA).fill(0), q = new Array(NA).fill(0), tot = visits.reduce((a, b) => a + b, 0);
@@ -54,7 +55,7 @@ const fd = fs.openSync(out, 'w');
 const t0 = Date.now(); let total = 0;
 for (let g = 0; g < games; g++) {
   const n = 2 + Math.floor(sim.rand() * 3);
-  const pool = MIX === 'az' ? ['az', 'az', 'az', 'ev', 'mc'] : ['rule', 'ev', 'mc'], must = MIX === 'az' ? 'az' : 'mc';
+  const pool = MIX === 'self' ? ['az'] : MIX === 'az' ? ['az', 'az', 'az', 'ev', 'mc'] : ['rule', 'ev', 'mc'], must = MIX === 'az' || MIX === 'self' ? 'az' : 'mc';
   const algs = Array.from({ length: n }, () => pool[Math.floor(sim.rand() * pool.length)]);
   if (!algs.includes(must)) algs[Math.floor(sim.rand() * n)] = must;
   main = sim.newGame(algs, 20, algs.map((a) => LEVEL[a]));

@@ -10,7 +10,9 @@
 import glob, json, sys, time
 import numpy as np, torch, torch.nn as nn
 
+import os
 dirs = sys.argv[1:] or ['tools/nn/data/gen0']
+OUT = os.environ.get('OUT', 'tools/nn/models'); os.makedirs(OUT, exist_ok=True)   # 輸出資料夾(每一代各自一個)
 EPOCHS = 12
 meta = json.load(open(glob.glob(f'{dirs[0]}/part*.json')[0]))
 C = {n: i for i, n in enumerate(meta['cols'])}; W = len(meta['cols']); DIM = meta['dim']; NA = 10
@@ -72,7 +74,7 @@ acc, base, dacc = pol_eval()
 print(f'策略網路:驗證集選擇一致 {acc:.1%}(照期望值建議 {base:.1%});不照建議的猜對 {dacc:.1%}  {time.time() - t0:.0f}s')
 json.dump({'kind': 'policy', 'dim': DIM, 'baseOneHot': NA, 'actions': meta['actions'], 'trained': time.strftime('%Y-%m-%d %H:%M'), 'data': dirs,
            'layers': [fold(pol.body[0]), pack(pol.body[2])], 'trade': pack(pol.trade), 'dice': {**pack(pol.dice)}, 'val': {'acc': acc, 'base': base, 'devAcc': dacc}},
-          open('tools/nn/models/nn-policy.json', 'w'), separators=(',', ':'))
+          open(f'{OUT}/nn-policy.json', 'w'), separators=(',', ':'))
 
 # ───────── 價值網路 ─────────
 def val_tensors(a):
@@ -107,5 +109,5 @@ print(f'價值網路:驗證集 log loss {ll:.4f}(只猜平均勝率 {ll0:.4f}),�
 for lo, pm, wm, k in bins: print(f'  預測 {lo:.1f}~{lo + 0.2:.1f}:平均預測 {pm:.2f},實際勝率 {wm:.2f}({k:,} 筆)')
 json.dump({'kind': 'value', 'dim': DIM, 'trained': time.strftime('%Y-%m-%d %H:%M'), 'data': dirs,
            'layers': [fold(val.body[0]), pack(val.body[3])], 'win': pack(val.win), 'val': {'logloss': ll, 'base': ll0, 'acc': acc}},
-          open('tools/nn/models/nn-value.json', 'w'), separators=(',', ':'))
-print('saved tools/nn/models/nn-policy.json, nn-value.json')
+          open(f'{OUT}/nn-value.json', 'w'), separators=(',', ':'))
+print(f'saved {OUT}/nn-policy.json, nn-value.json')
