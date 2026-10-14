@@ -79,6 +79,7 @@ const cur = { x: innerWidth/2, y: innerHeight/2, tx: innerWidth/2, ty: innerHeig
 const face = document.getElementById('face');
 const pupils = face.querySelectorAll('.pupil');
 const eyesG = document.getElementById('eyes');
+const LOOK = +(face.dataset.look || 4.6);   // 瞳孔最多移多遠(SVG 單位);照片版貓的眼睛比較小,在 HTML 用 data-look 調小
 let fc = { x:0, y:0 };
 function faceCenter(){ const r = face.getBoundingClientRect(); fc.x = r.left + r.width/2; fc.y = r.top + r.height/2; }
 faceCenter(); addEventListener('resize', faceCenter); addEventListener('scroll', faceCenter, {passive:true});
@@ -597,7 +598,7 @@ function frame(){
   { const mv = Math.hypot(cur.tx - cat.lx, cur.ty - cat.ly); cat.lx = cur.tx; cat.ly = cur.ty;
     cat.speed = cat.speed * 0.85 + mv; tabTitle(cat.speed > 1.5, performance.now()); }
   // 貓眼注視
-  { const dx=cur.tx-fc.x, dy=cur.ty-fc.y, d=Math.hypot(dx,dy)||1, k=Math.min(1,d/260)*4.6;
+  { const dx=cur.tx-fc.x, dy=cur.ty-fc.y, d=Math.hypot(dx,dy)||1, k=Math.min(1,d/260)*LOOK;
     const ox=(dx/d*k).toFixed(1), oy=(dy/d*k).toFixed(1);
     pupils.forEach(p=>p.setAttribute('transform',`translate(${ox} ${oy})`)); }
 
