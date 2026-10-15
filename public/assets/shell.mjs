@@ -784,7 +784,8 @@ barba.init({
     try { const u = new URL(href, location.href);
       if (u.origin !== location.origin) return true;
       const p = u.pathname;
-      return !(p === '/' || p === '/index.html' || p === '/about.html');
+      // 只有往 About 用翻頁轉場;首頁(太空梭)和其他頁一律整頁載入
+      return !(p === '/about.html');
     } catch(e){ return true; }
   },
   transitions: [{
