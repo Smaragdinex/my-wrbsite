@@ -71,7 +71,7 @@
   header{display:flex;justify-content:space-between;align-items:flex-start;
     font-size:13px;letter-spacing:.18em;text-transform:uppercase}
   .face{pointer-events:auto;line-height:0;filter:drop-shadow(0 2px 10px rgba(0,0,0,.4))}
-  /* 左上貓:眨眼時兩眼各自壓扁,同構圖的閉眼照片(只取眼睛周圍)淡入蓋上 */
+  /* 左上頭像:#eyes 定時加 .blink —— .eye 會壓扁(眨眼)、.lids 淡入(太空人版是墨鏡閃一道反光) */
   #eyes .eye{transform-box:fill-box;transform-origin:center;transition:transform .12s ease}
   #eyes.blink .eye{transform:scaleY(.08)}
   .face .lids{opacity:0;transition:opacity .08s}
