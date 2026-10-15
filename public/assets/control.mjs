@@ -70,7 +70,8 @@ function tick(now) {
     launchT += dt;
     const s = launchT;
     XP.dissolve = ease(seg(s, 0, 2.8));                        // 0~2.8 秒:顆粒化開
-    XP.warp = ease(seg(s, 2.0, 3.8)) * (1 - ease(seg(s, 6.2, 7.4)));   // 2~7.4 秒:星際穿越
+    XP.warp = ease(seg(s, 2.0, 2.4)) * (1 - ease(seg(s, 6.6, 7.3)));   // 2~7.3 秒:超空間跳躍(星星拉長 → 光隧道 → 跳出)
+    XP.lt = s;                                                     // 給 starship/main.mjs 分段用
     XP.fadeBg = ease(seg(s, 2.4, 4.0));
     XP.flash = Math.sin(Math.PI * seg(s, 6.4, 7.6)) * .7;      // 抵達時一下白光
     XP.ship = ease(seg(s, 6.6, LAUNCH_SEC));                   // 太空梭飛進來

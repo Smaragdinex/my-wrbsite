@@ -1,7 +1,7 @@
-// 星艦裡的六間艙(艦橋 = About Me,其他一間一個作品)。每間照 catinsight-3d 那間 3D 房間的格局:厚底座 + 地板 + 兩面牆,鏡頭從前方 45° 看;
+// 星艦裡的五間艙(一間一個作品;About 是另外的頁面)。每間照 catinsight-3d 那間 3D 房間的格局:厚底座 + 地板 + 兩面牆,鏡頭從前方 45° 看;
 // 牆是艦艙面板 + 發光燈條 + 看得到太空的圓窗。佈置之後照使用者的描述 / 參考圖一間一間改(改這個檔就好)。
 import * as THREE from 'three';
-import { mat, glow, box, cyl, sphere, group, woodTex, panelTex, pot, leafyPlant, rand, textTex } from './kit.mjs';
+import { mat, glow, box, cyl, sphere, group, woodTex, panelTex, pot, leafyPlant, rand, textTex } from './kit.mjs?v=3';
 
 export const S = 6.4, T = 0.42, H = 4.8;   // 地板邊長、牆厚、牆高(跟 3D room 一樣)
 
@@ -81,8 +81,6 @@ export function shell(parent, cfg) {
 // ---------- 五間房的佈置 ----------
 // 每個 builder 拿到房間 group,回傳 { update(t) } 做小動畫
 export const ROOMS = [
-  { key: 'bridge', title: 'Bridge', tag: 'About Me · Portfolio', desc: "Who's behind X-Arts: about me, what I make and how to get in touch.", url: '/about.html',
-    cfg: { slab: 0xc9d3e6, wall: '#e3e9f4', wallB: '#c9d6ec', wallLow: 0x8fa3c8, accent: 0x6cc6ff, floor: 'metal', planet: '#6c8cf0', seed: 6, windows: false, lampColor: 0xe8f2ff } },
   { key: 'kitty', title: 'KittyCafe', tag: 'Web · iOS · Casual Game', desc: 'Serve the pickiest cat customers before the clock runs out.', url: '/kitty-cafe/',
     cfg: { slab: 0xf3c9d6, wall: '#f9d6e1', wallB: '#e6c9f2', wallLow: 0xf3a9bd, accent: 0xff8fb0, floor: 'tile', tileA: 0xfff6f8, tileB: 0xf6c6d4, planet: '#e47aa9', seed: 1 } },
   { key: 'stocks', title: 'Cat Street Stocks', tag: 'Board Game · Stock Market', desc: 'A board game about the stock market, with cats.', url: '/catinsight-3d/',
@@ -96,53 +94,6 @@ export const ROOMS = [
 ];
 
 const D = {};
-// 艦橋(About Me):後牆一整片觀景窗(看得到行星)+ 窗下長操控台、側牆主螢幕「ABOUT ME」、艦長椅、全息 X 投影台
-D.bridge = (R, ctx) => {
-  const zb = -S / 2 + T, xs = -S / 2 + T;
-  const sky = spaceTex('#6c8cf0', 61);
-  box(R, 4.7, 2.15, .1, 0x2b3150, { x: .35, y: 3.05, z: zb + .05, r: .04 });
-  const view = new THREE.Mesh(new THREE.PlaneGeometry(4.45, 1.9), new THREE.MeshBasicMaterial({ map: sky, toneMapped: false })); view.position.set(.35, 3.05, zb + .11); R.add(view);
-  for (const x of [-.75, 1.45]) box(R, .1, 1.95, .08, 0xc7cfdd, { x, y: 3.05, z: zb + .14, r: .02, m: { metalness: .5, roughness: .3 } });
-  // 窗下長操控台:斜面 + 一排小螢幕 + 按鈕燈
-  box(R, 4.6, .9, .75, 0xeef1f7, { x: .35, y: .45, z: zb + .45, r: .06 });
-  box(R, 4.6, .08, .8, 0xb9c4dc, { x: .35, y: .93, z: zb + .5, rx: .3, r: .03 });
-  const cols = [0x7fd0ff, 0x7fe0a0, 0xffd166, 0x7fd0ff, 0xb48bff];
-  cols.forEach((c, k) => { const sc = new THREE.Mesh(new THREE.PlaneGeometry(.62, .34), glow(c, 1.3)); sc.position.set(-1.45 + k * .9, .99, zb + .52); sc.rotation.x = -(Math.PI / 2 - .3); R.add(sc); });
-  // 側牆主螢幕
-  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 600; const g = cv.getContext('2d');
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-  const drawScreen = (blink) => {
-    const gr = g.createLinearGradient(0, 0, 0, 600); gr.addColorStop(0, '#13204a'); gr.addColorStop(1, '#0a1230'); g.fillStyle = gr; g.fillRect(0, 0, 1024, 600);
-    g.strokeStyle = 'rgba(127,208,255,.25)'; g.lineWidth = 2; for (let y = 0; y < 600; y += 6) { g.beginPath(); g.moveTo(0, y); g.lineTo(1024, y); g.stroke(); }
-    g.fillStyle = '#7fd0ff'; g.beginPath(); g.arc(170, 300, 105, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#13204a'; g.beginPath(); g.arc(170, 270, 42, 0, Math.PI * 2); g.fill(); g.beginPath(); g.ellipse(170, 372, 70, 44, 0, Math.PI, 0); g.fill();
-    g.fillStyle = '#ffffff'; g.font = '800 104px "Helvetica Neue", sans-serif'; g.fillText('ABOUT ME', 320, 250);
-    g.fillStyle = 'rgba(255,255,255,.72)'; g.font = '500 46px "Helvetica Neue", sans-serif'; g.fillText('X-ARTS STUDIO', 324, 330); g.fillText('Games · Web · 3D', 324, 392);
-    g.fillStyle = blink ? '#7fe0a0' : 'rgba(127,224,160,.35)'; g.font = '700 40px "SF Mono", Menlo, monospace'; g.fillText('> OPEN PROFILE _', 324, 480);
-    tex.needsUpdate = true;
-  };
-  drawScreen(true);
-  box(R, .1, 1.75, 2.95, 0x2b3150, { x: xs + .05, y: 2.75, z: .35, r: .04 });
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.62), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); scr.position.set(xs + .11, 2.75, .35); scr.rotation.y = Math.PI / 2; R.add(scr);
-  // 艦長椅(面向觀景窗)
-  const ch = group(R, .45, 0, .75);
-  cyl(ch, .32, .4, .12, 0xc9ced9, { y: .06, m: { metalness: .5, roughness: .3 } }); cyl(ch, .08, .1, .42, 0xc9ced9, { y: .32, m: { metalness: .5, roughness: .3 } });
-  box(ch, .8, .16, .78, 0x5aa9e6, { y: .6, r: .07 }); box(ch, .8, .95, .16, 0x5aa9e6, { y: 1.12, z: .36, r: .07, rx: -.12 });
-  for (const x of [-.46, .46]) { box(ch, .12, .1, .62, 0xe9edf5, { x, y: .86, z: .02, r: .04 }); const btn = new THREE.Mesh(new THREE.BoxGeometry(.08, .02, .16), glow(x < 0 ? 0xff7a7a : 0x7fe0a0, 2)); btn.position.set(x, .92, -.15); ch.add(btn); }
-  // 全息投影台:會轉的發光 X
-  const ped = group(R, 2.0, 0, 1.9);
-  cyl(ped, .45, .55, .7, 0xe9edf5, { y: .35 }); cyl(ped, .42, .42, .04, new THREE.MeshStandardMaterial({ color: 0x0b1530, emissive: 0x2a7fd0, emissiveIntensity: .9 }), { y: .72 });
-  const holoM = new THREE.MeshBasicMaterial({ color: 0x7fd0ff, transparent: true, opacity: .6, depthWrite: false, blending: THREE.AdditiveBlending });
-  const X = group(ped, 0, 1.35, 0);
-  for (const rz of [.78, -.78]) { const b = new THREE.Mesh(new THREE.BoxGeometry(.16, .95, .16), holoM); b.rotation.z = rz; X.add(b); }
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(.5, .012, 8, 48), glow(0x7fd0ff, 2.4)); ring.position.y = .85; ring.rotation.x = Math.PI / 2; ped.add(ring);
-  leafyPlant(R, { x: -2.3, z: 2.4, pot: 0xffffff });
-  let acc = 0, on = true;
-  return { update(t, dt) {
-    X.rotation.y = t * .8; X.position.y = 1.35 + Math.sin(t * 1.6) * .05; ring.rotation.z = t;
-    acc += dt; if (acc > .55) { acc = 0; on = !on; drawScreen(on); }
-  } };
-};
 // KittyCafe:沿後牆的吧台(木頭檯面)+ 咖啡機 + 甜點櫃 + 吧台椅、兩張小圓桌、菜單看板、植物、壁燈
 D.kitty = (R, ctx) => {
   const z0 = -S / 2 + T;

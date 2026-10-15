@@ -2,7 +2,7 @@
 // 中後段一階一階往上疊的艦橋塔 + 天線、甲板上的雙管砲塔、側面亮著暖光的機庫口、
 // 艦尾八角形引擎艙(2×2 四顆藍色引擎)、深灰裝甲板 + 很多橘色小窗 + 藍色燈條。艦首朝 -z、艦尾 +z。
 import * as THREE from 'three';
-import { mat, glow, cyl, rand } from './kit.mjs';
+import { mat, glow, cyl, rand } from './kit.mjs?v=3';
 
 // 裝甲板貼圖:大小不一的長方形板塊 + 接縫(顏色由材質決定,貼圖只給明暗)
 function plateTex(seed = 5) {

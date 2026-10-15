@@ -4,9 +4,13 @@
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=4';
-import { ROOMS, buildRoom } from './rooms.mjs?v=3';
-import { createHall, createCorridor } from './hall.mjs?v=4';
+import { createExterior } from './exterior.mjs?v=6';
+import { ROOMS, buildRoom } from './rooms.mjs?v=6';
+import { createHall, createCorridor } from './hall.mjs?v=22';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const canvas = document.getElementById('ship');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -42,8 +46,9 @@ const meteorTex = (() => { const c = document.createElement('canvas'); c.width =
 const meteors = [];
 for (let k = 0; k < 4; k++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: meteorTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); m.visible = false; skyScene.add(m); meteors.push({ m, life: 0, dur: 1, vx: 0, vy: 0 }); }
 let nextMeteor = 1.2;
-function stepSky(dt, t) {
+function stepSky(dt, t, meteorsOn = true) {
   starMat.uniforms.uTime.value = t; nextMeteor -= dt;
+  if (!meteorsOn) { nextMeteor = Math.max(nextMeteor, 1.5); for (const f of meteors) f.m.visible = false; }   // 跳躍 / 轉場時不出現流星
   if (nextMeteor <= 0) { nextMeteor = 1 + Math.random() * 3; const f = meteors.find((x) => !x.m.visible);
     if (f) { const W = innerWidth, H = innerHeight, ang = Math.PI + .35 + Math.random() * .55, sp = 700 + Math.random() * 700, len = 120 + Math.random() * 200;
       f.vx = Math.cos(ang) * sp; f.vy = Math.sin(ang) * sp; f.life = 0; f.dur = .7 + Math.random() * .7; f.m.position.set(W * (.3 + Math.random() * .7), H * (.5 + Math.random() * .5), 0);
@@ -51,17 +56,49 @@ function stepSky(dt, t) {
   for (const f of meteors) { if (!f.m.visible) continue; f.life += dt; f.m.position.x += f.vx * dt; f.m.position.y += f.vy * dt; const k = f.life / f.dur; f.m.material.opacity = Math.sin(Math.PI * Math.min(1, k)); if (k >= 1) f.m.visible = false; }
 }
 
-// ---------- 光速星線(出發後)----------
-const warpScene = new THREE.Scene(), warpCam = new THREE.PerspectiveCamera(70, 1, .1, 400);
-const WN = 1400, wData = [], wPos = new Float32Array(WN * 6), wCol = new Float32Array(WN * 6);
-for (let k = 0; k < WN; k++) { const a = Math.random() * Math.PI * 2, r = 1.2 + Math.pow(Math.random(), .6) * 40; wData.push({ x: Math.cos(a) * r, y: Math.sin(a) * r, z: -Math.random() * 300 });
-  const c = Math.random() < .25 ? [.6, .8, 1] : Math.random() < .35 ? [.85, .75, 1] : [1, 1, 1]; wCol.set([...c, ...c.map((v) => v * .1)], k * 6); }
+// ---------- 超空間跳躍(像《星際大戰》):①前方的星星拉長成放射狀的光線 ②藍白色的光隧道 ③光線縮回成星點、白光、抵達 ----------
+const warpScene = new THREE.Scene(), warpCam = new THREE.PerspectiveCamera(70, 1, .1, 600);
+const WN = 1600, wData = [], wPos = new Float32Array(WN * 6), wCol = new Float32Array(WN * 6);
+for (let k = 0; k < WN; k++) { const a = Math.random() * Math.PI * 2, r = 1.5 + Math.pow(Math.random(), .5) * 45; wData.push({ x: Math.cos(a) * r, y: Math.sin(a) * r, z: -20 - Math.random() * 380 });
+  const c = Math.random() < .3 ? [.65, .82, 1] : [1, 1, 1]; wCol.set([...c, ...c.map((v) => v * .15)], k * 6); }
 const wGeo = new THREE.BufferGeometry(); wGeo.setAttribute('position', new THREE.BufferAttribute(wPos, 3)); wGeo.setAttribute('color', new THREE.BufferAttribute(wCol, 3));
 const wMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
 const warpLines = new THREE.LineSegments(wGeo, wMat); warpLines.frustumCulled = false; warpScene.add(warpLines);
-function stepWarp(dt, w) { const speed = 14 + w * 210, len = 1 + w * 22;
-  for (let k = 0; k < WN; k++) { const d = wData[k]; d.z += speed * dt; if (d.z > 2) d.z -= 300; wPos.set([d.x, d.y, d.z, d.x, d.y, d.z - len], k * 6); }
-  wGeo.attributes.position.needsUpdate = true; wMat.opacity = Math.min(1, w * 1.4); warpCam.rotation.z += dt * w * .12; }
+// 光隧道:包住鏡頭的長圓筒,shader 畫一條條往鏡頭衝過來、會慢慢扭轉的藍白光紋
+const TUN_L = 420;
+const tunMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.BackSide,
+  uniforms: { uTime: { value: 0 }, uOp: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform float uTime, uOp; varying vec2 vUv;
+    float h(float n){ return fract(sin(n * 12.9898) * 43758.5453); }
+    void main(){
+      float a = vUv.x * 72.0 + vUv.y * 9.0 + uTime * .35;              // 繞圈方向的光紋(會扭轉)
+      float lane = floor(a), f = fract(a), r = h(lane);
+      float s = fract(vUv.y * (3.0 + r * 5.0) - uTime * (2.2 + r * 2.5) + r * 7.0);
+      float streak = smoothstep(.0, .5, s) * smoothstep(1.0, .55, s) * smoothstep(.0, .45, f) * smoothstep(1.0, .55, f);
+      vec3 col = mix(vec3(.18, .38, 1.0), vec3(.85, .95, 1.0), streak * (.4 + r * .6));
+      float far = smoothstep(.0, .25, vUv.y), near = smoothstep(1.0, .8, vUv.y);
+      gl_FragColor = vec4(col * (.4 + streak * 1.9), uOp * far * near * (.45 + streak * .55));
+    }` });
+const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, TUN_L, 64, 1, true), tunMat);
+tunnel.rotation.x = Math.PI / 2; tunnel.position.z = -TUN_L / 2 + 15; warpScene.add(tunnel);
+const coreTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.25, 'rgba(170,210,255,.7)'); gr.addColorStop(1, 'rgba(60,110,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })();
+const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: coreTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+core.position.z = -220; core.scale.setScalar(120); warpScene.add(core);
+const segW = (x, a, b) => Math.min(1, Math.max(0, (x - a) / (b - a))), easeW = (t) => t * t * (3 - 2 * t);
+function stepWarp(dt, w, lt, t) {
+  const stretch = easeW(segW(lt, 2.0, 3.3)), tun = easeW(segW(lt, 3.0, 3.7)) * (1 - easeW(segW(lt, 5.6, 6.1))), out = easeW(segW(lt, 5.9, 6.45));
+  const len = 2 + 150 * Math.pow(stretch, 2.2) * (1 - out);            // 光線長度:拉長 → 跳出時一下子縮回星點
+  const speed = 6 + 520 * stretch * (1 - out);
+  for (let k = 0; k < WN; k++) { const d = wData[k]; d.z += speed * dt; if (d.z > 2) d.z -= 400; wPos.set([d.x, d.y, d.z, d.x, d.y, d.z - len], k * 6); }
+  wGeo.attributes.position.needsUpdate = true;
+  wMat.opacity = w * (1 - tun * .88);
+  tunMat.uniforms.uTime.value = t; tunMat.uniforms.uOp.value = tun * w;
+  core.material.opacity = tun * .7 * w; core.scale.setScalar(80 + Math.sin(t * 9) * 5);
+  warpCam.rotation.z += dt * tun * .25;                                  // 隧道裡鏡頭慢慢旋轉
+  warpCam.position.set((Math.random() - .5) * .06 * tun, (Math.random() - .5) * .06 * tun, 0);   // 微微震動
+}
 
 // ---------- 戰艦外觀 ----------
 const extScene = new THREE.Scene(); extScene.environment = envTex;
@@ -87,18 +124,25 @@ const roomCam = new THREE.PerspectiveCamera(30, 1, .1, 200);
 const CAM_OFF = new THREE.Vector3(9.6, 7.0, 9.6).sub(new THREE.Vector3(0, 1.55, 0));
 
 // ---------- 中央大廳 ----------
-const hallScene = new THREE.Scene(); hallScene.environment = envTex;
-hallScene.add(new THREE.HemisphereLight(0xe6eeff, 0x3c3a78, .5));
-const hkey = new THREE.DirectionalLight(0xfff4e8, 1.05); hkey.position.set(7, 14, 9); hkey.castShadow = true; hkey.shadow.mapSize.set(2048, 2048);
+const hallScene = new THREE.Scene(); hallScene.environment = envTex; hallScene.environmentIntensity = .55;
+hallScene.add(new THREE.HemisphereLight(0xfff8ee, 0x8a8478, .3));
+const hkey = new THREE.DirectionalLight(0xfff4e8, .45); hkey.position.set(5, 16, 6); hkey.castShadow = true; hkey.shadow.mapSize.set(2048, 2048);
 Object.assign(hkey.shadow.camera, { near: 1, far: 50, left: -10, right: 10, top: 10, bottom: -10 }); hkey.shadow.bias = -.0015; hkey.shadow.normalBias = .06;
 hallScene.add(hkey);
 const hall = createHall(hallScene, ROOMS); hall.root.updateMatrixWorld(true);
-const hallCam = new THREE.PerspectiveCamera(38, 1, .1, 200);
+const hallCam = new THREE.PerspectiveCamera(56, 1, .1, 200);
+// 大廳另外走後製:暖白燈條、地球儀會有柔和的光暈(bloom)
+const hallComposer = new EffectComposer(renderer);
+hallComposer.addPass(new RenderPass(hallScene, hallCam));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .4, .5, 1.15);   // 門檻高:只有燈條 / 投影會發光,白牆不會 hallComposer.addPass(bloom);
+hallComposer.addPass(new OutputPass());
 
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   const a = innerWidth / innerHeight;
   for (const c of [warpCam, extCam, roomCam, corCam, hallCam]) { c.aspect = a; c.updateProjectionMatrix(); }
+  hallCam.fov = a < 1 ? 80 : 56; hallCam.updateProjectionMatrix();
+  hallComposer.setPixelRatio(renderer.getPixelRatio()); hallComposer.setSize(innerWidth, innerHeight);
   starMat.uniforms.uDpr.value = renderer.getPixelRatio(); buildStars();
 }
 addEventListener('resize', resize); resize();
@@ -127,7 +171,7 @@ function open(w) { if (/^https?:/.test(w.url)) window.open(w.url, '_blank', 'noo
 // ---------- 流程狀態 ----------
 // ext 外觀 → enter(飛進機庫、走通道)→ hall 大廳 → toRoom → room(左右換艙)→ toHall → hall → exit → ext
 let mode = 'ext', t0 = 0, cur = 0, roomF = 0, side = 1, fromDoor = 0, clockT = 0;
-const ENTER = 5.2, TO_ROOM = 1.5, TO_HALL = 1.2, EXIT = 1.6;
+const ENTER = 5.6, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 1.6;
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
 function go(m, extra = {}) { mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
@@ -143,6 +187,22 @@ function nav(kind, d = 0) {
   else if (mode === 'room') { if (kind === 'h' || d > 0) slideTo(cur + d); else { fromDoor = cur; go('toHall'); } }
 }
 window.__shipNav = nav;
+// 從 About 頁按「← Home」回來時,直接回到大廳(離開時在外觀就回到外觀;還在 X 階段就照常從 X 開始)。
+// 只有這條路會接續;重新整理、上一頁、從其他頁面進來,一律從頭開始。
+const SAVE_KEY = 'xarts-ship';
+addEventListener('pagehide', () => { try {
+  if (window.__xp?.state !== 'ship') { sessionStorage.removeItem(SAVE_KEY); return; }
+  sessionStorage.setItem(SAVE_KEY, JSON.stringify({ mode: mode === 'ext' || mode === 'exit' || mode === 'enter' ? 'ext' : 'hall', at: Date.now() }));
+} catch {} });
+addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });   // 按上一頁時瀏覽器會把整頁原封不動還原,這裡改成重新載入 → 從頭開始
+function restore() { try {
+  const saved = JSON.parse(sessionStorage.getItem(SAVE_KEY) || 'null'); sessionStorage.removeItem(SAVE_KEY);   // 只用一次
+  const nav = performance.getEntriesByType('navigation')[0]?.type;
+  let ref = ''; try { const u = new URL(document.referrer); if (u.origin === location.origin) ref = u.pathname; } catch {}
+  if (!saved || nav !== 'navigate' || !/^\/about(\.html)?\/?$/.test(ref) || Date.now() - saved.at > 2 * 3600e3) return;
+  window.__xpDebug?.jump('ship');
+  if (saved.mode === 'hall') go('hall');
+} catch {} }
 window.__ship = { enter: enterShip, toRoom, slideTo, nav, jump(m, i = 0) { cur = roomF = fromDoor = i; go(m, { room: i }); t0 = -99; } };
 
 // ---------- 滑鼠 / 手指:外觀拖曳旋轉、點機庫口、點艙門、點作品艙 ----------
@@ -152,7 +212,10 @@ const setNdc = (e) => ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / inne
 addEventListener('pointermove', setNdc);
 canvas.style.touchAction = 'none';
 canvas.addEventListener('pointerdown', (e) => { setNdc(e); drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY }; if (mode === 'ext') { window.__shipDrag = true; canvas.setPointerCapture(e.pointerId); } });
-canvas.addEventListener('pointermove', (e) => { if (!drag || mode !== 'ext') return;
+canvas.addEventListener('pointermove', (e) => { if (drag && mode === 'hall') {          // 大廳:左右拖 = 轉頭看(上下滑還是交給滾動換層)
+    const dx = e.clientX - drag.x; if (Math.abs(e.clientX - drag.x0) > Math.abs(e.clientY - drag.y0)) window.__shipDrag = true;
+    hallYaw = Math.max(-1.0, Math.min(1.0, hallYaw + dx * .004)); drag.x = e.clientX; drag.y = e.clientY; return; }
+  if (!drag || mode !== 'ext') return;
   dragYaw -= (e.clientX - drag.x) * .0065; dragPitch = Math.min(1.25, Math.max(-1.0, dragPitch + (e.clientY - drag.y) * .005)); drag.x = e.clientX; drag.y = e.clientY; });
 canvas.addEventListener('pointerup', (e) => {
   const moved = drag ? Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) : 99; drag = null; window.__shipDrag = false;
@@ -197,16 +260,26 @@ function drawCorridor(p, t) {
   corCam.position.set(Math.sin(t * 1.3) * .08, .2 + Math.sin(t * 2.1) * .05, z); corCam.lookAt(0, .1, z - 10);
   cor.update(z); renderer.render(corScene, corCam);
 }
-function hallHome(v) {
-  const k = port() ? Math.max(1, 1.12 / hallCam.aspect) : 1;   // 直式螢幕拉遠,六道門都放得下
-  return v.set(0, 10.5 * k, 15.5 * k);
+// 大廳鏡頭:站在入口平視;滑鼠移動有一點視差,拖曳可以左右轉頭看(手機直式看不到全部門時用)
+let hallYaw = 0, lookX = 0, lookY = 0;
+const HALL_POS = V(0, 2.2, 7.4), HALL_T = V(0, 1.55, -3);
+function hallHome(v) { return v.copy(HALL_POS); }
+function hallLook(v) {
+  const has = mode === 'hall' && !drag && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;     // 滑鼠還沒進畫面時 ndc 是 (9, 9),不算
+  lookX += ((has ? ndc.x : 0) * .1 - lookX) * .06; lookY += ((has ? ndc.y : 0) * .05 - lookY) * .06;
+  const yaw = hallYaw - lookX, d = HALL_T.clone().sub(HALL_POS);
+  d.applyAxisAngle(V(0, 1, 0), yaw); d.y += lookY * 6; return v.copy(HALL_POS).add(d);
 }
-const HALL_T = V(0, 1.3, -1.4);
-function drawHallAt(t, dt, pos, tg) { hallCam.position.copy(pos); hallCam.lookAt(tg); hall.update(t, dt); renderer.render(hallScene, hallCam); }
-// 大廳全景;from + k < 1 = 從 from 的位置往全景拉
+function drawHallAt(t, dt, pos, tg) { hallCam.position.copy(pos); hallCam.lookAt(tg); hall.update(t, dt); hallComposer.render(dt); }
+// 從大廳全景走到第 i 道門前(k 0→1):先往上 / 往門的方向弧形繞過中央投影,再降到門口
+function doorPath(i, k, out) {
+  const d = hall.doors[i], p0 = HALL_POS, p1 = d.world(5.2, 3.7), p2 = d.world(.3, 1.6), e = ease(k);
+  out.pos.copy(p0).multiplyScalar((1 - e) * (1 - e)).addScaledVector(p1, 2 * e * (1 - e)).addScaledVector(p2, e * e);
+  out.tgt.copy(hallLook(V(0, 0, 0))).lerp(d.world(-2, 1.4), Math.min(1, e * 1.4)); return out;
+}
 function drawHall(t, dt, from = null, k = 1) {
-  hallHome(camPos); tgt.copy(HALL_T);
-  if (from && k < 1) { camPos.lerpVectors(from.pos, camPos, ease(k)); tgt.lerpVectors(from.tgt, HALL_T, ease(k)); }
+  hallHome(camPos); hallLook(tgt);
+  if (from && k < 1) { const base = tgt.clone(); camPos.lerpVectors(from.pos, camPos, ease(k)); tgt.lerpVectors(from.tgt, base, ease(k)); }
   drawHallAt(t, dt, camPos, tgt);
 }
 function setRoomCam(i, near = 0) {
@@ -231,8 +304,6 @@ function drawRooms(t, dt, near = 0) {
   }
   renderer.setViewport(0, 0, W, H);
 }
-// 站在艙門前的鏡頭(進門 / 出門的轉場用)
-const doorView = (i, d = 2.4) => ({ pos: hall.doors[i].world(d, 1.6), tgt: hall.doors[i].world(-2, 1.5) });
 
 // ---------- 每幀 ----------
 const clock = new THREE.Clock();
@@ -246,8 +317,8 @@ function frame() {
   flashEl.style.opacity = (XP.flash || 0).toFixed(3);
 
   renderer.clear();
-  stepSky(dt, t); renderer.render(skyScene, skyCam);
-  if (warpOn) { stepWarp(dt, XP.warp); renderer.render(warpScene, warpCam); }
+  stepSky(dt, t, XP.state === 'ship' && !warpOn && !busy()); renderer.render(skyScene, skyCam);
+  if (warpOn) { stepWarp(dt, XP.warp, XP.lt ?? 99, t); renderer.render(warpScene, warpCam); }
 
   const k = t - t0;
   let fade = 0;
@@ -256,19 +327,18 @@ function frame() {
     else if (mode === 'enter') {                               // 0~1.7 秒飛進機庫口 → 通道 → 大廳
       if (k < 1.7) { drawExterior(t, 1, k / 1.7); fade = ease(seg(k, 1.35, 1.7)); }
       else if (k < 4.3) { drawCorridor((k - 1.7) / 2.6, t); fade = 1 - ease(seg(k, 1.7, 2.0)) + ease(seg(k, 3.95, 4.3)); }
-      else { drawHall(t, dt, { pos: V(0, 2.2, 13.5), tgt: V(0, 1.8, 0) }, (k - 4.3) / (ENTER - 4.3)); fade = 1 - ease(seg(k, 4.3, 4.65)); }
+      else { drawHall(t, dt, { pos: V(0, 3.0, 7.2), tgt: V(0, 8, -3) }, (k - 4.3) / (ENTER - 4.3)); fade = 1 - ease(seg(k, 4.3, 4.65)); }   // 一進來先抬頭看圓頂,再慢慢看向前方
       if (k >= ENTER) go('hall');
     } else if (mode === 'hall') drawHall(t, dt);
     else if (mode === 'toRoom') {                              // 鏡頭走到艙門前、門滑開、穿進去 → 作品艙
       const d = hall.doors[cur];
-      if (k < .85) { d.open = ease(seg(k, .15, .6)); const v = doorView(cur, .2), a = ease(seg(k, 0, .85));
-        hallHome(camPos).lerp(v.pos, a); tgt.copy(HALL_T).lerp(v.tgt, a); drawHallAt(t, dt, camPos, tgt); fade = ease(seg(k, .6, .85)); }
-      else { d.open = 0; drawRooms(t, dt, 1 - ease(seg(k, .85, TO_ROOM))); fade = 1 - ease(seg(k, .85, 1.15)); }
+      if (k < 1.1) { d.open = ease(seg(k, .1, .7)); const v = doorPath(cur, seg(k, 0, 1.1), { pos: camPos, tgt }); drawHallAt(t, dt, v.pos, v.tgt); fade = ease(seg(k, .85, 1.1)); }
+      else { d.open = 0; drawRooms(t, dt, 1 - ease(seg(k, 1.1, TO_ROOM))); fade = 1 - ease(seg(k, 1.1, 1.4)); }
       if (k >= TO_ROOM) go('room', { room: cur });
     } else if (mode === 'room') { roomF += (cur - roomF) * Math.min(1, dt * 3.2); if (Math.abs(cur - roomF) < .002) roomF = cur; drawRooms(t, dt); }
     else if (mode === 'toHall') {                              // 作品艙淡出 → 從那道艙門前退回大廳全景
       if (k < .35) { drawRooms(t, dt, ease(seg(k, 0, .35)) * .5); fade = ease(seg(k, 0, .35)); }
-      else { drawHall(t, dt, doorView(fromDoor), (k - .35) / (TO_HALL - .35)); fade = 1 - ease(seg(k, .35, .65)); }
+      else { const v = doorPath(fromDoor, 1 - seg(k, .35, TO_HALL), { pos: camPos, tgt }); drawHallAt(t, dt, v.pos, v.tgt); fade = 1 - ease(seg(k, .35, .65)); }
       if (k >= TO_HALL) go('hall');
     } else if (mode === 'exit') {                              // 大廳淡出 → 從機庫口退回太空看整艘船
       if (k < .4) { drawHall(t, dt); fade = ease(seg(k, 0, .4)); }
@@ -292,4 +362,5 @@ function frame() {
   if (arrows) { arrows.classList.toggle('on', inRoom); prevBtn.disabled = cur <= 0; nextBtn.disabled = cur >= ROOMS.length - 1; }
   requestAnimationFrame(frame);
 }
+restore();
 requestAnimationFrame(frame);

@@ -64,15 +64,24 @@ export function pot(parent, r = 0.3, h = 0.42, color = 0xd9784f, o = {}) {
 export function leafyPlant(parent, o = {}) {
   const g = pot(parent, o.r ?? 0.28, o.h ?? 0.4, o.pot ?? 0xf0f0f4, o);
   const leafM = mat(o.leaf ?? 0x35b98a, { roughness: 0.55 }), leafM2 = mat(o.leaf2 ?? 0x2a9a72, { roughness: 0.55 });
-  const n = o.n ?? 11, top = (o.h ?? 0.4) * .95;
+  const n = o.n ?? 11, top = (o.h ?? 0.4) * .95, leaves = g.userData.leaves = [];   // leaves:給「被風吹」動畫用(swayPlant)
   for (let i = 0; i < n; i++) {
     const a = i / n * Math.PI * 2 + Math.random() * .3, tilt = 0.35 + Math.random() * .55, len = (o.len ?? 0.75) * (0.7 + Math.random() * .5);
     const stem = new THREE.Group(); stem.position.y = top; stem.rotation.set(0, a, 0); g.add(stem);
-    const arm = new THREE.Group(); arm.rotation.z = -tilt; stem.add(arm);
+    const arm = new THREE.Group(); arm.rotation.z = -tilt; stem.add(arm); leaves.push({ arm, tilt, a, ph: Math.random() * 6.28, len });
     const leaf = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), i % 2 ? leafM : leafM2);
     leaf.scale.set(0.09, len / 2, 0.025); leaf.position.y = len / 2; leaf.castShadow = true; arm.add(leaf);
   }
   return g;
+}
+// 被風吹:每片葉子照自己的相位擺動,wind 是這一刻的風力(0 ~ 1),dir 是風往哪邊吹(弧度)
+export function swayPlant(g, t, wind = .5, dir = 0) {
+  for (const l of g.userData.leaves || []) {
+    const face = Math.cos(l.a - dir);                       // 順風的葉子被壓低多一點、逆風的往上翻
+    const flutter = Math.sin(t * (5.5 + l.len * 2) + l.ph) * .08 * (.4 + wind);
+    l.arm.rotation.z = -l.tilt - face * wind * .38 + flutter;
+    l.arm.rotation.x = Math.sin(t * 3.1 + l.ph) * .07 * wind;
+  }
 }
 export function rand(seed) { let s = seed; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; }
 
