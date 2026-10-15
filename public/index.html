@@ -1,56 +1,26 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<!-- Google AdSense:驗證網站擁有權 + 放送廣告。必須在每一頁的 <head> 裡 -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5147653290882209" crossorigin="anonymous"></script>
+    <!-- Google AdSense:驗證網站擁有權 + 放送廣告。必須在每一頁的 <head> 裡 -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5147653290882209"
+            crossorigin="anonymous"></script>
+
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#05060c">
-<title>X-Arts</title>
-<link rel="icon" href="data:,">
-<style>
-  /* 首頁:整段由捲動控制 —— X 打開 → 光速穿越太空 → 太空梭 → 進艙,一間艙室一個作品(舊首頁留在 /classic.html) */
-  :root{ --fg:#f2f2f0; --dim:rgba(242,242,240,.6); --accent:#7fd0ff; }
-  *{margin:0;padding:0;box-sizing:border-box}
-  html,body{background:#05060c;color:var(--fg);font-family:"Helvetica Neue",-apple-system,"PingFang TC",sans-serif;-webkit-font-smoothing:antialiased}
-  canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
-  #track{height:1300vh}
-  header{position:fixed;left:0;right:0;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;
-    padding:clamp(16px,3.4vw,44px);pointer-events:none}
-  .face{line-height:0;pointer-events:auto;filter:drop-shadow(0 2px 10px rgba(0,0,0,.4))}
-  #eyes .eye{transform-box:fill-box;transform-origin:center;transition:transform .12s ease}
-  #eyes.blink .eye{transform:scaleY(.08)}
-  .pupil{transition:transform .18s cubic-bezier(.2,.8,.2,1)}
-  .right{display:flex;align-items:flex-start;gap:clamp(16px,2vw,34px);pointer-events:auto}
-  .topnav{display:flex;gap:clamp(14px,1.6vw,26px);padding-top:4px}
-  .topnav a{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg);opacity:.75;text-decoration:none}
-  .topnav a:hover{opacity:1}
-  .brand{text-align:right;font-size:13px;letter-spacing:.18em;text-transform:uppercase}
-  .brand b{display:block;font-weight:700}
-  .brand span{color:var(--dim)}
-  #hint{position:fixed;left:50%;bottom:56px;transform:translateX(-50%);z-index:5;font-size:12px;letter-spacing:.24em;text-transform:uppercase;
-    color:var(--dim);transition:opacity .4s;text-align:center}
-  #hint i{display:block;margin:10px auto 0;width:1px;height:28px;background:linear-gradient(var(--dim),transparent);animation:drip 1.6s infinite}
-  @keyframes drip{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
-  #stage{position:fixed;left:clamp(16px,3.4vw,44px);bottom:clamp(20px,5vh,48px);z-index:5;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
-  #card{position:fixed;right:clamp(16px,3.4vw,44px);bottom:clamp(20px,5vh,48px);z-index:6;width:min(340px,calc(100vw - 32px));
-    background:rgba(8,12,28,.72);backdrop-filter:blur(10px);border:1px solid rgba(127,208,255,.35);border-radius:18px;padding:18px 20px;
-    opacity:0;transform:translateY(12px);transition:opacity .35s,transform .35s;pointer-events:none}
-  #card.on{opacity:1;transform:none;pointer-events:auto}
-  #card small{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
-  #card h2{margin-top:6px;font-size:26px;letter-spacing:-.01em}
-  #card p{margin-top:6px;font-size:14px;line-height:1.5;color:var(--dim)}
-  #card a{display:inline-block;margin-top:12px;padding:10px 16px;border-radius:999px;background:var(--accent);color:#06101e;font-weight:700;text-decoration:none;font-size:14px}
-  #fade{position:fixed;inset:0;z-index:4;background:#dff3ff;opacity:0;pointer-events:none}
-  @media(max-width:600px){ #stage{display:none} #card{left:16px;right:16px;width:auto} .topnav a{font-size:13px;letter-spacing:.1em} .brand span{display:none} .right{gap:12px} }
-</style>
-<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js" } }</script>
+<meta name="theme-color" content="#08080a">
+<title>X-Arts — Selected Works</title>
+<link rel="icon" href="data:,">   <!-- 不顯示分頁圖示 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/css/dseg.css">
+<link rel="stylesheet" href="/assets/site.css?v=11">
 </head>
-<body>
-<canvas id="c"></canvas>
-<div id="track"></div>
-<header>
-  <div class="face" id="face" data-look="5">
+<body data-barba="wrapper" data-ns="home">
+<canvas id="gl"></canvas>
+<div class="cursor" id="cursor"><span class="view">View</span></div>
+
+<!-- ===== 常駐 HUD(Barba 容器外,永不重載) ===== -->
+<div class="wrap">
+  <header>
+    <div class="face" id="face" data-look="5">
       <svg viewBox="0 0 100 100" width="56" height="56" aria-hidden="true">
         <!-- 太空人頭盔(AI 生成)+面罩裡的發光眼睛:.pupil 往滑鼠方向看(shell.mjs),#eyes.blink 時 .eye 壓扁 = 眨眼 -->
         <defs>
@@ -69,343 +39,73 @@
           <circle cx="50" cy="50" r="48.6" fill="none" stroke="#8fd0ff" stroke-width="1.8" filter="url(#ringGlow)"/>
         </g>
       </svg>
+    </div>
+    <div class="topright">
+      <nav class="topnav">
+        <a class="about-link" href="/about.html">About</a>
+        <a href="#contact" data-contact>Contact</a>
+        <a class="home-link" href="/index.html">← Home</a>
+      </nav>
+      <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
+    </div>
+  </header>
+  <div class="center"></div>
+  <footer><span></span><span>xarts.games</span></footer>
+</div>
+
+<!-- ===== Barba 容器:首頁內容(只有這裡會被抽換) ===== -->
+<main data-barba="container" data-barba-namespace="home">
+  <div class="hero"></div>
+  <div class="works" id="works"></div>
+  <div class="worksfoot"><span>That's all for now</span><a href="/about.html">About</a><a href="#" data-contact>Contact</a></div>
+</main>
+
+<!-- ===== 常駐 Contact 面板(Barba 容器外) ===== -->
+<div class="cx" id="contactPanel" role="dialog" aria-label="Contact" aria-hidden="true">
+  <div class="cx-top">
+    <div class="cx-logo">X·ARTS <span>: STUDIO</span></div>
+    <button class="cx-close" id="cxClose" aria-label="關閉">✕</button>
   </div>
-  <div class="right"><nav class="topnav"><a href="/about.html">About</a><a href="mailto:contact@xarts.games">Contact</a></nav><div class="brand"><b>X·ARTS</b><span>Studio — 2026</span></div></div>
-</header>
-<div id="hint">Scroll to launch<i></i></div>
-<div id="stage">01 — X</div>
-<div id="card"><small id="cTag"></small><h2 id="cTitle"></h2><p id="cDesc"></p><a id="cLink" href="#">Enter ↗</a></div>
-<div id="fade"></div>
+  <div class="cx-grid">
+    <div>
+      <div class="cx-lbl">Areas</div>
+      <div class="cx-big">Playground<br>Selected Works<br>Experiments</div>
+    </div>
+    <div class="cx-follow">
+      <div class="cx-lbl">Follow</div>
+      <ul>
+        <li><a href="#" target="_blank" rel="noopener">Instagram</a></li>
+        <li><a href="#" target="_blank" rel="noopener">X</a></li>
+        <li><a href="https://github.com/Smaragdinex" target="_blank" rel="noopener">GitHub</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="cx-lbl">Newsletter</div>
+      <form id="cxForm">
+        <div class="cx-subhead">Subscribe <span>(you may opt out anytime)</span></div>
+        <div class="cx-field"><input type="email" id="cxEmail" placeholder="Email address" required><button type="submit" aria-label="Subscribe">●</button></div>
+      </form>
+    </div>
+    <div>
+      <div class="cx-lbl">Contact</div>
+      <a class="cx-mail" href="mailto:contact@xarts.games">contact@xarts.games</a>
+    </div>
+  </div>
+  <div class="cx-foot">
+    <div class="cx-copy">©2026</div>
+    <div class="cx-tag">X·ARTS Studio — playful, high-craft web experiences</div>
+    <div class="cx-clock">
+      <div class="led"><span class="led-off">88:88:88</span><span class="led-on" id="cxTime">00:00:00</span></div>
+      <em id="cxGreet">Hello</em>
+    </div>
+  </div>
+</div>
 
-<script type="module">
-import * as THREE from 'three';
+<!-- 轉場覆蓋層:SVG path morph 液態揭幕 -->
+<svg class="pt-morph" id="ptMorph" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M 0 100 V 100 Q 50 100 100 100 V 100 z"/></svg>
 
-const WORKS = [
-  { title: 'KittyCafe', tag: 'Web · iOS · Casual Game', desc: 'Serve the pickiest cat customers before the clock runs out.', url: '/kitty-cafe/', img: '/assets/kittycafe.jpg', color: 0xff8fa3 },
-  { title: 'Cat Street Stocks', tag: 'Board Game · Stock Market', desc: 'A board game about the stock market, with cats.', url: '/catinsight-3d/', img: '/assets/cat-board.jpg', color: 0x7fe0a0 },
-  { title: 'Ocean Cleanup', tag: 'iOS Game', desc: 'A casual iOS game about cleaning up the beach.', url: 'https://apps.apple.com/tw/app/id6771914760', img: '/assets/oceancleanup.jpg', color: 0x6fc4ff },
-  { title: 'Tiny Planet', tag: 'Three.js · Flight Sandbox', desc: 'Fly a little plane around a tiny planet.', url: '/tiny-planet/', img: '/assets/tinyplanet.jpg?v=2', color: 0xc6a0ff },
-  { title: 'Wooden Rails', tag: 'Three.js · Track Puzzle', desc: 'A track-laying puzzle built from wooden rails.', url: '/wooden-rails/', img: '/assets/woodenrails.jpg', color: 0xffc56f },
-];
-
-// ---------- 基本 ----------
-const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x05060c);
-const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 3000);
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
-addEventListener('resize', resize); resize();
-const loader = new THREE.TextureLoader();
-const clamp01 = (v) => Math.min(1, Math.max(0, v));
-const seg = (p, a, b) => clamp01((p - a) / (b - a));                 // p 在 [a,b] 之間的進度
-const ease = (t) => t * t * (3 - 2 * t);
-const lerp = (a, b, t) => a + (b - a) * t;
-
-// 捲動進度(0~1),平滑追上
-let target = 0, prog = 0;
-const readScroll = () => { const max = document.documentElement.scrollHeight - innerHeight; target = max > 0 ? scrollY / max : 0; };
-addEventListener('scroll', readScroll, { passive: true }); readScroll();
-
-// 時間軸
-const T = { xOpen: [0.0, 0.16], warp: [0.13, 0.40], ship: [0.40, 0.58], enter: [0.575, 0.61], inside: [0.61, 1.0] };
-
-// ---------- 1) 粒子 X:四隻手臂,往下滑時往外打開 ----------
-function dotTexture() {
-  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.4, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-}
-const DOT = dotTexture();
-const xGroup = new THREE.Group(); scene.add(xGroup);
-const arms = [];
-for (let k = 0; k < 4; k++) {
-  const ang = Math.PI / 4 + k * Math.PI / 2;                      // 45°、135°、225°、315°
-  const N = 2600, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
-  for (let i = 0; i < N; i++) {
-    const along = Math.random() * 8.5, across = (Math.random() - .5) * 2.1 * (1 - along / 30), depth = (Math.random() - .5) * 0.8;
-    pos[i * 3] = along; pos[i * 3 + 1] = across; pos[i * 3 + 2] = depth;
-    const tint = Math.random(); col.set(tint < .15 ? [.6, .9, 1] : tint < .25 ? [.85, .75, 1] : [1, 1, 1], i * 3);
-  }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const m = new THREE.PointsMaterial({ size: 0.16, map: DOT, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-  const pts = new THREE.Points(g, m);
-  const pivot = new THREE.Group(); pivot.rotation.z = ang; pivot.add(pts); xGroup.add(pivot);
-  arms.push({ pivot, pts, ang, m });
-}
-
-// ---------- 2) 星空:一條很長的隧道,光速時拉成線 ----------
-const STARS = 3200, starPos = new Float32Array(STARS * 3);
-for (let i = 0; i < STARS; i++) {
-  const r = 18 + Math.random() * 260, a = Math.random() * Math.PI * 2;
-  starPos.set([Math.cos(a) * r, Math.sin(a) * r, 60 - Math.random() * 1000], i * 3);
-}
-const streakPos = new Float32Array(STARS * 6);
-const streakGeo = new THREE.BufferGeometry(); streakGeo.setAttribute('position', new THREE.BufferAttribute(streakPos, 3));
-const streaks = new THREE.LineSegments(streakGeo, new THREE.LineBasicMaterial({ color: 0xcfe8ff, transparent: true, opacity: .9 }));
-streaks.frustumCulled = false; scene.add(streaks);
-const farStars = (() => {   // 背景遠方的星(不拉線)
-  const N = 2500, p = new Float32Array(N * 3); const v = new THREE.Vector3();
-  for (let i = 0; i < N; i++) { v.randomDirection().multiplyScalar(1400); p.set([v.x, v.y, v.z], i * 3); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-  const pts = new THREE.Points(g, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, color: 0xffffff, transparent: true, opacity: .8 }));
-  scene.add(pts); return pts;
-})();
-
-// ---------- 3) 太空梭(程式建模)----------
-const SHIP_Z = -760;
-const ship = new THREE.Group(); ship.position.set(0, 0, SHIP_Z); scene.add(ship);
-scene.add(new THREE.HemisphereLight(0xbfd8ff, 0x1a1830, 0.9));
-const sunL = new THREE.DirectionalLight(0xffffff, 2.4); sunL.position.set(30, 40, -680); scene.add(sunL);
-{
-  const white = new THREE.MeshStandardMaterial({ color: 0xf2f4f8, roughness: .45, metalness: .15 });
-  const grey = new THREE.MeshStandardMaterial({ color: 0x8b93a6, roughness: .5, metalness: .4 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x141b2e, roughness: .2, metalness: .6 });
-  const glow = (c, i = 3) => new THREE.MeshStandardMaterial({ color: 0x000000, emissive: c, emissiveIntensity: i });
-  // 機身:沿 y 軸旋轉的輪廓,再轉成機頭朝 -z
-  const prof = [[0, 24], [1.4, 23.4], [2.8, 21.6], [3.9, 18.5], [4.5, 14], [4.6, 8], [4.6, -14], [4.35, -17], [3.8, -18.4]].map(([r, y]) => new THREE.Vector2(r, y));
-  const body = new THREE.Mesh(new THREE.LatheGeometry(prof, 48), white); body.rotation.x = -Math.PI / 2; ship.add(body);
-  // 駕駛艙窗
-  const cock = new THREE.Mesh(new THREE.SphereGeometry(3.2, 32, 16, 0, Math.PI * 2, 0, Math.PI / 3.2), dark);
-  cock.position.set(0, 1.9, -17.6); cock.rotation.x = -1.05; ship.add(cock);
-  // 機翼
-  const wingShape = new THREE.Shape(); wingShape.moveTo(0, 0); wingShape.lineTo(13, 9); wingShape.lineTo(13, 13); wingShape.lineTo(0, 18); wingShape.closePath();
-  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: .5, bevelEnabled: true, bevelThickness: .15, bevelSize: .15, bevelSegments: 2 });
-  for (const s of [1, -1]) { const w = new THREE.Mesh(wingGeo, white); w.rotation.x = -Math.PI / 2; w.scale.x = s; w.position.set(s * 3.8, -1.6, 12); ship.add(w);
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(.4, .3, 4), glow(0x7fd0ff, 4)); tip.position.set(s * 16.8, -1.4, 1); ship.add(tip); }
-  // 尾翼
-  const finShape = new THREE.Shape(); finShape.moveTo(0, 0); finShape.lineTo(9, 0); finShape.lineTo(3, 8); finShape.lineTo(0, 8); finShape.closePath();
-  const fin = new THREE.Mesh(new THREE.ExtrudeGeometry(finShape, { depth: .4, bevelEnabled: false }), white); fin.rotation.y = Math.PI / 2; fin.position.set(-.2, 3.6, 17.5); ship.add(fin);
-  // 引擎
-  for (const [x, y] of [[-2.3, -.6], [2.3, -.6], [0, 2.1]]) {
-    const n = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.6, 2.4, 24, 1, true), grey); n.rotation.x = Math.PI / 2; n.position.set(x, y, 19.3); ship.add(n);
-    const g = new THREE.Mesh(new THREE.CircleGeometry(1.15, 24), glow(0x5ab8ff, 6)); g.position.set(x, y, 20.3); ship.add(g);
-  }
-  const engineLight = new THREE.PointLight(0x5ab8ff, 60, 40); engineLight.position.set(0, 0, 24); ship.add(engineLight);
-  // 舷窗(兩側各一排)
-  for (const s of [1, -1]) for (let i = 0; i < 7; i++) {
-    const w = new THREE.Mesh(new THREE.CircleGeometry(.42, 16), glow(i % 3 ? 0xffe2a8 : 0x9fdcff, 2.2));
-    w.position.set(s * 4.62, 1.3, -9 + i * 2.6); w.rotation.y = s * Math.PI / 2; ship.add(w);
-  }
-  // 側邊艙門(左側,鏡頭從這裡進去):外框發光,門板會往上滑開
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.6, 3.4), glow(0x7fd0ff, 2.5)); frame.position.set(-4.62, -.4, 2); ship.add(frame);
-  const door = new THREE.Mesh(new THREE.BoxGeometry(.25, 4.1, 2.9), grey); door.position.set(-4.7, -.4, 2); ship.add(door); ship.userData.door = door;
-  const airlock = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 4.0), new THREE.MeshBasicMaterial({ color: 0xe8f6ff })); airlock.position.set(-4.5, -.4, 2); airlock.rotation.y = -Math.PI / 2; ship.add(airlock);
-  const doorLight = new THREE.PointLight(0xdff3ff, 0, 12); doorLight.position.set(-6, -.4, 2); ship.add(doorLight); ship.userData.doorLight = doorLight;
-}
-const HATCH = new THREE.Vector3(-4.7, -.4, 2 + SHIP_Z);
-
-// ---------- 4) 艙內:一條走廊,一間艙室一個作品 ----------
-const IN_X = 4000;              // 艙內放在很遠的地方,不跟太空場景重疊
-const ROOM = 14, RW = 10, RH = 6;
-const inside = new THREE.Group(); inside.position.set(IN_X, 0, 0); scene.add(inside);
-const screens = [];
-function textTexture(w) {
-  const c = document.createElement('canvas'); c.width = 1024; c.height = 300; const g = c.getContext('2d');
-  g.fillStyle = 'rgba(6,10,24,.92)'; g.fillRect(0, 0, 1024, 300);
-  g.fillStyle = '#' + w.color.toString(16).padStart(6, '0'); g.fillRect(0, 0, 10, 300);
-  g.fillStyle = '#9fb3d9'; g.font = '600 34px "Helvetica Neue", sans-serif'; g.fillText(w.tag.toUpperCase(), 48, 78);
-  g.fillStyle = '#ffffff'; g.font = '700 92px "Helvetica Neue", sans-serif'; g.fillText(w.title, 46, 182);
-  g.fillStyle = '#7fd0ff'; g.font = '600 36px "Helvetica Neue", sans-serif'; g.fillText('CLICK TO ENTER  ↗', 48, 254);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
-}
-function starWindowTexture() {
-  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
-  const gr = g.createRadialGradient(128, 128, 10, 128, 128, 128); gr.addColorStop(0, '#162a5e'); gr.addColorStop(1, '#03050d'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 160; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * .9 + .1})`; const s = Math.random() * 1.8 + .3; g.fillRect(Math.random() * 256, Math.random() * 256, s, s); }
-  g.fillStyle = 'rgba(120,170,255,.25)'; g.beginPath(); g.arc(190, 190, 60, 0, Math.PI * 2); g.fill();
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-}
-{
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xe4e8f0, roughness: .6, metalness: .1 });
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x3a4154, roughness: .7, metalness: .3 });
-  const ribMat = new THREE.MeshStandardMaterial({ color: 0xb9c1d1, roughness: .4, metalness: .5 });
-  const winTex = starWindowTexture();
-  const total = WORKS.length;
-  // 入口氣閘(一小段)
-  // 艙室是「沒有前後牆」的隧道段(地板、天花板、左右牆),前後才看得通
-  function tunnel(parent, len, mat) {
-    const g = new THREE.Group();
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(RW, len), mat); ceil.rotation.x = Math.PI / 2; ceil.position.y = RH; g.add(ceil);
-    for (const sd of [-1, 1]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(len, RH), mat); w.rotation.y = -sd * Math.PI / 2; w.position.set(sd * RW / 2, RH / 2, 0); g.add(w); }
-    parent.add(g); return g;
-  }
-  const airMat = new THREE.MeshStandardMaterial({ color: 0xd8dde8, roughness: .6, side: THREE.DoubleSide });
-  const air = tunnel(inside, 8, airMat); air.position.z = 4;
-  const airFloor = new THREE.Mesh(new THREE.PlaneGeometry(RW, 8), floorMat); airFloor.rotation.x = -Math.PI / 2; airFloor.position.set(0, .01, 4); inside.add(airFloor);
-  const airLamp = new THREE.PointLight(0xffffff, 14, 14, 1.6); airLamp.position.set(0, RH - 1, 4); inside.add(airLamp);
-  WORKS.forEach((w, i) => {
-    const z0 = -i * ROOM, zc = z0 - ROOM / 2, side = i % 2 === 0 ? -1 : 1;   // 螢幕左右輪流
-    const room = new THREE.Group(); room.position.z = zc; inside.add(room);
-    const wm = wallMat.clone(); wm.side = THREE.DoubleSide; wm.color.lerp(new THREE.Color(w.color), .08); tunnel(room, ROOM, wm);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(RW - .1, ROOM), floorMat); floor.rotation.x = -Math.PI / 2; floor.position.y = .01; room.add(floor);
-    // 天花板燈條(作品的代表色)
-    const accent = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: w.color, emissiveIntensity: 2.4 });
-    for (const s of [-1, 1]) { const strip = new THREE.Mesh(new THREE.BoxGeometry(.18, .08, ROOM - 1), accent); strip.position.set(s * (RW / 2 - .6), RH - .05, 0); room.add(strip); }
-    const lamp = new THREE.PointLight(w.color, 18, 16, 1.6); lamp.position.set(0, RH - 1, 0); room.add(lamp);
-    const fill = new THREE.PointLight(0xffffff, 10, 14, 1.6); fill.position.set(0, RH - 1.2, -3); room.add(fill);
-    // 艙壁之間的框(每間的入口)
-    const rib = new THREE.Mesh(new THREE.TorusGeometry(3, .2, 10, 48), ribMat); rib.scale.set((RW / 2 - .15) / 3, (RH / 2 - .1) / 3, 1); rib.position.set(0, RH / 2, ROOM / 2 - .05); room.add(rib);
-    const ribGlow = new THREE.Mesh(new THREE.TorusGeometry(3, .05, 8, 60), accent); ribGlow.scale.set((RW / 2 - .35) / 3, (RH / 2 - .3) / 3, 1); ribGlow.position.set(0, RH / 2, ROOM / 2 - .3); room.add(ribGlow);
-    // 作品螢幕
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(.25, 3.3, 5.6), new THREE.MeshStandardMaterial({ color: 0x1a2033, roughness: .4, metalness: .6 }));
-    frame.position.set(side * (RW / 2 - .14), 3.1, -2.2); room.add(frame);
-    const tex = loader.load(w.img); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    const scr = new THREE.Mesh(new THREE.PlaneGeometry(5.3, 3.0), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-    scr.position.set(side * (RW / 2 - .28), 3.1, -2.2); scr.rotation.y = -side * Math.PI / 2; room.add(scr);
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 1.29), new THREE.MeshBasicMaterial({ map: textTexture(w), toneMapped: false, transparent: true }));
-    label.position.set(side * (RW / 2 - .3), .95, -1.75); label.rotation.y = -side * Math.PI / 2; room.add(label);
-    scr.userData.work = w; label.userData.work = w; screens.push(scr, label);
-    // 對面的圓窗(看得到外面的星空)
-    const win = new THREE.Mesh(new THREE.CircleGeometry(1.3, 40), new THREE.MeshBasicMaterial({ map: winTex }));
-    win.position.set(-side * (RW / 2 - .02), 3.2, 0); win.rotation.y = side * Math.PI / 2; room.add(win);
-    const winRim = new THREE.Mesh(new THREE.TorusGeometry(1.32, .12, 10, 40), ribMat); winRim.position.copy(win.position); winRim.rotation.y = side * Math.PI / 2; room.add(winRim);
-  });
-  // 走廊盡頭的牆
-  const ec = document.createElement('canvas'); ec.width = 1600; ec.height = 960; const eg = ec.getContext('2d');
-  const egr = eg.createLinearGradient(0, 0, 0, 960); egr.addColorStop(0, '#16204a'); egr.addColorStop(1, '#070a18'); eg.fillStyle = egr; eg.fillRect(0, 0, 1600, 960);
-  for (let k = 0; k < 220; k++) { eg.fillStyle = `rgba(255,255,255,${Math.random() * .8 + .1})`; const z = Math.random() * 2.2 + .4; eg.fillRect(Math.random() * 1600, Math.random() * 960, z, z); }
-  eg.textAlign = 'center'; eg.fillStyle = '#7fd0ff'; eg.font = '600 44px "Helvetica Neue", sans-serif'; eg.fillText('END OF THE LINE — FOR NOW', 800, 360);
-  eg.fillStyle = '#ffffff'; eg.font = '700 120px "Helvetica Neue", sans-serif'; eg.fillText('More rooms coming soon', 800, 520);
-  eg.fillStyle = '#9fb3d9'; eg.font = '500 46px "Helvetica Neue", sans-serif'; eg.fillText('contact@xarts.games', 800, 640);
-  const et = new THREE.CanvasTexture(ec); et.colorSpace = THREE.SRGBColorSpace;
-  const endWall = new THREE.Mesh(new THREE.PlaneGeometry(RW, RH), new THREE.MeshBasicMaterial({ map: et, toneMapped: false }));
-  endWall.position.set(0, RH / 2, -total * ROOM + .02); inside.add(endWall);
-}
-const ROOM_STOP = (i) => -(i * ROOM + ROOM / 2) + 3;   // 停在房間後半段,螢幕在斜前方
-const YAW = .74;                                          // 轉頭看螢幕的角度(約 42°)
-
-// ---------- 左上頭像:眼睛跟滑鼠、隨機眨眼 ----------
-{
-  const face = document.getElementById('face'), pupils = face.querySelectorAll('.pupil'), eyesG = document.getElementById('eyes');
-  const LOOK = +(face.dataset.look || 4.6);
-  (function blink() { eyesG.classList.add('blink'); setTimeout(() => eyesG.classList.remove('blink'), 140); setTimeout(blink, 2200 + Math.random() * 3200); })();
-  addEventListener('pointermove', (e) => {
-    const r = face.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / 260) * LOOK;
-    pupils.forEach((p) => p.setAttribute('transform', `translate(${(dx / d * k).toFixed(1)} ${(dy / d * k).toFixed(1)})`));
-  });
-}
-
-// ---------- 點螢幕進作品 ----------
-const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-let hoverWork = null;
-addEventListener('pointermove', (e) => { ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); });
-canvas.addEventListener('click', () => { if (hoverWork) openWork(hoverWork); });
-function openWork(w) { if (/^https?:/.test(w.url)) window.open(w.url, '_blank', 'noopener'); else location.href = w.url; }
-
-// ---------- 畫面 ----------
-const card = document.getElementById('card'), stageEl = document.getElementById('stage'), hint = document.getElementById('hint'), fade = document.getElementById('fade');
-let lastCard = -1;
-const camPath = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(14, 9, SHIP_Z + 62), new THREE.Vector3(-6, 6, SHIP_Z + 40), new THREE.Vector3(-26, 3, SHIP_Z + 14),
-  new THREE.Vector3(-16, 0, SHIP_Z + 3), HATCH.clone().add(new THREE.Vector3(-3.2, 0, 0)), HATCH.clone().add(new THREE.Vector3(-.4, 0, 0)),
-]);
-const clock = new THREE.Clock();
-const lookV = new THREE.Vector3();
-let prevCamZ = 12;
-
-function frame() {
-  const dt = Math.min(.05, clock.getDelta()), t = clock.elapsedTime;
-  prog += (target - prog) * Math.min(1, dt * 6);
-  const p = prog;
-
-  // --- X 打開 ---
-  const xo = ease(seg(p, ...T.xOpen));
-  xGroup.visible = xo < .999;
-  xGroup.rotation.z = Math.sin(t * .25) * .04;
-  arms.forEach((a, k) => {
-    const dir = new THREE.Vector3(Math.cos(a.ang), Math.sin(a.ang), 0);
-    a.pivot.position.copy(dir.multiplyScalar(xo * xo * 9));
-    a.pivot.rotation.set(xo * 1.1 * (k % 2 ? 1 : -1), xo * 1.1 * (k < 2 ? 1 : -1), a.ang + xo * .35);
-    a.m.opacity = 1 - ease(seg(xo, .55, 1));
-    a.m.size = .16 + xo * .12;
-  });
-
-  // --- 鏡頭 ---
-  const inShipPhase = p >= T.ship[0], inside_ = p >= T.enter[1];
-  if (!inShipPhase) {
-    // X → 光速:z 從 12 一路衝到太空梭後方
-    const w = seg(p, T.warp[0], T.warp[1]);
-    const wz = lerp(12, SHIP_Z + 62, ease(w));
-    const xDist = 14 * Math.max(1, .8 / camera.aspect);         // 直式手機把鏡頭拉遠,X 才放得進畫面
-    const z = lerp(xDist, 12, xo) + (wz - 12);
-    camera.position.set(Math.sin(t * .3) * .3 * (1 - w), Math.cos(t * .25) * .2 * (1 - w), z);
-    camera.up.set(0, 1, 0);
-    camera.lookAt(0, 0, z - 10);
-    if (w > .85) { const k = ease(seg(w, .85, 1)); camera.position.lerp(new THREE.Vector3(14, 9, SHIP_Z + 62), k); lookV.set(0, 0, z - 10).lerp(new THREE.Vector3(0, 0, SHIP_Z), k); camera.lookAt(lookV); }
-  } else if (!inside_) {
-    // 繞太空梭到左側艙門
-    const s = ease(seg(p, T.ship[0], T.enter[1]));
-    camera.position.copy(camPath.getPoint(s));
-    const lookShip = new THREE.Vector3(0, 0, SHIP_Z), k = ease(seg(s, .55, .95));
-    lookV.copy(lookShip).lerp(HATCH, k); camera.up.set(0, 1, 0); camera.lookAt(lookV);
-  } else {
-    // 艙內:每間艙室停一下、轉頭看螢幕
-    const q = seg(p, T.inside[0], T.inside[1]);
-    const N = WORKS.length, r = q * (N - .001) - .0;   // 0 ~ N
-    const i = Math.min(N - 1, Math.floor(r)), f = r - i;
-    let z, yaw;
-    if (i === 0 && f < .25) { const e = ease(seg(f, 0, .25)); z = lerp(5, ROOM_STOP(0), e); yaw = lerp(0, -YAW, e); }
-    else {
-      const from = ROOM_STOP(i), to = i + 1 < N ? ROOM_STOP(i + 1) : ROOM_STOP(i) - 3;
-      const e = ease(seg(f, .55, .95));
-      z = lerp(from, to, e);
-      const sFrom = (i % 2 === 0 ? -1 : 1) * YAW, sTo = i + 1 < N ? ((i + 1) % 2 === 0 ? -1 : 1) * YAW : 0;
-      yaw = lerp(sFrom, sTo, e) * Math.abs(Math.cos(Math.PI * e));
-    }
-    camera.position.set(IN_X + Math.sin(t * .6) * .05, 2.2 + Math.sin(t * 1.1) * .04, z);
-    camera.up.set(0, 1, 0);
-    camera.lookAt(IN_X + Math.sin(yaw) * 10, 2.4, z - Math.cos(yaw) * 10);
-    const near = (i === 0 && f < .25) ? -1 : (f < .55 ? i : -1);
-    if (near !== lastCard) {
-      lastCard = near;
-      if (near >= 0) { const w = WORKS[near]; document.getElementById('cTag').textContent = `Room ${String(near + 1).padStart(2, '0')} · ${w.tag}`;
-        document.getElementById('cTitle').textContent = w.title; document.getElementById('cDesc').textContent = w.desc;
-        const a = document.getElementById('cLink'); a.href = w.url; a.target = /^https?:/.test(w.url) ? '_blank' : ''; card.classList.add('on'); }
-      else card.classList.remove('on');
-    }
-  }
-  if (!inside_ && lastCard !== -1) { lastCard = -1; card.classList.remove('on'); }
-
-  // --- 光速星線 ---
-  const speed = Math.abs(camera.position.z - prevCamZ) / Math.max(dt, 1e-3); prevCamZ = camera.position.z;
-  const wv = seg(p, T.warp[0], T.warp[1]);
-  const stretch = inShipPhase ? 0 : Math.max(Math.sin(Math.PI * wv) * 45, Math.min(60, speed * .04));
-  for (let i = 0; i < STARS; i++) {
-    const x = starPos[i * 3], y = starPos[i * 3 + 1], z = starPos[i * 3 + 2];
-    streakPos.set([x, y, z, x, y, z + .4 + stretch], i * 6);
-  }
-  streakGeo.attributes.position.needsUpdate = true;
-  streaks.visible = !inside_;
-  farStars.visible = !inside_;
-
-  // --- 太空梭 ---
-  ship.visible = !inside_;
-  ship.rotation.z = Math.sin(t * .4) * .03; ship.position.y = Math.sin(t * .6) * .4;
-  const doorOpen = ease(seg(p, .54, .575));
-  ship.userData.door.position.y = -.4 + doorOpen * 4.2; ship.userData.doorLight.intensity = doorOpen * 40;
-
-  // --- 進艙的白光轉場 ---
-  const e1 = seg(p, T.enter[0], T.enter[1] - .005), e2 = seg(p, T.enter[1] - .005, T.enter[1] + .02);
-  fade.style.opacity = (p < T.enter[1] - .005 ? ease(e1) : 1 - ease(e2)).toFixed(3);
-
-  // --- 介面文字 ---
-  hint.style.opacity = p < .02 ? 1 : 0;
-  stageEl.textContent = p < T.xOpen[1] ? '01 — X' : p < T.warp[1] ? '02 — Into space' : p < T.enter[1] ? '03 — The shuttle' : '04 — On board · ' + WORKS.length + ' rooms';
-
-  // --- 滑鼠指到螢幕 ---
-  hoverWork = null;
-  if (inside_) { ray.setFromCamera(ndc, camera); const hit = ray.intersectObjects(screens, false)[0]; if (hit && hit.distance < 12) hoverWork = hit.object.userData.work; }
-  canvas.style.cursor = hoverWork ? 'pointer' : '';
-
-  renderer.render(scene, camera);
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-window.__demo = { setProg: (v) => { const max = document.documentElement.scrollHeight - innerHeight; scrollTo(0, v * max); target = prog = v; } };
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@barba/core@2.10.3/dist/barba.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script type="module" src="/assets/shell.mjs?v=12"></script>
 </body>
 </html>
