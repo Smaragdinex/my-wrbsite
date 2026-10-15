@@ -91,13 +91,19 @@ export function createExterior(scene) {
   windowRows(7.08, [-1.6, -1.05, 1.0, 1.55], -26, 23, .42);
 
   // 2) 機庫口(兩側):暖光內部 + 黑色框 + 欄杆
-  const hT = hangarTex();
+  const hT = hangarTex(), hangarGlow = glow(0x7fd0ff, 1.5), hangarHits = [], hangarInside = [];
   for (const s of [-1, 1]) {
     const inside = new THREE.Mesh(new THREE.PlaneGeometry(11.6, 3.6), new THREE.MeshStandardMaterial({ map: hT, emissiveMap: hT, emissive: 0xffffff, emissiveIntensity: 1.3, roughness: 1 }));
     inside.position.set(s * 6.6, .3, 3); inside.rotation.y = s * Math.PI / 2; ship.add(inside);
     block(.9, .5, -3.2, 9.2, { x: s * 6.7, y: 2.35, c: .3, m: M.dark }); block(.9, .5, -3.2, 9.2, { x: s * 6.7, y: -1.75, c: .3, m: M.dark });
     for (const z of [-3, 1, 5, 9]) block(.9, 4.6, z - .25, z + .25, { x: s * 6.7, y: .3, c: .2, m: M.dark });
     const rail = new THREE.Mesh(new THREE.BoxGeometry(.05, .05, 11.6), glow(ORANGE, 1.6)); rail.position.set(s * 6.9, -1.1, 3); ship.add(rail);
+    // 入口外圈的發光框(平常慢慢呼吸,滑鼠移上去變亮)+ 比較大的隱形點擊範圍
+    for (const [y, z, h, d] of [[2.66, 3, .1, 12.9], [-2.06, 3, .1, 12.9], [.3, -3.48, 4.8, .1], [.3, 9.48, 4.8, .1]]) {
+      const e = new THREE.Mesh(new THREE.BoxGeometry(.08, h, d), hangarGlow); e.position.set(s * 7.18, y, z); ship.add(e);
+    }
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(2.2, 6, 14), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); hit.position.set(s * 7, .3, 3); ship.add(hit); hangarHits.push(hit);
+    hangarInside.push(inside.material);
   }
 
   // 3) 上甲板 + 一階一階的艦橋塔
@@ -178,29 +184,22 @@ export function createExterior(scene) {
     const h = new THREE.Sprite(new THREE.SpriteMaterial({ map: gt, color: col, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); h.scale.setScalar(2.6); h.position.copy(l.position); ship.add(h);
     blink.push({ l, h, rate, ph });
   }
-  ship.userData.hangar = new THREE.Object3D(); ship.userData.hangar.position.set(6.6, .3, 3); ship.add(ship.userData.hangar);
 
-  // 8) 背景行星(遠、小,只做比例)+ 大氣光暈
-  const planet = new THREE.Group(); planet.position.set(-260, -150, -520); root.add(planet);
-  const pc = document.createElement('canvas'); pc.width = 1024; pc.height = 512; { const g = pc.getContext('2d');
-    const gr = g.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, '#2b3f88'); gr.addColorStop(.5, '#4f6fc7'); gr.addColorStop(1, '#22306a'); g.fillStyle = gr; g.fillRect(0, 0, 1024, 512);
-    for (let i = 0; i < 26; i++) { g.fillStyle = `rgba(${200 + r() * 55 | 0},${210 + r() * 40 | 0},255,${.05 + r() * .12})`; g.fillRect(0, r() * 512, 1024, 6 + r() * 26); } }
-  const ptex = new THREE.CanvasTexture(pc); ptex.colorSpace = THREE.SRGBColorSpace;
-  planet.add(new THREE.Mesh(new THREE.SphereGeometry(55, 64, 48), new THREE.MeshStandardMaterial({ map: ptex, roughness: .9 })));
-  planet.add(new THREE.Mesh(new THREE.SphereGeometry(57.5, 64, 48), new THREE.ShaderMaterial({ transparent: true, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false,
-    vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vN = normalize(normalMatrix*normal); vec4 mv = modelViewMatrix*vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
-    fragmentShader: 'varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 3.0); gl_FragColor = vec4(vec3(0.45,0.7,1.0)*f*1.6, f); }' })));
   // 太陽光(有陰影,讓一層層的結構有立體感)+ 冷色輪廓光
   const sun = new THREE.DirectionalLight(0xfff1e0, 3.2); sun.position.set(40, 70, 10); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { near: 10, far: 200, left: -40, right: 40, top: 40, bottom: -40 }); sun.shadow.bias = -.0006; sun.shadow.normalBias = .05;
   root.add(sun); root.add(sun.target);
   const rim = new THREE.DirectionalLight(0x8fb6ff, 1.4); rim.position.set(-50, 10, -60); root.add(rim);
 
+  let hov = 0;
   return {
-    root, ship, hangarWorld: () => ship.userData.hangar.getWorldPosition(new THREE.Vector3()),
-    update(t) {
+    root, ship, hangarHits,
+    hangarWorld: (side = 1) => ship.localToWorld(new THREE.Vector3(side * 6.6, .3, 3)),   // 機庫口中心(side = 哪一側)
+    update(t, hover = false) {
+      hov += ((hover ? 1 : 0) - hov) * .12;
+      hangarGlow.emissiveIntensity = 1.2 + (Math.sin(t * 2.4) * .5 + .5) * 1.4 + hov * 4;
+      for (const m of hangarInside) m.emissiveIntensity = 1.3 + hov * 1.2;
       ship.position.y = Math.sin(t * .35) * .5; ship.rotation.z = Math.sin(t * .25) * .02;
-      planet.rotation.y = t * .01;
       for (const f of flames) { const k = .85 + Math.sin(t * 21 + f.ph) * .08 + Math.sin(t * 33 + f.ph * 2) * .05; f.cone.scale.set(1, k, 1); f.halo.material.opacity = .65 + (k - .85) * 2; }
       for (const b of blink) { const on = ((t * b.rate + b.ph) % 1) < .16; b.l.material.emissiveIntensity = on ? 6 : .3; b.h.material.opacity = on ? 1 : .05; }
     },
