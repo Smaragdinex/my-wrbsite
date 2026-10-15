@@ -12,6 +12,34 @@
 <link rel="icon" href="data:,">   <!-- 不顯示分頁圖示 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/css/dseg.css">
 <link rel="stylesheet" href="/assets/site.css?v=11">
+<style>
+  /* 首頁:往下滑 X 隨機打散 → 讀條(要連續快滑)→ 顆粒化開 + 星際穿越 → 太空梭,一間房一個作品(作品格子由房間取代) */
+  /* 頁面本身不捲:滾輪/觸控/鍵盤由 control.mjs 接手 */
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:none}
+  .hero{height:100vh}
+  /* 讀條:要夠快、連續往下滑才會漲,停手就慢慢掉 */
+  #gate{position:fixed;left:50%;bottom:clamp(54px,9vh,96px);transform:translate(-50%,10px);z-index:9;width:min(320px,70vw);text-align:center;
+    opacity:0;transition:opacity .4s,transform .4s;pointer-events:none;color:#f2f2f0}
+  #gate.on{opacity:1;transform:translate(-50%,0)}
+  #gate .lbl{font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:rgba(242,242,240,.7)}
+  #gate .bar{margin-top:12px;height:3px;border-radius:3px;background:rgba(242,242,240,.16);overflow:hidden}
+  #gateFill{height:100%;width:100%;transform-origin:left;transform:scaleX(0);background:linear-gradient(90deg,#9fc4ff,#ffb3d1)}
+  #gatePct{margin-top:10px;font:600 12px/1 "SF Mono",Menlo,monospace;letter-spacing:.1em;color:rgba(242,242,240,.55)}
+  #hint{position:fixed;left:50%;bottom:clamp(54px,9vh,96px);transform:translateX(-50%);z-index:9;font-size:12px;letter-spacing:.28em;text-transform:uppercase;
+    color:rgba(242,242,240,.55);transition:opacity .5s;pointer-events:none}
+  #flash{position:fixed;inset:0;z-index:4;background:#eaf4ff;opacity:0;pointer-events:none}
+  .works,.worksfoot{display:none}
+  canvas#ship{position:fixed;inset:0;width:100%;height:100%;z-index:3;opacity:0;pointer-events:none}
+  #card{position:fixed;right:clamp(16px,3.4vw,44px);bottom:clamp(20px,5vh,48px);z-index:8;width:min(340px,calc(100vw - 32px));
+    background:rgba(16,18,40,.78);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:18px 20px;
+    opacity:0;transform:translateY(12px);transition:opacity .35s,transform .35s;pointer-events:none;color:#f2f2f0}
+  #card.on{opacity:1;transform:none;pointer-events:auto}
+  #card small{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#9fc4ff}
+  #card h2{margin-top:6px;font-size:26px}
+  #card p{margin-top:6px;font-size:14px;line-height:1.5;color:rgba(242,242,240,.65)}
+  #card a{display:inline-block;margin-top:12px;padding:10px 16px;border-radius:999px;background:#9fc4ff;color:#0b1020;font-weight:700;text-decoration:none;font-size:14px}
+  @media(max-width:600px){ #card{left:16px;right:16px;width:auto;bottom:44px} }
+</style>
 </head>
 <body data-barba="wrapper" data-ns="home">
 <canvas id="gl"></canvas>
@@ -106,6 +134,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@barba/core@2.10.3/dist/barba.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-<script type="module" src="/assets/shell.mjs?v=12"></script>
+<canvas id="ship"></canvas>
+<div id="flash"></div>
+<div id="hint">Scroll</div>
+<div id="gate"><div class="lbl">Keep scrolling to launch</div><div class="bar"><div id="gateFill"></div></div><div id="gatePct">0%</div></div>
+<div id="card"><small></small><h2></h2><p></p><a href="#">Enter ↗</a></div>
+<script type="module" src="/assets/control.mjs?v=1"></script>
+<script type="module" src="/assets/shell.mjs?v=14"></script>
+<script type="module" src="/assets/ship.mjs?v=1"></script>
 </body>
 </html>

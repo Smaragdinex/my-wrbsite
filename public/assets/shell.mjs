@@ -196,6 +196,24 @@ function clearRT(rt){ renderer.setRenderTarget(rt); renderer.clear(true,false,fa
 [offA,offB,velA,velB,watA,watB,fluidA,fluidB].forEach(clearRT);   // 初始 offset=0 vel=0 → 粒子先聚成 X
 
 /* --- 旋轉函式：sim 與 render 必須一致（共用同一個 uTime）--- */
+/* 往下滑時 X 隨機打散:只改「家」的位置,粒子靠原本的彈簧+流體追過去,所以保留原本的顆粒和水流感 */
+const OPEN_GLSL = `
+// 往下滑時 X 隨機打散:每顆粒子依自己的位置算出一組亂數 → 往隨機方向散開;
+// 而且不是同時開始,亂數決定誰先剝離,看起來是一顆一顆陸續散掉
+vec3 hash3(vec3 p){
+  p = vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5, 183.3, 246.1)), dot(p, vec3(113.5, 271.9, 124.6)));
+  return fract(sin(p) * 43758.5453);
+}
+vec3 openX(vec3 h, float o){
+  if (o <= 0.0) return h;
+  vec3 r = hash3(h * 7.31 + 0.17);
+  float start = r.x * 0.55;                                  // 0~0.55:什麼時候開始散
+  float k = clamp((o - start) / 0.45, 0.0, 1.0);
+  k = k*k*(3.0-2.0*k);
+  vec3 dir = normalize(hash3(h * 3.17 + 5.3) * 2.0 - 1.0 + vec3(h.xy * 0.35, 0.0));   // 隨機方向(略偏向往外)
+  float dist = 0.6 + r.y * 3.2;
+  return h + dir * dist * k + vec3(0.0, 0.0, k * r.z * 1.5);
+}`;
 const ROT_GLSL = `
 vec3 applyRot(vec3 p, float t){
   // 固定傾角(看得出立體厚度與前後交叉),不隨時間擺動 → X 完全靜止
@@ -244,14 +262,15 @@ uniform sampler2D uHome, uOffPrev, uVelPrev;
 uniform vec3 uMouse;
 uniform sampler2D uFluid;
 uniform mat4 uViewProj;
-uniform float uTime, uDt, uMouseStr, uRadius, uSpring, uDamp, uFlowPush, uZFlow;
+uniform float uTime, uDt, uMouseStr, uRadius, uSpring, uDamp, uFlowPush, uZFlow, uOpen, uDissolve;
+${OPEN_GLSL}
 ${ROT_GLSL}
 void main(){
   vec4 H = texture2D(uHome, vUv);
   vec3 home = H.xyz; float sd = H.w;
   vec3 off = texture2D(uOffPrev, vUv).xyz;
   vec3 vel = texture2D(uVelPrev, vUv).xyz;
-  vec3 Rhome = applyRot(home, uTime);
+  vec3 Rhome = applyRot(openX(home, uOpen), uTime);
   vec3 pos = Rhome + off;
 
   vec3 force = vec3(0.0);
@@ -283,7 +302,14 @@ void main(){
   force += curl * disturb * 1.3;                     // 只有被擾動(離家/流體/滑鼠)時才亂流,靜止完全不動
 
   // 彈簧拉回旋轉中的家（off=pos-Rhome）→ 滑鼠停下時慢慢重組成 X
-  force += -uSpring * off;
+  force += -uSpring * off * (1.0 - uDissolve);
+
+  // 出發時顆粒自己化開:彈簧鬆掉、渦流變強、往外往前飄散
+  if (uDissolve > 0.0){
+    force += curl * uDissolve * 4.5;
+    force.xy += normalize(pos.xy + vec2(1e-4)) * uDissolve * (2.5 + sd * 3.0);
+    force.z  += uDissolve * (2.0 + sd * 3.0);
+  }
 
   vel = (vel + force * uDt) * uDamp;
   gl_FragColor = vec4(vel, 1.0);
@@ -292,7 +318,7 @@ void main(){
     uMouse:{value:new THREE.Vector3(99,99,0)}, uFluid:{value:null}, uViewProj:{value:new THREE.Matrix4()},
     uTime:{value:0}, uDt:{value:0.016},
     uMouseStr:{value:0}, uRadius:{value:0.6}, uSpring:{value:1.15}, uDamp:{value:0.955},
-    uFlowPush:{value:34.0}, uZFlow:{value:9.0} }});
+    uFlowPush:{value:34.0}, uZFlow:{value:9.0}, uOpen:{value:0}, uDissolve:{value:0} }});
 
 /* ===== 粒子位置 sim：offset += vel*dt ===== */
 const offSimMat = new THREE.ShaderMaterial({ vertexShader:fsVert, fragmentShader:`
@@ -392,18 +418,19 @@ geo.setAttribute('aColor', new THREE.BufferAttribute(aColor, 3));
 const pointsMat = new THREE.ShaderMaterial({
   transparent:true, depthTest:false, depthWrite:false, blending:THREE.NormalBlending,
   uniforms:{ uOff:{value:null}, uVel:{value:null}, uTime:{value:0},
-    uSize:{value:Math.min(devicePixelRatio,2)}, uHover:{value:0} },
+    uSize:{value:Math.min(devicePixelRatio,2)}, uHover:{value:0}, uOpen:{value:0}, uDissolve:{value:0} },
   vertexShader:`
 precision highp float;
 attribute vec3 aHome; attribute vec2 aRef; attribute float aSeed; attribute vec3 aColor;
 uniform sampler2D uOff, uVel;
-uniform float uTime, uSize, uHover;
+uniform float uTime, uSize, uHover, uOpen;
 varying float vSpeed; varying float vSeed; varying float vDepth; varying vec3 vColor;
+${OPEN_GLSL}
 ${ROT_GLSL}
 void main(){
   vec3 off = texture2D(uOff, aRef).xyz;
   vec3 vel = texture2D(uVel, aRef).xyz;
-  vec3 pos = applyRot(aHome, uTime) + off;     // 固定 X:被滑鼠打散後靠彈簧回原位
+  vec3 pos = applyRot(openX(aHome, uOpen), uTime) + off;     // X:被滑鼠打散後靠彈簧回原位;往下滑時家位置跟著打開
   vSpeed = length(vel); vSeed = aSeed; vColor = aColor;
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   vDepth = -mv.z;
@@ -414,7 +441,7 @@ void main(){
   fragmentShader:`
 precision highp float;
 varying float vSpeed; varying float vSeed; varying float vDepth; varying vec3 vColor;
-uniform float uTime, uHover;
+uniform float uTime, uHover, uDissolve;
 vec3 oil(float t){ return 0.5 + 0.5*cos(6.28318*(t + vec3(0.0,0.33,0.67))); }
 void main(){
   vec2 pc = gl_PointCoord - 0.5;
@@ -428,7 +455,7 @@ void main(){
   vec3 col = mix(base, mix(base, irid, 0.5), sheen);  // 流動時微微泛汽油虹光
   col += sheen * 0.12 + uHover * 0.06;
 
-  gl_FragColor = vec4(col, a * (0.42 + sheen*0.34 + uHover*0.12));
+  gl_FragColor = vec4(col, a * (0.42 + sheen*0.34 + uHover*0.12) * (1.0 - smoothstep(0.45, 1.0, uDissolve)));
 }`});
 const points = new THREE.Points(geo, pointsMat);
 const pointsScene = new THREE.Scene(); pointsScene.add(points);
@@ -483,15 +510,16 @@ pointsScene.add(starPoints);
    所以 X 核心仍完全固定不動,只是「送」細顆粒往前流 */
 const emberMat = new THREE.ShaderMaterial({
   transparent:true, depthTest:false, depthWrite:false, blending:THREE.AdditiveBlending,
-  uniforms:{ uTime:{value:0}, uSize:{value:Math.min(devicePixelRatio,2)}, uSpeed:{value:0.16}, uDist:{value:3.0}, uAlpha:{value:0.5} },
+  uniforms:{ uTime:{value:0}, uSize:{value:Math.min(devicePixelRatio,2)}, uSpeed:{value:0.16}, uDist:{value:3.0}, uAlpha:{value:0.5}, uOpen:{value:0} },
   vertexShader:`
 precision highp float;
 attribute vec3 aHome; attribute float aSeed;
-uniform float uTime, uSize, uSpeed, uDist;
+uniform float uTime, uSize, uSpeed, uDist, uOpen;
 varying float vB; varying float vCull;
+${OPEN_GLSL}
 ${ROT_GLSL}
 void main(){
-  vec3 pos = applyRot(aHome, uTime);                  // 從固定 X 的位置出發
+  vec3 pos = applyRot(openX(aHome, uOpen), uTime);    // 從 X(或打開中的 X)的位置出發
   float ph = fract(aSeed*17.0 + uTime*uSpeed*(0.6 + aSeed*0.8));
   pos.z += ph * uDist;                                // 往相機(+z)漂→投影上往外匯入星海
   vB = sin(ph * 3.14159);                             // X 處=0(不動到核心)、中途最亮、前緣淡出
@@ -604,7 +632,15 @@ function frame(){
 
   // 捲進作品區後背景(水面 + 粒子 X)淡出;完全淡出時跳過所有 GPU 模擬與繪製,省電也不搶 hover 的流暢度
   { const vh = innerHeight, y = scrollY;
-    let a = 1 - (y - vh*0.30) / (vh*0.45); a = a<0?0:a>1?1:a;
+    // 進度由 control.mjs 控制(頁面不捲):open = X 打開、dissolve = 顆粒化開、warp = 星際穿越、fadeBg = 背景淡出
+    const XP = window.__xp || { open:0, dissolve:0, warp:0, fadeBg:0 };   // About 頁沒有 control.mjs → 全部是 0
+    velSimMat.uniforms.uOpen.value = pointsMat.uniforms.uOpen.value = emberMat.uniforms.uOpen.value = XP.open;
+    velSimMat.uniforms.uDissolve.value = pointsMat.uniforms.uDissolve.value = XP.dissolve;
+    starMat.uniforms.uSpeed.value = 0.09 + XP.warp * 2.6;           // 原本的超空間星場,出發時加速
+    starMat.uniforms.uAlpha.value = 0.7 + XP.warp * 0.3;
+    emberMat.uniforms.uAlpha.value = 0.5 * (1 - XP.dissolve);
+    // 首頁:背景淡出由 control.mjs 決定;About 頁:照原本,捲下去就淡出
+    let a = window.__xp ? 1 - XP.fadeBg : 1 - (y - vh*0.30) / (vh*0.45); a = a<0?0:a>1?1:a;
     if (a !== bgAlpha){ bgAlpha = a; renderer.domElement.style.opacity = a.toFixed(3); }
     if (a <= 0.001){ requestAnimationFrame(frame); return; } }
 
@@ -784,7 +820,8 @@ barba.init({
     try { const u = new URL(href, location.href);
       if (u.origin !== location.origin) return true;
       const p = u.pathname;
-      return !(p === '/' || p === '/index.html' || p === '/about.html');
+      // 首頁改成自己接手捲動(control.mjs 鎖住頁面捲動),用 Barba 換頁會把那些設定帶到 About → 一律整頁載入
+      return true;
     } catch(e){ return true; }
   },
   transitions: [{
