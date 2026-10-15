@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=4';
 import { ROOMS, buildRoom } from './rooms.mjs?v=3';
-import { createHall, createCorridor } from './hall.mjs?v=2';
+import { createHall, createCorridor } from './hall.mjs?v=4';
 
 const canvas = document.getElementById('ship');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -198,10 +198,10 @@ function drawCorridor(p, t) {
   cor.update(z); renderer.render(corScene, corCam);
 }
 function hallHome(v) {
-  const k = port() ? Math.max(1, 1.32 / hallCam.aspect) : 1;   // 直式螢幕拉遠,六道門都放得下
-  return v.set(0, 9.2 * k, 14.2 * k);
+  const k = port() ? Math.max(1, 1.12 / hallCam.aspect) : 1;   // 直式螢幕拉遠,六道門都放得下
+  return v.set(0, 10.5 * k, 15.5 * k);
 }
-const HALL_T = V(0, 1.4, -1.6);
+const HALL_T = V(0, 1.3, -1.4);
 function drawHallAt(t, dt, pos, tg) { hallCam.position.copy(pos); hallCam.lookAt(tg); hall.update(t, dt); renderer.render(hallScene, hallCam); }
 // 大廳全景;from + k < 1 = 從 from 的位置往全景拉
 function drawHall(t, dt, from = null, k = 1) {
