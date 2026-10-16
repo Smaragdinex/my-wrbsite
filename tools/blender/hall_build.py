@@ -361,12 +361,11 @@ for sx in (-1, 1):
     clumps(f'soil_clumps_round_{sx}', pts, top)
     place('pachira_aquatica_01', (sx * 3.6, -5.6, top - .04), sx * .8, 1.0, keep=['_d'])
 soil_cut.hide_render = True; soil_cut.hide_viewport = True
-# 左側休息區:兩張現代扶手椅面對面 + 咖啡桌 + 一盆植物
+# 左側休息區:兩張現代扶手椅面對面 + 咖啡桌(原本旁邊的盆栽跟其他植物不一樣,使用者不要)
 lx, ly = -5.4, -1.0
 place('modern_coffee_table_02', (lx, ly, 0), 0, 1.0, prefix='furn')
 place('modern_arm_chair_01', (lx - .2, ly - 1.05, 0), math.atan2(-(lx - (lx - .2)), (ly - (ly - 1.05))) + math.pi, 1.0, recolor=(['pillow'], mat('fabric_mist', '#c9d3dc', .9)), prefix='furn')
 place('modern_arm_chair_01', (lx + 1.05, ly + .15, 0), math.atan2(-(lx - (lx + 1.05)), (ly - (ly + .15))) + math.pi, 1.0, recolor=(['pillow'], mat('fabric_mist', '#c9d3dc', .9)), prefix='furn')
-place('potted_plant_01', (lx - 1.3, ly + .9, 0), 0, 1.0, recolor=(['pot'], M_CERAMIC))
 # 右側休息區:中古風躺椅 + 腳凳 + 邊桌 + 小盆栽
 # 布面沙發、大理石桌面叫 furn_*:跟建築一起烘光(網頁上看起來跟渲染圖一樣);金屬零件叫 prop_*(即時打光,金屬烘不出來)
 # 右側休息區:北歐輕奢的「豌豆沙發」(使用者給的參考圖):S 形的豆子坐墊 + 一長一短兩條圓滾滾的靠背 + 左端嵌一片古銅色圓托盤、

@@ -555,7 +555,7 @@ export function createHall(scene, rooms) {
     led.material = ledRing.material; chev.material = frame.material = lightM; chev.userData.flash = true; eyes.push(chev); botChev = chev;
     botModel.add(body, led, chev, frame, botRoller);
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
-  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=11'), loadGLB('/assets/starship/models/hall_props.glb?v=11')]).then(([hallM, propsM]) => {
+  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=12'), loadGLB('/assets/starship/models/hall_props.glb?v=12')]).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光
