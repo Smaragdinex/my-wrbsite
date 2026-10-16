@@ -6,13 +6,13 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=7';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
-import { createHall, createCorridor } from './hall.mjs?v=62';
+import { createHall, createCorridor } from './hall.mjs?v=66';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { sfx } from './sfx.mjs?v=1';
+import { sfx } from './sfx.mjs?v=3';
 
 const canvas = document.getElementById('ship');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -237,7 +237,7 @@ window.__ship = { enter: enterShip, toRoom, slideTo, nav, jump(m, i = 0) { cur =
 
 // ---------- 滑鼠 / 手指:外觀拖曳旋轉、點機庫口、點艙門、點作品艙 ----------
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(9, 9);
-let dragYaw = 0, dragPitch = 0, drag = null, hover = -1, hoverHangar = false;
+let dragYaw = 0, dragPitch = 0, drag = null, hover = -1, hoverHangar = false, hoverBot = false;
 const setNdc = (e) => ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
 addEventListener('pointermove', setNdc);
 canvas.style.touchAction = 'none';
@@ -252,6 +252,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (moved > 6) return;                                       // 是拖曳,不是點擊
   setNdc(e); const h = pick();
   if (mode === 'ext' && h === 'hangar') enterShip();
+  else if (mode === 'hall' && h === 'bot') { if (hall.greet(hallCam.position)) sfx.greet(); }   // 點機器人:它會轉過來打招呼
   else if (mode === 'hall' && h >= 0) toRoom(h);
   else if (mode === 'room' && h >= 0) { sfx.click(); open(ROOMS[h]); }
 });
@@ -260,7 +261,7 @@ function pick() {
   if (mode === 'ext') {                                        // 只算看得到的那一側機庫口(被船身擋住的不算)
     ray.setFromCamera(ndc, extCam); const h = ray.intersectObject(ext.ship, true).find((x) => x.object.isMesh);
     return h && ext.hangarHits.includes(h.object) ? 'hangar' : -1; }
-  if (mode === 'hall') { ray.setFromCamera(ndc, hallCam); const h = ray.intersectObjects(hall.hits, false)[0]; return h ? h.object.userData.door : -1; }
+  if (mode === 'hall') { ray.setFromCamera(ndc, hallCam); const h = ray.intersectObjects([...hall.hits, hall.botHit], false)[0]; return !h ? -1 : h.object.userData.bot ? 'bot' : h.object.userData.door; }
   if (mode === 'room' && Math.abs(roomF - cur) < .02) { setRoomCam(cur); ray.setFromCamera(ndc, roomCam); return ray.intersectObjects(rooms[cur].group.children, true).length ? cur : -1; }
   return -1;
 }
@@ -389,14 +390,14 @@ function frame() {
   veil.style.opacity = fade.toFixed(3);
 
   // 滑鼠指到的東西(機庫口 / 艙門 / 作品艙)
-  hover = -1; hoverHangar = false;
-  if (live && !drag) { const h = pick(); if (h === 'hangar') hoverHangar = true; else hover = h; }
+  hover = -1; hoverHangar = false; hoverBot = false;
+  if (live && !drag) { const h = pick(); if (h === 'hangar') hoverHangar = true; else if (h === 'bot') hoverBot = true; else hover = h; }
   hall.doors.forEach((d) => { d.hover += ((mode === 'hall' && hover === d.i ? 1 : 0) - d.hover) * Math.min(1, dt * 8); });
   // 游標:桌機用網站本來的圓球游標,指到作品門 / 機庫口 / 作品艙時縮成小點;手機或窄螢幕才用系統游標
-  const onThing = live && (hoverHangar || hover >= 0);
+  const onThing = live && (hoverHangar || hoverBot || hover >= 0);
   cursorEl?.classList.toggle('ondoor', onThing);
   canvas.style.cursor = fineCursor ? '' : onThing ? 'pointer' : mode === 'ext' ? (drag ? 'grabbing' : 'grab') : '';
-  const hk = hoverHangar ? 'h' : hover; if (hk !== lastHk) { if (hk !== -1 && live) sfx.hover(); lastHk = hk; }   // 滑到新的東西:滴一聲
+  const hk = hoverHangar ? 'h' : hoverBot ? 'b' : hover; if (hk !== lastHk) { if (hk !== -1 && live) sfx.hover(); lastHk = hk; }   // 滑到新的東西:滴一聲
   if (sfxBtn) sfxBtn.classList.toggle('on', live);
 
   // UI:作品卡、圓點、左右箭頭、返回鈕

@@ -450,10 +450,33 @@ export function createHall(scene, rooms) {
   const brushes = [-1, 1].map((x) => { const br = group(bot, x * .3, .015, -.26); for (let k = 0; k < 3; k++) { const f = new THREE.Mesh(new THREE.BoxGeometry(.015, .006, .17), mat(0x8a8f99)); f.rotation.y = k * Math.PI * 2 / 3; f.position.set(Math.sin(k * Math.PI * 2 / 3) * .07, 0, Math.cos(k * Math.PI * 2 / 3) * .07); br.add(f); } return br; });
   const shadowBlob = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), tintMat('blob', 0x6a645a, 1)); shadowBlob.rotation.x = -Math.PI / 2; shadowBlob.position.y = .021; bot.add(shadowBlob);
   bot.traverse((o) => { if (o.isMesh) o.castShadow = true; }); bot.scale.setScalar(1.35);
+  // 點機器人會打招呼:一個看不見的方塊當點擊範圍
+  const botHit = new THREE.Mesh(new THREE.BoxGeometry(.62, .82, .42), new THREE.MeshBasicMaterial({ visible: false }));
+  botHit.position.y = .41; botHit.userData.bot = true; bot.add(botHit);
+  // 打招呼時正面亮起一塊小螢幕,畫笑臉 ^‿^(蓋住 ︿ 燈和相機圓環那一段;顏色乘 1.6 讓白線超過 bloom 門檻、會發光)
+  const face = (() => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 272; const g = c.getContext('2d');
+    g.fillStyle = '#0a0d12'; g.beginPath(); g.roundRect(6, 6, 244, 260, 34); g.fill();
+    g.strokeStyle = '#ffffff'; g.lineWidth = 17; g.lineCap = 'round'; g.shadowColor = '#9fe4ff'; g.shadowBlur = 18;
+    for (const x of [78, 178]) { g.beginPath(); g.arc(x, 112, 30, Math.PI * 1.12, Math.PI * 1.88); g.stroke(); }   // 開心瞇起來的眼睛 ^ ^
+    g.beginPath(); g.arc(128, 150, 66, Math.PI * .18, Math.PI * .82); g.stroke();                                     // 大大的笑
+    g.shadowBlur = 0; g.fillStyle = 'rgba(255,143,176,.55)';
+    for (const x of [48, 208]) { g.beginPath(); g.ellipse(x, 168, 20, 11, 0, 0, Math.PI * 2); g.fill(); }            // 腮紅
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(.136, .145), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0, toneMapped: false }));
+    m.material.color.setScalar(1.6); m.rotation.y = Math.PI; m.position.set(0, .54, -.0975); m.visible = false; return m;
+  })();
+  botBody.add(face);
+  const GREET_SEC = 3.4;
+  function greet(camPos) {
+    if (B.greet > 0) return false;
+    B.greet = GREET_SEC; B.cx = camPos.x; B.cz = camPos.z;
+    return true;
+  }
   const AVOID = [[-5.6, 1.0, 1.9], [5.34, 1.57, 2.1], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
   const okPt = (x, z) => AVOID.every(([ax, az, r]) => Math.hypot(x - ax, z - az) > r);
   const clearPath = (x0, z0, x1, z1) => { for (let k = 1; k <= 12; k++) { const u = k / 12, x = x0 + (x1 - x0) * u, z = z0 + (z1 - z0) * u, rr = Math.hypot(x, z); if (!okPt(x, z) || rr < 2.5 || rr > 6.9) return false; } return true; };
-  const B = { x: -3.2, z: -2.6, h: Math.PI / 2, tx: 0, tz: 0, wait: 0, speed: 0, dir: 1 };   // dir:沿著圈繞的方向,偶爾掉頭
+  const B = { x: -3.2, z: -2.6, h: Math.PI / 2, tx: 0, tz: 0, wait: 0, speed: 0, dir: 1, greet: 0, cx: 0, cz: 0 };   // dir:沿著圈繞的方向,偶爾掉頭
   function nextTarget() {
     if (Math.random() < .08) B.dir *= -1;
     const a0 = Math.atan2(B.x, -B.z);
@@ -465,7 +488,16 @@ export function createHall(scene, rooms) {
   }
   nextTarget(); window.__hallBot = B;   // 測試用:可以把機器人停到鏡頭前
   function stepBot(t, dt) {
-    if (B.wait > 0) { B.wait -= dt; B.speed = Math.max(0, B.speed - dt * 1.5); }
+    if (B.greet > 0) {                                                                         // 打招呼:停下 → 轉向鏡頭 → 鞠躬兩下 + 笑臉 → 回去打掃
+      B.greet -= dt; B.speed = Math.max(0, B.speed - dt * 4);
+      const want = Math.atan2(-(B.cx - B.x), -(B.cz - B.z)); let dh = want - B.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+      B.h += Math.sign(dh) * Math.min(Math.abs(dh), dt * 5);
+      const g = GREET_SEC - B.greet, p = Math.min(1, Math.max(0, (g - .45) / 1.3));
+      botBody.rotation.x = -.2 * Math.sin(p * Math.PI * 2) ** 2;                                // 往前鞠躬兩下(底部當支點)
+      const fk = Math.min(1, Math.max(0, (g - .25) / .25)) * Math.min(1, B.greet / .3);       // 笑臉螢幕亮起 → 最後暗掉
+      face.visible = fk > 0; face.material.opacity = fk; if (botChev) botChev.visible = fk < .5;
+      if (B.greet <= 0) { botBody.rotation.x = 0; face.visible = false; if (botChev) botChev.visible = true; B.wait = .4; nextTarget(); }
+    } else if (B.wait > 0) { B.wait -= dt; B.speed = Math.max(0, B.speed - dt * 1.5); }
     else {
       const dx = B.tx - B.x, dz = B.tz - B.z, dist = Math.hypot(dx, dz);
       const want = Math.atan2(-dx, -dz); let dh = want - B.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
@@ -477,8 +509,8 @@ export function createHall(scene, rooms) {
     B.x += -Math.sin(B.h) * B.speed * dt; B.z += -Math.cos(B.h) * B.speed * dt;
     bot.position.set(B.x, 0, B.z); bot.rotation.y = B.h;
     botBody.position.y = Math.sin(t * 18) * .003 * (B.speed > .05 ? 1 : 0);
-    const spin = 8 + B.speed * 14; brushes[0].rotation.y += dt * spin; brushes[1].rotation.y -= dt * spin;
-    const blink = (t % 3.7) < .12; eyes.forEach((e) => { if (e.userData.sz) e.scale.z = e.userData.sz * (blink ? .15 : 1); else e.scale.y = blink ? .15 : 1; });   // 模型版眼睛是平躺的橢圓,眨眼壓前後方向
+    const spin = 8 + B.speed * 14; brushes.forEach((br, k) => { br.rotation.y += dt * spin * (k ? -1 : 1); }); if (botRoller) botRoller.rotation.z += dt * B.speed * 14;
+    const blink = (t % 3.7) < .12; eyes.forEach((e) => { if (e.userData.flash) { if (!(B.greet > 0)) e.visible = !blink; } else e.scale.y = blink ? .15 : 1; });   // 模型版是正面的 ︿ 白燈:眨眼 = 熄一下
     ledRing.material.emissiveIntensity = B.wait > 0 ? 1.8 + Math.sin(t * 4) * 1.4 : 3.2;
   }
 
@@ -506,17 +538,18 @@ export function createHall(scene, rooms) {
   }
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
   const loadGLB = (url) => new Promise((ok, fail) => gl.load(url, (g) => ok(g.scene), undefined, fail));
-  // 打掃機器人的精細版(tools/blender/bot_build.py):載入後把程式做的簡易機身換掉;側刷、眼睛、燈環沿用原本的動畫
-  loadGLB('/assets/starship/models/bot.glb?v=1').then((m) => {
+  // 打掃機器人的精細版(tools/blender/bot_build.py,倒 T 造型):載入後把程式做的簡易機身換掉;滾筒會轉、燈線呼吸、正面的 ︿ 白燈偶爾閃一下(笑臉螢幕 face 留著)
+  let botRoller = null, botChev = null;
+  loadGLB('/assets/starship/models/bot.glb?v=3').then((m) => {
     const get = (n) => m.getObjectByName(n);
-    for (const o of [...botBody.children]) { botBody.remove(o); o.geometry?.dispose(); }
+    for (const o of [...botBody.children]) { if (o === face) continue; botBody.remove(o); o.geometry?.dispose(); }
     for (const br of brushes) bot.remove(br);
-    const body = get('bot_body'), led = get('bot_led');
-    body.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    led.material = ledRing.material;
-    botBody.add(body, led);
-    ['bot_eyeL', 'bot_eyeR'].forEach((n, k) => { const e = get(n); e.material = eyeM; e.userData.sz = e.scale.z; botBody.add(e); eyes[k] = e; });
-    ['bot_brushL', 'bot_brushR'].forEach((n, k) => { const b = get(n); b.traverse((o) => { if (o.isMesh) o.castShadow = true; }); bot.add(b); brushes[k] = b; });
+    brushes.length = 0; eyes.length = 0;
+    const body = get('bot_body'), led = get('bot_led'), chev = get('bot_chevron');
+    botRoller = get('bot_roller');
+    for (const o of [body, botRoller]) o.traverse((x) => { if (x.isMesh) { x.castShadow = true; x.receiveShadow = true; } });
+    led.material = ledRing.material; chev.material = glow(0xeef6ff, 3.4); chev.userData.flash = true; eyes.push(chev); botChev = chev;
+    botBody.add(body, led, chev); bot.add(botRoller);
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
   Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=9'), loadGLB('/assets/starship/models/hall_props.glb?v=9')]).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
@@ -536,7 +569,7 @@ export function createHall(scene, rooms) {
 
   const _v = new THREE.Vector3(), warmC = new THREE.Color(WARM);
   return {
-    root, doors, hits: doors.map((d) => d.hit), get baked() { return baked; },
+    root, doors, hits: doors.map((d) => d.hit), botHit, greet, get baked() { return baked; },
     update(t, dt) {
       stepBot(t, Math.min(dt, .05));
       globeU.uTime.value = t; spin.rotation.y = t * .12; holo.rotation.y = -t * .3; holo.position.y = 2.6 + Math.sin(t * 1.2) * .05; globe.position.y = 1.5 + Math.sin(t * .8) * .03;

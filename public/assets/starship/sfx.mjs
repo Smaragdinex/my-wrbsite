@@ -1,6 +1,6 @@
 // 首頁的介面音效(全部用 Web Audio 即時合成,不用載音檔):
 //   hover 滑過可互動的東西:輕輕一聲「滴」;click 按下:清脆的確認音;open 機庫大門滑開:低沉的嗡聲 + 氣流;
-//   whoosh 飛進門 / 退出:一陣風聲;swish 左右換艙:短短的刷一聲。
+//   whoosh 飛進門 / 退出:一陣風聲;swish 左右換艙:短短的刷一聲;greet 點機器人時它的電子招呼聲。
 // 瀏覽器規定要使用者先點一下(或按鍵)才能出聲,所以第一次互動之前是靜音的。右下角的喇叭可以關掉音效(記在 localStorage)。
 let ctx = null, master = null, muted = false, lastHover = 0;
 try { muted = localStorage.getItem('xarts-sfx') === 'off'; } catch {}
@@ -38,6 +38,11 @@ export const sfx = {
   click() { if (!ready()) return; tone(880, { dur: .1, vol: .07 }); tone(1320, { at: .055, dur: .16, vol: .06 }); tone(2640, { at: .055, dur: .08, vol: .015 }); },
   open() { if (!ready()) return; tone(95, { dur: 1.1, type: 'sawtooth', vol: .05, to: 70, lp: 380 }); noise({ dur: 1.1, vol: .05, f0: 300, f1: 1400, q: .8 }); tone(1500, { at: .9, dur: .12, type: 'triangle', vol: .03 }); },
   whoosh(inward = true) { if (!ready()) return; noise(inward ? { dur: .8, vol: .07, f0: 350, f1: 2600 } : { dur: .7, vol: .06, f0: 2400, f1: 380 }); },
+  // 機器人打招呼:「嗶—嘟嗶!」上揚的電子啁啾,笑臉亮起時再「叮叮」兩聲;第一次互動就點機器人的話,等聲音解鎖再播
+  greet() { if (muted) return; const c = ac(); if (!c) return; if (c.state !== 'running') { c.resume().then(() => sfx.greet()).catch(() => {}); return; }
+    tone(880, { dur: .09, type: 'square', vol: .035, to: 1320, lp: 3200 }); tone(1320, { at: .11, dur: .07, type: 'square', vol: .03, lp: 3200 });
+    tone(990, { at: .2, dur: .14, type: 'square', vol: .034, to: 1760, lp: 3600 });
+    tone(2093, { at: .42, dur: .22, type: 'sine', vol: .05 }); tone(2637, { at: .52, dur: .3, type: 'sine', vol: .045 }); tone(3136, { at: .6, dur: .35, type: 'triangle', vol: .02 }); },
   swish() { if (!ready()) return; noise({ dur: .28, vol: .045, f0: 1200, f1: 3400, q: 1.6 }); },
   get muted() { return muted; },
   toggle() { muted = !muted; try { localStorage.setItem('xarts-sfx', muted ? 'off' : 'on'); } catch {} if (!muted) { unlock(); setTimeout(() => sfx.click(), 30); } return muted; },
