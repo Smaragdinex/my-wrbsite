@@ -305,16 +305,62 @@ def place(name, pos, rot_z=0.0, scale=1.0, keep=None, recolor=None, prefix='prop
         _placed.remove(root); bpy.data.objects.remove(root, do_unlink=True); return None
     return root
 M_CERAMIC = mat('ceramic_white', '#f4f2ee', .18, coat=.4)
-# 柱腳花盆:輪流放火鶴花 / 肖竹芋(直接種在白色花盆箱裡)
+# 花盆土:白色花盆上緣往下挖一個淺槽(布林),填一層深色泥土 + 表面一些小土塊(使用者:植物都要有土)
+import random
+rng = random.Random(7)
+def soil_mat():
+    m = mat('soil', '#2b1f17', .96); nt = m.node_tree; p = nt.nodes['Principled BSDF']
+    nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 90; nz.inputs['Detail'].default_value = 8
+    ramp = nt.nodes.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].color = srgb('#1f1610'); ramp.color_ramp.elements[1].color = srgb('#4a3626')
+    bump = nt.nodes.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .9
+    nt.links.new(nz.outputs['Fac'], ramp.inputs['Fac']); nt.links.new(ramp.outputs['Color'], p.inputs['Base Color'])
+    nt.links.new(nz.outputs['Fac'], bump.inputs['Height']); nt.links.new(bump.outputs['Normal'], p.inputs['Normal'])
+    return m
+M_SOIL = soil_mat()
+soil_cut = bpy.data.collections.new('soil_cutters'); scene.collection.children.link(soil_cut)
+def dig(planter, cutter):
+    for c in list(cutter.users_collection): c.objects.unlink(cutter)
+    soil_cut.objects.link(cutter)
+    bo = planter.modifiers.new('soil', 'BOOLEAN'); bo.operation = 'DIFFERENCE'; bo.object = cutter; bo.solver = 'EXACT'
+def clumps(name, pts, top):
+    """泥土表面的小土塊(幾顆扁扁的小球),跟土合成一個物件"""
+    bm = bmesh.new()
+    for x, y in pts:
+        r = rng.uniform(.01, .022); g = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=r)
+        bmesh.ops.scale(bm, vec=(1, 1, .5), verts=g['verts']); bmesh.ops.translate(bm, vec=(x, y, top + r * .15), verts=g['verts'])
+    return mesh_obj(name, bm, M_SOIL, smooth=False)
+DEPTH, SOIL_DOWN = .06, .025                                  # 槽深、土面比花盆上緣低多少
+# 柱腳方形花盆(.86 × .74,上緣 z = .6)
 for i, b in enumerate(pillars):
+    pl = bpy.data.objects[f'planter_{i}']
     p, rz = door_frame(b, (0, .85, .6))
-    if i % 2 == 0: place('anthurium_botany_01', p, rz, 1.45, keep=['anthurium_botany_01_a'])
-    else: place('calathea_orbifolia_01', p, rz, 2.1, keep=['calathea_orbifolia_01_a'])
-# 入口兩側:大白色圓花盆 + 發財樹
+    dig(pl, box(f'cut_soil_{i}', (.86 - .12, .74 - .12, DEPTH * 2), p, M_WHITE, rz))
+    top = .6 - SOIL_DOWN
+    s_ = box(f'soil_{i}', (.86 - .125, .74 - .125, DEPTH - SOIL_DOWN), (p.x, p.y, .6 - DEPTH + (DEPTH - SOIL_DOWN) / 2), M_SOIL, rz)
+    pts = []
+    for k in range(26):
+        lx_, ly_ = rng.uniform(-.33, .33), rng.uniform(-.27, .27)
+        pts.append((p.x + lx_ * math.cos(rz) - ly_ * math.sin(rz), p.y + lx_ * math.sin(rz) + ly_ * math.cos(rz)))
+    clumps(f'soil_clumps_{i}', pts, top)
+    # 植物種在土面上:輪流放火鶴花 / 肖竹芋
+    pp = Vector((p.x, p.y, top - .01))
+    if i % 2 == 0: place('anthurium_botany_01', pp, rz, 1.45, keep=['anthurium_botany_01_a'])
+    else: place('calathea_orbifolia_01', pp, rz, 2.1, keep=['calathea_orbifolia_01_a'])
+# 入口兩側:大白色圓花盆(上緣 z = .62)+ 發財樹
 for sx in (-1, 1):
     bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.5, depth=.62, location=(sx * 3.6, -5.6, .31)); o = link(bpy.context.active_object); o.name = f'planter_round_{sx}'; o.data.materials.append(M_CERAMIC)
     bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .04; bv.segments = 3
-    place('pachira_aquatica_01', (sx * 3.6, -5.6, .56), sx * .8, 1.0, keep=['_d'])
+    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.44, depth=DEPTH * 2, location=(sx * 3.6, -5.6, .62)); dig(o, bpy.context.active_object); bpy.context.active_object.name = f'cut_soil_round_{sx}'
+    top = .62 - SOIL_DOWN
+    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.437, depth=DEPTH - SOIL_DOWN, location=(sx * 3.6, -5.6, .62 - DEPTH + (DEPTH - SOIL_DOWN) / 2))
+    so = link(bpy.context.active_object); so.name = f'soil_round_{sx}'; so.data.materials.append(M_SOIL)
+    pts = []
+    for k in range(30):
+        a_, r_ = rng.uniform(0, math.tau), .4 * math.sqrt(rng.random())
+        pts.append((sx * 3.6 + math.cos(a_) * r_, -5.6 + math.sin(a_) * r_))
+    clumps(f'soil_clumps_round_{sx}', pts, top)
+    place('pachira_aquatica_01', (sx * 3.6, -5.6, top - .04), sx * .8, 1.0, keep=['_d'])
+soil_cut.hide_render = True; soil_cut.hide_viewport = True
 # 左側休息區:兩張現代扶手椅面對面 + 咖啡桌 + 一盆植物
 lx, ly = -5.4, -1.0
 place('modern_coffee_table_02', (lx, ly, 0), 0, 1.0, prefix='furn')
@@ -324,7 +370,7 @@ place('potted_plant_01', (lx - 1.3, ly + .9, 0), 0, 1.0, recolor=(['pot'], M_CER
 # 右側休息區:中古風躺椅 + 腳凳 + 邊桌 + 小盆栽
 # 布面沙發、大理石桌面叫 furn_*:跟建築一起烘光(網頁上看起來跟渲染圖一樣);金屬零件叫 prop_*(即時打光,金屬烘不出來)
 # 右側休息區:北歐輕奢的「豌豆沙發」(使用者給的參考圖):S 形的豆子坐墊 + 一長一短兩條圓滾滾的靠背 + 左端嵌一片古銅色圓托盤、
-# 兩條靠背中間後面一張古銅小圓几;前面再放一張小圓桌。全部米白圈圈紗(boucle)。
+# 兩條靠背中間後面一張古銅小圓几。全部米白圈圈紗(boucle)。(前面的小圓桌 + 盆栽使用者不要,拿掉了)
 # 先在「沙發自己的座標」蓋(x = 長邊、-y = 正面),最後整組轉到大廳裡,正面朝大廳中央偏入口(玩家站的地方)
 def boucle(name, color):
     m = mat(name, color, .95)
@@ -410,19 +456,12 @@ bv = e.modifiers.new('bevel', 'BEVEL'); bv.width = .008; bv.segments = 3
 p, nv = spine_frame(int(N * .68)); tx, ty = p.x + nv.x * .62, p.y + nv.y * .62
 for nm, r, d, z in (('top', .26, .02, .55), ('stem', .02, .54, .27), ('foot', .16, .015, .008)):
     bpy.ops.mesh.primitive_cylinder_add(vertices=64 if r > .05 else 24, radius=r, depth=d, location=(tx, ty, z)); e = link(bpy.context.active_object); e.data.materials.append(M_BRONZE); e.name = f'prop_sofa_sidetable_{nm}'; sofa.append(e)
-# 小圓桌(在沙發正前方):白色大理石桌面 + 拉絲金屬細腳座
-M_STONE = mat('stone_white', '#efece6', .12, coat=.6); M_BRUSHED = mat('brushed_metal', '#c9c6c0', .3, metal=1.0)
-for nm, r, d, z, m_, v in (('top', .36, .035, .4, M_STONE, 96), ('stem', .032, .37, .2, M_BRUSHED, 32), ('base', .2, .022, .011, M_BRUSHED, 64)):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=v, radius=r, depth=d, location=(.05, -1.12, z)); e = link(bpy.context.active_object); e.data.materials.append(m_); e.name = f'{"furn" if nm == "top" else "prop"}_table_{nm}'; sofa.append(e)
-    if nm != 'stem': bv = e.modifiers.new('bevel', 'BEVEL'); bv.width = .01; bv.segments = 3
 # 整組擺進大廳:沙發中心 C,正面(-y)轉向玩家
 Cx, Cy = 5.7, -1.4
 fx, fy = -Cx, -4.0 - Cy; _n = math.hypot(fx, fy); fx, fy = fx / _n, fy / _n
 th = math.atan2(fx, -fy)
 M_SOFA = Matrix.Translation((Cx, Cy, 0)) @ Matrix.Rotation(th, 4, 'Z')
 for o in sofa: o.matrix_world = M_SOFA @ o.matrix_world
-tt = M_SOFA @ Vector((.05, -1.12, 0))
-place('potted_plant_02', (tt.x + .05, tt.y + .03, .42), 0, .38, recolor=(['pot'], M_CERAMIC))
 
 # ---------------- 燈光:天窗冷光 + 暖光補 + 世界(太空的深藍)----------------
 sky = bpy.data.lights.new('skylight', 'AREA'); sky.shape = 'DISK'; sky.size = 5.6; sky.energy = 1500; sky.color = (0.86, 0.92, 1.0)
@@ -441,6 +480,10 @@ if VIEW == 'bay':      # 第二道門的展示艙特寫
     b = BEARINGS[1]; eye, look, fov = at(b, 4.6, 1.75), at(b, 8.6, 1.9), 48
 elif VIEW == 'lounge': # 左邊休息區 + 植物
     eye, look, fov = Vector((-2.2, -4.6, 1.5)), Vector((-5.6, -.4, .9)), 50
+elif VIEW == 'planter': # 柱腳花盆特寫(看土)
+    b = pillars[2]; eye, look, fov = at(b, HALL_R - 2.4, 1.6), at(b, HALL_R - .9, .5), 45
+elif VIEW == 'entry': # 入口的大圓花盆(發財樹)
+    eye, look, fov = Vector((1.6, -3.6, 1.9)), Vector((3.6, -5.6, .45)), 45
 elif VIEW == 'rlounge': # 右邊休息區(躺椅)
     eye, look, fov = Vector((2.2, -4.6, 1.5)), Vector((5.6, -.4, .9)), 50
 cam_d.angle = math.radians(fov); cam.location = eye
