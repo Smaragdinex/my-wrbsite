@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <!-- Google AdSense:驗證網站擁有權 + 放送廣告。
+         CrazyGames 版會被 build_crazygames.sh 剝掉 —— 那邊明文禁止外部廣告 -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5147653290882209"
+            crossorigin="anonymous"></script>
+    <meta name="theme-color" content="#87b8e8">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <!-- iOS:加入主畫面後以無瀏覽器介面的全螢幕啟動 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tiny Planet">
+    <link rel="apple-touch-icon" href="./public/icons/icon-192.png">
+    <title>[WebGPU] Tiny Planet — Fly around a tiny planet</title>
+    <!-- 分頁標題的小飛機:雲一直往左飄、飛機固定在中間,看起來像在飛(分頁在背景也看得到) -->
+    <script>
+      (() => { const BLANK = '\u2003', W = 9, P = 4;
+        const sky = Array.from({ length: W }, (_, i) => (i % 3 === 1 ? ['☁️', '☁️', '🌤️'][(i / 3 | 0) % 3] : BLANK));
+        const draw = () => { document.title = `Tiny Planet ${sky.map((c, i) => (i === P ? '✈️' : c)).join('')}`; };
+        draw(); setInterval(() => { sky.push(sky.shift()); draw(); }, 220); })();
+    </script>
+    <style>
+        :root {
+            /* 所有懸浮按鈕都跟著畫面短邊縮放,大螢幕才不會顯得很小 */
+            --ui: clamp(46px, 6vmin, 84px);
+            --uiStep: calc(var(--ui) + 12px);      /* 垂直堆疊的間距 */
+            --sw: clamp(22px, 2.6vmin, 34px);      /* 調色盤色票 */
+            --brand: #f2a0a8;                      /* 開場畫面固定用草莓粉,不跟著存檔的機身色跑 */
+        }
+        body {
+            margin: 0; overflow: hidden;
+            touch-action: none;              /* 關掉捲動/縮放手勢,交給遊戲處理 */
+            overscroll-behavior: none;
+            -webkit-user-select: none; user-select: none;
+        }
+        /* 虛擬搖桿:按下時出現在手指位置 */
+        #stick, #stickDot {
+            position: fixed; border-radius: 50%; pointer-events: none;
+            opacity: 0; transition: opacity .15s; z-index: 9;
+        }
+        #stick {
+            width: 132px; height: 132px; margin: -66px 0 0 -66px;
+            border: 2px solid rgba(255,255,255,.5);
+            background: rgba(255,255,255,.07); backdrop-filter: blur(2px);
+        }
+        #stickDot {
+            width: 52px; height: 52px; margin: -26px 0 0 -26px;
+            background: rgba(255,255,255,.82);
+            box-shadow: 0 2px 10px rgba(0,0,0,.3);
+        }
+        #stick.on, #stickDot.on { opacity: 1; }
+        /* 觸控裝置:隱藏鍵盤面板,改顯示拖曳提示 */
+        #touchHint {
+            position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+            padding: 9px 18px; border-radius: 999px; z-index: 10;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            color: #fff; font: 14px system-ui; white-space: nowrap;
+            transition: opacity .5s; display: none;
+        }
+        @media (hover: none) and (pointer: coarse) {
+            #keys, #remoteBtn { display: none; }
+            #touchHint { display: block; }
+            /* 這裡 remoteBtn 不顯示,贊助鈕要遞補上去,不然按鈕列中間會空一格 */
+            #donateBtn { top: calc(20px + var(--uiStep) * 2 + env(safe-area-inset-top)); }
+        }
+        #musicBtn {
+            position: fixed; right: 20px; top: calc(20px + env(safe-area-inset-top)); z-index: 10;
+            width: var(--ui); height: var(--ui); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: calc(var(--ui) * 0.46); line-height: 1; color: #fff; cursor: pointer;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.24);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: background .18s, color .18s, transform .12s;
+        }
+        #musicBtn:hover, #planeBtn:hover, #fsBtn:hover { transform: scale(1.07); }
+        #fsBtn {
+            position: fixed; left: calc(20px + env(safe-area-inset-left)); top: calc(20px + env(safe-area-inset-top)); z-index: 10;
+            width: var(--ui); height: var(--ui); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: calc(var(--ui) * 0.41); line-height: 1; color: #fff; cursor: pointer;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.24);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: transform .12s, background .18s;
+        }
+        #fsBtn.hidden, #fsBtn.unsupported { display: none; }
+        #remoteBtn {
+            position: fixed; right: 20px; top: calc(20px + var(--uiStep) * 2 + env(safe-area-inset-top)); z-index: 10;
+            width: var(--ui); height: var(--ui); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; cursor: pointer;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.24);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: transform .12s, background .18s, color .18s;
+        }
+        #remoteBtn:hover { transform: scale(1.07); }
+        /* 贊助鈕:排在右側按鈕列最下面。DONATE_URL 沒設就不加 .show,整顆不出現 */
+        #donateBtn {
+            position: fixed; right: 20px; top: calc(20px + var(--uiStep) * 3 + env(safe-area-inset-top)); z-index: 10;
+            width: var(--ui); height: var(--ui); border-radius: 50%;
+            display: none; align-items: center; justify-content: center;
+            color: #fff; cursor: pointer; text-decoration: none;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.24);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: background .18s, color .18s, transform .12s;
+        }
+        #donateBtn.show { display: flex; }
+        #donateBtn:hover { transform: scale(1.07); background: rgba(255,150,165,.92); color: #23262e; }
+        #remoteBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
+        #fsBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
+        #planeBtn {
+            position: fixed; right: 20px; top: calc(20px + var(--uiStep) + env(safe-area-inset-top)); z-index: 10;
+            width: var(--ui); height: var(--ui); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: calc(var(--ui) * 0.46); line-height: 1; cursor: pointer; color: #23262e;
+            background: rgba(255,214,140,.92);          /* 與音樂鈕啟用時同一個琥珀黃 */
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.5);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+            transition: transform .12s, box-shadow .18s;
+        }
+        /* 右下角小圓點顯示目前機身色 */
+        #planeBtn::after {
+            content: ''; position: absolute; right: 1px; bottom: 1px;
+            width: calc(var(--ui) * 0.28); height: calc(var(--ui) * 0.28); border-radius: 50%;
+            background: var(--body, #f2a0a8);
+            border: 2px solid rgba(255,255,255,.9);
+            box-shadow: 0 1px 3px rgba(0,0,0,.3);
+        }
+        #planeBtn.open { box-shadow: 0 0 0 2px rgba(255,255,255,.55), 0 4px 16px rgba(0,0,0,.2); }
+        #musicBtn.on { background: rgba(255,214,140,.92); color: #23262e; border-color: rgba(255,255,255,.5); }
+        #musicBtn.off { opacity: .78; }
+        #musicBtn.off::after {
+            content: ''; position: absolute; width: calc(var(--ui) * 0.59); height: 2px;
+            background: currentColor; transform: rotate(-45deg); border-radius: 2px;
+        }
+        #palette {
+            position: fixed; right: 20px; top: calc(20px + var(--uiStep) * 3 + env(safe-area-inset-top)); z-index: 10;
+            display: grid; grid-template-columns: repeat(4, var(--sw)); gap: 7px;
+            padding: 10px 11px; border-radius: 14px;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.16);
+            box-shadow: 0 4px 16px rgba(0,0,0,.2);
+        }
+        #palette .sw {
+            width: var(--sw); height: var(--sw); padding: 0; border-radius: 50%;
+            background: var(--c); cursor: pointer;
+            border: 1px solid rgba(255,255,255,.45);
+            box-shadow: 0 1px 3px rgba(0,0,0,.25);
+            transition: transform .12s, box-shadow .12s;
+        }
+        #palette {
+            opacity: 0; transform: scale(.9) translateY(-8px);
+            transform-origin: top right; pointer-events: none;
+            transition: opacity .18s, transform .18s;
+        }
+        #palette.open { opacity: 1; transform: none; pointer-events: auto; }
+        #palette .sw:hover { transform: scale(1.18); }
+        #palette .sw.on {
+            transform: scale(1.18);
+            box-shadow: 0 0 0 2px rgba(255,255,255,.92), 0 2px 6px rgba(0,0,0,.3);
+        }
+        /* ---------- 開場 / 載入畫面 ---------- */
+        #boot {
+            position: fixed; inset: 0; z-index: 50;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: clamp(14px, 2.4vmin, 26px);
+            background: linear-gradient(180deg, #9cc8ee 0%, #bcdcf3 55%, #e9f2f7 100%);
+            font: 500 16px/1.5 system-ui, -apple-system, "Noto Sans TC", sans-serif;
+            color: #2b3a4a; transition: opacity .7s ease; -webkit-user-select: none; user-select: none;
+        }
+        #boot.gone { opacity: 0; pointer-events: none; }
+        /* 封面插畫:小地球 + 繞著飛的小飛機 */
+        #bootArt {
+            width: clamp(130px, 26vmin, 260px); aspect-ratio: 1;
+            margin-bottom: clamp(-6px, -1vmin, 0px);
+        }
+        #bootArt svg { width: 100%; height: 100%; display: block; overflow: visible; }
+        #bootArt .globe { animation: bootBob 4.5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+        #bootArt .orbit { transform-box: view-box; transform-origin: 100px 112px; animation: bootOrbit 15s linear infinite; }
+        @keyframes bootOrbit { to { transform: rotate(360deg); } }
+        @keyframes bootBob { 50% { transform: translateY(-4px); } }
+        @media (prefers-reduced-motion: reduce) {
+            #bootArt .orbit, #bootArt .globe { animation: none; }
+        }
+        #bootTitle {
+            font-size: clamp(30px, 6.5vmin, 68px); font-weight: 800; letter-spacing: .14em;
+            color: #23384d; text-shadow: 0 2px 0 rgba(255,255,255,.6);
+        }
+        #bootSub { font-size: clamp(12px, 1.9vmin, 18px); opacity: .72; letter-spacing: .22em; }
+        /* 讀條:小飛機沿著進度往前飛,後面留下已完成的軌跡 */
+        #bootBar {
+            position: relative; width: min(72vw, 460px); height: 8px;
+            border-radius: 99px; background: rgba(255,255,255,.55);
+            box-shadow: inset 0 1px 3px rgba(0,0,0,.12);
+        }
+        #bootFill {
+            position: absolute; inset: 0 auto 0 0; width: 0%;
+            border-radius: 99px; background: var(--brand);
+            transition: width .25s ease;
+        }
+        #bootPlane {
+            position: absolute; top: 50%; left: 0; width: clamp(34px, 5vmin, 54px);
+            transform: translate(-50%, -50%); transition: left .25s ease;
+        }
+        #bootPlane svg { width: 100%; height: auto; display: block; }
+        #bootPct { font-size: clamp(11px, 1.6vmin, 15px); opacity: 0; letter-spacing: .08em; }
+        /* 開場先只有標題與起飛鈕;按下去才切到讀取狀態 */
+        #bootBar { opacity: 0; transition: opacity .35s; }
+        #boot.loading #bootBar { opacity: 1; }
+        #boot.loading #bootPct { opacity: .6; }
+        #boot.loading #bootStart { opacity: 0; pointer-events: none; }
+        #bootLang {
+            margin-top: clamp(4px, 1vmin, 12px);
+            padding: clamp(7px, 1vmin, 12px) clamp(16px, 2.4vmin, 28px);
+            font: 600 clamp(12px, 1.6vmin, 16px)/1 system-ui, "Noto Sans TC", sans-serif;
+            color: #35506b; cursor: pointer; appearance: none; -webkit-appearance: none;
+            border: 1.5px solid rgba(255,255,255,.9); border-radius: 99px;
+            background: rgba(255,255,255,.55); backdrop-filter: blur(6px);
+            text-align: center; text-align-last: center;
+        }
+        #bootLang:hover { background: rgba(255,255,255,.78); }
+        /* 贊助連結:刻意做得低調 —— 標題畫面的主角是「起飛」,不是要錢 */
+        #bootDonate {
+            margin-top: clamp(10px, 1.8vmin, 20px);
+            font: 500 clamp(11px, 1.45vmin, 14px)/1 system-ui, "Noto Sans TC", sans-serif;
+            color: #35506b; opacity: .62; text-decoration: none;
+            letter-spacing: .06em; border-bottom: 1px solid rgba(53,80,107,.35);
+            padding-bottom: 2px; transition: opacity .18s;
+        }
+        #bootDonate:hover { opacity: .95; }
+        #boot.loading #bootDonate { opacity: 0; pointer-events: none; }
+        #bootStart {
+            margin-top: clamp(6px, 1.2vmin, 14px);
+            padding: clamp(11px, 1.5vmin, 18px) clamp(30px, 5vmin, 56px);
+            font: 700 clamp(15px, 2.1vmin, 21px)/1 system-ui, "Noto Sans TC", sans-serif;
+            letter-spacing: .12em; color: #23384d; cursor: pointer;
+            border: none; border-radius: 99px; background: #fff;
+            box-shadow: 0 6px 18px rgba(40,70,100,.22);
+            transition: transform .12s, opacity .3s, box-shadow .18s;
+        }
+        #bootStart:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 9px 24px rgba(40,70,100,.28); }
+        #bootStart:not(:disabled):active { transform: scale(.96); }
+
+        /* 被染色時的提示:一顆同色的圓點加一圈倒數。
+           放在發射鈕正上方 —— 玩家開火時眼睛本來就在那裡,不用另外找 */
+        #dye {
+            position: fixed; z-index: 11; opacity: 0; pointer-events: none;
+            right: clamp(24px, 20vmin, 220px);
+            bottom: calc(clamp(24px, 16vmin, 176px) + clamp(80px, 12vmin, 168px)
+                         + 14px + env(safe-area-inset-bottom));
+            width: clamp(80px, 12vmin, 168px);
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity .25s;
+        }
+        #dye.on { opacity: 1; }
+        #dye .ring {
+            width: clamp(26px, 4vmin, 46px); height: clamp(26px, 4vmin, 46px);
+            border-radius: 50%;
+            background: var(--c, #fff);
+            box-shadow: 0 3px 10px rgba(0,0,0,.28), 0 0 0 2px rgba(255,255,255,.8) inset;
+            /* 倒數:用 conic-gradient 當進度環,不用另外畫 SVG */
+            background-image: conic-gradient(rgba(0,0,0,.28) calc((1 - var(--k, 1)) * 360deg), transparent 0);
+            background-blend-mode: multiply;
+        }
+
+        #fireBtn {
+            /* 尺寸與內縮都跟著畫面短邊走(vmin),大螢幕才不會顯得很小;
+               上下用 clamp 夾住,手機不會佔掉半個畫面、4K 也不會誇張 */
+            position: fixed; z-index: 11;
+            right: clamp(24px, 20vmin, 220px);
+            bottom: calc(clamp(24px, 16vmin, 176px) + env(safe-area-inset-bottom));
+            width: clamp(80px, 12vmin, 168px);
+            height: clamp(80px, 12vmin, 168px);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; -webkit-user-select: none; user-select: none;
+            background: rgba(255,255,255,.9); backdrop-filter: blur(8px);
+            border: 2px solid rgba(255,255,255,.75);
+            box-shadow: 0 6px 20px rgba(0,0,0,.26);
+            transition: transform .1s, opacity .15s;
+        }
+        #fireBtn:active { transform: scale(.88); }
+        #fireBtn.cool { opacity: .42; transform: scale(.92); }
+        /* 中間那顆就是目前機身色,一看就知道會射出什麼顏色 */
+        #fireBtn .dot {
+            width: 48%; aspect-ratio: 1; border-radius: 50%;
+            background: var(--body, #f2a0a8);
+            box-shadow: inset 0 -5px 10px rgba(0,0,0,.2), 0 1px 4px rgba(0,0,0,.25);
+        }
+        #keys {
+            position: fixed; left: 20px; bottom: 20px; z-index: 10;
+            display: flex; flex-direction: column; align-items: center; gap: 7px;
+            padding: 14px 16px 12px; border-radius: 16px;
+            background: rgba(12,16,28,.36); backdrop-filter: blur(8px);
+            font: 600 13px/1 system-ui; color: #fff; user-select: none;
+            box-shadow: 0 6px 22px rgba(0,0,0,.22);
+        }
+        #keys .row { display: flex; gap: 7px; }
+        #keys .key.wide { min-width: 132px; }
+        #keys .key {
+            min-width: 40px; height: 40px; padding: 0 10px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-radius: 9px; background: rgba(255,255,255,.13);
+            border: 1px solid rgba(255,255,255,.22);
+            border-bottom-width: 3px;
+            transition: background .08s, transform .08s;
+        }
+        #keys .key .sub { font-size: 10px; font-weight: 500; opacity: .72; margin-top: 2px; }
+        #keys .key.active {
+            background: rgba(255,214,140,.9); color: #23262e;
+            border-color: rgba(255,255,255,.5); transform: translateY(2px);
+            border-bottom-width: 1px;
+        }
+        #keys .cap { font-size: 11px; font-weight: 500; opacity: .68; letter-spacing: .04em; }
+        #keys {
+            opacity: 0; transform: scale(.92) translateY(10px);
+            transform-origin: bottom left;
+            transform-origin: bottom right; pointer-events: none;
+            transition: opacity .18s, transform .18s;
+        }
+        #keys.open { opacity: 1; transform: none; pointer-events: auto; }
+        #hint {
+            position: fixed; top: 12px; left: 14px; color: #fff;
+            font: 14px/1.7 system-ui; text-shadow: 0 1px 3px rgba(0,0,0,.45);
+            user-select: none;
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+            "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+            "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.tsl.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <button id="fsBtn" title="全螢幕"></button>
+    <button id="musicBtn" class="off" title="音樂">♪</button>
+    <button id="planeBtn" title="機身顏色">✈</button>
+    <div id="palette"></div>
+    <a id="donateBtn" href="#" target="_blank" rel="noopener noreferrer" title="支持這個專案">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20.5 4.2 12.9a4.6 4.6 0 0 1 6.5-6.5l1.3 1.3 1.3-1.3a4.6 4.6 0 0 1 6.5 6.5z"/>
+        </svg>
+    </a>
+    <button id="remoteBtn" title="操作說明">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+            <rect x="7" y="2.5" width="10" height="19" rx="3"/>
+            <path d="M12 6.2v2.6M10.7 7.5h2.6"/>
+            <circle cx="10.4" cy="13" r="1.05"/><circle cx="13.6" cy="13" r="1.05"/>
+            <path d="M10 17.4h4"/>
+        </svg>
+    </button>
+    <div id="hint"></div>
+    <div id="stick"></div><div id="stickDot"></div>
+    <div id="touchHint">👆 Drag to steer · two fingers to boost</div>
+    <div id="boot">
+        <div id="bootArt"><svg viewBox="0 0 200 200" fill="none">
+            <g class="globe">
+                <circle cx="100" cy="112" r="54" fill="#1f3f7a"/>
+                <path d="M62 92c10-9 24-11 33-5 8 6 4 15-4 19-9 5-24 6-31 1-5-4-3-11 2-15Z" fill="#7fa84a"/>
+                <path d="M108 76c9-4 21-2 26 5 4 6-2 12-10 14-9 3-19 1-22-5-3-6 0-11 6-14Z" fill="#8fb655"/>
+                <path d="M96 128c14-6 33-4 40 5 6 8-4 18-18 21-16 3-32-2-36-10-3-7 5-13 14-16Z" fill="#7fa84a"/>
+                <path d="M54 124c7-3 15-1 17 4 2 4-3 8-9 9-7 1-13-1-14-5-1-4 2-7 6-8Z" fill="#8fb655"/>
+                <circle cx="82" cy="90" r="18" fill="#fff" opacity=".13"/>
+                <ellipse cx="136" cy="98" rx="13" ry="6" fill="#fff" opacity=".72"/>
+                <ellipse cx="128" cy="95" rx="8" ry="5" fill="#fff" opacity=".72"/>
+                <ellipse cx="66" cy="142" rx="11" ry="5" fill="#fff" opacity=".6"/>
+            </g>
+            <!-- 小飛機沿著軌道繞星球 -->
+            <g class="orbit">
+                <g transform="translate(100 34)">
+                    <ellipse cx="0" cy="0" rx="7" ry="15" fill="#faf3e5"/>
+                    <ellipse cx="-15" cy="0" rx="3.5" ry="7" fill="#faf3e5"/>
+                    <ellipse cx="2" cy="0" rx="17" ry="6" fill="var(--brand)"/>
+                    <circle cx="11" cy="0" r="2.6" fill="#c4e1ed"/>
+                    <rect x="18" y="-1.4" width="9" height="2.8" rx="1.4" fill="#e6d6b8"/>
+                </g>
+            </g>
+        </svg></div>
+        <div id="bootTitle">TINY PLANET</div>
+        <div id="bootSub">Fly around a tiny planet</div>
+        <div id="bootBar">
+            <div id="bootFill"></div>
+            <!-- 俯視的小飛機:機翼要先畫(在下層),機身才不會被蓋掉 -->
+            <div id="bootPlane"><svg viewBox="0 0 64 40" fill="none">
+                <ellipse cx="27" cy="20" rx="8" ry="17" fill="#faf3e5"/>
+                <ellipse cx="9" cy="20" rx="4" ry="8" fill="#faf3e5"/>
+                <ellipse cx="31" cy="20" rx="19" ry="6.5" fill="var(--brand)"/>
+                <circle cx="41" cy="20" r="3" fill="#c4e1ed"/>
+                <rect x="49" y="18.5" width="10" height="3" rx="1.5" fill="#e6d6b8"/>
+            </svg></div>
+        </div>
+        <div id="bootPct">0%</div>
+        <button id="bootStart">TAKE OFF</button>
+        <select id="bootLang" aria-label="Language"></select>
+        <a id="bootDonate" href="#" target="_blank" rel="noopener noreferrer" hidden></a>
+    </div>
+    <div id="dye"><div class="ring"></div></div>
+    <div id="fireBtn" title="發射漆彈(空白鍵)"><div class="dot"></div></div>
+    <div id="keys" dir="ltr">
+        <div class="cap">Flight controls</div>
+        <div class="row">
+            <div class="key" data-k="up">↑<span class="sub">W</span></div>
+        </div>
+        <div class="row">
+            <div class="key" data-k="left">←<span class="sub">A</span></div>
+            <div class="key" data-k="down">↓<span class="sub">S</span></div>
+            <div class="key" data-k="right">→<span class="sub">D</span></div>
+        </div>
+        <div class="row">
+            <div class="key wide" data-k="fire"><span class="kn">SPACE</span><span class="sub">Paintball</span></div>
+        </div>
+    </div>
+    <script type="module">
+        import { makeTHREE } from './gpu-compat.js?v=2'
+        const THREE = makeTHREE()   // WebGPU 版:Points 換成 instanced sprite(見 gpu-compat.js)
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
+        // 版本號要與下方的 V 同步:模組不帶 ?v= 的話,瀏覽器會一直用快取的舊檔
+        import { Music } from './music.js?v=113'
+        import { Weather } from './weather.gpu.js?v=2'
+        import { Traffic } from './traffic.js?v=113'
+        import { Paint } from './paint.js?v=113'
+        import { I18N, LANG_NAMES, RTL, detectLang } from './lang.js?v=113'
+        import { Fireworks } from './fireworks.js?v=113'
+        import { Net } from './net.js?v=113'
+
+        // ---------- 多語 ----------
+        let lang = detectLang()
+        // ---------- 贊助連結 ----------
+        // GitHub Pages 是純靜態託管,沒有後端也不可能自己收款,所以這裡只能外連。
+        // 把下面換成你自己的收款頁(Ko-fi / Buy Me a Coffee / PayPal.me 都可以),
+        // 留空字串就整個隱藏,不會出現壞掉的連結。
+        const DONATE_URL = 'https://donate.stripe.com/cNi3cu8ZX3Ps67ncHn5Rm01'
+
+        // ---------- 同場飛行(多人)----------
+        // 部署完 server/ 那個 Cloudflare Worker 之後,把網址填進來:
+        //   wss://tiny-planet-room.<你的子網域>.workers.dev/ws
+        // 留空就完全不連線,遊戲照常是單人 + AI(所以填錯或忘了填也不會壞)。
+        // 本機測試:cd server && npx wrangler dev,再開 ?mp=ws://127.0.0.1:8787/ws
+        const MULTIPLAYER_DEFAULT = 'wss://tiny-planet-room.xarts.workers.dev/ws'
+        const MULTIPLAYER_URL = new URLSearchParams(location.search).get('mp') || MULTIPLAYER_DEFAULT
+        const donateEl = document.getElementById('bootDonate')
+        const donateBtn = document.getElementById('donateBtn')
+        if (DONATE_URL) {
+            donateEl.href = DONATE_URL
+            donateEl.hidden = false
+            donateBtn.href = DONATE_URL
+            donateBtn.classList.add('show')
+        }
+
+        const langSel = document.getElementById('bootLang')
+        Object.entries(LANG_NAMES).forEach(([code, name]) => {
+            const o = document.createElement('option')
+            o.value = code; o.textContent = name
+            langSel.appendChild(o)
+        })
+        langSel.value = lang
+
+        const applyLang = code => {
+            lang = code
+            localStorage.setItem('tp.lang', code)
+            document.documentElement.lang = code
+            // 阿拉伯語要由右至左。鍵盤圖示另外鎖成 ltr(標記上直接寫死),
+            // 否則 W A S D 會被翻成 D S A W
+            document.documentElement.dir = RTL.has(code) ? 'rtl' : 'ltr'
+            const t = I18N[code]
+            document.getElementById('bootSub').textContent = t.sub
+            document.getElementById('bootStart').textContent = t.start
+            donateEl.textContent = t.donate
+            donateBtn.title = t.donate
+            document.getElementById('touchHint').textContent = t.hint
+            document.querySelector('#keys .cap').textContent = t.controls
+            document.querySelector('#keys .key.wide .kn').textContent = t.space
+            document.querySelector('#keys .key.wide .sub').textContent = t.fire
+            document.getElementById('musicBtn').title = t.tipMusic
+            document.getElementById('planeBtn').title = t.tipColor
+            document.getElementById('remoteBtn').title = t.tipHelp
+            document.getElementById('fireBtn').title = t.tipFire
+            const fs = document.getElementById('fsBtn')
+            fs.title = document.fullscreenElement ? t.tipFsExit : t.tipFs
+            // 配色名稱(色票的提示文字)可能還沒建立,建立時會再讀一次 t.colors
+            document.querySelectorAll('#palette .sw').forEach((b, i) => { b.title = t.colors[i] })
+        }
+        langSel.addEventListener('change', () => applyLang(langSel.value))
+        applyLang(lang)
+
+
+        const scene = new THREE.Scene()
+        scene.background = new THREE.Color(0x87b8e8)
+        scene.fog = new THREE.FogExp2(0x87b8e8, 0.00040)   // 大氣透視,濃度隨天氣調整
+
+        const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 4200)
+        const renderer = new THREE.WebGPURenderer({ antialias: true })   // 不支援 WebGPU 的瀏覽器會自動退回 WebGL2
+        await renderer.init()
+        window.__gpuBackend = renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2 (fallback)'
+        console.log('[tiny-planet] renderer backend:', window.__gpuBackend)
+        renderer.setSize(innerWidth, innerHeight)
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+        renderer.toneMapping = THREE.ACESFilmicToneMapping   // 暗部平滑滾降,不死黑
+        renderer.toneMappingExposure = 1.15
+        document.body.appendChild(renderer.domElement)
+
+        // 燈光:業界標準三層 —— 主光(太陽)+ 半球環境光 + 冷色補光
+        const sun = new THREE.DirectionalLight(0xfff2dd, 3.5)
+        sun.position.set(30, 20, 15)
+        scene.add(sun)
+
+        // 半球光:上半是天空藍、下半是地面反光,暗面自然帶一點環境色
+        const hemi = new THREE.HemisphereLight(0x9db8e8, 0x3d4a35, 0.55)
+        scene.add(hemi)
+
+        // 補光:太陽反方向的弱冷光,勾出暗面輪廓(業界叫 fill light)
+        const fill = new THREE.DirectionalLight(0x6677aa, 0.5)
+        fill.position.set(-30, -10, -20)
+        scene.add(fill)
+
+        // ---------- 晝夜循環 ----------
+        const DAY_SECONDS = 120           // 白天 2 分鐘
+        const NIGHT_SECONDS = 60           // 夜晚 1 分鐘
+        const CYCLE = DAY_SECONDS + NIGHT_SECONDS
+        const DAY_FRAC = DAY_SECONDS / CYCLE
+        // phase 0~1:0=日出 → DAY_FRAC=日落 → 1=再次日出;?sun= 可指定起始時刻
+        let phase = parseFloat(new URLSearchParams(location.search).get('sun') || '0.25')
+
+        const MOON_X = new THREE.Vector3(1, 0, 0)
+        const WORLD_Y = new THREE.Vector3(0, 1, 0)
+        const WORLD_X = new THREE.Vector3(1, 0, 0)
+        const sunTarget = new THREE.Object3D()
+        scene.add(sunTarget)
+        sun.target = sunTarget
+        fill.target = sunTarget
+        const sunEast = new THREE.Vector3(1, 0, 0)   // 世界空間的太陽方位,逐幀平滑延續
+
+        // 太陽本體(遠處的亮球)。星球小、地平線下沉約 38°,
+        // 日落後仍會露臉,因此要主動淡出,否則夜空會出現一顆假月亮。
+        const sunBall = new THREE.Mesh(
+            new THREE.SphereGeometry(21, 24, 16),
+            new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, depthWrite: false, fog: false }))
+        scene.add(sunBall)
+
+        // 月亮:載入含隕石坑的模型(明暗已烘進頂點色,故用自發光材質不吃場景光)
+        const moonBall = new THREE.Group()
+        scene.add(moonBall)
+        let moonMat = null
+
+        // 月暈:一圈柔和的光,讓月亮不會像貼紙
+        const moonHaloTex = (() => {
+            const c = document.createElement('canvas')
+            c.width = c.height = 128
+            const ctx = c.getContext('2d')
+            const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+            g.addColorStop(0.0, 'rgba(226,236,255,0.55)')
+            g.addColorStop(0.3, 'rgba(200,216,255,0.16)')
+            g.addColorStop(1.0, 'rgba(180,200,255,0)')
+            ctx.fillStyle = g
+            ctx.fillRect(0, 0, 128, 128)
+            return new THREE.CanvasTexture(c)
+        })()
+        const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: moonHaloTex, blending: THREE.AdditiveBlending,
+            depthWrite: false, transparent: true, fog: false
+        }))
+        moonHalo.scale.setScalar(345)
+        scene.add(moonHalo)
+
+        // ---------- 星空 ----------
+        // 世界放大後,原本開啟距離衰減的星點只剩 0.4px。改為固定像素大小,
+        // 並分三層(微弱/中等/明亮)+ 銀河帶,才有層次。
+        const starTex = (() => {
+            const c = document.createElement('canvas')
+            c.width = c.height = 32
+            const ctx = c.getContext('2d')
+            const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16)
+            g.addColorStop(0.0, 'rgba(255,255,255,1)')
+            g.addColorStop(0.45, 'rgba(255,255,255,0.85)')   // 核心夠大,小點才不會整個變透明
+            g.addColorStop(0.75, 'rgba(255,255,255,0.25)')
+            g.addColorStop(1.0, 'rgba(255,255,255,0)')
+            ctx.fillStyle = g
+            ctx.fillRect(0, 0, 32, 32)
+            return new THREE.CanvasTexture(c)
+        })()
+
+        const STAR_R = 2400
+        const MILKY_AXIS = new THREE.Vector3(0.35, 0.86, 0.37).normalize()
+        const starLayers = []
+
+        function makeStars(count, size, milkyRatio) {
+            const pos = new Float32Array(count * 3)
+            const col = new Float32Array(count * 3)
+            const v = new THREE.Vector3()
+            for (let i = 0; i < count; i++) {
+                v.randomDirection()
+                // 一部分星星集中在銀河帶上(壓向與銀河軸垂直的平面)
+                if (Math.random() < milkyRatio) {
+                    const along = v.dot(MILKY_AXIS)
+                    v.addScaledVector(MILKY_AXIS, -along * (0.82 + Math.random() * 0.15)).normalize()
+                }
+                pos.set([v.x * STAR_R, v.y * STAR_R, v.z * STAR_R], i * 3)
+
+                // 星色:多數偏白,少數偏藍或偏暖
+                const t = Math.random()
+                const c = t < 0.12 ? [0.72, 0.82, 1.0]        // 藍白
+                        : t < 0.22 ? [1.0, 0.88, 0.72]        // 橙黃
+                        : [1.0, 1.0, 1.0]
+                const dim = 0.75 + Math.random() * 0.25
+                col.set([c[0] * dim, c[1] * dim, c[2] * dim], i * 3)
+            }
+            const geo = new THREE.BufferGeometry()
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+            geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+            const mat = new THREE.PointsMaterial({
+                map: starTex, size, sizeAttenuation: false,   // 固定像素大小,才不會被距離吃掉
+                fog: false,
+                vertexColors: true, transparent: true, opacity: 0,
+                depthWrite: false, blending: THREE.AdditiveBlending
+            })
+            const pts = new THREE.Points(geo, mat)
+            pts.frustumCulled = false
+            scene.add(pts)
+            starLayers.push({ mat, base: 1 })
+            return pts
+        }
+
+        makeStars(3200, 3.0, 0.45)      // 微弱的背景星塵(含銀河帶)
+        makeStars(1100, 5.0, 0.30)      // 中等亮度
+        makeStars(220, 8.0, 0.10)       // 少數明亮的主星
+        const starMat = { set opacity(v) { for (const l of starLayers) l.mat.opacity = v } }
+
+        // 天色關鍵影格:太陽仰角 → 天空顏色(深夜→黎明紫→日出橘→白天藍)
+        const skyStops = [
+            [-0.50, new THREE.Color(0x070d26)],
+            [-0.15, new THREE.Color(0x2a2050)],
+            [ 0.03, new THREE.Color(0xe08a60)],
+            [ 0.30, new THREE.Color(0x87b8e8)],
+        ]
+        function skyColor(e) {
+            if (e <= skyStops[0][0]) return skyStops[0][1]
+            for (let i = 1; i < skyStops.length; i++) {
+                if (e <= skyStops[i][0]) {
+                    const [e0, c0] = skyStops[i - 1], [e1, c1] = skyStops[i]
+                    return c0.clone().lerp(c1, (e - e0) / (e1 - e0))
+                }
+            }
+            return skyStops[skyStops.length - 1][1]
+        }
+        const smoothstep = (a, b, x) => {
+            const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1)
+            return t * t * (3 - 2 * t)
+        }
+
+        // ---------- 飛行參數 ----------
+        const R = 280.8
+        const SPEED = 13         // 巡航速度
+        const TURN = 1.6         // 轉彎速率 rad/s
+        const ALT_MIN = R + 8.5  // 最低高度(需高於最高地標:金門大橋塔頂 99.61)
+        const ALT_MAX = R + 21.6
+        // ?goto=<地名|緯度,經度> 直接從該處上空起飛。星球用真實地球資料,座標即真實經緯度。
+        const PLACES = {                      // 緯度, 經度
+            ny: [40.75, -73.98],              // 紐約曼哈頓
+            liberty: [38.76, -73.98],         // 自由女神(離岸小島)
+            sf: [37.82, -122.87],             // 金門大橋
+            tokyo: [35.66, 139.75],           // 東京鐵塔
+            paris: [48.86, 2.29],             // 艾菲爾鐵塔
+            sydney: [-34.01, 151.73],         // 雪梨歌劇院(建置時往海上推到港灣小島)
+            london: [51.51, -0.13],           // 大笨鐘 + 倫敦眼
+            rome: [42.05, 13.29],             // 羅馬競技場(往內陸推 68km,離第勒尼安海太近)
+            giza: [29.98, 31.13],             // 吉薩金字塔+人面獅身
+            machu: [-13.16, -72.55],          // 馬丘比丘
+            chichen: [20.22, -88.57],         // 奇琴伊察(往內陸推 51km,海陸圖解析度所限)
+            wall: [40.36, 116.02],            // 萬里長城(八達嶺)
+            moscow: [55.75, 37.62],            // 紅場・聖瓦西里主教座堂
+            pisa: [43.72, 10.40],              // 比薩斜塔
+            kinderdijk: [51.88, 4.64],         // 小孩堤防風車村
+            rio: [-22.95, -43.21],             // 救世主基督像
+            taj: [27.18, 78.04],               // 泰姬瑪哈陵
+            angkor: [13.41, 103.87],           // 吳哥窟
+            hagia: [41.01, 28.98],             // 聖索菲亞大教堂
+            athens: [38.28, 23.73],            // 帕德嫩神廟(密掃往內陸推 34km)
+            barcelona: [41.81, 1.63],          // 聖家堂(密掃往內陸推 64km)
+            edinburgh: [55.95, -3.29],         // 愛丁堡城堡
+            jerusalem: [31.78, 35.24],         // 圓頂清真寺
+            taipei: [25.03, 121.56],           // 台北 101
+            dubai: [25.20, 55.27],             // 哈里發塔
+            shanghai: [31.23, 121.51],         // 上海中心大廈
+        }
+        // 經緯度 → 方向(先算 Blender Z-up,再轉成 Three 的 Y-up)
+        const latLonDir = (lat, lon) => {
+            const la = lat * Math.PI / 180, lo = lon * Math.PI / 180
+            const x = Math.cos(la) * Math.cos(lo)
+            const y = Math.cos(la) * Math.sin(lo)
+            const z = Math.sin(la)
+            return new THREE.Vector3(x, z, -y).normalize()
+        }
+        // ?debug=1 才掛出來:加完地標要繞到現場近距離看,靠這個把相機擺到指定經緯度旁邊
+        if (new URLSearchParams(location.search).has('debug')) {
+            window.__tp = {
+                THREE, scene, camera, renderer, latLonDir, R,
+                get weather() { return weather },      // 天氣要能單獨驅動來驗證
+                get paint() { return paint },
+                get traffic() { return traffic },
+                onPlayerPainted,   // 染色機制要能不靠對手就驗證
+                get fireworks() { return fireworks },
+                get net() { return net },
+                get plane() { return rig },
+                // 錄 demo 影片用:外部腳本靠 drag 這組操控量寫自動駕駛,
+                // 讓飛機自己飛去指定地標 —— 錄到的就是真實遊玩畫面,不是另外運鏡
+                get keys() { return keys },
+                get drag() { return drag },
+                get pos() { return pos },
+                get fwd() { return fwd },
+                get alt() { return alt },
+                look(lat, lon, dist = 15, high = 6) {
+                    const dir = latLonDir(lat, lon)
+                    const tan = new THREE.Vector3(0, 1, 0).cross(dir).normalize()
+                    camera.position.copy(dir).multiplyScalar(R + high).addScaledVector(tan, dist)
+                    camera.up.copy(dir)
+                    camera.lookAt(dir.clone().multiplyScalar(R + 1.2))
+                    camera.aspect = 16 / 9
+                    camera.updateProjectionMatrix()
+                    renderer.setSize(1280, 720, false)
+                    renderer.render(scene, camera)
+                },
+            }
+        }
+        const gotoParam = new URLSearchParams(location.search).get('goto')
+        let startDir = latLonDir(40.75, -73.98)          // 預設從紐約出發
+        if (gotoParam) {
+            const p = PLACES[gotoParam.toLowerCase()] || gotoParam.split(',').map(Number)
+            if (p && p.length === 2 && p.every(n => isFinite(n))) startDir = latLonDir(p[0], p[1])
+        }
+        let pos = startDir.clone().multiplyScalar(R + 8.5)
+        let fwd = new THREE.Vector3().crossVectors(startDir, new THREE.Vector3(0, 1, 0)).normalize()
+        if (fwd.lengthSq() < 0.1) fwd.set(0, 0, -1)
+        let alt = pos.length(), targetAlt = alt
+
+        // ---------- 天氣 ----------
+        const rainParam = new URLSearchParams(location.search).get('rain')
+        const weather = new Weather(THREE, scene,
+            rainParam === null ? null : Math.max(0, Math.min(1, parseFloat(rainParam) || 0)))
+
+        // ---------- 煙火:只在夜裡、只在指定城市 ----------
+        const fireworks = new Fireworks(THREE, scene, R, latLonDir)
+
+        // ---------- 輸入 ----------
+        const music = new Music()
+        window.__music = music
+        // ---------- 全螢幕 ----------
+        const fsBtn = document.getElementById('fsBtn')
+        const el = document.documentElement
+        const canFS = !!(el.requestFullscreen || el.webkitRequestFullscreen)
+        const inFS = () => !!(document.fullscreenElement || document.webkitFullscreenElement)
+        if (!canFS) fsBtn.classList.add('unsupported')  // iPhone Safari 不支援 → 永久隱藏
+                                                       // (與全螢幕中的暫時隱藏用不同 class,才不會互相覆蓋)
+        fsBtn.addEventListener('click', e => {
+            e.stopPropagation()
+            if (inFS()) (document.exitFullscreen || document.webkitExitFullscreen).call(document)
+            else (el.requestFullscreen || el.webkitRequestFullscreen).call(el)
+        })
+        // 兩個狀態用方向相反的角標:向外=放大,向內=還原
+        const ICON_EXPAND = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"/></svg>'
+        const ICON_SHRINK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6"/></svg>'
+        const paintFS = () => {
+            const on = inFS()
+            fsBtn.innerHTML = on ? ICON_SHRINK : ICON_EXPAND
+            fsBtn.title = on ? I18N[lang].tipFsExit : I18N[lang].tipFs
+            fsBtn.classList.toggle('hidden', on)   // 全螢幕中交給系統的關閉鈕/Esc
+        }
+        paintFS()
+        document.addEventListener('fullscreenchange', paintFS)
+        document.addEventListener('webkitfullscreenchange', paintFS)
+
+        // 操作說明面板:平時收起,點右上角遙控器鈕展開
+        const remoteBtn = document.getElementById('remoteBtn')
+        const keysEl = document.getElementById('keys')
+        remoteBtn.addEventListener('click', e => {
+            e.stopPropagation()
+            const open = !keysEl.classList.contains('open')
+            keysEl.classList.toggle('open', open)
+            remoteBtn.classList.toggle('on', open)
+        })
+
+        const musicBtn = document.getElementById('musicBtn')
+        const paintMusic = on => {
+            musicBtn.classList.toggle('on', on)
+            musicBtn.classList.toggle('off', !on)
+        }
+        // 音樂預設關閉,只有使用者自己開過才會記住並自動播
+        let musicWanted = localStorage.getItem('tp.music') === 'on'
+        const startMusic = () => {
+            if (music.ctx) return
+            music.start()
+            weather.attachAudio(music.ctx, music.master)   // 雨聲併入音樂總線
+            paintMusic(true)
+        }
+        musicBtn.addEventListener('click', e => {
+            e.stopPropagation()
+            if (!music.ctx) { startMusic(); musicWanted = true; localStorage.setItem('tp.music', 'on'); return }
+            const on = music.toggle()
+            musicWanted = on
+            localStorage.setItem('tp.music', on ? 'on' : 'off')
+            paintMusic(on)
+        })
+
+        // 右下角鍵盤面板:按下即時高亮
+        const KEY_MAP = {
+            ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
+            ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+        }
+        const keyEls = {}
+        document.querySelectorAll('#keys .key').forEach(el => { keyEls[el.dataset.k] = el })
+        const paintKey = (code, on) => {
+            const el = keyEls[KEY_MAP[code]]
+            if (el) el.classList.toggle('active', on)
+        }
+
+        // ---------- 觸控/拖曳操縱 ----------
+        // 按住畫面任一處拖曳:左右=轉彎、上下=爬升俯衝;多指=加速。
+        const stickEl = document.getElementById('stick')
+        const stickDot = document.getElementById('stickDot')
+        const touchHint = document.getElementById('touchHint')
+        const STICK_R = 66                       // 拉到滿舵所需的位移(px)
+        const drag = { id: null, x0: 0, y0: 0, turn: 0, climb: 0, boost: false }
+        const activePointers = new Set()
+
+        // 點在 UI 上就不要啟動虛擬搖桿(漏掉某個元件的症狀就是「按鈕一按飛機就偏」)
+        const onUI = el => el && el.closest &&
+            el.closest('#fsBtn, #musicBtn, #planeBtn, #remoteBtn, #palette, #keys, #fireBtn, #donateBtn')
+
+        addEventListener('pointerdown', e => {
+            activePointers.add(e.pointerId)
+            drag.boost = activePointers.size > 1          // 雙指 = 加速
+            if (onUI(e.target) || drag.id !== null) return
+            drag.id = e.pointerId
+            drag.x0 = e.clientX; drag.y0 = e.clientY
+            stickEl.style.left = stickDot.style.left = e.clientX + 'px'
+            stickEl.style.top = stickDot.style.top = e.clientY + 'px'
+            stickEl.classList.add('on'); stickDot.classList.add('on')
+            if (touchHint) touchHint.style.opacity = '0'
+        })
+
+        addEventListener('pointermove', e => {
+            if (e.pointerId !== drag.id) return
+            const dx = THREE.MathUtils.clamp((e.clientX - drag.x0) / STICK_R, -1, 1)
+            const dy = THREE.MathUtils.clamp((e.clientY - drag.y0) / STICK_R, -1, 1)
+            drag.turn = -dx                              // 往右拖 = 右轉
+            drag.climb = -dy                             // 往上拖 = 爬升
+            stickDot.style.left = (drag.x0 + dx * STICK_R) + 'px'
+            stickDot.style.top = (drag.y0 + dy * STICK_R) + 'px'
+        })
+
+        const endDrag = e => {
+            activePointers.delete(e.pointerId)
+            drag.boost = activePointers.size > 1
+            if (e.pointerId !== drag.id) return
+            drag.id = null; drag.turn = 0; drag.climb = 0
+            stickEl.classList.remove('on'); stickDot.classList.remove('on')
+        }
+        addEventListener('pointerup', endDrag)
+        addEventListener('pointercancel', endDrag)
+
+        const keys = {}
+        addEventListener('keydown', e => {
+            paintKey(e.code, true)
+            if (e.code === 'KeyM') {           // M 鍵手動開關
+                if (!music.ctx) { startMusic(); musicWanted = true; localStorage.setItem('tp.music', 'on') }
+                else { const on = music.toggle(); musicWanted = on; localStorage.setItem('tp.music', on ? 'on' : 'off'); paintMusic(on) }
+            }
+            keys[e.code] = true
+        })
+        addEventListener('keyup', e => { keys[e.code] = false; paintKey(e.code, false) })
+        const dbg = new URLSearchParams(location.search).has('dbg')
+        const hintEl = document.getElementById('hint')
+
+        // ---------- 載入模型 ----------
+        // ---------- 開場載入進度 ----------
+        // 各資產大小差很多(星球 2.1MB 佔大宗),用權重而不是「載完幾個檔」,
+        // 讀條才不會卡在某一格不動
+        const ASSETS = { planet: 0.52, landmarks: 0.20, biplane: 0.08, moon: 0.08, json: 0.12 }
+        const done = {}
+        const bootEl = document.getElementById('boot')
+        const bootFill = document.getElementById('bootFill')
+        const bootPlane = document.getElementById('bootPlane')
+        const bootPct = document.getElementById('bootPct')
+        const bootStart = document.getElementById('bootStart')
+        let bootShown = 0
+
+        const bootProgress = (key, frac) => {
+            done[key] = Math.min(1, frac)
+            const target = Object.entries(ASSETS)
+                .reduce((a, [k, w]) => a + w * (done[k] || 0), 0)
+            // 只往前不倒退,避免不同檔案的進度互相拉扯
+            bootShown = Math.max(bootShown, target)
+            const pct = Math.round(bootShown * 100)
+            bootFill.style.width = pct + '%'
+            bootPlane.style.left = pct + '%'
+            bootPct.textContent = pct + '%'
+            if (bootShown >= 0.999 && !bootReady) {
+                bootReady = true
+                bootMaybeEnter()
+            }
+        }
+        let bootReady = false, bootStarted = false
+        const bootMaybeEnter = () => {
+            if (!bootReady || !bootStarted) return
+            // 就算資源早就載完,也讓讀條露臉一下再走,不然按下去畫面會硬跳
+            setTimeout(() => {
+                bootEl.classList.add('gone')
+                setTimeout(() => bootEl.remove(), 800)
+            }, 420)
+        }
+        // 有些瀏覽器不回報 total(壓縮傳輸時),那就退回「載完才跳」
+        const onXhr = key => e => { if (e.lengthComputable) bootProgress(key, e.loaded / e.total) }
+
+        bootStart.addEventListener('click', () => {
+            if (bootStarted) return
+            bootStarted = true
+            if (musicWanted) startMusic()       // 預設不播;開過的人這一下點擊順便解鎖音訊
+            bootEl.classList.add('loading')     // 切到讀取狀態
+            bootMaybeEnter()
+        })
+
+        const loader = new GLTFLoader()
+        // Draco 解碼器:壓縮版模型用得到,未壓縮的模型設了也無妨
+        const draco = new DRACOLoader()
+        draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/')
+        loader.setDRACOLoader(draco)
+        const V = 113   // 模型改版時 +1,避免瀏覽器吃到舊快取
+        // 星球被切成上百塊區域網格(見 make_planet.py 的 build_chunked),
+        // 這裡收集每一塊的「中心方向」與「角半徑」,主迴圈用來做地平線剔除。
+        //
+        // 為什麼不能只靠內建的視錐剔除:相機貼著地表往前看時,視錐是一個延伸到
+        // far=4200 的錐體,會直接穿過整顆星球打到背面 —— 那些被星球擋住的區塊
+        // 仍然落在視錐內,照畫不誤。實測只省了 37%。
+        // 球面上「看不看得到」有封閉解,補上之後才真的省。
+        const chunks = []
+        loader.load(`./public/assets/planet.glb?v=${V}`,
+            g => {
+                scene.add(g.scene)
+                g.scene.updateWorldMatrix(true, true)
+                g.scene.traverse(o => {
+                    if (!o.isMesh || !o.geometry) return
+                    o.geometry.computeBoundingSphere()
+                    const bs = o.geometry.boundingSphere
+                    if (!bs || bs.radius <= 0) return
+                    // 一定要換算到世界座標:glTF 匯出時把每個物件的原點放在自己的
+                    // 中心,幾何區域座標的球心是 (0,0,0),直接拿來算方向會全錯
+                    const c = bs.center.clone().applyMatrix4(o.matrixWorld)
+                    const rad = bs.radius * o.matrixWorld.getMaxScaleOnAxis()
+                    const len = c.length()
+                    if (len < 1e-3) return
+                    const dir = c.clone().multiplyScalar(1 / len)
+                    // 這塊涵蓋的角半徑,寧可高估一點免得邊緣被剔掉
+                    const ang = Math.min(Math.PI / 2,
+                        Math.asin(Math.min(1, rad / len)) * 1.15 + 0.04)
+                    chunks.push({ obj: o, dir, ang })
+                })
+                console.log('[cull] 區塊', chunks.length)
+                bootProgress('planet', 1)
+            }, onXhr('planet'))
+        // 會動的地標(倫敦眼的輪子、風車的葉片……):產生器把它們各自匯出成
+        // 具名物件、原點設在旋轉中心,轉軸與轉速寫在 landmark_anim.json
+        const spinners = []
+        let lmRoot = null, animMeta = null
+        const bindSpinners = () => {
+            if (!lmRoot || !animMeta || spinners.length) return
+            for (const [name, m] of Object.entries(animMeta)) {
+                const obj = lmRoot.getObjectByName(name)
+                if (!obj) continue
+                spinners.push({
+                    obj, angle: 0,
+                    axis: new THREE.Vector3(...m.axis).normalize(),
+                    speed: m.speed || 0.11,
+                    q0: obj.quaternion.clone(),      // 模型自帶的朝向,轉動時要保留
+                })
+            }
+        }
+        loader.load(`./public/assets/landmarks.glb?v=${V}`, g => {
+            scene.add(g.scene)
+            lmRoot = g.scene
+            bindSpinners()
+            bootProgress('landmarks', 1)
+        }, onXhr('landmarks'))
+        let jsonDone = 0
+        const jsonTick = () => bootProgress('json', ++jsonDone / 3)
+        fetch(`./public/assets/landmark_anim.json?v=${V}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { animMeta = d; bindSpinners() })
+            .catch(() => {})
+            .finally(jsonTick)
+        // ---------- 城市燈火 ----------
+        // 幾千盞窗火用單一 Points 繪製(一次 draw call),夜裡才點亮。
+        let cityLights = null
+        const lightFiles = ['city_lights.json', 'landmark_lights.json']
+        Promise.all(lightFiles.map(f =>
+            fetch(`./public/assets/${f}?v=${V}`).then(r => r.ok ? r.json() : null)
+                .catch(() => null).finally(jsonTick)
+        ))
+            .then(list => {
+                const pts = list.filter(Boolean).flatMap(d => d.positions || [])
+                if (!pts.length) return
+                const d = { positions: pts }
+                const geo = new THREE.BufferGeometry()
+                geo.setAttribute('position', new THREE.Float32BufferAttribute(d.positions, 3))
+
+                // 圓形柔邊光點貼圖(方形點會很像雜訊)
+                const c = document.createElement('canvas')
+                c.width = c.height = 64
+                const ctx = c.getContext('2d')
+                const gr = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+                gr.addColorStop(0.0, 'rgba(255,236,190,1)')
+                gr.addColorStop(0.35, 'rgba(255,205,120,0.55)')
+                gr.addColorStop(1.0, 'rgba(255,180,90,0)')
+                ctx.fillStyle = gr
+                ctx.fillRect(0, 0, 64, 64)
+
+                cityLights = new THREE.Points(geo, new THREE.PointsMaterial({
+                    map: new THREE.CanvasTexture(c), color: 0xffd79a,
+                    size: 1.6, sizeAttenuation: true,
+                    blending: THREE.AdditiveBlending,
+                    transparent: true, depthWrite: false, opacity: 0
+                }))
+                scene.add(cityLights)
+            })
+            .catch(err => console.error('[city lights] 載入失敗:', err))
+
+        loader.load(`./public/assets/moon.glb?v=${V}`, g => {
+            g.scene.scale.setScalar(32)
+            g.scene.traverse(o => {
+                if (!o.isMesh) return
+                moonMat = new THREE.MeshBasicMaterial({
+                    vertexColors: true, transparent: true, depthWrite: false
+                })
+                o.material = moonMat
+            })
+            moonBall.add(g.scene)
+            bootProgress('moon', 1)
+        }, onXhr('moon'))
+
+        // 馬卡龍色盤:柔和低飽和,和低多邊形星球的色調協調
+        const MACARON = [
+            ['#f2a0a8', '草莓'], ['#f7be8f', '蜜桃'], ['#f1de97', '檸檬'], ['#afd69c', '抹茶'],
+            ['#97d8cb', '薄荷'], ['#9dc6ec', '天空'], ['#b4a7de', '薰衣草'], ['#dfa9ce', '丁香'],
+        ]
+        const paletteEl = document.getElementById('palette')
+        const dyeEl = document.getElementById('dye')
+        const planeBtn = document.getElementById('planeBtn')
+        const bodyMats = []                                   // 機身材質(不含機翼/座艙)
+        let planeColor = localStorage.getItem('tp.color') || MACARON[0][0]
+
+        // ---------- 染色 ----------
+        // 被同一個顏色連打兩發就會被「染」成那個顏色一分鐘。
+        // 這是漆彈第一次有後果 —— 在此之前打中只是沾一下就褪掉,沒有任何影響。
+        //
+        // 染色期間連自己發射的漆彈也是新顏色,所以會傳染:被染的人去打別人,
+        // 別人也會變成同一色。人多的時候會自己演成一場顏色戰爭。
+        //
+        // 刻意不寫進 localStorage —— 這是暫時狀態,一分鐘後要回到自己選的顏色。
+        const DYE_HITS = 2            // 連續幾發同色才會被染
+        const DYE_TIME = 60           // 染色持續秒數
+        let dyeColor = null, dyeLeft = 0
+        let hitColor = null, hitCount = 0     // 連擊紀錄:被別色打中就從頭算
+
+        const activeColor = () => dyeColor || planeColor
+
+        function paintBody(hex) {
+            for (const m of bodyMats) {
+                m.color.set(hex)
+                m.emissive.copy(m.color)                      // 自發光跟著換,夜裡才不會色偏
+            }
+            // 設在 body 上,飛機鈕的小圓點和發射鈕的中心點才會一起跟著換
+            document.body.style.setProperty('--body', hex)
+        }
+
+        function applyPlaneColor(hex) {
+            planeColor = hex
+            localStorage.setItem('tp.color', hex)
+            paletteEl.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c === hex))
+            if (!dyeColor) paintBody(hex)      // 染色中就先不動,等褪了自然回到新選的顏色
+        }
+
+        /** 玩家被漆彈打中。回傳是否因此被染色 */
+        function onPlayerPainted(hex) {
+            paint.splat(hex)
+            if (hex === activeColor()) return false    // 同色打不動,免得自己人互相刷
+            hitCount = hex === hitColor ? hitCount + 1 : 1
+            hitColor = hex
+            if (hitCount < DYE_HITS) return false
+            hitCount = 0
+            dyeColor = hex
+            dyeLeft = DYE_TIME
+            paintBody(hex)
+            dyeEl.style.setProperty('--c', hex)
+            dyeEl.classList.add('on')
+            return true
+        }
+
+        function tickDye(dt) {
+            if (!dyeColor) return
+            dyeLeft -= dt
+            dyeEl.style.setProperty('--k', Math.max(0, dyeLeft / DYE_TIME))
+            if (dyeLeft > 0) return
+            dyeColor = null
+            paintBody(planeColor)              // 回到自己選的顏色
+            dyeEl.classList.remove('on')
+        }
+
+        const setPaletteOpen = open => {
+            paletteEl.classList.toggle('open', open)
+            planeBtn.classList.toggle('open', open)
+        }
+        planeBtn.addEventListener('click', e => {
+            e.stopPropagation()
+            setPaletteOpen(!paletteEl.classList.contains('open'))
+        })
+        // 點畫面其他地方就收起來
+        addEventListener('pointerdown', e => {
+            if (!paletteEl.contains(e.target) && e.target !== planeBtn) setPaletteOpen(false)
+        })
+
+        MACARON.forEach(([hex], i) => {
+            const b = document.createElement('button')
+            b.className = 'sw'
+            b.style.setProperty('--c', hex)
+            b.dataset.c = hex
+            b.title = I18N[lang].colors[i]
+            b.addEventListener('click', e => { e.stopPropagation(); applyPlaneColor(hex) })
+            paletteEl.appendChild(b)
+        })
+
+        const planeMats = []
+        let traffic = null
+        let rig = null, tilt = null, propeller = null, net = null
+        let headlight = null, beacon = null, halo = null
+        const navLights = []
+        // ---------- 漆彈 ----------
+        const paint = new Paint(THREE, scene, R)
+        const FIRE_CD = 0.42
+        let fireCool = 0
+        const fireBtn = document.getElementById('fireBtn')
+        const doFire = () => {
+            if (fireCool > 0) return
+            fireCool = FIRE_CD
+            fireBtn.classList.add('cool')
+            paint.fire(pos.clone().addScaledVector(fwd, 2.4), fwd, activeColor(), 'player')
+        }
+        fireBtn.addEventListener('pointerdown', e => {
+            e.preventDefault(); e.stopPropagation()      // 別讓事件傳到搖桿
+            doFire()
+        })
+        addEventListener('keydown', e => {
+            if (e.code === 'Space') { e.preventDefault(); doFire() }
+        })
+
+        loader.load(`./public/assets/biplane.glb?v=${V}`, g => {
+            rig = new THREE.Group()          // 位置 + 航向
+            tilt = new THREE.Group()         // 壓坡度 / 俯仰的視覺傾斜
+            const inner = new THREE.Group()
+            inner.rotation.y = Math.PI       // 模型機頭原朝 -Z,轉 180° 對齊 rig +Z
+            inner.add(g.scene)
+            tilt.add(inner)
+            rig.add(tilt)
+            scene.add(rig)
+            propeller = g.scene.getObjectByName('Propeller')
+            // 自發光:讓飛機永遠看得清楚(逆光/夜晚也不會變成剪影),又不影響地形
+            g.scene.traverse(o => {
+                if (!o.isMesh) return
+                for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+                    if (!m.emissive) continue
+                    m.emissive.copy(m.color)
+                    m.emissiveIntensity = 0.42
+                    planeMats.push(m)
+                    if (m.name.includes('PlaneRed')) bodyMats.push(m)   // 機身/機鼻/尾翼
+                }
+            })
+
+            // ---------- 夜間航行燈 ----------
+            // 機艙內燈:從飛機內部往外照亮自己的機身
+            headlight = new THREE.PointLight(0xffd9a0, 0, 6, 1.4)
+            headlight.position.set(0, 0.15, 0)
+            tilt.add(headlight)
+
+            applyPlaneColor(planeColor)          // 套用上次選的顏色
+
+            // 空中交通:複製同一份機身模型,隨機配色各自巡航
+            traffic = new Traffic(THREE, scene, g.scene, {
+                count: 10, R, altMin: 6.5, altMax: 20,
+                palette: MACARON.map(m => m[0]),
+                onShoot: (p, from, dir, color) => paint.fire(from, dir, color, p),
+            })
+            traffic.spawnAround(pos.clone().normalize())
+
+            // 同場飛行:機身沿用同一份 GLTF,真人玩家看起來就跟 AI 飛機一樣
+            net = new Net(THREE, scene, g.scene, MULTIPLAYER_URL,
+                () => rig && { pos: rig.position, quat: rig.quaternion, color: activeColor() })
+
+            // 光暈:圍繞飛機的柔和光球,夜裡向外暈開
+            const c = document.createElement('canvas')
+            c.width = c.height = 128
+            const ctx = c.getContext('2d')
+            const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+            grad.addColorStop(0.0, 'rgba(255,224,170,0.85)')
+            grad.addColorStop(0.35, 'rgba(255,200,130,0.28)')
+            grad.addColorStop(1.0, 'rgba(255,180,110,0)')
+            ctx.fillStyle = grad
+            ctx.fillRect(0, 0, 128, 128)
+            halo = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: new THREE.CanvasTexture(c),
+                blending: THREE.AdditiveBlending,
+                depthWrite: false, transparent: true, opacity: 0
+            }))
+            halo.scale.setScalar(7)
+            tilt.add(halo)
+
+            // 尾部防撞燈:閃爍白光
+            beacon = new THREE.Mesh(
+                new THREE.SphereGeometry(0.07, 10, 8),
+                new THREE.MeshBasicMaterial({ color: 0xffffff }))
+            beacon.position.set(0, 0.62, -1.1)
+            const beaconGlow = new THREE.PointLight(0xffffff, 0, 2.5)
+            beacon.add(beaconGlow)
+            tilt.add(beacon)
+            navLights.push({ mesh: beacon, glow: beaconGlow, base: new THREE.Color(0xffffff), blink: true })
+            bootProgress('biplane', 1)
+        }, onXhr('biplane'))
+
+        // ---------- 主迴圈 ----------
+        const clock = new THREE.Clock()
+        function tick() {
+            const dt = Math.min(clock.getDelta(), 0.05)
+
+            // ---- 晝夜:純粹由時間決定,與飛到星球哪一面無關 ----
+            phase = (phase + dt / CYCLE) % 1
+            // 晝夜長度不同 → 白天與夜晚各自等速走完半圈,交界處仰角連續為 0
+            const theta = phase < DAY_FRAC
+                ? Math.PI * (phase / DAY_FRAC)
+                : Math.PI * (1 + (phase - DAY_FRAC) / (1 - DAY_FRAC))
+            const e = Math.sin(theta)             // 太陽仰角,-1=午夜 0=地平線 1=正午
+            const dayF = smoothstep(-0.12, 0.28, e)
+
+            // 太陽相對「當地地平面」升落:東邊升起 → 過頂 → 西邊落下
+            // 方位參考用「平行移動」延續上一幀的方向(而非每幀由固定軸重算),
+            // 否則經過極點時參考軸會瞬間翻轉、且趨近零長度導致方向亂轉 → 畫面閃爍
+            const localUp = pos.clone().normalize()
+            sunEast.addScaledVector(localUp, -sunEast.dot(localUp))      // 投影回當前地平面
+            if (sunEast.lengthSq() < 1e-8) {                             // 極端情況的保險
+                sunEast.crossVectors(Math.abs(localUp.y) > 0.9 ? WORLD_X : WORLD_Y, localUp)
+            }
+            sunEast.normalize()
+
+            const sunDir = localUp.clone().multiplyScalar(e)
+                .addScaledVector(sunEast, Math.cos(theta)).normalize()
+
+            sunTarget.position.copy(pos)
+            sun.position.copy(pos).addScaledVector(sunDir, 990)
+            sunBall.position.copy(pos).addScaledVector(sunDir, 2160)
+            sunBall.material.opacity = smoothstep(-0.06, 0.05, e)   // 落到地平線就淡出
+
+            // 月亮:放在水平線下約 20°(仍高於「視覺地平線」)。
+            // 小星球地平線下沉約 38°、鏡頭再下壓約 27°,畫面中的天空其實都在水平線以下,
+            // 月亮擺在天頂反而永遠拍不到。
+            const MOON_SIN = -0.20, MOON_COS = 0.98
+            const moonDir = localUp.clone().multiplyScalar(MOON_SIN)
+                .addScaledVector(sunEast, -MOON_COS).normalize()
+            moonBall.position.copy(pos).addScaledVector(moonDir, 2070)
+            moonHalo.position.copy(moonBall.position)
+            const moonF = smoothstep(0.16, -0.05, e)
+            if (moonMat) moonMat.opacity = moonF
+            moonHalo.material.opacity = moonF * 0.42
+            moonBall.visible = moonHalo.visible = moonF > 0.01
+            // 烘焙受光是朝 +X,把 +X 轉向太陽,明暗交界就會落在正確的位置
+            moonBall.quaternion.setFromUnitVectors(MOON_X, sunDir)
+
+            // 補光跟著太陽的反方向,飛行中與地形的相對關係才穩定
+            fill.position.copy(pos).addScaledVector(sunDir, -270).addScaledVector(localUp, 90)
+
+            // 天氣(雨勢會壓暗天色與陽光)
+            const upNow = pos.clone().normalize()
+            const rightNow = new THREE.Vector3().crossVectors(fwd, upNow).normalize()
+            // 緯度越高越冷。飛行時緯度每秒變化約 7°,門檻太低會一直在下雪,
+            // 故拉高到 58°~72°(約 66° 以北才轉為降雪)
+            const lat = Math.abs(Math.asin(THREE.MathUtils.clamp(upNow.y, -1, 1)) * 180 / Math.PI)
+            const cold = smoothstep(58, 72, lat)
+            const rain = weather.update(dt, pos, upNow, fwd, rightNow, cold, dayF)
+            const wet = rain * 0.75
+
+            const sky = skyColor(e).clone().lerp(new THREE.Color(0x4a5460), wet)
+            scene.background = sky
+            scene.fog.color.copy(sky)
+            scene.fog.density = 0.00040 + weather.fogFactor * 0.00250
+            sun.intensity = (0.05 + 3.4 * dayF) * (1 - wet * 0.65)
+            sun.color.set(0xff8a4d).lerp(new THREE.Color(0xfff2dd), smoothstep(0.0, 0.42, e))
+            hemi.intensity = (0.12 + 0.45 * dayF) * (1 - wet * 0.25) + weather.flash * 2.2
+            fill.intensity = 0.18 + 0.32 * dayF
+            starMat.opacity = (1 - dayF) * (1 - wet)      // 下雨看不到星星
+            if (cityLights) {                       // 天黑才亮燈,黃昏漸亮
+                const lit = smoothstep(0.16, -0.06, e)
+                cityLights.material.opacity = lit
+                cityLights.visible = lit > 0.01
+            }
+            music.setNight(1 - dayF)
+            fireworks.update(dt, 1 - dayF)      // 只有夜裡的那幾座城市會放
+
+            if (rig) {
+                const up = pos.clone().normalize()
+
+                const keyTurn = ((keys.ArrowLeft || keys.KeyA) ? 1 : 0) - ((keys.ArrowRight || keys.KeyD) ? 1 : 0)
+                const keyClimb = ((keys.ArrowUp || keys.KeyW) ? 1 : 0) - ((keys.ArrowDown || keys.KeyS) ? 1 : 0)
+                // 鍵盤與拖曳共用同一組控制量,兩種操作方式都能用
+                const turn = THREE.MathUtils.clamp(keyTurn + drag.turn, -1, 1)
+                const climb = THREE.MathUtils.clamp(keyClimb + drag.climb, -1, 1)
+                const boost = ((keys.ShiftLeft || keys.ShiftRight) || drag.boost) ? 1.9 : 1
+
+                // 航向繞「頭頂方向」旋轉 = 貼著球面轉彎
+                fwd.applyAxisAngle(up, turn * TURN * dt)
+
+                // 高度控制(平滑)
+                targetAlt = THREE.MathUtils.clamp(targetAlt + climb * 6 * dt, ALT_MIN, ALT_MAX)
+                alt += (targetAlt - alt) * Math.min(1, dt * 3)
+
+                // 前進 + 投影回球面高度 → 自然繞行星球
+                pos.addScaledVector(fwd, SPEED * boost * dt)
+                pos.setLength(alt)
+                const newUp = pos.clone().normalize()
+                fwd.sub(newUp.clone().multiplyScalar(fwd.dot(newUp))).normalize()
+
+                // 飛機姿態
+                rig.position.copy(pos)
+                rig.up.copy(newUp)
+                rig.lookAt(pos.clone().add(fwd))
+
+                // 轉彎壓坡度、爬升抬頭(純視覺,平滑過渡)
+                tilt.rotation.z += (-turn * 0.55 - tilt.rotation.z) * Math.min(1, dt * 5)
+                tilt.rotation.x += (-climb * 0.3 - tilt.rotation.x) * Math.min(1, dt * 5)
+
+                // 螺旋槳
+                if (propeller) propeller.rotation.z += dt * (25 * boost)
+
+                // 夜間航行燈:夜色越深越亮
+                const nightF = 1 - dayF
+                if (headlight) headlight.intensity = 7 * nightF
+                for (const m of planeMats) m.emissiveIntensity = 0.38 + 0.22 * nightF
+                if (halo) {
+                    // 光暈隨呼吸微微起伏
+                    halo.material.opacity = nightF * (0.72 + 0.12 * Math.sin(clock.elapsedTime * 1.6))
+                    halo.scale.setScalar(6.4 + 0.5 * Math.sin(clock.elapsedTime * 1.6))
+                }
+                const t = clock.elapsedTime
+                for (const L of navLights) {
+                    // 防撞燈快閃,翼尖燈慢呼吸
+                    const pulse = L.blink
+                        ? (t % 1.4 < 0.12 ? 1 : 0)
+                        : 0.55 + 0.45 * Math.sin(t * 2.2)
+                    L.glow.intensity = 0.5 * nightF * pulse
+                    L.mesh.material.color.copy(L.base).multiplyScalar(0.3 + 0.7 * nightF * pulse)
+                }
+
+                if (dbg) hintEl.textContent =
+                    `turn=${turn} climb=${climb} bank=${tilt.rotation.z.toFixed(2)} alt=${alt.toFixed(1)} pos=${pos.x.toFixed(1)},${pos.y.toFixed(1)},${pos.z.toFixed(1)}`
+
+                if (traffic) traffic.update(dt, pos, nightF)
+                if (net) net.update(dt)
+
+                if (fireCool > 0) {
+                    fireCool -= dt
+                    if (fireCool <= 0) fireBtn.classList.remove('cool')
+                }
+                tickDye(dt)
+                paint.update(dt,
+                    { pos, onHit: onPlayerPainted },
+                    traffic ? traffic.planes : null,
+                    (p, c) => traffic.splash(p, c))
+                for (const s of spinners) {          // 繞世界軸轉要左乘,原朝向才不會被蓋掉
+                    s.angle += dt * s.speed
+                    s.obj.quaternion.setFromAxisAngle(s.axis, s.angle).multiply(s.q0)
+                }
+
+                // 相機:機尾追隨
+                const camTarget = pos.clone().addScaledVector(fwd, -8.5).addScaledVector(newUp, 4.2)
+                camera.position.lerp(camTarget, Math.min(1, dt * 4))
+                camera.up.copy(newUp)
+                camera.lookAt(pos.clone().addScaledVector(fwd, 6).addScaledVector(newUp, -3.2))
+            }
+
+            // ---- 地平線剔除 ----
+            // 球面上,相機在高度 h 時看得到的角半徑是 acos(R/(R+h))。
+            // 某一塊只要「中心角距 - 自身角半徑」還在那個範圍內就要畫。
+            // 這比視錐剔除有效得多,因為視錐不知道星球會擋住後面的東西。
+            if (chunks.length) {
+                const camLen = camera.position.length()
+                const camDir = camera.position.clone().multiplyScalar(1 / camLen)
+                // 可見角半徑,再加一段餘裕:地形有起伏、山峰會突出地平線,
+                // 而且相機貼著地面時腳下那一塊的「中心」可能已經在身後
+                const horizon = Math.acos(Math.min(1, R / camLen)) + 0.10
+                for (const c of chunks) {
+                    // 要看「這一塊離相機最近的點」有沒有進來,所以是
+                    // 角距 - 自身角半徑 < 地平線,不是把角半徑加在門檻上
+                    const d = Math.acos(Math.max(-1, Math.min(1, c.dir.dot(camDir))))
+                    c.obj.visible = d - c.ang < horizon
+                }
+            }
+
+            renderer.render(scene, camera)
+            requestAnimationFrame(tick)
+        }
+        // 相機初始位置:直接放到機尾該在的地方。
+        // 原本寫死在北極附近再 lerp 過去,星球一放大那段插值會穿過星球內部,
+        // 開場會有一兩秒在地底看地形背面(整片黑)。
+        camera.position.copy(pos).addScaledVector(fwd, -8.5).addScaledVector(startDir, 4.2)
+        camera.up.copy(startDir)
+        camera.lookAt(pos.clone().addScaledVector(fwd, 6).addScaledVector(startDir, -3.2))
+        tick()
+
+        addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight
+            camera.updateProjectionMatrix()
+            renderer.setSize(innerWidth, innerHeight)
+        })
+    </script>
+</body>
+</html>

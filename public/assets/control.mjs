@@ -11,9 +11,12 @@ const OPEN_LEN = 1.4;          // 打開 X 要滑幾個「螢幕高」
 const TOUR_LEN = 2.2;          // 看完五間房要滑幾個螢幕高
 const CHARGE_PER_PX = 1 / 1100; // 讀條:每滑 1px 漲多少(要連續快滑才追得過衰減)
 const DECAY = 0.42;            // 讀條每秒往回掉多少
+// 手機:一次滑動只有一個螢幕高,手指抬起再放下中間又會掉 → 每滑一次漲比較多(約 3 下滿)、手指按著不掉、放開後等一下才慢慢掉
+const TOUCH_CHARGE = 1 / 1.9;   // 每滑「一個螢幕高」漲多少
+const TOUCH_GRACE = 700, TOUCH_DECAY = 0.2;
 const LAUNCH_SEC = 9.0;
 
-let vOpen = 0, vTour = 0, launchT = 0, lastInput = 0, pageAcc = 0, pageLock = 0;
+let vOpen = 0, vTour = 0, launchT = 0, lastInput = 0, pageAcc = 0, pageLock = 0, touching = false, lastTouch = -1e9;
 const ui = { gate: document.getElementById('gate'), fill: document.getElementById('gateFill'), pct: document.getElementById('gatePct') };
 
 // 戰艦階段的換頁 / 回上一層交給 starship/main.mjs(window.__shipNav):kind 'v' 上下、'h' 左右、'back' 回上一層;
@@ -25,7 +28,7 @@ function nav(kind, d = 0) {
 }
 
 function input(dyPx, touch = false, axis = 'v') {          // dyPx > 0 = 往下滑(內容往上走);手機一次滑動距離很大,讀條另外算
-  const cpp = touch ? 1 / (innerHeight * 3.2) : CHARGE_PER_PX;
+  const cpp = touch ? TOUCH_CHARGE / innerHeight : CHARGE_PER_PX;
   lastInput = performance.now();
   const vh = innerHeight;
   if (XP.state === 'open') {
@@ -48,10 +51,12 @@ function input(dyPx, touch = false, axis = 'v') {          // dyPx > 0 = 往下�
 addEventListener('wheel', (e) => { e.preventDefault(); const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1; const h = XP.state === 'ship' && Math.abs(e.deltaX) > Math.abs(e.deltaY); input((h ? e.deltaX : e.deltaY) * k, false, h ? 'h' : 'v'); }, { passive: false });
 // 手機:手指往上推 = 往下滑
 let ty = null, tx = null;
-addEventListener('touchstart', (e) => { ty = e.touches[0].clientY; tx = e.touches[0].clientX; }, { passive: true });
-addEventListener('touchmove', (e) => { if (ty == null) return; if (window.__shipDrag) { if (e.cancelable) e.preventDefault(); return; }   // 正在拖曳旋轉戰艦:不換頁 const y = e.touches[0].clientY, x = e.touches[0].clientX, dy = ty - y, dx = tx - x;
-  const h = XP.state === 'ship' && Math.abs(dx) > Math.abs(dy); input((h ? dx : dy) * 1.6, true, h ? 'h' : 'v'); ty = y; tx = x; if (e.cancelable) e.preventDefault(); }, { passive: false });
-addEventListener('touchend', () => { ty = tx = null; });
+addEventListener('touchstart', (e) => { ty = e.touches[0].clientY; tx = e.touches[0].clientX; touching = true; lastTouch = performance.now(); }, { passive: true });
+addEventListener('touchmove', (e) => { if (ty == null) return; if (window.__shipDrag) { if (e.cancelable) e.preventDefault(); return; }   // 正在拖曳旋轉戰艦:不換頁
+  const y = e.touches[0].clientY, x = e.touches[0].clientX, dy = ty - y, dx = tx - x;
+  const h = XP.state === 'ship' && Math.abs(dx) > Math.abs(dy); input((h ? dx : dy) * 1.6, true, h ? 'h' : 'v'); ty = y; tx = x; lastTouch = performance.now(); if (e.cancelable) e.preventDefault(); }, { passive: false });
+const touchUp = () => { ty = tx = null; touching = false; lastTouch = performance.now(); };
+addEventListener('touchend', touchUp); addEventListener('touchcancel', touchUp);
 // 鍵盤
 addEventListener('keydown', (e) => {
   const step = { ArrowDown: 80, PageDown: innerHeight * .8, ' ': innerHeight * .8, ArrowUp: -80, PageUp: -innerHeight * .8 }[e.key];
@@ -64,7 +69,11 @@ addEventListener('keydown', (e) => {
 let prev = performance.now();
 function tick(now) {
   const dt = Math.min(.05, (now - prev) / 1000); prev = now;
-  if (XP.state === 'gate' && now - lastInput > 90) XP.charge = Math.max(0, XP.charge - DECAY * dt);   // 停手就慢慢掉
+  if (XP.state === 'gate') {                                                            // 停手就慢慢掉
+    const byTouch = now - lastTouch < 4000;
+    if (byTouch) { if (!touching && now - lastTouch > TOUCH_GRACE) XP.charge = Math.max(0, XP.charge - TOUCH_DECAY * dt); }
+    else if (now - lastInput > 90) XP.charge = Math.max(0, XP.charge - DECAY * dt);
+  }
   if (now - lastInput > 250) pageAcc = 0;
   if (XP.state === 'launch') {
     launchT += dt;
