@@ -3,3 +3,8 @@ dist/
 .astro/
 .DS_Store
 tools/nn/data/
+
+# Blender 用的 CC0 素材(太大,不進版控;來源見 tools/blender/assets/LICENSE.md)
+tools/blender/assets/*
+!tools/blender/assets/LICENSE.md
+tools/blender/bake_tmp/

@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=7';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
-import { createHall, createCorridor } from './hall.mjs?v=50';
+import { createHall, createCorridor } from './hall.mjs?v=55';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -300,7 +300,12 @@ function hallLook(v) {
   const yaw = hallYaw - lookX, d = HALL_T.clone().sub(HALL_POS);
   d.applyAxisAngle(V(0, 1, 0), yaw); d.y += lookY * 6; return v.copy(HALL_POS).add(d);
 }
-function drawHallAt(t, dt, pos, tg) { hallCam.position.copy(pos); hallCam.lookAt(tg); hall.update(t, dt); hallComposer.render(dt); }
+function drawHallAt(t, dt, pos, tg) {
+  hallCam.position.copy(pos); hallCam.lookAt(tg); hall.update(t, dt);
+  // 烘焙版的貼圖已經套過 Blender 的色調(AgX),大廳這段就不要再做一次色調映射
+  const tm = renderer.toneMapping; if (hall.baked) renderer.toneMapping = THREE.NoToneMapping;
+  hallComposer.render(dt); renderer.toneMapping = tm;
+}
 // 從大廳全景走到第 i 道門前(k 0→1):先往上 / 往門的方向弧形繞過中央投影,再降到門口
 function doorPath(i, k, out) {
   const d = hall.doors[i], p0 = HALL_POS, p1 = d.world(5.2, 3.7), p2 = d.world(.3, 1.6), e = ease(k);

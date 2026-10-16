@@ -4,6 +4,8 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mat, glow, box, cyl, sphere, group, panelTex, leafyPlant, swayPlant, rand } from './kit.mjs?v=3';
 
 // 圓環的一段(俯視是扇形環),沿 y 擠出:做弧形艙壁用。b0/b1 是方位角(0 = 正後方 -z,正值往 +x)
@@ -159,6 +161,7 @@ const enterTex = () => canvasTex(512, 96, (g, W, H) => { g.fillStyle = '#1d2440'
 
 export function createHall(scene, rooms) {
   const root = new THREE.Group(); scene.add(root);
+  const arch = new THREE.Group(); root.add(arch);   // 建築(地板、牆、柱、門框、展示艙、天花板…):烘焙好的模型載入後整組換掉;互動的東西留在 root
   scene.background = new THREE.Color(0x0a0c14);
   const n = rooms.length, span = 150 * Math.PI / 180;
   const bearings = rooms.map((_, i) => -span / 2 + span * (i + .5) / n);
@@ -198,7 +201,7 @@ export function createHall(scene, rooms) {
   const fTex = (mode) => { const t = canvasTex(FPX, FPX, (g) => drawFloor(g, mode)); if (mode !== 'color') t.colorSpace = THREE.NoColorSpace; return t; };
   const floor = new THREE.Mesh(new THREE.CircleGeometry(FR, 128), new THREE.MeshStandardMaterial({ map: fTex('color'), bumpMap: fTex('bump'), bumpScale: 1.2, roughnessMap: fTex('rough'), roughness: 1,
     metalness: 0, transparent: !!mirror, opacity: mirror ? .86 : 1, envMapIntensity: .9 }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = .01; floor.receiveShadow = true; floor.renderOrder = -2; root.add(floor);   // 地板先畫,地上的貼花(陰影、光池、編號)才不會被半透明地板蓋掉
+  floor.rotation.x = -Math.PI / 2; floor.position.y = .01; floor.receiveShadow = true; floor.renderOrder = -2; arch.add(floor);   // 地板先畫,地上的貼花(陰影、光池、編號)才不會被半透明地板蓋掉
   // 接觸陰影:東西貼地的地方一圈柔和的暗(圓形 / 長條,貼在地板上)
   const contact = (parent, x, z, sx, sz, op = .35, ry = 0) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), tintMat('blob', 0x8a8274, Math.min(1, op * 2.6))); m.rotation.set(-Math.PI / 2, 0, ry); m.scale.set(sx, sz, 1); m.position.set(x, .022, z); parent.add(m); return m; };
   // 牆腳的「環境遮蔽」:靠牆的地上越往牆越暗一點點
@@ -206,7 +209,7 @@ export function createHall(scene, rooms) {
     vertexShader: 'varying float vR; void main(){ vR = length(position.xy); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: 'uniform float uR; varying float vR; void main(){ float a = pow(smoothstep(uR - 1.3, uR, vR), 2.0) * .32; gl_FragColor = vec4(mix(vec3(1.0), vec3(.62, .58, .52), a), 1.0); }',
     blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.DstColorFactor, blendDst: THREE.ZeroFactor });
-  const ao = new THREE.Mesh(new THREE.RingGeometry(HALL_R - 1.4, HALL_R + .02, 128), aoM); ao.rotation.x = -Math.PI / 2; ao.position.y = .02; root.add(ao);
+  const ao = new THREE.Mesh(new THREE.RingGeometry(HALL_R - 1.4, HALL_R + .02, 128), aoM); ao.rotation.x = -Math.PI / 2; ao.position.y = .02; arch.add(ao);
 
   // ---------- 艙壁:一整圈亮白牆(後半圈開六個門洞),牆腳 / 牆頂暖光燈條 ----------
   const wallM = new THREE.MeshStandardMaterial({ map: panelTex('#f0eee9', 'rgba(150,138,120,.13)', 1024, 1024, 3, 2), roughness: .3, metalness: .04 });
@@ -215,11 +218,11 @@ export function createHall(scene, rooms) {
   let prev = bearings[0] + half;
   for (const b of bearings.slice(1)) { segs.push([prev, b - half]); prev = b + half; }
   segs.push([prev, bearings[0] - half + Math.PI * 2]);
-  for (const [b0, b1] of segs) if (b1 > b0) root.add(ringSector(HALL_R, HALL_R + .5, b0, b1, WALL_H, wallM));
-  for (const b of bearings) { const lin = ringSector(HALL_R, HALL_R + .5, b - half, b + half, WALL_H - DOOR_H - .45, wallM); lin.position.y = DOOR_H + .45; root.add(lin); }
+  for (const [b0, b1] of segs) if (b1 > b0) arch.add(ringSector(HALL_R, HALL_R + .5, b0, b1, WALL_H, wallM));
+  for (const b of bearings) { const lin = ringSector(HALL_R, HALL_R + .5, b - half, b + half, WALL_H - DOOR_H - .45, wallM); lin.position.y = DOOR_H + .45; arch.add(lin); }
   const panelM = gloss(0xf5f3ef, .35), seamM = gloss(CD3, .5), ventM = mat(0x8d8a84, { roughness: .6 }), ledCols = [0x6cc6ff, 0x7fe0a0, 0xffd166];
   function wallModule(b, k) {
-    const m = group(root, Math.sin(b) * (HALL_R - .02), 0, -Math.cos(b) * (HALL_R - .02), -b);
+    const m = group(arch, Math.sin(b) * (HALL_R - .02), 0, -Math.cos(b) * (HALL_R - .02), -b);
     box(m, 1.25, 2.3, .05, panelM, { y: 2.15, r: .04, shadow: false });                     // 微凸的大面板
     box(m, .03, WALL_H - .8, .03, seamM, { x: .7, y: WALL_H / 2, r: 0, shadow: false });        // 直接縫
     for (let v = 0; v < 6; v++) box(m, .8, .025, .03, ventM, { y: .62 + v * .07, r: 0, shadow: false });   // 通風格柵
@@ -230,35 +233,35 @@ export function createHall(scene, rooms) {
   let mk = 0;
   for (const [b0, b1] of segs) { const arc = (b1 - b0) * HALL_R; if (arc < 1.6) continue; const cnt = Math.floor(arc / 1.5);
     for (let j = 0; j < cnt; j++) wallModule(b0 + (b1 - b0) * (j + .5) / cnt, mk++); }
-  for (const [y, h, m] of [[0, .3, gloss(CD3)], [WALL_H - .05, .1, gloss(CD2)]]) { const s = ringSector(HALL_R - .08, HALL_R, -Math.PI, Math.PI, h, m); s.position.y = y; root.add(s); }
-  for (const y of [.32, WALL_H - .3]) { const s = ringSector(HALL_R - .1, HALL_R - .06, -Math.PI, Math.PI, .04, warmM(2.4)); s.position.y = y; root.add(s); }
+  for (const [y, h, m] of [[0, .3, gloss(CD3)], [WALL_H - .05, .1, gloss(CD2)]]) { const s = ringSector(HALL_R - .08, HALL_R, -Math.PI, Math.PI, h, m); s.position.y = y; arch.add(s); }
+  for (const y of [.32, WALL_H - .3]) { const s = ringSector(HALL_R - .1, HALL_R - .06, -Math.PI, Math.PI, .04, warmM(2.4)); s.position.y = y; arch.add(s); }
   // 門與門之間(和前半圈)的柱子:圓角白柱 + 一道直的暖光 + 柱腳白色花盆
   const pillarB = [];
   for (let k = 0; k <= n; k++) pillarB.push(bearings[0] - span / n / 2 + span / n * k);
   for (let k = 1; k < 6; k++) if (k !== 3) pillarB.push(span / 2 + (Math.PI * 2 - span) * k / 6);   // 正前方(鏡頭站的位置)不放柱子
   pillarB.forEach((b, k) => {
-    const p = group(root, Math.sin(b) * (HALL_R - .25), 0, -Math.cos(b) * (HALL_R - .25), -b);
+    const p = group(arch, Math.sin(b) * (HALL_R - .25), 0, -Math.cos(b) * (HALL_R - .25), -b);
     box(p, .7, WALL_H, .5, gloss(CD), { y: WALL_H / 2, r: .12 });
     box(p, .16, WALL_H - 1.0, .04, gloss(CD3, .5), { y: WALL_H / 2 + .2, z: .24, r: .02, shadow: false });    // 燈槽
     const s = new THREE.Mesh(new THREE.BoxGeometry(.05, WALL_H - 1.2, .02), warmM(2.8)); s.position.set(0, WALL_H / 2 + .2, .27); p.add(s);
     for (const y of [1.2, 4.6]) { const l = new THREE.Mesh(new THREE.BoxGeometry(.18, .04, .02), glow(0x6cc6ff, 2)); l.position.set(0, y, .27); p.add(l); }
-    contact(root, Math.sin(b) * (HALL_R - .45), -Math.cos(b) * (HALL_R - .45), 1.6, 1.1, .3, -b);
+    contact(arch, Math.sin(b) * (HALL_R - .45), -Math.cos(b) * (HALL_R - .45), 1.6, 1.1, .3, -b);
     if (k <= n) { box(p, .8, .55, .7, gloss(0xffffff), { y: .28, z: .75, r: .1 }); plant(p, { y: .55, z: .75, r: .26, h: .2, pot: 0xffffff, len: .75, n: 12 }); }
   });
 
   // ---------- 五個門洞:圓角白門框 + 內圈暖光 + 招牌面板 + 艙內縮影 ----------
   const doors = rooms.map((room, i) => {
     const b = bearings[i], acc = room.cfg.accent, cfg = room.cfg;
-    const g = group(root, Math.sin(b) * HALL_R, 0, -Math.cos(b) * HALL_R, -b);
+    const g = group(root, Math.sin(b) * HALL_R, 0, -Math.cos(b) * HALL_R, -b), ga = group(arch, Math.sin(b) * HALL_R, 0, -Math.cos(b) * HALL_R, -b);
     // 厚門框(往大廳凸出 1.1)+ 外圈一道凹槽 + 門框正面和門洞內側(門柱裡)都嵌一圈燈帶
     const FD = 1.1;
-    const fr = new THREE.Mesh(frameGeo(DOOR_W + .9, DOOR_H + .5, DOOR_W, DOOR_H + .1, .45, FD, -.05), gloss(CD)); fr.position.z = -.35; fr.castShadow = true; g.add(fr);
-    const groove = new THREE.Mesh(frameGeo(DOOR_W + .62, DOOR_H + .36, DOOR_W + .5, DOOR_H + .3, .42, .02, -.03), gloss(CD3, .5)); groove.position.z = FD - .33; g.add(groove);
+    const fr = new THREE.Mesh(frameGeo(DOOR_W + .9, DOOR_H + .5, DOOR_W, DOOR_H + .1, .45, FD, -.05), gloss(CD)); fr.position.z = -.35; fr.castShadow = true; ga.add(fr);
+    const groove = new THREE.Mesh(frameGeo(DOOR_W + .62, DOOR_H + .36, DOOR_W + .5, DOOR_H + .3, .42, .02, -.03), gloss(CD3, .5)); groove.position.z = FD - .33; ga.add(groove);
     const lineM = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: WARM, emissiveIntensity: 2.6 });
     const ln = new THREE.Mesh(frameGeo(DOOR_W + .22, DOOR_H + .17, DOOR_W + .06, DOOR_H + .06, .4, .02, 0), lineM); ln.position.z = FD - .32; g.add(ln);
     for (const x of [-1, 1]) { const j = new THREE.Mesh(new THREE.BoxGeometry(.02, DOOR_H - .7, .06), lineM); j.position.set(x * (DOOR_W / 2 - .01), DOOR_H / 2 + .1, .2); g.add(j); }   // 門柱內側的直燈
     const jt = new THREE.Mesh(new THREE.BoxGeometry(DOOR_W - .7, .02, .06), lineM); jt.position.set(0, DOOR_H + .04, .2); g.add(jt);
-    contact(g, 0, .75, DOOR_W + 1.6, 1.6, .28);
+    contact(ga, 0, .75, DOOR_W + 1.6, 1.6, .28);
     const statusM = glow(0x5cf09a, 2.6); const status = new THREE.Mesh(new THREE.CapsuleGeometry(.035, .1, 4, 8), statusM); status.position.set(DOOR_W / 2 + .42, 1.55, FD - .32); g.add(status);
     const poolM = tintMat('pool', new THREE.Color(acc).offsetHSL(0, .3, -.12), .7);
     const pool = new THREE.Mesh(new THREE.PlaneGeometry(DOOR_W + 1.2, 3.4), poolM); pool.rotation.x = -Math.PI / 2; pool.position.set(0, .024, 1.55 + 1.7); g.add(pool);   // 從門口平台的前緣開始往大廳淡出
@@ -274,7 +277,7 @@ export function createHall(scene, rooms) {
     const enterM = new THREE.MeshBasicMaterial({ map: enterTex(), transparent: true, opacity: 0, depthWrite: false });
     const enter = new THREE.Mesh(new THREE.PlaneGeometry(1.75, .33), enterM); enter.position.set(0, -.74, .42); sg.add(enter);   // 擺在厚門框前面,不會被擋住
     // 艙內(往牆外凸出):白色內壁 + 天花板燈 + 該艙的後牆畫 + 小道具 + 燈
-    const R = group(g, 0, 0, 0);
+    const R = group(ga, 0, 0, 0);
     const floorC = { kitty: 0xf6d6e0, stocks: 0xdfe8e6, ocean: 0xe9d6a8, planet: 0x3a2466, rails: 0xd9b88f }[room.key] ?? 0xeeeeee;
     box(R, DOOR_W + .4, .06, ALC_D, gloss(floorC, .3), { y: .03, z: -ALC_D / 2, r: 0, shadow: false });
     const inner = glossNew(new THREE.Color(CD2).lerp(new THREE.Color(cfg.wall), .25).getHex(), .4);   // 滑過時會變色,每間自己一個
@@ -285,10 +288,10 @@ export function createHall(scene, rooms) {
     const back = new THREE.Mesh(new THREE.PlaneGeometry(DOOR_W + .4, DOOR_H + .4), new THREE.MeshStandardMaterial({ map: bt, emissiveMap: bt, emissive: 0xffffff, emissiveIntensity: .55, roughness: .8 }));
     back.position.set(0, (DOOR_H + .4) / 2, -ALC_D + .02); R.add(back);
     const cabLight = props(R, room.key, new THREE.Color(acc).lerp(new THREE.Color(WARM), .5).getHex());
-    box(g, DOOR_W + .3, .08, .8, gloss(CD2), { y: .04, z: 1.15, r: .03, shadow: false });     // 門口的小平台
+    box(ga, DOOR_W + .3, .08, .8, gloss(CD2), { y: .04, z: 1.15, r: .03, shadow: false });     // 門口的小平台
     const hit = new THREE.Mesh(new THREE.BoxGeometry(3.2, 5.2, 2.2), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); hit.position.set(0, 2.6, .3); g.add(hit);
     hit.userData.door = i;
-    return { i, b, g, edgeM: lineM, lineM, hit, bar, barM, BAR_W, enter, enterM, cabLight, statusM, poolM, backM: back.material, innerM: inner, open: 0, hover: 0, acc: new THREE.Color(acc), world: (dist = 0, y = 1.5) => g.localToWorld(new THREE.Vector3(0, y, dist)) };
+    return { i, b, g, ln, status, edgeM: lineM, lineM, hit, bar, barM, BAR_W, enter, enterM, cabLight, statusM, poolM, backM: back.material, innerM: inner, open: 0, hover: 0, acc: new THREE.Color(acc), world: (dist = 0, y = 1.5) => g.localToWorld(new THREE.Vector3(0, y, dist)) };
   });
 
   // ---------- 天花板:一圈斜的大窗(看得到太空和地球)+ 頂上的圓形天窗 + 放射狀的樑 + 中央吊柱 ----------
@@ -299,33 +302,33 @@ export function createHall(scene, rooms) {
         g.strokeStyle = '#ffd9a8'; g.lineWidth = 5; g.beginPath(); g.roundRect(k * ww + 10, 36, ww - 20, H - 72, 28); g.stroke(); } });
   })();
   const clere = new THREE.Mesh(new THREE.CylinderGeometry(5.6, HALL_R + .5, 3.0, 64, 1, true), new THREE.MeshStandardMaterial({ map: winTex, emissiveMap: winTex, emissive: 0xffffff, emissiveIntensity: .2, roughness: .3, side: THREE.BackSide }));
-  clere.position.y = WALL_H + 1.5; root.add(clere);
-  const ceil = new THREE.Mesh(new THREE.RingGeometry(3.0, 5.62, 96), gloss(CD)); ceil.rotation.x = Math.PI / 2; ceil.position.y = CEIL_Y; root.add(ceil);
-  for (let k = 0; k < 12; k++) { const b = k / 12 * Math.PI * 2, p = group(root, 0, 0, 0, -b);
+  clere.position.y = WALL_H + 1.5; arch.add(clere);
+  const ceil = new THREE.Mesh(new THREE.RingGeometry(3.0, 5.62, 96), gloss(CD)); ceil.rotation.x = Math.PI / 2; ceil.position.y = CEIL_Y; arch.add(ceil);
+  for (let k = 0; k < 12; k++) { const b = k / 12 * Math.PI * 2, p = group(arch, 0, 0, 0, -b);
     box(p, .3, .25, 2.7, gloss(CD2), { y: CEIL_Y - .12, z: -4.3, r: .06 });
     const l = new THREE.Mesh(new THREE.BoxGeometry(.06, .02, 2.5), warmM(2.6)); l.position.set(0, CEIL_Y - .25, -4.3); p.add(l); }
   const ocu = new THREE.Mesh(new THREE.CircleGeometry(3.0, 64), new THREE.MeshBasicMaterial({ map: earthView(), color: new THREE.Color(1.15, 1.15, 1.2), toneMapped: false }));
-  ocu.rotation.x = Math.PI / 2; ocu.position.y = CEIL_Y + .4; root.add(ocu);
-  const ocuF = new THREE.Mesh(new THREE.TorusGeometry(3.0, .22, 16, 96), gloss(CD)); ocuF.rotation.x = Math.PI / 2; ocuF.position.y = CEIL_Y + .1; root.add(ocuF);
-  const ocuL = new THREE.Mesh(new THREE.TorusGeometry(2.8, .03, 8, 96), warmM(3)); ocuL.rotation.x = Math.PI / 2; ocuL.position.y = CEIL_Y - .05; root.add(ocuL);
-  const topRing = new THREE.Mesh(new THREE.TorusGeometry(HALL_R + .2, .05, 8, 128), warmM(2.6)); topRing.rotation.x = Math.PI / 2; topRing.position.y = WALL_H + .02; root.add(topRing);
+  ocu.rotation.x = Math.PI / 2; ocu.position.y = CEIL_Y + .4; arch.add(ocu);
+  const ocuF = new THREE.Mesh(new THREE.TorusGeometry(3.0, .22, 16, 96), gloss(CD)); ocuF.rotation.x = Math.PI / 2; ocuF.position.y = CEIL_Y + .1; arch.add(ocuF);
+  const ocuL = new THREE.Mesh(new THREE.TorusGeometry(2.8, .03, 8, 96), warmM(3)); ocuL.rotation.x = Math.PI / 2; ocuL.position.y = CEIL_Y - .05; arch.add(ocuL);
+  const topRing = new THREE.Mesh(new THREE.TorusGeometry(HALL_R + .2, .05, 8, 128), warmM(2.6)); topRing.rotation.x = Math.PI / 2; topRing.position.y = WALL_H + .02; arch.add(topRing);
   // 中央吊柱(從天窗中間垂下來,底部是投影發射器)
-  for (const [y0, y1, rr] of [[CEIL_Y + .4, 6.4, .34]]) { cyl(root, rr, rr, y0 - y1, gloss(CD), { y: (y0 + y1) / 2, seg: 24 });
-    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, l = new THREE.Mesh(new THREE.BoxGeometry(.04, y0 - y1 - .6, .04), warmM(2.8)); l.position.set(Math.sin(a) * (rr + .01), (y0 + y1) / 2, Math.cos(a) * (rr + .01)); root.add(l); } }
-  cyl(root, .55, .3, .4, gloss(CD), { y: 6.25, seg: 32 });
-  const emit = new THREE.Mesh(new THREE.TorusGeometry(.62, .035, 8, 64), glow(0x6cc6ff, 3.2)); emit.rotation.x = Math.PI / 2; emit.position.y = 6.05; root.add(emit);
-  const emitRing = new THREE.Mesh(new THREE.TorusGeometry(1.15, .012, 6, 96), glow(0x8fd4ff, 2.6)); emitRing.rotation.x = Math.PI / 2; emitRing.position.y = 6.0; root.add(emitRing);
+  for (const [y0, y1, rr] of [[CEIL_Y + .4, 6.4, .34]]) { cyl(arch, rr, rr, y0 - y1, gloss(CD), { y: (y0 + y1) / 2, seg: 24 });
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, l = new THREE.Mesh(new THREE.BoxGeometry(.04, y0 - y1 - .6, .04), warmM(2.8)); l.position.set(Math.sin(a) * (rr + .01), (y0 + y1) / 2, Math.cos(a) * (rr + .01)); arch.add(l); } }
+  cyl(arch, .55, .3, .4, gloss(CD), { y: 6.25, seg: 32 });
+  const emit = new THREE.Mesh(new THREE.TorusGeometry(.62, .035, 8, 64), glow(0x6cc6ff, 3.2)); emit.rotation.x = Math.PI / 2; emit.position.y = 6.05; arch.add(emit);
+  const emitRing = new THREE.Mesh(new THREE.TorusGeometry(1.15, .012, 6, 96), glow(0x8fd4ff, 2.6)); emitRing.rotation.x = Math.PI / 2; emitRing.position.y = 6.0; arch.add(emitRing);
 
   // ---------- 中央:平的地板,只用嵌在地上的光環分區 + 發光地球儀 + 戰艦投影 ----------
-  const ped = group(root, 0, 0, 0);
-  const inlay = (r0, r1, m, y = .02) => { const g = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 160), m); g.rotation.x = -Math.PI / 2; g.position.y = y; ped.add(g); return g; };
+  const ped = group(root, 0, 0, 0), pedArch = group(arch, 0, 0, 0);
+  const inlay = (r0, r1, m, y = .02) => { const g = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 160), m); g.rotation.x = -Math.PI / 2; g.position.y = y; pedArch.add(g); return g; };
   inlay(4.3, 4.36, warmM(2.8)); inlay(3.62, 3.67, warmM(2.8)); inlay(3.67, 4.3, gloss(CD2, .2), .016);   // 兩圈暖光之間是一圈淡一點的地板
-  for (let k = 0; k < 36; k++) { const b = k / 36 * Math.PI * 2, l = new THREE.Mesh(new THREE.PlaneGeometry(.04, .5), warmM(1.8)); l.rotation.x = -Math.PI / 2; l.rotation.z = -b; const p = at(b, 3.98, .022); l.position.copy(p); ped.add(l); }
+  for (let k = 0; k < 36; k++) { const b = k / 36 * Math.PI * 2, l = new THREE.Mesh(new THREE.PlaneGeometry(.04, .5), warmM(1.8)); l.rotation.x = -Math.PI / 2; l.rotation.z = -b; const p = at(b, 3.98, .022); l.position.copy(p); pedArch.add(l); }
   const padTex = canvasTex(512, 512, (g, W) => { g.fillStyle = '#0c1a36'; g.fillRect(0, 0, W, W); g.strokeStyle = 'rgba(127,208,255,.7)';
     for (let k = 1; k < 9; k++) { g.lineWidth = k % 3 ? 2 : 5; g.beginPath(); g.arc(W / 2, W / 2, k * 28, 0, Math.PI * 2); g.stroke(); }
     for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2; g.beginPath(); g.moveTo(W / 2 + Math.cos(a) * 60, W / 2 + Math.sin(a) * 60); g.lineTo(W / 2 + Math.cos(a) * 250, W / 2 + Math.sin(a) * 250); g.stroke(); } });
-  const pad = new THREE.Mesh(new THREE.CircleGeometry(2.0, 64), new THREE.MeshBasicMaterial({ map: padTex, toneMapped: false })); pad.rotation.x = -Math.PI / 2; pad.position.y = .024; ped.add(pad);
-  const r3 = new THREE.Mesh(new THREE.TorusGeometry(2.02, .04, 8, 96), glow(0x6cc6ff, 3)); r3.rotation.x = Math.PI / 2; r3.position.y = .03; ped.add(r3);
+  const pad = new THREE.Mesh(new THREE.CircleGeometry(2.0, 64), new THREE.MeshBasicMaterial({ map: padTex, toneMapped: false })); pad.rotation.x = -Math.PI / 2; pad.position.y = .024; pedArch.add(pad);
+  const r3 = new THREE.Mesh(new THREE.TorusGeometry(2.02, .04, 8, 96), glow(0x6cc6ff, 3)); r3.rotation.x = Math.PI / 2; r3.position.y = .03; pedArch.add(r3);
   // ---------- 中央全息:旋轉的地球(藍球 + 點狀大陸 + 經緯線 + 光暈 + 兩圈軌道)+ 上方戰艦投影 + 往上飄的光點 ----------
   // 大陸形狀:球面上的 3D 雜訊(fbm)決定哪裡是陸地 → 自然的不規則海岸線
   const hash = (x, y, z) => { const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453; return h - Math.floor(h); };
@@ -384,13 +387,13 @@ export function createHall(scene, rooms) {
   const dust = new THREE.Points(dGeo, new THREE.PointsMaterial({ color: 0xffffff, size: .03, transparent: true, opacity: .55, depthWrite: false })); root.add(dust);
 
   // ---------- 入口兩側的大花盆 ----------
-  for (const s of [-1, 1]) { contact(root, s * 3.6, 5.6, 1.9, 1.9, .32); box(root, 1.0, .7, 1.0, gloss(0xffffff), { x: s * 3.6, y: .35, z: 5.6, r: .12 }); plant(root, { x: s * 3.6, y: .7, z: 5.6, r: .32, h: .2, pot: 0xffffff, len: 1.0, n: 14 }); }
+  for (const s of [-1, 1]) { contact(arch, s * 3.6, 5.6, 1.9, 1.9, .32); box(arch, 1.0, .7, 1.0, gloss(0xffffff), { x: s * 3.6, y: .35, z: 5.6, r: .12 }); plant(arch, { x: s * 3.6, y: .7, z: 5.6, r: .32, h: .2, pot: 0xffffff, len: 1.0, n: 14 }); }
 
   // ---------- 圓形沙發(兩側) ----------
   const sofaM = gloss(CD2, .85), cushM = gloss(0xfaf8f4, .9);
   for (const s of [-1, 1]) {
-    const px = s * 5.7, pz = 1.2, so = group(root, px, 0, pz, Math.atan2(-px, -pz));
-    contact(root, px, pz, 3.0, 3.0, .38); cyl(so, 1.12, 1.12, .12, gloss(CD3), { y: .06, seg: 48 });
+    const px = s * 5.7, pz = 1.2, so = group(arch, px, 0, pz, Math.atan2(-px, -pz));
+    contact(arch, px, pz, 3.0, 3.0, .38); cyl(so, 1.12, 1.12, .12, gloss(CD3), { y: .06, seg: 48 });
     const ringL = new THREE.Mesh(new THREE.TorusGeometry(1.1, .025, 6, 64), warmM(2.4)); ringL.rotation.x = Math.PI / 2; ringL.position.y = .03; so.add(ringL);
     cyl(so, 1.05, 1.08, .3, sofaM, { y: .27, seg: 48 }); cyl(so, .98, .98, .14, cushM, { y: .48, seg: 48 });
     const rim = new THREE.Mesh(new THREE.TorusGeometry(.98, .07, 10, 64), cushM); rim.rotation.x = Math.PI / 2; rim.position.y = .48; so.add(rim);
@@ -412,7 +415,7 @@ export function createHall(scene, rooms) {
   const brushes = [-1, 1].map((x) => { const br = group(bot, x * .3, .015, -.26); for (let k = 0; k < 3; k++) { const f = new THREE.Mesh(new THREE.BoxGeometry(.015, .006, .17), mat(0x8a8f99)); f.rotation.y = k * Math.PI * 2 / 3; f.position.set(Math.sin(k * Math.PI * 2 / 3) * .07, 0, Math.cos(k * Math.PI * 2 / 3) * .07); br.add(f); } return br; });
   const shadowBlob = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), tintMat('blob', 0x6a645a, 1)); shadowBlob.rotation.x = -Math.PI / 2; shadowBlob.position.y = .021; bot.add(shadowBlob);
   bot.traverse((o) => { if (o.isMesh) o.castShadow = true; }); bot.scale.setScalar(1.35);
-  const AVOID = [[-5.7, 1.2, 1.7], [5.7, 1.2, 1.7], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 沙發、入口花盆:[x, z, 半徑]
+  const AVOID = [[-5.6, 1.0, 1.9], [5.5, 1.0, 1.8], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
   const okPt = (x, z) => AVOID.every(([ax, az, r]) => Math.hypot(x - ax, z - az) > r);
   const clearPath = (x0, z0, x1, z1) => { for (let k = 1; k <= 12; k++) { const u = k / 12, x = x0 + (x1 - x0) * u, z = z0 + (z1 - z0) * u, rr = Math.hypot(x, z); if (!okPt(x, z) || rr < 2.5 || rr > 6.9) return false; } return true; };
   const B = { x: -3.2, z: -2.6, h: Math.PI / 2, tx: 0, tz: 0, wait: 0, speed: 0, dir: 1 };   // dir:沿著圈繞的方向,偶爾掉頭
@@ -450,15 +453,36 @@ export function createHall(scene, rooms) {
 
   // ---------- 效能:不會動的東西依材質合併成少數幾個網格(draw call 從上千降到幾百)----------
   const skip = new Set([bot, globe, holo, motes, dust, emitRing, ...plants, ...doors.flatMap((d) => [d.bar, d.enter])]); if (mirror) skip.add(mirror);
-  mergeStatic(root, skip);
+  mergeStatic(arch, skip);
   // 葉子、艙裡的小道具不投陰影(地上的接觸陰影就夠了),省掉陰影那一輪的大量繪製
   for (const p of plants) p.traverse((o) => { o.castShadow = false; });
   for (const d of doors) d.g.traverse((o) => { if (o.isMesh && o.geometry.parameters?.height !== undefined && o !== d.hit) o.castShadow = false; });
   // 地板反射每兩幀更新一次(倒影本來就柔,看不出差別),反射那一輪的成本減半
   if (mirror) { const orig = mirror.onBeforeRender; let f = 0; mirror.onBeforeRender = function (...a) { if ((f++ & 1) === 0) orig.apply(this, a); }; }
+  // ---------- 烘焙版建築(Blender 建模 + Cycles 烘光,tools/blender/hall_bake.py 產生)----------
+  // 載入前先顯示上面用程式蓋的大廳;載入後把 arch 整組換掉。植物家具是另一個檔(原本材質、即時打光)。
+  let baked = false; const propPlants = [];
+  const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
+  const loadGLB = (url) => new Promise((ok, fail) => gl.load(url, (g) => ok(g.scene), undefined, fail));
+  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=3'), loadGLB('/assets/starship/models/hall_props.glb?v=3')]).then(([hallM, propsM]) => {
+    hallM.traverse((o) => {
+      if (!o.isMesh) return;
+      const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光
+      if (o.name.startsWith('baked_floor') && mirror) { m.transparent = true; m.opacity = .9; o.renderOrder = -2; mirror.position.y = -.012; }   // 讓即時的地板倒影透一點出來(鏡面放到磚面底下,不然會搶深度)
+      if (o.name.startsWith('screen_')) m.color.setScalar(.9);
+      o.material = m; src.dispose(); o.matrixAutoUpdate = false; o.updateMatrix();
+    });
+    propsM.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+      if (/^prop_(anthurium|calathea|pachira|potted)/.test(o.name) && o.parent === propsM) propPlants.push({ o, rz: o.rotation.z, rx: o.rotation.x, ph: Math.random() * 6 }); });
+    root.add(hallM, propsM);
+    root.remove(arch); arch.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); } });
+    plants.length = 0; baked = true;
+    for (const d of doors) { d.ln.position.z = .88; d.status.position.z = .88; }   // 烘焙版的門框比較厚,燈帶往前一點
+  }).catch((e) => console.warn('[hall] 烘焙模型載入失敗,用程式蓋的版本', e));
+
   const _v = new THREE.Vector3(), warmC = new THREE.Color(WARM);
   return {
-    root, doors, hits: doors.map((d) => d.hit),
+    root, doors, hits: doors.map((d) => d.hit), get baked() { return baked; },
     update(t, dt) {
       stepBot(t, Math.min(dt, .05));
       spin.rotation.y = t * .12; holo.rotation.y = -t * .3; holo.position.y = 2.6 + Math.sin(t * 1.2) * .05; globe.position.y = 1.5 + Math.sin(t * .8) * .03;
@@ -481,6 +505,8 @@ export function createHall(scene, rooms) {
         d.barM.color.setRGB(.16, .58, .9).multiplyScalar(.55 + Math.max(br, d.hover) * 1.1 + d.open * .8);   // 冰藍(白底上要深一點才看得到)
         d.enterM.opacity = d.hover; d.enter.position.y = -.8 + d.hover * .08;
       }
+      for (const p of propPlants) { const x = p.o.position.x, tt = t - x * .09, w = Math.max(0, .35 + .4 * Math.sin(tt * .55) + .25 * Math.sin(tt * 1.37 + 1.2));
+        p.o.rotation.x = p.rx + Math.sin(t * 1.7 + p.ph) * .012 * (.4 + w); p.o.rotation.z = p.rz + w * .025 + Math.sin(t * 2.3 + p.ph) * .01; }
       for (const p of plants) {
         const x = p.getWorldPosition(_v).x, tt = t - x * .09;
         const wind = Math.max(0, .35 + .4 * Math.sin(tt * .55) + .25 * Math.sin(tt * 1.37 + 1.2));
