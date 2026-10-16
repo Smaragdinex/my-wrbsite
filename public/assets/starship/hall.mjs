@@ -498,24 +498,10 @@ export function createHall(scene, rooms) {
   // ---------- 烘焙版建築(Blender 建模 + Cycles 烘光,tools/blender/hall_bake.py 產生)----------
   // 載入前先顯示上面用程式蓋的大廳;載入後把 arch 整組換掉。植物家具是另一個檔(原本材質、即時打光)。
   let baked = false; const propPlants = [];
-  // 即時打光下 Blender 的材質要微調:沙發圈圈紗改成霧面絨布感(sheen)+ 細顆粒凹凸;古銅、拉絲金屬在這裡反射的環境偏暗,降低金屬度才不會變黑
-  const fabricBump = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), d = g.createImageData(256, 256);
-    for (let i = 0; i < d.data.length; i += 4) { const v = 128 + (Math.random() - .5) * 150; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
-    g.putImageData(d, 0, 0); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; })();
+  // 即時打光下 Blender 的金屬材質要微調:古銅、拉絲金屬在這裡反射的環境偏暗,降低金屬度才不會變黑(布沙發已經跟建築一起烘光,不用處理)
   function fixPropMat(m) {
     if (!m || fixPropMat.done?.has(m)) return; (fixPropMat.done ??= new Set()).add(m);
-    if (m.name === 'sofa_boucle') {
-      m.roughness = 1; m.metalness = 0; m.color.set(0xe2d6c2);
-      if ('sheen' in m) { m.sheen = 1; m.sheenRoughness = .85; m.sheenColor.set(0xfff4e2); }
-      // 圈圈紗的顆粒:用世界座標三面投影一張雜訊,當 bump 擾動法線(模型沒有 UV 也能用)
-      m.onBeforeCompile = (sh) => {
-        sh.uniforms.uFab = { value: fabricBump };
-        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFabP;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvFabP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uFab; varying vec3 vFabP;\nfloat fab(vec3 p){ return texture2D(uFab, p.xy*9.).r*.34 + texture2D(uFab, p.yz*9.).r*.33 + texture2D(uFab, p.zx*9.).r*.33; }')
-          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float e = .004, h = fab(vFabP); vec3 gx = vec3(fab(vFabP + vec3(e,0,0)) - h, fab(vFabP + vec3(0,e,0)) - h, fab(vFabP + vec3(0,0,e)) - h) / e; vec3 gv = (viewMatrix * vec4(gx, 0.)).xyz; normal = normalize(normal - (gv - dot(gv, normal) * normal) * .0022); diffuseColor.rgb *= .9 + .2 * h; }');
-      };
-      m.needsUpdate = true;
-    } else if (m.name === 'bronze') { m.metalness = .55; m.roughness = .34; m.color.set(0xc09a62); }
+    if (m.name === 'bronze') { m.metalness = .55; m.roughness = .34; m.color.set(0xc09a62); }
     else if (m.name === 'brushed_metal') { m.metalness = .45; m.roughness = .32; m.color.set(0xd8d4cc); }
   }
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
@@ -532,7 +518,7 @@ export function createHall(scene, rooms) {
     ['bot_eyeL', 'bot_eyeR'].forEach((n, k) => { const e = get(n); e.material = eyeM; e.userData.sz = e.scale.z; botBody.add(e); eyes[k] = e; });
     ['bot_brushL', 'bot_brushR'].forEach((n, k) => { const b = get(n); b.traverse((o) => { if (o.isMesh) o.castShadow = true; }); bot.add(b); brushes[k] = b; });
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
-  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=6'), loadGLB('/assets/starship/models/hall_props.glb?v=6')]).then(([hallM, propsM]) => {
+  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=8'), loadGLB('/assets/starship/models/hall_props.glb?v=8')]).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光

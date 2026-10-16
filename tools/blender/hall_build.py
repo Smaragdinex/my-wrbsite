@@ -316,6 +316,7 @@ place('modern_arm_chair_01', (lx - .2, ly - 1.05, 0), math.atan2(-(lx - (lx - .2
 place('modern_arm_chair_01', (lx + 1.05, ly + .15, 0), math.atan2(-(lx - (lx + 1.05)), (ly - (ly + .15))) + math.pi, 1.0, recolor=(['pillow'], mat('fabric_mist', '#c9d3dc', .9)))
 place('potted_plant_01', (lx - 1.3, ly + .9, 0), 0, 1.0, recolor=(['pot'], M_CERAMIC))
 # 右側休息區:中古風躺椅 + 腳凳 + 邊桌 + 小盆栽
+# 布面沙發、大理石桌面叫 furn_*:跟建築一起烘光(網頁上看起來跟渲染圖一樣);金屬零件叫 prop_*(即時打光,金屬烘不出來)
 # 右側休息區:北歐輕奢的「豌豆沙發」(使用者給的參考圖):S 形的豆子坐墊 + 一長一短兩條圓滾滾的靠背 + 左端嵌一片古銅色圓托盤、
 # 兩條靠背中間後面一張古銅小圓几;前面再放一張小圓桌。全部米白圈圈紗(boucle)。
 # 先在「沙發自己的座標」蓋(x = 長邊、-y = 正面),最後整組轉到大廳裡,正面朝大廳中央偏入口(玩家站的地方)
@@ -355,13 +356,13 @@ def seat_outline():
     p, nv = spine_frame(0); t = Vector((-nv.y, nv.x, 0)); w = width(0) / 2
     ring += [p - nv * math.cos(a) * w + t * math.sin(a) * w for a in [math.pi * k / 12 for k in range(1, 12)]]   # 左端半圓
     return ring
-def curve_obj(name, pts, cyclic, bevel, extrude=0.0, fill='BOTH', z=0.0, material=None, res=6):
+def curve_obj(name, pts, cyclic, bevel, extrude=0.0, fill='BOTH', z=0.0, material=None, res=6, caps=True):
     cd = bpy.data.curves.new(name, 'CURVE'); cd.dimensions = '2D' if extrude else '3D'
     sp = cd.splines.new('POLY'); sp.points.add(len(pts) - 1)
     for k, v in enumerate(pts): sp.points[k].co = (v.x, v.y, v.z if not extrude else 0, 1)
     sp.use_cyclic_u = cyclic; cd.bevel_depth = bevel; cd.bevel_resolution = res; cd.extrude = extrude
     if extrude: cd.fill_mode = fill
-    else: cd.use_fill_caps = True
+    else: cd.use_fill_caps = caps
     o = bpy.data.objects.new(name, cd); col_root.objects.link(o); o.location.z = z
     if material: o.data.materials.append(material)
     bpy.ops.object.select_all(action='DESELECT'); o.select_set(True); bpy.context.view_layer.objects.active = o
@@ -370,9 +371,9 @@ def curve_obj(name, pts, cyclic, bevel, extrude=0.0, fill='BOTH', z=0.0, materia
     return o
 sofa = []
 # 坐墊:豆子形的厚墊,邊緣整圈圓角(高 0.46)
-sofa.append(curve_obj('prop_sofa_seat', seat_outline(), True, .13, extrude=.1, z=.23, material=M_BOUCLE))
+sofa.append(curve_obj('furn_sofa_seat', seat_outline(), True, .13, extrude=.1, z=.23, material=M_BOUCLE))
 # 底下一圈內縮的深色踢腳,看起來輕一點
-sofa.append(curve_obj('prop_sofa_kick', [v * .94 for v in seat_outline()], True, .0, extrude=.04, z=.04, material=mat('sofa_kick', '#4a4642', .5)))
+sofa.append(curve_obj('furn_sofa_kick', [v * .94 for v in seat_outline()], True, .0, extrude=.04, z=.04, material=mat('sofa_kick', '#4a4642', .5)))
 def bolster(name, i0, i1, r, inset, wrap=0):
     """沿坐墊後緣的一條圓滾靠背;wrap > 0 = 在右端再繞過半圓往前包"""
     pts = []
@@ -383,18 +384,19 @@ def bolster(name, i0, i1, r, inset, wrap=0):
         pts += [p + nv * math.cos(a) * w + t * math.sin(a) * w for a in [math.radians(wrap) * k / 8 for k in range(1, 9)]]
     ZC, SZ = .62, 1.35                                                          # 靠背中心高度、上下拉長(胖胖的橢圓斷面,下半部埋進坐墊)
     for v in pts: v.z = 0
-    o = curve_obj(name, pts, False, r, material=M_BOUCLE, res=8)
+    o = curve_obj(name, pts, False, r, material=M_BOUCLE, res=8, caps=False)
     o.scale.z = SZ; o.location.z = ZC; bpy.ops.object.transform_apply(location=True, scale=True)
-    for v in (pts[0], pts[-1]):                                                  # 兩端用同樣大小的球收成圓頭
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=r, location=(v.x, v.y, ZC)); e = link(bpy.context.active_object)
-        e.scale.z = SZ; e.data.materials.append(M_BOUCLE); e.name = name + '_cap'
-        bpy.ops.object.select_all(action='DESELECT'); e.select_set(True); bpy.context.view_layer.objects.active = e; bpy.ops.object.transform_apply(scale=True)
-        for pl in e.data.polygons: pl.use_smooth = True
-        sofa.append(e)
+    # 兩端收成半球,剛好接在管子的斷面上(不用整顆球疊進去,烘光時重疊的地方會出現一條黑線)
+    for v, w in ((pts[0], pts[1]), (pts[-1], pts[-2])):
+        t = (v - w).normalized(); bm = bmesh.new()
+        bmesh.ops.create_uvsphere(bm, u_segments=36, v_segments=18, radius=r)
+        bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0), plane_no=t, clear_inner=True)
+        for vv in bm.verts: vv.co.z *= SZ; vv.co += Vector((v.x, v.y, ZC))
+        e = mesh_obj(name + '_cap', bm, M_BOUCLE); sofa.append(e)
     sofa.append(o)
 N = len(SPINE) - 1
-bolster('prop_sofa_back_long', 2, int(N * .58), .2, .2)
-bolster('prop_sofa_back_short', int(N * .76), N, .19, .19, wrap=100)
+bolster('furn_sofa_back_long', 2, int(N * .58), .2, .2)
+bolster('furn_sofa_back_short', int(N * .76), N, .19, .19, wrap=100)
 # 左端嵌的古銅托盤 + 兩條靠背中間後面的古銅小圓几
 p, nv = spine_frame(0); t = (SPINE[0] - SPINE[1]).normalized()
 bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.3, depth=.022, location=(p.x + t.x * .3 - nv.x * .1, p.y + t.y * .3 - nv.y * .1, .47)); e = link(bpy.context.active_object); e.data.materials.append(M_BRONZE); e.name = 'prop_sofa_tray'; sofa.append(e)
@@ -405,7 +407,7 @@ for nm, r, d, z in (('top', .26, .02, .55), ('stem', .02, .54, .27), ('foot', .1
 # 小圓桌(在沙發正前方):白色大理石桌面 + 拉絲金屬細腳座
 M_STONE = mat('stone_white', '#efece6', .12, coat=.6); M_BRUSHED = mat('brushed_metal', '#c9c6c0', .3, metal=1.0)
 for nm, r, d, z, m_, v in (('top', .36, .035, .4, M_STONE, 96), ('stem', .032, .37, .2, M_BRUSHED, 32), ('base', .2, .022, .011, M_BRUSHED, 64)):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=v, radius=r, depth=d, location=(.05, -1.12, z)); e = link(bpy.context.active_object); e.data.materials.append(m_); e.name = f'prop_table_{nm}'; sofa.append(e)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=v, radius=r, depth=d, location=(.05, -1.12, z)); e = link(bpy.context.active_object); e.data.materials.append(m_); e.name = f'{"furn" if nm == "top" else "prop"}_table_{nm}'; sofa.append(e)
     if nm != 'stem': bv = e.modifiers.new('bevel', 'BEVEL'); bv.width = .01; bv.segments = 3
 # 整組擺進大廳:沙發中心 C,正面(-y)轉向玩家
 Cx, Cy = 5.7, -1.4

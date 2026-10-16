@@ -23,12 +23,13 @@ log('scene built', len(bpy.data.objects), 'objects')
 # ---- 2. 分組 ----
 SKIP = ('prop_', 'screen_', 'signtext_', 'holo_', 'door_light_', 'cut_', 'sign_')     # 不烘:網頁上另外做的(招牌、全息、門框燈帶)或另外匯出的
 def group_of(n):
+    if n.startswith('furn_'): return 'furn'                                      # 布沙發、石桌面:靜止不動,一起烘
     if n.startswith(SKIP) and not n.startswith('screen_bezel_'): return None
     if n.startswith(('tile_', 'floor_base', 'inlay_', 'warm_ring_', 'pad')): return 'floor'
     if n.startswith(('door_frame_', 'door_step_', 'cabin_', 'screen_bezel_')): return 'doors'
     if n.startswith(('rib', 'clerestory_glass', 'ring_low', 'ring_high', 'ceiling', 'ceil_beam', 'oculus_', 'column', 'emitter_')): return 'ceiling'
     return 'walls'
-SIZES = {'floor': 4096, 'walls': 4096, 'doors': 4096, 'ceiling': 2048}   # 最終品質;測試時用倍率縮小
+SIZES = {'floor': 4096, 'walls': 4096, 'doors': 4096, 'ceiling': 2048, 'furn': 2048}   # 最終品質;測試時用倍率縮小
 groups = {}
 for o in list(scene.objects):
     if o.type not in ('MESH', 'CURVE'): continue
