@@ -28,21 +28,6 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
-// ---------- 環境反射:一個上亮下暗、帶幾塊柔光板的小攝影棚,讓金屬和玻璃有反光 ----------
-{
-  const env = new THREE.Scene();
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, uniforms: {},
-    vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: 'varying vec3 vP; void main(){ float h = normalize(vP).y*0.5+0.5; gl_FragColor = vec4(mix(vec3(0.10,0.10,0.16), vec3(0.95,0.97,1.0), smoothstep(0.2,1.0,h)), 1.0); }' }));
-  env.add(sky);
-  for (const [x, y, z, c] of [[6, 5, 3, 0xffffff], [-6, 3, -4, 0xbfd6ff], [0, 6, -6, 0xffe2f0]]) {
-    const panel = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.5), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }));
-    panel.position.set(x, y, z); panel.lookAt(0, 0, 0); env.add(panel);
-  }
-  const pm = new THREE.PMREMGenerator(renderer);
-  scene.environment = pm.fromScene(env, 0.02).texture;
-}
-
 // ---------- 光 ----------
 scene.add(new THREE.HemisphereLight(0xeaf2ff, 0x5a5070, 1.25));
 const key = new THREE.DirectionalLight(0xfff3e4, 2.1); key.position.set(10, 18, 12); key.castShadow = true;
@@ -51,7 +36,7 @@ scene.add(key); scene.add(key.target);
 const rim = new THREE.DirectionalLight(0x9fc4ff, .7); rim.position.set(-12, 6, -10); scene.add(rim);
 
 // ---------- 小工具 ----------
-const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: .62, metalness: .02, envMapIntensity: .55, ...o });
+const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: .62, metalness: .02, ...o });
 const G = (c, i = 2) => new THREE.MeshStandardMaterial({ color: 0x000000, emissive: c, emissiveIntensity: i });
 function rbox(w, h, d, r = .08, m) {        // 圓角方塊(粉彩玩具感)
   const s = new THREE.Shape(); const x = -w / 2, y = -h / 2;
@@ -87,17 +72,7 @@ function label(text, accent) {
 // ---------- 太空梭:沿 x 軸,前側(+z)切開看得到裡面 ----------
 const ROOMS = WORKS.length, RW = 4, LEN = ROOMS * RW, R = 3.1, FLOOR_Y = -1.5;
 const ship = new THREE.Group(); scene.add(ship);
-function panelTexture() {     // 機身面板:淡淡的接縫線和鉚釘
-  const c = document.createElement('canvas'); c.width = 512; c.height = 2048; const g = c.getContext('2d');
-  g.fillStyle = '#f4f5f9'; g.fillRect(0, 0, 512, 2048);
-  g.strokeStyle = 'rgba(120,130,160,.35)'; g.lineWidth = 3;
-  for (let y = 0; y <= 2048; y += 205) { g.beginPath(); g.moveTo(0, y); g.lineTo(512, y); g.stroke(); }
-  for (let x = 0; x <= 512; x += 128) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 2048); g.stroke(); }
-  g.fillStyle = 'rgba(120,130,160,.45)';
-  for (let y = 12; y < 2048; y += 205) for (let x = 10; x < 512; x += 32) { g.beginPath(); g.arc(x, y, 2.2, 0, Math.PI * 2); g.fill(); }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
-}
-const hullM = M(0xffffff, { map: panelTexture(), roughness: .38, metalness: .12, side: THREE.DoubleSide });
+const hullM = M(0xf3f4f8, { roughness: .45, metalness: .08, side: THREE.DoubleSide });
 const hullIn = M(0xdfe3ee, { side: THREE.BackSide });
 // 機身:只留背面那半圈(上→後→下),前面切開
 const hull = mesh(new THREE.CylinderGeometry(R, R, LEN, 48, 1, true, Math.PI / 2, Math.PI), hullM); hull.rotation.z = Math.PI / 2; ship.add(hull);
@@ -123,60 +98,6 @@ for (const s of [-1, 1]) { const w = mesh(wingGeo, M(0xe8ebf3)); w.rotation.x = 
   const tip = mesh(new THREE.BoxGeometry(1.4, .12, .16), G(WORKS[s > 0 ? 0 : 3].accent, 2.5), false); tip.position.set(LEN / 2 - 4.2, FLOOR_Y - .5, s * (R + 3.7)); ship.add(tip); }
 const fin = mesh(new THREE.ExtrudeGeometry((() => { const f = new THREE.Shape(); f.moveTo(0, 0); f.lineTo(4, 0); f.lineTo(3.2, 3); f.lineTo(1.6, 3); f.closePath(); return f; })(), { depth: .2, bevelEnabled: false }), M(0xe8ebf3));
 fin.position.set(LEN / 2 - 4.4, R - .25, -.9); ship.add(fin);
-
-// ---------- 升級細節 ----------
-const blinkers = [], flames = [];
-// 機身上下兩道彩色飾條(貼在外殼上,稍微大一點)
-for (const [a0, col] of [[Math.PI / 2 + .12, 0xff8fa3], [Math.PI * 1.5 - .3, 0x7fb8ff]]) {
-  const band = mesh(new THREE.CylinderGeometry(R + .015, R + .015, LEN - .1, 48, 1, true, a0, .18), M(col, { roughness: .35, side: THREE.DoubleSide }), false);
-  band.rotation.z = Math.PI / 2; ship.add(band);
-}
-// 切口上下兩條藍色發光燈條
-for (const y of [R - .02, -R + .02]) { const e = mesh(new THREE.BoxGeometry(LEN - .4, .05, .06), G(0x7fd0ff, 2.2), false); e.position.set(0, y, .1); ship.add(e); }
-// 機身頂部外側一排亮著的小舷窗
-for (let k = 0; k < 9; k++) {
-  const a = Math.PI / 2 + .55;                                   // 外殼上偏後的一圈位置(轉成 x 軸後)
-  const w = mesh(new THREE.CircleGeometry(.16, 18), G(k % 3 ? 0xffe2a8 : 0x9fdcff, 1.8), false);
-  const y = Math.cos(a - Math.PI / 2) * (R + .02), z = -Math.sin(a - Math.PI / 2) * (R + .02);
-  w.position.set(-LEN / 2 + 1.2 + k * (LEN - 2.4) / 8, y, z); w.lookAt(w.position.x, y * 2, z * 2); ship.add(w);
-}
-// 天線(機頭上方)+ 碟形天線
-{
-  const mast = mesh(new THREE.CylinderGeometry(.04, .05, 1.6, 8), M(0xb9c2d6, { metalness: .6, roughness: .3 })); mast.position.set(-LEN / 2 + 1.6, R + .75, -.6); ship.add(mast);
-  const tip = mesh(new THREE.SphereGeometry(.09, 12, 8), G(0xff6b6b, 3), false); tip.position.set(-LEN / 2 + 1.6, R + 1.6, -.6); ship.add(tip); blinkers.push({ m: tip, rate: 1.1, phase: 0 });
-  const dish = mesh(new THREE.SphereGeometry(.55, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2.6), M(0xeef1f7, { metalness: .4, roughness: .3, side: THREE.DoubleSide }));
-  dish.position.set(LEN / 2 - 2.6, R + .35, -1.1); dish.rotation.set(-.5, 0, .5); ship.add(dish);
-  const dstem = mesh(new THREE.CylinderGeometry(.05, .05, .5, 8), M(0xb9c2d6)); dstem.position.set(LEN / 2 - 2.6, R + .1, -1.1); ship.add(dstem);
-}
-// 駕駛艙玻璃反光
-{ const glint = mesh(new THREE.SphereGeometry(1.21, 24, 16, 0, Math.PI * .5, Math.PI * .15, Math.PI * .3), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .35 }), false);
-  glint.scale.set(1.6, .8, 1.1); glint.position.set(-LEN / 2 - 3.6, 1.0, -1.3); ship.add(glint); }
-// 航行燈:左翼紅、右翼綠、尾翼白色閃光
-for (const [x, y, z, col, rate, ph] of [[LEN / 2 - 4.0, FLOOR_Y - .45, R + 3.85, 0x5cff9a, .9, .3], [LEN / 2 - 4.0, FLOOR_Y - .45, -(R + 3.85), 0xff5a5a, .9, .3], [LEN / 2 - 2.4, R + 2.85, -.8, 0xffffff, 1.6, 0]]) {
-  const l = mesh(new THREE.SphereGeometry(.13, 12, 8), G(col, 3), false); l.position.set(x, y, z); ship.add(l);
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: col, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); halo.scale.setScalar(1.1); halo.position.copy(l.position); ship.add(halo);
-  blinkers.push({ m: l, halo, rate, phase: ph });
-}
-// 引擎火焰:會閃動的藍色錐形+光暈
-function glowTex() {
-  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.35, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
-}
-function flameTex() {
-  const c = document.createElement('canvas'); c.width = 32; c.height = 256; const g = c.getContext('2d');
-  const gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.25, 'rgba(140,210,255,.85)'); gr.addColorStop(1, 'rgba(60,120,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 32, 256); return new THREE.CanvasTexture(c);
-}
-{
-  const ft = flameTex(), gt = glowTex(); ft.flipY = false;   // 亮的那端貼在噴嘴
-  for (const [y, z] of [[1.1, -1.2], [-1.1, -1.2], [0, -2.1]]) {
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(.62, 3.2, 20, 1, true), new THREE.MeshBasicMaterial({ map: ft, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
-    cone.geometry.translate(0, 1.6, 0); cone.rotation.z = -Math.PI / 2; cone.position.set(LEN / 2 + 1.65, y, z); ship.add(cone);   // 底(寬)在噴嘴、尖端往後
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: gt, color: 0x7fc8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(2.6); glow.position.set(LEN / 2 + 1.9, y, z); ship.add(glow);
-    flames.push({ cone, glow, ph: Math.random() * 6 });
-  }
-}
 
 // ---------- 五間房 ----------
 const rooms = [];
@@ -252,61 +173,12 @@ WORKS.forEach((w, i) => {
   rooms.push({ w, room, props, lb, hit, anim, lamp, cx, lift: 0 });
 });
 
-// ---------- 背景天空:三層星星(亮的會閃)+ 隨機流星(螢幕座標,不跟著鏡頭縮放)----------
-const skyScene = new THREE.Scene(), skyCam = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
-const starMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  uniforms: { uTime: { value: 0 }, uDpr: { value: renderer.getPixelRatio() } },
-  vertexShader: `attribute float aSize; attribute float aPhase; attribute float aTw; uniform float uTime, uDpr; varying float vA;
-    void main(){ vA = mix(1.0, 0.35 + 0.65*abs(sin(uTime*(0.6+aTw*1.8) + aPhase)), step(0.5, aTw)); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_PointSize = aSize * uDpr; }`,
-  fragmentShader: `varying float vA; void main(){ vec2 c = gl_PointCoord-0.5; float r = length(c); if(r>0.5) discard; float a = smoothstep(0.5,0.0,r); gl_FragColor = vec4(vec3(0.85,0.9,1.0), a*a*vA); }` });
-let starGeo = null;
-function buildStars() {
-  const W = innerWidth, H = innerHeight, N = Math.round(W * H / 380);   // 1280×800 約 2,700 顆
-  const pos = new Float32Array(N * 3), size = new Float32Array(N), ph = new Float32Array(N), tw = new Float32Array(N);
-  for (let k = 0; k < N; k++) {
-    const r = Math.random();
-    pos.set([Math.random() * W, Math.random() * H, 0], k * 3);
-    size[k] = r < .8 ? 1.2 + Math.random() * .8 : r < .97 ? 2.2 + Math.random() * 1.2 : 3.6 + Math.random() * 1.6;   // 小、中、少數亮星
-    ph[k] = Math.random() * 6.28; tw[k] = r > .8 ? Math.random() : Math.random() * .5;                             // 亮一點的才會閃
-  }
-  if (starGeo) { skyScene.remove(skyScene.userData.stars); starGeo.dispose(); }
-  starGeo = new THREE.BufferGeometry();
-  starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); starGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
-  starGeo.setAttribute('aPhase', new THREE.BufferAttribute(ph, 1)); starGeo.setAttribute('aTw', new THREE.BufferAttribute(tw, 1));
-  const pts = new THREE.Points(starGeo, starMat); pts.frustumCulled = false; skyScene.add(pts); skyScene.userData.stars = pts;
-  skyCam.right = W; skyCam.top = H; skyCam.updateProjectionMatrix();
-}
-buildStars(); addEventListener('resize', buildStars);
-// 流星:頭亮尾淡的細長條,從畫面上半部往左下劃過
-const meteorTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 16; const g = c.getContext('2d');
-  const gr = g.createLinearGradient(0, 0, 256, 0); gr.addColorStop(0, 'rgba(160,200,255,0)'); gr.addColorStop(.85, 'rgba(210,230,255,.7)'); gr.addColorStop(1, 'rgba(255,255,255,1)');
-  g.fillStyle = gr; g.beginPath(); g.moveTo(0, 8); g.lineTo(240, 3); g.arc(246, 8, 6, -Math.PI / 2, Math.PI / 2); g.lineTo(0, 9); g.fill();
-  return new THREE.CanvasTexture(c); })();
-const meteors = [];
-for (let k = 0; k < 4; k++) {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: meteorTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  m.visible = false; skyScene.add(m); meteors.push({ m, life: 0, dur: 1, vx: 0, vy: 0 });
-}
-let nextMeteor = 1.2;
-function stepSky(dt, t) {
-  starMat.uniforms.uTime.value = t;
-  nextMeteor -= dt;
-  if (nextMeteor <= 0) {
-    nextMeteor = 1 + Math.random() * 3;
-    const f = meteors.find((x) => !x.m.visible);
-    if (f) {
-      const W = innerWidth, H = innerHeight, ang = Math.PI + .35 + Math.random() * .55, sp = 700 + Math.random() * 700, len = 120 + Math.random() * 200;
-      f.vx = Math.cos(ang) * sp; f.vy = Math.sin(ang) * sp; f.life = 0; f.dur = .7 + Math.random() * .7;
-      f.m.position.set(W * (.3 + Math.random() * .7), H * (.5 + Math.random() * .5), 0);
-      f.m.rotation.z = ang + Math.PI; f.m.scale.set(len, 6 + Math.random() * 4, 1); f.m.visible = true;
-    }
-  }
-  for (const f of meteors) {
-    if (!f.m.visible) continue;
-    f.life += dt; f.m.position.x += f.vx * dt; f.m.position.y += f.vy * dt;
-    const k = f.life / f.dur; f.m.material.opacity = Math.sin(Math.PI * Math.min(1, k));
-    if (k >= 1) f.m.visible = false;
-  }
+// ---------- 遠方星星 ----------
+{
+  const N = 900, p = new Float32Array(N * 3); const v = new THREE.Vector3();
+  for (let k = 0; k < N; k++) { v.randomDirection().multiplyScalar(80 + Math.random() * 40); p.set([v.x, v.y, v.z], k * 3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcfe0ff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: .8 })));
 }
 
 // ---------- 星際穿越(光速星線):出發後自動播放 ----------
@@ -365,7 +237,6 @@ function frame() {
   flashEl.style.opacity = (XP.flash || 0).toFixed(3);
   if (appear <= 0.001 && !warpOn) { requestAnimationFrame(frame); return; }
   renderer.clear();
-  if (appear > .001) { stepSky(dt, t); renderer.render(skyScene, skyCam); }
   if (warpOn) { stepWarp(dt, XP.warp); renderer.render(warpScene, warpCam); }
   if (appear <= 0.001) { requestAnimationFrame(frame); return; }
 
@@ -373,7 +244,7 @@ function frame() {
   const r = tour * (ROOMS - 1), ri = Math.round(r);
   const focusX = tour > 0 ? -LEN / 2 + RW / 2 + r * RW : 0;
   const zoomIn = ease(seg(tour, 0, .12));
-  const zoom = THREE.MathUtils.lerp(.03, .62, ease(appear)) * THREE.MathUtils.lerp(1, 2.5, zoomIn);   // 先看整艘(含機頭和火焰),再拉近看房間
+  const zoom = THREE.MathUtils.lerp(.03, .74, ease(appear)) * THREE.MathUtils.lerp(1, 2.1, zoomIn);
   ship.rotation.y = (1 - appear) * -.9;               // 從遠方轉著飛進來
   tgt.set(THREE.MathUtils.lerp(0, focusX, zoomIn), THREE.MathUtils.lerp(-.6, -.6, zoomIn), 0);
   cam.position.copy(tgt).addScaledVector(VIEW, 60); cam.lookAt(tgt); cam.zoom = zoom; cam.updateProjectionMatrix();
@@ -395,8 +266,6 @@ function frame() {
     rm.anim.forEach((f) => f(t));
   });
   ship.traverse((o) => { if (o.userData.pulse) o.material.emissiveIntensity = 3 + Math.sin(t * 6) * .6; });
-  for (const b of blinkers) { const on = ((t * b.rate + b.phase) % 1) < .18; b.m.material.emissiveIntensity = on ? 5 : .3; if (b.halo) b.halo.material.opacity = on ? 1 : .08; }
-  for (const f of flames) { const k = .85 + Math.sin(t * 23 + f.ph) * .08 + Math.sin(t * 37 + f.ph * 2) * .06; f.cone.scale.set(1, k, 1); f.glow.material.opacity = .7 + (k - .85) * 2; }
   key.target.position.copy(tgt);
   renderer.render(scene, cam);
   requestAnimationFrame(frame);
