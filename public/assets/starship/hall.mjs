@@ -450,7 +450,7 @@ export function createHall(scene, rooms) {
   const brushes = [-1, 1].map((x) => { const br = group(bot, x * .3, .015, -.26); for (let k = 0; k < 3; k++) { const f = new THREE.Mesh(new THREE.BoxGeometry(.015, .006, .17), mat(0x8a8f99)); f.rotation.y = k * Math.PI * 2 / 3; f.position.set(Math.sin(k * Math.PI * 2 / 3) * .07, 0, Math.cos(k * Math.PI * 2 / 3) * .07); br.add(f); } return br; });
   const shadowBlob = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), tintMat('blob', 0x6a645a, 1)); shadowBlob.rotation.x = -Math.PI / 2; shadowBlob.position.y = .021; bot.add(shadowBlob);
   bot.traverse((o) => { if (o.isMesh) o.castShadow = true; }); bot.scale.setScalar(1.35);
-  const AVOID = [[-5.6, 1.0, 1.9], [5.5, 1.0, 1.8], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
+  const AVOID = [[-5.6, 1.0, 1.9], [5.34, 1.57, 2.1], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
   const okPt = (x, z) => AVOID.every(([ax, az, r]) => Math.hypot(x - ax, z - az) > r);
   const clearPath = (x0, z0, x1, z1) => { for (let k = 1; k <= 12; k++) { const u = k / 12, x = x0 + (x1 - x0) * u, z = z0 + (z1 - z0) * u, rr = Math.hypot(x, z); if (!okPt(x, z) || rr < 2.5 || rr > 6.9) return false; } return true; };
   const B = { x: -3.2, z: -2.6, h: Math.PI / 2, tx: 0, tz: 0, wait: 0, speed: 0, dir: 1 };   // dir:沿著圈繞的方向,偶爾掉頭
@@ -463,7 +463,7 @@ export function createHall(scene, rooms) {
     }
     B.dir *= -1; const a = a0 + B.dir * .4, r = 4.6; B.tx = Math.sin(a) * r; B.tz = -Math.cos(a) * r;   // 找不到路就掉頭
   }
-  nextTarget();
+  nextTarget(); window.__hallBot = B;   // 測試用:可以把機器人停到鏡頭前
   function stepBot(t, dt) {
     if (B.wait > 0) { B.wait -= dt; B.speed = Math.max(0, B.speed - dt * 1.5); }
     else {
@@ -478,13 +478,14 @@ export function createHall(scene, rooms) {
     bot.position.set(B.x, 0, B.z); bot.rotation.y = B.h;
     botBody.position.y = Math.sin(t * 18) * .003 * (B.speed > .05 ? 1 : 0);
     const spin = 8 + B.speed * 14; brushes[0].rotation.y += dt * spin; brushes[1].rotation.y -= dt * spin;
-    const blink = (t % 3.7) < .12; eyes.forEach((e) => { e.scale.y = blink ? .15 : 1; });
+    const blink = (t % 3.7) < .12; eyes.forEach((e) => { if (e.userData.sz) e.scale.z = e.userData.sz * (blink ? .15 : 1); else e.scale.y = blink ? .15 : 1; });   // 模型版眼睛是平躺的橢圓,眨眼壓前後方向
     ledRing.material.emissiveIntensity = B.wait > 0 ? 1.8 + Math.sin(t * 4) * 1.4 : 3.2;
   }
 
   // 燈:暖白頂光 + 地球儀藍光
   const lamp = new THREE.PointLight(0xfff0dc, 2.5, 22, 1.2); lamp.position.set(0, 7.5, 0); root.add(lamp);
-  const holoLight = new THREE.PointLight(0xffc874, 3, 6, 1.6);   // 地球的金光 holoLight.position.set(0, 1.5, 0); root.add(holoLight);
+  const holoLight = new THREE.PointLight(0xffc874, 3, 6, 1.6);   // 地球的金光
+  holoLight.position.set(0, 1.5, 0); root.add(holoLight);
 
   // ---------- 效能:不會動的東西依材質合併成少數幾個網格(draw call 從上千降到幾百)----------
   const skip = new Set([bot, globe, holo, motes, dust, emitRing, ...plants, ...doors.flatMap((d) => [d.bar, d.enter])]); if (mirror) skip.add(mirror);
@@ -497,9 +498,41 @@ export function createHall(scene, rooms) {
   // ---------- 烘焙版建築(Blender 建模 + Cycles 烘光,tools/blender/hall_bake.py 產生)----------
   // 載入前先顯示上面用程式蓋的大廳;載入後把 arch 整組換掉。植物家具是另一個檔(原本材質、即時打光)。
   let baked = false; const propPlants = [];
+  // 即時打光下 Blender 的材質要微調:沙發圈圈紗改成霧面絨布感(sheen)+ 細顆粒凹凸;古銅、拉絲金屬在這裡反射的環境偏暗,降低金屬度才不會變黑
+  const fabricBump = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), d = g.createImageData(256, 256);
+    for (let i = 0; i < d.data.length; i += 4) { const v = 128 + (Math.random() - .5) * 150; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+    g.putImageData(d, 0, 0); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; })();
+  function fixPropMat(m) {
+    if (!m || fixPropMat.done?.has(m)) return; (fixPropMat.done ??= new Set()).add(m);
+    if (m.name === 'sofa_boucle') {
+      m.roughness = 1; m.metalness = 0; m.color.set(0xe2d6c2);
+      if ('sheen' in m) { m.sheen = 1; m.sheenRoughness = .85; m.sheenColor.set(0xfff4e2); }
+      // 圈圈紗的顆粒:用世界座標三面投影一張雜訊,當 bump 擾動法線(模型沒有 UV 也能用)
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.uFab = { value: fabricBump };
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFabP;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvFabP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uFab; varying vec3 vFabP;\nfloat fab(vec3 p){ return texture2D(uFab, p.xy*9.).r*.34 + texture2D(uFab, p.yz*9.).r*.33 + texture2D(uFab, p.zx*9.).r*.33; }')
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float e = .004, h = fab(vFabP); vec3 gx = vec3(fab(vFabP + vec3(e,0,0)) - h, fab(vFabP + vec3(0,e,0)) - h, fab(vFabP + vec3(0,0,e)) - h) / e; vec3 gv = (viewMatrix * vec4(gx, 0.)).xyz; normal = normalize(normal - (gv - dot(gv, normal) * normal) * .0022); diffuseColor.rgb *= .9 + .2 * h; }');
+      };
+      m.needsUpdate = true;
+    } else if (m.name === 'bronze') { m.metalness = .55; m.roughness = .34; m.color.set(0xc09a62); }
+    else if (m.name === 'brushed_metal') { m.metalness = .45; m.roughness = .32; m.color.set(0xd8d4cc); }
+  }
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
   const loadGLB = (url) => new Promise((ok, fail) => gl.load(url, (g) => ok(g.scene), undefined, fail));
-  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=3'), loadGLB('/assets/starship/models/hall_props.glb?v=3')]).then(([hallM, propsM]) => {
+  // 打掃機器人的精細版(tools/blender/bot_build.py):載入後把程式做的簡易機身換掉;側刷、眼睛、燈環沿用原本的動畫
+  loadGLB('/assets/starship/models/bot.glb?v=1').then((m) => {
+    const get = (n) => m.getObjectByName(n);
+    for (const o of [...botBody.children]) { botBody.remove(o); o.geometry?.dispose(); }
+    for (const br of brushes) bot.remove(br);
+    const body = get('bot_body'), led = get('bot_led');
+    body.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    led.material = ledRing.material;
+    botBody.add(body, led);
+    ['bot_eyeL', 'bot_eyeR'].forEach((n, k) => { const e = get(n); e.material = eyeM; e.userData.sz = e.scale.z; botBody.add(e); eyes[k] = e; });
+    ['bot_brushL', 'bot_brushR'].forEach((n, k) => { const b = get(n); b.traverse((o) => { if (o.isMesh) o.castShadow = true; }); bot.add(b); brushes[k] = b; });
+  }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
+  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=6'), loadGLB('/assets/starship/models/hall_props.glb?v=6')]).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光
@@ -507,7 +540,7 @@ export function createHall(scene, rooms) {
       if (o.name.startsWith('screen_')) m.color.setScalar(.9);
       o.material = m; src.dispose(); o.matrixAutoUpdate = false; o.updateMatrix();
     });
-    propsM.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+    propsM.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; fixPropMat(o.material); }
       if (/^prop_(anthurium|calathea|pachira|potted)/.test(o.name) && o.parent === propsM) propPlants.push({ o, rz: o.rotation.z, rx: o.rotation.x, ph: Math.random() * 6 }); });
     root.add(hallM, propsM);
     root.remove(arch); arch.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); } });
