@@ -29,7 +29,7 @@ def group_of(n):
     if n.startswith(('door_frame_', 'door_step_', 'cabin_', 'screen_bezel_')): return 'doors'
     if n.startswith(('rib', 'clerestory_glass', 'ring_low', 'ring_high', 'ceiling', 'ceil_beam', 'oculus_', 'column', 'emitter_')): return 'ceiling'
     return 'walls'
-SIZES = {'floor': 4096, 'walls': 4096, 'doors': 4096, 'ceiling': 2048, 'furn': 2048}   # 最終品質;測試時用倍率縮小
+SIZES = {'floor': 4096, 'walls': 4096, 'doors': 4096, 'ceiling': 2048, 'furn': 4096}   # 最終品質;測試時用倍率縮小
 groups = {}
 for o in list(scene.objects):
     if o.type not in ('MESH', 'CURVE'): continue
@@ -79,6 +79,11 @@ for g, ob in joined.items():
     for slot in ob.material_slots:
         m = slot.material
         if not m or not m.use_nodes: continue
+        if g == 'furn':                                       # 家具的金屬零件:烘焙只烘漫射光,金屬會變全黑 → 當成同顏色的非金屬來烘
+            for pn in m.node_tree.nodes:
+                if pn.type == 'BSDF_PRINCIPLED':
+                    for l in list(pn.inputs['Metallic'].links): m.node_tree.links.remove(l)
+                    pn.inputs['Metallic'].default_value = 0.0
         n = m.node_tree.nodes.get('__bake__') or m.node_tree.nodes.new('ShaderNodeTexImage'); n.name = '__bake__'
         n.image = img; m.node_tree.nodes.active = n
     select_only([ob])

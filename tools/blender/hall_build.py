@@ -289,14 +289,20 @@ def asset(name, keep=None):
             for c in o.users_collection: c.objects.unlink(o)
         _cache[name] = objs
     return _cache[name]
-def place(name, pos, rot_z=0.0, scale=1.0, keep=None, recolor=None):
-    root = bpy.data.objects.new(f'prop_{name}_{len(_placed)}', None); col_root.objects.link(root); _placed.append(root)
+def place(name, pos, rot_z=0.0, scale=1.0, keep=None, recolor=None, prefix='prop'):
+    """prefix='furn':不會動的家具,跟建築一起烘光(網站上看起來跟渲染圖一樣);拆掉父物件、直接留世界座標,烘焙時才合得起來"""
+    root = bpy.data.objects.new(f'{prefix}_{name}_{len(_placed)}', None); col_root.objects.link(root); _placed.append(root)
+    kids = []
     for o in asset(name, keep):
-        c = o.copy(); col_root.objects.link(c); c.parent = root; c.name = f'prop_{name}_{len(_placed)}_{o.name}'
+        c = o.copy(); col_root.objects.link(c); c.parent = root; c.name = f'{prefix}_{name}_{len(_placed)}_{o.name}'; kids.append(c)
         if recolor:
             for slot in c.material_slots:
                 if slot.material and any(k in slot.material.name for k in recolor[0]): c.material_slots[slot.slot_index].link = 'OBJECT'; c.material_slots[slot.slot_index].material = recolor[1]
     root.location = pos; root.rotation_euler = (0, 0, rot_z); root.scale = (scale,) * 3
+    if prefix == 'furn':
+        bpy.context.view_layer.update()
+        for c in kids: mw = c.matrix_world.copy(); c.parent = None; c.matrix_world = mw
+        _placed.remove(root); bpy.data.objects.remove(root, do_unlink=True); return None
     return root
 M_CERAMIC = mat('ceramic_white', '#f4f2ee', .18, coat=.4)
 # 柱腳花盆:輪流放火鶴花 / 肖竹芋(直接種在白色花盆箱裡)
@@ -311,9 +317,9 @@ for sx in (-1, 1):
     place('pachira_aquatica_01', (sx * 3.6, -5.6, .56), sx * .8, 1.0, keep=['_d'])
 # 左側休息區:兩張現代扶手椅面對面 + 咖啡桌 + 一盆植物
 lx, ly = -5.4, -1.0
-place('modern_coffee_table_02', (lx, ly, 0), 0, 1.0)
-place('modern_arm_chair_01', (lx - .2, ly - 1.05, 0), math.atan2(-(lx - (lx - .2)), (ly - (ly - 1.05))) + math.pi, 1.0, recolor=(['pillow'], mat('fabric_mist', '#c9d3dc', .9)))
-place('modern_arm_chair_01', (lx + 1.05, ly + .15, 0), math.atan2(-(lx - (lx + 1.05)), (ly - (ly + .15))) + math.pi, 1.0, recolor=(['pillow'], mat('fabric_mist', '#c9d3dc', .9)))
+place('modern_coffee_table_02', (lx, ly, 0), 0, 1.0, prefix='furn')
+place('modern_arm_chair_01', (lx - .2, ly - 1.05, 0), math.atan2(-(lx - (lx - .2)), (ly - (ly - 1.05))) + math.pi, 1.0, recolor=(['pillow'], mat('fabric_mist', '#c9d3dc', .9)), prefix='furn')
+place('modern_arm_chair_01', (lx + 1.05, ly + .15, 0), math.atan2(-(lx - (lx + 1.05)), (ly - (ly + .15))) + math.pi, 1.0, recolor=(['pillow'], mat('fabric_mist', '#c9d3dc', .9)), prefix='furn')
 place('potted_plant_01', (lx - 1.3, ly + .9, 0), 0, 1.0, recolor=(['pot'], M_CERAMIC))
 # 右側休息區:中古風躺椅 + 腳凳 + 邊桌 + 小盆栽
 # 布面沙發、大理石桌面叫 furn_*:跟建築一起烘光(網頁上看起來跟渲染圖一樣);金屬零件叫 prop_*(即時打光,金屬烘不出來)

@@ -518,7 +518,7 @@ export function createHall(scene, rooms) {
     ['bot_eyeL', 'bot_eyeR'].forEach((n, k) => { const e = get(n); e.material = eyeM; e.userData.sz = e.scale.z; botBody.add(e); eyes[k] = e; });
     ['bot_brushL', 'bot_brushR'].forEach((n, k) => { const b = get(n); b.traverse((o) => { if (o.isMesh) o.castShadow = true; }); bot.add(b); brushes[k] = b; });
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
-  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=8'), loadGLB('/assets/starship/models/hall_props.glb?v=8')]).then(([hallM, propsM]) => {
+  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=9'), loadGLB('/assets/starship/models/hall_props.glb?v=9')]).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光
