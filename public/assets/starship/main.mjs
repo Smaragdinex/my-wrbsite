@@ -6,11 +6,12 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=7';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
-import { createHall, createCorridor } from './hall.mjs?v=24';
+import { createHall, createCorridor } from './hall.mjs?v=33';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { sfx } from './sfx.mjs?v=1';
 
 const canvas = document.getElementById('ship');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -153,6 +154,19 @@ addEventListener('resize', resize); resize();
 
 // ---------- UI ----------
 const card = document.getElementById('card'), flashEl = document.getElementById('flash'), dots = document.getElementById('dots');
+const cursorEl = document.getElementById('cursor'), fineCursor = matchMedia('(min-width: 701px) and (hover: hover)').matches;
+let lastHk = -1;
+// 頁面上所有按鈕 / 連結:滑過「滴」、按下「確認音」;艙室箭頭、圓點、作品卡按鈕滑過時圓球游標也縮小
+let lastEl = null;
+addEventListener('pointerover', (e) => { const el = e.target.closest?.('a, button'); if (el && el !== lastEl) sfx.hover(); lastEl = el;
+  if (el && el.matches('#arrows button, #dots button, #card a, #sfxBtn')) cursorEl?.classList.add('onnav'); });
+addEventListener('pointerout', (e) => { const el = e.target.closest?.('#arrows button, #dots button, #card a, #sfxBtn'); if (el && !el.contains(e.relatedTarget)) cursorEl?.classList.remove('onnav'); });
+addEventListener('click', (e) => { if (e.target.closest?.('a, button') && !e.target.closest('#sfxBtn')) sfx.click(); }, true);
+// 音效開關(右下角的小喇叭)
+const sfxBtn = Object.assign(document.createElement('button'), { id: 'sfxBtn', title: 'Sound' });
+sfxBtn.setAttribute('aria-label', 'Toggle sound');
+const drawSfx = () => { sfxBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/>${sfx.muted ? '<path d="M17 9l5 6M22 9l-5 6"/>' : '<path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>'}</svg>`; sfxBtn.classList.toggle('muted', sfx.muted); };
+drawSfx(); sfxBtn.addEventListener('click', () => { sfx.toggle(); drawSfx(); }); document.body.appendChild(sfxBtn);
 const arrows = document.getElementById('arrows'), prevBtn = document.getElementById('prevRoom'), nextBtn = document.getElementById('nextRoom');
 const veil = Object.assign(document.createElement('div'), { id: 'veil' });          // 轉場用的幕(進出戰艦用暖白,其他用黑)
 veil.style.cssText = 'position:fixed;inset:0;z-index:4;background:#05070d;opacity:0;pointer-events:none';
@@ -177,11 +191,11 @@ function open(w) { if (/^https?:/.test(w.url)) window.open(w.url, '_blank', 'noo
 let mode = 'ext', t0 = 0, cur = 0, roomF = 0, side = 1, fromDoor = 0, clockT = 0;
 const ENTER = 6.2, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0;
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
-function go(m, extra = {}) { mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
+function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
-function enterShip() { if (mode !== 'ext') return; side = extCam.position.x >= 0 ? 1 : -1; go('enter'); }
-function toRoom(i) { if (mode !== 'hall') return; cur = roomF = i; fromDoor = i; go('toRoom', { room: i }); }
-function slideTo(i) { cur = Math.max(0, Math.min(ROOMS.length - 1, i)); window.__shipState.room = cur; }
+function enterShip() { if (mode !== 'ext') return; side = extCam.position.x >= 0 ? 1 : -1; sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); go('enter'); }
+function toRoom(i) { if (mode !== 'hall') return; sfx.click(); sfx.whoosh(true); cur = roomF = i; fromDoor = i; go('toRoom', { room: i }); }
+function slideTo(i) { const n = Math.max(0, Math.min(ROOMS.length - 1, i)); if (n !== cur) sfx.swish(); cur = n; window.__shipState.room = cur; }
 function nav(kind, d = 0) {
   if (busy()) return;
   if (kind === 'back') { if (mode === 'room') { fromDoor = cur; go('toHall'); } else if (mode === 'hall') go('exit'); return; }
@@ -227,7 +241,7 @@ canvas.addEventListener('pointerup', (e) => {
   setNdc(e); const h = pick();
   if (mode === 'ext' && h === 'hangar') enterShip();
   else if (mode === 'hall' && h >= 0) toRoom(h);
-  else if (mode === 'room' && h >= 0) open(ROOMS[h]);
+  else if (mode === 'room' && h >= 0) { sfx.click(); open(ROOMS[h]); }
 });
 canvas.addEventListener('pointercancel', () => { drag = null; window.__shipDrag = false; });
 function pick() {
@@ -357,7 +371,12 @@ function frame() {
   hover = -1; hoverHangar = false;
   if (live && !drag) { const h = pick(); if (h === 'hangar') hoverHangar = true; else hover = h; }
   hall.doors.forEach((d) => { d.hover += ((mode === 'hall' && hover === d.i ? 1 : 0) - d.hover) * Math.min(1, dt * 8); });
-  canvas.style.cursor = (hoverHangar || hover >= 0) ? 'pointer' : mode === 'ext' ? (drag ? 'grabbing' : 'grab') : '';
+  // 游標:桌機用網站本來的圓球游標,指到作品門 / 機庫口 / 作品艙時縮成小點;手機或窄螢幕才用系統游標
+  const onThing = live && (hoverHangar || hover >= 0);
+  cursorEl?.classList.toggle('ondoor', onThing);
+  canvas.style.cursor = fineCursor ? '' : onThing ? 'pointer' : mode === 'ext' ? (drag ? 'grabbing' : 'grab') : '';
+  const hk = hoverHangar ? 'h' : hover; if (hk !== lastHk) { if (hk !== -1 && live) sfx.hover(); lastHk = hk; }   // 滑到新的東西:滴一聲
+  if (sfxBtn) sfxBtn.classList.toggle('on', live);
 
   // UI:作品卡、圓點、左右箭頭、返回鈕
   const inRoom = live && mode === 'room', settled = inRoom && Math.abs(roomF - cur) < .02;
