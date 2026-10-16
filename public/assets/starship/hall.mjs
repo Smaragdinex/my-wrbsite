@@ -310,42 +310,48 @@ export function createHall(scene, rooms) {
   };
 }
 
-// 機庫 → 通道:八角形的長走道(艙壁面板、每隔一段一圈肋骨、天花板燈、地上兩條藍燈),兩道會滑開的艙門
+// 機庫 → 通道(跟大廳同一套風格):亮面白的圓形長走道、一圈圈白色肋環(內側暖白燈)、天花板暖光燈條、
+// 白色亮面走道 + 兩條暖光邊線;兩道白色滑門(暖光門縫 + 一點藍),盡頭是一片亮白(大廳的光)
 export function createCorridor(scene) {
   const root = new THREE.Group(); scene.add(root);
-  scene.fog = new THREE.Fog(0x0a0f1e, 12, 52);
-  const L = 70, R = 3.0;
-  const wt = panelTex('#dfe4ee', 'rgba(70,80,120,.3)', 1024, 1024, 4, 4); wt.repeat.set(2, 18);
-  const tube = new THREE.Mesh(new THREE.CylinderGeometry(R, R, L, 8, 1, true), new THREE.MeshStandardMaterial({ map: wt, roughness: .6, side: THREE.BackSide }));
-  tube.rotation.set(Math.PI / 2, 0, 0); tube.rotateY(Math.PI / 8); tube.position.z = -L / 2 + 16; tube.receiveShadow = true; root.add(tube);
-  const ap = R * Math.cos(Math.PI / 8);
-  const ft = panelTex('#5a6378', 'rgba(20,24,36,.6)', 512, 1024, 2, 8); ft.repeat.set(1, 10);
-  box(root, 2.4, .06, L, new THREE.MeshStandardMaterial({ map: ft, roughness: .5, metalness: .5 }), { y: -ap + .03, z: -L / 2 + 16, r: 0, shadow: false });
-  for (const x of [-1.25, 1.25]) { const s = new THREE.Mesh(new THREE.BoxGeometry(.07, .05, L), glow(0x5fb4ff, 2.6)); s.position.set(x, -ap + .06, -L / 2 + 16); root.add(s); }
-  const ribM = mat(0xb9c4dc, { roughness: .4, metalness: .4 });
-  for (let z = 14; z > -L + 16; z -= 4) {
-    const rib = new THREE.Mesh(new THREE.TorusGeometry(R - .05, .16, 6, 8), ribM); rib.rotation.z = Math.PI / 8; rib.position.z = z; root.add(rib);
-    const lt = new THREE.Mesh(new THREE.BoxGeometry(1.2, .06, .3), glow(0xfff2dc, 3)); lt.position.set(0, ap - .05, z - 2); root.add(lt);
-    for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.BoxGeometry(.04, .5, 1.2), glow(0x9fd6ff, 1.2)); w.position.set(s * (ap - .03), .4, z - 2); root.add(w); }
+  const WARM = 0xffd9a8, CD = 0xf0eee9, CD2 = 0xe4e0d8;
+  scene.background = new THREE.Color(0xf4efe6);
+  scene.fog = new THREE.Fog(0xf4efe6, 22, 70);                           // 遠處淡進一片暖白
+  const gloss = (c, rough = .22) => new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: .04, envMapIntensity: 1.1 });
+  const warmM = (i = 2.6) => glow(WARM, i);
+  const L = 70, R = 3.0, Z0 = 16;
+  const wt = panelTex('#f0eee9', 'rgba(150,138,120,.16)', 1024, 1024, 4, 4); wt.repeat.set(3, 16);
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(R, R, L, 40, 1, true), new THREE.MeshStandardMaterial({ map: wt, roughness: .3, metalness: .04, side: THREE.BackSide }));
+  tube.rotation.x = Math.PI / 2; tube.scale.set(1.15, 1, 1); tube.position.z = -L / 2 + Z0; tube.receiveShadow = true; root.add(tube);
+  const floorY = -R * .78;
+  box(root, 3.0, .08, L, gloss(0xf6f3ee, .14), { y: floorY, z: -L / 2 + Z0, r: 0, shadow: false });
+  for (const x of [-1.42, 1.42]) { const st = new THREE.Mesh(new THREE.BoxGeometry(.05, .03, L), warmM(2.6)); st.position.set(x, floorY + .05, -L / 2 + Z0); root.add(st); }
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry(.5, .04, L), warmM(2.2)); ceil.position.set(0, R - .08, -L / 2 + Z0); root.add(ceil);
+  for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.BoxGeometry(.03, .05, L), warmM(1.8)); w.position.set(s * (R * 1.15 - .06), .6, -L / 2 + Z0); root.add(w); }
+  // 肋環:白色圓環 + 內側一圈暖光
+  for (let z = Z0 - 2; z > -L + Z0; z -= 4.5) {
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(R - .08, .2, 10, 48), gloss(CD2, .3)); rib.scale.set(1.15, 1, 1); rib.position.z = z; root.add(rib);
+    const rl = new THREE.Mesh(new THREE.TorusGeometry(R - .3, .022, 6, 64), warmM(1.7)); rl.scale.set(1.15, 1, 1); rl.position.z = z; root.add(rl);
   }
-  // 艙門:八角框 + 左右兩片門板(往兩邊滑開)
-  function door(z, color) {
+  // 滑門:圓角白框 + 左右兩片白門(暖光門縫、門上一道淡藍)
+  function door(z) {
     const g = group(root, 0, 0, z);
-    const frame = new THREE.Mesh(new THREE.TorusGeometry(R - .2, .35, 6, 8), mat(0x8c96ad, { metalness: .5, roughness: .35 })); frame.rotation.z = Math.PI / 8; g.add(frame);
-    const edge = new THREE.Mesh(new THREE.TorusGeometry(R - .55, .03, 4, 8), glow(color, 2.6)); edge.rotation.z = Math.PI / 8; g.add(edge);
+    const fr = new THREE.Mesh(new THREE.TorusGeometry(R - .15, .38, 12, 48), gloss(CD, .25)); fr.scale.set(1.15, 1, 1); g.add(fr);
+    const fl = new THREE.Mesh(new THREE.TorusGeometry(R - .55, .03, 6, 64), warmM(3)); fl.scale.set(1.15, 1, 1); fl.position.z = .3; g.add(fl);
+    const seam = warmM(3);
     const panels = [-1, 1].map((s) => {
       const p = group(g, 0, 0, 0);
-      box(p, R - .1, (R - .2) * 2, .2, 0xe8ecf4, { x: s * (R - .1) / 2, r: .04 });
-      const st = new THREE.Mesh(new THREE.BoxGeometry(.08, R * 1.2, .02), glow(color, 2)); st.position.set(s * .15, 0, .12); p.add(st);
+      box(p, R * 1.15 - .1, (R - .2) * 2, .18, gloss(0xfbfaf7, .2), { x: s * (R * 1.15 - .1) / 2, r: .06 });
+      const sl = new THREE.Mesh(new THREE.BoxGeometry(.05, R * 1.7, .02), seam); sl.position.set(s * .03, 0, .1); p.add(sl);
+      const bl = new THREE.Mesh(new THREE.BoxGeometry(R * .9, .05, .02), glow(0x7fd0ff, 2)); bl.position.set(s * (R * .6), -.4, .1); p.add(bl);
       return { p, s };
     });
-    return { set(k) { panels.forEach(({ p, s }) => { p.position.x = s * k * (R - .1); }); } };
+    return { set(k) { panels.forEach(({ p, s }) => { p.position.x = s * k * (R * 1.15); }); seam.emissiveIntensity = 3 + k * 2; } };
   }
-  const d1 = door(0, 0x6cc6ff), d2 = door(-44, 0xffb35c);
-  // 走道盡頭的光(大廳)
-  const endGlow = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshBasicMaterial({ color: 0xeaf4ff, toneMapped: false })); endGlow.position.z = -48; root.add(endGlow);
-  scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2f48, 1.1));
-  for (const z of [8, -8, -24, -40]) { const l = new THREE.PointLight(0xffeedd, 14, 18, 1.5); l.position.set(0, 1.8, z); root.add(l); }
+  const d1 = door(0), d2 = door(-44);
+  const endGlow = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color: 0xfffaf2, toneMapped: false })); endGlow.position.z = -48; root.add(endGlow);
+  scene.add(new THREE.HemisphereLight(0xfff8ee, 0x9a9284, .42));
+  for (const z of [8, -8, -24, -40]) { const l = new THREE.PointLight(0xfff0dc, 4, 18, 1.5); l.position.set(0, 1.6, z); root.add(l); }
   const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   return {
     root, START: 13, END: -47,

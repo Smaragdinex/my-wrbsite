@@ -91,7 +91,7 @@ export function createExterior(scene) {
   windowRows(7.08, [-1.6, -1.05, 1.0, 1.55], -26, 23, .42);
 
   // 2) 機庫口(兩側):暖光內部 + 黑色框 + 欄杆
-  const hT = hangarTex(), hangarGlow = glow(0x7fd0ff, 1.5), hangarHits = [], hangarInside = [];
+  const hT = hangarTex(), hangarGlow = glow(0x7fd0ff, 1.5), hangarHits = [], hangarInside = [], hangarDoors = [], hangarSeam = glow(0xffe2bc, 2.6);
   for (const s of [-1, 1]) {
     const inside = new THREE.Mesh(new THREE.PlaneGeometry(11.6, 3.6), new THREE.MeshStandardMaterial({ map: hT, emissiveMap: hT, emissive: 0xffffff, emissiveIntensity: 1.3, roughness: 1 }));
     inside.position.set(s * 6.6, .3, 3); inside.rotation.y = s * Math.PI / 2; ship.add(inside);
@@ -100,10 +100,20 @@ export function createExterior(scene) {
     const rail = new THREE.Mesh(new THREE.BoxGeometry(.05, .05, 11.6), glow(ORANGE, 1.6)); rail.position.set(s * 6.9, -1.1, 3); ship.add(rail);
     // 入口外圈的發光框(平常慢慢呼吸,滑鼠移上去變亮)+ 比較大的隱形點擊範圍
     for (const [y, z, h, d] of [[2.66, 3, .1, 12.9], [-2.06, 3, .1, 12.9], [.3, -3.48, 4.8, .1], [.3, 9.48, 4.8, .1]]) {
-      const e = new THREE.Mesh(new THREE.BoxGeometry(.08, h, d), hangarGlow); e.position.set(s * 7.18, y, z); ship.add(e);
+      const e = new THREE.Mesh(new THREE.BoxGeometry(.08, h, d), hangarGlow); e.position.set(s * 7.34, y, z); ship.add(e);
     }
     const hit = new THREE.Mesh(new THREE.BoxGeometry(2.2, 6, 14), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); hit.position.set(s * 7, .3, 3); ship.add(hit); hangarHits.push(hit);
     hangarInside.push(inside.material);
+    // 機庫大門:左右兩片(沿艦身方向滑開),平常關著;門縫一道暖白光 + 一條藍色腰線
+    const leaves = [-1, 1].map((d) => {
+      const g = new THREE.Group(); g.position.set(s * 7.22, .3, 3); ship.add(g);
+      const pnl = new THREE.Mesh(new THREE.BoxGeometry(.12, 4.1, 6.3), M.light); pnl.position.z = d * 3.15; pnl.castShadow = true; g.add(pnl);
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(.03, 3.9, .06), hangarSeam); seam.position.set(s * .07, 0, d * .05); g.add(seam);
+      const band = new THREE.Mesh(new THREE.BoxGeometry(.03, .08, 5.9), glow(0x7fd0ff, 2.4)); band.position.set(s * .07, -.9, d * 3.15); g.add(band);
+      for (const y of [1.3, .2]) { const rib = new THREE.Mesh(new THREE.BoxGeometry(.05, .12, 5.6), M.dark); rib.position.set(s * .07, y, d * 3.15); g.add(rib); }
+      return { g, d };
+    });
+    hangarDoors.push(...leaves);
   }
 
   // 3) 上甲板 + 一階一階的艦橋塔
@@ -194,6 +204,7 @@ export function createExterior(scene) {
   let hov = 0;
   return {
     root, ship, hangarHits,
+    setHangarOpen(k) { for (const { g, d } of hangarDoors) g.position.z = 3 + d * k * 6.2; hangarSeam.emissiveIntensity = 2.6 + k * 3; },   // 0 = 關、1 = 全開
     hangarWorld: (side = 1) => ship.localToWorld(new THREE.Vector3(side * 6.6, .3, 3)),   // 機庫口中心(side = 哪一側)
     update(t, hover = false) {
       hov += ((hover ? 1 : 0) - hov) * .12;

@@ -4,9 +4,9 @@
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=6';
+import { createExterior } from './exterior.mjs?v=7';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
-import { createHall, createCorridor } from './hall.mjs?v=22';
+import { createHall, createCorridor } from './hall.mjs?v=24';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -110,6 +110,10 @@ const extCam = new THREE.PerspectiveCamera(38, 1, .5, 2000);
 const corScene = new THREE.Scene(); corScene.environment = envTex;
 const cor = createCorridor(corScene);
 const corCam = new THREE.PerspectiveCamera(62, 1, .1, 120);
+const corComposer = new EffectComposer(renderer);                      // 通道跟大廳一樣有燈條光暈
+corComposer.addPass(new RenderPass(corScene, corCam));
+corComposer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .4, .5, 1.15));
+corComposer.addPass(new OutputPass());
 
 // ---------- 作品艙(一次只畫一間)----------
 const roomScene = new THREE.Scene(); roomScene.environment = envTex;
@@ -142,7 +146,7 @@ function resize() {
   const a = innerWidth / innerHeight;
   for (const c of [warpCam, extCam, roomCam, corCam, hallCam]) { c.aspect = a; c.updateProjectionMatrix(); }
   hallCam.fov = a < 1 ? 80 : 56; hallCam.updateProjectionMatrix();
-  hallComposer.setPixelRatio(renderer.getPixelRatio()); hallComposer.setSize(innerWidth, innerHeight);
+  for (const c of [hallComposer, corComposer]) { c.setPixelRatio(renderer.getPixelRatio()); c.setSize(innerWidth, innerHeight); }
   starMat.uniforms.uDpr.value = renderer.getPixelRatio(); buildStars();
 }
 addEventListener('resize', resize); resize();
@@ -150,7 +154,7 @@ addEventListener('resize', resize); resize();
 // ---------- UI ----------
 const card = document.getElementById('card'), flashEl = document.getElementById('flash'), dots = document.getElementById('dots');
 const arrows = document.getElementById('arrows'), prevBtn = document.getElementById('prevRoom'), nextBtn = document.getElementById('nextRoom');
-const veil = Object.assign(document.createElement('div'), { id: 'veil' });          // 轉場用的黑幕
+const veil = Object.assign(document.createElement('div'), { id: 'veil' });          // 轉場用的幕(進出戰艦用暖白,其他用黑)
 veil.style.cssText = 'position:fixed;inset:0;z-index:4;background:#05070d;opacity:0;pointer-events:none';
 document.body.appendChild(veil);
 if (dots) { dots.innerHTML = ROOMS.map((r) => `<button aria-label="${r.title}"></button>`).join('');
@@ -171,7 +175,7 @@ function open(w) { if (/^https?:/.test(w.url)) window.open(w.url, '_blank', 'noo
 // ---------- 流程狀態 ----------
 // ext 外觀 → enter(飛進機庫、走通道)→ hall 大廳 → toRoom → room(左右換艙)→ toHall → hall → exit → ext
 let mode = 'ext', t0 = 0, cur = 0, roomF = 0, side = 1, fromDoor = 0, clockT = 0;
-const ENTER = 5.6, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 1.6;
+const ENTER = 6.2, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0;
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
 function go(m, extra = {}) { mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
@@ -241,8 +245,8 @@ const tgt = new THREE.Vector3(), camPos = new THREE.Vector3(), V = (x, y, z) => 
 const port = () => innerWidth < innerHeight;
 
 // 外觀:戰艦從遠方飛近(appear)後慢慢自轉一圈一圈;dive 0→1 = 鏡頭飛向機庫口、穿進去
-function drawExterior(t, appear, dive = 0) {
-  ext.update(t, hoverHangar);
+function drawExterior(t, appear, dive = 0, open = 0) {
+  ext.update(t, hoverHangar); ext.setHangarOpen(open);
   const fitE = port() ? .8 / extCam.aspect : 1;
   const yaw = 2.3 + t * .045 + dragYaw, dist = THREE.MathUtils.lerp(420, 80, ease(appear)) * fitE;
   const el = Math.min(1.45, Math.max(-1.1, .36 + dragPitch + Math.sin(t * .1) * .03));
@@ -258,7 +262,7 @@ function drawExterior(t, appear, dive = 0) {
 function drawCorridor(p, t) {
   const z = THREE.MathUtils.lerp(cor.START, cor.END, ease(p) * .3 + p * .7);
   corCam.position.set(Math.sin(t * 1.3) * .08, .2 + Math.sin(t * 2.1) * .05, z); corCam.lookAt(0, .1, z - 10);
-  cor.update(z); renderer.render(corScene, corCam);
+  cor.update(z); corComposer.render();
 }
 // 大廳鏡頭:站在入口平視;滑鼠移動有一點視差,拖曳可以左右轉頭看(手機直式看不到全部門時用)
 let hallYaw = 0, lookX = 0, lookY = 0;
@@ -324,10 +328,10 @@ function frame() {
   let fade = 0;
   if (appear > .001) {                                         // 穿越途中(戰艦還沒出現)不畫戰艦
     if (mode === 'ext') drawExterior(t, appear);
-    else if (mode === 'enter') {                               // 0~1.7 秒飛進機庫口 → 通道 → 大廳
-      if (k < 1.7) { drawExterior(t, 1, k / 1.7); fade = ease(seg(k, 1.35, 1.7)); }
-      else if (k < 4.3) { drawCorridor((k - 1.7) / 2.6, t); fade = 1 - ease(seg(k, 1.7, 2.0)) + ease(seg(k, 3.95, 4.3)); }
-      else { drawHall(t, dt, { pos: V(0, 3.0, 7.2), tgt: V(0, 8, -3) }, (k - 4.3) / (ENTER - 4.3)); fade = 1 - ease(seg(k, 4.3, 4.65)); }   // 一進來先抬頭看圓頂,再慢慢看向前方
+    else if (mode === 'enter') {                               // 機庫大門滑開 → 鏡頭飛進門裡 → 白色通道(兩道門)→ 大廳
+      if (k < 2.3) { drawExterior(t, 1, seg(k, .55, 2.3), ease(seg(k, 0, 1.0))); fade = ease(seg(k, 2.0, 2.3)); }
+      else if (k < 4.9) { drawCorridor((k - 2.3) / 2.6, t); fade = 1 - ease(seg(k, 2.3, 2.6)) + ease(seg(k, 4.55, 4.9)); }
+      else { drawHall(t, dt, { pos: V(0, 3.0, 7.2), tgt: V(0, 8, -3) }, (k - 4.9) / (ENTER - 4.9)); fade = 1 - ease(seg(k, 4.9, 5.25)); }   // 一進來先抬頭看圓頂,再慢慢看向前方
       if (k >= ENTER) go('hall');
     } else if (mode === 'hall') drawHall(t, dt);
     else if (mode === 'toRoom') {                              // 鏡頭走到艙門前、門滑開、穿進去 → 作品艙
@@ -342,10 +346,11 @@ function frame() {
       if (k >= TO_HALL) go('hall');
     } else if (mode === 'exit') {                              // 大廳淡出 → 從機庫口退回太空看整艘船
       if (k < .4) { drawHall(t, dt); fade = ease(seg(k, 0, .4)); }
-      else { drawExterior(t, 1, 1 - ease(seg(k, .4, EXIT))); fade = 1 - ease(seg(k, .4, .75)); }
+      else { drawExterior(t, 1, 1 - ease(seg(k, .4, 1.6)), 1 - ease(seg(k, 1.4, EXIT))); fade = 1 - ease(seg(k, .4, .75)); }   // 退出門外,大門在身後關上
       if (k >= EXIT) go('ext');
     }
   }
+  veil.style.background = mode === 'enter' || mode === 'exit' ? '#f4efe6' : '#05070d';
   veil.style.opacity = fade.toFixed(3);
 
   // 滑鼠指到的東西(機庫口 / 艙門 / 作品艙)
