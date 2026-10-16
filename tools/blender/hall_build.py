@@ -361,11 +361,7 @@ for sx in (-1, 1):
     clumps(f'soil_clumps_round_{sx}', pts, top)
     place('pachira_aquatica_01', (sx * 3.6, -5.6, top - .04), sx * .8, 1.0, keep=['_d'])
 soil_cut.hide_render = True; soil_cut.hide_viewport = True
-# 左側休息區:兩張現代扶手椅面對面 + 咖啡桌(原本旁邊的盆栽跟其他植物不一樣,使用者不要)
-lx, ly = -5.4, -1.0
-place('modern_coffee_table_02', (lx, ly, 0), 0, 1.0, prefix='furn')
-place('modern_arm_chair_01', (lx - .2, ly - 1.05, 0), math.atan2(-(lx - (lx - .2)), (ly - (ly - 1.05))) + math.pi, 1.0, recolor=(['pillow'], mat('fabric_mist', '#c9d3dc', .9)), prefix='furn')
-place('modern_arm_chair_01', (lx + 1.05, ly + .15, 0), math.atan2(-(lx - (lx + 1.05)), (ly - (ly + .15))) + math.pi, 1.0, recolor=(['pillow'], mat('fabric_mist', '#c9d3dc', .9)), prefix='furn')
+# 左側休息區:弧形沙發 + 未來感茶几(在右側沙發後面蓋,因為要用到 curve_obj)
 # 右側休息區:中古風躺椅 + 腳凳 + 邊桌 + 小盆栽
 # 布面沙發、大理石桌面叫 furn_*:跟建築一起烘光(網頁上看起來跟渲染圖一樣);金屬零件叫 prop_*(即時打光,金屬烘不出來)
 # 右側休息區:北歐輕奢的「豌豆沙發」(使用者給的參考圖):S 形的豆子坐墊 + 一長一短兩條圓滾滾的靠背 + 左端嵌一片古銅色圓托盤、
@@ -462,6 +458,95 @@ th = math.atan2(fx, -fy)
 M_SOFA = Matrix.Translation((Cx, Cy, 0)) @ Matrix.Rotation(th, 4, 'Z')
 for o in sofa: o.matrix_world = M_SOFA @ o.matrix_world
 
+# ---------------- 左側休息區(使用者參考圖):弧形皮沙發環抱一張未來感茶几 + 圓地毯 ----------------
+# 茶几:亮白烤漆的水滴形矮几、上緣下方一圈金色燈縫、香檳金底座,一端有一個架高的圓形小桌(喇叭形腳);上面放兩本書、煙燻玻璃球、黃銅小碟
+# 沙發:奶白皮革、弧形、分段坐墊與靠墊、兩端圓頭、內縮的金屬踢腳,米色 + 炭灰兩顆抱枕。全部 furn_*:跟建築一起烘光
+def arc_block(name, cx, cy, r0, r1, a0, a1, z0, z1, material, lean=0.0, seg=64, bevel=0.0, bseg=4):
+    """以 (cx, cy) 為圓心的一段環形實心塊;角度 a 從 +X 逆時針算;lean > 0 = 頂面內緣往外退(椅背往後仰)"""
+    bm = bmesh.new(); rings = []
+    for i in range(seg + 1):
+        a = a0 + (a1 - a0) * i / seg; c, s_ = math.cos(a), math.sin(a)
+        rings.append([bm.verts.new((cx + c * r, cy + s_ * r, z)) for r, z in ((r0, z0), (r1, z0), (r1, z1), (r0 + lean, z1))])
+    for i in range(seg):
+        A, B = rings[i], rings[i + 1]
+        for k in range(4): bm.faces.new((A[k], B[k], B[(k + 1) % 4], A[(k + 1) % 4]))
+    bm.faces.new(list(reversed(rings[0]))); bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return mesh_obj(name, bm, material, bevel=bevel, seg=bseg)
+def leather():
+    m = mat('leather_cream', '#e0d7c9', .42, coat=.15); nt = m.node_tree; p = nt.nodes['Principled BSDF']
+    nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 140; bump = nt.nodes.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .12
+    nt.links.new(nz.outputs['Fac'], bump.inputs['Height']); nt.links.new(bump.outputs['Normal'], p.inputs['Normal']); return m
+def rug_mat():
+    m = mat('rug_gray', '#8f8a84', .98); nt = m.node_tree; p = nt.nodes['Principled BSDF']
+    nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 260; nz.inputs['Detail'].default_value = 10
+    ramp = nt.nodes.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].color = srgb('#77726c'); ramp.color_ramp.elements[1].color = srgb('#aaa49c')
+    bump = nt.nodes.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .8
+    nt.links.new(nz.outputs['Fac'], ramp.inputs['Fac']); nt.links.new(ramp.outputs['Color'], p.inputs['Base Color'])
+    nt.links.new(nz.outputs['Fac'], bump.inputs['Height']); nt.links.new(bump.outputs['Normal'], p.inputs['Normal']); return m
+M_LEATHER = leather(); M_RUG = rug_mat()
+M_LACQUER = mat('lacquer_white', '#f6f4f0', .12, coat=.8)
+M_CHAMPAGNE = mat('champagne', '#c9b48e', .3, metal=1.0)
+M_CHROME = mat('chrome', '#c4c6ca', .2, metal=1.0)
+M_GOLDLED = mat('gold_led', '#000000', 1, emit='#ffc26b', emit_k=18)
+TX, TY = -5.0, -1.3                                                            # 茶几中心
+fx, fy = -TX, -4.0 - TY; _n = math.hypot(fx, fy); fx, fy = fx / _n, fy / _n    # 朝玩家的方向
+ab = math.atan2(-fy, -fx); SP = math.radians(72); A0, A1 = ab - SP, ab + SP     # 沙發包在玩家的反方向
+# 圓地毯 + 金色細圈
+bpy.ops.mesh.primitive_cylinder_add(vertices=128, radius=1.75, depth=.014, location=(TX, TY, .007)); o = link(bpy.context.active_object); o.name = 'furn_rug'; o.data.materials.append(M_RUG)
+bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .006; bv.segments = 2
+bpy.ops.mesh.primitive_torus_add(major_radius=1.79, minor_radius=.007, major_segments=192, minor_segments=8, location=(TX, TY, .007)); o = link(bpy.context.active_object); o.name = 'furn_rug_ring'; o.data.materials.append(M_CHAMPAGNE)
+# 沙發
+R0, RS, R1 = 1.32, 1.95, 2.22                                                  # 坐墊前緣、靠墊內緣、靠背外緣
+arc_block('furn_arc_kick', TX, TY, R0 + .07, R1 - .06, A0 + .02, A1 - .02, .0, .1, M_CHROME, seg=96, bevel=.01, bseg=2)
+arc_block('furn_arc_base', TX, TY, R0, R1, A0, A1, .1, .27, M_LEATHER, seg=96, bevel=.05, bseg=4)
+n, gap = 4, math.radians(.9); w = (A1 - A0 - gap * (n - 1)) / n
+for k in range(n):
+    a = A0 + k * (w + gap)
+    arc_block(f'furn_arc_seat_{k}', TX, TY, R0 + .02, RS + .02, a, a + w, .27, .42, M_LEATHER, seg=24, bevel=.065, bseg=5)
+    arc_block(f'furn_arc_back_{k}', TX, TY, RS, R1 - .02, a, a + w, .27, .76, M_LEATHER, lean=.07, seg=24, bevel=.08, bseg=5)
+for k, a in enumerate((A0, A1)):                                               # 兩端圓頭
+    rm = (R0 + R1) / 2; cxe, cye = TX + math.cos(a) * rm, TY + math.sin(a) * rm
+    bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=(R1 - R0) / 2, depth=.32, location=(cxe, cye, .26)); o = link(bpy.context.active_object); o.name = f'furn_arc_end_{k}'; o.data.materials.append(M_LEATHER)
+    bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .07; bv.segments = 5
+    for pl in o.data.polygons: pl.use_smooth = True
+for k, (da, col) in enumerate(((-.3, '#d9cfc1'), (.05, '#4b4946'), (.36, '#d9cfc1'))):   # 抱枕
+    a = ab + da; bpy.ops.mesh.primitive_cube_add(size=1, location=(TX + math.cos(a) * (RS - .08), TY + math.sin(a) * (RS - .08), .58))
+    o = link(bpy.context.active_object); o.name = f'furn_arc_pillow_{k}'; o.scale = (.13, .46, .34); o.rotation_euler = (0, -.3, a)
+    o.data.materials.append(mat(f'arc_pillow_{col}', col, .85))
+    bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .09; bv.segments = 6
+    for pl in o.data.polygons: pl.use_smooth = True
+# 茶几(在自己的座標蓋:x = 長邊、-y = 朝玩家),最後轉進大廳
+def drop(sc=1.0, n=96):
+    pts = []
+    for k in range(n):
+        t = math.tau * k / n; c = math.cos(t)
+        pts.append(Vector((.8 * c * sc, .47 * math.sin(t) * (1 - .4 * max(0.0, c) ** 2) * sc, 0)))
+    return pts
+table = []
+table.append(curve_obj('furn_tbl_top', drop(1.0), True, .03, extrude=.025, z=.285, material=M_LACQUER))     # .23 ~ .34
+table.append(curve_obj('furn_tbl_body', drop(.8), True, .03, extrude=.035, z=.13, material=M_LACQUER))      # .065 ~ .195(內縮,上緣下方留一道發光的縫)
+table.append(curve_obj('furn_tbl_led', drop(.86), True, .009, z=.212, material=M_GOLDLED))
+table.append(curve_obj('furn_tbl_led_low', drop(.76), True, .006, z=.062, material=M_GOLDLED))   # 底座上緣也一圈
+table.append(curve_obj('furn_tbl_plinth', drop(.72), True, .012, extrude=.02, z=.035, material=M_CHAMPAGNE))
+PX = .6                                                                        # 架高小圓桌的位置(水滴尖的那頭)
+bpy.ops.mesh.primitive_cone_add(vertices=64, radius1=.12, radius2=.2, depth=.12, location=(PX, 0, .4)); o = link(bpy.context.active_object); o.name = 'furn_tbl_neck'; o.data.materials.append(M_LACQUER); table.append(o)
+bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .02; bv.segments = 3
+bpy.ops.mesh.primitive_cylinder_add(vertices=96, radius=.31, depth=.07, location=(PX, 0, .495)); o = link(bpy.context.active_object); o.name = 'furn_tbl_tier'; o.data.materials.append(M_LACQUER); table.append(o)
+bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .028; bv.segments = 5
+bpy.ops.mesh.primitive_torus_add(major_radius=.24, minor_radius=.005, major_segments=96, minor_segments=8, location=(PX, 0, .458)); o = link(bpy.context.active_object); o.name = 'furn_tbl_tier_led'; o.data.materials.append(M_GOLDLED); table.append(o)
+# 擺飾:兩本書 + 煙燻玻璃球 + 黃銅小碟
+for k, (sz, col, z) in enumerate((((.24, .17, .024), '#1e1e23', .352), ((.22, .155, .02), '#2f2d33', .374))):
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(-.25, .03, z)); o = link(bpy.context.active_object); o.name = f'furn_tbl_book_{k}'; o.scale = sz; o.rotation_euler = (0, 0, .12 * (k * 2 - 1))
+    o.data.materials.append(mat(f'book_{k}', col, .6)); bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .004; bv.segments = 2; table.append(o)
+bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=.065, location=(-.23, .04, .449)); o = link(bpy.context.active_object); o.name = 'furn_tbl_sphere'; o.data.materials.append(mat('smoke_glass', '#7d8188', .08, coat=1.0)); table.append(o)
+for pl in o.data.polygons: pl.use_smooth = True
+bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=.055, depth=.016, location=(.02, -.1, .348)); o = link(bpy.context.active_object); o.name = 'furn_tbl_dish'; o.data.materials.append(mat('brass', '#b8955a', .3, metal=1.0)); table.append(o)
+bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .006; bv.segments = 2
+th2 = math.atan2(fx, -fy)
+M_TBL = Matrix.Translation((TX, TY, 0)) @ Matrix.Rotation(th2, 4, 'Z')
+for o in table: o.matrix_world = M_TBL @ o.matrix_world
+
 # ---------------- 燈光:天窗冷光 + 暖光補 + 世界(太空的深藍)----------------
 sky = bpy.data.lights.new('skylight', 'AREA'); sky.shape = 'DISK'; sky.size = 5.6; sky.energy = 1500; sky.color = (0.86, 0.92, 1.0)
 so = bpy.data.objects.new('skylight', sky); col_root.objects.link(so); so.location = (0, 0, CEIL_Y + .3)
@@ -477,8 +562,8 @@ VIEW = ARGS[3] if len(ARGS) > 3 else 'main'
 eye, look, fov = (Vector((0, -7.4, 2.2)), Vector((0, 3.0, 1.55)), 56)
 if VIEW == 'bay':      # 第二道門的展示艙特寫
     b = BEARINGS[1]; eye, look, fov = at(b, 4.6, 1.75), at(b, 8.6, 1.9), 48
-elif VIEW == 'lounge': # 左邊休息區 + 植物
-    eye, look, fov = Vector((-2.2, -4.6, 1.5)), Vector((-5.6, -.4, .9)), 50
+elif VIEW == 'lounge': # 左邊休息區(弧形沙發 + 茶几)
+    eye, look, fov = Vector((-2.0, -4.4, 1.6)), Vector((-5.3, -.9, .45)), 52
 elif VIEW == 'planter': # 柱腳花盆特寫(看土)
     b = pillars[2]; eye, look, fov = at(b, HALL_R - 2.4, 1.6), at(b, HALL_R - .9, .5), 45
 elif VIEW == 'entry': # 入口的大圓花盆(發財樹)

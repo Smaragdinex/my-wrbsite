@@ -475,7 +475,7 @@ export function createHall(scene, rooms) {
     B.greet = GREET_SEC; B.cx = camPos.x; B.cz = camPos.z;
     return true;
   }
-  const AVOID = [[-5.6, 1.0, 1.9], [5.34, 1.57, 2.1], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
+  const AVOID = [[-5.0, 1.3, 2.6], [5.34, 1.57, 2.1], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
   const okPt = (x, z) => AVOID.every(([ax, az, r]) => Math.hypot(x - ax, z - az) > r);
   const clearPath = (x0, z0, x1, z1) => { for (let k = 1; k <= 12; k++) { const u = k / 12, x = x0 + (x1 - x0) * u, z = z0 + (z1 - z0) * u, rr = Math.hypot(x, z); if (!okPt(x, z) || rr < 2.5 || rr > 6.9) return false; } return true; };
   const B = { x: -3.2, z: -2.6, h: Math.PI / 2, tx: 0, tz: 0, wait: 0, speed: 0, dir: 1, greet: 0, cx: 0, cz: 0 };   // dir:沿著圈繞的方向,偶爾掉頭
@@ -555,7 +555,7 @@ export function createHall(scene, rooms) {
     led.material = ledRing.material; chev.material = frame.material = lightM; chev.userData.flash = true; eyes.push(chev); botChev = chev;
     botModel.add(body, led, chev, frame, botRoller);
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
-  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=12'), loadGLB('/assets/starship/models/hall_props.glb?v=12')]).then(([hallM, propsM]) => {
+  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=13'), loadGLB('/assets/starship/models/hall_props.glb?v=13')]).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光
