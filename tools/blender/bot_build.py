@@ -1,8 +1,9 @@
 # 大廳的打掃機器人(倒 T 造型,使用者給的參考:《007 First Light》裡的清潔機器人):
 #   霧黑石墨色的高方柱(頂端是尖的五角形斷面)、正面上方一道白色「︿」燈、下面一個相機圓環、正中一條細燈線、兩側直條散熱槽;
-#   底下一塊寬扁底座:(從正面看)左邊一顆黑色滾筒、右邊一塊斜楔 → ⊥(正面朝 +Y,所以從正面看的左邊是 +X)
-# 會動的零件分開成獨立物件,網頁上照名字找來動:bot_roller(滾筒,繞自己的軸轉)、bot_chevron(白燈,偶爾閃一下;打招呼時上下翻成笑臉 ︶)、bot_led(燈線呼吸)
-# 單位跟網頁一樣(網頁再放大 1.35 倍);正面朝 Blender +Y(匯出 glTF 後 = 網頁的 -Z,也就是機器人前進方向)
+#   寬面上有 [ ] 括號燈框、頭下面一圈燈帶、頭上小螢幕;底下一塊扁底座:前面(-X)斜楔、後面(+X)橫跨整個寬面的滾筒 + 兩顆小輪子
+#   從臉那側看是 ⊥;機器人是「橫著走」:前進方向 = 斜楔那頭(-X)
+# 會動的零件分開成獨立物件,網頁上照名字找來動:bot_roller(滾筒,繞自己的軸轉)、bot_chevron(臉那側的 ︿ 燈,偶爾閃一下)、bot_frame(燈帶 + [ ] 括號燈框,變色)、bot_led(燈線 + 螢幕小字,呼吸)
+# 單位跟網頁一樣(網頁再放大 1.35 倍);臉在 Blender +Y、前進方向是 -X(網頁那邊整組轉 -90° 對齊前進方向)
 # 用法:blender -b --python tools/blender/bot_build.py -- [preview out.png samples front|back|site] [export out.glb]
 import bpy, bmesh, sys, os, math
 from mathutils import Vector
@@ -71,45 +72,70 @@ def join(objs, name):
     o = bpy.context.active_object; o.name = name; o.data.name = name; return o
 
 parts = []
-# ---- 底座:寬扁的板(左右方向)----
+# 方向:前進方向 = ±X(寬面朝前後;斜楔那頭在前、滾筒那頭在後),窄面 ±Y 是左右兩側,臉(︿ 燈 + 相機)在 +Y 那一側
+# ---- 柱子:窄 CW(沿前進方向)× 寬 CD(左右);五角形斷面 → 從窄面看頂端是尖的、從寬面看是斜屋頂 ----
+CW, CD, CH, PK = .13, .22, .47, .04                       # 窄、寬、直身高、頂尖多高
 BH = .05                                                  # 底座板高
-parts.append(box('bot_base', (.3, .2, BH), (0, 0, .012 + BH / 2), M_BODY, .012))
-parts.append(box('bot_base_skirt', (.28, .18, .014), (0, 0, .007), M_RUBBER, .004))
-# 斜楔(從柱子往外斜到地上,從正面看在右邊 = -X)+ 外緣一條金屬邊
-parts.append(prism('bot_wedge', [(-.075, .13), (-.24, .025), (-.24, .01), (-.07, .01)], -.1, .1, M_BODY, .008))
-parts.append(prism('bot_wedge_lip', [(-.2, .02), (-.25, .014), (-.25, .002), (-.2, .002)], -.098, .098, M_METAL, .003))
-# ---- 柱子:五角形斷面(正面看頂端是尖的),沿前後方向擠出 ----
-CW, CD, CH, PK = .15, .17, .58, .04                       # 寬、深、直身高、頂尖多高
 Z0 = .012 + BH
+# ---- 底座:扁板 + 斜楔(-X,前)+ 滾筒(+X,後)----
+parts.append(box('bot_base', (.26, CD + .02, BH), (0, 0, .012 + BH / 2), M_BODY, .012))
+parts.append(box('bot_base_skirt', (.24, CD, .014), (0, 0, .007), M_RUBBER, .004))
+WY = CD / 2 + .01
+parts.append(prism('bot_wedge', [(-.06, .13), (-.21, .025), (-.21, .01), (-.055, .01)], -WY, WY, M_BODY, .008))
+parts.append(prism('bot_wedge_lip', [(-.17, .02), (-.22, .014), (-.22, .002), (-.17, .002)], -WY + .002, WY - .002, M_METAL, .003))
 parts.append(prism('bot_column', [(-CW / 2, Z0), (CW / 2, Z0), (CW / 2, Z0 + CH), (0, Z0 + CH + PK), (-CW / 2, Z0 + CH)], -CD / 2, CD / 2, M_BODY, .01))
-# 兩側的直條散熱槽(長短不一,讓側面有層次)+ 上方一塊亮一點的面板
-for sx in (-1, 1):
-    for k, (yc, h) in enumerate(((-.045, .34), (.02, .22), (.058, .3))):
-        parts.append(box(f'bot_slot_{sx}_{k}', (.006, .014, h), (sx * (CW / 2 + .001), yc, Z0 + .08 + h / 2), M_SLOT, .002))
-    parts.append(box(f'bot_sidepanel_{sx}', (.003, CD * .82, .1), (sx * (CW / 2 + .0005), 0, Z0 + CH - .06), M_PANEL, .002))
-parts.append(box('bot_backpanel', (CW * .7, .004, CH * .6), (0, -CD / 2 - .001, Z0 + CH * .45), M_PANEL, .002))
-# ---- 正面(+Y):白色 ︿ 燈、相機圓環、正中細燈線 ----
+# 頭:比柱身寬一點、切角的帽子(一樣是五角形斷面)
+HW, HD, H0 = CW / 2 + .009, CD / 2 + .009, Z0 + CH - .1
+parts.append(prism('bot_head', [(-HW, H0), (HW, H0), (HW, Z0 + CH + .004), (0, Z0 + CH + PK + .008), (-HW, Z0 + CH + .004)], -HD, HD, M_BODY, .014))
+# 頭的兩個寬面上各一塊小狀態螢幕(深色玻璃)
+for sx in (-1, 1): parts.append(box(f'bot_screen_{sx}', (.004, CD * .62, .03), (sx * (HW + .001), 0, Z0 + CH - .035), M_GLASS, .003))
+# 背面(-Y 窄面)的直條散熱槽
+for k, (xc, h) in enumerate(((-.03, .3), (0, .22), (.03, .26))):
+    parts.append(box(f'bot_slot_{k}', (.012, .006, h), (xc, -CD / 2 - .001, Z0 + .08 + h / 2), M_SLOT, .002))
+# ---- 燈:頭下面繞一圈的燈帶(寬面是直線、窄面是 ︿)+ 兩個寬面上的 [ ] 括號燈框 → bot_frame(網頁上控制顏色:走的時候白、停下來琥珀色)----
 FY = CD / 2 + .002
-CZ = Z0 + CH - .07                                        # ︿ 燈高度
-chevron = join([box(f'bot_chev_{sx}', (CW * .46, .006, .011), (sx * CW * .22, FY + .002, CZ), M_CHEV, 0, rot=(0, sx * math.radians(11), 0)) for sx in (-1, 1)], 'bot_chevron')
+CZ = H0 - .015                                            # 燈帶高度
+chev = lambda name, y: join([box(f'{name}_{sx}', (CW * .46, .006, .011), (sx * CW * .22, y, CZ), M_CHEV, 0, rot=(0, sx * math.radians(11), 0)) for sx in (-1, 1)], name)
+frame = [chev('bot_chev_back', -FY - .002)]
+L, T = .009, .004                                         # 燈線粗細、凸出多少
+for sx in (-1, 1):
+    X = sx * (CW / 2 + T / 2 + .001)
+    frame.append(box(f'bot_band_{sx}', (T, CD * .9, L), (X, 0, CZ), M_CHEV))
+    zb, zt, yo, arm = Z0 + .1, H0 - .07, CD / 2 - .022, .035
+    for sy in (-1, 1):
+        frame.append(box(f'bot_br_v_{sx}_{sy}', (T, L, zt - zb), (X, sy * yo, (zb + zt) / 2), M_CHEV))
+        for z in (zb, zt): frame.append(box(f'bot_br_h_{sx}_{sy}_{z:.2f}', (T, arm, L), (X, sy * (yo - arm / 2 + L / 2), z), M_CHEV))
+    for z in (zb, zt): frame.append(box(f'bot_br_dash_{sx}_{z:.2f}', (T, .03, L), (X, 0, z), M_CHEV))
+frame = join(frame, 'bot_frame')
+# ---- 臉那一側(+Y 窄面):白色 ︿(跟燈帶接在一起)、相機圓環、正中細燈線 ----
+chevron = chev('bot_chevron', FY + .002)
 bpy.ops.object.select_all(action='DESELECT'); chevron.select_set(True); bpy.context.view_layer.objects.active = chevron
-bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')       # 原點放在燈的正中間:網頁上下翻轉就變成笑臉 ︶
-RZ = CZ - .065
+bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+RZ = CZ - .06
 parts.append(cyl('bot_cam_ring', .03, .008, (0, FY + .001, RZ), M_METAL, 48, .002, rot=(math.pi / 2, 0, 0)))
 parts.append(cyl('bot_cam_glass', .024, .01, (0, FY + .003, RZ), M_GLASS, 48, .002, rot=(math.pi / 2, 0, 0)))
-led = box('bot_led', (.004, .004, CH * .8), (0, FY + .001, Z0 + CH * .42), M_LED)
-parts.append(cyl('bot_topsensor', .018, .01, (0, .02, Z0 + CH + PK * .6), M_GLASS, 32, .002))   # 頂端的小感測器
-# ---- 左邊的滾筒(軸朝前後,從正面看得到它的圓端)+ 支架 ----
-RR, RX = .058, .2
-roller = join([cyl('bot_roller', RR, .2, (RX, 0, RR), M_RUBBER, 48, .012, rot=(math.pi / 2, 0, 0))] +
-              [cyl(f'bot_roller_g{k}', RR + .002, .004, (RX, -.085 + k * .0243, RR), M_SLOT, 48, 0, rot=(math.pi / 2, 0, 0)) for k in range(8)], 'bot_roller')
+# 細燈線 + 狀態螢幕上的幾格小字(都用藍色 LED 材質,網頁上一起呼吸)
+lz0, lz1 = Z0 + .03, RZ - .04
+glyphs = [box('bot_led', (.004, .004, lz1 - lz0), (0, FY + .001, (lz0 + lz1) / 2), M_LED)]
+for sx in (-1, 1):
+    y = -CD * .26
+    for k, w in enumerate((.012, .02, .008, .016, .01, .014)):
+        glyphs.append(box(f'bot_glyph_{sx}_{k}', (.002, w, .006), (sx * (HW + .0035), y + w / 2, Z0 + CH - .035 + (.006 if k % 3 == 1 else 0)), M_LED)); y += w + .006
+led = join(glyphs, 'bot_led')
+# ---- 滾筒(+X,後):軸朝左右、橫跨整個寬面,兩端各一顆小輪子 ----
+RR, RX = .056, .135
+RL = CD + .02
+roller = join([cyl('bot_roller', RR, RL, (RX, 0, RR), M_RUBBER, 48, .012, rot=(math.pi / 2, 0, 0))] +
+              [cyl(f'bot_roller_g{k}', RR + .002, .004, (RX, -RL / 2 + .015 + k * (RL - .03) / 9, RR), M_SLOT, 48, 0, rot=(math.pi / 2, 0, 0)) for k in range(10)], 'bot_roller')
 bpy.ops.object.select_all(action='DESELECT'); roller.select_set(True); bpy.context.view_layer.objects.active = roller
 bpy.context.scene.cursor.location = (RX, 0, RR); bpy.ops.object.origin_set(type='ORIGIN_CURSOR')   # 原點在軸心,網頁才能讓它轉
-for sy in (-1, 1): parts.append(cyl(f'bot_roller_cap_{sy}', RR * .55, .012, (RX, sy * .106, RR), M_METAL, 32, .003, rot=(math.pi / 2, 0, 0)))
-parts.append(box('bot_roller_arm', (.07, .2, .03), (.15, 0, .045), M_BODY, .008))
+for sy in (-1, 1):
+    parts.append(cyl(f'bot_wheel_{sy}', .04, .022, (RX - .03, sy * (RL / 2 + .016), .04), M_RUBBER, 32, .006, rot=(math.pi / 2, 0, 0)))
+    parts.append(cyl(f'bot_hub_{sy}', .018, .024, (RX - .03, sy * (RL / 2 + .016), .04), M_METAL, 24, .003, rot=(math.pi / 2, 0, 0)))
+parts.append(box('bot_roller_arm', (.06, RL, .03), (.095, 0, .045), M_BODY, .008))
 
 body = join(parts, 'bot_body')            # 不會動的零件合成一個物件(網頁上 draw call 少)
-BOT = [body, led, chevron, roller]
+BOT = [body, led, chevron, frame, roller]
 
 mode = ARGS[0] if ARGS else 'preview'
 if mode == 'preview':
@@ -122,7 +148,7 @@ if mode == 'preview':
     w = bpy.data.worlds.new('w'); scene.world = w; w.use_nodes = True; w.node_tree.nodes['Background'].inputs['Color'].default_value = (.75, .8, .88, 1); w.node_tree.nodes['Background'].inputs['Strength'].default_value = .6
     cd = bpy.data.cameras.new('c'); cd.lens = 60; cam = bpy.data.objects.new('c', cd); scene.collection.objects.link(cam); scene.camera = cam
     view = ARGS[3] if len(ARGS) > 3 else 'front'
-    eye = {'front': Vector((.75, 2.0, .7)), 'back': Vector((-1.0, -1.4, .9)), 'site': Vector((1.1, 2.6, 1.5))}[view]
+    eye = {'front': Vector((.75, 2.0, .7)), 'wide': Vector((2.0, .55, .75)), 'back': Vector((-1.0, -1.4, .9)), 'site': Vector((1.1, 2.6, 1.5))}[view]
     look = Vector((0, 0, .32))
     if view == 'site': cd.lens = 50
     cam.location = eye; cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (look - eye).to_track_quat('-Z', 'Y')
