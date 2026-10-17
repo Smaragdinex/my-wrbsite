@@ -186,14 +186,15 @@ function hallPortal(t, dt) {                                  // 從通道鏡頭
   pCam.fov = corCam.fov; pCam.aspect = corCam.aspect; pCam.near = Math.max(.1, pCam.position.z - 7.2); pCam.far = 200; pCam.updateProjectionMatrix();
   hall.update(t, dt); renderTo(rtHall, hallScene, pCam, hall.baked);
 }
+const hallFov = () => (innerWidth / innerHeight < 1 ? 80 : 56);
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   const a = innerWidth / innerHeight;
   for (const c of [warpCam, extCam, roomCam, corCam, hallCam]) { c.aspect = a; c.updateProjectionMatrix(); }
-  hallCam.fov = a < 1 ? 80 : 56; hallCam.updateProjectionMatrix();
+  hallCam.fov = hallFov(); hallCam.near = .1; hallCam.updateProjectionMatrix();
   for (const c of [hallComposer, corComposer, extComposer]) { c.setPixelRatio(renderer.getPixelRatio()); c.setSize(innerWidth, innerHeight); }
   starMat.uniforms.uDpr.value = renderer.getPixelRatio(); buildStars();
-  renderer.getDrawingBufferSize(_dbs); rtCor.setSize(_dbs.x * .7, _dbs.y * .7); rtHall.setSize(_dbs.x * .7, _dbs.y * .7);
+  renderer.getDrawingBufferSize(_dbs); rtCor.setSize(_dbs.x * .7, _dbs.y * .7); rtHall.setSize(_dbs.x, _dbs.y);   /* 大廳的窗用全解析度:走到門口時跟直接畫的大廳一樣清楚 */
   for (const rt of [rtCor, rtHall]) { renderer.setRenderTarget(rt); renderer.setClearColor(0xf4efe6, 1); renderer.clear(); } renderer.setRenderTarget(null); renderer.setClearColor(0x000000, 0);   // 新的貼圖先清乾淨(半精度貼圖沒清會有垃圾值)
 }
 addEventListener('resize', resize); resize();
@@ -345,13 +346,21 @@ function drawExterior(t, appear, dive = 0, open = 0) {
   if (dive > .6) corPortal();                                  // 氣閘門開了:門洞裡畫通道
   warpPass.enabled = (window.__xp?.warp || 0) > .001; extComposer.render();
 }
-function drawCorridor(p, t) {
+const HANDOFF = -41.6;                                           // 通道走到這裡,第二道門後的大廳已經佔滿整個畫面(橫式 -40.8、直式 -41.2 就滿了)
+function drawCorridor(p, t, dt) {
   const z = THREE.MathUtils.lerp(cor.START, cor.END, ease(p) * .7 + (1 - (1 - p) * (1 - p)) * .3);   // 慢慢起步(接機庫鏡頭的速度)、中間快、到大廳門口慢慢停(接大廳靜止的鏡頭)
-  const wob = Math.min(1, p * 4) * (1 - seg(p, .85, 1));       // 剛進來和快出去時不晃,接縫才對得上
-  const fv = THREE.MathUtils.lerp(60, hallCam.fov, seg(p, .55, .95)); if (corCam.fov !== fv) { corCam.fov = fv; corCam.updateProjectionMatrix(); }   // 鏡頭焦距慢慢變成跟大廳一樣
-  corCam.position.set(Math.sin(t * 1.3) * .08 * wob, .2 + Math.sin(t * 2.1) * .05 * wob, z); corCam.lookAt(0, THREE.MathUtils.lerp(.1, -.45, seg(p, .6, 1)), z - 10);
+  const wob = Math.min(1, p * 4) * (1 - ease(seg(p, .8, 1)));  // 剛進來和快出去時不晃,接縫才對得上(平順地停,不要一下轉向)
+  const fv = THREE.MathUtils.lerp(60, hallFov(), seg(p, .55, .95)); if (corCam.fov !== fv) { corCam.fov = fv; corCam.updateProjectionMatrix(); }   // 鏡頭焦距慢慢變成跟大廳一樣
+  corCam.position.set(Math.sin(t * 1.3) * .08 * wob, .2 + Math.sin(t * 2.1) * .05 * wob, z); corCam.lookAt(0, THREE.MathUtils.lerp(.1, -.45, seg(p, .6, 1)), z - 10.4);   // 最後的視線 = 大廳鏡頭的視線
+  if (z < HANDOFF) {                                           // 門洞已經佔滿畫面:直接用大廳的畫法畫(跟停下來之後一模一樣)→ 鏡頭停住時不會突然變清楚 / 變暗
+    hallCam.position.copy(corCam.position).add(_lp.set(0, HALL_DY, HALL_FROM_COR)); hallCam.quaternion.copy(corCam.quaternion);
+    hallCam.fov = corCam.fov; hallCam.near = Math.max(.1, hallCam.position.z - 7.2); hallCam.updateProjectionMatrix();   // near 切掉大廳入口後面的牆(跟門洞裡的畫法一樣)
+    hall.update(t, dt); renderHall(dt); return;
+  }
+  const bk = seg(z, -30, HANDOFF);                              // 快到交接點:通道光暈慢慢調成跟大廳一樣,門洞裡的大廳看起來就跟交接後一樣
+  corBloom.strength = THREE.MathUtils.lerp(.4, .18, bk); corBloom.radius = THREE.MathUtils.lerp(.5, .3, bk); corBloom.threshold = THREE.MathUtils.lerp(1.15, 1.6, bk);
   cor.update(z);
-  if (z < -18) hallPortal(t, 1 / 60);
+  if (z < -18) hallPortal(t, dt);
   const tm = renderer.toneMapping; if (cor.baked) renderer.toneMapping = THREE.NoToneMapping;   // 烘焙貼圖已經套過色調
   corComposer.render(); renderer.toneMapping = tm;
 }
@@ -365,11 +374,14 @@ function hallLook(v) {
   const yaw = hallYaw - lookX, d = HALL_T.clone().sub(HALL_POS);
   d.applyAxisAngle(V(0, 1, 0), yaw); d.y += lookY * 6; return v.copy(HALL_POS).add(d);
 }
-function drawHallAt(t, dt, pos, tg) {
-  hallCam.position.copy(pos); hallCam.lookAt(tg); hall.update(t, dt);
+function renderHall(dt) {
   // 烘焙版的貼圖已經套過 Blender 的色調(AgX),大廳這段就不要再做一次色調映射
   const tm = renderer.toneMapping; if (hall.baked) renderer.toneMapping = THREE.NoToneMapping;
   hallComposer.render(dt); renderer.toneMapping = tm;
+}
+function drawHallAt(t, dt, pos, tg) {
+  if (hallCam.near !== .1 || hallCam.fov !== hallFov()) { hallCam.near = .1; hallCam.fov = hallFov(); hallCam.updateProjectionMatrix(); }   // 進艦交接時借用過,換回大廳的
+  hallCam.position.copy(pos); hallCam.lookAt(tg); hall.update(t, dt); renderHall(dt);
 }
 // 從大廳全景走到第 i 道門前(k 0→1):先往上 / 往門的方向弧形繞過中央投影,再降到門口
 function doorPath(i, k, out) {
@@ -430,7 +442,7 @@ function frame() {
     if (mode === 'ext') drawExterior(t, appear);
     else if (mode === 'enter') {                               // 機庫大門滑開 → 鏡頭飛進門裡 → 白色通道(兩道門)→ 大廳
       if (k < 4.7) drawExterior(t, 1, seg(k, .25, 4.7), ease(seg(k, 0, .9)));   // 機庫門開 → 俯衝 → 機庫 → 氣閘門開,門洞裡已經看得到通道 → 穿過去
-      else if (k < 7.5) { drawCorridor((k - 4.7) / 2.8, t); fade = .35 * (1 - ease(seg(k, 4.7, 4.95))); }   // 穿過氣閘門時一點點亮光
+      else if (k < 7.5) { drawCorridor((k - 4.7) / 2.8, t, dt); fade = .35 * (1 - ease(seg(k, 4.7, 4.95))); }   // 穿過氣閘門時一點點亮光
       else drawHall(t, dt);                                                       // 第二道門裡已經看得到大廳 → 直接走進去   // 一進來先抬頭看圓頂,再慢慢看向前方
       if (k >= ENTER) go('hall');
     } else if (mode === 'hall') drawHall(t, dt);
