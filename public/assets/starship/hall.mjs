@@ -365,7 +365,7 @@ export function createHall(scene, rooms, opts = {}) {
     vertexShader: 'varying vec2 vUv; varying vec3 vN, vV; void main(){ vUv = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - wp.xyz); gl_Position = projectionMatrix * viewMatrix * wp; }',
     fragmentShader: `uniform sampler2D uLand; uniform float uTime; varying vec2 vUv; varying vec3 vN, vV;
       void main(){
-        float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
+        float f = clamp(1.0 - abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0);
         vec3 ocean = mix(vec3(.015, .04, .16), vec3(.05, .22, .62), smoothstep(.0, .75, f));
         ocean = mix(ocean, vec3(.42, .3, .95), smoothstep(.62, 1.0, f));
         vec4 land = texture2D(uLand, vUv);
@@ -383,7 +383,7 @@ export function createHall(scene, rooms, opts = {}) {
   // 大氣層:輪廓一圈光,顏色由下往上從青 → 洋紅
   const rim = new THREE.Mesh(new THREE.SphereGeometry(1.07, 64, 48), new THREE.ShaderMaterial({ transparent: true, depthWrite: false,
     vertexShader: 'varying vec3 vN, vV, vP; void main(){ vP = position; vec4 wp = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - wp.xyz); gl_Position = projectionMatrix * viewMatrix * wp; }',
-    fragmentShader: 'varying vec3 vN, vV, vP; void main(){ float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2); vec3 c = mix(vec3(.25, .85, 1.0), vec3(1.0, .4, .95), smoothstep(-1.0, 1.0, vP.y)); gl_FragColor = vec4(c * 1.7, f * .9); }' }));
+    fragmentShader: 'varying vec3 vN, vV, vP; void main(){ float f = pow(clamp(1.0 - abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0), 2.2); vec3 c = mix(vec3(.25, .85, 1.0), vec3(1.0, .4, .95), smoothstep(-1.0, 1.0, vP.y)); gl_FragColor = vec4(c * 1.7, f * .9); }' }));
   globe.add(rim);
   // 背後的光暈:中心偏金、往外變藍再淡出
   const haloT = canvasTex(256, 256, (g) => { const gr = g.createRadialGradient(128, 128, 30, 128, 128, 128); gr.addColorStop(0, 'rgba(255,205,120,.55)'); gr.addColorStop(.45, 'rgba(110,170,255,.3)'); gr.addColorStop(1, 'rgba(160,110,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); });

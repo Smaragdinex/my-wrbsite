@@ -66,7 +66,7 @@ function createPlanet(root, sunDir, Q = {}) {
         float night = smoothstep(-.02, -.2, nd);
         float city = smoothstep(.55, .75, snoise(vObj * 90.) * .5 + .5) * smoothstep(.08, .14, h) * night;
         c += vec3(1., .66, .32) * city * 1.4;
-        float fr = pow(1. - max(dot(N, V), 0.), 6.);                                       // 很淡的一點邊緣藍(主要的大氣交給外面那層 atmo)
+        float fr = pow(clamp(1. - dot(N, V), 0., 1.), 6.);                                       // 很淡的一點邊緣藍(主要的大氣交給外面那層 atmo)
         c = mix(c, vec3(.3,.55,.95) * (.1 + lit * .7), fr * .12);
         gl_FragColor = vec4(c, 1.);
         #include <tonemapping_fragment>

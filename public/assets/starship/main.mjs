@@ -5,9 +5,9 @@
 import * as THREE from 'three';
 import { quality, Q_SET } from './quality.mjs?v=2';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=24';
+import { createExterior } from './exterior.mjs?v=25';
 import { ROOMS, buildRoom } from './rooms.mjs?v=13';
-import { createHall, createCorridor } from './hall.mjs?v=83';
+import { createHall, createCorridor } from './hall.mjs?v=84';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -119,11 +119,15 @@ window.__shipHover = () => ({ door: mode === 'hall' ? hover : -1, hangar: hoverH
 window.__dbg = () => ({ ext, extCam, rtHall, rtCor, renderer, hallPortal, corCam, cor, hall, pCam }); window.__shipPose = () => ({ yaw: +ext.ship.rotation.y.toFixed(3), pitch: +ext.ship.rotation.x.toFixed(3) });   // 測試用
 window.__shipReady = () => ext.loaded || ext.failed; window.__shipProgress = () => ext.progress;   // control.mjs 的讀條等戰艦模型載好才出發
 const extCam = new THREE.PerspectiveCamera(38, 1, .5, 6000);           // 遠平面要看得到底下那顆大星球
+// 光暈前先把壞掉的像素(NaN / 無限大)換成 0:不然 bloom 會把一個壞點擴散成一大塊黑色方框(大廳中間偶爾出現的黑框就是這樣來的)
+const NAN_FIX = { uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); if (any(isnan(c)) || any(isinf(c))) c = vec4(0.0, 0.0, 0.0, 1.0); gl_FragColor = clamp(c, 0.0, 64.0); }' };
+const nanFix = () => new ShaderPass(NAN_FIX);
 const extComposer = new EffectComposer(renderer);                      // 外觀也加光暈:上千個小窗、環臂長廊、艦首大環的金光
 const skyPass = new RenderPass(skyScene, skyCam), warpPass = new RenderPass(warpScene, warpCam), extPass = new RenderPass(extScene, extCam);   // 星空、(還在收尾的)超空間、戰艦疊在一起再加光暈
 warpPass.clear = false; warpPass.clearDepth = true; extPass.clear = false; extPass.clearDepth = true;
 for (const ps of [skyPass, warpPass, extPass]) extComposer.addPass(ps);
-const extBloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .35, .35, 2.2); extBloom.enabled = Q_SET.bloom; extComposer.addPass(extBloom);   // 門檻高:只有窗戶、燈條會發光,被太陽照亮的白色艦身不會糊掉
+const extBloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .35, .35, 2.2); extBloom.enabled = Q_SET.bloom; extComposer.addPass(nanFix()); extComposer.addPass(extBloom);   // 門檻高:只有窗戶、燈條會發光,被太陽照亮的白色艦身不會糊掉
 extComposer.addPass(new OutputPass());
 
 // ---------- 機庫 → 通道 ----------
@@ -137,7 +141,7 @@ const FINISH = { uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying
       c.rgb *= mix(1.0, .8, smoothstep(.42, .95, d)); c.rgb = mix(c.rgb, c.rgb * c.rgb * (3.0 - 2.0 * c.rgb), .18); gl_FragColor = c; }` };
 const corComposer = new EffectComposer(renderer);                      // 通道跟大廳一樣有燈條光暈
 corComposer.addPass(new RenderPass(corScene, corCam));
-const corBloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .4, .5, 1.15); corBloom.enabled = Q_SET.bloom; corComposer.addPass(corBloom);
+const corBloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .4, .5, 1.15); corBloom.enabled = Q_SET.bloom; corComposer.addPass(nanFix()); corComposer.addPass(corBloom);
 corComposer.addPass(new OutputPass());
 corComposer.addPass(new ShaderPass(FINISH));
 
@@ -168,7 +172,7 @@ const hallCam = new THREE.PerspectiveCamera(56, 1, .1, 200);
 const hallComposer = new EffectComposer(renderer);
 hallComposer.addPass(new RenderPass(hallScene, hallCam));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .18, .3, 1.6);   // 很淡、門檻高:只有最亮的燈條 / 投影有一點光暈,白牆和門框保持乾淨
-bloom.enabled = Q_SET.hallBloom; hallComposer.addPass(bloom);
+bloom.enabled = Q_SET.hallBloom; hallComposer.addPass(nanFix()); hallComposer.addPass(bloom);
 hallComposer.addPass(new OutputPass());
 hallComposer.addPass(new ShaderPass(FINISH));
 
@@ -177,7 +181,7 @@ const rtCor = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType }), 
 const _dbs = new THREE.Vector2();
 const portalMat = (rt, k) => new THREE.ShaderMaterial({ uniforms: { tMap: { value: rt.texture }, uRes: { value: _dbs }, uK: { value: k } },
   vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
-  fragmentShader: 'uniform sampler2D tMap; uniform vec2 uRes; uniform float uK; void main(){ vec3 c = texture2D(tMap, gl_FragCoord.xy / uRes).rgb; if (!(c.r == c.r && c.g == c.g && c.b == c.b)) c = vec3(0.); gl_FragColor = vec4(clamp(c * uK, 0., 32.), 1.); }' });   // 擋掉 NaN(不然 bloom 會把整個畫面變黑)
+  fragmentShader: 'uniform sampler2D tMap; uniform vec2 uRes; uniform float uK; void main(){ vec3 c = texture2D(tMap, gl_FragCoord.xy / uRes).rgb; if (any(isnan(c)) || any(isinf(c))) c = vec3(0.); gl_FragColor = vec4(clamp(c * uK, 0., 32.), 1.); }' });   // 擋掉 NaN(不然 bloom 會把整個畫面變黑)
 ext.portal.material = portalMat(rtCor, 1.22); cor.portal.material = portalMat(rtHall, 1);
 const pCam = new THREE.PerspectiveCamera(60, 1, .1, 200), _q = new THREE.Quaternion(), _lp = new THREE.Vector3();
 const COR_FROM_BAY = 19.9, HALL_FROM_COR = 51.6, HALL_DY = 2.0;            // 座標對應:機庫(戰艦本地)z -6.9 = 通道起點 13;通道終點 -44.2 = 大廳鏡頭 7.4
