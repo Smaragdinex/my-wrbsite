@@ -72,12 +72,14 @@ export const sfx = {
 };
 
 // ================= 背景音樂(播放清單)=================
-// 跟 Cat Street 3D 房間電台同一份歌單(Mixkit 免費授權;檔案就是 /catinsight-3d/music/ 那幾首,不另外放),
-// 從最搭太空的「Vastness」開始,一首播完接下一首。用 <audio> 串流(不用整首下載完),接進 Web Audio 做淡入、超空間時壓低。
+// 歌單(全部 Mixkit 免費授權):使用者挑的 Relaxation 05(Lily J)、Valley Sunset(Alejandro Magaña)放在 /assets/music/,
+// 後面接 Cat Street 3D 房間電台的四首(/catinsight-3d/music/ 那份,不另外放);一首播完接下一首。用 <audio> 串流(不用整首下載完),接進 Web Audio 做淡入、超空間時壓低。
 // 各曲母帶音量差很多 → trim 統一到 Vastness 的響度(-13.5 LUFS)。左下角的播放器(main.mjs)用 sfx.music 控制。
 const MUSIC_DIR = '/catinsight-3d/music/', MUSIC_LEVEL = .3;
+const trackURL = (t) => (t.file.startsWith('/') ? t.file : MUSIC_DIR + t.file);   // 我們自己下載的放在 /assets/music/,其他是 Cat Street 房間那份
 const PLAYLIST = [
-  { title: 'Vastness', artist: 'Andrew Ev', mood: 'Ambient · Space', file: 'vastness.m4a', trim: 1, cover: ['#0f2027', '#2c5364', '#8ec5fc'] },
+  { title: 'Relaxation 05', artist: 'Lily J', mood: 'Ambient · Meditative', file: '/assets/music/relaxation-05.m4a', trim: .86, cover: ['#e0c3fc', '#8ec5fc', '#c2e9fb'] },
+  { title: 'Valley Sunset', artist: 'Alejandro Magaña', mood: 'Ambient · Mysterious', file: '/assets/music/valley-sunset.m4a', trim: 1.58, cover: ['#f6d365', '#fda085', '#5b3a7a'] },
   { title: 'Opalescent', artist: 'Eugenio Mininni', mood: 'Ambient', file: 'opalescent.m4a', trim: .79, cover: ['#a18cd1', '#fbc2eb', '#8fd3f4'] },
   { title: 'Home', artist: 'Eugenio Mininni', mood: 'Ambient · Warm', file: 'home.m4a', trim: .84, cover: ['#43e97b', '#38f9d7', '#4facfe'] },
   { title: 'Finding Myself', artist: 'Michael Ramir C.', mood: 'Ambient · Warm', file: 'finding-myself.m4a', trim: 2.6, cover: ['#f6d365', '#fda085', '#c471f5'] },
@@ -91,7 +93,7 @@ function musicElement() {                                             // 在使�
   if (!musicEl) {
     let saved = null; try { saved = JSON.parse(sessionStorage.getItem('xarts-music') || 'null'); } catch {}   // 從首頁 / About 換頁過來:接著同一首、同一個位置
     if (saved && PLAYLIST[saved.i] && Date.now() - saved.at < 30 * 60e3) { trackI = saved.i; userPaused = !!saved.paused; }
-    musicEl = new Audio(); musicEl.preload = 'none'; musicEl.crossOrigin = 'anonymous'; musicEl.src = MUSIC_DIR + PLAYLIST[trackI].file;
+    musicEl = new Audio(); musicEl.preload = 'none'; musicEl.crossOrigin = 'anonymous'; musicEl.src = trackURL(PLAYLIST[trackI]);
     if (saved && saved.i === trackI && saved.t > 1) musicEl.addEventListener('loadedmetadata', () => { try { musicEl.currentTime = saved.t; } catch {} }, { once: true });
     musicEl.addEventListener('ended', () => playTrack((trackI + 1) % PLAYLIST.length));
     for (const ev of ['play', 'pause']) musicEl.addEventListener(ev, notify);
@@ -109,7 +111,7 @@ function startMusic() {
 }
 function playTrack(i) {                                               // 換歌(點歌單 / 下一首 / 播完自動接)
   trackI = (i + PLAYLIST.length) % PLAYLIST.length; userPaused = false;
-  const el = musicElement(); el.src = MUSIC_DIR + PLAYLIST[trackI].file;
+  const el = musicElement(); el.src = trackURL(PLAYLIST[trackI]);
   if (mus) mus.trim.gain.setValueAtTime(PLAYLIST[trackI].trim, ctx.currentTime);
   if (muted) { muted = false; try { localStorage.setItem('xarts-sfx', 'on'); } catch {} }   // 主動選歌 = 要聽:音效開關一起打開
   el.play().catch(() => {}); unlock(); notify();

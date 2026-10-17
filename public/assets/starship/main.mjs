@@ -13,8 +13,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { sfx } from './sfx.mjs?v=7';
-import { player } from '../player.mjs?v=1';
+import { sfx } from './sfx.mjs?v=8';
+import { player } from '../player.mjs?v=2';
 
 const canvas = document.getElementById('ship');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.tier !== 'low', alpha: true, powerPreference: 'high-performance' });
