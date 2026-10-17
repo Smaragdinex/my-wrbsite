@@ -165,7 +165,7 @@ export function createExterior(scene, Q = {}) {
       escorts.push({ pivot, a, b: a * 1.3, h, sp, th0, ph: r() * 6 });
     }
     ship.add(m); ship.visible = true; loaded = true; progress = 1; readyFn();
-  }, (x) => { if (x.total) progress = x.loaded / x.total; }, (e) => { console.warn('[exterior] 戰艦模型載入失敗', e); failed = true; readyFn(); });
+  }, (x) => { if (x.total) progress = x.loaded / x.total; }, (e) => { console.warn('[exterior] 戰艦模型載入失敗', e); failed = true; window.__siteError = true; readyFn(); });
 
   // 2) 機庫口(兩側):暖光內部 + 柱子 + 欄杆 + 發光框 + 兩片會滑開的大門 + 隱形點擊範圍
   const hangarGlow = glow(0x7fd0ff, 1.5), hangarHits = [], hangarDoors = [], hangarSeam = glow(0xffe2bc, 2.6);

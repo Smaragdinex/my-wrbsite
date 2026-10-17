@@ -83,7 +83,7 @@ const LOOK = +(face.dataset.look || 4.6);   // 瞳孔最多移多遠(SVG 單位)
 let fc = { x:0, y:0 };
 function faceCenter(){ const r = face.getBoundingClientRect(); fc.x = r.left + r.width/2; fc.y = r.top + r.height/2; }
 faceCenter(); addEventListener('resize', faceCenter); addEventListener('scroll', faceCenter, {passive:true});
-(function blink(){ eyesG.classList.add('blink'); setTimeout(()=>eyesG.classList.remove('blink'),140);
+(function blink(){ if (!eyesG) return; eyesG.classList.add('blink'); setTimeout(()=>eyesG.classList.remove('blink'),140);
   setTimeout(blink, 2200 + Math.random()*3200); })();
 
 /* =====================================================================

@@ -77,7 +77,7 @@
   .face .lids{opacity:0;transition:opacity .08s}
   .face #eyes.blink ~ .lids{opacity:1}
   .pupil{transition:transform .18s cubic-bezier(.2,.8,.2,1)}
-  .brand{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;margin-right:auto;padding:6px 0 0 clamp(12px,1.4vw,18px)}   /* X·ARTS 放左上(頭像旁邊) */
+  .brand{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;margin-right:auto;padding:6px 0 0 clamp(22px,2.2vw,30px)}   /* X·ARTS 放左上(頭盔旁邊,頭盔圖比 60px 外框大一點,留空間) */
   /* 手機選單按鈕:淺色圓 + 兩個黑點(··);打開時轉 90° 變成 : */
   .menu-btn{display:none;width:44px;height:44px;border-radius:50%;border:0;background:rgba(228,231,240,.92);cursor:pointer;
     align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 18px rgba(0,0,0,.25);transition:transform .35s cubic-bezier(.2,.8,.2,1),background .25s;

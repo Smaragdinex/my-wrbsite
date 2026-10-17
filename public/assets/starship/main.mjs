@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { quality, Q_SET } from './quality.mjs?v=1';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=21';
+import { createExterior } from './exterior.mjs?v=22';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
 import { createHall, createCorridor } from './hall.mjs?v=83';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -107,6 +107,7 @@ function stepWarp(dt, w, lt, t) {
 const extScene = new THREE.Scene(); extScene.environment = envTex;
 extScene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1830, .5));
 const ext = createExterior(extScene, Q_SET);
+window.__shipHover = () => ({ door: mode === 'hall' ? hover : -1, hangar: hoverHangar, bot: hoverBot });   /* 給左上表情臉用 */
 window.__dbg = () => ({ ext, extCam, rtHall, rtCor, renderer, hallPortal, corCam, cor, hall, pCam }); window.__shipPose = () => ({ yaw: +ext.ship.rotation.y.toFixed(3), pitch: +ext.ship.rotation.x.toFixed(3) });   // 測試用
 window.__shipReady = () => ext.loaded || ext.failed; window.__shipProgress = () => ext.progress;   // control.mjs 的讀條等戰艦模型載好才出發
 const extCam = new THREE.PerspectiveCamera(38, 1, .5, 6000);           // 遠平面要看得到底下那顆大星球
