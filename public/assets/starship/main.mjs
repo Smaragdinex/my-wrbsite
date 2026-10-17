@@ -5,9 +5,9 @@
 import * as THREE from 'three';
 import { quality, Q_SET } from './quality.mjs?v=1';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=17';
+import { createExterior } from './exterior.mjs?v=18';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
-import { createHall, createCorridor } from './hall.mjs?v=76';
+import { createHall, createCorridor } from './hall.mjs?v=80';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -118,7 +118,7 @@ extComposer.addPass(new OutputPass());
 
 // ---------- 機庫 → 通道 ----------
 const corScene = new THREE.Scene(); corScene.environment = envTex;
-const cor = createCorridor(corScene);
+const cor = createCorridor(corScene, { after: ext.ready });
 const corCam = new THREE.PerspectiveCamera(62, 1, .1, 120);
 // 最後一層:淡淡的暗角 + 一點點對比(電影感),大廳和通道共用
 const FINISH = { uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -210,7 +210,7 @@ const ENTER = 8.3, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0;
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
 function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
-function enterShip() { if (mode !== 'ext') return; side = extCam.position.x >= 0 ? 1 : -1; sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); setTimeout(() => { if (mode === 'enter') sfx.open(); }, 3900); setTimeout(() => { if (mode === 'enter') sfx.whoosh(true); }, 4500); go('enter'); }   // 機庫門、俯衝風聲、氣閘門、衝進通道
+function enterShip() { if (mode !== 'ext') return; side = ext.ship.worldToLocal(extCam.position.clone()).x >= 0 ? 1 : -1; /* 鏡頭在戰艦哪一側就從那側進 */ sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); setTimeout(() => { if (mode === 'enter') sfx.open(); }, 3900); setTimeout(() => { if (mode === 'enter') sfx.whoosh(true); }, 4500); go('enter'); }   // 機庫門、俯衝風聲、氣閘門、衝進通道
 function toRoom(i) { if (mode !== 'hall') return; sfx.click(); sfx.whoosh(true); cur = roomF = i; fromDoor = i; go('toRoom', { room: i }); }
 function slideTo(i) { const n = Math.max(0, Math.min(ROOMS.length - 1, i)); if (n !== cur) sfx.swish(); cur = n; window.__shipState.room = cur; }
 function nav(kind, d = 0) {
@@ -288,8 +288,9 @@ const smoother = (x) => { x = Math.min(1, Math.max(0, x)); const a = x * x * x *
 function drawExterior(t, appear, dive = 0, open = 0) {
   ext.update(t, hoverHangar); ext.setHangarOpen(open);
   const fitE = port() ? .8 / extCam.aspect : 1;
-  const yaw = 2.3 + t * .045 + dragYaw, dist = THREE.MathUtils.lerp(560, 128, ease(appear)) * fitE;   // 新戰艦比較大(環臂 + 高塔),鏡頭退遠一點
-  const el = Math.min(1.45, Math.max(-1.1, .36 + dragPitch + Math.sin(t * .1) * .03));
+  // 鏡頭固定在一個角度;自轉和拖曳都是轉「戰艦本身」(護航小艦、星球不跟著轉)
+  const yaw = 2.3, dist = THREE.MathUtils.lerp(560, 128, ease(appear)) * fitE, el = .36 + Math.sin(t * .1) * .03;
+  ext.setPose(-(t * .045) - dragYaw, Math.max(-.45, Math.min(.45, dragPitch * .6)) * (1 - ease(seg(dive, 0, .3))));
   camPos.set(Math.sin(yaw) * Math.cos(el) * dist, Math.sin(el) * dist, Math.cos(yaw) * Math.cos(el) * dist); tgt.set(0, 5, 4);
   let roll = 0, fov = 38, near = .5;
   if (dive > 0) {                                              // 進艦:從軌道俯衝到機庫口 → 穿過開口、轉向艦首 → 沿著機庫甲板滑向氣閘門 → 氣閘門滑開
@@ -309,7 +310,9 @@ function drawExterior(t, appear, dive = 0, open = 0) {
 function drawCorridor(p, t) {
   const z = THREE.MathUtils.lerp(cor.START, cor.END, ease(p) * .3 + p * .7);
   corCam.position.set(Math.sin(t * 1.3) * .08, .2 + Math.sin(t * 2.1) * .05, z); corCam.lookAt(0, .1, z - 10);
-  cor.update(z); corComposer.render();
+  cor.update(z);
+  const tm = renderer.toneMapping; if (cor.baked) renderer.toneMapping = THREE.NoToneMapping;   // 烘焙貼圖已經套過色調
+  corComposer.render(); renderer.toneMapping = tm;
 }
 // 大廳鏡頭:站在入口平視;滑鼠移動有一點視差,拖曳可以左右轉頭看(手機直式看不到全部門時用)
 let hallYaw = 0, lookX = 0, lookY = 0;

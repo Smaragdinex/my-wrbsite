@@ -114,7 +114,7 @@ export function createExterior(scene, Q = {}) {
   const box = (w, h, d, m, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = true; b.receiveShadow = true; ship.add(b); return b; };
 
   // 1) Blender 模型
-  const escorts = [], airlock = [];
+  const escorts = [], airlock = [], _ev = new THREE.Vector3();
   let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
   gl.load('/assets/starship/models/ship.glb?v=2', (gltf) => {
@@ -133,22 +133,28 @@ export function createExterior(scene, Q = {}) {
     const behind = new THREE.Mesh(new THREE.CircleGeometry(1.75, 48), new THREE.MeshBasicMaterial({ color: 0xfff4e4, toneMapped: false }));   // 氣閘門後面:亮白的通道光(門一開就透出來)
     behind.material.color.multiplyScalar(2.2); Object.assign(behind.material, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); behind.position.set(0, .35, -6.995); ship.add(behind);   // 貼在機庫前牆上、門板後面
     for (const n of ['airlock_L', 'airlock_R']) { const a = m.getObjectByName(n); if (a) airlock.push({ o: a, x: a.position.x, s: n.endsWith('L') ? -1 : 1 }); }
-    for (const o of [...m.children]) if (/^escort_/.test(o.name)) escorts.push({ o, base: o.position.clone(), ph: r() * 6, dir: new THREE.Vector3(0, 0, -1).applyQuaternion(o.quaternion) });
+    // 護航小艦:從戰艦上拿下來,各自在戰艦外圍的大橢圓軌道上飛(戰艦轉的時候它們不跟著轉);機頭轉到朝 +Z,再用 lookAt 對準飛行方向
+    const YAW = [.3, -.4, .9, .1, .5], ORB = [[52, 6, .05], [58, -10, -.04], [64, 14, .035], [55, -15, -.055], [72, 2, .03]];
+    for (const o of [...m.children]) {
+      const k = /^escort_(\d+)$/.exec(o.name)?.[1]; if (k == null) continue;
+      const pivot = new THREE.Group(); root.add(pivot); m.remove(o); pivot.add(o);
+      o.position.set(0, 0, 0); o.rotation.set(0, -(YAW[k] + Math.PI), 0);
+      const [a, h, sp] = ORB[k], th0 = r() * Math.PI * 2;
+      escorts.push({ pivot, a, b: a * 1.3, h, sp, th0, ph: r() * 6 });
+    }
     ship.add(m); ship.visible = true; loaded = true; progress = 1; readyFn();
   }, (x) => { if (x.total) progress = x.loaded / x.total; }, (e) => { console.warn('[exterior] 戰艦模型載入失敗', e); failed = true; readyFn(); });
 
   // 2) 機庫口(兩側):暖光內部 + 柱子 + 欄杆 + 發光框 + 兩片會滑開的大門 + 隱形點擊範圍
   const hangarGlow = glow(0x7fd0ff, 1.5), hangarHits = [], hangarDoors = [], hangarSeam = glow(0xffe2bc, 2.6);
   for (const s of [-1, 1]) {
-    for (const z of [-3.45, 9.45]) box(.5, 4.2, .5, M.dark, s * 6.75, .3, z);          // 開口兩端的柱子(中間留空,看得到裡面的機庫)
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(.05, .05, 11.6), glow(ORANGE, 1.6)); rail.position.set(s * 6.9, -1.1, 3); ship.add(rail);
-    for (const [y, z, h, d] of [[2.66, 3, .1, 12.9], [-2.06, 3, .1, 12.9], [.3, -3.48, 4.8, .1], [.3, 9.48, 4.8, .1]]) {
-      const e = new THREE.Mesh(new THREE.BoxGeometry(.08, h, d), hangarGlow); e.position.set(s * 7.34, y, z); ship.add(e);
+    for (const [y, z, h, d] of [[2.4, 3, .06, 13.3], [-1.8, 3, .06, 13.3], [.3, -3.64, 4.2, .06], [.3, 9.64, 4.2, .06]]) {   // 開口外緣一圈細的藍色燈框(貼著船殼)
+      const e = new THREE.Mesh(new THREE.BoxGeometry(.04, h, d), hangarGlow); e.position.set(s * 6.62, y, z); ship.add(e);
     }
     const hit = new THREE.Mesh(new THREE.BoxGeometry(2.2, 6, 14), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); hit.position.set(s * 7, .3, 3); ship.add(hit); hangarHits.push(hit);
     const leaves = [-1, 1].map((d) => {
-      const g = new THREE.Group(); g.position.set(s * 7.22, .3, 3); ship.add(g);
-      const pnl = new THREE.Mesh(new THREE.BoxGeometry(.12, 4.1, 6.3), M.light); pnl.position.z = d * 3.15; pnl.castShadow = true; g.add(pnl);
+      const g = new THREE.Group(); g.position.set(s * 6.46, .3, 3); ship.add(g);          // 門板縮在開口裡面一點,打開時滑進船殼(看不到)
+      const pnl = new THREE.Mesh(new THREE.BoxGeometry(.1, 4.1, 6.6), M.light); pnl.position.z = d * 3.3; pnl.castShadow = true; g.add(pnl);
       const seam = new THREE.Mesh(new THREE.BoxGeometry(.03, 3.9, .06), hangarSeam); seam.position.set(s * .07, 0, d * .05); g.add(seam);
       const band = new THREE.Mesh(new THREE.BoxGeometry(.03, .08, 5.9), glow(0x7fd0ff, 2.4)); band.position.set(s * .07, -.9, d * 3.15); g.add(band);
       for (const y of [1.3, .2]) { const rib = new THREE.Mesh(new THREE.BoxGeometry(.05, .12, 5.6), M.dark); rib.position.set(s * .07, y, d * 3.15); g.add(rib); }
@@ -189,8 +195,9 @@ export function createExterior(scene, Q = {}) {
   let hov = 0, loaded = false;
   return {
     root, ship, hangarHits,
-    setHangarOpen(k) { for (const { g, d } of hangarDoors) g.position.z = 3 + d * k * 6.2; hangarSeam.emissiveIntensity = 2.6 + k * 3; },   // 0 = 關、1 = 全開
+    setHangarOpen(k) { for (const { g, d } of hangarDoors) g.position.z = 3 + d * k * 6.7; hangarSeam.emissiveIntensity = 2.6 + k * 3; },   // 0 = 關、1 = 全開
     hangarWorld: (side = 1) => ship.localToWorld(new THREE.Vector3(side * 6.6, .3, 3)),   // 機庫口中心(side = 哪一側)
+    setPose(yaw, pitch) { ship.rotation.y = yaw; ship.rotation.x = pitch; },   // 拖曳 / 自轉只轉戰艦(鏡頭、星球、護航小艦不動)
     get loaded() { return loaded; }, get failed() { return failed; }, get progress() { return progress; }, ready,
     setAirlock(k) { for (const a of airlock) a.o.position.x = a.x + a.s * k * 1.75; },  // 機庫最裡面的圓形氣閘門:0 = 關、1 = 左右滑開
     update(t, hover = false) {
@@ -199,7 +206,11 @@ export function createExterior(scene, Q = {}) {
       ship.position.y = Math.sin(t * .35) * .5; ship.rotation.z = Math.sin(t * .25) * .015;
       for (const f of flames) { const k = .85 + Math.sin(t * 21 + f.ph) * .08 + Math.sin(t * 33 + f.ph * 2) * .05; f.cone.scale.set(1, k, 1); f.halo.material.opacity = .65 + (k - .85) * 2; }
       for (const b of blink) { const on = ((t * b.rate + b.ph) % 1) < .16; b.l.material.emissiveIntensity = on ? 6 : .3; b.h.material.opacity = on ? 1 : .05; }
-      for (const e of escorts) e.o.position.copy(e.base).addScaledVector(e.dir, Math.sin(t * .12 + e.ph) * 6).add(new THREE.Vector3(0, Math.sin(t * .3 + e.ph) * .6, 0));   // 護航小艦慢慢前後飄
+      for (const e of escorts) {                                                 // 護航小艦各自繞軌道(最近也離戰艦中心 50 以上,不會穿過船身)
+        const th = e.th0 + t * e.sp, x = Math.cos(th) * e.a, z = Math.sin(th) * e.b + 4, y = e.h + Math.sin(t * .3 + e.ph) * .8;
+        e.pivot.position.set(x, y, z);
+        _ev.set(x - Math.sin(th) * e.a * e.sp, y, z + Math.cos(th) * e.b * e.sp); e.pivot.lookAt(_ev); e.pivot.rotateZ(Math.sign(e.sp) * .22);
+      }
       planet.update(t);
     },
   };

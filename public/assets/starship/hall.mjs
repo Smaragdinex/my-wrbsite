@@ -610,8 +610,9 @@ export function createHall(scene, rooms, opts = {}) {
 
 // 機庫 → 通道(跟大廳同一套風格):亮面白的圓形長走道、一圈圈白色肋環(內側暖白燈)、天花板暖光燈條、
 // 白色亮面走道 + 兩條暖光邊線;兩道白色滑門(暖光門縫 + 一點藍),盡頭是一片亮白(大廳的光)
-export function createCorridor(scene) {
-  const root = new THREE.Group(); scene.add(root);
+export function createCorridor(scene, opts = {}) {
+  const top = new THREE.Group(); scene.add(top);
+  const root = new THREE.Group(); top.add(root);   // 程式蓋的通道(Blender 烘焙版載入前先用;載入後整組拿掉)
   const WARM = 0xffd9a8, CD = 0xf0eee9, CD2 = 0xe4e0d8;
   scene.background = new THREE.Color(0xf4efe6);
   scene.fog = new THREE.Fog(0xf4efe6, 22, 70);                           // 遠處淡進一片暖白
@@ -637,7 +638,7 @@ export function createCorridor(scene) {
     const fr = new THREE.Mesh(new THREE.TorusGeometry(R - .15, .38, 12, 48), gloss(CD, .25)); fr.scale.set(1.15, 1, 1); g.add(fr);
     const fl = new THREE.Mesh(new THREE.TorusGeometry(R - .55, .03, 6, 64), warmM(3)); fl.scale.set(1.15, 1, 1); fl.position.z = .3; g.add(fl);
     const seam = warmM(3);
-    const panels = [-1, 1].map((s) => {
+    const panels = [].map((s) => {
       const p = group(g, 0, 0, 0);
       box(p, R * 1.15 - .1, (R - .2) * 2, .18, gloss(0xfbfaf7, .2), { x: s * (R * 1.15 - .1) / 2, r: .06 });
       const sl = new THREE.Mesh(new THREE.BoxGeometry(.05, R * 1.7, .02), seam); sl.position.set(s * .03, 0, .1); p.add(sl);
@@ -646,13 +647,66 @@ export function createCorridor(scene) {
     });
     return { set(k) { panels.forEach(({ p, s }) => { p.position.x = s * k * (R * 1.15); }); seam.emissiveIntensity = 3 + k * 2; } };
   }
-  const d1 = door(0), d2 = door(-44);
-  const endGlow = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color: 0xfffaf2, toneMapped: false })); endGlow.position.z = -48; root.add(endGlow);
+  // 滑門:兩片半個八角形的白門板,卡在艙壁開口裡,往兩側滑進牆裡
+  const FL = -2.34, HALF = [[0, FL], [-1.7, FL], [-2.6, -1.4], [-2.6, 1.2], [-1.8, 2.1], [0, 2.1]];
+  const leafGeo = (() => { const sh = new THREE.Shape(); HALF.forEach(([x, y], i) => (i ? sh.lineTo(x, y) : sh.moveTo(x, y))); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: .14, bevelEnabled: true, bevelThickness: .02, bevelSize: .02, bevelSegments: 2 }); g.translate(0, 0, -.07); return g; })();
+  function slider(z) {
+    const g = group(top, 0, 0, z), seamM = warmM(3);
+    const leaves = [-1, 1].map((s) => {
+      const p = group(g, 0, 0, 0);
+      const m = new THREE.Mesh(leafGeo, gloss(0xf7f5f0, .24)); m.scale.x = -s; p.add(m);
+      const sl = new THREE.Mesh(new THREE.BoxGeometry(.04, 4.3, .03), seamM); sl.position.set(s * .02, -.1, .09); p.add(sl);
+      const bl = new THREE.Mesh(new THREE.BoxGeometry(1.6, .05, .03), glow(0x7fd0ff, 2)); bl.position.set(s * 1.1, -.5, .09); p.add(bl);
+      for (const y of [1.1, -1.6]) { const rib = new THREE.Mesh(new THREE.BoxGeometry(1.9, .05, .03), gloss(0xd8d4cc, .4)); rib.position.set(s * 1.25, y, .09); p.add(rib); }
+      return { p, s };
+    });
+    return { set(k) { leaves.forEach(({ p, s }) => { p.position.x = s * k * 2.75; }); seamM.emissiveIntensity = 3 + k * 2; } };
+  }
+  door(0); door(-44);                                  // 舊門框(只剩框,門板改用上面的滑門)
+  const d1 = slider(0), d2 = slider(-44);
+  const endGlow = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color: 0xfffaf2, toneMapped: false })); endGlow.position.z = -48; top.add(endGlow);
   scene.add(new THREE.HemisphereLight(0xfff8ee, 0x9a9284, .42));
   for (const z of [8, -8, -24, -40]) { const l = new THREE.PointLight(0xfff0dc, 4, 18, 1.5); l.position.set(0, 1.6, z); root.add(l); }
   const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  // ---------- Blender 版通道(tools/blender/corridor_build.py,光影烘在貼圖裡)----------
+  // 窗:看出去是星空 + 底下一大片星球(依視線方向算,有真的視差)
+  const winM = new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: `varying vec3 vW;
+      float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+        return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + 1.), f.x), f.y); }
+      float fb(vec2 p){ float s = 0., a = .5; for (int k = 0; k < 5; k++) { s += a * vn(p); p *= 2.07; a *= .5; } return s; }
+      void main(){ vec3 d = normalize(vW - cameraPosition);
+        vec3 q = floor(d * 260.); float st = step(.9965, h(q)) * (.5 + .5 * h(q + 3.1));
+        vec3 c = vec3(.006, .009, .02) + vec3(st);
+        float hz = .1 + .05 * d.z;                                      // 星球的地平線(微微彎;窗的下半部看得到星球)
+        float below = smoothstep(hz + .01, hz - .03, d.y);
+        vec3 planet = mix(vec3(.05, .22, .45), vec3(.02, .07, .18), smoothstep(hz, hz - .5, d.y));
+        vec2 g = d.xz / max(hz - d.y + .025, .025) * .9;                 // 投影到地面上(越靠近地平線越扁)→ 雲有透視
+        float land = smoothstep(.52, .56, fb(g * .35 + 7.));
+        planet = mix(planet, mix(vec3(.16, .3, .14), vec3(.5, .45, .32), fb(g * 1.3)), land * .8);
+        float cl = smoothstep(.5, .72, fb(g + vec2(3.1, 1.7)));
+        planet = mix(planet, vec3(.92, .95, 1.), cl * .85);              // 雲
+        c = mix(c, planet, below);
+        c += vec3(.35, .6, 1.) * exp(-abs(d.y - hz) * 40.) * .9;           // 大氣光
+        gl_FragColor = vec4(c, 1.);
+        #include <colorspace_fragment>
+      }` });
+  let baked = false;
+  const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
+  Promise.resolve(opts.after).then(() => new Promise((ok, fail) => gl.load('/assets/starship/models/corridor.glb?v=3', (g) => ok(g.scene), undefined, fail))).then((m) => {
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      if (/window/.test(o.material.name || o.name)) { o.material = winM; return; }
+      const src = o.material; o.material = new THREE.MeshBasicMaterial({ map: src.map, toneMapped: false }); src.dispose();
+    });
+    top.add(m); top.remove(root); baked = true;
+    scene.fog = new THREE.Fog(0xf4efe6, 34, 95);
+  }).catch((e) => console.warn('[corridor] 烘焙通道載入失敗,用程式蓋的版本', e));
   return {
-    root, START: 13, END: -47,
+    root, START: 13, END: -47, get baked() { return baked; },
     // 依鏡頭目前的 z 開門(靠近時滑開)
     update(camZ) { d1.set(smooth(9, 3, camZ)); d2.set(smooth(-33, -39, camZ)); },
   };
