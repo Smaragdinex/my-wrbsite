@@ -107,6 +107,7 @@ function stepWarp(dt, w, lt, t) {
 const extScene = new THREE.Scene(); extScene.environment = envTex;
 extScene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1830, .5));
 const ext = createExterior(extScene, Q_SET);
+window.__shipPose = () => ({ yaw: +ext.ship.rotation.y.toFixed(3), pitch: +ext.ship.rotation.x.toFixed(3) });   // 測試用
 window.__shipReady = () => ext.loaded || ext.failed; window.__shipProgress = () => ext.progress;   // control.mjs 的讀條等戰艦模型載好才出發
 const extCam = new THREE.PerspectiveCamera(38, 1, .5, 6000);           // 遠平面要看得到底下那顆大星球
 const extComposer = new EffectComposer(renderer);                      // 外觀也加光暈:上千個小窗、環臂長廊、艦首大環的金光
@@ -248,17 +249,21 @@ window.__ship = { enter: enterShip, toRoom, slideTo, nav, jump(m, i = 0) { cur =
 
 // ---------- 滑鼠 / 手指:外觀拖曳旋轉、點機庫口、點艙門、點作品艙 ----------
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(9, 9);
-let dragYaw = 0, dragPitch = 0, drag = null, hover = -1, hoverHangar = false, hoverBot = false;
+let dragYaw = 0, dragPitch = 0, yawVel = 0, yawShown = 0, lastExtT = 0, drag = null, hover = -1, hoverHangar = false, hoverBot = false;
 const setNdc = (e) => ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
 addEventListener('pointermove', setNdc);
 canvas.style.touchAction = 'none';
-canvas.addEventListener('pointerdown', (e) => { setNdc(e); drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY }; if (mode === 'ext') { window.__shipDrag = true; canvas.setPointerCapture(e.pointerId); } });
+canvas.addEventListener('pointerdown', (e) => { setNdc(e); yawVel = 0; drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY }; if (mode === 'ext') { window.__shipDrag = true; canvas.setPointerCapture(e.pointerId); } });
 canvas.addEventListener('pointermove', (e) => { if (drag && mode === 'hall') {          // 大廳:左右拖 = 轉頭看(上下滑還是交給滾動換層)
     const dx = e.clientX - drag.x; if (Math.abs(e.clientX - drag.x0) > Math.abs(e.clientY - drag.y0)) window.__shipDrag = true;
     hallYaw = Math.max(-1.0, Math.min(1.0, hallYaw + dx * .004)); drag.x = e.clientX; drag.y = e.clientY; return; }
   if (!drag || mode !== 'ext') return;
-  dragYaw -= (e.clientX - drag.x) * .0065; dragPitch = Math.min(1.25, Math.max(-1.0, dragPitch + (e.clientY - drag.y) * .005)); drag.x = e.clientX; drag.y = e.clientY; });
+  // 只左右轉(不上下翻);記下拖曳速度,放開後還會慣性滑一下
+  const now = performance.now(), d = -(e.clientX - drag.x) * .0065, dtm = Math.max(8, now - (drag.t || now - 16));
+  dragYaw += d; yawVel = yawVel * .6 + (d / (dtm / 1000)) * .4; drag.t = now; drag.x = e.clientX; drag.y = e.clientY; });
 canvas.addEventListener('pointerup', (e) => {
+  if (drag && performance.now() - (drag.t || 0) > 90) yawVel = 0;                  // 停住一下才放開 = 不要甩出去
+  yawVel = Math.max(-2.6, Math.min(2.6, yawVel));
   const moved = drag ? Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) : 99; drag = null; window.__shipDrag = false;
   if (moved > 6) return;                                       // 是拖曳,不是點擊
   setNdc(e); const h = pick();
@@ -290,7 +295,10 @@ function drawExterior(t, appear, dive = 0, open = 0) {
   const fitE = port() ? .8 / extCam.aspect : 1;
   // 鏡頭固定在一個角度;自轉和拖曳都是轉「戰艦本身」(護航小艦、星球不跟著轉)
   const yaw = 2.3, dist = THREE.MathUtils.lerp(560, 128, ease(appear)) * fitE, el = .36 + Math.sin(t * .1) * .03;
-  ext.setPose(-(t * .045) - dragYaw, Math.max(-.45, Math.min(.45, dragPitch * .6)) * (1 - ease(seg(dive, 0, .3))));
+  const dtE = Math.min(.05, Math.max(0, t - lastExtT)); lastExtT = t;
+  if (!drag) { if (dive > 0) yawVel = 0; dragYaw += yawVel * dtE; yawVel *= Math.exp(-dtE * 3.4); }          // 放開後的慣性,慢慢停下
+  yawShown += (dragYaw - yawShown) * (1 - Math.exp(-dtE * 9));                      // 畫面上的角度平滑追上手指(不會一頓一頓)
+  ext.setPose(-(t * .045) - yawShown, 0);
   camPos.set(Math.sin(yaw) * Math.cos(el) * dist, Math.sin(el) * dist, Math.cos(yaw) * Math.cos(el) * dist); tgt.set(0, 5, 4);
   let roll = 0, fov = 38, near = .5;
   if (dive > 0) {                                              // 進艦:從軌道俯衝到機庫口 → 穿過開口、轉向艦首 → 沿著機庫甲板滑向氣閘門 → 氣閘門滑開
