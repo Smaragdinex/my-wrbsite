@@ -355,6 +355,102 @@ for s in (-1, 1):
     box(f'hangar_frame_top_{s}', (.5, 14.2, .5), (s * 6.55, -3, 2.55), M_DARK, bevel=.05)
     box(f'hangar_frame_bot_{s}', (.5, 14.2, .5), (s * 6.55, -3, -1.95), M_DARK, bevel=.05)
 
+M_PAINT = mat('ship_paint', '#3a3f48', .4, .2)
+M_HAZARD = mat('ship_hazard', '#e8b23a', .4)
+def label(text, loc, rot, size, m):
+    cu = bpy.data.curves.new(text, 'FONT'); cu.body = text; cu.size = size; cu.align_x = 'CENTER'; cu.align_y = 'CENTER'; cu.extrude = .01
+    o = bpy.data.objects.new('label_' + text, cu); scene.collection.objects.link(o); o.location = loc; o.rotation_euler = rot; o.data.materials.append(m)
+    bpy.ops.object.select_all(action='DESELECT'); o.select_set(True); bpy.context.view_layer.objects.active = o; bpy.ops.object.convert(target='MESH')
+# ================= 6.5) 機庫:艦身挖出一個真的機庫(兩側開口 = 網頁上的機庫門位置),裡面有甲板、天花板燈、停機坪、兩艘小艇、貨櫃、氣閘門 =================
+#   機庫範圍 x ±6.3、y -12 ~ 7(+y = 艦首那頭,氣閘門在這面牆)、z -1.8 ~ 2.6;開口 y -9.6 ~ 3.6、z -1.75 ~ 2.35(兩側)
+BX, BY0, BY1, BZ0, BZ1 = 6.3, -12.0, 7.0, -1.8, 2.6
+BYM, BZM = (BY0 + BY1) / 2, (BZ0 + BZ1) / 2
+cut_col = bpy.data.collections.new('bay_cutters'); scene.collection.children.link(cut_col)
+def cutter(name, size, loc):
+    bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1); bmesh.ops.scale(bm, vec=size, verts=bm.verts)
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free(); o = bpy.data.objects.new(name, me); cut_col.objects.link(o); o.location = loc
+    me.materials.append(M_HULL)                                               # 布林切出來的面沿用艦身材質(不然烘焙時是空材質)
+cutter('cut_bay', (BX * 2 + .1, BY1 - BY0 + .1, BZ1 - BZ0 + .1), (0, BYM, BZM))
+cutter('cut_open', (18, 13.2, 4.1), (0, -3, .3))
+cut_col.hide_render = True; cut_col.hide_viewport = True
+bo = bpy.data.objects['hull'].modifiers.new('bay', 'BOOLEAN'); bo.operation = 'DIFFERENCE'; bo.operand_type = 'COLLECTION'; bo.collection = cut_col; bo.solver = 'EXACT'
+M_DECK = plated('bay_deck', '#454a53', .62, .45, coat=0.0, scale=.9, seam=.5)
+M_BAYW = plated('bay_wall', '#dcdee2', .34, .3, coat=.3, scale=.8, seam=.45)
+M_YEL = mat('bay_yellow', '#d9a23a', .5)
+M_BLIGHT = mat('bay_light', '#000000', 1, emit='#fff1dc', k=14)
+M_PAD = mat('bay_pad', '#000000', 1, emit='#7cc8ff', k=7)
+M_GUIDE = mat('bay_guide', '#000000', 1, emit='#ffcf8a', k=10)
+def bbox(name, size, loc, m, rot=(0, 0, 0), bevel=0.0): return box('bay_' + name, size, loc, m, rot, bevel)
+# 甲板、天花板、天花板橫樑 + 燈條
+bbox('floor', (2 * BX, BY1 - BY0, .2), (0, BYM, BZ0 - .1), M_DECK)
+bbox('ceil', (2 * BX, BY1 - BY0, .2), (0, BYM, BZ1 + .1), M_BAYW)
+y = BY0 + 1
+while y < BY1 - .5:
+    bbox(f'beam_{y:.0f}', (2 * BX, .32, .38), (0, y, BZ1 - .19), M_BAYW, bevel=.03)
+    if y + 1 < BY1: bbox(f'lightstrip_{y:.0f}', (2 * BX - 1.4, .16, .05), (0, y + 1, BZ1 - .03), M_BLIGHT)
+    y += 2
+# 前牆(氣閘門)、後牆(貨櫃)、開口兩旁的側牆 + 直條肋
+bbox('wall_front', (2 * BX, .3, BZ1 - BZ0), (0, BY1 + .15, BZM), M_BAYW)
+bbox('wall_back', (2 * BX, .3, BZ1 - BZ0), (0, BY0 - .15, BZM), M_BAYW)
+for s_ in (-1, 1):
+    for (ya, yb) in ((BY0, -9.6), (3.6, BY1)):
+        bbox(f'wall_side_{s_}_{ya:.0f}', (.3, yb - ya, BZ1 - BZ0), (s_ * (BX + .15), (ya + yb) / 2, BZM), M_BAYW)
+    for x in (2.2, 4.4):
+        for yy in (BY1 - .05, BY0 + .05):
+            bbox(f'rib_{s_}_{x}_{yy:.0f}', (.3, .18, BZ1 - BZ0), (s_ * x, yy, BZM), M_DECK, bevel=.03)
+# 氣閘門:圓形門框 + 暖光環 + 左右兩半門(網頁上會滑開)+ 門上方的字
+torus('bay_airlock_frame', 1.8, .24, (0, BY1 - .08, .35), M_BAYW, rot=(math.pi / 2, 0, 0), seg=96, mseg=16)
+torus('bay_airlock_glow', 1.52, .045, (0, BY1 - .2, .35), M_GUIDE, rot=(math.pi / 2, 0, 0), seg=96, mseg=8)
+for s_, nm in ((-1, 'L'), (1, 'R')):
+    bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=64, radius1=1.62, radius2=1.62, depth=.16)
+    bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0), plane_no=(-s_, 0, 0), clear_inner=True)
+    bmesh.ops.contextual_create(bm, geom=[e for e in bm.edges if e.is_boundary])
+    o = obj(f'bay_door_{nm}', bm, M_HULL, .02, 2); o.location = (0, BY1 - .1, .35); o.rotation_euler = (math.pi / 2, 0, 0)
+    box(f'bay_door_{nm}_seam', (.04, .02, 3.0), (s_ * .03, BY1 - .2, .35), M_GUIDE).parent = None
+    box(f'bay_door_{nm}_band', (1.2, .02, .06), (s_ * .75, BY1 - .2, -.15), M_PAD)
+label('HANGAR 01', (0, BY1 - .32, 2.25), (math.pi / 2, 0, 0), .36, M_PAINT)
+for o in [o for o in scene.objects if o.name == 'label_HANGAR 01']: o.name = 'bay_label'
+# 地上的標線:開口邊的黃線、兩個停機坪光環、通往氣閘門的導引燈
+for s_ in (-1, 1):
+    bbox(f'yline_{s_}', (.08, 13.0, .01), (s_ * 5.7, -3, BZ0 + .006), M_YEL)
+    for k in range(9): bbox(f'hz_{s_}_{k}', (.5, .18, .012), (s_ * 6.0, -9.2 + k * 1.55, BZ0 + .007), M_YEL, rot=(0, 0, math.radians(35)))
+for k, (x, y_) in enumerate(((-3.2, -7.2), (3.2, -7.2))):
+    torus(f'bay_pad_{k}', 1.7, .05, (x, y_, BZ0 + .02), M_PAD, seg=96, mseg=6)
+    torus(f'bay_padline_{k}', 1.25, .03, (x, y_, BZ0 + .02), M_YEL, seg=96, mseg=6)
+y = -9.0
+while y < BY1 - .8:
+    for x in (-.85, .85): bbox(f'guide_{x}_{y:.1f}', (.12, .3, .025), (x, y, BZ0 + .012), M_GUIDE)
+    y += .9
+# 停在停機坪上的兩艘小艇(跟外面護航艦同款,縮小)+ 起落架
+for k, (x, y_) in enumerate(((-3.2, -7.2), (3.2, -7.2))):
+    shuttle(f'parked{k}', (x, y_, BZ0 + .62), 0, .55)
+    for nm in ('', '_wing', '_glow'):
+        o = bpy.data.objects.get(f'escort_parked{k}{nm}')
+        if o: o.name = f'bay_ship_{k}{nm}'
+    for dx, dy in ((-.6, -.9), (.6, -.9), (0, 1.0)):
+        bbox(f'gear_{k}_{dx}_{dy}', (.08, .08, .5), (x + dx, y_ + dy, BZ0 + .25), M_DARK)
+# 後牆前面的貨櫃 + 油桶、天花板吊車
+for i in range(-5, 6):
+    if abs(i) < 2: continue
+    for j in range(rng.randint(1, 3)):
+        sz = rng.uniform(.75, .95)
+        bbox(f'crate_{i}_{j}', (sz, sz, sz), (i * 1.0 + rng.uniform(-.08, .08), BY0 + .7 + rng.uniform(0, .3), BZ0 + sz / 2 + j * sz), rng.choice((M_DECK, M_BAYW, M_YEL)), rot=(0, 0, rng.uniform(-.1, .1)), bevel=.04)
+for k in range(5):
+    cyl(f'bay_tank_{k}', .28, 1.1, (-5.4 + k * .65, BY0 + 1.9, BZ0 + .55), M_HULL2, verts=24, bevel=.04)
+bbox('crane', (2 * BX - .6, .3, .3), (0, -2.0, BZ1 - .55), M_YEL, bevel=.03)
+bbox('crane_trolley', (.7, .6, .4), (1.5, -2.0, BZ1 - .9), M_DARK, bevel=.04)
+cyl('bay_crane_cable', .02, 1.1, (1.5, -2.0, BZ1 - 1.65), M_METAL, verts=6)
+# 烘光用的燈(只在機庫裡):天花板燈條各一盞面光 + 停機坪上方的冷光
+for y_ in [BY0 + 2 + 2 * k for k in range(9)]:
+    if y_ >= BY1: break
+    L_ = bpy.data.lights.new(f'baylamp_{y_}', 'AREA'); L_.shape = 'RECTANGLE'; L_.size = 2 * BX - 1.4; L_.size_y = .3; L_.energy = 180; L_.color = (1, .95, .88)
+    lo = bpy.data.objects.new(f'baylamp_{y_}', L_); scene.collection.objects.link(lo); lo.location = (0, y_, BZ1 - .08)
+for x in (-3.2, 3.2):
+    L_ = bpy.data.lights.new(f'baypad_{x}', 'POINT'); L_.energy = 60; L_.color = (.6, .8, 1); L_.shadow_soft_size = .5
+    lo = bpy.data.objects.new(f'baypad_{x}', L_); scene.collection.objects.link(lo); lo.location = (x, -7.2, BZ0 + .5)
+L_ = bpy.data.lights.new('bayairlock', 'POINT'); L_.energy = 120; L_.color = (1, .85, .65); L_.shadow_soft_size = .8
+lo = bpy.data.objects.new('bayairlock', L_); scene.collection.objects.link(lo); lo.location = (0, BY1 - 1.2, .4)
+
 # ================= 7) 表面小結構(kitbash):管線箱、散熱片、感測器、小燈,沿表面法線長出來 =================
 def surface_points(objs, n, cond):
     tris = []
@@ -390,24 +486,19 @@ def kitbash(tag, pts, mats, light_every=9):
         if len(bm.verts): obj(f'kit_{tag}_{nm}', bm, m, smooth=False)
         else: bm.free()
 hub_xy = Vector((HX, HY))
+out_bay = lambda c: not (abs(c.x) < 6.9 and BY0 - .4 < c.y < BY1 + .4 and BZ0 - .4 < c.z < BZ1 + .4)
 not_hangar = lambda c: not (abs(c.x) > 4.5 and -10.5 < c.y < 4.5 and -2.4 < c.z < 3.0)
 off_hub = lambda c: (Vector((c.x, c.y)) - hub_xy).length > 10.8
 off_collar = lambda c: not (13.8 < c.y < 19.8)
 hulls = [o for o in scene.objects if o.name in ('hull', 'deck1', 'deck2', 'keel')]
-kitbash('top', surface_points(hulls, 900, lambda c, n: n.z > .75 and off_hub(c) and off_collar(c) and c.y < 30), [M_HULL2, M_HULL2, M_HULL, M_HULL, M_METAL, M_DARK])
-kitbash('side', surface_points(hulls, 500, lambda c, n: abs(n.x) > .6 and not_hangar(c) and off_collar(c) and c.y < 28 and abs(c.z) > .2 and not (-2 < c.z < 2 and abs(c.x) > 4)), [M_HULL2, M_HULL2, M_HULL, M_DARK])
-kitbash('belly', surface_points(hulls, 450, lambda c, n: n.z < -.7 and off_collar(c) and c.y < 30), [M_HULL2, M_DARK, M_METAL])
+kitbash('top', surface_points(hulls, 900, lambda c, n: n.z > .75 and out_bay(c) and off_hub(c) and off_collar(c) and c.y < 30), [M_HULL2, M_HULL2, M_HULL, M_HULL, M_METAL, M_DARK])
+kitbash('side', surface_points(hulls, 500, lambda c, n: abs(n.x) > .6 and out_bay(c) and not_hangar(c) and off_collar(c) and c.y < 28 and abs(c.z) > .2 and not (-2 < c.z < 2 and abs(c.x) > 4)), [M_HULL2, M_HULL2, M_HULL, M_DARK])
+kitbash('belly', surface_points(hulls, 450, lambda c, n: n.z < -.7 and out_bay(c) and off_collar(c) and c.y < 30), [M_HULL2, M_DARK, M_METAL])
 arms = [o for o in scene.objects if o.name in ('arm_outer', 'arm_inner', 'arm_low')]
 kitbash('armunder', surface_points(arms, 700, lambda c, n: n.z < -.6), [M_HULL2, M_DARK, M_METAL], light_every=6)
 kitbash('hub', surface_points([o for o in scene.objects if o.name in ('hub_base', 'hub_step')], 160, lambda c, n: n.z < -.6 or abs(n.z) < .3), [M_HULL2, M_DARK], light_every=5)
 
 # ================= 8) 標記:艦名、編號、機庫口的警示斜紋 =================
-M_PAINT = mat('ship_paint', '#3a3f48', .4, .2)
-M_HAZARD = mat('ship_hazard', '#e8b23a', .4)
-def label(text, loc, rot, size, m):
-    cu = bpy.data.curves.new(text, 'FONT'); cu.body = text; cu.size = size; cu.align_x = 'CENTER'; cu.align_y = 'CENTER'; cu.extrude = .01
-    o = bpy.data.objects.new('label_' + text, cu); scene.collection.objects.link(o); o.location = loc; o.rotation_euler = rot; o.data.materials.append(m)
-    bpy.ops.object.select_all(action='DESELECT'); o.select_set(True); bpy.context.view_layer.objects.active = o; bpy.ops.object.convert(target='MESH')
 for s_ in (-1, 1):
     hw = hull_half_width(-17, .6)
     label('XA-01', (s_ * (hw + .03), -17, .1), (math.pi / 2, 0, s_ * math.pi / 2), .9, M_PAINT)
@@ -488,7 +579,7 @@ if mode == 'preview':
     R = 520
     cd = bpy.data.cameras.new('c'); cd.lens = 35; cd.clip_end = 6000; cam = bpy.data.objects.new('c', cd); scene.collection.objects.link(cam); scene.camera = cam
     view = ARGS[3] if len(ARGS) > 3 else 'hero'
-    eye, look = {'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2))}[view]
+    eye, look = {'bay': ((5.6, -3.2, .5), (-1.5, 3.5, .1)), 'bayin': ((0, -6.5, .9), (0, 7, .3)), 'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2))}[view]
     cam.location = eye; cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (Vector(look) - Vector(eye)).to_track_quat('-Z', 'Y')
     if '--noplanet' not in sys.argv:                                            # 星球擺在鏡頭看過去的後方、偏下:船浮在星球上空,地平線弧線橫過畫面下半
         fwd = (Vector(look) - Vector(eye)).normalized(); right = fwd.cross(Vector((0, 0, 1))).normalized()

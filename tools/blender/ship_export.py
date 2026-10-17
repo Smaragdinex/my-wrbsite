@@ -43,7 +43,9 @@ def mat_of(o): return o.active_material.name if o.type in ('MESH', 'CURVE', 'FON
 
 meshes = [o for o in scene.objects if o.type in ('MESH', 'CURVE', 'FONT')]
 escorts = [o for o in meshes if o.name.startswith('escort_')]
-rest = [o for o in meshes if o not in escorts]
+rest = [o for o in meshes if o not in escorts and not o.name.startswith('bay_')]
+g_bay = [o for o in meshes if o.name.startswith('bay_') and not o.name.startswith('bay_door_')]     # 機庫內部:烘光(含機庫裡的燈)
+g_air_names = [o.name for o in meshes if o.name.startswith('bay_door_')]                                       # 氣閘門兩半:網頁上滑開
 WHITE = ('ship_white', 'ship_pearl')
 big = lambda o: max(o.dimensions) > 3.0 and not o.name.startswith(('kit_', 'greeble_', 'hub_fin_', 'engine_fin', 'collar_strut', 'dish', 'seam_'))
 g_white = [o for o in rest if mat_of(o) in WHITE and big(o)]
@@ -90,6 +92,26 @@ for k in range(10):
     e = join(parts, f'escort_{k}')
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS'); escort_objs.append(e)
 
+# 機庫:合併、展 UV、COMBINED 烘光(只有機庫裡的燈 + 自發光;build 模式沒有太陽)→ 網頁上當不受光的貼圖
+bay = join(g_bay, 'ship_bay'); unwrap(bay, .002)
+img = bpy.data.images.new('ship_bay_lit', int(4096 * SCALE), int(4096 * SCALE), float_buffer=True, alpha=False)
+for slot in bay.material_slots:
+    nt = slot.material.node_tree; n = nt.nodes.get('__bake__') or nt.nodes.new('ShaderNodeTexImage'); n.name = '__bake__'; n.image = img; nt.nodes.active = n
+select_only([bay]); scene.cycles.samples = 384
+bk.use_pass_direct = True; bk.use_pass_indirect = True; bk.use_pass_diffuse = True; bk.use_pass_glossy = False; bk.use_pass_transmission = False; bk.use_pass_emit = True
+log('baking bay COMBINED'); bpy.ops.object.bake(type='COMBINED')
+scene.view_settings.view_transform = 'AgX'; scene.view_settings.look = 'AgX - Medium High Contrast'
+scene.render.image_settings.file_format = 'PNG'; scene.render.image_settings.color_depth = '8'
+bay_png = os.path.join(TMP, 'ship_bay_lit.png'); img.save_render(bay_png, scene=scene)
+set_mat(bay, simple('ship_bay', tex=bay_png, rough=1, metal=0))
+air = []
+door_white = simple('airlock_white', base=(.85, .85, .83, 1), rough=.3, metal=.2)
+for side in ('L', 'R'):
+    parts = [bpy.data.objects[n] for n in g_air_names if n.startswith(f'bay_door_{side}') and n in bpy.data.objects]
+    log('airlock', side, [p.name for p in parts])
+    for o in parts:
+        if o.name == f'bay_door_{side}': set_mat(o, door_white)
+    a = join(parts, f'airlock_{side}'); bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS'); air.append(a)
 hull = join(g_white, 'ship_hull'); unwrap(hull, .0015)
 hull_png = bake(hull, 'DIFFUSE', int(4096 * SCALE), 'ship_hull_albedo', 32)
 fac = join(g_facade, 'ship_facade'); unwrap(fac, .003)
@@ -114,7 +136,7 @@ for mname, objs in groups.items():
     if not mname or not objs: continue
     merged.append(join(objs, 'ship_' + mname.replace('ship_', '')))
     log('merged', mname, len(objs))
-merged += escort_objs
+merged += escort_objs + [bay] + air
 select_only(merged)
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=True, export_apply=True, export_yup=True, export_cameras=False, export_lights=False,
                           export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=6, export_image_format='WEBP', export_image_quality=88)

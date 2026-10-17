@@ -17,19 +17,6 @@ function plateTex(seed = 5) {
   }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.repeat.set(1 / 6, 1 / 6); return t;
 }
-// 機庫內部:暖光、天花板燈、地板、一排排貨箱和小飛機的剪影
-function hangarTex() {
-  const W = 512, H = 192, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
-  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#2a1d14'); bg.addColorStop(.55, '#6b4325'); bg.addColorStop(1, '#c98a4a');
-  g.fillStyle = bg; g.fillRect(0, 0, W, H);
-  for (let x = 10; x < W; x += 34) { g.fillStyle = '#ffe2b0'; g.fillRect(x, 10, 18, 4); }
-  g.fillStyle = 'rgba(20,14,10,.75)'; for (let x = 0; x < W; x += 64) g.fillRect(x, 0, 6, H);
-  const r = rand(3);
-  for (let i = 0; i < 22; i++) { const x = r() * W, w = 14 + r() * 26, h = 12 + r() * 26; g.fillStyle = `rgba(${40 + r() * 30 | 0},${30 + r() * 20 | 0},${24},.9)`; g.fillRect(x, H - 22 - h, w, h); }
-  g.fillStyle = 'rgba(25,18,14,.9)'; for (const x of [120, 330]) { g.beginPath(); g.moveTo(x, H - 40); g.lineTo(x + 70, H - 52); g.lineTo(x + 90, H - 40); g.lineTo(x + 70, H - 34); g.closePath(); g.fill(); }
-  g.fillStyle = 'rgba(255,220,160,.6)'; g.fillRect(0, H - 22, W, 3);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-}
 function glowTex() {
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
   const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.3, 'rgba(255,255,255,.4)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
@@ -126,9 +113,9 @@ export function createExterior(scene) {
   const box = (w, h, d, m, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = true; b.receiveShadow = true; ship.add(b); return b; };
 
   // 1) Blender 模型
-  const escorts = [];
+  const escorts = [], airlock = [];
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
-  gl.load('/assets/starship/models/ship.glb?v=1', (gltf) => {
+  gl.load('/assets/starship/models/ship.glb?v=2', (gltf) => {
     const m = gltf.scene;
     m.traverse((o) => {
       if (!o.isMesh) return;
@@ -139,22 +126,24 @@ export function createExterior(scene) {
       else if (/window|goldglow|blueglow/.test(n)) { o.castShadow = false; mt.emissiveIntensity = Math.min(mt.emissiveIntensity, /blue/.test(n) ? 1.6 : 3.2); }   // 燈條亮度上限,不然 bloom 糊成一團
       else if (mt.isMeshStandardMaterial) mt.envMapIntensity = .6;
     });
+    const bay = m.getObjectByName('ship_bay');
+    if (bay) bay.traverse((o) => { if (o.isMesh) { const src = o.material; o.material = new THREE.MeshBasicMaterial({ map: src.map, toneMapped: false }); o.material.color.setScalar(1.22); src.dispose(); o.castShadow = false; o.receiveShadow = false; } });   // 光影烘在貼圖裡(機庫裡的燈)
+    const behind = new THREE.Mesh(new THREE.CircleGeometry(1.75, 48), new THREE.MeshBasicMaterial({ color: 0xfff4e4, toneMapped: false }));   // 氣閘門後面:亮白的通道光(門一開就透出來)
+    behind.material.color.multiplyScalar(2.2); Object.assign(behind.material, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); behind.position.set(0, .35, -6.995); ship.add(behind);   // 貼在機庫前牆上、門板後面
+    for (const n of ['airlock_L', 'airlock_R']) { const a = m.getObjectByName(n); if (a) airlock.push({ o: a, x: a.position.x, s: n.endsWith('L') ? -1 : 1 }); }
     for (const o of [...m.children]) if (/^escort_/.test(o.name)) escorts.push({ o, base: o.position.clone(), ph: r() * 6, dir: new THREE.Vector3(0, 0, -1).applyQuaternion(o.quaternion) });
-    ship.add(m); ship.visible = true;
+    ship.add(m); ship.visible = true; loaded = true;
   }, undefined, (e) => console.warn('[exterior] 戰艦模型載入失敗', e));
 
   // 2) 機庫口(兩側):暖光內部 + 柱子 + 欄杆 + 發光框 + 兩片會滑開的大門 + 隱形點擊範圍
-  const hT = hangarTex(), hangarGlow = glow(0x7fd0ff, 1.5), hangarHits = [], hangarInside = [], hangarDoors = [], hangarSeam = glow(0xffe2bc, 2.6);
+  const hangarGlow = glow(0x7fd0ff, 1.5), hangarHits = [], hangarDoors = [], hangarSeam = glow(0xffe2bc, 2.6);
   for (const s of [-1, 1]) {
-    const inside = new THREE.Mesh(new THREE.PlaneGeometry(11.6, 3.6), new THREE.MeshStandardMaterial({ map: hT, emissiveMap: hT, emissive: 0xffffff, emissiveIntensity: 1.3, roughness: 1 }));
-    inside.position.set(s * 6.64, .3, 3); inside.rotation.y = s * Math.PI / 2; ship.add(inside);
-    for (const z of [-3, 1, 5, 9]) box(.5, 4.2, .5, M.dark, s * 6.75, .3, z);
+    for (const z of [-3.45, 9.45]) box(.5, 4.2, .5, M.dark, s * 6.75, .3, z);          // 開口兩端的柱子(中間留空,看得到裡面的機庫)
     const rail = new THREE.Mesh(new THREE.BoxGeometry(.05, .05, 11.6), glow(ORANGE, 1.6)); rail.position.set(s * 6.9, -1.1, 3); ship.add(rail);
     for (const [y, z, h, d] of [[2.66, 3, .1, 12.9], [-2.06, 3, .1, 12.9], [.3, -3.48, 4.8, .1], [.3, 9.48, 4.8, .1]]) {
       const e = new THREE.Mesh(new THREE.BoxGeometry(.08, h, d), hangarGlow); e.position.set(s * 7.34, y, z); ship.add(e);
     }
     const hit = new THREE.Mesh(new THREE.BoxGeometry(2.2, 6, 14), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); hit.position.set(s * 7, .3, 3); ship.add(hit); hangarHits.push(hit);
-    hangarInside.push(inside.material);
     const leaves = [-1, 1].map((d) => {
       const g = new THREE.Group(); g.position.set(s * 7.22, .3, 3); ship.add(g);
       const pnl = new THREE.Mesh(new THREE.BoxGeometry(.12, 4.1, 6.3), M.light); pnl.position.z = d * 3.15; pnl.castShadow = true; g.add(pnl);
@@ -195,15 +184,16 @@ export function createExterior(scene) {
   const bounce = new THREE.DirectionalLight(0x6f9cff, .55); bounce.position.set(0, -80, 0); root.add(bounce);
   const planet = createPlanet(root, sun.position.clone().normalize());
 
-  let hov = 0;
+  let hov = 0, loaded = false;
   return {
     root, ship, hangarHits,
     setHangarOpen(k) { for (const { g, d } of hangarDoors) g.position.z = 3 + d * k * 6.2; hangarSeam.emissiveIntensity = 2.6 + k * 3; },   // 0 = 關、1 = 全開
     hangarWorld: (side = 1) => ship.localToWorld(new THREE.Vector3(side * 6.6, .3, 3)),   // 機庫口中心(side = 哪一側)
+    get loaded() { return loaded; },
+    setAirlock(k) { for (const a of airlock) a.o.position.x = a.x + a.s * k * 1.75; },  // 機庫最裡面的圓形氣閘門:0 = 關、1 = 左右滑開
     update(t, hover = false) {
       hov += ((hover ? 1 : 0) - hov) * .12;
       hangarGlow.emissiveIntensity = 1.2 + (Math.sin(t * 2.4) * .5 + .5) * 1.4 + hov * 4;
-      for (const m of hangarInside) m.emissiveIntensity = 1.3 + hov * 1.2;
       ship.position.y = Math.sin(t * .35) * .5; ship.rotation.z = Math.sin(t * .25) * .015;
       for (const f of flames) { const k = .85 + Math.sin(t * 21 + f.ph) * .08 + Math.sin(t * 33 + f.ph * 2) * .05; f.cone.scale.set(1, k, 1); f.halo.material.opacity = .65 + (k - .85) * 2; }
       for (const b of blink) { const on = ((t * b.rate + b.ph) % 1) < .16; b.l.material.emissiveIntensity = on ? 6 : .3; b.h.material.opacity = on ? 1 : .05; }

@@ -4,7 +4,7 @@
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=12';
+import { createExterior } from './exterior.mjs?v=16';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
 import { createHall, createCorridor } from './hall.mjs?v=74';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -203,11 +203,11 @@ function open(w) { if (/^https?:/.test(w.url)) window.open(w.url, '_blank', 'noo
 // ---------- 流程狀態 ----------
 // ext 外觀 → enter(飛進機庫、走通道)→ hall 大廳 → toRoom → room(左右換艙)→ toHall → hall → exit → ext
 let mode = 'ext', t0 = 0, cur = 0, roomF = 0, side = 1, fromDoor = 0, clockT = 0;
-const ENTER = 6.2, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0;
+const ENTER = 8.3, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0;
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
 function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
-function enterShip() { if (mode !== 'ext') return; side = extCam.position.x >= 0 ? 1 : -1; sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); go('enter'); }
+function enterShip() { if (mode !== 'ext') return; side = extCam.position.x >= 0 ? 1 : -1; sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); setTimeout(() => { if (mode === 'enter') sfx.open(); }, 3900); setTimeout(() => { if (mode === 'enter') sfx.whoosh(true); }, 4500); go('enter'); }   // 機庫門、俯衝風聲、氣閘門、衝進通道
 function toRoom(i) { if (mode !== 'hall') return; sfx.click(); sfx.whoosh(true); cur = roomF = i; fromDoor = i; go('toRoom', { room: i }); }
 function slideTo(i) { const n = Math.max(0, Math.min(ROOMS.length - 1, i)); if (n !== cur) sfx.swish(); cur = n; window.__shipState.room = cur; }
 function nav(kind, d = 0) {
@@ -277,6 +277,8 @@ const clamp01 = (v) => Math.min(1, Math.max(0, v)), ease = (t) => t * t * (3 - 2
 const tgt = new THREE.Vector3(), camPos = new THREE.Vector3(), V = (x, y, z) => new THREE.Vector3(x, y, z);
 const port = () => innerWidth < innerHeight;
 
+const diveP = new THREE.CatmullRomCurve3([0, 1, 2, 3, 4].map(() => new THREE.Vector3())), diveT = new THREE.CatmullRomCurve3([0, 1, 2, 3, 4].map(() => new THREE.Vector3())), _dv = new THREE.Vector3();
+const smoother = (x) => { x = Math.min(1, Math.max(0, x)); const a = x * x * x * (x * (x * 6 - 15) + 10); return a * .8 + x * .2; };   // 起步不要太慢
 // 外觀:戰艦從遠方飛近(appear)後慢慢自轉一圈一圈;dive 0→1 = 鏡頭飛向機庫口、穿進去
 function drawExterior(t, appear, dive = 0, open = 0) {
   ext.update(t, hoverHangar); ext.setHangarOpen(open);
@@ -284,13 +286,20 @@ function drawExterior(t, appear, dive = 0, open = 0) {
   const yaw = 2.3 + t * .045 + dragYaw, dist = THREE.MathUtils.lerp(560, 128, ease(appear)) * fitE;   // 新戰艦比較大(環臂 + 高塔),鏡頭退遠一點
   const el = Math.min(1.45, Math.max(-1.1, .36 + dragPitch + Math.sin(t * .1) * .03));
   camPos.set(Math.sin(yaw) * Math.cos(el) * dist, Math.sin(el) * dist, Math.cos(yaw) * Math.cos(el) * dist); tgt.set(0, 5, 4);
-  if (dive > 0) {
-    const h = ext.hangarWorld(side), out = V(side, 0, 0);
-    const p1 = h.clone().addScaledVector(out, 16).add(V(0, 2.5, 0)), p2 = h.clone().addScaledVector(out, .3);
-    const a = ease(seg(dive, 0, .62)), b = ease(seg(dive, .62, 1));
-    camPos.lerp(p1, a).lerp(p2, b); tgt.lerp(h, a).lerp(h.clone().addScaledVector(out, -6), b);
-  }
-  extCam.position.copy(camPos); extCam.lookAt(tgt); warpPass.enabled = (window.__xp?.warp || 0) > .001; extComposer.render();
+  let roll = 0, fov = 38, near = .5;
+  if (dive > 0) {                                              // 進艦:從軌道俯衝到機庫口 → 穿過開口、轉向艦首 → 沿著機庫甲板滑向氣閘門 → 氣閘門滑開
+    const L = (x, y, z) => ext.ship.localToWorld(_dv.set(x, y, z)).clone(), s = side, P = diveP.points, T = diveT.points;
+    P[0].copy(camPos); P[1].copy(L(s * 30, 6, 7)); P[2].copy(L(s * 10, .7, 3.4)); P[3].copy(L(s * 2.8, .3, .6)); P[4].copy(L(0, .34, -4.6));
+    T[0].copy(tgt); T[1].copy(L(s * 6.6, .3, 3)); T[2].copy(L(s * 3.2, .2, -1.2)); T[3].copy(L(0, .32, -7)); T[4].copy(L(0, .32, -14));
+    const e = smoother(dive);
+    camPos.copy(diveP.getPoint(e)); tgt.copy(diveT.getPoint(e));
+    roll = side * .2 * Math.sin(Math.PI * seg(dive, .3, .78));               // 轉進機庫時機身(鏡頭)壓一點彎
+    fov = 38 + 22 * ease(seg(dive, .4, .7));                                  // 進到機庫裡鏡頭變廣角
+    near = dive > .5 ? .06 : .5;
+    ext.setAirlock(ease(seg(dive, .74, .9)));
+  } else ext.setAirlock(0);
+  if (extCam.fov !== fov || extCam.near !== near) { extCam.fov = fov; extCam.near = near; extCam.updateProjectionMatrix(); }
+  extCam.position.copy(camPos); extCam.lookAt(tgt); if (roll) extCam.rotateZ(roll); warpPass.enabled = (window.__xp?.warp || 0) > .001; extComposer.render();
 }
 function drawCorridor(p, t) {
   const z = THREE.MathUtils.lerp(cor.START, cor.END, ease(p) * .3 + p * .7);
@@ -371,9 +380,9 @@ function frame() {
   if (appear > .001) {                                         // 穿越途中(戰艦還沒出現)不畫戰艦
     if (mode === 'ext') drawExterior(t, appear);
     else if (mode === 'enter') {                               // 機庫大門滑開 → 鏡頭飛進門裡 → 白色通道(兩道門)→ 大廳
-      if (k < 2.3) { drawExterior(t, 1, seg(k, .55, 2.3), ease(seg(k, 0, 1.0))); fade = ease(seg(k, 2.0, 2.3)); }
-      else if (k < 4.9) { drawCorridor((k - 2.3) / 2.6, t); fade = 1 - ease(seg(k, 2.3, 2.6)) + ease(seg(k, 4.55, 4.9)); }
-      else { drawHall(t, dt, { pos: V(0, 3.0, 7.2), tgt: V(0, 8, -3) }, (k - 4.9) / (ENTER - 4.9)); fade = 1 - ease(seg(k, 4.9, 5.25)); }   // 一進來先抬頭看圓頂,再慢慢看向前方
+      if (k < 4.7) { drawExterior(t, 1, seg(k, .25, 4.7), ease(seg(k, 0, .9))); fade = ease(seg(k, 4.35, 4.7)); }   // 機庫門開 → 俯衝 → 機庫 → 氣閘門開,亮光一閃進通道
+      else if (k < 6.9) { drawCorridor((k - 4.7) / 2.2, t); fade = 1 - ease(seg(k, 4.7, 5.0)) + ease(seg(k, 6.55, 6.9)); }
+      else { drawHall(t, dt, { pos: V(0, 3.0, 7.2), tgt: V(0, 8, -3) }, (k - 6.9) / (ENTER - 6.9)); fade = 1 - ease(seg(k, 6.9, 7.25)); }   // 一進來先抬頭看圓頂,再慢慢看向前方
       if (k >= ENTER) go('hall');
     } else if (mode === 'hall') drawHall(t, dt);
     else if (mode === 'toRoom') {                              // 鏡頭走到艙門前、門滑開、穿進去 → 作品艙
