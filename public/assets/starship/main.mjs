@@ -7,7 +7,7 @@ import { quality, Q_SET } from './quality.mjs?v=1';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=21';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
-import { createHall, createCorridor } from './hall.mjs?v=82';
+import { createHall, createCorridor } from './hall.mjs?v=83';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -345,7 +345,7 @@ function drawExterior(t, appear, dive = 0, open = 0) {
   warpPass.enabled = (window.__xp?.warp || 0) > .001; extComposer.render();
 }
 function drawCorridor(p, t) {
-  const z = THREE.MathUtils.lerp(cor.START, cor.END, ease(p));   // 慢慢起步(接機庫鏡頭的速度)、中間快、到大廳門口慢慢停(接大廳靜止的鏡頭)
+  const z = THREE.MathUtils.lerp(cor.START, cor.END, ease(p) * .7 + (1 - (1 - p) * (1 - p)) * .3);   // 慢慢起步(接機庫鏡頭的速度)、中間快、到大廳門口慢慢停(接大廳靜止的鏡頭)
   const wob = Math.min(1, p * 4) * (1 - seg(p, .85, 1));       // 剛進來和快出去時不晃,接縫才對得上
   const fv = THREE.MathUtils.lerp(60, hallCam.fov, seg(p, .55, .95)); if (corCam.fov !== fv) { corCam.fov = fv; corCam.updateProjectionMatrix(); }   // 鏡頭焦距慢慢變成跟大廳一樣
   corCam.position.set(Math.sin(t * 1.3) * .08 * wob, .2 + Math.sin(t * 2.1) * .05 * wob, z); corCam.lookAt(0, THREE.MathUtils.lerp(.1, -.45, seg(p, .6, 1)), z - 10);

@@ -709,6 +709,6 @@ export function createCorridor(scene, opts = {}) {
   return {
     root, START: 13, END: -44.2, portal: endGlow, get baked() { return baked; },
     // 依鏡頭目前的 z 開門(靠近時滑開)
-    update(camZ) { d1.set(smooth(9, 3, camZ)); d2.set(smooth(-22, -30, camZ)); /* 第二道門早一點開,走近時就看得到門後的大廳 */ },
+    update(camZ) { d1.set(smooth(12.6, 8, camZ)); d2.set(smooth(-22, -30, camZ)); /* 第二道門早一點開,走近時就看得到門後的大廳 */ },
   };
 }
