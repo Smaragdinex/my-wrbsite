@@ -4,7 +4,7 @@
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=7';
+import { createExterior } from './exterior.mjs?v=12';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
 import { createHall, createCorridor } from './hall.mjs?v=74';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -106,7 +106,13 @@ function stepWarp(dt, w, lt, t) {
 const extScene = new THREE.Scene(); extScene.environment = envTex;
 extScene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1830, .5));
 const ext = createExterior(extScene);
-const extCam = new THREE.PerspectiveCamera(38, 1, .5, 2000);
+const extCam = new THREE.PerspectiveCamera(38, 1, .5, 6000);           // 遠平面要看得到底下那顆大星球
+const extComposer = new EffectComposer(renderer);                      // 外觀也加光暈:上千個小窗、環臂長廊、艦首大環的金光
+const skyPass = new RenderPass(skyScene, skyCam), warpPass = new RenderPass(warpScene, warpCam), extPass = new RenderPass(extScene, extCam);   // 星空、(還在收尾的)超空間、戰艦疊在一起再加光暈
+warpPass.clear = false; warpPass.clearDepth = true; extPass.clear = false; extPass.clearDepth = true;
+for (const ps of [skyPass, warpPass, extPass]) extComposer.addPass(ps);
+extComposer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .35, .35, 2.2));   // 門檻高:只有窗戶、燈條會發光,被太陽照亮的白色艦身不會糊掉
+extComposer.addPass(new OutputPass());
 
 // ---------- 機庫 → 通道 ----------
 const corScene = new THREE.Scene(); corScene.environment = envTex;
@@ -155,7 +161,7 @@ function resize() {
   const a = innerWidth / innerHeight;
   for (const c of [warpCam, extCam, roomCam, corCam, hallCam]) { c.aspect = a; c.updateProjectionMatrix(); }
   hallCam.fov = a < 1 ? 80 : 56; hallCam.updateProjectionMatrix();
-  for (const c of [hallComposer, corComposer]) { c.setPixelRatio(renderer.getPixelRatio()); c.setSize(innerWidth, innerHeight); }
+  for (const c of [hallComposer, corComposer, extComposer]) { c.setPixelRatio(renderer.getPixelRatio()); c.setSize(innerWidth, innerHeight); }
   starMat.uniforms.uDpr.value = renderer.getPixelRatio(); buildStars();
 }
 addEventListener('resize', resize); resize();
@@ -275,16 +281,16 @@ const port = () => innerWidth < innerHeight;
 function drawExterior(t, appear, dive = 0, open = 0) {
   ext.update(t, hoverHangar); ext.setHangarOpen(open);
   const fitE = port() ? .8 / extCam.aspect : 1;
-  const yaw = 2.3 + t * .045 + dragYaw, dist = THREE.MathUtils.lerp(420, 80, ease(appear)) * fitE;
+  const yaw = 2.3 + t * .045 + dragYaw, dist = THREE.MathUtils.lerp(560, 128, ease(appear)) * fitE;   // 新戰艦比較大(環臂 + 高塔),鏡頭退遠一點
   const el = Math.min(1.45, Math.max(-1.1, .36 + dragPitch + Math.sin(t * .1) * .03));
-  camPos.set(Math.sin(yaw) * Math.cos(el) * dist, Math.sin(el) * dist, Math.cos(yaw) * Math.cos(el) * dist); tgt.set(0, 2, 4);
+  camPos.set(Math.sin(yaw) * Math.cos(el) * dist, Math.sin(el) * dist, Math.cos(yaw) * Math.cos(el) * dist); tgt.set(0, 5, 4);
   if (dive > 0) {
     const h = ext.hangarWorld(side), out = V(side, 0, 0);
     const p1 = h.clone().addScaledVector(out, 16).add(V(0, 2.5, 0)), p2 = h.clone().addScaledVector(out, .3);
     const a = ease(seg(dive, 0, .62)), b = ease(seg(dive, .62, 1));
     camPos.lerp(p1, a).lerp(p2, b); tgt.lerp(h, a).lerp(h.clone().addScaledVector(out, -6), b);
   }
-  extCam.position.copy(camPos); extCam.lookAt(tgt); renderer.render(extScene, extCam);
+  extCam.position.copy(camPos); extCam.lookAt(tgt); warpPass.enabled = (window.__xp?.warp || 0) > .001; extComposer.render();
 }
 function drawCorridor(p, t) {
   const z = THREE.MathUtils.lerp(cor.START, cor.END, ease(p) * .3 + p * .7);
