@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { quality, Q_SET } from './quality.mjs?v=1';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=22';
-import { ROOMS, buildRoom } from './rooms.mjs?v=7';
+import { ROOMS, buildRoom } from './rooms.mjs?v=13';
 import { createHall, createCorridor } from './hall.mjs?v=83';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -142,7 +142,9 @@ roomScene.add(key); roomScene.add(key.target);
 const fill = new THREE.DirectionalLight(0xc9b4ff, .35); fill.position.set(-6, 5, 6); roomScene.add(fill);
 const GAP = 22;            // 房與房在場景裡的間距(一次只畫一間,換房是整張畫面左右滑)
 const rooms = ROOMS.map((r, i) => { const b = buildRoom(roomScene, r, { mirror: Q_SET.mirror && innerWidth >= 700 }); b.group.position.set(i * GAP, 0, 0); return b; });
-const realOn = (i) => !!rooms[i]?.real?.ready;                       // 這間已經換成真的房間(烘焙模型載好了)
+const realOn = (i) => !!rooms[i]?.real?.ready;
+let roomChain = null;                                                // 五間房一間一間載(手機不要同時下載十幾 MB)
+const loadRooms = () => { roomChain ??= rooms.reduce((p, r) => p.then(() => r.real?.load()), Promise.resolve()); };                       // 這間已經換成真的房間(烘焙模型載好了)
 const roomCam = new THREE.PerspectiveCamera(30, 1, .1, 200);
 const CAM_OFF = new THREE.Vector3(9.6, 7.0, 9.6).sub(new THREE.Vector3(0, 1.55, 0));
 
@@ -185,9 +187,64 @@ function corPortal() {                                       // 從機庫鏡頭�
 function hallPortal(t, dt) {                                  // 從通道鏡頭換算到大廳(從入口後方看進去,用 near 切掉後牆)
   pCam.position.copy(corCam.position).add(_lp.set(0, HALL_DY, HALL_FROM_COR)); pCam.quaternion.copy(corCam.quaternion);
   pCam.fov = corCam.fov; pCam.aspect = corCam.aspect; pCam.near = Math.max(.1, pCam.position.z - 7.2); pCam.far = 200; pCam.updateProjectionMatrix();
-  hall.update(t, dt); renderTo(rtHall, hallScene, pCam, hall.baked);
+  pCam.layers.enable(1); hall.update(t, dt); updateDoorWins(pCam); renderTo(rtHall, hallScene, pCam, hall.baked);   // 通道盡頭看進去的大廳:門洞裡也是真的房間
 }
 const hallFov = () => (innerWidth / innerHeight < 1 ? 80 : 56);
+// ---------- 大廳門洞裡看到的是真的房間(跟走進去看到的一樣)----------
+// 每道門洞放一片「窗」,畫的是該房間:用大廳鏡頭換算到房間裡的位置(門框後緣 = 房間入口 z 0),五道門共用一張貼圖(各自只畫門洞在畫面上的那一塊)。
+// 窗只在 layer 1(大廳鏡頭看得到;地板倒影、通道那邊的門洞看不到,那兩處還是原本的展示艙)。
+const doorRT = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType });
+const DOOR_Z = -.02, OPEN_W = 2.4, OPEN_H = 2.85;                  // 門洞(跟 hall.mjs 的 DOOR_W、DOOR_H + .1 一樣)
+const doorCam = new THREE.PerspectiveCamera(56, 1, .1, 200), clipFront = [new THREE.Plane(new THREE.Vector3(0, 0, -1), -.01)];   // 房間座標 z > -.01(入口那面牆)切掉
+const doorWins = hall.doors.map((d) => {
+  const sh = new THREE.Shape(), w = OPEN_W + .24, h = OPEN_H + .2, r = .5, x0 = -w / 2, y0 = -.08;
+  sh.moveTo(x0 + r, y0); sh.lineTo(x0 + w - r, y0); sh.quadraticCurveTo(x0 + w, y0, x0 + w, y0 + r); sh.lineTo(x0 + w, y0 + h - r); sh.quadraticCurveTo(x0 + w, y0 + h, x0 + w - r, y0 + h);
+  sh.lineTo(x0 + r, y0 + h); sh.quadraticCurveTo(x0, y0 + h, x0, y0 + h - r); sh.lineTo(x0, y0 + r); sh.quadraticCurveTo(x0, y0, x0 + r, y0);
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(sh, 10), portalMat(doorRT, 1)); m.position.z = DOOR_Z; m.layers.set(1); m.visible = false; d.g.add(m); return m;
+});
+hallCam.layers.enable(1);
+const _dm = new THREE.Matrix4(), _dinv = new THREE.Matrix4(), _dT = new THREE.Matrix4(), _cw = new THREE.Matrix4(), _ds = new THREE.Vector3(), _corner = new THREE.Vector3();
+function doorToRoom(i) {                                          // 大廳世界座標 → 第 i 間房的世界座標
+  hall.doors[i].g.updateWorldMatrix(true, false); rooms[i].group.updateWorldMatrix(true, false);
+  return _dm.copy(rooms[i].group.matrixWorld).multiply(_dT.makeTranslation(0, 0, -DOOR_Z)).multiply(_dinv.copy(hall.doors[i].g.matrixWorld).invert());
+}
+const _poly = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+function doorRect(i, cam) {                                       // 門洞在畫面上的範圍(貼圖像素):門洞四角先在鏡頭空間切掉鏡頭後面的部分,再投影;看不到就回 null
+  const d = hall.doors[i], W = doorRT.width, H = doorRT.height, zc = -cam.near * 1.01;
+  [[-1.5, -.1], [1.5, -.1], [1.5, 3.05], [-1.5, 3.05]].forEach(([x, y], k) => { _poly[k].set(x, y, DOOR_Z); d.g.localToWorld(_poly[k]).applyMatrix4(cam.matrixWorldInverse); });
+  const pts = [];
+  for (let k = 0; k < 4; k++) {                                   // 用鏡頭的近平面切多邊形(Sutherland–Hodgman 一條邊)
+    const a = _poly[k], b = _poly[(k + 1) % 4], ina = a.z <= zc, inb = b.z <= zc;
+    if (ina) pts.push(a.clone());
+    if (ina !== inb) pts.push(a.clone().lerp(b, (zc - a.z) / (b.z - a.z)));
+  }
+  if (!pts.length) return null;
+  let x0 = 1, x1 = -1, y0 = 1, y1 = -1;
+  for (const p of pts) { p.applyMatrix4(cam.projectionMatrix); x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  if (x1 < -1 || x0 > 1 || y1 < -1 || y0 > 1) return null;
+  const px = (v) => (Math.max(-1, Math.min(1, v)) * .5 + .5);
+  const ax = Math.max(0, Math.floor(px(x0) * W) - 2), ay = Math.max(0, Math.floor(px(y0) * H) - 2);
+  return [ax, ay, Math.min(W, Math.ceil(px(x1) * W) + 2) - ax, Math.min(H, Math.ceil(px(y1) * H) + 2) - ay];
+}
+function updateDoorWins(cam) {
+  cam.updateMatrixWorld(); let any = false;
+  const order = doorWins.map((_, i) => i).sort((a, b) => hall.doors[b].g.getWorldPosition(_ds).distanceToSquared(cam.position) - hall.doors[a].g.getWorldPosition(_corner).distanceToSquared(cam.position));   // 遠的先畫、最近的那道門最後畫(範圍重疊時以它為準)
+  for (const i of order) {
+    const on = realOn(i), rect = on ? doorRect(i, cam) : null; doorWins[i].visible = !!rect;
+    if (!rect) continue;
+    _cw.multiplyMatrices(doorToRoom(i), cam.matrixWorld); _cw.decompose(doorCam.position, doorCam.quaternion, _ds);
+    doorCam.fov = cam.fov; doorCam.aspect = cam.aspect; doorCam.near = cam.near; doorCam.far = 200; doorCam.updateProjectionMatrix();
+    rooms.forEach((r, j) => { r.group.visible = j === i; });
+    const st = rooms[i].real, lite = quality.tier !== 'high'; if (st.mirror) { st.mirror.visible = false; st.floorM.opacity = 1; }   // 門洞裡不做地板倒影(省一輪)
+    if (st.props && lite) st.props.visible = false;                 // 中低階:門洞裡不畫植物
+    doorRT.scissor.set(...rect); doorRT.scissorTest = true;
+    renderer.setRenderTarget(doorRT); renderer.clippingPlanes = clipFront; renderer.clear(); renderer.render(roomScene, doorCam);
+    if (st.mirror) { st.mirror.visible = true; st.floorM.opacity = .9; }
+    if (st.props) st.props.visible = true;
+    any = true;
+  }
+  if (any) { renderer.clippingPlanes = []; renderer.setRenderTarget(null); }
+}
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   const a = innerWidth / innerHeight;
@@ -195,7 +252,7 @@ function resize() {
   hallCam.fov = hallFov(); hallCam.near = .1; hallCam.updateProjectionMatrix();
   for (const c of [hallComposer, corComposer, extComposer]) { c.setPixelRatio(renderer.getPixelRatio()); c.setSize(innerWidth, innerHeight); }
   starMat.uniforms.uDpr.value = renderer.getPixelRatio(); buildStars();
-  renderer.getDrawingBufferSize(_dbs); rtCor.setSize(_dbs.x * .7, _dbs.y * .7); rtHall.setSize(_dbs.x, _dbs.y);   /* 大廳的窗用全解析度:走到門口時跟直接畫的大廳一樣清楚 */
+  renderer.getDrawingBufferSize(_dbs); rtCor.setSize(_dbs.x * .7, _dbs.y * .7); rtHall.setSize(_dbs.x, _dbs.y); doorRT.setSize(_dbs.x, _dbs.y);   /* 大廳的窗、門洞裡的房間用全解析度:走到門口時跟直接畫的一樣清楚 */
   for (const rt of [rtCor, rtHall]) { renderer.setRenderTarget(rt); renderer.setClearColor(0xf4efe6, 1); renderer.clear(); } renderer.setRenderTarget(null); renderer.setClearColor(0x000000, 0);   // 新的貼圖先清乾淨(半精度貼圖沒清會有垃圾值)
 }
 addEventListener('resize', resize); resize();
@@ -237,9 +294,9 @@ function open(w) { if (/^https?:/.test(w.url)) window.open(w.url, '_blank', 'noo
 // ---------- 流程狀態 ----------
 // ext 外觀 → enter(飛進機庫、走通道)→ hall 大廳 → toRoom → room(左右換艙)→ toHall → hall → exit → ext
 let mode = 'ext', t0 = 0, cur = 0, roomF = 0, side = 1, fromDoor = 0, clockT = 0;
-const ENTER = 8.2, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0;
+const ENTER = 8.2, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0, TO_ROOM_R = 2.4, TO_HALL_R = 2.1;   // _R:真的房間(門口直接走進去,比較長)
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
-function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); if (m === 'hall' || m === 'toRoom') rooms.forEach((r) => r.real?.load()); /* 走進大廳就開始載房間模型 */ mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
+function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); if (m === 'toRoom') rooms[extra.room]?.real?.load(); if (m === 'hall' || m === 'toRoom') loadRooms(); /* 走進大廳就開始載房間模型 */ mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
 function enterShip() { if (mode !== 'ext') return; side = ext.ship.worldToLocal(extCam.position.clone()).x >= 0 ? 1 : -1; /* 鏡頭在戰艦哪一側就從那側進 */ sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); setTimeout(() => { if (mode === 'enter') sfx.open(); }, 3900); setTimeout(() => { if (mode === 'enter') sfx.whoosh(true); }, 4500); go('enter'); }   // 機庫門、俯衝風聲、氣閘門、衝進通道
 function toRoom(i) { if (mode !== 'hall') return; sfx.click(); sfx.whoosh(true); cur = roomF = i; fromDoor = i; go('toRoom', { room: i }); }
@@ -308,7 +365,7 @@ function pick() {
     ray.setFromCamera(ndc, extCam); const h = ray.intersectObject(ext.ship, true).find((x) => x.object.isMesh);
     return h && ext.hangarHits.includes(h.object) ? 'hangar' : -1; }
   if (mode === 'hall') { ray.setFromCamera(ndc, hallCam); const h = ray.intersectObjects([...hall.hits, hall.botHit], false)[0]; return !h ? -1 : h.object.userData.bot ? 'bot' : h.object.userData.door; }
-  if (mode === 'room' && Math.abs(roomF - cur) < .02) { setRoomCam(cur); ray.setFromCamera(ndc, roomCam); return ray.intersectObjects(realOn(cur) ? rooms[cur].real.hits : rooms[cur].group.children, true).length ? cur : -1; }   // 真的房間:點作品螢幕才開
+  if (mode === 'room' && Math.abs(roomF - cur) < .02) { setRoomCam(cur); ray.setFromCamera(ndc, roomCam); return ray.intersectObjects(realOn(cur) ? rooms[cur].real.hits : rooms[cur].group.children, true).length ? cur : -1; }   // 真的房間:點家具 / 擺設就進作品
   return -1;
 }
 
@@ -377,6 +434,7 @@ function hallLook(v) {
 }
 function renderHall(dt) {
   // 烘焙版的貼圖已經套過 Blender 的色調(AgX),大廳這段就不要再做一次色調映射
+  updateDoorWins(hallCam);
   const tm = renderer.toneMapping; if (hall.baked) renderer.toneMapping = THREE.NoToneMapping;
   hallComposer.render(dt); renderer.toneMapping = tm;
 }
@@ -395,8 +453,16 @@ function drawHall(t, dt, from = null, k = 1) {
   if (from && k < 1) { const base = tgt.clone(); camPos.lerpVectors(from.pos, camPos, ease(k)); tgt.lerpVectors(from.tgt, base, ease(k)); }
   drawHallAt(t, dt, camPos, tgt);
 }
-let roomLX = 0, roomLY = 0;
+let roomLX = 0, roomLY = 0, roomWalk = null;
+const _wp = new THREE.Vector3(), _wt = new THREE.Vector3(), _we = new THREE.Vector3(), _wl = new THREE.Vector3();
+// 走進 / 走出真的房間:e 0 = 大廳 doorPath 的終點(換算到房間裡,剛好在門洞前面)、1 = 在房間裡站好
+function walkPose(i, e) {
+  const v = doorPath(i, 1, { pos: _wp, tgt: _wt }), M = doorToRoom(i), st = rooms[i].real, base = rooms[i].group.position;
+  v.pos.applyMatrix4(M); v.tgt.applyMatrix4(M);
+  roomWalk = { i, pos: v.pos.lerp(_we.copy(base).add(st.eye), e), tgt: v.tgt.lerp(_wl.copy(base).add(st.look), e) };
+}
 function setRoomCam(i, near = 0) {
+  if (roomWalk && roomWalk.i === i) { const fv = hallFov(); if (roomCam.fov !== fv) { roomCam.fov = fv; roomCam.updateProjectionMatrix(); } roomCam.position.copy(roomWalk.pos); roomCam.lookAt(roomWalk.tgt); tgt.copy(roomWalk.tgt); return; }
   if (realOn(i)) {                                             // 真的房間:站在入口往裡看(跟大廳一樣),滑鼠有一點視差;剛走進來時從門口往前走一點
     const st = rooms[i].real, base = rooms[i].group.position, has = mode === 'room' && !drag && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;
     roomLX += ((has ? ndc.x : 0) - roomLX) * .05; roomLY += ((has ? ndc.y : 0) - roomLY) * .05;
@@ -415,7 +481,8 @@ function drawRoom(i, t, dt, near = 0) {
   key.position.set(tgt.x + 6, 10, 4); key.target.position.set(tgt.x, 0, 0); key.target.updateMatrixWorld();
   rooms.forEach((r, j) => { r.group.visible = j === i; });
   rooms[i].update(t, dt);
-  renderer.render(roomScene, roomCam);
+  if (realOn(i)) renderer.clippingPlanes = clipFront;              // 真房間:入口那面牆切掉(從門口走進來時才看得到門洞外)
+  renderer.render(roomScene, roomCam); renderer.clippingPlanes = [];
 }
 // 作品艙:目前這間 + 正在滑進來的那間,各畫在自己往左 / 右推的畫面上
 function drawRooms(t, dt, near = 0) {
@@ -459,14 +526,17 @@ function frame() {
     } else if (mode === 'hall') drawHall(t, dt);
     else if (mode === 'toRoom') {                              // 鏡頭走到艙門前、門滑開、穿進去 → 作品艙
       const d = hall.doors[cur];
-      if (k < 1.1) { d.open = ease(seg(k, .1, .7)); const v = doorPath(cur, seg(k, 0, 1.1), { pos: camPos, tgt }); drawHallAt(t, dt, v.pos, v.tgt); fade = ease(seg(k, .85, 1.1)); }
+      const real = realOn(cur), END = real ? TO_ROOM_R : TO_ROOM;
+      if (k < 1.1) { d.open = ease(seg(k, .1, .7)); const v = doorPath(cur, seg(k, 0, 1.1), { pos: camPos, tgt }); drawHallAt(t, dt, v.pos, v.tgt); if (!real) fade = ease(seg(k, .85, 1.1)); }
+      else if (real) { d.open = 0; walkPose(cur, ease(seg(k, 1.1, END))); drawRooms(t, dt); }   // 門洞裡已經是這間房 → 直接從門口走進去(不淡出)
       else { d.open = 0; drawRooms(t, dt, 1 - ease(seg(k, 1.1, TO_ROOM))); fade = 1 - ease(seg(k, 1.1, 1.4)); }
-      if (k >= TO_ROOM) go('room', { room: cur });
+      if (k >= END) { roomWalk = null; roomLX = roomLY = 0; go('room', { room: cur }); }
     } else if (mode === 'room') { roomF += (cur - roomF) * Math.min(1, dt * 3.2); if (Math.abs(cur - roomF) < .002) roomF = cur; drawRooms(t, dt); }
     else if (mode === 'toHall') {                              // 作品艙淡出 → 從那道艙門前退回大廳全景
-      if (k < .35) { drawRooms(t, dt, ease(seg(k, 0, .35)) * .5); fade = ease(seg(k, 0, .35)); }
-      else { const v = doorPath(fromDoor, 1 - seg(k, .35, TO_HALL), { pos: camPos, tgt }); drawHallAt(t, dt, v.pos, v.tgt); fade = 1 - ease(seg(k, .35, .65)); }
-      if (k >= TO_HALL) go('hall');
+      const real = realOn(fromDoor), A = real ? .8 : .35, END = real ? TO_HALL_R : TO_HALL;
+      if (k < A) { if (real) { walkPose(fromDoor, 1 - ease(seg(k, 0, A))); drawRooms(t, dt); } else { drawRooms(t, dt, ease(seg(k, 0, .35)) * .5); fade = ease(seg(k, 0, .35)); } }   // 真房間:退回門口,接著退回大廳(不淡出)
+      else { roomWalk = null; const v = doorPath(fromDoor, 1 - seg(k, A, END), { pos: camPos, tgt }); drawHallAt(t, dt, v.pos, v.tgt); if (!real) fade = 1 - ease(seg(k, .35, .65)); }
+      if (k >= END) go('hall');
     } else if (mode === 'exit') {                              // 大廳淡出 → 從機庫口退回太空看整艘船
       if (k < .4) { drawHall(t, dt); fade = ease(seg(k, 0, .4)); }
       else { drawExterior(t, 1, 1 - ease(seg(k, .4, 1.6)), 1 - ease(seg(k, 1.4, EXIT))); fade = 1 - ease(seg(k, .4, .75)); }   // 退出門外,大門在身後關上

@@ -123,7 +123,7 @@ def screen(name, img, w, h, loc, rot_z=0.0, k=1.15):
     """作品畫面:自發光貼圖平面(網頁上直接用圖,不烘)"""
     sm = bpy.data.materials.new(name); sm.use_nodes = True; nt = sm.node_tree; nt.nodes.clear()
     o_ = nt.nodes.new('ShaderNodeOutputMaterial'); em = nt.nodes.new('ShaderNodeEmission'); im = nt.nodes.new('ShaderNodeTexImage')
-    im.image = bpy.data.images.load(f'{SITE}/public/assets/{img}'); nt.links.new(im.outputs['Color'], em.inputs['Color']); em.inputs['Strength'].default_value = k; nt.links.new(em.outputs['Emission'], o_.inputs['Surface'])
+    im.image = bpy.data.images.load(img if img.startswith('/') else f'{SITE}/public/assets/{img}'); nt.links.new(im.outputs['Color'], em.inputs['Color']); em.inputs['Strength'].default_value = k; nt.links.new(em.outputs['Emission'], o_.inputs['Surface'])
     bpy.ops.mesh.primitive_plane_add(size=1); sc = link(bpy.context.active_object); sc.name = name; sc.scale = (w, h, 1); sc.data.materials.append(sm)
     sc.rotation_euler = (math.radians(90), 0, rot_z); sc.location = loc
     return sc
@@ -132,7 +132,18 @@ def shell(t):
     """t: 主題 dict(floor_a / floor_b 地磚兩色、wall_a / wall_b 條紋、wains 護牆板、accent 燈色)"""
     # 地板:一塊塊有倒角的方磚,棋盤格兩色(各一個物件,各自加倒角)
     T = .5; nx, ny = int(W / T), int(D / T)
-    for k, mname in enumerate(('a', 'b')):
+    if t.get('floor') == 'planks':                                             # 木地板:一條條往裡延伸的木板,長短交錯、三種木色
+        PW = .2; mats = [woodmat(f'plank_{k}', *c) for k, c in enumerate(t['planks'])]; bms = [bmesh.new() for _ in mats]
+        for i in range(int(W / PW)):
+            y = -rng.random() * 1.6
+            while y < D:
+                ln = 1.2 + rng.random() * 1.2; y0_, y1_ = max(0, y), min(D, y + ln)
+                if y1_ - y0_ > .05:
+                    bm = bms[rng.randrange(len(bms))]; g = bmesh.ops.create_cube(bm, size=1)['verts']
+                    bmesh.ops.scale(bm, vec=(PW, y1_ - y0_, .04), verts=g); bmesh.ops.translate(bm, vec=(-W / 2 + (i + .5) * PW, (y0_ + y1_) / 2, -.02), verts=g)
+                y += ln
+        for k, (bm, m) in enumerate(zip(bms, mats)): mesh_obj(f'tile_plank_{k}', bm, m, bevel=.004, seg=1)
+    for k, mname in enumerate(('a', 'b') if t.get('floor') != 'planks' else ()):
         bm = bmesh.new()
         for i in range(nx):
             for j in range(ny):
@@ -183,20 +194,110 @@ def shell(t):
     wall_run('left_a', Vector((-W / 2 + .02, 0, 0)), Vector((-W / 2 + .02, y0 - .1, 0)), Vector((1, 0, 0)))
     wall_run('left_b', Vector((-W / 2 + .02, y1 + .1, 0)), Vector((-W / 2 + .02, D, 0)), Vector((1, 0, 0)))
     # 天花板:白頂 + 一圈內凹燈槽(暖光)+ 中間一塊柔光板
-    box('ceiling', (W + .6, D + .6, .2), (0, D / 2, H + .1), M_WHITE)
+    M_CEIL = mat(f'ceil_{ROOM}', t.get('ceil', '#f0eee9'), .28)
+    box('ceiling', (W + .6, D + .6, .2), (0, D / 2, H + .1), M_CEIL)
     for nm, size, loc in (('cove_l', (.5, D - .6, .18), (-W / 2 + .25, D / 2, H - .09)), ('cove_r', (.5, D - .6, .18), (W / 2 - .25, D / 2, H - .09)),
                           ('cove_b', (W, .5, .18), (0, D - .25, H - .09)), ('cove_f', (W, .5, .18), (0, .25, H - .09))):
-        box(nm, size, loc, M_WHITE, bevel=.03)
+        box(nm, size, loc, M_CEIL, bevel=.03)
     M_ACC = mat('accent_light', '#000000', 1, emit=t['accent'], emit_k=8)
     for nm, size, loc in (('covel_l', (.03, D - 1.2, .03), (-W / 2 + .52, D / 2, H - .16)), ('covel_r', (.03, D - 1.2, .03), (W / 2 - .52, D / 2, H - .16)),
                           ('covel_b', (W - 1.2, .03, .03), (0, D - .52, H - .16)), ('covel_f', (W - 1.2, .03, .03), (0, .52, H - .16))):
         box(nm, size, loc, M_WARM)
-    box('ceil_panel', (3.6, 2.6, .04), (0, D / 2 + .3, H - .02), mat('soft_panel', '#000000', 1, emit='#fff1e2', emit_k=3.2), bevel=.01)
+    box('ceil_panel', (3.6, 2.6, .04), (0, D / 2 + .3, H - .02), M_STARS if t.get('ceil_panel') == 'stars' else mat('soft_panel', '#000000', 1, emit='#fff1e2', emit_k=3.2), bevel=.01)
     box('ceil_panel_rim', (3.8, 2.8, .05), (0, D / 2 + .3, H - .01), M_TRIM)
     # 牆角燈帶(地腳線發光,跟大廳一樣)
     for nm, size, loc in (('base_b', (W - .2, .03, .03), (0, D - .07, .06)), ('base_r', (.03, D - .2, .03), (W / 2 - .07, D / 2, .06))):
         box(nm, size, loc, M_ACC)
     return M_ACC
+
+# ================= 共用家具 / 燈(Cat Street、Ocean、Tiny Planet、Wooden Rails 用)=================
+def woodmat(name, a, b, scale=6.0, rough=.5):
+    m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree; p = nt.nodes['Principled BSDF']
+    wv = nt.nodes.new('ShaderNodeTexWave'); wv.wave_type = 'RINGS'; wv.inputs['Scale'].default_value = scale; wv.inputs['Distortion'].default_value = 6; wv.inputs['Detail'].default_value = 3
+    tc = nt.nodes.new('ShaderNodeTexCoord'); mp = nt.nodes.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (1, .08, 1)
+    nt.links.new(tc.outputs['Object'], mp.inputs['Vector']); nt.links.new(mp.outputs['Vector'], wv.inputs['Vector'])
+    rp = nt.nodes.new('ShaderNodeValToRGB'); rp.color_ramp.elements[0].color = srgb(a); rp.color_ramp.elements[1].color = srgb(b)
+    nt.links.new(wv.outputs['Fac'], rp.inputs['Fac']); nt.links.new(rp.outputs['Color'], p.inputs['Base Color']); p.inputs['Roughness'].default_value = rough
+    return m
+def area(name, loc, energy, color, size, aim=None, shape='RECTANGLE', sy=None):
+    L_ = bpy.data.lights.new(name, 'AREA'); L_.energy = energy; L_.color = color; L_.shape = shape; L_.size = size
+    if sy: L_.size_y = sy
+    o = bpy.data.objects.new(name, L_); col.objects.link(o); o.location = loc
+    if aim: o.rotation_mode = 'QUATERNION'; o.rotation_quaternion = (Vector(aim) - Vector(loc)).to_track_quat('-Z', 'Y')
+    return o
+def base_lights(k=1.0, win=380, warm=(1, .93, .85)):
+    area('ceil_soft', (0, D / 2 + .3, H - .08), 700 * k, warm, 3.4, sy=2.4)
+    area('ceil_front', (0, 2.0, H - .1), 260 * k, warm, 3.0, sy=1.5)
+    area('window_light', (-W / 2 - .6, 4.5, 2.1), win, (.78, .86, 1), 4.5, aim=(0, 4.5, 1.0), sy=2.0)
+def hero(title, neon_hex, x=0.0, z=3.62):
+    """後牆上方的霓虹店名(不放作品截圖;後牆中間放每間自己的主題擺設,點房間裡的東西就進作品)"""
+    text('neon_title', title, (x, D - .08, z), .42, mat(f'neon_{ROOM}', '#000000', 1, emit=neon_hex, emit_k=16), extrude=.012)
+def glowtext(name, s_, loc, size, hex_, k=2.0, align='CENTER', rot=(math.radians(90), 0, 0)):
+    """不烘的發光字(網頁上直接用顏色畫,字才清楚)"""
+    return text(f'neon_{name}', s_, loc, size, mat(f'glow_{hex_}', '#000000', 1, emit=hex_, emit_k=k), rot=rot, extrude=.004, align=align)
+def wall_board(name, w, h, zc, board_hex, frame_hex, x=0.0):
+    box(f'{name}_frame', (w + .24, .08, h + .24), (x, D - .06, zc), mat(f'{name}_fr', frame_hex, .35, coat=.5), bevel=.05, seg=4)
+    box(f'{name}_board', (w, .06, h), (x, D - .11, zc), mat(f'{name}_bd', board_hex, .75), bevel=.01)
+    return D - .15
+def pendant(name, x, y, shade, drop=1.05, r=.26, cone=False):
+    top = Vector((x, y, H - .02))
+    cyl(f'{name}_cord', .006, drop, top - Vector((0, 0, drop / 2)), M_DARK, 8)
+    if cone: cyl(f'{name}_shade', r, r * 1.1, top - Vector((0, 0, drop + r * .55)), shade, 40, r2=.05)
+    else:
+        bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=20, radius=r)
+        bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0), plane_no=(0, 0, -1), clear_outer=True)
+        bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.015); bmesh.ops.translate(bm, vec=top - Vector((0, 0, drop)), verts=bm.verts)
+        mesh_obj(f'{name}_shade', bm, shade)
+    zb = drop + (r * 1.1 if cone else .05)
+    sphere(f'{name}_bulb', .07, top - Vector((0, 0, zb)), mat('bulb', '#000000', 1, emit='#ffe2b8', emit_k=30))
+    L_ = bpy.data.lights.new(f'{name}_light', 'POINT'); L_.energy = 55; L_.color = (1, .86, .72); L_.shadow_soft_size = .12
+    lo = bpy.data.objects.new(f'{name}_light', L_); col.objects.link(lo); lo.location = top - Vector((0, 0, zb + .06))
+def armchair(name, p, face, m_body, m_cush):
+    """圓潤的單人沙發:座、椅背、兩邊扶手(大倒角);face = 朝向(弧度)"""
+    R_ = Matrix.Rotation(face - math.pi / 2, 3, 'Z')
+    def part(nm, size, off, m, bv):
+        bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1); bmesh.ops.scale(bm, vec=size, verts=bm.verts)
+        bmesh.ops.translate(bm, vec=off, verts=bm.verts); bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=R_, verts=bm.verts); bmesh.ops.translate(bm, vec=p, verts=bm.verts)
+        mesh_obj(f'{name}_{nm}', bm, m, bevel=bv, seg=5)
+    part('base', (.86, .8, .3), (0, 0, .2), m_body, .08)
+    part('seat', (.66, .66, .14), (0, .04, .41), m_cush, .06)
+    part('back', (.86, .2, .52), (0, -.33, .58), m_body, .09)
+    for s_ in (-1, 1): part(f'arm{s_}', (.16, .76, .26), (s_ * .38, .02, .46), m_body, .07)
+def beanbag(name, p, m):
+    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=20, radius=.5)
+    for v in bm.verts:
+        v.co.z *= .62 if v.co.z > 0 else .4
+        if v.co.z > .1: v.co.y += .12 * v.co.z / .3                               # 後面高、前面凹一點
+    bmesh.ops.translate(bm, vec=p + Vector((0, 0, .2)), verts=bm.verts); mesh_obj(name, bm, m)
+def framed(name, loc, rot_z, w, h, bg, draw=None):
+    """牆上的畫:白框 + 畫布;draw(c, f, side) 在畫布前面放小形狀"""
+    box(f'{name}_frame', (w + .1, .05, h + .1), loc, M_WHITE, rot_z, bevel=.015)
+    f = Vector((math.sin(rot_z), -math.cos(rot_z), 0)); side = Vector((math.cos(rot_z), math.sin(rot_z), 0))
+    box(f'{name}_canvas', (w, .02, h), loc + f * .025, mat(f'{name}_bg', bg, .8), rot_z)
+    if draw: draw(loc + f * .04, f, side)
+def cat_fig(name, p, face, s=1.0, m=None):
+    m = m or mat('ceramic_cat', '#fbf8f4', .12, coat=.9); f = Vector((math.cos(face), math.sin(face), 0)); side = Vector((-f.y, f.x, 0))
+    sphere(f'{name}_body', .16 * s, p + Vector((0, 0, .15 * s)), m, scale=(1, 1, 1.15))
+    hp = p + f * .05 * s + Vector((0, 0, .38 * s)); sphere(f'{name}_head', .12 * s, hp, m, scale=(1, 1, .9))
+    for sd in (-1, 1):
+        bm = bmesh.new(); g = bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=.05 * s, radius2=.0, depth=.09 * s)['verts']
+        bmesh.ops.translate(bm, vec=hp + side * sd * .065 * s + Vector((0, 0, .1 * s)), verts=g); mesh_obj(f'{name}_ear_{sd}', bm, m)
+        sphere(f'{name}_eye_{sd}', .014 * s, hp + f * .11 * s + side * sd * .042 * s + Vector((0, 0, .01 * s)), mat('ink', '#3a2a35', .4))
+def plank_table(name, c, w, d, h, top_m, leg_m):
+    box(f'{name}_top', (w, d, .07), c + Vector((0, 0, h - .035)), top_m, bevel=.02)
+    box(f'{name}_apron', (w - .2, d - .2, .1), c + Vector((0, 0, h - .12)), leg_m, bevel=.01)
+    for sx in (-1, 1):
+        for sy in (-1, 1): box(f'{name}_leg_{sx}_{sy}', (.09, .09, h - .07), c + Vector((sx * (w / 2 - .14), sy * (d / 2 - .14), (h - .07) / 2)), leg_m, bevel=.01)
+def tree(name, p, s=1.0, m_leaf=None):
+    cyl(f'{name}_trunk', .025 * s, .12 * s, p + Vector((0, 0, .06 * s)), mat('trunk', '#8a5a3a', .7), 12)
+    bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=10, radius1=.11 * s, radius2=0, depth=.3 * s)
+    bmesh.ops.translate(bm, vec=p + Vector((0, 0, .27 * s)), verts=bm.verts); mesh_obj(f'{name}_leaf', bm, m_leaf or mat('leaf', '#4fae5c', .6), smooth=False)
+def house(name, p, s, wall_hex, roof_hex, rot=0.0):
+    box(f'{name}_body', (.22 * s, .2 * s, .16 * s), p + Vector((0, 0, .08 * s)), mat(f'house_{wall_hex}', wall_hex, .6), rot, bevel=.01)
+    bm = bmesh.new(); g = bmesh.ops.create_cone(bm, cap_ends=True, segments=3, radius1=.14 * s, radius2=.14 * s, depth=.26 * s)['verts']
+    bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(math.radians(90), 3, 'Y') @ Matrix.Rotation(math.radians(90), 3, 'Z'), verts=g)
+    bmesh.ops.scale(bm, vec=(1, 1, .55), verts=g); bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(rot, 3, 'Z'), verts=g)
+    bmesh.ops.translate(bm, vec=p + Vector((0, 0, .2 * s)), verts=g); mesh_obj(f'{name}_roof', bm, mat(f'roof_{roof_hex}', roof_hex, .5), smooth=False)
 
 # ================= KittyCafe =================
 def kitty():
@@ -206,13 +307,20 @@ def kitty():
     M_CREAM = mat('cream', '#fff4e6', .3, coat=.5); M_MARBLE = mat('marble', '#f7f3ef', .12, coat=.8)
     M_CHROME = mat('chrome', '#d8dce3', .14, metal=1.0); M_WOOD = mat('wood', '#d9a676', .45)
     M_BERRY = mat('berry', '#ff5a7a', .35); M_CUSH = mat('cushion', '#f7b8c8', .85)
-    # --- 後牆:大螢幕(遊戲畫面)+ 粉紅圓角框 + 霓虹招牌 ---
-    sw, sh = 4.2, 4.2 * 736 / 1600
-    box('bezel_screen', (sw + .22, .1, sh + .22), (-.3, D - .1, 2.2), M_DARK, bevel=.04)
-    box('frame_screen', (sw + .5, .08, sh + .5), (-.3, D - .06, 2.2), M_PINK, bevel=.06, seg=4)
-    screen('screen_kitty', 'kittycafe.jpg', sw, sh, (-.3, D - .16, 2.2), 0)
+    # --- 後牆:菜單黑板(粉紅框;左右兩欄品項 + 價錢,中間一隻貓臉)+ 霓虹招牌 ---
+    yb = wall_board('menu', 3.9, 1.85, 2.22, '#3a2a35', '#f4a7bb', -.3)
+    glowtext('menu_head', 'MENU', (-.3, yb, 2.86), .26, '#ffd1dc', 2)
+    for k, (a_, b_) in enumerate((('LATTE', '120'), ('MATCHA', '140'), ('TAIYAKI', '90'))): glowtext(f'menu_l{k}', f'{a_}  {b_}', (-1.35, yb, 2.42 - k * .34), .16, '#fff1e0', 1.6)
+    for k, (a_, b_) in enumerate((('ICE CREAM', '110'), ('STRAWBERRY', '130'), ('CAT COOKIE', '80'))): glowtext(f'menu_r{k}', f'{a_}  {b_}', (.85, yb, 2.42 - k * .34), .16, '#fff1e0', 1.6)
+    cf = Vector((-.3, yb, 2.1)); M_CF = mat('menu_cat', '#fff4e6', .5)
+    sphere('menu_cat_head', .26, cf, M_CF, scale=(1, .12, .85))
+    for sd in (-1, 1):
+        bm = bmesh.new(); g = bmesh.ops.create_cone(bm, cap_ends=True, segments=3, radius1=.11, radius2=0, depth=.02)['verts']
+        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(math.radians(90), 3, 'X'), verts=g); bmesh.ops.translate(bm, vec=cf + Vector((sd * .15, 0, .23)), verts=g); mesh_obj(f'menu_cat_ear_{sd}', bm, M_CF)
+        sphere(f'menu_cat_eye_{sd}', .03, cf + Vector((sd * .09, -.03, .03)), mat('ink', '#3a2a35', .4), seg=12)
+        sphere(f'menu_cat_blush_{sd}', .035, cf + Vector((sd * .15, -.03, -.06)), mat('blush', '#f7a3bc', .6), scale=(1, .3, .6), seg=12)
     M_NEON = mat('neon_pink', '#000000', 1, emit='#ff7aa8', emit_k=16)
-    text('neon_title', 'KITTY CAFÉ', (-.3, D - .08, 3.68), .46, M_NEON, extrude=.012)
+    text('neon_title', 'KITTY CAFÉ', (-.3, D - .08, 3.6), .46, M_NEON, extrude=.012)
     # --- 右邊:吧台(粉紅圓弧條前板 + 大理石檯面)+ 遮陽棚 + 後櫃 ---
     cx, cy0, cy1 = 3.55, 2.6, 7.6; L = cy1 - cy0
     box('counter_body', (.9, L, 1.0), (cx, (cy0 + cy1) / 2, .5), M_CREAM, bevel=.03)
@@ -238,13 +346,13 @@ def kitty():
         y = cy0 - .2 + (k + .5) * (L + .4) / n; m = M_PINK if k % 2 == 0 else M_CREAM
         bm = bmesh.new(); w = (L + .4) / n
         vs = [bm.verts.new(v) for v in ((aw_x0, y - w / 2, aw_z0), (aw_x0, y + w / 2, aw_z0), (aw_x1, y + w / 2, aw_z1), (aw_x1, y - w / 2, aw_z1))]
-        bm.faces.new(vs); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.025)
+        bm.faces.new(vs); bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.025)
         mesh_obj(f'awning_{k}', bm, m)
         bm = bmesh.new(); g = bmesh.ops.create_circle(bm, cap_ends=True, segments=24, radius=w / 2)['verts']
         for v in g: v.co = Vector((0, v.co.x, v.co.y))
         bm.faces.ensure_lookup_table()
         if bm.faces: bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0), plane_no=(0, 0, 1), clear_outer=True)
-        bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.02); bmesh.ops.translate(bm, vec=(aw_x1, y, aw_z1), verts=bm.verts)
+        bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.02); bmesh.ops.translate(bm, vec=(aw_x1, y, aw_z1), verts=bm.verts)
         mesh_obj(f'awning_scallop_{k}', bm, m)
     for y in (cy0 - .2, cy1 + .2): cyl(f'awning_rod_{y}', .025, 1.0, (aw_x1 + .2, y, aw_z1 + .15), M_CHROME, 16, rot=Matrix.Rotation(math.radians(90), 3, 'X') @ Matrix.Rotation(0, 3, 'Z'))
     # 吧台上:咖啡機、貓咪造型烤吐司機、蛋糕架、杯子
@@ -287,7 +395,7 @@ def kitty():
         for v in bm.verts:                                                         # 椅背:後面那半圈拉高
             back = max(0, (v.co.x * math.cos(face) + v.co.y * math.sin(face)) / .3)        # 離桌子遠的那一側
             if v.co.z > -.05: v.co.z += back ** 1.6 * .2 * (v.co.z + .05) / .11
-        bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.025); bmesh.ops.translate(bm, vec=p + Vector((0, 0, .66)), verts=bm.verts)
+        bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.025); bmesh.ops.translate(bm, vec=p + Vector((0, 0, .66)), verts=bm.verts)
         mesh_obj(f'{name}_shell', bm, M_CREAM, bevel=.008)
         cyl(f'{name}_cushion', .24, .06, p + Vector((0, 0, .44)), M_CUSH, 32, bevel=.025)
     tables = [(-2.1, 3.6), (1.0, 4.3), (-2.6, 6.3)]
@@ -307,7 +415,7 @@ def kitty():
         cyl(f'pend_cord_{k}', .006, 1.05, top - Vector((0, 0, .52)), M_DARK, 8)
         bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=20, radius=.26)
         bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0), plane_no=(0, 0, -1), clear_outer=True)
-        bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.015); bmesh.ops.translate(bm, vec=top - Vector((0, 0, 1.05)), verts=bm.verts)
+        bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.015); bmesh.ops.translate(bm, vec=top - Vector((0, 0, 1.05)), verts=bm.verts)
         mesh_obj(f'pend_shade_{k}', bm, M_PINK if k != 1 else M_CREAM)
         sphere(f'pend_bulb_{k}', .07, top - Vector((0, 0, 1.1)), mat('bulb', '#000000', 1, emit='#ffe2b8', emit_k=30))
         L_ = bpy.data.lights.new(f'pend_light_{k}', 'POINT'); L_.energy = 55; L_.color = (1, .86, .72); L_.shadow_soft_size = .12
@@ -388,9 +496,286 @@ def kitty():
     area('ceil_front', (0, 2.0, H - .1), 260, (1, .95, .9), 3.0, sy=1.5)
     area('awning_light', (cx - .2, (cy0 + cy1) / 2, 2.5), 160, (1, .88, .76), .6, sy=L)
     area('window_light', (-W / 2 - .6, 4.5, 2.1), 380, (.78, .86, 1), 4.5, aim=(0, 4.5, 1.0), sy=2.0)
-    area('screen_glow', (-.3, D - .6, 2.2), 70, (1, .85, .9), 3.5, aim=(-.3, 0, 1.6), sy=1.6)
+    area('board_glow', (-.3, D - 1.2, 3.6), 60, (1, .9, .9), 3.0, aim=(-.3, D, 2.2), sy=.6)
 
-THEMES = {'kitty': kitty}
+# ================= Cat Street Stocks:桌遊交誼廳(薄荷綠)=================
+def stocks():
+    t = dict(floor_a='#f4f8f3', floor_b='#cfe9d6', wall_a='#eef6f0', wall_b='#e3efe7', wains='#7fc79a', rail='#f7fbf8', accent='#7fe0a0')
+    shell(t); base_lights(1.0)
+    hero('CAT STREET', '#1fc46a')
+    # 後牆:行情看板(發光折線 + K 線 + 指數)
+    yb = wall_board('market', 4.0, 2.0, 2.25, '#112a22', '#7fc79a')
+    glowtext('mk_head', 'CAT INDEX', (-1.55, yb, 3.0), .2, '#9fffc8', 2, align='LEFT'); glowtext('mk_val', '+7.2%', (1.65, yb, 3.0), .22, '#7fffb0', 3, align='RIGHT')
+    for k in range(4): box(f'neon_mk_grid_{k}', (3.6, .01, .008), (0, yb, 1.55 + k * .38), mat('glow_grid', '#000000', 1, emit='#2c5a48', emit_k=1))
+    rr = random.Random(5); v = 1.75; pts = []
+    for k in range(16):
+        v = max(1.45, min(2.75, v + (rr.random() - .4) * .22)); x = -1.75 + k * .233; pts.append(Vector((x, yb - .005, v)))
+        o = v - (rr.random() - .5) * .18
+        box(f'neon_mk_candle_{k}', (.09, .01, max(.04, abs(v - o) + .05)), (x, yb, (o + v) / 2 - .2), mat('glow_up' if v >= o else 'glow_dn', '#000000', 1, emit='#3fe08a' if v >= o else '#ff5a6a', emit_k=2))
+    for k in range(15):
+        a_, b_ = pts[k], pts[k + 1]; d_ = b_ - a_
+        cyl(f'neon_mk_line_{k}', .012, d_.length, (a_ + b_) / 2, mat('glow_line', '#000000', 1, emit='#9fffc8', emit_k=3), 8, rot=Vector((0, 0, 1)).rotation_difference(d_).to_matrix())
+    M_OAK = woodmat('oak', '#c99a64', '#a87a48'); M_DARKW = mat('walnut', '#6b4a33', .5)
+    M_FELT = mat('felt', '#8fd49a', .9); M_POND = mat('pond', '#6cc6ff', .15, coat=.8)
+    # 跑馬燈:右牆上方一條黑色 LED 條 + 綠色字
+    box('ticker_body', (.08, 7.4, .36), (W / 2 - .06, 4.6, 3.55), M_DARK, bevel=.02)
+    text('neon_ticker', 'CATS +7.2%    FISH +3.8%    BIRD +0.9%    MOUSE +12%', (W / 2 - .11, 4.6, 3.55), .2, mat('neon_tick', '#000000', 1, emit='#7fffb0', emit_k=14), rot=(math.radians(90), 0, math.radians(-90)), extrude=.006)
+    # 中間:大桌 + 立體棋盤(一圈彩色格子、草地、小房子、樹、池塘、骰子、貓棋子)
+    c = Vector((.2, 4.7, 0)); plank_table('gt', c, 3.4, 2.5, .78, M_OAK, M_DARKW)
+    box('board_felt', (3.0, 2.1, .04), c + Vector((0, 0, .8)), M_FELT, bevel=.01)
+    cols = ['#ff8fa3', '#ffd166', '#6cc6ff', '#b48bff', '#5cc77a', '#ff9f5a']
+    per = [(-1.3, -.9), (1.3, -.9), (1.3, .9), (-1.3, .9)]; n = 0
+    for k in range(4):
+        (x0, y0), (x1, y1) = per[k], per[(k + 1) % 4]; m_ = 8 if k % 2 == 0 else 6
+        for j in range(m_):
+            u = j / m_; x, y = x0 + (x1 - x0) * u, y0 + (y1 - y0) * u
+            box(f'tile_board_{n}', (.26, .26, .04), c + Vector((x, y, .84)), mat(f'bt{n % 6}', cols[n % 6], .45, coat=.4), bevel=.012); n += 1
+    cyl('board_pond', .32, .02, c + Vector((-.25, .1, .83)), M_POND, 48)
+    for k, (x, y, wc, rc) in enumerate(((.5, .35, '#fff4e6', '#ff8fa3'), (.75, -.3, '#e8f4ff', '#6cc6ff'), (-.7, -.35, '#fff7d6', '#ffd166'))): house(f'bh_{k}', c + Vector((x, y, .82)), 1.0, wc, rc, k * .4)
+    for k, (x, y) in enumerate(((.15, -.45), (.35, .55), (-.75, .45), (.95, .3), (-.2, .55), (-.55, -.05))): tree(f'bt_{k}', c + Vector((x, y, .82)), .9)
+    for k, (x, y, r) in enumerate(((.05, -.1, .3), (.28, .02, -.4))):
+        box(f'die_{k}', (.12, .12, .12), c + Vector((x, y, .88)), mat('die', '#ffffff', .3, coat=.6), r, bevel=.025, seg=4)
+        sphere(f'pip_{k}', .016, c + Vector((x, y, .945)), mat('pip', '#2b2f3a', .4))
+    for k, (x, y, hx) in enumerate(((-1.3, -.9, '#fbf8f4'), (1.3, .9, '#f7c08a'), (1.04, -.9, '#c9c3ff'))): cat_fig(f'piece_{k}', c + Vector((x, y, .86)), -math.pi / 2, .35, mat(f'piece{k}', hx, .2, coat=.8))
+    for k, (dx, dy, hx) in enumerate(((-2.15, 0, '#7fc79a'), (2.15, 0, '#b48bff'), (0, 1.65, '#6cc6ff'))):
+        cyl(f'pouf_{k}', .3, .45, c + Vector((dx, dy, .225)), mat(f'pouf{k}', hx, .85), 40, bevel=.06)
+    pendant('pd_a', c.x - .8, c.y, mat('shade_g', '#7fc79a', .35, coat=.5), 1.1); pendant('pd_b', c.x + .8, c.y, mat('shade_w', '#f7fbf8', .3, coat=.5), 1.1)
+    # 窗邊:兩個懶骨頭 + 小邊桌
+    beanbag('bean_a', Vector((-4.0, 3.2, 0)), mat('bean_g', '#7fc79a', .9)); beanbag('bean_b', Vector((-4.1, 5.4, 0)), mat('bean_p', '#b9a6ef', .9))
+    cyl('side_t', .25, .5, Vector((-4.2, 4.3, .25)), mat('side_w', '#f7fbf8', .3, coat=.5), 40, bevel=.03)
+    # 右邊:桌遊櫃(彩色盒子)+ 街機
+    sx = W / 2 - .3
+    box('shelf_body', (.5, 2.4, 2.2), (sx, 2.2, 1.1), M_OAK, bevel=.02)
+    for k, z in enumerate((.45, 1.1, 1.75)):
+        box(f'shelf_slot_{k}', (.46, 2.24, .5), (sx - .04, 2.2, z + .02), mat('slot', '#3b2a1e', .7))
+        for j in range(6):
+            hx = cols[(j + k * 2) % 6]; hh = .22 + (j % 3) * .06
+            box(f'gamebox_{k}_{j}', (.36, .09 + (j % 2) * .03, hh), (sx - .08, 1.25 + j * .36, z - .23 + hh / 2 + .02), mat(f'gb{(j + k) % 6}', hx, .45), bevel=.008)
+    ar = Vector((W / 2 - .55, 7.4, 0))
+    box('arcade_body', (.8, .9, 1.8), ar + Vector((0, 0, .9)), mat('arcade', '#b89ad3', .35, coat=.5), bevel=.05)
+    box('arcade_top', (.84, .94, .18), ar + Vector((0, 0, 1.86)), mat('arcade_t', '#ff8fa3', .35, coat=.5), bevel=.04)
+    box('arcade_screen', (.04, .6, .46), ar + Vector((-.41, 0, 1.4)), mat('arcade_scr', '#000000', 1, emit='#7fffb0', emit_k=4))
+    box('arcade_panel', (.3, .8, .08), ar + Vector((-.5, 0, 1.0)), mat('arcade_p', '#5a4d80', .4), bevel=.02)
+    for k, (dy, hx) in enumerate(((-.2, '#ff5a5a'), (.05, '#ffd166'), (.2, '#6cc6ff'))): sphere(f'arcade_btn_{k}', .035, ar + Vector((-.52, dy, 1.06)), mat(f'btn{k}', hx, .3))
+    framed('art_chart', Vector((-W / 2 + .05, 1.0, 2.3)), math.radians(-90), .8, .6, '#123026',
+           lambda p, f, sd: [box(f'art_chart_seg_{k}', (.2, .012, .02), p + sd * (-.3 + k * .15) + Vector((0, 0, -.15 + [0, .1, .04, .2, .14][k])), mat('chart', '#000000', 1, emit='#7fffb0', emit_k=4), math.radians(-90)) for k in range(5)])
+    place('potted_plant_02', (-W / 2 + .7, D - .7, 0), .4, 1.05); place('calathea_orbifolia_01', (2.2, D - .55, 0), 1.0, 1.1)
+
+# ================= Ocean Cleanup:海邊交誼廳 + 水族箱牆(沙色 + 海藍)=================
+def ocean():
+    t = dict(floor_a='#f3ead8', floor_b='#e8dbbd', wall_a='#eaf6fb', wall_b='#dcf0f8', wains='#5ab7e0', rail='#f5fbfd', accent='#5ad0ff')
+    shell(t); base_lights(1.0)
+    hero('OCEAN CLEANUP', '#109fe0')
+    # 後牆:一幅層層海浪的浮雕壁畫(天空 + 太陽 + 四層浪 + 小帆船)
+    yb = wall_board('mural', 4.2, 2.1, 2.25, '#dff3fb', '#5ab7e0')
+    cyl('mural_sun', .28, .02, (1.2, yb - .02, 2.85), mat('sun', '#ffd38a', .6), 48, rot=Matrix.Rotation(math.radians(90), 3, 'X'))
+    for k, (hx, base, amp, ph) in enumerate((('#9fd8f0', 2.35, .1, 0), ('#5ab7e0', 2.05, .12, 1.3), ('#2f8fc8', 1.75, .1, 2.4), ('#1b5f9a', 1.45, .08, .7))):
+        bm = bmesh.new(); vs = [bm.verts.new((-2.08, 0, 1.22))]
+        for j in range(49): x = -2.08 + 4.16 * j / 48; vs.append(bm.verts.new((x, 0, base + amp * math.sin(x * 3.2 + ph) + amp * .4 * math.sin(x * 7 + ph))))
+        vs.append(bm.verts.new((2.08, 0, 1.22))); bm.faces.new(vs); bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.02)
+        bmesh.ops.translate(bm, vec=(0, yb - .045 - k * .022, 0), verts=bm.verts); mesh_obj(f'mural_wave_{k}', bm, mat(f'wave{k}', hx, .5), bevel=.006)   # 每層往前一點,不要埋進板子裡
+    bm = bmesh.new(); vs = [bm.verts.new(v) for v in ((-1.05, 0, 2.3), (-.65, 0, 2.3), (-.72, 0, 2.2), (-.98, 0, 2.2))]; bm.faces.new(vs)
+    bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.03); bmesh.ops.translate(bm, vec=(0, yb - .14, 0), verts=bm.verts); mesh_obj('mural_boat', bm, mat('boat', '#ffffff', .5))
+    bm = bmesh.new(); vs = [bm.verts.new(v) for v in ((-.85, 0, 2.32), (-.85, 0, 2.72), (-.62, 0, 2.34))]; bm.faces.new(vs)
+    bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.02); bmesh.ops.translate(bm, vec=(0, yb - .14, 0), verts=bm.verts); mesh_obj('mural_sail', bm, mat('sail', '#ff8f7a', .5))
+    M_SAND = mat('sand', '#efdcb2', .95)
+    # 右牆:大水族箱(白框 + 發光的海水背板 + 魚、海草、珊瑚、氣泡)
+    ax0, ay0, ay1, az0, az1 = W / 2 - .02, 2.0, 7.6, .55, 3.1
+    box('tank_base', (1.0, ay1 - ay0 + .3, .55), (ax0 - .5, (ay0 + ay1) / 2, .275), mat('tank_base', '#f5fbfd', .3, coat=.5), bevel=.03)
+    box('tank_cap', (1.0, ay1 - ay0 + .3, .25), (ax0 - .5, (ay0 + ay1) / 2, az1 + .125), mat('tank_base', '#f5fbfd', .3, coat=.5), bevel=.03)
+    for k, y in enumerate((ay0 - .1, ay1 + .1)): box(f'tank_post_{k}', (1.0, .14, az1 - az0), (ax0 - .5, y, (az0 + az1) / 2), mat('tank_base', '#f5fbfd', .3), bevel=.02)
+    wm = bpy.data.materials.new('water_back'); wm.use_nodes = True; nt = wm.node_tree; nt.nodes.clear()
+    o_ = nt.nodes.new('ShaderNodeOutputMaterial'); em = nt.nodes.new('ShaderNodeEmission'); tc = nt.nodes.new('ShaderNodeTexCoord'); sep = nt.nodes.new('ShaderNodeSeparateXYZ'); rp = nt.nodes.new('ShaderNodeValToRGB')
+    nt.links.new(tc.outputs['Generated'], sep.inputs[0]); nt.links.new(sep.outputs['Z'], rp.inputs['Fac'])
+    rp.color_ramp.elements[0].color = srgb('#0b3d7a'); rp.color_ramp.elements[1].color = srgb('#7fe0ff'); nt.links.new(rp.outputs['Color'], em.inputs['Color']); em.inputs['Strength'].default_value = 2.2; nt.links.new(em.outputs['Emission'], o_.inputs['Surface'])
+    box('tank_water', (.06, ay1 - ay0, az1 - az0), (ax0 - .05, (ay0 + ay1) / 2, (az0 + az1) / 2), wm)
+    box('tank_sand', (.9, ay1 - ay0, .12), (ax0 - .5, (ay0 + ay1) / 2, az0 + .06), M_SAND)
+    r = random.Random(4)
+    for k in range(14):
+        y = ay0 + .3 + r.random() * (ay1 - ay0 - .6); h = .5 + r.random() * .9
+        cyl(f'kelp_{k}', .03, h, (ax0 - .25 - r.random() * .5, y, az0 + .12 + h / 2), mat('kelp', '#2fae6a', .6, emit='#1f8a50', emit_k=.4), 8, r2=.012)
+    for k in range(5): sphere(f'coral_{k}', .12 + r.random() * .08, (ax0 - .35, ay0 + .6 + k * 1.1, az0 + .15), mat(f'coral{k % 3}', ['#ff8f7a', '#ffb3c6', '#ffd166'][k % 3], .7), scale=(1, 1, .7), seg=16)
+    for k in range(12):
+        y = ay0 + .4 + r.random() * (ay1 - ay0 - .8); z = az0 + .5 + r.random() * 1.8; hx = ['#ffa24a', '#ffd166', '#ff6b9a', '#9fe8ff'][k % 4]
+        f = sphere(f'fish_{k}', .07, (ax0 - .4, y, z), mat(f'fish{k % 4}', '#000000', 1, emit=hx, emit_k=1.6), scale=(.5, 1.6, 1), seg=16)
+        bm = bmesh.new(); g = bmesh.ops.create_cone(bm, cap_ends=True, segments=3, radius1=.06, radius2=0, depth=.08)['verts']
+        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(math.radians(90), 3, 'X'), verts=g); bmesh.ops.translate(bm, vec=(ax0 - .4, y - .14, z), verts=g); mesh_obj(f'fish_tail_{k}', bm, mat(f'fish{k % 4}', '#000000', 1), smooth=False)
+    for k in range(18): sphere(f'bubble_{k}', .015 + r.random() * .02, (ax0 - .3, ay0 + .5 + r.random() * (ay1 - ay0 - 1), az0 + .4 + r.random() * 2.1), mat('bubble', '#000000', 1, emit='#dff8ff', emit_k=2), seg=10)
+    area('tank_light', (ax0 - 1.2, (ay0 + ay1) / 2, 1.8), 220, (.6, .85, 1), 1.2, aim=(-2, (ay0 + ay1) / 2, 1.0), sy=5.0)
+    # 中間偏左:沙灘(一片沙 + 兩張條紋躺椅 + 陽傘 + 海灘球 + 貝殼 + 海星)
+    bm = bmesh.new(); bmesh.ops.create_circle(bm, cap_ends=True, segments=64, radius=1.0)
+    for v in bm.verts: a = math.atan2(v.co.y, v.co.x); k = 1 + .12 * math.sin(a * 3 + 1) + .07 * math.sin(a * 5); v.co.x *= 2.3 * k; v.co.y *= 1.6 * k
+    bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.06); bmesh.ops.translate(bm, vec=(-2.2, 4.6, .06), verts=bm.verts); mesh_obj('beach_sand', bm, M_SAND, bevel=.03)
+    for k, (x, y, rz) in enumerate(((-3.0, 3.9, -.3), (-1.6, 3.8, .3))):
+        p = Vector((x, y, .1)); Rz = Matrix.Rotation(rz, 3, 'Z')
+        for j in range(7):
+            bm = bmesh.new(); g = bmesh.ops.create_cube(bm, size=1)['verts']; bmesh.ops.scale(bm, vec=(.62, .2, .03), verts=g)
+            yy = -.6 + j * .2; zz = .32 + (max(0, j - 4) * .2); rx = .9 if j > 4 else 0
+            bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(-rx, 3, 'X'), verts=g); bmesh.ops.translate(bm, vec=(0, yy + (.05 if j > 4 else 0), zz), verts=g)
+            bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Rz, verts=g); bmesh.ops.translate(bm, vec=p, verts=g)
+            mesh_obj(f'chair_{k}_{j}', bm, mat(f'stripe{j % 2}', ['#5ab7e0', '#ffffff'][j % 2], .6), bevel=.008)
+        for sx in (-1, 1):
+            for sy in (-.55, .45): cyl(f'chair_leg_{k}_{sx}_{sy}', .015, .3, p + Rz @ Vector((sx * .28, sy, .15)), mat('chrome2', '#d8dce3', .2), 8)
+    um = Vector((-3.1, 5.3, .1)); cyl('umb_pole', .025, 2.3, um + Vector((0, 0, 1.15)), mat('pole', '#ffffff', .3), 12)
+    for j in range(8):
+        a0 = j / 8 * math.tau; bm = bmesh.new()
+        vs = [bm.verts.new(um + Vector((0, 0, 2.35))), bm.verts.new(um + Vector((math.cos(a0) * 1.15, math.sin(a0) * 1.15, 1.95))), bm.verts.new(um + Vector((math.cos(a0 + math.tau / 8) * 1.15, math.sin(a0 + math.tau / 8) * 1.15, 1.95)))]
+        bm.faces.new(vs); bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.015); mesh_obj(f'umb_{j}', bm, mat(f'umb{j % 2}', ['#ff8f7a', '#ffffff'][j % 2], .6), smooth=False)
+    sphere('beach_ball', .2, (-.9, 5.5, .32), mat('ball', '#ffd166', .4, coat=.6))
+    for k in range(7): sphere(f'shell_{k}', .05, (-3.6 + k * .45, 5.9 - (k % 2) * .5, .14), mat(f'shell{k % 3}', ['#ffffff', '#ffc7d1', '#ffe0a8'][k % 3], .4), scale=(1, 1, .5), seg=12)
+    bm = bmesh.new(); vs = []
+    for j in range(10): a = j / 10 * math.tau; rr = .16 if j % 2 == 0 else .07; vs.append(bm.verts.new((math.cos(a) * rr, math.sin(a) * rr, 0)))
+    bm.faces.new(vs); bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.03); bmesh.ops.translate(bm, vec=(-1.5, 5.8, .13), verts=bm.verts); mesh_obj('starfish', bm, mat('starfish', '#ff8f5a', .6), bevel=.01)
+    # 中間:淺藍圓地毯 + 漂流木矮桌(上面貝殼、玻璃瓶)+ 兩個坐墊
+    cc = Vector((.9, 5.0, 0)); M_DRIFT = woodmat('drift', '#cdb89a', '#a99272', 4, .8)
+    cyl('ocean_rug', 1.6, .02, cc + Vector((0, 0, .011)), mat('orug', '#a9dcf2', .95), 96)
+    for k in range(3):
+        bpy.ops.mesh.primitive_torus_add(major_radius=.6 + k * .32, minor_radius=.012, major_segments=96, minor_segments=6, location=cc + Vector((0, 0, .025)))
+        rg = link(bpy.context.active_object); rg.name = f'orug_ring_{k}'; rg.scale = (1, 1, .3); rg.data.materials.append(mat('orug_ring', '#ffffff', .9))
+    cyl('drift_table', .55, .1, cc + Vector((0, 0, .4)), M_DRIFT, 48, bevel=.03)
+    cyl('drift_base', .2, .35, cc + Vector((0, 0, .175)), M_DRIFT, 24, r2=.28, bevel=.02)
+    for k in range(3): sphere(f'tshell_{k}', .05, cc + Vector((-.2 + k * .15, .1 - k * .08, .47)), mat(f'shell{k % 3}', ['#ffffff', '#ffc7d1', '#ffe0a8'][k % 3], .4), scale=(1, 1, .5), seg=12)
+    cyl('jar', .08, .24, cc + Vector((.25, -.15, .57)), mat('jar_glass', '#cfeff7', .05, coat=1), 32)
+    for k, (dx, dy, hx) in enumerate(((-.95, .5, '#5ab7e0'), (.95, .55, '#ffd166'))): cyl(f'cush_{k}', .32, .2, cc + Vector((dx, dy, .1)), mat(f'cush{k}', hx, .85), 40, bevel=.07)
+    # 回收桶(三色)+ 救生圈 + 衝浪板
+    for k, hx in enumerate(('#5cc77a', '#6cc6ff', '#ffd166')):
+        p = Vector((1.6 + k * .62, D - .55, 0)); cyl(f'bin_{k}', .25, .72, p + Vector((0, 0, .36)), mat(f'bin{k}', hx, .45, coat=.3), 40, r2=.22, bevel=.02)
+        cyl(f'bin_lid_{k}', .27, .06, p + Vector((0, 0, .75)), mat(f'bin{k}', hx, .45), 40, bevel=.02)
+    bpy.ops.mesh.primitive_torus_add(major_radius=.32, minor_radius=.08, major_segments=48, minor_segments=16, location=(W / 2 - .1, 1.2, 2.2), rotation=(0, math.radians(90), 0))
+    lb = link(bpy.context.active_object); lb.name = 'lifebuoy'; lb.data.materials.append(mat('buoy', '#ff6b5a', .4))
+    for pp in lb.data.polygons: pp.use_smooth = True
+    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=20, radius=1.0); bmesh.ops.scale(bm, vec=(.3, .06, 1.1), verts=bm.verts)
+    bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(-.18, 3, 'Y'), verts=bm.verts); bmesh.ops.translate(bm, vec=(-W / 2 + .45, 8.2, 1.15), verts=bm.verts); mesh_obj('surfboard', bm, mat('surf', '#5ad0ff', .25, coat=.8))
+    pendant('pd_a', -2.4, 3.0, mat('rattan', '#d9b98a', .7), 1.0); pendant('pd_b', 1.2, 5.6, mat('rattan', '#d9b98a', .7), 1.0)
+    place('potted_plant_01', (-W / 2 + .6, 1.3, 0), 2.0, .9); place('potted_plant_02', (.6, D - .6, 0), .6, 1.0)
+
+# ================= Tiny Planet:觀測室(深紫夜空色)=================
+def planet():
+    t = dict(floor_a='#2b2652', floor_b='#352e66', wall_a='#3a3172', wall_b='#332a68', wains='#5b4aa8', rail='#9a86ea', accent='#b48bff', ceil='#2e2860', ceil_panel='stars')
+    shell(t); base_lights(.55, win=520, warm=(.88, .86, 1))
+    hero('TINY PLANET', '#c9a8ff', z=3.75)
+    # 後牆:一面大圓形觀景窗(網頁上畫窗外的星空 + 星球),厚白框 + 一圈紫光 + 螺栓
+    wc = Vector((.4, D - .02, 2.12)); RW = 1.12
+    bpy.ops.mesh.primitive_torus_add(major_radius=RW, minor_radius=.13, major_segments=96, minor_segments=24, location=wc + Vector((0, -.08, 0)), rotation=(math.radians(90), 0, 0))
+    rf = link(bpy.context.active_object); rf.name = 'round_window_frame'; rf.data.materials.append(mat('rw_frame', '#e9e4ff', .3, coat=.6))
+    for pp in rf.data.polygons: pp.use_smooth = True
+    bpy.ops.mesh.primitive_torus_add(major_radius=RW + .17, minor_radius=.015, major_segments=96, minor_segments=6, location=wc + Vector((0, -.05, 0)), rotation=(math.radians(90), 0, 0))
+    rl = link(bpy.context.active_object); rl.name = 'round_window_glow'; rl.data.materials.append(mat('accent_light', '#000000', 1))
+    for k in range(8): a = k / 8 * math.tau; box(f'round_window_bolt_{k}', (.06, .04, .06), wc + Vector((math.cos(a) * RW, -.21, math.sin(a) * RW)), mat('rw_bolt', '#b9a6ef', .3, metal=.5), bevel=.01)
+    bm = bmesh.new(); bmesh.ops.create_circle(bm, cap_ends=True, segments=96, radius=RW - .1)
+    for v in bm.verts: v.co = Vector((v.co.x, 0, v.co.y))
+    bmesh.ops.translate(bm, vec=wc + Vector((0, -.06, 0)), verts=bm.verts); mesh_obj('window_round', bm, M_STARS)   # 在壁紙前面(壁紙在 D - .04)
+    area('round_window_light', wc + Vector((0, -.3, 0)), 140, (.7, .75, 1), 2.2, aim=wc + Vector((0, -5, -1)), shape='DISK')
+    # 中間:台座 + 浮空的小星球(海 + 低多邊形陸地 + 大氣光)+ 軌道環 + 小飛機
+    c = Vector((-2.2, 5.4, 0))
+    cyl('ped_base', .75, .12, c + Vector((0, 0, .06)), mat('ped', '#e9e4ff', .3, coat=.5), 64, bevel=.03)
+    cyl('ped_col', .45, .5, c + Vector((0, 0, .37)), mat('ped', '#e9e4ff', .3), 64, r2=.38, bevel=.02)
+    cyl('ped_ring', .4, .03, c + Vector((0, 0, .63)), mat('ped_glow', '#000000', 1, emit='#b48bff', emit_k=10), 64)
+    pc = c + Vector((0, 0, 1.75))
+    bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=4, radius=.62); bmesh.ops.translate(bm, vec=pc, verts=bm.verts); mesh_obj('planet_sea', bm, mat('sea', '#3f7fe0', .3, coat=.6, emit='#1a3a8a', emit_k=.6))
+    bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=3, radius=.63); rr = random.Random(9)
+    keep = []
+    for v in bm.verts:
+        n = v.co.normalized(); h = math.sin(n.x * 4.1 + 1) * math.sin(n.y * 3.3 + 2) * math.sin(n.z * 3.7)
+        v.co = n * (.62 + max(0, h) * .16)
+    land = [f for f in bm.faces if sum((v.co.length for v in f.verts)) / 3 > .64]
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f not in land], context='FACES'); bmesh.ops.translate(bm, vec=pc, verts=bm.verts)
+    mesh_obj('planet_land', bm, mat('land', '#7fd67f', .6), smooth=False)
+    bpy.ops.mesh.primitive_torus_add(major_radius=.95, minor_radius=.006, major_segments=96, minor_segments=8, location=pc, rotation=(math.radians(68), 0, math.radians(-25)))
+    orb = link(bpy.context.active_object); orb.name = 'orbit_ring'; orb.data.materials.append(mat('orbit', '#000000', 1, emit='#c9a8ff', emit_k=4))
+    pl = pc + Vector((.94, .1, .3))
+    box('plane_body', (.06, .26, .06), pl, mat('plane', '#e8eeff', .3, coat=.6), .3, bevel=.02)
+    box('plane_wing', (.34, .07, .015), pl + Vector((0, .02, .01)), mat('plane', '#e8eeff', .3), .3, bevel=.006)
+    box('plane_tail', (.12, .04, .012), pl + Vector((.03, -.11, .02)), mat('plane', '#e8eeff', .3), .3, bevel=.004)
+    area('holo_light', pc + Vector((0, -1.2, .6)), 60, (.75, .7, 1), 1.0, aim=pc)
+    L_ = bpy.data.lights.new('planet_glow', 'POINT'); L_.energy = 80; L_.color = (.7, .6, 1); L_.shadow_soft_size = .6
+    lo = bpy.data.objects.new('planet_glow', L_); col.objects.link(lo); lo.location = c + Vector((0, 0, .9))
+    # 地毯:深紫圓毯 + 一圈發光星點
+    cyl('rug', 1.9, .02, c + Vector((0, 0, .012)), mat('rug', '#41377f', .95), 96)
+    for k in range(24): a = k / 24 * math.tau; sphere(f'rug_star_{k}', .02, c + Vector((math.cos(a) * 1.65, math.sin(a) * 1.65, .03)), mat('rugstar', '#000000', 1, emit='#e0d0ff', emit_k=6), scale=(1, 1, .3), seg=8)
+    # 望遠鏡(窗邊,對著窗外)
+    tp = Vector((-3.9, 6.8, 0))
+    for k in range(3):
+        a = k / 3 * math.tau + .3; foot = tp + Vector((math.cos(a) * .45, math.sin(a) * .45, 0)); top = tp + Vector((0, 0, 1.15))
+        d = (top - foot); cyl(f'tel_leg_{k}', .02, d.length, (foot + top) / 2, mat('brass', '#c9a46a', .3, metal=.8), 12, rot=Vector((0, 0, 1)).rotation_difference(d).to_matrix())
+    tube_dir = Vector((-1, .25, .55)).normalized(); tc_ = tp + Vector((0, 0, 1.25))
+    cyl('tel_tube', .09, 1.1, tc_, mat('tel', '#f2f0ff', .25, coat=.6), 32, r2=.12, rot=Vector((0, 0, 1)).rotation_difference(tube_dir).to_matrix())
+    cyl('tel_ring', .13, .06, tc_ + tube_dir * .45, mat('brass', '#c9a46a', .3, metal=.8), 32, rot=Vector((0, 0, 1)).rotation_difference(tube_dir).to_matrix())
+    # 右邊:兩張扶手椅 + 落地燈 + 星圖
+    for k, (y, f) in enumerate(((3.2, math.radians(160)), (6.3, math.radians(200)))): armchair(f'arm_{k}', Vector((3.4, y, 0)), f, mat('arm_body', '#8f7ae0', .8), mat('arm_cush', '#b9a6ef', .85))
+    lp = Vector((4.3, 4.75, 0)); cyl('lamp_base', .18, .03, lp + Vector((0, 0, .015)), M_DARK, 32); cyl('lamp_pole', .015, 1.5, lp + Vector((0, 0, .77)), M_DARK, 8)
+    cyl('lamp_shade', .2, .3, lp + Vector((0, 0, 1.6)), mat('lshade', '#f3ecff', .6, emit='#ffe8c8', emit_k=1.5), 32, r2=.14)
+    L_ = bpy.data.lights.new('lamp_l', 'POINT'); L_.energy = 45; L_.color = (1, .85, .7); lo = bpy.data.objects.new('lamp_l', L_); col.objects.link(lo); lo.location = lp + Vector((0, 0, 1.55))
+    def stars_draw(p, f, sd):
+        rr = random.Random(3); pts = [p + sd * (rr.random() - .5) * .9 + Vector((0, 0, (rr.random() - .5) * .9)) for _ in range(14)]
+        for k, q in enumerate(pts): sphere(f'map_star_{k}', .018, q, mat('mapstar', '#000000', 1, emit='#ffffff', emit_k=6), scale=(1, .3, 1), seg=8)
+        for k in range(6):
+            a, b_ = pts[k], pts[k + 1]; d = b_ - a
+            cyl(f'map_line_{k}', .004, d.length, (a + b_) / 2, mat('mapline', '#000000', 1, emit='#b48bff', emit_k=4), 6, rot=Vector((0, 0, 1)).rotation_difference(d).to_matrix())
+    framed('art_map', Vector((W / 2 - .05, 1.6, 2.3)), math.radians(90), 1.1, 1.1, '#141a3a', stars_draw)
+    place('potted_plant_02', (-W / 2 + .7, D - .7, 0), .4, 1.0)
+
+# ================= Wooden Rails:玩具木工房(暖木色)=================
+def rails():
+    t = dict(floor='planks', planks=[('#c9925c', '#b37d4a'), ('#d9a676', '#c08a58'), ('#b9824e', '#9e6b3e')], wall_a='#fbf2e3', wall_b='#f4e6cf', wains='#d9a676', rail='#fff7ea', accent='#ffb35c')
+    shell(t); base_lights(1.0)
+    hero('WOODEN RAILS', '#ff7f1f')
+    # 後牆:軌道展示板(綠毛氈 + 一圈木軌 + 小房子剪影)
+    yb = wall_board('trackboard', 4.0, 2.0, 2.25, '#8fd07a', '#b8844e')
+    M_TRK = woodmat('track_w', '#e2b380', '#cf9d68', 12)
+    def tp_(u): a = u * math.tau; return Vector((-.2 + math.cos(a) * 1.45, 0, 2.25 + math.sin(a) * .72 * (1 + .25 * math.sin(a * 2))))
+    for k in range(56):
+        p0, p1 = tp_(k / 56), tp_((k + 1) / 56); d_ = p1 - p0; ang = math.atan2(d_.z, d_.x)
+        bm = bmesh.new(); g = bmesh.ops.create_cube(bm, size=1)['verts']; bmesh.ops.scale(bm, vec=(d_.length + .006, .03, .14), verts=g)
+        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(-ang, 3, 'Y'), verts=g); bmesh.ops.translate(bm, vec=(p0 + p1) / 2 + Vector((0, yb - .015, 0)), verts=g)
+        mesh_obj(f'trackboard_seg_{k}', bm, M_TRK, bevel=.005, seg=1)
+    for k, (x, z, hx) in enumerate(((1.6, 2.9, '#e65a4f'), (1.55, 1.6, '#5cb7f0'), (-.2, 2.3, '#ffd166'))):
+        box(f'trackboard_house_{k}', (.24, .05, .2), (x, yb - .03, z), mat(f'tbh{k}', '#fff4e6', .6), bevel=.01)
+        bm = bmesh.new(); vs = [bm.verts.new(v) for v in ((x - .15, 0, z + .1), (x + .15, 0, z + .1), (x, 0, z + .24))]; bm.faces.new(vs)
+        bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.05); bmesh.ops.translate(bm, vec=(0, yb - .005, 0), verts=bm.verts); mesh_obj(f'trackboard_roof_{k}', bm, mat(f'tbr{k}', hx, .5))
+    M_OAK = woodmat('oak', '#d8a36a', '#b8844e'); M_LEG = woodmat('leg', '#8a6040', '#6e4a30'); M_TRACK = woodmat('track', '#e2b380', '#cf9d68', 12)
+    M_GRASS = mat('grass', '#8fd07a', .9)
+    # 中間:火車桌(綠色桌面 + 木軌道一圈 + 小火車 + 小房子、樹、河、橋)
+    c = Vector((.2, 4.6, 0)); plank_table('tt', c, 3.8, 2.6, .76, M_OAK, M_LEG)
+    box('tt_grass', (3.5, 2.3, .04), c + Vector((0, 0, .78)), M_GRASS, bevel=.01)
+    box('tt_river', (3.5, .32, .045), c + Vector((0, -.55, .785)), mat('river', '#6cc6ff', .15, coat=.8))
+    rx, ry, n = 1.25, .72, 64
+    def track_pt(u):
+        a = u * math.tau; return Vector((math.cos(a) * rx, math.sin(a) * ry, 0))
+    for k in range(n):
+        p0, p1 = track_pt(k / n), track_pt((k + 1) / n); d = (p1 - p0); mid = (p0 + p1) / 2; ang = math.atan2(d.y, d.x)
+        box(f'track_{k}', (d.length + .006, .2, .035), c + mid + Vector((0, 0, .815)), M_TRACK, ang, bevel=.006, seg=2)
+        nrm = Vector((-d.y, d.x, 0)).normalized()
+        for sd in (-1, 1): box(f'groove_{k}_{sd}', (d.length + .006, .018, .008), c + mid + nrm * sd * .05 + Vector((0, 0, .834)), mat('groove', '#8a6040', .7), ang)
+    box('bridge', (.5, .34, .06), c + Vector((-.3, -.55 - .17 + .17, .84)), M_OAK, 0, bevel=.01)
+    u0 = .1
+    for k, (hx, ln) in enumerate((('#e65a4f', .3), ('#5cb7f0', .24), ('#ffd166', .24))):
+        u = u0 - k * .055; p = track_pt(u); p2 = track_pt(u + .01); ang = math.atan2(p2.y - p.y, p2.x - p.x)
+        box(f'train_{k}', (ln, .16, .14), c + p + Vector((0, 0, .9)), mat(f'train{k}', hx, .35, coat=.5), ang, bevel=.025)
+        for sd in (-1, 1):
+            nrm = Vector((-math.sin(ang), math.cos(ang), 0))
+            for e in (-1, 1): cyl(f'wheel_{k}_{sd}_{e}', .035, .02, c + p + nrm * sd * .085 + Vector((math.cos(ang), math.sin(ang), 0)) * e * ln * .3 + Vector((0, 0, .85)), M_DARK, 16, rot=Matrix.Rotation(math.pi / 2, 3, 'X') @ Matrix.Rotation(0, 3, 'Z') if False else Matrix.Rotation(ang, 3, 'Z') @ Matrix.Rotation(math.pi / 2, 3, 'X'))
+        if k == 0: cyl('chimney', .03, .1, c + p + Vector((math.cos(ang), math.sin(ang), 0)) * .08 + Vector((0, 0, 1.01)), M_DARK, 16)
+    for k, (x, y, wc, rc) in enumerate(((-.6, .3, '#fff4e6', '#e65a4f'), (.55, .35, '#fff7d6', '#5cb7f0'), (1.4, -.85, '#ffffff', '#ffd166'), (-1.45, .85, '#fff4e6', '#7fc79a'))): house(f'th_{k}', c + Vector((x, y, .8)), 1.1, wc, rc, k * .5)
+    for k, (x, y) in enumerate(((0, .1), (-.2, .35), (.95, .05), (-1.0, -.1), (1.55, .85), (-1.55, -.95), (.3, -.95))): tree(f'tt_tree_{k}', c + Vector((x, y, .8)), 1.0)
+    for k, (dx, dy) in enumerate(((-2.2, -.4), (-2.2, .6), (2.2, .2))): cyl(f'stool_{k}', .24, .5, c + Vector((dx, dy, .25)), M_OAK, 32, bevel=.03)
+    # 右邊:工作台 + 洞洞板(工具)
+    wb = Vector((W / 2 - .45, 5.0, 0)); plank_table('wb', wb, .8, 2.8, .92, M_OAK, M_LEG)
+    box('pegboard', (.04, 2.6, 1.2), (W / 2 - .04, 5.0, 1.9), mat('peg', '#e8c9a0', .7), bevel=.01)
+    for k in range(9): box(f'tool_{k}', (.03, .05, .3 + (k % 3) * .1), (W / 2 - .08, 4.0 + k * .25, 1.95), mat(f'tool{k % 3}', ['#9aa4b8', '#e65a4f', '#ffd166'][k % 3], .4, metal=.3 if k % 3 == 0 else 0), bevel=.008)
+    box('vise', (.2, .25, .18), wb + Vector((-.25, -1.1, 1.0)), mat('vise', '#5a6a80', .4, metal=.5), bevel=.02)
+    for k in range(6): box(f'block_{k}', (.16, .16, .16), wb + Vector((-.1 + (k % 2) * .2, -.2 + k * .2, 1.0)), mat(f'blk{k % 4}', ['#ff8fa3', '#ffd166', '#6cc6ff', '#5cc77a'][k % 4], .45), k * .3, bevel=.02)
+    for k in range(5): box(f'plank_wb_{k}', (.6, .1, .02), wb + Vector((0, .8, .97 + k * .022)), M_OAK, .1 * k, bevel=.004)
+    # 左後:玩具層架
+    sh = Vector((-W / 2 + .3, 8.0, 0))
+    for k, z in enumerate((.6, 1.3, 2.0)):
+        box(f'toy_shelf_{k}', (.4, 1.6, .05), sh + Vector((0, 0, z)), M_OAK, bevel=.01)
+        for j in range(4): box(f'toy_{k}_{j}', (.18, .18, .18), sh + Vector((0, -.55 + j * .37, z + .115)), mat(f'toy{(j + k) % 4}', ['#e65a4f', '#ffd166', '#5cb7f0', '#7fc79a'][(j + k) % 4], .45), (j + k) * .4, bevel=.03)
+    for sd in (-1, 1): box(f'toy_side_{sd}', (.4, .04, 2.1), sh + Vector((0, sd * .8, 1.05)), M_OAK, bevel=.01)
+    pendant('pd_a', c.x - .9, c.y, mat('ind_shade', '#2b2f3a', .4, metal=.4), 1.15, .24, cone=True); pendant('pd_b', c.x + .9, c.y, mat('ind_shade', '#2b2f3a', .4), 1.15, .24, cone=True)
+    place('potted_plant_02', (-W / 2 + .7, 1.3, 0), .4, 1.0); place('calathea_orbifolia_01', (2.3, D - .55, 0), 1.0, 1.1)
+
+THEMES = {'kitty': kitty, 'stocks': stocks, 'ocean': ocean, 'planet': planet, 'rails': rails}
 THEMES[ROOM]()
 
 world = bpy.data.worlds.new('space'); scene.world = world; world.use_nodes = True

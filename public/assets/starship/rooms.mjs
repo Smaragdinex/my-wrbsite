@@ -272,11 +272,12 @@ D.rails = (R, ctx) => {
 
 // ---------- 真的房間(Blender 建模 + 烘光,tools/blender/room_build.py / room_bake.py)----------
 // 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
+// 房間裡不放作品截圖(使用者:截圖跟環境不搭),點房間裡的家具 / 擺設就進作品。
 // 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
-const REAL = { kitty: { v: 2, props: true } };
+const REAL = { kitty: { v: 3, props: true }, stocks: { v: 2, props: true }, ocean: { v: 2, props: true }, planet: { v: 4, props: true }, rails: { v: 2, props: true } };
 // 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
-const winMat = () => new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
-  fragmentShader: `varying vec3 vW;
+const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { value: hzOff } }, vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: `varying vec3 vW; uniform float uHz;
     float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + 1.), f.x), f.y); }
@@ -284,7 +285,7 @@ const winMat = () => new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vW; 
     void main(){ vec3 d = normalize(vW - cameraPosition);
       vec3 q = floor(d * 260.); float st = step(.9965, h(q)) * (.5 + .5 * h(q + 3.1));
       vec3 c = vec3(.006, .009, .02) + vec3(st);
-      float hz = .03 + .04 * d.z; float below = smoothstep(hz + .01, hz - .03, d.y);
+      float hz = .03 + .04 * d.z + uHz; float below = smoothstep(hz + .01, hz - .03, d.y);
       vec3 planet = mix(vec3(.05, .22, .45), vec3(.02, .07, .18), smoothstep(hz, hz - .5, d.y));
       vec2 g = d.xz / max(hz - d.y + .025, .025) * .9;
       float land = smoothstep(.52, .56, fb(g * .35 + 7.)); planet = mix(planet, mix(vec3(.16, .3, .14), vec3(.5, .45, .32), fb(g * 1.3)), land * .8);
@@ -310,16 +311,16 @@ function realRoom(R, key, ctx) {
     m.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, n = o.name;
-      if (n.startsWith('window_')) { o.material = winMat(); return; }
+      if (n.startsWith('window_')) { o.material = winMat(n.startsWith('window_round') ? .05 : 0); return; }   // 圓窗(正對著看):地平線拉高,下半看得到星球
       let mm;
       if (n.startsWith('neon_')) mm = new THREE.MeshBasicMaterial({ color: src.emissive.clone().multiplyScalar(1.1), toneMapped: false });
       else mm = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });
-      if (n.startsWith('screen_')) { mm.color.setScalar(.92); st.hits.push(o); }
-      if (n.startsWith('baked_floor') && mirror) { mm.transparent = true; mm.opacity = .9; o.renderOrder = -2; }
+      if (n.startsWith('baked_furn') || n.startsWith('neon_')) st.hits.push(o);    // 點房間裡的東西(家具、擺設、招牌)就進作品;牆、地板、天花板不算
+      if (n.startsWith('baked_floor') && mirror) { mm.transparent = true; mm.opacity = .9; o.renderOrder = -2; st.floorM = mm; }
       o.material = mm; src.dispose(); o.matrixAutoUpdate = false; o.updateMatrix();
     });
-    top.add(m);
-    if (props) { props.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); top.add(props); }
+    st.mirror = mirror; top.add(m);
+    if (props) { props.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; st.hits.push(o); } }); top.add(props); st.props = props; }
     const warm = new THREE.PointLight(0xffe6cc, 6, 12, 1.4); warm.position.set(0, 3.6, -4.5); top.add(warm);   // 給植物的暖光(建築的光已經烘在貼圖裡)
     for (const c of [...R.children]) if (c !== top) c.visible = false;          // 小模型收起來
     top.visible = true; st.ready = true;
