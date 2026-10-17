@@ -2,7 +2,7 @@
 #   1) 白色裝甲(ship_white / ship_pearl,板塊接縫 + 角落髒污 + 板邊高光都是程序材質)→ 合併、自動展 UV、烘成一張 4096 底色貼圖
 #   2) 深色玻璃立面(上千個隨機亮暗的小窗)→ 合併、展 UV、烘成一張 2048 發光貼圖
 #   3) 其他材質(燈條、金屬、草地、樹…)照原樣,同材質的物件合成一個,draw call 少
-#   4) 護航小艦保留成獨立物件 escort_N(網頁上讓它們慢慢飄),材質換成簡單白色
+#   4) 護航小艦保留成獨立物件 escort_N(網頁上讓它們慢慢飄):白 / 珍珠灰換成單色,深色、座艙玻璃、橘色飾條、舷窗、噴口、翼尖燈照原樣
 # 星球、燈光、鏡頭不匯出(星球網頁上用 shader 另外畫)。
 # 用法:blender -b --python tools/blender/ship_export.py -- [輸出 glb] [貼圖倍率 = 1.0]
 import bpy, sys, os, runpy, time, math
@@ -83,12 +83,12 @@ def set_mat(o, m):
     for poly in o.data.polygons: poly.material_index = 0
 # 護航小艦:每艘(機身 + 翼 + 噴口光)合成一個物件 escort_N,原點放在船中心
 escort_objs = []; escort_names = [o.name for o in escorts]
-white = simple('escort_white', base=(.82, .82, .8, 1), rough=.3, metal=.2)
+ESC = {'ship_white': simple('escort_white', base=(.86, .86, .84, 1), rough=.28, metal=.15, coat=.4), 'ship_pearl': simple('escort_pearl', base=(.62, .66, .72, 1), rough=.3, metal=.45)}   # 程序材質(板塊)換成單色;深色、玻璃、飾條、燈照原樣
 for k in range(10):
     parts = [bpy.data.objects[n] for n in escort_names if n.split('_')[1] == str(k)]
     if not parts: continue
     for o in parts:
-        if not o.name.endswith('_glow'): set_mat(o, white) if o.type == 'MESH' else None
+        if o.type == 'MESH' and mat_of(o) in ESC: set_mat(o, ESC[mat_of(o)])
     e = join(parts, f'escort_{k}')
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS'); escort_objs.append(e)
 

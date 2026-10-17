@@ -3,9 +3,9 @@
 //   ship 狀態 → 自己的流程:外觀(慢慢轉、可拖曳,點機庫口)→ 穿過機庫和通道 → 中央大廳(六道艙門)
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
-import { quality, Q_SET } from './quality.mjs?v=2';
+import { quality, Q_SET } from './quality.mjs?v=3';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=25';
+import { createExterior } from './exterior.mjs?v=26';
 import { ROOMS, buildRoom } from './rooms.mjs?v=13';
 import { createHall, createCorridor } from './hall.mjs?v=84';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -408,6 +408,8 @@ function drawExterior(t, appear, dive = 0, open = 0) {
     ext.setAirlock(ease(seg(dive, .7, .86)));
   } else ext.setAirlock(0);
   if (extCam.fov !== fov || extCam.near !== near) { extCam.fov = fov; extCam.near = near; extCam.updateProjectionMatrix(); }
+  const ov = window.__camOv;                                          // 測試用:指定外觀鏡頭(戰艦本地座標)看細節
+  if (ov) { camPos.copy(ext.ship.localToWorld(new THREE.Vector3(...ov.pos))); tgt.copy(ext.ship.localToWorld(new THREE.Vector3(...ov.tgt))); if (ov.fov && extCam.fov !== ov.fov) { extCam.fov = ov.fov; extCam.updateProjectionMatrix(); } }
   extCam.position.copy(camPos); extCam.lookAt(tgt); if (roll) extCam.rotateZ(roll);
   if (dive > .6) corPortal();                                  // 氣閘門開了:門洞裡畫通道
   warpPass.enabled = (window.__xp?.warp || 0) > .001; extComposer.render();

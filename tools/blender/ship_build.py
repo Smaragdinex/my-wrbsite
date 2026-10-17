@@ -4,7 +4,7 @@
 #   環臂只繞在艦尾那半圈(y < -12),不擋鏡頭飛進機庫的路線。
 # 用法:blender -b --python tools/blender/ship_build.py -- [preview out.png samples hero|side|top|back] [export out.glb]
 import bpy, bmesh, sys, os, math, random
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -372,16 +372,35 @@ for k, adeg in enumerate((254, 270, 286)):
         box(f'engine_fin_{k}_{q}', (.12, 2.0, .45), (ex + math.cos(b) * 1.7 * big_, y0 - 1.3, zc_ + math.sin(b) * 1.7 * big_), M_DARK, rot=(0, -b, 0), bevel=.02)
     ENGINES.append((round(ex, 3), round(y0 - 2.7, 3), round(zc_, 3), big_))
 print('ENGINES', ENGINES)
-# 護航小艦:幾艘白色小船繞在旁邊(只在渲染圖;網頁上另外做會飛的)
+# 護航小艦:白色機身 + 珍珠灰背脊 / 機翼 / 尾翼 + 深色玻璃座艙 + 兩具引擎艙(藍色噴口)+ 翼尖燈(左紅右綠)+ 橘色飾條 + 一排舷窗 + 面板縫
+# (機頭朝 +Y;先在原點蓋好,最後整組移到 loc、轉 yaw、縮放 sc)
 M_SHIPGLOW = M_BLUE
+M_ESC_GLASS = mat('escort_glass', '#0c1830', .05, .3, coat=1.0)
+M_ESC_ACCENT = mat('escort_accent', '#e8913a', .35, .1, coat=.5)
+M_NAV_R = mat('escort_navred', '#000000', 1, emit='#ff3b3b', k=12)
+M_NAV_G = mat('escort_navgreen', '#000000', 1, emit='#3bff7a', k=12)
 def shuttle(tag, loc, yaw, sc):
-    o = loft(f'escort_{tag}', [(-3, 1.6, .8, 0, .3), (-1, 2.2, 1.0, .1, .35), (1.5, 1.6, .8, .1, .3), (3.2, .2, .2, 0, .05)], M_HULL, .05)
-    w = loft(f'escort_{tag}_wing', [(-2.6, 4.4, .16, -.1, .05), (-.6, 3.2, .16, -.1, .05), (.6, .6, .12, -.1, .03)], M_HULL2, .03)
-    g = cyl(f'escort_{tag}_glow', .45, .1, (0, -3.05, 0), M_SHIPGLOW, rot=(math.pi / 2, 0, 0), verts=24)
-    for o_ in (o, w, g):
-        o_.location = Vector(loc) + Vector(o_.location) * sc if o_ is g else Vector(loc)
-        o_.scale = (sc, sc, sc); o_.rotation_euler = (o_.rotation_euler[0], 0, yaw)
-        if o_ is g: o_.location = Vector(loc) + Vector((math.sin(yaw) * 3.05 * sc, -math.cos(yaw) * 3.05 * sc, 0))
+    before = set(bpy.data.objects); P = f'escort_{tag}'
+    loft(P, [(-3, 1.5, .78, 0, .3), (-1.2, 2.0, .95, .08, .35), (1.2, 1.5, .78, .1, .3), (2.7, .7, .45, .05, .15), (3.4, .12, .12, 0, .03)], M_HULL, .05)
+    loft(f'{P}_wing', [(-2.4, 4.6, .14, -.12, .05), (-.8, 3.4, .14, -.12, .05), (.6, .8, .1, -.12, .03)], M_HULL2, .03)
+    loft(f'{P}_spine', [(-2.8, .5, .3, .5, .1), (.6, .42, .26, .5, .1), (1.4, .1, .1, .42, .03)], M_HULL2, .03)
+    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=1)
+    bmesh.ops.scale(bm, vec=(.4, .9, .26), verts=bm.verts); bmesh.ops.translate(bm, vec=(0, 1.45, .38), verts=bm.verts)
+    obj(f'{P}_canopy', bm, M_ESC_GLASS, smooth=True)
+    box(f'{P}_fin', (.08, 1.0, .75), (0, -2.35, .8), M_HULL2, rot=(math.radians(-22), 0, 0), bevel=.02)
+    for s_ in (-1, 1):
+        cyl(f'{P}_nacelle_{s_}', .28, 1.7, (s_ * .82, -2.3, -.04), M_DARK, rot=(math.pi / 2, 0, 0), verts=24, bevel=.03, r2=.34)
+        cyl(f'{P}_nozzle_{s_}', .3, .12, (s_ * .82, -3.18, -.04), M_METAL, rot=(math.pi / 2, 0, 0), verts=24)
+        cyl(f'{P}_glow_{s_}', .23, .05, (s_ * .82, -3.25, -.04), M_SHIPGLOW, rot=(math.pi / 2, 0, 0), verts=24)
+        cyl(f'{P}_tip_{s_}', .1, .9, (s_ * 2.28, -1.95, -.12), M_HULL2, rot=(math.pi / 2, 0, 0), verts=12, r2=.06)
+        bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=.07); bmesh.ops.translate(bm, vec=(s_ * 2.28, -1.48, -.12), verts=bm.verts)
+        obj(f'{P}_nav_{s_}', bm, M_NAV_R if s_ < 0 else M_NAV_G)
+        box(f'{P}_stripe_{s_}', (.03, 3.4, .09), (s_ * .9, -.25, .1), M_ESC_ACCENT)
+        for k in range(6): box(f'{P}_win_{s_}_{k}', (.03, .16, .07), (s_ * .86, -1.25 + k * .36, .28), M_WIN)
+        for k, y in enumerate((-1.95, -.75)): box(f'{P}_seam_{s_}_{k}', (.02, .025, .45), (s_ * .92, y, .02), M_DARK)
+    bpy.context.view_layer.update()                                             # box / cyl 只設了 location / rotation:先更新,matrix_world 才是對的
+    M_ = Matrix.Translation(Vector(loc)) @ Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Scale(sc, 4)
+    for o_ in set(bpy.data.objects) - before: o_.matrix_world = M_ @ o_.matrix_world
 for k, (loc, yaw, sc) in enumerate((((30, 18, -6), .3, 1.0), ((-34, 6, 8), -.4, .9), ((24, -42, 4), .9, 1.1), ((-12, 44, -10), .1, .8), ((44, -8, 12), .5, .7))):
     shuttle(k, loc, yaw, sc)
 
@@ -459,9 +478,8 @@ while y < BY1 - .8:
 # 停在停機坪上的兩艘小艇(跟外面護航艦同款,縮小)+ 起落架
 for k, (x, y_) in enumerate(((-3.2, -7.2), (3.2, -7.2))):
     shuttle(f'parked{k}', (x, y_, BZ0 + .62), 0, .55)
-    for nm in ('', '_wing', '_glow'):
-        o = bpy.data.objects.get(f'escort_parked{k}{nm}')
-        if o: o.name = f'bay_ship_{k}{nm}'
+    for o in [o for o in bpy.data.objects if o.name.startswith(f'escort_parked{k}')]:   # 停機坪上的兩艘:改名併進機庫(一起烘光)
+        o.name = o.name.replace(f'escort_parked{k}', f'bay_ship_{k}')
     for dx, dy in ((-.6, -.9), (.6, -.9), (0, 1.0)):
         bbox(f'gear_{k}_{dx}_{dy}', (.08, .08, .5), (x + dx, y_ + dy, BZ0 + .25), M_DARK)
 # 後牆前面的貨櫃 + 油桶、天花板吊車
@@ -614,7 +632,7 @@ if mode == 'preview':
     R = 520
     cd = bpy.data.cameras.new('c'); cd.lens = 35; cd.clip_end = 6000; cam = bpy.data.objects.new('c', cd); scene.collection.objects.link(cam); scene.camera = cam
     view = ARGS[3] if len(ARGS) > 3 else 'hero'
-    eye, look = {'bay': ((5.6, -3.2, .5), (-1.5, 3.5, .1)), 'bayin': ((0, -6.5, .9), (0, 7, .3)), 'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2)), 'tail': ((-26, -74, 16), (0, -37, 0)), 'dome': ((15, -3, 12), (0, -18, 4.5))}[view]
+    eye, look = {'bay': ((5.6, -3.2, .5), (-1.5, 3.5, .1)), 'bayin': ((0, -6.5, .9), (0, 7, .3)), 'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2)), 'tail': ((-26, -74, 16), (0, -37, 0)), 'dome': ((15, -3, 12), (0, -18, 4.5)), 'escort': ((36, 25, -2), (30, 18, -6)), 'escort_side': ((36.7, 16.1, -4.3), (30, 18, -6)), 'escort_rear': ((34.4, 10.5, -3.6), (30, 18, -6))}[view]
     cam.location = eye; cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (Vector(look) - Vector(eye)).to_track_quat('-Z', 'Y')
     if '--noplanet' not in sys.argv:                                            # 星球擺在鏡頭看過去的後方、偏下:船浮在星球上空,地平線弧線橫過畫面下半
         fwd = (Vector(look) - Vector(eye)).normalized(); right = fwd.cross(Vector((0, 0, 1))).normalized()
