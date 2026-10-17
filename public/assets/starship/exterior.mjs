@@ -133,13 +133,14 @@ export function createExterior(scene, Q = {}) {
   const portal = new THREE.Mesh(new THREE.CircleGeometry(1.75, 64), new THREE.MeshBasicMaterial({ color: 0xfff4e4 }));
   let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
-  gl.load('/assets/starship/models/ship.glb?v=3', (gltf) => {
+  gl.load('/assets/starship/models/ship.glb?v=4', (gltf) => {
     const m = gltf.scene;
     m.traverse((o) => {
       if (!o.isMesh) return;
       o.castShadow = true; o.receiveShadow = true;
       const mt = o.material, n = mt.name || '';
       if (n === 'ship_glass') { o.material = new THREE.MeshPhysicalMaterial({ color: 0xdcecff, roughness: .05, metalness: 0, transparent: true, opacity: .2, envMapIntensity: 1.6, depthWrite: false }); o.castShadow = false; }
+      else if (n === 'ship_vault') { o.material = new THREE.MeshPhysicalMaterial({ color: 0xbfdcff, roughness: .04, metalness: 0, clearcoat: 1, transparent: true, opacity: .16, envMapIntensity: .9, emissive: 0x1d3a5c, emissiveIntensity: .12, side: THREE.DoubleSide, depthWrite: false }); o.castShadow = false; o.renderOrder = 2; }   // 環臂花園的薄玻璃拱頂:看得出一層玻璃,樹還是透得過來
       else if (n === 'ship_facade') { mt.emissive.set(0xffffff); mt.emissiveIntensity = 2.6; mt.envMapIntensity = 1.2; }
       else if (/window|goldglow|blueglow/.test(n)) { o.castShadow = false; mt.emissiveIntensity = Math.min(mt.emissiveIntensity, /blue/.test(n) ? 1.6 : 3.2); }   // 燈條亮度上限,不然 bloom 糊成一團
       else if (mt.isMeshStandardMaterial) mt.envMapIntensity = .6;

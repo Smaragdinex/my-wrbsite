@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { quality, Q_SET } from './quality.mjs?v=1';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=23';
+import { createExterior } from './exterior.mjs?v=24';
 import { ROOMS, buildRoom } from './rooms.mjs?v=13';
 import { createHall, createCorridor } from './hall.mjs?v=83';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';

@@ -93,6 +93,7 @@ M_WIN = mat('ship_window', '#000000', 1, emit='#ffd49a', k=7)
 M_GOLD = mat('ship_goldglow', '#000000', 1, emit='#ffbe63', k=12)
 M_BLUE = mat('ship_blueglow', '#000000', 1, emit='#7cc8ff', k=8)
 M_GLASS = mat('ship_glass', '#dcecff', .03, 0, trans=1.0)
+M_VAULT = mat('ship_vault', '#cfe6ff', .04, 0, trans=1.0)                  # 環臂花園的薄玻璃拱頂(網頁上比穹頂看得清楚一點)
 M_LAWN = mat('ship_lawn', '#4a7236', .95)
 M_TREE = mat('ship_tree', '#3b6a33', .85)
 M_TREE2 = mat('ship_tree2', '#557f3a', .85)
@@ -321,12 +322,12 @@ def ring_arm(tag, R, wr, h, zc, a0, a1):
     gc, gw = R - wr * .12, wr * .25                                              # 花園中心半徑、半寬
     for i in range(n):
         if rng.random() < .55:
-            a = rng.uniform(a0 + .4, a1 - .4); r_ = gc + rng.uniform(-gw, gw) * .7; cr = rng.uniform(.22, .38)
+            a = rng.uniform(a0 + .4, a1 - .4); r_ = gc + rng.uniform(-gw, gw) * .7; cr = rng.uniform(.2, .32)
             bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=cr)
             for v in bm.verts: v.co *= rng.uniform(.85, 1.08)
             o = obj(f'arm_{tag}_tree_{i}', bm, rng.choice((M_TREE, M_TREE2))); o.location = (HX + math.cos(a) * r_, HY + math.sin(a) * r_, zc + h / 2 + .18 + cr * .8)
     # 玻璃拱頂:斷面是半個扁橢圓,沿著弧掃過去;兩端 6° 內收成圓頭;每隔一段一道細金屬肋
-    va0, va1, vw, vh, top = a0 + .28, a1 - .28, gw + .45, .95, zc + h / 2 + .12
+    va0, va1, vw, vh, top = a0 + .28, a1 - .28, gw + .4, .8, zc + h / 2 + .12
     def section(a, k):
         return [(gc + math.cos(t) * vw * k, top + math.sin(t) * vh * k) for t in [math.pi * q / 16 for q in range(17)]]
     bm = bmesh.new(); rings = []; segn = 180
@@ -335,7 +336,7 @@ def ring_arm(tag, R, wr, h, zc, a0, a1):
         rings.append([bm.verts.new((HX + math.cos(a) * r, HY + math.sin(a) * r, z)) for r, z in section(a, k)])
     for A, B in zip(rings, rings[1:]):
         for q in range(16): bm.faces.new((A[q], A[q + 1], B[q + 1], B[q]))
-    obj(f'arm_{tag}_vault', bm, M_GLASS)
+    obj(f'arm_{tag}_vault', bm, M_VAULT)
     a = va0 + .12
     while a < va1 - .1:
         bm = bmesh.new(); pts = [bm.verts.new((HX + math.cos(a) * r, HY + math.sin(a) * r, z)) for r, z in section(a, 1.0)]
@@ -357,7 +358,6 @@ for a in (180, 360):                                                            
 # 艦身尾端:封起來的尾板 + 深色散熱格柵(不再放引擎,免得噴到後面的環臂)
 box('stern_plate', (8.2, .5, 4.4), (0, -26.15, 0), M_HULL2, bevel=.2)
 for k in range(5): box(f'stern_vent_{k}', (6.0, .12, .28), (0, -26.42, -1.3 + k * .62), M_DARK, bevel=.03)
-torus('stern_glow', 2.6, .06, (0, -26.45, 0), M_BLUE, rot=(math.pi / 2, 0, 0), seg=64, mseg=6)
 ENGINES = []                                                                    # (x, 噴口 y, z):網頁 exterior.mjs 的噴焰位置照這個
 OR_R, OR_W, OR_Z = 22, 4.8, -.4                                                 # 外環臂(跟上面 ring_arm('outer', ...) 一樣)
 for k, adeg in enumerate((254, 270, 286)):
