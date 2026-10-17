@@ -665,7 +665,8 @@ export function createCorridor(scene, opts = {}) {
   }
   door(0); door(-44);                                  // 舊門框(只剩框,門板改用上面的滑門)
   const d1 = slider(0), d2 = slider(-44);
-  const endGlow = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color: 0xfffaf2, toneMapped: false })); endGlow.position.z = -48; top.add(endGlow);
+  // 第二道門後面:一個「窗」,畫的是大廳(main.mjs 每幀從對應的位置渲染大廳),門一開就看得到大廳
+  const endGlow = new THREE.Mesh(new THREE.PlaneGeometry(9, 8), new THREE.MeshBasicMaterial({ color: 0xfffaf2, toneMapped: false })); endGlow.position.z = -44.45; top.add(endGlow);
   scene.add(new THREE.HemisphereLight(0xfff8ee, 0x9a9284, .42));
   for (const z of [8, -8, -24, -40]) { const l = new THREE.PointLight(0xfff0dc, 4, 18, 1.5); l.position.set(0, 1.6, z); root.add(l); }
   const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -706,8 +707,8 @@ export function createCorridor(scene, opts = {}) {
     scene.fog = new THREE.Fog(0xf4efe6, 34, 95);
   }).catch((e) => console.warn('[corridor] 烘焙通道載入失敗,用程式蓋的版本', e));
   return {
-    root, START: 13, END: -47, get baked() { return baked; },
+    root, START: 13, END: -44.2, portal: endGlow, get baked() { return baked; },
     // 依鏡頭目前的 z 開門(靠近時滑開)
-    update(camZ) { d1.set(smooth(9, 3, camZ)); d2.set(smooth(-33, -39, camZ)); },
+    update(camZ) { d1.set(smooth(9, 3, camZ)); d2.set(smooth(-22, -30, camZ)); /* 第二道門早一點開,走近時就看得到門後的大廳 */ },
   };
 }

@@ -129,7 +129,8 @@ export function createExterior(scene, Q = {}) {
   const box = (w, h, d, m, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = true; b.receiveShadow = true; ship.add(b); return b; };
 
   // 1) Blender 模型
-  const escorts = [], airlock = [], _ev = new THREE.Vector3();
+  const escorts = [], airlock = [], _ev = new THREE.Vector3(), clipU = { value: new THREE.Matrix4() }, gapU = { value: 0 };
+  const portal = new THREE.Mesh(new THREE.CircleGeometry(1.75, 64), new THREE.MeshBasicMaterial({ color: 0xfff4e4 }));
   let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
   gl.load('/assets/starship/models/ship.glb?v=2', (gltf) => {
@@ -145,9 +146,15 @@ export function createExterior(scene, Q = {}) {
     });
     const bay = m.getObjectByName('ship_bay');
     if (bay) bay.traverse((o) => { if (o.isMesh) { const src = o.material; o.material = new THREE.MeshBasicMaterial({ map: src.map, toneMapped: false }); o.material.color.setScalar(1.22); src.dispose(); o.castShadow = false; o.receiveShadow = false; } });   // 光影烘在貼圖裡(機庫裡的燈)
-    const behind = new THREE.Mesh(new THREE.CircleGeometry(1.75, 48), new THREE.MeshBasicMaterial({ color: 0xfff4e4, toneMapped: false }));   // 氣閘門後面:亮白的通道光(門一開就透出來)
-    behind.material.color.multiplyScalar(2.2); Object.assign(behind.material, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); behind.position.set(0, .35, -6.995); ship.add(behind);   // 貼在機庫前牆上、門板後面
+    // 氣閘門後面:一個「窗」,畫的是通道裡的畫面(main.mjs 每幀從對應的位置渲染通道),門一開就看得到通道的深度
+    portal.position.set(0, .35, -6.995); ship.add(portal);
     for (const n of ['airlock_L', 'airlock_R']) { const a = m.getObjectByName(n); if (a) airlock.push({ o: a, x: a.position.x, s: n.endsWith('L') ? -1 : 1 }); }
+    // 氣閘門:門板不動,從中間開一道直的縫往兩邊變寬(像兩片門收進圓形門框);圓框外面的部分一律不畫
+    for (const { o } of airlock) o.traverse((x) => { if (!x.isMesh) return;
+      x.material = x.material.clone();
+      x.material.onBeforeCompile = (sh) => { sh.uniforms.uInv = clipU; sh.uniforms.uGap = gapU;
+        sh.vertexShader = 'uniform mat4 uInv; varying vec3 vLp;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvLp = (uInv * modelMatrix * vec4(transformed, 1.0)).xyz;');
+        sh.fragmentShader = 'uniform float uGap; varying vec3 vLp;\n' + sh.fragmentShader.replace('void main() {', 'void main() {\n  if (length(vLp.xy - vec2(0., .35)) > 1.56 || abs(vLp.x) < uGap) discard;'); }; });
     // 護航小艦:從戰艦上拿下來,各自在戰艦外圍的大橢圓軌道上飛(戰艦轉的時候它們不跟著轉);機頭轉到朝 +Z,再用 lookAt 對準飛行方向
     const YAW = [.3, -.4, .9, .1, .5], ORB = [[52, 6, .05], [58, -10, -.04], [64, 14, .035], [55, -15, -.055], [72, 2, .03]];
     for (const o of [...m.children]) {
@@ -213,8 +220,9 @@ export function createExterior(scene, Q = {}) {
     setHangarOpen(k) { for (const { g, d } of hangarDoors) g.position.z = 3 + d * k * 6.7; hangarSeam.emissiveIntensity = 2.6 + k * 3; },   // 0 = 關、1 = 全開
     hangarWorld: (side = 1) => ship.localToWorld(new THREE.Vector3(side * 6.6, .3, 3)),   // 機庫口中心(side = 哪一側)
     setPose(yaw, pitch) { ship.rotation.y = yaw; ship.rotation.x = pitch; },   // 拖曳 / 自轉只轉戰艦(鏡頭、星球、護航小艦不動)
+    portal,
     get loaded() { return loaded; }, get failed() { return failed; }, get progress() { return progress; }, ready,
-    setAirlock(k) { for (const a of airlock) a.o.position.x = a.x + a.s * k * 1.75; },  // 機庫最裡面的圓形氣閘門:0 = 關、1 = 左右滑開
+    setAirlock(k) { gapU.value = k * 1.7; },  // 機庫最裡面的圓形氣閘門:0 = 關、1 = 左右滑開
     update(t, hover = false) {
       hov += ((hover ? 1 : 0) - hov) * .12;
       hangarGlow.emissiveIntensity = 1.2 + (Math.sin(t * 2.4) * .5 + .5) * 1.4 + hov * 4;
@@ -226,7 +234,7 @@ export function createExterior(scene, Q = {}) {
         e.pivot.position.set(x, y, z);
         _ev.set(x - Math.sin(th) * e.a * e.sp, y, z + Math.cos(th) * e.b * e.sp); e.pivot.lookAt(_ev); e.pivot.rotateZ(Math.sign(e.sp) * .22);
       }
-      planet.update(t);
+      planet.update(t); ship.updateMatrixWorld(); clipU.value.copy(ship.matrixWorld).invert();
     },
   };
 }
