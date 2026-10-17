@@ -44,7 +44,8 @@ def mat_of(o): return o.active_material.name if o.type in ('MESH', 'CURVE', 'FON
 
 meshes = [o for o in scene.objects if o.type in ('MESH', 'CURVE', 'FONT')]
 escorts = [o for o in meshes if o.name.startswith('escort_')]
-rest = [o for o in meshes if o not in escorts and not o.name.startswith('bay_')]
+radar_names = [o.name for o in meshes if o.name.startswith('radarhead_')]                 # 雷達會轉的部分:每座合成一個物件 radar_N,原點在轉軸(網頁上讓它轉)
+rest = [o for o in meshes if o not in escorts and not o.name.startswith(('bay_', 'radarhead_'))]
 g_bay = [o for o in meshes if o.name.startswith('bay_') and not o.name.startswith('bay_door_')]     # 機庫內部:烘光(含機庫裡的燈)
 g_air_names = [o.name for o in meshes if o.name.startswith('bay_door_')]                                       # 氣閘門兩半:網頁上滑開
 WHITE = ('ship_white', 'ship_pearl')
@@ -93,6 +94,13 @@ for k in range(10):
         if o.type == 'MESH' and mat_of(o) in ESC: set_mat(o, ESC[mat_of(o)])
     e = join(parts, f'escort_{k}')
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS'); escort_objs.append(e)
+
+radar_objs = []
+for k, (x, y, zp) in enumerate(G['RADARS']):
+    parts = [bpy.data.objects[n] for n in radar_names if n.startswith(f'radarhead_{k}_')]
+    for o in parts:
+        if o.type == 'MESH' and mat_of(o) in ESC: set_mat(o, ESC[mat_of(o)])
+    r = join(parts, f'radar_{k}'); scene.cursor.location = (x, y, zp); bpy.ops.object.origin_set(type='ORIGIN_CURSOR'); radar_objs.append(r)
 
 # 機庫:合併、展 UV、COMBINED 烘光(只有機庫裡的燈 + 自發光;build 模式沒有太陽)→ 網頁上當不受光的貼圖
 bay = join(g_bay, 'ship_bay'); unwrap(bay, .002)
@@ -164,7 +172,7 @@ for mname, objs in groups.items():
     if not mname or not objs: continue
     merged.append(join(objs, 'ship_' + mname.replace('ship_', '')))
     log('merged', mname, len(objs))
-merged += escort_objs + [bay] + air
+merged += escort_objs + radar_objs + [bay] + air
 select_only(merged)
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=True, export_apply=True, export_yup=True, export_cameras=False, export_lights=False,
                           export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=6, export_image_format='WEBP', export_image_quality=88)

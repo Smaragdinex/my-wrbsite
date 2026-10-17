@@ -26,11 +26,10 @@ const tabTitle = (() => {
   draw();
   return (walking, now) => { if (!walking || now - last < 160) return; last = now; scenery.unshift(scenery.pop()); draw(); };
 })();
-/* hover ABOUT/CONTACT 時圓點縮成 40px */
-document.querySelectorAll('.topnav a').forEach(a => {
-  a.addEventListener('mouseenter', () => cursor.classList.add('onnav'));
-  a.addEventListener('mouseleave', () => cursor.classList.remove('onnav'));
-});
+/* 滑到 ABOUT / CONTACT、左上角機器人頭盔、左下角音樂播放器(含歌單每一首)、喇叭按鈕時,圓點游標縮小 */
+const SMALL_CURSOR = '.topnav a, #face, #musicBox button, #musicBox .mb-row, #sfxBtn';
+addEventListener('pointerover', (e) => { if (cursor && e.target.closest?.(SMALL_CURSOR)) cursor.classList.add('onnav'); });
+addEventListener('pointerout', (e) => { if (cursor && e.target.closest?.(SMALL_CURSOR) && !e.relatedTarget?.closest?.(SMALL_CURSOR)) cursor.classList.remove('onnav'); });
 
 /* ===== 往下滑出現的作品大區塊(70% 左右交替,圖黑灰→hover 彩色,標題翻滾) ===== */
 function buildCard(w, i){

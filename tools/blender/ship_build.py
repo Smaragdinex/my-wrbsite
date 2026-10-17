@@ -428,9 +428,56 @@ for o in [o for o in scene.objects if o.name.startswith('dome_rib_')]:
 for k in range(20):                                                             # 樞紐圓盤外緣的放射鰭
     a = k * math.tau / 20
     box(f'hub_fin_{k}', (1.6, .22, .9), (HX + math.cos(a) * 10.4, HY + math.sin(a) * 10.4, HZ + .55), M_HULL2, rot=(0, 0, a), bevel=.04)
-for k, (x, y) in enumerate(((3.2, 22.0), (-3.0, -6.0))):                         # 甲板上的天線碟
-    cyl(f'dish_mast_{k}', .12, 1.6, (x, y, 5.7), M_METAL, verts=12)
-    cyl(f'dish_{k}', 1.3, .35, (x, y, 6.6), M_HULL2, rot=(math.radians(35), 0, math.radians(30 + k * 120)), verts=48, bevel=.04, r2=.15)
+# 甲板上的兩座雷達:底座貼著甲板表面(往下打射線找真正的表面高度)+ 立柱;上面會轉的部分 radarhead_N_*(轉盤、叉架、仰角軸、拋物面碟、背肋、饋源三腳架、紅色警示燈)
+RADARS = []                                                                     # (底座中心 x, y, 轉軸高度 z):匯出時把 radarhead_N_* 合成一個物件、原點放在轉軸,網頁上讓它慢慢轉
+def surface_z(x, y):
+    """從上往下打射線找甲板表面高度;打到小凸起(greeble)就把它刪掉再打(雷達底座要蓋在那裡)"""
+    bpy.context.view_layer.update()
+    for _ in range(12):
+        hit, loc, nrm, idx, ob, mtx = scene.ray_cast(bpy.context.evaluated_depsgraph_get(), Vector((x, y, 30)), Vector((0, 0, -1)))
+        if hit and ob.name.startswith('greeble_'): bpy.data.objects.remove(ob, do_unlink=True); continue
+        return loc.z if hit else 4.0
+    return 4.0
+def place(o, Mx):
+    o.matrix_basis = Mx @ o.matrix_basis; return o
+def revolve(name, prof, m, seg=40):
+    """繞本地 Z 軸旋轉的曲面:prof = [(半徑, z)]"""
+    bm = bmesh.new(); rings = [[bm.verts.new((r * math.cos(math.tau * i / seg), r * math.sin(math.tau * i / seg), z)) for i in range(seg)] for r, z in prof]
+    for A, B in zip(rings, rings[1:]):
+        for i in range(seg): bm.faces.new((A[i], A[(i + 1) % seg], B[(i + 1) % seg], B[i]))
+    bm.faces.new(rings[0][::-1]); return obj(name, bm, m)
+M_RADARLED = mat('ship_radarled', '#000000', 1, emit='#ff3b2e', k=5)
+for k, (x, y, hd) in enumerate(((1.9, 10.0, 30), (-1.9, -4.0, 200))):
+    z0 = surface_z(x, y) - .04
+    cyl(f'radar_base_{k}', .7, .14, (x, y, z0 + .05), M_HULL2, verts=40, bevel=.04)                # 底座板(稍微埋進甲板)
+    for q in range(8):                                                          # 底座螺栓
+        b = q * math.tau / 8; cyl(f'radar_bolt_{k}_{q}', .045, .05, (x + math.cos(b) * .58, y + math.sin(b) * .58, z0 + .14), M_METAL, verts=8)
+    cyl(f'radar_ped_{k}', .3, 1.0, (x, y, z0 + .6), M_HULL2, verts=32, bevel=.03, r2=.22)              # 立柱(下粗上細)
+    torus(f'radar_band_{k}', .27, .035, (x, y, z0 + .4), M_DARK, seg=32, mseg=6)
+    box(f'radar_hatch_{k}', (.03, .2, .3), (x + .27, y, z0 + .55), M_DARK)                          # 維修門
+    zp = z0 + 1.1; RADARS.append((x, y, round(zp, 3)))
+    H = Matrix.Translation((x, y, zp)) @ Matrix.Rotation(math.radians(hd), 4, 'Z')
+    N = lambda part: f'radarhead_{k}_{part}'
+    place(cyl(N('turntable'), .46, .14, (0, 0, .07), M_DARK, verts=32, bevel=.02), H)
+    e = .78                                                                     # 仰角軸高度
+    for sx in (-1, 1): place(box(N(f'yoke_{sx + 1}'), (.1, .32, e + .05), (sx * .44, 0, (e + .05) / 2 + .1), M_HULL2, bevel=.03), H)
+    place(cyl(N('axle'), .07, 1.02, (0, 0, e + .1), M_METAL, rot=(0, math.pi / 2, 0), verts=12), H)
+    D = H @ Matrix.Translation((0, 0, e + .1)) @ Matrix.Rotation(math.radians(-52), 4, 'X')   # 碟面朝上往前仰
+    Rd, f = 1.05, .5; pz = lambda r: .12 + r * r / (4 * f)                      # 拋物面
+    place(revolve(N('dish'), [(.06 + (Rd - .06) * i / 12, pz(.06 + (Rd - .06) * i / 12)) for i in range(13)], M_HULL, 48), D)
+    place(revolve(N('dish_back'), [(.06 + (Rd - .06) * i / 12, pz(.06 + (Rd - .06) * i / 12) - .05) for i in range(13)], M_HULL2, 48), D)
+    place(torus(N('rim'), Rd, .035, (0, 0, pz(Rd) - .02), M_METAL, seg=64, mseg=6), D)
+    place(cyl(N('hub'), .22, .26, (0, 0, -.02), M_DARK, verts=24, bevel=.02), D)
+    for q in range(8):                                                          # 背面放射肋
+        b = q * math.tau / 8 + math.pi / 8
+        for j, (r0, r1) in enumerate(((.2, .6), (.6, Rd * .95))):              # 每根分兩段,貼著碟背的弧度(一根直的會從碟面中間穿出來)
+            place(strut(N(f'rib_{q}_{j}'), (math.cos(b) * r0, math.sin(b) * r0, pz(r0) - .1), (math.cos(b) * r1, math.sin(b) * r1, pz(r1) - .1), .03, M_HULL2), D)
+    fz = .12 + f                                                                # 焦點:饋源喇叭 + 三根支撐
+    for q in range(3):
+        b = q * math.tau / 3 + math.pi / 2
+        place(strut(N(f'feedstrut_{q}'), (math.cos(b) * Rd * .96, math.sin(b) * Rd * .96, pz(Rd * .96)), (0, 0, fz + .02), .018, M_METAL), D)
+    place(cyl(N('feed'), .085, .22, (0, 0, fz + .06), M_DARK, verts=16, r2=.05), D)
+    bm_ = bmesh.new(); bmesh.ops.create_icosphere(bm_, subdivisions=1, radius=.035); place(obj(N('led'), bm_, M_RADARLED), D @ Matrix.Translation((0, 0, fz + .2)))
 # ================= 4) 貫穿樞紐的高塔(上高下短)=================
 def tower(name, z0, z1, w0, w1, m):
     bm = bmesh.new(); rings = []
@@ -866,7 +913,7 @@ if mode == 'preview':
     R = 520
     cd = bpy.data.cameras.new('c'); cd.lens = 35; cd.clip_end = 6000; cam = bpy.data.objects.new('c', cd); scene.collection.objects.link(cam); scene.camera = cam
     view = ARGS[3] if len(ARGS) > 3 else 'hero'
-    eye, look = {'bay': ((5.6, -3.2, .5), (-1.5, 3.5, .1)), 'bayin': ((0, -6.5, .9), (0, 7, .3)), 'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2)), 'tail': ((-26, -74, 16), (0, -37, 0)), 'dome': ((15, -3, 12), (0, -18, 4.5)), 'escort': ((36, 25, -2), (30, 18, -6)), 'escort_side': ((36.7, 16.1, -4.3), (30, 18, -6)), 'escort_rear': ((34.4, 10.5, -3.6), (30, 18, -6)), 'engines': ((9, -51, -6.5), (0, -40, -3.8)), 'lounge': ((0, -55, .6), (0, -40, -.2)), 'bow': ((20, 52, 9), (0, 31, 1)), 'gallery': ((14, -52, 0), (14, -30, -.5)), 'toplights': ((-22, -36, 11), (0, -17, 5.5)), 'spire': ((-12, -36, 24), (0, -17, 19)), 'win': ((19, -44, 1), (13, -36, -.3)), 'hullwin': ((16, -20, 1), (6.6, -16, -.2))}[view]
+    eye, look = {'bay': ((5.6, -3.2, .5), (-1.5, 3.5, .1)), 'bayin': ((0, -6.5, .9), (0, 7, .3)), 'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2)), 'tail': ((-26, -74, 16), (0, -37, 0)), 'dome': ((15, -3, 12), (0, -18, 4.5)), 'escort': ((36, 25, -2), (30, 18, -6)), 'escort_side': ((36.7, 16.1, -4.3), (30, 18, -6)), 'escort_rear': ((34.4, 10.5, -3.6), (30, 18, -6)), 'engines': ((9, -51, -6.5), (0, -40, -3.8)), 'lounge': ((0, -55, .6), (0, -40, -.2)), 'bow': ((20, 52, 9), (0, 31, 1)), 'gallery': ((14, -52, 0), (14, -30, -.5)), 'toplights': ((-22, -36, 11), (0, -17, 5.5)), 'spire': ((-12, -36, 24), (0, -17, 19)), 'win': ((19, -44, 1), (13, -36, -.3)), 'hullwin': ((16, -20, 1), (6.6, -16, -.2)), 'radar': ((8, 3, 9), (1.9, 10, 5.4)), 'radar2': ((-7, -10, 9), (-1.9, -4, 5.8))}[view]
     cam.location = eye; cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (Vector(look) - Vector(eye)).to_track_quat('-Z', 'Y')
     if '--noplanet' not in sys.argv:                                            # 星球擺在鏡頭看過去的後方、偏下:船浮在星球上空,地平線弧線橫過畫面下半
         fwd = (Vector(look) - Vector(eye)).normalized(); right = fwd.cross(Vector((0, 0, 1))).normalized()

@@ -222,9 +222,9 @@ export function createExterior(scene, Q = {}) {
   const portal = new THREE.Mesh(new THREE.CircleGeometry(1.75, 64), new THREE.MeshBasicMaterial({ color: 0xfff4e4 }));
   let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
-  const lightMapP = new Promise((ok) => new THREE.TextureLoader().load('/assets/starship/models/ship_light.webp?v=1', (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.channel = 0; ok(t); }, undefined, () => ok(null)));   // 燈具打在船殼上的光照(Blender 烘的):燈旁邊亮、越遠越暗
+  const lightMapP = new Promise((ok) => new THREE.TextureLoader().load('/assets/starship/models/ship_light.webp?v=2', (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.channel = 0; ok(t); }, undefined, () => ok(null)));   // 燈具打在船殼上的光照(Blender 烘的):燈旁邊亮、越遠越暗
   const LIGHT_K = .5 * Math.PI / .1593;                                   // 烘的時候除過的 scale(ship_light.json)× 亮度
-  gl.load('/assets/starship/models/ship.glb?v=11', (gltf) => lightMapP.then((lightMap) => {
+  gl.load('/assets/starship/models/ship.glb?v=12', (gltf) => lightMapP.then((lightMap) => {
     const m = gltf.scene;
     m.traverse((o) => {
       if (!o.isMesh) return;
@@ -278,6 +278,8 @@ export function createExterior(scene, Q = {}) {
       });
       escorts.push(e);
     }
+    radars = ['radar_0', 'radar_1'].map((n) => m.getObjectByName(n)).filter(Boolean);   // 甲板上兩座雷達會轉的頭
+    m.traverse((o) => { if (o.isMesh && o.material.name === 'ship_radarled') radarLed = o.material; });
     ship.add(m); ship.visible = true; loaded = true; progress = 1; readyFn();
     function hullLight(mt) { if (lightMap) { mt.lightMap = lightMap; mt.lightMapIntensity = LIGHT_K; mt.needsUpdate = true; } }
   }), (x) => { if (x.total) progress = x.loaded / x.total; }, (e) => { console.warn('[exterior] 戰艦模型載入失敗', e); failed = true; window.__siteError = true; readyFn(); });
@@ -342,7 +344,7 @@ export function createExterior(scene, Q = {}) {
   const bounce = new THREE.DirectionalLight(0x6f9cff, .3); bounce.position.set(0, -80, 0); root.add(bounce);
   const planet = createPlanet(root, sun.position.clone().normalize());
 
-  let hov = 0, loaded = false;
+  let hov = 0, loaded = false, radars = [], radarLed = null;
   return {
     root, ship, hangarHits,
     setHangarOpen(k) { for (const { g, d } of hangarDoors) g.position.z = 3 + d * k * 6.7; hangarSeam.emissiveIntensity = 2.6 + k * 3; },   // 0 = 關、1 = 全開
@@ -356,6 +358,8 @@ export function createExterior(scene, Q = {}) {
       hov += ((hover ? 1 : 0) - hov) * .12;
       hangarGlow.emissiveIntensity = 1.2 + (Math.sin(t * 2.4) * .5 + .5) * 1.4 + hov * 4;
       ship.position.y = Math.sin(t * .35) * .5; ship.rotation.z = Math.sin(t * .25) * .015;
+      radars.forEach((r, i) => { r.rotation.y = i ? 2.1 - t * .21 : t * .3; });   // 雷達:兩座不同速度、不同方向慢慢掃
+      if (radarLed) radarLed.emissiveIntensity = ((t * .9) % 1) < .12 ? 4 : .25;   // 雷達頂端紅色警示燈:一秒閃一下
       for (const f of flames) {                                                  // 噴焰:快速的小抖動 + 偶爾一點長短變化
         const k = .9 + Math.sin(t * 23 + f.ph) * .05 + Math.sin(t * 37 + f.ph * 2) * .04 + Math.sin(t * 3.1 + f.ph) * .03;
         for (const m of [f.outer, f.core]) { m.material.uniforms.uTime.value = t + f.ph; m.material.uniforms.uK.value = k; }
