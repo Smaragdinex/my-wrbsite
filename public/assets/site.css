@@ -77,7 +77,27 @@
   .face .lids{opacity:0;transition:opacity .08s}
   .face #eyes.blink ~ .lids{opacity:1}
   .pupil{transition:transform .18s cubic-bezier(.2,.8,.2,1)}
-  .brand{display:flex;flex-direction:column;align-items:flex-end;gap:5px;text-align:right}
+  .brand{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;margin-right:auto;padding:6px 0 0 clamp(12px,1.4vw,18px)}   /* X·ARTS 放左上(頭像旁邊) */
+  /* 手機選單按鈕:淺色圓 + 兩個黑點(··);打開時轉 90° 變成 : */
+  .menu-btn{display:none;width:44px;height:44px;border-radius:50%;border:0;background:rgba(228,231,240,.92);cursor:pointer;
+    align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 18px rgba(0,0,0,.25);transition:transform .35s cubic-bezier(.2,.8,.2,1),background .25s;
+    -webkit-tap-highlight-color:transparent;pointer-events:auto}
+  .menu-btn i{display:block;width:7px;height:7px;border-radius:50%;background:#0d0f14}
+  body.menu-open .menu-btn{transform:rotate(90deg);background:#fff}
+  @media (max-width:700px){
+    .topright{position:relative;flex-direction:column;align-items:flex-end;gap:10px}
+    .menu-btn{display:flex}
+    .topnav{position:absolute;top:54px;right:0;flex-direction:column;align-items:flex-end;gap:2px;padding:8px;border-radius:16px;
+      background:rgba(14,17,26,.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(242,242,240,.12);
+      opacity:0;transform:translateY(-8px) scale(.96);transform-origin:top right;pointer-events:none;transition:opacity .25s,transform .3s cubic-bezier(.2,.8,.2,1)}
+    body.menu-open .topnav{opacity:1;transform:none;pointer-events:auto}
+    .topnav a{font-size:15px;padding:10px 14px;opacity:.9}
+    .topnav a::after{display:none}
+    .topnav a.home-link{display:none}
+    body[data-ns="about"] .topnav a.home-link{display:block}
+    .brand{padding-top:4px}
+    .brand b{font-size:13px} .brand span{font-size:10px}
+  }
   header b{font-weight:700}
   header span{color:var(--dim)}
   .center{flex:1;display:flex;flex-direction:column;justify-content:center}

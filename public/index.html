@@ -13,7 +13,7 @@
 <title>X-Arts — Selected Works</title>
 <link rel="icon" href="data:,">   <!-- 不顯示分頁圖示 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/css/dseg.css">
-<link rel="stylesheet" href="/assets/site.css?v=11">
+<link rel="stylesheet" href="/assets/site.css?v=12">
 <style>
   /* 首頁:往下滑 X 隨機打散 → 讀條(要連續快滑)→ 顆粒化開 + 星際穿越 → 太空梭,一間房一個作品(作品格子由房間取代) */
   /* 頁面本身不捲:滾輪/觸控/鍵盤由 control.mjs 接手 */
@@ -36,7 +36,7 @@
   #sfxBtn.on{opacity:.85;pointer-events:auto}
   #sfxBtn:hover{background:rgba(159,196,255,.3)}
   #sfxBtn.muted{color:rgba(242,242,240,.5)}
-  @media (max-width:600px){ #sfxBtn{bottom:auto;left:auto;right:16px;top:64px;width:32px;height:32px} }
+  @media (max-width:700px){ #sfxBtn{bottom:auto;left:auto;right:clamp(20px,4vw,52px);top:86px;width:32px;height:32px} body.menu-open #sfxBtn{opacity:0;pointer-events:none} }   /* 手機:喇叭在選單按鈕下面,選單打開時先藏起來 */
   #arrows button{pointer-events:auto;width:48px;height:48px;margin-top:-24px;border-radius:50%;border:1px solid rgba(242,242,240,.35);background:rgba(11,16,32,.55);color:#f2f2f0;font-size:22px;line-height:1;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:background .25s,opacity .25s,transform .25s}
   #arrows button:hover:not(:disabled){background:rgba(159,196,255,.3);transform:scale(1.08)}
   #arrows button:disabled{opacity:0;pointer-events:none}
@@ -86,13 +86,15 @@
         </g>
       </svg>
     </div>
+    <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
     <div class="topright">
-      <nav class="topnav">
+      <!-- 手機:圓形按鈕(兩個點 ··),點開往下展開 About / Contact,點點轉 90° 變成 : -->
+      <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="topnav"><i></i><i></i></button>
+      <nav class="topnav" id="topnav">
         <a class="about-link" href="/about.html">About</a>
         <a href="#contact" data-contact>Contact</a>
         <a class="home-link" href="/index.html">← Home</a>
       </nav>
-      <div class="brand"><b>X·ARTS</b><span>Studio&nbsp;— 2026</span></div>
     </div>
   </header>
   <div class="center"></div>
@@ -161,5 +163,16 @@
 <script type="module" src="/assets/control.mjs?v=8"></script>
 <script type="module" src="/assets/shell.mjs?v=14"></script>
 <script type="module" src="/assets/starship/main.mjs?v=113"></script>
+<script>
+/* 手機選單:點按鈕開 / 關;點選單裡的連結、點外面、按 Esc 都會關 */
+(() => {
+  const btn = document.querySelector('.menu-btn'), nav = document.getElementById('topnav'); if (!btn || !nav) return;
+  const set = (open) => { document.body.classList.toggle('menu-open', open); btn.setAttribute('aria-expanded', open); };
+  btn.addEventListener('click', (e) => { e.stopPropagation(); set(!document.body.classList.contains('menu-open')); });
+  nav.addEventListener('click', () => set(false));
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.topright')) set(false); }, true);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') set(false); });
+})();
+</script>
 </body>
 </html>
