@@ -133,7 +133,7 @@ export function createExterior(scene, Q = {}) {
   const portal = new THREE.Mesh(new THREE.CircleGeometry(1.75, 64), new THREE.MeshBasicMaterial({ color: 0xfff4e4 }));
   let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
-  gl.load('/assets/starship/models/ship.glb?v=2', (gltf) => {
+  gl.load('/assets/starship/models/ship.glb?v=3', (gltf) => {
     const m = gltf.scene;
     m.traverse((o) => {
       if (!o.isMesh) return;
@@ -185,13 +185,14 @@ export function createExterior(scene, Q = {}) {
     hangarDoors.push(...leaves);
   }
 
-  // 3) 艦尾三顆引擎的藍色噴焰
+  // 3) 艦尾三顆引擎的藍色噴焰(噴口朝外太空,後面沒有建築)
   const gt = glowTex(), flames = [];
   const fl = (() => { const c = document.createElement('canvas'); c.width = 32; c.height = 256; const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 0, 0, 256);
     gr.addColorStop(0, 'rgba(190,225,255,.9)'); gr.addColorStop(.25, 'rgba(90,160,255,.6)'); gr.addColorStop(1, 'rgba(40,90,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 256);
     const t = new THREE.CanvasTexture(c); t.flipY = false; return t; })();
-  for (const [x, y] of [[-3, -.4], [3, -.4], [0, 1.9]]) {
-    const nz = 28.3, rr = 1.05;
+  // 引擎在外環臂的最後面(tools/blender/ship_build.py 印出的 ENGINES:Blender (x, 噴口 y, z, 大小) → 這裡 (x, z, -y))
+  for (const [x, y, nz0, big] of [[-6.726, -.5, 44.155, 1], [0, -.05, 45.1, 1.25], [6.726, -.5, 44.155, 1]]) {
+    const nz = nz0 + .1, rr = 1.05 * big;
     const cone = new THREE.Mesh(new THREE.ConeGeometry(rr * .9, rr * 3.2, 24, 1, true), new THREE.MeshBasicMaterial({ map: fl, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
     cone.geometry.translate(0, rr * 1.6, 0); cone.rotation.x = Math.PI / 2; cone.position.set(x, y, nz); ship.add(cone);
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: gt, color: 0x7fc4ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); halo.scale.setScalar(rr * 5); halo.position.set(x, y, nz + .4); ship.add(halo);

@@ -240,15 +240,20 @@ cyl('hub_step', 8.6, .9, (HX, HY, HZ + 1.75), M_HULL2, verts=128, bevel=.18)
 torus('hub_glow', 10.25, .1, (HX, HY, HZ + .9), M_GOLD, seg=160, mseg=8)
 torus('hub_glow2', 8.65, .08, (HX, HY, HZ + 2.1), M_WIN, seg=160, mseg=8)
 cyl('garden_lawn', 6.6, .25, (HX, HY, HZ + 2.3), M_LAWN, verts=96)
-for i in range(46):                                                             # 穹頂裡的樹(樹幹 + 兩三團樹冠)
-    a, r_ = rng.uniform(0, math.tau), 6.0 * math.sqrt(rng.random())
+DOME_R, DOME_H = 6.8, 6.8 * .62
+def dome_top(r): return HZ + 2.2 + DOME_H * math.sqrt(max(0, 1 - (r / DOME_R) ** 2))   # 穹頂在半徑 r 處的玻璃高度
+for i in range(46):                                                             # 穹頂裡的樹(樹幹 + 兩三團樹冠):每棵都整個在玻璃裡面
+    a, r_ = rng.uniform(0, math.tau), 5.4 * math.sqrt(rng.random())
     if r_ < 1.9: continue                                                       # 中間留給高塔
-    x, y = HX + math.cos(a) * r_, HY + math.sin(a) * r_; hgt = rng.uniform(.8, 2.0) * (1 - .35 * r_ / 6)
+    x, y = HX + math.cos(a) * r_, HY + math.sin(a) * r_
+    cr = rng.uniform(.45, .8) * (1 - .3 * r_ / 5.4); room = dome_top(r_ + cr + .3) - (HZ + 2.4) - .3   # 樹冠外緣那一圈的玻璃高度,再留 .3
+    hgt = min(rng.uniform(.8, 2.0) * (1 - .35 * r_ / 6), room - cr * 1.25)
+    if hgt < .35: continue
     cyl(f'trunk_{i}', .07, hgt, (x, y, HZ + 2.4 + hgt / 2), mat('trunk', '#5a4330', .9), verts=6)
     for j in range(rng.randint(2, 3)):
-        bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=rng.uniform(.45, .8))
-        for v in bm.verts: v.co *= rng.uniform(.8, 1.15)
-        o = obj(f'canopy_{i}_{j}', bm, rng.choice((M_TREE, M_TREE2))); o.location = (x + rng.uniform(-.3, .3), y + rng.uniform(-.3, .3), HZ + 2.4 + hgt + rng.uniform(-.1, .4)); o.scale = (1, 1, .8)
+        bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=cr)
+        for v in bm.verts: v.co *= rng.uniform(.85, 1.1)
+        o = obj(f'canopy_{i}_{j}', bm, rng.choice((M_TREE, M_TREE2))); o.location = (x + rng.uniform(-.25, .25), y + rng.uniform(-.25, .25), HZ + 2.4 + hgt + rng.uniform(-.15, .1)); o.scale = (1, 1, .8)
 for i in range(14):
     a = rng.uniform(0, math.tau); r_ = rng.uniform(2.2, 6.0)
     cyl(f'garden_lamp_{i}', .09, .5, (HX + math.cos(a) * r_, HY + math.sin(a) * r_, HZ + 2.65), M_WIN, verts=8)
@@ -312,13 +317,32 @@ def ring_arm(tag, R, wr, h, zc, a0, a1):
     while a < a1 - .3:
         arc(f'arm_{tag}_rib_{a:.2f}', HX, HY, R, wr * 1.06, h * 1.06, zc, a, a + .012, M_HULL2, seg=2, bevel=.03)
         a += .11
-    n = int((a1 - a0) * R / 1.6)                                                # 屋頂花園的小樹
+    n = int((a1 - a0) * R / 1.6)                                                # 屋頂花園的小樹(都在玻璃拱頂下面)
+    gc, gw = R - wr * .12, wr * .25                                              # 花園中心半徑、半寬
     for i in range(n):
         if rng.random() < .55:
-            a = rng.uniform(a0 + .3, a1 - .3); r_ = R + rng.uniform(-wr * .3, wr * .2)
-            bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=rng.uniform(.25, .5))
-            for v in bm.verts: v.co *= rng.uniform(.82, 1.12)
-            o = obj(f'arm_{tag}_tree_{i}', bm, rng.choice((M_TREE, M_TREE2))); o.location = (HX + math.cos(a) * r_, HY + math.sin(a) * r_, zc + h / 2 + .4)
+            a = rng.uniform(a0 + .4, a1 - .4); r_ = gc + rng.uniform(-gw, gw) * .7; cr = rng.uniform(.22, .38)
+            bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=cr)
+            for v in bm.verts: v.co *= rng.uniform(.85, 1.08)
+            o = obj(f'arm_{tag}_tree_{i}', bm, rng.choice((M_TREE, M_TREE2))); o.location = (HX + math.cos(a) * r_, HY + math.sin(a) * r_, zc + h / 2 + .18 + cr * .8)
+    # 玻璃拱頂:斷面是半個扁橢圓,沿著弧掃過去;兩端 6° 內收成圓頭;每隔一段一道細金屬肋
+    va0, va1, vw, vh, top = a0 + .28, a1 - .28, gw + .45, .95, zc + h / 2 + .12
+    def section(a, k):
+        return [(gc + math.cos(t) * vw * k, top + math.sin(t) * vh * k) for t in [math.pi * q / 16 for q in range(17)]]
+    bm = bmesh.new(); rings = []; segn = 180
+    for i in range(segn + 1):
+        a = va0 + (va1 - va0) * i / segn; d = min(a - va0, va1 - a) / math.radians(6); k = 1.0 if d >= 1 else max(.05, math.sin(d * math.pi / 2)) ** .5
+        rings.append([bm.verts.new((HX + math.cos(a) * r, HY + math.sin(a) * r, z)) for r, z in section(a, k)])
+    for A, B in zip(rings, rings[1:]):
+        for q in range(16): bm.faces.new((A[q], A[q + 1], B[q + 1], B[q]))
+    obj(f'arm_{tag}_vault', bm, M_GLASS)
+    a = va0 + .12
+    while a < va1 - .1:
+        bm = bmesh.new(); pts = [bm.verts.new((HX + math.cos(a) * r, HY + math.sin(a) * r, z)) for r, z in section(a, 1.0)]
+        for p, q in zip(pts, pts[1:]): bm.edges.new((p, q))
+        o = obj(f'arm_{tag}_vault_rib_{a:.2f}'.replace('.', 'p'), bm, M_METAL)
+        sk = o.modifiers.new('skin', 'SKIN'); [setattr(v, 'radius', (.035, .035)) for v in o.data.skin_vertices[0].data]
+        a += .16
 ring_arm('outer', 22, 4.8, 3.2, -.4, 160, 378)
 ring_arm('inner', 14.8, 3.4, 2.4, .7, 150, 390)
 arc('arm_low', HX, HY, 19.2, 2.2, 1.2, -3.2, math.radians(185), math.radians(355), M_HULL2, taper=25)   # 下面再一道細的,讓環臂有層次
@@ -330,13 +354,24 @@ for a in (180, 360):                                                            
     box(f'hub_spoke_{a}', (4.8, 1.4, 1.0), (HX + math.cos(r_) * mid, HY + math.sin(r_) * mid, 1.2), M_HULL2, rot=(0, 0, r_), bevel=.12)
 
 # ================= 6) 艦尾引擎(三顆;網頁上再加藍色噴焰)=================
-for k, (x, z) in enumerate(((-3.0, -.4), (3.0, -.4), (0, 1.9))):
-    cyl(f'engine_{k}', 1.45, 2.4, (x, -27, z), M_HULL2, rot=(math.pi / 2, 0, 0), verts=48, bevel=.12, r2=1.7)
-    cyl(f'engine_core_{k}', 1.05, .1, (x, -28.25, z), M_BLUE, rot=(math.pi / 2, 0, 0), verts=48)
-    torus(f'engine_lip_{k}', 1.62, .12, (x, -28.2, z), M_METAL, rot=(math.pi / 2, 0, 0), seg=64, mseg=10)
+# 艦身尾端:封起來的尾板 + 深色散熱格柵(不再放引擎,免得噴到後面的環臂)
+box('stern_plate', (8.2, .5, 4.4), (0, -26.15, 0), M_HULL2, bevel=.2)
+for k in range(5): box(f'stern_vent_{k}', (6.0, .12, .28), (0, -26.42, -1.3 + k * .62), M_DARK, bevel=.03)
+torus('stern_glow', 2.6, .06, (0, -26.45, 0), M_BLUE, rot=(math.pi / 2, 0, 0), seg=64, mseg=6)
+ENGINES = []                                                                    # (x, 噴口 y, z):網頁 exterior.mjs 的噴焰位置照這個
+OR_R, OR_W, OR_Z = 22, 4.8, -.4                                                 # 外環臂(跟上面 ring_arm('outer', ...) 一樣)
+for k, adeg in enumerate((254, 270, 286)):
+    a = math.radians(adeg); ex = HX + math.cos(a) * (OR_R + OR_W / 2); ey = HY + math.sin(a) * (OR_R + OR_W / 2)
+    y0 = ey - 1.0; zc_ = OR_Z + (.35 if adeg == 270 else -.1); big_ = 1.25 if adeg == 270 else 1.0   # 中間那顆大一點
+    box(f'engine_pylon_{k}', (1.6 * big_, 2.6, 1.0), (ex, ey - .6, zc_), M_HULL2, bevel=.12)
+    cyl(f'engine_{k}', 1.45 * big_, 2.6, (ex, y0 - 1.3, zc_), M_HULL2, rot=(math.pi / 2, 0, 0), verts=48, bevel=.12, r2=1.75 * big_)
+    cyl(f'engine_core_{k}', 1.05 * big_, .1, (ex, y0 - 2.65, zc_), M_BLUE, rot=(math.pi / 2, 0, 0), verts=48)
+    torus(f'engine_lip_{k}', 1.66 * big_, .12, (ex, y0 - 2.6, zc_), M_METAL, rot=(math.pi / 2, 0, 0), seg=64, mseg=10)
     for q in range(10):                                                         # 噴嘴外側的散熱鰭
-        a = q * math.tau / 10
-        box(f'engine_fin_{k}_{q}', (.12, 1.8, .45), (x + math.cos(a) * 1.65, -27, z + math.sin(a) * 1.65), M_DARK, rot=(0, -a, 0), bevel=.02)
+        b = q * math.tau / 10
+        box(f'engine_fin_{k}_{q}', (.12, 2.0, .45), (ex + math.cos(b) * 1.7 * big_, y0 - 1.3, zc_ + math.sin(b) * 1.7 * big_), M_DARK, rot=(0, -b, 0), bevel=.02)
+    ENGINES.append((round(ex, 3), round(y0 - 2.7, 3), round(zc_, 3), big_))
+print('ENGINES', ENGINES)
 # 護航小艦:幾艘白色小船繞在旁邊(只在渲染圖;網頁上另外做會飛的)
 M_SHIPGLOW = M_BLUE
 def shuttle(tag, loc, yaw, sc):
@@ -579,7 +614,7 @@ if mode == 'preview':
     R = 520
     cd = bpy.data.cameras.new('c'); cd.lens = 35; cd.clip_end = 6000; cam = bpy.data.objects.new('c', cd); scene.collection.objects.link(cam); scene.camera = cam
     view = ARGS[3] if len(ARGS) > 3 else 'hero'
-    eye, look = {'bay': ((5.6, -3.2, .5), (-1.5, 3.5, .1)), 'bayin': ((0, -6.5, .9), (0, 7, .3)), 'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2))}[view]
+    eye, look = {'bay': ((5.6, -3.2, .5), (-1.5, 3.5, .1)), 'bayin': ((0, -6.5, .9), (0, 7, .3)), 'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2)), 'tail': ((-26, -74, 16), (0, -37, 0)), 'dome': ((15, -3, 12), (0, -18, 4.5))}[view]
     cam.location = eye; cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (Vector(look) - Vector(eye)).to_track_quat('-Z', 'Y')
     if '--noplanet' not in sys.argv:                                            # 星球擺在鏡頭看過去的後方、偏下:船浮在星球上空,地平線弧線橫過畫面下半
         fwd = (Vector(look) - Vector(eye)).normalized(); right = fwd.cross(Vector((0, 0, 1))).normalized()
