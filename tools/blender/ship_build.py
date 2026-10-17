@@ -50,14 +50,14 @@ def tri_brick(nt, scale, width, row, mortar, msize, c1=(.9, .9, .9, 1), c2=(1, 1
         L.new(m1.outputs[R], m2.inputs[A]); L.new(bxy.outputs[out], m2.inputs[B])
         return m2.outputs[R]
     return pick('Color', 'RGBA'), pick('Fac', 'FLOAT')
-def plated(name, color, rough, metal, coat=.35, scale=.42, seam=.6):
+def plated(name, color, rough, metal, coat=.35, scale=.42, seam=.85):
     """白色裝甲板:長方形板塊(接縫壓暗 + 凹凸、每塊深淺不同)+ 角落縫隙的髒污(AO)+ 板邊微亮(Bevel)"""
     m = mat(name, color, rough, metal, coat=coat); nt = m.node_tree; p = nt.nodes['Principled BSDF']; L = nt.links
-    col, fac = tri_brick(nt, scale, 2.4, .8, (1 - seam * .7,) * 3 + (1,), .012)
+    col, fac = tri_brick(nt, scale, 2.4, .8, (1 - seam * .7,) * 3 + (1,), .017, c1=(.8, .8, .8, 1))
     mul = nt.nodes.new('ShaderNodeMix'); mul.data_type = 'RGBA'; mul.blend_type = 'MULTIPLY'; mul.inputs['Factor'].default_value = 1
     mul.inputs[6].default_value = srgb(color); L.new(col, mul.inputs[7])
-    ao = nt.nodes.new('ShaderNodeAmbientOcclusion'); ao.inputs['Distance'].default_value = .8; ao.samples = 12
-    grime = nt.nodes.new('ShaderNodeMapRange'); grime.inputs['To Min'].default_value = .62; L.new(ao.outputs['AO'], grime.inputs['Value'])
+    ao = nt.nodes.new('ShaderNodeAmbientOcclusion'); ao.inputs['Distance'].default_value = 1.2; ao.samples = 16
+    grime = nt.nodes.new('ShaderNodeMapRange'); grime.inputs['To Min'].default_value = .42; L.new(ao.outputs['AO'], grime.inputs['Value'])
     mul2 = nt.nodes.new('ShaderNodeMix'); mul2.data_type = 'RGBA'; mul2.blend_type = 'MULTIPLY'; mul2.inputs['Factor'].default_value = 1
     L.new(mul.outputs[2], mul2.inputs[6]); L.new(grime.outputs['Result'], mul2.inputs[7])
     bev = nt.nodes.new('ShaderNodeBevel'); bev.inputs['Radius'].default_value = .05; geo = nt.nodes.new('ShaderNodeNewGeometry')
@@ -67,11 +67,11 @@ def plated(name, color, rough, metal, coat=.35, scale=.42, seam=.6):
     lit = nt.nodes.new('ShaderNodeMix'); lit.data_type = 'RGBA'; lit.blend_type = 'SCREEN'
     em = nt.nodes.new('ShaderNodeMath'); em.operation = 'MULTIPLY'; em.inputs[1].default_value = .35; L.new(edge.outputs['Result'], em.inputs[0]); L.new(em.outputs[0], lit.inputs['Factor'])
     L.new(mul2.outputs[2], lit.inputs[6]); lit.inputs[7].default_value = (1, 1, 1, 1); L.new(lit.outputs[2], p.inputs['Base Color'])
-    bump = nt.nodes.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .45; bump.inputs['Distance'].default_value = .02; bump.invert = True
+    bump = nt.nodes.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .75; bump.inputs['Distance'].default_value = .02; bump.invert = True
     L.new(fac, bump.inputs['Height']); L.new(bump.outputs['Normal'], p.inputs['Normal'])
     return m
 def facade(name):
-    """深色玻璃立面 + 上千個小窗:Brick 每格隨機亮或暗(像夜裡的城市),窗框是暗的"""
+    """深色玻璃立面 + 上千個小窗:Brick 每格隨機亮或暗(像夜裡的城市),窗框是暗的;發光強度最多 1(烘成 8 位元貼圖才不會爆成全白),亮度在網頁上調"""
     m = mat(name, '#11161e', .08, .3, coat=1.0); nt = m.node_tree; p = nt.nodes['Principled BSDF']; L = nt.links
     col, fac = tri_brick(nt, 3.0, 1.2, .95, (0, 0, 0, 1), .22, c1=(0, 0, 0, 1), c2=(1, 1, 1, 1), offset=.5)
     sep = nt.nodes.new('ShaderNodeSeparateColor'); L.new(col, sep.inputs['Color'])
@@ -83,13 +83,54 @@ def facade(name):
     mask = nt.nodes.new('ShaderNodeMath'); mask.operation = 'MULTIPLY'; L.new(lit.outputs['Result'], mask.inputs[0])
     inside = nt.nodes.new('ShaderNodeMapRange'); inside.inputs['From Min'].default_value = .5; inside.inputs['From Max'].default_value = .9; L.new(fac, inside.inputs['Value'])   # 窗框(mortar)不發光
     inv = nt.nodes.new('ShaderNodeMath'); inv.operation = 'SUBTRACT'; inv.inputs[0].default_value = 1; L.new(inside.outputs['Result'], inv.inputs[1]); L.new(inv.outputs[0], mask.inputs[1])
-    k = nt.nodes.new('ShaderNodeMath'); k.operation = 'MULTIPLY'; k.inputs[1].default_value = 4.2; L.new(mask.outputs[0], k.inputs[0]); L.new(k.outputs[0], p.inputs['Emission Strength'])
+    k = nt.nodes.new('ShaderNodeMath'); k.operation = 'MULTIPLY'; k.inputs[1].default_value = 1.0; L.new(mask.outputs[0], k.inputs[0]); L.new(k.outputs[0], p.inputs['Emission Strength'])
     return m
 M_HULL = plated('ship_white', '#ecebe7', .26, .2, coat=.45)
 M_HULL2 = plated('ship_pearl', '#cfd3da', .32, .45, coat=.25, scale=.6)
 M_FACADE = facade('ship_facade')
 M_DARK = mat('ship_dark', '#2f343d', .5, .5)
 M_WIN = mat('ship_window', '#000000', 1, emit='#ffd49a', k=7)
+M_WIN_DIM = mat('ship_window_dim', '#000000', 1, emit='#ffc98a', k=2.6)        # 窗帶分段:有的區段只開一半的燈
+M_WIN_DARK = mat('ship_window_dark', '#000000', 1, emit='#c98a50', k=.7)       # 有的區段幾乎沒開燈
+def win_mat(): return rng.choices((M_WIN, M_WIN_DIM, M_WIN_DARK), (.4, .4, .2))[0]
+GAL = {}
+def gallery(zc, hgt, lv):
+    """環臂長廊窗(烘成發光貼圖):從外面看得到裡面 —— 上緣一條天花燈、暖色牆(一間間亮度不同)、下面深色的地板和家具 / 人影、每隔一段一根深色窗框;lv = 0 亮、1 半亮、2 暗"""
+    key = (round(zc, 3), round(hgt, 3), lv)
+    if key in GAL: return GAL[key]
+    m = mat(f'ship_gallery_{len(GAL)}', '#000000', 1); nt = m.node_tree; p = nt.nodes['Principled BSDF']; L = nt.links
+    def node(t, **kw):
+        n = nt.nodes.new(t)
+        for k, v in kw.items(): setattr(n, k, v)
+        return n
+    def math_(op, a, b=None):
+        n = node('ShaderNodeMath', operation=op)
+        for i, v in enumerate((a, b)):
+            if v is None: continue
+            if isinstance(v, (int, float)): n.inputs[i].default_value = v
+            else: L.new(v, n.inputs[i])
+        return n.outputs[0]
+    tc = node('ShaderNodeTexCoord'); sep = node('ShaderNodeSeparateXYZ'); L.new(tc.outputs['Object'], sep.inputs['Vector'])
+    t = math_('DIVIDE', math_('SUBTRACT', sep.outputs['Z'], zc - hgt / 2), hgt)                       # 0 = 窗下緣、1 = 上緣
+    ang = math_('ARCTAN2', math_('SUBTRACT', sep.outputs['Y'], HY), math_('SUBTRACT', sep.outputs['X'], HX))
+    rad = node('ShaderNodeVectorMath', operation='LENGTH'); cmb = node('ShaderNodeCombineXYZ'); L.new(math_('SUBTRACT', sep.outputs['X'], HX), cmb.inputs['X']); L.new(math_('SUBTRACT', sep.outputs['Y'], HY), cmb.inputs['Y']); L.new(cmb.outputs[0], rad.inputs[0])
+    u = math_('MULTIPLY', ang, rad.outputs['Value'])                                                  # 沿著環臂的距離
+    mull = math_('GREATER_THAN', math_('FRACT', math_('DIVIDE', u, .9)), .07)                          # 窗框:每 .9 一根
+    room = node('ShaderNodeTexNoise'); room.inputs['Scale'].default_value = 1.0; cr = node('ShaderNodeCombineXYZ'); L.new(math_('FLOOR', math_('DIVIDE', u, 2.7)), cr.inputs['X']); L.new(cr.outputs[0], room.inputs['Vector'])
+    wall = node('ShaderNodeMapRange'); L.new(room.outputs['Fac'], wall.inputs['Value']); wall.inputs['From Min'].default_value = .3; wall.inputs['From Max'].default_value = .7; wall.inputs['To Min'].default_value = .16; wall.inputs['To Max'].default_value = .5   # 一間間牆的亮度不同
+    ceil = math_('MULTIPLY', math_('GREATER_THAN', t, .84), math_('LESS_THAN', t, .95))                  # 天花燈帶
+    floor_ = math_('LESS_THAN', t, .2)
+    cu = math_('MULTIPLY', u, 2.8); cell = math_('FLOOR', cu); fu = math_('FRACT', cu)                # 每 .36 一格:隨機放一個人 / 植物 / 沙發的剪影(矩形)
+    def wn(off):
+        n = node('ShaderNodeTexWhiteNoise', noise_dimensions='1D'); L.new(math_('ADD', cell, off), n.inputs['W']); return n.outputs['Value']
+    blob = math_('MULTIPLY', math_('GREATER_THAN', wn(0), .66), math_('LESS_THAN', t, math_('ADD', .26, math_('MULTIPLY', wn(7.3), .32))))
+    blob = math_('MULTIPLY', blob, math_('MULTIPLY', math_('GREATER_THAN', fu, .2), math_('LESS_THAN', fu, math_('ADD', .5, math_('MULTIPLY', wn(3.1), .35)))))
+    k = math_('MULTIPLY', wall.outputs['Result'], math_('SUBTRACT', 1, math_('MAXIMUM', floor_, blob)))
+    k = math_('MAXIMUM', math_('ADD', k, math_('MULTIPLY', floor_, .04)), ceil)
+    k = math_('MULTIPLY', math_('MULTIPLY', k, mull), (1.0, .45, .12)[lv])
+    col = node('ShaderNodeMix', data_type='RGBA'); L.new(ceil, col.inputs['Factor']); col.inputs[6].default_value = srgb('#ffc58a'); col.inputs[7].default_value = srgb('#fff3df')
+    L.new(col.outputs[2], p.inputs['Emission Color']); L.new(k, p.inputs['Emission Strength'])
+    GAL[key] = m; return m
 M_GOLD = mat('ship_goldglow', '#000000', 1, emit='#ffbe63', k=12)
 M_BLUE = mat('ship_blueglow', '#000000', 1, emit='#7cc8ff', k=8)
 M_GLASS = mat('ship_glass', '#dcecff', .03, 0, trans=1.0)
@@ -98,7 +139,10 @@ M_LAWN = mat('ship_lawn', '#4a7236', .95)
 M_TREE = mat('ship_tree', '#3b6a33', .85)
 M_TREE2 = mat('ship_tree2', '#557f3a', .85)
 M_METAL = mat('ship_metal', '#b9bcc2', .25, 1.0)
-M_LOUNGE = mat('ship_lounge', '#000000', 1, emit='#ffd9b0', k=2.2)            # 觀景窗裡面的暖光內牆
+M_LOUNGE = mat('ship_lounge', '#000000', 1, emit='#ffd9b0', k=2.2)            # 觀景窗裡面的暖光內牆(亮 / 半亮 / 暗三種,一格一格不一樣)
+M_LOUNGE2 = mat('ship_lounge_dim', '#000000', 1, emit='#ffcf9c', k=1.0)
+M_LOUNGE3 = mat('ship_lounge_dark', '#000000', 1, emit='#b98a62', k=.3)
+M_VIEWGLASS = mat('ship_viewglass', '#dcecff', .03, 0, trans=1.0)             # 觀景窗玻璃(網頁上反光壓低,看得到裡面)
 M_WOODFLOOR = mat('ship_woodfloor', '#8a5a3a', .6)
 
 def obj(name, bm, m, bevel=0.0, seg=2, smooth=True, angle=35):
@@ -148,6 +192,43 @@ def torus(name, R, r, loc, m, rot=(0, 0, 0), seg=128, mseg=16):
     o = bpy.context.active_object; o.name = name; o.data.materials.append(m)
     for p in o.data.polygons: p.use_smooth = True
     return o
+def lathe(name, cx, cz, prof, m, seg=48, cap0=False, cap1=False):
+    """繞 Y 軸旋轉的曲面(軸心在 x = cx、z = cz):prof = [(y, 半徑)],往 -y 走法線朝外、往 +y 走法線朝內"""
+    bm = bmesh.new(); rings = [[bm.verts.new((cx + r * math.cos(t), y, cz + r * math.sin(t))) for t in [math.tau * i / seg for i in range(seg)]] for y, r in prof]
+    for A, B in zip(rings, rings[1:]):
+        for k in range(seg): bm.faces.new((A[k], A[(k + 1) % seg], B[(k + 1) % seg], B[k]))
+    if cap0: bm.faces.new(rings[0])
+    if cap1: bm.faces.new(rings[-1][::-1])
+    return obj(name, bm, m)
+def strut(name, p, q, r, m):
+    """兩點之間的圓桿"""
+    p, q = Vector(p), Vector(q); d = q - p
+    o = cyl(name, r, d.length, tuple((p + q) / 2), m, verts=12); o.rotation_mode = 'QUATERNION'; o.rotation_quaternion = d.to_track_quat('Z', 'Y'); return o
+def sec_at(secs, y):
+    """loft 斷面在 y 處的內插值 (寬, 高, 中心 z, 切角)"""
+    for a, b in zip(secs, secs[1:]):
+        if a[0] <= y <= b[0]:
+            t = (y - a[0]) / (b[0] - a[0]); return tuple(a[i] + (b[i] - a[i]) * t for i in range(1, 5))
+    return None
+def armor(tag, secs, faces, y0, y1, step, gap, d=.07, th=.06, inset=.12, ms=(None,)):
+    """裝甲分層:沿 loft 的某幾個斜面 / 側面貼一片片稍微浮起的板(板跟板中間留縫),底下再墊一層深灰,縫看起來就是凹下去的深溝"""
+    for f in faces:
+        def edge(y, dd, ins):
+            w, h, zc, c = sec_at(secs, y); P = octa(w, h, c); (px, pz), (qx, qz) = P[f], P[(f + 1) % 8]
+            ex, ez = qx - px, qz - pz; L = math.hypot(ex, ez) or 1; nx, nz = ez / L, -ex / L; ins = min(ins, L * .3)
+            return ((px + ex / L * ins + nx * dd, y, zc + pz + ez / L * ins + nz * dd), (qx - ex / L * ins + nx * dd, y, zc + qz - ez / L * ins + nz * dd))
+        bm = bmesh.new(); ys = [y0 + (y1 - y0) * i / 30 for i in range(31)]; rows = [[bm.verts.new(v) for v in edge(y, .025, 0)] for y in ys]
+        for A, B in zip(rows, rows[1:]): bm.faces.new((A[0], B[0], B[1], A[1]))
+        obj(f'trench_{tag}_{f}', bm, M_DARK, smooth=False)
+        y, k = y0, 0
+        while y < y1 - .6:
+            ya, yb = y, min(y + step * rng.uniform(.75, 1.25), y1); bm = bmesh.new()
+            rows = [[bm.verts.new(v) for v in edge(ya + (yb - gap - ya) * i / 6, d, inset)] for i in range(7)]
+            for A, B in zip(rows, rows[1:]): bm.faces.new((A[0], B[0], B[1], A[1]))
+            o = obj(f'armor_{tag}_{f}_{k}', bm, ms[k % len(ms)] or M_HULL, smooth=False)
+            sd = o.modifiers.new('solid', 'SOLIDIFY'); sd.thickness = th; sd.offset = -1
+            bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .02; bv.segments = 1
+            y, k = yb, k + 1
 
 # ================= 1) 主艦身:箭頭形(艦首 +Y 收尖),機庫那段側面平直 =================
 HULL = [  # (y, 寬, 高, 中心 z, 切角)
@@ -203,6 +284,16 @@ loft('keel', [(-24, 6.4, 1.6, -3.6, .6), (4, 7.2, 1.6, -3.6, .6), (22, 4.0, 1.2,
 # 甲板中央的深色溝 + 藍色導航燈線
 box('deck_trench', (.9, 26, .12), (0, 18, 4.88), M_DARK)
 box('deck_blue', (.08, 24, .06), (0, 18, 4.96), M_BLUE)
+# 裝甲分層:主艦身上下四道斜面、艦首兩側和頂面、兩層甲板的斜面,一片片浮起的板 + 板縫下的深灰凹槽
+armor('hull', HULL, (3, 5, 1, 7), -25.6, 40.2, 3.4, .22, ms=(M_HULL, M_HULL, M_HULL2))
+armor('bow', HULL, (2, 6, 4), 30.5, 40.4, 2.6, .2)
+D1 = [(-24, 9.4, 1.2, 3.4, .5), (6, 10.4, 1.2, 3.4, .5), (20, 7.2, 1.0, 3.3, .45), (33, 2.6, .7, 3.0, .3), (37, .3, .2, 2.8, .1)]
+armor('deck1', D1, (3, 5), -23.6, 35.5, 2.8, .18, d=.05, th=.05, inset=.05)
+for s_ in (-1, 1):                                                              # 艦首兩側的深色進氣凹槽(裡面幾片橫向百葉)
+    for k, y in enumerate((32.2, 34.6)):
+        hw = hull_half_width(y, -.2)
+        box(f'bow_intake_{s_}_{k}', (.05, 1.7, .62), (s_ * (hw + .06), y, -.2), M_DARK)
+        for q in range(4): box(f'bow_louver_{s_}_{k}_{q}', (.06, 1.5, .05), (s_ * (hw + .1), y, -.44 + q * .16), M_HULL2)
 
 # 側面:一層層的深色玻璃立面帶(上千個小窗在材質裡,隨機亮暗),機庫那段 y = -10 ~ 4 跳過
 def facade_band(tag, s_, zr, y0, y1, hgt):
@@ -312,8 +403,20 @@ def ring_arm(tag, R, wr, h, zc, a0, a1):
         arc(f'arm_{tag}_sill', HX, HY, ro, DEP, wb - (zc - h / 2), (zc - h / 2 + wb) / 2, v0, v1, M_HULL2, seg=60, bevel=.04)
         arc(f'arm_{tag}_header', HX, HY, ro, DEP, (zc + h / 2) - wt, (zc + h / 2 + wt) / 2, v0, v1, M_HULL2, seg=60, bevel=.04)
         rw = R + wr / 2 - DEP                                                   # 窗裡面:暖光的內牆 + 天花燈帶 + 地板
-        arc(f'arm_{tag}_lounge_wall', HX, HY, rw + .1, .04, wt - wb, (wt + wb) / 2, v0 + .01, v1 - .01, M_LOUNGE, seg=60, bevel=0)   # 離後面的白殼 .1(貼太近白殼會蓋過來)
-        arc(f'arm_{tag}_lounge_light', HX, HY, rw + .25, .3, .04, wt - .05, v0 + .02, v1 - .02, M_WIN, seg=60, bevel=0)
+        NB = 14; bw = (v1 - v0) / NB                                           # 室內分 14 格(跟外面的窗框對齊):每格亮度不同,有柱子、天花板、下半截深色牆板、壁燈、門
+        for b in range(NB):
+            b0, b1 = v0 + b * bw, v0 + (b + 1) * bw; lv = rng.choices((0, 1, 2), (.45, .35, .2))[0]   # 0 = 亮、1 = 半亮、2 = 暗
+            arc(f'arm_{tag}_lounge_wall_{b}', HX, HY, rw + .1, .04, wt - wb, (wt + wb) / 2, b0 + .004, b1 - .004, (M_LOUNGE, M_LOUNGE2, M_LOUNGE3)[lv], seg=6, bevel=0)   # 離後面的白殼 .1(貼太近白殼會蓋過來)
+            arc(f'arm_{tag}_lounge_dado_{b}', HX, HY, rw + .15, .04, .42, wb + .21, b0, b1, M_DARK, seg=6, bevel=0)
+            if lv < 2: arc(f'arm_{tag}_lounge_light_{b}', HX, HY, rw + .3, .16, .035, wt - .1, b0 + .01, b1 - .01, (M_WIN, M_WIN_DIM)[lv], seg=6, bevel=0)
+            if rng.random() < .3:                                               # 往裡面走的門(深色門洞 + 門框)
+                c_ = (b0 + b1) / 2; arc(f'arm_{tag}_lounge_door_{b}', HX, HY, rw + .14, .03, 1.05, wb + .55, c_ - .012, c_ + .012, M_DARK, seg=2, bevel=0)
+                for e_ in (-1, 1): arc(f'arm_{tag}_lounge_jamb_{b}_{e_ + 1}', HX, HY, rw + .16, .05, 1.1, wb + .57, c_ + e_ * .013 - .0015, c_ + e_ * .013 + .0015, M_METAL, seg=1, bevel=0)
+            elif lv < 2:
+                for e_ in (-1, 1): c_ = (b0 + b1) / 2 + e_ * bw * .25; arc(f'arm_{tag}_lounge_sconce_{b}_{e_ + 1}', HX, HY, rw + .15, .04, .22, (wt + wb) / 2 + .15, c_ - .002, c_ + .002, M_WIN_DIM, seg=1, bevel=0)
+            ca, sa = math.cos(b0), math.sin(b0)
+            if b: box(f'arm_{tag}_lounge_pillar_{b}', (.3, .14, wt - wb), (HX + ca * (rw + .26), HY + sa * (rw + .26), (wt + wb) / 2), M_DARK, rot=(0, 0, b0), bevel=.02)
+        arc(f'arm_{tag}_lounge_ceiling', HX, HY, rw + .3, .6, .05, wt - .04, v0 + .005, v1 - .005, M_DARK, seg=60, bevel=0)
         arc(f'arm_{tag}_lounge_floor', HX, HY, rw + .3, .58, .04, wb + .02, v0 + .01, v1 - .01, M_WOODFLOOR, seg=60, bevel=0)
         a = v0 + .03                                                            # 沙發 + 植物(從外面看是剪影)
         while a < v1 - .03:
@@ -323,7 +426,7 @@ def ring_arm(tag, R, wr, h, zc, a0, a1):
                 cyl(f'arm_{tag}_pot_{a:.2f}', .09, .2, (HX + ca * (rw + .2), HY + sa * (rw + .2), wb + .12), M_HULL2, verts=12)
                 bm_ = bmesh.new(); bmesh.ops.create_icosphere(bm_, subdivisions=1, radius=.2); o_ = obj(f'arm_{tag}_plant_{a:.2f}', bm_, M_TREE); o_.location = (HX + ca * (rw + .2), HY + sa * (rw + .2), wb + .38)
             a += rng.uniform(.035, .06)
-        arc(f'arm_{tag}_view_glass', HX, HY, R + wr / 2 - .04, .03, wt - wb, (wt + wb) / 2, v0, v1, M_GLASS, seg=90, bevel=0)   # 一整面玻璃
+        arc(f'arm_{tag}_view_glass', HX, HY, R + wr / 2 - .04, .03, wt - wb, (wt + wb) / 2, v0, v1, M_VIEWGLASS, seg=90, bevel=0)   # 一整面玻璃
         a = v0
         while a <= v1 + 1e-6:                                                   # 窗框:直的細柱 + 上下兩條橫框
             arc(f'arm_{tag}_mullion_{a:.3f}'.replace('.', 'p'), HX, HY, R + wr / 2 - .02, .08, wt - wb, (wt + wb) / 2, a - .0035, a + .0035, M_HULL2, seg=1, bevel=0)
@@ -339,13 +442,15 @@ def ring_arm(tag, R, wr, h, zc, a0, a1):
         a = a0 + .3
         while a < a1 - .3:
             L = rng.uniform(.18, .4)
-            if not (side == 1 and (in_view(a, tag, .02) or in_view(min(a + L, a1 - .3), tag, .02))): arc(f'arm_{tag}_gal_{side}_{a:.2f}', HX, HY, r_, .07, h * .32, zc + h * .08, a, min(a + L, a1 - .3), M_WIN, seg=12, bevel=0)
+            if not (side == 1 and (in_view(a, tag, .02) or in_view(min(a + L, a1 - .3), tag, .02))): arc(f'arm_{tag}_gal_{side}_{a:.2f}', HX, HY, r_, .07, h * .32, zc + h * .08, a, min(a + L, a1 - .3), gallery(zc + h * .08, h * .32, rng.choices((0, 1, 2), (.4, .4, .2))[0]), seg=12, bevel=0)   # 每段亮度不同
             a += L + .025
         a = a0 + .35
         while a < a1 - .35:
             L = rng.uniform(.03, .08)
-            if rng.random() < .7 and not (side == 1 and in_view(a, tag, .02)): arc(f'arm_{tag}_win_{side}_{a:.2f}', HX, HY, r_, .06, .14, zc - h * .3, a, a + L, M_WIN, seg=4, bevel=0)
+            if rng.random() < .7 and not (side == 1 and in_view(a, tag, .02)): arc(f'arm_{tag}_win_{side}_{a:.2f}', HX, HY, r_, .06, .14, zc - h * .3, a, a + L, win_mat(), seg=4, bevel=0)
             a += L + rng.uniform(.02, .05)
+        for j, z_ in enumerate((zc - h * .43, zc + h * .38)):                   # 側面兩道深灰凹槽,把白色大面分成上下幾層
+            for k_, (s0, s1) in enumerate(spans): arc(f'arm_{tag}_groove_{side}_{j}_{k_}', HX, HY, r_ - side * .01, .04, .07, z_, s0, s1, M_DARK, seg=120, bevel=0)
     a = a0 + .3                                                                # 結構肋:每隔幾度一圈稍微凸出的環箍
     while a < a1 - .3:
         if not in_view(a, tag, .01): arc(f'arm_{tag}_rib_{a:.2f}', HX, HY, R, wr * 1.06, h * 1.06, zc, a, a + .012, M_HULL2, seg=2, bevel=.03)
@@ -390,21 +495,37 @@ for a in (180, 360):                                                            
 # 艦身尾端:封起來的尾板 + 深色散熱格柵(不再放引擎,免得噴到後面的環臂)
 box('stern_plate', (8.2, .5, 4.4), (0, -26.15, 0), M_HULL2, bevel=.2)
 for k in range(5): box(f'stern_vent_{k}', (6.0, .12, .28), (0, -26.42, -1.3 + k * .62), M_DARK, bevel=.03)
-ENGINES = []                                                                    # (x, 噴口 y, z):網頁 exterior.mjs 的噴焰位置照這個
-OR_R, OR_W, OR_Z = 22, 4.8, -.4                                                 # 外環臂(跟上面 ring_arm('outer', ...) 一樣)
-for k, adeg in enumerate((256, 270, 284)):                                   # 掛在外環臂底下(環臂最後面留給觀景窗);噴焰從環臂下面往後噴,碰不到建築
-    a = math.radians(adeg); big_ = 1.1 if adeg == 270 else .95                  # 中間那顆大一點
-    ex = HX + math.cos(a) * (OR_R + .8); ey = HY + math.sin(a) * (OR_R + .8) + .6; y0 = ey + .2
-    zc_ = -2.85 - .35 - 1.75 * big_                                             # 環臂下緣(含底下那片)約 -2.85,留 .35 給吊架
-    box(f'engine_pylon_{k}', (1.0 * big_, 2.2, abs(-2.6 - zc_)), (ex, ey, (-2.6 + zc_) / 2), M_HULL2, bevel=.12)
-    box(f'engine_pylon_fin_{k}', (.25, 2.6, .9), (ex, ey - .2, -2.9), M_DARK, bevel=.04)
-    cyl(f'engine_{k}', 1.45 * big_, 2.6, (ex, y0 - 1.3, zc_), M_HULL2, rot=(math.pi / 2, 0, 0), verts=48, bevel=.12, r2=1.75 * big_)
-    cyl(f'engine_core_{k}', 1.05 * big_, .1, (ex, y0 - 2.65, zc_), M_BLUE, rot=(math.pi / 2, 0, 0), verts=48)
-    torus(f'engine_lip_{k}', 1.66 * big_, .12, (ex, y0 - 2.6, zc_), M_METAL, rot=(math.pi / 2, 0, 0), seg=64, mseg=10)
-    for q in range(10):                                                         # 噴嘴外側的散熱鰭
-        b = q * math.tau / 10
-        box(f'engine_fin_{k}_{q}', (.12, 2.0, .45), (ex + math.cos(b) * 1.7 * big_, y0 - 1.3, zc_ + math.sin(b) * 1.7 * big_), M_DARK, rot=(0, -b, 0), bevel=.02)
-    ENGINES.append((round(ex, 3), round(y0 - 2.7, 3), round(zc_, 3), big_))
+ENGINES = []                                                                    # (x, 噴口 y, z, 大小):網頁 exterior.mjs 的噴焰位置照這個
+OR_R = 22                                                                       # 外環臂半徑(跟上面 ring_arm('outer', ...) 一樣);環臂底下那片的下緣約 z = -2.8
+for k, adeg in enumerate((256, 270, 284)):                                      # 縮在外環臂正下方、貼著下緣(少擋後面的觀景窗)
+    a = math.radians(adeg); s = (1.1 if adeg == 270 else .95) * .85
+    ex = HX + math.cos(a) * (OR_R - .2); ye = HY + math.sin(a) * (OR_R + 2.2); L = 3.4 * s; yf = ye + L   # 噴口 y、機艙前端 y
+    zc = -2.9 - 1.42 * s                                                         # 機艙頂端離環臂下緣只留一點縫
+    lathe(f'engine_{k}', ex, zc, [(yf + .35 * s, .05), (yf + .3 * s, .55 * s), (yf + .1 * s, 1.05 * s), (yf - .25 * s, 1.28 * s), (ye + .5 * s, 1.38 * s), (ye + .12 * s, 1.42 * s)], M_HULL2, cap0=True)
+    lathe(f'engine_lip_{k}', ex, zc, [(ye + .12 * s, 1.42 * s), (ye, 1.4 * s), (ye - .02, 1.3 * s), (ye + .1 * s, 1.24 * s)], M_METAL)   # 噴口外緣
+    lathe(f'engine_bell_{k}', ex, zc, [(ye + .1 * s, 1.24 * s), (ye + .7 * s, 1.02 * s), (ye + 1.3 * s, .8 * s)], M_DARK)               # 噴嘴內壁(往裡收)
+    for j, (dy, rr) in enumerate(((.38, 1.13), (.85, .93))): torus(f'engine_ring_{k}_{j}', rr * s, .035 * s, (ex, ye + dy * s, zc), M_METAL, rot=(math.pi / 2, 0, 0), seg=64, mseg=6)   # 內壁上兩圈冷卻環
+    cyl(f'engine_core_{k}', .8 * s, .04, (ex, ye + 1.33 * s, zc), M_BLUE, rot=(math.pi / 2, 0, 0), verts=48)                           # 最裡面的發光面(從渦輪葉片縫隙透出來)
+    torus(f'engine_glow_{k}', .78 * s, .04 * s, (ex, ye + 1.26 * s, zc), M_BLUE, rot=(math.pi / 2, 0, 0), seg=64, mseg=6)
+    for q in range(18):                                                         # 渦輪葉片
+        b = q * math.tau / 18
+        box(f'engine_blade_{k}_{q}', (.08 * s, .04, .5 * s), (ex + math.cos(b) * .53 * s, ye + 1.22 * s, zc + math.sin(b) * .53 * s), M_DARK, rot=(.35, math.pi / 2 - b, 0))
+    lathe(f'engine_plug_{k}', ex, zc, [(ye + 1.25 * s, .3 * s), (ye + .8 * s, .26 * s), (ye + .3 * s, .12 * s), (ye + .1 * s, .02)], M_METAL, cap1=True)   # 中央尖錐
+    for j, (yy, rr) in enumerate(((yf - .45 * s, 1.31), (ye + .6 * s, 1.39))): torus(f'engine_band_{k}_{j}', rr * s + .02, .07 * s, (ex, yy, zc), M_DARK, rot=(math.pi / 2, 0, 0), seg=64, mseg=8)   # 固定環
+    for j in range(7):                                                          # 散熱片:機艙中段一疊薄圓片
+        cyl(f'engine_hs_{k}_{j}', 1.5 * s, .045, (ex, yf - (.8 + j * .15) * s, zc), M_DARK, rot=(math.pi / 2, 0, 0), verts=48)
+    for side in (-1, 1):                                                        # 兩側的散熱板(上面一排小鰭)
+        x_ = ex + side * (1.33 + .42) * s
+        box(f'engine_rad_{k}_{side + 1}', (.85 * s, 1.5 * s, .07), (x_, ye + 1.05 * s, zc - .1 * s), M_HULL2, bevel=.02)
+        for q in range(6): box(f'engine_radfin_{k}_{side + 1}_{q}', (.75 * s, .04, .16 * s), (x_, ye + (.42 + q * .25) * s, zc - .1 * s + .1 * s), M_DARK)
+    top = zc + 1.3 * s                                                          # 吊架:機艙頂上的鞍座 + 左右各兩根斜撐(上端接在環臂下面)
+    box(f'engine_pylon_{k}', (.7 * s, 2.1 * s, -2.7 - top + .3), (ex, ye + L * .55, (-2.7 + top - .3) / 2), M_HULL2, bevel=.06)
+    for side in (-1, 1):
+        for j, yy in enumerate((ye + L * .3, ye + L * .8)):
+            p_ = (ex + side * 1.3 * s * math.cos(.55), yy, zc + 1.3 * s * math.sin(.55)); q_ = (ex + side * 1.75 * s, yy, -2.78)
+            strut(f'engine_strut_{k}_{side + 1}_{j}', p_, q_, .07 * s, M_METAL)
+            box(f'engine_clevis_{k}_{side + 1}_{j}', (.22 * s, .22 * s, .1), (q_[0], yy, -2.76), M_DARK)
+    ENGINES.append((round(ex, 3), round(ye, 3), round(zc, 3), round(s, 3)))
 print('ENGINES', ENGINES)
 # 護航小艦:白色機身 + 珍珠灰背脊 / 機翼 / 尾翼 + 深色玻璃座艙 + 兩具引擎艙(藍色噴口)+ 翼尖燈(左紅右綠)+ 橘色飾條 + 一排舷窗 + 面板縫
 # (機頭朝 +Y;先在原點蓋好,最後整組移到 loc、轉 yaw、縮放 sc)
@@ -666,7 +787,7 @@ if mode == 'preview':
     R = 520
     cd = bpy.data.cameras.new('c'); cd.lens = 35; cd.clip_end = 6000; cam = bpy.data.objects.new('c', cd); scene.collection.objects.link(cam); scene.camera = cam
     view = ARGS[3] if len(ARGS) > 3 else 'hero'
-    eye, look = {'bay': ((5.6, -3.2, .5), (-1.5, 3.5, .1)), 'bayin': ((0, -6.5, .9), (0, 7, .3)), 'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2)), 'tail': ((-26, -74, 16), (0, -37, 0)), 'dome': ((15, -3, 12), (0, -18, 4.5)), 'escort': ((36, 25, -2), (30, 18, -6)), 'escort_side': ((36.7, 16.1, -4.3), (30, 18, -6)), 'escort_rear': ((34.4, 10.5, -3.6), (30, 18, -6))}[view]
+    eye, look = {'bay': ((5.6, -3.2, .5), (-1.5, 3.5, .1)), 'bayin': ((0, -6.5, .9), (0, 7, .3)), 'cine': ((46, 54, 16), (2, -6, 4)), 'detail': ((26, -2, 16), (2, -14, 2)), 'hero': ((62, 58, 40), (0, -4, 0)), 'side': ((90, 4, 14), (0, -2, 2)), 'top': ((10, -6, 110), (0, -6, 0)), 'back': ((-55, -75, 35), (0, -10, 2)), 'tail': ((-26, -74, 16), (0, -37, 0)), 'dome': ((15, -3, 12), (0, -18, 4.5)), 'escort': ((36, 25, -2), (30, 18, -6)), 'escort_side': ((36.7, 16.1, -4.3), (30, 18, -6)), 'escort_rear': ((34.4, 10.5, -3.6), (30, 18, -6)), 'engines': ((9, -51, -6.5), (0, -40, -3.8)), 'lounge': ((0, -55, .6), (0, -40, -.2)), 'bow': ((20, 52, 9), (0, 31, 1)), 'gallery': ((14, -52, 0), (14, -30, -.5))}[view]
     cam.location = eye; cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (Vector(look) - Vector(eye)).to_track_quat('-Z', 'Y')
     if '--noplanet' not in sys.argv:                                            # 星球擺在鏡頭看過去的後方、偏下:船浮在星球上空,地平線弧線橫過畫面下半
         fwd = (Vector(look) - Vector(eye)).normalized(); right = fwd.cross(Vector((0, 0, 1))).normalized()

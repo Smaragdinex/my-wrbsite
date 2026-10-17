@@ -51,6 +51,7 @@ big = lambda o: max(o.dimensions) > 3.0 and not o.name.startswith(('kit_', 'gree
 g_white = [o for o in rest if mat_of(o) in WHITE and big(o)]
 g_small = [o for o in rest if mat_of(o) in WHITE and not big(o)]          # 小零件不烘(貼圖留給大面),直接用單色
 g_facade = [o for o in rest if mat_of(o) == 'ship_facade']
+g_gal = [o for o in rest if (mat_of(o) or '').startswith('ship_gallery_')]                 # 環臂長廊窗(看得到裡面的程序材質)→ 烘成發光貼圖
 log('white', len(g_white), 'facade', len(g_facade))
 
 scene.render.engine = 'CYCLES'; scene.cycles.device = 'GPU'
@@ -116,6 +117,9 @@ hull = join(g_white, 'ship_hull'); unwrap(hull, .0015)
 hull_png = bake(hull, 'DIFFUSE', int(4096 * SCALE), 'ship_hull_albedo', 32)
 fac = join(g_facade, 'ship_facade'); unwrap(fac, .003)
 fac_png = bake(fac, 'EMIT', int(2048 * SCALE), 'ship_facade_emit', 4)
+gal = join(g_gal, 'ship_gallery'); unwrap(gal, .003)
+gal_png = bake(gal, 'EMIT', int(2048 * SCALE), 'ship_gallery_emit', 4)
+set_mat(gal, simple('ship_gallery', base=(.004, .004, .006, 1), emit_tex=gal_png, rough=.12, metal=.2))
 
 set_mat(hull, simple('ship_hull', tex=hull_png, rough=.3, metal=.25))
 small_w = [o for o in g_small if mat_of(o) == 'ship_white']; small_p = [o for o in g_small if mat_of(o) == 'ship_pearl']
@@ -127,11 +131,11 @@ set_mat(fac, simple('ship_facade', base=(.006, .008, .012, 1), emit_tex=fac_png,
 # 其他材質:同材質合成一個物件
 groups = {}
 for o in rest:
-    if o in g_white or o in g_facade: continue
+    if o in g_white or o in g_facade or o in g_gal: continue
     try: o.name
     except ReferenceError: continue
     groups.setdefault(mat_of(o), []).append(o)
-merged = [hull, fac]
+merged = [hull, fac, gal]
 for mname, objs in groups.items():
     if not mname or not objs: continue
     merged.append(join(objs, 'ship_' + mname.replace('ship_', '')))

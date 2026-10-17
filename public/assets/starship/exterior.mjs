@@ -39,7 +39,7 @@ const plumeFS = `uniform float uTime, uK, uCore, uSeed; uniform vec3 uHot, uMid,
   float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + 1.), f.x), f.y); }
   void main(){
-    float fres = mix(.35, 1., pow(clamp(abs(dot(normalize(vN), normalize(vV))), 0., 1.), 1.6));   // 火焰中間最亮、邊緣淡掉;從正後方看(沿噴焰方向)也還看得到
+    float fres = mix(.3, 1., pow(clamp(abs(dot(normalize(vN), normalize(vV))), 0., 1.), 2.2));   // 火焰中間最亮、邊緣淡掉;從正後方看(沿噴焰方向)也還看得到
     float streak = n2(vec2(vA.x * 5. + uSeed, aT * 6. - uTime * 9.)) * .6 + n2(vec2(vA.x * 11. + uSeed * 3., aT * 14. - uTime * 15.)) * .4;
     float diamonds = (.5 + .5 * cos(aT * 38. - uTime * 2.)) * exp(-aT * 5.);                   // 震波鑽石:靠近噴口一圈圈的亮帶
     float fade = pow(clamp(1. - aT, 0., 1.), 1.7) * smoothstep(0., .04, aT + .02);
@@ -166,7 +166,7 @@ export function createExterior(scene, Q = {}) {
   const portal = new THREE.Mesh(new THREE.CircleGeometry(1.75, 64), new THREE.MeshBasicMaterial({ color: 0xfff4e4 }));
   let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
-  gl.load('/assets/starship/models/ship.glb?v=7', (gltf) => {
+  gl.load('/assets/starship/models/ship.glb?v=10', (gltf) => {
     const m = gltf.scene;
     m.traverse((o) => {
       if (!o.isMesh) return;
@@ -174,10 +174,12 @@ export function createExterior(scene, Q = {}) {
       const mt = o.material, n = mt.name || '';
       if (n === 'ship_glass') { o.material = new THREE.MeshPhysicalMaterial({ color: 0xdcecff, roughness: .05, metalness: 0, transparent: true, opacity: .2, envMapIntensity: 1.6, depthWrite: false }); o.castShadow = false; }
       else if (n === 'ship_vault') { o.material = new THREE.MeshPhysicalMaterial({ color: 0xbfdcff, roughness: .04, metalness: 0, clearcoat: 1, transparent: true, opacity: .16, envMapIntensity: .9, emissive: 0x1d3a5c, emissiveIntensity: .12, side: THREE.DoubleSide, depthWrite: false }); o.castShadow = false; o.renderOrder = 2; }   // 環臂花園的薄玻璃拱頂:看得出一層玻璃,樹還是透得過來
-      else if (n === 'ship_lounge') { mt.emissive.set(0xffc690); mt.emissiveIntensity = .38; mt.color.set(0x2a2018); }   // 觀景窗裡的內牆:暖暖的室內光,不要亮到看起來像白板
-      else if (n === 'ship_facade') { mt.emissive.set(0xffffff); mt.emissiveIntensity = 2.6; mt.envMapIntensity = 1.2; }
-      else if (/window|goldglow|blueglow/.test(n)) { o.castShadow = false; mt.emissiveIntensity = Math.min(mt.emissiveIntensity, /blue/.test(n) ? 1.6 : 3.2); }   // 燈條亮度上限,不然 bloom 糊成一團
-      else if (mt.isMeshStandardMaterial) mt.envMapIntensity = .6;
+      else if (n === 'ship_viewglass') { o.material = new THREE.MeshPhysicalMaterial({ color: 0xdcecff, roughness: .05, metalness: 0, transparent: true, opacity: .1, envMapIntensity: .45, depthWrite: false }); o.castShadow = false; }   // 觀景窗玻璃:反光壓低,看得到裡面
+      else if (/^ship_lounge/.test(n)) { mt.emissive.set(0xffc690); mt.emissiveIntensity = { ship_lounge: .24, ship_lounge_dim: .1, ship_lounge_dark: .025 }[n] ?? .1; mt.color.set(0x2a2018); }   // 觀景窗裡的內牆:一格亮、一格半亮、一格暗
+      else if (/^ship_facade/.test(n)) { mt.emissive.set(0xffffff); mt.emissiveIntensity = .7; mt.envMapIntensity = 1.2; }   /* 匯出後叫 ship_facade.001;貼圖最亮 = 1(暖色不爆白),亮度在這裡調 */
+      else if (/^ship_gallery/.test(n)) { mt.emissive.set(0xffffff); mt.emissiveIntensity = 1.6; mt.envMapIntensity = .8; o.castShadow = false; }   /* 環臂長廊窗:烘好的室內(天花燈、牆、剪影、窗框) */
+      else if (/window|goldglow|blueglow/.test(n)) { o.castShadow = false; mt.emissiveIntensity = Math.min(mt.emissiveIntensity, /blue/.test(n) ? 1.6 : /_dark/.test(n) ? 1 : /_dim/.test(n) ? .8 : 2.05); }   // 燈條 / 窗帶亮度上限(比之前暗約 35%,而且分亮、半亮、暗三種)
+      else if (mt.isMeshStandardMaterial) mt.envMapIntensity = .42;   // 環境反光少一點,背光面才夠暗
     });
     const bay = m.getObjectByName('ship_bay');
     if (bay) bay.traverse((o) => { if (o.isMesh) { const src = o.material; o.material = new THREE.MeshBasicMaterial({ map: src.map, toneMapped: false }); o.material.color.setScalar(1.22); src.dispose(); o.castShadow = false; o.receiveShadow = false; } });   // 光影烘在貼圖裡(機庫裡的燈)
@@ -241,13 +243,14 @@ export function createExterior(scene, Q = {}) {
   const flames = [];
   // 引擎在外環臂底下(tools/blender/ship_build.py 印出的 ENGINES:Blender (x, 噴口 y, z, 大小) → 這裡 (x, z, -y))
   const ENG_COLS = ['#f4fbff', '#5aa8ff', '#5b3cff'];
-  [[-5.516, -4.862, 41.023, .95], [0, -5.125, 41.7, 1.1], [5.516, -4.862, 41.023, .95]].forEach(([x, y, nz0, big], k) => {   // 掛在外環臂底下(環臂最後面是觀景窗)
-    const nz = nz0 + .05, rr = 1.05 * big, g = new THREE.Group(); g.position.set(x, y, nz); g.rotation.x = Math.PI / 2; ship.add(g);   // +y → 朝船尾(+z)
-    const outer = plume(rr, rr * 7.5, false, k * 3.1, ENG_COLS), core = plume(rr, rr * 3.6, true, k * 5.7, ['#ffffff', '#bfe2ff', '#5aa8ff']); g.add(outer, core);
+  [[-5.274, -4.047, 40.481, .807], [0, -4.228, 41.2, .935], [5.274, -4.047, 40.481, .807]].forEach(([x, y, nz0, s], k) => {   // 貼在外環臂下緣(環臂最後面是觀景窗)
+    const big = s / .85, nz = nz0 + .05, rr = .78 * s, g = new THREE.Group(); g.position.set(x, y, nz); g.rotation.x = Math.PI / 2; ship.add(g);   // +y → 朝船尾(+z);噴焰只比噴嘴中間那圈發光面大一點
+    const outer = plume(rr, rr * 5.2, false, k * 3.1, ENG_COLS), core = plume(rr, rr * 2.6, true, k * 5.7, ['#ffffff', '#cfe8ff', '#5aa8ff']); g.add(outer, core);
+    outer.material.uniforms.uCore.value = 1.05;                           // 外圈淡、中心亮
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: gl_, color: new THREE.Color(0x8fcfff).multiplyScalar(1.6), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-    halo.scale.setScalar(rr * 6); halo.position.set(x, y, nz + .3); ship.add(halo);
+    halo.scale.setScalar(rr * 4); halo.position.set(x, y, nz + .3); ship.add(halo);
     let light = null;
-    if (LIGHTS >= 2 || (LIGHTS === 1 && k === 1)) { light = new THREE.PointLight(0x6fb6ff, 0, 16 * big, 2); light.position.set(x, y, nz + 1.6); ship.add(light); }   // 噴焰真的照亮引擎座和環臂尾端
+    if (LIGHTS >= 2 || (LIGHTS === 1 && k === 1)) { light = new THREE.PointLight(0x6fb6ff, 0, 14 * big, 2); light.position.set(x, y - .4, nz + 2.6); ship.add(light); }   // 噴焰真的照亮引擎座和環臂尾端
     flames.push({ outer, core, halo, light, ph: r() * 6, big });
   });
 
@@ -274,8 +277,8 @@ export function createExterior(scene, Q = {}) {
   const sun = new THREE.DirectionalLight(0xfff1e0, 2.5); sun.position.set(40, 70, 10); sun.castShadow = true;
   sun.shadow.mapSize.set(Q.shadowSize || 2048, Q.shadowSize || 2048); Object.assign(sun.shadow.camera, { near: 10, far: 260, left: -60, right: 60, top: 60, bottom: -60 }); sun.shadow.bias = -.0006; sun.shadow.normalBias = .05;
   root.add(sun); root.add(sun.target);
-  const rim = new THREE.DirectionalLight(0x8fb6ff, 1.2); rim.position.set(-50, 10, -60); root.add(rim);
-  const bounce = new THREE.DirectionalLight(0x6f9cff, .55); bounce.position.set(0, -80, 0); root.add(bounce);
+  const rim = new THREE.DirectionalLight(0x8fb6ff, 1.5); rim.position.set(-50, 10, -60); root.add(rim);
+  const bounce = new THREE.DirectionalLight(0x6f9cff, .3); bounce.position.set(0, -80, 0); root.add(bounce);
   const planet = createPlanet(root, sun.position.clone().normalize());
 
   let hov = 0, loaded = false;
@@ -297,7 +300,7 @@ export function createExterior(scene, Q = {}) {
         for (const m of [f.outer, f.core]) { m.material.uniforms.uTime.value = t + f.ph; m.material.uniforms.uK.value = k; }
         f.outer.scale.y = .94 + (k - .9) * 1.2; f.core.scale.y = .96 + (k - .9) * .8;
         f.halo.material.opacity = .75 + (k - .9) * 2.4;
-        if (f.light) f.light.intensity = 60 * f.big * k;
+        if (f.light) f.light.intensity = 32 * f.big * k;
       }
       for (const b of blink) {
         if (b.kind === 'steady') { if (b.light) b.light.intensity = 5; continue; }

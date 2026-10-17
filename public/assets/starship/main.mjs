@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { quality, Q_SET } from './quality.mjs?v=3';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=28';
+import { createExterior } from './exterior.mjs?v=34';
 import { ROOMS, buildRoom } from './rooms.mjs?v=13';
 import { createHall, createCorridor } from './hall.mjs?v=84';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -114,7 +114,7 @@ function stepWarp(dt, w, lt, t) {
 
 // ---------- 戰艦外觀 ----------
 const extScene = new THREE.Scene(); extScene.environment = envTex;
-extScene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1830, .5));
+extScene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1830, .3));   /* 補光少一點:背光面要夠暗,船殼才有立體感 */
 const ext = createExterior(extScene, Q_SET);
 window.__shipHover = () => ({ door: mode === 'hall' ? hover : -1, hangar: hoverHangar, bot: hoverBot });   /* 給左上表情臉用 */
 window.__dbg = () => ({ ext, extCam, rtHall, rtCor, renderer, hallPortal, corCam, cor, hall, pCam }); window.__shipPose = () => ({ yaw: +ext.ship.rotation.y.toFixed(3), pitch: +ext.ship.rotation.x.toFixed(3) });   // 測試用
