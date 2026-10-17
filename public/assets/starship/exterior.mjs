@@ -66,8 +66,8 @@ function createPlanet(root, sunDir, Q = {}) {
         float night = smoothstep(-.02, -.2, nd);
         float city = smoothstep(.55, .75, snoise(vObj * 90.) * .5 + .5) * smoothstep(.08, .14, h) * night;
         c += vec3(1., .66, .32) * city * 1.4;
-        float fr = pow(1. - max(dot(N, V), 0.), 7.);                                       // 只在最邊緣一層大氣藍(從低軌道看大部分地面都是斜的,不能太強)
-        c = mix(c, vec3(.35,.6,1.) * (.15 + lit * .8), fr * .45);
+        float fr = pow(1. - max(dot(N, V), 0.), 6.);                                       // 很淡的一點邊緣藍(主要的大氣交給外面那層 atmo)
+        c = mix(c, vec3(.3,.55,.95) * (.1 + lit * .7), fr * .12);
         gl_FragColor = vec4(c, 1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -81,27 +81,42 @@ function createPlanet(root, sunDir, Q = {}) {
         vec3 p = vObj * 7.5 + vec3(uT * .01, 0., uT * .006);
         float d = fbm(p + fbm(p * .7, 2) * .6, ${O2});
         float a = smoothstep(.2, .45, d);
+        a *= smoothstep(.03, .25, dot(normalize(vN), normalize(cameraPosition - vW)));     // 越接近地平線(斜著看)雲越淡,不然會疊成一大片白霧
         float lit = clamp((dot(normalize(vN), uSun) + .1) / .9, 0., 1.);
         gl_FragColor = vec4(vec3(.96, .97, 1.) * (.06 + lit * .9), a * .85);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }` });
+  // 大氣:沿著視線算穿過一層薄薄的空氣有多少 → 天邊一條細細的亮藍光,往下看的地方只有很淡、透明的霧(不是一整圈厚厚的藍)
   const atmo = new THREE.ShaderMaterial({
-    uniforms: { uSun: { value: sunDir } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.BackSide,
+    uniforms: { uSun: { value: sunDir }, uC: { value: new THREE.Vector3() }, uR: { value: R } }, transparent: true, depthWrite: false,
     vertexShader: vs,
-    fragmentShader: `uniform vec3 uSun; varying vec3 vObj; varying vec3 vN; varying vec3 vW;
+    fragmentShader: `uniform vec3 uSun; uniform vec3 uC; uniform float uR; varying vec3 vObj; varying vec3 vN; varying vec3 vW;
       void main(){
-        vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
-        float rim = pow(clamp(1. - abs(dot(N, V)), 0., 1.), 2.2);
-        float day = clamp((dot(N, uSun) + .35) / .9, .05, 1.);
-        gl_FragColor = vec4(vec3(.36, .62, 1.) * rim * day * 1.6, 1.);
+        vec3 d = normalize(vW - cameraPosition), oc = uC - cameraPosition;
+        float tc = dot(oc, d), b = sqrt(max(dot(oc, oc) - tc * tc, 0.));             // 視線離星球中心最近的距離
+        float H = 14.;                                                            // 大氣厚度的尺度(星球半徑 2400,很薄)
+        vec3 blue = vec3(.33, .6, 1.), col; float a;
+        if (b > uR) {                                                             // 視線從地平線上方掠過:最近點越貼地越亮
+          vec3 pc = cameraPosition + d * tc, n = normalize(pc - uC);
+          float day = clamp(dot(n, uSun) * .8 + .45, .08, 1.);
+          float dens = exp(-(b - uR) / H);
+          col = mix(blue, vec3(.75, .88, 1.), dens * .6) * day; a = clamp(dens * 1.15, 0., 1.) * .85;
+        } else {                                                                  // 視線打到地面:越斜霧越多,但保持透明
+          float th = tc - sqrt(uR * uR - b * b); vec3 hp = cameraPosition + d * th, n = normalize(hp - uC);
+          float mu = max(dot(n, -d), 0.), day = clamp(dot(n, uSun) * .8 + .4, .06, 1.);
+          col = blue * day; a = exp(-mu * 9.) * .38;
+        }
+        gl_FragColor = vec4(col, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }` });
   const geo = new THREE.SphereGeometry(R, SEG, SEG / 2);
   const ground = new THREE.Mesh(geo, surface); g.add(ground);
   const cl = new THREE.Mesh(new THREE.SphereGeometry(R * 1.004, SEG * .75, SEG * .375), clouds); g.add(cl);
-  const at = new THREE.Mesh(new THREE.SphereGeometry(R * 1.045, 128, 64), atmo); g.add(at);
+  const at = new THREE.Mesh(new THREE.SphereGeometry(R * 1.03, 160, 80), atmo); g.add(at); at.renderOrder = 2;
   g.rotation.set(1.45, 0, .3);                                                   // 轉一下:從軌道上看下去是赤道附近(不是一整片極地冰帽)
-  return { group: g, update(t) { ground.rotation.y = t * .0025; cl.rotation.y = t * .0032; clouds.uniforms.uT.value = t; } };
+  return { group: g, update(t) { g.getWorldPosition(atmo.uniforms.uC.value); ground.rotation.y = t * .0025; cl.rotation.y = t * .0032; clouds.uniforms.uT.value = t; } };
 }
 
 export function createExterior(scene, Q = {}) {
