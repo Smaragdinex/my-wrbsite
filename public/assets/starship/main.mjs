@@ -3,7 +3,7 @@
 //   ship 狀態 → 自己的流程:外觀(慢慢轉、可拖曳,點機庫口)→ 穿過機庫和通道 → 中央大廳(六道艙門)
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
-import { quality, Q_SET } from './quality.mjs?v=1';
+import { quality, Q_SET } from './quality.mjs?v=2';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=24';
 import { ROOMS, buildRoom } from './rooms.mjs?v=13';
@@ -61,7 +61,7 @@ function stepSky(dt, t, meteorsOn = true) {
 
 // ---------- 超空間跳躍(像《星際大戰》):①前方的星星拉長成放射狀的光線 ②藍白色的光隧道 ③光線縮回成星點、白光、抵達 ----------
 const warpScene = new THREE.Scene(), warpCam = new THREE.PerspectiveCamera(70, 1, .1, 600);
-const WN = 1600, wData = [], wPos = new Float32Array(WN * 6), wCol = new Float32Array(WN * 6);
+const WN = Q_SET.warpN || 1600, wData = []   /* 星線數依顯示卡分級(quality.mjs) */, wPos = new Float32Array(WN * 6), wCol = new Float32Array(WN * 6);
 for (let k = 0; k < WN; k++) { const a = Math.random() * Math.PI * 2, r = 1.5 + Math.pow(Math.random(), .5) * 45; wData.push({ x: Math.cos(a) * r, y: Math.sin(a) * r, z: -20 - Math.random() * 380 });
   const c = Math.random() < .3 ? [.65, .82, 1] : [1, 1, 1]; wCol.set([...c, ...c.map((v) => v * .15)], k * 6); }
 const wGeo = new THREE.BufferGeometry(); wGeo.setAttribute('position', new THREE.BufferAttribute(wPos, 3)); wGeo.setAttribute('color', new THREE.BufferAttribute(wCol, 3));
@@ -83,8 +83,15 @@ const tunMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, 
       float far = smoothstep(.0, .25, vUv.y), near = smoothstep(1.0, .8, vUv.y);
       gl_FragColor = vec4(col * (.4 + streak * 1.9), uOp * far * near * (.45 + streak * .55));
     }` });
-const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, TUN_L, 64, 1, true), tunMat);
+const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, TUN_L, Q_SET.tunSeg || 64, 1, true), tunMat);
 tunnel.rotation.x = Math.PI / 2; tunnel.position.z = -TUN_L / 2 + 15; warpScene.add(tunnel);
+// 高階顯示卡:外面再一層比較慢、偏紫的光紋(有景深,像《星際大戰》光速時的多層光)
+let tunnel2 = null;
+if (Q_SET.tun2) {
+  const m2 = tunMat.clone(); m2.uniforms = { uTime: { value: 0 }, uOp: { value: 0 } };
+  m2.fragmentShader = tunMat.fragmentShader.replace('vUv.x * 72.0', 'vUv.x * 48.0').replace('uTime * (2.2 + r * 2.5)', 'uTime * (1.1 + r * 1.3)').replace('vec3(.18, .38, 1.0), vec3(.85, .95, 1.0)', 'vec3(.32, .22, .9), vec3(.8, .78, 1.0)');
+  tunnel2 = new THREE.Mesh(new THREE.CylinderGeometry(13, 13, TUN_L, 96, 1, true), m2); tunnel2.rotation.x = Math.PI / 2; tunnel2.position.z = -TUN_L / 2 + 15; warpScene.add(tunnel2);
+}
 const coreTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
   gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.25, 'rgba(170,210,255,.7)'); gr.addColorStop(1, 'rgba(60,110,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })();
 const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: coreTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
@@ -98,9 +105,10 @@ function stepWarp(dt, w, lt, t) {
   wGeo.attributes.position.needsUpdate = true;
   wMat.opacity = w * (1 - tun * .88);
   tunMat.uniforms.uTime.value = t; tunMat.uniforms.uOp.value = tun * w;
+  if (tunnel2) { tunnel2.material.uniforms.uTime.value = t; tunnel2.material.uniforms.uOp.value = tun * w * .55; tunnel2.rotation.y = -t * .05; }
   core.material.opacity = tun * .7 * w; core.scale.setScalar(80 + Math.sin(t * 9) * 5);
   warpCam.rotation.z += dt * tun * .25;                                  // 隧道裡鏡頭慢慢旋轉
-  warpCam.position.set((Math.random() - .5) * .06 * tun, (Math.random() - .5) * .06 * tun, 0);   // 微微震動
+  const sh = Q_SET.shake ? .06 * tun : 0; warpCam.position.set((Math.random() - .5) * sh, (Math.random() - .5) * sh, 0);   // 微微震動(低階不震,省得暈)
 }
 
 // ---------- 戰艦外觀 ----------

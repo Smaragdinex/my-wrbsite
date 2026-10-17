@@ -4,7 +4,7 @@
 // 8 種狀態(依網站上發生的事自動切換,優先順序由上往下):
 //   錯誤  error   :生氣臉 + 變紅 + 頭上一個生氣符號(模型載入失敗、或短時間來回滾很多次)
 //   驚訝  surprise:眼睛放大 + 「!」線(點臉、點機庫口 / 艙門、讀條快速往下滑)
-//   載入中 loading :圓圈眼轉圈(讀條滿了在等戰艦模型)
+//   載入中 loading :圓圈眼轉圈(在光隧道裡等戰艦模型載好)
 //   播放中 playing :笑 + 音符往上飄(超空間跳躍、進艦 / 換艙的動畫)
 //   開心  happy   :^ ^ 眼 + 腮紅短線 + 大笑(滑鼠靠近頭盔、指到機庫口 / 艙門 / 機器人)
 //   睡眠  sleep   :閉眼 + zzz(25 秒沒動;一動就驚醒)
@@ -108,7 +108,7 @@ if (host) {
   function baseState(now) {
     if (window.__siteError) return 'error';
     const xp = window.__xp, gp = document.getElementById('gatePct');
-    if (gp && /LOADING/.test(gp.textContent) && xp?.state === 'gate') return 'loading';
+    if (xp?.hold) return 'loading';                                 // 光隧道裡等戰艦模型載好
     if (xp?.state === 'gate' && xp.charge > .12) return 'surprise';
     const mode = window.__shipState?.mode;
     if (xp?.state === 'launch' || /^(enter|toRoom|toHall|exit)$/.test(mode || '')) return 'playing';

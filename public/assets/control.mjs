@@ -1,7 +1,8 @@
 // 首頁的捲動控制(自己接手滾輪/觸控/鍵盤,頁面本身不捲):
 //   open   :往下滑 → X 停在畫面上打開(進度跟著手)
-//   gate   :X 打開到底後鎖住,出現讀條 —— 要夠快、連續地往下滑才會漲,一停就慢慢掉回去,滿了才出發
-//   launch :自動播放 —— 顆粒自己化開 → 星際穿越(光速星線)→ 太空梭從遠方飛進來
+//   gate   :X 打開到底後鎖住,出現讀條(超空間引擎充能)—— 要夠快、連續地往下滑才會漲,一停就慢慢掉回去,滿了立刻出發
+//   launch :自動播放 —— 顆粒自己化開 → 星際穿越(光速星線 → 光隧道)→ 太空梭從遠方飛進來
+//            載入就在光隧道裡:戰艦模型還沒載好就一直待在隧道裡(HOLD),載好才跳出(電腦快就跟原本一樣,不用等)
 //   ship   :一頁一頁:0 = 戰艦外觀、1~5 = 艦內五間房;一次滑動換一頁(換頁中鎖住一下,才不會一次跳好幾間)
 // 其他模組每幀讀 window.__xp(open / dissolve / warp / fadeBg / ship / tour)
 const XP = window.__xp = { state: 'open', open: 0, dissolve: 0, warp: 0, fadeBg: 0, ship: 0, tour: 0, charge: 0, flash: 0 };
@@ -14,9 +15,9 @@ const DECAY = 0.42;            // 讀條每秒往回掉多少
 // 手機:一次滑動只有一個螢幕高,手指抬起再放下中間又會掉 → 每滑一次漲比較多(約 3 下滿)、手指按著不掉、放開後等一下才慢慢掉
 const TOUCH_CHARGE = 1 / 1.9;   // 每滑「一個螢幕高」漲多少
 const TOUCH_GRACE = 700, TOUCH_DECAY = 0.2;
-const LAUNCH_SEC = 9.0;
+const LAUNCH_SEC = 9.0, HOLD = 4.6;   // HOLD:光隧道正中間,模型沒載好就停在這一刻(隧道本身繼續流動)
 
-let waitShip = false, vOpen = 0, vTour = 0, launchT = 0, lastInput = 0, pageAcc = 0, pageLock = 0, touching = false, lastTouch = -1e9;
+let vOpen = 0, vTour = 0, launchT = 0, lastInput = 0, pageAcc = 0, pageLock = 0, touching = false, lastTouch = -1e9;
 const ui = { gate: document.getElementById('gate'), fill: document.getElementById('gateFill'), pct: document.getElementById('gatePct') };
 
 // 戰艦階段的換頁 / 回上一層交給 starship/main.mjs(window.__shipNav):kind 'v' 上下、'h' 左右、'back' 回上一層;
@@ -35,11 +36,10 @@ function input(dyPx, touch = false, axis = 'v') {          // dyPx > 0 = 往下�
     vOpen = Math.max(0, vOpen + dyPx / vh);
     if (vOpen >= OPEN_LEN) { vOpen = OPEN_LEN; XP.state = 'gate'; }
   } else if (XP.state === 'gate') {
-    if (dyPx < 0) waitShip = false;                                        // 等戰艦時往上滑 = 取消
     if (dyPx > 0) XP.charge = Math.min(1, XP.charge + dyPx * cpp);
     else if (XP.charge <= 0.001) { XP.state = 'open'; vOpen = Math.max(0, OPEN_LEN + dyPx / vh); }   // 讀條空的時候往上滑 = 退回去把 X 合起來
     else XP.charge = Math.max(0, XP.charge + dyPx * cpp);
-    if (XP.charge >= 1) { XP.charge = 1; waitShip = true; }                // 讀條滿了:戰艦模型載好就出發(tick 裡檢查)
+    if (XP.charge >= 1) { XP.charge = 1; XP.state = 'launch'; launchT = 0; }   // 讀條滿了:立刻跳(載入在光隧道裡等)
   } else if (XP.state === 'ship') {
     const now = performance.now();
     if (now < pageLock) return;
@@ -67,19 +67,24 @@ addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); nav('back'); }
 });
 
+const hud = Object.assign(document.createElement('div'), { id: 'jumpHud' });
+hud.style.cssText = 'position:fixed;left:0;right:0;bottom:calc(9vh + env(safe-area-inset-bottom,0px));text-align:center;z-index:6;pointer-events:none;opacity:0;font:600 11px/1 "Helvetica Neue",Arial,sans-serif;letter-spacing:.42em;color:rgba(200,225,255,.85);text-shadow:0 0 12px rgba(120,170,255,.8)';
+document.body.appendChild(hud); let holdA = 0;
 let prev = performance.now();
 function tick(now) {
   const dt = Math.min(.05, (now - prev) / 1000); prev = now;
   const shipOk = () => { try { return !!window.__shipReady?.(); } catch { return false; } };
-  if (waitShip && XP.state === 'gate' && shipOk()) { waitShip = false; XP.state = 'launch'; launchT = 0; }
-  if (XP.state === 'gate' && !waitShip) {                                                // 停手就慢慢掉
+  if (XP.state === 'gate') {                                                // 停手就慢慢掉
     const byTouch = now - lastTouch < 4000;
     if (byTouch) { if (!touching && now - lastTouch > TOUCH_GRACE) XP.charge = Math.max(0, XP.charge - TOUCH_DECAY * dt); }
     else if (now - lastInput > 90) XP.charge = Math.max(0, XP.charge - DECAY * dt);
   }
   if (now - lastInput > 250) pageAcc = 0;
+  XP.hold = false;
   if (XP.state === 'launch') {
-    launchT += dt;
+    const ready = shipOk();
+    launchT = ready ? launchT + dt : Math.min(launchT + dt, Math.max(launchT, HOLD));   // 沒載好:最多走到 HOLD 就停住
+    XP.hold = !ready && launchT >= HOLD;
     const s = launchT;
     XP.dissolve = ease(seg(s, 0, 2.8));                        // 0~2.8 秒:顆粒化開
     XP.warp = ease(seg(s, 2.0, 2.4)) * (1 - ease(seg(s, 6.6, 7.3)));   // 2~7.3 秒:超空間跳躍(星星拉長 → 光隧道 → 跳出)
@@ -96,7 +101,11 @@ function tick(now) {
   const g = XP.state === 'gate' || (XP.state === 'launch' && launchT < .5);
   ui.gate.classList.toggle('on', g);
   ui.fill.style.transform = `scaleX(${XP.charge.toFixed(3)})`;
-  ui.pct.textContent = waitShip && XP.state === 'gate' ? `LOADING SHIP ${Math.round((window.__shipProgress?.() || 0) * 100)}%` : Math.round(XP.charge * 100) + '%';
+  ui.pct.textContent = Math.round(XP.charge * 100) + '%';
+  // 光隧道裡等載入:下方一行小字(像星艦的導航讀數)
+  holdA += ((XP.hold ? 1 : 0) - holdA) * Math.min(1, dt * 3);
+  hud.style.opacity = holdA.toFixed(3);
+  if (XP.hold) hud.textContent = `HYPERSPACE  ·  ${Math.round((window.__shipProgress?.() || 0) * 100)}%`;
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);

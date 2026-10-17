@@ -62,11 +62,11 @@ function detect() {
 }
 
 const Q = window.__quality = detect();
-// 每一級的設定(main.mjs / exterior.mjs / hall.mjs 讀這裡)
+// 每一級的設定(main.mjs / exterior.mjs / hall.mjs 讀這裡);warpN / tunSeg / tun2 / shake = 超空間跳躍的星線數、隧道細緻度、外層第二道隧道、鏡頭震動
 const SETTINGS = {
-  high:   { dprMax: 2,   bloom: true,  shadows: true,  shadowSize: 2048, planetOct: [6, 5], planetSeg: 256, mirror: true,  hallBloom: true },
-  medium: { dprMax: 1.5, bloom: true,  shadows: true,  shadowSize: 1024, planetOct: [4, 4], planetSeg: 160, mirror: true,  hallBloom: true },
-  low:    { dprMax: 1,   bloom: false, shadows: false, shadowSize: 512,  planetOct: [3, 3], planetSeg: 96,  mirror: false, hallBloom: false },
+  high:   { dprMax: 2,   bloom: true,  shadows: true,  shadowSize: 2048, planetOct: [6, 5], planetSeg: 256, mirror: true,  hallBloom: true,  warpN: 2600, tunSeg: 96, tun2: true,  shake: true },
+  medium: { dprMax: 1.5, bloom: true,  shadows: true,  shadowSize: 1024, planetOct: [4, 4], planetSeg: 160, mirror: true,  hallBloom: true,  warpN: 1500, tunSeg: 64, tun2: false, shake: true },
+  low:    { dprMax: 1,   bloom: false, shadows: false, shadowSize: 512,  planetOct: [3, 3], planetSeg: 96,  mirror: false, hallBloom: false, warpN: 650,  tunSeg: 28, tun2: false, shake: false },
 };
 export const quality = Q;
 export const Q_SET = SETTINGS[Q.tier];
