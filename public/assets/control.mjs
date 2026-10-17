@@ -16,7 +16,7 @@ const TOUCH_CHARGE = 1 / 1.9;   // 每滑「一個螢幕高」漲多少
 const TOUCH_GRACE = 700, TOUCH_DECAY = 0.2;
 const LAUNCH_SEC = 9.0;
 
-let vOpen = 0, vTour = 0, launchT = 0, lastInput = 0, pageAcc = 0, pageLock = 0, touching = false, lastTouch = -1e9;
+let waitShip = false, vOpen = 0, vTour = 0, launchT = 0, lastInput = 0, pageAcc = 0, pageLock = 0, touching = false, lastTouch = -1e9;
 const ui = { gate: document.getElementById('gate'), fill: document.getElementById('gateFill'), pct: document.getElementById('gatePct') };
 
 // 戰艦階段的換頁 / 回上一層交給 starship/main.mjs(window.__shipNav):kind 'v' 上下、'h' 左右、'back' 回上一層;
@@ -35,10 +35,11 @@ function input(dyPx, touch = false, axis = 'v') {          // dyPx > 0 = 往下�
     vOpen = Math.max(0, vOpen + dyPx / vh);
     if (vOpen >= OPEN_LEN) { vOpen = OPEN_LEN; XP.state = 'gate'; }
   } else if (XP.state === 'gate') {
+    if (dyPx < 0) waitShip = false;                                        // 等戰艦時往上滑 = 取消
     if (dyPx > 0) XP.charge = Math.min(1, XP.charge + dyPx * cpp);
     else if (XP.charge <= 0.001) { XP.state = 'open'; vOpen = Math.max(0, OPEN_LEN + dyPx / vh); }   // 讀條空的時候往上滑 = 退回去把 X 合起來
     else XP.charge = Math.max(0, XP.charge + dyPx * cpp);
-    if (XP.charge >= 1) { XP.state = 'launch'; launchT = 0; }
+    if (XP.charge >= 1) { XP.charge = 1; waitShip = true; }                // 讀條滿了:戰艦模型載好就出發(tick 裡檢查)
   } else if (XP.state === 'ship') {
     const now = performance.now();
     if (now < pageLock) return;
@@ -69,7 +70,9 @@ addEventListener('keydown', (e) => {
 let prev = performance.now();
 function tick(now) {
   const dt = Math.min(.05, (now - prev) / 1000); prev = now;
-  if (XP.state === 'gate') {                                                            // 停手就慢慢掉
+  const shipOk = () => { try { return !!window.__shipReady?.(); } catch { return false; } };
+  if (waitShip && XP.state === 'gate' && shipOk()) { waitShip = false; XP.state = 'launch'; launchT = 0; }
+  if (XP.state === 'gate' && !waitShip) {                                                // 停手就慢慢掉
     const byTouch = now - lastTouch < 4000;
     if (byTouch) { if (!touching && now - lastTouch > TOUCH_GRACE) XP.charge = Math.max(0, XP.charge - TOUCH_DECAY * dt); }
     else if (now - lastInput > 90) XP.charge = Math.max(0, XP.charge - DECAY * dt);
@@ -93,7 +96,7 @@ function tick(now) {
   const g = XP.state === 'gate' || (XP.state === 'launch' && launchT < .5);
   ui.gate.classList.toggle('on', g);
   ui.fill.style.transform = `scaleX(${XP.charge.toFixed(3)})`;
-  ui.pct.textContent = Math.round(XP.charge * 100) + '%';
+  ui.pct.textContent = waitShip && XP.state === 'gate' ? `LOADING SHIP ${Math.round((window.__shipProgress?.() || 0) * 100)}%` : Math.round(XP.charge * 100) + '%';
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);

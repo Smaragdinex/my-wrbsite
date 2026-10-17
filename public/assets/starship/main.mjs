@@ -3,10 +3,11 @@
 //   ship 狀態 → 自己的流程:外觀(慢慢轉、可拖曳,點機庫口)→ 穿過機庫和通道 → 中央大廳(六道艙門)
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
+import { quality, Q_SET } from './quality.mjs?v=1';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=16';
+import { createExterior } from './exterior.mjs?v=17';
 import { ROOMS, buildRoom } from './rooms.mjs?v=6';
-import { createHall, createCorridor } from './hall.mjs?v=74';
+import { createHall, createCorridor } from './hall.mjs?v=76';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -15,9 +16,9 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { sfx } from './sfx.mjs?v=3';
 
 const canvas = document.getElementById('ship');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.tier !== 'low', alpha: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, Q_SET.dprMax));          // 畫質分級(quality.mjs):high 2x、medium 1.5x、low 1x
+renderer.shadowMap.enabled = Q_SET.shadows; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 renderer.autoClear = false;
@@ -105,13 +106,14 @@ function stepWarp(dt, w, lt, t) {
 // ---------- 戰艦外觀 ----------
 const extScene = new THREE.Scene(); extScene.environment = envTex;
 extScene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1830, .5));
-const ext = createExterior(extScene);
+const ext = createExterior(extScene, Q_SET);
+window.__shipReady = () => ext.loaded || ext.failed; window.__shipProgress = () => ext.progress;   // control.mjs 的讀條等戰艦模型載好才出發
 const extCam = new THREE.PerspectiveCamera(38, 1, .5, 6000);           // 遠平面要看得到底下那顆大星球
 const extComposer = new EffectComposer(renderer);                      // 外觀也加光暈:上千個小窗、環臂長廊、艦首大環的金光
 const skyPass = new RenderPass(skyScene, skyCam), warpPass = new RenderPass(warpScene, warpCam), extPass = new RenderPass(extScene, extCam);   // 星空、(還在收尾的)超空間、戰艦疊在一起再加光暈
 warpPass.clear = false; warpPass.clearDepth = true; extPass.clear = false; extPass.clearDepth = true;
 for (const ps of [skyPass, warpPass, extPass]) extComposer.addPass(ps);
-extComposer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .35, .35, 2.2));   // 門檻高:只有窗戶、燈條會發光,被太陽照亮的白色艦身不會糊掉
+const extBloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .35, .35, 2.2); extBloom.enabled = Q_SET.bloom; extComposer.addPass(extBloom);   // 門檻高:只有窗戶、燈條會發光,被太陽照亮的白色艦身不會糊掉
 extComposer.addPass(new OutputPass());
 
 // ---------- 機庫 → 通道 ----------
@@ -125,14 +127,14 @@ const FINISH = { uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying
       c.rgb *= mix(1.0, .8, smoothstep(.42, .95, d)); c.rgb = mix(c.rgb, c.rgb * c.rgb * (3.0 - 2.0 * c.rgb), .18); gl_FragColor = c; }` };
 const corComposer = new EffectComposer(renderer);                      // 通道跟大廳一樣有燈條光暈
 corComposer.addPass(new RenderPass(corScene, corCam));
-corComposer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .4, .5, 1.15));
+const corBloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .4, .5, 1.15); corBloom.enabled = Q_SET.bloom; corComposer.addPass(corBloom);
 corComposer.addPass(new OutputPass());
 corComposer.addPass(new ShaderPass(FINISH));
 
 // ---------- 作品艙(一次只畫一間)----------
 const roomScene = new THREE.Scene(); roomScene.environment = envTex;
 roomScene.add(new THREE.HemisphereLight(0xffe4f2, 0x3c3a78, .6));
-const key = new THREE.DirectionalLight(0xfff0e0, 1.35); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+const key = new THREE.DirectionalLight(0xfff0e0, 1.35); key.castShadow = true; key.shadow.mapSize.set(Q_SET.shadowSize, Q_SET.shadowSize);
 Object.assign(key.shadow.camera, { near: 1, far: 40, left: -7, right: 7, top: 7, bottom: -7 }); key.shadow.bias = -.0015; key.shadow.normalBias = .06;
 roomScene.add(key); roomScene.add(key.target);
 const fill = new THREE.DirectionalLight(0xc9b4ff, .35); fill.position.set(-6, 5, 6); roomScene.add(fill);
@@ -147,12 +149,13 @@ hallScene.add(new THREE.HemisphereLight(0xfff8ee, 0x8a8478, .3));
 const hkey = new THREE.DirectionalLight(0xfff4e8, .45); hkey.position.set(5, 16, 6); hkey.castShadow = false;   // 陰影交給天窗的聚光燈,這盞只補光 hkey.shadow.mapSize.set(2048, 2048);
 Object.assign(hkey.shadow.camera, { near: 1, far: 50, left: -10, right: 10, top: 10, bottom: -10 }); hkey.shadow.bias = -.0015; hkey.shadow.normalBias = .06;
 hallScene.add(hkey);
-const hall = createHall(hallScene, ROOMS); hall.root.updateMatrixWorld(true);
+const hall = createHall(hallScene, ROOMS, { mirror: Q_SET.mirror, after: ext.ready }); hall.root.updateMatrixWorld(true);
 const hallCam = new THREE.PerspectiveCamera(56, 1, .1, 200);
 // 大廳另外走後製:暖白燈條、地球儀會有柔和的光暈(bloom)
 const hallComposer = new EffectComposer(renderer);
 hallComposer.addPass(new RenderPass(hallScene, hallCam));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .4, .5, 1.15);   // 門檻高:只有燈條 / 投影會發光,白牆不會 hallComposer.addPass(bloom);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .18, .3, 1.6);   // 很淡、門檻高:只有最亮的燈條 / 投影有一點光暈,白牆和門框保持乾淨
+bloom.enabled = Q_SET.hallBloom; hallComposer.addPass(bloom);
 hallComposer.addPass(new OutputPass());
 hallComposer.addPass(new ShaderPass(FINISH));
 
@@ -237,7 +240,9 @@ function restore() { try {
 } catch {} }
 // 效能數據(測試用):每幀的 draw call、三角形數、記憶體裡的幾何 / 貼圖數
 renderer.info.autoReset = false; let lastInfo = null;
-const perf = { acc: 0, n: 0, i: 0, levels: [...new Set([Math.min(devicePixelRatio, 2), 1.5, 1.25, 1].filter((v) => v <= Math.min(devicePixelRatio, 2)))] };
+const DPR0 = Math.min(devicePixelRatio, Q_SET.dprMax), perf = { acc: 0, n: 0, i: 0, slow: 0, levels: [...new Set([DPR0, 1.5, 1.25, 1].filter((v) => v <= DPR0))] };
+// 解析度已經降到最低還是卡:關掉光暈(等於降到 low)
+function dropToLow() { if (quality.tier === 'low') return; quality.tier = 'low'; quality.why += ', runtime'; extBloom.enabled = corBloom.enabled = bloom.enabled = false; console.info('[quality] runtime → low'); }
 window.__shipInfo = () => lastInfo;
 window.__ship = { enter: enterShip, toRoom, slideTo, nav, jump(m, i = 0) { cur = roomF = fromDoor = i; go(m, { room: i }); t0 = -99; } };
 
@@ -368,7 +373,7 @@ function frame() {
   flashEl.style.opacity = (XP.flash || 0).toFixed(3);
 
   // 自動降解析度:畫面上有東西時,最近 90 幀平均慢於 ~42fps 就降一級(2 → 1.5 → 1.25 → 1);只降不升,避免來回跳
-  if (appear > .9) { perf.acc += dt; if (++perf.n >= 90) { if (perf.acc / perf.n > 1 / 42 && perf.i < perf.levels.length - 1) { renderer.setPixelRatio(perf.levels[++perf.i]); resize(); } perf.acc = perf.n = 0; } }
+  if (appear > .9) { perf.acc += dt; if (++perf.n >= 90) { if (perf.acc / perf.n > 1 / 42) { if (perf.i < perf.levels.length - 1) { renderer.setPixelRatio(perf.levels[++perf.i]); resize(); } else if (++perf.slow >= 2) dropToLow(); } perf.acc = perf.n = 0; } }
   if (renderer.info.render.frame) lastInfo = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, texs: renderer.info.memory.textures, dpr: renderer.getPixelRatio() };
   renderer.info.reset();
   renderer.clear();

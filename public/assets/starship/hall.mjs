@@ -159,7 +159,7 @@ function signTex(room, i) {
 const enterTex = () => canvasTex(512, 96, (g, W, H) => { g.fillStyle = '#1d2440'; g.beginPath(); g.roundRect(4, 8, W - 8, H - 16, (H - 16) / 2); g.fill();
   g.fillStyle = '#e8f6ff'; g.font = '500 36px "SF Mono", Menlo, monospace'; g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText('ENTER PROJECT →', W / 2, H / 2 + 1); });
 
-export function createHall(scene, rooms) {
+export function createHall(scene, rooms, opts = {}) {
   const root = new THREE.Group(); scene.add(root);
   const arch = new THREE.Group(); root.add(arch);   // 建築(地板、牆、柱、門框、展示艙、天花板…):烘焙好的模型載入後整組換掉;互動的東西留在 root
   scene.background = new THREE.Color(0x0a0c14);
@@ -178,7 +178,7 @@ export function createHall(scene, rooms) {
   const dpr = Math.min(devicePixelRatio, 2), small = innerWidth < 700;
   // 反射用低解析度 → 倒影自然變柔(像拋光石材,不是鏡子),也省效能;手機不做反射
   let mirror = null;
-  if (!small) { mirror = new Reflector(new THREE.CircleGeometry(HALL_R + .5, 96), { clipBias: .003, color: 0x555555,
+  if (!small && opts.mirror !== false) { mirror = new Reflector(new THREE.CircleGeometry(HALL_R + .5, 96), { clipBias: .003, color: 0x555555,
     textureWidth: innerWidth * dpr * .28, textureHeight: innerHeight * dpr * .28 });
     mirror.rotation.x = -Math.PI / 2; mirror.renderOrder = -3; root.add(mirror); }
   // 地磚:同心圓分圈 + 放射狀接縫(外圈分得越細),每塊磚的白有一點點差異;接縫微凹(bump)、比磚面粗一點(roughness)
@@ -555,7 +555,8 @@ export function createHall(scene, rooms) {
     led.material = ledRing.material; chev.material = frame.material = lightM; chev.userData.flash = true; eyes.push(chev); botChev = chev;
     botModel.add(body, led, chev, frame, botRoller);
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
-  Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=14'), loadGLB('/assets/starship/models/hall_props.glb?v=14')]).then(([hallM, propsM]) => {
+  // 先讓戰艦模型下載完(第一眼看到的是戰艦、頻寬不要互搶),大廳的模型再接著載;保險起見最多等 20 秒
+  Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=14'), loadGLB('/assets/starship/models/hall_props.glb?v=14')])).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光

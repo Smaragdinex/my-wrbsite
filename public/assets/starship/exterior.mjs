@@ -39,7 +39,8 @@ float snoise(vec3 v){ const vec2 C=vec2(1./6.,1./3.); const vec4 D=vec4(0.,.5,1.
   vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.); m=m*m;
   return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3))); }
 float fbm(vec3 p, int oct){ float s=0., a=.5; for(int i=0;i<8;i++){ if(i>=oct) break; s+=a*snoise(p); p*=2.03; a*=.5; } return s; }`;
-function createPlanet(root, sunDir) {
+function createPlanet(root, sunDir, Q = {}) {
+  const [O1, O2] = Q.planetOct || [6, 5], SEG = Q.planetSeg || 256;   // 畫質分級:雜訊層數、球的細分
   const R = 2400, g = new THREE.Group(); g.position.set(0, -2650, 0); root.add(g);
   const vs = `varying vec3 vObj; varying vec3 vN; varying vec3 vW;
     void main(){ vObj = normalize(position); vN = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
@@ -50,7 +51,7 @@ function createPlanet(root, sunDir) {
       uniform vec3 uSun; varying vec3 vObj; varying vec3 vN; varying vec3 vW;
       void main(){
         vec3 p = vObj * 4.2;
-        float h = fbm(p + vec3(3.1, 7.7, 1.3), 6) + .12 * fbm(p * 6.0, 2);
+        float h = fbm(p + vec3(3.1, 7.7, 1.3), ${O1}) + .12 * fbm(p * 6.0, 2);
         float land = smoothstep(.02, .06, h);
         vec3 deep = vec3(.012,.07,.2), shallow = vec3(.05,.27,.46), sand = vec3(.72,.66,.47), green = vec3(.2,.32,.13), dry = vec3(.4,.33,.21), rock = vec3(.66,.63,.57);
         vec3 ocean = mix(deep, shallow, smoothstep(-.25, .03, h));
@@ -78,7 +79,7 @@ function createPlanet(root, sunDir) {
       uniform vec3 uSun; uniform float uT; varying vec3 vObj; varying vec3 vN; varying vec3 vW;
       void main(){
         vec3 p = vObj * 7.5 + vec3(uT * .01, 0., uT * .006);
-        float d = fbm(p + fbm(p * .7, 2) * .6, 5);
+        float d = fbm(p + fbm(p * .7, 2) * .6, ${O2});
         float a = smoothstep(.2, .45, d);
         float lit = clamp((dot(normalize(vN), uSun) + .1) / .9, 0., 1.);
         gl_FragColor = vec4(vec3(.96, .97, 1.) * (.06 + lit * .9), a * .85);
@@ -95,15 +96,15 @@ function createPlanet(root, sunDir) {
         float day = clamp((dot(N, uSun) + .35) / .9, .05, 1.);
         gl_FragColor = vec4(vec3(.36, .62, 1.) * rim * day * 1.6, 1.);
       }` });
-  const geo = new THREE.SphereGeometry(R, 256, 128);
+  const geo = new THREE.SphereGeometry(R, SEG, SEG / 2);
   const ground = new THREE.Mesh(geo, surface); g.add(ground);
-  const cl = new THREE.Mesh(new THREE.SphereGeometry(R * 1.004, 192, 96), clouds); g.add(cl);
+  const cl = new THREE.Mesh(new THREE.SphereGeometry(R * 1.004, SEG * .75, SEG * .375), clouds); g.add(cl);
   const at = new THREE.Mesh(new THREE.SphereGeometry(R * 1.045, 128, 64), atmo); g.add(at);
   g.rotation.set(1.45, 0, .3);                                                   // 轉一下:從軌道上看下去是赤道附近(不是一整片極地冰帽)
   return { group: g, update(t) { ground.rotation.y = t * .0025; cl.rotation.y = t * .0032; clouds.uniforms.uT.value = t; } };
 }
 
-export function createExterior(scene) {
+export function createExterior(scene, Q = {}) {
   const root = new THREE.Group(); scene.add(root);
   const ship = new THREE.Group(); root.add(ship); ship.visible = false;           // 模型載入完才顯示(那時候飛船還在超空間裡,看不到空檔)
   const r = rand(7), BLUE = 0x5fb4ff, ORANGE = 0xffb25e;
@@ -114,6 +115,7 @@ export function createExterior(scene) {
 
   // 1) Blender 模型
   const escorts = [], airlock = [];
+  let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
   gl.load('/assets/starship/models/ship.glb?v=2', (gltf) => {
     const m = gltf.scene;
@@ -132,8 +134,8 @@ export function createExterior(scene) {
     behind.material.color.multiplyScalar(2.2); Object.assign(behind.material, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); behind.position.set(0, .35, -6.995); ship.add(behind);   // 貼在機庫前牆上、門板後面
     for (const n of ['airlock_L', 'airlock_R']) { const a = m.getObjectByName(n); if (a) airlock.push({ o: a, x: a.position.x, s: n.endsWith('L') ? -1 : 1 }); }
     for (const o of [...m.children]) if (/^escort_/.test(o.name)) escorts.push({ o, base: o.position.clone(), ph: r() * 6, dir: new THREE.Vector3(0, 0, -1).applyQuaternion(o.quaternion) });
-    ship.add(m); ship.visible = true; loaded = true;
-  }, undefined, (e) => console.warn('[exterior] 戰艦模型載入失敗', e));
+    ship.add(m); ship.visible = true; loaded = true; progress = 1; readyFn();
+  }, (x) => { if (x.total) progress = x.loaded / x.total; }, (e) => { console.warn('[exterior] 戰艦模型載入失敗', e); failed = true; readyFn(); });
 
   // 2) 機庫口(兩側):暖光內部 + 柱子 + 欄杆 + 發光框 + 兩片會滑開的大門 + 隱形點擊範圍
   const hangarGlow = glow(0x7fd0ff, 1.5), hangarHits = [], hangarDoors = [], hangarSeam = glow(0xffe2bc, 2.6);
@@ -178,7 +180,7 @@ export function createExterior(scene) {
 
   // 太陽(有陰影)+ 冷色輪廓光 + 星球反射上來的淡藍光
   const sun = new THREE.DirectionalLight(0xfff1e0, 2.5); sun.position.set(40, 70, 10); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { near: 10, far: 260, left: -60, right: 60, top: 60, bottom: -60 }); sun.shadow.bias = -.0006; sun.shadow.normalBias = .05;
+  sun.shadow.mapSize.set(Q.shadowSize || 2048, Q.shadowSize || 2048); Object.assign(sun.shadow.camera, { near: 10, far: 260, left: -60, right: 60, top: 60, bottom: -60 }); sun.shadow.bias = -.0006; sun.shadow.normalBias = .05;
   root.add(sun); root.add(sun.target);
   const rim = new THREE.DirectionalLight(0x8fb6ff, 1.2); rim.position.set(-50, 10, -60); root.add(rim);
   const bounce = new THREE.DirectionalLight(0x6f9cff, .55); bounce.position.set(0, -80, 0); root.add(bounce);
@@ -189,7 +191,7 @@ export function createExterior(scene) {
     root, ship, hangarHits,
     setHangarOpen(k) { for (const { g, d } of hangarDoors) g.position.z = 3 + d * k * 6.2; hangarSeam.emissiveIntensity = 2.6 + k * 3; },   // 0 = 關、1 = 全開
     hangarWorld: (side = 1) => ship.localToWorld(new THREE.Vector3(side * 6.6, .3, 3)),   // 機庫口中心(side = 哪一側)
-    get loaded() { return loaded; },
+    get loaded() { return loaded; }, get failed() { return failed; }, get progress() { return progress; }, ready,
     setAirlock(k) { for (const a of airlock) a.o.position.x = a.x + a.s * k * 1.75; },  // 機庫最裡面的圓形氣閘門:0 = 關、1 = 左右滑開
     update(t, hover = false) {
       hov += ((hover ? 1 : 0) - hov) * .12;
