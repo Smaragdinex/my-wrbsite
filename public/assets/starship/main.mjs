@@ -13,7 +13,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { sfx } from './sfx.mjs?v=3';
+import { sfx } from './sfx.mjs?v=4';
 
 const canvas = document.getElementById('ship');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.tier !== 'low', alpha: true, powerPreference: 'high-performance' });
@@ -283,6 +283,7 @@ const sfxBtn = Object.assign(document.createElement('button'), { id: 'sfxBtn', t
 sfxBtn.setAttribute('aria-label', 'Toggle sound');
 const drawSfx = () => { sfxBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/>${sfx.muted ? '<path d="M17 9l5 6M22 9l-5 6"/>' : '<path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>'}</svg>`; sfxBtn.classList.toggle('muted', sfx.muted); };
 drawSfx(); sfxBtn.addEventListener('click', () => { sfx.toggle(); drawSfx(); }); document.body.appendChild(sfxBtn);
+sfx.enableMusic();                                                     // 首頁才有背景音樂(第一次點擊 / 按鍵 / 觸控後淡入;喇叭可關)
 const arrows = document.getElementById('arrows'), prevBtn = document.getElementById('prevRoom'), nextBtn = document.getElementById('nextRoom');
 const veil = Object.assign(document.createElement('div'), { id: 'veil' });          // 轉場用的幕(進出戰艦用暖白,其他用黑)
 veil.style.cssText = 'position:fixed;inset:0;z-index:4;background:#05070d;opacity:0;pointer-events:none';
@@ -610,7 +611,7 @@ function frame() {
   const appear = XP.ship, warpOn = XP.warp > .001, live = appear > .9 && XP.state === 'ship';
   canvas.style.opacity = Math.max(appear, Math.min(1, XP.warp * 3)).toFixed(3);
   canvas.style.pointerEvents = appear > .9 ? 'auto' : 'none';
-  warmTick();
+  warmTick(); sfx.hyperspace(XP);                                    // 超空間音效跟著時間軸走
   if (appear <= .001 && !warpOn) { warmComposers(); flashEl.style.opacity = (XP.flash || 0).toFixed(3); requestAnimationFrame(frame); return; }
   warmComposers();                                                   // 在清畫面之前畫 → 接著整個重畫,看不到
   flashEl.style.opacity = (XP.flash || 0).toFixed(3);

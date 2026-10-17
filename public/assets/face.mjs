@@ -11,6 +11,7 @@
 //   思考  think   :一字眼左右看(8 秒沒動)
 //   預設  idle    :圓角眼 + 小微笑,眼睛跟著滑鼠 / 手指看
 // 手機版(≤700px):拿掉頭上的小特效。其他程式可以呼叫 window.__face.show('surprise', 1200) 暫時換表情。
+import { sfx } from '/assets/starship/sfx.mjs?v=4';                  // 跟首頁共用同一個音效開關(同一個網址 = 同一份模組)
 const NS = 'http://www.w3.org/2000/svg';
 const BLUE = '#5aa8ff', RED = '#ff4d5e', CORE = '#eef8ff', CORE_RED = '#ffe1e4';
 // 面罩(helm.webp 裡):中心 (50,50),半徑 26.5 × 24.2(Blender 1 單位 = 38.46)
@@ -103,7 +104,7 @@ if (host) {
     lastDir = d;
   }, { passive: true });
   addEventListener('pointerup', () => { const h = window.__shipHover?.(); if (h && (h.door >= 0 || h.hangar)) show('surprise', 1100); }, true);
-  host.addEventListener('click', (e) => { e.stopPropagation(); show('surprise', 1200); });
+  host.addEventListener('click', (e) => { e.stopPropagation(); show('surprise', 1200); sfx.robot(); });   // 點頭盔:機器人叫一聲
 
   function baseState(now) {
     if (window.__siteError) return 'error';
