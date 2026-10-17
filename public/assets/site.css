@@ -233,3 +233,48 @@
   .pt-morph{position:fixed;inset:0;z-index:100;width:100%;height:100%;pointer-events:none;visibility:hidden;opacity:0}
   .pt-morph svg,.pt-morph{display:block}
   .pt-morph path{fill:#0e0e12}
+/* ---------- 喇叭開關 + 音樂播放器(assets/player.mjs;首頁、About 共用)---------- */
+#sfxBtn{position:fixed;left:clamp(16px,2.6vw,34px);bottom:clamp(20px,4.5vh,40px);z-index:9;width:36px;height:36px;border-radius:50%;border:1px solid rgba(242,242,240,.35);background:rgba(11,16,32,.5);color:#f2f2f0;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .4s,background .25s;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#sfxBtn.on{opacity:.85;pointer-events:auto}
+#sfxBtn:hover{background:rgba(159,196,255,.3)}
+#sfxBtn.muted{color:rgba(242,242,240,.5)}
+@media (max-width:700px){ #sfxBtn{bottom:auto;left:auto;right:clamp(20px,4vw,52px);top:86px;width:32px;height:32px} body.menu-open #sfxBtn{opacity:0;pointer-events:none} }   /* 手機:喇叭在選單按鈕下面,選單打開時先藏起來 */
+/* 播放器:左下角喇叭旁邊的一條膠囊(封面 + 歌名 + 播放 / 下一首),點封面或歌名往上展開歌單;手機縮成喇叭下面一顆圓鈕,歌單往下展開 */
+#musicBox{position:fixed;left:calc(clamp(16px,2.6vw,34px) + 46px);bottom:clamp(20px,4.5vh,40px);z-index:9;height:36px;display:flex;align-items:center;gap:2px;padding:0 4px 0 3px;border-radius:18px;border:1px solid rgba(242,242,240,.28);background:rgba(11,16,32,.5);color:#f2f2f0;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .4s;font:500 11px/1.2 "Helvetica Neue",Arial,sans-serif}
+#musicBox.on{opacity:.9;pointer-events:auto}
+#musicBox button{border:0;background:none;color:inherit;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}
+#musicBox .mb-cover{width:28px;height:28px;border-radius:50%;position:relative;overflow:hidden;flex:none}
+#musicBox .mb-cover i{position:absolute;inset:0;border-radius:50%}
+#musicBox .mb-info{flex-direction:column;align-items:flex-start;max-width:150px;padding:0 6px 0 7px;text-align:left}
+#musicBox .mb-info b{font-weight:600;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+#musicBox .mb-info span{opacity:.55;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+#musicBox .mb-play,#musicBox .mb-next{width:28px;height:28px;border-radius:50%;transition:background .2s}
+#musicBox .mb-play:hover,#musicBox .mb-next:hover,#musicBox .mb-row:hover{background:rgba(159,196,255,.22)}
+#musicBox .eq{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:2px;opacity:0;transition:opacity .3s}
+#musicBox .eq b{width:2px;height:9px;border-radius:1px;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.4);transform-origin:50% 100%;animation:mbEq .9s ease-in-out infinite}
+#musicBox .eq b:nth-child(2){animation-delay:-.3s}#musicBox .eq b:nth-child(3){animation-delay:-.6s}
+#musicBox.playing .mb-cover .eq{opacity:.95}
+@keyframes mbEq{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+#musicBox .mb-list{position:absolute;left:-46px;bottom:46px;width:268px;padding:8px;border-radius:16px;border:1px solid rgba(242,242,240,.2);background:rgba(11,16,32,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .25s,transform .25s}
+#musicBox.open .mb-list{opacity:1;transform:none;pointer-events:auto}
+#musicBox .mb-head{display:flex;justify-content:space-between;align-items:baseline;padding:4px 8px 8px;font-size:10px;letter-spacing:.32em;opacity:.7}
+#musicBox .mb-head small{letter-spacing:.06em;font-size:9px;opacity:.7}
+#musicBox .mb-ctl{display:none;gap:4px;margin-left:auto}
+#musicBox .mb-ctl button{width:30px;height:30px;border-radius:50%;background:rgba(159,196,255,.16) !important}
+#musicBox .mb-row{width:100%;justify-content:flex-start !important;gap:10px;padding:6px 8px !important;border-radius:10px;text-align:left;position:relative}
+#musicBox .mb-row i{width:30px;height:30px;border-radius:8px;flex:none}
+#musicBox .mb-row span:not(.eq){display:flex;flex-direction:column;min-width:0}
+#musicBox .mb-row b{font-weight:600;font-size:12px}
+#musicBox .mb-row em{font-style:normal;font-size:10px;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#musicBox .mb-row .eq{left:8px;right:auto;width:30px}
+#musicBox .mb-row.cur{background:rgba(159,196,255,.14)}
+#musicBox.playing .mb-row.cur .eq{opacity:.95}
+@media (max-width:700px){
+  #musicBox{left:auto;bottom:auto;right:clamp(20px,4vw,52px);top:128px;width:32px;height:32px;padding:0;border-radius:50%;justify-content:center}
+  #musicBox .mb-info,#musicBox .mb-play,#musicBox .mb-next{display:none}
+  #musicBox .mb-cover{width:26px;height:26px}
+  #musicBox .mb-list{left:auto;right:0;bottom:auto;top:40px;width:min(268px,calc(100vw - 32px))}
+  #musicBox .mb-list .mb-head{align-items:center;gap:8px}
+  #musicBox .mb-ctl{display:flex}
+  body.menu-open #musicBox{opacity:0;pointer-events:none}
+}

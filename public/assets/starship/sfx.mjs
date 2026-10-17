@@ -56,7 +56,7 @@ export const sfx = {
     tone(2637, { at: .3, dur: .3, type: 'sine', vol: .03 }); tone(3520, { at: .36, dur: .35, type: 'sine', vol: .018 }); },
   // 超空間:每幀由 main.mjs 呼叫(XP = window.__xp),依讀條 / 跳躍時間軸自己決定出什麼聲音
   hyperspace(XP) { hyper(XP); },
-  enableMusic() { musicAllowed = true; if (ctx && ctx.state === 'running' && !muted) startMusic(); },
+  enableMusic() { musicAllowed = true; musicElement(); notify(); if (ctx && ctx.state === 'running' && !muted) startMusic(); },
   music: {                                                             // 左下角播放器用
     get list() { return PLAYLIST; },                                   // getter:PLAYLIST 宣告在下面
     get index() { return trackI; },
@@ -83,12 +83,16 @@ const PLAYLIST = [
   { title: 'Finding Myself', artist: 'Michael Ramir C.', mood: 'Ambient · Warm', file: 'finding-myself.m4a', trim: 2.6, cover: ['#f6d365', '#fda085', '#c471f5'] },
   { title: 'Relax Beat', artist: 'Arulo', mood: 'Ambient beat', file: 'relax-beat.m4a', trim: 7, cover: ['#ff9a8b', '#ff6a88', '#ffd3a5'] },
 ];
-let mus = null, musicAllowed = false, musicEl = null, trackI = 0, userPaused = false;   // 只有首頁(有喇叭開關)會開音樂;About 頁只有音效
+let mus = null, musicAllowed = false, musicEl = null, trackI = 0, userPaused = false;
+addEventListener('pagehide', () => { if (!musicEl) return; try { sessionStorage.setItem('xarts-music', JSON.stringify({ i: trackI, t: musicEl.currentTime, paused: userPaused, at: Date.now() })); } catch {} });   // 只有首頁(有喇叭開關)會開音樂;About 頁只有音效
 const listeners = new Set(), notify = () => listeners.forEach((f) => { try { f(); } catch {} });
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 function musicElement() {                                             // 在使用者點擊的那一刻就呼叫 play()(Safari 規定要在點擊當下)
   if (!musicEl) {
+    let saved = null; try { saved = JSON.parse(sessionStorage.getItem('xarts-music') || 'null'); } catch {}   // 從首頁 / About 換頁過來:接著同一首、同一個位置
+    if (saved && PLAYLIST[saved.i] && Date.now() - saved.at < 30 * 60e3) { trackI = saved.i; userPaused = !!saved.paused; }
     musicEl = new Audio(); musicEl.preload = 'none'; musicEl.crossOrigin = 'anonymous'; musicEl.src = MUSIC_DIR + PLAYLIST[trackI].file;
+    if (saved && saved.i === trackI && saved.t > 1) musicEl.addEventListener('loadedmetadata', () => { try { musicEl.currentTime = saved.t; } catch {} }, { once: true });
     musicEl.addEventListener('ended', () => playTrack((trackI + 1) % PLAYLIST.length));
     for (const ev of ['play', 'pause']) musicEl.addEventListener(ev, notify);
   }
