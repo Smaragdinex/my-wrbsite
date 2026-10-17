@@ -166,7 +166,7 @@ export function createExterior(scene, Q = {}) {
   const portal = new THREE.Mesh(new THREE.CircleGeometry(1.75, 64), new THREE.MeshBasicMaterial({ color: 0xfff4e4 }));
   let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
-  gl.load('/assets/starship/models/ship.glb?v=5', (gltf) => {
+  gl.load('/assets/starship/models/ship.glb?v=7', (gltf) => {
     const m = gltf.scene;
     m.traverse((o) => {
       if (!o.isMesh) return;
@@ -174,6 +174,7 @@ export function createExterior(scene, Q = {}) {
       const mt = o.material, n = mt.name || '';
       if (n === 'ship_glass') { o.material = new THREE.MeshPhysicalMaterial({ color: 0xdcecff, roughness: .05, metalness: 0, transparent: true, opacity: .2, envMapIntensity: 1.6, depthWrite: false }); o.castShadow = false; }
       else if (n === 'ship_vault') { o.material = new THREE.MeshPhysicalMaterial({ color: 0xbfdcff, roughness: .04, metalness: 0, clearcoat: 1, transparent: true, opacity: .16, envMapIntensity: .9, emissive: 0x1d3a5c, emissiveIntensity: .12, side: THREE.DoubleSide, depthWrite: false }); o.castShadow = false; o.renderOrder = 2; }   // 環臂花園的薄玻璃拱頂:看得出一層玻璃,樹還是透得過來
+      else if (n === 'ship_lounge') { mt.emissive.set(0xffc690); mt.emissiveIntensity = .38; mt.color.set(0x2a2018); }   // 觀景窗裡的內牆:暖暖的室內光,不要亮到看起來像白板
       else if (n === 'ship_facade') { mt.emissive.set(0xffffff); mt.emissiveIntensity = 2.6; mt.envMapIntensity = 1.2; }
       else if (/window|goldglow|blueglow/.test(n)) { o.castShadow = false; mt.emissiveIntensity = Math.min(mt.emissiveIntensity, /blue/.test(n) ? 1.6 : 3.2); }   // 燈條亮度上限,不然 bloom 糊成一團
       else if (mt.isMeshStandardMaterial) mt.envMapIntensity = .6;
@@ -238,9 +239,9 @@ export function createExterior(scene, Q = {}) {
 
   // 3) 艦尾三顆引擎的藍色噴焰(噴口朝外太空,後面沒有建築)
   const flames = [];
-  // 引擎在外環臂的最後面(tools/blender/ship_build.py 印出的 ENGINES:Blender (x, 噴口 y, z, 大小) → 這裡 (x, z, -y))
+  // 引擎在外環臂底下(tools/blender/ship_build.py 印出的 ENGINES:Blender (x, 噴口 y, z, 大小) → 這裡 (x, z, -y))
   const ENG_COLS = ['#f4fbff', '#5aa8ff', '#5b3cff'];
-  [[-6.726, -.5, 44.155, 1], [0, -.05, 45.1, 1.25], [6.726, -.5, 44.155, 1]].forEach(([x, y, nz0, big], k) => {
+  [[-5.516, -4.862, 41.023, .95], [0, -5.125, 41.7, 1.1], [5.516, -4.862, 41.023, .95]].forEach(([x, y, nz0, big], k) => {   // 掛在外環臂底下(環臂最後面是觀景窗)
     const nz = nz0 + .05, rr = 1.05 * big, g = new THREE.Group(); g.position.set(x, y, nz); g.rotation.x = Math.PI / 2; ship.add(g);   // +y → 朝船尾(+z)
     const outer = plume(rr, rr * 7.5, false, k * 3.1, ENG_COLS), core = plume(rr, rr * 3.6, true, k * 5.7, ['#ffffff', '#bfe2ff', '#5aa8ff']); g.add(outer, core);
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: gl_, color: new THREE.Color(0x8fcfff).multiplyScalar(1.6), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));

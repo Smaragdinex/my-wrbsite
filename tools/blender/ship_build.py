@@ -98,6 +98,8 @@ M_LAWN = mat('ship_lawn', '#4a7236', .95)
 M_TREE = mat('ship_tree', '#3b6a33', .85)
 M_TREE2 = mat('ship_tree2', '#557f3a', .85)
 M_METAL = mat('ship_metal', '#b9bcc2', .25, 1.0)
+M_LOUNGE = mat('ship_lounge', '#000000', 1, emit='#ffd9b0', k=2.2)            # 觀景窗裡面的暖光內牆
+M_WOODFLOOR = mat('ship_woodfloor', '#8a5a3a', .6)
 
 def obj(name, bm, m, bevel=0.0, seg=2, smooth=True, angle=35):
     me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
@@ -121,14 +123,14 @@ def loft(name, secs, m, bevel=.12):
     bm.faces.new(rings[0][::-1]); bm.faces.new(rings[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     return obj(name, bm, m, bevel, 2, smooth=False)
-def arc(name, cx, cy, R, wr, h, zc, a0, a1, m, taper=0.0, seg=160, bevel=.1, lean=0.0):
+def arc(name, cx, cy, R, wr, h, zc, a0, a1, m, taper=0.0, seg=160, bevel=.1, lean=0.0, ends=None):
     """以 (cx, cy) 為圓心的一段實心弧(斷面:徑向寬 wr、高 h);taper = 兩端多少度內逐漸收尖"""
     bm = bmesh.new(); rings = []
     for i in range(seg + 1):
         a = a0 + (a1 - a0) * i / seg
         k = 1.0
         if taper:
-            d = min(a - a0, a1 - a) / math.radians(taper)
+            e0, e1 = ends or (a0, a1); d = min(a - e0, e1 - a) / math.radians(taper)
             if d < 1: k = .12 + .88 * math.sin(d * math.pi / 2)
         ca, sa = math.cos(a), math.sin(a); ww, hh = wr * k, h * (.4 + .6 * k)
         pts = [(R - ww / 2, -hh / 2), (R + ww / 2, -hh / 2), (R + ww / 2 + lean * k, hh / 2), (R - ww / 2 + lean * k, hh / 2)]
@@ -297,26 +299,56 @@ for z in (12, 20, 27):                                                          
     torus(f'spire_deck_glow_{z}', 2.6 - z * .03, .05, (HX, HY, z), M_WIN, seg=64, mseg=6)
 
 # ================= 5) 環臂:兩道弧形環繞艦尾那半圈(兩端收尖)+ 屋頂花園 + 窗帶 + 連接臂 =================
+VIEW = (math.radians(248), math.radians(292))                                   # 外環臂最後面的觀景窗範圍
+def in_view(a, tag, pad=0.0): return tag == 'outer' and VIEW[0] - pad <= ((a - math.radians(160)) % math.tau) + math.radians(160) <= VIEW[1] + pad
 def ring_arm(tag, R, wr, h, zc, a0, a1):
     a0, a1 = math.radians(a0), math.radians(a1)
-    arc(f'arm_{tag}', HX, HY, R, wr, h, zc, a0, a1, M_HULL, taper=28)
+    if tag == 'outer':                                                          # 分三段蓋:觀景窗那段外殼往內退,上下留窗台 / 窗楣
+        v0, v1 = VIEW[0] + math.tau * (VIEW[0] < a0), VIEW[1] + math.tau * (VIEW[1] < a0); DEP, wb, wt = .6, -1.15, .95   # 退多深、窗的下緣 / 上緣(z)
+        arc(f'arm_{tag}', HX, HY, R, wr, h, zc, a0, v0, M_HULL, taper=28, ends=(a0, a1))
+        arc(f'arm_{tag}_b', HX, HY, R, wr, h, zc, v1, a1, M_HULL, taper=28, ends=(a0, a1))
+        arc(f'arm_{tag}_core', HX, HY, R - DEP / 2, wr - DEP, h, zc, v0, v1, M_HULL, seg=60)
+        ro = R + wr / 2 - DEP / 2
+        arc(f'arm_{tag}_sill', HX, HY, ro, DEP, wb - (zc - h / 2), (zc - h / 2 + wb) / 2, v0, v1, M_HULL2, seg=60, bevel=.04)
+        arc(f'arm_{tag}_header', HX, HY, ro, DEP, (zc + h / 2) - wt, (zc + h / 2 + wt) / 2, v0, v1, M_HULL2, seg=60, bevel=.04)
+        rw = R + wr / 2 - DEP                                                   # 窗裡面:暖光的內牆 + 天花燈帶 + 地板
+        arc(f'arm_{tag}_lounge_wall', HX, HY, rw + .1, .04, wt - wb, (wt + wb) / 2, v0 + .01, v1 - .01, M_LOUNGE, seg=60, bevel=0)   # 離後面的白殼 .1(貼太近白殼會蓋過來)
+        arc(f'arm_{tag}_lounge_light', HX, HY, rw + .25, .3, .04, wt - .05, v0 + .02, v1 - .02, M_WIN, seg=60, bevel=0)
+        arc(f'arm_{tag}_lounge_floor', HX, HY, rw + .3, .58, .04, wb + .02, v0 + .01, v1 - .01, M_WOODFLOOR, seg=60, bevel=0)
+        a = v0 + .03                                                            # 沙發 + 植物(從外面看是剪影)
+        while a < v1 - .03:
+            ca, sa = math.cos(a), math.sin(a)
+            if rng.random() < .6: box(f'arm_{tag}_seat_{a:.2f}', (.3, .55, .22), (HX + ca * (rw + .2), HY + sa * (rw + .2), wb + .14), M_DARK, rot=(0, 0, a), bevel=.04)
+            else:
+                cyl(f'arm_{tag}_pot_{a:.2f}', .09, .2, (HX + ca * (rw + .2), HY + sa * (rw + .2), wb + .12), M_HULL2, verts=12)
+                bm_ = bmesh.new(); bmesh.ops.create_icosphere(bm_, subdivisions=1, radius=.2); o_ = obj(f'arm_{tag}_plant_{a:.2f}', bm_, M_TREE); o_.location = (HX + ca * (rw + .2), HY + sa * (rw + .2), wb + .38)
+            a += rng.uniform(.035, .06)
+        arc(f'arm_{tag}_view_glass', HX, HY, R + wr / 2 - .04, .03, wt - wb, (wt + wb) / 2, v0, v1, M_GLASS, seg=90, bevel=0)   # 一整面玻璃
+        a = v0
+        while a <= v1 + 1e-6:                                                   # 窗框:直的細柱 + 上下兩條橫框
+            arc(f'arm_{tag}_mullion_{a:.3f}'.replace('.', 'p'), HX, HY, R + wr / 2 - .02, .08, wt - wb, (wt + wb) / 2, a - .0035, a + .0035, M_HULL2, seg=1, bevel=0)
+            a += (v1 - v0) / 14
+        for z_ in (wb + .03, wt - .03): arc(f'arm_{tag}_transom_{z_:.2f}'.replace('.', 'p'), HX, HY, R + wr / 2 - .02, .09, .06, z_, v0, v1, M_HULL2, seg=60, bevel=0)
+    else:
+        arc(f'arm_{tag}', HX, HY, R, wr, h, zc, a0, a1, M_HULL, taper=28)
     arc(f'arm_{tag}_under', HX, HY, R - wr * .05, wr * .7, h * .4, zc - h * .55, a0 + .12, a1 - .12, M_HULL2, taper=20, bevel=.06)
     arc(f'arm_{tag}_garden', HX, HY, R - wr * .12, wr * .5, .18, zc + h / 2 + .05, a0 + .25, a1 - .25, M_LAWN, taper=10, bevel=0)
     for side, r_ in ((1, R + wr / 2 + .03), (-1, R - wr / 2 - .03)):           # 內外兩側:一長條發光的長廊窗帶(中間有支柱分隔)+ 下面一排小窗
-        arc(f'arm_{tag}_facade_{side}', HX, HY, r_ - side * .02, .05, h * .48, zc + h * .08, a0 + .28, a1 - .28, M_FACADE, seg=120, bevel=0)
+        spans = [(a0 + .28, a1 - .28)] if not (tag == 'outer' and side == 1) else [(a0 + .28, VIEW[0] + math.tau * (VIEW[0] < a0) - .02), (VIEW[1] + math.tau * (VIEW[1] < a0) + .02, a1 - .28)]
+        for k_, (s0, s1) in enumerate(spans): arc(f'arm_{tag}_facade_{side}_{k_}', HX, HY, r_ - side * .02, .05, h * .48, zc + h * .08, s0, s1, M_FACADE, seg=120, bevel=0)
         a = a0 + .3
         while a < a1 - .3:
             L = rng.uniform(.18, .4)
-            arc(f'arm_{tag}_gal_{side}_{a:.2f}', HX, HY, r_, .07, h * .32, zc + h * .08, a, min(a + L, a1 - .3), M_WIN, seg=12, bevel=0)
+            if not (side == 1 and (in_view(a, tag, .02) or in_view(min(a + L, a1 - .3), tag, .02))): arc(f'arm_{tag}_gal_{side}_{a:.2f}', HX, HY, r_, .07, h * .32, zc + h * .08, a, min(a + L, a1 - .3), M_WIN, seg=12, bevel=0)
             a += L + .025
         a = a0 + .35
         while a < a1 - .35:
             L = rng.uniform(.03, .08)
-            if rng.random() < .7: arc(f'arm_{tag}_win_{side}_{a:.2f}', HX, HY, r_, .06, .14, zc - h * .3, a, a + L, M_WIN, seg=4, bevel=0)
+            if rng.random() < .7 and not (side == 1 and in_view(a, tag, .02)): arc(f'arm_{tag}_win_{side}_{a:.2f}', HX, HY, r_, .06, .14, zc - h * .3, a, a + L, M_WIN, seg=4, bevel=0)
             a += L + rng.uniform(.02, .05)
     a = a0 + .3                                                                # 結構肋:每隔幾度一圈稍微凸出的環箍
     while a < a1 - .3:
-        arc(f'arm_{tag}_rib_{a:.2f}', HX, HY, R, wr * 1.06, h * 1.06, zc, a, a + .012, M_HULL2, seg=2, bevel=.03)
+        if not in_view(a, tag, .01): arc(f'arm_{tag}_rib_{a:.2f}', HX, HY, R, wr * 1.06, h * 1.06, zc, a, a + .012, M_HULL2, seg=2, bevel=.03)
         a += .11
     n = int((a1 - a0) * R / 1.6)                                                # 屋頂花園的小樹(都在玻璃拱頂下面)
     gc, gw = R - wr * .12, wr * .25                                              # 花園中心半徑、半寬
@@ -360,10 +392,12 @@ box('stern_plate', (8.2, .5, 4.4), (0, -26.15, 0), M_HULL2, bevel=.2)
 for k in range(5): box(f'stern_vent_{k}', (6.0, .12, .28), (0, -26.42, -1.3 + k * .62), M_DARK, bevel=.03)
 ENGINES = []                                                                    # (x, 噴口 y, z):網頁 exterior.mjs 的噴焰位置照這個
 OR_R, OR_W, OR_Z = 22, 4.8, -.4                                                 # 外環臂(跟上面 ring_arm('outer', ...) 一樣)
-for k, adeg in enumerate((254, 270, 286)):
-    a = math.radians(adeg); ex = HX + math.cos(a) * (OR_R + OR_W / 2); ey = HY + math.sin(a) * (OR_R + OR_W / 2)
-    y0 = ey - 1.0; zc_ = OR_Z + (.35 if adeg == 270 else -.1); big_ = 1.25 if adeg == 270 else 1.0   # 中間那顆大一點
-    box(f'engine_pylon_{k}', (1.6 * big_, 2.6, 1.0), (ex, ey - .6, zc_), M_HULL2, bevel=.12)
+for k, adeg in enumerate((256, 270, 284)):                                   # 掛在外環臂底下(環臂最後面留給觀景窗);噴焰從環臂下面往後噴,碰不到建築
+    a = math.radians(adeg); big_ = 1.1 if adeg == 270 else .95                  # 中間那顆大一點
+    ex = HX + math.cos(a) * (OR_R + .8); ey = HY + math.sin(a) * (OR_R + .8) + .6; y0 = ey + .2
+    zc_ = -2.85 - .35 - 1.75 * big_                                             # 環臂下緣(含底下那片)約 -2.85,留 .35 給吊架
+    box(f'engine_pylon_{k}', (1.0 * big_, 2.2, abs(-2.6 - zc_)), (ex, ey, (-2.6 + zc_) / 2), M_HULL2, bevel=.12)
+    box(f'engine_pylon_fin_{k}', (.25, 2.6, .9), (ex, ey - .2, -2.9), M_DARK, bevel=.04)
     cyl(f'engine_{k}', 1.45 * big_, 2.6, (ex, y0 - 1.3, zc_), M_HULL2, rot=(math.pi / 2, 0, 0), verts=48, bevel=.12, r2=1.75 * big_)
     cyl(f'engine_core_{k}', 1.05 * big_, .1, (ex, y0 - 2.65, zc_), M_BLUE, rot=(math.pi / 2, 0, 0), verts=48)
     torus(f'engine_lip_{k}', 1.66 * big_, .12, (ex, y0 - 2.6, zc_), M_METAL, rot=(math.pi / 2, 0, 0), seg=64, mseg=10)
