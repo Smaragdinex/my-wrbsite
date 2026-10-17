@@ -55,6 +55,62 @@ function plume(rr, len, core, seed, cols) {                              // 一�
   const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false; mesh.renderOrder = 3; return mesh;
 }
 
+// 窗戶裡的「假 3D 房間」(interior mapping,3A 遊戲做城市窗戶的作法):每格窗後面用光線算出一個盒子房間 ——
+//   天花板(中間一條燈板)、地板、左右牆、後牆,牆角陰影;中間一層家具 / 人影;有的拉了百葉。鏡頭一動房間有視差。
+//   每間亮度(全暗 / 半亮 / 亮)、色溫(暖黃 / 中性 / 螢幕冷藍)用格子編號亂數決定。
+//   facade:船身 / 環臂的小方窗(窗框來自烘好的底色貼圖)。gallery:環臂長廊大窗(窗框在這裡算)
+const IM_GLSL = `
+uniform float imK; varying vec3 vImP, vImN, vImC;
+float imH(vec2 c, float s){ return fract(sin(dot(vec3(c, s), vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+vec3 imRoom(vec2 id, vec2 f, vec3 d, vec3 S){
+  float r = imH(id, 1.), r2 = imH(id, 2.), r3 = imH(id, 3.), r4 = imH(id, 4.), r5 = imH(id, 5.);
+  float lvl = r < .2 ? .025 : (r < .48 ? .28 : .6 + .45 * r);
+  vec3 col = r2 < .55 ? vec3(1., .64, .34) : (r2 < .86 ? vec3(1., .85, .64) : vec3(.6, .75, 1.));
+  vec3 p = vec3(f * S.xy, 0.);
+  vec3 tt = (step(0., d) * S - p) / d;
+  float t = min(min(tt.x, tt.y), tt.z);
+  vec3 q = (p + d * t) / S, e = min(q, 1. - q), c; float ed;
+  if (t == tt.z) { c = col * (.36 + .5 * q.y); ed = min(e.x, e.y); }
+  else if (t == tt.x) { c = col * (.26 + .4 * q.y) * (.7 + .3 * q.z); ed = min(e.y, e.z); }
+  else if (d.y > 0.) { c = col * (.6 + 1.5 * smoothstep(.2, .0, abs(q.x - .5)) * smoothstep(.12, .45, q.z) * smoothstep(.96, .72, q.z)); ed = min(e.x, e.z); }
+  else { c = col * .13 * (.45 + .55 * q.z); ed = min(e.x, e.z); }
+  c *= .5 + .5 * smoothstep(0., .14, ed);
+  float tm = S.z * (.42 + .25 * r4) / d.z;
+  if (tm < t && r3 > .42) {
+    vec2 m = (p.xy + d.xy * tm) / S.xy; float x0 = .08 + .5 * r5, px = x0 + .42 + .1 * r4;
+    bool sofa = m.x > x0 && m.x < x0 + .36 && (m.y < .14 || (m.y < .24 && m.x < x0 + .06));   /* 矮沙發(有扶手) */
+    bool person = r3 > .72 && ((abs(m.x - px) < .05 && m.y < .5) || (length(vec2((m.x - px) * 1.4, m.y - .58)) < .07));
+    if (sofa || person) c = col * .045;
+  }
+  if (r4 > .76 && f.y > 1. - .75 * r5) c = mix(c, col * .5, step(.5, fract(f.y * S.y * 22.)) * .85);
+  return c * lvl;
+}`;
+function interiorWindows(mt, kind) {                                    // kind: 'facade' | 'gallery'
+  mt.customProgramCacheKey = () => 'im_' + kind;
+  mt.onBeforeCompile = (sh) => {
+    sh.uniforms.imK = { value: kind === 'gallery' ? 1.15 : 1.5 };
+    sh.vertexShader = 'varying vec3 vImP, vImN, vImC;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vImP = position; vImN = normal; vImC = (inverse(modelMatrix) * vec4(cameraPosition, 1.)).xyz;');
+    sh.fragmentShader = IM_GLSL + '\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+    {
+      vec3 N = normalize(vImN), P = vImP; vec2 rv = vec2(P.x, P.z - 17.); float rad = length(rv);
+      bool arm = rad > 12.5 && rad < 26. && abs(dot(normalize(rv), normalize(N.xz + 1e-5))) > .85;
+      vec3 T; float u;
+      if (arm) { u = atan(17. - P.z, P.x) * rad; T = vec3(-(17. - P.z) / rad, 0., -P.x / rad); } else { u = -P.z; T = vec3(0., 0., -1.); }
+      vec3 dv = normalize(P - vImC), d = vec3(dot(dv, T), dv.y, dot(dv, -N));
+      ${kind === 'gallery' ? `
+      bool outer = rad > 18.5; float H = outer ? 1.024 : .768, W = .9, fv = (P.y - (outer ? -.656 : .508)) / H, uu = u / W, fu = fract(uu);
+      vec2 id = vec2(floor(uu), outer ? 1. : 2.);
+      float glass = step(.035, fu) * step(fu, .965) * step(.07, fv) * step(fv, .93);
+      vec2 gf = vec2((fu - .035) / .93, (fv - .07) / .86); vec3 S = vec3(W * .93, H * .86, .95);` : `
+      float H = .36, W = .5, row = floor(P.y / H), fv = fract(P.y / H), uu = u / W + row * .5, fu = fract(uu);
+      vec2 id = vec2(floor(uu), row + (arm ? 0. : (P.x > 0. ? 300. : 600.)));
+      float glass = 1. - smoothstep(.03, .09, dot(diffuseColor.rgb, vec3(.3333)));
+      vec2 gf = vec2((fu - .07) / .86, (fv - .12) / .76); vec3 S = vec3(W * .86, H * .76, .42);`}
+      totalEmissiveRadiance = (d.z > .02 && glass > 0.) ? imRoom(id, clamp(gf, 0., 1.), d, S) * glass * imK : vec3(0.);
+    }`);
+  };
+}
+
 // ---------- 大星球:3D simplex 雜訊(Ashima Arts, MIT)做大陸 / 雲,自己算日照(不吃船的影子)----------
 const NOISE = `
 vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;} vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
@@ -166,7 +222,9 @@ export function createExterior(scene, Q = {}) {
   const portal = new THREE.Mesh(new THREE.CircleGeometry(1.75, 64), new THREE.MeshBasicMaterial({ color: 0xfff4e4 }));
   let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
-  gl.load('/assets/starship/models/ship.glb?v=10', (gltf) => {
+  const lightMapP = new Promise((ok) => new THREE.TextureLoader().load('/assets/starship/models/ship_light.webp?v=1', (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.channel = 0; ok(t); }, undefined, () => ok(null)));   // 燈具打在船殼上的光照(Blender 烘的):燈旁邊亮、越遠越暗
+  const LIGHT_K = .5 * Math.PI / .1593;                                   // 烘的時候除過的 scale(ship_light.json)× 亮度
+  gl.load('/assets/starship/models/ship.glb?v=11', (gltf) => lightMapP.then((lightMap) => {
     const m = gltf.scene;
     m.traverse((o) => {
       if (!o.isMesh) return;
@@ -176,9 +234,11 @@ export function createExterior(scene, Q = {}) {
       else if (n === 'ship_vault') { o.material = new THREE.MeshPhysicalMaterial({ color: 0xbfdcff, roughness: .04, metalness: 0, clearcoat: 1, transparent: true, opacity: .16, envMapIntensity: .9, emissive: 0x1d3a5c, emissiveIntensity: .12, side: THREE.DoubleSide, depthWrite: false }); o.castShadow = false; o.renderOrder = 2; }   // 環臂花園的薄玻璃拱頂:看得出一層玻璃,樹還是透得過來
       else if (n === 'ship_viewglass') { o.material = new THREE.MeshPhysicalMaterial({ color: 0xdcecff, roughness: .05, metalness: 0, transparent: true, opacity: .1, envMapIntensity: .45, depthWrite: false }); o.castShadow = false; }   // 觀景窗玻璃:反光壓低,看得到裡面
       else if (/^ship_lounge/.test(n)) { mt.emissive.set(0xffc690); mt.emissiveIntensity = { ship_lounge: .24, ship_lounge_dim: .1, ship_lounge_dark: .025 }[n] ?? .1; mt.color.set(0x2a2018); }   // 觀景窗裡的內牆:一格亮、一格半亮、一格暗
-      else if (/^ship_facade/.test(n)) { mt.emissive.set(0xffffff); mt.emissiveIntensity = .7; mt.envMapIntensity = 1.2; }   /* 匯出後叫 ship_facade.001;貼圖最亮 = 1(暖色不爆白),亮度在這裡調 */
-      else if (/^ship_gallery/.test(n)) { mt.emissive.set(0xffffff); mt.emissiveIntensity = 1.6; mt.envMapIntensity = .8; o.castShadow = false; }   /* 環臂長廊窗:烘好的室內(天花燈、牆、剪影、窗框) */
+      else if (/^ship_facade/.test(n)) { mt.emissive.set(0xffffff); mt.emissiveMap = null; mt.envMapIntensity = 1.0; interiorWindows(mt, 'facade'); }   /* 匯出後叫 ship_facade.001;窗框用烘好的底色貼圖,窗裡面的房間用 shader 算 */
+      else if (/^ship_led/.test(n)) { o.castShadow = false; mt.emissiveIntensity = /cool/.test(n) ? 1.7 : 2.4; }   /* 頂部燈具的發光面 */
+      else if (/^ship_gallery/.test(n)) { mt.emissive.set(0xffffff); mt.emissiveMap = null; mt.envMapIntensity = .8; o.castShadow = false; interiorWindows(mt, 'gallery'); }   /* 環臂長廊窗:烘好的室內(天花燈、牆、剪影、窗框) */
       else if (/window|goldglow|blueglow/.test(n)) { o.castShadow = false; mt.emissiveIntensity = Math.min(mt.emissiveIntensity, /blue/.test(n) ? 1.6 : /_dark/.test(n) ? 1 : /_dim/.test(n) ? .8 : 2.05); }   // 燈條 / 窗帶亮度上限(比之前暗約 35%,而且分亮、半亮、暗三種)
+      else if (n === 'ship_hull') { hullLight(mt); mt.envMapIntensity = .42; }
       else if (mt.isMeshStandardMaterial) mt.envMapIntensity = .42;   // 環境反光少一點,背光面才夠暗
     });
     const bay = m.getObjectByName('ship_bay');
@@ -219,7 +279,8 @@ export function createExterior(scene, Q = {}) {
       escorts.push(e);
     }
     ship.add(m); ship.visible = true; loaded = true; progress = 1; readyFn();
-  }, (x) => { if (x.total) progress = x.loaded / x.total; }, (e) => { console.warn('[exterior] 戰艦模型載入失敗', e); failed = true; window.__siteError = true; readyFn(); });
+    function hullLight(mt) { if (lightMap) { mt.lightMap = lightMap; mt.lightMapIntensity = LIGHT_K; mt.needsUpdate = true; } }
+  }), (x) => { if (x.total) progress = x.loaded / x.total; }, (e) => { console.warn('[exterior] 戰艦模型載入失敗', e); failed = true; window.__siteError = true; readyFn(); });
 
   // 2) 機庫口(兩側):暖光內部 + 柱子 + 欄杆 + 發光框 + 兩片會滑開的大門 + 隱形點擊範圍
   const hangarGlow = glow(0x7fd0ff, 1.5), hangarHits = [], hangarDoors = [], hangarSeam = glow(0xffe2bc, 2.6);

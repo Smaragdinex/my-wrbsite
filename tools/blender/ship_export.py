@@ -5,7 +5,8 @@
 #   4) 護航小艦保留成獨立物件 escort_N(網頁上讓它們慢慢飄):白 / 珍珠灰換成單色,深色、座艙玻璃、橘色飾條、舷窗、噴口、翼尖燈照原樣
 # 星球、燈光、鏡頭不匯出(星球網頁上用 shader 另外畫)。
 # 用法:blender -b --python tools/blender/ship_export.py -- [輸出 glb] [貼圖倍率 = 1.0]
-import bpy, sys, os, runpy, time, math
+import bpy, sys, os, runpy, time, math, json
+import numpy as np
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
@@ -16,7 +17,7 @@ t0 = time.time()
 def log(*a): print('[ship %5.0fs]' % (time.time() - t0), *a, flush=True)
 
 sys.argv = [sys.argv[0], '--', 'build']
-runpy.run_path(os.path.join(ROOT, 'ship_build.py'), run_name='__main__')
+G = runpy.run_path(os.path.join(ROOT, 'ship_build.py'), run_name='__main__')
 scene = bpy.context.scene
 log('built', len(scene.objects), 'objects')
 
@@ -50,7 +51,7 @@ WHITE = ('ship_white', 'ship_pearl')
 big = lambda o: max(o.dimensions) > 3.0 and not o.name.startswith(('kit_', 'greeble_', 'hub_fin_', 'engine_fin', 'collar_strut', 'dish', 'seam_'))
 g_white = [o for o in rest if mat_of(o) in WHITE and big(o)]
 g_small = [o for o in rest if mat_of(o) in WHITE and not big(o)]          # 小零件不烘(貼圖留給大面),直接用單色
-g_facade = [o for o in rest if mat_of(o) == 'ship_facade']
+g_facade = [o for o in rest if (mat_of(o) or '').startswith('ship_facade')]
 g_gal = [o for o in rest if (mat_of(o) or '').startswith('ship_gallery_')]                 # 環臂長廊窗(看得到裡面的程序材質)→ 烘成發光貼圖
 log('white', len(g_white), 'facade', len(g_facade))
 
@@ -115,8 +116,31 @@ for side in ('L', 'R'):
     a = join(parts, f'airlock_{side}'); bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS'); air.append(a)
 hull = join(g_white, 'ship_hull'); unwrap(hull, .0015)
 hull_png = bake(hull, 'DIFFUSE', int(4096 * SCALE), 'ship_hull_albedo', 32)
+# 光照貼圖:只開燈具(沒有太陽、沒有環境光),烘「燈打在船殼上」的照度(不含底色)→ 網頁上當 lightMap,燈旁邊才有光暈、越遠越暗
+G['fixture_lights']()
+LS = int(2048 * SCALE); limg = bpy.data.images.new('ship_hull_light_f', LS, LS, float_buffer=True, alpha=False)
+for slot in hull.material_slots:
+    n = slot.material.node_tree.nodes['__bake__']; n.image = limg; slot.material.node_tree.nodes.active = n
+select_only([hull]); scene.cycles.samples = 512; scene.cycles.max_bounces = 3
+bk.use_pass_direct = True; bk.use_pass_indirect = True; bk.use_pass_color = False
+log('baking ship_hull_light DIFFUSE', LS); bpy.ops.object.bake(type='DIFFUSE')
+px = np.array(limg.pixels[:], dtype=np.float32).reshape(LS, LS, 4)[..., :3]
+def blur(a, r):                                                                 # 去雜訊:兩次小範圍方框模糊(光照本來就是平滑的)
+    for ax in (0, 1):
+        c = np.cumsum(np.pad(a, [(r + 1, r) if i == ax else (0, 0) for i in range(3)], mode='edge'), axis=ax)
+        a = (np.take(c, range(2 * r + 1, c.shape[ax]), axis=ax) - np.take(c, range(0, c.shape[ax] - 2 * r - 1), axis=ax)) / (2 * r + 1)
+    return a
+px = blur(blur(px, 1), 1)
+lum = px.max(axis=2); scale = 1 / max(1e-4, float(np.percentile(lum[lum > 1e-4], 99.6)) if (lum > 1e-4).any() else 1)
+v = np.clip(px * scale, 0, 1); v = np.where(v <= .0031308, v * 12.92, 1.055 * np.power(v, 1 / 2.4) - .055)   # 存成 sRGB(暗部漸層不會一階一階)
+oimg = bpy.data.images.new('ship_hull_light', LS, LS, alpha=False); oimg.pixels[:] = np.concatenate([v, np.ones((LS, LS, 1), np.float32)], axis=2).ravel()
+LIGHT_OUT = os.path.join(os.path.dirname(OUT), 'ship_light.webp'); oimg.file_format = 'WEBP'; oimg.filepath_raw = LIGHT_OUT; oimg.save()
+json.dump({'scale': scale}, open(os.path.join(os.path.dirname(OUT), 'ship_light.json'), 'w'))
+log('light map', LIGHT_OUT, os.path.getsize(LIGHT_OUT) // 1024, 'KB', 'scale', round(scale, 4))
+for o in [o for o in scene.objects if o.name.startswith('fx_')]: bpy.data.objects.remove(o)   # 燈只用來烘貼圖
 fac = join(g_facade, 'ship_facade'); unwrap(fac, .003)
-fac_png = bake(fac, 'EMIT', int(2048 * SCALE), 'ship_facade_emit', 4)
+fac_png = bake(fac, 'EMIT', int(2048 * SCALE), 'ship_facade_emit', 8)
+fac_alb = bake(fac, 'DIFFUSE', int(2048 * SCALE), 'ship_facade_albedo', 8)   # 窗框(灰色金屬)/ 玻璃(深色)
 gal = join(g_gal, 'ship_gallery'); unwrap(gal, .003)
 gal_png = bake(gal, 'EMIT', int(2048 * SCALE), 'ship_gallery_emit', 4)
 set_mat(gal, simple('ship_gallery', base=(.004, .004, .006, 1), emit_tex=gal_png, rough=.12, metal=.2))
@@ -126,7 +150,7 @@ small_w = [o for o in g_small if mat_of(o) == 'ship_white']; small_p = [o for o 
 sw = simple('ship_small_white', base=(.8, .79, .76, 1), rough=.32, metal=.2); sp = simple('ship_small_pearl', base=(.6, .63, .68, 1), rough=.35, metal=.45)
 for o in small_w: set_mat(o, sw) if o.type == 'MESH' else None
 for o in small_p: set_mat(o, sp) if o.type == 'MESH' else None
-set_mat(fac, simple('ship_facade', base=(.006, .008, .012, 1), emit_tex=fac_png, rough=.1, metal=.3))
+set_mat(fac, simple('ship_facade', tex=fac_alb, emit_tex=fac_png, rough=.14, metal=.35))
 
 # 其他材質:同材質合成一個物件
 groups = {}
