@@ -1,6 +1,9 @@
 // 星艦裡的五間艙(一間一個作品;About 是另外的頁面)。每間照 catinsight-3d 那間 3D 房間的格局:厚底座 + 地板 + 兩面牆,鏡頭從前方 45° 看;
 // 牆是艦艙面板 + 發光燈條 + 看得到太空的圓窗。佈置之後照使用者的描述 / 參考圖一間一間改(改這個檔就好)。
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mat, glow, box, cyl, sphere, group, woodTex, panelTex, pot, leafyPlant, rand, textTex } from './kit.mjs?v=3';
 
 export const S = 6.4, T = 0.42, H = 4.8;   // 地板邊長、牆厚、牆高(跟 3D room 一樣)
@@ -267,8 +270,66 @@ D.rails = (R, ctx) => {
   } };
 };
 
+// ---------- 真的房間(Blender 建模 + 烘光,tools/blender/room_build.py / room_bake.py)----------
+// 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
+// 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
+const REAL = { kitty: { v: 2, props: true } };
+// 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
+const winMat = () => new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: `varying vec3 vW;
+    float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+    float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + 1.), f.x), f.y); }
+    float fb(vec2 p){ float s = 0., a = .5; for (int k = 0; k < 5; k++) { s += a * vn(p); p *= 2.07; a *= .5; } return s; }
+    void main(){ vec3 d = normalize(vW - cameraPosition);
+      vec3 q = floor(d * 260.); float st = step(.9965, h(q)) * (.5 + .5 * h(q + 3.1));
+      vec3 c = vec3(.006, .009, .02) + vec3(st);
+      float hz = .03 + .04 * d.z; float below = smoothstep(hz + .01, hz - .03, d.y);
+      vec3 planet = mix(vec3(.05, .22, .45), vec3(.02, .07, .18), smoothstep(hz, hz - .5, d.y));
+      vec2 g = d.xz / max(hz - d.y + .025, .025) * .9;
+      float land = smoothstep(.52, .56, fb(g * .35 + 7.)); planet = mix(planet, mix(vec3(.16, .3, .14), vec3(.5, .45, .32), fb(g * 1.3)), land * .8);
+      float cl = smoothstep(.5, .72, fb(g + vec2(3.1, 1.7))); planet = mix(planet, vec3(.92, .95, 1.), cl * .85);
+      c = mix(c, planet, below); c += vec3(.35, .6, 1.) * exp(-abs(d.y - hz) * 40.) * .9;
+      gl_FragColor = vec4(c, 1.);
+      #include <colorspace_fragment>
+    }` });
+let _gl = null;
+const loader = () => { if (!_gl) { _gl = new GLTFLoader(); const dr = new DRACOLoader(); dr.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); _gl.setDRACOLoader(dr); } return _gl; };
+const loadGLB = (url) => new Promise((ok, fail) => loader().load(url, (g) => ok(g.scene), undefined, fail));
+function realRoom(R, key, ctx) {
+  const cfg = REAL[key], top = new THREE.Group(); top.visible = false; R.add(top);
+  const st = { ready: false, eye: new THREE.Vector3(0, 1.65, -.9), look: new THREE.Vector3(0, 1.35, -9), hits: [], loading: null };
+  st.load = () => st.loading ??= Promise.all([loadGLB(`/assets/starship/models/room_${key}.glb?v=${cfg.v}`), cfg.props ? loadGLB(`/assets/starship/models/room_${key}_props.glb?v=${cfg.v}`) : null]).then(([m, props]) => {
+    let mirror = null;
+    if (ctx.mirror) {                                                          // 亮面地磚的倒影(低解析度 → 柔柔的,像拋光的磚)
+      const dpr = Math.min(devicePixelRatio, 2);
+      mirror = new Reflector(new THREE.PlaneGeometry(10, 9), { clipBias: .003, color: 0x555555, textureWidth: innerWidth * dpr * .28, textureHeight: innerHeight * dpr * .28 });
+      mirror.rotation.x = -Math.PI / 2; mirror.position.set(0, -.012, -4.5); mirror.renderOrder = -3; top.add(mirror);
+      const orig = mirror.onBeforeRender; let f = 0; mirror.onBeforeRender = function (...a) { if ((f++ & 1) === 0) orig.apply(this, a); };
+    }
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      const src = o.material, n = o.name;
+      if (n.startsWith('window_')) { o.material = winMat(); return; }
+      let mm;
+      if (n.startsWith('neon_')) mm = new THREE.MeshBasicMaterial({ color: src.emissive.clone().multiplyScalar(1.1), toneMapped: false });
+      else mm = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });
+      if (n.startsWith('screen_')) { mm.color.setScalar(.92); st.hits.push(o); }
+      if (n.startsWith('baked_floor') && mirror) { mm.transparent = true; mm.opacity = .9; o.renderOrder = -2; }
+      o.material = mm; src.dispose(); o.matrixAutoUpdate = false; o.updateMatrix();
+    });
+    top.add(m);
+    if (props) { props.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); top.add(props); }
+    const warm = new THREE.PointLight(0xffe6cc, 6, 12, 1.4); warm.position.set(0, 3.6, -4.5); top.add(warm);   // 給植物的暖光(建築的光已經烘在貼圖裡)
+    for (const c of [...R.children]) if (c !== top) c.visible = false;          // 小模型收起來
+    top.visible = true; st.ready = true;
+  }).catch((e) => { console.warn('[rooms] 房間模型載入失敗,用小模型', key, e); });
+  return st;
+}
+
 export function buildRoom(parent, room, ctx) {
   const R = shell(parent, room.cfg);
   const api = D[room.key](R, ctx) || {};
-  return { group: R, update: api.update || (() => {}) };
+  const real = REAL[room.key] ? realRoom(R, room.key, ctx) : null;
+  return { group: R, real, update: (t, dt) => { if (!real?.ready) api.update?.(t, dt); } };
 }

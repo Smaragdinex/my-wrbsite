@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { quality, Q_SET } from './quality.mjs?v=1';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=22';
-import { ROOMS, buildRoom } from './rooms.mjs?v=6';
+import { ROOMS, buildRoom } from './rooms.mjs?v=7';
 import { createHall, createCorridor } from './hall.mjs?v=83';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -141,7 +141,8 @@ Object.assign(key.shadow.camera, { near: 1, far: 40, left: -7, right: 7, top: 7,
 roomScene.add(key); roomScene.add(key.target);
 const fill = new THREE.DirectionalLight(0xc9b4ff, .35); fill.position.set(-6, 5, 6); roomScene.add(fill);
 const GAP = 22;            // 房與房在場景裡的間距(一次只畫一間,換房是整張畫面左右滑)
-const rooms = ROOMS.map((r, i) => { const b = buildRoom(roomScene, r, {}); b.group.position.set(i * GAP, 0, 0); return b; });
+const rooms = ROOMS.map((r, i) => { const b = buildRoom(roomScene, r, { mirror: Q_SET.mirror && innerWidth >= 700 }); b.group.position.set(i * GAP, 0, 0); return b; });
+const realOn = (i) => !!rooms[i]?.real?.ready;                       // 這間已經換成真的房間(烘焙模型載好了)
 const roomCam = new THREE.PerspectiveCamera(30, 1, .1, 200);
 const CAM_OFF = new THREE.Vector3(9.6, 7.0, 9.6).sub(new THREE.Vector3(0, 1.55, 0));
 
@@ -238,7 +239,7 @@ function open(w) { if (/^https?:/.test(w.url)) window.open(w.url, '_blank', 'noo
 let mode = 'ext', t0 = 0, cur = 0, roomF = 0, side = 1, fromDoor = 0, clockT = 0;
 const ENTER = 8.2, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0;
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
-function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
+function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); if (m === 'hall' || m === 'toRoom') rooms.forEach((r) => r.real?.load()); /* 走進大廳就開始載房間模型 */ mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
 function enterShip() { if (mode !== 'ext') return; side = ext.ship.worldToLocal(extCam.position.clone()).x >= 0 ? 1 : -1; /* 鏡頭在戰艦哪一側就從那側進 */ sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); setTimeout(() => { if (mode === 'enter') sfx.open(); }, 3900); setTimeout(() => { if (mode === 'enter') sfx.whoosh(true); }, 4500); go('enter'); }   // 機庫門、俯衝風聲、氣閘門、衝進通道
 function toRoom(i) { if (mode !== 'hall') return; sfx.click(); sfx.whoosh(true); cur = roomF = i; fromDoor = i; go('toRoom', { room: i }); }
@@ -307,7 +308,7 @@ function pick() {
     ray.setFromCamera(ndc, extCam); const h = ray.intersectObject(ext.ship, true).find((x) => x.object.isMesh);
     return h && ext.hangarHits.includes(h.object) ? 'hangar' : -1; }
   if (mode === 'hall') { ray.setFromCamera(ndc, hallCam); const h = ray.intersectObjects([...hall.hits, hall.botHit], false)[0]; return !h ? -1 : h.object.userData.bot ? 'bot' : h.object.userData.door; }
-  if (mode === 'room' && Math.abs(roomF - cur) < .02) { setRoomCam(cur); ray.setFromCamera(ndc, roomCam); return ray.intersectObjects(rooms[cur].group.children, true).length ? cur : -1; }
+  if (mode === 'room' && Math.abs(roomF - cur) < .02) { setRoomCam(cur); ray.setFromCamera(ndc, roomCam); return ray.intersectObjects(realOn(cur) ? rooms[cur].real.hits : rooms[cur].group.children, true).length ? cur : -1; }   // 真的房間:點作品螢幕才開
   return -1;
 }
 
@@ -394,7 +395,17 @@ function drawHall(t, dt, from = null, k = 1) {
   if (from && k < 1) { const base = tgt.clone(); camPos.lerpVectors(from.pos, camPos, ease(k)); tgt.lerpVectors(from.tgt, base, ease(k)); }
   drawHallAt(t, dt, camPos, tgt);
 }
+let roomLX = 0, roomLY = 0;
 function setRoomCam(i, near = 0) {
+  if (realOn(i)) {                                             // 真的房間:站在入口往裡看(跟大廳一樣),滑鼠有一點視差;剛走進來時從門口往前走一點
+    const st = rooms[i].real, base = rooms[i].group.position, has = mode === 'room' && !drag && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;
+    roomLX += ((has ? ndc.x : 0) - roomLX) * .05; roomLY += ((has ? ndc.y : 0) - roomLY) * .05;
+    const fv = hallFov(); if (roomCam.fov !== fv) { roomCam.fov = fv; roomCam.updateProjectionMatrix(); }
+    roomCam.position.copy(base).add(st.eye); roomCam.position.z += near * .8;
+    tgt.copy(base).add(st.look); tgt.x += roomLX * .9; tgt.y += roomLY * .5;
+    roomCam.lookAt(tgt); return;
+  }
+  if (roomCam.fov !== 30) { roomCam.fov = 30; roomCam.updateProjectionMatrix(); }
   const fit = Math.max(1.12, 1.4 / roomCam.aspect);
   tgt.set(i * GAP, 1.55, 0);
   roomCam.position.copy(tgt).addScaledVector(CAM_OFF, fit * (1 - near * .45)); roomCam.lookAt(tgt);
@@ -462,7 +473,8 @@ function frame() {
       if (k >= EXIT) go('ext');
     }
   }
-  veil.style.background = mode === 'enter' || mode === 'exit' ? '#f4efe6' : '#05070d';
+  const warmVeil = mode === 'enter' || mode === 'exit' || ((mode === 'toRoom' || mode === 'toHall') && realOn(mode === 'toRoom' ? cur : fromDoor));   // 白色大廳 ↔ 白色房間:用暖白轉場,不要閃黑
+  veil.style.background = warmVeil ? '#f4efe6' : '#05070d';
   veil.style.opacity = fade.toFixed(3);
 
   // 滑鼠指到的東西(機庫口 / 艙門 / 作品艙)
