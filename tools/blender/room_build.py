@@ -666,30 +666,16 @@ def planet():
     for v in bm.verts: v.co = Vector((v.co.x, 0, v.co.y))
     bmesh.ops.translate(bm, vec=wc + Vector((0, -.06, 0)), verts=bm.verts); mesh_obj('window_round', bm, M_STARS)   # 在壁紙前面(壁紙在 D - .04)
     area('round_window_light', wc + Vector((0, -.3, 0)), 140, (.7, .75, 1), 2.2, aim=wc + Vector((0, -5, -1)), shape='DISK')
-    # 中間:台座 + 浮空的小星球(海 + 低多邊形陸地 + 大氣光)+ 軌道環 + 小飛機
+    # 左後方:投影台座(上面浮著網頁加的全息地球儀)
     c = Vector((-2.2, 5.4, 0))
     cyl('ped_base', .75, .12, c + Vector((0, 0, .06)), mat('ped', '#e9e4ff', .3, coat=.5), 64, bevel=.03)
     cyl('ped_col', .45, .5, c + Vector((0, 0, .37)), mat('ped', '#e9e4ff', .3), 64, r2=.38, bevel=.02)
     cyl('ped_ring', .4, .03, c + Vector((0, 0, .63)), mat('ped_glow', '#000000', 1, emit='#b48bff', emit_k=10), 64)
     pc = c + Vector((0, 0, 1.75))
-    bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=4, radius=.62); bmesh.ops.translate(bm, vec=pc, verts=bm.verts); mesh_obj('planet_sea', bm, mat('sea', '#3f7fe0', .3, coat=.6, emit='#1a3a8a', emit_k=.6))
-    bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=3, radius=.63); rr = random.Random(9)
-    keep = []
-    for v in bm.verts:
-        n = v.co.normalized(); h = math.sin(n.x * 4.1 + 1) * math.sin(n.y * 3.3 + 2) * math.sin(n.z * 3.7)
-        v.co = n * (.62 + max(0, h) * .16)
-    land = [f for f in bm.faces if sum((v.co.length for v in f.verts)) / 3 > .64]
-    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f not in land], context='FACES'); bmesh.ops.translate(bm, vec=pc, verts=bm.verts)
-    mesh_obj('planet_land', bm, mat('land', '#7fd67f', .6), smooth=False)
-    bpy.ops.mesh.primitive_torus_add(major_radius=.95, minor_radius=.006, major_segments=96, minor_segments=8, location=pc, rotation=(math.radians(68), 0, math.radians(-25)))
-    orb = link(bpy.context.active_object); orb.name = 'orbit_ring'; orb.data.materials.append(mat('orbit', '#000000', 1, emit='#c9a8ff', emit_k=4))
-    pl = pc + Vector((.94, .1, .3))
-    box('plane_body', (.06, .26, .06), pl, mat('plane', '#e8eeff', .3, coat=.6), .3, bevel=.02)
-    box('plane_wing', (.34, .07, .015), pl + Vector((0, .02, .01)), mat('plane', '#e8eeff', .3), .3, bevel=.006)
-    box('plane_tail', (.12, .04, .012), pl + Vector((.03, -.11, .02)), mat('plane', '#e8eeff', .3), .3, bevel=.004)
+    # 台座上方的星球不在這裡建:網頁上放大廳搬過來的全息地球儀(globe.mjs),這裡只留它打在房間裡的光
     area('holo_light', pc + Vector((0, -1.2, .6)), 60, (.75, .7, 1), 1.0, aim=pc)
     L_ = bpy.data.lights.new('planet_glow', 'POINT'); L_.energy = 80; L_.color = (.7, .6, 1); L_.shadow_soft_size = .6
-    lo = bpy.data.objects.new('planet_glow', L_); col.objects.link(lo); lo.location = c + Vector((0, 0, .9))
+    lo = bpy.data.objects.new('planet_glow', L_); col.objects.link(lo); lo.location = pc   # 光從全息地球的位置發出
     # 地毯:深紫圓毯 + 一圈發光星點
     cyl('rug', 1.9, .02, c + Vector((0, 0, .012)), mat('rug', '#41377f', .95), 96)
     for k in range(24): a = k / 24 * math.tau; sphere(f'rug_star_{k}', .02, c + Vector((math.cos(a) * 1.65, math.sin(a) * 1.65, .03)), mat('rugstar', '#000000', 1, emit='#e0d0ff', emit_k=6), scale=(1, 1, .3), seg=8)
