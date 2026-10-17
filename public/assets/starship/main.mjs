@@ -241,7 +241,7 @@ function updateDoorWins(cam) {
   cam.updateMatrixWorld(); let any = false;
   const order = doorWins.map((_, i) => i).sort((a, b) => hall.doors[b].g.getWorldPosition(_ds).distanceToSquared(cam.position) - hall.doors[a].g.getWorldPosition(_corner).distanceToSquared(cam.position));   // 遠的先畫、最近的那道門最後畫(範圍重疊時以它為準)
   for (const i of order) {
-    const on = realOn(i), rect = on ? doorRect(i, cam) : null; doorWins[i].visible = !!rect;
+    const on = realOn(i) && roomTex[i] && !pending(roomTex[i]), rect = on ? doorRect(i, cam) : null; doorWins[i].visible = !!rect;   // 房間貼圖都傳上顯示卡了才在門洞裡畫
     if (!rect) continue;
     _cw.multiplyMatrices(doorToRoom(i), cam.matrixWorld); _cw.decompose(doorCam.position, doorCam.quaternion, _ds);
     doorCam.fov = cam.fov; doorCam.aspect = cam.aspect; doorCam.near = cam.near; doorCam.far = 200; doorCam.updateProjectionMatrix();
@@ -514,11 +514,13 @@ const clock = new THREE.Clock();
 // 超空間會等到「戰艦 + 通道 + 大廳」都預熱好才跳出(最多多等 15 秒);五間房接著在背景載、預熱(看戰艦外觀的時候)。
 const warmRT = new THREE.WebGLRenderTarget(8, 8, { type: THREE.HalfFloatType }), texQueue = [], texSeen = new WeakSet(), composerWarm = [];
 const W8 = { ext: 0, cor: 0, hall: 0 };                                // 0 還沒開始、1 進行中、2 好了
-const roomWarm = new Set(), extTex = new WeakSet(); let shipReadyAt = 0;
+const roomWarm = new Set(), extTex = new WeakSet(), corTex = new WeakSet(), hallTex = new WeakSet(), roomTex = []; let shipReadyAt = 0;
+const pending = (set) => texQueue.some((x) => set.has(x)) || bigQueue.some((b) => set.has(b.tx));   // 這組貼圖還有沒傳完的
 function queueTextures(root) {
   root.traverse((o) => { for (const m of [].concat(o.material || [])) {
-    for (const k in m) { const v = m[k]; if (v && v.isTexture && !texSeen.has(v)) { texSeen.add(v); texQueue.push(v); } }
-    if (m.uniforms) for (const u of Object.values(m.uniforms)) { const v = u && u.value; if (v && v.isTexture && !texSeen.has(v)) { texSeen.add(v); texQueue.push(v); } }
+    const add = (v) => { if (v && v.isTexture && !v.isRenderTargetTexture && !texSeen.has(v)) { texSeen.add(v); texQueue.push(v); } };   // 後製 / 門洞用的畫布貼圖不用傳
+    for (const k in m) add(m[k]);
+    if (m.uniforms) for (const u of Object.values(m.uniforms)) add(u && u.value);
   } });
 }
 async function compileBoth(scene, cam, clip = null) {                  // 畫到貼圖(後製 / 門洞)和直接畫到螢幕,shader 版本不一樣 → 兩種都先編好
@@ -572,9 +574,9 @@ function markTex(root, set) {                                          // 記下
 function warmTick() {
   const go_ = (key, ok, fn) => { if (W8[key] === 0 && ok) { W8[key] = 1; fn().then(() => { W8[key] = 2; }); } };
   go_('ext', ext.loaded, () => markTex(extScene, extTex) || Promise.all([compileBoth(extScene, extCam), compilePasses(extComposer)]).then(() => composerWarm.push('ext')));
-  go_('cor', cor.baked, () => Promise.all([compileBoth(corScene, corCam), compilePasses(corComposer)]).then(() => composerWarm.push('cor')));
-  go_('hall', hall.baked, () => Promise.all([compileBoth(hallScene, hallCam), compilePasses(hallComposer)]).then(() => { composerWarm.push('hall'); loadRooms(); }));   // 大廳好了就接著載房間
-  rooms.forEach((r, i) => { if (realOn(i) && !roomWarm.has(i)) { roomWarm.add(i); compileBoth(roomScene, roomCam, clipFront); } });
+  go_('cor', cor.baked, () => markTex(corScene, corTex) || Promise.all([compileBoth(corScene, corCam), compilePasses(corComposer)]).then(() => composerWarm.push('cor')));
+  go_('hall', hall.baked, () => markTex(hallScene, hallTex) || Promise.all([compileBoth(hallScene, hallCam), compilePasses(hallComposer)]).then(() => { composerWarm.push('hall'); loadRooms(); }));   // 大廳好了就接著載房間
+  rooms.forEach((r, i) => { if (realOn(i) && !roomWarm.has(i)) { roomWarm.add(i); markTex(r.group, roomTex[i] = new WeakSet()); compileBoth(roomScene, roomCam, clipFront); } });
   // 貼圖:每幀最多花 ~6ms 傳(一張大貼圖可能就超過,那就一幀一張)
   const t0 = performance.now();
   while (texQueue.length && performance.now() - t0 < 4) {
@@ -586,20 +588,22 @@ function warmTick() {
   stepBig();
 }
 function warmComposers() {                                             // 後製的 shader(光暈、輸出)第一次畫才編譯 → 先在看不到的時候畫一次
-  const kind = composerWarm.shift(); if (!kind) return;
+  const kind = composerWarm[0]; if (!kind) return;
+  if (pending({ ext: extTex, cor: corTex, hall: hallTex }[kind])) return;   // 等這個場景的大貼圖分段傳完再畫(不然 three.js 會整張同步上傳 → 卡)
+  composerWarm.shift();
   if (kind === 'ext') extComposer.render();
   else if (kind === 'cor') { corCam.position.set(0, .2, cor.START); corCam.lookAt(0, .1, cor.START - 10); cor.update(cor.START); const tm = renderer.toneMapping; if (cor.baked) renderer.toneMapping = THREE.NoToneMapping; corComposer.render(); renderer.toneMapping = tm; }
   else if (kind === 'hall') { hallCam.position.copy(HALL_POS); hallCam.lookAt(HALL_T); renderHall(0); }
 }
-const innerReady = () => W8.cor === 2 && W8.hall === 2 && !composerWarm.length && !bigQueue.length && !texQueue.some((x) => (x.image?.width || 0) >= 2048);
+const innerReady = () => W8.cor === 2 && W8.hall === 2 && !composerWarm.length && !pending(corTex) && !pending(hallTex);
 window.__shipReady = () => {                                           // control.mjs:超空間等到這個是 true 才跳出
   if (ext.failed) return true;
-  if (!ext.loaded || W8.ext !== 2 || composerWarm.includes('ext') || texQueue.some((x) => extTex.has(x)) || bigQueue.some((b) => extTex.has(b.tx))) return false;
+  if (!ext.loaded || W8.ext !== 2 || composerWarm.includes('ext') || pending(extTex)) return false;
   shipReadyAt ||= performance.now();
   return innerReady() || performance.now() - shipReadyAt > 15000;      // 通道 / 大廳太慢就不等了(背景繼續)
 };
 window.__shipProgress = () => Math.min(1, ext.progress * .55 + (W8.ext === 2 ? .1 : 0) + (cor.baked ? .1 : 0) + (W8.cor === 2 ? .05 : 0) + (hall.baked ? .15 : 0) + (W8.hall === 2 ? .05 : 0));
-window.__warm = () => ({ ...W8, tex: texQueue.length, rooms: [...roomWarm] });   // 測試用
+window.__warm = (detail) => ({ ...W8, tex: texQueue.length, big: bigQueue.length, rooms: [...roomWarm], q: detail ? texQueue.slice(0, 30).map((x) => [x.name, x.constructor.name, x.image && x.image.constructor.name, x.image && x.image.width, x.version, x.isCanvasTexture, x.isRenderTargetTexture]) : undefined });   // 測試用
 function frame() {
   const dt = Math.min(.05, clock.getDelta()), t = clock.elapsedTime; clockT = t;
   const XP = window.__xp || { ship: 0, warp: 0, flash: 0, state: '' };
