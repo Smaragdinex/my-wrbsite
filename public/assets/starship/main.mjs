@@ -117,7 +117,6 @@ extScene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1830, .5));
 const ext = createExterior(extScene, Q_SET);
 window.__shipHover = () => ({ door: mode === 'hall' ? hover : -1, hangar: hoverHangar, bot: hoverBot });   /* 給左上表情臉用 */
 window.__dbg = () => ({ ext, extCam, rtHall, rtCor, renderer, hallPortal, corCam, cor, hall, pCam }); window.__shipPose = () => ({ yaw: +ext.ship.rotation.y.toFixed(3), pitch: +ext.ship.rotation.x.toFixed(3) });   // 測試用
-window.__shipReady = () => ext.loaded || ext.failed; window.__shipProgress = () => ext.progress;   // control.mjs 的讀條等戰艦模型載好才出發
 const extCam = new THREE.PerspectiveCamera(38, 1, .5, 6000);           // 遠平面要看得到底下那顆大星球
 // 光暈前先把壞掉的像素(NaN / 無限大)換成 0:不然 bloom 會把一個壞點擴散成一大塊黑色方框(大廳中間偶爾出現的黑框就是這樣來的)
 const NAN_FIX = { uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -509,13 +508,107 @@ function drawRooms(t, dt, near = 0) {
 
 // ---------- 每幀 ----------
 const clock = new THREE.Clock();
+// ---------- 預熱(超空間裡做完,進大廳才不會卡一下)----------
+// 模型載好不代表能馬上順順地畫:第一次畫的時候還要編譯 shader、把大張貼圖傳上顯示卡,那一幀會卡 0.1~0.6 秒。
+// 所以每個場景的模型一載好就:①在背景編譯 shader(compileAsync,不卡畫面)②貼圖排隊,每幀傳一兩張 ③後製(光暈等)先畫一次。
+// 超空間會等到「戰艦 + 通道 + 大廳」都預熱好才跳出(最多多等 15 秒);五間房接著在背景載、預熱(看戰艦外觀的時候)。
+const warmRT = new THREE.WebGLRenderTarget(8, 8, { type: THREE.HalfFloatType }), texQueue = [], texSeen = new WeakSet(), composerWarm = [];
+const W8 = { ext: 0, cor: 0, hall: 0 };                                // 0 還沒開始、1 進行中、2 好了
+const roomWarm = new Set(), extTex = new WeakSet(); let shipReadyAt = 0;
+function queueTextures(root) {
+  root.traverse((o) => { for (const m of [].concat(o.material || [])) {
+    for (const k in m) { const v = m[k]; if (v && v.isTexture && !texSeen.has(v)) { texSeen.add(v); texQueue.push(v); } }
+    if (m.uniforms) for (const u of Object.values(m.uniforms)) { const v = u && u.value; if (v && v.isTexture && !texSeen.has(v)) { texSeen.add(v); texQueue.push(v); } }
+  } });
+}
+async function compileBoth(scene, cam, clip = null) {                  // 畫到貼圖(後製 / 門洞)和直接畫到螢幕,shader 版本不一樣 → 兩種都先編好
+  queueTextures(scene);
+  const prevClip = renderer.clippingPlanes; if (clip) renderer.clippingPlanes = clip;
+  renderer.setRenderTarget(warmRT); const a = renderer.compileAsync(scene, cam); renderer.setRenderTarget(null);
+  const b = renderer.compileAsync(scene, cam); renderer.clippingPlanes = prevClip;
+  try { await Promise.all([a, b]); } catch (e) { console.warn('[warm]', e); }
+}
+// 大貼圖(≥ 2048)分段上傳:一次傳一條(約 100 萬像素,幾毫秒),傳完產生 mipmap,再交給 three.js(它就不會再自己整張傳一次 → 不卡)
+const bigQueue = [], GL = renderer.getContext();
+const WRAP = { 1000: GL.REPEAT, 1001: GL.CLAMP_TO_EDGE, 1002: GL.MIRRORED_REPEAT }, FILT = { 1003: GL.NEAREST, 1004: GL.NEAREST_MIPMAP_NEAREST, 1005: GL.NEAREST_MIPMAP_LINEAR, 1006: GL.LINEAR, 1007: GL.LINEAR_MIPMAP_NEAREST, 1008: GL.LINEAR_MIPMAP_LINEAR };
+const bigOK = (tx) => typeof createImageBitmap === 'function' && !tx.isRenderTargetTexture && !tx.isDataTexture && !tx.isCompressedTexture && !tx.isCanvasTexture && !tx.isVideoTexture
+  && tx.flipY === false && tx.format === THREE.RGBAFormat && tx.type === THREE.UnsignedByteType && (tx.image?.width || 0) >= 2048 && !renderer.properties.get(tx).__webglInit;
+function startBig(tx) {
+  const w = tx.image.width, h = tx.image.height, mips = tx.generateMipmaps && FILT[tx.minFilter] !== GL.LINEAR && FILT[tx.minFilter] !== GL.NEAREST;
+  const glTex = GL.createTexture(); renderer.state.bindTexture(GL.TEXTURE_2D, glTex);
+  GL.texStorage2D(GL.TEXTURE_2D, mips ? Math.floor(Math.log2(Math.max(w, h))) + 1 : 1, tx.colorSpace === THREE.SRGBColorSpace ? GL.SRGB8_ALPHA8 : GL.RGBA8, w, h);
+  GL.texParameteri(GL.TEXTURE_2D, GL.TEXTURE_WRAP_S, WRAP[tx.wrapS]); GL.texParameteri(GL.TEXTURE_2D, GL.TEXTURE_WRAP_T, WRAP[tx.wrapT]);
+  GL.texParameteri(GL.TEXTURE_2D, GL.TEXTURE_MAG_FILTER, FILT[tx.magFilter]); GL.texParameteri(GL.TEXTURE_2D, GL.TEXTURE_MIN_FILTER, FILT[tx.minFilter]);
+  bigQueue.push({ tx, glTex, w, h, mips, y: 0, rows: Math.max(32, Math.floor(1048576 / w)), strip: null, busy: false });
+}
+function stepBig() {
+  const b = bigQueue[0]; if (!b) return;
+  if (renderer.properties.get(b.tx).__webglInit) { GL.deleteTexture(b.glTex); bigQueue.shift(); return; }   // three.js 等不及已經自己傳了:用它的
+  if (!b.strip) { if (!b.busy) { b.busy = true; createImageBitmap(b.tx.image, 0, b.y, b.w, Math.min(b.rows, b.h - b.y), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }).then((bm) => { b.strip = bm; }, () => { b.fail = true; }); } if (b.fail) { GL.deleteTexture(b.glTex); bigQueue.shift(); renderer.initTexture(b.tx); } return; }
+  renderer.state.bindTexture(GL.TEXTURE_2D, b.glTex);
+  GL.pixelStorei(GL.UNPACK_FLIP_Y_WEBGL, false); GL.pixelStorei(GL.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); GL.pixelStorei(GL.UNPACK_ALIGNMENT, 4); GL.pixelStorei(GL.UNPACK_COLORSPACE_CONVERSION_WEBGL, GL.NONE);
+  GL.texSubImage2D(GL.TEXTURE_2D, 0, 0, b.y, GL.RGBA, GL.UNSIGNED_BYTE, b.strip);
+  b.y += b.strip.height; b.strip.close(); b.strip = null; b.busy = false;
+  if (b.y >= b.h) {
+    if (b.mips) GL.generateMipmap(GL.TEXTURE_2D);
+    const p = renderer.properties.get(b.tx); p.__webglTexture = b.glTex; p.__webglInit = true; p.__version = b.tx.version;
+    bigQueue.shift();
+  }
+}
+// 後製(光暈、輸出、NaN 清除…)的材質:塞進一個小場景,一起在背景編譯
+function passMaterials(composer) {
+  const out = new Set(), take = (v) => { if (!v) return; if (v.isMaterial) out.add(v); else if (Array.isArray(v)) v.forEach(take); };
+  for (const p of composer.passes) for (const k of Object.keys(p)) { const v = p[k]; take(v); if (v && v._mesh) take(v._mesh.material); if (v && typeof v === 'object' && !v.isMaterial && !Array.isArray(v) && k !== 'scene' && k !== 'camera') for (const k2 of Object.keys(v)) take(v[k2]); }
+  return [...out];
+}
+function compilePasses(composer) {
+  const sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), geo = new THREE.PlaneGeometry(2, 2);
+  for (const m of passMaterials(composer)) { const q = new THREE.Mesh(geo, m); q.frustumCulled = false; sc.add(q); }
+  return compileBoth(sc, cam);
+}
+function markTex(root, set) {                                          // 記下某個場景用到的貼圖(戰艦的貼圖要先傳完才跳出超空間)
+  root.traverse((o) => { for (const m of [].concat(o.material || [])) for (const k in m) { const v = m[k]; if (v && v.isTexture) set.add(v); } });
+}
+function warmTick() {
+  const go_ = (key, ok, fn) => { if (W8[key] === 0 && ok) { W8[key] = 1; fn().then(() => { W8[key] = 2; }); } };
+  go_('ext', ext.loaded, () => markTex(extScene, extTex) || Promise.all([compileBoth(extScene, extCam), compilePasses(extComposer)]).then(() => composerWarm.push('ext')));
+  go_('cor', cor.baked, () => Promise.all([compileBoth(corScene, corCam), compilePasses(corComposer)]).then(() => composerWarm.push('cor')));
+  go_('hall', hall.baked, () => Promise.all([compileBoth(hallScene, hallCam), compilePasses(hallComposer)]).then(() => { composerWarm.push('hall'); loadRooms(); }));   // 大廳好了就接著載房間
+  rooms.forEach((r, i) => { if (realOn(i) && !roomWarm.has(i)) { roomWarm.add(i); compileBoth(roomScene, roomCam, clipFront); } });
+  // 貼圖:每幀最多花 ~6ms 傳(一張大貼圖可能就超過,那就一幀一張)
+  const t0 = performance.now();
+  while (texQueue.length && performance.now() - t0 < 4) {
+    const tx = texQueue[0];
+    if (!tx.image || (tx.image.width || 0) === 0 || tx.version === 0) { texQueue.push(texQueue.shift()); if (texQueue.length < 2 || texQueue.every((x) => !x.image || x.version === 0)) break; continue; }   // 圖還沒解碼好:排到後面
+    texQueue.shift();
+    if (bigOK(tx)) startBig(tx); else { try { renderer.initTexture(tx); } catch {} }
+  }
+  stepBig();
+}
+function warmComposers() {                                             // 後製的 shader(光暈、輸出)第一次畫才編譯 → 先在看不到的時候畫一次
+  const kind = composerWarm.shift(); if (!kind) return;
+  if (kind === 'ext') extComposer.render();
+  else if (kind === 'cor') { corCam.position.set(0, .2, cor.START); corCam.lookAt(0, .1, cor.START - 10); cor.update(cor.START); const tm = renderer.toneMapping; if (cor.baked) renderer.toneMapping = THREE.NoToneMapping; corComposer.render(); renderer.toneMapping = tm; }
+  else if (kind === 'hall') { hallCam.position.copy(HALL_POS); hallCam.lookAt(HALL_T); renderHall(0); }
+}
+const innerReady = () => W8.cor === 2 && W8.hall === 2 && !composerWarm.length && !bigQueue.length && !texQueue.some((x) => (x.image?.width || 0) >= 2048);
+window.__shipReady = () => {                                           // control.mjs:超空間等到這個是 true 才跳出
+  if (ext.failed) return true;
+  if (!ext.loaded || W8.ext !== 2 || composerWarm.includes('ext') || texQueue.some((x) => extTex.has(x)) || bigQueue.some((b) => extTex.has(b.tx))) return false;
+  shipReadyAt ||= performance.now();
+  return innerReady() || performance.now() - shipReadyAt > 15000;      // 通道 / 大廳太慢就不等了(背景繼續)
+};
+window.__shipProgress = () => Math.min(1, ext.progress * .55 + (W8.ext === 2 ? .1 : 0) + (cor.baked ? .1 : 0) + (W8.cor === 2 ? .05 : 0) + (hall.baked ? .15 : 0) + (W8.hall === 2 ? .05 : 0));
+window.__warm = () => ({ ...W8, tex: texQueue.length, rooms: [...roomWarm] });   // 測試用
 function frame() {
   const dt = Math.min(.05, clock.getDelta()), t = clock.elapsedTime; clockT = t;
   const XP = window.__xp || { ship: 0, warp: 0, flash: 0, state: '' };
   const appear = XP.ship, warpOn = XP.warp > .001, live = appear > .9 && XP.state === 'ship';
   canvas.style.opacity = Math.max(appear, Math.min(1, XP.warp * 3)).toFixed(3);
   canvas.style.pointerEvents = appear > .9 ? 'auto' : 'none';
-  if (appear <= .001 && !warpOn) { flashEl.style.opacity = (XP.flash || 0).toFixed(3); requestAnimationFrame(frame); return; }
+  warmTick();
+  if (appear <= .001 && !warpOn) { warmComposers(); flashEl.style.opacity = (XP.flash || 0).toFixed(3); requestAnimationFrame(frame); return; }
+  warmComposers();                                                   // 在清畫面之前畫 → 接著整個重畫,看不到
   flashEl.style.opacity = (XP.flash || 0).toFixed(3);
 
   // 自動降解析度:畫面上有東西時,最近 90 幀平均慢於 ~42fps 就降一級(2 → 1.5 → 1.25 → 1);只降不升,避免來回跳
