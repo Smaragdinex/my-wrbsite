@@ -505,11 +505,16 @@ for k in range(n):
     a = A0 + k * (w + gap)
     arc_block(f'furn_arc_seat_{k}', TX, TY, R0 + .02, RS + .02, a, a + w, .27, .42, M_LEATHER, seg=24, bevel=.065, bseg=5)
     arc_block(f'furn_arc_back_{k}', TX, TY, RS, R1 - .02, a, a + w, .27, .76, M_LEATHER, lean=.07, seg=24, bevel=.08, bseg=5)
-for k, a in enumerate((A0, A1)):                                               # 兩端圓頭
-    rm = (R0 + R1) / 2; cxe, cye = TX + math.cos(a) * rm, TY + math.sin(a) * rm
-    bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=(R1 - R0) / 2, depth=.32, location=(cxe, cye, .26)); o = link(bpy.context.active_object); o.name = f'furn_arc_end_{k}'; o.data.materials.append(M_LEATHER)
-    bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .07; bv.segments = 5
-    for pl in o.data.polygons: pl.use_smooth = True
+# 兩端圓頭:半圓柱,平的那面剛好貼在弧形的端面上、往外凸(不跟坐墊重疊,烘光才不會有黑縫)
+for k, (a, sgn) in enumerate(((A0, -1), (A1, 1))):
+    rm, rr = (R0 + R1) / 2, (R1 - R0) / 2
+    cxe, cye = TX + math.cos(a) * rm, TY + math.sin(a) * rm
+    out = Vector((-math.sin(a), math.cos(a), 0)) * sgn                         # 往弧形外面的切線方向
+    bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=64, radius1=rr, radius2=rr, depth=.32)
+    bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0), plane_no=out, clear_inner=True)
+    bmesh.ops.contextual_create(bm, geom=[e for e in bm.edges if e.is_boundary])   # 補上切開的平面
+    bmesh.ops.translate(bm, vec=(cxe, cye, .26), verts=bm.verts)
+    mesh_obj(f'furn_arc_end_{k}', bm, M_LEATHER, bevel=.06, seg=5)
 for k, (da, col) in enumerate(((-.3, '#d9cfc1'), (.05, '#4b4946'), (.36, '#d9cfc1'))):   # 抱枕
     a = ab + da; bpy.ops.mesh.primitive_cube_add(size=1, location=(TX + math.cos(a) * (RS - .08), TY + math.sin(a) * (RS - .08), .58))
     o = link(bpy.context.active_object); o.name = f'furn_arc_pillow_{k}'; o.scale = (.13, .46, .34); o.rotation_euler = (0, -.3, a)
