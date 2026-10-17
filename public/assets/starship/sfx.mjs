@@ -2,7 +2,7 @@
 //   hover 滑過可互動的東西:輕輕一聲「滴」;click 按下:清脆的確認音;open 機庫大門滑開:低沉的嗡聲 + 氣流;
 //   whoosh 飛進門 / 退出:一陣風聲;swish 左右換艙:短短的刷一聲;greet 點機器人時它的電子招呼聲。
 // 瀏覽器規定要使用者先點一下(或按鍵)才能出聲,所以第一次互動之前是靜音的。右下角的喇叭可以關掉音效(記在 localStorage)。
-// 另外:背景音樂(即時合成的太空氛圍音樂:慢慢變化的和弦鋪底 + 低音 + 稀疏的鐘聲琶音,加回音和大殘響)、
+// 另外:背景音樂(Cat Street 3D 房間電台的歌單,從「Vastness」開始,串流播放;左下角有播放器)、
 //       超空間音效(充能嗡聲 → 跳躍時往上衝的掃頻 + 風聲 → 隧道裡的轟隆聲 → 跳出時一聲低沉的「轟」+ 抵達的鐘聲)、
 //       點左上頭盔的機器人叫聲。全部共用同一個開關。
 let ctx = null, master = null, muted = false, lastHover = 0;
@@ -13,7 +13,7 @@ function ac() {
     ctx = new AC(); master = ctx.createGain(); master.gain.value = .55; master.connect(ctx.destination); }
   return ctx;
 }
-function unlock() { try { const c = ac(); if (!c) return; const go = () => { if (!muted) startMusic(); }; if (c.state === 'suspended') c.resume().then(go, () => {}); else go(); } catch {} }
+function unlock() { try { const c = ac(); if (!c) return; if (musicAllowed && !muted && !userPaused) musicElement().play().catch(() => {}); const go = () => { if (!muted) startMusic(); }; if (c.state === 'suspended') c.resume().then(go, () => {}); else go(); } catch {} }   // 音樂的 play() 要在點擊當下呼叫
 for (const ev of ['pointerdown', 'keydown', 'touchend']) addEventListener(ev, unlock, { passive: true });
 const ready = () => !muted && ctx && ctx.state === 'running';
 
@@ -57,72 +57,66 @@ export const sfx = {
   // 超空間:每幀由 main.mjs 呼叫(XP = window.__xp),依讀條 / 跳躍時間軸自己決定出什麼聲音
   hyperspace(XP) { hyper(XP); },
   enableMusic() { musicAllowed = true; if (ctx && ctx.state === 'running' && !muted) startMusic(); },
+  music: {                                                             // 左下角播放器用
+    get list() { return PLAYLIST; },                                   // getter:PLAYLIST 宣告在下面
+    get index() { return trackI; },
+    get playing() { return !!musicEl && !musicEl.paused && !muted; },
+    play(i) { playTrack(i ?? trackI); },
+    toggle() { if (this.playing) { userPaused = true; musicEl.pause(); notify(); } else playTrack(trackI); },
+    next() { playTrack(trackI + 1); }, prev() { playTrack(trackI - 1); },
+    on(f) { listeners.add(f); return () => listeners.delete(f); },
+  },
   get muted() { return muted; },
   toggle() { muted = !muted; try { localStorage.setItem('xarts-sfx', muted ? 'off' : 'on'); } catch {}
-    if (!muted) { unlock(); setTimeout(() => sfx.click(), 30); } else stopAll(); return muted; },
+    if (!muted) { unlock(); setTimeout(() => sfx.click(), 30); } else stopAll(); notify(); return muted; },
 };
 
-// ================= 背景音樂 =================
-// 四個和弦循環(每個約 9.6 秒):Cmaj9 → Am(add9) → Fmaj7(#11) → G6sus;鋪底 = 每個音兩支微微走音的鋸齒波 + 慢慢開合的低通,
-// 低音 = 和弦根音的正弦波,琶音 = 偶爾一顆鐘聲(五聲音階,進回音),全部再送進一個長殘響。
+// ================= 背景音樂(播放清單)=================
+// 跟 Cat Street 3D 房間電台同一份歌單(Mixkit 免費授權;檔案就是 /catinsight-3d/music/ 那幾首,不另外放),
+// 從最搭太空的「Vastness」開始,一首播完接下一首。用 <audio> 串流(不用整首下載完),接進 Web Audio 做淡入、超空間時壓低。
+// 各曲母帶音量差很多 → trim 統一到 Vastness 的響度(-13.5 LUFS)。左下角的播放器(main.mjs)用 sfx.music 控制。
+const MUSIC_DIR = '/catinsight-3d/music/', MUSIC_LEVEL = .3;
+const PLAYLIST = [
+  { title: 'Vastness', artist: 'Andrew Ev', mood: 'Ambient · Space', file: 'vastness.m4a', trim: 1, cover: ['#0f2027', '#2c5364', '#8ec5fc'] },
+  { title: 'Opalescent', artist: 'Eugenio Mininni', mood: 'Ambient', file: 'opalescent.m4a', trim: .79, cover: ['#a18cd1', '#fbc2eb', '#8fd3f4'] },
+  { title: 'Home', artist: 'Eugenio Mininni', mood: 'Ambient · Warm', file: 'home.m4a', trim: .84, cover: ['#43e97b', '#38f9d7', '#4facfe'] },
+  { title: 'Finding Myself', artist: 'Michael Ramir C.', mood: 'Ambient · Warm', file: 'finding-myself.m4a', trim: 2.6, cover: ['#f6d365', '#fda085', '#c471f5'] },
+  { title: 'Relax Beat', artist: 'Arulo', mood: 'Ambient beat', file: 'relax-beat.m4a', trim: 7, cover: ['#ff9a8b', '#ff6a88', '#ffd3a5'] },
+];
+let mus = null, musicAllowed = false, musicEl = null, trackI = 0, userPaused = false;   // 只有首頁(有喇叭開關)會開音樂;About 頁只有音效
+const listeners = new Set(), notify = () => listeners.forEach((f) => { try { f(); } catch {} });
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
-const CHORDS = [[48, 55, 62, 64, 71], [45, 52, 59, 60, 67], [41, 48, 55, 57, 64], [43, 50, 57, 59, 62]];
-const PENTA = [[60, 62, 64, 67, 71, 74, 76], [57, 60, 64, 67, 69, 72, 76], [57, 60, 64, 65, 67, 72, 76], [59, 62, 67, 69, 71, 74, 79]];
-const CHORD_SEC = 9.6, MUSIC_LEVEL = .65;
-let mus = null, musTimer = null, musicAllowed = false;   // 只有首頁(有喇叭開關)會開音樂;About 頁只有音效
-function reverbIR(sec = 5, decay = 2.8) {
-  const len = Math.floor(ctx.sampleRate * sec), b = ctx.createBuffer(2, len, ctx.sampleRate);
-  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); }
-  return b;
+function musicElement() {                                             // 在使用者點擊的那一刻就呼叫 play()(Safari 規定要在點擊當下)
+  if (!musicEl) {
+    musicEl = new Audio(); musicEl.preload = 'none'; musicEl.crossOrigin = 'anonymous'; musicEl.src = MUSIC_DIR + PLAYLIST[trackI].file;
+    musicEl.addEventListener('ended', () => playTrack((trackI + 1) % PLAYLIST.length));
+    for (const ev of ['play', 'pause']) musicEl.addEventListener(ev, notify);
+  }
+  return musicEl;
 }
 function startMusic() {
-  if (!musicAllowed) return;
-  if (mus || !ctx || muted) { if (mus && !muted) mus.out.gain.setTargetAtTime(MUSIC_LEVEL * mus.duck, ctx.currentTime, 1.2); return; }
-  const out = ctx.createGain(); out.gain.value = 0; out.connect(master);
-  const verb = ctx.createConvolver(); verb.buffer = reverbIR(); const wet = ctx.createGain(); wet.gain.value = .6; verb.connect(wet); wet.connect(out);
-  const dry = ctx.createGain(); dry.gain.value = .55; dry.connect(out);
-  const bus = (send) => { const g = ctx.createGain(); g.connect(dry); const s_ = ctx.createGain(); s_.gain.value = send; g.connect(s_); s_.connect(verb); return g; };
-  const padF = ctx.createBiquadFilter(); padF.type = 'lowpass'; padF.frequency.value = 820; padF.Q.value = .6; padF.connect(bus(.75));
-  const lfo = ctx.createOscillator(), lfoG = ctx.createGain(); lfo.frequency.value = .045; lfoG.gain.value = 380; lfo.connect(lfoG); lfoG.connect(padF.frequency); lfo.start();
-  const dl = ctx.createDelay(1.5), fb = ctx.createGain(), dlF = ctx.createBiquadFilter(), bell = bus(.85);
-  dl.delayTime.value = .46; fb.gain.value = .36; dlF.type = 'lowpass'; dlF.frequency.value = 2800; dl.connect(dlF); dlF.connect(fb); fb.connect(dl); dlF.connect(bell);
-  const bellIn = ctx.createGain(); bellIn.connect(bell); bellIn.connect(dl);
-  mus = { out, padF, bellIn, bass: bus(.2), step: 0, next: ctx.currentTime + .2, arp: ctx.currentTime + 3.5, duck: 1 };
-  out.gain.setValueAtTime(0, ctx.currentTime); out.gain.linearRampToValueAtTime(MUSIC_LEVEL * mus.duck, ctx.currentTime + 7);   // 慢慢淡入
-  musTimer = setInterval(schedule, 250); schedule();
+  if (!musicAllowed || !ctx || muted || userPaused) return;
+  if (mus) { mus.out.gain.setTargetAtTime(MUSIC_LEVEL * mus.duck, ctx.currentTime, 1.2); musicElement().play().catch(() => {}); return; }
+  const el = musicElement(), out = ctx.createGain(), trim = ctx.createGain(); out.gain.value = 0; trim.gain.value = PLAYLIST[trackI].trim; trim.connect(out); out.connect(master);
+  ctx.createMediaElementSource(el).connect(trim);
+  mus = { out, trim, duck: 1 };
+  out.gain.setValueAtTime(0, ctx.currentTime); out.gain.linearRampToValueAtTime(MUSIC_LEVEL, ctx.currentTime + 6);   // 慢慢淡入
+  el.play().catch(() => {});
 }
-function voice(freq, t, dur, dest, { type = 'sawtooth', vol = .02, att = 2.8, rel = 4.5, detune = 0 } = {}) {
-  const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = freq; o.detune.value = detune;
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + att); g.gain.setValueAtTime(vol, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + rel);
-  o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + rel + .1);
-}
-function schedule() {
-  if (!mus || !ctx || ctx.state !== 'running') return;
-  const now = ctx.currentTime;
-  while (mus.next < now + 1.5) {                                      // 和弦:鋪底 + 低音
-    const t = mus.next, ch = CHORDS[mus.step % CHORDS.length];
-    for (const n of ch) for (const d of [-7, 6]) voice(midi(n), t, CHORD_SEC - 1, mus.padF, { vol: .05, detune: d });
-    voice(midi(ch[0] - 12), t, CHORD_SEC - 1.5, mus.bass, { type: 'sine', vol: .2, att: 2.2, rel: 3 });
-    if (mus.step % 2 === 1) voice(midi(ch[4] + 24), t + 2, 4, mus.padF, { type: 'sine', vol: .035, att: 3, rel: 4 });   // 偶爾一層很高的閃光
-    mus.next += CHORD_SEC; mus.step++;
-  }
-  while (mus.arp < now + 1.5) {                                       // 鐘聲:稀疏、隨機
-    const ch = PENTA[(mus.step - 1 + CHORDS.length) % CHORDS.length], n = ch[Math.random() * ch.length | 0] + (Math.random() < .3 ? 12 : 0), t = mus.arp;
-    for (const [mul, v, d] of [[1, .13, 1.8], [2.01, .03, .9], [3.98, .014, .5]]) {   // 一點泛音 → 像鐘 / 鋼片琴
-      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = midi(n) * mul;
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + d);
-      o.connect(g); g.connect(mus.bellIn); o.start(t); o.stop(t + d + .05);
-    }
-    mus.arp += .7 + Math.random() * 1.6 + (Math.random() < .2 ? 2.5 : 0);
-  }
+function playTrack(i) {                                               // 換歌(點歌單 / 下一首 / 播完自動接)
+  trackI = (i + PLAYLIST.length) % PLAYLIST.length; userPaused = false;
+  const el = musicElement(); el.src = MUSIC_DIR + PLAYLIST[trackI].file;
+  if (mus) mus.trim.gain.setValueAtTime(PLAYLIST[trackI].trim, ctx.currentTime);
+  if (muted) { muted = false; try { localStorage.setItem('xarts-sfx', 'on'); } catch {} }   // 主動選歌 = 要聽:音效開關一起打開
+  el.play().catch(() => {}); unlock(); notify();
 }
 function duckMusic(v, sec = .8) { if (!mus) return; mus.duck = v; mus.out.gain.setTargetAtTime(muted ? 0 : MUSIC_LEVEL * v, ctx.currentTime, sec); }
 function stopAll() {
-  if (mus) { mus.out.gain.setTargetAtTime(0, ctx.currentTime, .3); clearInterval(musTimer); const m = mus; mus = null; setTimeout(() => { try { m.out.disconnect(); } catch {} }, 2500); }
+  if (mus) { mus.out.gain.setTargetAtTime(0, ctx.currentTime, .3); setTimeout(() => { if (muted) musicEl?.pause(); }, 1200); }   // 淡出後暫停(重新打開從原處接著播)
   hypStop(.2);
 }
 window.__sfxTap = () => { const c = ac(); const d = c.createMediaStreamDestination(); master.connect(d); return d.stream; };   // 測試用:錄下網站的聲音
-addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) ctx.suspend(); else if (!muted) ctx.resume(); });   // 切到別的分頁就停
+addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) { ctx.suspend(); musicEl?.pause(); } else if (!muted) { ctx.resume(); if (mus && !userPaused) musicEl?.play().catch(() => {}); } });   // 切到別的分頁就停
 
 // ================= 超空間 =================
 let hyp = null, charge = null;
