@@ -3,11 +3,11 @@
 //   ship 狀態 → 自己的流程:外觀(慢慢轉、可拖曳,點機庫口)→ 穿過機庫和通道 → 中央大廳(六道艙門)
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
-import { quality, Q_SET } from './quality.mjs?v=3';
+import { quality, Q_SET } from './quality.mjs?v=4';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=39';
-import { ROOMS, buildRoom } from './rooms.mjs?v=16';
-import { createHall, createCorridor } from './hall.mjs?v=92';
+import { createExterior } from './exterior.mjs?v=40';
+import { ROOMS, buildRoom } from './rooms.mjs?v=17';
+import { createHall, createCorridor } from './hall.mjs?v=93';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';

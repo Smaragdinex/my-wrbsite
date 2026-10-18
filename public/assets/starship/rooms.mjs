@@ -6,6 +6,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mat, glow, box, cyl, sphere, group, woodTex, panelTex, pot, leafyPlant, rand, textTex } from './kit.mjs?v=3';
 import { holoGlobe } from './globe.mjs?v=1';
+import { asset } from './quality.mjs?v=4';
 
 export const S = 6.4, T = 0.42, H = 4.8;   // 地板邊長、牆厚、牆高(跟 3D room 一樣)
 
@@ -301,7 +302,7 @@ const loadGLB = (url) => new Promise((ok, fail) => loader().load(url, (g) => ok(
 function realRoom(R, key, ctx) {
   const cfg = REAL[key], top = new THREE.Group(); top.visible = false; R.add(top);
   const st = { ready: false, eye: new THREE.Vector3(0, 1.65, -.9), look: new THREE.Vector3(0, 1.35, -9), hits: [], loading: null };
-  st.load = () => st.loading ??= Promise.all([loadGLB(`/assets/starship/models/room_${key}.glb?v=${cfg.v}`), cfg.props ? loadGLB(`/assets/starship/models/room_${key}_props.glb?v=${cfg.v}`) : null]).then(([m, props]) => {
+  st.load = () => st.loading ??= Promise.all([loadGLB(asset(`/assets/starship/models/room_${key}.glb?v=${cfg.v}`)), cfg.props ? loadGLB(asset(`/assets/starship/models/room_${key}_props.glb?v=${cfg.v}`)) : null]).then(([m, props]) => {
     let mirror = null;
     if (ctx.mirror) {                                                          // 亮面地磚的倒影(低解析度 → 柔柔的,像拋光的磚)
       const dpr = Math.min(devicePixelRatio, 2);

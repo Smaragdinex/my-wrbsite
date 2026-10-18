@@ -68,6 +68,15 @@ const SETTINGS = {
   medium: { dprMax: 1.5, bloom: true,  shadows: true,  shadowSize: 1024, planetOct: [4, 4], planetSeg: 160, mirror: true,  hallBloom: true,  warpN: 1500, tunSeg: 64, tun2: false, shake: true,  lights: 1 },
   low:    { dprMax: 1,   bloom: false, shadows: false, shadowSize: 512,  planetOct: [3, 3], planetSeg: 96,  mirror: false, hallBloom: false, warpN: 650,  tunSeg: 28, tun2: false, shake: false, lights: 0 },
 };
+// 模型版本:手機、平板(iPhone / iPad / Android / 觸控為主的裝置)載 _m 小貼圖版(tools/blender/make_mobile.py 產生),電腦載原版。
+//   原版大貼圖全部加起來 GPU 要 2.5GB,iPhone / iPad Safari 會直接當掉;小貼圖版約 1/4 ~ 1/8。網址加 ?assets=full|mobile 可以強制(測試用)
+const MOBILE_ASSETS = (() => {
+  const f = new URLSearchParams(location.search).get('assets'); if (f === 'full') return false; if (f === 'mobile') return true;
+  const ua = navigator.userAgent;
+  return /iphone|ipad|ipod|android/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
+})();
+Q.assets = MOBILE_ASSETS ? 'mobile' : 'full';
+export const asset = (u) => (MOBILE_ASSETS ? u.replace(/(\.glb|\.webp)(\?|$)/, '_m$1$2') : u);   // models/ship.glb?v=12 → models/ship_m.glb?v=12
 export const quality = Q;
 export const Q_SET = SETTINGS[Q.tier];
-console.info(`[quality] ${Q.tier} (${Q.why}) gpu="${Q.gpu}" bench=${Q.ms == null ? '-' : Q.ms.toFixed(1) + 'ms'}`);
+console.info(`[quality] ${Q.tier} (${Q.why}) assets=${Q.assets} gpu="${Q.gpu}" bench=${Q.ms == null ? '-' : Q.ms.toFixed(1) + 'ms'}`);

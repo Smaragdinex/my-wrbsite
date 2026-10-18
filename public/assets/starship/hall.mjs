@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mat, glow, box, cyl, sphere, group, panelTex, leafyPlant, swayPlant, rand } from './kit.mjs?v=3';
+import { asset } from './quality.mjs?v=4';
 
 // 圓環的一段(俯視是扇形環),沿 y 擠出:做弧形艙壁用。b0/b1 是方位角(0 = 正後方 -z,正值往 +x)
 function ringSector(r0, r1, b0, b1, h, m) {
@@ -454,7 +455,7 @@ export function createHall(scene, rooms, opts = {}) {
   // 打掃機器人的精細版(tools/blender/bot_build.py,倒 T 造型):載入後把程式做的簡易機身換掉;滾筒會轉、燈線呼吸、正面的 ︿ 白燈偶爾閃一下(笑臉螢幕 face 留著)
   let botRoller = null, botChev = null;
   const lightM = glow(0xeef6ff, 3.2), LIGHT_WHITE = new THREE.Color(0xeef6ff), LIGHT_AMBER = new THREE.Color(0xffad3a);   // 燈帶、︿、[ ] 燈框共用:走的時候白、停下來琥珀色
-  loadGLB('/assets/starship/models/bot.glb?v=4').then((m) => {
+  loadGLB(asset('/assets/starship/models/bot.glb?v=4')).then((m) => {
     const get = (n) => m.getObjectByName(n);
     for (const o of [...botBody.children]) { if (o === botModel) continue; botBody.remove(o); o.geometry?.dispose(); }
     for (const br of brushes) bot.remove(br);
@@ -466,7 +467,7 @@ export function createHall(scene, rooms, opts = {}) {
     botModel.add(body, led, chev, frame, botRoller);
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
   // 先讓戰艦模型下載完(第一眼看到的是戰艦、頻寬不要互搶),大廳的模型再接著載;保險起見最多等 20 秒
-  Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=20'), loadGLB('/assets/starship/models/hall_props.glb?v=20')])).then(([hallM, propsM]) => {
+  Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => Promise.all([loadGLB(asset('/assets/starship/models/hall_baked.glb?v=20')), loadGLB(asset('/assets/starship/models/hall_props.glb?v=20'))])).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光
@@ -599,7 +600,7 @@ export function createCorridor(scene, opts = {}) {
       }` });
   let baked = false;
   const gl = new GLTFLoader(), draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); gl.setDRACOLoader(draco);
-  Promise.resolve(opts.after).then(() => new Promise((ok, fail) => gl.load('/assets/starship/models/corridor.glb?v=3', (g) => ok(g.scene), undefined, fail))).then((m) => {
+  Promise.resolve(opts.after).then(() => new Promise((ok, fail) => gl.load(asset('/assets/starship/models/corridor.glb?v=3'), (g) => ok(g.scene), undefined, fail))).then((m) => {
     m.traverse((o) => {
       if (!o.isMesh) return;
       if (/window/.test(o.material.name || o.name)) { o.material = winM; return; }
