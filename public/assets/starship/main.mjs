@@ -3,11 +3,11 @@
 //   ship 狀態 → 自己的流程:外觀(慢慢轉、可拖曳,點機庫口)→ 穿過機庫和通道 → 中央大廳(六道艙門)
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
-import { quality, Q_SET } from './quality.mjs?v=5';
+import { quality, Q_SET } from './quality.mjs?v=6';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=41';
-import { ROOMS, buildRoom } from './rooms.mjs?v=19';
-import { createHall, createCorridor } from './hall.mjs?v=96';
+import { createExterior } from './exterior.mjs?v=42';
+import { ROOMS, buildRoom } from './rooms.mjs?v=20';
+import { createHall, createCorridor } from './hall.mjs?v=97';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -17,7 +17,7 @@ import { sfx } from './sfx.mjs?v=9';
 import { player } from '../player.mjs?v=3';
 
 const canvas = document.getElementById('ship');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.tier !== 'low' && !quality.tablet, alpha: true, powerPreference: 'high-performance' });   // 平板不開(省記憶體;大部分畫面走後製,抗鋸齒本來就用不太到)
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.tier !== 'low' && !quality.lite, alpha: true, powerPreference: 'high-performance' });   // 平板不開(省記憶體;大部分畫面走後製,抗鋸齒本來就用不太到)
 renderer.setPixelRatio(Math.min(devicePixelRatio, Q_SET.dprMax));          // 畫質分級(quality.mjs):high 2x、medium 1.5x、low 1x
 renderer.shadowMap.enabled = Q_SET.shadows; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -156,9 +156,9 @@ const GAP = 22;            // 房與房在場景裡的間距(一次只畫一間,
 const rooms = ROOMS.map((r, i) => { const b = buildRoom(roomScene, r, { mirror: Q_SET.mirror && innerWidth >= 700 }); b.group.position.set(i * GAP, 0, 0); return b; });
 const realOn = (i) => !!rooms[i]?.real?.ready;
 let roomChain = null;                                                // 五間房一間一間載(手機不要同時下載十幾 MB)
-const loadRooms = () => { if (quality.tablet) return; roomChain ??= rooms.reduce((p, r) => p.then(() => r.real?.load()), Promise.resolve()); };   /* 平板:不一次載五間(記憶體),進哪間才載哪間(roomOnly) */
+const loadRooms = () => { if (quality.lite) return; roomChain ??= rooms.reduce((p, r) => p.then(() => r.real?.load()), Promise.resolve()); };   /* 平板:不一次載五間(記憶體),進哪間才載哪間(roomOnly) */
 function roomOnly(i, keep = -1) {                                   // 平板:載第 i 間,其他間(除了 keep,滑動換間時正在離開的那間)卸掉
-  if (!quality.tablet) return;
+  if (!quality.lite) return;
   rooms[i]?.real?.load();
   rooms.forEach((r, k) => { if (k === i || k === keep || !r.real?.ready) return; const set = roomTex[k];
     if (set) { for (let q = texQueue.length - 1; q >= 0; q--) if (set.has(texQueue[q])) texQueue.splice(q, 1); for (let q = bigQueue.length - 1; q >= 0; q--) if (set.has(bigQueue[q].tx)) { GL.deleteTexture(bigQueue[q].glTex); bigQueue.splice(q, 1); } }
@@ -593,6 +593,14 @@ function warmTick() {
   }
   stepBig();
 }
+// 當機保護(見 quality.mjs):離開戰艦外觀(進機庫、通道、大廳、房間)就記一筆,每一段待 8 秒都正常就擦掉;正常離開頁面也擦掉。網頁中途當掉的話這筆會留著 → 下次載入改用安全模式
+let guardMode = '', guardT = 0;
+function crashGuard() {
+  if (mode === guardMode) { if (guardT && performance.now() - guardT > 8000) { guardT = 0; try { localStorage.removeItem('xarts-crash'); } catch {} } return; }
+  guardMode = mode; guardT = 0;
+  if (mode !== 'ext') { guardT = performance.now(); try { localStorage.setItem('xarts-crash', JSON.stringify({ stage: mode, t: Date.now() })); } catch {} }
+}
+addEventListener('pagehide', () => { try { localStorage.removeItem('xarts-crash'); } catch {} });
 function warmComposers() {                                             // 後製的 shader(光暈、輸出)第一次畫才編譯 → 先在看不到的時候畫一次
   const kind = composerWarm[0]; if (!kind) return;
   if (pending({ ext: extTex, cor: corTex, hall: hallTex }[kind])) return;   // 等這個場景的大貼圖分段傳完再畫(不然 three.js 會整張同步上傳 → 卡)
@@ -616,7 +624,7 @@ function frame() {
   const appear = XP.ship, warpOn = XP.warp > .001, live = appear > .9 && XP.state === 'ship';
   canvas.style.opacity = Math.max(appear, Math.min(1, XP.warp * 3)).toFixed(3);
   canvas.style.pointerEvents = appear > .9 ? 'auto' : 'none';
-  warmTick(); sfx.hyperspace(XP);                                    // 超空間音效跟著時間軸走
+  warmTick(); sfx.hyperspace(XP); crashGuard();                                    // 超空間音效跟著時間軸走
   if (appear <= .001 && !warpOn) { warmComposers(); flashEl.style.opacity = (XP.flash || 0).toFixed(3); requestAnimationFrame(frame); return; }
   warmComposers();                                                   // 在清畫面之前畫 → 接著整個重畫,看不到
   flashEl.style.opacity = (XP.flash || 0).toFixed(3);

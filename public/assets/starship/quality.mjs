@@ -41,8 +41,19 @@ function bench(gl) {
   } catch { return null; } finally { try { gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch {} }
 }
 
+// 當機保護:上次進大廳 / 房間時網頁當掉了(Safari 重新載入、或顯示「無法打開網頁」)→ 這次起這台裝置都用安全模式
+//   main.mjs 進大廳 / 房間時記一筆 xarts-crash,待 8 秒正常就擦掉;還在 = 當掉過。?safe=1 強制、?safe=0 清掉
+let SAFE = false;
+try {
+  const f = new URLSearchParams(location.search).get('safe'); if (f === '0') localStorage.removeItem('xarts-safe');
+  const m = JSON.parse(localStorage.getItem('xarts-crash') || 'null');
+  if (m && Date.now() - m.t < 5 * 60e3) localStorage.setItem('xarts-safe', '1');
+  localStorage.removeItem('xarts-crash');
+  SAFE = f === '1' || localStorage.getItem('xarts-safe') === '1';
+} catch {}
 function detect() {
   const forced = new URLSearchParams(location.search).get('q');
+  if (SAFE && !TIERS.includes(forced)) return { tier: 'low', why: 'safe mode (crashed before)', gpu: '', ms: null };
   if (TIERS.includes(forced)) return { tier: forced, why: 'forced', gpu: '', ms: null };
   const { name, gl } = gpuName(), g = name.toLowerCase();
   const mobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /macintosh/i.test(navigator.userAgent));
@@ -72,6 +83,7 @@ const SETTINGS = {
 //   原版大貼圖全部加起來 GPU 要 2.5GB,iPhone / iPad Safari 會直接當掉;小貼圖版約 1/4 ~ 1/8。網址加 ?assets=full|mobile 可以強制(測試用)
 const MOBILE_ASSETS = (() => {
   const f = new URLSearchParams(location.search).get('assets'); if (f === 'full') return false; if (f === 'mobile') return true;
+  if (SAFE) return true;                                               // 安全模式:任何裝置都載小貼圖版
   const ua = navigator.userAgent;
   return /iphone|ipad|ipod|android/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
 })();
@@ -79,7 +91,9 @@ Q.assets = MOBILE_ASSETS ? 'mobile' : 'full';
 // 平板(行動裝置、螢幕短邊 ≥ 700):畫面大 → 後製用的全螢幕貼圖跟著大,舊 iPad 記憶體不夠進大廳會當掉、被 Safari 重新載回首頁
 //   → 解析度 1x、不開多重取樣抗鋸齒、房間一次只載一間(大廳門洞先顯示小模型)、畫布貼圖縮一半
 Q.tablet = MOBILE_ASSETS && Math.min(screen.width, screen.height) >= 700;
+Q.safe = SAFE;
+Q.lite = Q.tablet || SAFE;                                              // 平板、安全模式:省記憶體的那一套(房間只載一間、不開抗鋸齒、畫布貼圖縮一半)
 export const asset = (u) => (MOBILE_ASSETS ? u.replace(/(\.glb|\.webp)(\?|$)/, '_m$1$2') : u);   // models/ship.glb?v=12 → models/ship_m.glb?v=12
 export const quality = Q;
-export const Q_SET = Q.tablet ? { ...SETTINGS[Q.tier], dprMax: 1 } : SETTINGS[Q.tier];
-console.info(`[quality] ${Q.tier} (${Q.why}) assets=${Q.assets}${Q.tablet ? ' tablet' : ''} gpu="${Q.gpu}" bench=${Q.ms == null ? '-' : Q.ms.toFixed(1) + 'ms'}`);
+export const Q_SET = Q.lite ? { ...SETTINGS[Q.tier], dprMax: 1, mirror: false } : SETTINGS[Q.tier];   // 平板也不做地板即時倒影(整個大廳要多畫一次)
+console.info(`[quality] ${Q.tier} (${Q.why}) assets=${Q.assets}${Q.tablet ? ' tablet' : ''}${Q.safe ? ' SAFE' : ''} gpu="${Q.gpu}" bench=${Q.ms == null ? '-' : Q.ms.toFixed(1) + 'ms'}`);

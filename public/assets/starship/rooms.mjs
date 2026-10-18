@@ -5,8 +5,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mat, glow, box, cyl, sphere, group, woodTex, panelTex, pot, leafyPlant, rand, textTex } from './kit.mjs?v=3';
-import { holoGlobe } from './globe.mjs?v=2';
-import { asset } from './quality.mjs?v=5';
+import { holoGlobe } from './globe.mjs?v=3';
+import { asset } from './quality.mjs?v=6';
 
 export const S = 6.4, T = 0.42, H = 4.8;   // 地板邊長、牆厚、牆高(跟 3D room 一樣)
 

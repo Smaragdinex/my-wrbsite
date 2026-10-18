@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mat, glow, box, cyl, sphere, group, panelTex, leafyPlant, swayPlant, rand } from './kit.mjs?v=3';
-import { asset, quality } from './quality.mjs?v=5';
+import { asset, quality } from './quality.mjs?v=6';
 
 // 圓環的一段(俯視是扇形環),沿 y 擠出:做弧形艙壁用。b0/b1 是方位角(0 = 正後方 -z,正值往 +x)
 function ringSector(r0, r1, b0, b1, h, m) {
@@ -17,7 +17,7 @@ function ringSector(r0, r1, b0, b1, h, m) {
   g.rotateX(-Math.PI / 2);                       // 形狀的 (x, y) → 世界 (x, -z),擠出方向 → +y
   const mesh = new THREE.Mesh(g, m); mesh.castShadow = mesh.receiveShadow = true; return mesh;
 }
-const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'), k = quality.tablet && Math.max(w, h) >= 1024 ? .5 : 1; c.width = w * k; c.height = h * k; const g = c.getContext('2d'); g.scale(k, k); draw(g, w, h);   /* 平板:大張的畫布貼圖畫成一半大(省記憶體) */
+const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'), k = quality.lite && Math.max(w, h) >= 1024 ? .5 : 1; c.width = w * k; c.height = h * k; const g = c.getContext('2d'); g.scale(k, k); draw(g, w, h);   /* 平板:大張的畫布貼圖畫成一半大(省記憶體) */
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
@@ -475,7 +475,7 @@ export function createHall(scene, rooms, opts = {}) {
       if (o.name.startsWith('baked_floor') && mirror) { m.transparent = true; m.opacity = .9; o.renderOrder = -2; mirror.position.y = -.012; }   // 讓即時的地板倒影透一點出來(鏡面放到磚面底下,不然會搶深度)
       if (o.name.startsWith('screen_')) { m.color.setScalar(.9);
         const key = Object.keys(SUB)[+o.name.slice(7)];                   // 平板:房間不預先載入,門洞裡先看到的是展示艙 → 艙裡的螢幕換成那間房間的照片(不是遊戲截圖)
-        if (quality.tablet && key) new THREE.TextureLoader().load(`/assets/starship/models/door_${key}.jpg?v=2`, (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; m.map?.dispose(); m.map = t; m.needsUpdate = true; }); }
+        if (quality.lite && key) new THREE.TextureLoader().load(`/assets/starship/models/door_${key}.jpg?v=2`, (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; m.map?.dispose(); m.map = t; m.needsUpdate = true; }); }
       o.material = m; src.dispose(); o.matrixAutoUpdate = false; o.updateMatrix();
     });
     propsM.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; fixPropMat(o.material); }
