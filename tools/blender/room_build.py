@@ -536,14 +536,19 @@ def stocks():
     for k, (x, y, r) in enumerate(((.05, -.1, .3), (.28, .02, -.4))):
         box(f'die_{k}', (.12, .12, .12), c + Vector((x, y, .88)), mat('die', '#ffffff', .3, coat=.6), r, bevel=.025, seg=4)
         sphere(f'pip_{k}', .016, c + Vector((x, y, .945)), mat('pip', '#2b2f3a', .4))
-    for k, (x, y, hx) in enumerate(((-1.3, -.9, '#fbf8f4'), (1.3, .9, '#f7c08a'), (1.04, -.9, '#c9c3ff'))): cat_fig(f'piece_{k}', c + Vector((x, y, .86)), -math.pi / 2, .35, mat(f'piece{k}', hx, .2, coat=.8))
+    # 貓棋子:不烘光(prop_*,網頁上即時打光),每隻的零件掛在一個空物件 prop_cat_N 底下(原點在腳底)→ 網頁上整隻跳起來轉圈
+    for k, (x, y, hx) in enumerate(((-1.3, -.9, '#fbf8f4'), (1.3, .9, '#f7c08a'), (1.04, -.9, '#c9c3ff'))):
+        nm, base = f'prop_cat_{k}', c + Vector((x, y, .86))
+        cat_fig(nm, base, -math.pi / 2, .35, mat(f'piece{k}', hx, .2, coat=.8))
+        e = bpy.data.objects.new(nm, None); col.objects.link(e); e.location = base; bpy.context.view_layer.update()
+        for o in [o for o in col.objects if o.name.startswith(nm + '_')]: o.parent = e; o.matrix_parent_inverse = e.matrix_world.inverted()
     for k, (dx, dy, hx) in enumerate(((-2.15, 0, '#7fc79a'), (2.15, 0, '#b48bff'), (0, 1.65, '#6cc6ff'))):
         cyl(f'pouf_{k}', .3, .45, c + Vector((dx, dy, .225)), mat(f'pouf{k}', hx, .85), 40, bevel=.06)
     pendant('pd_a', c.x - .8, c.y, mat('shade_g', '#7fc79a', .35, coat=.5), 1.1); pendant('pd_b', c.x + .8, c.y, mat('shade_w', '#f7fbf8', .3, coat=.5), 1.1)
     # 窗邊:兩個懶骨頭 + 小邊桌
     beanbag('bean_a', Vector((-4.0, 3.2, 0)), mat('bean_g', '#7fc79a', .9)); beanbag('bean_b', Vector((-4.1, 5.4, 0)), mat('bean_p', '#b9a6ef', .9))
     cyl('side_t', .25, .5, Vector((-4.2, 4.3, .25)), mat('side_w', '#f7fbf8', .3, coat=.5), 40, bevel=.03)
-    # 右邊:桌遊櫃(彩色盒子)+ 街機
+    # 右邊:桌遊櫃(彩色盒子)(角落的街機使用者不要,拿掉了)
     sx = W / 2 - .3
     box('shelf_body', (.5, 2.4, 2.2), (sx, 2.2, 1.1), M_OAK, bevel=.02)
     for k, z in enumerate((.45, 1.1, 1.75)):
@@ -551,12 +556,6 @@ def stocks():
         for j in range(6):
             hx = cols[(j + k * 2) % 6]; hh = .22 + (j % 3) * .06
             box(f'gamebox_{k}_{j}', (.36, .09 + (j % 2) * .03, hh), (sx - .08, 1.25 + j * .36, z - .23 + hh / 2 + .02), mat(f'gb{(j + k) % 6}', hx, .45), bevel=.008)
-    ar = Vector((W / 2 - .55, 7.4, 0))
-    box('arcade_body', (.8, .9, 1.8), ar + Vector((0, 0, .9)), mat('arcade', '#b89ad3', .35, coat=.5), bevel=.05)
-    box('arcade_top', (.84, .94, .18), ar + Vector((0, 0, 1.86)), mat('arcade_t', '#ff8fa3', .35, coat=.5), bevel=.04)
-    box('arcade_screen', (.04, .6, .46), ar + Vector((-.41, 0, 1.4)), mat('arcade_scr', '#000000', 1, emit='#7fffb0', emit_k=4))
-    box('arcade_panel', (.3, .8, .08), ar + Vector((-.5, 0, 1.0)), mat('arcade_p', '#5a4d80', .4), bevel=.02)
-    for k, (dy, hx) in enumerate(((-.2, '#ff5a5a'), (.05, '#ffd166'), (.2, '#6cc6ff'))): sphere(f'arcade_btn_{k}', .035, ar + Vector((-.52, dy, 1.06)), mat(f'btn{k}', hx, .3))
     framed('art_chart', Vector((-W / 2 + .05, 1.0, 2.3)), math.radians(-90), .8, .6, '#123026',
            lambda p, f, sd: [box(f'art_chart_seg_{k}', (.2, .012, .02), p + sd * (-.3 + k * .15) + Vector((0, 0, -.15 + [0, .1, .04, .2, .14][k])), mat('chart', '#000000', 1, emit='#7fffb0', emit_k=4), math.radians(-90)) for k in range(5)])
     place('potted_plant_02', (-W / 2 + .7, D - .7, 0), .4, 1.05); place('calathea_orbifolia_01', (2.2, D - .55, 0), 1.0, 1.1)

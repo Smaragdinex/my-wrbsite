@@ -275,7 +275,7 @@ D.rails = (R, ctx) => {
 // 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
 // 房間裡不放作品截圖(使用者:截圖跟環境不搭),點房間裡的家具 / 擺設就進作品。
 // 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
-const REAL = { kitty: { v: 3, props: true }, stocks: { v: 2, props: true }, ocean: { v: 2, props: true }, planet: { v: 6, props: true }, rails: { v: 2, props: true } };
+const REAL = { kitty: { v: 3, props: true }, stocks: { v: 3, props: true }, ocean: { v: 2, props: true }, planet: { v: 6, props: true }, rails: { v: 2, props: true } };
 // 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
 const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { value: hzOff } }, vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: `varying vec3 vW; uniform float uHz;
@@ -320,6 +320,18 @@ function realRoom(R, key, ctx) {
     });
     st.mirror = mirror; top.add(m);
     if (props) { props.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; st.hits.push(o); } }); top.add(props); st.props = props; }
+    if (key === 'stocks' && props) {                                     // Cat Street:桌上三隻貓棋子輪流跳起來轉一圈(落地時壓扁一下)
+      const cats = [0, 1, 2].map((k) => props.getObjectByName(`prop_cat_${k}`)).filter(Boolean).map((o, k) => ({ o, y0: o.position.y, r0: o.rotation.y, ph: k * 1.15 }));
+      const HOP = .9, CYCLE = 3.4;
+      st.tick = (t) => { for (const c of cats) {
+        const u = (t + c.ph) % CYCLE, j = Math.min(1, u / HOP), air = u < HOP;
+        const e = j * j * (3 - 2 * j);                                       // 轉圈先慢後快再慢
+        c.o.position.y = c.y0 + (air ? Math.sin(j * Math.PI) * .24 : 0);
+        c.o.rotation.y = c.r0 + (air ? e * Math.PI * 2 : 0);
+        const sq = u < .1 ? Math.sin(u / .1 * Math.PI) * .14 : (u > HOP && u < HOP + .14) ? Math.sin((u - HOP) / .14 * Math.PI) * .18 : 0;   // 起跳前、落地後壓扁
+        c.o.scale.set(1 + sq * .5, 1 - sq, 1 + sq * .5);
+      } };
+    }
     const warm = new THREE.PointLight(0xffe6cc, 6, 12, 1.4); warm.position.set(0, 3.6, -4.5); top.add(warm);   // 給植物的暖光(建築的光已經烘在貼圖裡)
     if (key === 'planet') {                                                    // Tiny Planet:原本大廳中間的全息地球儀,浮在左後方的台座上(台座在 Blender 的 (-2.2, 5.4),頂面高 .63)
       const g = holoGlobe(); g.group.scale.setScalar(.64); g.group.position.set(-2.2, 1.75, -5.4); top.add(g.group); st.hits.push(g.ball);
