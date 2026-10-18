@@ -2,10 +2,10 @@
 // 每個都有自己的記憶體;舊 iPad 的 Safari 受不了)。行動裝置只開 1~2 個執行緒。
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { quality } from './quality.mjs?v=7';
+import { quality } from './quality.mjs?v=9';
 
 const draco = new DRACOLoader();
 draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
-draco.setWorkerLimit(quality.lite ? 1 : quality.assets === 'mobile' ? 2 : 4);
+draco.setWorkerLimit(quality.lean ? 1 : quality.assets === 'mobile' ? 2 : 4);
 let gl = null;
 export const gltf = () => { if (!gl) { gl = new GLTFLoader(); gl.setDRACOLoader(draco); } return gl; };

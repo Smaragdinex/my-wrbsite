@@ -3,11 +3,11 @@
 //   ship 狀態 → 自己的流程:外觀(慢慢轉、可拖曳,點機庫口)→ 穿過機庫和通道 → 中央大廳(六道艙門)
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
-import { quality, Q_SET } from './quality.mjs?v=7';
+import { quality, Q_SET } from './quality.mjs?v=9';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=43';
-import { ROOMS, buildRoom } from './rooms.mjs?v=21';
-import { createHall, createCorridor } from './hall.mjs?v=98';
+import { createExterior } from './exterior.mjs?v=45';
+import { ROOMS, buildRoom } from './rooms.mjs?v=23';
+import { createHall, createCorridor } from './hall.mjs?v=100';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -17,7 +17,7 @@ import { sfx } from './sfx.mjs?v=9';
 import { player } from '../player.mjs?v=3';
 
 const canvas = document.getElementById('ship');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.tier !== 'low' && !quality.lite, alpha: true, powerPreference: 'high-performance' });   // 平板不開(省記憶體;大部分畫面走後製,抗鋸齒本來就用不太到)
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.tier !== 'low' && !quality.lean, alpha: true, powerPreference: 'high-performance' });   // 平板不開(省記憶體;大部分畫面走後製,抗鋸齒本來就用不太到)
 renderer.setPixelRatio(Math.min(devicePixelRatio, Q_SET.dprMax));          // 畫質分級(quality.mjs):high 2x、medium 1.5x、low 1x
 renderer.shadowMap.enabled = Q_SET.shadows; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -313,7 +313,7 @@ const ENTER = 8.2, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0, TO_ROOM_R = 2.4, T
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
 function go(m, extra = {}) { window.__crumb?.(`go ${m}${extra.room != null ? ' ' + extra.room : ''}`); if (m === 'toHall' || m === 'exit') sfx.whoosh(false); if (m === 'toRoom') { rooms[extra.room]?.real?.load(); roomOnly(extra.room); } if (m === 'hall' || m === 'toRoom') loadRooms(); /* 走進大廳就開始載房間模型 */ mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
-function enterShip() { if (mode !== 'ext') return; side = ext.ship.worldToLocal(extCam.position.clone()).x >= 0 ? 1 : -1; /* 鏡頭在戰艦哪一側就從那側進 */ sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); setTimeout(() => { if (mode === 'enter') sfx.open(); }, 3900); setTimeout(() => { if (mode === 'enter') sfx.whoosh(true); }, 4500); go('enter'); }   // 機庫門、俯衝風聲、氣閘門、衝進通道
+function enterShip() { if (mode !== 'ext') return; if (quality.flat) { showFlat(); return; } side = ext.ship.worldToLocal(extCam.position.clone()).x >= 0 ? 1 : -1; /* 鏡頭在戰艦哪一側就從那側進 */ sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); setTimeout(() => { if (mode === 'enter') sfx.open(); }, 3900); setTimeout(() => { if (mode === 'enter') sfx.whoosh(true); }, 4500); go('enter'); }   // 機庫門、俯衝風聲、氣閘門、衝進通道
 function toRoom(i) { if (mode !== 'hall') return; sfx.click(); sfx.whoosh(true); cur = roomF = i; fromDoor = i; go('toRoom', { room: i }); }
 function slideTo(i) { const n = Math.max(0, Math.min(ROOMS.length - 1, i)); if (n !== cur) { sfx.swish(); roomOnly(n, cur); } cur = n; window.__shipState.room = cur; }
 function nav(kind, d = 0) {
@@ -594,6 +594,20 @@ function warmTick() {
   }
   stepBig();
 }
+// 等級 5(平面):不進 3D 艦內,改顯示作品卡片頁(首頁原本就有的 #works 卡片)
+function showFlat() { document.body.classList.add('flat2d'); window.__crumb?.('flat page'); }
+// 讀取畫面(超空間隧道)量實際幀率:行動裝置在隧道裡中位數 < 28fps → 降一級(大廳、房間的模型還沒開始載,來得及換輕的)
+const tunDt = []; let tunPrev = 0, tunDone = false;
+function tunnelProbe(XP) {
+  if (tunDone || quality.assets !== 'mobile') return;
+  const now = performance.now();
+  if (XP.state === 'launch') { if (tunPrev) tunDt.push(now - tunPrev); tunPrev = now; return; }
+  if (XP.state === 'ship' && tunDt.length > 40) {
+    tunDone = true; const med = tunDt.sort((a, b) => a - b)[tunDt.length >> 1];
+    window.__crumb?.(`tunnel ${(1000 / med).toFixed(0)}fps`);
+    if (med > 36) quality.stepDown(`tunnel ${(1000 / med).toFixed(0)}fps`);
+  }
+}
 // 當機保護(見 quality.mjs):離開戰艦外觀(進機庫、通道、大廳、房間)就記一筆,每一段待 8 秒都正常就擦掉;正常離開頁面也擦掉。網頁中途當掉的話這筆會留著 → 下次載入改用安全模式
 let guardMode = '', guardT = 0;
 function crashGuard() {
@@ -625,7 +639,7 @@ function frame() {
   const appear = XP.ship, warpOn = XP.warp > .001, live = appear > .9 && XP.state === 'ship';
   canvas.style.opacity = Math.max(appear, Math.min(1, XP.warp * 3)).toFixed(3);
   canvas.style.pointerEvents = appear > .9 ? 'auto' : 'none';
-  warmTick(); sfx.hyperspace(XP); crashGuard();                                    // 超空間音效跟著時間軸走
+  warmTick(); sfx.hyperspace(XP); crashGuard(); tunnelProbe(XP);                                    // 超空間音效跟著時間軸走
   if (appear <= .001 && !warpOn) { warmComposers(); flashEl.style.opacity = (XP.flash || 0).toFixed(3); requestAnimationFrame(frame); return; }
   warmComposers();                                                   // 在清畫面之前畫 → 接著整個重畫,看不到
   flashEl.style.opacity = (XP.flash || 0).toFixed(3);

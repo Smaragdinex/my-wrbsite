@@ -3,9 +3,9 @@
 //   機庫口(兩側 x = ±6.6、z = -3 ~ 9)的門 / 發光框 / 點擊範圍還是在這裡蓋,讓「點機庫口 → 開門飛進去」照舊。
 //   底下一顆很大的星球(shader 畫的海洋、大陸、雲、大氣光暈、夜面城市燈),從任何角度看都是在軌道上。艦首朝 -z、艦尾 +z。
 import * as THREE from 'three';
-import { gltf } from './loaders.mjs?v=1';
+import { gltf } from './loaders.mjs?v=3';
 import { glow, rand } from './kit.mjs?v=3';
-import { asset } from './quality.mjs?v=7';
+import { asset } from './quality.mjs?v=9';
 
 // 機庫門的白色裝甲板貼圖(大小不一的長方形板塊 + 接縫)
 function plateTex(seed = 5) {

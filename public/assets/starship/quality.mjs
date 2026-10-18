@@ -51,19 +51,30 @@ function bench(gl) {
   } catch { return null; } finally { try { gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch {} }
 }
 
-// 當機保護:上次進大廳 / 房間時網頁當掉了(Safari 重新載入、或顯示「無法打開網頁」)→ 這次起這台裝置都用安全模式
-//   main.mjs 進大廳 / 房間時記一筆 xarts-crash,待 8 秒正常就擦掉;還在 = 當掉過。?safe=1 強制、?safe=0 清掉
-let SAFE = false, CRASHED = null;
+// 裝置等級(level):0 電腦(原版)、1 手機 / 平板(小貼圖,五間房全載)、2 舊平板(同 1,再加 1x、不開抗鋸齒、沒有地板倒影)、
+//   3 省記憶體(房間一次只載一間、低畫質)、4 精簡(大廳 / 通道 / 房間都不載烘焙模型,用程式蓋的輕量版)、5 平面(不進 3D 艦內,改成作品卡片頁)
+//   使用者要求:平板跟手機一樣(五間房都要真的載、一樣的畫質),除非是很舊的平板(跑分慢 / 核心少 → 2);真的當掉才再往下降
+// 決定方式:①依裝置給預設 ②超空間(讀取畫面)量實際幀率,太慢就往下降一級(stepDown,main.mjs 呼叫)
+//          ③當機保護:進艦內時記一筆 xarts-crash,正常就擦掉;下次載入還在 = 上次當掉 → 比上次用的等級再低一級,而且這台記住(14 天)
+//   ?level=0~5 強制、?safe=0 清掉記住的等級
+const LEVEL_KEY = 'xarts-floor', P = new URLSearchParams(location.search);
+let FLOOR = 0, CRASHED = null;
 try {
-  const f = new URLSearchParams(location.search).get('safe'); if (f === '0') localStorage.removeItem('xarts-safe');
-  const m = JSON.parse(localStorage.getItem('xarts-crash') || 'null');
-  if (m && Date.now() - m.t < 5 * 60e3) { localStorage.setItem('xarts-safe', '1'); CRASHED = JSON.parse(localStorage.getItem('xarts-trail') || '[]'); }
+  if (P.get('safe') === '0') { localStorage.removeItem(LEVEL_KEY); localStorage.removeItem('xarts-safe'); }
+  const fl = JSON.parse(localStorage.getItem(LEVEL_KEY) || 'null'); if (fl && Date.now() - fl.t < 14 * 864e5) FLOOR = fl.level;
+  localStorage.removeItem('xarts-safe');                                // 舊版的安全模式旗標:不沿用(重新從裝置預設開始,真的當掉才降)
+  const m = JSON.parse(localStorage.getItem('xarts-crash') || 'null'), used = +(localStorage.getItem('xarts-used') || 0);
+  if (m && Date.now() - m.t < 864e5) { FLOOR = Math.min(5, Math.max(FLOOR, used + 1)); localStorage.setItem(LEVEL_KEY, JSON.stringify({ level: FLOOR, t: Date.now() })); CRASHED = JSON.parse(localStorage.getItem('xarts-trail') || '[]'); }
   localStorage.removeItem('xarts-crash');
-  SAFE = f === '1' || localStorage.getItem('xarts-safe') === '1';
 } catch {}
+const UA = navigator.userAgent, IS_MOBILE = /iphone|ipad|ipod|android/i.test(UA) || (/macintosh/i.test(UA) && navigator.maxTouchPoints > 1) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
+const IS_TABLET = IS_MOBILE && Math.min(screen.width, screen.height) >= 700;
+let LEVEL = Math.max(IS_MOBILE ? 1 : 0, FLOOR);
+if (/^[0-5]$/.test(P.get('level') || '')) LEVEL = +P.get('level');
+const SAFE = LEVEL >= 3;
 function detect() {
   const forced = new URLSearchParams(location.search).get('q');
-  if (SAFE && !TIERS.includes(forced)) return { tier: 'low', why: 'safe mode (crashed before)', gpu: '', ms: null };
+  if (SAFE && !TIERS.includes(forced)) return { tier: 'low', why: `level ${LEVEL}`, gpu: '', ms: null };
   if (TIERS.includes(forced)) return { tier: forced, why: 'forced', gpu: '', ms: null };
   const { name, gl } = gpuName(), g = name.toLowerCase();
   const mobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /macintosh/i.test(navigator.userAgent));
@@ -93,20 +104,26 @@ const SETTINGS = {
 //   原版大貼圖全部加起來 GPU 要 2.5GB,iPhone / iPad Safari 會直接當掉;小貼圖版約 1/4 ~ 1/8。網址加 ?assets=full|mobile 可以強制(測試用)
 const MOBILE_ASSETS = (() => {
   const f = new URLSearchParams(location.search).get('assets'); if (f === 'full') return false; if (f === 'mobile') return true;
-  if (SAFE) return true;                                               // 安全模式:任何裝置都載小貼圖版
+  if (LEVEL >= 1) return true;                                         // 手機以下(含當機後降級的電腦)都載小貼圖版
   const ua = navigator.userAgent;
   return /iphone|ipad|ipod|android/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
 })();
 Q.assets = MOBILE_ASSETS ? 'mobile' : 'full';
-// 平板(行動裝置、螢幕短邊 ≥ 700):畫面大 → 後製用的全螢幕貼圖跟著大,舊 iPad 記憶體不夠進大廳會當掉、被 Safari 重新載回首頁
-//   → 解析度 1x、不開多重取樣抗鋸齒、房間一次只載一間(大廳門洞先顯示小模型)、畫布貼圖縮一半
-Q.tablet = MOBILE_ASSETS && Math.min(screen.width, screen.height) >= 700;
-Q.safe = SAFE;
-Q.lite = Q.tablet || SAFE;                                              // 平板、安全模式:省記憶體的那一套(房間只載一間、不開抗鋸齒、畫布貼圖縮一半)
+Q.tablet = IS_TABLET;
+// 很舊的平板(啟動時的 GPU 跑分 > 6ms;M1 以後的 iPad 大約 1~2ms)→ 等級 2。不看 CPU 核心數(iPad 的 Safari 回報的不準)
+Q.oldTablet = IS_TABLET && (Q.ms == null || Q.ms > 6);
+if (Q.oldTablet && !/^[0-5]$/.test(P.get('level') || '')) LEVEL = Math.max(LEVEL, 2);
+function applyLevel(lv) {                                               // 等級 → 各模組讀的旗標(之後降級也走這裡)
+  Q.level = lv; Q.lean = lv >= 2; Q.lite = lv >= 3; Q.minimal = lv >= 4; Q.flat = lv >= 5; Q.safe = lv > (Q.oldTablet ? 2 : IS_MOBILE ? 1 : 0);   // lean:1x / 不開抗鋸齒 / 沒倒影;lite:房間一次一間
+  try { localStorage.setItem('xarts-used', String(lv)); } catch {}
+}
+applyLevel(MOBILE_ASSETS ? Math.max(LEVEL, 1) : LEVEL);
+// 讀取畫面(超空間)量到太慢 / 其他原因要降級:只影響還沒載的東西(大廳、通道、房間的模型是飛到戰艦之後才開始載)
+Q.stepDown = (why) => { if (Q.level >= 5) return; applyLevel(Math.max(Q.level + 1, 3)); window.__crumb?.(`step down → level ${Q.level} (${why})`); console.info(`[quality] step down → level ${Q.level} (${why})`); };
 export const asset = (u) => (MOBILE_ASSETS ? u.replace(/(\.glb|\.webp)(\?|$)/, '_m$1$2') : u);   // models/ship.glb?v=12 → models/ship_m.glb?v=12
 export const quality = Q;
-if (CRASHED) { showNote(`Safe mode · ${navigator.userAgent.match(/OS [\d_]+|Version\/[\d.]+/g)?.join(' ') || ''}\n上次停在(最後幾步):`, CRASHED.slice(-8)); }
+if (CRASHED) { showNote(`Level ${Q.level} · ${navigator.userAgent.match(/OS [\d_]+|Version\/[\d.]+/g)?.join(' ') || ''}\n上次停在(最後幾步):`, CRASHED.slice(-8)); }
 if (new URLSearchParams(location.search).get('debug') === '1') dbgBox = showNote('debug', []);
-window.__crumb(`start ${Q.tier} ${Q.assets}${Q.tablet ? ' tablet' : ''}${Q.safe ? ' safe' : ''} ${screen.width}x${screen.height}@${devicePixelRatio}`);
-export const Q_SET = Q.lite ? { ...SETTINGS[Q.tier], dprMax: 1, mirror: false } : SETTINGS[Q.tier];   // 平板也不做地板即時倒影(整個大廳要多畫一次)
-console.info(`[quality] ${Q.tier} (${Q.why}) assets=${Q.assets}${Q.tablet ? ' tablet' : ''}${Q.safe ? ' SAFE' : ''} gpu="${Q.gpu}" bench=${Q.ms == null ? '-' : Q.ms.toFixed(1) + 'ms'}`);
+window.__crumb(`start level ${Q.level} ${Q.tier} ${Q.assets}${Q.tablet ? (Q.oldTablet ? ' old-tablet' : ' tablet') : ''} bench ${Q.ms == null ? '-' : Q.ms.toFixed(1)}ms ${screen.width}x${screen.height}@${devicePixelRatio}`);
+export const Q_SET = Q.lean ? { ...SETTINGS[Q.tier], dprMax: 1, mirror: false } : SETTINGS[Q.tier];   // 平板也不做地板即時倒影(整個大廳要多畫一次)
+console.info(`[quality] level ${Q.level} ${Q.tier} (${Q.why}) assets=${Q.assets} gpu="${Q.gpu}" bench=${Q.ms == null ? '-' : Q.ms.toFixed(1) + 'ms'}`);

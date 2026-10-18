@@ -4,9 +4,9 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { gltf } from './loaders.mjs?v=1';
+import { gltf } from './loaders.mjs?v=3';
 import { mat, glow, box, cyl, sphere, group, panelTex, leafyPlant, swayPlant, rand } from './kit.mjs?v=3';
-import { asset, quality } from './quality.mjs?v=7';
+import { asset, quality } from './quality.mjs?v=9';
 
 // 圓環的一段(俯視是扇形環),沿 y 擠出:做弧形艙壁用。b0/b1 是方位角(0 = 正後方 -z,正值往 +x)
 function ringSector(r0, r1, b0, b1, h, m) {
@@ -16,7 +16,7 @@ function ringSector(r0, r1, b0, b1, h, m) {
   g.rotateX(-Math.PI / 2);                       // 形狀的 (x, y) → 世界 (x, -z),擠出方向 → +y
   const mesh = new THREE.Mesh(g, m); mesh.castShadow = mesh.receiveShadow = true; return mesh;
 }
-const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'), k = quality.lite && Math.max(w, h) >= 1024 ? .5 : 1; c.width = w * k; c.height = h * k; const g = c.getContext('2d'); g.scale(k, k); draw(g, w, h);   /* 平板:大張的畫布貼圖畫成一半大(省記憶體) */
+const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'), k = quality.lean && Math.max(w, h) >= 1024 ? .5 : 1; c.width = w * k; c.height = h * k; const g = c.getContext('2d'); g.scale(k, k); draw(g, w, h);   /* 平板:大張的畫布貼圖畫成一半大(省記憶體) */
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
@@ -467,7 +467,8 @@ export function createHall(scene, rooms, opts = {}) {
     botModel.add(body, led, chev, frame, botRoller);
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
   // 先讓戰艦模型下載完(第一眼看到的是戰艦、頻寬不要互搶),大廳的模型再接著載;保險起見最多等 20 秒
-  Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => Promise.all([loadGLB(asset('/assets/starship/models/hall_baked.glb?v=20')), loadGLB(asset('/assets/starship/models/hall_props.glb?v=20'))])).then(([hallM, propsM]) => { window.__crumb?.('hall glb loaded');
+  if (quality.minimal) baked = true;                                    // 等級 4(精簡):不載烘焙版大廳(3MB 模型 + 大貼圖),直接用上面程式蓋的輕量大廳
+  else Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => quality.minimal ? (baked = true, null) : Promise.all([loadGLB(asset('/assets/starship/models/hall_baked.glb?v=20')), loadGLB(asset('/assets/starship/models/hall_props.glb?v=20'))])).then((pair) => { if (!pair) return; const [hallM, propsM] = pair; window.__crumb?.('hall glb loaded');
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光
@@ -602,7 +603,7 @@ export function createCorridor(scene, opts = {}) {
       }` });
   let baked = false;
   const gl = gltf();                                                   // 全站共用的載入器(loaders.mjs)
-  Promise.resolve(opts.after).then(() => new Promise((ok, fail) => gl.load(asset('/assets/starship/models/corridor.glb?v=3'), (g) => ok(g.scene), undefined, fail))).then((m) => { window.__crumb?.('corridor glb loaded');
+  Promise.resolve(opts.after).then(() => quality.minimal ? null : new Promise((ok, fail) => gl.load(asset('/assets/starship/models/corridor.glb?v=3'), (g) => ok(g.scene), undefined, fail))).then((m) => { if (!m) { baked = true; return; }   /* 等級 4:不載烘焙版通道,用程式蓋的 */ window.__crumb?.('corridor glb loaded');
     m.traverse((o) => {
       if (!o.isMesh) return;
       if (/window/.test(o.material.name || o.name)) { o.material = winM; return; }

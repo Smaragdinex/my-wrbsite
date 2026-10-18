@@ -49,11 +49,11 @@ function input(dyPx, touch = false, axis = 'v') {          // dyPx > 0 = 往下�
 }
 
 // 滾輪(觸控板也是 wheel 事件)
-addEventListener('wheel', (e) => { e.preventDefault(); const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1; const h = XP.state === 'ship' && Math.abs(e.deltaX) > Math.abs(e.deltaY); input((h ? e.deltaX : e.deltaY) * k, false, h ? 'h' : 'v'); }, { passive: false });
+addEventListener('wheel', (e) => { if (document.body.classList.contains('flat2d')) return;   /* 等級 5 的作品卡片頁:讓它自己捲 */ e.preventDefault(); const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1; const h = XP.state === 'ship' && Math.abs(e.deltaX) > Math.abs(e.deltaY); input((h ? e.deltaX : e.deltaY) * k, false, h ? 'h' : 'v'); }, { passive: false });
 // 手機:手指往上推 = 往下滑
 let ty = null, tx = null;
 addEventListener('touchstart', (e) => { ty = e.touches[0].clientY; tx = e.touches[0].clientX; touching = true; lastTouch = performance.now(); }, { passive: true });
-addEventListener('touchmove', (e) => { if (ty == null) return; if (window.__shipDrag) { if (e.cancelable) e.preventDefault(); return; }   // 正在拖曳旋轉戰艦:不換頁
+addEventListener('touchmove', (e) => { if (ty == null || document.body.classList.contains('flat2d')) return; if (window.__shipDrag) { if (e.cancelable) e.preventDefault(); return; }   // 正在拖曳旋轉戰艦:不換頁
   const y = e.touches[0].clientY, x = e.touches[0].clientX, dy = ty - y, dx = tx - x;
   const h = XP.state === 'ship' && Math.abs(dx) > Math.abs(dy); input((h ? dx : dy) * 1.6, true, h ? 'h' : 'v'); ty = y; tx = x; lastTouch = performance.now(); if (e.cancelable) e.preventDefault(); }, { passive: false });
 const touchUp = () => { ty = tx = null; touching = false; lastTouch = performance.now(); };
