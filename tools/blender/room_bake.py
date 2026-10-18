@@ -65,7 +65,7 @@ bk.use_pass_direct = True; bk.use_pass_indirect = True
 bk.use_pass_diffuse = True; bk.use_pass_glossy = False; bk.use_pass_transmission = False; bk.use_pass_emit = True
 bk.margin = 12; bk.margin_type = 'EXTEND'; bk.target = 'IMAGE_TEXTURES'
 scene.render.image_settings.file_format = 'PNG'; scene.render.image_settings.color_depth = '8'
-MOVERS = [o for o in scene.objects if o.name.startswith(('prop_train_', 'prop_cat_', 'prop_rabbit_'))]   # 網頁上會動的東西(火車、棋子):烘光時藏起來,不然影子烘死在原地
+MOVERS = [o for o in scene.objects if o.name.startswith(('prop_train_', 'prop_cat_', 'prop_rabbit_', 'prop_rcplane'))]   # 網頁上會動的東西(火車、棋子):烘光時藏起來,不然影子烘死在原地
 for o in MOVERS: o.hide_render = True
 baked_png = {}
 for g, ob in joined.items():

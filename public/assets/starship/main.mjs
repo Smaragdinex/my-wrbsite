@@ -6,8 +6,8 @@ import * as THREE from 'three';
 import { quality, Q_SET } from './quality.mjs?v=9';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=46';
-import { ROOMS, buildRoom } from './rooms.mjs?v=26';
-import { createHall, createCorridor } from './hall.mjs?v=102';
+import { ROOMS, buildRoom } from './rooms.mjs?v=28';
+import { createHall, createCorridor } from './hall.mjs?v=103';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -296,7 +296,26 @@ if (dots) { dots.innerHTML = ROOMS.map((r) => `<button aria-label="${r.title}"><
 prevBtn?.addEventListener('click', () => nav('h', -1));
 nextBtn?.addEventListener('click', () => nav('h', 1));
 let shownCard = -2;
+const touchUI = !matchMedia('(hover: hover) and (pointer: fine)').matches;   // 手機 / 平板:不顯示作品卡,改用牆上的白點(roomHint)
+const roomHint = document.getElementById('roomHint'), hintAt = [], _hv = new THREE.Vector3(), _hb = new THREE.Box3();   // 白點擺在牆上大標題字的右邊(標題下面是菜單 / 圓窗,放下面會擋到)
+roomHint?.addEventListener('click', (e) => { e.stopPropagation(); if (mode === 'room') open(ROOMS[cur]); });
+function placeHint(on) {
+  if (!roomHint) return;
+  if (on) {
+    if (!hintAt[cur]) {                                                     /* 第一次:量烘焙版房間的標題字(neon_title)右緣;還沒載好就先用估計值 */
+      const t = realOn(cur) && rooms[cur].group.getObjectByName('neon_title');
+      if (t) { _hb.setFromObject(t); hintAt[cur] = new THREE.Vector3(_hb.max.x + .3, (_hb.min.y + _hb.max.y) / 2, _hb.max.z + .02); }
+    }
+    if (hintAt[cur]) _hv.copy(hintAt[cur]); else _hv.set(rooms[cur].group.position.x + 1.4, 3.78, -8.9);
+    _hv.project(roomCam);
+    on = _hv.z < 1 && Math.abs(_hv.x) < 1 && Math.abs(_hv.y) < 1;
+    if (on) { const x = (_hv.x + 1) / 2 * innerWidth; roomHint.style.transform = `translate3d(${x.toFixed(1)}px, ${((1 - _hv.y) / 2 * innerHeight).toFixed(1)}px, 0)`;
+      roomHint.classList.toggle('below', x + 22 + (roomHint.lastChild.offsetWidth || 90) > innerWidth - 10); }   /* 右邊放不下 Enter 標籤 → 改放白點下面 */
+  }
+  roomHint.classList.toggle('on', on);
+}
 function showCard(i) {
+  if (touchUI) i = -1;
   if (i === shownCard) return; shownCard = i;
   if (i < 0) { card.classList.remove('on'); return; }
   const w = ROOMS[i];
@@ -699,6 +718,7 @@ function frame() {
   // UI:作品卡、圓點、左右箭頭、返回鈕
   const inRoom = live && mode === 'room', settled = inRoom && Math.abs(roomF - cur) < .02;
   showCard(settled ? cur : -1);
+  if (touchUI) placeHint(settled);
   dots?.classList.toggle('on', inRoom);
   dots && [...dots.children].forEach((b, i) => b.classList.toggle('on', i === cur));
   if (arrows) { arrows.classList.toggle('on', inRoom); prevBtn.disabled = cur <= 0; nextBtn.disabled = cur >= ROOMS.length - 1; }

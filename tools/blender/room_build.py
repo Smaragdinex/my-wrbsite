@@ -494,9 +494,6 @@ def kitty():
     art('art_b', Vector((-W / 2 + .05, 8.0, 2.4)), math.radians(-90), .6, .6, '#ffd59a', '#e9799a')
     art('art_c', Vector((W / 2 - .05, 1.5, 2.3)), math.radians(90), .8, 1.0, '#d9c4ff', '#ffffff')
     # 植物(網頁即時打光)
-    place('potted_plant_02', (W / 2 - .7, D - .7, 0), 0.6, 1.05)
-    place('potted_plant_01', (-W / 2 + .6, 1.3, 0), 2.0, .9)
-    place('calathea_orbifolia_01', (1.9, D - .55, 0), 1.0, 1.1)
     # 燈:中間柔光板往下、吧台遮陽棚下暖光、窗外的星球冷光、螢幕的光
     def area(name, loc, energy, color, size, aim=None, shape='RECTANGLE', sy=None):
         L_ = bpy.data.lights.new(name, 'AREA'); L_.energy = energy; L_.color = color; L_.shape = shape; L_.size = size
@@ -571,7 +568,6 @@ def stocks():
             box(f'gamebox_{k}_{j}', (.36, .09 + (j % 2) * .03, hh), (sx - .08, 1.25 + j * .36, z - .23 + hh / 2 + .02), mat(f'gb{(j + k) % 6}', hx, .45), bevel=.008)
     framed('art_chart', Vector((-W / 2 + .05, 1.0, 2.3)), math.radians(-90), .8, .6, '#123026',
            lambda p, f, sd: [box(f'art_chart_seg_{k}', (.2, .012, .02), p + sd * (-.3 + k * .15) + Vector((0, 0, -.15 + [0, .1, .04, .2, .14][k])), mat('chart', '#000000', 1, emit='#7fffb0', emit_k=4), math.radians(-90)) for k in range(5)])
-    place('potted_plant_02', (-W / 2 + .7, D - .7, 0), .4, 1.05); place('calathea_orbifolia_01', (2.2, D - .55, 0), 1.0, 1.1)
 
 # ================= Ocean Cleanup:海邊交誼廳 + 水族箱牆(沙色 + 海藍)=================
 def ocean():
@@ -618,16 +614,28 @@ def ocean():
     bm = bmesh.new(); bmesh.ops.create_circle(bm, cap_ends=True, segments=64, radius=1.0)
     for v in bm.verts: a = math.atan2(v.co.y, v.co.x); k = 1 + .12 * math.sin(a * 3 + 1) + .07 * math.sin(a * 5); v.co.x *= 2.3 * k; v.co.y *= 1.6 * k
     bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.06); bmesh.ops.translate(bm, vec=(-2.2, 4.6, .06), verts=bm.verts); mesh_obj('beach_sand', bm, M_SAND, bevel=.03)
+    # 兩張條紋躺椅:平的坐墊(5 條板子)+ 從坐墊尾端往上斜 50° 的靠背(3 條板子,接在同一條轉軸上)+ 兩側鉻管框 + 四支腳 + 靠背後面的撐桿
+    #   (原本靠背的板子各自往上抬、轉的支點不對,看起來浮在半空中)
+    M_CHR = mat('chrome2', '#d8dce3', .2, metal=.6)
+    def slat(name, ctr, ang, m, Rz, base):                                  # 一條板子:中心 ctr(躺椅自己的座標)、繞 x 軸傾斜 ang
+        bm = bmesh.new(); g = bmesh.ops.create_cube(bm, size=1)['verts']; bmesh.ops.scale(bm, vec=(.62, .19, .035), verts=g)
+        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(ang, 3, 'X'), verts=g); bmesh.ops.translate(bm, vec=ctr, verts=g)
+        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Rz, verts=g); bmesh.ops.translate(bm, vec=base, verts=g)
+        mesh_obj(name, bm, m, bevel=.008)
     for k, (x, y, rz) in enumerate(((-3.0, 3.9, -.3), (-1.6, 3.8, .3))):
-        p = Vector((x, y, .1)); Rz = Matrix.Rotation(rz, 3, 'Z')
-        for j in range(7):
-            bm = bmesh.new(); g = bmesh.ops.create_cube(bm, size=1)['verts']; bmesh.ops.scale(bm, vec=(.62, .2, .03), verts=g)
-            yy = -.6 + j * .2; zz = .32 + (max(0, j - 4) * .2); rx = .9 if j > 4 else 0
-            bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(-rx, 3, 'X'), verts=g); bmesh.ops.translate(bm, vec=(0, yy + (.05 if j > 4 else 0), zz), verts=g)
-            bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Rz, verts=g); bmesh.ops.translate(bm, vec=p, verts=g)
-            mesh_obj(f'chair_{k}_{j}', bm, mat(f'stripe{j % 2}', ['#5ab7e0', '#ffffff'][j % 2], .6), bevel=.008)
-        for sx in (-1, 1):
-            for sy in (-.55, .45): cyl(f'chair_leg_{k}_{sx}_{sy}', .015, .3, p + Rz @ Vector((sx * .28, sy, .15)), mat('chrome2', '#d8dce3', .2), 8)
+        p = Vector((x, y, .1)); Rz = Matrix.Rotation(rz, 3, 'Z'); SZ = .32       # 坐墊高(沙面上)
+        cols = [mat(f'stripe{j}', c_, .6) for j, c_ in enumerate(('#5ab7e0', '#ffffff'))]
+        for j in range(5): slat(f'lounger_{k}_seat_{j}', Vector((0, -.6 + j * .2, SZ)), 0, cols[j % 2], Rz, p)
+        hinge, BA = Vector((0, .3, SZ)), math.radians(50)                    # 靠背轉軸在坐墊尾端,往後上方斜
+        dirv = Vector((0, math.cos(BA), math.sin(BA)))
+        for j in range(3): slat(f'lounger_{k}_back_{j}', hinge + dirv * (.1 + j * .2), BA, cols[(j + 1) % 2], Rz, p)
+        for sx in (-1, 1):                                                  # 兩側鉻管框(坐墊下面,從頭到尾)
+            a_, b_ = p + Rz @ Vector((sx * .3, -.7, SZ - .04)), p + Rz @ Vector((sx * .3, .32, SZ - .04)); d_ = b_ - a_
+            cyl(f'lounger_{k}_rail_{sx}', .014, d_.length, (a_ + b_) / 2, M_CHR, 10, rot=Vector((0, 0, 1)).rotation_difference(d_).to_matrix())
+            for sy in (-.62, .24):                                          # 四支腳:從沙面到框
+                cyl(f'lounger_{k}_leg_{sx}_{sy}', .014, SZ - .04, p + Rz @ Vector((sx * .3, sy, (SZ - .04) / 2)), M_CHR, 10)
+            top_ = p + Rz @ (hinge + dirv * .5 + Vector((sx * .26, 0, -.03))); bot_ = p + Rz @ Vector((sx * .3, .62, 0)); d_ = top_ - bot_   # 靠背撐桿
+            cyl(f'lounger_{k}_strut_{sx}', .012, d_.length, (top_ + bot_) / 2, M_CHR, 10, rot=Vector((0, 0, 1)).rotation_difference(d_).to_matrix())
     um = Vector((-3.1, 5.3, .1)); cyl('umb_pole', .025, 2.3, um + Vector((0, 0, 1.15)), mat('pole', '#ffffff', .3), 12)
     for j in range(8):
         a0 = j / 8 * math.tau; bm = bmesh.new()
@@ -659,7 +667,6 @@ def ocean():
     bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=20, radius=1.0); bmesh.ops.scale(bm, vec=(.3, .06, 1.1), verts=bm.verts)
     bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(-.18, 3, 'Y'), verts=bm.verts); bmesh.ops.translate(bm, vec=(-W / 2 + .45, 8.2, 1.15), verts=bm.verts); mesh_obj('surfboard', bm, mat('surf', '#5ad0ff', .25, coat=.8))
     pendant('pd_a', -2.4, 3.0, mat('rattan', '#d9b98a', .7), 1.0); pendant('pd_b', 1.2, 5.6, mat('rattan', '#d9b98a', .7), 1.0)
-    place('potted_plant_01', (-W / 2 + .6, 1.3, 0), 2.0, .9); place('potted_plant_02', (.6, D - .6, 0), .6, 1.0)
 
 # ================= Tiny Planet:觀測室(深紫夜空色)=================
 def planet():
@@ -688,6 +695,23 @@ def planet():
     area('holo_light', pc + Vector((0, -1.2, .6)), 60, (.75, .7, 1), 1.0, aim=pc)
     L_ = bpy.data.lights.new('planet_glow', 'POINT'); L_.energy = 80; L_.color = (.7, .6, 1); L_.shadow_soft_size = .6
     lo = bpy.data.objects.new('planet_glow', L_); col.objects.link(lo); lo.location = pc   # 光從全息地球的位置發出
+    # 遙控飛機(使用者要的):紅白小飛機,機頭朝 +x;零件掛在空物件 prop_rcplane 底下,螺旋槳另外掛在 prop_rcplane_spin(網頁上會轉),
+    #   不烘光、網頁上沿著房間中間繞圈飛(會傾斜轉彎、上下起伏)
+    pp = Vector((.3, 4.6, 2.6)); M_RED = mat('rc_red', '#ff5f5f', .35, coat=.6); M_WHT = mat('rc_white', '#f7f8ff', .3, coat=.6); M_YEL = mat('rc_yel', '#ffd166', .4)
+    nmp = 'prop_rcplane'; parts = []
+    parts.append(cyl(f'{nmp}_body', .045, .5, pp, M_RED, 24, r2=.028, rot=Matrix.Rotation(-math.pi / 2, 3, 'Y')))     # 機身(機頭那端粗)
+    parts.append(sphere(f'{nmp}_nose', .045, pp + Vector((.25, 0, 0)), M_WHT, scale=(1.2, 1, 1)))
+    parts.append(sphere(f'{nmp}_canopy', .035, pp + Vector((.1, 0, .04)), mat('rc_glass', '#2a3f6a', .1, coat=1), scale=(1.6, .8, .7)))
+    parts.append(box(f'{nmp}_wing', (.13, .6, .016), pp + Vector((.04, 0, .035)), M_WHT, bevel=.006))
+    for sd in (-1, 1): parts.append(box(f'{nmp}_wingtip_{sd + 1}', (.13, .05, .018), pp + Vector((.04, sd * .28, .035)), M_RED, bevel=.005))
+    parts.append(box(f'{nmp}_tail', (.07, .22, .012), pp + Vector((-.22, 0, .01)), M_WHT, bevel=.004))
+    parts.append(box(f'{nmp}_fin', (.08, .012, .1), pp + Vector((-.23, 0, .06)), M_YEL, bevel=.004))
+    e = bpy.data.objects.new(nmp, None); col.objects.link(e); e.location = pp
+    sp = bpy.data.objects.new(f'{nmp}_spin', None); col.objects.link(sp); sp.location = pp + Vector((.31, 0, 0))
+    blade = box(f'{nmp}_blade', (.008, .2, .024), pp + Vector((.31, 0, 0)), M_DARK, bevel=.004)
+    bpy.context.view_layer.update()
+    for o in parts + [sp]: o.parent = e; o.matrix_parent_inverse = e.matrix_world.inverted()
+    bpy.context.view_layer.update(); blade.parent = sp; blade.matrix_parent_inverse = sp.matrix_world.inverted()
     # 地毯:深紫圓毯 + 一圈發光星點
     cyl('rug', 1.9, .02, c + Vector((0, 0, .012)), mat('rug', '#41377f', .95), 96)
     for k in range(24): a = k / 24 * math.tau; sphere(f'rug_star_{k}', .02, c + Vector((math.cos(a) * 1.65, math.sin(a) * 1.65, .03)), mat('rugstar', '#000000', 1, emit='#e0d0ff', emit_k=6), scale=(1, 1, .3), seg=8)
@@ -711,7 +735,6 @@ def planet():
             a, b_ = pts[k], pts[k + 1]; d = b_ - a
             cyl(f'map_line_{k}', .004, d.length, (a + b_) / 2, mat('mapline', '#000000', 1, emit='#b48bff', emit_k=4), 6, rot=Vector((0, 0, 1)).rotation_difference(d).to_matrix())
     framed('art_map', Vector((W / 2 - .05, 1.6, 2.3)), math.radians(90), 1.1, 1.1, '#141a3a', stars_draw)
-    place('potted_plant_02', (-W / 2 + .7, D - .7, 0), .4, 1.0)
 
 # ================= Wooden Rails:玩具木工房(暖木色)=================
 def rails():
@@ -774,7 +797,6 @@ def rails():
         for j in range(4): box(f'toy_{k}_{j}', (.18, .18, .18), sh + Vector((0, -.55 + j * .37, z + .115)), mat(f'toy{(j + k) % 4}', ['#e65a4f', '#ffd166', '#5cb7f0', '#7fc79a'][(j + k) % 4], .45), (j + k) * .4, bevel=.03)
     for sd in (-1, 1): box(f'toy_side_{sd}', (.4, .04, 2.1), sh + Vector((0, sd * .8, 1.05)), M_OAK, bevel=.01)
     pendant('pd_a', c.x - .9, c.y, mat('ind_shade', '#2b2f3a', .4, metal=.4), 1.15, .24, cone=True); pendant('pd_b', c.x + .9, c.y, mat('ind_shade', '#2b2f3a', .4), 1.15, .24, cone=True)
-    place('potted_plant_02', (-W / 2 + .7, 1.3, 0), .4, 1.0); place('calathea_orbifolia_01', (2.3, D - .55, 0), 1.0, 1.1)
 
 THEMES = {'kitty': kitty, 'stocks': stocks, 'ocean': ocean, 'planet': planet, 'rails': rails}
 THEMES[ROOM]()

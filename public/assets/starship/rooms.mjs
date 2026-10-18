@@ -275,7 +275,7 @@ D.rails = (R, ctx) => {
 // 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
 // 房間裡不放作品截圖(使用者:截圖跟環境不搭),點房間裡的家具 / 擺設就進作品。
 // 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
-const REAL = { kitty: { v: 4, props: true }, stocks: { v: 5, props: true }, ocean: { v: 3, props: true }, planet: { v: 7, props: true }, rails: { v: 4, props: true } };
+const REAL = { kitty: { v: 5, props: false }, stocks: { v: 6, props: true }, ocean: { v: 4, props: false }, planet: { v: 8, props: true }, rails: { v: 5, props: true } };   // 盆栽全部拿掉(使用者:每間都不需要);props 只剩會動的東西
 // 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
 const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { value: hzOff } }, vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: `varying vec3 vW; uniform float uHz;
@@ -320,6 +320,20 @@ function realRoom(R, key, ctx) {
     });
     st.mirror = mirror; top.add(m);
     if (props) { props.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; st.hits.push(o); } }); top.add(props); st.props = props; }
+    if (key === 'planet' && props) {                                     // Tiny Planet:遙控飛機繞著房間中間飛(轉彎時往內傾、爬升時機頭抬起),螺旋槳一直轉
+      const pl = props.getObjectByName('prop_rcplane'), spin = props.getObjectByName('prop_rcplane_spin');
+      if (pl) {
+        const CX = .5, CY = 5.6, R = 1.25, W = .6, H0 = 2.2; pl.rotation.order = 'YZX';   // 圓心、半徑(Blender 座標;網頁 x = x、z = -y)、角速度
+        const prev = st.tick;
+        st.tick = (t) => { prev?.(t);
+          const a = t * W, y = H0 + Math.sin(t * .9) * .22, vy = Math.cos(t * .9) * .9 * .22;
+          pl.position.set(CX + Math.cos(a) * R, y, -(CY + Math.sin(a) * R));
+          const dx = -Math.sin(a) * R * W, dz = -Math.cos(a) * R * W;
+          pl.rotation.set(-.38, Math.atan2(-dz, dx), Math.atan2(vy, R * W));   // 往圓心那側傾斜、機頭跟著上下
+          if (spin) spin.rotation.x = t * 45;
+        };
+      }
+    }
     if (key === 'stocks' && props) {                                     // Cat Street:一隻貓、一隻兔子沿著棋盤外圈的彩色格子繞圈走(兔子用跳的),面朝前進方向
       const HX = 1.3, HY = .9, CX = .2, CY = 4.7, P = 4 * (HX + HY);       // 外圈格子的半寬 / 半深、棋盤中心(Blender 座標;網頁 x = x、z = -y)
       const SEG = [[-HX, -HY, 1, 0, 2 * HX], [HX, -HY, 0, 1, 2 * HY], [HX, HY, -1, 0, 2 * HX], [-HX, HY, 0, -1, 2 * HY]];
@@ -347,7 +361,8 @@ function realRoom(R, key, ctx) {
     const warm = new THREE.PointLight(0xffe6cc, 6, 12, 1.4); warm.position.set(0, 3.6, -4.5); top.add(warm);   // 給植物的暖光(建築的光已經烘在貼圖裡)
     if (key === 'planet') {                                                    // Tiny Planet:原本大廳中間的全息地球儀,浮在左後方的台座上(台座在 Blender 的 (-2.2, 5.4),頂面高 .63)
       const g = holoGlobe(); g.group.scale.setScalar(.64); g.group.position.set(-2.2, 1.75, -5.4); top.add(g.group); st.hits.push(g.ball);
-      st.tick = (t) => { g.update(t); g.group.position.y = 1.75 + Math.sin(t * .8) * .03; };
+      const prev = st.tick;                                                  /* 遙控飛機也有 tick,一起跑 */
+      st.tick = (t) => { prev?.(t); g.update(t); g.group.position.y = 1.75 + Math.sin(t * .8) * .03; };
     }
     for (const c of [...R.children]) if (c !== top) c.visible = false;          // 小模型收起來
     top.visible = true; st.ready = true;
