@@ -6,8 +6,8 @@ import * as THREE from 'three';
 import { quality, Q_SET } from './quality.mjs?v=5';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createExterior } from './exterior.mjs?v=41';
-import { ROOMS, buildRoom } from './rooms.mjs?v=18';
-import { createHall, createCorridor } from './hall.mjs?v=95';
+import { ROOMS, buildRoom } from './rooms.mjs?v=19';
+import { createHall, createCorridor } from './hall.mjs?v=96';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -117,7 +117,7 @@ const extScene = new THREE.Scene(); extScene.environment = envTex;
 extScene.add(new THREE.HemisphereLight(0xbcd2ff, 0x1a1830, .3));   /* 補光少一點:背光面要夠暗,船殼才有立體感 */
 const ext = createExterior(extScene, Q_SET);
 window.__shipHover = () => ({ door: mode === 'hall' ? hover : -1, hangar: hoverHangar, bot: hoverBot });   /* 給左上表情臉用 */
-window.__dbg = () => ({ ext, extCam, rtHall, rtCor, renderer, hallPortal, corCam, cor, hall, pCam }); window.__shipPose = () => ({ yaw: +ext.ship.rotation.y.toFixed(3), pitch: +ext.ship.rotation.x.toFixed(3) });   // 測試用
+window.__dbg = () => ({ ext, extCam, rtHall, rtCor, renderer, hallPortal, corCam, cor, hall, pCam, roomCam, rooms }); window.__shipPose = () => ({ yaw: +ext.ship.rotation.y.toFixed(3), pitch: +ext.ship.rotation.x.toFixed(3) });   // 測試用
 const extCam = new THREE.PerspectiveCamera(38, 1, .5, 6000);           // 遠平面要看得到底下那顆大星球
 // 光暈前先把壞掉的像素(NaN / 無限大)換成 0:不然 bloom 會把一個壞點擴散成一大塊黑色方框(大廳中間偶爾出現的黑框就是這樣來的)
 const NAN_FIX = { uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',

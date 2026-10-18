@@ -653,7 +653,7 @@ def ocean():
 def planet():
     t = dict(floor_a='#2b2652', floor_b='#352e66', wall_a='#3a3172', wall_b='#332a68', wains='#5b4aa8', rail='#9a86ea', accent='#b48bff', ceil='#2e2860', ceil_panel='stars')
     shell(t); base_lights(.55, win=520, warm=(.88, .86, 1))
-    hero('TINY PLANET', '#c9a8ff', z=3.75)
+    hero('TINY PLANET', '#c9a8ff', x=.4, z=3.63)                                 # 跟下面的圓窗(中心 x = .4)對齊;字往下,離天花板的邊遠一點
     # 後牆:一面大圓形觀景窗(網頁上畫窗外的星空 + 星球),厚白框 + 一圈紫光 + 螺栓
     wc = Vector((.4, D - .02, 2.12)); RW = 1.12
     bpy.ops.mesh.primitive_torus_add(major_radius=RW, minor_radius=.13, major_segments=96, minor_segments=24, location=wc + Vector((0, -.08, 0)), rotation=(math.radians(90), 0, 0))

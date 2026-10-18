@@ -276,7 +276,7 @@ D.rails = (R, ctx) => {
 // 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
 // 房間裡不放作品截圖(使用者:截圖跟環境不搭),點房間裡的家具 / 擺設就進作品。
 // 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
-const REAL = { kitty: { v: 3, props: true }, stocks: { v: 2, props: true }, ocean: { v: 2, props: true }, planet: { v: 5, props: true }, rails: { v: 2, props: true } };
+const REAL = { kitty: { v: 3, props: true }, stocks: { v: 2, props: true }, ocean: { v: 2, props: true }, planet: { v: 6, props: true }, rails: { v: 2, props: true } };
 // 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
 const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { value: hzOff } }, vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: `varying vec3 vW; uniform float uHz;
