@@ -65,6 +65,8 @@ bk.use_pass_direct = True; bk.use_pass_indirect = True
 bk.use_pass_diffuse = True; bk.use_pass_glossy = False; bk.use_pass_transmission = False; bk.use_pass_emit = True
 bk.margin = 12; bk.margin_type = 'EXTEND'; bk.target = 'IMAGE_TEXTURES'
 scene.render.image_settings.file_format = 'PNG'; scene.render.image_settings.color_depth = '8'
+MOVERS = [o for o in scene.objects if o.name.startswith(('prop_train_', 'prop_cat_', 'prop_rabbit_'))]   # 網頁上會動的東西(火車、棋子):烘光時藏起來,不然影子烘死在原地
+for o in MOVERS: o.hide_render = True
 baked_png = {}
 for g, ob in joined.items():
     size = int(SIZES[g] * SCALE)
@@ -98,6 +100,7 @@ live = [o for o in scene.objects if o.name.startswith(('screen_', 'neon_', 'wind
 select_only(list(joined.values()) + live)
 f = os.path.join(OUT_DIR, f'room_{ROOM}.glb')
 bpy.ops.export_scene.gltf(filepath=f, export_normals=False, export_image_quality=86, **GLTF); log('exported', f, os.path.getsize(f) // 1024, 'KB')
+for o in MOVERS: o.hide_render = False
 props = [o for o in scene.objects if o.name.startswith('prop_')]
 for o in props:
     if o.type != 'MESH': continue

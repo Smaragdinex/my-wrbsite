@@ -147,18 +147,16 @@ json.dump({'scale': scale}, open(os.path.join(os.path.dirname(OUT), 'ship_light.
 log('light map', LIGHT_OUT, os.path.getsize(LIGHT_OUT) // 1024, 'KB', 'scale', round(scale, 4))
 for o in [o for o in scene.objects if o.name.startswith('fx_')]: bpy.data.objects.remove(o)   # 燈只用來烘貼圖
 fac = join(g_facade, 'ship_facade'); unwrap(fac, .003)
-fac_png = bake(fac, 'EMIT', int(2048 * SCALE), 'ship_facade_emit', 8)
 fac_alb = bake(fac, 'DIFFUSE', int(2048 * SCALE), 'ship_facade_albedo', 8)   # 窗框(灰色金屬)/ 玻璃(深色)
 gal = join(g_gal, 'ship_gallery'); unwrap(gal, .003)
-gal_png = bake(gal, 'EMIT', int(2048 * SCALE), 'ship_gallery_emit', 4)
-set_mat(gal, simple('ship_gallery', base=(.004, .004, .006, 1), emit_tex=gal_png, rough=.12, metal=.2))
+set_mat(gal, simple('ship_gallery', base=(.004, .004, .006, 1), rough=.12, metal=.2))   # 窗裡的房間由網頁 shader 算(interior mapping),不用烘發光貼圖(省下載量)
 
 set_mat(hull, simple('ship_hull', tex=hull_png, rough=.3, metal=.25))
 small_w = [o for o in g_small if mat_of(o) == 'ship_white']; small_p = [o for o in g_small if mat_of(o) == 'ship_pearl']
 sw = simple('ship_small_white', base=(.8, .79, .76, 1), rough=.32, metal=.2); sp = simple('ship_small_pearl', base=(.6, .63, .68, 1), rough=.35, metal=.45)
 for o in small_w: set_mat(o, sw) if o.type == 'MESH' else None
 for o in small_p: set_mat(o, sp) if o.type == 'MESH' else None
-set_mat(fac, simple('ship_facade', tex=fac_alb, emit_tex=fac_png, rough=.14, metal=.35))
+set_mat(fac, simple('ship_facade', tex=fac_alb, rough=.14, metal=.35))   # 只要窗框底色;窗裡的房間由網頁 shader 算,不放發光貼圖(省 0.5MB)
 
 # 其他材質:同材質合成一個物件
 groups = {}

@@ -222,9 +222,9 @@ export function createExterior(scene, Q = {}) {
   const portal = new THREE.Mesh(new THREE.CircleGeometry(1.75, 64), new THREE.MeshBasicMaterial({ color: 0xfff4e4 }));
   let progress = 0, failed = false, readyFn; const ready = new Promise((ok) => { readyFn = ok; });   // 載入進度(讀條用)
   const gl = gltf();                                                   // 全站共用的載入器(loaders.mjs)
-  const lightMapP = new Promise((ok) => new THREE.TextureLoader().load(asset('/assets/starship/models/ship_light.webp?v=2'), (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.channel = 0; ok(t); }, undefined, () => ok(null)));   // 燈具打在船殼上的光照(Blender 烘的):燈旁邊亮、越遠越暗
+  const lightMapP = new Promise((ok) => new THREE.TextureLoader().load(asset('/assets/starship/models/ship_light.webp?v=3'), (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.channel = 0; ok(t); }, undefined, () => ok(null)));   // 燈具打在船殼上的光照(Blender 烘的):燈旁邊亮、越遠越暗
   const LIGHT_K = .5 * Math.PI / .1593;                                   // 烘的時候除過的 scale(ship_light.json)× 亮度
-  gl.load(asset('/assets/starship/models/ship.glb?v=12'), (gltf) => lightMapP.then((lightMap) => { window.__crumb?.('ship glb loaded');
+  gl.load(asset('/assets/starship/models/ship.glb?v=13'), (gltf) => lightMapP.then((lightMap) => { window.__crumb?.('ship glb loaded');
     const m = gltf.scene;
     m.traverse((o) => {
       if (!o.isMesh) return;

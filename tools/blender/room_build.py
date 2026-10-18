@@ -165,7 +165,7 @@ def shell(t):
     box('wall_front_top', (DOOR_W, WT, H - DOOR_H), (0, -WT / 2, (DOOR_H + H) / 2), M_PANEL)
     # 大窗:厚圓角白框 + 星空玻璃 + 窗外的大星球
     for nm, size, loc in (('wf_lo', (.5, y1 - y0 + .3, .14), (-W / 2 + .05, (y0 + y1) / 2, z0 - .02)), ('wf_hi', (.5, y1 - y0 + .3, .14), (-W / 2 + .05, (y0 + y1) / 2, z1 + .02)),
-                          ('wf_a', (.5, .16, z1 - z0 + .3), (-W / 2 + .05, y0 - .03, (z0 + z1) / 2)), ('wf_b', (.5, .16, z1 - z0 + .3), (-W / 2 + .05, y1 + .03, (z0 + z1) / 2))):
+                          ('wf_a', (.5, .16, z1 - z0 - .1), (-W / 2 + .05, y0 - .03, (z0 + z1) / 2)), ('wf_b', (.5, .16, z1 - z0 - .1), (-W / 2 + .05, y1 + .03, (z0 + z1) / 2))):   # 直柱夾在上下橫框之間(不插進去:插進去的角落烘出黑點)
         box(nm, size, loc, M_WHITE, bevel=.05, seg=4)
     for k in range(1, 3): box(f'wf_mull_{k}', (.12, .06, z1 - z0), (-W / 2 - .05, y0 + (y1 - y0) * k / 3, (z0 + z1) / 2), M_WHITE, bevel=.02)
     bpy.ops.mesh.primitive_plane_add(size=1); g = link(bpy.context.active_object); g.name = 'window_glass'; g.scale = (y1 - y0, z1 - z0, 1)
@@ -196,7 +196,7 @@ def shell(t):
     # 天花板:白頂 + 一圈內凹燈槽(暖光)+ 中間一塊柔光板
     M_CEIL = mat(f'ceil_{ROOM}', t.get('ceil', '#f0eee9'), .28)
     box('ceiling', (W + .6, D + .6, .2), (0, D / 2, H + .1), M_CEIL)
-    for nm, size, loc in (('cove_l', (.5, D - .6, .18), (-W / 2 + .25, D / 2, H - .09)), ('cove_r', (.5, D - .6, .18), (W / 2 - .25, D / 2, H - .09)),
+    for nm, size, loc in (('cove_l', (.5, D - 1.0, .18), (-W / 2 + .25, D / 2, H - .09)), ('cove_r', (.5, D - 1.0, .18), (W / 2 - .25, D / 2, H - .09)),   # 左右兩條只到前後兩條的邊(不重疊:重疊的底面同高,烘出黑色、網頁上閃黑)
                           ('cove_b', (W, .5, .18), (0, D - .25, H - .09)), ('cove_f', (W, .5, .18), (0, .25, H - .09))):
         box(nm, size, loc, M_CEIL, bevel=.03)
     M_ACC = mat('accent_light', '#000000', 1, emit=t['accent'], emit_k=8)
@@ -283,6 +283,18 @@ def cat_fig(name, p, face, s=1.0, m=None):
         bm = bmesh.new(); g = bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=.05 * s, radius2=.0, depth=.09 * s)['verts']
         bmesh.ops.translate(bm, vec=hp + side * sd * .065 * s + Vector((0, 0, .1 * s)), verts=g); mesh_obj(f'{name}_ear_{sd}', bm, m)
         sphere(f'{name}_eye_{sd}', .014 * s, hp + f * .11 * s + side * sd * .042 * s + Vector((0, 0, .01 * s)), mat('ink', '#3a2a35', .4))
+def rabbit_fig(name, p, face, s=1.0, m=None):
+    """跟 cat_fig 一樣大小的兔子棋子:圓身體、頭、兩隻長耳朵(內側粉紅)、圓尾巴、眼睛"""
+    m = m or mat('ceramic_rabbit', '#fbf8f4', .12, coat=.9); f = Vector((math.cos(face), math.sin(face), 0)); side = Vector((-f.y, f.x, 0))
+    sphere(f'{name}_body', .16 * s, p + Vector((0, 0, .15 * s)), m, scale=(1, 1, 1.1))
+    hp = p + f * .06 * s + Vector((0, 0, .36 * s)); sphere(f'{name}_head', .11 * s, hp, m, scale=(1, 1, .95))
+    for sd in (-1, 1):
+        ep = hp + side * sd * .045 * s + Vector((0, 0, .17 * s)) - f * .01 * s
+        sphere(f'{name}_ear_{sd}', .04 * s, ep, m, scale=(1, .55, 2.6))
+        sphere(f'{name}_earin_{sd}', .028 * s, ep + f * .016 * s, mat('rabbit_ear_in', '#ffb7c9', .5), scale=(1, .4, 2.3))
+        sphere(f'{name}_eye_{sd}', .014 * s, hp + f * .1 * s + side * sd * .042 * s + Vector((0, 0, .01 * s)), mat('ink', '#3a2a35', .4))
+    sphere(f'{name}_nose', .012 * s, hp + f * .11 * s - Vector((0, 0, .02 * s)), mat('rabbit_nose', '#ff8fa8', .4))
+    sphere(f'{name}_tail', .05 * s, p - f * .15 * s + Vector((0, 0, .12 * s)), m)
 def plank_table(name, c, w, d, h, top_m, leg_m):
     box(f'{name}_top', (w, d, .07), c + Vector((0, 0, h - .035)), top_m, bevel=.02)
     box(f'{name}_apron', (w - .2, d - .2, .1), c + Vector((0, 0, h - .12)), leg_m, bevel=.01)
@@ -536,10 +548,11 @@ def stocks():
     for k, (x, y, r) in enumerate(((.05, -.1, .3), (.28, .02, -.4))):
         box(f'die_{k}', (.12, .12, .12), c + Vector((x, y, .88)), mat('die', '#ffffff', .3, coat=.6), r, bevel=.025, seg=4)
         sphere(f'pip_{k}', .016, c + Vector((x, y, .945)), mat('pip', '#2b2f3a', .4))
-    # 貓棋子:不烘光(prop_*,網頁上即時打光),每隻的零件掛在一個空物件 prop_cat_N 底下(原點在腳底)→ 網頁上整隻跳起來轉圈
-    for k, (x, y, hx) in enumerate(((-1.3, -.9, '#fbf8f4'), (1.3, .9, '#f7c08a'), (1.04, -.9, '#c9c3ff'))):
-        nm, base = f'prop_cat_{k}', c + Vector((x, y, .86))
-        cat_fig(nm, base, -math.pi / 2, .35, mat(f'piece{k}', hx, .2, coat=.8))
+    # 棋子:一隻貓、一隻兔子(使用者要的)。不烘光(prop_*,網頁上即時打光),零件掛在空物件 prop_cat_0 / prop_rabbit_0 底下(原點在腳底)
+    #   → 網頁上沿著外圈的彩色格子繞圈走(兔子用跳的)
+    for k, (kind, x, y, hx) in enumerate((('cat', -1.3, -.9, '#f7c08a'), ('rabbit', 1.3, .9, '#fbf8f4'))):
+        nm, base = f'prop_{kind}_0', c + Vector((x, y, .86))
+        (cat_fig if kind == 'cat' else rabbit_fig)(nm, base, -math.pi / 2, .35, mat(f'piece{k}', hx, .2, coat=.8))
         e = bpy.data.objects.new(nm, None); col.objects.link(e); e.location = base; bpy.context.view_layer.update()
         for o in [o for o in col.objects if o.name.startswith(nm + '_')]: o.parent = e; o.matrix_parent_inverse = e.matrix_world.inverted()
     for k, (dx, dy, hx) in enumerate(((-2.15, 0, '#7fc79a'), (2.15, 0, '#b48bff'), (0, 1.65, '#6cc6ff'))):
@@ -732,15 +745,18 @@ def rails():
         box(f'track_{k}', (d.length + .006, .2, .035), c + mid + Vector((0, 0, .815)), M_TRACK, ang, bevel=.006, seg=2)
         nrm = Vector((-d.y, d.x, 0)).normalized()
         for sd in (-1, 1): box(f'groove_{k}_{sd}', (d.length + .006, .018, .008), c + mid + nrm * sd * .05 + Vector((0, 0, .834)), mat('groove', '#8a6040', .7), ang)
-    box('bridge', (.5, .34, .06), c + Vector((-.3, -.55 - .17 + .17, .84)), M_OAK, 0, bevel=.01)
+    # (原本這裡有一塊木板當橋,擋在軌道上 → 拿掉;軌道本來就鋪在河上面)
     u0 = .1
     for k, (hx, ln) in enumerate((('#e65a4f', .3), ('#5cb7f0', .24), ('#ffd166', .24))):
         u = u0 - k * .055; p = track_pt(u); p2 = track_pt(u + .01); ang = math.atan2(p2.y - p.y, p2.x - p.x)
-        box(f'train_{k}', (ln, .16, .14), c + p + Vector((0, 0, .9)), mat(f'train{k}', hx, .35, coat=.5), ang, bevel=.025)
+        nm = f'prop_train_{k}'                                                # 不烘光、每節掛在空物件底下(原點在車廂中心),網頁上沿軌道跑
+        box(f'{nm}_body', (ln, .16, .14), c + p + Vector((0, 0, .9)), mat(f'train{k}', hx, .35, coat=.5), ang, bevel=.025)
         for sd in (-1, 1):
             nrm = Vector((-math.sin(ang), math.cos(ang), 0))
-            for e in (-1, 1): cyl(f'wheel_{k}_{sd}_{e}', .035, .02, c + p + nrm * sd * .085 + Vector((math.cos(ang), math.sin(ang), 0)) * e * ln * .3 + Vector((0, 0, .85)), M_DARK, 16, rot=Matrix.Rotation(math.pi / 2, 3, 'X') @ Matrix.Rotation(0, 3, 'Z') if False else Matrix.Rotation(ang, 3, 'Z') @ Matrix.Rotation(math.pi / 2, 3, 'X'))
-        if k == 0: cyl('chimney', .03, .1, c + p + Vector((math.cos(ang), math.sin(ang), 0)) * .08 + Vector((0, 0, 1.01)), M_DARK, 16)
+            for e in (-1, 1): cyl(f'{nm}_wheel_{sd}_{e}', .035, .02, c + p + nrm * sd * .085 + Vector((math.cos(ang), math.sin(ang), 0)) * e * ln * .3 + Vector((0, 0, .85)), M_DARK, 16, rot=Matrix.Rotation(math.pi / 2, 3, 'X') @ Matrix.Rotation(0, 3, 'Z') if False else Matrix.Rotation(ang, 3, 'Z') @ Matrix.Rotation(math.pi / 2, 3, 'X'))
+        if k == 0: cyl(f'{nm}_chimney', .03, .1, c + p + Vector((math.cos(ang), math.sin(ang), 0)) * .08 + Vector((0, 0, 1.01)), M_DARK, 16)
+        e = bpy.data.objects.new(nm, None); col.objects.link(e); e.location = c + p + Vector((0, 0, .9)); e.rotation_euler = (0, 0, ang); bpy.context.view_layer.update()
+        for o in [o for o in col.objects if o.name.startswith(nm + '_')]: o.parent = e; o.matrix_parent_inverse = e.matrix_world.inverted()
     for k, (x, y, wc, rc) in enumerate(((-.6, .3, '#fff4e6', '#e65a4f'), (.55, .35, '#fff7d6', '#5cb7f0'), (1.4, -.85, '#ffffff', '#ffd166'), (-1.45, .85, '#fff4e6', '#7fc79a'))): house(f'th_{k}', c + Vector((x, y, .8)), 1.1, wc, rc, k * .5)
     for k, (x, y) in enumerate(((0, .1), (-.2, .35), (.95, .05), (-1.0, -.1), (1.55, .85), (-1.55, -.95), (.3, -.95))): tree(f'tt_tree_{k}', c + Vector((x, y, .8)), 1.0)
     for k, (dx, dy) in enumerate(((-2.2, -.4), (-2.2, .6), (2.2, .2))): cyl(f'stool_{k}', .24, .5, c + Vector((dx, dy, .25)), M_OAK, 32, bevel=.03)

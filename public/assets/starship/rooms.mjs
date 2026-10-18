@@ -275,7 +275,7 @@ D.rails = (R, ctx) => {
 // 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
 // 房間裡不放作品截圖(使用者:截圖跟環境不搭),點房間裡的家具 / 擺設就進作品。
 // 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
-const REAL = { kitty: { v: 3, props: true }, stocks: { v: 3, props: true }, ocean: { v: 2, props: true }, planet: { v: 6, props: true }, rails: { v: 2, props: true } };
+const REAL = { kitty: { v: 4, props: true }, stocks: { v: 5, props: true }, ocean: { v: 3, props: true }, planet: { v: 7, props: true }, rails: { v: 4, props: true } };
 // 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
 const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { value: hzOff } }, vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: `varying vec3 vW; uniform float uHz;
@@ -320,16 +320,28 @@ function realRoom(R, key, ctx) {
     });
     st.mirror = mirror; top.add(m);
     if (props) { props.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; st.hits.push(o); } }); top.add(props); st.props = props; }
-    if (key === 'stocks' && props) {                                     // Cat Street:桌上三隻貓棋子輪流跳起來轉一圈(落地時壓扁一下)
-      const cats = [0, 1, 2].map((k) => props.getObjectByName(`prop_cat_${k}`)).filter(Boolean).map((o, k) => ({ o, y0: o.position.y, r0: o.rotation.y, ph: k * 1.15 }));
-      const HOP = .9, CYCLE = 3.4;
-      st.tick = (t) => { for (const c of cats) {
-        const u = (t + c.ph) % CYCLE, j = Math.min(1, u / HOP), air = u < HOP;
-        const e = j * j * (3 - 2 * j);                                       // 轉圈先慢後快再慢
-        c.o.position.y = c.y0 + (air ? Math.sin(j * Math.PI) * .24 : 0);
-        c.o.rotation.y = c.r0 + (air ? e * Math.PI * 2 : 0);
-        const sq = u < .1 ? Math.sin(u / .1 * Math.PI) * .14 : (u > HOP && u < HOP + .14) ? Math.sin((u - HOP) / .14 * Math.PI) * .18 : 0;   // 起跳前、落地後壓扁
-        c.o.scale.set(1 + sq * .5, 1 - sq, 1 + sq * .5);
+    if (key === 'stocks' && props) {                                     // Cat Street:一隻貓、一隻兔子沿著棋盤外圈的彩色格子繞圈走(兔子用跳的),面朝前進方向
+      const HX = 1.3, HY = .9, CX = .2, CY = 4.7, P = 4 * (HX + HY);       // 外圈格子的半寬 / 半深、棋盤中心(Blender 座標;網頁 x = x、z = -y)
+      const SEG = [[-HX, -HY, 1, 0, 2 * HX], [HX, -HY, 0, 1, 2 * HY], [HX, HY, -1, 0, 2 * HX], [-HX, HY, 0, -1, 2 * HY]];
+      const along = (d) => { d = ((d % P) + P) % P; for (const [x, y, dx, dy, L] of SEG) { if (d <= L) return [x + dx * d, y + dy * d, dx, dy]; d -= L; } return [-HX, -HY, 1, 0]; };
+      const walkers = [['prop_cat_0', 0, 'walk'], ['prop_rabbit_0', P / 2, 'hop']].map(([n, off, gait]) => { const o = props.getObjectByName(n); return o && { o, off, gait, y0: o.position.y, head: null }; }).filter(Boolean);
+      let last = 0;
+      st.tick = (t) => { const dt = Math.min(.1, t - last || 0); last = t;
+        for (const w of walkers) {
+          const [x, y, dx, dy] = along(w.off + t * .26), want = Math.atan2(dx, -dy);   // 模型正面朝 Blender 的 -y(網頁 +z)
+          w.head ??= want; let dh = want - w.head; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); w.head += dh * Math.min(1, dt * 6);   // 轉角慢慢轉過去
+          w.o.position.set(CX + x, w.y0, -(CY + y)); w.o.rotation.set(0, w.head, 0);
+          if (w.gait === 'hop') { const ph = (t * 2.2 + w.off) % 1; w.o.position.y += Math.sin(ph * Math.PI) * .07; const sq = ph < .12 ? Math.sin(ph / .12 * Math.PI) * .12 : 0; w.o.scale.set(1 + sq * .5, 1 - sq, 1 + sq * .5); }
+          else { w.o.position.y += Math.abs(Math.sin(t * 9)) * .012; w.o.rotation.z = Math.sin(t * 9) * .06; }   // 貓:走路一顛一顛、左右晃
+        } };
+    }
+    if (key === 'rails' && props) {                                      // Wooden Rails:三節小火車沿著橢圓軌道一直繞圈跑,車頭朝前
+      const CX = .2, CY = 4.6, RX = 1.25, RY = .72, U0 = .1, GAP = .055;   // 軌道中心、橢圓半徑(Blender 座標),跟 tools/blender/room_build.py rails() 一樣
+      const cars = [0, 1, 2].map((k) => { const o = props.getObjectByName(`prop_train_${k}`); return o && { o, k, y0: o.position.y }; }).filter(Boolean);
+      st.tick = (t) => { for (const c of cars) {
+        const a = (U0 - c.k * GAP + t * .045) * Math.PI * 2, dx = -Math.sin(a) * RX, dy = Math.cos(a) * RY;
+        c.o.position.set(CX + Math.cos(a) * RX, c.y0 + Math.abs(Math.sin(t * 14 + c.k)) * .004, -(CY + Math.sin(a) * RY));
+        c.o.rotation.set(0, Math.atan2(dy, dx), 0);                      // Blender 繞 z 轉 = 網頁繞 y 轉
       } };
     }
     const warm = new THREE.PointLight(0xffe6cc, 6, 12, 1.4); warm.position.set(0, 3.6, -4.5); top.add(warm);   // 給植物的暖光(建築的光已經烘在貼圖裡)
