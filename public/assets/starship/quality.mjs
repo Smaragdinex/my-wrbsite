@@ -76,7 +76,10 @@ const MOBILE_ASSETS = (() => {
   return /iphone|ipad|ipod|android/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
 })();
 Q.assets = MOBILE_ASSETS ? 'mobile' : 'full';
+// 平板(行動裝置、螢幕短邊 ≥ 700):畫面大 → 後製用的全螢幕貼圖跟著大,舊 iPad 記憶體不夠進大廳會當掉、被 Safari 重新載回首頁
+//   → 解析度 1x、不開多重取樣抗鋸齒、房間一次只載一間(大廳門洞先顯示小模型)、畫布貼圖縮一半
+Q.tablet = MOBILE_ASSETS && Math.min(screen.width, screen.height) >= 700;
 export const asset = (u) => (MOBILE_ASSETS ? u.replace(/(\.glb|\.webp)(\?|$)/, '_m$1$2') : u);   // models/ship.glb?v=12 → models/ship_m.glb?v=12
 export const quality = Q;
-export const Q_SET = SETTINGS[Q.tier];
-console.info(`[quality] ${Q.tier} (${Q.why}) assets=${Q.assets} gpu="${Q.gpu}" bench=${Q.ms == null ? '-' : Q.ms.toFixed(1) + 'ms'}`);
+export const Q_SET = Q.tablet ? { ...SETTINGS[Q.tier], dprMax: 1 } : SETTINGS[Q.tier];
+console.info(`[quality] ${Q.tier} (${Q.why}) assets=${Q.assets}${Q.tablet ? ' tablet' : ''} gpu="${Q.gpu}" bench=${Q.ms == null ? '-' : Q.ms.toFixed(1) + 'ms'}`);

@@ -5,8 +5,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mat, glow, box, cyl, sphere, group, woodTex, panelTex, pot, leafyPlant, rand, textTex } from './kit.mjs?v=3';
-import { holoGlobe } from './globe.mjs?v=1';
-import { asset } from './quality.mjs?v=4';
+import { holoGlobe } from './globe.mjs?v=2';
+import { asset } from './quality.mjs?v=5';
 
 export const S = 6.4, T = 0.42, H = 4.8;   // 地板邊長、牆厚、牆高(跟 3D room 一樣)
 
@@ -330,6 +330,12 @@ function realRoom(R, key, ctx) {
     }
     for (const c of [...R.children]) if (c !== top) c.visible = false;          // 小模型收起來
     top.visible = true; st.ready = true;
+    st.unload = () => {                                                  // 平板記憶體不夠:離開時卸掉(幾何、材質、貼圖都釋放),換回小模型,之後要再進來會重新載
+      st.ready = false; st.loading = null; st.hits = []; st.props = null; st.tick = null; top.visible = false;
+      top.traverse((o) => { if (o.geometry) o.geometry.dispose(); for (const mm of [].concat(o.material || [])) { for (const k in mm) if (mm[k]?.isTexture) mm[k].dispose(); mm.dispose?.(); } });
+      if (mirror) mirror.dispose?.(); top.clear(); st.mirror = null;
+      for (const c of R.children) if (c !== top) c.visible = true;
+    };
   }).catch((e) => { console.warn('[rooms] 房間模型載入失敗,用小模型', key, e); });
   return st;
 }

@@ -2,8 +2,10 @@
 // holoGlobe() → { group, ball(點擊用), update(t) };半徑約 1(軌道到 1.72),放進場景時自己縮放
 import * as THREE from 'three';
 import { sphere, group, rand } from './kit.mjs?v=3';
+import { quality } from './quality.mjs?v=5';
 
-const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'), k = quality.tablet && Math.max(w, h) >= 1024 ? .5 : 1; c.width = w * k; c.height = h * k; const g = c.getContext('2d'); g.scale(k, k); draw(g, w, h);   /* 平板:大張的畫布貼圖畫成一半大(省記憶體) */
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
 
 export function holoGlobe() {
   // 大陸形狀:球面上的 3D 雜訊(fbm)決定哪裡是陸地 → 自然的不規則海岸線

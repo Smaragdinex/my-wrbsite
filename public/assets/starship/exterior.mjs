@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { glow, rand } from './kit.mjs?v=3';
-import { asset } from './quality.mjs?v=4';
+import { asset } from './quality.mjs?v=5';
 
 // 機庫門的白色裝甲板貼圖(大小不一的長方形板塊 + 接縫)
 function plateTex(seed = 5) {

@@ -3,11 +3,11 @@
 //   ship 狀態 → 自己的流程:外觀(慢慢轉、可拖曳,點機庫口)→ 穿過機庫和通道 → 中央大廳(六道艙門)
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
-import { quality, Q_SET } from './quality.mjs?v=4';
+import { quality, Q_SET } from './quality.mjs?v=5';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=40';
-import { ROOMS, buildRoom } from './rooms.mjs?v=17';
-import { createHall, createCorridor } from './hall.mjs?v=93';
+import { createExterior } from './exterior.mjs?v=41';
+import { ROOMS, buildRoom } from './rooms.mjs?v=18';
+import { createHall, createCorridor } from './hall.mjs?v=95';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -17,7 +17,7 @@ import { sfx } from './sfx.mjs?v=9';
 import { player } from '../player.mjs?v=3';
 
 const canvas = document.getElementById('ship');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.tier !== 'low', alpha: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.tier !== 'low' && !quality.tablet, alpha: true, powerPreference: 'high-performance' });   // 平板不開(省記憶體;大部分畫面走後製,抗鋸齒本來就用不太到)
 renderer.setPixelRatio(Math.min(devicePixelRatio, Q_SET.dprMax));          // 畫質分級(quality.mjs):high 2x、medium 1.5x、low 1x
 renderer.shadowMap.enabled = Q_SET.shadows; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -156,7 +156,14 @@ const GAP = 22;            // 房與房在場景裡的間距(一次只畫一間,
 const rooms = ROOMS.map((r, i) => { const b = buildRoom(roomScene, r, { mirror: Q_SET.mirror && innerWidth >= 700 }); b.group.position.set(i * GAP, 0, 0); return b; });
 const realOn = (i) => !!rooms[i]?.real?.ready;
 let roomChain = null;                                                // 五間房一間一間載(手機不要同時下載十幾 MB)
-const loadRooms = () => { roomChain ??= rooms.reduce((p, r) => p.then(() => r.real?.load()), Promise.resolve()); };                       // 這間已經換成真的房間(烘焙模型載好了)
+const loadRooms = () => { if (quality.tablet) return; roomChain ??= rooms.reduce((p, r) => p.then(() => r.real?.load()), Promise.resolve()); };   /* 平板:不一次載五間(記憶體),進哪間才載哪間(roomOnly) */
+function roomOnly(i, keep = -1) {                                   // 平板:載第 i 間,其他間(除了 keep,滑動換間時正在離開的那間)卸掉
+  if (!quality.tablet) return;
+  rooms[i]?.real?.load();
+  rooms.forEach((r, k) => { if (k === i || k === keep || !r.real?.ready) return; const set = roomTex[k];
+    if (set) { for (let q = texQueue.length - 1; q >= 0; q--) if (set.has(texQueue[q])) texQueue.splice(q, 1); for (let q = bigQueue.length - 1; q >= 0; q--) if (set.has(bigQueue[q].tx)) { GL.deleteTexture(bigQueue[q].glTex); bigQueue.splice(q, 1); } }
+    r.real.unload(); roomWarm.delete(k); });
+}                       // 這間已經換成真的房間(烘焙模型載好了)
 const roomCam = new THREE.PerspectiveCamera(30, 1, .1, 200);
 const CAM_OFF = new THREE.Vector3(9.6, 7.0, 9.6).sub(new THREE.Vector3(0, 1.55, 0));
 
@@ -304,11 +311,11 @@ function open(w) { if (/^https?:/.test(w.url)) window.open(w.url, '_blank', 'noo
 let mode = 'ext', t0 = 0, cur = 0, roomF = 0, side = 1, fromDoor = 0, clockT = 0;
 const ENTER = 8.2, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0, TO_ROOM_R = 2.4, TO_HALL_R = 2.1;   // _R:真的房間(門口直接走進去,比較長)
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
-function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); if (m === 'toRoom') rooms[extra.room]?.real?.load(); if (m === 'hall' || m === 'toRoom') loadRooms(); /* 走進大廳就開始載房間模型 */ mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
+function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); if (m === 'toRoom') { rooms[extra.room]?.real?.load(); roomOnly(extra.room); } if (m === 'hall' || m === 'toRoom') loadRooms(); /* 走進大廳就開始載房間模型 */ mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
 function enterShip() { if (mode !== 'ext') return; side = ext.ship.worldToLocal(extCam.position.clone()).x >= 0 ? 1 : -1; /* 鏡頭在戰艦哪一側就從那側進 */ sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); setTimeout(() => { if (mode === 'enter') sfx.open(); }, 3900); setTimeout(() => { if (mode === 'enter') sfx.whoosh(true); }, 4500); go('enter'); }   // 機庫門、俯衝風聲、氣閘門、衝進通道
 function toRoom(i) { if (mode !== 'hall') return; sfx.click(); sfx.whoosh(true); cur = roomF = i; fromDoor = i; go('toRoom', { room: i }); }
-function slideTo(i) { const n = Math.max(0, Math.min(ROOMS.length - 1, i)); if (n !== cur) sfx.swish(); cur = n; window.__shipState.room = cur; }
+function slideTo(i) { const n = Math.max(0, Math.min(ROOMS.length - 1, i)); if (n !== cur) { sfx.swish(); roomOnly(n, cur); } cur = n; window.__shipState.room = cur; }
 function nav(kind, d = 0) {
   if (busy()) return;
   if (kind === 'back') { if (mode === 'room') { fromDoor = cur; go('toHall'); } else if (mode === 'hall') go('exit'); return; }
