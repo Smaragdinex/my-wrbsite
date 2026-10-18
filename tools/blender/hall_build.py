@@ -336,8 +336,9 @@ for i, b in enumerate(pillars):
     else: place('calathea_orbifolia_01', pp, rz, 2.1, keep=['calathea_orbifolia_01_a'])
 # 入口兩側:大白色圓花盆(上緣 z = .62)+ 發財樹;花盆本身不烘光(見下面 prop_ 的說明)
 for sx in (-1, 1):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.5, depth=.62, location=(sx * 3.6, -5.6, .31)); o = link(bpy.context.active_object); o.name = f'prop_planter_round_{sx}'; o.data.materials.append(M_CERAMIC)   # prop_:不烘光、網頁即時打光(烘的時候圓角邊緣分到的貼圖太細,會出現黑色髒邊)
-    bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .04; bv.segments = 3
+    bpy.ops.mesh.primitive_cylinder_add(vertices=128, radius=.5, depth=.62, location=(sx * 3.6, -5.6, .31)); o = link(bpy.context.active_object); o.name = f'prop_planter_round_{sx}'; o.data.materials.append(M_CERAMIC)   # prop_:不烘光、網頁即時打光(烘的時候圓角邊緣分到的貼圖太細,會出現黑色髒邊)
+    for pl in o.data.polygons: pl.use_smooth = True                      # 即時打光看得到每一面 → 平滑著色、128 段(不然側面一條條)
+    bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .04; bv.segments = 4; bv.limit_method = 'ANGLE'; bv.harden_normals = True
     bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.44, depth=DEPTH * 2, location=(sx * 3.6, -5.6, .62)); dig(o, bpy.context.active_object); bpy.context.active_object.name = f'cut_soil_round_{sx}'
     top = .62 - SOIL_DOWN
     bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.437, depth=DEPTH - SOIL_DOWN, location=(sx * 3.6, -5.6, .62 - DEPTH + (DEPTH - SOIL_DOWN) / 2))

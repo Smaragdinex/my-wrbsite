@@ -466,7 +466,7 @@ export function createHall(scene, rooms, opts = {}) {
     botModel.add(body, led, chev, frame, botRoller);
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
   // 先讓戰艦模型下載完(第一眼看到的是戰艦、頻寬不要互搶),大廳的模型再接著載;保險起見最多等 20 秒
-  Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=19'), loadGLB('/assets/starship/models/hall_props.glb?v=19')])).then(([hallM, propsM]) => {
+  Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=20'), loadGLB('/assets/starship/models/hall_props.glb?v=20')])).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光
