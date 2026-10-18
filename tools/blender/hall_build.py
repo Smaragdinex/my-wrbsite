@@ -49,6 +49,7 @@ M_TRIM = mat('trim', '#d3cdc2', .45)
 M_TRIM2 = mat('trim2', '#e4e0d8', .35)
 M_FLOOR = mat('floor_tile', '#efece6', .12, coat=.6)
 M_METAL = mat('metal_inlay', '#b9b2a4', .28, metal=1.0)
+M_SCREW = mat('screw_satin', '#cdc8bf', .38)                                     # 牆板螺絲:不用全金屬(烘光不算反射,全金屬會烘成一顆顆黑點)
 M_DARK = mat('dark_glass', '#2a2a2e', .6)
 def star_glass():
     m = bpy.data.materials.new('star_glass'); m.use_nodes = True; nt = m.node_tree; nt.nodes.clear()
@@ -167,7 +168,7 @@ while b < 2 * math.pi:
         sector(f'panel_in_{k}', HALL_R - .05, HALL_R - .035, b + e, b + step - e, 1.45, 3.1, M_TRIM2, bevel=.008, seg=6)
         for v in range(5): sector(f'vent_{k}_{v}', HALL_R - .045, HALL_R - .03, b + step * .3, b + step * .7, .58 + v * .1, .62 + v * .1, M_TRIM, seg=4)
         for (bb, zz) in [(b + e * .6, 1.3), (b + step - e * .6, 1.3), (b + e * .6, 3.26), (b + step - e * .6, 3.26)]:
-            sector(f'screw_{k}_{bb:.3f}_{zz}', HALL_R - .05, HALL_R - .036, bb - .004, bb + .004, zz - .03, zz + .03, M_METAL, seg=2)
+            sector(f'screw_{k}_{bb:.3f}_{zz}', HALL_R - .05, HALL_R - .036, bb - .004, bb + .004, zz - .03, zz + .03, M_SCREW, seg=2)
         sector(f'reveal_{k}', HALL_R - .006, HALL_R + .02, b - .0028, b + .0028, .38, 4.66, M_TRIM, seg=2)   # 面板之間的細縫(淺灰,不要像管子)
         k += 1
     b += step
@@ -304,13 +305,19 @@ def dig(planter, cutter):
     for c in list(cutter.users_collection): c.objects.unlink(cutter)
     soil_cut.objects.link(cutter)
     bo = planter.modifiers.new('soil', 'BOOLEAN'); bo.operation = 'DIFFERENCE'; bo.object = cutter; bo.solver = 'EXACT'
-def clumps(name, pts, top):
-    """泥土表面的小土塊(幾顆扁扁的小球),跟土合成一個物件"""
-    bm = bmesh.new()
+M_PEBBLES = [mat('pebble_white', '#ebe7e0', .42), mat('pebble_grey', '#b9b5ae', .48), mat('pebble_beige', '#d6c8b2', .5)]
+def clumps(name, pts, top, spread=None):
+    """土面鋪一層裝飾用的鵝卵石(米白 / 淺灰 / 米色三種,扁圓、大小不一)。
+    叫 prop_*:不烘光、網頁上即時打光(之前是幾顆很小的土塊跟建築一起烘,貼圖只分到幾個像素 → 變成一顆顆黑點)"""
+    if spread: pts = [spread() for _ in range(len(pts) * 9)]                  # 鋪滿:原本 26~30 顆土塊 → 230~270 顆石頭(看起來是一層石頭,不是一顆顆白點)
+    bms = [bmesh.new() for _ in M_PEBBLES]
     for x, y in pts:
-        r = rng.uniform(.01, .022); g = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=r)
-        bmesh.ops.scale(bm, vec=(1, 1, .5), verts=g['verts']); bmesh.ops.translate(bm, vec=(x, y, top + r * .15), verts=g['verts'])
-    return mesh_obj(name, bm, M_SOIL, smooth=False)
+        r = rng.uniform(.014, .032); k = rng.choices((0, 1, 2), (.5, .25, .25))[0]; bm = bms[k]
+        g = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=r)
+        bmesh.ops.scale(bm, vec=(rng.uniform(1, 1.35), 1, rng.uniform(.42, .58)), verts=g['verts'])
+        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(rng.uniform(0, math.tau), 3, 'Z'), verts=g['verts'])
+        bmesh.ops.translate(bm, vec=(x, y, top + r * .22), verts=g['verts'])
+    return [mesh_obj(f'prop_{name}_{k}', bm, M_PEBBLES[k], smooth=True) for k, bm in enumerate(bms)]
 DEPTH, SOIL_DOWN = .06, .025                                  # 槽深、土面比花盆上緣低多少
 # 柱腳方形花盆(.86 × .74,上緣 z = .6)
 for i, b in enumerate(pillars):
@@ -319,28 +326,26 @@ for i, b in enumerate(pillars):
     dig(pl, box(f'cut_soil_{i}', (.86 - .12, .74 - .12, DEPTH * 2), p, M_WHITE, rz))
     top = .6 - SOIL_DOWN
     s_ = box(f'soil_{i}', (.86 - .125, .74 - .125, DEPTH - SOIL_DOWN), (p.x, p.y, .6 - DEPTH + (DEPTH - SOIL_DOWN) / 2), M_SOIL, rz)
-    pts = []
-    for k in range(26):
-        lx_, ly_ = rng.uniform(-.33, .33), rng.uniform(-.27, .27)
-        pts.append((p.x + lx_ * math.cos(rz) - ly_ * math.sin(rz), p.y + lx_ * math.sin(rz) + ly_ * math.cos(rz)))
-    clumps(f'soil_clumps_{i}', pts, top)
+    def sq(p=p, rz=rz):                                                     # 方盆土面上的隨機一點
+        lx_, ly_ = rng.uniform(-.335, .335), rng.uniform(-.275, .275)
+        return (p.x + lx_ * math.cos(rz) - ly_ * math.sin(rz), p.y + lx_ * math.sin(rz) + ly_ * math.cos(rz))
+    clumps(f'pebbles_{i}', [0] * 26, top, sq)
     # 植物種在土面上:輪流放火鶴花 / 肖竹芋
     pp = Vector((p.x, p.y, top - .01))
     if i % 2 == 0: place('anthurium_botany_01', pp, rz, 1.45, keep=['anthurium_botany_01_a'])
     else: place('calathea_orbifolia_01', pp, rz, 2.1, keep=['calathea_orbifolia_01_a'])
-# 入口兩側:大白色圓花盆(上緣 z = .62)+ 發財樹
+# 入口兩側:大白色圓花盆(上緣 z = .62)+ 發財樹;花盆本身不烘光(見下面 prop_ 的說明)
 for sx in (-1, 1):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.5, depth=.62, location=(sx * 3.6, -5.6, .31)); o = link(bpy.context.active_object); o.name = f'planter_round_{sx}'; o.data.materials.append(M_CERAMIC)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.5, depth=.62, location=(sx * 3.6, -5.6, .31)); o = link(bpy.context.active_object); o.name = f'prop_planter_round_{sx}'; o.data.materials.append(M_CERAMIC)   # prop_:不烘光、網頁即時打光(烘的時候圓角邊緣分到的貼圖太細,會出現黑色髒邊)
     bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .04; bv.segments = 3
     bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.44, depth=DEPTH * 2, location=(sx * 3.6, -5.6, .62)); dig(o, bpy.context.active_object); bpy.context.active_object.name = f'cut_soil_round_{sx}'
     top = .62 - SOIL_DOWN
     bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.437, depth=DEPTH - SOIL_DOWN, location=(sx * 3.6, -5.6, .62 - DEPTH + (DEPTH - SOIL_DOWN) / 2))
     so = link(bpy.context.active_object); so.name = f'soil_round_{sx}'; so.data.materials.append(M_SOIL)
-    pts = []
-    for k in range(30):
-        a_, r_ = rng.uniform(0, math.tau), .4 * math.sqrt(rng.random())
-        pts.append((sx * 3.6 + math.cos(a_) * r_, -5.6 + math.sin(a_) * r_))
-    clumps(f'soil_clumps_round_{sx}', pts, top)
+    def rd(sx=sx):                                                          # 圓盆土面上的隨機一點
+        a_, r_ = rng.uniform(0, math.tau), .41 * math.sqrt(rng.random())
+        return (sx * 3.6 + math.cos(a_) * r_, -5.6 + math.sin(a_) * r_)
+    clumps(f'pebbles_round_{sx + 1}', [0] * 30, top, rd)
     place('pachira_aquatica_01', (sx * 3.6, -5.6, top - .04), sx * .8, 1.0, keep=['_d'])
 soil_cut.hide_render = True; soil_cut.hide_viewport = True
 # 左側休息區:弧形沙發 + 未來感茶几(在右側沙發後面蓋,因為要用到 curve_obj)
