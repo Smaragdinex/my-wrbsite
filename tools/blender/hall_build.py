@@ -140,9 +140,9 @@ for r in (5.6, 6.8):   # 金屬嵌條
     sector(f'inlay_{r}', r - .02, r + .02, 0, 2 * math.pi, -.05, .004, M_METAL, seg=160)
 for r in (3.645, 4.33):  # 中央的暖光環
     sector(f'warm_ring_{r}', r - .022, r + .022, 0, 2 * math.pi, -.05, .003, M_WARM, seg=160)
+# 中央:留白(使用者參考圖 A:移除中央裝置,只留地板的圓形設計)—— 一整片白地磚(邊緣只是一般的磚縫)
 pad = bpy.data.objects.new('pad', bpy.data.meshes.new('pad')); col_root.objects.link(pad)
-bm = bmesh.new(); bmesh.ops.create_circle(bm, cap_ends=True, radius=2.05, segments=96); bm.to_mesh(pad.data); bm.free(); pad.location.z = .002; pad.data.materials.append(M_PAD)
-sector('pad_ring', 2.03, 2.1, 0, 2 * math.pi, -.05, .01, M_COOL, seg=160)
+bm = bmesh.new(); bmesh.ops.create_circle(bm, cap_ends=True, radius=2.1 - GAP, segments=128); bm.to_mesh(pad.data); bm.free(); pad.location.z = 0.0; pad.data.materials.append(M_FLOOR)
 
 # ---------------- 艙壁:整圈牆(門洞挖空)+ 一格格面板 + 腰帶 + 燈槽 ----------------
 wall = sector('wall', HALL_R, HALL_R + WALL_T, 0, 2 * math.pi, 0, WALL_H, M_WHITE, seg=240)
@@ -250,24 +250,6 @@ for o in col_root.objects:
     if o.type == 'MESH':
         for p in o.data.polygons: p.use_smooth = True
 
-# 中央的地球(預覽用,網頁上是即時的全息)
-bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=32, radius=.82, location=(0, 0, 1.5)); o = link(bpy.context.active_object); o.name = f'holo_core'
-o.data.materials.append(mat('globe_core', '#0b2a66', .15, emit='#1d4fa8', emit_k=.8))
-for p in o.data.polygons: p.use_smooth = True
-bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=12, radius=.86, location=(0, 0, 1.5)); o = link(bpy.context.active_object); o.name = f'holo_grid'
-w = o.modifiers.new('wire', 'WIREFRAME'); w.thickness = .007; o.data.materials.append(mat('globe_grid', '#000000', 1, emit='#8fd8ff', emit_k=9))
-for (rad, tilt) in [(1.3, 20), (1.48, -32)]:
-    bpy.ops.mesh.primitive_torus_add(major_radius=rad, minor_radius=.006, major_segments=160, minor_segments=6, location=(0, 0, 1.5), rotation=(math.radians(tilt), 0, 0)); o = link(bpy.context.active_object); o.name = f'holo_orbit_{rad}'; o.data.materials.append(M_COOL)
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=.035, location=(rad * .7, 0, 1.5 + rad * .7 * math.sin(math.radians(tilt)))); o = link(bpy.context.active_object); o.name = f'holo_sat_{rad}'; o.data.materials.append(mat('sat', '#000000', 1, emit='#dff6ff', emit_k=20))
-def pad_mat():
-    m = bpy.data.materials.new('holo_pad_rings'); m.use_nodes = True; nt = m.node_tree; p = nt.nodes['Principled BSDF']
-    p.inputs['Base Color'].default_value = srgb('#0c1a36'); p.inputs['Roughness'].default_value = .15
-    wv = nt.nodes.new('ShaderNodeTexWave'); wv.wave_type = 'RINGS'; wv.rings_direction = 'SPHERICAL'; wv.inputs['Scale'].default_value = 1.6; wv.inputs['Distortion'].default_value = 0
-    rp = nt.nodes.new('ShaderNodeValToRGB'); rp.color_ramp.elements[0].position = .9; rp.color_ramp.elements[0].color = (0, 0, 0, 1); rp.color_ramp.elements[1].position = .97; rp.color_ramp.elements[1].color = srgb('#5ab4ff')
-    tc = nt.nodes.new('ShaderNodeTexCoord'); nt.links.new(tc.outputs['Object'], wv.inputs['Vector']); nt.links.new(wv.outputs['Fac'], rp.inputs['Fac'])
-    nt.links.new(rp.outputs['Color'], p.inputs['Emission Color']); p.inputs['Emission Strength'].default_value = 4
-    return m
-pad.data.materials.clear(); pad.data.materials.append(pad_mat())
 
 # ---------------- 植物與家具(Poly Haven CC0 模型,tools/blender/assets/)----------------
 _cache = {}
@@ -451,14 +433,15 @@ bv = e.modifiers.new('bevel', 'BEVEL'); bv.width = .008; bv.segments = 3
 p, nv = spine_frame(int(N * .68)); tx, ty = p.x + nv.x * .62, p.y + nv.y * .62
 for nm, r, d, z in (('top', .26, .02, .55), ('stem', .02, .54, .27), ('foot', .16, .015, .008)):
     bpy.ops.mesh.primitive_cylinder_add(vertices=64 if r > .05 else 24, radius=r, depth=d, location=(tx, ty, z)); e = link(bpy.context.active_object); e.data.materials.append(M_BRONZE); e.name = f'prop_sofa_sidetable_{nm}'; sofa.append(e)
-# 整組擺進大廳:沙發中心 C,正面(-y)轉向玩家
-Cx, Cy = 5.7, -1.4
-fx, fy = -Cx, -4.0 - Cy; _n = math.hypot(fx, fy); fx, fy = fx / _n, fy / _n
+# 整組擺進大廳:沙發中心 C(沿著大廳的圓,往入口那邊挪,方位角 116°、半徑 5.87),正面(-y)朝大廳中心、背靠牆(順著圓弧)
+SOFA_B, SOFA_R = math.radians(116), 5.87
+Cx, Cy = math.sin(SOFA_B) * SOFA_R, math.cos(SOFA_B) * SOFA_R
+fx, fy = -Cx, -Cy; _n = math.hypot(fx, fy); fx, fy = fx / _n, fy / _n
 th = math.atan2(fx, -fy)
 M_SOFA = Matrix.Translation((Cx, Cy, 0)) @ Matrix.Rotation(th, 4, 'Z')
 for o in sofa: o.matrix_world = M_SOFA @ o.matrix_world
 
-# ---------------- 左側休息區(使用者參考圖):弧形皮沙發環抱一張未來感茶几 + 圓地毯 ----------------
+# ---------------- 左側休息區(使用者參考圖):弧形皮沙發環抱一張未來感茶几 ----------------
 # 茶几:亮白烤漆的水滴形矮几、上緣下方一圈金色燈縫、香檳金底座,一端有一個架高的圓形小桌(喇叭形腳);上面放兩本書、煙燻玻璃球、黃銅小碟
 # 沙發:奶白皮革、弧形、分段坐墊與靠墊、兩端圓頭、內縮的金屬踢腳,米色 + 炭灰兩顆抱枕。全部 furn_*:跟建築一起烘光
 def arc_block(name, cx, cy, r0, r1, a0, a1, z0, z1, material, lean=0.0, seg=64, bevel=0.0, bseg=4):
@@ -489,13 +472,11 @@ M_LACQUER = mat('lacquer_white', '#f6f4f0', .12, coat=.8)
 M_CHAMPAGNE = mat('champagne', '#c9b48e', .3, metal=1.0)
 M_CHROME = mat('chrome', '#c4c6ca', .2, metal=1.0)
 M_GOLDLED = mat('gold_led', '#000000', 1, emit='#ffc26b', emit_k=18)
-TX, TY = -5.0, -1.3                                                            # 茶几中心
-fx, fy = -TX, -4.0 - TY; _n = math.hypot(fx, fy); fx, fy = fx / _n, fy / _n    # 朝玩家的方向
+LOUNGE_B, LOUNGE_R = math.radians(-116), 5.17                                 # 茶几中心:沿著大廳的圓往入口那邊挪(跟右邊沙發對稱)
+TX, TY = math.sin(LOUNGE_B) * LOUNGE_R, math.cos(LOUNGE_B) * LOUNGE_R
+fx, fy = -TX, -TY; _n = math.hypot(fx, fy); fx, fy = fx / _n, fy / _n          # 朝大廳中心:弧形沙發包在牆那一側(順著圓弧)
 ab = math.atan2(-fy, -fx); SP = math.radians(72); A0, A1 = ab - SP, ab + SP     # 沙發包在玩家的反方向
-# 圓地毯 + 金色細圈
-bpy.ops.mesh.primitive_cylinder_add(vertices=128, radius=1.75, depth=.014, location=(TX, TY, .007)); o = link(bpy.context.active_object); o.name = 'furn_rug'; o.data.materials.append(M_RUG)
-bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .006; bv.segments = 2
-bpy.ops.mesh.primitive_torus_add(major_radius=1.79, minor_radius=.007, major_segments=192, minor_segments=8, location=(TX, TY, .007)); o = link(bpy.context.active_object); o.name = 'furn_rug_ring'; o.data.materials.append(M_CHAMPAGNE)
+# (使用者:左邊沙發不需要地毯)
 # 沙發
 R0, RS, R1 = 1.32, 1.95, 2.22                                                  # 坐墊前緣、靠墊內緣、靠背外緣
 arc_block('furn_arc_kick', TX, TY, R0 + .07, R1 - .06, A0 + .02, A1 - .02, .0, .1, M_CHROME, seg=96, bevel=.01, bseg=2)

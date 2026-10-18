@@ -1,6 +1,6 @@
 // 艦內:①機庫 → 通道(鏡頭穿過兩道會滑開的艙門)②中央大廳(照使用者給的參考圖,像《劍星》那種亮白科幻空間):
 // 鏡頭站在入口平視;亮面白地板(真的反射)、暖白燈條、圓頂天花板一圈大窗 + 天窗看得到地球、中央吊柱;
-// 後半圈五個圓角門洞(白色招牌、裡面是該艙的縮影)、中央地上的光環 + 戰艦投影、圓沙發、會被風吹動的盆栽、自己到處跑的打掃機器人。
+// 後半圈五個圓角門洞(白色招牌、裡面是該艙的縮影)、中央地上兩圈光環(留白)、圓沙發、會被風吹動的盆栽、自己到處跑的打掃機器人。
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -19,7 +19,7 @@ function ringSector(r0, r1, b0, b1, h, m) {
 const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
-const SUB = { kitty: 'Web · iOS', stocks: 'Board Game', ocean: 'iOS Game', planet: 'Three.js', rails: 'Track Puzzle' };
+const SUB = { kitty: 'Web · iOS', stocks: 'Three.js · Board Game', ocean: 'iOS Game', planet: 'Three.js', rails: 'Three.js · Track Puzzle' };
 
 // ---------- 艙口裡的縮影:後牆的畫 + 幾件立體小道具 ----------
 const BACK = {
@@ -269,10 +269,6 @@ export function createHall(scene, rooms, opts = {}) {
     const sg = group(g, 0, DOOR_H + 1.25, .45);
     box(sg, 3.2, 1.05, .16, gloss(0xfbfaf7), { r: .12 });
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.0, .985), new THREE.MeshBasicMaterial({ map: signTex(room, i), transparent: true })); sign.position.set(0, .03, .085); sg.add(sign);
-    // 底部燈條:淡灰軌道 + 冰藍光(平常停在一段、慢慢呼吸;點擊時從左掃到右)
-    const BAR_W = 2.76, track = new THREE.Mesh(new THREE.PlaneGeometry(BAR_W, .04), new THREE.MeshBasicMaterial({ color: 0xdcd7ce })); track.position.set(0, -.4, .086); sg.add(track);
-    const barM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcf0).multiplyScalar(1.8), toneMapped: false });
-    const bar = new THREE.Mesh(new THREE.PlaneGeometry(1, .046), barM); bar.position.set(0, -.4, .088); sg.add(bar);
     // 滑過時浮現的「ENTER PROJECT →」(招牌下方)
     const enterM = new THREE.MeshBasicMaterial({ map: enterTex(), transparent: true, opacity: 0, depthWrite: false });
     const enter = new THREE.Mesh(new THREE.PlaneGeometry(1.75, .33), enterM); enter.position.set(0, -.74, .42); sg.add(enter);   // 擺在厚門框前面,不會被擋住
@@ -291,7 +287,7 @@ export function createHall(scene, rooms, opts = {}) {
     box(ga, DOOR_W + .3, .08, .8, gloss(CD2), { y: .04, z: 1.15, r: .03, shadow: false });     // 門口的小平台
     const hit = new THREE.Mesh(new THREE.BoxGeometry(3.2, 5.2, 2.2), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); hit.position.set(0, 2.6, .3); g.add(hit);
     hit.userData.door = i;
-    return { i, b, g, ln, status, edgeM: lineM, lineM, hit, bar, barM, BAR_W, enter, enterM, cabLight, statusM, poolM, backM: back.material, innerM: inner, open: 0, hover: 0, acc: new THREE.Color(acc), world: (dist = 0, y = 1.5) => g.localToWorld(new THREE.Vector3(0, y, dist)) };
+    return { i, b, g, ln, status, edgeM: lineM, lineM, hit, enter, enterM, cabLight, statusM, poolM, backM: back.material, innerM: inner, open: 0, hover: 0, acc: new THREE.Color(acc), world: (dist = 0, y = 1.5) => g.localToWorld(new THREE.Vector3(0, y, dist)) };
   });
 
   // ---------- 天花板:一圈斜的大窗(看得到太空和地球)+ 頂上的圓形天窗 + 放射狀的樑 + 中央吊柱 ----------
@@ -319,26 +315,11 @@ export function createHall(scene, rooms, opts = {}) {
   const emit = new THREE.Mesh(new THREE.TorusGeometry(.62, .035, 8, 64), glow(0x6cc6ff, 3.2)); emit.rotation.x = Math.PI / 2; emit.position.y = 6.05; arch.add(emit);
   const emitRing = new THREE.Mesh(new THREE.TorusGeometry(1.15, .012, 6, 96), glow(0x8fd4ff, 2.6)); emitRing.rotation.x = Math.PI / 2; emitRing.position.y = 6.0; arch.add(emitRing);
 
-  // ---------- 中央:平的地板,只用嵌在地上的光環分區 + 發光地球儀 + 戰艦投影 ----------
-  const ped = group(root, 0, 0, 0), pedArch = group(arch, 0, 0, 0);
+  // ---------- 中央:留白(使用者參考圖 A)—— 平的地板,只有嵌在地上的兩圈暖光環(全息地球儀搬到 Tiny Planet 艙,見 globe.mjs)----------
+  const pedArch = group(arch, 0, 0, 0);
   const inlay = (r0, r1, m, y = .02) => { const g = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 160), m); g.rotation.x = -Math.PI / 2; g.position.y = y; pedArch.add(g); return g; };
   inlay(4.3, 4.36, warmM(2.8)); inlay(3.62, 3.67, warmM(2.8)); inlay(3.67, 4.3, gloss(CD2, .2), .016);   // 兩圈暖光之間是一圈淡一點的地板
   for (let k = 0; k < 36; k++) { const b = k / 36 * Math.PI * 2, l = new THREE.Mesh(new THREE.PlaneGeometry(.04, .5), warmM(1.8)); l.rotation.x = -Math.PI / 2; l.rotation.z = -b; const p = at(b, 3.98, .022); l.position.copy(p); pedArch.add(l); }
-  const padTex = canvasTex(512, 512, (g, W) => { g.fillStyle = '#0c1a36'; g.fillRect(0, 0, W, W); g.strokeStyle = 'rgba(127,208,255,.7)';
-    for (let k = 1; k < 9; k++) { g.lineWidth = k % 3 ? 2 : 5; g.beginPath(); g.arc(W / 2, W / 2, k * 28, 0, Math.PI * 2); g.stroke(); }
-    for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2; g.beginPath(); g.moveTo(W / 2 + Math.cos(a) * 60, W / 2 + Math.sin(a) * 60); g.lineTo(W / 2 + Math.cos(a) * 250, W / 2 + Math.sin(a) * 250); g.stroke(); } });
-  const pad = new THREE.Mesh(new THREE.CircleGeometry(2.0, 64), new THREE.MeshBasicMaterial({ map: padTex, toneMapped: false })); pad.rotation.x = -Math.PI / 2; pad.position.y = .024; pedArch.add(pad);
-  const r3 = new THREE.Mesh(new THREE.TorusGeometry(2.02, .04, 8, 96), glow(0x6cc6ff, 3)); r3.rotation.x = Math.PI / 2; r3.position.y = .03; pedArch.add(r3);
-  // ---------- 中央:戰艦全息投影(地上的投影圓盤往上打)+ 往上飄的光點(原本的地球儀搬到 Tiny Planet 艙,見 globe.mjs)----------
-  const holo = group(ped, 0, 1.6, 0); holo.scale.setScalar(.62);
-  const hW = new THREE.MeshBasicMaterial({ color: 0x9fdcff, wireframe: true, transparent: true, opacity: .75, depthWrite: false, toneMapped: false }), hM = new THREE.MeshBasicMaterial({ color: 0x5aaef5, transparent: true, opacity: .12, depthWrite: false });
-  for (const [w, h, d, y, z] of [[1.1, .45, 3.2, 0, 0], [.9, .3, 2.2, .36, .3], [.6, .3, 1.3, .64, .45], [.35, .32, .55, .94, .5], [1.3, .9, .5, .15, 1.7]]) {
-    const geo = new THREE.BoxGeometry(w, h, d); for (const m of [hM, hW]) { const mesh = new THREE.Mesh(geo, m); mesh.position.set(0, y, z); holo.add(mesh); } }
-  // 往上飄的光點(從地上的圓盤升起,繞著戰艦投影慢慢轉)
-  const PN = 180, pPos = new Float32Array(PN * 3), pSeed = [];
-  for (let k = 0; k < PN; k++) { const a = Math.random() * 6.28, r = .3 + Math.random() * 1.7; pSeed.push({ a, r, y: Math.random() * 3.4, v: .15 + Math.random() * .35 }); }
-  const pGeo = new THREE.BufferGeometry(); pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-  const motes = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: new THREE.Color(0x3a9cff).multiplyScalar(1.4), size: .05, transparent: true, opacity: .85, depthWrite: false, toneMapped: false })); ped.add(motes);
 
   // ---------- 天窗:行星的光從上面灑下來(冷白聚光 + 很淡的光束 + 飄在光裡的灰塵)----------
   const skyLight = new THREE.SpotLight(0xdfeaff, 40, 20, .62, .7, 1.2); skyLight.position.set(0, CEIL_Y + .3, 0); skyLight.target.position.set(0, 0, 0);
@@ -358,7 +339,7 @@ export function createHall(scene, rooms, opts = {}) {
   // ---------- 圓形沙發(兩側) ----------
   const sofaM = gloss(CD2, .85), cushM = gloss(0xfaf8f4, .9);
   for (const s of [-1, 1]) {
-    const px = s * 5.7, pz = 1.2, so = group(arch, px, 0, pz, Math.atan2(-px, -pz));
+    const px = s * 5.2, pz = 2.45, so = group(arch, px, 0, pz, Math.atan2(-px, -pz));   // 跟烘焙版一樣:沿大廳的圓往入口挪、面向中心
     contact(arch, px, pz, 3.0, 3.0, .38); cyl(so, 1.12, 1.12, .12, gloss(CD3), { y: .06, seg: 48 });
     const ringL = new THREE.Mesh(new THREE.TorusGeometry(1.1, .025, 6, 64), warmM(2.4)); ringL.rotation.x = Math.PI / 2; ringL.position.y = .03; so.add(ringL);
     cyl(so, 1.05, 1.08, .3, sofaM, { y: .27, seg: 48 }); cyl(so, .98, .98, .14, cushM, { y: .48, seg: 48 });
@@ -406,7 +387,7 @@ export function createHall(scene, rooms, opts = {}) {
     B.greet = GREET_SEC; B.cx = camPos.x; B.cz = camPos.z;
     return true;
   }
-  const AVOID = [[-5.0, 1.3, 2.6], [5.34, 1.57, 2.1], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
+  const AVOID = [[-4.65, 2.27, 2.6], [5.01, 2.44, 2.1], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
   const okPt = (x, z) => AVOID.every(([ax, az, r]) => Math.hypot(x - ax, z - az) > r);
   const clearPath = (x0, z0, x1, z1) => { for (let k = 1; k <= 12; k++) { const u = k / 12, x = x0 + (x1 - x0) * u, z = z0 + (z1 - z0) * u, rr = Math.hypot(x, z); if (!okPt(x, z) || rr < 2.5 || rr > 6.9) return false; } return true; };
   const B = { x: -3.2, z: -2.6, h: Math.PI / 2, tx: 0, tz: 0, wait: 0, speed: 0, dir: 1, greet: 0, cx: 0, cz: 0 };   // dir:沿著圈繞的方向,偶爾掉頭
@@ -448,13 +429,11 @@ export function createHall(scene, rooms, opts = {}) {
     lightM.emissive.lerp(B.wait > 0 && !(B.greet > 0) ? LIGHT_AMBER : LIGHT_WHITE, Math.min(1, dt * 4));
   }
 
-  // 燈:暖白頂光 + 戰艦投影的藍光
+  // 燈:暖白頂光
   const lamp = new THREE.PointLight(0xfff0dc, 2.5, 22, 1.2); lamp.position.set(0, 7.5, 0); root.add(lamp);
-  const holoLight = new THREE.PointLight(0x6cc6ff, 2.2, 6, 1.6);   // 投影的藍光
-  holoLight.position.set(0, 1.5, 0); root.add(holoLight);
 
   // ---------- 效能:不會動的東西依材質合併成少數幾個網格(draw call 從上千降到幾百)----------
-  const skip = new Set([bot, holo, motes, dust, emitRing, ...plants, ...doors.flatMap((d) => [d.bar, d.enter])]); if (mirror) skip.add(mirror);
+  const skip = new Set([bot, dust, emitRing, ...plants, ...doors.map((d) => d.enter)]); if (mirror) skip.add(mirror);
   mergeStatic(arch, skip);
   // 葉子、艙裡的小道具不投陰影(地上的接觸陰影就夠了),省掉陰影那一輪的大量繪製
   for (const p of plants) p.traverse((o) => { o.castShadow = false; });
@@ -487,7 +466,7 @@ export function createHall(scene, rooms, opts = {}) {
     botModel.add(body, led, chev, frame, botRoller);
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
   // 先讓戰艦模型下載完(第一眼看到的是戰艦、頻寬不要互搶),大廳的模型再接著載;保險起見最多等 20 秒
-  Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=14'), loadGLB('/assets/starship/models/hall_props.glb?v=14')])).then(([hallM, propsM]) => {
+  Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => Promise.all([loadGLB('/assets/starship/models/hall_baked.glb?v=17'), loadGLB('/assets/starship/models/hall_props.glb?v=17')])).then(([hallM, propsM]) => {
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光
@@ -508,10 +487,7 @@ export function createHall(scene, rooms, opts = {}) {
     root, doors, hits: doors.map((d) => d.hit), botHit, greet, get baked() { return baked; },
     update(t, dt) {
       stepBot(t, Math.min(dt, .05));
-      holo.rotation.y = -t * .3; holo.position.y = 1.6 + Math.sin(t * 1.2) * .05;
       emitRing.scale.setScalar(1 + Math.sin(t * 2) * .04);
-      for (let k = 0; k < PN; k++) { const p = pSeed[k]; p.y += p.v * dt; if (p.y > 3.4) p.y = 0; pPos.set([Math.cos(p.a + t * .1) * p.r * (1 - p.y * .12), p.y + .05, Math.sin(p.a + t * .1) * p.r * (1 - p.y * .12)], k * 3); }
-      pGeo.attributes.position.needsUpdate = true;
       for (let k = 0; k < DN; k++) { const d = dSeed[k]; d.y -= dt * .05 * d.s; if (d.y < 0) d.y = CEIL_Y; dPos.set([Math.cos(d.a + t * .02 * d.s) * d.r, d.y, Math.sin(d.a + t * .02 * d.s) * d.r], k * 3); }
       dGeo.attributes.position.needsUpdate = true;
       leds.forEach((l, k) => { l.material.emissiveIntensity = ((t * .7 + k * .37) % 1) < .8 ? 2.6 : .4; });
@@ -521,10 +497,6 @@ export function createHall(scene, rooms, opts = {}) {
         d.cabLight.intensity = 3 + d.hover * 7; d.poolM.uniforms.uK.value = .7 + d.hover * .3;
         d.statusM.emissive.setHex(0x5cf09a).lerp(d.acc, d.hover); d.statusM.emissiveIntensity = (((t * .5 + d.i * .2) % 1) < .85 ? 2.6 : .6) + d.hover * 2; d.backM.emissiveIntensity = .55 + d.hover * .5; d.innerM.emissiveIntensity = d.hover * .25;   // 滑到哪一艙,那一艙亮起來
         d.innerM.emissive.copy(d.acc);
-        // 燈條:平常 35% 長、很慢地呼吸;滑過時亮一點;點擊(open)時一路掃到 100%
-        const fill = .35 + (1 - .35) * d.open, br = .55 + .45 * (.5 + .5 * Math.sin(t * .8 + d.i * 1.3));
-        d.bar.scale.x = d.BAR_W * fill; d.bar.position.x = -d.BAR_W / 2 + d.BAR_W * fill / 2;
-        d.barM.color.setRGB(.16, .58, .9).multiplyScalar(.55 + Math.max(br, d.hover) * 1.1 + d.open * .8);   // 冰藍(白底上要深一點才看得到)
         d.enterM.opacity = d.hover; d.enter.position.y = -.8 + d.hover * .08;
       }
       for (const p of propPlants) { const x = p.o.position.x, tt = t - x * .09, w = Math.max(0, .35 + .4 * Math.sin(tt * .55) + .25 * Math.sin(tt * 1.37 + 1.2));

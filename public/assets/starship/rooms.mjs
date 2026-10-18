@@ -87,7 +87,7 @@ export function shell(parent, cfg) {
 export const ROOMS = [
   { key: 'kitty', title: 'KittyCafe', tag: 'Web · iOS · Casual Game', desc: 'Serve the pickiest cat customers before the clock runs out.', url: '/kitty-cafe/',
     cfg: { slab: 0xf3c9d6, wall: '#f9d6e1', wallB: '#e6c9f2', wallLow: 0xf3a9bd, accent: 0xff8fb0, floor: 'tile', tileA: 0xfff6f8, tileB: 0xf6c6d4, planet: '#e47aa9', seed: 1 } },
-  { key: 'stocks', title: 'Cat Street Stocks', tag: 'Board Game · Stock Market', desc: 'A board game about the stock market, with cats.', url: '/catinsight-3d/',
+  { key: 'stocks', title: 'Cat Street Stocks', tag: 'Three.js · Board Game', desc: 'A board game about the stock market, with cats.', url: '/catinsight-3d/',
     cfg: { slab: 0xcbd5f3, wall: '#c9f0d8', wallB: '#b7c3f2', wallLow: 0x8fa3e8, accent: 0x7fe0a0, floor: 'wood', planet: '#5ccf8a', seed: 2 } },
   { key: 'ocean', title: 'Ocean Cleanup', tag: 'iOS Game', desc: 'A casual iOS game about cleaning up the beach.', url: 'https://apps.apple.com/tw/app/id6771914760',
     cfg: { slab: 0xbfe1f2, wall: '#cdeefa', wallB: '#9fd7f0', wallLow: 0x76bfe6, accent: 0x5ad0ff, floor: 'metal', planet: '#3aa0e6', seed: 3 } },
