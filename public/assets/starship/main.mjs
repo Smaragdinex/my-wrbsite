@@ -3,11 +3,11 @@
 //   ship 狀態 → 自己的流程:外觀(慢慢轉、可拖曳,點機庫口)→ 穿過機庫和通道 → 中央大廳(六道艙門)
 //                → 點艙門飛進作品艙;艙裡左右切換隔壁艙;往上滾 = 回上一層、往下滾 = 往前
 import * as THREE from 'three';
-import { quality, Q_SET } from './quality.mjs?v=6';
+import { quality, Q_SET } from './quality.mjs?v=7';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createExterior } from './exterior.mjs?v=42';
-import { ROOMS, buildRoom } from './rooms.mjs?v=20';
-import { createHall, createCorridor } from './hall.mjs?v=97';
+import { createExterior } from './exterior.mjs?v=43';
+import { ROOMS, buildRoom } from './rooms.mjs?v=21';
+import { createHall, createCorridor } from './hall.mjs?v=98';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -311,7 +311,7 @@ function open(w) { if (/^https?:/.test(w.url)) window.open(w.url, '_blank', 'noo
 let mode = 'ext', t0 = 0, cur = 0, roomF = 0, side = 1, fromDoor = 0, clockT = 0;
 const ENTER = 8.2, TO_ROOM = 1.75, TO_HALL = 1.5, EXIT = 2.0, TO_ROOM_R = 2.4, TO_HALL_R = 2.1;   // _R:真的房間(門口直接走進去,比較長)
 const busy = () => !['ext', 'hall', 'room'].includes(mode);
-function go(m, extra = {}) { if (m === 'toHall' || m === 'exit') sfx.whoosh(false); if (m === 'toRoom') { rooms[extra.room]?.real?.load(); roomOnly(extra.room); } if (m === 'hall' || m === 'toRoom') loadRooms(); /* 走進大廳就開始載房間模型 */ mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
+function go(m, extra = {}) { window.__crumb?.(`go ${m}${extra.room != null ? ' ' + extra.room : ''}`); if (m === 'toHall' || m === 'exit') sfx.whoosh(false); if (m === 'toRoom') { rooms[extra.room]?.real?.load(); roomOnly(extra.room); } if (m === 'hall' || m === 'toRoom') loadRooms(); /* 走進大廳就開始載房間模型 */ mode = m; t0 = clockT; Object.assign(window.__shipState, { mode: m, ...extra }); }
 window.__shipState = { mode };
 function enterShip() { if (mode !== 'ext') return; side = ext.ship.worldToLocal(extCam.position.clone()).x >= 0 ? 1 : -1; /* 鏡頭在戰艦哪一側就從那側進 */ sfx.click(); sfx.open(); setTimeout(() => sfx.whoosh(true), 650); setTimeout(() => { if (mode === 'enter') sfx.open(); }, 3900); setTimeout(() => { if (mode === 'enter') sfx.whoosh(true); }, 4500); go('enter'); }   // 機庫門、俯衝風聲、氣閘門、衝進通道
 function toRoom(i) { if (mode !== 'hall') return; sfx.click(); sfx.whoosh(true); cur = roomF = i; fromDoor = i; go('toRoom', { room: i }); }
@@ -542,6 +542,7 @@ const WRAP = { 1000: GL.REPEAT, 1001: GL.CLAMP_TO_EDGE, 1002: GL.MIRRORED_REPEAT
 const bigOK = (tx) => typeof createImageBitmap === 'function' && !tx.isRenderTargetTexture && !tx.isDataTexture && !tx.isCompressedTexture && !tx.isCanvasTexture && !tx.isVideoTexture
   && tx.flipY === false && tx.format === THREE.RGBAFormat && tx.type === THREE.UnsignedByteType && (tx.image?.width || 0) >= 2048 && !renderer.properties.get(tx).__webglInit;
 function startBig(tx) {
+  window.__crumb?.(`upload ${tx.image.width}`);
   const w = tx.image.width, h = tx.image.height, mips = tx.generateMipmaps && FILT[tx.minFilter] !== GL.LINEAR && FILT[tx.minFilter] !== GL.NEAREST;
   const glTex = GL.createTexture(); renderer.state.bindTexture(GL.TEXTURE_2D, glTex);
   GL.texStorage2D(GL.TEXTURE_2D, mips ? Math.floor(Math.log2(Math.max(w, h))) + 1 : 1, tx.colorSpace === THREE.SRGBColorSpace ? GL.SRGB8_ALPHA8 : GL.RGBA8, w, h);
@@ -578,7 +579,7 @@ function markTex(root, set) {                                          // 記下
   root.traverse((o) => { for (const m of [].concat(o.material || [])) for (const k in m) { const v = m[k]; if (v && v.isTexture) set.add(v); } });
 }
 function warmTick() {
-  const go_ = (key, ok, fn) => { if (W8[key] === 0 && ok) { W8[key] = 1; fn().then(() => { W8[key] = 2; }); } };
+  const go_ = (key, ok, fn) => { if (W8[key] === 0 && ok) { W8[key] = 1; window.__crumb?.(`warm ${key}`); fn().then(() => { W8[key] = 2; window.__crumb?.(`warm ${key} done`); }); } };
   go_('ext', ext.loaded, () => markTex(extScene, extTex) || Promise.all([compileBoth(extScene, extCam), compilePasses(extComposer)]).then(() => composerWarm.push('ext')));
   go_('cor', cor.baked, () => markTex(corScene, corTex) || Promise.all([compileBoth(corScene, corCam), compilePasses(corComposer)]).then(() => composerWarm.push('cor')));
   go_('hall', hall.baked, () => markTex(hallScene, hallTex) || Promise.all([compileBoth(hallScene, hallCam), compilePasses(hallComposer)]).then(() => { composerWarm.push('hall'); loadRooms(); }));   // 大廳好了就接著載房間
@@ -597,14 +598,14 @@ function warmTick() {
 let guardMode = '', guardT = 0;
 function crashGuard() {
   if (mode === guardMode) { if (guardT && performance.now() - guardT > 8000) { guardT = 0; try { localStorage.removeItem('xarts-crash'); } catch {} } return; }
-  guardMode = mode; guardT = 0;
+  guardMode = mode; guardT = 0; window.__crumb?.(`mode ${mode}`);
   if (mode !== 'ext') { guardT = performance.now(); try { localStorage.setItem('xarts-crash', JSON.stringify({ stage: mode, t: Date.now() })); } catch {} }
 }
 addEventListener('pagehide', () => { try { localStorage.removeItem('xarts-crash'); } catch {} });
 function warmComposers() {                                             // 後製的 shader(光暈、輸出)第一次畫才編譯 → 先在看不到的時候畫一次
   const kind = composerWarm[0]; if (!kind) return;
   if (pending({ ext: extTex, cor: corTex, hall: hallTex }[kind])) return;   // 等這個場景的大貼圖分段傳完再畫(不然 three.js 會整張同步上傳 → 卡)
-  composerWarm.shift();
+  composerWarm.shift(); window.__crumb?.(`composer ${kind}`);
   if (kind === 'ext') extComposer.render();
   else if (kind === 'cor') { corCam.position.set(0, .2, cor.START); corCam.lookAt(0, .1, cor.START - 10); cor.update(cor.START); const tm = renderer.toneMapping; if (cor.baked) renderer.toneMapping = THREE.NoToneMapping; corComposer.render(); renderer.toneMapping = tm; }
   else if (kind === 'hall') { hallCam.position.copy(HALL_POS); hallCam.lookAt(HALL_T); renderHall(0); }

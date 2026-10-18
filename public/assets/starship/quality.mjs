@@ -4,6 +4,16 @@
 //   3) 跑起來以後,main.mjs 還會看實際幀率:一直卡就自動降級(先降解析度,再降到 low)
 // 網址加 ?q=high|medium|low 可以強制指定(測試用)。結果放在 window.__quality。
 const TIERS = ['low', 'medium', 'high'];
+// 當機足跡:每個載入 / 切換步驟記一筆到 localStorage(最後 30 筆、離開始幾秒)。網頁當掉後下一次載入,右下角顯示上次停在哪一步(?debug=1 也會顯示這次的),
+// 這樣在實機上就知道是哪一步出事(模擬器重現不出來)
+const T0 = performance.now(), trail = [];
+window.__crumb = (s) => { trail.push(`${((performance.now() - T0) / 1000).toFixed(1)}s ${s}`); if (trail.length > 30) trail.shift(); try { localStorage.setItem('xarts-trail', JSON.stringify(trail)); } catch {} if (dbgBox) dbgBox.textContent = trail.slice(-8).join('\n'); };
+let dbgBox = null;
+function showNote(title, lines) {
+  const d = document.createElement('div'); d.textContent = title + '\n' + lines.join('\n');
+  Object.assign(d.style, { position: 'fixed', right: '10px', bottom: '10px', zIndex: 99, maxWidth: '78vw', whiteSpace: 'pre-wrap', font: '11px/1.45 Menlo, monospace', color: '#e8ecf4', background: 'rgba(10,14,28,.82)', padding: '8px 10px', borderRadius: '8px', pointerEvents: 'auto' });
+  d.onclick = () => d.remove(); (document.body ? Promise.resolve() : new Promise((r) => addEventListener('DOMContentLoaded', r))).then(() => document.body.appendChild(d)); return d;
+}
 
 function gpuName() {
   try {
@@ -43,11 +53,11 @@ function bench(gl) {
 
 // 當機保護:上次進大廳 / 房間時網頁當掉了(Safari 重新載入、或顯示「無法打開網頁」)→ 這次起這台裝置都用安全模式
 //   main.mjs 進大廳 / 房間時記一筆 xarts-crash,待 8 秒正常就擦掉;還在 = 當掉過。?safe=1 強制、?safe=0 清掉
-let SAFE = false;
+let SAFE = false, CRASHED = null;
 try {
   const f = new URLSearchParams(location.search).get('safe'); if (f === '0') localStorage.removeItem('xarts-safe');
   const m = JSON.parse(localStorage.getItem('xarts-crash') || 'null');
-  if (m && Date.now() - m.t < 5 * 60e3) localStorage.setItem('xarts-safe', '1');
+  if (m && Date.now() - m.t < 5 * 60e3) { localStorage.setItem('xarts-safe', '1'); CRASHED = JSON.parse(localStorage.getItem('xarts-trail') || '[]'); }
   localStorage.removeItem('xarts-crash');
   SAFE = f === '1' || localStorage.getItem('xarts-safe') === '1';
 } catch {}
@@ -95,5 +105,8 @@ Q.safe = SAFE;
 Q.lite = Q.tablet || SAFE;                                              // 平板、安全模式:省記憶體的那一套(房間只載一間、不開抗鋸齒、畫布貼圖縮一半)
 export const asset = (u) => (MOBILE_ASSETS ? u.replace(/(\.glb|\.webp)(\?|$)/, '_m$1$2') : u);   // models/ship.glb?v=12 → models/ship_m.glb?v=12
 export const quality = Q;
+if (CRASHED) { showNote(`Safe mode · ${navigator.userAgent.match(/OS [\d_]+|Version\/[\d.]+/g)?.join(' ') || ''}\n上次停在(最後幾步):`, CRASHED.slice(-8)); }
+if (new URLSearchParams(location.search).get('debug') === '1') dbgBox = showNote('debug', []);
+window.__crumb(`start ${Q.tier} ${Q.assets}${Q.tablet ? ' tablet' : ''}${Q.safe ? ' safe' : ''} ${screen.width}x${screen.height}@${devicePixelRatio}`);
 export const Q_SET = Q.lite ? { ...SETTINGS[Q.tier], dprMax: 1, mirror: false } : SETTINGS[Q.tier];   // 平板也不做地板即時倒影(整個大廳要多畫一次)
 console.info(`[quality] ${Q.tier} (${Q.why}) assets=${Q.assets}${Q.tablet ? ' tablet' : ''}${Q.safe ? ' SAFE' : ''} gpu="${Q.gpu}" bench=${Q.ms == null ? '-' : Q.ms.toFixed(1) + 'ms'}`);

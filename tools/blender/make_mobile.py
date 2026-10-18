@@ -2,6 +2,7 @@
 #   只把 glb 裡面嵌的圖片縮小、重新打包,幾何、材質、物件名稱一個 byte 都不動(網頁上 _m 跟原本的可以直接互換)。
 #   原因:原版大貼圖(4096)全部加起來 GPU 要 2.5GB、解碼又再吃一份記憶體 → iPhone / iPad 的 Safari 直接當掉(「無法打開網頁」)。
 #   縮多少:戰艦 / 大廳 / 通道 → 一半;五間房的建築(一次只看一間)→ 1/4;植物家具 → 一半;1024 以下的小圖不動。
+#   另外大廳的植物家具(hall_props_m.glb)再減面成低多邊形版(行動裝置用;植物葉子最多面)。
 #   每次重烘 ship / hall / room 之後都要再跑一次。
 # 用法:blender -b --python tools/blender/make_mobile.py
 import bpy, os, json, struct, glob, tempfile
@@ -70,3 +71,27 @@ if os.path.exists(lm):
     img = bpy.data.images.load(lm); w, h = img.size; img.scale(w // 2, h // 2)
     dst = os.path.join(MODELS, 'ship_light_m.webp'); img.file_format = 'WEBP'; img.filepath_raw = dst; img.save(filepath=dst, quality=88)
     print(f'ship_light.webp: {w}x{h} -> {w // 2}x{h // 2}', flush=True)
+
+# ---- 低多邊形:大廳植物家具(葉子一片片面數很多)→ 面數 > 3000 的物件減到約 35%(最少留 1500 面),物件名稱、材質、階層都保留 ----
+def lowpoly(name, ratio=.35, min_tris=3000):
+    path = os.path.join(MODELS, name)
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=path)
+    tris = lambda me: sum(len(p.vertices) - 2 for p in me.polygons)
+    groups = {}                                                             # 同一個網格被好幾個物件共用(同一盆植物擺好幾個)→ 減一次、其他物件指到減好的那份
+    for o in bpy.context.scene.objects:
+        if o.type == 'MESH': groups.setdefault(o.data, []).append(o)
+    before = sum(tris(me) for me in groups); after = 0
+    for me, objs in groups.items():
+        n = tris(me)
+        if n > min_tris:
+            o = objs[0]; m = o.modifiers.new('decimate', 'DECIMATE'); m.ratio = max(ratio, 1500 / n)
+            bpy.context.view_layer.objects.active = o; bpy.ops.object.select_all(action='DESELECT'); o.select_set(True)
+            bpy.ops.object.modifier_apply(modifier=m.name, single_user=True)
+            for x in objs[1:]: x.data = o.data
+        after += tris(objs[0].data)
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=False, export_yup=True, export_apply=True, export_cameras=False, export_lights=False,
+                              export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=6, export_image_format='WEBP', export_image_quality=88)
+    print(f'{name}: lowpoly {before // 1000}k -> {after // 1000}k tris, {os.path.getsize(path) // 1024} KB', flush=True)
+lowpoly('hall_props_m.glb')

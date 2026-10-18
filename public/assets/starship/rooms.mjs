@@ -1,12 +1,11 @@
 // 星艦裡的五間艙(一間一個作品;About 是另外的頁面)。每間照 catinsight-3d 那間 3D 房間的格局:厚底座 + 地板 + 兩面牆,鏡頭從前方 45° 看;
 // 牆是艦艙面板 + 發光燈條 + 看得到太空的圓窗。佈置之後照使用者的描述 / 參考圖一間一間改(改這個檔就好)。
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { gltf } from './loaders.mjs?v=1';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mat, glow, box, cyl, sphere, group, woodTex, panelTex, pot, leafyPlant, rand, textTex } from './kit.mjs?v=3';
-import { holoGlobe } from './globe.mjs?v=3';
-import { asset } from './quality.mjs?v=6';
+import { holoGlobe } from './globe.mjs?v=4';
+import { asset } from './quality.mjs?v=7';
 
 export const S = 6.4, T = 0.42, H = 4.8;   // 地板邊長、牆厚、牆高(跟 3D room 一樣)
 
@@ -296,13 +295,11 @@ const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { valu
       gl_FragColor = vec4(c, 1.);
       #include <colorspace_fragment>
     }` });
-let _gl = null;
-const loader = () => { if (!_gl) { _gl = new GLTFLoader(); const dr = new DRACOLoader(); dr.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/'); _gl.setDRACOLoader(dr); } return _gl; };
-const loadGLB = (url) => new Promise((ok, fail) => loader().load(url, (g) => ok(g.scene), undefined, fail));
+const loadGLB = (url) => new Promise((ok, fail) => gltf().load(url, (g) => ok(g.scene), undefined, fail));   // 全站共用的載入器(loaders.mjs)
 function realRoom(R, key, ctx) {
   const cfg = REAL[key], top = new THREE.Group(); top.visible = false; R.add(top);
   const st = { ready: false, eye: new THREE.Vector3(0, 1.65, -.9), look: new THREE.Vector3(0, 1.35, -9), hits: [], loading: null };
-  st.load = () => st.loading ??= Promise.all([loadGLB(asset(`/assets/starship/models/room_${key}.glb?v=${cfg.v}`)), cfg.props ? loadGLB(asset(`/assets/starship/models/room_${key}_props.glb?v=${cfg.v}`)) : null]).then(([m, props]) => {
+  st.load = () => st.loading ??= (window.__crumb?.(`room ${key} load`), Promise.all([loadGLB(asset(`/assets/starship/models/room_${key}.glb?v=${cfg.v}`)), cfg.props ? loadGLB(asset(`/assets/starship/models/room_${key}_props.glb?v=${cfg.v}`)) : null])).then(([m, props]) => { window.__crumb?.(`room ${key} loaded`);
     let mirror = null;
     if (ctx.mirror) {                                                          // 亮面地磚的倒影(低解析度 → 柔柔的,像拋光的磚)
       const dpr = Math.min(devicePixelRatio, 2);

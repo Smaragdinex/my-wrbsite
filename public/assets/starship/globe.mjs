@@ -2,7 +2,7 @@
 // holoGlobe() → { group, ball(點擊用), update(t) };半徑約 1(軌道到 1.72),放進場景時自己縮放
 import * as THREE from 'three';
 import { sphere, group, rand } from './kit.mjs?v=3';
-import { quality } from './quality.mjs?v=6';
+import { quality } from './quality.mjs?v=7';
 
 const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'), k = quality.lite && Math.max(w, h) >= 1024 ? .5 : 1; c.width = w * k; c.height = h * k; const g = c.getContext('2d'); g.scale(k, k); draw(g, w, h);   /* 平板:大張的畫布貼圖畫成一半大(省記憶體) */
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
