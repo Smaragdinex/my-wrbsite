@@ -1,7 +1,7 @@
 // 喇叭開關 + 音樂播放器(首頁、About 頁共用):
 //   喇叭 = 所有聲音的開關;播放器 = 封面 + 歌名 + 播放 / 下一首,點封面或歌名打開歌單(Cat Street 3D 房間電台同一份)。
 //   電腦在左下角,手機在右上的選單按鈕下面。首頁要等飛到戰艦才顯示(main.mjs 呼叫 player.show),About 頁一直顯示。
-import { sfx } from '/assets/starship/sfx.mjs?v=8';
+import { sfx } from '/assets/starship/sfx.mjs?v=9';
 const sfxBtn = Object.assign(document.createElement('button'), { id: 'sfxBtn', title: 'Sound' });
 sfxBtn.setAttribute('aria-label', 'Toggle sound');
 const drawSfx = () => { sfxBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/>${sfx.muted ? '<path d="M17 9l5 6M22 9l-5 6"/>' : '<path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>'}</svg>`; sfxBtn.classList.toggle('muted', sfx.muted); };
@@ -33,4 +33,11 @@ musicBox.querySelectorAll('.mb-row').forEach((r) => r.addEventListener('click', 
 addEventListener('pointerdown', (e) => { if (!musicBox.contains(e.target)) musicBox.classList.remove('open'); });
 sfx.enableMusic();                                                     // 有喇叭開關的頁面才放背景音樂(第一次點擊 / 按鍵 / 觸控後淡入)
 export const player = { show(on) { sfxBtn.classList.toggle('on', on); musicBox.classList.toggle('on', on); } };
+// 首頁一開始(顆粒 X、讀條)還沒有任何點擊:瀏覽器不准出聲(滾輪不算) → 下方一顆小提示「點一下開聲音」,點了音樂就從這裡開始放,提示淡出
+const hint = Object.assign(document.createElement('div'), { id: 'soundHint' });
+hint.innerHTML = `<span class="sw"><i></i><i></i><i></i><i></i></span>${matchMedia('(hover: none)').matches ? 'Tap for sound' : 'Click for sound'}`;
+document.body.appendChild(hint);
+const hintTick = () => { const st = window.__xp?.state, on = !sfx.muted && !sfx.unlocked && (st === 'open' || st === 'gate');
+  hint.classList.toggle('on', on); if (sfx.unlocked || st === 'ship') { if (!on) setTimeout(() => hint.remove(), 800); return; } setTimeout(hintTick, 250); };
+if (window.__xp) setTimeout(hintTick, 1200); else hint.remove();
 player.show(document.body.dataset.ns !== 'home');

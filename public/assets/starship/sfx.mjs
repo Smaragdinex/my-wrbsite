@@ -3,7 +3,7 @@
 //   whoosh 飛進門 / 退出:一陣風聲;swish 左右換艙:短短的刷一聲;greet 點機器人時它的電子招呼聲。
 // 瀏覽器規定要使用者先點一下(或按鍵)才能出聲,所以第一次互動之前是靜音的。右下角的喇叭可以關掉音效(記在 localStorage)。
 // 另外:背景音樂(Cat Street 3D 房間電台的歌單,從「Vastness」開始,串流播放;左下角有播放器)、
-//       超空間音效(充能嗡聲 → 跳躍時往上衝的掃頻 + 風聲 → 隧道裡的轟隆聲 → 跳出時一聲低沉的「轟」+ 抵達的鐘聲)、
+//       超空間音效(充能嗡聲 → 跳躍時往上衝的掃頻 + 風聲 → 隧道裡的轟隆聲 + 星線從左右呼嘯而過 → 跳出時一聲低沉的「轟」+ 抵達的鐘聲)、
 //       點左上頭盔的機器人叫聲。全部共用同一個開關。
 let ctx = null, master = null, muted = false, lastHover = 0;
 try { muted = localStorage.getItem('xarts-sfx') === 'off'; } catch {}
@@ -67,6 +67,7 @@ export const sfx = {
     on(f) { listeners.add(f); return () => listeners.delete(f); },
   },
   get muted() { return muted; },
+  get unlocked() { return !!ctx && ctx.state === 'running'; },        // 瀏覽器允許出聲了沒(第一次點擊 / 按鍵 / 觸控之後)
   toggle() { muted = !muted; try { localStorage.setItem('xarts-sfx', muted ? 'off' : 'on'); } catch {}
     if (!muted) { unlock(); setTimeout(() => sfx.click(), 30); } else stopAll(); notify(); return muted; },
 };
@@ -135,12 +136,22 @@ function hypStart() {
   airF.type = 'bandpass'; airF.Q.value = 1.4; airF.frequency.value = 900; airG.gain.value = 0; air.connect(airF); airF.connect(airG); airG.connect(out); air.start();
   const dr = [55, 82.5].map((f) => { const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.value = f; lp.type = 'lowpass'; lp.frequency.value = 300; g.gain.value = 0; o.connect(lp); lp.connect(g); g.connect(out); o.start(); return { o, g, lp }; });
   out.gain.setTargetAtTime(1, ctx.currentTime, .3);
-  hyp = { out, rum, rumG, rumF, air, airG, airF, dr, fired: {} };
+  hyp = { out, rum, rumG, rumF, air, airG, airF, dr, fired: {}, nextPass: 0 };
 }
 function hypStop(sec = 1.2) {
   if (!hyp) return; const h = hyp; hyp = null;
   h.out.gain.setTargetAtTime(0, ctx.currentTime, sec / 3);
   setTimeout(() => { try { h.rum.stop(); h.air.stop(); h.dr.forEach((d) => d.o.stop()); h.out.disconnect(); } catch {} }, sec * 1000 + 600);
+}
+function streak(vol) {                                                // 一道星線從旁邊呼嘯而過:高頻風聲往下滑(都卜勒)、從畫面中間甩到左或右
+  const t = ctx.currentTime, dur = .3 + Math.random() * .5, side = Math.random() < .5 ? -1 : 1, f0 = 2200 + Math.random() * 3000;
+  const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  s.buffer = noiseBuf; s.playbackRate.value = .85 + Math.random() * .4; f.type = 'bandpass'; f.Q.value = 2.4;
+  f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f0 * .25, t + dur);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + dur * .4); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  s.connect(f); f.connect(g);
+  if (p) { p.pan.setValueAtTime(side * .15, t); p.pan.linearRampToValueAtTime(side * .95, t + dur); g.connect(p); p.connect(hyp.out); } else g.connect(hyp.out);
+  s.start(t, Math.random() * 1.5); s.stop(t + dur + .05);
 }
 function chargeHum(v) {                                               // 讀條充能:越滿越高、越大聲
   if (v > .01 && !charge) { const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter(); o.type = 'sawtooth'; o2.type = 'sine'; lp.type = 'lowpass'; lp.frequency.value = 600; g.gain.value = 0; o.connect(lp); o2.connect(g); lp.connect(g); g.connect(master); o.start(); o2.start(); charge = { o, o2, g, lp }; }
@@ -174,5 +185,6 @@ function hyper(XP) {
     hyp.rumG.gain.setTargetAtTime(.36 * tun, t, .15); hyp.rumF.frequency.setTargetAtTime(140 + 120 * wob, t, .2);
     hyp.airG.gain.setTargetAtTime(.09 * tun * wob, t, .2); hyp.airF.frequency.setTargetAtTime(700 + 900 * (.5 + .5 * Math.sin(t * .9)), t, .2);
     hyp.dr.forEach((d, k) => { d.g.gain.setTargetAtTime(.06 * tun, t, .2); d.lp.frequency.setTargetAtTime(200 + 260 * wob + k * 80, t, .2); });
+    if (tun > .25 && t >= hyp.nextPass) { streak((.035 + Math.random() * .05) * tun); hyp.nextPass = t + .14 + Math.random() * .4; }   // 飛在隧道裡:星線一道道從身邊掠過
   } else if (hyp) { hypStop(1.2); if (mus && mus.duck < 1) duckMusic(1, 2); }
 }
