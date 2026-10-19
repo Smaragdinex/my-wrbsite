@@ -475,7 +475,7 @@ export function createHall(scene, rooms, opts = {}) {
       if (o.name.startsWith('baked_floor') && mirror) { m.transparent = true; m.opacity = .9; o.renderOrder = -2; mirror.position.y = -.012; }   // 讓即時的地板倒影透一點出來(鏡面放到磚面底下,不然會搶深度)
       if (o.name.startsWith('screen_')) { m.color.setScalar(.9);
         const key = Object.keys(SUB)[+o.name.slice(7)];                   // 平板:房間不預先載入,門洞裡先看到的是展示艙 → 艙裡的螢幕換成那間房間的照片(不是遊戲截圖)
-        if (quality.lite && key) new THREE.TextureLoader().load(`/assets/starship/models/door_${key}.jpg?v=5`, (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; m.map?.dispose(); m.map = t; m.needsUpdate = true; }); }
+        if (quality.lite && key) new THREE.TextureLoader().load(`/assets/starship/models/door_${key}.jpg?v=6`, (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; m.map?.dispose(); m.map = t; m.needsUpdate = true; }); }
       o.material = m; src.dispose(); o.matrixAutoUpdate = false; o.updateMatrix();
     });
     propsM.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; fixPropMat(o.material); }

@@ -319,18 +319,11 @@ def kitty():
     M_CREAM = mat('cream', '#fff4e6', .3, coat=.5); M_MARBLE = mat('marble', '#f7f3ef', .12, coat=.8)
     M_CHROME = mat('chrome', '#d8dce3', .14, metal=1.0); M_WOOD = mat('wood', '#d9a676', .45)
     M_BERRY = mat('berry', '#ff5a7a', .35); M_CUSH = mat('cushion', '#f7b8c8', .85)
-    # --- 後牆:菜單黑板(粉紅框;左右兩欄品項 + 價錢,中間一隻貓臉)+ 霓虹招牌 ---
+    # --- 後牆:菜單黑板(粉紅框;左右兩欄品項 + 價錢;中間原本的貓臉不好看,拿掉了)+ 霓虹招牌 ---
     yb = wall_board('menu', 3.9, 1.85, 2.22, '#3a2a35', '#f4a7bb', -.3)
     glowtext('menu_head', 'MENU', (-.3, yb, 2.86), .26, '#ffd1dc', 2)
     for k, (a_, b_) in enumerate((('LATTE', '120'), ('MATCHA', '140'), ('TAIYAKI', '90'))): glowtext(f'menu_l{k}', f'{a_}  {b_}', (-1.35, yb, 2.42 - k * .34), .16, '#fff1e0', 1.6)
     for k, (a_, b_) in enumerate((('ICE CREAM', '110'), ('STRAWBERRY', '130'), ('CAT COOKIE', '80'))): glowtext(f'menu_r{k}', f'{a_}  {b_}', (.85, yb, 2.42 - k * .34), .16, '#fff1e0', 1.6)
-    cf = Vector((-.3, yb, 2.1)); M_CF = mat('menu_cat', '#fff4e6', .5)
-    sphere('menu_cat_head', .26, cf, M_CF, scale=(1, .12, .85))
-    for sd in (-1, 1):
-        bm = bmesh.new(); g = bmesh.ops.create_cone(bm, cap_ends=True, segments=3, radius1=.11, radius2=0, depth=.02)['verts']
-        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(math.radians(90), 3, 'X'), verts=g); bmesh.ops.translate(bm, vec=cf + Vector((sd * .15, 0, .23)), verts=g); mesh_obj(f'menu_cat_ear_{sd}', bm, M_CF)
-        sphere(f'menu_cat_eye_{sd}', .03, cf + Vector((sd * .09, -.03, .03)), mat('ink', '#3a2a35', .4), seg=12)
-        sphere(f'menu_cat_blush_{sd}', .035, cf + Vector((sd * .15, -.03, -.06)), mat('blush', '#f7a3bc', .6), scale=(1, .3, .6), seg=12)
     M_NEON = mat('neon_pink', '#000000', 1, emit='#ff7aa8', emit_k=16)
     text('neon_title', 'KITTY CAFÉ', (-.3, D - .08, 3.6), .46, M_NEON, extrude=.012)
     # --- 右邊:吧台(粉紅圓弧條前板 + 大理石檯面)+ 遮陽棚 + 後櫃 ---
@@ -366,7 +359,9 @@ def kitty():
         if bm.faces: bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0), plane_no=(0, 0, 1), clear_outer=True)
         bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.02); bmesh.ops.translate(bm, vec=(aw_x1, y, aw_z1), verts=bm.verts)
         mesh_obj(f'awning_scallop_{k}', bm, m)
-    for y in (cy0 - .2, cy1 + .2): cyl(f'awning_rod_{y}', .025, 1.0, (aw_x1 + .2, y, aw_z1 + .15), M_CHROME, 16, rot=Matrix.Rotation(math.radians(90), 3, 'X') @ Matrix.Rotation(0, 3, 'Z'))
+    for y in (cy0 - .17, cy1 + .17):                                         # 兩端撐桿:沿著棚子的斜邊,從牆面接到前緣(原本橫著擺、一半伸出棚外懸空)
+        a_, b_ = Vector((aw_x0, y, aw_z0 - .04)), Vector((aw_x1 + .02, y, aw_z1 - .04)); d_ = b_ - a_
+        cyl(f'awning_rod_{y}', .02, d_.length, (a_ + b_) / 2, M_CHROME, 16, rot=Vector((0, 0, 1)).rotation_difference(d_).to_matrix())
     # 吧台上:咖啡機、貓咪造型烤吐司機、蛋糕架、杯子
     em = Vector((cx - .05, 3.4, 1.07))
     box('espresso', (.55, .7, .45), em + Vector((0, 0, .225)), M_CHROME, bevel=.04)
@@ -623,7 +618,7 @@ def ocean():
         bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Rz, verts=g); bmesh.ops.translate(bm, vec=base, verts=g)
         mesh_obj(name, bm, m, bevel=.008)
     for k, (x, y, rz) in enumerate(((-3.0, 3.9, -.3), (-1.6, 3.8, .3))):
-        p = Vector((x, y, .1)); Rz = Matrix.Rotation(rz, 3, 'Z'); SZ = .32       # 坐墊高(沙面上)
+        p = Vector((x, y, .06)); Rz = Matrix.Rotation(rz, 3, 'Z'); SZ = .32       # 坐墊高(沙面上)
         cols = [mat(f'stripe{j}', c_, .6) for j, c_ in enumerate(('#5ab7e0', '#ffffff'))]
         for j in range(5): slat(f'lounger_{k}_seat_{j}', Vector((0, -.6 + j * .2, SZ)), 0, cols[j % 2], Rz, p)
         hinge, BA = Vector((0, .3, SZ)), math.radians(50)                    # 靠背轉軸在坐墊尾端,往後上方斜
@@ -636,16 +631,16 @@ def ocean():
                 cyl(f'lounger_{k}_leg_{sx}_{sy}', .014, SZ - .04, p + Rz @ Vector((sx * .3, sy, (SZ - .04) / 2)), M_CHR, 10)
             top_ = p + Rz @ (hinge + dirv * .5 + Vector((sx * .26, 0, -.03))); bot_ = p + Rz @ Vector((sx * .3, .62, 0)); d_ = top_ - bot_   # 靠背撐桿
             cyl(f'lounger_{k}_strut_{sx}', .012, d_.length, (top_ + bot_) / 2, M_CHR, 10, rot=Vector((0, 0, 1)).rotation_difference(d_).to_matrix())
-    um = Vector((-3.1, 5.3, .1)); cyl('umb_pole', .025, 2.3, um + Vector((0, 0, 1.15)), mat('pole', '#ffffff', .3), 12)
+    um = Vector((-3.1, 5.3, .06)); cyl('umb_pole', .025, 2.3, um + Vector((0, 0, 1.15)), mat('pole', '#ffffff', .3), 12)
     for j in range(8):
         a0 = j / 8 * math.tau; bm = bmesh.new()
         vs = [bm.verts.new(um + Vector((0, 0, 2.35))), bm.verts.new(um + Vector((math.cos(a0) * 1.15, math.sin(a0) * 1.15, 1.95))), bm.verts.new(um + Vector((math.cos(a0 + math.tau / 8) * 1.15, math.sin(a0 + math.tau / 8) * 1.15, 1.95)))]
         bm.faces.new(vs); bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.015); mesh_obj(f'umb_{j}', bm, mat(f'umb{j % 2}', ['#ff8f7a', '#ffffff'][j % 2], .6), smooth=False)
-    sphere('beach_ball', .2, (-.9, 5.5, .32), mat('ball', '#ffd166', .4, coat=.6))
-    for k in range(7): sphere(f'shell_{k}', .05, (-3.6 + k * .45, 5.9 - (k % 2) * .5, .14), mat(f'shell{k % 3}', ['#ffffff', '#ffc7d1', '#ffe0a8'][k % 3], .4), scale=(1, 1, .5), seg=12)
+    sphere('beach_ball', .2, (-.9, 5.5, .245), mat('ball', '#ffd166', .4, coat=.6))
+    for k in range(7): sphere(f'shell_{k}', .05, (-3.6 + k * .45, 5.9 - (k % 2) * .5, .075), mat(f'shell{k % 3}', ['#ffffff', '#ffc7d1', '#ffe0a8'][k % 3], .4), scale=(1, 1, .5), seg=12)
     bm = bmesh.new(); vs = []
     for j in range(10): a = j / 10 * math.tau; rr = .16 if j % 2 == 0 else .07; vs.append(bm.verts.new((math.cos(a) * rr, math.sin(a) * rr, 0)))
-    bm.faces.new(vs); bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.03); bmesh.ops.translate(bm, vec=(-1.5, 5.8, .13), verts=bm.verts); mesh_obj('starfish', bm, mat('starfish', '#ff8f5a', .6), bevel=.01)
+    bm.faces.new(vs); bm.normal_update(); bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=.03); bmesh.ops.translate(bm, vec=(-1.5, 5.8, .085), verts=bm.verts); mesh_obj('starfish', bm, mat('starfish', '#ff8f5a', .6), bevel=.01)
     # 中間:淺藍圓地毯 + 漂流木矮桌(上面貝殼、玻璃瓶)+ 兩個坐墊
     cc = Vector((.9, 5.0, 0)); M_DRIFT = woodmat('drift', '#cdb89a', '#a99272', 4, .8)
     cyl('ocean_rug', 1.6, .02, cc + Vector((0, 0, .011)), mat('orug', '#a9dcf2', .95), 96)
