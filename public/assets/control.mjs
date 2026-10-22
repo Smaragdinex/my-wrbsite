@@ -2,7 +2,7 @@
 //   open   :往下滑 → X 停在畫面上打開(進度跟著手)
 //   gate   :X 打開到底後鎖住,出現讀條(超空間引擎充能)—— 要夠快、連續地往下滑才會漲,一停就慢慢掉回去,滿了立刻出發
 //   launch :自動播放 —— 顆粒自己化開 → 星際穿越(光速星線 → 光隧道)→ 太空梭從遠方飛進來
-//            載入就在光隧道裡:戰艦模型還沒載好就一直待在隧道裡(HOLD),載好才跳出(電腦快就跟原本一樣,不用等)
+//            載入改在一進首頁的讀取頁(loader.mjs);隧道裡的 HOLD 只剩保險用(讀取頁等太久放行時,模型還沒好就停在隧道裡)
 //   ship   :一頁一頁:0 = 戰艦外觀、1~5 = 艦內五間房;一次滑動換一頁(換頁中鎖住一下,才不會一次跳好幾間)
 // 其他模組每幀讀 window.__xp(open / dissolve / warp / fadeBg / ship / tour)
 const XP = window.__xp = { state: 'open', open: 0, dissolve: 0, warp: 0, fadeBg: 0, ship: 0, tour: 0, charge: 0, flash: 0 };
@@ -29,6 +29,7 @@ function nav(kind, d = 0) {
 }
 
 function input(dyPx, touch = false, axis = 'v') {          // dyPx > 0 = 往下滑(內容往上走);手機一次滑動距離很大,讀條另外算
+  if (window.__loading) return;                                  /* 讀取頁還在(loader.mjs):先不接輸入 */
   const cpp = touch ? TOUCH_CHARGE / innerHeight : CHARGE_PER_PX;
   lastInput = performance.now();
   const vh = innerHeight;
