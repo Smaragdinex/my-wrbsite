@@ -275,26 +275,12 @@ def framed(name, loc, rot_z, w, h, bg, draw=None):
     f = Vector((math.sin(rot_z), -math.cos(rot_z), 0)); side = Vector((math.cos(rot_z), math.sin(rot_z), 0))
     box(f'{name}_canvas', (w, .02, h), loc + f * .025, mat(f'{name}_bg', bg, .8), rot_z)
     if draw: draw(loc + f * .04, f, side)
-def cat_fig(name, p, face, s=1.0, m=None):
-    m = m or mat('ceramic_cat', '#fbf8f4', .12, coat=.9); f = Vector((math.cos(face), math.sin(face), 0)); side = Vector((-f.y, f.x, 0))
-    sphere(f'{name}_body', .16 * s, p + Vector((0, 0, .15 * s)), m, scale=(1, 1, 1.15))
-    hp = p + f * .05 * s + Vector((0, 0, .38 * s)); sphere(f'{name}_head', .12 * s, hp, m, scale=(1, 1, .9))
-    for sd in (-1, 1):
-        bm = bmesh.new(); g = bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=.05 * s, radius2=.0, depth=.09 * s)['verts']
-        bmesh.ops.translate(bm, vec=hp + side * sd * .065 * s + Vector((0, 0, .1 * s)), verts=g); mesh_obj(f'{name}_ear_{sd}', bm, m)
-        sphere(f'{name}_eye_{sd}', .014 * s, hp + f * .11 * s + side * sd * .042 * s + Vector((0, 0, .01 * s)), mat('ink', '#3a2a35', .4))
-def rabbit_fig(name, p, face, s=1.0, m=None):
-    """跟 cat_fig 一樣大小的兔子棋子:圓身體、頭、兩隻長耳朵(內側粉紅)、圓尾巴、眼睛"""
-    m = m or mat('ceramic_rabbit', '#fbf8f4', .12, coat=.9); f = Vector((math.cos(face), math.sin(face), 0)); side = Vector((-f.y, f.x, 0))
-    sphere(f'{name}_body', .16 * s, p + Vector((0, 0, .15 * s)), m, scale=(1, 1, 1.1))
-    hp = p + f * .06 * s + Vector((0, 0, .36 * s)); sphere(f'{name}_head', .11 * s, hp, m, scale=(1, 1, .95))
-    for sd in (-1, 1):
-        ep = hp + side * sd * .045 * s + Vector((0, 0, .17 * s)) - f * .01 * s
-        sphere(f'{name}_ear_{sd}', .04 * s, ep, m, scale=(1, .55, 2.6))
-        sphere(f'{name}_earin_{sd}', .028 * s, ep + f * .016 * s, mat('rabbit_ear_in', '#ffb7c9', .5), scale=(1, .4, 2.3))
-        sphere(f'{name}_eye_{sd}', .014 * s, hp + f * .1 * s + side * sd * .042 * s + Vector((0, 0, .01 * s)), mat('ink', '#3a2a35', .4))
-    sphere(f'{name}_nose', .012 * s, hp + f * .11 * s - Vector((0, 0, .02 * s)), mat('rabbit_nose', '#ff8fa8', .4))
-    sphere(f'{name}_tail', .05 * s, p - f * .15 * s + Vector((0, 0, .12 * s)), m)
+def critter(name, kind, base, face, height):
+    """使用者用 Tripo 做的貓 / 兔子(tools/blender/critters_prep.py 整理過:原點在腳底、高 1、面朝 -Y)→ 縮放、轉向 face、放到 base"""
+    bpy.ops.import_scene.gltf(filepath=os.path.join(ROOT, 'assets', 'critters', f'{kind}.glb'))
+    o = bpy.context.selected_objects[0]; link(o); o.name = f'{name}_m'
+    o.scale = (height, height, height); o.rotation_euler = (0, 0, face + math.pi / 2); o.location = base
+    return o
 def plank_table(name, c, w, d, h, top_m, leg_m):
     box(f'{name}_top', (w, d, .07), c + Vector((0, 0, h - .035)), top_m, bevel=.02)
     box(f'{name}_apron', (w - .2, d - .2, .1), c + Vector((0, 0, h - .12)), leg_m, bevel=.01)
@@ -540,11 +526,11 @@ def stocks():
     for k, (x, y, r) in enumerate(((.05, -.1, .3), (.28, .02, -.4))):
         box(f'die_{k}', (.12, .12, .12), c + Vector((x, y, .88)), mat('die', '#ffffff', .3, coat=.6), r, bevel=.025, seg=4)
         sphere(f'pip_{k}', .016, c + Vector((x, y, .945)), mat('pip', '#2b2f3a', .4))
-    # 棋子:一隻貓、一隻兔子(使用者要的)。不烘光(prop_*,網頁上即時打光),零件掛在空物件 prop_cat_0 / prop_rabbit_0 底下(原點在腳底)
-    #   → 網頁上沿著外圈的彩色格子繞圈走(兔子用跳的)
-    for k, (kind, x, y, hx) in enumerate((('cat', -1.3, -.9, '#f7c08a'), ('rabbit', 1.3, .9, '#fbf8f4'))):
+    # 棋子:一隻貓、一隻兔子(使用者用 Tripo 做的模型)。不烘光(prop_*,網頁上即時打光),掛在空物件 prop_cat_0 / prop_rabbit_0 底下(原點在腳底)
+    #   → 網頁上沿著外圈的彩色格子繞圈,兩隻都用跳的(Tripo 的骨架是人形,套在動物上很怪,所以不綁骨架)
+    for kind, src, x, y, hgt in (('cat', 'cat', -1.3, -.9, .27), ('rabbit', 'bunny', 1.3, .9, .31)):
         nm, base = f'prop_{kind}_0', c + Vector((x, y, .86))
-        (cat_fig if kind == 'cat' else rabbit_fig)(nm, base, -math.pi / 2, .35, mat(f'piece{k}', hx, .2, coat=.8))
+        critter(nm, src, base, -math.pi / 2, hgt)
         e = bpy.data.objects.new(nm, None); col.objects.link(e); e.location = base; bpy.context.view_layer.update()
         for o in [o for o in col.objects if o.name.startswith(nm + '_')]: o.parent = e; o.matrix_parent_inverse = e.matrix_world.inverted()
     for k, (dx, dy, hx) in enumerate(((-2.15, 0, '#7fc79a'), (2.15, 0, '#b48bff'), (0, 1.65, '#6cc6ff'))):
@@ -805,6 +791,7 @@ cam = bpy.data.objects.new('cam', cam_d); col.objects.link(cam); scene.camera = 
 eye, look, fov = EYE, Vector((0, D, 1.35)), 56
 if VIEW == 'counter': eye, look, fov = Vector((-.5, 2.2, 1.6)), Vector((3.6, 4.6, 1.1)), 50
 elif VIEW == 'window': eye, look, fov = Vector((1.2, 2.0, 1.6)), Vector((-4.6, 4.8, 1.2)), 52
+elif VIEW == 'board': eye, look, fov = Vector((.2, 2.3, 1.55)), Vector((.2, 4.7, .9)), 46
 elif VIEW == 'cattree': eye, look, fov = Vector((-1.6, 5.2, 1.7)), Vector((-4.0, 8.0, 1.3)), 50
 cam_d.angle = math.radians(fov); cam.location = eye
 cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (look - eye).to_track_quat('-Z', 'Y')

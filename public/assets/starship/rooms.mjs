@@ -275,7 +275,7 @@ D.rails = (R, ctx) => {
 // 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
 // 房間裡不放作品截圖(使用者:截圖跟環境不搭),點房間裡的家具 / 擺設就進作品。
 // 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
-const REAL = { kitty: { v: 6, props: false }, stocks: { v: 6, props: true }, ocean: { v: 5, props: false }, planet: { v: 8, props: true }, rails: { v: 5, props: true } };   // 盆栽全部拿掉(使用者:每間都不需要);props 只剩會動的東西
+const REAL = { kitty: { v: 6, props: false }, stocks: { v: 7, props: true }, ocean: { v: 5, props: false }, planet: { v: 8, props: true }, rails: { v: 5, props: true } };   // 盆栽全部拿掉(使用者:每間都不需要);props 只剩會動的東西
 // 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
 const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { value: hzOff } }, vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: `varying vec3 vW; uniform float uHz;
@@ -338,14 +338,19 @@ function realRoom(R, key, ctx) {
       const HX = 1.3, HY = .9, CX = .2, CY = 4.7, P = 4 * (HX + HY);       // 外圈格子的半寬 / 半深、棋盤中心(Blender 座標;網頁 x = x、z = -y)
       const SEG = [[-HX, -HY, 1, 0, 2 * HX], [HX, -HY, 0, 1, 2 * HY], [HX, HY, -1, 0, 2 * HX], [-HX, HY, 0, -1, 2 * HY]];
       const along = (d) => { d = ((d % P) + P) % P; for (const [x, y, dx, dy, L] of SEG) { if (d <= L) return [x + dx * d, y + dy * d, dx, dy]; d -= L; } return [-HX, -HY, 1, 0]; };
-      const walkers = [['prop_cat_0', 0, 'walk'], ['prop_rabbit_0', P / 2, 'hop']].map(([n, off, gait]) => { const o = props.getObjectByName(n); return o && { o, off, gait, y0: o.position.y, head: null }; }).filter(Boolean);
+      const walkers = [['prop_cat_0', 0, 'hop'], ['prop_rabbit_0', P / 2, 'hop']]   /* 兩隻都用跳的(Tripo 模型沒綁骨架) */.map(([n, off, gait]) => { const o = props.getObjectByName(n); return o && { o, off, gait, y0: o.position.y, head: null }; }).filter(Boolean);
       let last = 0;
       st.tick = (t) => { const dt = Math.min(.1, t - last || 0); last = t;
         for (const w of walkers) {
           const [x, y, dx, dy] = along(w.off + t * .26), want = Math.atan2(dx, -dy);   // 模型正面朝 Blender 的 -y(網頁 +z)
           w.head ??= want; let dh = want - w.head; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); w.head += dh * Math.min(1, dt * 6);   // 轉角慢慢轉過去
           w.o.position.set(CX + x, w.y0, -(CY + y)); w.o.rotation.set(0, w.head, 0);
-          if (w.gait === 'hop') { const ph = (t * 2.2 + w.off) % 1; w.o.position.y += Math.sin(ph * Math.PI) * .07; const sq = ph < .12 ? Math.sin(ph / .12 * Math.PI) * .12 : 0; w.o.scale.set(1 + sq * .5, 1 - sq, 1 + sq * .5); }
+          if (w.gait === 'hop') {                                                  // 一跳一跳:起跳前壓扁、空中拉長、身體往前傾,落地再壓扁一下
+            const ph = (t * 2.0 + w.off * .37) % 1, air = Math.sin(ph * Math.PI);
+            const sq = ph < .14 ? Math.sin(ph / .14 * Math.PI) * .14 : ph > .9 ? Math.sin((ph - .9) / .1 * Math.PI) * .1 : -air * .05;
+            w.o.position.y += air * .085; w.o.scale.set(1 + sq * .5, 1 - sq, 1 + sq * .5);
+            w.o.rotation.order = 'YXZ'; w.o.rotation.set(air * .16, w.head, Math.sin(ph * Math.PI * 2) * .05);
+          }
           else { w.o.position.y += Math.abs(Math.sin(t * 9)) * .012; w.o.rotation.z = Math.sin(t * 9) * .06; }   // 貓:走路一顛一顛、左右晃
         } };
     }
