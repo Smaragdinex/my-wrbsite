@@ -302,15 +302,17 @@ roomHint?.addEventListener('click', (e) => { e.stopPropagation(); if (mode === '
 function placeHint(on) {
   if (!roomHint) return;
   if (on) {
-    if (!hintAt[cur]) {                                                     /* 第一次:量烘焙版房間的標題字(neon_title)右緣;還沒載好就先用估計值 */
+    if (!hintAt[cur]) {                                                     /* 第一次:量烘焙版房間的標題字(neon_title),白點放在標題正上方置中;還沒載好就先用估計值 */
       const t = realOn(cur) && rooms[cur].group.getObjectByName('neon_title');
-      if (t) { _hb.setFromObject(t); hintAt[cur] = new THREE.Vector3(_hb.max.x + .3, (_hb.min.y + _hb.max.y) / 2, _hb.max.z + .02); }
+      if (t) { _hb.setFromObject(t); hintAt[cur] = new THREE.Vector3((_hb.min.x + _hb.max.x) / 2, _hb.max.y + .17, _hb.max.z + .02); }
     }
-    if (hintAt[cur]) _hv.copy(hintAt[cur]); else _hv.set(rooms[cur].group.position.x + 1.4, 3.78, -8.9);
+    if (hintAt[cur]) _hv.copy(hintAt[cur]); else _hv.set(rooms[cur].group.position.x, 4.02, -8.9);
     _hv.project(roomCam);
     on = _hv.z < 1 && Math.abs(_hv.x) < 1 && Math.abs(_hv.y) < 1;
-    if (on) { const x = (_hv.x + 1) / 2 * innerWidth; roomHint.style.transform = `translate3d(${x.toFixed(1)}px, ${((1 - _hv.y) / 2 * innerHeight).toFixed(1)}px, 0)`;
-      roomHint.classList.toggle('below', x + 22 + (roomHint.lastChild.offsetWidth || 90) > innerWidth - 10); }   /* 右邊放不下 Enter 標籤 → 改放白點下面 */
+    if (on) {                                                               /* 白點 + Enter 標籤整組置中(白點在左、標籤在右,所以白點往左挪半個標籤寬) */
+      const x = (_hv.x + 1) / 2 * innerWidth - ((roomHint.lastChild.offsetWidth || 90) - 4) / 2;
+      roomHint.style.transform = `translate3d(${x.toFixed(1)}px, ${((1 - _hv.y) / 2 * innerHeight).toFixed(1)}px, 0)`;
+    }
   }
   roomHint.classList.toggle('on', on);
 }
