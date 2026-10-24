@@ -296,22 +296,22 @@ if (dots) { dots.innerHTML = ROOMS.map((r) => `<button aria-label="${r.title}"><
 prevBtn?.addEventListener('click', () => nav('h', -1));
 nextBtn?.addEventListener('click', () => nav('h', 1));
 let shownCard = -2;
-const touchUI = !matchMedia('(hover: hover) and (pointer: fine)').matches;   // 手機 / 平板:不顯示作品卡,改用牆上的白點(roomHint)
-const roomHint = document.getElementById('roomHint'), hintAt = [], _hv = new THREE.Vector3(), _hb = new THREE.Box3();   // 白點擺在牆上大標題字的右邊(標題下面是菜單 / 圓窗,放下面會擋到)
+const touchUI = !matchMedia('(hover: hover) and (pointer: fine)').matches;   // 手機 / 平板:不顯示作品卡,改用牆上的 Enter 按鈕(roomHint)
+const roomHint = document.getElementById('roomHint'), hintAt = [], _hv = new THREE.Vector3(), _hb = new THREE.Box3();   // Enter 按鈕擺在牆上大標題正上方(標題下面是菜單 / 圓窗,放下面會擋到)
 roomHint?.addEventListener('click', (e) => { e.stopPropagation(); if (mode === 'room') open(ROOMS[cur]); });
 function placeHint(on) {
   if (!roomHint) return;
   if (on) {
-    if (!hintAt[cur]) {                                                     /* 第一次:量烘焙版房間的標題字(neon_title),白點放在標題正上方置中;還沒載好就先用估計值 */
+    if (!hintAt[cur]) {                                                     /* 第一次:量烘焙版房間的標題字(neon_title),Enter 按鈕放在標題正上方置中;還沒載好就先用估計值 */
       const t = realOn(cur) && rooms[cur].group.getObjectByName('neon_title');
-      if (t) { _hb.setFromObject(t); hintAt[cur] = new THREE.Vector3((_hb.min.x + _hb.max.x) / 2, _hb.max.y + .17, _hb.max.z + .02); }
+      if (t) { _hb.setFromObject(t); hintAt[cur] = new THREE.Vector3((_hb.min.x + _hb.max.x) / 2, _hb.max.y + .04, _hb.max.z + .02); }
     }
-    if (hintAt[cur]) _hv.copy(hintAt[cur]); else _hv.set(rooms[cur].group.position.x, 4.02, -8.9);
+    if (hintAt[cur]) _hv.copy(hintAt[cur]); else _hv.set(rooms[cur].group.position.x, 3.9, -8.9);
     _hv.project(roomCam);
     on = _hv.z < 1 && Math.abs(_hv.x) < 1 && Math.abs(_hv.y) < 1;
-    if (on) {                                                               /* 白點 + Enter 標籤整組置中(白點在左、標籤在右,所以白點往左挪半個標籤寬) */
-      const x = (_hv.x + 1) / 2 * innerWidth - ((roomHint.lastChild.offsetWidth || 90) - 4) / 2;
-      roomHint.style.transform = `translate3d(${x.toFixed(1)}px, ${((1 - _hv.y) / 2 * innerHeight).toFixed(1)}px, 0)`;
+    if (on) {                                                               /* Enter 按鈕:左右置中,底邊貼在標題上緣再往上 6px(不壓到字) */
+      const x = (_hv.x + 1) / 2 * innerWidth - (roomHint.offsetWidth || 96) / 2, y = (1 - _hv.y) / 2 * innerHeight - (roomHint.offsetHeight || 34) - 6;
+      roomHint.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
     }
   }
   roomHint.classList.toggle('on', on);

@@ -52,17 +52,14 @@
   #card p{margin-top:6px;font-size:14px;line-height:1.5;color:rgba(242,242,240,.65)}
   #card a{display:inline-block;margin-top:12px;padding:10px 16px;border-radius:999px;background:#9fc4ff;color:#0b1020;font-weight:700;text-decoration:none;font-size:14px}
   @media(max-width:600px){ #card{left:16px;right:16px;width:auto;bottom:44px} }
-  /* 手機 / 平板(沒有滑鼠):不顯示作品卡,改在房間牆上大標題正上方(置中)放一個會擴散的白點(跟 catinsight-3d 房間的提示點一樣),點它就進作品 */
-  #roomHint{position:fixed;left:0;top:0;z-index:7;width:44px;height:44px;margin:-22px 0 0 -22px;padding:0;border:0;background:none;cursor:pointer;
-    opacity:0;pointer-events:none;transition:opacity .35s;will-change:transform;-webkit-tap-highlight-color:transparent}
+  /* 手機 / 平板(沒有滑鼠):不顯示作品卡,改在房間牆上大標題正上方放一顆置中的「Enter ↗」按鈕(外圈淡淡呼吸光暈),點它就進作品 */
+  #roomHint{position:fixed;left:0;top:0;z-index:7;margin:0;padding:10px 20px;border:0;border-radius:999px;cursor:pointer;
+    background:rgba(16,18,40,.82);color:#fff;font:700 14px/1 -apple-system,"SF Pro Display","Helvetica Neue",sans-serif;letter-spacing:.05em;white-space:nowrap;
+    opacity:0;pointer-events:none;transition:opacity .35s;will-change:transform;-webkit-tap-highlight-color:transparent;
+    box-shadow:0 0 0 0 rgba(255,255,255,.55);animation:hintGlow 2.2s ease-out infinite}
   #roomHint.on{opacity:1;pointer-events:auto}
-  #roomHint .core{position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;
-    box-shadow:0 0 0 3px rgba(255,255,255,.28),0 0 14px rgba(255,255,255,.95)}
-  #roomHint .ring{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;border:1.5px solid rgba(255,255,255,.9);animation:hintPulse 1.9s ease-out infinite}
-  #roomHint .ring+.ring{animation-delay:.95s}
-  @keyframes hintPulse{0%{transform:scale(.55);opacity:.95}100%{transform:scale(2.1);opacity:0}}
-  #roomHint .lbl{position:absolute;left:100%;top:50%;transform:translate(-4px,-50%);padding:6px 11px;border-radius:999px;background:rgba(16,18,40,.8);color:#fff;
-    font:700 12px/1 -apple-system,"SF Pro Display","Helvetica Neue",sans-serif;letter-spacing:.04em;white-space:nowrap;pointer-events:none}
+  #roomHint:active{background:rgba(16,18,40,.95)}
+  @keyframes hintGlow{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}70%{box-shadow:0 0 0 12px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
   /* 一進首頁的讀取頁:小太空船沿著進度線往前飛;戰艦、通道、大廳都載好 → 小船往前衝出去、整頁淡出,才看到顆粒 X(超空間不再停下來等) */
   #loader{position:fixed;inset:0;z-index:60;background:#05070d;color:#e8eefc;display:grid;place-items:center;overflow:hidden;
     transition:opacity .7s ease .25s;font:600 11px/1 "Helvetica Neue",Arial,sans-serif}
@@ -194,12 +191,12 @@
 <div id="arrows"><button id="prevRoom" aria-label="Previous room">&#8249;</button><button id="nextRoom" aria-label="Next room">&#8250;</button></div>
 <div id="gate"><div class="bar"><div id="gateFill"></div></div><div id="gatePct">0%</div></div>
 <div id="card"><small></small><h2></h2><p></p><a href="#">Enter ↗</a></div>
-<button id="roomHint" type="button" aria-label="Enter project"><span class="ring"></span><span class="ring"></span><span class="core"></span><span class="lbl">Enter ↗</span></button>
+<button id="roomHint" type="button" aria-label="Enter project">Enter ↗</button>
 <script type="module" src="/assets/loader.mjs?v=1"></script>
 <script type="module" src="/assets/control.mjs?v=11"></script>
 <script type="module" src="/assets/shell.mjs?v=17"></script>
 <script type="module" src="/assets/face.mjs?v=12"></script>
-<script type="module" src="/assets/starship/main.mjs?v=189"></script>
+<script type="module" src="/assets/starship/main.mjs?v=190"></script>
 <script>
 /* 手機選單:點按鈕開 / 關;點選單裡的連結、點外面、按 Esc 都會關 */
 (() => {
