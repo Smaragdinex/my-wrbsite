@@ -7,6 +7,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { makeFace, drawFace, setFace, faceMaterial, softRamp, EXPR } from './rig.mjs?v=3';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -283,7 +284,7 @@ const marginCheck = () => ENG.marginCheck(S);
 async function flushNotices() {
   while (S.notices.length) {
     const x = S.notices.shift(), sec = SECTORS[x.k], who = nameOf(S.players[x.pi]); x.isMe = isYou(S.players[x.pi]);
-    drawAll(); hud(); sfx('liq');
+    drawAll(); hud(); sfx('liq'); emote(PIECES[x.pi]?.body, 'Sad');
     if (x.squeeze) {
       await cardPanel(x.isMe ? L('Short squeeze: you were forced to cover', '軋空:你被強迫回補') : L(`${who} got squeezed`, `${who}被軋空了`),
         x.isMe
@@ -976,24 +977,66 @@ function loadModel(url, height) {
     const m = gltf.scene;
     const bb = new THREE.Box3().setFromObject(m), size = bb.getSize(new THREE.Vector3()), ctr = bb.getCenter(new THREE.Vector3());
     const k = height / size.y;
+    const ramp = gltf.animations.some((a) => a.name === 'Idle') ? softRamp : toonRamp;   // 骨架角色用柔和版三階
     m.scale.setScalar(k); m.position.set(-ctr.x * k, -bb.min.y * k, -ctr.z * k);
     m.traverse((o) => {
       if (!o.isMesh) return;
       o.castShadow = true;
       const old = o.material;
-      o.material = new THREE.MeshToonMaterial({ map: old.map || null, gradientMap: toonRamp, side: old.side });
+      if (old.name === 'Face') { faceMaterial(o, ramp); return; }   // 表情貼片:每個分身在 standingCopy 換成自己的 canvas
+      o.material = new THREE.MeshToonMaterial({ map: old.map || null, gradientMap: ramp, side: old.side });
       // 生成模型在 UV 接縫處法線不連續,描邊會沿接縫裂開變成臉上的髒線 → 這個模型不描邊
       o.material.userData.outlineParameters = { visible: false };
     });
-    const wrap = new THREE.Group(); wrap.add(m); wrap.userData.walk = gltf.animations.find((a) => a.name === 'Walk') || null; res(wrap);
+    const wrap = new THREE.Group(); wrap.add(m); wrap.userData.walk = gltf.animations.find((a) => a.name === 'Walk') || null; wrap.userData.clips = gltf.animations; res(wrap);
   }, undefined, rej)));
 }
 // 有骨架的角色(Kitty骨架/rig8.py 做的):靜止姿勢是 T 字,所以擺成走路動畫第 0 格的站姿(兩腳併攏、手放下),不播動畫
-function standingCopy(tpl) {
+// 有骨架 + Idle 的角色(兔子,tools/blender/rig_bunny.py + rig_bunny_anim.py):Idle 一直循環,Hop / Roll / Happy / Sad 由 emote() 觸發。live=false 只取靜止的第 0 格(頭像用)
+const ANIMS = new Set();
+function standingCopy(tpl, live = true) {
+  const clips = tpl.userData.clips || [];
+  if (clips.some((c) => c.name === 'Idle')) {
+    const inst = SkeletonUtils.clone(tpl), mx = new THREE.AnimationMixer(inst), act = {}, face = makeFace(inst);
+    clips.forEach((c) => { act[c.name] = mx.clipAction(c); });
+    act.Idle.play(); mx.update(live ? Math.random() * 2 : 0);   // 每隻從不同時間開始,同角色並排時才不會同步晃
+    if (live) {
+      const a = inst.userData.anim = { mx, act, cur: null, back: 0, root: inst, face };
+      mx.addEventListener('finished', (e) => { if (e.action === a.cur) a.back = a.cur.getClip().name === 'Sad' ? 1.4 : 0.001; });
+      ANIMS.add(a);
+    }
+    return inst;
+  }
   if (!tpl.userData.walk) return tpl.clone(true);
   const inst = SkeletonUtils.clone(tpl), mx = new THREE.AnimationMixer(inst); mx.clipAction(tpl.userData.walk).play(); mx.update(0); return inst;
 }
 // 先放幾何佔位,模型到了再換
+// 播一次性動作(dur:要在幾秒內播完;不給就照原速)。物件底下沒有骨架角色就回傳 false,呼叫端照舊用程式擺動
+function rigOf(obj) {
+  if (!obj) return null;
+  let a = obj.userData.rigA; if (a && ANIMS.has(a)) return a;
+  a = null; obj.traverse((o) => { if (o.userData.anim) a = o.userData.anim; }); obj.userData.rigA = a; return a;
+}
+function emote(obj, name, dur = 0) {
+  const a = rigOf(obj), x = a?.act[name]; if (!x) return false;
+  setFace(a, EXPR[name] || 'smile');
+  if (a.cur && a.cur !== x) a.cur.fadeOut(0.08);
+  x.reset(); x.setLoop(THREE.LoopOnce, 1); x.clampWhenFinished = true;
+  x.timeScale = dur ? x.getClip().duration / dur : 1;
+  x.fadeIn(0.08).play(); a.act.Idle.fadeOut(0.08); a.cur = x; a.back = 0;
+  return true;
+}
+function animStep(dt) {
+  for (const a of ANIMS) {
+    let o = a.root; while (o.parent) o = o.parent;
+    if (o !== scene && o.type !== 'Scene') { ANIMS.delete(a); continue; }   // 已經從場景拿掉(換角色)
+    if (a.back > 0 && (a.back -= dt) <= 0) { a.back = 0; a.act.Idle.reset().fadeIn(0.25).play(); a.cur.fadeOut(0.25); a.cur = null; setFace(a, 'smile'); }   // 一次性動作做完,回到 Idle
+    const f = a.face;   // 待機時每 2~5 秒眨一次眼
+    if (f && !a.cur && f.expr === 'smile' && (f.next -= dt) <= 0) {
+      if (!f.blink) { f.blink = true; drawFace(f, 'smile', true); f.next = 0.12; } else { f.blink = false; drawFace(f, 'smile'); f.next = 2 + Math.random() * 3; } }
+    a.mx.update(dt);
+  }
+}
 function loadPiece(url, height, placeholder, target = body) {
   placeholder.name = 'ph'; target.add(placeholder);
   const token = (target.userData.token = (target.userData.token || 0) + 1);   // 之後又換角色的話,舊的載入結果就丟掉
@@ -1009,7 +1052,7 @@ const bearBody = new THREE.Group(); bearPiece.add(bearBody); bearBody.rotation.y
 // 四個角色:開局選一隻當自己,電腦從剩下的挑一隻當對手。模型都是 Meshy 生成後壓到約 250 KB
 const CHARS = {
   cat:   { url: './kitty.glb?v=1', h: 1.25, name: L('Kitty', '貓咪'), icon: '🐱', color: 0xffb057 },
-  bunny: { url: './bunny.glb?v=1', h: 1.3,  name: L('Bunny', '兔子'), icon: '🐰', color: 0xfff4e2 },
+  bunny: { url: './bunny.glb?v=19', h: 1.3,  name: L('Bunny', '兔子'), icon: '🐰', color: 0xfff4e2 },
   bear:  { url: './bear.glb?v=1',  h: 1.25, name: L('Bear', '小熊'),  icon: '🐻', color: 0xb9793f },
   dog:   { url: './pup.glb?v=1',   h: 1.25, name: L('Pup', '狗狗'),   icon: '🐶', color: 0xe8c9a0 },
   penguin: { url: './penguin.glb?v=1', h: 1.2,  name: L('Penguin', '小企鵝'),   icon: '🐧', color: 0x4a5a78 },
@@ -1161,7 +1204,7 @@ function stageSelect(i, dir = 1) {
   const n = slots.length; i = (i % n + n) % n;
   for (let c = 0; c < n && slots[i].taken; c++) i = (i + dir + n) % n;
   if (i !== stageSel) sfx('hop');     // 換角色也有聲(按鈕本身的點擊聲另外有)
-  stageSel = i; slots[i].hop = 1; paintStage(); if (NET.on && !NET.started) netLobby();
+  stageSel = i; slots[i].hop = 1; emote(slots[i].holder, 'Happy'); paintStage(); if (NET.on && !NET.started) netLobby();
 }
 function paintStage() {
   const c = CHARS[slots[stageSel].key];
@@ -1291,7 +1334,7 @@ async function portrait(key) {
   if (portraitCache[key]) return portraitCache[key];
   const c = CHARS[key], tpl = await loadModel(c.url, c.h), SZ = 192;
   const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0xffe9c9, 1.3)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(-1, 2, 3); sc.add(dl);
-  sc.add(standingCopy(tpl));
+  sc.add(standingCopy(tpl, false));
   const pc = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 10); pc.position.set(0, c.h * 0.66, 3); pc.lookAt(0, c.h * 0.66, 0);
   const rt = new THREE.WebGLRenderTarget(SZ, SZ); rt.texture.colorSpace = THREE.SRGBColorSpace;
   const prev = renderer.getRenderTarget(), oc = renderer.getClearColor(new THREE.Color()), oa = renderer.getClearAlpha();
@@ -1367,7 +1410,7 @@ const ease = (k) => 1 - Math.pow(1 - k, 3);
 let skipRender = false;
 function step(dt) {
   T += dt;
-  windStep(); rippleStep(dt);
+  windStep(); rippleStep(dt); animStep(dt);
   for (let i = tweens.length - 1; i >= 0; i--) {
     const a = tweens[i], k = Math.min(1, (T - a.t0) / a.dur);
     a.fn(k);
@@ -1375,6 +1418,11 @@ function step(dt) {
   }
   // 待機:貓輕輕呼吸;小樓平滑長高
   PIECES.forEach((P, i) => {
+    if (rigOf(P.body)) {   // 骨架角色:呼吸交給 Idle 動作;跳格時面向前進方向,停下來後轉回面向鏡頭
+      P.yawHold = (P.yawHold || 0) - dt;
+      P.body.rotation.y = turnToward(P.body.rotation.y, P.yawHold > 0 ? P.yawGoal : FACE_CAM, Math.min(1, dt * (P.yawHold > 0 ? 16 : 6)));
+      P.body.scale.y = 1; P.body.rotation.z = 0; return;
+    }
     if (!S.busy) { P.body.scale.y = 1 + Math.sin(T * (3 - i * 0.3) + i) * 0.025; P.body.rotation.z = Math.sin(T * (1.6 - i * 0.2) + i * 2) * 0.04; }
     else P.body.rotation.z *= 0.85;
   });
@@ -1449,7 +1497,7 @@ window.__tick = (ms = 16, fast = false) => { skipRender = fast; for (let t = 0; 
 // 兩顆骰子一起擲:各自有自己的起點、旋轉軸和落點,最後停在指定點數朝上
 async function rollDice(vals, P = PM()) {
   if (NET.on && NET.started) netSend({ t: 'dice', p: PIECES.indexOf(P), vals });
-  diceSpots(P); sfx('dice');
+  diceSpots(P); sfx('dice'); emote(P.body, 'Roll');
   dice.forEach((d, i) => { d.visible = i < vals.length; });      // 只擲一顆時,第二顆收起來;三顆骰子道具才會有第三顆
   const plan = dice.slice(0, vals.length).map((d, i) => {
     const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
@@ -1478,13 +1526,18 @@ function hopTarget(g) {
   return null;
 }
 const hopGroup = (tgt) => (tgt.k === 't' ? tiles[tgt.i].g : tgt.k === 'c' ? laneTiles[tgt.type].cell.g : laneTiles[tgt.type].path[tgt.at - 1].g);
+const HOP_LAND = 13 / 20;
+const FACE_CAM = Math.PI / 4;   // 棋子平常面向鏡頭的角度
+const turnToward = (cur, goal, k) => { const d = Math.atan2(Math.sin(goal - cur), Math.cos(goal - cur)); return cur + d * k; };   // 走最短的方向轉   // Hop 動作第 13 格(共 20 格)是落地壓扁
 async function hopOnto(g, P = PM(), far = false) {
   if (NET.on && NET.started) { const tgt = hopTarget(g); if (tgt) netSend({ t: 'hop', p: PIECES.indexOf(P), tgt, far }); }
-  const a = P.piece.position.clone(), p = g.position, b = new THREE.Vector3(p.x + P.off.x, TOP, p.z + P.off.z);
-  await tween(far ? 0.8 : 0.22, (k) => {
+  const a = P.piece.position.clone(), p = g.position, b = new THREE.Vector3(p.x + P.off.x, TOP, p.z + P.off.z), dur = far ? 0.8 : 0.22;
+  const rig = emote(P.body, 'Hop', dur / HOP_LAND);
+  if (rig && Math.hypot(b.x - a.x, b.z - a.z) > 0.01) { P.yawGoal = Math.atan2(b.x - a.x, b.z - a.z); P.yawHold = far ? 1.1 : 0.45; P.body.rotation.y = turnToward(P.body.rotation.y, P.yawGoal, 0.6); }
+  await tween(dur, (k) => {
     P.piece.position.lerpVectors(a, b, k);
     P.piece.position.y = TOP + Math.sin(k * Math.PI) * (far ? 2.4 : 0.5);
-    P.body.scale.y = 1 + Math.sin(k * Math.PI) * 0.18;
+    if (!rig) P.body.scale.y = 1 + Math.sin(k * Math.PI) * 0.18;
   });
   // 落地把格子壓一下
   sfx(far ? 'coin' : S.players[PIECES.indexOf(P)]?.human ? 'hop' : 'hopAi');
@@ -1702,6 +1755,7 @@ function buyPanel(k) {
           : L(`${nm} bought ${sec.name}. Price ${pct(buyF(q))}`, `${nm}買進${sec.name},股價被推高 ${pct(buyF(q))}`));
       } else if (a === 'sell') {
         const r = ENG.sell(S, me, k, q); sfx('sell');      // 賣拉桿上的股數(不夠就全賣),借款按比例一起還
+        if (r) emote(PM().body, r.pl >= 0 ? 'Happy' : 'Sad');
         if (r) toast(L(`${nm} sold ${sec.name}. Price ${pct(sellF(r.n))}`, `${nm}賣出${sec.name},股價 ${pct(sellF(r.n))}`));
       } else if (a === 'short') {
         ENG.short(S, me, k, q); sfx('short');
@@ -1760,7 +1814,7 @@ function evalMissions() {
 }
 function checkMissions() {
   const me = S.players[S.hi], got = evalMissions();
-  got.forEach((t) => { sfx('mission'); showAchv(me, t); });
+  got.forEach((t) => { sfx('mission'); showAchv(me, t); }); if (got.length) emote(PM().body, 'Happy');
   hud();
 }
 // 電腦也照同樣規則拿成就(每個 +$500):把 S.hi 暫時指到牠檢查,一次達成好幾個就合併成一則公告
@@ -1920,7 +1974,7 @@ async function enterLane(isMe, type) {
   // 每次有人進來,這條小路重新隨機生成(除非還有別人正走在上面)
   if (ENG.enterLane(S, isMe ? S.players[S.hi] : who, type, Math.random).regen) drawLaneNet(type);   // 引擎:必要時重新生成小路的格子
   hud();
-  await hopOnto(laneTiles[type].cell.g, P, true); sfx(type === 'jail' ? 'jail' : 'bell');
+  await hopOnto(laneTiles[type].cell.g, P, true); sfx(type === 'jail' ? 'jail' : 'bell'); if (type === 'jail') emote(P.body, 'Sad');
   if (type === 'ipo') return isMe ? ipoPanel() : aiIpo();
   if (isMe) await cardPanel(L('Sent to the police station', '被送進警察局'),
     L(`Rest here ${JAIL_WAIT} rounds. You cannot buy, sell, cover or use items, but prices keep moving: a margin position below 130% is still sold for you. On your turn you can pay $${fmt(BAIL)} bail to leave at once.`,
