@@ -1,8 +1,9 @@
-# 用法:blender -b -P rig_bunny.py -- tools/blender/assets/bunny_tripo_v1.glb <輸出 .blend>(Tripo 生成的兔子;舊的 Meshy 版是 bunny_meshy_v1.glb,座標不同)
+# 用法:blender -b -P rig_bunny.py -- <Tripo glb> <輸出 .blend> <角色 key>(角色參數在 rig_chars.py;原檔在 tools/blender/assets/<key>_tripo_v1.glb)
 # 兔子綁骨架:建骨架 → 自動權重 → 存 .blend
 import bpy, sys, math
 from mathutils import Vector
-a=sys.argv[sys.argv.index('--')+1:]; SRC,OUT=a[0],a[1]
+a=sys.argv[sys.argv.index('--')+1:]; SRC,OUT=a[0],a[1]; CH=a[2] if len(a)>2 else 'bunny'
+import os; sys.path.insert(0,os.path.dirname(os.path.abspath(__file__))); from rig_chars import CHARS; C=CHARS[CH]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=SRC)
 me=[o for o in bpy.context.scene.objects if o.type=='MESH'][0]; me.name='Bunny'
@@ -26,36 +27,45 @@ vn=np.array([v.normal[:] for v in me.data.vertices])
 # 法線:拿掉匯入時帶的自訂法線(原本接縫兩側不連續,卡通著色的明暗交界會出現鋸齒),改成整體平滑
 # 五官抹平:生成模型把眼睛 / 嘴巴雕成凹凸,卡通光影會在邊緣打出亮圈。表情改由貼片畫,所以這幾處的網格抹平(半徑由大到小,邊緣才不會有台階)
 import bmesh
-FEATS=[(-0.217,-0.01),(0.217,-0.01),(0.0,-0.11)]   # (x, z),都在臉的正面(y < -0.3)
+FEATS=[(f[0],f[1]) for f in C['feats']]   # (x, z),都在臉的正面(y < -0.3)
 co=np.array([v.co[:] for v in me.data.vertices])
 def ss(e0,e1,x): t=np.clip((x-e0)/(e1-e0),0,1); return t*t*(3-2*t)
-for (fx,fz),rad in zip(FEATS,(0.11,0.11,0.09)):   # 半徑要比五官大一圈,邊緣才不會留下弧形凹痕
-  d=np.hypot(co[:,0]-fx,co[:,2]-fz); front=co[:,1]<-0.3
-  ring=front&(d>rad)&(d<rad*2.0)
-  # 用五官外圍那一圈皮膚擬合球面:|p|^2 = 2c·p + k(線性最小平方)
-  P=co[ring]; A=np.c_[2*P,np.ones(len(P))]; sol=np.linalg.lstsq(A,(P**2).sum(1),rcond=None)[0]
-  c=sol[:3]; R=np.sqrt(sol[3]+c@c)
-  inside=front&(d<rad); q=co[inside]; tgt=c+(q-c)/np.linalg.norm(q-c,axis=1)[:,None]*R
-  w=1-ss(rad*0.65,rad,d[inside])
-  co[inside]=q+(tgt-q)*w[:,None]
-  sn=(co[inside]-c)/np.linalg.norm(co[inside]-c,axis=1)[:,None]; m=vn[inside]+(sn-vn[inside])*w[:,None]
-  vn[inside]=m/np.linalg.norm(m,axis=1)[:,None]   # 推平的地方法線也換成球面的,光影才不會留下輪廓
-  print('feature',fx,fz,'R',round(R,3),'moved',int(inside.sum()))
+# 原本的位置存起來(face 腳本烘顏色時暫時換回原形狀,投射才會貼合原模型)
+oc=me.data.attributes.new('orig_co','FLOAT_VECTOR','POINT'); oc.data.foreach_set('vector',co.astype(np.float32).ravel())
+# 薄膜填補:五官範圍外的頂點固定,範圍內反覆取鄰居平均 → 不管凸起成什麼形狀都會變成平順的一片
+nV=len(co); ed=np.zeros(len(me.data.edges)*2,dtype=np.int64); me.data.edges.foreach_get('vertices',ed); ea,eb=ed[0::2],ed[1::2]
+deg=np.bincount(np.r_[ea,eb],minlength=nV).astype(np.float64)[:,None]
+def nbr_avg(a):
+  acc=np.zeros_like(a); np.add.at(acc,ea,a[eb]); np.add.at(acc,eb,a[ea]); return acc/np.maximum(deg,1)
+mask=np.zeros(nV,bool)
+for (fx,fz),rad in zip(FEATS,[f[2] for f in C['feats']]):
+  m=(co[:,1]<-0.2)&(np.hypot(co[:,0]-fx,co[:,2]-fz)<rad); mask|=m
+  print('feature',fx,fz,'moved',int(m.sum()))
+for _ in range(400): co[mask]=nbr_avg(co)[mask]
+# 法線:填補區用重算的(平順),外圍保留原本的,交界用鄰居平均抹勻
+me.data.vertices.foreach_set('co',co.ravel()); me.data.update()
+nn=np.zeros(nV*3); me.data.vertices.foreach_get('normal',nn); nn=nn.reshape(-1,3)
+band=mask.copy()
+for _ in range(3): band|=(nbr_avg(band[:,None].astype(float))[:,0]>0)
+vn[mask]=nn[mask]
+for _ in range(6): t=nbr_avg(vn); vn[band]=t[band]
+vn/=np.linalg.norm(vn,axis=1)[:,None]
 me.data.vertices.foreach_set('co',co.ravel()); me.data.update()
 bpy.ops.object.shade_smooth(); me.data.normals_split_custom_set_from_vertices([tuple(n) for n in vn])
 print('custom normals', me.data.has_custom_normals)
 print('verts after merge',len(me.data.vertices))
 B={ # name: (head, tail, parent)
- 'root':((0,0,-0.95),(0,0,-0.82),None),
- 'hips':((0,0,-0.80),(0,0,-0.58),'root'),
- 'chest':((0,0,-0.58),(0,0,-0.36),'hips'),
- 'head':((0,-0.04,-0.36),(0,-0.04,0.38),'chest'),
+ 'root':((0,0,C['root'][0]),(0,0,C['root'][1]),None),
+ 'hips':((0,0,C['hips'][0]),(0,0,C['hips'][1]),'root'),
+ 'chest':((0,0,C['chest'][0]),(0,0,C['chest'][1]),'hips'),
+ 'head':((0,C['head'][2],C['head'][0]),(0,C['head'][2],C['head'][1]),'chest'),
 }
 for s,x in (('L',1),('R',-1)):
- B[f'ear1.{s}']=((0.17*x,-0.03,0.34),(0.23*x,-0.03,0.66),'head')
- B[f'ear2.{s}']=((0.23*x,-0.03,0.66),(0.30*x,-0.03,0.95),f'ear1.{s}')
- B[f'arm.{s}']=((0.20*x,-0.06,-0.42),(0.50*x,-0.07,-0.60),'chest')   # 肩關節放在身體裡面:袖子跟著手臂一起轉,手才舉得起來
- B[f'leg.{s}']=((0.165*x,-0.04,-0.78),(0.165*x,-0.07,-0.95),'hips')
+ M=lambda p:(p[0]*x,p[1],p[2])   # 左邊座標鏡射到右邊
+ B[f'ear1.{s}']=(M(C['ear1'][0]),M(C['ear1'][1]),'head')
+ B[f'ear2.{s}']=(M(C['ear1'][1]),M(C['ear2']),f'ear1.{s}')
+ B[f'arm.{s}']=(M(C['arm'][0]),M(C['arm'][1]),'chest')   # 肩關節放在身體裡面:袖子跟著手臂一起轉,手才舉得起來
+ B[f'leg.{s}']=(M(C['leg'][0]),M(C['leg'][1]),'hips')
 arm=bpy.data.objects.new('Rig',bpy.data.armatures.new('Rig')); bpy.context.scene.collection.objects.link(arm)
 bpy.context.view_layer.objects.active=arm; bpy.ops.object.mode_set(mode='EDIT')
 for n,(h,t,p) in B.items():
@@ -76,15 +86,15 @@ def W(v):
   return {me.vertex_groups[g.group].name:g.weight for g in v.groups}
 for v in me.data.vertices:
   p=me.matrix_world@v.co; w=W(v)
-  bag = ss(0.18,0.26,p.y)*(1-ss(-0.36,-0.30,p.z))   # 身體後面 = 書包
+  bag = ss(*C['bag_y'],p.y)*(1-ss(*C['bag_z'],p.z))   # 身體後面 = 書包
   for s in 'LR':
     k=f'arm.{s}'
     if k in w:
-      keep=ss(0.22,0.33,abs(p.x))*(1-bag)   # 袖子也算手臂(漸層到肩膀)
+      keep=ss(*C['arm_x'],abs(p.x))*(1-bag)   # 袖子也算手臂(漸層到肩膀)
       w['chest']=w.get('chest',0)+w[k]*(1-keep); w[k]*=keep
     k=f'leg.{s}'
     if k in w:
-      keep=1-ss(-0.80,-0.74,p.z)
+      keep=1-ss(*C['leg_z'],p.z)
       w['hips']=w.get('hips',0)+w[k]*(1-keep); w[k]*=keep
   t=sum(w.values()) or 1
   for n,x in w.items():

@@ -7,7 +7,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { makeFace, drawFace, setFace, faceMaterial, softRamp, EXPR } from './rig.mjs?v=3';
+import { makeFace, drawFace, setFace, faceMaterial, softRamp, EXPR } from './rig.mjs?v=7';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -988,7 +988,7 @@ function loadModel(url, height) {
       // 生成模型在 UV 接縫處法線不連續,描邊會沿接縫裂開變成臉上的髒線 → 這個模型不描邊
       o.material.userData.outlineParameters = { visible: false };
     });
-    const wrap = new THREE.Group(); wrap.add(m); wrap.userData.walk = gltf.animations.find((a) => a.name === 'Walk') || null; wrap.userData.clips = gltf.animations; res(wrap);
+    const wrap = new THREE.Group(); wrap.add(m); wrap.userData.walk = gltf.animations.find((a) => a.name === 'Walk') || null; wrap.userData.clips = gltf.animations; wrap.userData.faceKey = url.match(/([\w-]+)\.glb/)?.[1]; res(wrap);
   }, undefined, rej)));
 }
 // 有骨架的角色(Kitty骨架/rig8.py 做的):靜止姿勢是 T 字,所以擺成走路動畫第 0 格的站姿(兩腳併攏、手放下),不播動畫
@@ -997,7 +997,7 @@ const ANIMS = new Set();
 function standingCopy(tpl, live = true) {
   const clips = tpl.userData.clips || [];
   if (clips.some((c) => c.name === 'Idle')) {
-    const inst = SkeletonUtils.clone(tpl), mx = new THREE.AnimationMixer(inst), act = {}, face = makeFace(inst);
+    const inst = SkeletonUtils.clone(tpl), mx = new THREE.AnimationMixer(inst), act = {}, face = makeFace(inst, tpl.userData.faceKey);
     clips.forEach((c) => { act[c.name] = mx.clipAction(c); });
     act.Idle.play(); mx.update(live ? Math.random() * 2 : 0);   // 每隻從不同時間開始,同角色並排時才不會同步晃
     if (live) {
@@ -1051,7 +1051,7 @@ const bearPiece = new THREE.Group(); scene.add(bearPiece);
 const bearBody = new THREE.Group(); bearPiece.add(bearBody); bearBody.rotation.y = Math.PI / 4;
 // 四個角色:開局選一隻當自己,電腦從剩下的挑一隻當對手。模型都是 Meshy 生成後壓到約 250 KB
 const CHARS = {
-  cat:   { url: './kitty.glb?v=1', h: 1.25, name: L('Kitty', '貓咪'), icon: '🐱', color: 0xffb057 },
+  cat:   { url: './kitty.glb?v=3', h: 1.25, name: L('Kitty', '貓咪'), icon: '🐱', color: 0xffb057 },
   bunny: { url: './bunny.glb?v=19', h: 1.3,  name: L('Bunny', '兔子'), icon: '🐰', color: 0xfff4e2 },
   bear:  { url: './bear.glb?v=1',  h: 1.25, name: L('Bear', '小熊'),  icon: '🐻', color: 0xb9793f },
   dog:   { url: './pup.glb?v=1',   h: 1.25, name: L('Pup', '狗狗'),   icon: '🐶', color: 0xe8c9a0 },

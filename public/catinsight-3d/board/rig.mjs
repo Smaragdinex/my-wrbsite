@@ -1,11 +1,26 @@
-// 骨架角色的表情(目前只有兔子:Tripo 生成、tools/blender/rig_bunny*.py 綁骨架與做 Face 貼片)。board.mjs 和 rig-test.html 共用
+// 骨架角色的表情(Tripo 生成、tools/blender/rig_bunny*.py + rig_chars.py 綁骨架與做 Face 貼片)。board.mjs 和 rig-test.html 共用
 import * as THREE from 'three';
-// 表情:臉上那片貼片的 UV 是正面平面投影(rig_bunny_face.py 的 X0..Z1 範圍),五官座標用同一套單位(x 往兔子左手邊、z 往上)
-const FACE_BOX = { x0: -0.40, x1: 0.40, z0: -0.30, z1: 0.12 }, FACE_W = 512, FACE_H = Math.round(512 * 0.42 / 0.8);
-const EYE_X = 0.22, EYE_Z = -0.015, MOUTH_Z = -0.113;   // Tripo 兔子(rig_bunny_face.py 偵測到的五官中心)
+// 表情:臉上那片貼片的 UV 是正面平面投影(box 範圍),五官座標用同一套單位(x 往角色左手邊、z 往上)
+// 各角色的設定,key = 模型檔名。box = 貼片範圍(要和 tools/blender/rig_chars.py 的 face_box 一樣);eye/mouth = 五官中心;s = 五官大小倍率
+const FACE_W = 512;
+const FACES = {
+  bunny: { box: [-0.40, 0.40, -0.30, 0.12], eyeX: 0.22, eyeZ: -0.015, mouthZ: -0.113, s: 1 },
+  // 貓是無五官模型:眼睛、鼻子、嘴、腮紅、鬍鬚全部由貼片畫
+  kitty: { box: [-0.68, 0.68, -0.02, 0.42], eyeX: 0.251, eyeZ: 0.275, mouthZ: 0.125, s: 1.2,
+           nose: { z: 0.199, w: 0.032, h: 0.024, color: '#f0909c' }, catMouth: true,
+           blush: { x: 0.34, z: 0.14, rx: 0.095, ry: 0.06, color: 'rgba(255,135,135,0.6)' },
+           whiskers: { x0: 0.44, x1: 0.62, z: [0.19, 0.10], tilt: [0.012, -0.03], color: '#5a3520', w: 0.024 } },
+};
 export function drawFace(f, expr, blink = false) {
-  const c = f.ctx, k = FACE_W / (FACE_BOX.x1 - FACE_BOX.x0), X = (x) => (x - FACE_BOX.x0) * k, Y = (z) => (FACE_BOX.z1 - z) * k, u = (v) => v * k;
-  c.clearRect(0, 0, FACE_W, FACE_H); c.fillStyle = c.strokeStyle = '#141414'; c.lineCap = c.lineJoin = 'round'; c.lineWidth = u(0.016);
+  const D = f.dims, { eyeX: EYE_X, eyeZ: EYE_Z, mouthZ: MOUTH_Z } = D, [x0, x1, , z1] = D.box;
+  const c = f.ctx, k = FACE_W / (x1 - x0), X = (x) => (x - x0) * k, Y = (z) => (z1 - z) * k, u = (v) => v * k * D.s;
+  c.clearRect(0, 0, c.canvas.width, c.canvas.height);
+  if (D.blush) { const b = D.blush, sad = expr === 'sad';   // 腮紅:邊緣柔和的橢圓,難過時淡一點
+    for (const s of [-1, 1]) { const bx = X(b.x * s), by = Y(b.z), g = c.createRadialGradient(0, 0, 0, 0, 0, k * b.rx);   // 漸層用平移後的座標
+      g.addColorStop(0, sad ? b.color.replace(/[\d.]+\)$/, '0.2)') : b.color); g.addColorStop(1, 'rgba(255,140,140,0)');
+      c.save(); c.fillStyle = g; c.translate(bx, by); c.scale(1, b.ry / b.rx); c.beginPath(); c.arc(0, 0, k * b.rx, 0, Math.PI * 2); c.fill(); c.restore(); } }
+  if (D.whiskers) { const w = D.whiskers; c.strokeStyle = w.color; c.lineCap = 'round'; c.lineWidth = k * w.w;   // 鬍鬚:兩側各兩根
+    for (const s of [-1, 1]) w.z.forEach((z, i) => { c.beginPath(); c.moveTo(X(w.x0 * s), Y(z)); c.quadraticCurveTo(X((w.x0 + w.x1) / 2 * s), Y(z + w.tilt[i] + 0.008), X(w.x1 * s), Y(z + w.tilt[i] * 2)); c.stroke(); }); } c.fillStyle = c.strokeStyle = '#141414'; c.lineCap = c.lineJoin = 'round'; c.lineWidth = u(0.016);
   const mx = X(0.003), my = Y(MOUTH_Z);
   for (const s of [-1, 1]) {
     const ex = X(EYE_X * s), ey = Y(EYE_Z);
@@ -28,16 +43,19 @@ export function drawFace(f, expr, blink = false) {
     c.fillStyle = '#7cc4ff'; c.beginPath(); const tx = X(EYE_X) + u(0.01), ty = Y(EYE_Z) + u(0.075); c.moveTo(tx, ty - u(0.03)); c.quadraticCurveTo(tx + u(0.022), ty + u(0.005), tx, ty + u(0.016)); c.quadraticCurveTo(tx - u(0.022), ty + u(0.005), tx, ty - u(0.03)); c.fill(); }   // 嘴角往下 + 一滴眼淚
   else if (expr === 'wow') { c.ellipse(mx, my + u(0.005), u(0.022), u(0.03), 0, 0, Math.PI * 2); c.fill(); }
   else if (expr === 'focus') { c.ellipse(mx, my, u(0.02), u(0.014), 0, 0, Math.PI * 2); c.fill(); }
+  else if (D.catMouth) { c.moveTo(mx - u(0.05), my - u(0.01)); c.quadraticCurveTo(mx - u(0.025), my + u(0.03), mx, my - u(0.008)); c.quadraticCurveTo(mx + u(0.025), my + u(0.03), mx + u(0.05), my - u(0.01)); c.stroke(); }   // 貓的 ω 嘴
   else { c.moveTo(mx - u(0.045), my - u(0.012)); c.quadraticCurveTo(mx, my + u(0.04), mx + u(0.045), my - u(0.012)); c.stroke(); }   // 原本的小微笑
+  if (D.nose) { const n = D.nose, nx = X(0), ny = Y(n.z), w = u(n.w), h = u(n.h);   // 圓角倒三角形鼻子
+    c.fillStyle = n.color; c.beginPath(); c.moveTo(nx - w, ny - h * 0.6); c.quadraticCurveTo(nx, ny - h * 1.1, nx + w, ny - h * 0.6); c.quadraticCurveTo(nx + w * 0.3, ny + h, nx, ny + h); c.quadraticCurveTo(nx - w * 0.3, ny + h, nx - w, ny - h * 0.6); c.fill(); }
   f.tex.needsUpdate = true;
 }
 export function setFace(a, expr) { if (!a?.face || (a.face.expr === expr && !a.face.blink)) return; a.face.expr = expr; a.face.blink = false; drawFace(a.face, expr); }
-export function makeFace(inst) {
+export function makeFace(inst, key = 'bunny') {
   let f = null;
   inst.traverse((o) => { if (!o.userData.face) return;
-    const cv = document.createElement('canvas'); cv.width = FACE_W; cv.height = FACE_H;
+    const D = FACES[key] || FACES.bunny, cv = document.createElement('canvas'); cv.width = FACE_W; cv.height = Math.round(FACE_W * (D.box[3] - D.box[2]) / (D.box[1] - D.box[0]));
     const tex = new THREE.CanvasTexture(cv); tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;   // flipY=false:和 glTF 的 UV 方向一致
-    o.material = o.material.clone(); o.material.map = tex; f = { ctx: cv.getContext('2d'), tex, expr: null, blink: false, next: 1 + Math.random() * 3 }; });
+    o.material = o.material.clone(); o.material.map = tex; f = { ctx: cv.getContext('2d'), tex, dims: D, expr: null, blink: false, next: 1 + Math.random() * 3 }; });
   if (f) { f.expr = 'smile'; drawFace(f, 'smile'); }
   return f;
 }

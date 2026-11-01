@@ -1,8 +1,9 @@
-# 用法:blender -b <rig_bunny.py 產生的 .blend> -P rig_bunny_face.py -- <輸出 .blend>(之後再跑 rig_bunny_anim.py)
+# 用法:blender -b <rig_bunny.py 產生的 .blend> -P rig_bunny_face.py -- <輸出 .blend> <角色 key>(之後再跑 rig_bunny_anim.py)
 # 表情:把貼圖上畫死的眼睛 / 嘴巴塗掉,在臉前面加一片跟著頭動的「表情貼片」(材質名 Face,遊戲用 canvas 即時畫表情)
 import bpy, bmesh, sys, math, numpy as np
 from mathutils import Vector
-OUT=sys.argv[sys.argv.index('--')+1]
+_a=sys.argv[sys.argv.index('--')+1:]; OUT=_a[0]; CH=_a[1] if len(_a)>1 else 'bunny'
+import os; sys.path.insert(0,os.path.dirname(os.path.abspath(__file__))); from rig_chars import CHARS; C=CHARS[CH]
 me=bpy.data.objects['Bunny']
 RES=2048   # 貼圖解析度:1024 時袖口、背帶邊緣拉近看會糊
 # 材質重建成最簡單的:Principled + 一張顏色貼圖(Tripo 原本還有法線 / 粗糙度貼圖,卡通渲染用不到)
@@ -45,7 +46,13 @@ sc=bpy.context.scene; sc.render.engine='CYCLES'; sc.cycles.samples=16; sc.cycles
 sc.render.bake.margin=0; sc.render.bake.use_clear=False
 COVER=bake_cover(); print('cover %', round(COVER.mean()*100,1)); nt.nodes.active=tgt   # 遮罩烘完要把目標設回來
 bpy.ops.object.select_all(action='DESELECT'); SRCOBJ.select_set(True); me.select_set(True); bpy.context.view_layer.objects.active=me
-bpy.ops.object.bake(type='EMIT',use_selected_to_active=True,cage_extrusion=0.02,max_ray_distance=0.05)   # 從原模型沿法線投射顏色
+# 暫時換回推平前的形狀投射顏色(和原模型完全貼合),烘完再換回來
+_n=len(me.data.vertices); _flat=np.zeros(_n*3,dtype=np.float32); me.data.vertices.foreach_get('co',_flat)
+_orig=np.zeros(_n*3,dtype=np.float32); me.data.attributes['orig_co'].data.foreach_get('vector',_orig)
+me.data.vertices.foreach_set('co',_orig); me.data.update()
+bpy.ops.object.bake(type='EMIT',use_selected_to_active=True,cage_extrusion=0.02,max_ray_distance=0.05)
+me.data.vertices.foreach_set('co',_flat); me.data.update()
+me.data.attributes.remove(me.data.attributes['orig_co'])   # 從原模型沿法線投射顏色
 SRCOBJ.select_set(False)
 src.image=img; nt.nodes.remove(tgt)
 bpy.data.objects.remove(SRCOBJ)   # 原模型用完就丟,不要跟著匯出
@@ -54,7 +61,7 @@ img.filepath_raw=OUT+'.baked.png'; img.file_format='PNG'; img.save()
 print('baked', img.size[:], 'uv', [u.name for u in me.data.uv_layers])
 W,H=img.size; px=np.array(img.pixels[:],dtype=np.float32).reshape(H,W,4)
 lum=px[...,:3]@np.array([.3,.59,.11],dtype=np.float32)
-dark=(px[...,:3].max(-1)<0.55)&(px[...,:3].max(-1)-px[...,:3].min(-1)<0.15)   # 黑色和烘焙後糊成灰的五官邊緣(衣服的藍、書包的黃彩度高,不會被抓到)
+dark=(px[...,:3].max(-1)<0.55)&(px[...,:3].max(-1)-px[...,:3].min(-1)<0.15)&(px[...,0]-px[...,2]<0.06)   # 黑色和烘焙後糊成灰的五官邊緣;只抓中性的黑(貓的深棕色鬍鬚偏暖,要留著)
 # 新貼圖沒用到的空白處也是黑的 → 只留「小塊」的黑色(眼睛、嘴巴),大片相連的是空白
 def small_blobs(m, limit=40000, core=None):   # 上限要跟著貼圖解析度放大(2048 時一隻眼睛就超過 5000 px)
   seen=np.zeros_like(m); keep=np.zeros_like(m); Hh,Ww=m.shape
@@ -68,8 +75,19 @@ def small_blobs(m, limit=40000, core=None):   # 上限要跟著貼圖解析度�
         if 0<=yy<Hh and 0<=xx<Ww and m[yy,xx] and not seen[yy,xx]: seen[yy,xx]=True; st.append((yy,xx))
     if len(comp)<limit and (core is None or any(core[y,x] for y,x in comp)):
       for y,x in comp: keep[y,x]=True
+      # 線條圍起來的內部也算(張開的嘴裡面的舌頭):從外框往內灌,灌不到的就是被圍住的
+      cy,cx=np.array(comp).T; y0b,y1b,x0b,x1b=cy.min(),cy.max()+1,cx.min(),cx.max()+1
+      box=np.zeros((y1b-y0b+2,x1b-x0b+2),bool); box[cy-y0b+1,cx-x0b+1]=True
+      out=np.zeros_like(box); out[0,:]=out[-1,:]=out[:,0]=out[:,-1]=True; fr=list(zip(*np.nonzero(out)))
+      while fr:
+        y,x=fr.pop()
+        for dy,dx in ((1,0),(-1,0),(0,1),(0,-1)):
+          yy,xx=y+dy,x+dx
+          if 0<=yy<box.shape[0] and 0<=xx<box.shape[1] and not box[yy,xx] and not out[yy,xx]: out[yy,xx]=True; fr.append((yy,xx))
+      hy,hx=np.nonzero(~out&~box); keep[hy+y0b-1,hx+x0b-1]=True
   return keep
-dark=small_blobs(dark&COVER, core=px[...,:3].max(-1)<0.22)   # 只留中間有純黑核心的(眼睛、嘴巴)
+dark=small_blobs(dark&COVER, core=(px[...,:3].max(-1)<0.22)&(px[...,0]-px[...,2]<0.06))   # 只留中間有純黑核心的(眼睛、嘴巴)
+if not C['feats']: dark[:]=False   # 無五官模型:沒有東西要塗
 # 3D 位置:落在黑色像素上的 loop → 頂點座標(用來對齊表情貼片上五官的位置)
 uvl=me.data.uv_layers.active.data; pts=[]
 for poly in me.data.polygons:
@@ -77,8 +95,10 @@ for poly in me.data.polygons:
     u,v=uvl[li].uv; x=min(W-1,int(u*W)); y=min(H-1,int(v*H))
     if dark[y,x]: pts.append(me.matrix_world@me.data.vertices[me.data.loops[li].vertex_index].co)
 pts=np.array([p[:] for p in pts])
+if len(pts)==0: pts=np.zeros((0,3))   # 無五官模型:沒有黑色點
 for name,m in (('eye.R',(pts[:,0]<-0.1)&(pts[:,2]>-0.09)),('eye.L',(pts[:,0]>0.1)&(pts[:,2]>-0.09)),('mouth',(abs(pts[:,0])<0.12)&(pts[:,2]<-0.07))):
-  q=pts[m]; print('FEAT',name,len(q),'center',q.mean(0).round(3),'min',q.min(0).round(3),'max',q.max(0).round(3))
+  q=pts[m]
+  if len(q): print('FEAT',name,len(q),'center',q.mean(0).round(3),'min',q.min(0).round(3),'max',q.max(0).round(3))   # 只是印出來參考(範圍是照兔子寫的)
 # 塗掉:黑色區域往外擴 3px,用外圈的毛色平均填
 
 def dil(m,r):
@@ -192,11 +212,12 @@ img.pixels.foreach_set(px.ravel()); img.update(); img.pack()   # pack 要在最�
 img.filepath_raw=OUT+'.final.png'; img.file_format='PNG'; img.save()
 print('erased px',int(D.sum()))
 # 表情貼片:臉前面那一塊的面複製一份,沿法線往外推一點,UV 用正面平面投影
-X0,X1,Z0,Z1=-0.40,0.40,-0.30,0.12
+X0,X1,Z0,Z1=C['face_box']
 bpy.context.view_layer.objects.active=me
 fm=bpy.data.materials.new('Face'); fm.use_nodes=True; fm.blend_method='BLEND'; me.data.materials.append(fm); FI=len(me.data.materials)-1
 bm=bmesh.new(); bm.from_mesh(me.data); bm.normal_update()
-sel=[f for f in bm.faces if X0<=f.calc_center_median().x<=X1 and Z0<=f.calc_center_median().z<=Z1 and f.normal.y<-0.25 and f.calc_center_median().y<-0.15]
+NY=C.get('face_ny',-0.25)
+sel=[f for f in bm.faces if X0<=f.calc_center_median().x<=X1 and Z0<=f.calc_center_median().z<=Z1 and f.normal.y<NY and f.calc_center_median().y<-0.15]
 r=bmesh.ops.duplicate(bm,geom=sel)
 nf=[g for g in r['geom'] if isinstance(g,bmesh.types.BMFace)]; nv=[g for g in r['geom'] if isinstance(g,bmesh.types.BMVert)]
 for v in nv: v.co+=v.normal*0.006
