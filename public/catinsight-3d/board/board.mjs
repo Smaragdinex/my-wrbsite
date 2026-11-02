@@ -1053,12 +1053,12 @@ const bearBody = new THREE.Group(); bearPiece.add(bearBody); bearBody.rotation.y
 const CHARS = {
   cat:   { url: './kitty.glb?v=5', h: 1.25, name: L('Kitty', '貓咪'), icon: '🐱', color: 0xffb057 },
   bunny: { url: './bunny.glb?v=20', h: 1.3,  name: L('Bunny', '兔子'), icon: '🐰', color: 0xfff4e2 },
-  bear:  { url: './bear.glb?v=4',  h: 1.25, name: L('Bear', '小熊'),  icon: '🐻', color: 0xb9793f },
-  dog:   { url: './pup.glb?v=4',   h: 1.25, name: L('Pup', '狗狗'),   icon: '🐶', color: 0xe8c9a0 },
-  penguin: { url: './penguin.glb?v=3', h: 1.2,  name: L('Penguin', '小企鵝'),   icon: '🐧', color: 0x4a5a78 },
-  guinea:  { url: './guinea.glb?v=3',  h: 1.15, name: L('Guinea pig', '天竺鼠'), icon: '🐹', color: 0xe9b97a },
-  fox:     { url: './fox.glb?v=3',     h: 1.25, name: L('Fox', '小狐狸'),       icon: '🦊', color: 0xf08a3c },
-  pony:    { url: './pony.glb?v=3',    h: 1.3,  name: L('Pony', '小馬'),        icon: '🐴', color: 0xd9b48a },
+  bear:  { url: './bear.glb?v=5',  h: 1.25, name: L('Bear', '小熊'),  icon: '🐻', color: 0xb9793f },
+  dog:   { url: './pup.glb?v=5',   h: 1.25, name: L('Pup', '狗狗'),   icon: '🐶', color: 0xe8c9a0 },
+  penguin: { url: './penguin.glb?v=4', h: 1.2,  name: L('Penguin', '小企鵝'),   icon: '🐧', color: 0x4a5a78 },
+  guinea:  { url: './guinea.glb?v=4',  h: 1.15, name: L('Guinea pig', '天竺鼠'), icon: '🐹', color: 0xe9b97a },
+  fox:     { url: './fox.glb?v=4',     h: 1.25, name: L('Fox', '小狐狸'),       icon: '🦊', color: 0xf08a3c },
+  pony:    { url: './pony.glb?v=4',    h: 1.3,  name: L('Pony', '小馬'),        icon: '🐴', color: 0xd9b48a },
 };
 function setChar(target, key) {
   while (target.children.length) target.remove(target.children[0]);
