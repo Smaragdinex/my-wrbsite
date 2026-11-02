@@ -67,11 +67,14 @@ for s,x in (('L',1),('R',-1)):
  B[f'arm.{s}']=(M(C['arm'][0]),M(C['arm'][1]),'chest')   # 肩關節放在身體裡面:袖子跟著手臂一起轉,手才舉得起來
  B[f'leg.{s}']=(M(C['leg'][0]),M(C['leg'][1]),'hips')
 arm=bpy.data.objects.new('Rig',bpy.data.armatures.new('Rig')); bpy.context.scene.collection.objects.link(arm)
+arm['arm_rest']=C.get('arm_rest',0)   # 手臂放鬆往下垂幾度(動畫腳本讀這個)
 bpy.context.view_layer.objects.active=arm; bpy.ops.object.mode_set(mode='EDIT')
 for n,(h,t,p) in B.items():
  e=arm.data.edit_bones.new(n); e.head=h; e.tail=t
  if p: e.parent=arm.data.edit_bones[p]; e.use_connect=(Vector(arm.data.edit_bones[p].tail)-Vector(h)).length<1e-4
 for n in ('root',): arm.data.edit_bones[n].use_deform=False
+if not C.get('ears',True):   # 沒有耳朵的角色(企鵝):耳朵骨頭留著讓動作檔通用,但不影響網格
+  for n in ('ear1.L','ear2.L','ear1.R','ear2.R'): arm.data.edit_bones[n].use_deform=False
 bpy.ops.object.mode_set(mode='OBJECT')
 bpy.ops.object.select_all(action='DESELECT'); me.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active=arm
 bpy.ops.object.parent_set(type='ARMATURE_AUTO')

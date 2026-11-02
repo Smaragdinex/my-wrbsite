@@ -10,6 +10,36 @@ const FACES = {
            nose: { z: 0.199, w: 0.032, h: 0.024, color: '#f0909c' }, catMouth: true,
            blush: { x: 0.34, z: 0.14, rx: 0.095, ry: 0.06, color: 'rgba(255,135,135,0.6)' },
            whiskers: { x0: 0.44, x1: 0.62, z: [0.19, 0.10], tilt: [0.012, -0.03], color: '#5a3520', w: 0.024 } },
+  // 以下也是無五官模型(位置由 tools/blender/measure 腳本量出再微調)
+  bear:    { box: [-0.66, 0.66, -0.05, 0.44], eyeX: 0.27, eyeZ: 0.28, mouthZ: 0.07, s: 1.2,
+             nose: { z: 0.165, w: 0.04, h: 0.028, color: '#4a2a1a' }, blush: { x: 0.36, z: 0.14, rx: 0.09, ry: 0.055, color: 'rgba(255,120,110,0.5)' } },
+  bear_m:  { box: [-0.62, 0.62, 0.0, 0.5], eyeX: 0.265, eyeZ: 0.30, mouthZ: 0.15, s: 1.2,   // 程式建模的熊
+             nose: { z: 0.245, w: 0.045, h: 0.03, color: '#4a2a1a' }, blush: { x: 0.39, z: 0.17, rx: 0.08, ry: 0.055, color: 'rgba(255,120,110,0.5)' } },
+  // 以下也是程式建模(build_toy.py),頭的大小位置都和 bear_m 一樣
+  kitty_m:   { box: [-0.62, 0.62, 0.0, 0.5], eyeX: 0.255, eyeZ: 0.30, mouthZ: 0.16, s: 1.2, catMouth: true,
+               nose: { z: 0.225, w: 0.032, h: 0.024, color: '#f0909c' }, blush: { x: 0.37, z: 0.17, rx: 0.085, ry: 0.055, color: 'rgba(255,135,135,0.6)' },
+               whiskers: { x0: 0.44, x1: 0.60, z: [0.23, 0.15], tilt: [0.012, -0.03], color: '#5a3520', w: 0.022 } },
+  bunny_m:   { box: [-0.62, 0.62, 0.0, 0.5], eyeX: 0.23, eyeZ: 0.30, mouthZ: 0.20, s: 1.2, blush: { x: 0.36, z: 0.20, rx: 0.085, ry: 0.055, color: 'rgba(255,140,150,0.55)' } },
+  pup_m:     { box: [-0.62, 0.62, 0.0, 0.5], eyeX: 0.25, eyeZ: 0.32, mouthZ: 0.15, s: 1.2,
+               nose: { z: 0.235, w: 0.05, h: 0.034, color: '#3a2418' }, blush: { x: 0.37, z: 0.18, rx: 0.08, ry: 0.05, color: 'rgba(255,130,130,0.5)' } },
+  penguin_m: { box: [-0.62, 0.62, 0.0, 0.5], eyeX: 0.22, eyeZ: 0.38, mouthZ: 0.2, s: 1.2, noMouth: true,   // 嘴喙在模型上
+               blush: { x: 0.35, z: 0.25, rx: 0.08, ry: 0.05, color: 'rgba(255,130,140,0.55)' } },
+  guinea_m:  { box: [-0.62, 0.62, 0.0, 0.5], eyeX: 0.27, eyeZ: 0.31, mouthZ: 0.16, s: 1.2, catMouth: true,
+               nose: { z: 0.225, w: 0.03, h: 0.022, color: '#f0909c' }, blush: { x: 0.39, z: 0.18, rx: 0.085, ry: 0.055, color: 'rgba(255,130,140,0.55)' } },
+  fox_m:     { box: [-0.62, 0.62, 0.0, 0.5], eyeX: 0.25, eyeZ: 0.31, mouthZ: 0.15, s: 1.15, catMouth: true,
+               nose: { z: 0.215, w: 0.034, h: 0.025, color: '#2a1a14' }, blush: { x: 0.37, z: 0.17, rx: 0.08, ry: 0.05, color: 'rgba(255,120,110,0.5)' } },
+  pony_m:    { box: [-0.62, 0.62, 0.0, 0.5], eyeX: 0.22, eyeZ: 0.36, mouthZ: 0.08, s: 1.1,
+               blush: { x: 0.36, z: 0.26, rx: 0.07, ry: 0.045, color: 'rgba(255,130,130,0.5)' } },
+  pup:     { box: [-0.55, 0.55, -0.15, 0.36], eyeX: 0.21, eyeZ: 0.17, mouthZ: 0.0, s: 1.15,
+             nose: { z: 0.08, w: 0.045, h: 0.03, color: '#3a2418' }, blush: { x: 0.33, z: 0.04, rx: 0.08, ry: 0.05, color: 'rgba(255,130,130,0.5)' } },
+  penguin: { box: [-0.694, 0.694, -0.002, 0.505], eyeX: 0.25, eyeZ: 0.35, mouthZ: 0.2, s: 1.2, noMouth: true,   // 嘴喙在模型上
+             blush: { x: 0.36, z: 0.24, rx: 0.08, ry: 0.05, color: 'rgba(255,130,140,0.55)' } },
+  guinea:  { box: [-0.66, 0.66, 0.0, 0.42], eyeX: 0.28, eyeZ: 0.26, mouthZ: 0.1, s: 1.2, catMouth: true,
+             nose: { z: 0.17, w: 0.03, h: 0.022, color: '#f0909c' }, blush: { x: 0.38, z: 0.13, rx: 0.09, ry: 0.055, color: 'rgba(255,130,140,0.55)' } },
+  fox:     { box: [-0.67, 0.67, -0.072, 0.373], eyeX: 0.26, eyeZ: 0.23, mouthZ: 0.07, s: 1.15, catMouth: true,
+             nose: { z: 0.14, w: 0.032, h: 0.024, color: '#2a1a14' }, blush: { x: 0.35, z: 0.1, rx: 0.08, ry: 0.05, color: 'rgba(255,120,110,0.5)' } },
+  pony:    { box: [-0.551, 0.551, -0.069, 0.382], eyeX: 0.22, eyeZ: 0.27, mouthZ: 0.0, s: 1.05,
+             blush: { x: 0.33, z: 0.14, rx: 0.07, ry: 0.045, color: 'rgba(255,130,130,0.5)' } },
 };
 export function drawFace(f, expr, blink = false) {
   const D = f.dims, { eyeX: EYE_X, eyeZ: EYE_Z, mouthZ: MOUTH_Z } = D, [x0, x1, , z1] = D.box;
@@ -37,7 +67,8 @@ export function drawFace(f, expr, blink = false) {
     c.lineWidth = u(0.016);
   }
   c.beginPath();
-  if (expr === 'happy') { c.moveTo(mx - u(0.06), my - u(0.015)); c.quadraticCurveTo(mx, my - u(0.02), mx + u(0.06), my - u(0.015)); c.quadraticCurveTo(mx, my + u(0.085), mx - u(0.06), my - u(0.015)); c.fill();
+  if (D.noMouth) { /* 嘴在模型上(企鵝的嘴喙) */ }
+  else if (expr === 'happy') { c.moveTo(mx - u(0.06), my - u(0.015)); c.quadraticCurveTo(mx, my - u(0.02), mx + u(0.06), my - u(0.015)); c.quadraticCurveTo(mx, my + u(0.085), mx - u(0.06), my - u(0.015)); c.fill();
     c.fillStyle = '#ff8a95'; c.beginPath(); c.ellipse(mx, my + u(0.035), u(0.03), u(0.016), 0, 0, Math.PI * 2); c.fill(); }   // 張嘴大笑 + 舌頭
   else if (expr === 'sad') { c.moveTo(mx - u(0.045), my + u(0.02)); c.quadraticCurveTo(mx, my - u(0.035), mx + u(0.045), my + u(0.02)); c.stroke();
     c.fillStyle = '#7cc4ff'; c.beginPath(); const tx = X(EYE_X) + u(0.01), ty = Y(EYE_Z) + u(0.075); c.moveTo(tx, ty - u(0.03)); c.quadraticCurveTo(tx + u(0.022), ty + u(0.005), tx, ty + u(0.016)); c.quadraticCurveTo(tx - u(0.022), ty + u(0.005), tx, ty - u(0.03)); c.fill(); }   // 嘴角往下 + 一滴眼淚

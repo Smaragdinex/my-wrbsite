@@ -35,7 +35,10 @@ def ears(fwd=0,out=0,tip=0,ph=0):
     d[f'ear1.{s}']=[(X,fwd),(Y,side(out,s))]
     d[f'ear2.{s}']=[(X,tip),(Y,side(out*0.4,s))]
   return d
+REST=r.get('arm_rest',0)   # 模型是 T 字手:放鬆時往下垂 REST 度,越舉高越少(舉到 90 度時不受影響)
+BIND=r.get('arm_bind',0)   # 模型手臂本來就比 T 字手低 BIND 度(A 字手):補回來,舉手才舉得一樣高
 def arms(fwdL=0,upL=0,fwdR=0,upR=0):
+  upL,upR=[u-REST*(1-u/90)+BIND for u in (upL,upR)]
   return {'arm.L':[(X,-fwdL),(Y,-upL)],'arm.R':[(X,-fwdR),(Y,upR)]}
 def M(*ds):
   o={}

@@ -44,16 +44,160 @@ keep=out.inputs['Surface'].links[0].from_socket
 tgt=nt.nodes.new('ShaderNodeTexImage'); tgt.image=img; nt.nodes.active=tgt
 sc=bpy.context.scene; sc.render.engine='CYCLES'; sc.cycles.samples=16; sc.cycles.device='CPU'   # 多取樣:色塊邊緣才有抗鋸齒
 sc.render.bake.margin=0; sc.render.bake.use_clear=False
-COVER=bake_cover(); print('cover %', round(COVER.mean()*100,1)); nt.nodes.active=tgt   # 遮罩烘完要把目標設回來
-bpy.ops.object.select_all(action='DESELECT'); SRCOBJ.select_set(True); me.select_set(True); bpy.context.view_layer.objects.active=me
-# 暫時換回推平前的形狀投射顏色(和原模型完全貼合),烘完再換回來
-_n=len(me.data.vertices); _flat=np.zeros(_n*3,dtype=np.float32); me.data.vertices.foreach_get('co',_flat)
-_orig=np.zeros(_n*3,dtype=np.float32); me.data.attributes['orig_co'].data.foreach_get('vector',_orig)
-me.data.vertices.foreach_set('co',_orig); me.data.update()
-bpy.ops.object.bake(type='EMIT',use_selected_to_active=True,cage_extrusion=0.02,max_ray_distance=0.05)
-me.data.vertices.foreach_set('co',_flat); me.data.update()
-me.data.attributes.remove(me.data.attributes['orig_co'])   # 從原模型沿法線投射顏色
-SRCOBJ.select_set(False)
+# 顏色轉移:新網格每個貼圖像素 → 3D 位置(用推平前的形狀,和原模型貼合)→ 原模型表面「最近的一點」→ 取原貼圖的顏色
+#   不用 Blender 的投射烘焙:手臂和袖子、背帶之間的夾縫被體素重建補起來後,投射光線會穿到底下藏住的那一層,
+#   取到沒人看過、亂七八糟的貼圖(背帶裡的黃色斑點、交界的條紋)。最近點只會落在最貼近的那層表面上
+from mathutils.bvhtree import BVHTree
+# 原模型被手臂、腿壓住的地方(腋下、袖子內側、大腿根):生成時看不到,貼圖是亂畫的;動起來手一抬就露出來(背帶裡的黃色斑點)
+#   → 找出「離別的部位很近、而且被遮住」的頂點,這些地方的顏色改用旁邊看得到的顏色延伸過去
+from mathutils.kdtree import KDTree
+def hidden_verts():
+  mm=me.data; oc=np.zeros(len(mm.vertices)*3,dtype=np.float32); mm.attributes['orig_co'].data.foreach_get('vector',oc); oc=oc.reshape(-1,3).astype(np.float64)
+  mm.calc_loop_triangles(); tri=np.array([t.vertices[:] for t in mm.loop_triangles])
+  fn_=np.cross(oc[tri[:,1]]-oc[tri[:,0]],oc[tri[:,2]]-oc[tri[:,0]]); vn=np.zeros_like(oc)
+  for k in range(3): np.add.at(vn,tri[:,k],fn_)
+  vn/=np.maximum(np.linalg.norm(vn,axis=1,keepdims=True),1e-12)
+  bvh=BVHTree.FromPolygons(oc.tolist(),tri.tolist())
+  N=96; i=np.arange(N)+0.5; ph=np.arccos(1-2*i/N); th=np.pi*(1+5**0.5)*i
+  D=np.c_[np.cos(th)*np.sin(ph),np.sin(th)*np.sin(ph),np.cos(ph)]
+  GR={'arm.L':1,'arm.R':2,'leg.L':3,'leg.R':4}; gi={g.index:GR.get(g.name,0) for g in me.vertex_groups}
+  part=np.zeros(len(oc),int); best=np.zeros(len(oc))
+  for v in mm.vertices:
+    for g in v.groups:
+      if gi.get(g.group,0) and g.weight>best[v.index]: best[v.index]=g.weight; part[v.index]=gi[g.group]
+  part[best<0.5]=0
+  near=np.full(len(oc),9.0)
+  for P_ in range(5):
+    idx=np.nonzero(part==P_)[0]
+    if not len(idx): continue
+    kd=KDTree(len(idx))
+    for j,k in enumerate(idx): kd.insert(oc[k],j)
+    kd.balance()
+    for k in np.nonzero(part!=P_)[0]: near[k]=min(near[k],kd.find(oc[k])[2])
+  cand=np.nonzero(near<0.05)[0]; h=np.zeros(len(oc),np.float32)
+  for k in cand:   # 只對靠近別的部位的頂點算遮蔽(半球 96 條光線,0.15 內有東西擋到就算遮住)
+    n=vn[k]; w=D@n; sel=w>0.05; o=Vector(oc[k]+n*0.002); tot=fr=0
+    for d,ww in zip(D[sel],w[sel]): tot+=ww; fr+=ww*(bvh.ray_cast(o,Vector(d),0.15)[0] is None)
+    h[k]=1.0 if fr/tot<0.8 else 0.0
+  print('hidden verts',int(h.sum()))
+  global PARTV; PARTV=part
+  return h
+def fill_in(c,known,M):   # M 裡的像素用旁邊 known 的顏色一圈一圈往內延伸(只走 M 自己,不會跨到別的 UV 島)
+  M=M.copy(); kn=known.copy()
+  for _ in range(400):
+    if not M.any(): break
+    v=kn.astype(np.float32)[...,None]; acc=np.zeros_like(c); cnt=np.zeros_like(v)
+    for ax,sh in ((0,1),(0,-1),(1,1),(1,-1)): acc+=np.roll(c*v,sh,ax); cnt+=np.roll(v,sh,ax)
+    g=M&(cnt[...,0]>0); c[g]=acc[g]/cnt[g]; M&=~g; kn|=g
+  return M
+HIDV=hidden_verts()
+def nearest_bake():
+  dg=bpy.context.evaluated_depsgraph_get()
+  sm=SRCOBJ.data; sm.calc_loop_triangles(); M=SRCOBJ.matrix_world
+  sv=np.array([(M@v.co)[:] for v in sm.vertices]); stri=np.array([t.vertices[:] for t in sm.loop_triangles]); sloop=np.array([t.loops[:] for t in sm.loop_triangles])
+  suv=np.zeros(len(sm.loops)*2,dtype=np.float32); sm.uv_layers.active.data.foreach_get('uv',suv); suv=suv.reshape(-1,2)
+  bvh=BVHTree.FromPolygons(sv.tolist(),stri.tolist())
+  si=stex.image; sw,sh=si.size; spx=np.array(si.pixels[:],dtype=np.float32).reshape(sh,sw,si.channels)[...,:3]
+  mm=me.data; mm.calc_loop_triangles()
+  oc=np.zeros(len(mm.vertices)*3,dtype=np.float32); mm.attributes['orig_co'].data.foreach_get('vector',oc); oc=oc.reshape(-1,3)
+  oc=(np.array(me.matrix_world)[:3,:3]@oc.T).T+np.array(me.matrix_world)[:3,3]
+  muv=np.zeros(len(mm.loops)*2,dtype=np.float32); mm.uv_layers['bake'].data.foreach_get('uv',muv); muv=muv.reshape(-1,2)
+  out=np.zeros((RES,RES,3),dtype=np.float32); hit=np.zeros((RES,RES),bool); hid=np.zeros((RES,RES),np.float32); P=[]; Y=[]; X=[]; Hd=[]; Pt=[]
+  for t in mm.loop_triangles:   # 光柵化:像素中心落在三角形裡(邊緣放寬一點,接縫不留縫)
+    uv=muv[list(t.loops)]*RES-0.5; p3=oc[list(t.vertices)]
+    x0,y0=np.floor(uv.min(0)).astype(int); x1,y1=np.ceil(uv.max(0)).astype(int)
+    gx,gy=np.meshgrid(np.arange(max(0,x0),min(RES,x1+1)),np.arange(max(0,y0),min(RES,y1+1)))
+    if gx.size==0: continue
+    a,b,c=uv; d=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1])
+    if abs(d)<1e-12: continue
+    l0=((b[1]-c[1])*(gx-c[0])+(c[0]-b[0])*(gy-c[1]))/d; l1=((c[1]-a[1])*(gx-c[0])+(a[0]-c[0])*(gy-c[1]))/d; l2=1-l0-l1
+    e=-0.6/max(1.0,np.abs(uv.max(0)-uv.min(0)).max()); ok=(l0>=e)&(l1>=e)&(l2>=e)
+    if not ok.any(): continue
+    L=np.clip(np.stack([l0[ok],l1[ok],l2[ok]],1),0,None); L/=L.sum(1,keepdims=True)
+    P.append(L@p3); Y.append(gy[ok]); X.append(gx[ok]); Hd.append(L@HIDV[list(t.vertices)]); Pt.append(np.full(ok.sum(),PARTV[t.vertices[int(np.argmax(L.sum(0)))]]))
+  P=np.concatenate(P); Y=np.concatenate(Y); X=np.concatenate(X)
+  loc=np.zeros_like(P); fi=np.zeros(len(P),dtype=np.int64); fn=bvh.find_nearest
+  for i,p in enumerate(P.tolist()):
+    r=fn(p); loc[i]=r[0]; fi[i]=r[2]
+  # 最近點在原三角形上的重心座標 → 原 UV → 雙線性取色
+  A,B,Cc=sv[stri[fi,0]],sv[stri[fi,1]],sv[stri[fi,2]]
+  v0,v1,v2=B-A,Cc-A,loc-A
+  d00=(v0*v0).sum(1); d01=(v0*v1).sum(1); d11=(v1*v1).sum(1); d20=(v2*v0).sum(1); d21=(v2*v1).sum(1); den=np.maximum(d00*d11-d01*d01,1e-20)
+  w1=(d11*d20-d01*d21)/den; w2=(d00*d21-d01*d20)/den; w0=1-w1-w2
+  U=w0[:,None]*suv[sloop[fi,0]]+w1[:,None]*suv[sloop[fi,1]]+w2[:,None]*suv[sloop[fi,2]]
+  fx=(U[:,0]%1)*sw-0.5; fy=(U[:,1]%1)*sh-0.5; ix=np.floor(fx).astype(int); iy=np.floor(fy).astype(int); tx=(fx-ix)[:,None]; ty=(fy-iy)[:,None]
+  g=lambda yy,xx: spx[np.clip(yy,0,sh-1),np.clip(xx,0,sw-1)]
+  col=(g(iy,ix)*(1-tx)+g(iy,ix+1)*tx)*(1-ty)+(g(iy+1,ix)*(1-tx)+g(iy+1,ix+1)*tx)*ty
+  out[Y,X]=col; hit[Y,X]=True; hid[Y,X]=np.concatenate(Hd)
+  global POS,PARTT; POS=np.zeros((RES,RES,3),np.float32); POS[Y,X]=P; PARTT=np.full((RES,RES),-1,np.int8); PARTT[Y,X]=np.concatenate(Pt)
+  return out,hit,hid
+_c,COVER,HIDT=nearest_bake()
+HIDT=COVER&(HIDT>0.5)
+from rig_strap import strap_mask, bag_texel, build_strap
+# 背帶抹掉只對 strap_erase 的角色做(熊、狗):其他角色的背帶是凸起的一層模型、顏色又和背包/毛色太近,抹了反而留線和色塊
+if C.get('strap_erase') or os.environ.get('STRAP_DBG'): STRAP,STRAPC=strap_mask(_c,COVER,POS,PARTT,C)
+else: STRAP,STRAPC=np.zeros_like(COVER),np.zeros(3,np.float32)
+_y,_z=POS[...,1],POS[...,2]
+BAGM=COVER&(PARTT==0)&(_y>C['bag_y'][0]+0.05)&(_z>C['chest'][0])&(_z<C['head'][0]-0.03)
+STRAP_UV=bag_texel(BAGM,_c,STRAPC,RES) if STRAP.any() else None
+if os.environ.get('STRAP_DBG'): _c[STRAP]=(1,0,1)
+else: HIDT=HIDT|STRAP   # 原本的背帶抹掉(不補 3D 帶子;STRAP_GEO=1 才補)
+_c[HIDT]=0; COVER=COVER&~fill_in(_c,COVER&~HIDT,HIDT)   # 整塊都被遮住、延伸不到的,交給最後的 fill_out 從外面補
+# 一圈一圈往內延伸會拉出一絲一絲的毛邊 → 再反覆取上下左右平均(外圈固定),延伸區變成平順的漸層
+_H=HIDT&COVER; _w=COVER.astype(np.float32)[...,None]   # 只拿模型上的像素平均(UV 島外的空白還是黑的,混進來會變髒的暗斑)
+for _ in range(300):
+  _cw=_c*_w; _s=np.roll(_cw,1,0)+np.roll(_cw,-1,0)+np.roll(_cw,1,1)+np.roll(_cw,-1,1); _n=np.roll(_w,1,0)+np.roll(_w,-1,0)+np.roll(_w,1,1)+np.roll(_w,-1,1)
+  _g=_H&(_n[...,0]>0); _c[_g]=(_s/np.maximum(_n,1))[_g]
+# 背帶抹掉的地方:往旁邊延伸會把手臂皮膚、毛色拉進來變成一條條白紋 → 直接塗附近衣服的顏色
+#   衣服色 = 背帶外圍一圈的中位色;每個像素再取附近(25x25)外圍裡和衣服色相近的平均,保留一點明暗
+if not os.environ.get('STRAP_DBG') and STRAP.any():
+  from rig_strap import dil
+  _ring=dil(STRAP,10)&~dil(STRAP,4)&COVER&(PARTT>=0)&(PARTT<=2)&(np.linalg.norm(_c-STRAPC,axis=-1)>0.2)
+  _shirt=np.median(_c[_ring],0); _ring&=np.linalg.norm(_c-_shirt,axis=-1)<0.2
+  # 背帶側面、邊緣反鋸齒常在別的 UV 島上,貼圖上不相鄰 → 改用 3D 距離抓:離原本背帶 0.03 內、顏色不像衣服的也抹
+  _q=0.03; _k=lambda P:np.floor(P/_q).astype(np.int64)
+  _key=lambda g:(g[...,0]*2003+g[...,1])*2003+g[...,2]
+  _g0=_k(POS[STRAP]); _vox=np.unique(np.concatenate([_key(_g0+np.array(d)) for d in np.ndindex(3,3,3) for d in [np.array(d)-1]]))
+  _zone=COVER&(PARTT>=0)&(PARTT<=2)&(POS[...,1]<C['bag_y'][0]-0.05)&(POS[...,2]<C['head'][0]+0.02)&(POS[...,2]>C['hips'][0])
+  _dS=np.linalg.norm(_c-_shirt,axis=-1); _dB=np.linalg.norm(_c-STRAPC,axis=-1)
+  _near=np.zeros_like(STRAP); _zi=np.flatnonzero(_zone); _near.flat[_zi]=np.isin(_key(_k(POS.reshape(-1,3)[_zi])),_vox)
+  _x=_near&~STRAP&(_dS>0.15)&((PARTT==0)|(_dB<_dS))   # 手臂上只抹比較像背帶的(手掌的膚色不動)
+  print('strap 3D extra px',int(_x.sum())); STRAP=STRAP|_x
+  def _box(a,r=12):
+    a=np.pad(a,((r+1,r),(r+1,r))+((0,0),)*(a.ndim-2)); s_=a.cumsum(0).cumsum(1); n=2*r+1
+    return s_[n:,n:]-s_[:-n,n:]-s_[n:,:-n]+s_[:-n,:-n]
+  _sum=_box(_c*_ring[...,None]); _cnt=_box(_ring.astype(np.float32))
+  _loc=np.where(_cnt[...,None]>20,_sum/np.maximum(_cnt,1)[...,None],_shirt)
+  _S=STRAP&COVER; _c[_S]=_loc[_S]
+  print('shirt color',(_shirt*255).round(),'ring px',int(_ring.sum()))
+# 細碎雜色:原模型背帶和袖口交界的夾縫裡,兩層顏色交錯成一條條的細紋。
+#   先把顏色分成幾群(色票),某個像素的顏色群在附近 9x9 只佔不到兩成 → 是夾在別的顏色裡的細紋 → 換成附近主要顏色群的平均色
+#   (只換細紋;正常的明暗漸層、交界都不動。只數有用到的像素,UV 島之間的空白不投票)
+def despeckle(c,cover,k=8,r=4,frac=0.2):
+  rng=np.random.default_rng(0); idx=np.flatnonzero(cover); smp=c.reshape(-1,3)[rng.choice(idx,min(200000,len(idx)),replace=False)]
+  cen=smp[rng.choice(len(smp),k,replace=False)]
+  for _ in range(20):
+    lab=((smp[:,None]-cen[None])**2).sum(-1).argmin(1)
+    cen=np.array([smp[lab==j].mean(0) if (lab==j).any() else cen[j] for j in range(k)])
+  lab=np.full(cover.shape,-1); cc=c[cover]; lab[cover]=((cc[:,None]-cen[None])**2).sum(-1).argmin(1)
+  def box(a):
+    a=np.pad(a,((r+1,r),(r+1,r))+((0,0),)*(a.ndim-2)); s_=a.cumsum(0).cumsum(1); n=2*r+1
+    return s_[n:,n:]-s_[:-n,n:]-s_[n:,:-n]+s_[:-n,:-n]
+  cnt=np.stack([box((lab==j).astype(np.float32)) for j in range(k)],-1); tot=np.maximum(cnt.sum(-1),1)
+  own=np.take_along_axis(cnt,np.clip(lab,0,None)[...,None],-1)[...,0]/tot; maj=cnt.argmax(-1)
+  bad=cover&(own<frac)&(maj!=lab)
+  out=c.copy()
+  for j in range(k):
+    m=bad&(maj==j)
+    if not m.any(): continue
+    w=(lab==j).astype(np.float32); avg=box(c*w[...,None])/np.maximum(box(w),1)[...,None]; out[m]=avg[m]
+  print('despeckled px',int(bad.sum()))
+  return out
+_c=despeckle(_c,COVER)   # 只跑一輪、範圍小:範圍放大(15x15、三成)會把色塊交界啃成毛邊
+_px=np.zeros((RES,RES,4),dtype=np.float32); _px[...,:3]=_c; _px[...,3]=1
+img.pixels.foreach_set(_px.ravel())
+print('nearest bake texels',int(COVER.sum()),'hidden repainted',int(HIDT.sum()))
+me.data.attributes.remove(me.data.attributes['orig_co'])
 src.image=img; nt.nodes.remove(tgt)
 bpy.data.objects.remove(SRCOBJ)   # 原模型用完就丟,不要跟著匯出
 for u in [u for u in me.data.uv_layers if u.name!='bake']: me.data.uv_layers.remove(u)   # 體素重建留下的舊 UV 沒用,留著匯出時會被當成主要 UV
@@ -211,6 +355,7 @@ if CLASSIFY:
 img.pixels.foreach_set(px.ravel()); img.update(); img.pack()   # pack 要在最後:匯出用的是 pack 起來的資料
 img.filepath_raw=OUT+'.final.png'; img.file_format='PNG'; img.save()
 print('erased px',int(D.sum()))
+if os.environ.get('STRAP_GEO'): build_strap(me,POS,STRAP,STRAP_UV,C,PARTV,POS[BAGM])
 # 表情貼片:臉前面那一塊的面複製一份,沿法線往外推一點,UV 用正面平面投影
 X0,X1,Z0,Z1=C['face_box']
 bpy.context.view_layer.objects.active=me
