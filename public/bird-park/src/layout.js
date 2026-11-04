@@ -145,6 +145,8 @@ function stampPaths() {
 function poolQ(x, z) { return ((x - POOL.x) / POOL.rx) ** 2 + ((z - POOL.z) / POOL.rz) ** 2 }
 export { poolQ }
 
+// 攤平的圓：鳥的活動範圍（x, z, 半徑, 高度）
+export const FLAT = [{ x: -57, z: -6.5, r: 3.5, y: 0.08 }]
 function buildHeights() {
   for (let j = 0; j < G.nz; j++) {
     const z = G.z0 + j * G.cell
@@ -163,6 +165,8 @@ function buildHeights() {
       // 山腳一圈攤平，步道起點才對得上地面
       const dm = Math.hypot(x - MTN.x, z - MTN.z)
       h = lerp(low * 0.6, h, smoothstep(19, 27, dm))
+      // 鳥走動的地方攤平（斑鳩在入口草地上走，原本有小坡會讓腳陷進土裡）
+      for (const f of FLAT) h = lerp(f.y, h, smoothstep(f.r, f.r + 3, Math.hypot(x - f.x, z - f.z)))
       // 水池
       const q = poolQ(x, z)
       h = lerp(-1.5, h, smoothstep(0.55, 1.25, q))
