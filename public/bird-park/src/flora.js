@@ -350,10 +350,10 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     if (s > 0.8) addCollider(x, z, s, terrainHeight(x, z) + s * 0.6)
     n++
   }
-  for (let i = 0; i < 46; i++) {
-    const a = (i / 46) * TAU + rnd() * 0.06, k = 1.06 + rnd() * 0.12
+  for (let i = 0; i < 64; i++) {
+    const a = (i / 64) * TAU + rnd() * 0.06, k = 1.06 + rnd() * 0.12
     const x = POOL.x + POOL.rx * k * Math.cos(a), z = POOL.z + POOL.rz * k * Math.sin(a)
-    if (distToMtn(x, z) < mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 0.3) continue
+    if (distToMtn(x, z) < mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 0.3 || pathClearAt(x, z) < 0.6) continue
     const name = pick(['mrock_7', 'mrock_8', 'mrock_9', 'mrock_10', 'mrock_12', 'mrock_13'])
     put(name, { p: v3(x, terrainHeight(x, z) - 0.25, z), q: qY(-a + (rnd() - 0.5)), s: sc(0.7 + rnd() * 0.5) })
   }

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime } from './structures.js'
+import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants } from './plants.js'
 import { buildStops, rampPoint } from './stops.js'
@@ -8,7 +8,7 @@ import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { snapScroll } from './snap.js'
 import { windUniforms } from './wind.js'
-import { MTN, mtnBase, domeY, terrainHeight } from './layout.js'
+import { MTN, POOL, mtnBase, domeY, terrainHeight } from './layout.js'
 import { softDotTex } from './textures.js'
 
 const canvas = document.getElementById('scene')
@@ -224,6 +224,17 @@ await renderer.compileAsync(scene, camera)
 console.log(`[park] 模型 ${Math.round(T1 - T0)} ms、擺放 ${Math.round(T2 - T1)} ms、預熱 ${Math.round(performance.now() - T2)} ms`)
 loadingEl.classList.add('done')
 
+// 池面的水紋：隨機的地方冒一圈（魚浮上來、蟲碰到水面），偶爾一次冒兩三圈
+let nextRipple = 0
+function pondRipples(t) {
+  if (t < nextRipple) return
+  nextRipple = t + 0.35 + Math.random() * 0.9
+  const n = Math.random() < 0.2 ? 3 : 1
+  const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 0.85
+  const x = POOL.x + Math.cos(a) * r * POOL.rx, z = POOL.z + Math.sin(a) * r * POOL.rz
+  for (let i = 0; i < n; i++) ripple(x + (Math.random() - 0.5) * 0.4 * i, z + (Math.random() - 0.5) * 0.4 * i, 0.5 + Math.random() * 0.8)
+}
+
 let smooth = null
 const clock = new THREE.Clock()
 function frame() {
@@ -232,6 +243,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime
   windUniforms.uTime.value = t
   waterTime.value = t
+  pondRipples(t)
   foliageTime.value = t
   // 鳥：只更新鏡頭附近的（骨架動畫很吃 CPU）
   for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt)

@@ -284,7 +284,7 @@ const GLSL_NOISE = `
   }`
 export const waterTime = { value: 0 }
 // 水波紋：鳥踩水、啄水時加一圈（12 個位置輪流用）
-const RIPPLES = 12
+const RIPPLES = 20
 const ripVal = { value: Array.from({ length: RIPPLES }, () => new THREE.Vector4(0, 0, -99, 0)) }
 let ripN = 0
 export function ripple(x, z, amp = 1) { ripVal.value[ripN++ % RIPPLES].set(x, z, waterTime.value, amp) }
@@ -311,6 +311,7 @@ export function buildWater(scene) {
         uniform vec4 uRip[${RIPPLES}];
         ${GLSL_NOISE}
         const vec2 FALL = vec2(${FX.toFixed(2)}, ${FZ.toFixed(2)});
+        float gRing = 0.0;   // 水紋環的波峰（顏色也提亮一點，不靠反光也看得到一圈圈）
         vec2 waterSlope(vec2 p) {
           vec2 g = vec2(0.0);
           const vec2 W[8] = vec2[8](vec2(6.3, 0.0), vec2(8.9, 0.55), vec2(11.7, -0.6), vec2(15.1, 0.95), vec2(19.6, -1.1), vec2(24.3, 0.3), vec2(31.0, -0.35), vec2(39.5, 1.3));
@@ -318,28 +319,31 @@ export function buildWater(scene) {
           for (int i = 0; i < 8; i++) {
             float k = W[i].x, a = 0.4 + W[i].y;
             vec2 d = vec2(cos(a), sin(a));
-            g += d * gust * (0.03 / sqrt(k)) * cos(dot(d, p) * k + uWT * sqrt(9.8 * k) * 0.6 + float(i) * 1.7);
+            g += d * gust * (0.048 / sqrt(k)) * cos(dot(d, p) * k + uWT * sqrt(9.8 * k) * 0.6 + float(i) * 1.7);
           }
           // 瀑布打進水裡：一直往外推的同心波，越遠越弱
           vec2 d = p - FALL; float r = length(d) + 1e-3;
           float env = exp(-r * 0.32);
-          g += (d / r) * env * 0.16 * cos(r * 9.0 - uWT * 7.0 + vnoise(d * 1.3) * 3.0);
+          g += (d / r) * env * 0.22 * cos(r * 9.0 - uWT * 7.0 + vnoise(d * 1.3) * 3.0);
           g += (vec2(vnoise(p * 3.0 + uWT * 1.7), vnoise(p * 3.0 - uWT * 1.3 + 7.0)) - 0.5) * env * 0.5;
           for (int j = 0; j < ${RIPPLES}; j++) {
             vec4 R = uRip[j];
             float age = uWT - R.z;
-            if (age < 0.0 || age > 4.0) continue;
+            if (age < 0.0 || age > 5.0) continue;
             vec2 q = p - R.xy; float rr = length(q) + 1e-4;
-            float front = rr - 0.35 * age;
-            float e2 = R.w * exp(-age * 1.1) * exp(-front * front * 30.0) / (1.0 + 3.0 * rr);
-            g += (q / rr) * e2 * 1.6 * cos(front * 45.0);
+            // 一圈主環＋後面跟著兩三圈小的，越擴越淡
+            float front = rr - 0.45 * age;
+            float e2 = R.w * exp(-age * 0.75) * exp(-front * front * 9.0) / (1.0 + 1.2 * rr);
+            float wv = cos(front * 26.0);
+            g += (q / rr) * e2 * 1.1 * wv;
+            gRing += e2 * max(0.0, wv);
           }
           return g;
         }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-        vec2 ws = waterSlope(vWp.xz);
         normal = normalize((viewMatrix * vec4(normalize(vec3(-ws.x, 1.0, -ws.y)), 0.0)).xyz);`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+        vec2 ws = waterSlope(vWp.xz);
         // 靠岸變淺：偏黃綠、透一點
         float q = length((vWp.xz - vec2(${POOL.x.toFixed(2)}, ${POOL.z.toFixed(2)})) / vec2(${(POOL.rx * 1.12).toFixed(2)}, ${(POOL.rz * 1.12).toFixed(2)}));
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.24, 0.32, 0.2), smoothstep(0.7, 1.0, q));
@@ -348,7 +352,8 @@ export function buildWater(scene) {
         float fr = length(vWp.xz - FALL);
         float fn = vnoise((vWp.xz - FALL) * 2.2 - normalize(vWp.xz - FALL + 1e-3) * uWT * 1.4) * 0.6 + vnoise(vWp.xz * 7.0 + uWT) * 0.4;
         float foam = smoothstep(0.35, 0.75, fn * exp(-fr * 0.45) * 1.6);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.96, 0.96), foam * 0.85);`)
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.96, 0.96), foam * 0.85);
+        diffuseColor.rgb += vec3(0.55, 0.65, 0.62) * min(gRing * 1.2, 0.5);`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.6, foam);')
   }
   const water = new THREE.Mesh(new THREE.CircleGeometry(1, 96).rotateX(-Math.PI / 2).scale(POOL.rx * 1.12, 1, POOL.rz * 1.12), poolMat)
