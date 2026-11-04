@@ -328,6 +328,11 @@ export function buildWater(scene) {
         uniform vec4 uRip[${RIPPLES}];
         ${GLSL_NOISE}
         const vec2 FALL = vec2(${FX.toFixed(2)}, ${FZ.toFixed(2)});
+        float foamLace(vec2 p) {
+          float patchy = smoothstep(-0.2, 0.6, snoise(p * 0.7 + 11.0));
+          return (smoothstep(0.62, 0.92, 1.0 - abs(snoise(p * 1.6))) * 0.7 + smoothstep(0.2, 0.75, snoise(p * 1.1 + 5.0)) * 0.5) * patchy;
+        }
+        float foamSpeck(vec2 p) { return smoothstep(0.62, 0.9, snoise(p * 7.0 + 3.0)); }
         float gRing = 0.0;   // 水紋環的波峰（顏色也提亮一點，不靠反光也看得到一圈圈）
         vec2 waterSlope(vec2 p) {
           vec2 g = vec2(0.0);
@@ -348,12 +353,16 @@ export function buildWater(scene) {
             float age = uWT - R.z;
             if (age < 0.0 || age > 5.0) continue;
             vec2 q = p - R.xy; float rr = length(q) + 1e-4;
-            // 一圈主環＋後面跟著兩三圈小的，越擴越淡
-            float front = rr - 0.45 * age;
-            float e2 = R.w * exp(-age * 0.75) * exp(-front * front * 9.0) / (1.0 + 1.2 * rr);
-            float wv = cos(front * 26.0);
-            g += (q / rr) * e2 * 1.1 * wv;
-            gRing += e2 * max(0.0, wv);
+            // 真的水波紋是一小串波（前面一圈最明顯，後面跟著幾圈越來越細），
+            // 往外走波長慢慢變長、整串變寬、越擴越淡；不是一圈圈等距發亮的線
+            float front = rr - 0.42 * age;
+            float width = 0.18 + 0.12 * age;
+            float packet = exp(-front * front / (width * width)) * step(-1.5 * width, front);
+            float k = 32.0 / (1.0 + 0.7 * age);
+            float e2 = R.w * exp(-age * 0.5) * packet / sqrt(1.0 + 1.5 * rr);
+            float wv = sin(front * k);
+            g += (q / rr) * e2 * 1.8 * wv;
+            gRing += e2 * wv;
           }
           return g;
         }`)
@@ -367,16 +376,22 @@ export function buildWater(scene) {
         diffuseColor.a *= mix(1.0, 0.75, smoothstep(0.8, 1.0, q));
         // 落點白沫（照影片）：打下來的地方一大片翻滾的白，往外是網狀的泡沫紋、零星的泡泡，慢慢往外漂
         vec2 dd = vWp.xz - FALL; float fr = length(dd); vec2 dir = dd / (fr + 1e-3);
-        vec2 drift = dd - dir * uWT * 0.35;
+        // 往外漂的泡沫用兩組錯開半個週期的位移交替淡入淡出（直接用 時間×速度 位移的話，
+        // 時間一久整片紋路會沿著放射方向被拉長，變成一條條放射線）
+        float ph1 = fract(uWT * 0.1), ph2 = fract(uWT * 0.1 + 0.5);
+        float w1 = 1.0 - abs(2.0 * ph1 - 1.0);
+        vec2 dr1 = dd - dir * ph1 * 3.0, dr2 = dd - dir * ph2 * 3.0 + vec2(17.3, 9.1);
         float core = smoothstep(2.8, 0.9, fr + snoise(dd * 1.4 + uWT * 0.9) * 0.7);
-        // 網狀泡沫：粗一點、一塊塊（不是細細的線），再用大尺度的雜訊挖出有的地方多、有的地方沒有
-        float patchy = smoothstep(-0.2, 0.6, snoise(drift * 0.7 + 11.0));
-        float lace = (smoothstep(0.62, 0.92, 1.0 - abs(snoise(drift * 1.6))) * 0.7 + smoothstep(0.2, 0.75, snoise(drift * 1.1 + 5.0)) * 0.5)
-          * patchy * smoothstep(7.5, 1.6, fr);
-        float speck = smoothstep(0.62, 0.9, snoise(drift * 7.0 + 3.0)) * smoothstep(4.5, 1.2, fr);
+        float lace = mix(foamLace(dr2), foamLace(dr1), w1) * smoothstep(7.5, 1.6, fr);
+        float speck = mix(foamSpeck(dr2), foamSpeck(dr1), w1) * smoothstep(4.5, 1.2, fr);
         float foam = clamp(core + lace * 0.75 + speck * 0.55, 0.0, 1.0);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.97, 0.97), foam * 0.92);
-        diffuseColor.rgb += vec3(0.55, 0.65, 0.62) * min(gRing * 1.2, 0.5);`)
+        // 波峰稍亮、波谷稍暗（像光被水面折射），很淡，主要還是靠反光看到水紋
+        // 從上往下看時水面幾乎不反光，水紋要靠「波峰亮、波谷暗」（光被折射聚散）才看得到：
+        // 用乘的（不是加一圈白），亮暗都很柔和，跟著水本身的顏色走
+        float rg = clamp(gRing * 4.0, -1.0, 1.0);
+        diffuseColor.rgb *= 1.0 + rg * 0.45;
+        diffuseColor.rgb += vec3(0.05, 0.07, 0.07) * max(rg, 0.0);`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.6, foam);')
   }
   const water = new THREE.Mesh(new THREE.CircleGeometry(1, 96).rotateX(-Math.PI / 2).scale(POOL.rx * 1.12, 1, POOL.rz * 1.12), poolMat)
