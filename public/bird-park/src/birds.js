@@ -778,7 +778,7 @@ function perchGroup(n, gap, start, mk) {
   const blocked = (s1, me) => birds.some((b) => b.hopper !== me && Math.abs(b.hopper.s - s1) < gap)
   for (let i = 0; i < n; i++) birds.push(mk(blocked))
   birds.forEach((b, i) => { b.hopper.s = start + i * gap * 1.4 })
-  return group(birds, () => V(birds.reduce((a, b) => a + b.hopper.s, 0) / n, 0.3, 0))
+  return group(birds, () => V(birds.reduce((a, b) => a + b.hopper.s, 0) / n, 0.3, 0), n >= 3)
 }
 // 地上兩隻：各走各的，選目的地和走的路線都會避開另一隻
 function groundGroup(n, gap, mk) {
@@ -791,13 +791,14 @@ function groundGroup(n, gap, mk) {
   const avoid = (x, z, p) => { for (let k = 1; k <= 8; k++) if (near(lerp(p.x, x, k / 8), lerp(p.y, z, k / 8), p)) return true; return false }
   for (let i = 0; i < n; i++) birds.push(mk(avoid))
   birds.forEach((b, i) => b.walker.p.set((i - (n - 1) / 2) * gap * 1.5, (i % 2) * 0.2))
-  return group(birds, () => birds.reduce((a, b) => a.add(b.focus), V()).divideScalar(n))
+  return group(birds, () => birds.reduce((a, b) => a.add(b.focus), V()).divideScalar(n), true)
 }
-function group(birds, center) {
+// lead：手機畫面窄、整群放不下時，鏡頭只跟著第一隻（地上走的一群、三隻以上停在枝上的）
+function group(birds, center, lead) {
   const g = new THREE.Group(), focus = V()
   birds.forEach((b) => g.add(b.obj))
   const update = (t, dt) => { birds.forEach((b) => b.update(t, dt)); focus.copy(center()) }
-  return { obj: g, focus, update, birds, acts: birds[0].acts }
+  return { obj: g, focus, lead: lead ? birds[0].focus : null, update, birds, acts: birds[0].acts }
 }
 // 綠繡眼常常幾隻一起：三隻在同一根枝上跳
 function whiteeye(env) {
@@ -1019,18 +1020,19 @@ export function placeAnimal(def) {
   // 動物本身不接收陰影（停在樹蔭下也要看得清楚），也不烘進地面
   built.obj.traverse((o) => { if (o.isMesh) { o.receiveShadow = !!o.userData.catcher; o.userData.noBake = true } })
 
-  // 鏡頭目標跟著動物走一部分
+  // 鏡頭目標跟著動物走：量的是「現在在哪」相對於站點中心（不是相對於一開始的位置，
+  // 不然一開始就停在枝條靠樹幹那段的鳥會一直偏在畫面一邊）。follow：手機畫面窄，整個跟上才會在正中間
   const base = target.clone(), f0 = V(), fw = V()
   g.updateMatrixWorld(true)
   built.update(0, 0.016)
   g.updateMatrixWorld(true)
-  obj.localToWorld(f0.copy(built.focus))
-  const update = (t, dt) => {
+  obj.localToWorld(f0.set(0, built.focus.y, 0))
+  const update = (t, dt, follow = 0.6) => {
     built.update(t, dt)
     obj.updateMatrixWorld()
-    obj.localToWorld(fw.copy(built.focus)).sub(f0)
+    obj.localToWorld(fw.copy(follow === 1 && built.lead ? built.lead : built.focus)).sub(f0)
     fw.y *= 0.3
-    target.copy(base).addScaledVector(fw, 0.6)
+    target.copy(base).addScaledVector(fw, follow)
   }
   const cam = base.clone().addScaledVector(toCam, dist)
   cam.y = gy + camH

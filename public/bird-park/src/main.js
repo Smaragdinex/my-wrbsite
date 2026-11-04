@@ -253,7 +253,7 @@ function frame() {
   pondRipples(t)
   foliageTime.value = t
   // 鳥：只更新鏡頭附近的（骨架動畫很吃 CPU）
-  for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt)
+  for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt, innerWidth > 720 ? 0.6 : 1)
   water.mist.update(dt, camera)
   for (const c of clouds) {
     const u = c.userData
