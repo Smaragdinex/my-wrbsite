@@ -108,7 +108,7 @@ const ALL = [
     ],
   },
   {
-    id: 'moorhen', spot: [-1, -15], perch: 'ground', view: 320, y: POOL.water - 0.25, water: POOL.water, dist: 2.1, camH: 0.9, lookY: 0.32,
+    id: 'moorhen', spot: [-5, -14], perch: 'ground', swim: true, view: 320, y: POOL.water - 0.25, water: POOL.water, dist: 3.2, camH: 0.9, lookY: 0.32,
     name: '紅冠水雞', sci: 'Gallinula chloropus', where: '水池',
     intro: '黑灰色的身體，配上紅色的額頭和嘴、黃色的嘴尖，很好認。牠很會游泳，游的時候頭會一前一後地點；長長的腳趾也能踩在水草和浮葉上走。',
     facts: [
@@ -119,7 +119,7 @@ const ALL = [
     ],
   },
   {
-    id: 'waterhen', spot: [-5, -19], perch: 'ground', view: 340, y: POOL.water - 0.25, water: POOL.water, dist: 2.1, camH: 0.9, lookY: 0.35,
+    id: 'waterhen', spot: [-6, -20], perch: 'ground', swim: true, view: 340, y: POOL.water - 0.25, water: POOL.water, dist: 2.8, camH: 0.9, lookY: 0.35,
     name: '白腹秧雞', sci: 'Amaurornis phoenicurus', where: '水池',
     intro: '臉和胸前是一大片白色，背是深灰色，尾巴下面卻是紅褐色。牠常在水邊和草叢之間走動，也會下水游泳，游的時候腳收在身體下面划水，短短的尾巴一直上下擺動。',
     facts: [

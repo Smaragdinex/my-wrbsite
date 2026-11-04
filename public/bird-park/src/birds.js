@@ -509,14 +509,14 @@ function groundTripo(env, cfg) {
       r.turn('neck3', FWD, -roll * 0.6)
       for (const b of ['neck2', 'neck3', 'head']) r.stretch(b, c.reach)
     } else {
-      r.turn('body', LAT, -c.lean + 0.02 * Math.sin(t * 1.3)); r.turn('body', FWD, roll)
+      r.turn('body', LAT, -c.lean - (cfg.swim ? 0.08 : 0) + 0.02 * Math.sin(t * 1.3)); r.turn('body', FWD, roll)
       r.turn('neck', LAT, -c.neck * 0.8); r.turn('neck', AX.y, c.yaw * 0.5 + c.sway)
       r.stretch('head', c.reach)
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
     // 尾巴：前傾時翹起、走路時跟著步伐上下左右擺
     const flick = cfg.flick ? cfg.flick * Math.pow(Math.max(0, Math.sin(t * (cfg.flickF ?? 2.4))), 6) : 0
-    r.turn('tail', LAT, 0.1 * c.lean + 0.06 * Math.sin(ph * 2 + 1) * c.amp + flick); r.turn('tail', AX.y, 0.08 * Math.sin(ph) * c.amp)
+    r.turn('tail', LAT, 0.1 * c.lean + 0.06 * Math.sin(ph * 2 + 1) * c.amp + flick + (cfg.swim ? 0.3 : 0)); r.turn('tail', AX.y, 0.08 * Math.sin(ph) * c.amp)
     for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) r.turn(wg, AX.y, sg * (0.02 * breath / 0.025 + 0.04 * Math.abs(roll) / 0.07))
     // 抬腳那一下身體微微升起
     const up = legs.reduce((a, L) => a + (L.t < 1 ? Math.sin(Math.PI * L.t) : 0), 0)
@@ -530,9 +530,11 @@ function groundTripo(env, cfg) {
     const beat = legs.map((L, i) => moving && Math.floor(c.phase + i * 0.5) > Math.floor(c.prevPhase + i * 0.5))
     c.prevPhase = c.phase
     if (cfg.swim) {
-      // 游泳：腳往後收在肚子下面（跟飛的時候收腳一樣：大腿往前、小腿往後折、腳掌貼平），游的時候兩腳輪流往後划
+      // 游泳（照影片）：腳整隻收進肚子底下看不到（大腿骨縮小，整條腿跟著縮到髖關節），在水面下輪流往後划；
+      // 身體微微前傾、尾巴翹起來，每划一下頭往前點一下
       legs.forEach((L, li) => {
         const kick = c.amp * Math.sin(ph + li * Math.PI)
+        r.bones['thigh' + L.sd].scale.setScalar(0.2)
         r.turn('thigh' + L.sd, LAT, 0.8 + 0.25 * kick)
         r.turn('shin' + L.sd, LAT, -1.6 - 0.35 * kick)
         r.turn('foot' + L.sd, LAT, 1.2 + 0.3 * kick)
@@ -818,7 +820,7 @@ const TRIPO = { rotY: Math.PI / 2, lat: V(0, 0, -1) }   // Tripo 模型都是頭
 const outer = (env, min) => ({ ...env, branch: { ...env.branch, min } })
 // 翠鳥：停在水池上方的枝頭，偶爾一頭栽進水裡抓魚、再飛回同一根枝
 function kingfisher(env) {
-  return perchRigged(outer(env, -0.7), { name: 'kingfisher-rig', k: 0.38, ...TRIPO, foot: 0.004, drop: 0.04, beat: 8, dive: true,
+  return perchRigged(outer(env, -0.2), { name: 'kingfisher-rig', k: 0.38, ...TRIPO, foot: 0.004, drop: 0.04, beat: 8, dive: true,
     hopper: { hop: [0.1, 0.25], rest: [3, 8] }, acts: { idle: [4, 2, 5], call: [1.5, 1.5, 3], preen: [0.8, 1.5, 3], dive: [2.5, 2.6, 2.6] } })
 }
 // 小白鷺：在淺水裡慢慢走、盯著水面、很快啄下去
@@ -830,13 +832,13 @@ function egret(env) {
 // 紅冠水雞：浮在水面上游，一邊游一邊點頭、翹尾巴，啄水面上的東西（腳在水裡划，每划一下一圈水紋）
 function moorhen(env) {
   return groundTripo(env, { name: 'moorhen-rig', H: 0.5, h0: 0.764, ...TRIPO, swim: true, bill: 0.165, bob: 0.03, flick: 0.5,
-    walk: { radius: 1.3, speed: 0.12 }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.3,
+    walk: { radius: 0.9, speed: 0.12, avoid: env.swimOK }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.3,
     acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } })
 }
 // 白腹秧雞：浮在水面上慢慢游，尾巴一直往上翹
 function waterhen(env) {
   return groundTripo(env, { name: 'waterhen-rig', H: 0.5, h0: 0.77, ...TRIPO, swim: true, bill: 0.2, bob: 0.025, flick: 0.45, flickF: 3.1,
-    walk: { radius: 1.0, speed: 0.12 }, stride: 0.11, swingT: 0.28, lift: 0, knee: [0.8, 1.4], focusY: 0.3,
+    walk: { radius: 1.2, speed: 0.12, avoid: env.swimOK }, stride: 0.11, swingT: 0.28, lift: 0, knee: [0.8, 1.4], focusY: 0.3,
     acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } })
 }
 // 麻雀：三隻在地上，兩腳併攏一跳一跳地找草籽
@@ -962,6 +964,8 @@ export function placeAnimal(def) {
   // 朝向：沿著 side 方向，再往鏡頭轉 turn 弧度，看起來是四分之三側面
   const face = (s, turn) => { const d = side.clone().multiplyScalar(s * Math.cos(turn)).addScaledVector(toCam, Math.sin(turn)); return Math.atan2(d.x, d.z) }
   const env = { toCam, face, waterY }
+  // 游泳的鳥：目的地和游過去的路線都要在開闊水面（不撞山、不撞池邊的石頭）；def.swimOK 吃溫室座標
+  if (def.swimOK) env.swimOK = (lx, lz, p) => { for (let k = 1; k <= 8; k++) if (!def.swimOK(x + lerp(p.x, lx, k / 8), z + lerp(p.y, lz, k / 8))) return true; return false }
   // 地上走的鳥：鳥群座標 (lx, lz) 的地面高度，相對鳥群原點（ground 鳥的 obj 沒有旋轉）
   if (def.groundAt && def.perch === 'ground') env.groundAt = (lx, lz) => def.groundAt(x + lx, z + lz) - gy
   const target = V()

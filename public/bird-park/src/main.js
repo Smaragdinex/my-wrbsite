@@ -8,7 +8,7 @@ import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { snapScroll } from './snap.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, mtnBase, domeY, terrainHeight } from './layout.js'
+import { MTN, POOL, mtnBase, domeY, terrainHeight, poolQ, mtnR } from './layout.js'
 import { softDotTex } from './textures.js'
 
 const canvas = document.getElementById('scene')
@@ -97,6 +97,8 @@ const T1 = performance.now()
 // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
 const birds = BIRDS.map((def) => {
   const d = { ...def, y: def.y ?? terrainHeight(...def.spot), groundAt: def.water == null ? terrainHeight : null }
+  // 游泳的鳥只在開闊水面：離池邊（石頭）和山腳都要留距離
+  if (def.swim) d.swimOK = (x, z) => poolQ(x, z) < 0.7 && Math.hypot(x - MTN.x, z - MTN.z) > mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 4
   // 沒指定方位就讓鏡頭站在「鳥背對山」那一側，背景是雲霧山
   if (d.view == null) d.view = THREE.MathUtils.radToDeg(Math.atan2(def.spot[0] - MTN.x, def.spot[1] - MTN.z))
   const a = placeAnimal(d)
