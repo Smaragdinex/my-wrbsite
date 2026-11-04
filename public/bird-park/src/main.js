@@ -235,6 +235,7 @@ function pondRipples(t) {
   for (let i = 0; i < n; i++) ripple(x + (Math.random() - 0.5) * 0.4 * i, z + (Math.random() - 0.5) * 0.4 * i, 0.5 + Math.random() * 0.8)
 }
 
+const _look = new THREE.Vector3(), _dir = new THREE.Vector3(), _right = new THREE.Vector3(), _upV = new THREE.Vector3(0, 1, 0)
 let smooth = null
 const clock = new THREE.Clock()
 function frame() {
@@ -262,7 +263,14 @@ function frame() {
   const k = 1 - Math.exp(-dt * 6)
   smooth.pos.lerp(camPos, k); smooth.target.lerp(camTarget, k)
   camera.position.copy(smooth.pos)
-  camera.lookAt(smooth.target)
+  // 寬螢幕卡片在左邊：鏡頭往左偏一點看，鳥才會落在畫面右半邊、不被卡片蓋住
+  _look.copy(smooth.target)
+  if (innerWidth > 720) {
+    _dir.subVectors(smooth.target, smooth.pos)
+    _right.crossVectors(_dir, _upV).normalize()
+    _look.addScaledVector(_right, -_dir.length() * 0.24)
+  }
+  camera.lookAt(_look)
   renderer.render(scene, camera)
 }
 window.__park = { scene, camera, renderer, snap, STOPS, flora, birds, shotAt: (p) => (shotAt(p), { pos: camPos.clone(), target: camTarget.clone() }) }
