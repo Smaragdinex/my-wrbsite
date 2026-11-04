@@ -13,7 +13,9 @@ import { softDotTex } from './textures.js'
 
 const canvas = document.getElementById('scene')
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+// 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
+const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
+renderer.setPixelRatio(Math.min(devicePixelRatio, PHONE ? 1.5 : 2))
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap   // PCF 才吃 shadow.radius，邊緣比較柔
 renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -39,7 +41,7 @@ scene.add(hemi)
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.3)
 sun.position.set(-45, 80, 30)
 sun.castShadow = true
-sun.shadow.mapSize.set(4096, 4096)
+sun.shadow.mapSize.setScalar(PHONE ? 2048 : 4096)
 Object.assign(sun.shadow.camera, { left: -85, right: 85, top: 70, bottom: -70, near: 1, far: 250 })
 sun.shadow.bias = -0.0004
 sun.shadow.normalBias = 0.06
