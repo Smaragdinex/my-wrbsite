@@ -10,6 +10,7 @@ import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.j
 import { judgePhoto, loadLLM, llm, rawGen } from './judge.js'
 import { createFlight, flyModels } from './flight.js'
 import { priceFor, MIN_SCORE } from './scoring.js'
+import { createViewmodel } from './viewmodel.js'
 
 const loadingEl = document.getElementById('loading')
 const world = await buildWorld(document.getElementById('scene'), {
@@ -22,6 +23,8 @@ const { renderer, scene, camera } = world
 buildShop(scene)
 
 const player = createPlayer(camera, renderer.domElement)
+scene.add(camera)   // 第一人稱的手和相機掛在鏡頭底下，鏡頭要在場景裡才會畫出來
+const vm = await createViewmodel(camera)
 // 鳥怕人：靠太近會飛走／跑掉／游開，玩家走開後再回來
 const flight = createFlight(world, player)
 world.shotOf = flight.shotOf
@@ -75,6 +78,7 @@ function rest() {
   const next = PERIODS.find((p) => p > hour + 0.05) ?? PERIODS[0] + 24
   hud.fadeThrough(() => { hour = next % 24; world.time.setTime(hour); hud.toast(`休息到${hour < 7 ? '清晨' : hour < 12 ? '早上' : hour < 18 ? '黃昏' : '夜晚'}`) })
 }
+vm.setScreenTexture(cam.lcdTex)
 const nearShop = () => Math.hypot(camera.position.x - SHOP.x, camera.position.z - (SHOP.z + 1.2)) < 3.2
 
 // 預熱：先畫一張，著色器編譯完再拿掉載入畫面
@@ -103,11 +107,14 @@ function frame() {
   cam.update(dt)
   if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }
   hud.setClock(hour)
+  vm.setGear(state.bodyId, state.lensId)
+  cam.setScreen(vm.screen)
+  vm.update(dt, { raise: cam.state.raised && !cam.panelOpen ? 1 : 0, view: cam.panelOpen ? 1 : 0, speed: flight.speed, t })
   world.tick(t, dt)
   flight.tick(t, dt, { sneak: player.state.sneak })
   hud.setHint(!panelOpen() && player.controls.isLocked ? (nearShop() ? '按 E 進入相機行' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')
   hud.update(dt)
   world.render()
 }
-window.__game = { world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, setHour: (h) => { hour = h; world.time.setTime(h) } }
+window.__game = { world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 frame()
