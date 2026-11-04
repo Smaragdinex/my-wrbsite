@@ -15,6 +15,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #c9d8d6; col
 /* HUD */
 #hud { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
 .crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3); }
+.clock { position: absolute; right: 18px; top: 54px; background: rgba(0, 0, 0, 0.45); color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 14px; }
+.fade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 0.6s; }
+.fade.on { opacity: 1; }
 .money { position: absolute; right: 18px; top: 16px; background: rgba(0, 0, 0, 0.45); color: #fff; padding: 6px 14px; border-radius: 99px; font-weight: 700; }
 .hint { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); background: rgba(0, 0, 0, 0.45); color: #fff; padding: 6px 14px; border-radius: 99px; font-size: 14px; white-space: nowrap; }
 .toast { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.6); color: #fff; padding: 8px 18px; border-radius: 10px; font-size: 15px; transition: opacity 0.4s; }

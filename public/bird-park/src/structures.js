@@ -11,19 +11,38 @@ import * as T from './textures.js'
 const tmpM = new THREE.Matrix4()
 
 /* ---------- 天空與外面的城市 ---------- */
+// 日夜共用的亮度：dayLight 白天 1 → 晚上 0；duskLight 黃昏、清晨的那一段（0～1）。world.setTime 改值，各個著色器直接讀
+export const dayLight = { value: 1 }, duskLight = { value: 0 }
 export function buildSky(scene) {
   const geo = new THREE.SphereGeometry(900, 32, 16)
+  // 日夜：uDay 白天 1、晚上 0；uDusk 黃昏／清晨那一段地平線變橘；晚上有星星和月亮（world.setTime 在改）
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() } },
+    uniforms: { sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `varying vec3 vDir; uniform vec3 sunDir;
+    fragmentShader: `varying vec3 vDir; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk;
+      float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       void main(){
-        float h = clamp(vDir.y, -0.2, 1.0);
-        vec3 top = vec3(0.30,0.55,0.85), hor = vec3(0.86,0.91,0.93), gnd = vec3(0.55,0.6,0.58);
+        vec3 d = normalize(vDir);
+        float h = clamp(d.y, -0.2, 1.0);
+        vec3 top = mix(vec3(0.012, 0.02, 0.05), vec3(0.30,0.55,0.85), uDay);
+        vec3 hor = mix(vec3(0.035, 0.05, 0.09), vec3(0.86,0.91,0.93), uDay);
+        // 黃昏：太陽那一側的地平線橘紅、天頂偏紫
+        float sunSide = 0.5 + 0.5 * dot(normalize(d.xz + 1e-4), normalize(sunDir.xz + 1e-4));
+        hor = mix(hor, vec3(0.98, 0.58, 0.34) * (0.35 + 0.65 * sunSide), uDusk);
+        top = mix(top, vec3(0.28, 0.32, 0.55), uDusk * 0.55);
+        vec3 gnd = hor * 0.6;
         vec3 c = h > 0.0 ? mix(hor, top, pow(h, 0.55)) : mix(hor, gnd, -h*5.0);
-        float s = max(dot(normalize(vDir), sunDir), 0.0);
-        c += vec3(1.0,0.9,0.7) * (pow(s, 600.0) * 4.0 + pow(s, 12.0) * 0.25);
+        float s = max(dot(d, sunDir), 0.0);
+        c += vec3(1.0,0.9,0.7) * (pow(s, 600.0) * 4.0 + pow(s, 12.0) * 0.25) * smoothstep(-0.06, 0.04, sunDir.y);
+        float night = 1.0 - uDay;
+        if (d.y > 0.0 && night > 0.01) {
+          vec3 cell = d * 260.0, g = floor(cell);
+          float r = hash(g), star = step(0.996, r) * smoothstep(0.42, 0.0, length(fract(cell) - 0.5));
+          c += vec3(0.85, 0.9, 1.0) * star * night * (0.4 + 0.9 * hash(g + 3.0)) * smoothstep(0.02, 0.25, d.y);
+        }
+        float m = dot(d, moonDir);
+        c += vec3(0.92, 0.94, 1.0) * (smoothstep(0.99935, 0.9996, m) * 1.4 + pow(max(m, 0.0), 80.0) * 0.06) * night;
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
       }`,
@@ -403,7 +422,7 @@ export function buildWater(scene) {
   const uRefl = { value: reflRT.texture }, uReflMat = { value: new THREE.Matrix4() }, uReflOn = { value: 0 }
   const poolMat = new THREE.MeshStandardMaterial({ color: 0x1b4644, roughness: 0.05, metalness: 0.0, transparent: true, opacity: 0.93, envMapIntensity: 1.4 })
   poolMat.onBeforeCompile = (sh) => {
-    sh.uniforms.uWT = waterTime; sh.uniforms.uRip = ripVal
+    sh.uniforms.uWT = waterTime; sh.uniforms.uRip = ripVal; sh.uniforms.uDayL = dayLight
     sh.uniforms.uRefl = uRefl; sh.uniforms.uReflMat = uReflMat; sh.uniforms.uReflOn = uReflOn
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWp;')
@@ -411,7 +430,7 @@ export function buildWater(scene) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         varying vec3 vWp;
-        uniform float uWT;
+        uniform float uWT; uniform float uDayL;
         uniform vec4 uRip[${RIPPLES}];
         uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
         ${GLSL_NOISE}
@@ -473,7 +492,7 @@ export function buildWater(scene) {
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.3, 0.22), shallow * 0.6);
         diffuseColor.a = mix(0.95, 0.35, shallow);
         // 淺水池底的光紋（隔著水看到的）
-        diffuseColor.rgb += vec3(0.55, 0.62, 0.5) * caustic(vWp.xz + ws * 2.0) * shallow * 0.55;
+        diffuseColor.rgb += vec3(0.55, 0.62, 0.5) * caustic(vWp.xz + ws * 2.0) * shallow * 0.55 * uDayL;   // 池底光紋是太陽照的，晚上沒有
         // 落點白沫（照影片）：打下來的地方一大片翻滾的白，往外是網狀的泡沫紋、零星的泡泡，慢慢往外漂
         vec2 dd = vWp.xz - FALL; float fr = length(dd); vec2 dir = dd / (fr + 1e-3);
         // 往外漂的泡沫用兩組錯開半個週期的位移交替淡入淡出（直接用 時間×速度 位移的話，
@@ -811,7 +830,7 @@ export function buildWater(scene) {
   mGeo.instanceCount = NM
   const mistMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, fog: true,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uNoise: { value: null }, uT: { value: 0 }, uWater: { value: POOL.water } }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uNoise: { value: null }, uT: { value: 0 }, uWater: { value: POOL.water }, uDay: dayLight }]),
     vertexShader: `
       attribute vec3 iPos; attribute vec4 iDat; attribute float iSq;
       varying vec2 vUv; varying float vA; varying float vRot; varying float vSeed; varying float vY;
@@ -827,7 +846,7 @@ export function buildWater(scene) {
         #include <fog_vertex>
       }`,
     fragmentShader: `
-      uniform sampler2D uNoise; uniform float uT; uniform float uWater;
+      uniform sampler2D uNoise; uniform float uT; uniform float uWater; uniform float uDay;
       varying vec2 vUv; varying float vA; varying float vRot; varying float vSeed; varying float vY;
       #include <fog_pars_fragment>
       void main() {
@@ -843,6 +862,7 @@ export function buildWater(scene) {
         float a = mask * smoothstep(0.18, 0.68, n) * vA;
         a *= smoothstep(uWater, uWater + 0.4, vY);                       // 碰到水面淡掉
         vec3 col = mix(vec3(0.8, 0.86, 0.88), vec3(0.97, 0.99, 1.0), clamp(vUv.y * 0.6 + n * 0.5, 0.0, 1.0));
+        col *= mix(0.1, 1.0, uDay);   // 不受光的水霧，晚上跟著暗
         gl_FragColor = vec4(col, a);
         #include <fog_fragment>
       }`,
@@ -979,6 +999,7 @@ export function buildRamp(scene) {
   glassMat.customProgramCacheKey = () => 'fresnelGlass'
   const edgeMat = new THREE.MeshStandardMaterial({ color: 0x8fc4b2, roughness: 0.1, transparent: true, opacity: 0.85 })
   const ledMat = new THREE.MeshStandardMaterial({ color: 0xfff2d8, emissive: 0xffe2b0, emissiveIntensity: 1.6, roughness: 0.4 })
+  ledMat.userData.lamp = [0.6, 3.5]   // 日夜：白天、晚上的發光強度
   const deck = new THREE.Mesh(mk(deckP, deckI, deckU), deckMat)
   deck.receiveShadow = deck.castShadow = true
   const side = new THREE.Mesh(mk(sideP, sideI), steel)

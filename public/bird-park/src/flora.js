@@ -165,7 +165,7 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     stem: new THREE.MeshStandardMaterial({ color: 0x4f7a2a, roughness: 0.9 }),
     wood: new THREE.MeshStandardMaterial({ color: 0x9a6a40, roughness: 0.8 }),
     metal: new THREE.MeshStandardMaterial({ color: 0x3e4447, roughness: 0.4, metalness: 0.7 }),
-    lamp: new THREE.MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffd89a, emissiveIntensity: 1.2 }),
+    lamp: Object.assign(new THREE.MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffd89a, emissiveIntensity: 1.2 }), { userData: { lamp: [0.15, 6] } }),   // 白天關著、晚上亮
   }
 
   /* --- 步道邊的長椅、路燈、解說牌 --- */
@@ -628,5 +628,6 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     scene.add(makeInst(geo, mats.vine, list, { receive: true }))
   }
 
-  return { mats, counts, heroes, stops }
+  // 路燈燈頭、長椅的位置（遊戲的日夜：燈光、坐下休息）
+  return { mats, counts, heroes, stops, lamps: lamps.map((l) => l.p.clone().setY(l.p.y + 3.35)), benches: benches.map((b) => ({ p: b.p.clone(), q: b.q.clone() })) }
 }

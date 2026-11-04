@@ -15,6 +15,7 @@ const world = await buildWorld(document.getElementById('scene'), {
   onProgress: (f) => { loadingEl.textContent = `園區建造中… ${Math.round(f * 100)}%` },
   extraReserve: [{ x: SHOP.x, z: SHOP.z, r: 3.2 }],
   extraModels: flyModels(),
+  night: true,
 })
 const { renderer, scene, camera } = world
 buildShop(scene)
@@ -46,7 +47,7 @@ const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
 addEventListener('keydown', (e) => {
   if (e.code === 'Tab') { e.preventDefault(); if (album.isOpen) album.close(); else if (!shop.isOpen) openPanel(album) }
-  if (e.code === 'KeyE') { if (shop.isOpen) shop.close(); else if (!album.isOpen && nearShop()) openPanel(shop) }
+  if (e.code === 'KeyE') { if (shop.isOpen) shop.close(); else if (!album.isOpen && nearShop()) openPanel(shop); else if (!panelOpen() && player.controls.isLocked && nearBench()) rest() }
   if (e.code === 'KeyQ' && player.controls.isLocked) {
     // 換下一支有的鏡頭
     const mine = LENSES.filter((l) => state.owned.includes(l.id))
@@ -54,6 +55,18 @@ addEventListener('keydown', (e) => {
     save(); hud.toast(`換上 ${gear.lens().name}`)
   }
 })
+// 日夜：一天 24 分鐘（遊戲裡 1 小時 = 現實 1 分鐘）；網址 ?t=19.5 可以直接從某個時間開始
+const DAY_SEC = 24 * 60
+const qs = new URLSearchParams(location.search)
+let hour = qs.has('t') ? +qs.get('t') : 9
+world.time.setTime(hour)
+// 長椅：坐下休息，跳到下一個時段（清晨 6、早上 9、黃昏 17、夜晚 19:30）
+const PERIODS = [6, 9, 17, 19.5]
+const nearBench = () => world.time.benches.find((b) => Math.hypot(camera.position.x - b.p.x, camera.position.z - b.p.z) < 1.6)
+function rest() {
+  const next = PERIODS.find((p) => p > hour + 0.05) ?? PERIODS[0] + 24
+  hud.fadeThrough(() => { hour = next % 24; world.time.setTime(hour); hud.toast(`休息到${hour < 7 ? '清晨' : hour < 12 ? '早上' : hour < 18 ? '黃昏' : '夜晚'}`) })
+}
 const nearShop = () => Math.hypot(camera.position.x - SHOP.x, camera.position.z - (SHOP.z + 1.2)) < 3.2
 
 // 預熱：先畫一張，著色器編譯完再拿掉載入畫面
@@ -79,11 +92,13 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime
   if (!panelOpen()) player.update(dt)
   cam.update(dt)
+  if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }
+  hud.setClock(hour)
   world.tick(t, dt)
   flight.tick(t, dt, { sneak: player.state.sneak })
-  hud.setHint(!panelOpen() && player.controls.isLocked && nearShop() ? '按 E 進入相機行' : '')
+  hud.setHint(!panelOpen() && player.controls.isLocked ? (nearShop() ? '按 E 進入相機行' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')
   hud.update(dt)
   world.render()
 }
-window.__game = { world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight }
+window.__game = { world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, setHour: (h) => { hour = h; world.time.setTime(h) } }
 frame()
