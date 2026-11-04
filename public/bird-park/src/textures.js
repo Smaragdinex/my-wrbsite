@@ -363,3 +363,25 @@ export function leafBladeTex() {
   return toTex(c)
 }
 
+// 水霧雜訊：可以無縫重複的分形雜訊（格點在邊界繞回去），水霧方片拿來捲動取樣，做出一絲一絲的霧
+export function mistNoiseTex() {
+  const S = 256, [c, g] = canvas(S, S), img = g.createImageData(S, S), d = img.data
+  const rnd = mulberry32(91), lat = {}
+  const L = (p, i, j) => { const k = p + ':' + ((i % p) + p) % p + ',' + ((j % p) + p) % p; return lat[k] ??= rnd() }
+  const val = (x, y, p) => {
+    const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j
+    const su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v)
+    return (L(p, i, j) * (1 - su) + L(p, i + 1, j) * su) * (1 - sv) + (L(p, i, j + 1) * (1 - su) + L(p, i + 1, j + 1) * su) * sv
+  }
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let n = 0, a = 0.5, tot = 0
+    for (const p of [4, 8, 16, 32, 64]) { n += val(x / S * p, y / S * p, p) * a; tot += a; a *= 0.55 }
+    n /= tot
+    const v = Math.round(255 * Math.min(1, Math.max(0, (n - 0.2) / 0.6))), k = (y * S + x) * 4
+    d[k] = d[k + 1] = d[k + 2] = v; d[k + 3] = 255
+  }
+  g.putImageData(img, 0, 0)
+  const t = toTex(c, { repeat: true, srgb: false })
+  return t
+}
+

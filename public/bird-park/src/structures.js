@@ -707,32 +707,97 @@ export function buildWater(scene) {
     }
     drops.instanceMatrix.needsUpdate = true
   }
-  // 水霧：大團、慢慢往上捲、往外飄
-  const NM = 150
-  const mistTex = T.softDotTex()
-  const mistMat = new THREE.PointsMaterial({ map: mistTex, size: 6.5, transparent: true, opacity: 0.36, depthWrite: false, vertexColors: true, color: 0xf6fafb })
-  const mp = new Float32Array(NM * 3), mc = new Float32Array(NM * 4), mv = [], ml = new Float32Array(NM), mspan = new Float32Array(NM)
-  const mg = new THREE.BufferGeometry()
-  mg.setAttribute('position', new THREE.BufferAttribute(mp, 3)); mg.setAttribute('color', new THREE.BufferAttribute(mc, 4))
-  const mist = new THREE.Points(mg, mistMat)
+  // 水霧（照瀑布影片）：面向鏡頭的方片，用捲動的雜訊貼圖做成一絲一絲、一直在翻的霧（不是一顆顆圓球）。三種：
+  // 1. 落點翻滾上來的大團霧：往上捲、往池子那邊（遠離山）擴散，越長越大
+  // 2. 沿瀑布兩側飄出來的細霧
+  // 3. 貼著水面往外滾的低霧（壓扁）
+  // 碰到水面的地方慢慢淡掉（沒有一條硬邊），每片自己轉、自己長大
+  const MIST = [
+    { n: 70, life: [5, 8], size: [1.4, 6.0], alpha: 0.95, squash: 1,
+      spawn: (p, v) => { p.set(impact.x + rs(1.2), POOL.water + 0.15 + Math.random() * 0.6, impact.z + rs(1.8)); v.set(-0.45 - Math.random() * 0.9, 0.3 + Math.random() * 0.7, rs(1.3)) } },
+    { n: 45, life: [3, 5.5], size: [0.7, 3.0], alpha: 0.6, squash: 1,
+      spawn: (p, v) => { const y = POOL.water + 1 + Math.random() ** 0.7 * 13; const r = mtnR(Math.PI, y) + 0.9 + 0.28 * Math.sqrt(Math.max(0, 30.5 - y)); p.set(MTN.x - Math.min(r, rampInner(y) - 0.4), y, MTN.z + rs(1.6)); v.set(-0.35 - Math.random() * 0.6, -0.25 - Math.random() * 0.4, rs(0.6)) } },
+    { n: 30, life: [7, 11], size: [2.5, 8.0], alpha: 0.45, squash: 0.35,
+      spawn: (p, v) => { p.set(impact.x - 0.5 + rs(1.5), POOL.water + 0.12, impact.z + rs(2.0)); const a = Math.PI + rs(1.8); v.set(Math.cos(a) * (0.5 + Math.random() * 0.7), 0.02, Math.sin(a) * (0.5 + Math.random() * 0.7)) } },
+  ]
+  function rs(k) { return (Math.random() - 0.5) * 2 * k }
+  const NM = MIST.reduce((a, m) => a + m.n, 0)
+  const mGeo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1))
+  const iPos = new THREE.InstancedBufferAttribute(new Float32Array(NM * 3), 3), iDat = new THREE.InstancedBufferAttribute(new Float32Array(NM * 4), 4), iSq = new THREE.InstancedBufferAttribute(new Float32Array(NM), 1)
+  iPos.setUsage(THREE.DynamicDrawUsage); iDat.setUsage(THREE.DynamicDrawUsage)
+  mGeo.setAttribute('iPos', iPos); mGeo.setAttribute('iDat', iDat); mGeo.setAttribute('iSq', iSq)
+  mGeo.instanceCount = NM
+  const mistMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uNoise: { value: null }, uT: { value: 0 }, uWater: { value: POOL.water } }]),
+    vertexShader: `
+      attribute vec3 iPos; attribute vec4 iDat; attribute float iSq;
+      varying vec2 vUv; varying float vA; varying float vRot; varying float vSeed; varying float vY;
+      #include <fog_pars_vertex>
+      void main() {
+        vUv = uv; vA = iDat.y; vRot = iDat.z; vSeed = iDat.w;
+        vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+        vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+        vec3 wp = iPos + (right * position.x + up * position.y * iSq) * iDat.x;
+        vY = wp.y;
+        vec4 mvPosition = viewMatrix * vec4(wp, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `
+      uniform sampler2D uNoise; uniform float uT; uniform float uWater;
+      varying vec2 vUv; varying float vA; varying float vRot; varying float vSeed; varying float vY;
+      #include <fog_pars_fragment>
+      void main() {
+        vec2 q = vUv - 0.5;
+        float r = length(q) * 2.0;
+        float cs = cos(vRot), sn = sin(vRot);
+        vec2 p = vec2(cs * q.x - sn * q.y, sn * q.x + cs * q.y);
+        // 兩層雜訊往不同方向捲：一絲一絲、一直在翻
+        float n1 = texture2D(uNoise, p * 0.8 + vSeed + vec2(uT * 0.025, -uT * 0.04)).r;
+        float n2 = texture2D(uNoise, p * 1.9 - vSeed * 1.7 + vec2(-uT * 0.05, uT * 0.03)).r;
+        float n = n1 * 0.62 + n2 * 0.38;
+        float mask = smoothstep(1.0, 0.15, r + (n - 0.5) * 0.7);
+        float a = mask * smoothstep(0.18, 0.68, n) * vA;
+        a *= smoothstep(uWater, uWater + 0.4, vY);                       // 碰到水面淡掉
+        vec3 col = mix(vec3(0.8, 0.86, 0.88), vec3(0.97, 0.99, 1.0), clamp(vUv.y * 0.6 + n * 0.5, 0.0, 1.0));
+        gl_FragColor = vec4(col, a);
+        #include <fog_fragment>
+      }`,
+  })
+  mistMat.uniforms.uNoise.value = T.mistNoiseTex()
+  const mist = new THREE.Mesh(mGeo, mistMat)
   mist.frustumCulled = false; mist.renderOrder = 7
   scene.add(mist)
-  const spawnMist = (i) => {
-    mp.set([impact.x + (Math.random() - 0.5) * 2, POOL.water + 0.2 + Math.random() * 0.8, impact.z + (Math.random() - 0.5) * 2.6], i * 3)
-    mv[i].set(-0.4 - Math.random() * 0.8, 0.5 + Math.random() * 0.9, (Math.random() - 0.5) * 1.0)
-    ml[i] = 0; mspan[i] = 3 + Math.random() * 3
+  const mP = [], mV = [], mL = new Float32Array(NM), mSpan = new Float32Array(NM), mKind = new Uint8Array(NM), mRot = new Float32Array(NM), mSpin = new Float32Array(NM)
+  {
+    let i = 0
+    MIST.forEach((M, k) => { for (let j = 0; j < M.n; j++, i++) { mKind[i] = k; mP.push(new THREE.Vector3()); mV.push(new THREE.Vector3()); iSq.array[i] = M.squash; iDat.array[i * 4 + 3] = Math.random() * 10 } })
   }
-  for (let i = 0; i < NM; i++) { mv.push(new THREE.Vector3()); spawnMist(i); ml[i] = Math.random() * 5 }
+  const spawnMist = (i) => {
+    const M = MIST[mKind[i]]
+    M.spawn(mP[i], mV[i])
+    mL[i] = 0; mSpan[i] = M.life[0] + Math.random() * (M.life[1] - M.life[0])
+    mRot[i] = Math.random() * TAU; mSpin[i] = rs(0.25)
+  }
+  for (let i = 0; i < NM; i++) { spawnMist(i); mL[i] = Math.random() * mSpan[i] }
   const updateMist = (dt) => {
+    mistMat.uniforms.uT.value += dt
     for (let i = 0; i < NM; i++) {
-      ml[i] += dt
-      if (ml[i] > mspan[i]) spawnMist(i)
-      mp[i * 3] += mv[i].x * dt; mp[i * 3 + 1] += mv[i].y * dt; mp[i * 3 + 2] += mv[i].z * dt
-      mv[i].multiplyScalar(1 - dt * 0.2)
-      const f = ml[i] / mspan[i]
-      mc[i * 4] = mc[i * 4 + 1] = mc[i * 4 + 2] = 1; mc[i * 4 + 3] = Math.min(1, f * 5) * (1 - f)
+      const M = MIST[mKind[i]]
+      mL[i] += dt
+      if (mL[i] > mSpan[i]) spawnMist(i)
+      mP[i].addScaledVector(mV[i], dt)
+      mV[i].multiplyScalar(1 - dt * 0.18)
+      if (mP[i].y < POOL.water + 0.1) mP[i].y = POOL.water + 0.1
+      mRot[i] += mSpin[i] * dt
+      const f = mL[i] / mSpan[i]
+      iPos.array.set([mP[i].x, mP[i].y, mP[i].z], i * 3)
+      iDat.array[i * 4] = M.size[0] + (M.size[1] - M.size[0]) * Math.sqrt(f)          // 越長越大
+      iDat.array[i * 4 + 1] = M.alpha * Math.min(1, f * 6) * (1 - f) ** 1.3             // 很快出現、慢慢散掉
+      iDat.array[i * 4 + 2] = mRot[i]
     }
-    mg.attributes.position.needsUpdate = true; mg.attributes.color.needsUpdate = true
+    iPos.needsUpdate = true; iDat.needsUpdate = true
   }
   out.mist = { update(dt, cam) { updateDrops(dt, cam); updateMist(dt) } }
   out.fallBase = impact
