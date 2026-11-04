@@ -241,7 +241,8 @@ function pondRipples(t) {
 }
 
 const _look = new THREE.Vector3(), _dir = new THREE.Vector3(), _right = new THREE.Vector3(), _upV = new THREE.Vector3(0, 1, 0)
-let smooth = null
+let smooth = null, phoneTilt = 0
+const clamp = THREE.MathUtils.clamp, damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt))
 const clock = new THREE.Clock()
 function frame() {
   requestAnimationFrame(frame)
@@ -274,6 +275,14 @@ function frame() {
     _dir.subVectors(smooth.target, smooth.pos)
     _right.crossVectors(_dir, _upV).normalize()
     _look.addScaledVector(_right, -_dir.length() * 0.24)
+  } else {
+    // 手機卡片在下面：鏡頭往下壓，讓鳥落在卡片上方那塊空白畫面的中間（依這一站卡片的實際高度算）
+    const card = story.children[Math.round(scrollY / innerHeight)]?.firstElementChild
+    const free = card ? clamp(1 - (card.offsetHeight + 36) / innerHeight, 0.3, 1) : 1   // 卡片上方空出來的比例
+    phoneTilt = damp(phoneTilt, Math.atan((1 - free) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))), 4, dt)
+    _dir.subVectors(smooth.target, smooth.pos)
+    _right.crossVectors(_dir, _upV).normalize()
+    _look.copy(smooth.pos).add(_dir.applyAxisAngle(_right, -phoneTilt))
   }
   camera.lookAt(_look)
   renderer.render(scene, camera)
