@@ -176,6 +176,8 @@ function buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera 
   const halo = new THREE.Points(new THREE.BufferGeometry().setFromPoints(lamps), new THREE.PointsMaterial({
     map: softDotTex(), color: 0xffcf8a, size: 2.6, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: true }))
   halo.frustumCulled = false
+  // layer 2：光暈、螢火蟲（點的大小跟畫布高度走，畫到相機測光那張 48×32 的小圖會變超大，測光時把這層關掉）
+  halo.layers.set(2); camera.layers.enable(2)
   scene.add(halo)
   // 真的光源：固定 N 盞（數量一變所有材質要重新編譯，所以白天也留著、亮度 0），每半秒換到離玩家最近的燈
   const N = PHONE ? 4 : 8
@@ -209,6 +211,7 @@ function buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera 
   })
   const fireflies = new THREE.Points(ffGeo, ffMat)
   fireflies.frustumCulled = false
+  fireflies.layers.set(2)
   scene.add(fireflies)
 
   const st = { hour: 10, day: 1, lamp: 0 }

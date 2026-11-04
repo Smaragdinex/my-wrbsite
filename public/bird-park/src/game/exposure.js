@@ -45,8 +45,8 @@ export function settle(cam, { lens, body, ev, focal }) {
 }
 
 // 測光：用小張 HDR 圖（還沒色調映射的線性亮度）量觀景窗中間的平均亮度，換成 EV。
-// 畫面的亮度跟真實世界差太多（晚上其實只暗 3、4 格），所以亮度差放大 K 倍：白天 13、黃昏 10→6、晚上 5～6（路燈下更亮）
-const MW = 48, MH = 32, K = 2.2, L_REF = 0.115   // L_REF：白天 11 點在入口量到的平均亮度
+// 畫面的亮度跟真實世界差太多（晚上其實只暗 3、4 格），所以亮度差放大 K 倍：白天 13～14、黃昏 11→6、晚上 3～5（路燈下更亮；入門機身晚上很吃力，要升級）
+const MW = 48, MH = 32, K = 2.0, L_REF = 0.115   // L_REF：白天 11 點在入口量到的平均亮度
 export function createMeter(renderer) {
   const rt = new THREE.WebGLRenderTarget(MW, MH, { type: THREE.HalfFloatType })
   const buf = new Uint16Array(MW * MH * 4)
@@ -54,7 +54,9 @@ export function createMeter(renderer) {
   function measure(scene, cam) {
     const prev = renderer.getRenderTarget(), au = renderer.shadowMap.autoUpdate
     renderer.shadowMap.autoUpdate = false   // 陰影貼圖沿用畫面那張，不重畫（很貴）
+    const l2 = cam.layers.isEnabled(2); cam.layers.disable(2)   // 光暈、螢火蟲不算（world.js 的 layer 2）
     renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(prev)
+    if (l2) cam.layers.enable(2)
     renderer.shadowMap.autoUpdate = au
     renderer.readRenderTargetPixels(rt, 0, 0, MW, MH, buf)
     // 中央重點測光：中間三分之一權重 3 倍
