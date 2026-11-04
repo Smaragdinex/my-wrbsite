@@ -39,7 +39,7 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
         if (_v.z > 1) behind = true
         x0 = Math.min(x0, _v.x); x1 = Math.max(x1, _v.x); y0 = Math.min(y0, _v.y); y1 = Math.max(y1, _v.y)
       }
-      if (behind || x1 < -1 || x0 > 1 || y1 < -1 || y0 > 1) continue
+      if (behind || !Number.isFinite(x0 + x1 + y0 + y1) || x1 < -1 || x0 > 1 || y1 < -1 || y0 > 1) continue
       const area = (x1 - x0) * (y1 - y0) / 4                        // 佔畫面的比例
       const inside = (Math.min(x1, 1) - Math.max(x0, -1)) * (Math.min(y1, 1) - Math.max(y0, -1)) / ((x1 - x0) * (y1 - y0))
       // 被擋住：從鏡頭打 9 條射線到鳥身上（中心＋往內縮的 8 個角）

@@ -18,33 +18,37 @@ export function ruleJudge(p) {
   return { price: p.price, comment: lines.join('') }
 }
 
-// ---------- 本地 LLM（Qwen2.5-0.5B-Instruct，transformers.js，在 Web Worker 裡跑）----------
-// 模型約 480 MB（顯示卡版）／790 MB（CPU 版），第一次下載後瀏覽器會快取；之後包 Steam 版時改成放在遊戲資料夾裡。
+// ---------- 本地 LLM（Qwen2.5-1.5B-Instruct，WebLLM，在 Web Worker 裡用 WebGPU 跑）----------
+// 模型約 1 GB，第一次下載後瀏覽器會快取；之後包 Steam 版時改成放在遊戲資料夾裡。實測 Apple M 系列：載入 30 秒、每則評語 1～1.5 秒。
+// （之前試過 transformers.js＋0.5B：這台 Mac 的 WebGPU 會算錯、CPU 一張 20 秒、評語也不穩，所以換成 WebLLM＋1.5B）
 // 老闆看的是遊戲量出來的數據（鳥種、大小、對焦、遮擋、動作），用台灣老闆的口氣講評，最後給 80～120 的百分比調整估價。
-export const llm = { status: 'idle', progress: 0, device: '' }
-let worker = null, loading = null, nextId = 1
-const waiting = new Map()
+const WEBLLM = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/lib/index.js'
+export const llm = { status: 'idle', progress: 0, device: '', model: '' }
+let engine = null, loading = null
 
-// prefer：網址 ?llm=wasm 強制用 CPU（測試用）
-export function loadLLM(onUpdate, prefer = new URLSearchParams(location.search).get('llm')) {
-  loading ??= new Promise((resolve) => {
-    llm.status = 'loading'; onUpdate?.()
-    worker = new Worker(new URL('./judge-worker.js' + new URL(import.meta.url).search, import.meta.url), { type: 'module' })
-    worker.onmessage = (e) => {
-      const m = e.data
-      if (m.type === 'progress') { llm.progress = m.p; onUpdate?.() }
-      else if (m.type === 'log') console.warn('[judge]', m.msg)
-      else if (m.type === 'ready') { llm.status = 'ready'; llm.device = m.device; onUpdate?.(); resolve(true) }
-      else if (m.type === 'failed') { console.warn('[judge] LLM 載入失敗，改用寫好的評語', m.msg); llm.status = 'failed'; onUpdate?.(); resolve(false) }
-      else if (m.type === 'out') { waiting.get(m.id)?.(m); waiting.delete(m.id) }
-    }
-    worker.onerror = (e) => { console.warn('[judge] worker 出錯', e.message); llm.status = 'failed'; onUpdate?.(); resolve(false) }
-    worker.postMessage({ type: 'load', prefer, test: [{ role: 'system', content: SYSTEM }, ...EXAMPLE, { role: 'user', content: TEST }] })
-  })
+export function loadLLM(onUpdate) {
+  loading ??= (async () => {
+    if (!navigator.gpu) throw new Error('這個瀏覽器沒有 WebGPU')
+    const adapter = await navigator.gpu.requestAdapter()
+    if (!adapter) throw new Error('沒有可用的顯示卡')
+    // 顯示卡支援半精度就用 f16 版（小、快），不支援用 f32 版
+    const model = `Qwen2.5-1.5B-Instruct-${adapter.features.has('shader-f16') ? 'q4f16_1' : 'q4f32_1'}-MLC`
+    llm.status = 'loading'; llm.model = model; onUpdate?.()
+    const W = await import(WEBLLM)
+    const worker = new Worker(new URL('./judge-worker.js' + new URL(import.meta.url).search, import.meta.url), { type: 'module' })
+    engine = await W.CreateWebWorkerMLCEngine(worker, model, { initProgressCallback: (r) => { llm.progress = r.progress; onUpdate?.() } })
+    llm.status = 'ready'; llm.device = 'webgpu'; onUpdate?.()
+  })().catch((e) => { console.warn('[judge] AI 老闆沒辦法啟動，改用寫好的評語：', e?.message ?? e); llm.status = 'failed'; engine = null; onUpdate?.() })
   return loading
 }
-const ask = (msgs, opts) => new Promise((res) => { const id = nextId++; waiting.set(id, res); worker.postMessage({ type: 'gen', id, msgs, opts }) })
+const ask = async (messages, opts) => {
+  const r = await engine.chat.completions.create({ messages, ...opts })
+  return r.choices[0].message.content
+}
 
+// 小模型偶爾冒出簡體字：常見的幾個換成繁體（只換不會有歧義的）
+const S2T = { 这: '這', 个: '個', 张: '張', 对: '對', 过: '過', 还: '還', 没: '沒', 头: '頭', 鸟: '鳥', 鲜: '鮮', 画: '畫', 准: '準', 种: '種', 拍摄: '拍攝', 镜: '鏡', 稀: '稀', 么: '麼', 们: '們', 时: '時', 会: '會', 让: '讓', 说: '說', 点: '點', 远: '遠', 观: '觀', 动: '動', 当: '當', 实: '實', 质: '質', 价: '價', 钱: '錢', 卖: '賣', 买: '買', 难: '難', 应: '應', 该: '該', 话: '話', 后: '後', 为: '為', 处: '處', 体: '體' }
+const toTrad = (t) => t.replace(/拍摄|[这个张对过还没头鸟鲜画准种镜么们时会让说点远观动当实质价钱卖买难应该话后为处体]/g, (c) => S2T[c] ?? c).replace(/這只/g, '這隻')
 const pct = (x) => `${Math.round(x * 100)}%`
 function facts(p) {
   const s = p.subject
@@ -61,10 +65,8 @@ function facts(p) {
   ].filter(Boolean).join('\n')
 }
 const SYSTEM = `你是溫室生態園門口「相機行」的老闆，專門收購遊客拍的鳥照片。你講話像台灣的老闆：親切、直接、有點幽默。
-一定要用繁體中文（台灣用字），不要用簡體字。評語一到兩句，30 字以內，要具體講到這張照片的優點或缺點。
+一定要用繁體中文（台灣用字），不要用簡體字。評語一到兩句，30 字以內，要具體講到這張照片的優點或缺點；照片沒有缺點就不要硬挑毛病、不要說「可惜」。
 最後一行寫「價格：」加一個 80 到 120 的整數，代表你願意出估價的百分之幾（拍得好給高、有明顯缺點給低）。`
-// 載入時拿來測顯示卡算得對不對的題目
-const TEST = '鳥：帝雉（非常稀有）\n遊戲評分：80 分（滿分 100）\n鳥在畫面裡的大小：佔 15%\n對焦：清楚\n遮擋：沒有\n鳥完整在畫面裡\n其他：低頭覓食\n用的鏡頭：18–55mm 標準變焦，40mm'
 const EXAMPLE = [
   { role: 'user', content: '鳥：翠鳥（稀有）\n遊戲評分：88 分（滿分 100）\n鳥在畫面裡的大小：佔 21%\n對焦：清楚\n遮擋：沒有\n鳥完整在畫面裡\n其他：入水的瞬間\n用的鏡頭：150–600mm 超望遠，420mm' },
   { role: 'assistant', content: '哇，入水那一下被你抓到了，水花都清清楚楚！這張我收。\n價格：118' },
@@ -76,15 +78,12 @@ export async function judgePhoto(p) {
   const base = ruleJudge(p)
   if (llm.status !== 'ready') return { ...base, by: 'rule' }
   try {
-    // 稍微有一點隨機（同樣的照片不會每次講一樣的話），但不要太大，小模型溫度高容易亂講
-    const out = await ask([{ role: 'system', content: SYSTEM }, ...EXAMPLE, { role: 'user', content: facts(p) }], { max_new_tokens: 60, do_sample: true, temperature: 0.4, top_p: 0.85, repetition_penalty: 1.15 })
-    if (out.error) throw new Error(out.error)
-    const text = out.text.trim()
+    // 稍微有一點隨機（同樣的照片不會每次講一樣的話）
+    const text = (await ask([{ role: 'system', content: SYSTEM }, ...EXAMPLE, { role: 'user', content: facts(p) }], { max_tokens: 70, temperature: 0.6, top_p: 0.9 })).trim()
     if (/(.{4,})\1\1/s.test(text) || !text) throw new Error('模型輸出重複：' + text)
     const m = text.match(/價格[:：]\s*(\d{2,3})/)
-    // 小模型的判斷不太穩：價錢最多只讓它在估價上下 10% 內調整
-    const k = Math.min(110, Math.max(90, m ? +m[1] : 100))
-    const comment = text.replace(/\n?價格[:：].*$/s, '').trim().slice(0, 80) || base.comment
+    const k = Math.min(120, Math.max(80, m ? +m[1] : 100))
+    const comment = toTrad(text.replace(/\n?價格[:：].*$/s, '').trim()).slice(0, 80) || base.comment
     return { price: Math.round(p.price * k / 100 / 5) * 5, comment, by: 'llm', pct: k }
   } catch (e) {
     console.warn('[judge] LLM 出錯，改用寫好的評語', e)
@@ -92,4 +91,4 @@ export async function judgePhoto(p) {
   }
 }
 // 除錯：直接丟訊息給模型
-export const rawGen = (msgs, opts = { max_new_tokens: 60, do_sample: false }) => ask(msgs, opts).then((o) => o.text ?? o.error)
+export const rawGen = (msgs, opts = { max_tokens: 60, temperature: 0 }) => engine ? ask(msgs, opts) : Promise.resolve('(no model)')

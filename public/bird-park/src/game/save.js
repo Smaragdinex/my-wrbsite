@@ -3,7 +3,11 @@ const KEY = 'birdpark-save-v1'
 const DEFAULT = { money: 500, owned: ['b1', 'l1'], bodyId: 'b1', lensId: 'l1', sold: 0, earned: 0 }
 
 export function loadState() {
-  try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || '{}') } } catch { return { ...DEFAULT } }
+  try {
+    const s = { ...DEFAULT, ...JSON.parse(localStorage.getItem(KEY) || '{}') }
+    for (const k of ['money', 'sold', 'earned']) if (!Number.isFinite(s[k])) s[k] = DEFAULT[k]   // 壞掉的數字修回來
+    return s
+  } catch { return { ...DEFAULT } }
 }
 export function saveState(s) {
   try { localStorage.setItem(KEY, JSON.stringify(s)) } catch {}

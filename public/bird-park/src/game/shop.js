@@ -104,6 +104,7 @@ export function createShop({ state, photos, judge, onChange, onClose }) {
       const p = photos.find((x) => x.time === +t.dataset.sell)
       busy = true; render()
       const r = await judge(p)                       // { price, comment }
+      if (!Number.isFinite(r.price)) r.price = 0      // 不管哪裡算錯，錢都不能變成 NaN 存進存檔
       p.sold = true; p.soldFor = r.price; p.judge = r.comment
       state.money += r.price; state.sold++; state.earned += r.price
       last = p; busy = false

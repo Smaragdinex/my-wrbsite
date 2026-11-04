@@ -1,6 +1,6 @@
 // 遊戲入口：同一個園區（world.js），第一人稱走動、拿相機拍鳥、拿照片去相機行換錢、買鏡頭
 import * as THREE from 'three'
-import { buildWorld } from '../world.js'
+import { buildWorld, PHONE } from '../world.js'
 import { createPlayer } from '../player.js'
 import { createHud } from './hud.js'
 import { createCamera, BODIES, LENSES } from './camera.js'
@@ -58,8 +58,8 @@ world.render()
 loadingEl.classList.add('done')
 
 // 老闆的 AI（本地 LLM）：背景下載，好了之前用寫好的評語
-// 老闆的 AI 是實驗功能（網址加 ?ai=1）：瀏覽器裡的小模型在 CPU 上一張要十幾二十秒、評語也不太穩，預設用寫好的評語
-if (new URLSearchParams(location.search).has('ai')) loadLLM(() => hud.setStatus(llm.status === 'loading' ? `老闆的 AI 準備中… ${Math.round(llm.progress * 100)}%` : llm.status === 'ready' ? '' : llm.status === 'failed' ? '' : ''))
+// 老闆的 AI（WebLLM）：桌機瀏覽器有 WebGPU 就在背景載入；手機、沒有 WebGPU、或網址加 ?ai=0 就用寫好的評語
+if (!PHONE && new URLSearchParams(location.search).get('ai') !== '0') loadLLM(() => hud.setStatus(llm.status === 'loading' ? `老闆的 AI 準備中… ${Math.round(llm.progress * 100)}%（第一次要下載約 1 GB）` : ''))
 
 // 開始畫面：點一下鎖定滑鼠（瀏覽器規定要使用者點擊才能鎖）
 const startEl = document.getElementById('start')

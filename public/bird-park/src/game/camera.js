@@ -104,7 +104,8 @@ export function createCamera({ world, camera, controls, hud, gear, onShot }) {
     shotCam.copy(camera)
     shotCam.aspect = PHOTO_W / PHOTO_H
     // 照片＝觀景窗裡 3:2 的那個框：框佔螢幕高度的比例換成照片的垂直視角
-    const hf = $('.vf-frame').getBoundingClientRect().height / innerHeight
+    let hf = $('.vf-frame').getBoundingClientRect().height / innerHeight
+    if (!(hf > 0 && hf <= 1)) hf = 0.78   // 量不到（視窗縮到最小之類）就用平常的比例，不然整張照片的數字都會變 NaN
     shotCam.fov = THREE.MathUtils.radToDeg(2 * Math.atan(hf * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))); shotCam.updateProjectionMatrix()
     const focusDist = st.locked ? st.focus : st.aimDist * (0.6 + Math.random() * 0.8)   // 還沒對到焦就按：焦點亂跑
     const found = measurePhoto(world, shotCam, { focusDist, dofTol: dofTol(st.aimDist) })
