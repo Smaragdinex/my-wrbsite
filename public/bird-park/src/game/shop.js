@@ -2,6 +2,7 @@
 import * as THREE from 'three'
 import { terrainHeight, addCollider } from '../layout.js'
 import { BODIES, LENSES } from './camera.js'
+import { MIN_SCORE } from './scoring.js'
 
 export const SHOP = { x: -64.5, z: -4.6, face: 0 }   // 攤位面朝 +z（步道）
 
@@ -76,15 +77,16 @@ export function createShop({ state, photos, judge, onChange, onClose }) {
     return `<div class="row"><div><b>${esc(it.name)}</b><div class="muted">${spec}</div></div>${btn}</div>`
   }
   function render() {
-    const unsold = photos.filter((p) => !p.sold && p.subject && p.score > 0 && p.price > 0)   // 沒拍到鳥（0 分）的不收.sort((a, b) => b.score - a.score)
+    const unsold = photos.filter((p) => !p.sold && p.subject && p.score >= MIN_SCORE && p.price > 0).sort((a, b) => b.score - a.score)   // 60 分以下不收
     el.innerHTML = `<div class="sheet-in"><header><h2>相機行</h2><span class="money-pill">$ ${state.money.toLocaleString()}</span>
       <nav><button class="tab ${tab === 'sell' ? 'on' : ''}" data-tab="sell">賣照片</button><button class="tab ${tab === 'gear' ? 'on' : ''}" data-tab="gear">器材</button></nav>
       <button class="btn ghost" data-close>離開（E）</button></header>
       ${tab === 'sell' ? `
-        <p class="muted">老闆：「拍到什麼好照片？拿來給我看看。對焦清楚、鳥夠大、沒被擋住，價錢就好。」</p>
+        <p class="muted">老闆：「拍到什麼好照片？拿來給我看看。我這裡不是資源回收，${MIN_SCORE} 分以上才收；100 分才給正常價，拍到難得的瞬間超過 100 分還會多給。」</p>
+        <p class="muted tiers">60–69 分：一成　70–79：兩成半　80–89：五成　90–99：七成　100：正常價　100 以上：每分多 5%</p>
         ${last ? `<div class="judged"><img src="${last.url}" alt=""><div><h3>${esc(last.subject.name)}　賣了 $${last.soldFor}</h3><p class="judge">「${esc(last.judge)}」</p></div></div>` : ''}
         <div class="grid">${unsold.map((p) => `<figure data-t="${p.time}"><img src="${p.url}" alt=""><figcaption><b>${esc(p.subject.name)}</b><span>${p.score} 分</span><span>估價 $${p.price}</span>
-          <button class="btn" data-sell="${p.time}" ${busy ? 'disabled' : ''}>${busy ? '老闆在看…' : '賣'}</button></figcaption></figure>`).join('') || '<p class="muted">沒有可以賣的照片（沒拍到鳥、0 分的不收）。</p>'}</div>`
+          <button class="btn" data-sell="${p.time}" ${busy ? 'disabled' : ''}>${busy ? '老闆在看…' : '賣'}</button></figcaption></figure>`).join('') || '<p class="muted">沒有可以賣的照片（${MIN_SCORE} 分以上才收）。</p>'}</div>`
       : `<h3>機身</h3>${BODIES.map((b) => gearRow(b, 'body')).join('')}<h3>鏡頭</h3>${LENSES.map((l) => gearRow(l, 'lens')).join('')}`}
       </div>`
   }
@@ -102,7 +104,7 @@ export function createShop({ state, photos, judge, onChange, onClose }) {
     }
     if (t.dataset.sell && !busy) {
       const p = photos.find((x) => x.time === +t.dataset.sell)
-      if (!p || !p.subject || p.score <= 0) return   // 保險：0 分的照片一律不收
+      if (!p || !p.subject || p.score < MIN_SCORE) return   // 保險：60 分以下一律不收
       busy = true; render()
       const r = await judge(p)                       // { price, comment }
       if (!Number.isFinite(r.price)) r.price = 0      // 不管哪裡算錯，錢都不能變成 NaN 存進存檔

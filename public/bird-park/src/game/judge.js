@@ -5,9 +5,8 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)]
 export function ruleJudge(p) {
   const s = p.subject, lines = []
   if (p.score >= 85) lines.push(pick(['這張可以掛在店裡了！', '漂亮，構圖、對焦都到位。', '少見的好照片，我出高一點。']))
-  else if (p.score >= 60) lines.push(pick(['拍得不錯。', '還行，可以收。', '這張有水準。']))
-  else if (p.score >= 30) lines.push(pick(['普普通通。', '可以再好一點。', '勉強收。']))
-  else lines.push(pick(['這張……我只能算你便宜一點。', '下次再靠近一點吧。']))
+  else if (p.score >= 70) lines.push(pick(['拍得不錯。', '還行，可以收。', '這張有水準。']))
+  else lines.push(pick(['普普通通，只能算你便宜。', '勉強收，下次拍好一點。', '這張……我只能算你便宜一點。']))
   if ((s.focusSharp ?? s.sharp) < 0.5) lines.push('焦點跑掉了，鳥是糊的。')
   else if (p.notes.includes('手震，快門太慢')) lines.push('手抖了，整張都糊，快門要快一點。')
   else if (p.notes.includes('鳥在動，快門不夠快')) lines.push('鳥在動、快門太慢，拖出殘影了。')
@@ -64,7 +63,7 @@ function facts(p) {
   const rare = { mikado: '非常稀有', bluemagpie: '稀有', kingfisher: '稀有', babbler: '不常見', waterhen: '普通', sparrow: '很常見', dove: '很常見', bulbul: '很常見' }[s.id] ?? '普通'
   return [
     `鳥：${s.name}（${rare}）`,
-    `遊戲評分：${p.score} 分（滿分 100）`,
+    `遊戲評分：${p.score} 分（100 分是好照片的標準，超過 100 是難得的瞬間）`,
     `鳥在畫面裡的大小：佔 ${pct(s.area)}`,
     `對焦：${s.sharp > 0.8 ? '清楚' : s.sharp > 0.4 ? '有點糊' : '糊掉了'}`,
     `遮擋：${s.visible > 0.9 ? '沒有' : s.visible > 0.6 ? '有一點被擋' : '被擋住很多'}`,

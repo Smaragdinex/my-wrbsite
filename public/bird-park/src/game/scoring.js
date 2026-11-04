@@ -7,6 +7,16 @@ export const VALUE = {
   sparrow: 40, dove: 50, bulbul: 60, whiteeye: 80, babbler: 140, barbet: 120, treepie: 90, heron: 110,
   nightheron: 100, egret: 90, moorhen: 90, waterhen: 110, kingfisher: 220, mikado: 300, bluemagpie: 240, blackbulbul: 100,
 }
+// 收購價：藝術是主觀的，相機行不是資源回收——60 分以下不收；60～70 給正常價的 10%、70～80 25%、80～90 50%、90～99 70%，
+// 100 分才是正常價（基本價 × 3）；超過 100 分每多 1 分多給 5%。同一張拍到好幾隻同種的鳥再 ×1.2
+export const MIN_SCORE = 60
+const TIERS = [[100, 1], [90, 0.7], [80, 0.5], [70, 0.25], [60, 0.1]]
+export function priceFor(id, score, same = 1) {
+  if (!(score >= MIN_SCORE)) return 0
+  const full = (VALUE[id] ?? 50) * 3 * (same > 1 ? 1.2 : 1)
+  const k = score > 100 ? 1 + (score - 100) * 0.05 : TIERS.find(([s]) => score >= s)[1]
+  return Math.max(5, Math.round(full * k / 5) * 5)
+}
 // 特別的瞬間（acts 的名字 → 加成倍數、說明）
 const ACTION = {
   dive: [2.2, '入水的瞬間'], strike: [1.8, '出手捕食'], worm: [1.6, '叼著蚯蚓'], peck: [1.15, '低頭覓食'],
@@ -85,14 +95,14 @@ export function scorePhoto(found, ex = {}) {
   found.sort((a, b) => rate(b) - rate(a))
   const s = found[0], q = rate(s) * expo * grain
   const [mult, actNote] = ACTION[s.act] ?? [1, '']
-  // 一般的好照片最多 85 分；要拍到特別的瞬間（入水、捕食、鳴叫…）才會接近 100
-  const score = Math.round(Math.min(100, q * 85 * Math.min(1.3, mult)))
+  // 一般的好照片最多 85 分；要拍到特別的瞬間（入水、捕食、起飛…）才會到 100 以上（最高 110）
+  const score = Math.round(Math.min(110, q * 85 * Math.min(1.3, mult)))
   // 0 分＝等於沒拍到鳥（太小、太糊、被擋住、太暗…）：不算主角、0 元，相機行不收
   if (score <= 0) return { score: 0, price: 0, subject: null, notes: ['沒拍到鳥（太小、太糊或看不清楚）'] }
   const same = found.filter((f) => f.id === s.id && f.visible > 0.5 && f.sharp > 0.5).length
-  // 底價（基本價的 15%）跟著分數慢慢給，10 分以上才給滿：低分的照片不會因為底價就值錢
-  const price = Math.max(5, Math.round((VALUE[s.id] ?? 50) * (0.15 * Math.min(1, score / 10) + 1.6 * q) * mult * (same > 1 ? 1.2 : 1) / 5) * 5)
+  const price = priceFor(s.id, score, same)
   const notes = []
+  if (score < MIN_SCORE) notes.push(`未滿 ${MIN_SCORE} 分，相機行不收`)
   if ((s.focusSharp ?? s.sharp) < 0.5) notes.push('沒對到焦，糊掉了')
   else if ((ex.shake ?? 0) > 2) notes.push('手震，快門太慢')
   else if ((s.motion ?? 0) > 3) notes.push('鳥在動，快門不夠快')

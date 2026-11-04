@@ -9,6 +9,7 @@ import { buildShop, createShop, SHOP } from './shop.js'
 import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.js'
 import { judgePhoto, loadLLM, llm, rawGen } from './judge.js'
 import { createFlight, flyModels } from './flight.js'
+import { priceFor, MIN_SCORE } from './scoring.js'
 
 const loadingEl = document.getElementById('loading')
 const world = await buildWorld(document.getElementById('scene'), {
@@ -31,13 +32,15 @@ const state = loadState()
 const photos = await allPhotos()
 // 舊存檔：以前 0 分的照片還有底價，改成「沒拍到鳥、0 元」
 for (const p of photos) if (!p.sold && p.score <= 0 && (p.subject || p.price)) { p.subject = null; p.price = 0; p.notes = ['沒拍到鳥（太小、太糊或看不清楚）']; putPhoto(p) }
+// 收購價改成分數分級（60 分以下不收）：沒賣掉的舊照片照新規則重算估價
+for (const p of photos) if (!p.sold && p.subject) { const np = priceFor(p.subject.id, p.score); if (np !== p.price) { p.price = np; putPhoto(p) } }
 const save = () => { saveState(state); hud.setMoney(state.money) }
 hud.setMoney(state.money)
 const gear = { body: () => BODIES.find((b) => b.id === state.bodyId), lens: () => LENSES.find((l) => l.id === state.lensId) }
 
 const cam = createCamera({ world, camera, controls: player.controls, hud, gear, onShot: (p) => {
   photos.push(p); putPhoto(p)
-  hud.toast(p.subject ? `${p.subject.name}　${p.score} 分　估價 $${p.price}${p.notes.length ? '\n' + p.notes.join('、') : ''}` : '沒拍到鳥　0 分　$0（相機行不收）')
+  hud.toast(p.subject ? `${p.subject.name}　${p.score} 分　${p.score >= MIN_SCORE ? '估價 $' + p.price : '$0'}${p.notes.length ? '\n' + p.notes.join('、') : ''}` : '沒拍到鳥　0 分　$0（相機行不收）')
 } })
 
 // 面板（相簿、相機行）開著的時候放開滑鼠；關掉再鎖回去
