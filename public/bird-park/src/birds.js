@@ -838,9 +838,10 @@ const TRIPO = { rotY: Math.PI / 2, lat: V(0, 0, -1) }   // Tripo 模型都是頭
 const outer = (env, min) => ({ ...env, branch: { ...env.branch, min } })
 // 翠鳥：停在水池上方的枝頭，偶爾一頭栽進水裡抓魚、再飛回同一根枝
 function kingfisher(env) {
-  // 飛行模型長 0.786（含嘴）縮到和停棲模型一樣長（0.98 × 0.38）；身體中心 y≈0.1 對到停棲模型身體中心（腳上 0.13 公尺）
+  // 飛行模型的身體比停棲模型細長，用「嘴的長度、頭和眼睛的大小」對齊（Blender 並排比過，0.47 時飛的那隻小了一半）；
+  // 身體中心 y≈0.1 對到停棲模型身體中心（腳上 0.13 公尺）
   return perchRigged(outer(env, -0.2), { name: 'kingfisher-rig', k: 0.38, ...TRIPO, foot: 0.004, drop: 0.04, beat: 8, dive: true,
-    fly: { name: 'kingfisher-fly-rig', k: 0.47, y: 0.13 - 0.1 * 0.47 },
+    fly: { name: 'kingfisher-fly-rig', k: 0.68, y: 0.13 - 0.1 * 0.68 },
     hopper: { hop: [0.1, 0.25], rest: [3, 8] }, acts: { idle: [4, 2, 5], call: [1.5, 1.5, 3], preen: [0.8, 1.5, 3], dive: [2.5, 2.6, 2.6] } })
 }
 // 小白鷺：在淺水裡慢慢走、盯著水面、很快啄下去
