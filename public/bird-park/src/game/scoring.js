@@ -87,8 +87,11 @@ export function scorePhoto(found, ex = {}) {
   const [mult, actNote] = ACTION[s.act] ?? [1, '']
   // 一般的好照片最多 85 分；要拍到特別的瞬間（入水、捕食、鳴叫…）才會接近 100
   const score = Math.round(Math.min(100, q * 85 * Math.min(1.3, mult)))
+  // 0 分＝等於沒拍到鳥（太小、太糊、被擋住、太暗…）：不算主角、0 元，相機行不收
+  if (score <= 0) return { score: 0, price: 0, subject: null, notes: ['沒拍到鳥（太小、太糊或看不清楚）'] }
   const same = found.filter((f) => f.id === s.id && f.visible > 0.5 && f.sharp > 0.5).length
-  const price = Math.round((VALUE[s.id] ?? 50) * (0.15 + 1.6 * q) * mult * (same > 1 ? 1.2 : 1) / 5) * 5
+  // 底價（基本價的 15%）跟著分數慢慢給，10 分以上才給滿：低分的照片不會因為底價就值錢
+  const price = Math.max(5, Math.round((VALUE[s.id] ?? 50) * (0.15 * Math.min(1, score / 10) + 1.6 * q) * mult * (same > 1 ? 1.2 : 1) / 5) * 5)
   const notes = []
   if ((s.focusSharp ?? s.sharp) < 0.5) notes.push('沒對到焦，糊掉了')
   else if ((ex.shake ?? 0) > 2) notes.push('手震，快門太慢')
