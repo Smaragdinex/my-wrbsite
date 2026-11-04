@@ -345,7 +345,8 @@ function groundTripo(env, cfg) {
   const root = new THREE.Group(), inner = new THREE.Group()
   r.model.scale.setScalar(k); inner.add(r.model)
   inner.rotation.y = cfg.rotY
-  root.add(inner, contactShadow(cfg.shadow ?? 0.3))
+  // 溫室的地面本身就接太陽陰影，不用再加 fju 那個接觸陰影圓盤（會變成腳下一圈黑）
+  root.add(inner)
   const w = new Walker({ radius: 0.7, speed: 0.16, turn: 1.0, ...cfg.walk })
   w.h = env.face(sgn(), rnd(0.3, 0.8))
   const acts = new Acts(cfg.acts, (n, a) => {
