@@ -42,11 +42,14 @@ const cam = createCamera({ world, camera, controls: player.controls, hud, gear, 
 const relock = () => player.controls.lock()
 const album = createAlbum({ photos, onDelete: (p) => { photos.splice(photos.indexOf(p), 1); deletePhoto(p.time) }, onClose: relock })
 const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); if (p) putPhoto(p) }, onClose: relock })
-const panelOpen = () => album.isOpen || shop.isOpen
+const panelOpen = () => album.isOpen || shop.isOpen || cam.panelOpen
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
 addEventListener('keydown', (e) => {
   if (e.code === 'Tab') { e.preventDefault(); if (album.isOpen) album.close(); else if (!shop.isOpen) openPanel(album) }
+  // E：舉著相機 → 相機設定；靠近相機行 → 進店；靠近長椅 → 休息
+  if (e.code === 'KeyE' && cam.panelOpen) { cam.closePanel(); return }
+  if (e.code === 'KeyE' && cam.state.raised && player.controls.isLocked) { cam.openPanel(); return }
   if (e.code === 'KeyE') { if (shop.isOpen) shop.close(); else if (!album.isOpen && nearShop()) openPanel(shop); else if (!panelOpen() && player.controls.isLocked && nearBench()) rest() }
   if (e.code === 'KeyQ' && player.controls.isLocked) {
     // 換下一支有的鏡頭

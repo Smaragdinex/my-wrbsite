@@ -61,15 +61,21 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
       const focusErr = Math.abs(dist - focusDist)
       const sharp = 1 - THREE.MathUtils.smoothstep(focusErr, dofTol, dofTol * 3)
       const act = sh.act
-      found.push({ id: b.def.id, name: b.def.name, dist, area, inside, visible, sharp, act, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 })
+      const f = { id: b.def.id, name: b.def.name, dist, area, inside, visible, sharp, act, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, box: [x0, y0, x1, y1] }
+      Object.defineProperty(f, 'obj', { value: sh.obj, enumerable: false })   // 相機算動態模糊用；不可列舉，存檔時不會被存進去
+      found.push(f)
     }
   }
   return found
 }
 
 // 評分：挑畫面裡最好的那隻當主角，0～100 分 + 價錢
-export function scorePhoto(found) {
+// ex：曝光的結果 { over 過曝幾格（負＝欠曝）, noise 雜訊強度, shake 手震像素 }（camera.js 算的）
+export function scorePhoto(found, ex = {}) {
   if (!found.length) return { score: 0, price: 0, subject: null, notes: ['畫面裡沒有鳥'] }
+  // 曝光差半格以內不扣；差越多扣越多（最多扣到 0.3）。雜訊輕微不扣
+  const over = ex.over ?? 0, expo = Math.max(0.3, 1 - 0.2 * Math.max(0, Math.abs(over) - 0.5))
+  const grain = 1 - THREE.MathUtils.clamp(((ex.noise ?? 0) - 6) / 40, 0, 0.5)
   const rate = (f) => {
     // 大小：鳥佔畫面面積 8%～35% 最好；太小一路扣、塞滿畫面也扣一點
     const size = THREE.MathUtils.smoothstep(f.area, 0.004, 0.09) * (1 - 0.35 * THREE.MathUtils.smoothstep(f.area, 0.45, 0.8))
@@ -77,14 +83,20 @@ export function scorePhoto(found) {
     return size * (0.35 + 0.65 * f.sharp) * (0.3 + 0.7 * f.visible) * (0.4 + 0.6 * f.inside) * comp
   }
   found.sort((a, b) => rate(b) - rate(a))
-  const s = found[0], q = rate(s)
+  const s = found[0], q = rate(s) * expo * grain
   const [mult, actNote] = ACTION[s.act] ?? [1, '']
   // 一般的好照片最多 85 分；要拍到特別的瞬間（入水、捕食、鳴叫…）才會接近 100
   const score = Math.round(Math.min(100, q * 85 * Math.min(1.3, mult)))
   const same = found.filter((f) => f.id === s.id && f.visible > 0.5 && f.sharp > 0.5).length
   const price = Math.round((VALUE[s.id] ?? 50) * (0.15 + 1.6 * q) * mult * (same > 1 ? 1.2 : 1) / 5) * 5
   const notes = []
-  if (s.sharp < 0.5) notes.push('沒對到焦，糊掉了')
+  if ((s.focusSharp ?? s.sharp) < 0.5) notes.push('沒對到焦，糊掉了')
+  else if ((ex.shake ?? 0) > 2) notes.push('手震，快門太慢')
+  else if ((s.motion ?? 0) > 3) notes.push('鳥在動，快門不夠快')
+  else if (s.act === 'fly' || s.act === 'takeoff' || s.act === 'land') { if ((s.motion ?? 9) < 1) notes.push('飛行中凍結得很清楚') }
+  if (over > 1) notes.push('曝光過度，太亮')
+  else if (over < -1) notes.push('曝光不足，太暗')
+  if ((ex.noise ?? 0) > 14) notes.push('雜訊很多')
   if (s.visible < 0.6) notes.push('被東西擋住')
   if (s.inside < 0.85) notes.push('鳥被畫面切到')
   if (s.area < 0.006) notes.push('鳥太小了，要再靠近或換長一點的鏡頭')

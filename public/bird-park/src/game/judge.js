@@ -8,7 +8,12 @@ export function ruleJudge(p) {
   else if (p.score >= 60) lines.push(pick(['拍得不錯。', '還行，可以收。', '這張有水準。']))
   else if (p.score >= 30) lines.push(pick(['普普通通。', '可以再好一點。', '勉強收。']))
   else lines.push(pick(['這張……我只能算你便宜一點。', '下次再靠近一點吧。']))
-  if (s.sharp < 0.5) lines.push('焦點跑掉了，鳥是糊的。')
+  if ((s.focusSharp ?? s.sharp) < 0.5) lines.push('焦點跑掉了，鳥是糊的。')
+  else if (p.notes.includes('手震，快門太慢')) lines.push('手抖了，整張都糊，快門要快一點。')
+  else if (p.notes.includes('鳥在動，快門不夠快')) lines.push('鳥在動、快門太慢，拖出殘影了。')
+  if (p.notes.includes('曝光過度，太亮')) lines.push('太亮了，白的地方都沒細節。')
+  if (p.notes.includes('曝光不足，太暗')) lines.push('有點暗，看不太清楚。')
+  if (p.notes.includes('雜訊很多')) lines.push('顆粒好粗，ISO 太高了吧。')
   if (s.visible < 0.6) lines.push('前面有東西擋住。')
   if (s.inside < 0.85) lines.push('鳥被切到了，留點空間。')
   if (s.area < 0.006) lines.push('鳥太小了，換支長一點的鏡頭吧。')
@@ -66,6 +71,7 @@ function facts(p) {
     s.inside < 0.85 ? '鳥有被畫面切到' : '鳥完整在畫面裡',
     p.notes.length ? `其他：${p.notes.join('、')}` : '',
     `用的鏡頭：${p.lens}，${p.focal}mm`,
+    p.exif ? `相機設定：f/${p.exif.N}、快門 ${p.exif.t >= 0.5 ? p.exif.t + ' 秒' : '1/' + Math.round(1 / p.exif.t)}、ISO ${p.exif.iso}` : '',
   ].filter(Boolean).join('\n')
 }
 const SYSTEM = `你是溫室生態園門口「相機行」的老闆，專門收購遊客拍的鳥照片。你講話像台灣的老闆：親切、直接、有點幽默。
