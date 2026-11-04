@@ -315,9 +315,14 @@ export function buildWater(scene) {
 
   // 水池：不動頂點，在片段著色器算水面斜率去歪法線（細浪＋瀑布落點一圈圈往外的波），
   // 落點附近一片白沫，靠岸淺的地方顏色變淡
+  // 真的倒影：每格把場景對水面鏡射畫到一張小貼圖（out.reflect），水面用波浪斜率扭一下再取樣，
+  // 照菲涅耳：斜斜看時幾乎全是倒影、往下看時看到水本身（淺的地方透明看得到池底和光紋）
+  const reflRT = new THREE.WebGLRenderTarget(512, 512, { type: THREE.HalfFloatType })
+  const uRefl = { value: reflRT.texture }, uReflMat = { value: new THREE.Matrix4() }, uReflOn = { value: 0 }
   const poolMat = new THREE.MeshStandardMaterial({ color: 0x1b4644, roughness: 0.05, metalness: 0.0, transparent: true, opacity: 0.93, envMapIntensity: 1.4 })
   poolMat.onBeforeCompile = (sh) => {
     sh.uniforms.uWT = waterTime; sh.uniforms.uRip = ripVal
+    sh.uniforms.uRefl = uRefl; sh.uniforms.uReflMat = uReflMat; sh.uniforms.uReflOn = uReflOn
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWp;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;')
@@ -326,6 +331,7 @@ export function buildWater(scene) {
         varying vec3 vWp;
         uniform float uWT;
         uniform vec4 uRip[${RIPPLES}];
+        uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
         ${GLSL_NOISE}
         const vec2 FALL = vec2(${FX.toFixed(2)}, ${FZ.toFixed(2)});
         float foamLace(vec2 p) {
@@ -333,6 +339,12 @@ export function buildWater(scene) {
           return (smoothstep(0.62, 0.92, 1.0 - abs(snoise(p * 1.6))) * 0.7 + smoothstep(0.2, 0.75, snoise(p * 1.1 + 5.0)) * 0.5) * patchy;
         }
         float foamSpeck(vec2 p) { return smoothstep(0.62, 0.9, snoise(p * 7.0 + 3.0)); }
+        // 池底光紋：兩層錯開移動的網狀亮線（abs 噪聲取細線）
+        float caustic(vec2 p) {
+          float a = 1.0 - abs(snoise(p * 1.7 + vec2(uWT * 0.21, uWT * 0.13)));
+          float b = 1.0 - abs(snoise(p * 2.3 - vec2(uWT * 0.17, -uWT * 0.19) + 4.0));
+          return pow(a, 6.0) * 0.6 + pow(b, 7.0) * 0.5;
+        }
         float gRing = 0.0;   // 水紋環的波峰（顏色也提亮一點，不靠反光也看得到一圈圈）
         vec2 waterSlope(vec2 p) {
           vec2 g = vec2(0.0);
@@ -372,8 +384,14 @@ export function buildWater(scene) {
         vec2 ws = waterSlope(vWp.xz);
         // 靠岸變淺：偏黃綠、透一點
         float q = length((vWp.xz - vec2(${POOL.x.toFixed(2)}, ${POOL.z.toFixed(2)})) / vec2(${(POOL.rx * 1.12).toFixed(2)}, ${(POOL.rz * 1.12).toFixed(2)}));
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.24, 0.32, 0.2), smoothstep(0.7, 1.0, q));
-        diffuseColor.a *= mix(1.0, 0.75, smoothstep(0.8, 1.0, q));
+        // 水深（照 layout.js 的池底形狀算，不用另外讀深度）：中間深（墨綠、不透）、靠岸淺（透明、看得到池底）
+        float pq = (q * 1.12) * (q * 1.12);
+        float depth = max(0.0, ${POOL.water.toFixed(2)} - mix(-1.5, 0.0, smoothstep(0.55, 1.25, pq)));
+        float shallow = 1.0 - smoothstep(0.05, 0.75, depth);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.3, 0.22), shallow * 0.6);
+        diffuseColor.a = mix(0.95, 0.35, shallow);
+        // 淺水池底的光紋（隔著水看到的）
+        diffuseColor.rgb += vec3(0.55, 0.62, 0.5) * caustic(vWp.xz + ws * 2.0) * shallow * 0.55;
         // 落點白沫（照影片）：打下來的地方一大片翻滾的白，往外是網狀的泡沫紋、零星的泡泡，慢慢往外漂
         vec2 dd = vWp.xz - FALL; float fr = length(dd); vec2 dir = dd / (fr + 1e-3);
         // 往外漂的泡沫用兩組錯開半個週期的位移交替淡入淡出（直接用 時間×速度 位移的話，
@@ -393,11 +411,69 @@ export function buildWater(scene) {
         diffuseColor.rgb *= 1.0 + rg * 0.45;
         diffuseColor.rgb += vec3(0.05, 0.07, 0.07) * max(rg, 0.0);`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.6, foam);')
+      .replace('#include <opaque_fragment>', `
+        // 菲涅耳＋倒影：倒影貼圖用水面位置投影，再照波浪斜率歪一點（近的歪多、白沫的地方沒有倒影）
+        vec3 vdir = normalize(cameraPosition - vWp);
+        vec3 wn = normalize(vec3(-ws.x, 1.0, -ws.y));
+        float cosT = clamp(dot(vdir, wn), 0.0, 1.0);
+        float fres = 0.03 + 0.97 * pow(1.0 - cosT, 5.0);
+        fres = mix(fres, 1.0, 0.18) * (1.0 - foam);
+        if (uReflOn > 0.5) {
+          vec4 rc = uReflMat * vec4(vWp, 1.0);
+          vec2 ruv = rc.xy / rc.w + ws * 0.1;
+          vec3 refl = texture2D(uRefl, ruv).rgb;
+          // 水面倒影比實景暗一點、帶水的顏色（不是鏡子）
+          refl = mix(refl, refl * vec3(0.75, 0.88, 0.85), 0.5) * 0.85;
+          outgoingLight = mix(outgoingLight, refl, clamp(fres * 1.1, 0.0, 0.8));
+          diffuseColor.a = mix(diffuseColor.a, 1.0, fres);
+        }
+        #include <opaque_fragment>`)
   }
   const water = new THREE.Mesh(new THREE.CircleGeometry(1, 96).rotateX(-Math.PI / 2).scale(POOL.rx * 1.12, 1, POOL.rz * 1.12), poolMat)
   water.position.set(POOL.x, POOL.water, POOL.z)
   water.receiveShadow = true
   scene.add(water)
+
+  // 倒影：鏡射鏡頭（對 y = 水面），斜切近平面讓水面以下的東西（池底、鳥腳）不會畫進倒影。
+  // 草葉放在 layer 1，倒影不畫（最花效能、倒影裡也看不出來）；鏡頭離水池太遠就不更新
+  const vCam = new THREE.PerspectiveCamera(), clip = new THREE.Plane(), cp = new THREE.Vector4(), qv = new THREE.Vector4()
+  const center = new THREE.Vector3(POOL.x, POOL.water, POOL.z)
+  let frame = 0
+  // every：每幾格更新一次倒影（水面一直在晃，看不出來；手機 3 格一次省效能）
+  out.reflect = (renderer, scene, camera, scale = 0.5, every = 2) => {
+    const far = camera.position.distanceTo(center) > 90 || camera.position.y < POOL.water + 0.05
+    uReflOn.value = far ? 0 : 1
+    if (far || frame++ % every) return   // 沒更新的那幾格沿用上一張（投影矩陣跟著那張，位置還是對的）
+    const w = Math.max(64, Math.round(renderer.domElement.width * scale)), h = Math.max(64, Math.round(renderer.domElement.height * scale))
+    if (reflRT.width !== w || reflRT.height !== h) reflRT.setSize(w, h)
+    camera.updateMatrixWorld()
+    vCam.copy(camera)
+    vCam.layers.set(0)
+    // 鏡射：位置、朝向都對水面翻過去
+    const Y = POOL.water
+    vCam.position.set(camera.position.x, 2 * Y - camera.position.y, camera.position.z)
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
+    dir.y = -dir.y
+    vCam.up.set(0, 1, 0)
+    vCam.lookAt(vCam.position.clone().add(dir))
+    vCam.updateMatrixWorld()
+    vCam.projectionMatrix.copy(camera.projectionMatrix)
+    uReflMat.value.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(vCam.projectionMatrix).multiply(vCam.matrixWorldInverse)
+    // 斜切近平面（Lengyel）
+    clip.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, Y, 0)).applyMatrix4(vCam.matrixWorldInverse)
+    cp.set(clip.normal.x, clip.normal.y, clip.normal.z, clip.constant)
+    const pm = vCam.projectionMatrix, e = pm.elements
+    qv.set((Math.sign(cp.x) + e[8]) / e[0], (Math.sign(cp.y) + e[9]) / e[5], -1, (1 + e[10]) / e[14])
+    cp.multiplyScalar(2 / cp.dot(qv))
+    e[2] = cp.x; e[6] = cp.y; e[10] = cp.z + 1 - 0.003; e[14] = cp.w
+    water.visible = false
+    const prevRT = renderer.getRenderTarget(), prevAuto = renderer.shadowMap.autoUpdate
+    renderer.shadowMap.autoUpdate = false
+    renderer.setRenderTarget(reflRT); renderer.clear()
+    renderer.render(scene, vCam)
+    renderer.setRenderTarget(prevRT); renderer.shadowMap.autoUpdate = prevAuto
+    water.visible = true
+  }
 
   // 瀑布：從山頂峽谷口衝出來，拋物線往下（離岩壁越來越遠，但不能超過空中步道內緣），三層：
   // 核心水柱（白、厚）、外層水幕（比較透、快）、最外面的水霧（很淡、往下越散越寬）。

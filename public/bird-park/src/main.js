@@ -25,6 +25,7 @@ const scene = new THREE.Scene()
 const FOG = new THREE.Color(0xc9d8d6)
 scene.fog = new THREE.FogExp2(FOG, 0.0052)
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2000)
+camera.layers.enable(1)   // layer 1：草葉（水面倒影的鏡頭不畫）
 
 /* 光 */
 const { sky } = buildSky(scene)
@@ -294,7 +295,8 @@ function frame() {
     _look.copy(smooth.pos).add(_dir.applyAxisAngle(_right, -phoneTilt))
   }
   camera.lookAt(_look)
+  water.reflect(renderer, scene, camera, PHONE ? 0.3 : 0.5, PHONE ? 3 : 2)
   renderer.render(scene, camera)
 }
-window.__park = { scene, camera, renderer, snap, STOPS, flora, birds, shotAt: (p) => (shotAt(p), { pos: camPos.clone(), target: camTarget.clone() }) }
+window.__park = { scene, camera, renderer, snap, STOPS, flora, birds, water, shotAt: (p) => (shotAt(p), { pos: camPos.clone(), target: camTarget.clone() }) }
 frame()

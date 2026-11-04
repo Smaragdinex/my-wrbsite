@@ -71,6 +71,8 @@ export function scatter(scene, node, list, { wind = 0, cast = true, receive = tr
     })
     im.castShadow = cast
     im.receiveShadow = receive
+    // 矮的植物（< 2.5 公尺）放 layer 1：水面倒影不畫（倒影裡看不出來，又是大部分的繪製次數）
+    if (H < 2.5) im.layers.set(1)
     im.computeBoundingSphere()
     scene.add(im)
     meshes.push(im)

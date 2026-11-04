@@ -501,6 +501,7 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     const grass = new THREE.Mesh(g, mat)
     grass.receiveShadow = true
     grass.frustumCulled = false
+    grass.layers.set(1)   // 水面倒影不畫草葉（main.js 的鏡頭有開 layer 1）
     scene.add(grass)
   }
 
