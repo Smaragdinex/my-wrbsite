@@ -105,7 +105,8 @@ const birdStops = birds.map((b) => ({
   bird: b, title: b.def.name, nick: b.def.nick, sci: b.def.sci, tag: b.def.where, text: b.def.intro, facts: b.def.facts,
   pos: b.cam, target: b.target,
 }))
-const reserve = birds.map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], r: b.def.perch === 'branch' ? 4 : 2.6 }))
+// 地上的鳥：空地要大到鏡頭那邊也沒有花草擋在最前面
+const reserve = birds.map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], r: b.def.perch === 'branch' ? 4 : Math.max(2.6, (b.def.dist ?? 0) + 0.8) }))
 const flora = buildFlora(scene, plantLib, { stopsFor: (h) => [...buildStops(h), ...birdStops], reserve })
 const T2 = performance.now()
 // 山體換成真實岩石貼圖（借 rock_face_02 的顏色＋法線），頂點色負責苔蘚／暗部

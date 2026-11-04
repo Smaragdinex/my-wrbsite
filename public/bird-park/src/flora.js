@@ -93,6 +93,8 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
 
   /* --- 步道邊的長椅、路燈、解說牌 --- */
   const benches = [], lamps = [], signs = []
+  // 鳥的活動範圍（和鏡頭那一側）不放長椅、路燈，不然會剛好擋在鳥前面
+  const nearBird = (x, z) => reserved.some((r) => (x - r.x) ** 2 + (z - r.z) ** 2 < (r.r + 4) ** 2)
   for (const p of PATHS) {
     if (p.name === 'spur') continue
     const pts = p.points
@@ -104,7 +106,7 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       const side = (k / every) % 2 < 1 ? 1 : -1
       const off = p.w / 2 + 0.9
       const x = pts[k].x + nx * off * side, z = pts[k].z + nz * off * side
-      if (!insideGarden(x, z, 0.92) || poolQ(x, z) < 1.4) continue
+      if (!insideGarden(x, z, 0.92) || poolQ(x, z) < 1.4 || nearBird(x, z)) continue
       if (distToMtn(x, z) < mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 2) continue
       const face = Math.atan2(-nx * side, -nz * side)
       if (rnd() < 0.55) {
@@ -122,7 +124,7 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       const side = (k / 55) % 2 < 1 ? -1 : 1
       const off = p.w / 2 + 0.45
       const x = pts[k].x - tz / tl * off * side, z = pts[k].z + tx / tl * off * side
-      if (!insideGarden(x, z, 0.92) || poolQ(x, z) < 1.3 || !freeOfColliders(x, z, 0.6)) continue
+      if (!insideGarden(x, z, 0.92) || poolQ(x, z) < 1.3 || !freeOfColliders(x, z, 0.6) || nearBird(x, z)) continue
       if (distToMtn(x, z) < mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 1.5) continue
       lamps.push({ p: v3(x, terrainHeight(x, z), z), q: qY(0), s: sc(1) })
       addCollider(x, z, 0.18, terrainHeight(x, z) + 4)

@@ -146,7 +146,11 @@ function poolQ(x, z) { return ((x - POOL.x) / POOL.rx) ** 2 + ((z - POOL.z) / PO
 export { poolQ }
 
 // 攤平的圓：鳥的活動範圍（x, z, 半徑, 高度）
-export const FLAT = [{ x: -57, z: -6.5, r: 3.5, y: 0.08 }]
+export const FLAT = [{ x: -57, z: -6.5, r: 3.5, y: 0.08 },
+  { x: -60, z: 6, r: 2.5, y: 0.6 },     // 麻雀
+  { x: -36, z: -34, r: 2.5, y: 1.0 },   // 小彎嘴（靠牆的種植坡上，攤成一小塊平台）
+  { x: -11, z: 25, r: 3, y: -0.05 },    // 帝雉
+]
 function buildHeights() {
   for (let j = 0; j < G.nz; j++) {
     const z = G.z0 + j * G.cell
