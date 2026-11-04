@@ -341,7 +341,8 @@ function curlToes(r, toes, c) { if (c) for (const t of toes) { r.turn(t.a, t.axi
 /* ---------- 地上走的鳥：現成或 Tripo 生成的模型 + 骨架（body → neck → head、tail、兩翼、兩腳 thigh → shin → foot） ---------- */
 // cfg：name 模型、H 顯示高度、h0 模型高度、rotY 讓頭朝 +z、lat「繞它正轉 = 抬頭、腳往前」的左右軸、
 //      walk Walker 參數、acts 動作表、step 步幅（公尺）、bob 走路點頭、sway 盯地面時脖子左右晃、
-//      hop 兩腳併攏用跳的（跳多高，麻雀、小彎嘴）、flick 尾巴一下一下往上翹（秧雞、水雞）
+//      hop 兩腳併攏用跳的（跳多高，麻雀、小彎嘴）、flick 尾巴一下一下往上翹（秧雞、水雞）、
+//      swim 浮在水面上游：腳收在肚子下面划水（不踩地），每划一下一圈小水波
 function groundTripo(env, cfg) {
   const r = rigged(cfg.name)
   const k = cfg.H / cfg.h0, LAT = cfg.lat, FWD = cfg.fwd ?? V(1, 0, 0)   // FWD：身體前後軸（側傾用）
@@ -528,7 +529,24 @@ function groundTripo(env, cfg) {
     // 走路時左右腳照節拍輪流跨：每走 stride 公尺一個循環，左腳在 0、右腳在半圈，步伐才平均
     const beat = legs.map((L, i) => moving && Math.floor(c.phase + i * 0.5) > Math.floor(c.prevPhase + i * 0.5))
     c.prevPhase = c.phase
-    legs.forEach((L, li) => {
+    if (cfg.swim) {
+      // 游泳：腳往後收在肚子下面（跟飛的時候收腳一樣：大腿往前、小腿往後折、腳掌貼平），游的時候兩腳輪流往後划
+      legs.forEach((L, li) => {
+        const kick = c.amp * Math.sin(ph + li * Math.PI)
+        r.turn('thigh' + L.sd, LAT, 0.8 + 0.25 * kick)
+        r.turn('shin' + L.sd, LAT, -1.6 - 0.35 * kick)
+        r.turn('foot' + L.sd, LAT, 1.2 + 0.3 * kick)
+        curlToes(r, L.toes, 0.6 - 0.4 * kick)
+      })
+      // 每划一下：頭往前點一下、身體後面一圈小水波
+      if (beat[0] || beat[1]) {
+        c.thrust = 0; c.hb0 = c.hb
+        const p = root.localToWorld(_d.set(0, 0, -0.1))
+        ripple(p.x, p.z, 0.3)
+      }
+      root.position.y += 0.004 * Math.sin(t * 2.1)   // 浮在水上微微起伏
+    }
+    if (!cfg.swim) legs.forEach((L, li) => {
       const home = r.model.localToWorld(L.rest.clone()); home.y -= liftY
       if (!L.plant) { L.plant = home.clone(); L.pos.copy(home) }
       const other = legs.find((o) => o !== L)
@@ -811,14 +829,14 @@ function egret(env) {
 }
 // 紅冠水雞：浮在水面上游，一邊游一邊點頭、翹尾巴，啄水面上的東西（腳在水裡划，每划一下一圈水紋）
 function moorhen(env) {
-  return groundTripo(env, { name: 'moorhen-rig', H: 0.5, h0: 0.764, ...TRIPO, wade: true, bill: 0.165, bob: 0.03, flick: 0.5,
+  return groundTripo(env, { name: 'moorhen-rig', H: 0.5, h0: 0.764, ...TRIPO, swim: true, bill: 0.165, bob: 0.03, flick: 0.5,
     walk: { radius: 1.3, speed: 0.12 }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.3,
     acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } })
 }
-// 白腹秧雞：在池邊淺水走來走去，尾巴一直往上翹
+// 白腹秧雞：浮在水面上慢慢游，尾巴一直往上翹
 function waterhen(env) {
-  return groundTripo(env, { name: 'waterhen-rig', H: 0.5, h0: 0.77, ...TRIPO, wade: true, bill: 0.2, flick: 0.45, flickF: 3.1,
-    walk: { radius: 1.0, speed: 0.17 }, stride: 0.13, swingT: 0.28, lift: 0, knee: [0.8, 1.4], focusY: 0.3,
+  return groundTripo(env, { name: 'waterhen-rig', H: 0.5, h0: 0.77, ...TRIPO, swim: true, bill: 0.2, bob: 0.025, flick: 0.45, flickF: 3.1,
+    walk: { radius: 1.0, speed: 0.12 }, stride: 0.11, swingT: 0.28, lift: 0, knee: [0.8, 1.4], focusY: 0.3,
     acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } })
 }
 // 麻雀：三隻在地上，兩腳併攏一跳一跳地找草籽

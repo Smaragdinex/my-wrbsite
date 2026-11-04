@@ -6,7 +6,7 @@ import { fbm2, fbm3, noise3 } from './noise.js'
 export const TAU = Math.PI * 2
 export const DOME = { A: 75, B: 55, H: 40 }          // 橢圓溫室：長半軸、短半軸、頂高
 export const MTN = { x: 12, z: -6, h: 32 }           // 中央雲霧山
-export const POOL = { x: -3, z: -6, rx: 9, rz: 14, water: -0.55 }   // 西緣不能再往外（環山步道在 x≈-16）
+export const POOL = { x: -3, z: -6, rx: 10, rz: 18, water: -0.55 }   // 西緣不能再往外（環山步道在 x≈-16），所以往南北拉長
 export const RAMP = { theta0: Math.PI / 2, turns: 2.2, y0: 0, y1: 24, width: 3, gap: 2.1 }
 export const DECK = { r: 4.5, x: 0, z: 0, y: 0 }
 export const SPAWN = { x: -68, z: 0, yaw: -90, pitch: 3 }
