@@ -289,7 +289,7 @@ export async function loadAnimalModels() {
   D.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
   L.setDRACOLoader(D)
   await Promise.all(['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
-    'kingfisher-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig'].map((n) => L.loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => { GLB[n] = g.scene })))
+    'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig'].map((n) => L.loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => { GLB[n] = g.scene })))
 }
 /* ---------- 有骨架的現成模型：用「模型座標的軸」轉骨頭 ---------- */
 // 每根骨頭的本地軸方向都不一樣（Blender 的 roll），直接轉 x/y/z 左右腳會不對稱。
@@ -692,6 +692,9 @@ function perchRigged(env, cfg) {
   r.model.scale.setScalar(k); r.model.position.y = -cfg.foot * k
   inner.add(r.model); inner.rotation.y = cfg.rotY
   lift.add(inner); root.add(lift)
+  // 飛行用的第二個模型（翅膀張開生成、另外綁翅膀骨架）：離開樹枝時換成它，回到枝上再換回來
+  const fr = cfg.fly ? rigged(cfg.fly.name) : null
+  if (fr) { fr.model.scale.setScalar(cfg.fly.k); fr.model.position.y = cfg.fly.y; fr.model.visible = false; inner.add(fr.model) }
   const hp = new Hopper(env, { rest: [2, 7], dur: 0.32, ...cfg.hopper })
   const toes = [toesOf(r, 'L'), toesOf(r, 'R')]
   const gl = new Glance([0.5, 1.6], 0.8, 0.3)
@@ -733,7 +736,21 @@ function perchRigged(env, cfg) {
       dive = { p, head: kk < 0.14 ? hp.h : head, pitch, flap: kk > 0.46 && kk < 0.9 ? 1 : 0, tuck: fly || (kk >= 0.38 && kk <= 0.46) ? 1 : 0,
         crouch: kk < 0.14 ? ss(kk, 0, 0.12) * 0.8 : kk > 0.9 ? Math.exp(-(kk - 0.9) * 40) : 0 }
       crouch = Math.max(crouch, dive.crouch)
-    } else dv.on = false
+      if (fr) {
+        // 翅膀：起飛時拍、俯衝時往後收成流線型（照影片：入水前翅膀往後貼）、出水後用力拍翅飛回去
+        const flying = kk > 0.12 && kk < 0.9
+        r.model.visible = !flying; fr.model.visible = flying
+        fr.reset()
+        const sweep = 1.25 * ss(kk, 0.2, 0.34) * (1 - ss(kk, 0.44, 0.52))
+        const beat = (kk < 0.22 ? 0.75 : kk > 0.46 ? 0.85 : 0) * (1 - ss(kk, 0.84, 0.9)) * (kk < 0.22 ? ss(kk, 0.12, 0.16) : 1)
+        const a = beat * Math.sin(t * 42), a2 = beat * Math.sin(t * 42 - 0.9)
+        for (const [n, sg] of [['L', 1], ['R', -1]]) {
+          fr.turn('wing' + n, AX.y, sg * sweep); fr.turn('wingtip' + n, AX.y, sg * sweep * 0.6)
+          fr.turn('wing' + n, AX.x, -sg * a); fr.turn('wingtip' + n, AX.x, -sg * a2 * 0.6)
+        }
+        fr.turn('head', LAT, 0.1 * sweep)
+      }
+    } else { dv.on = false; if (fr) { r.model.visible = true; fr.model.visible = false } }
     c.yaw = damp(c.yaw, acts.name === 'preen' ? 1.2 * acts.sgn : dive ? 0 : gl.yaw, acts.name === 'preen' ? 6 : 18, dt)
     c.pitch = damp(c.pitch, acts.name === 'preen' ? -0.5 : dive ? 0 : -gl.hp, 18, dt)
     c.call = damp(c.call, acts.name === 'call' ? 1 : 0, 6, dt)
@@ -821,7 +838,9 @@ const TRIPO = { rotY: Math.PI / 2, lat: V(0, 0, -1) }   // Tripo 模型都是頭
 const outer = (env, min) => ({ ...env, branch: { ...env.branch, min } })
 // 翠鳥：停在水池上方的枝頭，偶爾一頭栽進水裡抓魚、再飛回同一根枝
 function kingfisher(env) {
+  // 飛行模型長 0.786（含嘴）縮到和停棲模型一樣長（0.98 × 0.38）；身體中心 y≈0.1 對到停棲模型身體中心（腳上 0.13 公尺）
   return perchRigged(outer(env, -0.2), { name: 'kingfisher-rig', k: 0.38, ...TRIPO, foot: 0.004, drop: 0.04, beat: 8, dive: true,
+    fly: { name: 'kingfisher-fly-rig', k: 0.47, y: 0.13 - 0.1 * 0.47 },
     hopper: { hop: [0.1, 0.25], rest: [3, 8] }, acts: { idle: [4, 2, 5], call: [1.5, 1.5, 3], preen: [0.8, 1.5, 3], dive: [2.5, 2.6, 2.6] } })
 }
 // 小白鷺：在淺水裡慢慢走、盯著水面、很快啄下去
