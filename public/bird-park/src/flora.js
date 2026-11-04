@@ -74,6 +74,73 @@ function randInGarden(rnd) {
 }
 
 /* ---------- 主體 ---------- */
+// 草葉：4 段、越上越窄、頂端收成一點；擺放、彎曲、風都在 shader 裡做。A：位置＋方向，B：顏色＋高度。
+// 寫實一點的地方：葉面左右兩半法線往外歪（看起來是有弧度的葉子，不是平板）、背光時太陽從葉子後面透過來（偏黃綠的亮光）、
+// 根部暗（被其他草擋住）、尖端偶爾枯黃
+const _sunDefault = new THREE.Vector3(-0.45, 0.8, 0.3).normalize()
+// lawn：短草坪用 2 段（3 個三角形）、法線大多朝上（像地面一樣均勻受光，不會一片亮一片黑）
+function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, lawn = false } = {}) {
+  const ys = lawn ? [0, 0.5] : [0, 0.3, 0.56, 0.78], ws = lawn ? [1, 0.55] : [1, 0.85, 0.62, 0.36], P = [], I = []
+  ys.forEach((y, i) => P.push(-0.5 * ws[i], y, 0, 0.5 * ws[i], y, 0))
+  P.push(0, 1, 0)
+  for (let i = 0; i < ys.length - 1; i++) { const k = i * 2; I.push(k, k + 1, k + 3, k, k + 3, k + 2) }
+  const tip = ys.length * 2; I.push(tip - 2, tip - 1, tip)
+  const g = new THREE.InstancedBufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3))
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(P.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3))
+  g.setIndex(I)
+  g.setAttribute('gA', new THREE.InstancedBufferAttribute(new Float32Array(A), 4))
+  g.setAttribute('gB', new THREE.InstancedBufferAttribute(new Float32Array(B), 4))
+  g.instanceCount = A.length / 4
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 100)
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide })
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = windUniforms.uTime
+    sh.uniforms.uSun = { value: sun.clone() }
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>
+        uniform float uTime;
+        attribute vec4 gA;   // x, y, z, 方向
+        attribute vec4 gB;   // 顏色 + 高度
+        varying vec3 vGcol; varying float vY; varying vec3 vGw;`)
+      .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+        vec2 nd = vec2(cos(gA.w), sin(gA.w));
+        vec3 side = vec3(-nd.y, 0.0, nd.x);
+        // 葉面有弧度：左右兩半的法線各往外歪
+        objectNormal = normalize(vec3(nd.x, 0.0, nd.y) * (fract(gA.w * 3.7) > 0.5 ? 1.0 : -1.0) * ${lawn ? '0.2' : '0.55'} + vec3(0.0, ${lawn ? '1.0' : '0.75'}, 0.0) + side * sign(position.x) * ${lawn ? '0.15' : '0.45'});`)
+      .replace('#include <begin_vertex>', `
+        float a = gA.w, h = gB.w, y = position.y;
+        float lean = 0.15 + fract(a * 7.13) * 0.6;
+        float w = sin(uTime * 1.2 + gA.x * 0.3 + gA.z * 0.17) * 0.6 + sin(uTime * 2.9 + gA.x * 2.1 + gA.z * 1.7) * 0.2;
+        vec2 dir = vec2(cos(a), sin(a));
+        float wid = ${width[0].toFixed(4)} + fract(a * 5.3) * ${width[1].toFixed(4)};
+        vec3 transformed = gA.xyz;
+        transformed.xz += vec2(-dir.y, dir.x) * position.x * wid;
+        transformed.xz += dir * lean * y * y * h + vec2(0.7, 0.35) * w * y * y * h * 0.25;
+        transformed.y += y * h * (1.0 - 0.18 * lean);
+        vY = y;
+        // 每片草顏色都不一樣一點（亮度、偏黃偏藍），根部暗、往上變亮
+        float jit = fract(sin(dot(gA.xz, vec2(12.9898, 78.233))) * 43758.5453);
+        vGcol = gB.rgb * mix(0.82, 1.12, jit) * mix(0.3, ${lawn ? '0.95' : '1.08'}, smoothstep(0.0, 0.85, y));
+        vGcol = mix(vGcol, vec3(0.7, 0.66, 0.4) * dot(gB.rgb, vec3(0.5)) * 1.5, smoothstep(0.7, 1.0, y) * step(0.82, fract(a * 13.7)) * 0.4);`)
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGw = (modelMatrix * vec4(transformed, 1.0)).xyz;')
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uSun; varying vec3 vGcol; varying float vY; varying vec3 vGw;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= vGcol;')
+      .replace('#include <opaque_fragment>', `
+        // 背光透光：太陽在葉子後面時，葉子邊緣和上半部透出黃綠色的光
+        vec3 vd = normalize(cameraPosition - vGw);
+        float back = pow(max(dot(-vd, uSun), 0.0), 3.0);
+        outgoingLight += vGcol * vec3(1.0, 1.15, 0.5) * back * smoothstep(0.3, 0.95, vY) * 0.35;
+        #include <opaque_fragment>`)
+  }
+  mat.customProgramCacheKey = () => 'grassBlade2' + (lawn ? 'L' : '')
+  const m = new THREE.Mesh(g, mat)
+  m.receiveShadow = true
+  m.layers.set(1)   // 水面倒影不畫草葉（main.js 的鏡頭有開 layer 1）
+  return m
+}
+
 let reserved = []
 export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
   reserved = reserve
@@ -455,54 +522,36 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       }
       clumps++
     }
-    // 一片草：4 段、越上越窄，頂端收成一點；擺放、彎曲、風都在 shader 裡做
-    const ys = [0, 0.3, 0.56, 0.78], ws = [1, 0.85, 0.62, 0.36], P = [], I = []
-    ys.forEach((y, i) => P.push(-0.5 * ws[i], y, 0, 0.5 * ws[i], y, 0))
-    P.push(0, 1, 0)
-    for (let i = 0; i < ys.length - 1; i++) { const k = i * 2; I.push(k, k + 1, k + 3, k, k + 3, k + 2) }
-    const tip = ys.length * 2; I.push(tip - 2, tip - 1, tip)
-    const g = new THREE.InstancedBufferGeometry()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3))
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(P.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3))
-    g.setIndex(I)
-    g.setAttribute('gA', new THREE.InstancedBufferAttribute(new Float32Array(A), 4))
-    g.setAttribute('gB', new THREE.InstancedBufferAttribute(new Float32Array(B), 4))
-    g.instanceCount = A.length / 4
-    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 100)
-    const mat = new THREE.MeshStandardMaterial({ roughness: 0.9, side: THREE.DoubleSide })
-    mat.onBeforeCompile = (sh) => {
-      sh.uniforms.uTime = windUniforms.uTime
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', `#include <common>
-          uniform float uTime;
-          attribute vec4 gA;   // x, y, z, 方向
-          attribute vec4 gB;   // 顏色 + 高度
-          varying vec3 vGcol;`)
-        .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
-          vec2 nd = vec2(cos(gA.w), sin(gA.w));
-          objectNormal = normalize(vec3(0.0, 1.0, 0.0) + vec3(nd.x, 0.0, nd.y) * 0.5 * (fract(gA.w * 3.7) > 0.5 ? 1.0 : -1.0));`)
-        .replace('#include <begin_vertex>', `
-          float a = gA.w, h = gB.w, y = position.y;
-          float lean = 0.15 + fract(a * 7.13) * 0.6;
-          float w = sin(uTime * 1.2 + gA.x * 0.3 + gA.z * 0.17) * 0.6 + sin(uTime * 2.9 + gA.x * 2.1 + gA.z * 1.7) * 0.2;
-          vec2 dir = vec2(cos(a), sin(a));
-          float wid = 0.014 + fract(a * 5.3) * 0.016;
-          vec3 transformed = gA.xyz;
-          transformed.xz += vec2(-dir.y, dir.x) * position.x * wid;
-          transformed.xz += dir * lean * y * y * h + vec2(0.7, 0.35) * w * y * y * h * 0.25;
-          transformed.y += y * h * (1.0 - 0.18 * lean);
-          vGcol = gB.rgb * mix(0.35, 1.2, y);
-          vGcol = mix(vGcol, vec3(0.78, 0.74, 0.42) * dot(gB.rgb, vec3(0.5)) * 1.6, smoothstep(0.65, 1.0, y) * step(0.75, fract(a * 13.7)) * 0.4);`)
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vGcol;')
-        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= vGcol;')
-    }
-    mat.customProgramCacheKey = () => 'grassBlade'
-    const grass = new THREE.Mesh(g, mat)
-    grass.receiveShadow = true
+    const grass = bladeMesh(A, B, { width: [0.014, 0.016] })
     grass.frustumCulled = false
-    grass.layers.set(1)   // 水面倒影不畫草葉（main.js 的鏡頭有開 layer 1）
     scene.add(grass)
+  }
+
+  /* --- 草坪：鳥站附近（鏡頭看得到的地方）一大片又短又密的草，鳥腳會陷進草裡一點；一站一塊，畫面外的整塊不畫 --- */
+  {
+    const sun = new THREE.Vector3()
+    scene.traverse((o) => { if (o.isDirectionalLight) sun.copy(o.position).normalize() })
+    for (const st of stops) {
+      const d = st.bird?.def
+      if (!d || d.perch !== 'ground' || d.water != null) continue
+      const cx = d.spot[0], cz = d.spot[1], R = 6.5
+      const A = [], B = [], base = new THREE.Color(), c = new THREE.Color()
+      for (let k = 0; k < 150000 && A.length / 4 < 70000; k++) {
+        const r = R * Math.sqrt(rnd()), a = rnd() * TAU
+        const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r
+        if (rnd() > 1.15 - r / R) continue                                   // 中間密、外圍漸漸稀
+        if (pathClearAt(x, z) < 0.05 || poolQ(x, z) < 1.15 || !insideGarden(x, z, 0.97)) continue
+        const n = fbm2(x * 0.9, z * 0.9)
+        base.setHSL(0.24 + n * 0.04 + (rnd() - 0.5) * 0.03, 0.5 + n * 0.1, 0.24 + rnd() * 0.06)
+        c.copy(base)
+        if (rnd() < 0.04) c.lerp(new THREE.Color(0.5, 0.46, 0.28), 0.4)   // 零星枯黃
+        A.push(x, terrainHeight(x, z) - 0.005, z, rnd() * TAU)
+        B.push(c.r, c.g, c.b, 0.03 + rnd() * 0.04 + Math.max(0, n) * 0.03)   // 3～10 公分：鳥腳陷進去一點，身體不會被蓋住
+      }
+      const m = bladeMesh(A, B, { width: [0.004, 0.004], sun, lawn: true })
+      m.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, terrainHeight(cx, cz), cz), R + 0.5)
+      scene.add(m)
+    }
   }
 
   /* --- 垂藤：步道外緣＋山壁凸出處 --- */
