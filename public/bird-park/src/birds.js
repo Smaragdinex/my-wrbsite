@@ -501,14 +501,17 @@ function groundTripo(env, cfg) {
     for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) r.turn(wg, AX.y, sg * (0.02 * breath / 0.025 + 0.04 * Math.abs(roll) / 0.07))
     // 抬腳那一下身體微微升起
     const up = legs.reduce((a, L) => a + (L.t < 1 ? Math.sin(Math.PI * L.t) : 0), 0)
-    root.position.set(w.p.x, 0.012 * cfg.H * up, w.p.y); root.rotation.y = w.h
+    // 跟著地形走：腳下那一點的地面高度（相對鳥群原點）；涉水的鳥不用（水底看不到）
+    const liftY = 0.012 * cfg.H * up, gyHere = env.groundAt ? env.groundAt(w.p.x, w.p.y) : 0
+    c.gy = c.gy == null ? gyHere : damp(c.gy, gyHere, 12, dt)
+    root.position.set(w.p.x, c.gy + liftY, w.p.y); root.rotation.y = w.h
     root.updateWorldMatrix(true, true)
     const fwd = _t.set(Math.sin(w.h), 0, Math.cos(w.h)).clone(), moving = c.amp > 0.3
     // 走路時左右腳照節拍輪流跨：每走 stride 公尺一個循環，左腳在 0、右腳在半圈，步伐才平均
     const beat = legs.map((L, i) => moving && Math.floor(c.phase + i * 0.5) > Math.floor(c.prevPhase + i * 0.5))
     c.prevPhase = c.phase
     legs.forEach((L, li) => {
-      const home = r.model.localToWorld(L.rest.clone()); home.y -= root.position.y
+      const home = r.model.localToWorld(L.rest.clone()); home.y -= liftY
       if (!L.plant) { L.plant = home.clone(); L.pos.copy(home) }
       const other = legs.find((o) => o !== L)
       if (L.t < 1) {
@@ -830,6 +833,8 @@ export function placeAnimal(def) {
   // 朝向：沿著 side 方向，再往鏡頭轉 turn 弧度，看起來是四分之三側面
   const face = (s, turn) => { const d = side.clone().multiplyScalar(s * Math.cos(turn)).addScaledVector(toCam, Math.sin(turn)); return Math.atan2(d.x, d.z) }
   const env = { toCam, face, waterY }
+  // 地上走的鳥：鳥群座標 (lx, lz) 的地面高度，相對鳥群原點（ground 鳥的 obj 沒有旋轉）
+  if (def.groundAt && def.perch === 'ground') env.groundAt = (lx, lz) => def.groundAt(x + lx, z + lz) - gy
   const target = V()
   let dist = 5.5, camH = 1.6
 

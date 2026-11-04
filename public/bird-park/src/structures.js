@@ -461,11 +461,84 @@ export function buildWater(scene) {
     scene.add(mesh)
     return mesh
   }
-  out.falls = [
-    make({ offset: 0.3, width: 2.2, spread: 0.4, arc: 0.28, speed: 4.5, opacity: 1, seed: 0, white: 0.12, solid: 0.9 }),
-    make({ offset: 0.45, width: 2.8, spread: 0.7, arc: 0.32, speed: 6.0, opacity: 0.75, seed: 17, white: 0.05, foamOnly: true }),
-    make({ offset: 0.65, width: 3.4, spread: 1.1, arc: 0.36, speed: 7.5, opacity: 0.4, seed: 41, white: 0, foamOnly: true }),
-  ]
+  // 後面一層薄薄的水幕（半透明，讓水柱之間不會直接看到岩石），前面是一條條的水柱
+  out.falls = [make({ offset: 0.2, width: 2.6, spread: 0.5, arc: 0.24, speed: 4.5, opacity: 0.55, seed: 0, white: 0.0, solid: 0.35 })]
+
+  // 水柱：真實的高瀑布其實是很多股寬窄不一的水並排落下，彼此交疊、中間有縫，越往下越散、碎成水滴。
+  // 每股是一條面向外的窄帶，各自的起點、寬度、速度、左右飄移都不一樣；全部合成一個網格一次畫完
+  {
+    const rnd = mulberry32(77)
+    const NS = 30, NY = 90
+    const P = [], A = [], I = []          // A：u（橫向 0～1）、v（落下距離）、股的編號、厚度
+    let base = 0
+    for (let k = 0; k < NS; k++) {
+      const sx0 = (rnd() - 0.5) * 2.6                       // 起點在峽谷口的左右位置
+      const w0 = 0.12 + rnd() ** 1.5 * 0.55                 // 寬度
+      const drift = (rnd() - 0.5) * 0.9                     // 落到底時往左右偏多少
+      const out0 = 0.15 + rnd() * 0.5                       // 離岩壁多遠
+      const arc = 0.22 + rnd() * 0.12
+      const thick = 0.45 + rnd() * 0.55
+      const top = yTop - rnd() * 1.5                        // 有的股從稍低一點的地方才冒出來
+      for (let j = 0; j <= NY; j++) {
+        const t = j / NY, y = lerp(top, yBot, t), drop = top - y
+        const w = w0 * (1 + 1.8 * t)                        // 越往下越散開
+        const cx = sx0 + drift * t * t + 0.12 * Math.sin(t * 6 + k)
+        for (const side of [-0.5, 0.5]) {
+          const sx = cx + side * w
+          const r0 = mtnR(Math.PI, y)
+          const th = Math.PI + sx / Math.max(r0, 1)
+          const wall = Math.max(mtnR(th, y), r0)
+          const r = Math.min(wall + out0 + arc * Math.sqrt(drop), rampInner(y) - 0.25)
+          P.push(MTN.x + r * Math.cos(th), y, MTN.z + r * Math.sin(th))
+          A.push(side + 0.5, drop, k, thick)
+        }
+      }
+      for (let j = 0; j < NY; j++) { const a0 = base + j * 2; I.push(a0, a0 + 2, a0 + 1, a0 + 1, a0 + 2, a0 + 3) }
+      base += (NY + 1) * 2
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3))
+    g.setAttribute('aFall', new THREE.Float32BufferAttribute(A, 4))
+    g.setIndex(I)
+    g.computeVertexNormals()
+    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.3, emissive: 0xdde9eb, emissiveIntensity: 0.55 })
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uWT = waterTime
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute vec4 aFall;\nvarying vec4 vFall;')
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\nvFall = aFall;')
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>
+          varying vec4 vFall;
+          uniform float uWT;
+          ${GLSL_NOISE}`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          float u = vFall.x, v = vFall.y, id = vFall.z, thick = vFall.w;
+          float t = clamp(v / ${L.toFixed(2)}, 0.0, 1.0);
+          float spd = 5.0 + fract(id * 0.618) * 3.0;
+          float fl = v - uWT * spd * (1.0 + 1.3 * t);
+          // 每股自己的紋：沿流向很長的條紋＋往下掉的一團團白
+          float s1 = snoise(vec2(u * 3.0 + id * 7.1, fl * 0.07)) * 0.5 + 0.5;
+          float s2 = snoise(vec2(u * 8.0 + id * 3.3, fl * 0.22)) * 0.5 + 0.5;
+          float c1 = snoise(vec2(u * 2.0 + id * 1.7, fl * 0.6)) * 0.5 + 0.5;
+          // 橫向：中間厚、兩邊薄，邊緣隨流向抖動
+          float e = 1.0 - abs(u * 2.0 - 1.0);
+          float body = smoothstep(0.0, 0.55 + 0.25 * (c1 - 0.5), e);
+          // 越往下越碎：用流動的雜訊挖洞，碎成一顆顆水滴
+          float holes = snoise(vec2(u * 6.0 + id * 9.0, fl * 1.4)) * 0.5 + 0.5;
+          float breakup = smoothstep(0.35, 1.0, t) * 0.75;
+          float dens = (s1 * 0.5 + s2 * 0.25 + c1 * 0.25) * body;
+          float a = smoothstep(0.12, 0.55, dens) * smoothstep(breakup - 0.1, breakup + 0.25, holes + 0.25);
+          a *= smoothstep(0.0, 0.6, v) * thick;
+          float wh = smoothstep(0.3, 0.7, dens + 0.15);
+          diffuseColor.rgb = mix(vec3(0.82, 0.89, 0.91), vec3(0.98, 0.99, 1.0), wh);
+          diffuseColor.a = a * mix(0.55, 1.0, wh);`)
+    }
+    const strands = new THREE.Mesh(g, m)
+    strands.renderOrder = 4
+    scene.add(strands)
+    out.falls.push(strands)
+  }
 
   // 落點（照瀑布底部的影片做）：
   // 1. 一團翻滾的白色水花丘：水柱打進水裡冒起來的白，一直在翻

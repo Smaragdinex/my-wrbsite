@@ -94,7 +94,7 @@ const [plantLib] = await Promise.all([loadPlants((f) => { loadingEl.textContent 
 const T1 = performance.now()
 // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
 const birds = BIRDS.map((def) => {
-  const d = { ...def, y: def.y ?? terrainHeight(...def.spot) }
+  const d = { ...def, y: def.y ?? terrainHeight(...def.spot), groundAt: def.water == null ? terrainHeight : null }
   // 沒指定方位就讓鏡頭站在「鳥背對山」那一側，背景是雲霧山
   if (d.view == null) d.view = THREE.MathUtils.radToDeg(Math.atan2(def.spot[0] - MTN.x, def.spot[1] - MTN.z))
   const a = placeAnimal(d)
