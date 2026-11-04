@@ -109,7 +109,8 @@ function frame() {
   hud.setClock(hour)
   vm.setGear(state.bodyId, state.lensId)
   cam.setScreen(vm.screen)
-  vm.update(dt, { raise: cam.state.raised && !cam.panelOpen ? 1 : 0, view: cam.panelOpen ? 1 : 0, speed: flight.speed, t })
+  vm.update(dt, { raise: cam.state.raised ? 1 : 0, view: 0, speed: flight.speed, t })
+  cam.state.vfReady = vm.st.raise > 0.85
   world.tick(t, dt)
   flight.tick(t, dt, { sneak: player.state.sneak })
   hud.setHint(!panelOpen() && player.controls.isLocked ? (nearShop() ? '按 E 進入相機行' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')

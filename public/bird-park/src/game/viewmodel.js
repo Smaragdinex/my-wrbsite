@@ -1,7 +1,7 @@
 // 第一人稱的手和相機：走路時相機拿在胸前（跟著腳步晃）、右鍵舉到眼前（舉到底就換成觀景窗）、按 E 把相機拿近看背面螢幕調設定。
 // 手：models/arms.glb（UHFPS 的手，骨架 upper_arm → forearm → hand → 手指；tools/export-arms.py）
 // 相機：models/camera/body-*.glb＋lens-*.glb（tools/make-camera.py；卡口中心＝原點、鏡頭朝 -Z、背面螢幕朝 +Z）
-// 兩隻手用兩節 IK 跟著相機：右手握握把（食指在快門上、拇指在背面），左手托在鏡頭下面（鏡頭越長托得越前面）。
+// 右手用兩節 IK 跟著相機握握把（拇指在背面）；左手收起來（只用右手拿相機）。
 // 整組掛在玩家鏡頭底下，放在 layer 3：拍照、測光的鏡頭不畫這層。
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
@@ -139,8 +139,8 @@ export async function createViewmodel(camera) {
   const qa = new THREE.Quaternion(), qb = new THREE.Quaternion()
   function update(dt, { raise = 0, view = 0, speed = 0, t = 0 } = {}) {
     st.raise = damp(st.raise, raise, 14, dt); st.view = damp(st.view, view, 9, dt)
-    // 舉到底：觀景窗接手，整組不畫
-    root.visible = st.raise < 0.96
+    // 舉到眼前（85%）就換成觀景窗，整組不畫：觀景窗裡不會看到手指、相機
+    root.visible = st.raise < 0.85
     if (!root.visible) return
     // 走路晃：跟著步伐上下、左右晃；舉起來或看螢幕時不太晃
     st.bob += dt * (speed > 0.3 ? 6 + speed * 0.9 : 0)
@@ -169,17 +169,17 @@ export async function createViewmodel(camera) {
     const palm = V(tune.lPalmAt.x, -Ln.S + tune.lPalmAt.y, -Math.min(0.035 + Ln.L * 0.42, 0.17))
     cradleL.position.copy(palm).addScaledVector(ld, -0.05).addScaledVector(ln, -0.016)
     // IK：先回到靜止姿勢再解
-    for (const b of Object.values(bones)) { b.quaternion.copy(restAll[b.name]); b.position.copy(restPos[b.name]) }
+    for (const b of Object.values(bones)) { b.quaternion.copy(restAll[b.name]); b.position.copy(restPos[b.name]); b.scale.setScalar(1) }
     root.updateMatrixWorld(true)
     const toW = (o) => o.getWorldPosition(V())
     const dirW = (v) => v.clone().transformDirection(camRig.matrixWorld)
     const poleW = (v) => v.clone().applyMatrix4(root.matrixWorld)
     solveArm('R', toW(gripR), poleW(tune.poleR))
     orientHand('R', dirW(tune.rDir), dirW(tune.rPalm))
-    solveArm('L', toW(cradleL), poleW(tune.poleL))
-    orientHand('L', dirW(tune.lDir), dirW(tune.lPalm))
+    // 只用右手拿相機：左手整隻縮到肩膀裡（骨頭縮成 0，畫面上看不到）
+    const ua = bones.upper_armL, hl = bones.handL
+    ua.scale.setScalar(1e-4); hl.scale.setScalar(1e-4); hl.position.copy(ua.position)
     for (const [f, a] of Object.entries(tune.rCurl)) curl('R', f, a)
-    for (const [f, a] of Object.entries(tune.lCurl)) curl('L', f, a)
   }
   // 五稜鏡正面的銘牌：機身型號（白字）
   for (const [id, b] of Object.entries(bodies)) b.traverse((o) => {

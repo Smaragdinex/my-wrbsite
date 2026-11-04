@@ -39,7 +39,7 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
   vf.innerHTML = `<div class="vf-mask"></div><div class="vf-frame"><i></i><i></i><i></i><i></i></div><div class="vf-af"></div>
     <div class="vf-bar"><span class="vf-mode"></span><span class="vf-f"></span><span class="vf-t"></span><span class="vf-ap"></span><span class="vf-iso"></span>
     <span class="vf-meter"><b>-2</b><b>-1</b><b>0</b><b>+1</b><b>+2</b><i></i></span><span class="vf-d"></span></div>
-    <div class="vf-warn"></div><div class="vf-tip">E：相機設定</div><div class="vf-flash"></div>`
+    <div class="vf-warn"></div><div class="vf-flash"></div>`
   hud.root.appendChild(vf)
   const $ = (s) => vf.querySelector(s)
 
@@ -70,6 +70,11 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
   const lcdTex = new THREE.CanvasTexture(lcdCanvas); lcdTex.colorSpace = THREE.SRGBColorSpace; lcdTex.anisotropy = 8
   lcdTex.flipY = false   // glTF 的 UV 原點在左上（跟畫布一樣）
   let panelOn = false, hits = [], hover = -1, screenMesh = null
+  // 按 E：整個視窗就是相機背面的螢幕（不用低頭看）；同一張畫布也貼在 3D 相機的螢幕上
+  const lcdWrap = document.createElement('div')
+  lcdWrap.className = 'cam-lcd'; lcdWrap.hidden = true
+  lcdWrap.appendChild(lcdCanvas)
+  document.body.appendChild(lcdWrap)
   const step = (list, v, d, lo = -Infinity, hi = Infinity) => {
     const ok = list.filter((x) => x >= lo - 1e-9 && x <= hi + 1e-9)
     let i = ok.findIndex((x) => Math.abs(x - v) < 1e-9)
@@ -97,26 +102,26 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     // 三排設定：名稱｜◀ 數值 ▶
     const rows = [['ap', '光圈', fmtAp(s.N)], ['t', '快門', fmtShutter(s.t)], ['iso', 'ISO', String(s.iso)]]
     rows.forEach(([k, label, val], i) => {
-      const y = 148 + i * 132, a = auto(k)
-      g.fillStyle = '#121b1f'; g.beginPath(); g.roundRect(18, y, LW - 36, 116, 14); g.fill()
-      g.fillStyle = '#9fb4b9'; g.font = `600 34px ${FONT}`; g.textBaseline = 'middle'; g.fillText(label, 44, y + 58)
+      const y = 146 + i * 122, a = auto(k)
+      g.fillStyle = '#121b1f'; g.beginPath(); g.roundRect(18, y, LW - 36, 108, 14); g.fill()
+      g.fillStyle = '#9fb4b9'; g.font = `600 34px ${FONT}`; g.textBaseline = 'middle'; g.fillText(label, 44, y + 54)
       for (const [dx, d, ch] of [[300, -1, '◀'], [LW - 140, 1, '▶']]) {
-        const hv = !a && hit(dx, y + 14, 100, 88, { k, d })
-        g.fillStyle = a ? '#1a2226' : hv ? '#f2c94c' : '#26343a'; g.beginPath(); g.roundRect(dx, y + 14, 100, 88, 12); g.fill()
-        g.fillStyle = a ? '#3c4a50' : hv ? '#111' : '#e8f0f2'; g.font = `40px ${FONT}`; g.textAlign = 'center'; g.fillText(ch, dx + 50, y + 60)
+        const hv = !a && hit(dx, y + 12, 100, 84, { k, d })
+        g.fillStyle = a ? '#1a2226' : hv ? '#f2c94c' : '#26343a'; g.beginPath(); g.roundRect(dx, y + 12, 100, 84, 12); g.fill()
+        g.fillStyle = a ? '#3c4a50' : hv ? '#111' : '#e8f0f2'; g.font = `40px ${FONT}`; g.textAlign = 'center'; g.fillText(ch, dx + 50, y + 56)
       }
-      g.fillStyle = a ? '#7f9196' : '#ffffff'; g.font = `700 64px ${MONO}`; g.textAlign = 'center'; g.fillText(val, LW / 2 + 60, y + 54)
-      if (a) { g.font = `24px ${FONT}`; g.fillStyle = '#f2c94c'; g.fillText('自動', LW / 2 + 60, y + 98) }
+      g.fillStyle = a ? '#7f9196' : '#ffffff'; g.font = `700 64px ${MONO}`; g.textAlign = 'center'; g.fillText(val, LW / 2 + 60, y + 48)
+      if (a) { g.font = `24px ${FONT}`; g.fillStyle = '#f2c94c'; g.fillText('自動', LW / 2 + 60, y + 92) }
       g.textAlign = 'left'
     })
     // 測光表：-3 … +3，指針
-    const my = 560, mx0 = 150, mx1 = LW - 150, o = THREE.MathUtils.clamp(s.over, -3, 3)
+    const my = 572, mx0 = 120, mx1 = LW - 290, o = THREE.MathUtils.clamp(s.over, -3, 3)
     g.strokeStyle = '#6f8388'; g.lineWidth = 3; g.beginPath(); g.moveTo(mx0, my); g.lineTo(mx1, my); g.stroke()
     g.font = `22px ${MONO}`; g.fillStyle = '#9fb4b9'; g.textAlign = 'center'
     for (let v = -3; v <= 3; v++) { const x = mx0 + (v + 3) / 6 * (mx1 - mx0); g.fillRect(x - 1.5, my - (v === 0 ? 16 : 9), 3, v === 0 ? 32 : 18); g.fillText(`${v > 0 ? '+' : ''}${v}`, x, my + 30) }
     const ok = Math.abs(s.over) <= 0.5, px = mx0 + (o + 3) / 6 * (mx1 - mx0)
     g.fillStyle = ok ? '#5cf07a' : '#ff9b5a'; g.beginPath(); g.moveTo(px, my - 12); g.lineTo(px - 13, my - 36); g.lineTo(px + 13, my - 36); g.fill()
-    g.font = `600 30px ${FONT}`; g.fillText(ok ? '曝光剛好' : s.over > 0 ? `過曝 ${s.over.toFixed(1)} 格` : `欠曝 ${(-s.over).toFixed(1)} 格`, LW / 2, 512)
+    g.font = `600 30px ${FONT}`; g.fillText(ok ? '曝光剛好' : s.over > 0 ? `過曝 ${s.over.toFixed(1)} 格` : `欠曝 ${(-s.over).toFixed(1)} 格`, (mx0 + mx1) / 2, 526)
     // 最下面：警告或機身資訊、關閉
     g.textAlign = 'left'; g.font = `24px ${FONT}`
     const warn = s.t > 1 / st.focal ? '⚠ 快門比 1/焦距 慢，會手震' : s.iso > 800 && s.iso >= B.iso * 0.5 ? '⚠ ISO 很高，雜訊多' : `${B.name.split(' ').slice(1).join(' ')}・${Math.round(st.focal)}mm・EV ${meter.ev.toFixed(1)}`
@@ -140,22 +145,16 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     if (a.k === 'iso') cam.iso = step(ISOS, cam.iso, a.d, 100, body().iso)
     saveCam(); renderPanel()
   }
-  // 滑鼠 → 螢幕上的哪一格
-  const lcdRay = new THREE.Raycaster(), _ndc = new THREE.Vector2()
-  lcdRay.layers.set(3)
+  // 滑鼠 → 螢幕上的哪一格（畫布鋪滿視窗中間，用它在畫面上的位置換算）
   function pick(e) {
-    if (!screenMesh) return -1
-    _ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1)
-    lcdRay.setFromCamera(_ndc, camera)
-    const h = lcdRay.intersectObject(screenMesh, false)[0]
-    if (!h?.uv) return -1
-    const x = h.uv.x * LW, y = h.uv.y * LH
-    return hits.findIndex((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+    const r = lcdCanvas.getBoundingClientRect()
+    const x = (e.clientX - r.left) / r.width * LW, y = (e.clientY - r.top) / r.height * LH
+    return hits.findIndex((h) => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h)
   }
-  addEventListener('mousemove', (e) => { if (!panelOn) return; const i = pick(e); if (i !== hover) { hover = i; renderPanel() } document.body.style.cursor = i >= 0 ? 'pointer' : '' })
-  addEventListener('click', (e) => { if (!panelOn) return; const i = pick(e); if (i >= 0) act(hits[i].act) })
-  function openPanel() { meterNow(); hover = -1; panelOn = true; renderPanel(); controls.unlock(); onPanel?.(true) }
-  function closePanel() { panelOn = false; document.body.style.cursor = ''; controls.lock(); onPanel?.(false) }
+  addEventListener('mousemove', (e) => { if (!panelOn) return; const i = pick(e); if (i !== hover) { hover = i; renderPanel() } lcdCanvas.style.cursor = i >= 0 ? 'pointer' : '' })
+  lcdCanvas.addEventListener('click', (e) => { if (!panelOn) return; const i = pick(e); if (i >= 0) act(hits[i].act) })
+  function openPanel() { meterNow(); hover = -1; panelOn = true; renderPanel(); lcdWrap.hidden = false; controls.unlock(); onPanel?.(true) }
+  function closePanel() { panelOn = false; lcdWrap.hidden = true; controls.lock(); onPanel?.(false) }
   // 平常（不是設定畫面）螢幕就顯示目前的設定、比較暗
   let idleT = 0
   function idleScreen(dt) { if (panelOn || (idleT -= dt) > 0) return; idleT = 0.5; renderPanel() }
@@ -211,7 +210,9 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     st.fov += (want - st.fov) * Math.min(1, dt * 12)
     camera.fov = st.fov; camera.updateProjectionMatrix()
     controls.pointerSpeed = Math.max(0.08, st.fov / WALK_FOV)   // 長焦時滑鼠轉得慢一點才瞄得準
-    vf.classList.toggle('on', st.raised && !panelOn)   // 看背面螢幕調設定時沒有觀景窗
+    // 相機舉到眼前（viewmodel 的 raise 到 85%）才出現觀景窗；舉著的時候沒有畫面中間的準星點
+    vf.classList.toggle('on', st.raised && !panelOn && (st.vfReady ?? true))
+    hud.root.querySelector('.crosshair')?.classList.toggle('off', st.raised)
     st.cool -= dt
     trackBirds(dt)
     idleScreen(dt)

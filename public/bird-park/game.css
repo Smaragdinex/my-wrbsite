@@ -87,3 +87,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #c9d8d6; col
 .judged { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: center; margin: 8px 0 16px; }
 .judged img { width: 100%; border-radius: 10px; }
 .status { position: absolute; left: 18px; top: 16px; background: rgba(0, 0, 0, 0.45); color: #fff; padding: 6px 14px; border-radius: 99px; font-size: 13px; }
+
+/* 按 E 的相機螢幕：整個視窗就是螢幕，外面一圈黑色機身邊框 */
+.cam-lcd { position: fixed; inset: 0; z-index: 7; background: radial-gradient(ellipse at center, #1b1d1f 0%, #050606 75%); display: grid; place-items: center; }
+.cam-lcd[hidden] { display: none; }
+.cam-lcd canvas { width: min(94vw, 141vh); height: auto; aspect-ratio: 1024 / 683; border: clamp(10px, 2.2vw, 26px) solid #0d0e0f; border-radius: clamp(12px, 2vw, 26px);
+  box-shadow: 0 0 0 2px #2a2c2e, 0 20px 60px rgba(0, 0, 0, 0.7), inset 0 0 30px rgba(0, 0, 0, 0.6); background: #000; }
+.crosshair.off { display: none; }
