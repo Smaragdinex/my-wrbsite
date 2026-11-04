@@ -1,4 +1,4 @@
-// 相機：右鍵舉起（觀景窗）、滾輪變焦、自動對焦（看機身對焦速度）、左鍵拍照。
+// 相機：右鍵按一下舉起／放下（觀景窗）、滾輪變焦、自動對焦（看機身對焦速度）、左鍵拍照。
 // 焦段用全片幅換算視角；照片是另外畫一張 3:2 的圖，沒對到焦就照誤差模糊。
 import * as THREE from 'three'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
@@ -40,10 +40,10 @@ export function createCamera({ world, camera, controls, hud, gear, onShot }) {
   addEventListener('contextmenu', (e) => e.preventDefault())
   addEventListener('mousedown', (e) => {
     if (!controls.isLocked) return
-    if (e.button === 2) { st.raised = true; st.af = 0; st.locked = false }
+    if (e.button === 2) { st.raised = !st.raised; st.af = 0; st.locked = false }   // 按一下切換，不用一直按著
     if (e.button === 0 && st.raised) shoot()
   })
-  addEventListener('mouseup', (e) => { if (e.button === 2) st.raised = false })
+  controls.addEventListener('unlock', () => { st.raised = false })   // 開相簿、相機行、按 Esc 就放下相機
   addEventListener('wheel', (e) => {
     if (!controls.isLocked || !st.raised) return
     st.focal *= Math.exp(-e.deltaY * 0.0015)
