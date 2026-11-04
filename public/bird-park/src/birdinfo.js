@@ -29,7 +29,7 @@ export const BIRDS = [
     ],
   },
   {
-    id: 'nightheron', spot: [-7.4, -7.5], perch: 'ground', y: POOL.water - 0.12, water: POOL.water, view: 285, dist: 3.6, camH: 3.0, lookY: 0.55,
+    id: 'nightheron', spot: [-9.5, -4], perch: 'ground', y: POOL.water - 0.12, water: POOL.water, view: 285, dist: 3.6, camH: 3.0, lookY: 0.55,
     name: '夜鷺', sci: 'Nycticorax nycticorax', where: '瀑布水池',
     intro: '常縮著脖子站在水邊，看起來像在打瞌睡，其實在等魚游過來。牠是很有耐心的獵人，可以在同一個地方站很久，看準時機才猛然把頭伸出去。名字裡有「夜」，傍晚和晚上最活躍，白天常在池邊的樹上休息。',
     facts: [
@@ -52,7 +52,7 @@ export const BIRDS = [
     ],
   },
   {
-    id: 'whiteeye', spot: [8, -33], perch: 'branch', dist: 3.0, camH: 3.6, lookY: 3.4,
+    id: 'whiteeye', spot: [-40, -14], perch: 'branch', dist: 3.0, camH: 3.6, lookY: 3.4,
     name: '綠繡眼', sci: 'Zosterops simplex', where: '開花的樹',
     intro: '小小的黃綠色身體，眼睛周圍有一圈白色的眼圈，就像繡上去的一樣。牠們比麻雀還小，喜歡成群在開花或結果的樹上跳來跳去，吸花蜜、吃果實，也會在葉子之間找小蟲吃。',
     facts: [
@@ -63,7 +63,7 @@ export const BIRDS = [
     ],
   },
   {
-    id: 'bulbul', spot: [40, -12], perch: 'branch', dist: 2.8, camH: 3.6, lookY: 3.4,
+    id: 'bulbul', spot: [42, 8], perch: 'branch', dist: 2.8, camH: 3.6, lookY: 3.4,
     name: '白頭翁', sci: 'Pycnonotus sinensis', where: '樹叢',
     intro: '城市裡最常見的鳥之一，成鳥的後腦勺有一塊白色羽毛，看起來像白頭髮。牠們適應力很強，從樹林、公園到住家陽台都看得到，果實、花和昆蟲都吃。',
     facts: [

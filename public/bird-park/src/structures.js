@@ -277,6 +277,22 @@ export function buildMountain(scene) {
 /* ---------- 瀑布、水池 ---------- */
 // 共用的 GLSL 小工具：value noise
 const GLSL_NOISE = `
+  // 2D simplex noise（Ashima Arts / Ian McEwan，MIT）：比 value noise 平滑，拉長後不會出現方格
+  vec3 sPerm(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
+  float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+    vec2 i = floor(v + dot(v, C.yy)), x0 = v - i + dot(i, C.xx);
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz; x12.xy -= i1;
+    i = mod(i, 289.0);
+    vec3 p = sPerm(sPerm(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
+    m = m * m; m = m * m;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0, h = abs(x) - 0.5, ox = floor(x + 0.5), a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+    vec3 g; g.x = a0.x * x0.x + h.x * x0.y; g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
   float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
   float vnoise(vec2 p) {
     vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -292,7 +308,8 @@ export function ripple(x, z, amp = 1) { ripVal.value[ripN++ % RIPPLES].set(x, z,
 export function buildWater(scene) {
   const out = {}
   // 瀑布落點（峽谷底部、池子靠山那側）
-  const fallR = mtnR(Math.PI, 0) + 0.6
+  // 跟下面核心水柱的拋物線落點一致
+  const fallR = Math.min(mtnR(Math.PI, 0) + 0.3 + 0.28 * Math.sqrt(30.5 - POOL.water), rampInner(0) - 0.25)
   const FX = MTN.x - fallR, FZ = MTN.z
   out.fallBase = new THREE.Vector3(FX, POOL.water, FZ)
 
@@ -361,21 +378,25 @@ export function buildWater(scene) {
   water.receiveShadow = true
   scene.add(water)
 
-  // 瀑布：沿峽谷岩面往下的帶子，兩層。顏色、透明度都是 shader 裡用拉長的雜訊做的水柱紋，
-  // 邊緣破碎、越往下越散開越白；u 是橫向 0～1，v 是往下的距離（公尺）
-  const make = (offset, width, speed, opacity, seed) => {
-    const NY = 120, NX = 10, P = [], U = [], I = []
-    const yTop = 30.5, yBot = POOL.water + 0.02
+  // 瀑布：從山頂峽谷口衝出來，拋物線往下（離岩壁越來越遠，但不能超過空中步道內緣），三層：
+  // 核心水柱（白、厚）、外層水幕（比較透、快）、最外面的水霧（很淡、往下越散越寬）。
+  // 顏色和透明度全在 shader：沿流向拉長的條紋＋一團團往下掉的白色氣泡水塊，邊緣碎成水滴。
+  const yTop = 30.5, yBot = POOL.water + 0.02, L = yTop - yBot
+  const make = ({ offset, width, spread, arc, speed, opacity, seed, white, solid = 0, foamOnly = false }) => {
+    const NY = 140, NX = 14, P = [], U = [], I = []
     for (let j = 0; j <= NY; j++) {
-      const t = j / NY, y = lerp(yTop, yBot, t)
-      const w = width * (0.75 + 0.7 * t)
+      const t = j / NY, y = lerp(yTop, yBot, t), drop = yTop - y
+      const w = width * (0.8 + spread * t)
       for (let i = 0; i <= NX; i++) {
-        const s = (i / NX - 0.5) * w
-        let r = mtnR(Math.PI, y) + offset
-        const th = Math.PI + s / r
-        r = Math.min(Math.max(mtnR(th, y), mtnR(Math.PI, y)) + offset + 0.35 * t, rampInner(y) - 0.3)
+        const sx = (i / NX - 0.5) * w
+        const r0 = mtnR(Math.PI, y)
+        const th = Math.PI + sx / Math.max(r0, 1)
+        const wall = Math.max(mtnR(th, y), r0)
+        // 水柱中間比兩邊鼓出來一點（有厚度的感覺）
+        const bulge = 0.25 * (1 - (2 * i / NX - 1) ** 2)
+        const r = Math.min(wall + offset + arc * Math.sqrt(drop) + bulge, rampInner(y) - 0.25)
         P.push(MTN.x + r * Math.cos(th), y, MTN.z + r * Math.sin(th))
-        U.push(i / NX, yTop - y)
+        U.push(i / NX, drop)
       }
     }
     for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
@@ -387,7 +408,7 @@ export function buildWater(scene) {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2))
     g.setIndex(I)
     g.computeVertexNormals()
-    const m = new THREE.MeshStandardMaterial({ color: 0xeaf4f6, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.25, emissive: 0xbfd6da, emissiveIntensity: 0.25 })
+    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.35, emissive: 0xd8e8ea, emissiveIntensity: 0.55 })
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uWT = waterTime
       sh.vertexShader = sh.vertexShader
@@ -399,53 +420,100 @@ export function buildWater(scene) {
           uniform float uWT;
           ${GLSL_NOISE}`)
         .replace('#include <color_fragment>', `#include <color_fragment>
-          float u = vFall.x, v = vFall.y, L = ${(30.5 - POOL.water).toFixed(2)};
-          float t = v / L;
-          // 往下流：越往下越快（重力），v 座標扣掉時間
-          float flow = v - uWT * ${speed.toFixed(2)} * (1.0 + t * 0.8);
-          vec2 p = vec2(u * ${(width * 5).toFixed(1)} + ${seed.toFixed(1)}, flow * 0.35);
-          float streak = vnoise(vec2(p.x * 2.0, p.y)) * 0.55 + vnoise(vec2(p.x * 5.0, p.y * 2.5)) * 0.3 + vnoise(vec2(p.x * 11.0, p.y * 6.0)) * 0.15;
-          float edge = smoothstep(0.0, 0.18 + 0.1 * vnoise(vec2(p.y * 2.0, 3.0)), u) * smoothstep(1.0, 0.82 - 0.1 * vnoise(vec2(p.y * 2.0, 9.0)), u);
-          float a = smoothstep(0.32 - t * 0.12, 0.7, streak) * edge;
-          diffuseColor.a *= a * ${opacity.toFixed(2)} * smoothstep(0.0, 0.6, v);
-          diffuseColor.rgb *= mix(0.78, 1.08, streak);`)
+          float u = vFall.x, v = vFall.y, t = v / ${L.toFixed(2)};
+          float W = ${(width * 2.2).toFixed(2)} * (0.8 + ${spread.toFixed(2)} * t);
+          // 自由落體：越往下越快，流動的位置用 v - 速度×時間
+          float fl = v - uWT * ${speed.toFixed(2)} * (1.0 + 1.4 * t);
+          float x = u * W + ${seed.toFixed(1)};
+          // 細長的水柱紋：沿流向拉得很長（y 的頻率比 x 低很多）
+          float s1 = snoise(vec2(x * 1.8, fl * 0.05)) * 0.5 + 0.5;
+          float s2 = snoise(vec2(x * 5.5, fl * 0.14 + 3.0)) * 0.5 + 0.5;
+          float s3 = snoise(vec2(x * 15.0, fl * 0.4 + 9.0)) * 0.5 + 0.5;
+          // 一團團往下掉的白色氣泡水（比條紋短、會被看到在往下走）
+          float c1 = snoise(vec2(x * 1.1, fl * 0.45 + 5.0)) * 0.5 + 0.5;
+          float c2 = snoise(vec2(x * 3.2, fl * 1.1 + 11.0)) * 0.5 + 0.5;
+          float dens = s1 * 0.38 + s2 * 0.22 + s3 * 0.05 + c1 * 0.23 + c2 * 0.12 + t * 0.1;
+          // 邊緣：越往下越碎
+          float fray = 0.1 + 0.25 * t;
+          float e = min(u, 1.0 - u);
+          float edge = smoothstep(0.0, fray, e + (c1 - 0.5) * fray * 1.2);
+          float a = smoothstep(0.28 - 0.06 * t, 0.78, dens) * edge;
+          // 核心水柱中間是滿的水（不會透出後面的岩石變成黑斑），只有靠邊才有縫
+          float solidA = ${solid.toFixed(2)} * smoothstep(fray * 0.8, fray + 0.22, e) * smoothstep(0.0, 1.2, v);
+          // 頂端剛衝出來那一段比較集中、透明
+          a *= smoothstep(0.0, 1.2, v);
+          vec3 clear = vec3(0.8, 0.88, 0.9), foam = vec3(0.97, 0.99, 1.0);
+          float wh = smoothstep(0.4, 0.75, dens + ${white.toFixed(2)});
+          diffuseColor.rgb = mix(clear, foam, wh);
+          // 外層只畫白色的水花部分：透明的水疊在白色水柱上反而會變灰、看起來像髒斑
+          diffuseColor.a = max(a * ${foamOnly ? 'wh * wh' : 'mix(0.22, 1.0, wh)'} * ${opacity.toFixed(2)}, solidA);
+          ${foamOnly ? 'diffuseColor.rgb = foam;' : ''}`)
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= mix(0.8, 1.0, wh);')
     }
     const mesh = new THREE.Mesh(g, m)
     mesh.renderOrder = 3
     scene.add(mesh)
     return mesh
   }
-  out.falls = [make(0.35, 2.6, 2.2, 0.95, 0), make(0.62, 2.0, 3.1, 0.7, 17)]
+  out.falls = [
+    make({ offset: 0.3, width: 2.2, spread: 0.4, arc: 0.28, speed: 4.5, opacity: 1, seed: 0, white: 0.12, solid: 0.9 }),
+    make({ offset: 0.45, width: 2.8, spread: 0.7, arc: 0.32, speed: 6.0, opacity: 0.75, seed: 17, white: 0.05, foamOnly: true }),
+    make({ offset: 0.65, width: 3.4, spread: 1.1, arc: 0.36, speed: 7.5, opacity: 0.4, seed: 41, white: 0, foamOnly: true }),
+  ]
 
-  // 水花霧氣
-  const N = 220
-  const pts = new Float32Array(N * 3), life = new Float32Array(N), vel = []
-  const bx = FX - 0.2, bz = FZ
-  for (let i = 0; i < N; i++) { life[i] = Math.random(); vel.push(new THREE.Vector3()) }
-  const pg = new THREE.BufferGeometry()
-  pg.setAttribute('position', new THREE.BufferAttribute(pts, 3))
-  const pm = new THREE.PointsMaterial({ map: T.softDotTex(), size: 2.6, transparent: true, opacity: 0.32, depthWrite: false, color: 0xf2f8fa })
-  const mist = new THREE.Points(pg, pm)
-  mist.frustumCulled = false
-  scene.add(mist)
-  out.mist = {
-    update(dt) {
+  // 落點：往外噴的水花（受重力掉回水面）＋慢慢往上飄的水霧
+  const impact = new THREE.Vector3(FX, POOL.water, FZ)
+  const particles = (N, { size, opacity, tex, spawn, step }) => {
+    const pos = new Float32Array(N * 3), col = new Float32Array(N * 4), vel = [], life = new Float32Array(N), span = new Float32Array(N)
+    for (let i = 0; i < N; i++) { vel.push(new THREE.Vector3()); life[i] = Math.random(); span[i] = 1 }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    g.setAttribute('color', new THREE.BufferAttribute(col, 4))
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({ map: tex, size, transparent: true, opacity, depthWrite: false, vertexColors: true, color: 0xf4fafb }))
+    pts.frustumCulled = false
+    pts.renderOrder = 4
+    scene.add(pts)
+    const p = new THREE.Vector3()
+    return (dt) => {
       for (let i = 0; i < N; i++) {
-        life[i] += dt * 0.35
-        if (life[i] >= 1) {
-          life[i] -= 1
-          pts[i * 3] = bx + (Math.random() - 0.5) * 2.5
-          pts[i * 3 + 1] = POOL.water + Math.random() * 0.4
-          pts[i * 3 + 2] = bz + (Math.random() - 0.5) * 3
-          vel[i].set(-0.6 - Math.random() * 1.6, 0.6 + Math.random() * 1.2, (Math.random() - 0.5) * 1.6)
-        }
-        pts[i * 3] += vel[i].x * dt; pts[i * 3 + 1] += vel[i].y * dt; pts[i * 3 + 2] += vel[i].z * dt
-        vel[i].multiplyScalar(1 - dt * 0.6)
+        life[i] += dt / span[i]
+        if (life[i] >= 1) { life[i] = 0; spawn(p, vel[i], i); span[i] = vel[i].userSpan ?? 1; pos.set([p.x, p.y, p.z], i * 3) }
+        step(pos, vel[i], i, dt)
+        const f = life[i], k = Math.min(1, f * 6) * (1 - f)
+        col[i * 4] = col[i * 4 + 1] = col[i * 4 + 2] = 1; col[i * 4 + 3] = k
       }
-      pg.attributes.position.needsUpdate = true
-    },
+      g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true
+    }
   }
-
+  const dot = T.softDotTex()
+  const spray = particles(1100, {
+    size: 0.5, opacity: 1, tex: dot,
+    spawn: (p, v) => {
+      const a = Math.random() * TAU, r = Math.random() * 1.1
+      p.set(impact.x + Math.cos(a) * r, POOL.water + 0.05, impact.z + Math.sin(a) * r * 1.4)
+      const out = 1 + Math.random() * 2.6
+      v.set(Math.cos(a) * out, 1.5 + Math.random() * 3.5, Math.sin(a) * out * 1.2)
+      v.userSpan = 0.6 + Math.random() * 0.7
+    },
+    step: (pos, v, i, dt) => {
+      v.y -= 9.8 * dt
+      pos[i * 3] += v.x * dt; pos[i * 3 + 1] = Math.max(POOL.water, pos[i * 3 + 1] + v.y * dt); pos[i * 3 + 2] += v.z * dt
+    },
+  })
+  const mist = particles(220, {
+    size: 4.2, opacity: 0.28, tex: dot,
+    spawn: (p, v) => {
+      p.set(impact.x + (Math.random() - 0.5) * 2.5, POOL.water + 0.3 + Math.random() * 1.2, impact.z + (Math.random() - 0.5) * 3)
+      v.set(-0.3 - Math.random() * 0.9, 0.35 + Math.random() * 0.7, (Math.random() - 0.5) * 0.8)
+      v.userSpan = 3 + Math.random() * 3
+    },
+    step: (pos, v, i, dt) => {
+      pos[i * 3] += v.x * dt; pos[i * 3 + 1] += v.y * dt; pos[i * 3 + 2] += v.z * dt
+      v.multiplyScalar(1 - dt * 0.15)
+    },
+  })
+  out.mist = { update(dt) { spray(dt); mist(dt) } }
+  out.fallBase = impact
   return out
 }
 

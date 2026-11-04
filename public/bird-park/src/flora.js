@@ -50,6 +50,7 @@ const qY = (a) => new THREE.Quaternion().setFromAxisAngle(UP, a)
 const v3 = (x, y, z) => new THREE.Vector3(x, y, z)
 const sc = (s) => new THREE.Vector3(s, s, s)
 
+const frontOfFall = (th) => Math.abs(Math.atan2(Math.sin(th - Math.PI), Math.cos(th - Math.PI))) < 0.42
 function freeOfColliders(x, z, r) {
   for (const c of colliders) if (Math.hypot(x - c.x, z - c.z) < c.r + r) return false
   return true
@@ -507,12 +508,14 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     const list = []
     for (let k = 0; k < 420; k++) {
       const s = 0.03 + rnd() * 0.97, p = rampSample(s)
+      if (frontOfFall(p.th)) continue                 // 瀑布前面不垂藤，不然會擋住水柱
       const r = p.ro + 0.05
       const L = 2 + rnd() * 5
       list.push({ p: v3(MTN.x + r * Math.cos(p.th), p.y - 0.3, MTN.z + r * Math.sin(p.th)), q: qY(Math.PI / 2 - p.th), s: v3(1, Math.min(L, p.y - RAMP.y0 + 0.5), 1) })
     }
     for (let k = 0; k < 1500 && list.length < 700; k++) {
       const th = rnd() * TAU, y = 4 + rnd() * (MTN.h - 5)
+      if (frontOfFall(th)) continue
       const r0 = mtnR(th, y)
       let L = 0
       while (L < 9 && mtnR(th, y - L - 0.5) < r0 - 0.25) L += 0.5

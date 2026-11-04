@@ -6,7 +6,7 @@ import { fbm2, fbm3, noise3 } from './noise.js'
 export const TAU = Math.PI * 2
 export const DOME = { A: 75, B: 55, H: 40 }          // 橢圓溫室：長半軸、短半軸、頂高
 export const MTN = { x: 12, z: -6, h: 32 }           // 中央雲霧山
-export const POOL = { x: -2, z: -6, rx: 6.5, rz: 11, water: -0.55 }   // 西緣不能再往外（環山步道在 x≈-11）
+export const POOL = { x: -3, z: -6, rx: 9, rz: 14, water: -0.55 }   // 西緣不能再往外（環山步道在 x≈-16）
 export const RAMP = { theta0: Math.PI / 2, turns: 2.2, y0: 0, y1: 24, width: 3, gap: 2.1 }
 export const DECK = { r: 4.5, x: 0, z: 0, y: 0 }
 export const SPAWN = { x: -68, z: 0, yaw: -90, pitch: 3 }
@@ -79,7 +79,8 @@ const onDeck = (x, z) => Math.hypot(x - DECK.x, z - DECK.z) <= DECK.r
 
 /* ---------- 步道 ---------- */
 const loopPt = (a) => [52 * Math.cos(a), 38 * Math.sin(a)]
-const ringPt = (a) => [MTN.x + 23 * Math.cos(a), MTN.z + 23 * Math.sin(a)]
+export const RING_R = 28   // 環山步道半徑（水池放大後往外推，原本 23）
+const ringPt = (a) => [MTN.x + RING_R * Math.cos(a), MTN.z + RING_R * Math.sin(a)]
 function curve(pts, closed = false) {
   return new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), closed, 'centripetal')
 }
@@ -105,7 +106,7 @@ export const PATHS = [
   { name: 'west', w: 3.0, curve: curve([loopPt(Math.PI), [-38, 3], [-24, -1], ringPt(Math.PI - 0.12)]) },
   { name: 'south', w: 2.6, curve: curve([loopPt(Math.PI / 2), [6, 30], [11, 22.5], ringPt(Math.PI / 2)]) },
   { name: 'east', w: 2.6, curve: curve([loopPt(0), [44, -3], ringPt(-0.12)]) },
-  { name: 'north', w: 2.6, curve: curve([loopPt(-Math.PI / 2), [2, -33], ringPt(-1.85)]) },
+  { name: 'north', w: 2.6, curve: curve([loopPt(-Math.PI / 2), [1, -36], ringPt(-1.85)]) },
   { name: 'sw', w: 2.4, curve: curve([loopPt(2.3), [-28, 18], [-14, 15], ringPt(2.3)]) },
   { name: 'nw', w: 2.4, curve: curve([loopPt(-2.4), [-28, -20], [-16, -22], ringPt(-2.5)]) },
   { name: 'spur', w: 2.6, curve: curve([ringPt(1.0), [19.5, 11.6], [14.6, 10.45]]) },
