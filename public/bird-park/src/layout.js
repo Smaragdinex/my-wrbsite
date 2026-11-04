@@ -113,7 +113,7 @@ export const PATHS = [
 ]
 
 /* ---------- 網格：步道距離與地形高度 ---------- */
-const G = { x0: -80, z0: -60, cell: 0.5, nx: 321, nz: 241 }
+export const G = { x0: -80, z0: -60, cell: 0.5, nx: 321, nz: 241 }   // structures.js 的步道材質也用這個格子（到步道邊的距離）
 export const pathClear = new Float32Array(G.nx * G.nz).fill(1e9)   // 到最近步道邊緣的距離（內部為負）
 const height = new Float32Array(G.nx * G.nz)
 

@@ -51,28 +51,6 @@ export function grassGroundTex() {
 }
 const TAU = Math.PI * 2
 
-export function paverTex() {
-  const S = 512, rnd = mulberry32(5)
-  const [c, g] = canvas(S, S)
-  g.fillStyle = '#8a8170'; g.fillRect(0, 0, S, S)
-  const rows = 8, rh = S / rows
-  for (let r = 0; r < rows; r++) {
-    let x = r % 2 ? -rh * 0.6 : 0
-    while (x < S) {
-      const w = rh * (1.1 + rnd() * 0.9)
-      const l = 62 + rnd() * 14
-      g.fillStyle = hsl(36 + rnd() * 10, 14 + rnd() * 10, l)
-      g.fillRect(x + 3, r * rh + 3, w - 6, rh - 6)
-      for (let k = 0; k < 30; k++) {
-        g.fillStyle = hsl(30, 10, l - 10 + rnd() * 20, 0.25)
-        g.fillRect(x + 3 + rnd() * (w - 8), r * rh + 3 + rnd() * (rh - 8), 2, 2)
-      }
-      x += w
-    }
-  }
-  return toTex(c, { repeat: true })
-}
-
 export function gratingTex() {
   const S = 256
   const [c, g] = canvas(S, S)

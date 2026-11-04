@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
   TAU, DOME, MTN, POOL, RAMP, DECK, PATHS, clamp, smoothstep, lerp, angDiff,
-  domeRho, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider,
+  domeRho, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
 } from './layout.js'
 import { fbm3, noise3, mulberry32 } from './noise.js'
 import * as T from './textures.js'
@@ -187,8 +187,90 @@ export function buildGround(scene) {
   scene.add(ground)
 
   // 步道帶
-  const pav = T.paverTex()
-  const pathMat = new THREE.MeshStandardMaterial({ map: pav, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+  // 步道：不規則的石板（照世界座標算，所以兩條步道交會、疊在一起的地方花紋一模一樣，不會有接縫），
+  // 石板之間是凹下去的灰縫，每塊顏色不一樣、邊緣有亮暗（有厚度）、表面有細紋和磨損；
+  // 兩側一圈深色收邊石（用「到所有步道邊的距離」算，所以交會處也順）、靠邊的地方髒一點、帶點泥土和青苔
+  const distTex = (() => {
+    const d = new Uint8Array(G.nx * G.nz)
+    for (let i = 0; i < d.length; i++) d[i] = Math.round(255 * Math.min(1, Math.max(0, (pathClear[i] + 2) / 4)))
+    const t = new THREE.DataTexture(d, G.nx, G.nz, THREE.RedFormat)
+    t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true
+    return t
+  })()
+  const pathMat = new THREE.MeshStandardMaterial({ roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+  pathMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uDist = { value: distTex }
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWp;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;')
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+        varying vec3 vWp;
+        uniform sampler2D uDist;
+        ${GLSL_NOISE}
+        vec2 h22(vec2 p) { p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
+        // Voronoi：回傳 (離最近石板中心, 離石縫的距離, 石板編號亂數)
+        vec3 stones(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          vec2 mg, mr; float md = 8.0;
+          for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+            vec2 g = vec2(float(x), float(y)), o = 0.15 + 0.7 * h22(i + g), r = g + o - f;
+            float d = dot(r, r);
+            if (d < md) { md = d; mr = r; mg = g; }
+          }
+          float ed = 8.0;
+          for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) {
+            vec2 g = mg + vec2(float(x), float(y)), o = 0.15 + 0.7 * h22(i + g), r = g + o - f;
+            if (dot(mr - r, mr - r) > 0.0001) ed = min(ed, dot(0.5 * (mr + r), normalize(r - mr)));
+          }
+          return vec3(sqrt(md), ed, h22(i + mg).x);
+        }
+        float pathEdge;   // 到步道邊的距離（公尺，負的在步道裡）
+        float stoneH;     // 石板高度（給法線用）`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        {
+          vec2 gp = (vWp.xz - vec2(${G.x0.toFixed(1)}, ${G.z0.toFixed(1)})) / ${G.cell.toFixed(2)};
+          pathEdge = texture2D(uDist, (gp + 0.5) / vec2(${G.nx}.0, ${G.nz}.0)).r * 4.0 - 2.0;
+          vec2 p = vWp.xz * 2.1 + vec2(snoise(vWp.xz * 0.9), snoise(vWp.xz * 0.9 + 7.0)) * 0.12;
+          vec3 st = stones(p);
+          float mortar = 1.0 - smoothstep(0.03, 0.075, st.y);
+          // 石板顏色：暖灰、米黃、偏紅的砂岩，每塊不一樣
+          float id = st.z;
+          vec3 stone = mix(vec3(0.44, 0.42, 0.38), vec3(0.55, 0.5, 0.42), fract(id * 3.7));
+          stone = mix(stone, vec3(0.5, 0.4, 0.34), step(0.78, fract(id * 7.3)) * 0.7);    // 偏紅的砂岩
+          stone = mix(stone, vec3(0.4, 0.42, 0.43), step(0.85, fract(id * 5.1)) * 0.6);    // 偏藍灰的
+          stone *= (0.8 + 0.32 * fract(id * 13.1)) * 0.72;   // 溫室裡陽光很強，石頭本身要暗一點才不會被照成白的
+          // 表面：細的顆粒、大片的深淺（磨損、雨痕）
+          float grain = snoise(vWp.xz * 38.0) * 0.5 + 0.5, blot = snoise(vWp.xz * 1.3 + id * 9.0) * 0.5 + 0.5;
+          stone *= 0.9 + 0.12 * grain;
+          stone *= mix(0.88, 1.06, blot);
+          // 邊緣磨圓：靠石縫的地方稍暗
+          stone *= mix(0.8, 1.0, smoothstep(0.07, 0.2, st.y));
+          vec3 col = mix(stone, vec3(0.2, 0.19, 0.17) * (0.85 + 0.3 * grain), mortar);
+          stoneH = smoothstep(0.03, 0.12, st.y) * 0.012 + grain * 0.0015;
+          // 收邊石：步道邊往內 0.28 公尺一圈深灰色的長條石（每 0.6 公尺一道縫）
+          float curb = smoothstep(-0.34, -0.28, pathEdge);
+          float joint = 1.0 - smoothstep(0.0, 0.03, abs(fract((vWp.x + vWp.z) * 0.8) - 0.5) - 0.47);
+          vec3 curbCol = vec3(0.32, 0.31, 0.3) * (0.9 + 0.15 * grain) * (1.0 - 0.45 * joint);
+          col = mix(col, curbCol, curb);
+          stoneH = mix(stoneH, 0.016 - joint * 0.006, curb);
+          // 靠邊髒一點：泥土、一點青苔
+          float dirt = smoothstep(-1.0, -0.2, pathEdge) * (0.5 + 0.5 * snoise(vWp.xz * 2.3));
+          col = mix(col, col * vec3(0.78, 0.8, 0.66), clamp(dirt, 0.0, 1.0) * 0.55);
+          diffuseColor.rgb = col;
+        }`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        {
+          // 石板凸、石縫凹：用高度的螢幕空間微分去歪法線（three 的 perturbNormalArb 同一套算法）
+          vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
+          float dhx = dFdx(stoneH), dhy = dFdy(stoneH);
+          vec3 r1 = cross(dpdy, normal), r2 = cross(normal, dpdx);
+          float det = dot(dpdx, r1);
+          vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
+          normal = normalize(abs(det) * normal - grad);
+        }`)
+  }
+  pathMat.customProgramCacheKey = () => 'flagstonePath'
   const geos = []
   PATHS.forEach((p, pi) => {
     const pts = p.points
