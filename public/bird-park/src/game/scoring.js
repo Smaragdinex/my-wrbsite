@@ -10,6 +10,7 @@ export const VALUE = {
 // 特別的瞬間（acts 的名字 → 加成倍數、說明）
 const ACTION = {
   dive: [2.2, '入水的瞬間'], strike: [1.8, '出手捕食'], worm: [1.6, '叼著蚯蚓'], peck: [1.15, '低頭覓食'],
+  takeoff: [2.0, '起飛的瞬間'], land: [1.8, '降落的瞬間'], fly: [1.7, '飛行中'], run: [1.25, '逃跑中'],
   call: [1.2, '正在鳴叫'], preen: [1.15, '理毛'], hunt: [1.1, '盯著獵物'], walk: [1.0, ''], look: [1.05, '抬頭張望'],
 }
 
@@ -29,7 +30,10 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
     const d0 = b.target.distanceTo(cam.position)
     if (d0 > 160) continue
     for (const m of members(b)) {
-      _box.setFromObject(m.obj, false)
+      // 遊戲裡鳥會飛走：飛行中量飛行模型、飛遠躲起來的不算（world.shotOf 由 flight.js 提供）
+      const sh = world.shotOf ? world.shotOf(m) : { obj: m.obj, act: m.acts?.name ?? '' }
+      if (!sh) continue
+      _box.setFromObject(sh.obj, false)
       if (_box.isEmpty()) continue
       _box.getCenter(_c); _box.getSize(_s)
       // 投影到畫面：8 個角 → 畫面上的框
@@ -56,7 +60,7 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
       if (visible === 0) continue
       const focusErr = Math.abs(dist - focusDist)
       const sharp = 1 - THREE.MathUtils.smoothstep(focusErr, dofTol, dofTol * 3)
-      const act = m.acts?.name ?? ''
+      const act = sh.act
       found.push({ id: b.def.id, name: b.def.name, dist, area, inside, visible, sharp, act, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 })
     }
   }

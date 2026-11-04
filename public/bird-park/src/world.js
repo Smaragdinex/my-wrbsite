@@ -14,8 +14,8 @@ import { softDotTex } from './textures.js'
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
 export const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
 
-// extraReserve：額外不種東西的圓（遊戲的攤位等），{ x, z, r }
-export async function buildWorld(canvas, { onProgress, extraReserve = [] } = {}) {
+// extraReserve：額外不種東西的圓（遊戲的攤位等），{ x, z, r }；extraModels：遊戲另外要載的鳥模型（飛行版）
+export async function buildWorld(canvas, { onProgress, extraReserve = [], extraModels = [] } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false })
   renderer.setPixelRatio(Math.min(devicePixelRatio, PHONE ? 1.5 : 2))
   renderer.shadowMap.enabled = true
@@ -56,7 +56,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [] } = {})
   const mountain = buildMountain(scene)
   const water = buildWater(scene)
   buildRamp(scene)
-  const [plantLib] = await Promise.all([loadPlants(onProgress), loadAnimalModels()])
+  const [plantLib] = await Promise.all([loadPlants(onProgress), loadAnimalModels(extraModels)])
   // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
   const birds = BIRDS.map((def) => {
     const d = { ...def, y: def.y ?? terrainHeight(...def.spot), groundAt: def.water == null ? terrainHeight : null }

@@ -284,18 +284,22 @@ const BUILD = {
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
 const GLB = {}
-export async function loadAnimalModels() {
+export async function loadAnimalModels(extra = []) {
   const L = new GLTFLoader(), D = new DRACOLoader()
   D.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
   L.setDRACOLoader(D)
-  await Promise.all(['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
-    'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig'].map((n) => L.loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => { GLB[n] = g.scene })))
+  const load = (n) => L.loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => { GLB[n] = g.scene })
+  await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
+    'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig'].map(load),
+    // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
+    ...extra.map((n) => load(n).catch(() => console.warn('[birds] 沒有模型', n)))])
 }
+export const hasModel = (n) => !!GLB[n]
 /* ---------- 有骨架的現成模型：用「模型座標的軸」轉骨頭 ---------- */
 // 每根骨頭的本地軸方向都不一樣（Blender 的 roll），直接轉 x/y/z 左右腳會不對稱。
 // 這裡先算出每根骨頭靜止時在模型座標裡的朝向，turn(骨頭, 模型座標的軸, 角度) 再換算成本地軸，
 // 所以「繞身體的上下軸轉」對每根骨頭意思都一樣。straight：一開始就把這些骨頭（例如捲起來的尾巴）拉直到某個比例。
-function rigged(name, { straight = {} } = {}) {
+export function rigged(name, { straight = {} } = {}) {
   const model = cloneSkinned(GLB[name])
   const bones = {}
   model.traverse((o) => {
@@ -326,7 +330,7 @@ function rigged(name, { straight = {} } = {}) {
 }
 // 版本號跟著 index.html 的 ?v= 走，模型檔才不會用到快取的舊版
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
-const AX = { x: V(1, 0, 0), y: V(0, 1, 0), z: V(0, 0, 1) }
+export const AX = { x: V(1, 0, 0), y: V(0, 1, 0), z: V(0, 0, 1) }
 // 腳趾（toeL0a → toeL0b …，Blender 自動找的）：彎曲軸 = 腳趾方向 × 往下，繞它正轉 = 趾尖往下勾
 function toesOf(r, sd) {
   r.model.updateWorldMatrix(true, true)

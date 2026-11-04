@@ -1,9 +1,9 @@
-// 第一人稱：WASD 走、Shift 跑、空白鍵跳、滑鼠看
+// 第一人稱：WASD 走、Shift 跑、C 蹲低慢慢走（鳥比較不會被嚇跑）、空白鍵跳、滑鼠看
 import * as THREE from 'three'
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js'
 import { supportAt, blocked, SPAWN } from './layout.js'
 
-const EYE = 1.65, WALK = 4.2, RUN = 8.5, GRAV = 22, JUMP = 7
+const EYE = 1.65, EYE_LOW = 1.05, WALK = 4.2, RUN = 8.5, SNEAK = 1.5, GRAV = 22, JUMP = 7
 const SLIDE = [0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2].map((d) => d)
 
 export function createPlayer(camera, dom) {
@@ -11,7 +11,7 @@ export function createPlayer(camera, dom) {
   camera.rotation.order = 'YXZ'
   const keys = new Set()
   const vel = new THREE.Vector3()
-  const st = { x: SPAWN.x, z: SPAWN.z, feet: 0, vy: 0, grounded: true, owner: 0 }
+  const st = { x: SPAWN.x, z: SPAWN.z, feet: 0, vy: 0, grounded: true, owner: 0, sneak: false, eye: EYE }
 
   // 網址參數：?x=&z=&y=&yaw=&pitch=（角度用度）
   const q = new URLSearchParams(location.search)
@@ -55,7 +55,8 @@ export function createPlayer(camera, dom) {
       if (keys.has('KeyD') || keys.has('ArrowRight')) want.add(right)
       if (keys.has('KeyA') || keys.has('ArrowLeft')) want.sub(right)
     }
-    if (want.lengthSq() > 0) want.normalize().multiplyScalar(keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK)
+    st.sneak = controls.isLocked && keys.has('KeyC')
+    if (want.lengthSq() > 0) want.normalize().multiplyScalar(st.sneak ? SNEAK : keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK)
     const k = st.grounded ? 12 : 3
     vel.x += (want.x - vel.x) * Math.min(1, k * dt)
     vel.z += (want.z - vel.z) * Math.min(1, k * dt)
@@ -81,7 +82,8 @@ export function createPlayer(camera, dom) {
     } else {
       st.grounded = false
     }
-    camera.position.set(st.x, st.feet + EYE, st.z)
+    st.eye += ((st.sneak ? EYE_LOW : EYE) - st.eye) * Math.min(1, 10 * dt)
+    camera.position.set(st.x, st.feet + st.eye, st.z)
   }
 
   camera.position.set(st.x, st.feet + EYE, st.z)

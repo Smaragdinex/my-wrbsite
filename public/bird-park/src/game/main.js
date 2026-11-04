@@ -8,16 +8,21 @@ import { createAlbum } from './album.js'
 import { buildShop, createShop, SHOP } from './shop.js'
 import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.js'
 import { judgePhoto, loadLLM, llm, rawGen } from './judge.js'
+import { createFlight, flyModels } from './flight.js'
 
 const loadingEl = document.getElementById('loading')
 const world = await buildWorld(document.getElementById('scene'), {
   onProgress: (f) => { loadingEl.textContent = `園區建造中… ${Math.round(f * 100)}%` },
   extraReserve: [{ x: SHOP.x, z: SHOP.z, r: 3.2 }],
+  extraModels: flyModels(),
 })
 const { renderer, scene, camera } = world
 buildShop(scene)
 
 const player = createPlayer(camera, renderer.domElement)
+// 鳥怕人：靠太近會飛走／跑掉／游開，玩家走開後再回來
+const flight = createFlight(world, player)
+world.shotOf = flight.shotOf
 const hud = createHud(document.getElementById('hud'))
 
 // 存檔：錢、裝備；照片從 IndexedDB 讀回來
@@ -75,9 +80,10 @@ function frame() {
   if (!panelOpen()) player.update(dt)
   cam.update(dt)
   world.tick(t, dt)
+  flight.tick(t, dt, { sneak: player.state.sneak })
   hud.setHint(!panelOpen() && player.controls.isLocked && nearShop() ? '按 E 進入相機行' : '')
   hud.update(dt)
   world.render()
 }
-window.__game = { world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen }
+window.__game = { world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight }
 frame()
