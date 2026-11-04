@@ -99,16 +99,25 @@ function ringPoints() {
   for (let i = 0; i < 20; i++) pts.push(ringPt((i / 20) * TAU))
   return pts
 }
+// 繞園步道會左右蜿蜒，所以 loopPt(a) 不一定在真的步道上；支線要從「步道上離它最近的那一點」出發，
+// 不然起點會偏到草地上、在步道旁邊留下一截方方的步道頭
+const LOOP = curve(loopPoints(), true), LOOP_PTS = LOOP.getSpacedPoints(800)
+function onLoop(a) {
+  const [x, z] = loopPt(a)
+  let best = LOOP_PTS[0], bd = Infinity
+  for (const q of LOOP_PTS) { const d = (q.x - x) ** 2 + (q.z - z) ** 2; if (d < bd) { bd = d; best = q } }
+  return [best.x, best.z]
+}
 export const PATHS = [
   { name: 'entry', w: 4.2, curve: curve([[-74, 0], [-66, 0], [-58, 0], loopPt(Math.PI)]) },
-  { name: 'loop', w: 3.4, curve: curve(loopPoints(), true) },
+  { name: 'loop', w: 3.4, curve: LOOP },
   { name: 'ring', w: 3.2, curve: curve(ringPoints(), true) },
   { name: 'west', w: 3.0, curve: curve([loopPt(Math.PI), [-38, 3], [-24, -1], ringPt(Math.PI - 0.12)]) },
   { name: 'south', w: 2.6, curve: curve([loopPt(Math.PI / 2), [6, 30], [11, 22.5], ringPt(Math.PI / 2)]) },
   { name: 'east', w: 2.6, curve: curve([loopPt(0), [44, -3], ringPt(-0.12)]) },
   { name: 'north', w: 2.6, curve: curve([loopPt(-Math.PI / 2), [1, -36], ringPt(-1.85)]) },
-  { name: 'sw', w: 2.4, curve: curve([loopPt(2.3), [-28, 18], [-14, 15], ringPt(2.3)]) },
-  { name: 'nw', w: 2.4, curve: curve([loopPt(-2.4), [-28, -20], [-16, -22], ringPt(-2.5)]) },
+  { name: 'sw', w: 2.4, curve: curve([onLoop(2.3), [-28, 18], [-14, 15], ringPt(2.3)]) },
+  { name: 'nw', w: 2.4, curve: curve([onLoop(-2.4), [-28, -20], [-16, -22], ringPt(-2.5)]) },
   { name: 'spur', w: 2.6, curve: curve([ringPt(1.0), [19.5, 11.6], [14.6, 10.45]]) },
 ]
 
