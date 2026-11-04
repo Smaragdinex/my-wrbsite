@@ -123,9 +123,12 @@ export async function createViewmodel(camera) {
   // 目標用「指根（中指第一節）」和「掌心」的位置定，手腕再沿著手掌方向往回推一個手掌長（0.088 公尺）
   // 座標都是相機（camRig）的：x 右、y 上、-z 前；W1＝機身右緣（入門機比較小）
   const tune = {
-    rKnuckle: V(0.012, 0.0, -0.036), rDir: V(-0.25, 0.3, -0.92), rPalm: V(-1, 0, 0.15),       // 指根在握把右前角，手掌貼握把（掌心朝左）
+    // 照真的握法（Nikon 等教學）：右手握住握把，中指、無名指、小指繞到握把前面，食指放在快門上，拇指在背面轉盤旁；手指不會蓋到相機頂上
+    rKnuckle: V(0.004, 0.0, -0.03), rDir: V(-0.15, 0.05, -1), rPalm: V(-1, 0, 0.1),       // 指根在握把右前緣、中間高度，手掌貼握把側面（掌心朝左）
+    rIndexLift: -0.2,   // 食指稍微往上（在快門那一側），但跟其他手指一樣繞著握把，不會翹到相機頂上
+    rThumb: [1.5, 0.5, 1.0],  // 拇指根繞（手掌方向、掌心法線、側軸）轉，放在機身背面螢幕右邊（低於頂部，從玩家這邊看不會像手指在上面）
     lPalmAt: V(-0.006, -0.011, 0), lDir: V(0.72, 0.0, -0.7), lPalm: V(-0.1, 1, 0),                  // 掌心托在鏡頭正下方，手指往右前方繞上去
-    rCurl: { index: [0.45, 0.55, 0.35], middle: [1.25, 1.15, 0.7], ring: [1.3, 1.15, 0.7], pinky: [1.35, 1.1, 0.7], thumb: [0.5, 0.45, 0.3] },
+    rCurl: { index: [1.25, 1.1, 0.7], middle: [1.35, 1.2, 0.75], ring: [1.4, 1.2, 0.75], pinky: [1.45, 1.15, 0.7], thumb: [0.8, 1.4, 0.84] },
     lCurl: { index: [0.9, 0.8, 0.5], middle: [1.0, 0.85, 0.5], ring: [1.05, 0.9, 0.55], pinky: [1.1, 0.9, 0.55], thumb: [0.05, 0.15, 0.1] },
     poleR: V(0.6, -0.8, 0.3), poleL: V(-0.6, -0.9, 0.2),
   }
@@ -164,7 +167,8 @@ export async function createViewmodel(camera) {
     camRig.position.copy(pose.position); camRig.quaternion.copy(pose.quaternion)
     // 手的目標
     const rd = tune.rDir.clone().normalize(), ld = tune.lDir.clone().normalize(), ln = tune.lPalm.clone().normalize()
-    gripR.position.set(W1[st.body] + tune.rKnuckle.x, tune.rKnuckle.y, tune.rKnuckle.z).addScaledVector(rd, -0.088)
+    // 入門機身小一號：手往外挪一點，拇指才不會蓋到螢幕
+    gripR.position.set(W1[st.body] + tune.rKnuckle.x + (st.body === 'b1' ? 0.009 : 0), tune.rKnuckle.y, tune.rKnuckle.z).addScaledVector(rd, -0.088)
     // 左手：掌心在鏡頭下面（鏡頭越長托得越前面），手腕＝掌心往回半個手掌、往下一點（掌心在手骨上面約 1.5 公分）
     const palm = V(tune.lPalmAt.x, -Ln.S + tune.lPalmAt.y, -Math.min(0.035 + Ln.L * 0.42, 0.17))
     cradleL.position.copy(palm).addScaledVector(ld, -0.05).addScaledVector(ln, -0.016)
@@ -179,6 +183,15 @@ export async function createViewmodel(camera) {
     // 只用右手拿相機：左手整隻縮到肩膀裡（骨頭縮成 0，畫面上看不到）
     const ua = bones.upper_armL, hl = bones.handL
     ua.scale.setScalar(1e-4); hl.scale.setScalar(1e-4); hl.position.copy(ua.position)
+    // 食指抬到握把頂上的快門、拇指擺到背面：繞手掌法線（掌心方向）轉第一節
+    {
+      const { d, n } = frameOf('R'), sd = d.clone().cross(n)
+      const rot = (nm, ax, ang) => { if (!ang) return; const b = bones[nm]; b.getWorldQuaternion(_q2); setWorldQ(b, new THREE.Quaternion().setFromAxisAngle(ax, ang).multiply(_q2)) }
+      rot('f_index01R', n, tune.rIndexLift)
+      // 拇指跟其他手指相對：繞手掌的三個軸轉到機身背面（數值用搜尋找的：拇指尖最靠近背面的拇指墊）
+      const th = tune.rThumb
+      rot('thumb01R', d, th[0]); rot('thumb01R', n, th[1]); rot('thumb01R', sd, th[2])
+    }
     for (const [f, a] of Object.entries(tune.rCurl)) curl('R', f, a)
   }
   // 五稜鏡正面的銘牌：機身型號（白字）
