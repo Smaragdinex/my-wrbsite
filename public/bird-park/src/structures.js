@@ -606,7 +606,7 @@ export function buildWater(scene) {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2))
     g.setIndex(I)
     g.computeVertexNormals()
-    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.35, emissive: 0xd8e8ea, emissiveIntensity: 0.55 })
+    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.35, metalness: 0, envMapIntensity: 1.3, emissive: 0xd8e8ea, emissiveIntensity: 0.22 })
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uWT = waterTime
       sh.vertexShader = sh.vertexShader
@@ -629,7 +629,7 @@ export function buildWater(scene) {
           float s3 = snoise(vec2(x * 15.0, fl * 0.4 + 9.0)) * 0.5 + 0.5;
           // 一團團往下掉的白色氣泡水（比條紋短、會被看到在往下走）
           float c1 = snoise(vec2(x * 1.1, fl * 0.45 + 5.0)) * 0.5 + 0.5;
-          float c2 = snoise(vec2(x * 3.2, fl * 1.1 + 11.0)) * 0.5 + 0.5;
+          float c2 = snoise(vec2(x * 4.0, fl * 0.5 + 11.0)) * 0.5 + 0.5;
           float dens = s1 * 0.38 + s2 * 0.22 + s3 * 0.05 + c1 * 0.23 + c2 * 0.12 + t * 0.1;
           // 邊緣：越往下越碎
           float fray = 0.1 + 0.25 * t;
@@ -640,13 +640,20 @@ export function buildWater(scene) {
           float solidA = ${solid.toFixed(2)} * smoothstep(fray * 0.8, fray + 0.22, e) * smoothstep(0.0, 1.2, v);
           // 頂端剛衝出來那一段比較集中、透明
           a *= smoothstep(0.0, 1.2, v);
-          vec3 clear = vec3(0.8, 0.88, 0.9), foam = vec3(0.97, 0.99, 1.0);
-          float wh = smoothstep(0.4, 0.75, dens + ${white.toFixed(2)});
-          diffuseColor.rgb = mix(clear, foam, wh);
+          // 寫實的高瀑布：大部分是打進空氣的白水，但白之間有一條條比較暗、帶藍灰的水（沒那麼多氣泡、透光），
+          // 剛從崖口衝出來那一兩公尺還是一整片透明發亮的水（還沒散開），之後才慢慢變白
+          float fine = snoise(vec2(x * 24.0, fl * 0.22 + 2.0)) * 0.5 + 0.5;       // 很細的直條紋
+          float lip = 1.0 - smoothstep(0.6, 3.5, v);
+          float wh = smoothstep(0.42, 0.8, dens + ${white.toFixed(2)} + fine * 0.08) * (1.0 - 0.75 * lip);
+          vec3 deep = vec3(0.46, 0.55, 0.57), body = vec3(0.66, 0.74, 0.76), foam = vec3(0.95, 0.97, 0.98);
+          vec3 wcol = mix(deep, body, smoothstep(0.2, 0.62, dens));
+          diffuseColor.rgb = mix(wcol, foam, wh) * (0.86 + 0.28 * fine);
           // 外層只畫白色的水花部分：透明的水疊在白色水柱上反而會變灰、看起來像髒斑
           diffuseColor.a = max(a * ${foamOnly ? 'wh * wh' : 'mix(0.22, 1.0, wh)'} * ${opacity.toFixed(2)}, solidA);
           ${foamOnly ? 'diffuseColor.rgb = foam;' : ''}`)
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= mix(0.8, 1.0, wh);')
+        // 透明的水很光滑（有反光的亮條），白色水花粗糙；自發光只給白水一點點（照到光才亮，不是一張發光的貼紙）
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.08, 0.6, wh);')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= wh;')
     }
     const mesh = new THREE.Mesh(g, m)
     mesh.renderOrder = 3
@@ -693,7 +700,7 @@ export function buildWater(scene) {
     g.setAttribute('aFall', new THREE.Float32BufferAttribute(A, 4))
     g.setIndex(I)
     g.computeVertexNormals()
-    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.3, emissive: 0xdde9eb, emissiveIntensity: 0.55 })
+    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.3, metalness: 0, envMapIntensity: 1.3, emissive: 0xdde9eb, emissiveIntensity: 0.22 })
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uWT = waterTime
       sh.vertexShader = sh.vertexShader
@@ -717,14 +724,19 @@ export function buildWater(scene) {
           float e = 1.0 - abs(u * 2.0 - 1.0);
           float body = smoothstep(0.0, 0.55 + 0.25 * (c1 - 0.5), e);
           // 越往下越碎：用流動的雜訊挖洞，碎成一顆顆水滴
-          float holes = snoise(vec2(u * 6.0 + id * 9.0, fl * 1.4)) * 0.5 + 0.5;
+          float holes = snoise(vec2(u * 10.0 + id * 9.0, fl * 0.45)) * 0.5 + 0.5;   // 細長的縫（水往下拉成一條條），不是圓洞
           float breakup = smoothstep(0.35, 1.0, t) * 0.75;
           float dens = (s1 * 0.5 + s2 * 0.25 + c1 * 0.25) * body;
           float a = smoothstep(0.12, 0.55, dens) * smoothstep(breakup - 0.1, breakup + 0.25, holes + 0.25);
           a *= smoothstep(0.0, 0.6, v) * thick;
-          float wh = smoothstep(0.3, 0.7, dens + 0.15);
-          diffuseColor.rgb = mix(vec3(0.82, 0.89, 0.91), vec3(0.98, 0.99, 1.0), wh);
-          diffuseColor.a = a * mix(0.55, 1.0, wh);`)
+          float fine = snoise(vec2(u * 18.0 + id * 5.0, fl * 0.3)) * 0.5 + 0.5;
+          float lip = 1.0 - smoothstep(0.5, 3.0, v);
+          float wh = smoothstep(0.32, 0.72, dens + 0.12 + fine * 0.08) * (1.0 - 0.7 * lip);
+          vec3 wcol = mix(vec3(0.48, 0.56, 0.58), vec3(0.66, 0.74, 0.76), smoothstep(0.15, 0.55, dens));
+          diffuseColor.rgb = mix(wcol, vec3(0.95, 0.97, 0.98), wh) * (0.86 + 0.28 * fine);
+          diffuseColor.a = a * mix(0.3, 1.0, wh);   // 薄的地方是透明的（看得到後面），不是一塊暗斑`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.08, 0.6, wh);')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= wh;')
     }
     const strands = new THREE.Mesh(g, m)
     strands.renderOrder = 4
@@ -739,7 +751,7 @@ export function buildWater(scene) {
   const impact = new THREE.Vector3(FX, POOL.water, FZ)
   {
     const g = new THREE.SphereGeometry(1, 40, 16, 0, TAU, 0, Math.PI / 2)
-    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, depthWrite: false, roughness: 0.7, emissive: 0xdfeaec, emissiveIntensity: 0.5 })
+    const m = new THREE.MeshStandardMaterial({ color: 0xf2f6f7, transparent: true, depthWrite: false, roughness: 0.75, emissive: 0xdfeaec, emissiveIntensity: 0.18 })
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uWT = waterTime
       sh.vertexShader = sh.vertexShader
@@ -756,10 +768,12 @@ export function buildWater(scene) {
           float n = snoise(vec2(ang * 4.0, vLp.y * 5.0 - uWT * 3.0)) * 0.5 + 0.5;
           float n2 = snoise(vec2(ang * 11.0, vLp.y * 12.0 - uWT * 5.0)) * 0.5 + 0.5;
           float edge = smoothstep(0.0, 0.35, vLp.y + (n - 0.5) * 0.3);
-          diffuseColor.a = smoothstep(0.25, 0.7, n * 0.65 + n2 * 0.35 + vLp.y * 0.3) * edge * 0.95;`)
+          // 水花丘不是一顆光滑的白球：一坨坨翻起來、中間有縫看得到下面的水
+          diffuseColor.a = smoothstep(0.38, 0.78, n * 0.6 + n2 * 0.4 + vLp.y * 0.2) * edge * 0.9;
+          diffuseColor.rgb *= 0.85 + 0.25 * n2;`)
     }
     const boil = new THREE.Mesh(g, m)
-    boil.scale.set(1.9, 0.9, 2.3)
+    boil.scale.set(1.5, 0.7, 1.8)
     boil.position.copy(impact).add(new THREE.Vector3(0, -0.15, 0))
     boil.renderOrder = 5
     scene.add(boil)
@@ -814,7 +828,7 @@ export function buildWater(scene) {
   // 3. 貼著水面往外滾的低霧（壓扁）
   // 碰到水面的地方慢慢淡掉（沒有一條硬邊），每片自己轉、自己長大
   const MIST = [
-    { n: 70, life: [5, 8], size: [1.4, 6.0], alpha: 0.95, squash: 1,
+    { n: 70, life: [5, 8], size: [1.2, 4.6], alpha: 0.55, squash: 1,   // 落點的水霧：看得到後面的水花，不是一大團白
       spawn: (p, v) => { p.set(impact.x + rs(1.2), POOL.water + 0.15 + Math.random() * 0.6, impact.z + rs(1.8)); v.set(-0.45 - Math.random() * 0.9, 0.3 + Math.random() * 0.7, rs(1.3)) } },
     { n: 45, life: [3, 5.5], size: [0.7, 3.0], alpha: 0.6, squash: 1,
       spawn: (p, v) => { const y = POOL.water + 1 + Math.random() ** 0.7 * 13; const r = mtnR(Math.PI, y) + 0.9 + 0.28 * Math.sqrt(Math.max(0, 30.5 - y)); p.set(MTN.x - Math.min(r, rampInner(y) - 0.4), y, MTN.z + rs(1.6)); v.set(-0.35 - Math.random() * 0.6, -0.25 - Math.random() * 0.4, rs(0.6)) } },
