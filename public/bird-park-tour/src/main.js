@@ -1,0 +1,172 @@
+// 導覽頁：卡片一張一張往下滑，鏡頭飛到每一站。世界本身在 world.js（遊戲也用同一份）
+import * as THREE from 'three'
+import { rampPoint } from './stops.js'
+import { snapScroll } from './snap.js'
+import { MTN, mtnBase, domeY } from './layout.js'
+import { buildWorld } from './world.js'
+
+const loadingEl = document.getElementById('loading')
+const T0 = performance.now()
+const world = await buildWorld(document.getElementById('scene'), { onProgress: (f) => { loadingEl.textContent = `園區建造中… ${Math.round(f * 100)}%` } })
+const { renderer, scene, camera, birds, flora, water } = world
+const T2 = performance.now()
+
+/* 卡片 */
+const story = document.getElementById('story'), dots = document.getElementById('dots')
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+const CREDITS = `<details class="credits"><summary>模型來源</summary><div class="small">
+  棕櫚、龜背芋、香蕉、蕨類：<a href="https://sketchfab.com/3d-models/2f093afb792742438f0f7ba7eaab90f0" target="_blank" rel="noopener">Tropical Plants Pack M02P</a> by MozzarellaARC（<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>）<br>
+  椰子類棕櫚：<a href="https://sketchfab.com/3d-models/d05c8ffb6ec64a7184c4b673e21f7224" target="_blank" rel="noopener">Realistic Palm Tree 2 Free</a> by Next Spring（CC BY 4.0）<br>
+  雨林大樹：<a href="https://sketchfab.com/3d-models/46f83ec5f6c04abf9d509c1070f67d1e" target="_blank" rel="noopener">Jungle Tree</a> by kobaltsecond6c7d6150917a4267（CC BY 4.0）<br>
+  鳳梨科植物：<a href="https://sketchfab.com/3d-models/0930b42ec567469b8cdeaa93d37c9f06" target="_blank" rel="noopener">BROMELIADS PLANTS</a> by wasis007（CC BY 4.0）<br>
+  火鶴、竹芋、蕨類、馬拉巴栗、岩石：<a href="https://polyhaven.com/models" target="_blank" rel="noopener">Poly Haven</a>（CC0）<br>
+  以上模型皆經縮放、減面與重新上色後使用。</div></details>`
+let STOPS = []
+function renderCards() {
+  story.innerHTML = STOPS.map((s, i) => s.cover
+    ? `<section class="step"><div class="card"><h1>${esc(s.title)}</h1><p>${esc(s.text)}</p><p class="hint">↓ 往下滑開始</p>${CREDITS}</div></section>`
+    : s.bird
+      ? `<section class="step"><div class="card">
+        <div class="num">${String(i).padStart(2, '0')} / ${STOPS.length - 1}・園區的鳥</div>
+        <h2>${esc(s.title)}${s.nick ? `<span class="nick">${esc(s.nick)}</span>` : ''}</h2>
+        <div class="sci">${esc(s.sci)}</div>
+        <div class="tag">📍 ${esc(s.tag)}</div>
+        <p>${esc(s.text)}</p>
+        <details class="facts"><summary>小知識（${s.facts.length}）</summary><ul>${s.facts.map((f) => `<li>${esc(f)}</li>`).join('')}</ul></details></div></section>`
+      : `<section class="step"><div class="card">
+        <div class="num">${String(i).padStart(2, '0')} / ${STOPS.length - 1}</div>
+        <h2>${esc(s.title)}</h2>${s.tag ? `<div class="tag">${esc(s.tag)}</div>` : ''}
+        <p>${esc(s.text)}</p></div></section>`).join('')
+  dots.innerHTML = ''
+  STOPS.forEach((s, i) => {
+    const b = document.createElement('button')
+    b.title = s.title
+    b.onclick = () => snap?.goTo(i)
+    dots.appendChild(b)
+  })
+}
+let snap = null, steps = []
+
+STOPS = flora.stops
+renderCards()
+steps = [...story.querySelectorAll('.step')]
+// 小知識：寬螢幕直接展開，手機收起來（卡片才不會太高）
+const wide = matchMedia('(min-width: 721px)')
+const openFacts = () => document.querySelectorAll('details.facts').forEach((d) => { d.open = wide.matches })
+openFacts(); wide.addEventListener('change', openFacts)
+snap = snapScroll(steps, { onChange: (i) => [...dots.children].forEach((b, k) => b.classList.toggle('on', k === i)) })
+;[...dots.children].forEach((b, k) => b.classList.toggle('on', k === 0))
+
+/* ---------- 捲動 → 鏡頭 ---------- */
+// 每一站的停點和 snap.js 一樣算：比畫面高的站（手機上卡片很長、iPhone 工具列跑出來時）是一段範圍，
+// 整段都算「在這一站」，鏡頭停在這一站；只有在兩站範圍之間才算在飛
+function scrollProgress() {
+  const y = scrollY, maxTop = document.scrollingElement.scrollHeight - innerHeight
+  const cl = (v) => Math.min(Math.max(v, 0), maxTop)
+  const R = steps.map((s) => s.offsetHeight <= innerHeight + 2
+    ? Array(2).fill(cl(s.offsetTop + s.offsetHeight / 2 - innerHeight / 2))
+    : [cl(s.offsetTop), cl(s.offsetTop + s.offsetHeight - innerHeight)])
+  if (y <= R[0][1]) return 0
+  for (let i = 1; i < R.length; i++) {
+    if (y < R[i][0]) return i - 1 + (y - R[i - 1][1]) / Math.max(1, R[i][0] - R[i - 1][1])
+    if (y <= R[i][1]) return i
+  }
+  return R.length - 1
+}
+const camPos = new THREE.Vector3(), camTarget = new THREE.Vector3()
+const _a = new THREE.Vector3(), _b = new THREE.Vector3()
+// 兩站之間用「繞山的圓柱座標」內插：角度走短的那邊、半徑不會小於山的半徑，鏡頭就不會穿過山體。
+// 中段稍微抬高，越過灌木和步道欄杆；但不能撞到溫室屋頂
+function shotAt(p) {
+  const i = Math.min(STOPS.length - 2, Math.floor(p))
+  const f = THREE.MathUtils.smoothstep(p - i, 0.08, 0.92)
+  const A = STOPS[i], B = STOPS[i + 1]
+  // 兩站都在空中步道上：沿著步道走過去（直線飛會穿過上一圈步道的地板），眼睛看前方的步道
+  if (A.ramp && B.ramp) {
+    const g = B.deck ? Math.min(1, f / 0.8) : f
+    const s = THREE.MathUtils.lerp(A.ramp.s, B.ramp.s, g), off = THREE.MathUtils.lerp(A.ramp.off, B.ramp.off, g)
+    camPos.copy(rampPoint(s, off))
+    if (B.deck) camPos.lerp(B.pos, THREE.MathUtils.smoothstep(f, 0.75, 1))
+    camTarget.lerpVectors(A.target, B.target, f)
+    const ahead = rampPoint(s + 0.06, off + 1.2, 1.2)
+    camTarget.lerp(ahead, Math.sin(f * Math.PI) * 0.9)
+    return Math.round(p)
+  }
+  // 直線不會靠近山：直接直線飛（繞山的弧線反而會掃過旁邊的大樹）
+  {
+    const dx = B.pos.x - A.pos.x, dz = B.pos.z - A.pos.z, L2 = dx * dx + dz * dz || 1
+    const t = THREE.MathUtils.clamp(((MTN.x - A.pos.x) * dx + (MTN.z - A.pos.z) * dz) / L2, 0, 1)
+    const near = Math.hypot(A.pos.x + dx * t - MTN.x, A.pos.z + dz * t - MTN.z)
+    if (near > mtnBase(0) + 7) {
+      camPos.lerpVectors(A.pos, B.pos, f)
+      camPos.y += Math.sin(f * Math.PI) * Math.min(6, A.pos.distanceTo(B.pos) * 0.15)
+      camPos.y = Math.min(camPos.y, domeY(camPos.x, camPos.z) - 1.5)
+      camTarget.lerpVectors(A.target, B.target, f)
+      return Math.round(p)
+    }
+  }
+  const cyl = (v) => ({ a: Math.atan2(v.z - MTN.z, v.x - MTN.x), r: Math.hypot(v.x - MTN.x, v.z - MTN.z), y: v.y })
+  const ca = cyl(A.pos), cb = cyl(B.pos)
+  let da = cb.a - ca.a
+  while (da > Math.PI) da -= Math.PI * 2
+  while (da < -Math.PI) da += Math.PI * 2
+  const bump = Math.sin(f * Math.PI)
+  const y = THREE.MathUtils.lerp(ca.y, cb.y, f) + bump * Math.min(8, A.pos.distanceTo(B.pos) * 0.12)
+  const rMin = mtnBase(Math.max(0, y)) + 6
+  const r = Math.max(THREE.MathUtils.lerp(ca.r, cb.r, f), rMin * bump + Math.min(ca.r, cb.r) * (1 - bump))
+  const a = ca.a + da * f
+  camPos.set(MTN.x + r * Math.cos(a), y, MTN.z + r * Math.sin(a))
+  camPos.y = Math.min(camPos.y, domeY(camPos.x, camPos.z) - 1.5)
+  camTarget.lerpVectors(_a.copy(A.target), _b.copy(B.target), f)
+  return Math.round(p)
+}
+
+// 預熱：載入畫面還蓋著的時候每一站都先畫一次，著色器編譯、貼圖上傳都在這時做完
+for (const b of birds) b.update(0, 0.016)
+for (const s of STOPS) {
+  camera.position.copy(s.pos); camera.lookAt(s.target)
+  renderer.render(scene, camera)
+}
+await renderer.compileAsync(scene, camera)
+console.log(`[park] 建造 ${Math.round(T2 - T0)} ms、預熱 ${Math.round(performance.now() - T2)} ms`)
+loadingEl.classList.add('done')
+
+const _look = new THREE.Vector3(), _dir = new THREE.Vector3(), _right = new THREE.Vector3(), _upV = new THREE.Vector3(0, 1, 0)
+let smooth = null, phoneTilt = 0
+const clamp = THREE.MathUtils.clamp, damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt))
+const clock = new THREE.Clock()
+function frame() {
+  requestAnimationFrame(frame)
+  snap.tick()
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime
+  world.tick(t, dt, { phone: innerWidth <= 720 })
+  shotAt(scrollProgress())
+  // 除錯：__park.view = { pos:[x,y,z], target:[x,y,z] } 把鏡頭固定在任意位置
+  const dv = window.__park.view
+  if (dv) { camPos.fromArray(dv.pos); camTarget.fromArray(dv.target); smooth = null }
+  // 平滑追上捲動位置，手機慣性捲動才不會抖
+  if (!smooth) smooth = { pos: camPos.clone(), target: camTarget.clone() }
+  const k = 1 - Math.exp(-dt * 6)
+  smooth.pos.lerp(camPos, k); smooth.target.lerp(camTarget, k)
+  camera.position.copy(smooth.pos)
+  // 寬螢幕卡片在左邊：鏡頭往左偏一點看，鳥才會落在畫面右半邊、不被卡片蓋住
+  _look.copy(smooth.target)
+  if (innerWidth > 720) {
+    _dir.subVectors(smooth.target, smooth.pos)
+    _right.crossVectors(_dir, _upV).normalize()
+    _look.addScaledVector(_right, -_dir.length() * 0.24)
+  } else {
+    // 手機卡片在下面：鏡頭往下壓，讓鳥落在卡片上方那塊空白畫面的中間（依這一站卡片的實際高度算）
+    // 卡片上方空出來的比例：直接量這一站卡片現在在螢幕上的位置（卡片比畫面高時也對）
+    const card = story.children[Math.round(scrollProgress())]?.firstElementChild
+    const free = card ? clamp(card.getBoundingClientRect().top / innerHeight, 0.3, 1) : 1
+    phoneTilt = damp(phoneTilt, Math.atan((1 - free) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))), 4, dt)
+    _dir.subVectors(smooth.target, smooth.pos)
+    _right.crossVectors(_dir, _upV).normalize()
+    _look.copy(smooth.pos).add(_dir.applyAxisAngle(_right, -phoneTilt))
+  }
+  camera.lookAt(_look)
+  world.render()
+}
+window.__park = { scene, camera, renderer, snap, STOPS, flora, birds, water, shotAt: (p) => (shotAt(p), { pos: camPos.clone(), target: camTarget.clone() }) }
+frame()
