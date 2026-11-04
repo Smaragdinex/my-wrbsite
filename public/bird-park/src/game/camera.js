@@ -278,5 +278,13 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     onShot?.({ url, ...result, found: found.map(({ obj, ...f }) => f), focal: Math.round(st.focal), lens: lens().name, body: body().name, time: Date.now(),
       exif: { mode: cam.mode, N: s.N, t: s.t, iso: s.iso, over: Math.round(s.over * 10) / 10, ev: Math.round(meter.ev * 10) / 10 } })
   }
-  return { update, state: st, shoot, shotCam, settings: cam, now, meter, openPanel, closePanel, get panelOpen() { return !panel.hidden } }
+  // 載入時先畫一次測光圖和照片圖：畫到貼圖用的著色器版本跟畫面不同，要先編譯好，不然一開始幾次測光會是全黑
+  async function warm() {
+    const r = world.renderer, sc = photoCam(), prev = r.getRenderTarget()
+    r.setRenderTarget(rt)   // 編譯「畫到貼圖」的版本（色調映射、色彩空間跟畫到螢幕不同）
+    await r.compileAsync(world.scene, sc)
+    r.render(world.scene, sc); r.setRenderTarget(prev)
+    for (let i = 0; i < 4 && meter.lum === meter.lum0; i++) { meterNow(); await new Promise((q) => setTimeout(q, 60)) }   // 分頁在背景時 requestAnimationFrame 不會跑，所以用 setTimeout
+  }
+  return { update, state: st, shoot, shotCam, settings: cam, warm, now, meter, openPanel, closePanel, get panelOpen() { return !panel.hidden } }
 }

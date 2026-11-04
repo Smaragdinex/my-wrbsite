@@ -75,6 +75,7 @@ const nearShop = () => Math.hypot(camera.position.x - SHOP.x, camera.position.z 
 // 預熱：先畫一張，著色器編譯完再拿掉載入畫面
 world.tick(0, 0.016)
 await renderer.compileAsync(scene, camera)
+await cam.warm()
 world.render()
 loadingEl.classList.add('done')
 

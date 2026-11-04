@@ -60,20 +60,22 @@ export function createMeter(renderer) {
     renderer.shadowMap.autoUpdate = au
     renderer.readRenderTargetPixels(rt, 0, 0, MW, MH, buf)
     // 中央重點測光：中間三分之一權重 3 倍
-    let s = 0, w = 0
+    let s = 0, w = 0, peak = 0
     const h = THREE.DataUtils.fromHalfFloat
     for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
       const i = (y * MW + x) * 4
       const L = 0.2126 * h(buf[i]) + 0.7152 * h(buf[i + 1]) + 0.0722 * h(buf[i + 2])
       const c = Math.abs(x - MW / 2) < MW / 6 && Math.abs(y - MH / 2) < MH / 6 ? 3 : 1
-      s += Math.log2(Math.max(L, 1e-5)) * c; w += c
+      s += Math.log2(Math.max(L, 1e-5)) * c; w += c; peak = Math.max(peak, L)
     }
-    lum = 2 ** (s / w)
+    // 整張全黑＝著色器還在背景編譯、這一格什麼都沒畫：沿用上一次的值
+    if (peak > 0) lum = 2 ** (s / w)
     return lum
   }
   return {
     measure,
     get lum() { return lum },
+    lum0: L_REF,   // 還沒量到之前的預設值
     get ev() { return 13 + K * log2(lum / L_REF) },
     // 照片的亮度：先把場景拉到「正常」亮度（晚上的長曝光照片本來就會比眼睛看到的亮，但不拉滿，留一點夜晚的感覺），再乘上過曝／欠曝
     photoGain(over) { return (L_REF / lum) ** 0.85 * 2 ** over },
