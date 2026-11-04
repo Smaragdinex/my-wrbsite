@@ -165,12 +165,15 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     stem: new THREE.MeshStandardMaterial({ color: 0x4f7a2a, roughness: 0.9 }),
     wood: new THREE.MeshStandardMaterial({ color: 0x9a6a40, roughness: 0.8 }),
     metal: new THREE.MeshStandardMaterial({ color: 0x3e4447, roughness: 0.4, metalness: 0.7 }),
-    lamp: Object.assign(new THREE.MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffd89a, emissiveIntensity: 1.2 }), { userData: { lamp: [0.15, 6] } }),   // 白天關著、晚上亮
+    lamp: Object.assign(new THREE.MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffd89a, emissiveIntensity: 1.2 }), { userData: { lamp: [0.1, 9] } }),   // 燈泡：白天關著、晚上很亮
   }
 
   /* --- 步道邊的長椅、路燈、解說牌 --- */
   const benches = [], lamps = [], signs = []
   // 鳥的活動範圍（和鏡頭那一側）不放長椅、路燈，不然會剛好擋在鳥前面
+  // 岔路口：每條支線的頭尾（接到別條步道的地方）；環狀的 loop、ring 沒有頭尾
+  const crossings = PATHS.filter((q) => q.name !== 'loop' && q.name !== 'ring').flatMap((q) => [q.points[0], q.points[q.points.length - 1]])
+  const nearCrossing = (x, z, r) => crossings.some((pt) => (pt.x - x) ** 2 + (pt.z - z) ** 2 < r * r)
   const nearBird = (x, z) => reserved.some((r) => (x - r.x) ** 2 + (z - r.z) ** 2 < (r.r + 4) ** 2)
   for (const p of PATHS) {
     if (p.name === 'spur') continue
@@ -186,7 +189,8 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       if (!insideGarden(x, z, 0.92) || poolQ(x, z) < 1.4 || nearBird(x, z)) continue
       if (distToMtn(x, z) < mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 2) continue
       const face = Math.atan2(-nx * side, -nz * side)
-      if (rnd() < 0.55) {
+      // 岔路口（支線接到別條步道的地方，7 公尺內）不放長椅（會擋路、也不好看），改放解說牌；不多抽亂數，其他位置的擺設才不會全部跑掉
+      if (rnd() < 0.55 && !nearCrossing(x, z, 7)) {
         benches.push({ p: v3(x, terrainHeight(x, z), z), q: qY(face), s: sc(1) })
         addCollider(x, z, 0.9, terrainHeight(x, z) + 1)
       } else {
@@ -217,11 +221,45 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     scene.add(makeInst(g, [mats.wood, mats.metal], benches))
   }
   {
-    const post = new THREE.CylinderGeometry(0.06, 0.09, 3.2, 8).translate(0, 1.6, 0)
-    const head = new THREE.CylinderGeometry(0.22, 0.16, 0.45, 8).translate(0, 3.35, 0)
-    const cap = new THREE.ConeGeometry(0.3, 0.25, 8).translate(0, 3.7, 0)
-    scene.add(makeInst(mergeGeometries([post, cap]), mats.metal, lamps))
-    scene.add(makeInst(head, mats.lamp, lamps, { cast: false }))
+    // 公園路燈（鑄鐵、墨綠烤漆）：八角底座 → 有凹槽線條的錐形燈桿 → 裝飾環 → 六角燈籠（玻璃燈罩＋框條）→ 斗笠燈帽＋頂飾
+    // 燈罩玻璃用 mats.lamp（白天霧面、晚上發光，world.js 的日夜在調）
+    const prof = [[0, 0], [0.2, 0], [0.2, 0.06], [0.17, 0.09], [0.17, 0.32], [0.13, 0.36], [0.11, 0.42], [0.085, 0.5], [0.075, 1.6],
+      [0.06, 2.55], [0.085, 2.58], [0.085, 2.64], [0.05, 2.68], [0.045, 2.84], [0.09, 2.88], [0.14, 2.9], [0.14, 2.94], [0, 2.94]].map(([r, y]) => new THREE.Vector2(r, y))
+    const post = new THREE.LatheGeometry(prof, 8)
+    // 燈桿上的凹槽：沿著桿身的細長條（比桿身稍微凸出一點，看起來有稜線）
+    const flutes = []
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8
+      flutes.push(new THREE.BoxGeometry(0.018, 1.9, 0.018).translate(0, 1.5, 0).translate(Math.cos(a) * 0.068, 0, Math.sin(a) * 0.068))
+    }
+    // 燈籠框：六根斜的框條＋上下兩圈
+    const frame = [], gB = 2.95, gT = 3.38, rB = 0.13, rT = 0.18
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2
+      const b = new THREE.Vector3(Math.cos(a) * rB, gB, Math.sin(a) * rB), t = new THREE.Vector3(Math.cos(a) * rT, gT, Math.sin(a) * rT)
+      const len = b.distanceTo(t), bar = new THREE.CylinderGeometry(0.012, 0.012, len, 4)
+      bar.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, t.clone().sub(b).normalize())).translate((b.x + t.x) / 2, (b.y + t.y) / 2, (b.z + t.z) / 2)
+      frame.push(bar)
+    }
+    frame.push(new THREE.CylinderGeometry(rB + 0.015, rB + 0.015, 0.035, 6).translate(0, gB, 0), new THREE.CylinderGeometry(rT + 0.02, rT + 0.02, 0.04, 6).translate(0, gT, 0))
+    // 燈帽：六角斗笠＋上面一小截＋頂飾小球
+    const roof = new THREE.ConeGeometry(0.27, 0.2, 6).translate(0, gT + 0.12, 0)
+    const top = new THREE.CylinderGeometry(0.035, 0.05, 0.08, 6).translate(0, gT + 0.25, 0)
+    const fin = new THREE.SphereGeometry(0.035, 8, 6).translate(0, gT + 0.32, 0)
+    const iron = mergeGeometries([post, ...flutes, ...frame, roof, top, fin].map((g) => g.index ? g.toNonIndexed() : g).map((g) => { g.deleteAttribute('uv'); return g }))   // 各自的法線（不重算，不然整支都變成一面一面的）
+    // 玻璃燈罩：六角錐台，裡面再一顆小燈泡（晚上看起來中間最亮）
+    // 玻璃燈罩：透明帶一點暖色、會反光；白天看得到裡面的燈泡，晚上整個燈罩泛光、燈泡最亮
+    const glass = new THREE.CylinderGeometry(rT - 0.005, rB - 0.005, gT - gB, 6, 1, true).translate(0, (gB + gT) / 2, 0)
+    const bulb = new THREE.SphereGeometry(0.045, 12, 10).scale(1, 1.35, 1).translate(0, (gB + gT) / 2 - 0.02, 0)
+    const socket = new THREE.CylinderGeometry(0.03, 0.035, 0.07, 8).translate(0, gB + 0.05, 0)
+    mats.iron = new THREE.MeshStandardMaterial({ color: 0x2b3b33, roughness: 0.38, metalness: 0.55 })   // 墨綠烤漆鑄鐵
+    mats.lampGlass = Object.assign(new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xffc77a, emissiveIntensity: 0.05, transparent: true, opacity: 0.38,
+      roughness: 0.08, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false }), { userData: { lamp: [0.02, 1.6] } })
+    const sock = socket.toNonIndexed(); sock.deleteAttribute('uv')
+    scene.add(makeInst(mergeGeometries([iron, sock]), mats.iron, lamps))
+    scene.add(makeInst(bulb, mats.lamp, lamps, { cast: false }))
+    const gl = makeInst(glass, mats.lampGlass, lamps, { cast: false }); gl.renderOrder = 3
+    scene.add(gl)
   }
   {
     const post = new THREE.BoxGeometry(0.12, 1.1, 0.12).translate(0, 0.55, 0)
@@ -629,5 +667,5 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
   }
 
   // 路燈燈頭、長椅的位置（遊戲的日夜：燈光、坐下休息）
-  return { mats, counts, heroes, stops, lamps: lamps.map((l) => l.p.clone().setY(l.p.y + 3.35)), benches: benches.map((b) => ({ p: b.p.clone(), q: b.q.clone() })) }
+  return { mats, counts, heroes, stops, lamps: lamps.map((l) => l.p.clone().setY(l.p.y + 3.15)), benches: benches.map((b) => ({ p: b.p.clone(), q: b.q.clone() })) }
 }
