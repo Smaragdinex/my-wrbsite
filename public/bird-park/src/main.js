@@ -154,12 +154,20 @@ snap = snapScroll(steps, { onChange: (i) => [...dots.children].forEach((b, k) =>
 ;[...dots.children].forEach((b, k) => b.classList.toggle('on', k === 0))
 
 /* ---------- 捲動 → 鏡頭 ---------- */
+// 每一站的停點和 snap.js 一樣算：比畫面高的站（手機上卡片很長、iPhone 工具列跑出來時）是一段範圍，
+// 整段都算「在這一站」，鏡頭停在這一站；只有在兩站範圍之間才算在飛
 function scrollProgress() {
-  const y = scrollY
-  const keys = steps.map((s) => s.offsetTop + s.offsetHeight / 2 - innerHeight / 2)
-  if (y <= keys[0]) return 0
-  for (let i = 1; i < keys.length; i++) if (y < keys[i]) return i - 1 + (y - keys[i - 1]) / (keys[i] - keys[i - 1])
-  return keys.length - 1
+  const y = scrollY, maxTop = document.scrollingElement.scrollHeight - innerHeight
+  const cl = (v) => Math.min(Math.max(v, 0), maxTop)
+  const R = steps.map((s) => s.offsetHeight <= innerHeight + 2
+    ? Array(2).fill(cl(s.offsetTop + s.offsetHeight / 2 - innerHeight / 2))
+    : [cl(s.offsetTop), cl(s.offsetTop + s.offsetHeight - innerHeight)])
+  if (y <= R[0][1]) return 0
+  for (let i = 1; i < R.length; i++) {
+    if (y < R[i][0]) return i - 1 + (y - R[i - 1][1]) / Math.max(1, R[i][0] - R[i - 1][1])
+    if (y <= R[i][1]) return i
+  }
+  return R.length - 1
 }
 const camPos = new THREE.Vector3(), camTarget = new THREE.Vector3()
 const _a = new THREE.Vector3(), _b = new THREE.Vector3()
@@ -253,7 +261,7 @@ function frame() {
   pondRipples(t)
   foliageTime.value = t
   // 鳥：只更新鏡頭附近的（骨架動畫很吃 CPU）
-  for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt, innerWidth > 720 ? 0.6 : 1)
+  for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt, innerWidth <= 720)
   water.mist.update(dt, camera)
   for (const c of clouds) {
     const u = c.userData
@@ -277,8 +285,9 @@ function frame() {
     _look.addScaledVector(_right, -_dir.length() * 0.24)
   } else {
     // 手機卡片在下面：鏡頭往下壓，讓鳥落在卡片上方那塊空白畫面的中間（依這一站卡片的實際高度算）
-    const card = story.children[Math.round(scrollY / innerHeight)]?.firstElementChild
-    const free = card ? clamp(1 - (card.offsetHeight + 36) / innerHeight, 0.3, 1) : 1   // 卡片上方空出來的比例
+    // 卡片上方空出來的比例：直接量這一站卡片現在在螢幕上的位置（卡片比畫面高時也對）
+    const card = story.children[Math.round(scrollProgress())]?.firstElementChild
+    const free = card ? clamp(card.getBoundingClientRect().top / innerHeight, 0.3, 1) : 1
     phoneTilt = damp(phoneTilt, Math.atan((1 - free) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))), 4, dt)
     _dir.subVectors(smooth.target, smooth.pos)
     _right.crossVectors(_dir, _upV).normalize()

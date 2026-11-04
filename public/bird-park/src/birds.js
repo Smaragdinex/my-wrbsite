@@ -1020,21 +1020,23 @@ export function placeAnimal(def) {
   // 動物本身不接收陰影（停在樹蔭下也要看得清楚），也不烘進地面
   built.obj.traverse((o) => { if (o.isMesh) { o.receiveShadow = !!o.userData.catcher; o.userData.noBake = true } })
 
-  // 鏡頭目標跟著動物走：量的是「現在在哪」相對於站點中心（不是相對於一開始的位置，
-  // 不然一開始就停在枝條靠樹幹那段的鳥會一直偏在畫面一邊）。follow：手機畫面窄，整個跟上才會在正中間
+  // 跟拍：鏡頭和目標一起跟著鳥平移（量的是鳥現在在哪、相對於站點中心），鳥在畫面上的位置和大小都不變。
+  // 一群鳥：寬螢幕跟整群的中心；手機（lead）跟其中一隻，整群放不下
   const base = target.clone(), f0 = V(), fw = V()
+  const cam = base.clone().addScaledVector(toCam, dist)
+  cam.y = gy + camH
+  const baseCam = cam.clone()
   g.updateMatrixWorld(true)
   built.update(0, 0.016)
   g.updateMatrixWorld(true)
   obj.localToWorld(f0.set(0, built.focus.y, 0))
-  const update = (t, dt, follow = 0.6) => {
+  const update = (t, dt, phone = false) => {
     built.update(t, dt)
     obj.updateMatrixWorld()
-    obj.localToWorld(fw.copy(follow === 1 && built.lead ? built.lead : built.focus)).sub(f0)
+    obj.localToWorld(fw.copy(phone && built.lead ? built.lead : built.focus)).sub(f0)
     fw.y *= 0.3
-    target.copy(base).addScaledVector(fw, follow)
+    target.copy(base).add(fw)
+    cam.copy(baseCam).add(fw)
   }
-  const cam = base.clone().addScaledVector(toCam, dist)
-  cam.y = gy + camH
   return { group: g, update, target, cam, built }
 }
