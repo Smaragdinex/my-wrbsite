@@ -248,7 +248,7 @@ function frame() {
   foliageTime.value = t
   // 鳥：只更新鏡頭附近的（骨架動畫很吃 CPU）
   for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt)
-  water.mist.update(dt)
+  water.mist.update(dt, camera)
   for (const c of clouds) {
     const u = c.userData
     u.a += u.speed * dt
