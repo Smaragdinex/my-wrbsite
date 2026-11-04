@@ -15,20 +15,30 @@ const UP = new THREE.Vector3(0, 1, 0)
 const _m = new THREE.Matrix4()
 
 /* ---------- 幾何 ---------- */
-function flowerHead() {
-  const P = [0, 0, 0], C = [1, 0.85, 0.35], I = []
-  const N = 40
-  for (let i = 0; i <= N; i++) {
-    const a = (i / N) * TAU
-    const r = 0.25 + 0.75 * Math.abs(Math.cos(a * 2.5))
-    P.push(Math.cos(a) * r * 0.5, 0.12 * r, Math.sin(a) * r * 0.5)
-    C.push(1, 1, 1)
-    if (i > 0) I.push(0, i + 1, i)
+// 花頭：一片片花瓣（基部在中心、往外伸、尖端往上翹成杯狀），貼花瓣貼圖；花心另外一顆扁球。單位：花的直徑約 1
+function petalHead(n, len, wid, cup, tilt, seed = 1) {
+  const r = mulberry32(seed), geos = []
+  for (let i = 0; i < n; i++) {
+    const g = new THREE.PlaneGeometry(wid, len, 1, 4), p = g.attributes.position
+    const lift = (r() - 0.5) * 0.06
+    for (let k = 0; k < p.count; k++) {
+      const x = p.getX(k), y = p.getY(k) + len / 2, t = y / len
+      p.setXYZ(k, y + 0.03, (cup * t * t + tilt * t + lift * t) * len, x * (1 - 0.15 * t))
+    }
+    g.rotateY((i + (r() - 0.5) * 0.25) / n * TAU)
+    geos.push(g)
   }
-  const g = new THREE.BufferGeometry()
-  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3))
-  g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3))
-  g.setIndex(I)
+  const m = mergeGeometries(geos)
+  m.computeVertexNormals()
+  return m
+}
+// 葉片：從地面斜斜往外長、往下垂的彎葉（長 1、寬 0.3）
+function leafBlade() {
+  const g = new THREE.PlaneGeometry(0.3, 1, 1, 5), p = g.attributes.position
+  for (let k = 0; k < p.count; k++) {
+    const x = p.getX(k), t = p.getY(k) + 0.5
+    p.setXYZ(k, t * 0.85, 0.55 * Math.sin(t * Math.PI * 0.8) - 0.1 * t, x)
+  }
   g.computeVertexNormals()
   return g
 }
@@ -439,17 +449,30 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     counts[name] = list.length
   }
 
-  /* --- 花 --- */
-  const heads = [], stems = []
-  const palettes = [
-    [0xe8506a, 0xf28aa0], [0xf2c230, 0xf7dd70], [0xb065d6, 0xd49af0], [0xffffff, 0xf6eef2],
-    [0xff7a3d, 0xffa86b], [0xe04848, 0xff6f6f], [0x6c8ff0, 0x9cb5ff],
+  /* --- 花：四種常見的花（花瓣、花心、莖、基部葉片），花瓣顏色每朵不一樣 --- */
+  // 雛菊（白、細瓣多、黃心）、波斯菊（粉紫、8 片寬瓣）、長春花（5 片圓瓣、白眼）、金光菊（黃橘、垂瓣、深棕心）
+  const SPECIES = [
+    { n: 16, len: 0.5, wid: 0.09, cup: 0.18, tilt: 0.06, shape: 0, center: 0xf0c02c, cr: 0.11, cols: [0xffffff, 0xfbf6ee, 0xf6f0f4] },
+    { n: 8, len: 0.5, wid: 0.27, cup: 0.22, tilt: 0.08, shape: 1, center: 0xe8b02a, cr: 0.08, cols: [0xe9629c, 0xf3a2c6, 0xb867d6, 0xf7d4e4] },
+    { n: 5, len: 0.42, wid: 0.34, cup: 0.12, tilt: 0.0, shape: 1, center: 0xf7eef4, cr: 0.06, cols: [0xd9659c, 0x8f86e6, 0xf27a7a, 0xffffff] },
+    { n: 13, len: 0.48, wid: 0.13, cup: -0.12, tilt: -0.08, shape: 0, center: 0x4a2a14, cr: 0.16, cols: [0xf4b81c, 0xf08a28, 0xf7c94a] },
   ]
-  const addFlower = (x, y, z, col, h, size) => {
-    stems.push({ p: v3(x, y, z), q: qY(0), s: v3(1, h, 1) })
-    heads.push({ p: v3(x, y + h, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.6, rnd() * TAU, (rnd() - 0.5) * 0.6)), s: sc(size), c: new THREE.Color(col) })
+  const fl = SPECIES.map(() => ({ heads: [], centers: [] })), stems = [], leaves = []
+  const addFlower = (x, y, z, sp, h, size, col) => {
+    const S = SPECIES[sp]
+    // 莖微微斜，花頭朝上偏一點（向光）
+    const lean = (rnd() - 0.5) * 0.25, la = rnd() * TAU
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(lean * Math.cos(la), 0, lean * Math.sin(la)))
+    stems.push({ p: v3(x, y, z), q, s: v3(1, h, 1) })
+    const top = v3(0, h, 0).applyQuaternion(q).add(v3(x, y, z))
+    const hq = new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.5, rnd() * TAU, (rnd() - 0.5) * 0.5))
+    const c = new THREE.Color(col ?? S.cols[Math.floor(rnd() * S.cols.length)]).multiplyScalar(0.92 + rnd() * 0.12)
+    fl[sp].heads.push({ p: top, q: hq, s: sc(size), c })
+    fl[sp].centers.push({ p: top, q: hq, s: sc(size), c: new THREE.Color(S.center) })
+    // 基部 2～3 片葉
+    for (let j = 0, nL = 2 + Math.floor(rnd() * 2); j < nL; j++) leaves.push({ p: v3(x, y, z), q: qY(rnd() * TAU), s: sc(0.09 + rnd() * 0.08), c: new THREE.Color().setHSL(0.26 + (rnd() - 0.5) * 0.04, 0.45, 0.32 + rnd() * 0.08) })
   }
-  // 花圃：沿步道邊成片
+  // 花圃：沿步道邊成片（一圃一種花）
   const beds = []
   tries = 0
   while (beds.length < 26 && tries++ < 3000) {
@@ -462,32 +485,60 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     beds.push({ x, z })
   }
   for (const b of beds) {
-    const pal = palettes[Math.floor(rnd() * palettes.length)]
+    const sp = Math.floor(rnd() * SPECIES.length), col = SPECIES[sp].cols[Math.floor(rnd() * SPECIES[sp].cols.length)]
     const R = 1.6 + rnd() * 1.6
-    for (let k = 0; k < 140; k++) {
+    for (let k = 0; k < 160; k++) {
       const a = rnd() * TAU, rr = Math.sqrt(rnd()) * R
       const x = b.x + Math.cos(a) * rr * 1.4, z = b.z + Math.sin(a) * rr
       if (pathClearAt(x, z) < 0.3) continue
-      addFlower(x, terrainHeight(x, z), z, pal[k % 2], 0.25 + rnd() * 0.45, 0.13 + rnd() * 0.08)
+      addFlower(x, terrainHeight(x, z), z, sp, 0.22 + rnd() * 0.35, 0.08 + rnd() * 0.04, rnd() < 0.85 ? col : null)
     }
   }
-  // 零星野花
-  for (let k = 0; k < 1400; k++) {
+  // 零星野花（一區一種，像真的野地）
+  for (let k = 0; k < 1600; k++) {
     const [x, z] = randInGarden(rnd)
     if (!groundOK(x, z, { clear: 0.4, mtnPad: 0.8, pool: 1.15 })) continue
-    const pal = palettes[Math.floor(Math.abs(fbm2(x * 0.05, z * 0.05)) * 40) % palettes.length]
-    addFlower(x, terrainHeight(x, z), z, pal[k % 2], 0.15 + rnd() * 0.4, 0.1 + rnd() * 0.06)
+    const sp = Math.floor(Math.abs(fbm2(x * 0.05, z * 0.05)) * 40) % SPECIES.length
+    addFlower(x, terrainHeight(x, z), z, sp, 0.12 + rnd() * 0.3, 0.06 + rnd() * 0.035)
   }
-  // 山壁蘭花（只有花）
+  // 鳥站旁邊的野花（birdinfo 的 flowers：[[種類, 朵數], …]）：撒在鏡頭看得到的那片草坪（鏡頭前 0.8～7 公尺、
+  // 越遠撒越寬），一小叢一小叢；鳥腳邊 0.5 公尺內不種
+  for (const st of stops) {
+    const d = st.bird?.def
+    if (!d?.flowers) continue
+    const f = v3(st.target.x - st.pos.x, 0, st.target.z - st.pos.z).normalize(), side = v3(-f.z, 0, f.x)
+    for (const [sp, count] of d.flowers) {
+      for (let k = 0, made = 0; k < count * 6 && made < count; k++) {
+        const fwd = 0.8 + Math.pow(rnd(), 1.3) * 5.2, lat = (rnd() - 0.5) * (0.6 + fwd * 1.1)
+        const x = st.pos.x + f.x * fwd + side.x * lat, z = st.pos.z + f.z * fwd + side.z * lat
+        if (Math.hypot(x - d.spot[0], z - d.spot[1]) < 0.5) continue
+        if (pathClearAt(x, z) < 0.15 || !insideGarden(x, z, 0.97)) continue
+        // 一叢 1～4 朵
+        for (let j = 0, n = 1 + Math.floor(rnd() * 4); j < n && made < count; j++, made++) {
+          const xx = x + (rnd() - 0.5) * 0.25, zz = z + (rnd() - 0.5) * 0.25
+          addFlower(xx, terrainHeight(xx, zz), zz, sp, 0.1 + rnd() * 0.16, 0.075 + rnd() * 0.04)
+        }
+      }
+    }
+  }
+  // 山壁蘭花（只有花頭）：用寬瓣那種
   const orchids = [0xd65bc8, 0xf2f0f5, 0xb74fe0, 0xf5a0c8, 0xfff07a]
   for (let k = 0; k < 520; k++) {
     const m = onMountain(1, MTN.h)
     if (!m) continue
-    const p = m.p.clone().addScaledVector(m.n, 0.35)
-    heads.push({ p, q: alignTo(m.n, rnd() * TAU), s: sc(0.16 + rnd() * 0.1), c: new THREE.Color(orchids[k % orchids.length]) })
+    const p = m.p.clone().addScaledVector(m.n, 0.35), q = alignTo(m.n, rnd() * TAU), s = sc(0.14 + rnd() * 0.08)
+    fl[1].heads.push({ p, q, s, c: new THREE.Color(orchids[k % orchids.length]) })
+    fl[1].centers.push({ p, q, s, c: new THREE.Color(0xf2e070) })
   }
-  scene.add(makeInst(new THREE.CylinderGeometry(0.012, 0.015, 1, 4).translate(0, 0.5, 0), mats.stem, stems, { cast: false }))
-  scene.add(makeInst(flowerHead(), mats.flower, heads, { colors: true, cast: false }))
+  scene.add(makeInst(new THREE.CylinderGeometry(0.004, 0.006, 1, 5).translate(0, 0.5, 0), mats.stem, stems, { cast: false }))
+  const leafMat = new THREE.MeshStandardMaterial({ map: T.leafBladeTex(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75 })
+  scene.add(makeInst(leafBlade(), leafMat, leaves, { colors: true, cast: false }))
+  const centerGeo = (r) => new THREE.SphereGeometry(r, 12, 6).scale(1, 0.45, 1).translate(0, 0.04, 0)
+  SPECIES.forEach((S, i) => {
+    const mat = new THREE.MeshStandardMaterial({ map: T.petalTex(S.shape), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.55 })
+    scene.add(makeInst(petalHead(S.n, S.len, S.wid, S.cup, S.tilt, 7 + i), mat, fl[i].heads, { colors: true, cast: false }))
+    scene.add(makeInst(centerGeo(S.cr), new THREE.MeshStandardMaterial({ roughness: 0.85 }), fl[i].centers, { colors: true, cast: false }))
+  })
 
   /* --- 草：一片一片的草葉，成叢長 --- */
   {

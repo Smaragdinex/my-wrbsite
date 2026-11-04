@@ -322,3 +322,44 @@ export function waterNormalTex() {
   t.needsUpdate = true
   return t
 }
+
+// 花瓣：白色（實際顏色由每朵花的 instance color 乘上去），基部窄、尖端圓、邊緣柔、中間一條條淡淡的脈紋，
+// 基部稍暗、尖端稍亮；透明度給 alphaTest 切邊。shape：0 細長（雛菊）、1 寬圓（波斯菊、長春花）
+export function petalTex(shape = 0) {
+  const W = 64, H = 128, [c, x] = canvas(W, H)
+  const img = x.createImageData(W, H), d = img.data
+  for (let j = 0; j < H; j++) {
+    const t = j / (H - 1)                                     // 0 基部 → 1 尖端
+    const half = shape ? Math.sin(Math.PI * Math.min(1, t * 1.1)) ** 0.6 * (0.2 + 0.8 * Math.min(1, t * 2.2)) * 0.48
+      : (0.12 + 0.88 * Math.min(1, t * 3.5)) * (1 - Math.max(0, t - 0.82) / 0.18 * 0.65) * 0.36
+    for (let i = 0; i < W; i++) {
+      const u = (i + 0.5) / W - 0.5, k = (j * W + i) * 4
+      const edge = half - Math.abs(u)
+      const a = Math.max(0, Math.min(1, edge * 40)) * (t < 0.985 ? 1 : 0)
+      const vein = 0.93 + 0.07 * Math.cos(u / Math.max(half, 0.01) * Math.PI * (shape ? 7 : 3))
+      const v = (0.72 + 0.28 * Math.min(1, t * 1.6)) * vein * (1 - 0.12 * Math.abs(u) / Math.max(half, 0.01))
+      d[k] = d[k + 1] = d[k + 2] = Math.round(255 * Math.min(1, v)); d[k + 3] = Math.round(255 * a)
+    }
+  }
+  x.putImageData(img, 0, 0)
+  return toTex(c)
+}
+// 葉片：披針形、中脈和側脈、邊緣稍暗
+export function leafBladeTex() {
+  const W = 64, H = 128, [c, x] = canvas(W, H)
+  const img = x.createImageData(W, H), d = img.data
+  for (let j = 0; j < H; j++) {
+    const t = j / (H - 1), half = Math.sin(Math.PI * t) ** 0.8 * 0.46 * (1 - 0.3 * t)
+    for (let i = 0; i < W; i++) {
+      const u = (i + 0.5) / W - 0.5, k = (j * W + i) * 4, au = Math.abs(u)
+      const a = Math.max(0, Math.min(1, (half - au) * 40))
+      const mid = Math.exp(-((u / 0.03) ** 2)) * 0.25
+      const side = Math.max(0, Math.cos((t * 9 - au / Math.max(half, 0.01) * 1.5) * Math.PI * 2)) ** 6 * 0.08
+      const v = 0.78 + mid + side - 0.18 * (au / Math.max(half, 0.01)) ** 2
+      d[k] = Math.round(70 * v); d[k + 1] = Math.round(122 * v); d[k + 2] = Math.round(44 * v); d[k + 3] = Math.round(255 * a)
+    }
+  }
+  x.putImageData(img, 0, 0)
+  return toTex(c)
+}
+

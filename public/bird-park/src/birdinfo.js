@@ -130,7 +130,8 @@ const ALL = [
     ],
   },
   {
-    id: 'sparrow', spot: [-60, 6], perch: 'ground', dist: 1.8, camH: 0.75, lookY: 0.08,
+    id: 'sparrow', spot: [-60, 6], perch: 'ground', flowers: [[0, 170], [2, 45], [1, 25]],   // 草坪上的雛菊和長春花
+    dist: 1.8, camH: 0.75, lookY: 0.08,
     name: '麻雀', sci: 'Passer montanus', where: '入口廣場',
     intro: '頭頂是栗褐色，白白的臉頰上有一塊黑斑，是認出牠的重點。麻雀常成群在地上一跳一跳地找草籽和碎屑，是住家附近最熟悉的小鳥。',
     facts: [
