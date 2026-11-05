@@ -620,8 +620,9 @@ export function buildWater(scene) {
         .replace('#include <color_fragment>', `#include <color_fragment>
           float u = vFall.x, v = vFall.y, t = v / ${L.toFixed(2)};
           float W = ${(width * 2.2).toFixed(2)} * (0.8 + ${spread.toFixed(2)} * t);
-          // 自由落體：越往下越快，流動的位置用 v - 速度×時間
-          float fl = v - uWT * ${speed.toFixed(2)} * (1.0 + 1.4 * t);
+          // 自由落體：越往下越快（速度 ∝ 1 + 1.4t）。不能寫成 v - 時間×速度(t)：時間一直加，幾秒後花紋會倒過來往上跑。
+          // 改用「水從崖口落到這裡要多久」當座標（∫dv/速度），花紋永遠往下走、越往下拉得越長
+          float fl = ${(L / 1.4).toFixed(2)} * log(1.0 + 1.4 * t) - uWT * ${speed.toFixed(2)};
           float x = u * W + ${seed.toFixed(1)};
           // 細長的水柱紋：沿流向拉得很長（y 的頻率比 x 低很多）
           float s1 = snoise(vec2(x * 1.8, fl * 0.05)) * 0.5 + 0.5;
@@ -715,7 +716,7 @@ export function buildWater(scene) {
           float u = vFall.x, v = vFall.y, id = vFall.z, thick = vFall.w;
           float t = clamp(v / ${L.toFixed(2)}, 0.0, 1.0);
           float spd = 5.0 + fract(id * 0.618) * 3.0;
-          float fl = v - uWT * spd * (1.0 + 1.3 * t);
+          float fl = ${(L / 1.3).toFixed(2)} * log(1.0 + 1.3 * t) - uWT * spd;   // 同上：落下的時間當座標，不會倒流
           // 每股自己的紋：沿流向很長的條紋＋往下掉的一團團白
           float s1 = snoise(vec2(u * 3.0 + id * 7.1, fl * 0.07)) * 0.5 + 0.5;
           float s2 = snoise(vec2(u * 8.0 + id * 3.3, fl * 0.22)) * 0.5 + 0.5;
