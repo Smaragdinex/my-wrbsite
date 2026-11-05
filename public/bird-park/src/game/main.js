@@ -102,10 +102,11 @@ startEl.addEventListener('click', (e) => { if (e.target.closest('.back')) showSh
 document.getElementById('btnSettings').onclick = () => showSheet(settings.el)
 document.getElementById('btnHelp').onclick = () => showSheet(helpEl)
 startEl.hidden = false
+document.body.classList.add('in-menu')   // 首頁選單上不顯示右上的錢、時間（HUD）
 const goEl = document.getElementById('go')
 goEl.onclick = () => player.controls.lock()
-player.controls.addEventListener('lock', () => { startEl.hidden = true; goEl.textContent = '繼續' })
-player.controls.addEventListener('unlock', () => { if (!panelOpen()) { showSheet(null); startEl.hidden = false } })
+player.controls.addEventListener('lock', () => { startEl.hidden = true; document.body.classList.remove('in-menu'); goEl.textContent = '繼續' })
+player.controls.addEventListener('unlock', () => { if (!panelOpen()) { showSheet(null); startEl.hidden = false; document.body.classList.add('in-menu') } })
 
 const clock = new THREE.Clock()
 function frame() {
