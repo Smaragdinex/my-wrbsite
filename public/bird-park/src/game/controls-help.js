@@ -30,6 +30,6 @@ export function controlsSvg() {
     <circle class="c-dot" cx="${x1}" cy="${y1}" r="7"/>
     <text class="c-label" x="${x2 + dx}" y="${y2 + (y2 < y1 ? -12 : 34)}" text-anchor="${anchor}"><tspan class="c-key">${key}</tspan><tspan dx="12">${text}</tspan></text>`).join('')
   return `<svg class="controls" viewBox="20 110 1516 840" role="img" aria-label="鍵盤滑鼠操作圖">
-    <image href="models/controls-keyboard.webp" x="0" y="0" width="1536" height="1024"/>
+    <image href="models/controls-keyboard.webp?v=2" x="0" y="0" width="1536" height="1024"/>
     ${keys}${lines}</svg>`
 }
