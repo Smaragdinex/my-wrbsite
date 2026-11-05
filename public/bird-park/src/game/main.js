@@ -1,6 +1,7 @@
 // 遊戲入口：同一個園區（world.js），第一人稱走動、拿相機拍鳥、拿照片去相機行換錢、買鏡頭
 import * as THREE from 'three'
 import { buildWorld, PHONE } from '../world.js'
+import { createSettings } from './settings.js'
 import { createPlayer } from '../player.js'
 import { createHud } from './hud.js'
 import { createCamera, BODIES, LENSES } from './camera.js'
@@ -92,12 +93,19 @@ loadingEl.classList.add('done')
 // 老闆的 AI（WebLLM）：桌機瀏覽器有 WebGPU 就在背景載入；手機、沒有 WebGPU、或網址加 ?ai=0 就用寫好的評語
 if (!PHONE && new URLSearchParams(location.search).get('ai') !== '0') loadLLM(() => hud.setStatus(llm.status === 'loading' ? `老闆的 AI 準備中… ${Math.round(llm.progress * 100)}%（第一次要下載約 1 GB）` : ''))
 
-// 開始畫面：點一下鎖定滑鼠（瀏覽器規定要使用者點擊才能鎖）
-const startEl = document.getElementById('start')
+// 首頁：開始遊戲／設定／操作說明。開始＝鎖定滑鼠（瀏覽器規定要使用者點擊才能鎖）；按 Esc 解鎖就回到這個選單（按鈕變「繼續」）
+const settings = createSettings({ world, player })
+const startEl = document.getElementById('start'), menuEl = document.getElementById('menu'), helpEl = document.getElementById('help')
+startEl.append(settings.el)
+const showSheet = (sheet) => { menuEl.hidden = !!sheet; for (const s of [helpEl, settings.el]) s.hidden = s !== sheet }
+startEl.addEventListener('click', (e) => { if (e.target.closest('.back')) showSheet(null) })
+document.getElementById('btnSettings').onclick = () => showSheet(settings.el)
+document.getElementById('btnHelp').onclick = () => showSheet(helpEl)
 startEl.hidden = false
-document.getElementById('go').onclick = () => player.controls.lock()
-player.controls.addEventListener('lock', () => { startEl.hidden = true })
-player.controls.addEventListener('unlock', () => { if (!panelOpen()) startEl.hidden = false })
+const goEl = document.getElementById('go')
+goEl.onclick = () => player.controls.lock()
+player.controls.addEventListener('lock', () => { startEl.hidden = true; goEl.textContent = '繼續' })
+player.controls.addEventListener('unlock', () => { if (!panelOpen()) { showSheet(null); startEl.hidden = false } })
 
 const clock = new THREE.Clock()
 function frame() {
@@ -115,8 +123,9 @@ function frame() {
   flight.tick(t, dt, { sneak: player.state.sneak })
   hud.setHint(!panelOpen() && player.controls.isLocked ? (nearShop() ? '按 E 進入相機行' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')
   hud.update(dt)
+  settings.tick(dt, player.controls.isLocked)
   world.render()
-  vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）
+  if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
 }
-window.__game = { world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
+window.__game = { settings, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 frame()

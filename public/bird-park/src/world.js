@@ -143,11 +143,13 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       c.position.set(MTN.x + Math.cos(u.a) * u.r, u.y + Math.sin(t * 0.2 + u.ph) * 0.8, MTN.z + Math.sin(u.a) * u.r)
     }
   }
+  // 畫質設定（遊戲的設定畫面會改）：水面倒影的解析度、幾格更新一次
+  const quality = { reflScale: PHONE ? 0.3 : 0.5, reflEvery: PHONE ? 3 : 2 }
   function render(cam = camera) {
-    water.reflect(renderer, scene, cam, PHONE ? 0.3 : 0.5, PHONE ? 3 : 2)
+    water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     renderer.render(scene, cam)
   }
-  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time }
+  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, quality }
 }
 
 /* ---------- 日夜 ---------- */
@@ -255,5 +257,5 @@ function buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera 
     for (const l of pls) l.intensity = 14 * st.lamp
   }
   setTime(10)
-  return { setTime, tick, get hour() { return st.hour }, get day() { return st.day }, lamps, benches: flora.benches }
+  return { setTime, tick, get hour() { return st.hour }, get day() { return st.day }, lamps, benches: flora.benches, lights: pls }
 }

@@ -5,7 +5,32 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #c9d8d6; col
 #loading { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: #c9d8d6; font-size: 18px; color: var(--muted); transition: opacity 0.6s; }
 #loading.done { opacity: 0; pointer-events: none; }
 #start { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(20, 30, 25, 0.35); }
-#start[hidden] { display: none; }
+#start[hidden], #start [hidden] { display: none !important; }
+/* 首頁：左邊大標題＋直排按鈕，背景就是園區（暗一點） */
+#start { background: linear-gradient(90deg, rgba(12, 22, 16, 0.72) 0%, rgba(12, 22, 16, 0.35) 45%, rgba(12, 22, 16, 0.1) 100%); }
+.menu { position: absolute; left: clamp(28px, 8vw, 120px); top: 50%; transform: translateY(-50%); color: #fff; }
+.menu .brand h1 { margin: 0; font-size: clamp(40px, 6vw, 72px); letter-spacing: 0.06em; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.35); }
+.menu .brand p { margin: 6px 0 34px; font-size: 18px; opacity: 0.85; }
+.menu nav { display: flex; flex-direction: column; gap: 12px; width: 240px; }
+.menu nav button { all: unset; cursor: pointer; padding: 13px 22px; border-radius: 12px; font-size: 18px; font-weight: 700; background: var(--accent); color: #fff; transition: transform 0.12s, background 0.12s; }
+.menu nav button.ghost { background: rgba(255, 255, 255, 0.14); backdrop-filter: blur(6px); }
+.menu nav button:hover { transform: translateX(6px); background: #3f8a5c; }
+.menu-sheet { max-height: 86vh; overflow: auto; }
+.menu-sheet h2 { margin: 0 0 10px; font-size: 24px; }
+.settings { width: min(560px, 94vw); }
+.settings h3 { margin: 18px 0 6px; font-size: 14px; color: var(--muted); letter-spacing: 0.08em; }
+.settings .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid rgba(0, 0, 0, 0.07); }
+.settings .row.main { border-top: none; }
+.settings .row b { display: block; }
+.settings .row small { color: var(--muted); font-size: 12.5px; }
+.seg { display: flex; background: #e6efe9; border-radius: 99px; padding: 3px; flex: none; }
+.panel .seg button { all: unset; cursor: pointer; padding: 5px 15px; border-radius: 99px; font-size: 14px; color: #34423a; margin: 0; background: none; font-weight: 600; }
+.panel .seg button.on { background: var(--accent); color: #fff; }
+.slider { display: flex; align-items: center; gap: 10px; flex: none; }
+.slider input { width: 140px; accent-color: var(--accent); }
+.slider span { width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.fps { position: fixed; right: 12px; bottom: 10px; z-index: 7; font: 600 12px ui-monospace, monospace; color: #fff; background: rgba(0, 0, 0, 0.4); padding: 3px 8px; border-radius: 6px; }
+.perf-tip { position: fixed; left: 50%; top: 70px; transform: translateX(-50%); z-index: 7; background: rgba(20, 30, 25, 0.82); color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 14px; }
 .panel { background: var(--panel); border-radius: 18px; padding: 26px 30px; width: min(440px, 92vw); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25); line-height: 1.7; }
 .panel h1 { margin: 0 0 6px; font-size: 28px; }
 .panel ul { padding-left: 1.2em; color: #34423a; }
