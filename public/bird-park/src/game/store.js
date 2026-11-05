@@ -1,6 +1,6 @@
 // 相機行（店面）：溫室入口外面另外一棟，像美術館門口的商店——遊戲從店裡開始，穿過東邊的玻璃通道才進溫室。
 // 外觀跟溫室同一套：白色鋼構、玻璃帷幕、天窗、綠牆（植物牆）、LED 燈條，乾淨的高科技感。
-// 北牆：櫃台（中間是發光玻璃展示櫃）＋老闆（models/owner.glb，Tripo）＋身後胡桃木燈箱格櫃；兩個角落：三腳架展示台、相機包櫃，牆上掛鳥類攝影作品（models/store-prints.jpg，ChatGPT 四張拼一張）。
+// 北牆：櫃台（中間是發光玻璃展示櫃）＋老闆（會走動的店員，shopkeeper.js，models/owner-rigged.glb）＋身後胡桃木燈箱格櫃；兩個角落：三腳架展示台、相機包櫃，牆上掛鳥類攝影作品（models/store-prints.jpg，ChatGPT 四張拼一張）。
 // 南半邊：地毯上一座座展示島（鋼底座＋橡木台面＋玻璃罩＋斜立價格卡）。天花板兩條軌道燈。
 // 逛店：走到展示台前面看著它 → 提示名稱、價錢，按 E 打開器材頁（直接跳到那一項）；走到櫃台前 → 按 E 跟老闆說話（賣照片、買器材）。
 // 座標（世界）：x 從 STORE.X0（東牆，接通道）到 STORE.X1（西牆，店門口），z ±STORE.HZ，原點在地面
@@ -9,6 +9,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { STORE, addCollider, colliders } from '../layout.js'
 import { BODIES, LENSES } from './camera.js'
+import { createShopkeeper } from './shopkeeper.js'
 
 const { X0, X1, HZ, H } = STORE
 const XM = (X0 + X1) / 2
@@ -65,7 +66,8 @@ export async function buildStore(scene, state) {
   const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
   const loader = new GLTFLoader()
   const load = (p) => loader.loadAsync(`${p}?v=${VER}`).then((r) => r.scene)
-  const [owner, ...gear] = await Promise.all(['models/owner.glb', ...BODIES.map((b) => `models/camera/body-${b.id}.glb`), ...LENSES.map((l) => `models/camera/lens-${l.id}.glb`)].map(load))
+  const ownerP = loader.loadAsync(`models/owner-rigged.glb?v=${VER}`)
+  const gear = await Promise.all([...BODIES.map((b) => `models/camera/body-${b.id}.glb`), ...LENSES.map((l) => `models/camera/lens-${l.id}.glb`)].map(load))
   const gearModel = Object.fromEntries([...BODIES, ...LENSES].map((it, i) => [it.id, gear[i]]))
 
   const g = new THREE.Group()
@@ -311,9 +313,6 @@ export async function buildStore(scene, state) {
     })
   }
 
-  owner.position.set(OWNER.x, 0, OWNER.z); owner.rotation.y = Math.PI
-  owner.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true })
-  g.add(owner)
 
   // 身後：胡桃木燈箱格櫃 8 欄 × 4 列，每格背板自己發暖光，擺機身／鏡頭／產品盒；下面是抽屜櫃
   const SX0 = -79.3, SX1 = -85.9, SB = HZ - 0.32, SD = 0.42, SY0 = 0.95, SY1 = 3.35, COLS = 8, ROWS = 4
@@ -543,7 +542,8 @@ export async function buildStore(scene, state) {
     card.position.set(x, 0.96, z + 0.36); card.rotation.x = -0.55; g.add(card)
     box('charcoal', 0.42, 0.012, 0.06, x, 0.916, z + 0.38)
     addCollider(x, z, 0.48, 1.5)
-    items.push({ ...it, kind, pos: V(x, 1.1, z), tex: t, draw: () => { labelDraw({ ...it, spec: spec(it) }, state)(t.image.getContext('2d'), 512, 192); t.needsUpdate = true } })
+    const pitch = state.owned.includes(it.id) ? `${it.name}你已經有了，用得還順手嗎？` : `這${kind === 'lens' ? '支' : '台'}${it.name}，${spec(it)}，按 E 可以看詳細！`
+    items.push({ ...it, kind, pitch, pos: V(x, 1.1, z), tex: t, draw: () => { labelDraw({ ...it, spec: spec(it) }, state)(t.image.getContext('2d'), 512, 192); t.needsUpdate = true } })
   }
   BODIES.forEach((b, i) => place(b, 'body', -79.6 - i * 3.0, -1.8))
   LENSES.forEach((l, i) => place(l, 'lens', -78.6 - i * 2.0, -4.6))
@@ -559,6 +559,17 @@ export async function buildStore(scene, state) {
   const l1 = new THREE.PointLight(0xfff2e0, 18, 16, 1.6); l1.position.set(XM, H - 0.4, 0); g.add(l1)
   const l2 = new THREE.PointLight(0xfff2e0, 6, 7, 1.6); l2.position.set(-82.6, 3.0, HZ - 1.4); g.add(l2)
   scene.add(g)
+
+  /* ---------- 老闆（會走動的店員，shopkeeper.js） ---------- */
+  const counterZone = (x, z) => x < cx0 + 0.6 && x > cx1 - 0.6 && z > cz - 2.4 && z < cz
+  const keeper = createShopkeeper({
+    gltf: await ownerP, parent: g, colliders, home: OWNER, homeYaw: Math.PI,
+    bounds: { x0: X1 + 0.55, x1: X0 - 0.35, z0: -HZ + 1.1, z1: HZ - 0.95 },
+    inStore: (x, z) => x < X0 && x > X1 && Math.abs(z) < HZ,
+    inPassage: (x, z) => x >= X0 && x < -66 && Math.abs(z) < 4,
+    counterZone,
+  })
+  addCollider(OWNER.x, OWNER.z, 0.3, 2.2); const keeperCol = colliders[colliders.length - 1]   // 玩家不能穿過老闆（建好找路格子之後才加，不然他會把自己當障礙）
 
   /* ---------- 互動 ---------- */
   const _d = V(), _f = V(), _p = V()
@@ -577,14 +588,11 @@ export async function buildStore(scene, state) {
     if (p.x < cx0 + 0.6 && p.x > cx1 - 0.6 && p.z > cz - 2.4 && p.z < cz) return { type: 'counter' }
     return null
   }
-  // 老闆：玩家在店裡就轉頭看玩家（以面朝 -z 為中心，最多 ±60 度），平常微微呼吸
-  function tick(t, dt, camPos) {
-    owner.getWorldPosition(_p)
-    const dx = camPos.x - _p.x, dz = camPos.z - _p.z
-    let a = Math.atan2(dx, dz); if (a < 0) a += Math.PI * 2          // 0～2π，面朝 -z ＝ π
-    const want = camPos.x < X0 + 1 ? THREE.MathUtils.clamp(a, Math.PI - 1.05, Math.PI + 1.05) : Math.PI
-    owner.rotation.y += (want - owner.rotation.y) * (1 - Math.exp(-2.5 * dt))
-    owner.scale.y = 1 + Math.sin(t * 1.6) * 0.004
+  // cam：鏡頭；opt.play＝玩家在玩（不是首頁）；opt.look＝滑鼠鎖住、可以看東西
+  function tick(t, dt, cam, opt = { play: true, look: false }) {
+    const camPos = cam.position
+    keeper.tick(t, dt, opt.play ? camPos : null, opt.look ? focus(cam)?.item ?? null : null)
+    keeperCol.x = keeper.pos.x; keeperCol.z = keeper.pos.y
     // 自動門：人在門口 3 公尺內就開，離開 1 秒後才關；開 0.7 秒、關 1.1 秒，速度頭尾放慢
     const near = Math.hypot(camPos.x - X0, camPos.z) < 3.0 && camPos.y < 4
     door.hold = near ? 1.0 : Math.max(0, door.hold - dt)
@@ -599,5 +607,5 @@ export async function buildStore(scene, state) {
     if (k !== slide && printT.image) { slide = k; drawSlide(k) }
   }
   const refresh = () => items.forEach((it) => it.draw())
-  return { group: g, focus, tick, refresh, items }
+  return { group: g, focus, tick, refresh, items, checkout: keeper.checkout, keeper }
 }

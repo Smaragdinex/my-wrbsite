@@ -67,7 +67,7 @@ addEventListener('keydown', (e) => {
     if (shop.isOpen) return shop.close()
     const f = !album.isOpen && player.controls.isLocked ? store.focus(camera) : null
     if (f?.type === 'item') { shop.open('gear', f.item.id); player.controls.unlock() }      // 逛店：看著展示台 → 器材頁跳到那一項
-    else if (f?.type === 'counter') { shop.open('sell'); player.controls.unlock() }         // 櫃台：跟老闆說話
+    else if (f?.type === 'counter') store.checkout(() => { shop.open('sell'); player.controls.unlock() })   // 櫃台：老闆不在櫃台就先走回來，到了才開買賣畫面
     else if (!panelOpen() && player.controls.isLocked && nearBench()) rest()
   }
   if (e.code === 'KeyQ' && player.controls.isLocked) {
@@ -146,7 +146,7 @@ function frame() {
   vm.update(dt, { raise: cam.state.raised ? 1 : 0, view: 0, speed: flight.speed, t })
   cam.state.vfReady = vm.st.raise > 0.85
   world.tick(t, dt)
-  store.tick(t, dt, camera.position)
+  store.tick(t, dt, camera, { play: !menuCam, look: !panelOpen() && player.controls.isLocked && !cam.state.raised })
   flight.tick(t, dt, { sneak: player.state.sneak })
   const sf = !panelOpen() && player.controls.isLocked && !cam.state.raised ? store.focus(camera) : null
   hud.setHint(!panelOpen() && player.controls.isLocked ? (sf?.type === 'item' ? `${sf.item.name}　${state.owned.includes(sf.item.id) ? '已擁有' : '$' + sf.item.price.toLocaleString()}　按 E 查看` : sf?.type === 'counter' ? '按 E 跟老闆說話（賣照片、買器材）' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')
@@ -155,5 +155,5 @@ function frame() {
   world.render()
   if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
 }
-window.__game = { settings, store, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
+window.__game = { setMenuCam, settings, store, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 frame()
