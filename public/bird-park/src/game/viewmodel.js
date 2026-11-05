@@ -20,7 +20,7 @@ const LENS = { l1: { L: 0.062, R: 0.033, S: 0.033 }, l2: { L: 0.145, R: 0.04, S:
 
 // 相機（卡口中心）在三種狀態的位置／角度（鏡頭座標：x 右、y 上、-z 前）
 const POSES = {
-  carry: { p: V(0.1, -0.115, -0.31), r: new THREE.Euler(-0.55, 0.4, 0.12) },   // 拿在胸前偏右，鏡頭朝前、頂部和背面朝玩家（畫面右下角看得到兩隻手）
+  carry: { p: V(0.095, -0.105, -0.28), r: new THREE.Euler(-0.18, 0.05, 0) },   // 照 ChatGPT 畫的參考圖（models/raw/ref/pov-camera-ref.png）：右下角、正正的背面朝玩家、稍微往前傾、底部被畫面切到
   raise: { p: V(0.0, -0.052, -0.085), r: new THREE.Euler(0, 0, 0) },            // 觀景窗貼在眼睛前
   view: { p: V(0.006, 0.03, -0.185), r: new THREE.Euler(0.3, 0, 0) },           // 拿近、往上翻一點，背面螢幕在畫面正中間
 }
@@ -31,9 +31,9 @@ export async function createViewmodel(camera) {
   const [arms, ...cams] = await Promise.all(['models/arms.glb', 'models/camera/body-b1.glb', 'models/camera/body-b2.glb', 'models/camera/body-b3.glb',
     'models/camera/lens-l1.glb', 'models/camera/lens-l2.glb', 'models/camera/lens-l3.glb', 'models/camera/lens-l4.glb', 'models/camera/lens-l5.glb'].map(load))
   const bodies = { b1: cams[0], b2: cams[1], b3: cams[2] }, lenses = { l1: cams[3], l2: cams[4], l3: cams[5], l4: cams[6], l5: cams[7] }
-  // 手：骨架原本面向 +z、A 字姿勢；轉 180 度讓右手在右邊，肩膀放在眼睛下面 0.2 公尺
+  // 手：骨架原本面向 +z、A 字姿勢；轉 180 度讓右手在右邊，肩膀放在眼睛下面
   arms.rotation.y = Math.PI
-  arms.position.set(0, -1.455 - 0.2, 0.06)
+  arms.position.set(0, -1.455 - 0.34, 0)   // 肩膀放低：前臂從畫面右下角斜斜上來
   root.add(arms)
   const camRig = new THREE.Group()
   root.add(camRig)
@@ -147,7 +147,7 @@ export async function createViewmodel(camera) {
     lPalmAt: V(-0.006, -0.011, 0), lDir: V(0.72, 0.0, -0.7), lPalm: V(-0.1, 1, 0),                  // 掌心托在鏡頭正下方，手指往右前方繞上去
     rCurl: { index: [1.25, 1.1, 0.7], middle: [1.35, 1.2, 0.75], ring: [1.4, 1.2, 0.75], pinky: [1.45, 1.15, 0.7], thumb: [1.5, 1.4, 0.84] },
     lCurl: { index: [0.9, 0.8, 0.5], middle: [1.0, 0.85, 0.5], ring: [1.05, 0.9, 0.55], pinky: [1.1, 0.9, 0.55], thumb: [0.05, 0.15, 0.1] },
-    poleR: V(0.35, -1.2, 0.15), poleL: V(-0.6, -0.9, 0.2),   // 手肘往下：前臂從畫面右下角上來，不會橫跨畫面
+    poleR: V(0.25, -1.2, -0.1), poleL: V(-0.6, -0.9, 0.2),   // 手肘往下：前臂從畫面右下角上來，不會橫跨畫面
   }
   const W1 = { b1: 0.072, b2: 0.082, b3: 0.086 }
   function setGear(body, lens) {
