@@ -3,7 +3,8 @@
 // 行為（狀態機）：
 //   home     櫃台後面站著；玩家在店裡就轉頭看玩家，偶爾東張西望
 //   greet    玩家進店 → 走到玩家前面 1.4 公尺，揮手問「需要幫忙嗎？」
-//   attend   站在玩家附近；玩家盯著一台器材看 → 走到旁邊介紹；玩家走遠就跟過去；20 秒沒事就回櫃台
+//   attend   像真的店員一樣陪逛：玩家在走就跟在側後方 2 公尺左右（不擋路）；玩家停下來站一下就再問「需要幫忙嗎？」（換句話，最多三次）；
+//            玩家盯著一台器材看 → 走到旁邊介紹；一陣子沒互動就回櫃台。在櫃台待 45 秒、玩家還在店裡逛 → 再出來看看
 //   checkout 玩家在櫃台按 E → 「來櫃台這邊」走回櫃台後面，到了才打開買賣畫面
 //   bye      玩家走進往溫室的通道 → 揮手「慢走」，再回櫃台
 // 走路：店裡切 0.2 公尺的格子，用店裡既有的碰撞點（展示島、櫃台、角落的架子…）當障礙，A* 找路再拉直；玩家擋在前面就停下來等。
@@ -59,7 +60,7 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     g.beginPath(); g.roundRect(bx, by, bw, bh, 26); g.moveTo(W / 2 - 18, by + bh); g.lineTo(W / 2, H - 4); g.lineTo(W / 2 + 18, by + bh); g.fill(); g.stroke()
     g.fillStyle = '#1f2a24'; g.textAlign = 'center'; g.textBaseline = 'middle'
     lines.forEach((l, i) => g.fillText(l, W / 2, by + 40 + i * 50))
-    btex.needsUpdate = true; bubbleT = sec
+    btex.needsUpdate = true; bubbleT = sec; sinceSpoke = 0
   }
 
   /* ---------- 找路：格子＋A* ---------- */
@@ -125,6 +126,9 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
   const pos = new THREE.Vector2(home.x, home.z), homeV = new THREE.Vector2(home.x, home.z)
   let state = 'home', path = [], onArrive = null, timer = 0, idleT = 12, greeted = false, lastIntro = null, lookT = 0, lookItem = null, pending = null, waitT = 0
   let faceYaw = homeYaw
+  // 玩家的動向：平滑過的速度、站著不動多久；老闆多久沒講話、問過幾次
+  let lastP = null, stillT = 0, sinceSpoke = 99, asks = 0, followT = 0, homeT = 0, pSpeed = 0
+  const pv = new THREE.Vector2()
   const P = new THREE.Vector2()
   function walkTo(target, then) {
     const t = target.clone(); const [i, j] = nearestFree(t.x, t.y); if (solid[i + j * NX] === 0 && t.distanceTo(centre(i, j)) > CELL) t.copy(centre(i, j))
@@ -141,11 +145,21 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
 
   // 走到器材旁邊（玩家看得到的那一側），點頭介紹
   function introduce() {
-    const it = lookItem; lastIntro = it; lookItem = null; timer = 20; state = 'attend'
+    const it = lookItem; lastIntro = it; lookItem = null; timer = 30; state = 'intro'   // 走過去的路上是 intro，到了點頭介紹完變回 attend
     const side = new THREE.Vector2(P.x - it.pos.x, P.y - it.pos.z).normalize(), perp = new THREE.Vector2(-side.y, side.x)
     if (perp.dot(new THREE.Vector2(pos.x - it.pos.x, pos.y - it.pos.z)) < 0) perp.negate()
     const to = new THREE.Vector2(it.pos.x, it.pos.z).addScaledVector(side, 0.55).addScaledVector(perp, 0.85)
-    walkTo(to, () => { faceTo(P); doOnce('agree', it.pitch, () => { timer = 20 }) })
+    walkTo(to, () => { faceTo(P); doOnce('agree', it.pitch, () => { timer = 30 }) })
+  }
+
+  // 陪逛的位置：玩家在走 → 側後方（走路方向往後 1.1、往旁邊 1.6，選靠老闆那一側）；玩家停著 → 維持現在的方向、2 公尺
+  function followSpot() {
+    const away = new THREE.Vector2().subVectors(pos, P); if (away.lengthSq() < 1e-4) away.set(0, 1); away.normalize()
+    if (pSpeed > 0.5) {
+      const m = pv.clone().normalize(), side = new THREE.Vector2(-m.y, m.x); if (side.dot(away) < 0) side.negate()
+      return P.clone().addScaledVector(pv, 0.6).addScaledVector(m, -1.1).addScaledVector(side, 1.6)   // 往玩家要去的地方提前一點
+    }
+    return P.clone().addScaledVector(away, 2.0)
   }
 
   // 玩家在櫃台按 E：老闆在櫃台就直接開；不在就先走回去
@@ -171,6 +185,16 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     P.set(cam.x, cam.z)
     const here = inStore(P.x, P.y), passage = inPassage(P.x, P.y)
     const dP = pos.distanceTo(P)
+    if (!lastP) lastP = P.clone()
+    pv.lerp(new THREE.Vector2().subVectors(P, lastP).divideScalar(Math.max(dt, 1e-3)), Math.min(1, dt * 4)); lastP.copy(P)
+    pSpeed = pv.length(); stillT = pSpeed < 0.35 ? stillT + dt : 0; sinceSpoke += dt
+
+    // 陪逛：每 0.6 秒看一次玩家在哪；離太遠（3 公尺）、太近（1.3）或玩家在走而位置差很多 → 換位置（走路中也可以改路線）
+    if (state === 'attend' && here && (followT -= dt) <= 0) {
+      followT = 0.6
+      const spot = followSpot()
+      if (dP > 3.0 || dP < 1.3 || (pSpeed > 0.5 && spot.distanceTo(pos) > 1.2)) walkTo(spot, () => {})
+    }
 
     // 走過去招呼時玩家自己走過來了：1.3 公尺內就停（不要走進玩家身上）
     if (path.length && state === 'greet' && dP < 1.3) path = [pos.clone()]
@@ -184,7 +208,9 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
       if (blocked) { waitT += dt; if (cur !== acts.idle) play('idle', 0.2); if (waitT > 0.8) { waitT = 0; avoid = P.clone(); path = findPath(pos, path[path.length - 1]); avoid = null } }   // 停一下，再繞過玩家
       else {
         waitT = 0; if (cur !== acts.walk) play('walk', 0.2)
-        const step = Math.min(d, SPEED * dt); pos.addScaledVector(dir, step)
+        const spd = state === 'attend' && dP > 2.4 ? THREE.MathUtils.clamp(pSpeed, 1.5, 2.2) : SPEED   // 陪逛落後就快步跟上（玩家走 4.2 公尺/秒，他最快 2.2，停下來時才追得上，像真人）
+        acts.walk.timeScale = spd / SPEED
+        const step = Math.min(d, spd * dt); pos.addScaledVector(dir, step)
         faceYaw = Math.atan2(dir.x, dir.y)
         if (d - step < 0.02) path.shift()
         if (!path.length) { play('idle'); const f = onArrive; onArrive = null; f?.() }
@@ -205,18 +231,25 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
         } else if (here && !greeted && dP < 9) {
           greeted = true; state = 'greet'
           const to = P.clone().add(new THREE.Vector2().subVectors(pos, P).setLength(NEAR_PLAYER))
-          walkTo(to, () => { faceTo(P); doOnce('greet_01', '歡迎光臨！需要幫忙嗎？', () => { timer = 20 }) })
+          asks = 1
+          walkTo(to, () => { faceTo(P); doOnce('greet_01', '歡迎光臨！需要幫忙嗎？', () => { timer = 40 }) })
         } else {
           if (here) faceTo(P); else faceYaw = homeYaw
           if (here) { const a = THREE.MathUtils.euclideanModulo(faceYaw - homeYaw + Math.PI, Math.PI * 2) - Math.PI; faceYaw = homeYaw + THREE.MathUtils.clamp(a, -1.05, 1.05) }
+          homeT = here && greeted ? homeT + dt : 0
           if (here && greeted && lookItem && lookT > 2.5) introduce()   // 在櫃台也看得到：玩家在一台器材前面站很久就走過來
+          else if (homeT > 45 && stillT > 2 && !counterZone(P.x, P.y)) {   // 玩家還在店裡慢慢看 → 再出來問問
+            homeT = 0; asks = 1; state = 'greet'
+            walkTo(P.clone().add(new THREE.Vector2().subVectors(pos, P).setLength(NEAR_PLAYER)), () => { faceTo(P); doOnce('greet_01', '還在看嗎？需要幫忙嗎？', () => { timer = 40 }) })
+          }
           else if ((idleT -= dt) < 0) { idleT = 25 + Math.random() * 20; if (!here) { play('look_around'); timer = onceDur('look_around'); state = 'anim'; onArrive = () => { state = 'home'; play('idle') } } }
         }
       } else if (state === 'attend') {
         faceTo(P); timer -= dt
         if (lookItem && lookT > 1.2) introduce()   // 盯著某台器材看超過 1.2 秒 → 走過去介紹
-        else if (here && dP > 3.2) {
-          walkTo(P.clone().add(new THREE.Vector2().subVectors(pos, P).setLength(1.8)), () => {})
+        else if (here && stillT > 2.5 && dP < 3.5 && sinceSpoke > 14 && asks < 3) {   // 玩家停下來了，隔一陣子再問一次（換句話）
+          const lines = ['歡迎光臨！需要幫忙嗎？', '想拍什麼鳥？我可以幫你挑器材喔！', '慢慢看，有問題隨時問我！']
+          doOnce(asks % 2 ? 'agree' : 'greet_01', lines[asks], () => { timer = 30 }); asks++
         } else if (passage) {
           doOnce('wave_goodbye_02', '慢走！拍照愉快！', () => { greeted = false; lastIntro = null; goHome() })
         } else if (!here) {
