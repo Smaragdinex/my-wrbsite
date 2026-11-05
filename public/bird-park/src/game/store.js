@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { STORE, addCollider } from '../layout.js'
+import { STORE, addCollider, colliders } from '../layout.js'
 import { BODIES, LENSES } from './camera.js'
 
 const { X0, X1, HZ, H } = STORE
@@ -158,6 +158,60 @@ export async function buildStore(scene, state) {
     pane([V(X0, EAVE, s * DW), V(X0, RIDGE, 0), V(X0, H, 0), V(X0, H, s * DW)])
   }
   bar('white', V(X0 - 0.05, H - 0.15, -DW), V(X0 - 0.05, H - 0.15, DW), 0.2)
+
+  /* ---------- 東牆開口：往溫室的自動門 ---------- */
+  // 兩片玻璃推拉門（中間對開，往兩邊滑進固定玻璃前面），上面一條門楣＋馬達箱，兩面各一顆感應器（關著紅燈、開門綠燈）。
+  // 人走到門口 3 公尺內就開，離開一秒後慢慢關；關著的時候擋人（動態碰撞點），開到七成以上才讓人過。
+  const DOOR_Y = 2.6, LEAF_W = 1.4, LEAF_H = 2.55, OPEN = 1.36, DX = X0 - 0.12
+  box('dark', 0.2, 0.26, DW * 2, X0, DOOR_Y + 0.13, 0)                              // 門楣
+  box('steel', 0.2, 0.24, 5.8, X0 - 0.2, DOOR_Y + 0.14, 0)                          // 馬達箱（店內那面）
+  box('steel', 0.02, 0.02, 5.6, DX, 0.01, 0)                                        // 地上導軌
+  pane([V(X0, DOOR_Y + 0.26, -DW), V(X0, DOOR_Y + 0.26, DW), V(X0, EAVE, DW), V(X0, RIDGE, 0), V(X0, EAVE, -DW)])   // 門楣上的固定玻璃
+  for (const s of [-1, 1]) {
+    rect(V(X0, 0.02, s * OPEN), V(X0, 0.02, s * DW), V(X0, DOOR_Y, s * DW), V(X0, DOOR_Y, s * OPEN))                 // 兩邊固定玻璃
+    bar('dark', V(X0, 0, s * OPEN), V(X0, DOOR_Y, s * OPEN), 0.07, 0.07)
+    bar('dark', V(X0, 0.03, s * OPEN), V(X0, 0.03, s * DW), 0.08, 0.06)
+    for (const sz of [0.06, 0.14]) box('white', 0.05, 0.004, 0.9, X0 - 0.03, 1.0 + sz, s * (OPEN + 1.3))   // 固定玻璃上的防撞貼條
+    addCollider(X0 - 0.05, s * 1.75, 0.32, 9); addCollider(X0 - 0.05, s * 2.4, 0.32, 9); addCollider(X0 - 0.05, s * 3.0, 0.32, 9)
+  }
+  const sensM = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff3a2a, emissiveIntensity: 1.2 })
+  for (const sx of [X0 - 0.33, X0 + 0.12]) {
+    box('dark', 0.08, 0.06, 0.26, sx, DOOR_Y - 0.03, 0)
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.018, 0.04), sensM); lamp.position.set(sx + (sx < X0 ? -0.045 : 0.045), DOOR_Y - 0.04, 0.08); g.add(lamp)
+  }
+  const bandM = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, roughness: 0.6, side: THREE.DoubleSide })
+  const leaves = [-1, 1].map((s) => {
+    const lf = new THREE.Group(); lf.position.set(DX, 0.03, s * LEAF_W / 2)
+    const fr = (w, h, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, w), mats.dark); m.position.set(0, y, z); m.castShadow = true; lf.add(m) }
+    fr(0.05, LEAF_H, LEAF_H / 2, -LEAF_W / 2 + 0.025); fr(0.05, LEAF_H, LEAF_H / 2, LEAF_W / 2 - 0.025)
+    fr(LEAF_W, 0.06, LEAF_H - 0.03, 0); fr(LEAF_W, 0.1, 0.05, 0)
+    const gl = new THREE.Mesh(new THREE.PlaneGeometry(LEAF_W - 0.1, LEAF_H - 0.16), glassM); gl.rotation.y = Math.PI / 2; gl.position.y = LEAF_H / 2 + 0.02; gl.renderOrder = 5; lf.add(gl)
+    for (const y of [1.0, 1.06, 1.12]) { const b = new THREE.Mesh(new THREE.PlaneGeometry(LEAF_W - 0.12, 0.025), bandM); b.rotation.y = Math.PI / 2; b.position.set(-0.012, y, 0); lf.add(b) }   // 磨砂防撞帶
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.02), mats.steel); h.position.set(-0.03, 0.95, -s * (LEAF_W / 2 - 0.12)); lf.add(h)          // 手動拉的小把手
+    g.add(lf); return { lf, s }
+  })
+  const doorCol = [-1.2, -0.6, 0, 0.6, 1.2].map((z) => { addCollider(DX, z, 0.32, 9); return colliders[colliders.length - 1] })
+  const door = { t: 0, hold: 0 }
+  // 店內那面門上：往溫室的指標牌（吊在天花板）
+  {
+    const t = canvasTex(512, 128, (x, w, h) => {
+      x.fillStyle = '#1f2a24'; x.fillRect(0, 0, w, h); x.fillStyle = '#7fd19c'; x.fillRect(0, h - 8, w, 8)
+      x.fillStyle = '#fff'; x.textBaseline = 'middle'; x.font = 'bold 56px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText('溫室', 120, h / 2 - 2)
+      x.font = '600 34px "Helvetica Neue", Arial, sans-serif'; x.fillStyle = '#cfe8d8'; x.fillText('GREENHOUSE', 250, h / 2 + 2)
+      x.strokeStyle = '#fff'; x.lineWidth = 9; x.beginPath(); x.moveTo(62, h - 26); x.lineTo(62, 26); x.moveTo(38, 50); x.lineTo(62, 24); x.lineTo(86, 50); x.stroke()   // 往前直走的箭頭
+    })
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.5 }))
+    sm.rotation.y = -Math.PI / 2; sm.position.set(X0 - 0.9, 3.55, 0); g.add(sm)
+    box('dark', 0.04, 0.37, 1.42, X0 - 0.88, 3.55, 0)
+    for (const z of [-0.55, 0.55]) bar('steel', V(X0 - 0.88, 3.72, z), V(X0 - 0.88, H, z), 0.012)
+  }
+  const mat2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.02, 2.6), mat.material); mat2.position.set(X0 - 0.95, 0.04, 0); mat2.receiveShadow = true; g.add(mat2)   // 門內腳踏墊
+  // 防盜感應門（EAS）：兩根白色立板夾著門口
+  for (const s of [-1, 1]) {
+    box('white', 0.5, 1.45, 0.05, X0 - 0.75, 0.75, s * 1.55); box('steel', 0.56, 0.04, 0.16, X0 - 0.75, 0.02, s * 1.55)
+    box('glow', 0.02, 1.3, 0.055, X0 - 0.52, 0.78, s * 1.55)
+    addCollider(X0 - 0.75, s * 1.6, 0.22, 2)
+  }
   // 北牆：實心白牆（櫃台後面）
   box('panel', X0 - X1, H, 0.3, XM, H / 2, HZ - 0.15)
 
@@ -241,6 +295,21 @@ export async function buildStore(scene, state) {
   addTuft(-80.3, ch + 0.15, cz + 0.1, 0.22)
   box('charcoal', 0.16, 0.06, 0.1, -80.9, ch + 0.06, cz - 0.15)                  // 清潔組：吹球座
   box('oak', 0.035, 0.12, 0.035, -80.95, ch + 0.15, cz - 0.15)
+
+  // 收據機（平板旁邊，吐出一小段紙）、紙袋（櫃台東端，綠色腰帶＋扭繩提把）
+  box('charcoal', 0.13, 0.1, 0.15, -81.25, ch + 0.08, cz + 0.12)
+  { const pp = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.09), new THREE.MeshStandardMaterial({ color: 0xfbfbf8, roughness: 0.9, side: THREE.DoubleSide })); pp.position.set(-81.25, ch + 0.17, cz + 0.04); pp.rotation.x = -0.5; g.add(pp) }
+  {
+    const bagT = canvasTex(256, 256, (x, w, h) => {
+      x.fillStyle = '#f3efe6'; x.fillRect(0, 0, w, h); x.fillStyle = '#2f7d4f'; x.fillRect(0, h * 0.55, w, h * 0.12)
+      x.fillStyle = '#1f2a24'; x.font = 'bold 40px "PingFang TC", sans-serif'; x.textAlign = 'center'; x.fillText('相機行', w / 2, h * 0.4)
+    })
+    const bm = new THREE.MeshStandardMaterial({ map: bagT, roughness: 0.85 }), hm = new THREE.MeshStandardMaterial({ color: 0xcdbb98, roughness: 0.9 })
+    ;[[-79.95, 0.26, -0.12], [-80.2, 0.3, 0.15]].forEach(([x, hh, ry]) => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.26, hh, 0.11), bm); b.position.set(x, ch + 0.03 + hh / 2, cz - 0.05); b.rotation.y = ry; b.castShadow = true; g.add(b)
+      for (const dz of [-0.035, 0.035]) { const hd = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.006, 5, 12, Math.PI), hm); hd.position.set(0, hh / 2, dz); b.add(hd) }
+    })
+  }
 
   owner.position.set(OWNER.x, 0, OWNER.z); owner.rotation.y = Math.PI
   owner.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true })
@@ -345,6 +414,110 @@ export async function buildStore(scene, state) {
   const rug = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.012, 4.6), new THREE.MeshStandardMaterial({ map: rugT, roughness: 0.95 }))
   rug.position.set(-82.6, 0.036, -3.2); rug.receiveShadow = true; g.add(rug)
 
+
+  /* ---------- 南牆中段：配件牆（洞洞板掛記憶卡、電池、濾鏡…，下面抽屜櫃） ---------- */
+  const AX0 = -79.45, AX1 = -84.15, AW = AX0 - AX1, AXM = (AX0 + AX1) / 2, AZ = -HZ + 0.3
+  box('charcoal', AW, 0.74, 0.45, AXM, 0.37, AZ + 0.225)
+  box('oak', AW + 0.04, 0.04, 0.49, AXM, 0.76, AZ + 0.235)
+  for (let i = 0; i < 6; i++) { const x = AX0 - (i + 0.5) * AW / 6; box('steel', 0.18, 0.018, 0.025, x, 0.55, AZ + 0.465); box('dark', AW / 6 - 0.04, 0.008, 0.008, x, 0.38, AZ + 0.452) }
+  const pegT = canvasTex(512, 256, (x, w, h) => {
+    x.fillStyle = '#f1f2ef'; x.fillRect(0, 0, w, h); x.fillStyle = 'rgba(40,45,42,0.45)'
+    for (let yy = 8; yy < h; yy += 16) for (let xx = 8; xx < w; xx += 16) { x.beginPath(); x.arc(xx, yy, 2.2, 0, 7); x.fill() }
+  })
+  pegT.wrapS = pegT.wrapT = THREE.RepeatWrapping; pegT.repeat.set(3, 1.6)
+  const peg = new THREE.Mesh(new THREE.BoxGeometry(AW, 1.6, 0.04), new THREE.MeshStandardMaterial({ map: pegT, roughness: 0.8, emissive: 0xf4f4f0, emissiveIntensity: 0.12 }))
+  peg.position.set(AXM, 1.62, AZ + 0.02); peg.receiveShadow = true; g.add(peg)
+  for (const x of [AX0 + 0.03, AX1 - 0.03]) box('walnut', 0.06, 2.0, 0.5, x, 1.42, AZ + 0.25)
+  box('walnut', AW + 0.12, 0.06, 0.5, AXM, 2.45, AZ + 0.25)
+  {
+    const t = canvasTex(1024, 128, (x, w, h) => {
+      x.clearRect(0, 0, w, h); x.textBaseline = 'middle'; x.textAlign = 'center'
+      x.fillStyle = '#2f7d4f'; x.font = 'bold 72px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText('配件', w / 2 - 150, h / 2)
+      x.fillStyle = '#5b6a61'; x.font = '600 44px "Helvetica Neue", Arial, sans-serif'; x.fillText('ACCESSORIES', w / 2 + 110, h / 2 + 4)
+    })
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.3), new THREE.MeshStandardMaterial({ map: t, transparent: true, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.3 }))
+    sm.position.set(AXM, 2.66, AZ + 0.51); g.add(sm)
+  }
+  // 掛卡：一張 1024×512 的圖畫 8 種配件（4×2 格），每種用 offset 取一格
+  const cardT = canvasTex(1024, 512, (x) => {
+    const tile = (k, draw, label, sub, col) => {
+      const ox = (k % 4) * 256, oy = Math.floor(k / 4) * 256
+      x.save(); x.translate(ox, oy)
+      x.fillStyle = '#fafaf7'; x.fillRect(4, 4, 248, 248); x.fillStyle = col; x.fillRect(4, 4, 248, 50)
+      x.fillStyle = '#d8d8d2'; x.beginPath(); x.ellipse(128, 26, 22, 8, 0, 0, 7); x.fill()   // 掛孔
+      x.fillStyle = '#fff'; x.font = 'bold 26px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'center'; x.fillText(label, 128, 48)
+      x.save(); x.translate(128, 140); draw(); x.restore()
+      x.fillStyle = '#2b302d'; x.font = 'bold 24px "PingFang TC", sans-serif'; x.fillText(sub, 128, 238)
+      x.restore()
+    }
+    tile(0, () => { x.fillStyle = '#20252a'; x.beginPath(); x.moveTo(-40, -55); x.lineTo(25, -55); x.lineTo(40, -40); x.lineTo(40, 55); x.lineTo(-40, 55); x.fill(); x.fillStyle = '#d33'; x.fillRect(-40, -10, 80, 26); x.fillStyle = '#fff'; x.font = 'bold 20px Arial'; x.fillText('128GB', 0, 10) }, 'SD CARD', '記憶卡', '#c0392b')
+    tile(1, () => { x.fillStyle = '#1b1d1f'; x.fillRect(-32, -58, 64, 112); x.fillStyle = '#c9a24a'; x.fillRect(-18, -58, 36, 8); x.fillStyle = '#9aa'; x.font = 'bold 15px Arial'; x.fillText('2280mAh', 0, 8) }, 'BATTERY', '鋰電池', '#2c3e50')
+    tile(2, () => { x.fillStyle = '#111'; x.beginPath(); x.arc(0, 0, 58, 0, 7); x.fill(); const gr = x.createRadialGradient(-15, -15, 5, 0, 0, 50); gr.addColorStop(0, '#6c6f74'); gr.addColorStop(1, '#202226'); x.fillStyle = gr; x.beginPath(); x.arc(0, 0, 48, 0, 7); x.fill() }, 'ND FILTER', '減光鏡', '#34495e')
+    tile(3, () => { x.fillStyle = '#111'; x.beginPath(); x.arc(0, 0, 58, 0, 7); x.fill(); x.fillStyle = '#cfe6f0'; x.beginPath(); x.arc(0, 0, 48, 0, 7); x.fill(); x.fillStyle = 'rgba(255,255,255,0.8)'; x.beginPath(); x.ellipse(-16, -18, 18, 8, -0.7, 0, 7); x.fill() }, 'UV FILTER', '保護鏡', '#2f7d4f')
+    tile(4, () => { x.rotate(-0.6); x.fillStyle = '#2b2f33'; x.fillRect(-10, -62, 20, 100); x.fillStyle = '#c3c6c9'; x.fillRect(-10, 38, 20, 14); x.fillStyle = '#e8e4da'; x.beginPath(); x.arc(0, 60, 9, 0, 7); x.fill() }, 'LENSPEN', '拭鏡筆', '#8e6c3a')
+    tile(5, () => { x.strokeStyle = '#3d4a3f'; x.lineWidth = 16; x.beginPath(); for (let a = 0; a < 18; a += 0.2) { const r = 12 + a * 2.3; x.lineTo(Math.cos(a) * r, Math.sin(a) * r * 0.6) } x.stroke() }, 'STRAP', '相機背帶', '#556b2f')
+    tile(6, () => { x.fillStyle = '#141516'; x.beginPath(); x.arc(0, 0, 56, 0, 7); x.fill(); x.strokeStyle = '#3a3c3e'; x.lineWidth = 4; x.beginPath(); x.arc(0, 0, 44, 0, 7); x.stroke(); x.fillStyle = '#9a9c9e'; x.fillRect(-60, -8, 12, 16); x.fillRect(48, -8, 12, 16) }, 'LENS CAP', '鏡頭蓋', '#444')
+    tile(7, () => { x.fillStyle = '#1e2124'; x.fillRect(-24, -55, 48, 90); x.fillStyle = '#7fd19c'; x.beginPath(); x.arc(0, -20, 14, 0, 7); x.fill(); x.strokeStyle = '#1e2124'; x.lineWidth = 5; x.beginPath(); x.moveTo(0, 35); x.bezierCurveTo(0, 70, 50, 50, 50, 80); x.stroke() }, 'REMOTE', '快門線', '#7d3c98')
+  })
+  const cardGeo = new THREE.BoxGeometry(0.2, 0.2, 0.012)
+  const cardMs = [...Array(8)].map((_, k) => {
+    const t = cardT.clone(); t.repeat.set(0.25, 0.5); t.offset.set((k % 4) * 0.25, k < 4 ? 0.5 : 0); t.needsUpdate = true
+    const face = new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 }), back = new THREE.MeshStandardMaterial({ color: 0xe9e9e4, roughness: 0.8 })
+    return [back, back, back, back, face, back]
+  })
+  const PCOLS = 9, prow = [2.3, 1.92, 1.54, 1.16]
+  prow.forEach((y, r) => { for (let c = 0; c < PCOLS; c++) {
+    const x = AX0 - 0.3 - c * (AW - 0.6) / (PCOLS - 1), k = (c * 3 + r * 5) % 8
+    bar('steel', V(x, y + 0.02, AZ + 0.04), V(x, y + 0.04, AZ + 0.27), 0.008)
+    for (let n = 0; n < 4; n++) { const cm = new THREE.Mesh(cardGeo, cardMs[k]); cm.position.set(x, y - 0.09, AZ + 0.09 + n * 0.045); cm.rotation.x = 0.05; g.add(cm) }
+    box('white', 0.06, 0.02, 0.003, x, y + 0.055, AZ + 0.28)   // 價格夾
+  } })
+  // 檯面上：濾鏡盒、幾顆鏡頭蓋、一台展示機
+  for (let i = 0; i < 5; i++) pack(0.12, 0.03 + (i % 2) * 0.02, 0.12, AX0 - 0.4 - i * 0.18, 0.78, AZ + 0.32, (i - 2) * 0.1)
+  pack(0.12, 0.03, 0.12, AX0 - 0.48, 0.81, AZ + 0.32, 0.4)
+  { const m = gearModel.b1.clone(); m.rotation.y = 0.4; m.position.set(AX1 + 0.7, 0.85, AZ + 0.27); g.add(m) }
+  { const m = gearModel.l2.clone(); m.rotation.x = Math.PI / 2; m.position.set(AX1 + 1.15, 0.78, AZ + 0.3); g.add(m) }
+  for (let x = AX0 - 0.3; x > AX1; x -= 0.75) addCollider(x, AZ + 0.25, 0.4, 3)
+
+  /* ---------- 門口附近：直立數位看板，輪播鳥照（每 6 秒換一張） ---------- */
+  const SIGN = { x: X0 - 1.1, z: -3.3 }
+  box('white', 0.14, 1.95, 0.82, SIGN.x, 0.995, SIGN.z); box('steel', 0.5, 0.03, 0.9, SIGN.x, 0.015, SIGN.z)
+  const scr = document.createElement('canvas'); scr.width = 448; scr.height = 768
+  const scrT = new THREE.CanvasTexture(scr); scrT.colorSpace = THREE.SRGBColorSpace
+  const scrM = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.2), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: scrT, emissiveIntensity: 0.9, roughness: 0.15 }))
+  scrM.rotation.y = -Math.PI / 2; scrM.position.set(SIGN.x - 0.072, 1.2, SIGN.z); g.add(scrM)
+  const caps = [['翠鳥', 'Common Kingfisher'], ['五色鳥', 'Taiwan Barbet'], ['藍鵲', 'Taiwan Blue Magpie'], ['白頭翁', 'Light-vented Bulbul']]
+  let slide = -1
+  function drawSlide(k) {
+    const x = scr.getContext('2d'), w = scr.width, h = scr.height, im = printT.image, iw = im.width / 2, ih = im.height / 2
+    x.fillStyle = '#0f1311'; x.fillRect(0, 0, w, h)
+    x.drawImage(im, (k % 2) * iw, (k < 2 ? 0 : 1) * ih, iw, ih, 0, 70, w, w)
+    x.fillStyle = '#7fd19c'; x.font = '600 26px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'left'; x.fillText('BIRD PHOTO OF THE WEEK', 24, 46)
+    x.fillStyle = '#fff'; x.font = 'bold 52px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText(caps[k][0], 24, w + 140)
+    x.fillStyle = '#b9c7be'; x.font = '28px "Helvetica Neue", Arial, sans-serif'; x.fillText(caps[k][1], 24, w + 186)
+    x.fillStyle = '#2f7d4f'; x.fillRect(24, h - 92, w - 48, 60); x.fillStyle = '#fff'; x.font = 'bold 28px "PingFang TC", sans-serif'; x.fillText('進溫室拍拍看 →', 44, h - 52)
+    for (let i = 0; i < 4; i++) { x.fillStyle = i === k ? '#fff' : '#4a524d'; x.beginPath(); x.arc(w - 110 + i * 24, 40, 6, 0, 7); x.fill() }
+    scrT.needsUpdate = true
+  }
+  addCollider(SIGN.x, SIGN.z, 0.45, 2.2)
+
+  /* ---------- 店門口（西側）：購物籃一疊 ---------- */
+  for (let i = 0; i < 5; i++) {
+    const bx = X1 + 0.75, bz = -2.4, y = 0.04 + i * 0.07, bw = 0.46, bd = 0.32, bh = 0.24
+    box('charcoal', bw, 0.015, bd, bx, y, bz)
+    for (const s of [-1, 1]) { box('charcoal', bw, bh, 0.012, bx, y + bh / 2, bz + s * bd / 2); box('charcoal', 0.012, bh, bd, bx + s * bw / 2, y + bh / 2, bz) }
+    box('glow', bw + 0.005, 0.02, 0.014, bx, y + bh - 0.03, bz - bd / 2)
+  }
+  bar('steel', V(X1 + 0.53, 0.04 + 4 * 0.07 + 0.24, -2.4), V(X1 + 0.75, 0.62, -2.4), 0.012); bar('steel', V(X1 + 0.97, 0.04 + 4 * 0.07 + 0.24, -2.4), V(X1 + 0.75, 0.62, -2.4), 0.012)
+  addCollider(X1 + 0.75, -2.4, 0.3, 0.7)
+
+  /* ---------- 天花板設備：空調出風口、灑水頭、偵煙器 ---------- */
+  for (const z of [-6.2, 6.2]) { box('dark', X0 - X1 - 2.0, 0.015, 0.12, XM, H - 0.01, z); box('steel', X0 - X1 - 1.9, 0.01, 0.16, XM, H - 0.004, z) }
+  for (let x = X0 - 1.6; x > X1 + 1; x -= 3.2) for (const z of [-5.2, 5.4]) {
+    box('steel', 0.03, 0.06, 0.03, x, H - 0.03, z); box('steel', 0.07, 0.008, 0.07, x, H - 0.065, z)   // 灑水頭
+  }
+  for (const [x, z] of [[-78.0, -5.6], [-84.6, -5.6], [-81.3, 6.4], [-87.4, 6.2]]) box('white', 0.14, 0.04, 0.14, x, H - 0.02, z)   // 偵煙器
+
   /* ---------- 展示島（可以逛）：深灰鋼底座＋橡木台面＋玻璃罩＋發光壓克力墊＋斜立價格卡 ---------- */
   const items = []
   const spec = (it) => it.af != null ? `對焦 ${it.af}s・連拍 ${it.fps} 張/秒` : `${it.min === it.max ? it.min : it.min + '–' + it.max}mm・f/${it.ap}`
@@ -412,6 +585,18 @@ export async function buildStore(scene, state) {
     const want = camPos.x < X0 + 1 ? THREE.MathUtils.clamp(a, Math.PI - 1.05, Math.PI + 1.05) : Math.PI
     owner.rotation.y += (want - owner.rotation.y) * (1 - Math.exp(-2.5 * dt))
     owner.scale.y = 1 + Math.sin(t * 1.6) * 0.004
+    // 自動門：人在門口 3 公尺內就開，離開 1 秒後才關；開 0.7 秒、關 1.1 秒，速度頭尾放慢
+    const near = Math.hypot(camPos.x - X0, camPos.z) < 3.0 && camPos.y < 4
+    door.hold = near ? 1.0 : Math.max(0, door.hold - dt)
+    const want2 = near || door.hold > 0 ? 1 : 0
+    door.t = THREE.MathUtils.clamp(door.t + (want2 ? dt / 0.7 : -dt / 1.1), 0, 1)
+    const e = door.t * door.t * (3 - 2 * door.t)
+    for (const { lf, s } of leaves) lf.position.z = s * (LEAF_W / 2 + (OPEN + 0.05) * e)
+    for (const c of doorCol) c.top = e > 0.7 ? -1 : 9
+    sensM.emissive.setHex(want2 ? 0x3ad06a : 0xff3a2a)
+    // 看板輪播
+    const k = Math.floor(t / 6) % 4
+    if (k !== slide && printT.image) { slide = k; drawSlide(k) }
   }
   const refresh = () => items.forEach((it) => it.draw())
   return { group: g, focus, tick, refresh, items }
