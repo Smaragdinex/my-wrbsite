@@ -99,6 +99,110 @@ function domeGeometry(scale = 1, nu = 160, nv = 48) {
   return g
 }
 
+// 入口：溫室外面接一間玻璃門廳（真的溫室都是這樣：先進門廳再進主館，擋風、保溫）。
+// 鋼構漆白（跟圓頂主拱肋同色）：角柱、簷樑、人字屋頂、玻璃分隔條，外側是自動玻璃拉門；內側是開口，上面掛綠色「出口」燈箱。
+// 圓頂的玻璃和斜格網在門口挖掉（cutDoor），主拱肋錯開半格，門中間不會有柱子。
+const DOOR = { W: 4.0, X0: -73.0, X1: -78.4, EAVE: 3.8, RIDGE: 5.3 }
+const doorTop = (z) => DOOR.EAVE + (DOOR.RIDGE - DOOR.EAVE) * Math.max(0, 1 - Math.abs(z) / DOOR.W)
+function cutDoor(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vDoorW;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvDoorW = (modelMatrix * vec4(transformed, 1.0)).xyz;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vDoorW;')
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        if (vDoorW.x < -60.0 && abs(vDoorW.z) < ${(DOOR.W + 0.02).toFixed(2)} && vDoorW.y < ${DOOR.EAVE.toFixed(2)} + ${(DOOR.RIDGE - DOOR.EAVE).toFixed(2)} * max(0.0, 1.0 - abs(vDoorW.z) / ${DOOR.W.toFixed(1)}) + 0.05) discard;`)
+  }
+  mat.customProgramCacheKey = () => 'cutDoor'
+}
+function buildEntrance() {
+  const g = new THREE.Group()
+  const steel = new THREE.MeshStandardMaterial({ color: 0xf2f4f5, roughness: 0.45, metalness: 0.5 })
+  const alu = new THREE.MeshStandardMaterial({ color: 0x3c4246, roughness: 0.35, metalness: 0.8 })
+  const glassM = new THREE.MeshStandardMaterial({ color: 0xcfe4ea, transparent: true, opacity: 0.16, roughness: 0.04, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false })
+  const { W, X0, X1, EAVE, RIDGE } = DOOR, L = X0 - X1, XM = (X0 + X1) / 2
+  const geos = { steel: [], alu: [] }
+  // 兩點之間拉一根方管（a、b 世界座標、t 管徑）
+  const bar = (list, a, b, t = 0.14, t2 = t) => {
+    const d = new THREE.Vector3().subVectors(b, a), len = d.length()
+    const m = new THREE.Matrix4().lookAt(a, b, Math.abs(d.y) > 0.99 * len ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0))
+    m.setPosition(a.clone().add(b).multiplyScalar(0.5))
+    list.push(new THREE.BoxGeometry(t, t2, len).applyMatrix4(m))
+  }
+  const V = (x, y, z) => new THREE.Vector3(x, y, z)
+  const glassPane = (pts) => {   // 平面多邊形玻璃（凸的）
+    const pos = []
+    for (let i = 1; i < pts.length - 1; i++) pos.push(...pts[0].toArray(), ...pts[i].toArray(), ...pts[i + 1].toArray())
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals()
+    const m = new THREE.Mesh(geo, glassM); m.renderOrder = 5; g.add(m)
+  }
+  // 柱子：四角＋側牆中間；每根底下一塊底板
+  for (const x of [X0, XM, X1]) for (const z of [-W, W]) {
+    bar(geos.steel, V(x, 0, z), V(x, EAVE, z), 0.24)
+    geos.steel.push(new THREE.BoxGeometry(0.5, 0.04, 0.5).translate(x, 0.02, z))
+  }
+  // 簷樑、人字屋架（每個柱位一榀）、屋脊、檁條
+  for (const z of [-W, W]) bar(geos.steel, V(X0, EAVE, z), V(X1, EAVE, z), 0.22, 0.3)
+  for (const x of [X0, XM, X1]) {
+    bar(geos.steel, V(x, EAVE, -W), V(x, RIDGE, 0), 0.2, 0.26); bar(geos.steel, V(x, EAVE, W), V(x, RIDGE, 0), 0.2, 0.26)
+    bar(geos.steel, V(x, EAVE, -W), V(x, EAVE, W), 0.08)                     // 拉桿
+  }
+  bar(geos.steel, V(X0, RIDGE, 0), V(X1, RIDGE, 0), 0.2)
+  for (const f of [1 / 3, 2 / 3]) for (const s of [-1, 1]) {
+    const z = s * W * (1 - f), y = EAVE + (RIDGE - EAVE) * f
+    bar(geos.alu, V(X0, y, z), V(X1, y, z), 0.06)
+  }
+  // 側牆：直的分隔條（約 1 公尺一格）＋ 腰帶（2.6 公尺）＋ 底下的踢腳板
+  const nSide = 5
+  for (const z of [-W, W]) {
+    for (let i = 1; i < nSide; i++) { const x = X0 - L * i / nSide; bar(geos.alu, V(x, 0.3, z), V(x, EAVE, z), 0.06) }
+    bar(geos.alu, V(X0, 2.6, z), V(X1, 2.6, z), 0.07)
+    geos.steel.push(new THREE.BoxGeometry(L, 0.3, 0.12).translate(XM, 0.15, z))
+    glassPane([V(X0, 0.3, z), V(X1, 0.3, z), V(X1, EAVE, z), V(X0, EAVE, z)])
+  }
+  // 屋頂玻璃
+  for (const s of [-1, 1]) glassPane([V(X0, EAVE, s * W), V(X1, EAVE, s * W), V(X1, RIDGE, 0), V(X0, RIDGE, 0)])
+  // 外牆（門那面）：兩側固定玻璃＋中間自動拉門（兩扇、往兩邊滑開一點點）＋門楣（感應器）＋上面三角形玻璃
+  const DW = 1.2
+  for (const z of [-DW * 2, DW * 2, -DW, DW]) bar(geos.alu, V(X1, 0, z), V(X1, 2.6, z), 0.09)
+  bar(geos.alu, V(X1, 2.6, -W), V(X1, 2.6, W), 0.1)
+  geos.alu.push(new THREE.BoxGeometry(0.22, 0.24, DW * 2.2).translate(X1 + 0.12, 2.48, 0))   // 拉門的機箱
+  for (const s of [-1, 1]) {
+    glassPane([V(X1, 0.05, s * DW * 2), V(X1, 0.05, s * W), V(X1, 2.6, s * W), V(X1, 2.6, s * DW * 2)])
+    // 門扇：鋁框＋玻璃（稍微往內一點，跟固定玻璃錯開）
+    const z0 = s * 0.02, z1 = s * (DW + 0.02), xd = X1 + 0.08
+    for (const z of [z0, z1]) bar(geos.alu, V(xd, 0.02, z), V(xd, 2.34, z), 0.05, 0.07)
+    bar(geos.alu, V(xd, 0.06, z0), V(xd, 0.06, z1), 0.06, 0.12); bar(geos.alu, V(xd, 2.32, z0), V(xd, 2.32, z1), 0.05)
+    glassPane([V(xd, 0.1, z0), V(xd, 0.1, z1), V(xd, 2.3, z1), V(xd, 2.3, z0)])
+    bar(geos.alu, V(xd + 0.06, 0.95, s * 0.12), V(xd + 0.06, 1.55, s * 0.12), 0.03)   // 把手
+  }
+  glassPane([V(X1, 2.6, -W), V(X1, 2.6, W), V(X1, EAVE, W), V(X1, RIDGE, 0), V(X1, EAVE, -W)])
+  for (const z of [-2, 0, 2]) bar(geos.alu, V(X1, 2.6, z), V(X1, doorTop(z), z), 0.06)
+  // 內側（接圓頂）：開口的門框，上面一根大樑
+  bar(geos.steel, V(X0, EAVE, -W), V(X0, EAVE, W), 0.26, 0.4)
+  // 地板：門廳鋪石材＋門口一塊深色腳踏墊
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(L, 0.06, W * 2), new THREE.MeshStandardMaterial({ color: 0xbdb8ad, roughness: 0.7 }))
+  floor.position.set(XM, 0.0, 0); floor.receiveShadow = true; g.add(floor)
+  const mat = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.02, DW * 2.4), new THREE.MeshStandardMaterial({ color: 0x2c2f2c, roughness: 0.95 }))
+  mat.position.set(X1 + 1.1, 0.04, 0); g.add(mat)
+  for (const [k, m] of [['steel', steel], ['alu', alu]]) {
+    const mesh = new THREE.Mesh(mergeGeometries(geos[k]), m)
+    mesh.castShadow = true; mesh.receiveShadow = true
+    g.add(mesh)
+  }
+  // 綠色出口燈箱（自己發光），掛在內側大樑下面、面向園區
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96
+  const x2 = c.getContext('2d'); x2.fillStyle = '#1f9a4c'; x2.fillRect(0, 0, 256, 96)
+  x2.fillStyle = '#fff'; x2.font = 'bold 52px "PingFang TC", "Noto Sans TC", sans-serif'; x2.textAlign = 'center'; x2.textBaseline = 'middle'
+  x2.fillText('出口 EXIT', 128, 50)
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.06), [alu, alu, alu, alu, new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.9 }), alu])
+  sign.material[4].userData.lamp = [0.9, 1.6]
+  sign.rotation.y = Math.PI / 2   // 有字的那面（+z）轉到朝 +x（園區那邊）
+  sign.position.set(X0 + 0.2, EAVE - 0.42, 0)
+  g.add(sign)
+  return g
+}
+
 export function buildDome(scene) {
   const group = new THREE.Group()
   const glass = new THREE.Mesh(domeGeometry(1), new THREE.MeshStandardMaterial({
@@ -106,6 +210,7 @@ export function buildDome(scene) {
     side: THREE.DoubleSide, depthWrite: false,
   }))
   glass.renderOrder = 5
+  cutDoor(glass.material)
   group.add(glass)
 
   const grid = T.domeGridTex()
@@ -113,6 +218,7 @@ export function buildDome(scene) {
   const frame = new THREE.Mesh(domeGeometry(0.998), new THREE.MeshStandardMaterial({
     color: 0xe8ecee, map: grid, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.4,
   }))
+  cutDoor(frame.material)
   frame.castShadow = true
   group.add(frame)
 
@@ -120,7 +226,7 @@ export function buildDome(scene) {
   const ribs = []
   const RIBS = 20
   for (let k = 0; k < RIBS; k++) {
-    const p = (k / RIBS) * TAU, pts = []
+    const p = ((k + 0.5) / RIBS) * TAU, pts = []   // 錯開半格：θ = π 是入口，不能有一根主拱肋剛好插在門中間
     for (let j = 0; j <= 24; j++) {
       const a = (j / 24) * Math.PI / 2 * 0.985
       pts.push(new THREE.Vector3(DOME.A * 0.99 * Math.cos(a) * Math.cos(p), DOME.H * 0.99 * Math.sin(a), DOME.B * 0.99 * Math.cos(a) * Math.sin(p)))
@@ -150,7 +256,7 @@ export function buildDome(scene) {
   for (let i = 0; i < N; i++) {
     const p = ((i + 0.5) / N) * TAU
     const x = DOME.A * Math.cos(p), z = DOME.B * Math.sin(p)
-    if (x < 0 && Math.abs(z) < 3.6) continue
+    if (x < 0 && Math.abs(z) < DOOR.W + 0.1) continue
     const a = i * 4, b = (i + 1) * 4
     for (let f = 0; f < 3; f++) wallIdx.push(a + f, b + f, a + f + 1, a + f + 1, b + f, b + f + 1)
   }
@@ -162,20 +268,7 @@ export function buildDome(scene) {
   wall.receiveShadow = true
   group.add(wall)
 
-  // 入口門框
-  const steel = new THREE.MeshStandardMaterial({ color: 0x5a5f63, roughness: 0.4, metalness: 0.7 })
-  const door = new THREE.Group()
-  for (const z of [-3.4, 3.4]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.2, 0.5), steel)
-    post.position.set(0, 2.1, z); door.add(post)
-  }
-  const lintel = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 7.3), steel)
-  lintel.position.set(0, 4.3, 0); door.add(lintel)
-  const pane = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 4), new THREE.MeshStandardMaterial({ color: 0xbfd8e0, transparent: true, opacity: 0.25, roughness: 0.05, side: THREE.DoubleSide, depthWrite: false }))
-  pane.rotation.y = Math.PI / 2; pane.position.set(0, 2, 0)
-  door.add(pane)
-  door.position.set(-DOME.A * 0.975, 0, 0)
-  group.add(door)
+  group.add(buildEntrance())
 
   scene.add(group)
 }

@@ -16,12 +16,12 @@ import { createViewmodel } from './viewmodel.js'
 const loadingEl = document.getElementById('loading')
 const world = await buildWorld(document.getElementById('scene'), {
   onProgress: (f) => { loadingEl.textContent = `園區建造中… ${Math.round(f * 100)}%` },
-  extraReserve: [{ x: SHOP.x, z: SHOP.z, r: 3.2 }],
+  extraReserve: [{ x: SHOP.x, z: SHOP.z, r: 3.2, noTrees: true }],
   extraModels: flyModels(),
   night: true,
 })
 const { renderer, scene, camera } = world
-buildShop(scene)
+const shopProp = await buildShop(scene)
 
 const player = createPlayer(camera, renderer.domElement)
 scene.add(camera)   // 第一人稱的手和相機掛在鏡頭底下，鏡頭要在場景裡才會畫出來
@@ -121,6 +121,7 @@ function frame() {
   vm.update(dt, { raise: cam.state.raised ? 1 : 0, view: 0, speed: flight.speed, t })
   cam.state.vfReady = vm.st.raise > 0.85
   world.tick(t, dt)
+  shopProp.tick(t, dt, camera.position)
   flight.tick(t, dt, { sneak: player.state.sneak })
   hud.setHint(!panelOpen() && player.controls.isLocked ? (nearShop() ? '按 E 進入相機行' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')
   hud.update(dt)

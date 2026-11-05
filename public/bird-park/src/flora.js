@@ -352,6 +352,7 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
         const off = entry.w / 2 + 2.2
         const x = pts[k].x - tz / tl * off * side, z = pts[k].z + tx / tl * off * side
         if (!insideGarden(x, z, 0.93) || !freeOfColliders(x, z, 1) || !clearOK(x, z, 3.5, 14)) continue
+        if (reserved.some((r) => r.noTrees && (x - r.x) ** 2 + (z - r.z) ** 2 < (r.r + 1.5) ** 2)) continue   // 相機行前面不種棕櫚（會擋住攤位）
         const name = pick(['coco_a', 'coco_f', 'coco_c', 'coco_e']), gy = terrainHeight(x, z)
         const s = Math.min(0.85 + rnd() * 0.25, (domeY(x, z) - gy - 1.5) / H(name))
         if (s < 0.5) continue

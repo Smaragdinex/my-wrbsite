@@ -1,5 +1,6 @@
-// 相機行：入口廣場旁的小攤子。靠近按 E：賣照片給老闆（老闆給評語和價錢）、買或換機身和鏡頭
+// 相機行：一進入口就在左手邊的相機器材店（攤位＋老闆都是 Tripo 模型）。靠近按 E：賣照片給老闆（老闆給評語和價錢）、買或換機身和鏡頭
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { terrainHeight, addCollider } from '../layout.js'
 import { BODIES, LENSES } from './camera.js'
 import { MIN_SCORE } from './scoring.js'
@@ -8,57 +9,67 @@ export const SHOP = { x: -64.5, z: -4.6, face: 0 }   // 攤位面朝 +z（步道
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
+// 招牌字：透明底、金色字，直接「漆」在模型頂上那塊空白木招牌上（AI 生的模型寫中文會變亂碼，所以招牌留白、字自己畫）
 function signTex(text, sub) {
-  const c = document.createElement('canvas'); c.width = 1024; c.height = 256
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 144
   const g = c.getContext('2d')
-  g.fillStyle = '#2d4a3a'; g.fillRect(0, 0, 1024, 256)
-  g.strokeStyle = '#d8c38a'; g.lineWidth = 10; g.strokeRect(14, 14, 996, 228)
-  g.fillStyle = '#f3e9cf'; g.textAlign = 'center'
-  g.font = 'bold 120px "PingFang TC", "Noto Sans TC", sans-serif'; g.fillText(text, 512, 140)
-  g.font = '48px "PingFang TC", "Noto Sans TC", sans-serif'; g.fillStyle = '#d8c38a'; g.fillText(sub, 512, 215)
+  g.textBaseline = 'middle'; g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = 6; g.shadowOffsetY = 3
+  g.font = 'bold 104px "PingFang TC", "Noto Sans TC", sans-serif'
+  const w1 = g.measureText(text).width
+  g.font = '44px "PingFang TC", "Noto Sans TC", sans-serif'
+  const w2 = g.measureText(sub).width, gap = 40, x0 = (1024 - w1 - gap - w2) / 2
+  g.fillStyle = '#e8cf8a'; g.font = 'bold 104px "PingFang TC", "Noto Sans TC", sans-serif'; g.fillText(text, x0, 76)
+  g.fillStyle = '#d9c9a0'; g.font = '44px "PingFang TC", "Noto Sans TC", sans-serif'; g.fillText(sub, x0 + w1 + gap, 82)
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8
   return t
 }
-function stripeTex() {
-  const c = document.createElement('canvas'); c.width = 256; c.height = 64
+
+function deckTex() {   // 一條條的木板
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128
   const g = c.getContext('2d')
-  for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#f2ede0' : '#2f6b4a'; g.fillRect(i * 32, 0, 32, 64) }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
+  for (let i = 0; i < 8; i++) {
+    const l = 150 + ((i * 37) % 40); g.fillStyle = `rgb(${l},${l * 0.8 | 0},${l * 0.6 | 0})`; g.fillRect(0, i * 16, 512, 15)
+    g.fillStyle = 'rgba(40,25,15,0.8)'; g.fillRect(0, i * 16 + 15, 512, 1)
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 2)
   return t
 }
 
-// 攤位：木頭櫃台＋後牆＋條紋遮陽棚＋招牌＋架上的相機
-export function buildShop(scene) {
+// 攤位和老闆：ChatGPT 畫四視圖 → Tripo 建模 → tools/make-prop.py（models/shop.glb、models/owner.glb）
+// 攤位寬 2.9、深 1.2、高 3 公尺，正面朝 +z；招牌在頂上（正面 z = -0.45、高 2.62～2.98）。
+// 老闆站在攤位靠入口那一側、櫃台旁邊；玩家走近會慢慢轉頭面向玩家，平常微微呼吸
+const OWNER = { x: -1.95, z: 0.55, yaw: -0.45 }
+export async function buildShop(scene) {
+  const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
+  const loader = new GLTFLoader()
+  const [kiosk, owner] = await Promise.all(['models/shop.glb', 'models/owner.glb'].map((p) => loader.loadAsync(`${p}?v=${VER}`).then((r) => r.scene)))
   const g = new THREE.Group()
   const y = terrainHeight(SHOP.x, SHOP.z)
   g.position.set(SHOP.x, y, SHOP.z); g.rotation.y = SHOP.face
-  const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a36, roughness: 0.75 })
-  const dark = new THREE.MeshStandardMaterial({ color: 0x3b2a1e, roughness: 0.8 })
-  const box = (w, h, d, m, x, yy, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, yy, z); o.castShadow = o.receiveShadow = true; g.add(o); return o }
-  box(3.0, 1.0, 0.7, wood, 0, 0.5, 0.6)                         // 櫃台
-  box(3.1, 0.06, 0.8, dark, 0, 1.03, 0.6)                       // 檯面
-  box(3.2, 2.6, 0.15, wood, 0, 1.3, -0.6)                       // 後牆
-  box(0.12, 2.6, 0.12, dark, -1.55, 1.3, 0.95); box(0.12, 2.6, 0.12, dark, 1.55, 1.3, 0.95)   // 前柱
-  box(0.12, 2.6, 0.12, dark, -1.55, 1.3, -0.6); box(0.12, 2.6, 0.12, dark, 1.55, 1.3, -0.6)
-  for (const yy of [1.45, 1.95]) box(2.9, 0.05, 0.3, dark, 0, yy, -0.45)   // 層架
-  // 架上的相機：機身＋鏡頭
-  const camMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.4, metalness: 0.3 })
-  for (let i = 0; i < 6; i++) {
-    const x = -1.2 + i * 0.48, yy = i < 3 ? 1.52 : 2.02
-    const body = box(0.22, 0.14, 0.1, camMat, x, yy, -0.42)
-    const len = 0.08 + (i % 3) * 0.08
-    const l = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, len, 16).rotateX(Math.PI / 2), camMat)
-    l.position.set(x, yy, -0.42 + 0.05 + len / 2); g.add(l)
-  }
-  // 遮陽棚（斜的條紋布）
-  const awn = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.9), new THREE.MeshStandardMaterial({ map: stripeTex(), side: THREE.DoubleSide, roughness: 0.9 }))
-  awn.position.set(0, 2.55, 0.25); awn.rotation.x = -Math.PI / 2 + 0.28; awn.castShadow = true; g.add(awn)
-  // 招牌
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshStandardMaterial({ map: signTex('相機行', '照片收購・器材'), roughness: 0.7 }))
-  sign.position.set(0, 2.95, 1.0); g.add(sign)
+  for (const m of [kiosk, owner]) m.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = true } })
+  g.add(kiosk)
+  // 木棧板平台：攤位和老闆一起站在上面（地形在這裡攤平了，layout.js 的 FLAT）
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.2, 2.1), new THREE.MeshStandardMaterial({ map: deckTex(), color: 0x9a7650, roughness: 0.8 }))
+  deck.position.set(-0.55, -0.02, 0.3); deck.castShadow = deck.receiveShadow = true; g.add(deck)
+  kiosk.position.y = owner.position.y = 0.08
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.05, 0.29), new THREE.MeshStandardMaterial({ map: signTex('相機行', '照片收購・器材'), transparent: true, roughness: 0.55, metalness: 0.3 }))
+  sign.position.set(0, 2.8, -0.435); g.add(sign)
+  owner.position.x = OWNER.x; owner.position.z = OWNER.z; owner.rotation.y = OWNER.yaw
+  g.add(owner)
   scene.add(g)
-  addCollider(SHOP.x, SHOP.z, 1.7, y + 3)
-  return g
+  addCollider(SHOP.x, SHOP.z, 1.6, y + 3)
+  addCollider(SHOP.x + OWNER.x, SHOP.z + OWNER.z, 0.35, y + 2)
+  const _p = new THREE.Vector3()
+  // 老闆：玩家在 6 公尺內就轉頭看玩家（最多轉 ±70 度），呼吸＝身體高度微微起伏
+  function tick(t, dt, camPos) {
+    owner.getWorldPosition(_p)
+    const dx = camPos.x - _p.x, dz = camPos.z - _p.z
+    const near = Math.hypot(dx, dz) < 6
+    const want = near ? THREE.MathUtils.clamp(Math.atan2(dx, dz) - SHOP.face, -1.2, 1.2) : OWNER.yaw
+    owner.rotation.y += (want - owner.rotation.y) * (1 - Math.exp(-2.5 * dt))
+    owner.scale.y = 1 + Math.sin(t * 1.6) * 0.004
+  }
+  return { group: g, owner, tick }
 }
 
 // 面板：賣照片／器材
