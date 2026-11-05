@@ -593,6 +593,8 @@ export async function buildStore(scene, state) {
     const camPos = cam.position
     keeper.tick(t, dt, opt.play ? camPos : null, opt.look ? focus(cam)?.item ?? null : null)
     keeperCol.x = keeper.pos.x; keeperCol.z = keeper.pos.y
+    // 玩家跟老闆疊在一起時（不管怎麼發生的）先關掉他的碰撞，不然玩家四個方向都會被擋住、WASD 完全不能動
+    keeperCol.top = Math.hypot(camPos.x - keeper.pos.x, camPos.z - keeper.pos.y) < 0.6 ? -1 : 2.2   // 正常碰撞會擋在 0.68，進到 0.6 以內代表已經疊在一起
     // 自動門：人在門口 3 公尺內就開，離開 1 秒後才關；開 0.7 秒、關 1.1 秒，速度頭尾放慢
     const near = Math.hypot(camPos.x - X0, camPos.z) < 3.0 && camPos.y < 4
     door.hold = near ? 1.0 : Math.max(0, door.hold - dt)

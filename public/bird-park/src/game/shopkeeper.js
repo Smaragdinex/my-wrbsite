@@ -172,13 +172,15 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     const here = inStore(P.x, P.y), passage = inPassage(P.x, P.y)
     const dP = pos.distanceTo(P)
 
+    // 走過去招呼時玩家自己走過來了：1.3 公尺內就停（不要走進玩家身上）
+    if (path.length && state === 'greet' && dP < 1.3) path = [pos.clone()]
     // 走路：沿著路徑點走，玩家擋在前面就停
     if (path.length) {
       const nx = path[0], d = nx.distanceTo(pos)
       const dir = new THREE.Vector2().subVectors(nx, pos).normalize()
       // 接下來 1 公尺的路會不會擦到玩家（0.55 公尺內）
       const ahead = Math.min(1, d), u = THREE.MathUtils.clamp(new THREE.Vector2().subVectors(P, pos).dot(dir), 0, ahead)
-      const blocked = here && P.distanceTo(new THREE.Vector2().copy(pos).addScaledVector(dir, u)) < 0.55 && !(path.length === 1 && state === 'greet')
+      const blocked = here && P.distanceTo(new THREE.Vector2().copy(pos).addScaledVector(dir, u)) < 0.55
       if (blocked) { waitT += dt; if (cur !== acts.idle) play('idle', 0.2); if (waitT > 0.8) { waitT = 0; avoid = P.clone(); path = findPath(pos, path[path.length - 1]); avoid = null } }   // 停一下，再繞過玩家
       else {
         waitT = 0; if (cur !== acts.walk) play('walk', 0.2)
