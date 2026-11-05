@@ -11,6 +11,7 @@
 import * as THREE from 'three'
 
 const CELL = 0.2, SPEED = 1.15, TURN = 5.5, NPC_R = 0.22
+const WALK_CLIP_SPEED = 0.92   // walk 這段動作原本的步伐速度（量腳著地時往後滑的速度），播放速度照實際走的速度調，腳才不會滑
 const NEAR_PLAYER = 1.4
 
 export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYaw, inStore, inPassage, counterZone }) {
@@ -132,8 +133,8 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
   const P = new THREE.Vector2()
   function walkTo(target, then) {
     const t = target.clone(); const [i, j] = nearestFree(t.x, t.y); if (solid[i + j * NX] === 0 && t.distanceTo(centre(i, j)) > CELL) t.copy(centre(i, j))
-    path = findPath(pos, t); onArrive = then
-    if (path.length) play('walk')
+    path = t.distanceTo(pos) < 0.45 ? [] : findPath(pos, t); onArrive = then   // 太近就不用走（不然會一直小碎步）
+    if (!path.length) { const f = onArrive; onArrive = null; f?.() }
   }
   const goHome = (then) => { state = 'return'; walkTo(homeV, () => { state = 'home'; faceYaw = homeYaw; play('idle'); then?.() }) }
   const faceTo = (v) => { faceYaw = Math.atan2(v.x - pos.x, v.y - pos.y) }
@@ -189,11 +190,11 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     pv.lerp(new THREE.Vector2().subVectors(P, lastP).divideScalar(Math.max(dt, 1e-3)), Math.min(1, dt * 4)); lastP.copy(P)
     pSpeed = pv.length(); stillT = pSpeed < 0.35 ? stillT + dt : 0; sinceSpoke += dt
 
-    // 陪逛：每 0.6 秒看一次玩家在哪；離太遠（3 公尺）、太近（1.3）或玩家在走而位置差很多 → 換位置（走路中也可以改路線）
+    // 陪逛：每 0.6 秒看一次玩家在哪；離太遠（3 公尺）、貼太近（0.9）或玩家在走、離開 1.8 公尺以上 → 換位置（走路中也可以改路線）
     if (state === 'attend' && here && (followT -= dt) <= 0) {
       followT = 0.6
       const spot = followSpot()
-      if (dP > 3.0 || dP < 1.3 || (pSpeed > 0.5 && spot.distanceTo(pos) > 1.2)) walkTo(spot, () => {})
+      if (dP > 3.0 || dP < 0.9 || (pSpeed > 0.5 && dP > 1.8 && spot.distanceTo(pos) > 1.2)) walkTo(spot, () => {})   // 玩家只是在旁邊小動，不跟著一直調位置
     }
 
     // 走過去招呼時玩家自己走過來了：1.3 公尺內就停（不要走進玩家身上）
@@ -205,11 +206,12 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
       // 接下來 1 公尺的路會不會擦到玩家（0.55 公尺內）
       const ahead = Math.min(1, d), u = THREE.MathUtils.clamp(new THREE.Vector2().subVectors(P, pos).dot(dir), 0, ahead)
       const blocked = here && P.distanceTo(new THREE.Vector2().copy(pos).addScaledVector(dir, u)) < 0.55
-      if (blocked) { waitT += dt; if (cur !== acts.idle) play('idle', 0.2); if (waitT > 0.8) { waitT = 0; avoid = P.clone(); path = findPath(pos, path[path.length - 1]); avoid = null } }   // 停一下，再繞過玩家
+      if (blocked && state === 'attend') { path = []; onArrive = null; play('idle', 0.3); followT = 1.5 }   // 陪逛時被玩家擋住＝玩家就在旁邊了，不用走，站著就好
+      else if (blocked) { waitT += dt; if (cur !== acts.idle) play('idle', 0.3); if (waitT > 0.8) { waitT = 0; avoid = P.clone(); path = findPath(pos, path[path.length - 1]); avoid = null } }   // 要去別的地方：停一下，再繞過玩家
       else {
         waitT = 0; if (cur !== acts.walk) play('walk', 0.2)
         const spd = state === 'attend' && dP > 2.4 ? THREE.MathUtils.clamp(pSpeed, 1.5, 2.2) : SPEED   // 陪逛落後就快步跟上（玩家走 4.2 公尺/秒，他最快 2.2，停下來時才追得上，像真人）
-        acts.walk.timeScale = spd / SPEED
+        acts.walk.timeScale = spd / WALK_CLIP_SPEED
         const step = Math.min(d, spd * dt); pos.addScaledVector(dir, step)
         faceYaw = Math.atan2(dir.x, dir.y)
         if (d - step < 0.02) path.shift()
@@ -267,5 +269,5 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     model.rotation.y = cy + dy * Math.min(1, TURN * dt)
     model.position.set(pos.x, 0, pos.y)
   }
-  return { model, tick, checkout, say, get state() { return state }, pos }
+  return { model, tick, checkout, say, get state() { return state }, get anim() { return cur?.getClip().name }, get path() { return path }, pos }
 }

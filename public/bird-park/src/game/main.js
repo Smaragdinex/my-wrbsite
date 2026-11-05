@@ -2,6 +2,7 @@
 import * as THREE from 'three'
 import { buildWorld, PHONE } from '../world.js'
 import { createSettings } from './settings.js'
+import { createAmbience } from './ambience.js'
 import { createPlayer } from '../player.js'
 import { createHud } from './hud.js'
 import { createCamera, BODIES, LENSES } from './camera.js'
@@ -118,6 +119,7 @@ if (!PHONE && new URLSearchParams(location.search).get('ai') !== '0') loadLLM(()
 
 // 首頁：開始遊戲／設定／操作說明。開始＝鎖定滑鼠（瀏覽器規定要使用者點擊才能鎖）；按 Esc 解鎖就回到這個選單（按鈕變「繼續」）
 const settings = createSettings({ world, player })
+const amb = createAmbience({ getMusic: () => settings.state.music, getAmb: () => settings.state.amb })   // 背景音樂＋溫室環境音（程式合成）
 createUiFx({ getSound: () => settings.state.sound })   // 滑鼠圓圈＋按鈕音效
 const startEl = document.getElementById('start'), menuEl = document.getElementById('menu'), helpEl = document.getElementById('help')
 startEl.append(settings.el)
@@ -141,6 +143,7 @@ function frame() {
   cam.update(dt)
   if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }
   hud.setClock(hour)
+  amb.tick(dt, { hour, pos: camera.position })
   vm.setGear(state.bodyId, state.lensId)
   cam.setScreen(vm.screen)
   vm.update(dt, { raise: cam.state.raised ? 1 : 0, view: 0, speed: flight.speed, t })
@@ -155,5 +158,5 @@ function frame() {
   world.render()
   if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
 }
-window.__game = { setMenuCam, settings, store, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
+window.__game = { setMenuCam, amb, settings, store, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 frame()
