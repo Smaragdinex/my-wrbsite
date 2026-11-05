@@ -77,7 +77,7 @@ export function createSettings({ world, player }) {
       <h3>聲音</h3>
       <div class="row"><div><b>背景音樂</b><small>輕柔的環境音樂</small></div>${seg('music', LEVELS, st.music)}</div>
       <div class="row"><div><b>環境音</b><small>鳥叫、蟲鳴、瀑布水聲</small></div>${seg('amb', LEVELS, st.amb)}</div>
-      <div class="row"><div><b>介面音效</b><small>滑過、按下按鈕的聲音</small></div>${seg('sound', { off: '關', on: '開' }, st.sound ? 'on' : 'off')}</div>
+      <div class="row"><div><b>音效</b><small>按鈕、對焦嗶聲、快門聲</small></div>${seg('sound', { off: '關', on: '開' }, st.sound ? 'on' : 'off')}</div>
       <button class="back">返回</button>`
   }
   el.addEventListener('click', (e) => {

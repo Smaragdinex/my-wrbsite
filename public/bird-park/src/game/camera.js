@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { measurePhoto, scorePhoto } from './scoring.js'
 import { APERTURES, SHUTTERS, ISOS, MODES, NOISE, fmtShutter, fmtAp, settle, createMeter } from './exposure.js'
+import { createCameraSfx } from './camera-sfx.js'
 
 // 機身：af 對焦要幾秒、fps 連拍、iso 最高 ISO（暗處能拍多亮；越高的機身雜訊也越少，見 exposure.js 的 NOISE）
 export const BODIES = [
@@ -26,7 +27,25 @@ const WALK_FOV = 62
 const PHOTO_W = 1200, PHOTO_H = 800
 const KEY = 'birdpark-camera-v1'
 
-export function createCamera({ world, camera, controls, hud, gear, onShot, onPanel }) {
+// 觀景窗裡的對焦點（像單眼的 AF 點陣）：7×3 個小框，中間那個是現在用的（比較大、四角括弧）；合焦時亮紅色、底下的綠點 ● 亮起
+const AF_SVG = (() => {
+  const W = 340, H = 170, pts = []
+  for (let r = -1; r <= 1; r++) for (let c = -3; c <= 3; c++) {
+    if (!r && !c) continue
+    const x = W / 2 + c * 44 - 10, y = H / 2 + r * 44 - 7
+    pts.push(`<rect class="pt" x="${x}" y="${y}" width="20" height="14" rx="1.5"/>`)
+  }
+  // 現用的對焦點：四個角括弧＋中間十字小刻（十字型對焦點）
+  const cx = W / 2, cy = H / 2, w = 17, h = 12, k = 7
+  const corner = (sx, sy) => `M${cx + sx * w},${cy + sy * (h - k)} V${cy + sy * h} H${cx + sx * (w - k)}`
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${pts.join('')}
+    <g class="act"><rect class="fill" x="${cx - w}" y="${cy - h}" width="${w * 2}" height="${h * 2}" rx="2"/>
+    <path d="${corner(-1, -1)} ${corner(1, -1)} ${corner(-1, 1)} ${corner(1, 1)}"/>
+    <path class="tick" d="M${cx - 3},${cy} H${cx + 3} M${cx},${cy - 3} V${cy + 3}"/></g></svg>`
+})()
+
+export function createCamera({ world, camera, controls, hud, gear, onShot, onPanel, getSound = () => true }) {
+  const sfx = createCameraSfx({ getSound })
   const st = { raised: false, focal: 35, focus: 10, aimDist: 10, af: 0, locked: false, fov: WALK_FOV, cool: 0, meterT: 0 }
   // 使用者選的設定（存起來，下次開遊戲還在）
   const cam = { mode: 'auto', ap: 5.6, t: 1 / 250, iso: 400 }
@@ -36,8 +55,8 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
   // 觀景窗疊圖：下面一排是焦距、快門、光圈、ISO、測光表、對焦距離、模式
   const vf = document.createElement('div')
   vf.className = 'viewfinder'
-  vf.innerHTML = `<div class="vf-mask"></div><div class="vf-frame"><i></i><i></i><i></i><i></i></div><div class="vf-af"></div>
-    <div class="vf-bar"><span class="vf-mode"></span><span class="vf-f"></span><span class="vf-t"></span><span class="vf-ap"></span><span class="vf-iso"></span>
+  vf.innerHTML = `<div class="vf-mask"></div><div class="vf-frame"><i></i><i></i><i></i><i></i></div><div class="vf-af">${AF_SVG}</div>
+    <div class="vf-bar"><span class="vf-ok">●</span><span class="vf-mode"></span><span class="vf-f"></span><span class="vf-t"></span><span class="vf-ap"></span><span class="vf-iso"></span>
     <span class="vf-meter"><b>-2</b><b>-1</b><b>0</b><b>+1</b><b>+2</b><i></i></span><span class="vf-d"></span></div>
     <div class="vf-warn"></div><div class="vf-flash"></div>`
   hud.root.appendChild(vf)
@@ -221,9 +240,15 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     const d = aim()
     if (Math.abs(d - st.aimDist) > Math.max(0.15, st.aimDist * 0.06)) { st.aimDist = d; st.af = 0; st.locked = false }
     st.af += dt
-    if (!st.locked && st.af >= body().af) { st.locked = true; st.focus = st.aimDist }
+    if (!st.locked && st.af >= body().af) {
+      st.locked = true; st.focus = st.aimDist
+      sfx.focusBeep()
+      const a = $('.vf-af'); a.classList.remove('hit'); void a.offsetWidth; a.classList.add('hit')   // 合焦那一下對焦點閃亮
+    }
     const s = now()
     $('.vf-af').classList.toggle('ok', st.locked)
+    $('.vf-af').classList.toggle('busy', !st.locked)
+    $('.vf-ok').classList.toggle('on', st.locked)
     $('.vf-mode').textContent = { auto: 'AUTO', A: 'A', S: 'S', M: 'M' }[cam.mode]
     $('.vf-f').textContent = `${Math.round(st.focal)}mm`
     $('.vf-t').textContent = fmtShutter(s.t)
@@ -265,6 +290,7 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     st.cool = 1 / body().fps
     meterNow()
     const s = now()
+    sfx.shutter(s.t, { fast: body().fps >= 15 })
     const sc = photoCam()
     const focusDist = st.locked ? st.focus : st.aimDist * (0.6 + Math.random() * 0.8)   // 還沒對到焦就按：焦點亂跑
     const found = measurePhoto(world, sc, { focusDist, dofTol: dofTol(s.N, st.aimDist) })
@@ -339,5 +365,5 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     r.render(world.scene, sc); r.setRenderTarget(prev)
     for (let i = 0; i < 4 && meter.lum === meter.lum0; i++) { meterNow(); await new Promise((q) => setTimeout(q, 60)) }   // 分頁在背景時 requestAnimationFrame 不會跑，所以用 setTimeout
   }
-  return { update, state: st, shoot, shotCam, settings: cam, warm, now, meter, openPanel, closePanel, get panelOpen() { return panelOn }, lcdTex, setScreen: (m) => { screenMesh = m } }
+  return { update, state: st, shoot, sfx, shotCam, settings: cam, warm, now, meter, openPanel, closePanel, get panelOpen() { return panelOn }, lcdTex, setScreen: (m) => { screenMesh = m } }
 }

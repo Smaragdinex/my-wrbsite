@@ -45,7 +45,7 @@ const save = () => { saveState(state); hud.setMoney(state.money) }
 hud.setMoney(state.money)
 const gear = { body: () => BODIES.find((b) => b.id === state.bodyId), lens: () => LENSES.find((l) => l.id === state.lensId) }
 
-const cam = createCamera({ world, camera, controls: player.controls, hud, gear, onShot: (p) => {
+const cam = createCamera({ world, camera, controls: player.controls, hud, gear, getSound: () => settings.state.sound, onShot: (p) => {
   photos.push(p); putPhoto(p)
   // 拍的當下不顯示分數、評語、價錢（使用者要求）：要到相簿或相機行老闆那裡才知道拍得怎樣
   hud.toast('已存入相簿')
