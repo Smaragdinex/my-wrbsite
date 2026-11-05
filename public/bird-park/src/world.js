@@ -45,7 +45,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   sun.position.set(-45, 80, 30)
   sun.castShadow = true
   sun.shadow.mapSize.setScalar(PHONE ? 2048 : 4096)
-  Object.assign(sun.shadow.camera, { left: -85, right: 85, top: 70, bottom: -70, near: 1, far: 250 })
+  Object.assign(sun.shadow.camera, { left: -96, right: 96, top: 74, bottom: -74, near: 1, far: 260 })   // 要蓋到溫室外面的相機行（x 到 -89）
   sun.shadow.bias = -0.0004
   sun.shadow.normalBias = 0.06
   sun.shadow.radius = 3

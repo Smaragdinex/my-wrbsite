@@ -9,7 +9,10 @@ export const MTN = { x: 12, z: -6, h: 32 }           // 中央雲霧山
 export const POOL = { x: -3, z: -6, rx: 10, rz: 18, water: -0.55 }   // 西緣不能再往外（環山步道在 x≈-16），所以往南北拉長
 export const RAMP = { theta0: Math.PI / 2, turns: 2.2, y0: 0, y1: 24, width: 3, gap: 2.1 }
 export const DECK = { r: 4.5, x: 0, z: 0, y: 0 }
-export const SPAWN = { x: -68, z: 0, yaw: -90, pitch: 3 }
+// 相機行：溫室入口外面另外一棟店（像美術館門口的商店），遊戲從店裡開始，穿過玻璃通道的門才進溫室。
+// x 從 X0（靠溫室那面牆，中間開口接通道）到 X1（店門口那面），z ±HZ；通道：x 從 X0 到圓頂門口，寬 ±DOOR_W
+export const STORE = { X0: -75.6, X1: -88.6, HZ: 7.5, H: 5.0, DOOR_W: 3.4 }
+export const SPAWN = { x: -87.6, z: 0.4, yaw: -90, pitch: 2 }   // 店門口往裡看：右邊是陳列櫃、左前方是櫃台，正前方是通往溫室的門
 
 export const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 export const lerp = (a, b, t) => a + (b - a) * t
@@ -159,7 +162,6 @@ export const FLAT = [{ x: -57, z: -6.5, r: 3.5, y: 0.08 },
   { x: -60, z: 6, r: 2.5, y: 0.6 },     // 麻雀
   { x: -36, z: -34, r: 2.5, y: 1.0 },   // 小彎嘴（靠牆的種植坡上，攤成一小塊平台）
   { x: -11, z: 25, r: 3, y: -0.05 },    // 帝雉
-  { x: -65, z: -4.2, r: 3.2, y: 0.1 },  // 相機行（攤位＋老闆站的木平台）
 ]
 function buildHeights() {
   for (let j = 0; j < G.nz; j++) {
@@ -185,6 +187,10 @@ function buildHeights() {
       const q = poolQ(x, z)
       h = lerp(-1.5, h, smoothstep(0.55, 1.25, q))
       if (rho > 1.02) h = 0
+      // 相機行那棟和通道底下攤平成 0（不然溫室牆邊的種植坡會從店的地板冒出來）
+      const sx = smoothstep(STORE.X0 + 3.5, STORE.X0 + 1.5, x) * smoothstep(STORE.HZ + 2, STORE.HZ, Math.abs(z))
+      const sp = smoothstep(-66, -69.5, x) * smoothstep(STORE.DOOR_W + 2.5, STORE.DOOR_W + 0.6, Math.abs(z))
+      h = lerp(h, 0, Math.max(sx, sp))
       height[k] = h
     }
   }
@@ -231,8 +237,10 @@ function ceilingHit(x, z, feet) {
   for (const h of hs) if (h > feet + 0.5 && h - 0.4 < feet + 1.9) return true
   return false
 }
+// 店裡和通道可以走（牆內縮一個人的寬度）
+const inStore = (x, z) => (x < STORE.X0 + 0.1 && x > STORE.X1 + 0.45 && Math.abs(z) < STORE.HZ - 0.45) || (x >= STORE.X0 && x < -70 && Math.abs(z) < STORE.DOOR_W - 0.45)
 export function blocked(x, z, feet) {
-  if (domeRho(x, z) > 0.955) return true
+  if (domeRho(x, z) > 0.955 && !inStore(x, z)) return true
   if (feet < 0.6 && poolQ(x, z) < 1.12) return true
   const dx = x - MTN.x, dz = z - MTN.z
   const r = Math.hypot(dx, dz)

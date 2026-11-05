@@ -6,7 +6,8 @@ import { createPlayer } from '../player.js'
 import { createHud } from './hud.js'
 import { createCamera, BODIES, LENSES } from './camera.js'
 import { createAlbum } from './album.js'
-import { buildShop, createShop, SHOP } from './shop.js'
+import { createShop } from './shop.js'
+import { buildStore } from './store.js'
 import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.js'
 import { judgePhoto, loadLLM, llm, rawGen } from './judge.js'
 import { createFlight, flyModels } from './flight.js'
@@ -16,12 +17,10 @@ import { createViewmodel } from './viewmodel.js'
 const loadingEl = document.getElementById('loading')
 const world = await buildWorld(document.getElementById('scene'), {
   onProgress: (f) => { loadingEl.textContent = `園區建造中… ${Math.round(f * 100)}%` },
-  extraReserve: [{ x: SHOP.x, z: SHOP.z, r: 3.2, noTrees: true }],
   extraModels: flyModels(),
   night: true,
 })
 const { renderer, scene, camera } = world
-const shopProp = await buildShop(scene)
 
 const player = createPlayer(camera, renderer.domElement)
 scene.add(camera)   // 第一人稱的手和相機掛在鏡頭底下，鏡頭要在場景裡才會畫出來
@@ -50,7 +49,8 @@ const cam = createCamera({ world, camera, controls: player.controls, hud, gear, 
 // 面板（相簿、相機行）開著的時候放開滑鼠；關掉再鎖回去
 const relock = () => player.controls.lock()
 const album = createAlbum({ photos, onDelete: (p) => { photos.splice(photos.indexOf(p), 1); deletePhoto(p.time) }, onClose: relock })
-const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); if (p) putPhoto(p) }, onClose: relock })
+const store = await buildStore(scene, state)   // 相機行：溫室門口外面那棟店，遊戲從店裡開始
+const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock })
 const panelOpen = () => album.isOpen || shop.isOpen || cam.panelOpen
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
@@ -59,7 +59,13 @@ addEventListener('keydown', (e) => {
   // E：舉著相機 → 相機設定；靠近相機行 → 進店；靠近長椅 → 休息
   if (e.code === 'KeyE' && cam.panelOpen) { cam.closePanel(); return }
   if (e.code === 'KeyE' && cam.state.raised && player.controls.isLocked) { cam.openPanel(); return }
-  if (e.code === 'KeyE') { if (shop.isOpen) shop.close(); else if (!album.isOpen && nearShop()) openPanel(shop); else if (!panelOpen() && player.controls.isLocked && nearBench()) rest() }
+  if (e.code === 'KeyE') {
+    if (shop.isOpen) return shop.close()
+    const f = !album.isOpen && player.controls.isLocked ? store.focus(camera) : null
+    if (f?.type === 'item') { shop.open('gear', f.item.id); player.controls.unlock() }      // 逛店：看著展示台 → 器材頁跳到那一項
+    else if (f?.type === 'counter') { shop.open('sell'); player.controls.unlock() }         // 櫃台：跟老闆說話
+    else if (!panelOpen() && player.controls.isLocked && nearBench()) rest()
+  }
   if (e.code === 'KeyQ' && player.controls.isLocked) {
     // 換下一支有的鏡頭
     const mine = LENSES.filter((l) => state.owned.includes(l.id))
@@ -80,7 +86,6 @@ function rest() {
   hud.fadeThrough(() => { hour = next % 24; world.time.setTime(hour); hud.toast(`休息到${hour < 7 ? '清晨' : hour < 12 ? '早上' : hour < 18 ? '黃昏' : '夜晚'}`) })
 }
 vm.setScreenTexture(cam.lcdTex)
-const nearShop = () => Math.hypot(camera.position.x - SHOP.x, camera.position.z - (SHOP.z + 1.2)) < 3.2
 
 // 預熱：先畫一張，著色器編譯完再拿掉載入畫面
 world.tick(0, 0.016)
@@ -121,13 +126,14 @@ function frame() {
   vm.update(dt, { raise: cam.state.raised ? 1 : 0, view: 0, speed: flight.speed, t })
   cam.state.vfReady = vm.st.raise > 0.85
   world.tick(t, dt)
-  shopProp.tick(t, dt, camera.position)
+  store.tick(t, dt, camera.position)
   flight.tick(t, dt, { sneak: player.state.sneak })
-  hud.setHint(!panelOpen() && player.controls.isLocked ? (nearShop() ? '按 E 進入相機行' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')
+  const sf = !panelOpen() && player.controls.isLocked && !cam.state.raised ? store.focus(camera) : null
+  hud.setHint(!panelOpen() && player.controls.isLocked ? (sf?.type === 'item' ? `${sf.item.name}　${state.owned.includes(sf.item.id) ? '已擁有' : '$' + sf.item.price.toLocaleString()}　按 E 查看` : sf?.type === 'counter' ? '按 E 跟老闆說話（賣照片、買器材）' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')
   hud.update(dt)
   settings.tick(dt, player.controls.isLocked)
   world.render()
   if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
 }
-window.__game = { settings, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
+window.__game = { settings, store, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 frame()

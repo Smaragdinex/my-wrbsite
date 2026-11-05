@@ -99,10 +99,10 @@ function domeGeometry(scale = 1, nu = 160, nv = 48) {
   return g
 }
 
-// 入口：溫室外面接一間玻璃門廳（真的溫室都是這樣：先進門廳再進主館，擋風、保溫）。
-// 鋼構漆白（跟圓頂主拱肋同色）：角柱、簷樑、人字屋頂、玻璃分隔條，外側是自動玻璃拉門；內側是開口，上面掛綠色「出口」燈箱。
+// 入口：圓頂門口到相機行（溫室外面另一棟店，store.js）之間的玻璃通道。
+// 鋼構漆白（跟圓頂主拱肋同色）：角柱、簷樑、人字屋頂、玻璃分隔條；兩頭都是開口，靠溫室那頭上面掛綠色「出口」燈箱。
 // 圓頂的玻璃和斜格網在門口挖掉（cutDoor），主拱肋錯開半格，門中間不會有柱子。
-const DOOR = { W: 4.0, X0: -73.0, X1: -78.4, EAVE: 3.8, RIDGE: 5.3 }
+const DOOR = { W: 4.0, X0: -73.0, X1: -75.6, EAVE: 3.4, RIDGE: 4.5 }   // X1 接到相機行那棟（layout.js STORE.X0）
 const doorTop = (z) => DOOR.EAVE + (DOOR.RIDGE - DOOR.EAVE) * Math.max(0, 1 - Math.abs(z) / DOOR.W)
 function cutDoor(mat) {
   mat.onBeforeCompile = (sh) => {
@@ -161,29 +161,11 @@ function buildEntrance() {
   }
   // 屋頂玻璃
   for (const s of [-1, 1]) glassPane([V(X0, EAVE, s * W), V(X1, EAVE, s * W), V(X1, RIDGE, 0), V(X0, RIDGE, 0)])
-  // 外牆（門那面）：兩側固定玻璃＋中間自動拉門（兩扇、往兩邊滑開一點點）＋門楣（感應器）＋上面三角形玻璃
-  const DW = 1.2
-  for (const z of [-DW * 2, DW * 2, -DW, DW]) bar(geos.alu, V(X1, 0, z), V(X1, 2.6, z), 0.09)
-  bar(geos.alu, V(X1, 2.6, -W), V(X1, 2.6, W), 0.1)
-  geos.alu.push(new THREE.BoxGeometry(0.22, 0.24, DW * 2.2).translate(X1 + 0.12, 2.48, 0))   // 拉門的機箱
-  for (const s of [-1, 1]) {
-    glassPane([V(X1, 0.05, s * DW * 2), V(X1, 0.05, s * W), V(X1, 2.6, s * W), V(X1, 2.6, s * DW * 2)])
-    // 門扇：鋁框＋玻璃（稍微往內一點，跟固定玻璃錯開）
-    const z0 = s * 0.02, z1 = s * (DW + 0.02), xd = X1 + 0.08
-    for (const z of [z0, z1]) bar(geos.alu, V(xd, 0.02, z), V(xd, 2.34, z), 0.05, 0.07)
-    bar(geos.alu, V(xd, 0.06, z0), V(xd, 0.06, z1), 0.06, 0.12); bar(geos.alu, V(xd, 2.32, z0), V(xd, 2.32, z1), 0.05)
-    glassPane([V(xd, 0.1, z0), V(xd, 0.1, z1), V(xd, 2.3, z1), V(xd, 2.3, z0)])
-    bar(geos.alu, V(xd + 0.06, 0.95, s * 0.12), V(xd + 0.06, 1.55, s * 0.12), 0.03)   // 把手
-  }
-  glassPane([V(X1, 2.6, -W), V(X1, 2.6, W), V(X1, EAVE, W), V(X1, RIDGE, 0), V(X1, EAVE, -W)])
-  for (const z of [-2, 0, 2]) bar(geos.alu, V(X1, 2.6, z), V(X1, doorTop(z), z), 0.06)
   // 內側（接圓頂）：開口的門框，上面一根大樑
   bar(geos.steel, V(X0, EAVE, -W), V(X0, EAVE, W), 0.26, 0.4)
-  // 地板：門廳鋪石材＋門口一塊深色腳踏墊
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(L, 0.06, W * 2), new THREE.MeshStandardMaterial({ color: 0xbdb8ad, roughness: 0.7 }))
+  // 地板：通道鋪石材
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(L + 0.2, 0.08, W * 2), new THREE.MeshStandardMaterial({ color: 0xd9d6cf, roughness: 0.6 }))
   floor.position.set(XM, 0.0, 0); floor.receiveShadow = true; g.add(floor)
-  const mat = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.02, DW * 2.4), new THREE.MeshStandardMaterial({ color: 0x2c2f2c, roughness: 0.95 }))
-  mat.position.set(X1 + 1.1, 0.04, 0); g.add(mat)
   for (const [k, m] of [['steel', steel], ['alu', alu]]) {
     const mesh = new THREE.Mesh(mergeGeometries(geos[k]), m)
     mesh.castShadow = true; mesh.receiveShadow = true

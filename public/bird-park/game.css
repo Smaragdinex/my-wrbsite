@@ -120,3 +120,5 @@ body.in-menu #hud { display: none; }
 .cam-lcd canvas { width: min(94vw, 141vh); height: auto; aspect-ratio: 1024 / 683; border: clamp(10px, 2.2vw, 26px) solid #0d0e0f; border-radius: clamp(12px, 2vw, 26px);
   box-shadow: 0 0 0 2px #2a2c2e, 0 20px 60px rgba(0, 0, 0, 0.7), inset 0 0 30px rgba(0, 0, 0, 0.6); background: #000; }
 .crosshair.off { display: none; }
+
+.row.focus { background: #e6f2ea; border-radius: 10px; padding-left: 10px; padding-right: 10px; box-shadow: inset 4px 0 0 var(--accent); }
