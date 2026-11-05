@@ -281,5 +281,7 @@ export function createFlight(world, player) {
     return { obj: m.obj, act: s.mode === 'flee' ? 'run' : m.acts?.name ?? '' }
   }
   window.__flight = { units, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
-  return { tick, units, shotOf, get speed() { return speed } }
+  // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
+  const snap = () => { last.copy(world.camera.position); speed = 0 }
+  return { tick, units, shotOf, snap, get speed() { return speed } }
 }

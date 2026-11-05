@@ -103,6 +103,7 @@ function setMenuCam(on) {
     camera.position.set(MENU_VIEW.x, terrainHeight(MENU_VIEW.x, MENU_VIEW.z) + MENU_VIEW.y, MENU_VIEW.z)
     camera.lookAt(MENU_VIEW.lx, MENU_VIEW.ly, MENU_VIEW.lz)
   } else { camera.position.copy(saved.p); camera.quaternion.copy(saved.q) }
+  camera.updateMatrixWorld(); flight.snap(); vm.snap()   // 鏡頭瞬間搬家不算移動／轉頭
 }
 setMenuCam(true)
 

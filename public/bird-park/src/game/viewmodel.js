@@ -84,7 +84,7 @@ export async function createViewmodel(camera) {
     const amp = clamp(speed / 4, 0, 1.6) * (1 - st.raise) * (1 - st.view)
     const breathe = Math.sin(t * 1.3) * 0.003
     // 鏡頭轉動時，手和相機落後一點（慣性）
-    const e = camera.rotation, dyaw = (e.y - st.lastYaw), dpit = (e.x - st.lastPitch)
+    const e = camera.rotation, dyaw = Math.atan2(Math.sin(e.y - st.lastYaw), Math.cos(e.y - st.lastYaw)), dpit = (e.x - st.lastPitch)   // 轉過 ±180° 那條線不要算成轉一大圈
     st.lastYaw = e.y; st.lastPitch = e.x
     st.sway.x = damp(st.sway.x, clamp(-dyaw / Math.max(dt, 1e-3) * 0.012, -0.05, 0.05), 8, dt)
     st.sway.y = damp(st.sway.y, clamp(-dpit / Math.max(dt, 1e-3) * 0.012, -0.05, 0.05), 8, dt)
@@ -115,7 +115,9 @@ export async function createViewmodel(camera) {
   function setScreenTexture(tex) {
     for (const m of Object.values(screens)) m.material = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.85, roughness: 0.22, metalness: 0 })
   }
-  const vm = { root, camRig, hand, bodies, lenses, screens, tune, setGear, update, render, st, POSES, setScreenTexture, get screen() { return screens[st.body] } }
+  // 鏡頭被程式直接搬走（首頁 ↔ 遊戲）時呼叫：不要把這一跳當成甩頭、跑步，手才不會一進遊戲就晃
+  function snap() { st.lastYaw = camera.rotation.y; st.lastPitch = camera.rotation.x; st.sway.set(0, 0, 0); st.bob = 0 }
+  const vm = { root, camRig, hand, bodies, lenses, screens, tune, setGear, update, render, st, POSES, setScreenTexture, snap, get screen() { return screens[st.body] } }
   window.__vm = vm
   return vm
 }
