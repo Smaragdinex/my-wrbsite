@@ -202,7 +202,7 @@ export async function buildStore(scene, state) {
     })
     const sm = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.5 }))
     sm.rotation.y = -Math.PI / 2; sm.position.set(X0 - 0.9, 3.55, 0); g.add(sm)
-    box('dark', 0.04, 0.37, 1.42, X0 - 0.88, 3.55, 0)
+    box('dark', 0.04, 0.37, 1.42, X0 - 0.87, 3.55, 0)
     for (const z of [-0.55, 0.55]) bar('steel', V(X0 - 0.88, 3.72, z), V(X0 - 0.88, H, z), 0.012)
   }
   const mat2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.02, 2.6), mat.material); mat2.position.set(X0 - 0.95, 0.04, 0); mat2.receiveShadow = true; g.add(mat2)   // 門內腳踏墊
