@@ -44,7 +44,24 @@ export async function createViewmodel(camera) {
     o.layers.set(VM_LAYER)
     if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false }
   })
-  camera.layers.enable(VM_LAYER)
+  // 手和相機用自己的鏡頭畫（視角固定 62 度、近平面 1 公分）：玩家的鏡頭會跟著焦段變焦，手如果用同一個鏡頭畫，
+  // 舉起／放下相機時會被放大成一大片。畫完世界之後清掉深度、再用這個鏡頭只畫 layer 3（也不會插進牆壁裡）
+  camera.layers.disable(VM_LAYER)
+  const vmCam = new THREE.PerspectiveCamera(62, camera.aspect, 0.01, 10)
+  vmCam.layers.set(VM_LAYER)
+  let litN = -1
+  function render(renderer, scene) {
+    if (!root.visible) return
+    // 燈光也要在 layer 3，這個鏡頭才照得到（three.js 的燈光會看圖層）；燈的數量變了（點光源）再補一次
+    if (litN !== scene.children.length) { litN = scene.children.length; scene.traverse((o) => { if (o.isLight) o.layers.enable(VM_LAYER) }) }
+    camera.updateMatrixWorld()
+    camera.getWorldPosition(vmCam.position); camera.getWorldQuaternion(vmCam.quaternion)
+    if (vmCam.aspect !== camera.aspect) { vmCam.aspect = camera.aspect; vmCam.updateProjectionMatrix() }
+    const ac = renderer.autoClear, su = renderer.shadowMap.autoUpdate
+    renderer.autoClear = false; renderer.shadowMap.autoUpdate = false
+    renderer.clearDepth(); renderer.render(scene, vmCam)
+    renderer.autoClear = ac; renderer.shadowMap.autoUpdate = su
+  }
   // 背面螢幕、銘牌的材質換成畫布貼圖（設定介面、機身名稱）
   const screens = {}
   for (const [id, b] of Object.entries(bodies)) b.traverse((o) => { if (o.isMesh && o.material.name === 'Screen') screens[id] = o })
@@ -130,7 +147,7 @@ export async function createViewmodel(camera) {
     lPalmAt: V(-0.006, -0.011, 0), lDir: V(0.72, 0.0, -0.7), lPalm: V(-0.1, 1, 0),                  // 掌心托在鏡頭正下方，手指往右前方繞上去
     rCurl: { index: [1.25, 1.1, 0.7], middle: [1.35, 1.2, 0.75], ring: [1.4, 1.2, 0.75], pinky: [1.45, 1.15, 0.7], thumb: [1.5, 1.4, 0.84] },
     lCurl: { index: [0.9, 0.8, 0.5], middle: [1.0, 0.85, 0.5], ring: [1.05, 0.9, 0.55], pinky: [1.1, 0.9, 0.55], thumb: [0.05, 0.15, 0.1] },
-    poleR: V(0.6, -0.8, 0.3), poleL: V(-0.6, -0.9, 0.2),
+    poleR: V(0.35, -1.2, 0.15), poleL: V(-0.6, -0.9, 0.2),   // 手肘往下：前臂從畫面右下角上來，不會橫跨畫面
   }
   const W1 = { b1: 0.072, b2: 0.082, b3: 0.086 }
   function setGear(body, lens) {
@@ -209,7 +226,7 @@ export async function createViewmodel(camera) {
   function setScreenTexture(tex) {
     for (const m of Object.values(screens)) m.material = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.85, roughness: 0.22, metalness: 0 })
   }
-  const vm = { root, camRig, arms, bones, bodies, lenses, screens, tune, setGear, update, st, POSES, setScreenTexture, get screen() { return screens[st.body] } }
+  const vm = { root, camRig, arms, bones, bodies, lenses, screens, tune, setGear, update, render, st, POSES, setScreenTexture, get screen() { return screens[st.body] } }
   window.__vm = vm
   return vm
 }

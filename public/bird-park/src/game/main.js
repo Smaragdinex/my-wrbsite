@@ -116,6 +116,7 @@ function frame() {
   hud.setHint(!panelOpen() && player.controls.isLocked ? (nearShop() ? '按 E 進入相機行' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')
   hud.update(dt)
   world.render()
+  vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）
 }
 window.__game = { world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 frame()
