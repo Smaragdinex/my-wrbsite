@@ -11,7 +11,7 @@ import { buildStore } from './store.js'
 import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.js'
 import { judgePhoto, loadLLM, llm, rawGen } from './judge.js'
 import { createFlight, flyModels } from './flight.js'
-import { priceFor, MIN_SCORE } from './scoring.js'
+import { priceFor } from './scoring.js'
 import { createViewmodel } from './viewmodel.js'
 import { createUiFx } from './ui-fx.js'
 import { controlsSvg } from './controls-help.js'
@@ -46,7 +46,8 @@ const gear = { body: () => BODIES.find((b) => b.id === state.bodyId), lens: () =
 
 const cam = createCamera({ world, camera, controls: player.controls, hud, gear, onShot: (p) => {
   photos.push(p); putPhoto(p)
-  hud.toast(p.subject ? `${p.subject.name}　${p.score} 分　${p.score >= MIN_SCORE ? '估價 $' + p.price : '$0'}${p.notes.length ? '\n' + p.notes.join('、') : ''}` : '沒拍到鳥　0 分　$0（相機行不收）')
+  // 拍的當下不顯示分數、評語、價錢（使用者要求）：要到相簿或相機行老闆那裡才知道拍得怎樣
+  hud.toast('已存入相簿')
 } })
 
 // 面板（相簿、相機行）開著的時候放開滑鼠；關掉再鎖回去
