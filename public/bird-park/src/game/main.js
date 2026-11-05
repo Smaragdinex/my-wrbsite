@@ -14,6 +14,7 @@ import { createFlight, flyModels } from './flight.js'
 import { priceFor, MIN_SCORE } from './scoring.js'
 import { createViewmodel } from './viewmodel.js'
 import { createUiFx } from './ui-fx.js'
+import { controlsSvg } from './controls-help.js'
 import { MENU_VIEW, terrainHeight } from '../layout.js'
 
 const loadingEl = document.getElementById('loading')
@@ -119,6 +120,7 @@ const settings = createSettings({ world, player })
 createUiFx({ getSound: () => settings.state.sound })   // 滑鼠圓圈＋按鈕音效
 const startEl = document.getElementById('start'), menuEl = document.getElementById('menu'), helpEl = document.getElementById('help')
 startEl.append(settings.el)
+helpEl.querySelector('.ctl').innerHTML = controlsSvg()   // 鍵盤滑鼠按鍵圖
 const showSheet = (sheet) => { menuEl.hidden = !!sheet; for (const s of [helpEl, settings.el]) s.hidden = s !== sheet }
 startEl.addEventListener('click', (e) => { if (e.target.closest('.back')) showSheet(null) })
 document.getElementById('btnSettings').onclick = () => showSheet(settings.el)

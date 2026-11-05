@@ -133,3 +133,34 @@ body.locked .cursor-ring { display: none; }
   transition: transform 0.18s cubic-bezier(.3, 1.5, .6, 1), background 0.18s, border-color 0.18s; }
 .cursor-ring.hot::before { transform: scale(0.4); background: #fff; border-color: #fff; }
 .cursor-ring.down::before { transform: scale(0.28); }
+
+/* 所有按鈕滑過都要變色、按下再深一點（--accent 綠 → 亮綠 → 深綠） */
+.panel button, .btn, .tab, .panel .seg button, .menu nav button { transition: background 0.15s, color 0.15s, transform 0.12s, box-shadow 0.15s; }
+.panel button:hover, .btn:hover { background: #3f9a63; }
+.panel button:active, .btn:active { background: #23623d; transform: scale(0.97); }
+.btn.ghost:hover { background: #c9e6d3; color: #1f5e39; }
+.btn.ghost:active { background: #b2dcc0; }
+.btn.danger:hover { background: #d95a4c; }
+.btn.danger:active { background: #a23a2f; }
+.panel .seg button:hover { background: #d6ecdf; color: #1f5e39; }
+.panel .seg button.on:hover { background: #3f9a63; color: #fff; }
+.tab:hover { background: #d6ecdf; color: #1f5e39; }
+.tab.on:hover { background: #3f9a63; color: #fff; }
+.menu nav button:hover { background: #3f9a63; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); }
+.menu nav button.ghost:hover { background: rgba(255, 255, 255, 0.92); color: #1f5e39; }
+.menu nav button:active { background: #23623d; color: #fff; transform: translateX(6px) scale(0.98); }
+.panel button:focus-visible, .btn:focus-visible, .tab:focus-visible, .menu nav button:focus-visible { outline: 3px solid #9fd6b3; outline-offset: 2px; }
+
+/* 操作說明：素描鍵盤滑鼠＋引線（controls-help.js） */
+#help { width: min(1200px, 96vw); box-sizing: border-box; background: #fffffc; }   /* 不透明，素描圖的白底才不會變成一塊亮框 */
+#help .ctl { margin: 0 -8px; }
+svg.controls { display: block; width: 100%; height: auto; }
+svg.controls image { mix-blend-mode: multiply; }
+.k-hi { fill: rgba(47, 125, 79, 0.82); stroke: #1f5e39; stroke-width: 2; }
+.k-cap { fill: #fff; font: 700 17px -apple-system, "PingFang TC", sans-serif; text-anchor: middle; }
+.c-halo { stroke: rgba(255, 255, 252, 0.9); stroke-width: 7; stroke-linecap: round; }
+.c-line { stroke: #1f2a24; stroke-width: 2.4; stroke-linecap: round; }
+.c-dot { fill: #e0782f; stroke: #fff; stroke-width: 3; }
+.c-label { font: 600 29px -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; fill: #1f2a24; paint-order: stroke; stroke: rgba(255, 255, 252, 0.95); stroke-width: 8px; stroke-linejoin: round; }
+.c-key { font-weight: 800; fill: #1f5e39; }
+#help .tips { margin: 4px 0 6px; padding-left: 20px; color: var(--muted); font-size: 15px; line-height: 1.7; }
