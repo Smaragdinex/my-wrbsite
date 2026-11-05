@@ -13,7 +13,7 @@ const OPTS = {
   lights: { label: '夜晚路燈光源', hint: '晚上同時照亮四周的路燈數', items: { high: ['高', 8], mid: ['中', 6], low: ['低', 4] } },
 }
 const PRESETS = { high: '高', mid: '中', low: '低' }
-const DEFAULT = { preset: PHONE ? 'low' : 'high', sens: 1, fps: false }
+const DEFAULT = { preset: PHONE ? 'low' : 'high', sens: 1, fps: false, sound: true }
 
 export function createSettings({ world, player }) {
   const { renderer, sun } = world
@@ -72,6 +72,7 @@ export function createSettings({ world, player }) {
       ${Object.entries(OPTS).map(([k, o]) => `<div class="row"><div><b>${o.label}</b><small>${o.hint}</small></div>${seg(k, o.items, st[k])}</div>`).join('')}
       <h3>操作</h3>
       <div class="row"><div><b>滑鼠靈敏度</b><small>轉頭的速度</small></div><div class="slider"><input type="range" min="0.3" max="2.5" step="0.1" value="${st.sens}"><span>${st.sens.toFixed(1)}</span></div></div>
+      <div class="row"><div><b>介面音效</b><small>滑過、按下按鈕的聲音</small></div>${seg('sound', { off: '關', on: '開' }, st.sound ? 'on' : 'off')}</div>
       <div class="row"><div><b>顯示 FPS</b><small>右下角顯示每秒幾格，判斷順不順</small></div>${seg('fps', { off: '關', on: '開' }, st.fps ? 'on' : 'off')}</div>
       <button class="back">返回</button>`
   }
@@ -79,7 +80,7 @@ export function createSettings({ world, player }) {
     const b = e.target.closest('.seg button'); if (!b) return
     const k = b.parentElement.dataset.k, v = b.dataset.v
     if (k === 'preset') { st.preset = v; for (const o of Object.keys(OPTS)) st[o] = v }
-    else if (k === 'fps') st.fps = v === 'on'
+    else if (k === 'fps' || k === 'sound') st[k] = v === 'on'
     else {
       st[k] = v
       const ks = Object.keys(OPTS)

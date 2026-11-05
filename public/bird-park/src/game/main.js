@@ -13,6 +13,8 @@ import { judgePhoto, loadLLM, llm, rawGen } from './judge.js'
 import { createFlight, flyModels } from './flight.js'
 import { priceFor, MIN_SCORE } from './scoring.js'
 import { createViewmodel } from './viewmodel.js'
+import { createUiFx } from './ui-fx.js'
+import { MENU_VIEW, terrainHeight } from '../layout.js'
 
 const loadingEl = document.getElementById('loading')
 const world = await buildWorld(document.getElementById('scene'), {
@@ -87,6 +89,20 @@ function rest() {
 }
 vm.setScreenTexture(cam.lcdTex)
 
+// 首頁背景：鏡頭搬到溫室裡一個固定的位置（看中央的山和瀑布）；開始遊戲再放回玩家身上（玩家本來在店裡）
+const saved = { p: new THREE.Vector3(), q: new THREE.Quaternion() }
+let menuCam = false
+function setMenuCam(on) {
+  if (on === menuCam) return
+  menuCam = on
+  if (on) {
+    saved.p.copy(camera.position); saved.q.copy(camera.quaternion)
+    camera.position.set(MENU_VIEW.x, terrainHeight(MENU_VIEW.x, MENU_VIEW.z) + MENU_VIEW.y, MENU_VIEW.z)
+    camera.lookAt(MENU_VIEW.lx, MENU_VIEW.ly, MENU_VIEW.lz)
+  } else { camera.position.copy(saved.p); camera.quaternion.copy(saved.q) }
+}
+setMenuCam(true)
+
 // 預熱：先畫一張，著色器編譯完再拿掉載入畫面
 world.tick(0, 0.016)
 await renderer.compileAsync(scene, camera)
@@ -100,6 +116,7 @@ if (!PHONE && new URLSearchParams(location.search).get('ai') !== '0') loadLLM(()
 
 // 首頁：開始遊戲／設定／操作說明。開始＝鎖定滑鼠（瀏覽器規定要使用者點擊才能鎖）；按 Esc 解鎖就回到這個選單（按鈕變「繼續」）
 const settings = createSettings({ world, player })
+createUiFx({ getSound: () => settings.state.sound })   // 滑鼠圓圈＋按鈕音效
 const startEl = document.getElementById('start'), menuEl = document.getElementById('menu'), helpEl = document.getElementById('help')
 startEl.append(settings.el)
 const showSheet = (sheet) => { menuEl.hidden = !!sheet; for (const s of [helpEl, settings.el]) s.hidden = s !== sheet }
@@ -110,14 +127,14 @@ startEl.hidden = false
 document.body.classList.add('in-menu')   // 首頁選單上不顯示右上的錢、時間（HUD）
 const goEl = document.getElementById('go')
 goEl.onclick = () => player.controls.lock()
-player.controls.addEventListener('lock', () => { startEl.hidden = true; document.body.classList.remove('in-menu'); goEl.textContent = '繼續' })
-player.controls.addEventListener('unlock', () => { if (!panelOpen()) { showSheet(null); startEl.hidden = false; document.body.classList.add('in-menu') } })
+player.controls.addEventListener('lock', () => { setMenuCam(false); startEl.hidden = true; document.body.classList.remove('in-menu'); goEl.textContent = '繼續' })
+player.controls.addEventListener('unlock', () => { if (!panelOpen()) { setMenuCam(true); showSheet(null); startEl.hidden = false; document.body.classList.add('in-menu') } })
 
 const clock = new THREE.Clock()
 function frame() {
   requestAnimationFrame(frame)
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime
-  if (!panelOpen()) player.update(dt)
+  if (!panelOpen() && !menuCam) player.update(dt)
   cam.update(dt)
   if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }
   hud.setClock(hour)

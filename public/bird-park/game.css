@@ -122,3 +122,14 @@ body.in-menu #hud { display: none; }
 .crosshair.off { display: none; }
 
 .row.focus { background: #e6f2ea; border-radius: 10px; padding-left: 10px; padding-right: 10px; box-shadow: inset 4px 0 0 var(--accent); }
+
+/* 滑鼠圓圈（ui-fx.js）：沒鎖住滑鼠的時候取代系統游標；移到按鈕上縮小變實心，按下再縮一點 */
+body.has-ring:not(.locked), body.has-ring:not(.locked) * { cursor: none !important; }
+.cursor-ring { position: fixed; left: 0; top: 0; z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+.cursor-ring.show { opacity: 1; }
+body.locked .cursor-ring { display: none; }
+.cursor-ring::before { content: ""; position: absolute; left: -16px; top: -16px; width: 32px; height: 32px; border-radius: 50%; box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 0.95); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+  transition: transform 0.18s cubic-bezier(.3, 1.5, .6, 1), background 0.18s, border-color 0.18s; }
+.cursor-ring.hot::before { transform: scale(0.4); background: #fff; border-color: #fff; }
+.cursor-ring.down::before { transform: scale(0.28); }
