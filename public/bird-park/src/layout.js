@@ -248,11 +248,12 @@ buildHeights()
 
 /* ---------- 高山區地形（0.5 公尺格子，x 45～190、z ±56；能走的範圍是 inAlpine） ---------- */
 // 溪流、步道都是折線，地形照它們挖溪谷、鋪平步道；結果存成格子（玩家走路、種樹、做網格都查這張）
-export const ALP_STREAM = [[172, -30], [163, -29], [154, -24], [145, -19], [136, -15], [127, -13], [118, -15], [109, -18], [100, -19], [94, -18]]
+// 溪：從山頂東南側的山泉（離觀景台不遠）往下，沿著山谷一路流到入口旁的水池；陡的那幾段是小瀑布
+export const ALP_STREAM = [[151, -2], [150, -8], [147, -13], [142, -16.5], [135, -15.5], [127, -13], [118, -15], [109, -18], [100, -19], [94, -18]]
 export const ALP_POND = { x: 88, z: -17, r: 7, water: -0.45 }
 export const ALP_TRAIL = [[76, 0], [86, 3], [97, 9], [108, 12], [116, 5], [120, -4], [124, -12], [128, -20], [137, -26], [147, -21], [157, -15], [163, -4], [161, 8], [154, 16], [146, 15], [145, 9]]
 export const ALP_BRIDGE = { a: 5, b: 6 }   // 步道第 5～7 點（120,-4 → 124,-12 → 128,-20）跨過溪谷：吊橋，橋下不鋪路
-export const ALP_PEAK = { x: 145, z: 8, h: 25 }
+export const ALP_PEAK = { x: 145, z: 8, h: 21 }   // 跟步道終點差不多高：步道才不會在山頂挖出一條溝
 const AG = { x0: ALP.X0, z0: -ALP.HZ, cell: 0.5, nx: 291, nz: 225 }
 const aHeight = new Float32Array(AG.nx * AG.nz), aTrail = new Float32Array(AG.nx * AG.nz).fill(1e9), aStream = new Float32Array(AG.nx * AG.nz).fill(1e9)
 function segDist(px, pz, ax, az, bx, bz) {
@@ -287,12 +288,12 @@ function buildAlpine() {
   prof[0] = 0
   for (let i = 1; i < prof.length; i++) {
     const L = Math.hypot(tr[i][0] - tr[i - 1][0], tr[i][1] - tr[i - 1][1])
-    prof[i] = clamp(prof[i], prof[i - 1] - L * 0.3, prof[i - 1] + L * 0.3)
+    prof[i] = clamp(prof[i], prof[i - 1] - L * 0.22, prof[i - 1] + L * 0.22)   // 步道坡度最多 22%（30% 時最後上山頂那段像一面斜牆）
   }
   // 吊橋：兩端等高直線
   prof[ALP_BRIDGE.a + 1] = (prof[ALP_BRIDGE.a] + prof[ALP_BRIDGE.a + 2]) / 2
   ALP_TRAIL.prof = prof
-  const st = ALP_STREAM, sProf = st.map(([x, z], i) => alpBase(x, z) - 2.2)
+  const st = ALP_STREAM, sProf = st.map(([x, z], i) => alpBase(x, z) - 1.3)
   for (let i = 1; i < sProf.length; i++) sProf[i] = Math.min(sProf[i], sProf[i - 1] - 0.3)     // 溪床一路往下
   sProf[sProf.length - 1] = Math.min(sProf[sProf.length - 1], ALP_POND.water - 0.3)
   ALP_STREAM.prof = sProf
@@ -311,7 +312,7 @@ function buildAlpine() {
     const [dt, ti, tt] = polyDist(x, z, tr, (i) => i === ALP_BRIDGE.a || i === ALP_BRIDGE.a + 1)
     aTrail[k] = dt
     const py = lerp(prof[ti], prof[ti + 1], tt)
-    h = lerp(py, h, smoothstep(1.4, 3.2, dt))
+    h = lerp(py, h, smoothstep(1.4, 5, dt))   // 步道兩側的切坡放緩（3.2 時像一面牆）
     // 山頂：步道終點一圈削成平台（觀景台在這裡，四周看出去不能被山頭擋住）
     const pe = tr[tr.length - 1], dpk = Math.hypot(x - pe[0], z - pe[1])
     h = lerp(Math.min(h, prof[prof.length - 1] + 0.1 + 0.08 * Math.max(0, dpk - 4)), h, smoothstep(9, 16, dpk))

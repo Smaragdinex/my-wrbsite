@@ -231,7 +231,7 @@ const ALL = [
   },
   // 2026-11-07 高山區（溫室東半邊）8 種：沿著上山的步道擺，鏡頭（view）從步道那側拍
   {
-    id: 'yuhina', spot: [88, 8], perch: 'branch', view: 180, dist: 2.6, camH: 3.6, lookY: 3.4,
+    id: 'yuhina', spot: [88, 10], perch: 'branch', view: 180, dist: 2.6, camH: 3.6, lookY: 3.4,
     name: '冠羽畫眉', sci: 'Yuhina brunneiceps', where: '山區入口的樹叢',
     intro: '台灣特有種。頭上一撮高高翹起的褐色羽冠，白臉上畫著黑色的過眼線和鬍鬚紋，看起來總是很有精神。中海拔山區很常見，常一小群在樹叢間吵吵鬧鬧地移動。',
     facts: [

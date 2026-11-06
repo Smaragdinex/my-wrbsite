@@ -11,6 +11,7 @@ import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
 import { mulberry32, fbm2 } from './noise.js'
+import { dayLight } from './structures.js'
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
@@ -90,6 +91,12 @@ function nearBird(avoid, x, z, r, w) {
   }
   return false
 }
+// 到吊橋中線的距離（吊橋那段不算步道，alpineTrailDist 量不到）
+function bridgeDist(x, z) {
+  const a = ALP_TRAIL[ALP_BRIDGE.a], b = ALP_TRAIL[ALP_BRIDGE.a + 2], dx = b[0] - a[0], dz = b[1] - a[1]
+  const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz)))
+  return Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t)
+}
 function buildInterior(lib, avoid = []) {
   const g = new THREE.Group(); g.name = 'alpineInterior'
   const rnd = mulberry32(2026)
@@ -117,8 +124,11 @@ function buildInterior(lib, avoid = []) {
       c.lerp(new THREE.Color().setHSL(0.1, 0.06, 0.36 + n * 0.08), rock)                     // 岩石
       const tr = ss(1.6, 0.9, alpineTrailDist(x, z))
       c.lerp(new THREE.Color().setHSL(0.08, 0.28, 0.33 + n * 0.04), tr * 0.9)               // 步道泥土
-      const wet = ss(3.5, 1, alpineStreamDist(x, z))
-      c.lerp(new THREE.Color().setHSL(0.15, 0.25, 0.17), wet * 0.7)                          // 溪邊濕地
+      // 溪床、池底：濕的深色石頭和砂（水是透明的，看得到底下）；岸上一圈濕地
+      const sd = alpineStreamDist(x, z), dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z) - ALP_POND.r
+      const wet = Math.max(ss(4.5, 1.2, sd), ss(3, 0, dp))
+      const stone = fbm2(x * 1.3, z * 1.3, 2)
+      c.lerp(new THREE.Color().setHSL(0.11 + stone * 0.04, 0.16, 0.1 + stone * 0.07), wet)
       col.set([c.r, c.g, c.b], k * 3)
     }
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
@@ -130,55 +140,215 @@ function buildInterior(lib, avoid = []) {
     const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.95 }))
     ground.receiveShadow = true; g.add(ground)
   }
-  // 水池＋溪：池面平的，溪是一條沿著溪床的帶子（往下流的水紋貼圖會捲動），陡的那段變成小瀑布
-  const waterT = canvasTex(128, 512, (x, w, h) => {
-    x.fillStyle = '#7f9aa0'; x.fillRect(0, 0, w, h)
-    for (let i = 0; i < 400; i++) { x.strokeStyle = `rgba(235,245,248,${0.1 + Math.random() * 0.35})`; x.lineWidth = 1 + Math.random() * 2; const px = Math.random() * w, py = Math.random() * h; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (Math.random() - 0.5) * 6, py + 10 + Math.random() * 30); x.stroke() }
+  // 水池＋溪：自己寫的水 shader（溪和池共用）。
+  // 水面是平的（不沿著岸往上爬），岸邊靠深度測試自然切掉；每個頂點帶「水深」（水面 - 地形）和「坡度」：
+  // 深的地方偏墨綠、淺的地方透出溪底，邊緣淡掉並有一圈白沫；看斜的地方反射天空（菲涅耳）、太陽方向有閃光；
+  // 坡度大的那幾段流得快、一片白（小瀑布、急流）。水紋是兩層往下游捲動的雜訊，算法線用。
+  const waterU = { uTime: { value: 0 }, uDay: dayLight, uSun: { value: V(-0.45, 0.8, 0.3).normalize() } }
+  const waterM = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide,   // 三角形的方向不管（從上面看才不會被背面剔除）
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uDay: { value: 1 }, uSun: { value: V() } }]),
+    vertexShader: `
+      attribute float aDepth; attribute float aSlope;
+      varying vec2 vUv; varying float vDepth; varying float vSlope; varying vec3 vW;
+      #include <fog_pars_vertex>
+      void main() {
+        vUv = uv; vDepth = aDepth; vSlope = aSlope;
+        vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz;
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `
+      uniform float uTime; uniform float uDay; uniform vec3 uSun;
+      varying vec2 vUv; varying float vDepth; varying float vSlope; varying vec3 vW;
+      #include <fog_pars_fragment>
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+      float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }
+      float waves(vec2 p, float sp) {
+        return fbm(p * vec2(1.6, 0.9) + vec2(0.0, -uTime * sp)) * 0.6 + fbm(p * vec2(3.1, 1.7) + vec2(3.0, -uTime * sp * 1.6)) * 0.4;
+      }
+      void main() {
+        float rapids = smoothstep(0.18, 0.5, vSlope);                        // 只有真的陡的地方（小瀑布、急流）才白
+        float sp = 0.35 + rapids * 2.6;
+        vec2 p = vec2(vUv.x * 2.2, vUv.y * 0.7);
+        float e = 0.06, h0 = waves(p, sp), hx = waves(p + vec2(e, 0.0), sp), hy = waves(p + vec2(0.0, e), sp);
+        vec3 N = normalize(vec3((h0 - hx) * (2.6 + rapids * 2.0), 1.0, (h0 - hy) * (2.6 + rapids * 2.0)));
+        vec3 Vd = normalize(cameraPosition - vW);
+        float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, Vd), 0.0), 5.0);
+        float d = clamp(vDepth / 0.7, 0.0, 1.0);
+        // 顏色是線性空間：要比直覺暗很多（0.05 線性 ≈ 0.25 sRGB）
+        vec3 bed = vec3(0.075, 0.085, 0.055), deep = vec3(0.008, 0.03, 0.026);
+        vec3 col = mix(bed, deep, smoothstep(0.0, 1.0, d));
+        col += vec3(0.01, 0.025, 0.02) * h0;                                  // 水裡的光影
+        // 反射：往上反射到天空才亮；斜斜看過去反射到的是兩岸的樹和山壁（暗綠），不是天空
+        vec3 R = reflect(-Vd, N);
+        vec3 sky = mix(fogColor, vec3(0.80, 0.87, 0.92), 0.5);
+        // 水紋讓反射一塊亮一塊暗（天空、樹影交錯），水面才看得出在動
+        vec3 env = mix(vec3(0.012, 0.022, 0.016), sky * 0.9, smoothstep(0.35, 0.9, R.y + (h0 - 0.5) * 0.9));
+        col = mix(col, env, clamp(fres * 1.3 + 0.08, 0.0, 1.0));
+        float spec = pow(max(dot(reflect(-uSun, N), Vd), 0.0), 70.0);
+        col += vec3(1.0, 0.97, 0.9) * spec * 2.4;
+        // 白沫：急流整片、岸邊一圈、石頭後面的碎浪
+        float fn = fbm(p * vec2(2.4, 1.2) + vec2(0.0, -uTime * sp * 1.3));
+        float foam = rapids * smoothstep(0.42, 0.68, fn + rapids * 0.1);
+        foam += smoothstep(0.06, 0.0, vDepth) * smoothstep(0.55, 0.75, fn) * 0.5;   // 岸邊細細一圈
+        foam = clamp(foam, 0.0, 1.0);
+        col = mix(col, vec3(0.75, 0.8, 0.8), foam * 0.8);
+        col *= mix(0.12, 1.0, uDay);
+        float a = mix(0.28, 0.88, d) + foam * 0.5 + fres * 0.35;            // 淺的地方看得到溪底的石頭
+        a *= smoothstep(0.0, 0.06, vDepth);                                    // 岸邊淡掉，不會有一條硬邊
+        gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
   })
-  waterT.wrapS = waterT.wrapT = THREE.RepeatWrapping
-  const waterM = new THREE.MeshStandardMaterial({ map: waterT, color: 0xb8ccd0, transparent: true, opacity: 0.82, roughness: 0.08, metalness: 0.2 })
+  waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uSun = waterU.uSun
   {
-    const pond = new THREE.Mesh(new THREE.CircleGeometry(ALP_POND.r + 0.8, 48).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x5e7a80, transparent: true, opacity: 0.85, roughness: 0.05, metalness: 0.3 }))
-    pond.position.set(ALP_POND.x, ALP_POND.water, ALP_POND.z); g.add(pond)
-    const st = ALP_STREAM, prof = ALP_STREAM.prof, pts = [], P = []
-    for (let i = 0; i < st.length; i++) P.push(V(st[i][0], prof[i] + 0.25, st[i][1]))
-    const curve = new THREE.CatmullRomCurve3(P), N = 160, pos = [], uv = [], idx = []
+    // 水池：一片比池子大一點的平面，每點的水深照地形算（沒水的地方深度 < 0 → 透明）
+    const R = ALP_POND.r + 3, NR = 28, NA = 64, pos = [], uv = [], dep = [], slo = [], idx = []
+    for (let i = 0; i <= NR; i++) for (let j = 0; j <= NA; j++) {
+      const r = R * i / NR, a = j / NA * TAU, x = ALP_POND.x + Math.cos(a) * r, z = ALP_POND.z + Math.sin(a) * r
+      pos.push(x, ALP_POND.water, z); uv.push(x * 0.35, z * 0.35); dep.push(ALP_POND.water - alpineHeight(x, z)); slo.push(0)
+      if (i && j) { const A = (i - 1) * (NA + 1) + j - 1, B = A + 1, C = A + NA + 1, D = C + 1; idx.push(A, C, B, B, C, D) }
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+    geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); geo.setAttribute('aSlope', new THREE.Float32BufferAttribute(slo, 1)); geo.setIndex(idx)
+    const pond = new THREE.Mesh(geo, waterM); pond.renderOrder = 2; g.add(pond)
+    // 溪：沿著溪床中線，每個斷面 9 個點、水面是平的（水深 = 水面 - 地形）；寬度照溪谷自然切
+    const st = ALP_STREAM, prof = ALP_STREAM.prof, P = []
+    for (let i = 0; i < st.length; i++) P.push(V(st[i][0], prof[i] + 0.32, st[i][1]))
+    const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.5), K = 8
+    const sp = [], su = [], sd = [], ss_ = [], si = []
     let acc = 0, prev = null
+    const ys = []
+    for (let i = 0; i <= N; i++) ys.push(curve.getPointAt(i / N).y)
     for (let i = 0; i <= N; i++) {
       const p = curve.getPointAt(i / N), tg = curve.getTangentAt(i / N), side = V(-tg.z, 0, tg.x).normalize()
-      if (prev) acc += p.distanceTo(prev); prev = p
-      const w = 0.9 + 0.4 * Math.sin(i * 0.37)
-      for (const s of [-1, 1]) { const q = p.clone().addScaledVector(side, s * w); q.y = Math.max(q.y, alpineHeight(q.x, q.z) + 0.04); pos.push(q.x, q.y, q.z); uv.push(s * 0.5 + 0.5, acc * 0.15) }
-      if (i) { const a = (i - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3) }
+      if (prev) acc += Math.hypot(p.x - prev.x, p.z - prev.z); prev = p
+      const a = Math.max(0, i - 2), b = Math.min(N, i + 2), slope = Math.max(0, (ys[a] - ys[b]) / ((b - a) * L / N))
+      const w = 1.8 + 0.5 * Math.sin(i * 0.23)
+      for (let k = 0; k <= K; k++) {
+        const s = (k / K - 0.5) * 2 * w, q = p.clone().addScaledVector(side, s)
+        sp.push(q.x, p.y, q.z); su.push(k / K, acc); sd.push(p.y - alpineHeight(q.x, q.z)); ss_.push(slope)
+      }
+      if (i) for (let k = 0; k < K; k++) { const A = (i - 1) * (K + 1) + k, B = A + 1, C = A + K + 1, D = C + 1; si.push(A, C, B, B, C, D) }
     }
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals()
-    const stream = new THREE.Mesh(geo, waterM); stream.renderOrder = 2; g.add(stream)
+    const sg = new THREE.BufferGeometry()
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(su, 2))
+    sg.setAttribute('aDepth', new THREE.Float32BufferAttribute(sd, 1)); sg.setAttribute('aSlope', new THREE.Float32BufferAttribute(ss_, 1)); sg.setIndex(si)
+    const stream = new THREE.Mesh(sg, waterM); stream.renderOrder = 2; g.add(stream)
   }
-  // 吊橋：兩端木塔＋鋼索扶手（垂成弧線）＋吊索＋木板橋面
+  // 吊橋：照台灣山區的人行吊橋做——兩端鋼構橋塔（H 形、漆成深綠，站在混凝土基座上），
+  // 兩條主鋼纜從塔頂垂成拋物線、往後拉到地上的錨碇；每 0.6 公尺一根吊索拉著橋面的橫樑；
+  // 橋面：橫樑上鋪縱向木板（板間留縫、每塊顏色和高度差一點）；兩側鋼絲網到扶手鋼索；橋面中間微微下垂（跟 layout.js bridgeAt 一樣）。
   {
     const a = ALP_TRAIL[ALP_BRIDGE.a], b = ALP_TRAIL[ALP_BRIDGE.a + 2], pa = ALP_TRAIL.prof[ALP_BRIDGE.a], pb = ALP_TRAIL.prof[ALP_BRIDGE.a + 2]
-    const A = V(a[0], pa, a[1]), B = V(b[0], pb, b[1]), dir = B.clone().sub(A), len = dir.length(); dir.normalize()
-    const side = V(-dir.z, 0, dir.x)
-    const wood = new THREE.MeshStandardMaterial({ color: 0x6a5038, roughness: 0.85 }), rope = new THREE.MeshStandardMaterial({ color: 0x3a3d40, roughness: 0.4, metalness: 0.7 })
-    const planks = [], ropes = [], posts = []
-    const deck = (t) => A.clone().lerp(B, t).add(V(0, -0.35 * Math.sin(Math.PI * t), 0))
-    for (let i = 0; i <= len / 0.28; i++) {
-      const t = i / (len / 0.28), p = deck(t)
-      const m = new THREE.Matrix4().makeRotationY(Math.atan2(dir.x, dir.z)).setPosition(p)
-      planks.push(new THREE.BoxGeometry(1.5, 0.05, 0.22).applyMatrix4(m))
+    const A = V(a[0], pa, a[1]), B = V(b[0], pb, b[1]), dir = B.clone().sub(A).setY(0), len = dir.length(); dir.normalize()
+    const side = V(-dir.z, 0, dir.x), yaw = Math.atan2(dir.x, dir.z), HW = 0.72
+    const deck = (t) => A.clone().lerp(B, t).add(V(0, -0.35 * Math.sin(Math.PI * t) + 0.06, 0))   // 橋面頂
+    const woodT = canvasTex(256, 64, (x, w, h) => {
+      x.fillStyle = '#7a5d40'; x.fillRect(0, 0, w, h)
+      for (let i = 0; i < 70; i++) { const y = Math.random() * h; x.strokeStyle = `rgba(${40 + Math.random() * 30},${28 + Math.random() * 20},18,${0.25 + Math.random() * 0.35})`; x.lineWidth = 0.6 + Math.random() * 1.6; x.beginPath(); x.moveTo(0, y); x.bezierCurveTo(w * 0.3, y + (Math.random() - 0.5) * 6, w * 0.7, y + (Math.random() - 0.5) * 6, w, y + (Math.random() - 0.5) * 4); x.stroke() }
+      for (let i = 0; i < 4; i++) { x.fillStyle = 'rgba(40,26,15,0.45)'; x.beginPath(); x.ellipse(Math.random() * w, Math.random() * h, 3 + Math.random() * 3, 2, 0, 0, 7); x.fill() }
+    })
+    woodT.wrapS = woodT.wrapT = THREE.RepeatWrapping
+    const wood = new THREE.MeshStandardMaterial({ map: woodT, roughness: 0.9, vertexColors: true })
+    const steel = new THREE.MeshStandardMaterial({ color: 0x2f4a3c, roughness: 0.55, metalness: 0.5 })      // 橋塔：深綠漆
+    const cable = new THREE.MeshStandardMaterial({ color: 0x55595c, roughness: 0.35, metalness: 0.85 })
+    const conc = new THREE.MeshStandardMaterial({ color: 0x8d8b84, roughness: 0.95 })
+    const meshT = canvasTex(64, 64, (x, w, h) => {            // 菱形鋼絲網（透明底）
+      x.clearRect(0, 0, w, h); x.strokeStyle = '#c9cdd0'; x.lineWidth = 2.2
+      x.beginPath(); x.moveTo(0, h / 2); x.lineTo(w / 2, 0); x.lineTo(w, h / 2); x.lineTo(w / 2, h); x.closePath(); x.stroke()
+    }, false)
+    meshT.wrapS = meshT.wrapT = THREE.RepeatWrapping; meshT.repeat.set(len / 0.12, 1.0 / 0.12)
+    const netM = new THREE.MeshStandardMaterial({ map: meshT, alphaTest: 0.4, side: THREE.DoubleSide, metalness: 0.6, roughness: 0.5, color: 0x9aa0a4 })
+    const woods = [], steels = [], cables = [], concs = [], col = new THREE.Color(), rnd2 = mulberry32(42)
+    const box = (list, w, h, d, p, ry = yaw, rx = 0) => list.push(new THREE.BoxGeometry(w, h, d).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, ry, 0, 'YXZ')).setPosition(p)))
+    const tube = (list, pts, r, seg = 64) => list.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), seg, r, 6))
+    // 橫樑（鋼）每 0.6 公尺一根；縱向木板一段一段鋪在橫樑上
+    const NB = Math.round(len / 0.6)
+    for (let i = 0; i <= NB; i++) {
+      const t = i / NB, p = deck(t).add(V(0, -0.09, 0))
+      box(steels, HW * 2 + 0.12, 0.08, 0.1, p)
     }
-    for (const s of [-1, 1]) {
-      const rail = [], low = []
-      for (let i = 0; i <= 24; i++) { const t = i / 24, p = deck(t).addScaledVector(side, s * 0.78); rail.push(p.clone().add(V(0, 1.05 + 0.25 * Math.sin(Math.PI * t), 0))); low.push(p.clone().add(V(0, 0.05, 0))) }
-      ropes.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rail), 48, 0.025, 6), new THREE.TubeGeometry(new THREE.CatmullRomCurve3(low), 48, 0.02, 6))
-      for (let i = 1; i < 24; i += 2) ropes.push(new THREE.TubeGeometry(new THREE.LineCurve3(low[i], rail[i]), 1, 0.008, 4))
-      for (const [P0, t] of [[A, 0], [B, 1]]) {
-        const p = deck(t).addScaledVector(side, s * 0.85)
-        posts.push(new THREE.CylinderGeometry(0.1, 0.12, 2.0, 8).translate(p.x, p.y + 0.6, p.z))
+    const NPL = 7, plW = (HW * 2 - 0.08) / NPL
+    for (let i = 0; i < NB; i++) {
+      const t0 = i / NB, t1 = (i + 1) / NB, p0 = deck(t0), p1 = deck(t1), mid = p0.clone().lerp(p1, 0.5), pitch = Math.atan2(p1.y - p0.y, Math.hypot(p1.x - p0.x, p1.z - p0.z))
+      for (let k = 0; k < NPL; k++) {
+        const off = (k - (NPL - 1) / 2) * plW, q = mid.clone().addScaledVector(side, off).add(V(0, -0.025 + (rnd2() - 0.5) * 0.008, 0))
+        const geo = new THREE.BoxGeometry(plW - 0.025, 0.04, len / NB + 0.01)
+        geo.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(-pitch, yaw, 0, 'YXZ')).setPosition(q))
+        // 每塊板顏色不一樣（舊一點的偏灰）
+        col.setHSL(0.07 + rnd2() * 0.03, 0.3 + rnd2() * 0.15, 0.55 + rnd2() * 0.3); if (rnd2() < 0.2) col.lerp(new THREE.Color(0.5, 0.5, 0.48), 0.5)
+        const c = []; for (let v = 0; v < geo.attributes.position.count; v++) c.push(col.r, col.g, col.b)
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(c, 3))
+        woods.push(geo)
       }
     }
-    const pm = new THREE.Mesh(mergeGeometries(planks), wood), rm = new THREE.Mesh(mergeGeometries(ropes), rope), po = new THREE.Mesh(mergeGeometries(posts), wood)
-    for (const m of [pm, rm, po]) { m.castShadow = true; m.receiveShadow = true; g.add(m) }
+    // 兩邊的邊樑（鋼，沿著橋面）
+    for (const s of [-1, 1]) { const pts = []; for (let i = 0; i <= 24; i++) pts.push(deck(i / 24).addScaledVector(side, s * (HW + 0.04)).add(V(0, -0.06, 0))); tube(steels, pts, 0.035) }
+    // 橋塔：每端兩根方柱＋上下兩根橫樑，站在混凝土基座上；塔頂比橋面高 2.4
+    const TH = 2.4, ends = [[0, -1], [1, 1]]
+    const topOf = {}
+    for (const [t, out] of ends) {
+      const p = deck(t).addScaledVector(dir, out * 0.35)
+      for (const s of [-1, 1]) {
+        const q = p.clone().addScaledVector(side, s * (HW + 0.18))
+        const g0 = Math.min(alpineHeight(q.x, q.z), q.y - 0.3)
+        box(concs, 0.55, q.y - g0 + 0.25, 0.55, V(q.x, (q.y + g0) / 2 - 0.1, q.z))                  // 基座
+        box(steels, 0.16, TH + 0.1, 0.16, q.clone().add(V(0, TH / 2, 0)))
+        topOf[t + ',' + s] = q.clone().add(V(0, TH, 0))
+      }
+      const c0 = p.clone().add(V(0, TH, 0)), c1 = p.clone().add(V(0, 1.15, 0))
+      box(steels, HW * 2 + 0.52, 0.14, 0.16, c0)
+      box(steels, HW * 2 + 0.52, 0.1, 0.12, c1)
+      // 斜撐（X）
+      for (const s of [-1, 1]) tube(steels, [p.clone().addScaledVector(side, s * (HW + 0.18)).add(V(0, 1.2, 0)), p.clone().addScaledVector(side, -s * (HW + 0.18)).add(V(0, TH - 0.1, 0))], 0.03, 2)
+    }
+    // 主鋼纜：塔頂到塔頂（拋物線，中間離橋面 1.1）；再從塔頂往外拉到地上的錨碇
+    for (const s of [-1, 1]) {
+      const T0 = topOf['0,' + s], T1 = topOf['1,' + s], pts = []
+      const sagMid = T0.clone().lerp(T1, 0.5).y - (deck(0.5).y + 1.1)      // 中間垂到離橋面 1.1
+      for (let i = 0; i <= 40; i++) {
+        const t = i / 40, d = deck(t).addScaledVector(side, s * (HW + 0.06))
+        pts.push(V(d.x, T0.y + (T1.y - T0.y) * t - sagMid * 4 * t * (1 - t), d.z))
+      }
+      tube(cables, pts, 0.028, 120)
+      // 吊索
+      for (let i = 1; i < 40; i++) {
+        const t = i / 40
+        const top = pts[i], bot = deck(t).addScaledVector(side, s * (HW + 0.04)).add(V(0, -0.06, 0))
+        tube(cables, [bot, top], 0.008, 1)
+      }
+      // 扶手鋼索（離橋面 1.0）
+      const rail = []; for (let i = 0; i <= 40; i++) rail.push(deck(i / 40).addScaledVector(side, s * (HW + 0.05)).add(V(0, 1.0, 0)))
+      tube(cables, rail, 0.016, 120)
+      // 錨碇：塔頂往外 4 公尺、往下到地面的混凝土塊
+      for (const [t, out] of ends) {
+        const T = topOf[t + ',' + s], q = T.clone().addScaledVector(dir, out * 4).addScaledVector(side, s * 0.3)
+        q.y = alpineHeight(q.x, q.z) + 0.15
+        tube(cables, [T, q], 0.024, 2)
+        box(concs, 0.7, 0.5, 0.7, q.clone().add(V(0, 0.05, 0)))
+      }
+      // 兩側鋼絲網：橋面到扶手
+      const np = [], nu = [], ni = []
+      for (let i = 0; i <= 40; i++) {
+        const t = i / 40, d = deck(t).addScaledVector(side, s * (HW + 0.05))
+        np.push(d.x, d.y - 0.04, d.z, d.x, d.y + 1.0, d.z); nu.push(t, 0, t, 1)
+        if (i) { const k = (i - 1) * 2; ni.push(k, k + 2, k + 1, k + 1, k + 2, k + 3) }
+      }
+      const ng = new THREE.BufferGeometry(); ng.setAttribute('position', new THREE.Float32BufferAttribute(np, 3)); ng.setAttribute('uv', new THREE.Float32BufferAttribute(nu, 2)); ng.setIndex(ni); ng.computeVertexNormals()
+      const net = new THREE.Mesh(ng, netM); g.add(net)
+    }
+    for (const [list, m] of [[woods, wood], [steels, steel], [cables, cable], [concs, conc]]) {
+      const mesh = new THREE.Mesh(mergeGeometries(list.map((q) => q.index ? q.toNonIndexed() : q).map((q) => { if (!q.attributes.color) { const c = new Float32Array(q.attributes.position.count * 3).fill(1); q.setAttribute('color', new THREE.BufferAttribute(c, 3)) } return q })), m)
+      mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh)
+    }
   }
   // 山頂觀景台：木平台＋欄杆＋解說牌
   {
@@ -203,11 +373,11 @@ function buildInterior(lib, avoid = []) {
     }
     needleM.customProgramCacheKey = () => 'needleMip'
     const barkM = new THREE.MeshStandardMaterial({ color: 0x4b3a2c, roughness: 0.95 })
-    const coreM = new THREE.MeshStandardMaterial({ color: 0x1f3324, roughness: 1 })
+    const coreM = new THREE.MeshStandardMaterial({ color: 0x2a4630, roughness: 1 })   // 跟針葉同色系，從上面看不會是一顆黑色金字塔
     for (const kind of ['fir', 'hemlock']) {
       const crown = coniferGeo(kind), trunk = new THREE.CylinderGeometry(0.006, 0.022, 0.86, 7).translate(0, 0.43, 0)   // 樹幹到 86% 就停：不然樹梢會冒出一根光禿禿的樹幹
       // 樹冠裡面一個實心的深綠圓錐：卡片樹側看會透光，遠看只剩枝幹像竹竿；有這個芯遠看才是一棵實心的針葉樹
-      const core = new THREE.ConeGeometry(kind === 'fir' ? 0.1 : 0.16, 0.8, 7, 1, true).translate(0, 0.52, 0)
+      const core = new THREE.ConeGeometry(kind === 'fir' ? 0.075 : 0.12, 0.74, 9, 1, true).translate(0, 0.5, 0)
       const list = []
       for (let k = 0; k < 12000 && list.length < (kind === 'fir' ? 240 : 180); k++) {
         const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
@@ -220,6 +390,9 @@ function buildInterior(lib, avoid = []) {
         // 越高越矮（高山上的冷杉長不高，山頂看得出去）；不能頂到玻璃
         const H = Math.min(((kind === 'fir' ? 9 : 8) + rnd() * 7) * (1 - 0.5 * ss(12, 22, hgt)), domeY(x, z) - hgt - 1.5)
         if (H < 4) continue
+        // 樹冠（底下最寬）不能伸到步道、吊橋、溪上：離中線至少樹冠半徑 + 1.3 公尺
+        const crownR = H * (kind === 'fir' ? 0.19 : 0.29)
+        if (alpineTrailDist(x, z) < crownR + 1.3 || bridgeDist(x, z) < crownR + 1.5 || alpineStreamDist(x, z) < crownR * 0.6 + 1.2) continue
         if (nearBird(avoid, x, z, 5.5, 2.5)) continue
         if (rnd() > ss(86, 100, x)) continue   // 入口一小片空地，先看到山再進林子
         if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 16) continue   // 山頂觀景台四周是箭竹草原，看得出去
@@ -243,11 +416,15 @@ function buildInterior(lib, avoid = []) {
     const pick = (a) => a[Math.floor(rnd() * a.length)]
     for (let k = 0; k < 8000; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || alpineTrailDist(x, z) < 2.2 || nearBird(avoid, x, z, 3, 1.5)) continue
+      if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
       const sd = alpineStreamDist(x, z)
       if (sd > 1.4 && sd < 4 && rnd() < 0.25) put(pick(moss), { p: V(x, h - 0.15, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 1.2), c: new THREE.Color().setHSL(0.25, 0.12, 0.85 + rnd() * 0.1) })
-      else if (slope > 0.55 && rnd() < 0.06) put(pick(big), { p: V(x, h - 0.6, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(1.5 + rnd() * 2), c: new THREE.Color().setHSL(0.1, 0.05, 0.8 + rnd() * 0.12) })
+      else if (slope > 0.55 && rnd() < 0.06) {
+        const k = 1.5 + rnd() * 2
+        if (alpineTrailDist(x, z) < 2.2 + k * 1.3 || bridgeDist(x, z) < 2.5 + k * 1.3) continue   // 大岩塊不能壓到步道
+        put(pick(big), { p: V(x, h - 0.6, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(k), c: new THREE.Color().setHSL(0.1, 0.05, 0.8 + rnd() * 0.12) })
+      }
     }
     for (const [n, list] of Object.entries(lists)) if (lib[n]) scatter(g, lib[n], list, { cast: true })
     // 溪邊、池邊的蕨類
@@ -354,7 +531,7 @@ function buildInterior(lib, avoid = []) {
       }
     }
   }
-  return { g, mist, waterT, updateMist }
+  return { g, mist, waterU, updateMist }
 }
 
 /* ---------- 對外 ---------- */
@@ -366,7 +543,7 @@ export function createAlpine({ scene, lib, avoid = [] }) {
     get group() { return interior?.g },
     animate(t, dt, camera) {
       if (!interior) return
-      interior.waterT.offset.y -= dt * 0.35
+      interior.waterU.uTime.value = t
       interior.updateMist(t, dt, camera)
     },
   }
