@@ -1,7 +1,7 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：溫室座標（公尺）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL } from './layout.js'
+import { POOL, AM } from './layout.js'
 
 const ALL = [
   {
@@ -231,7 +231,7 @@ const ALL = [
   },
   // 2026-11-07 高山區（溫室東半邊）8 種：沿著上山的步道擺，鏡頭（view）從步道那側拍
   {
-    id: 'yuhina', spot: [88, 10], perch: 'branch', view: 180, dist: 2.6, camH: 3.6, lookY: 3.4,
+    id: 'yuhina', spot: AM(88, 10), perch: 'branch', view: 180, dist: 2.6, camH: 3.6, lookY: 3.4,
     name: '冠羽畫眉', sci: 'Yuhina brunneiceps', where: '山區入口的樹叢',
     intro: '台灣特有種。頭上一撮高高翹起的褐色羽冠，白臉上畫著黑色的過眼線和鬍鬚紋，看起來總是很有精神。中海拔山區很常見，常一小群在樹叢間吵吵鬧鬧地移動。',
     facts: [
@@ -242,7 +242,7 @@ const ALL = [
     ],
   },
   {
-    id: 'bushrobin', spot: [100, 13.5], perch: 'ground', view: 180, dist: 2.2, camH: 1.0, lookY: 0.2,
+    id: 'bushrobin', spot: AM(100, 13.5), perch: 'ground', view: 180, dist: 2.2, camH: 1.0, lookY: 0.2,
     name: '栗背林鴝', sci: 'Tarsiger johnstoniae', where: '步道邊',
     intro: '台灣特有種。公鳥黑頭配一道長長的白眉，胸前一圈橘紅色的領子連到栗紅色的背，非常好認。常停在步道邊的矮枝或石頭上，不太怕人，被叫做阿里山的「迎賓鳥」。',
     facts: [
@@ -253,7 +253,7 @@ const ALL = [
     ],
   },
   {
-    id: 'yellowtit', spot: [111, 14], perch: 'branch', view: 180, dist: 2.6, camH: 3.6, lookY: 3.4,
+    id: 'yellowtit', spot: AM(111, 14), perch: 'branch', view: 180, dist: 2.6, camH: 3.6, lookY: 3.4,
     name: '黃山雀', sci: 'Machlolophus holsti', where: '闊葉林樹枝',
     intro: '台灣特有種，也是保育類。全身鮮黃，頭頂有一撮直立的黑色羽冠，背和翅膀是藍灰色，翅上點綴白斑。數量不多，就算在山上也不容易遇到，遇到的人都很幸運。',
     facts: [
@@ -264,7 +264,7 @@ const ALL = [
     ],
   },
   {
-    id: 'niltava', spot: [117, -12], perch: 'branch', view: 45, dist: 2.8, camH: 3.6, lookY: 3.4,
+    id: 'niltava', spot: AM(117, -12), perch: 'branch', view: 45, dist: 2.8, camH: 3.6, lookY: 3.4,
     name: '黃腹琉璃', sci: 'Niltava vivida', where: '溪谷旁的樹',
     intro: '公鳥上半身是深邃的寶藍色，肚子是鮮豔的橘黃色，橘色還尖尖地往上延伸到喉嚨，像在胸前別了一個箭頭。常停在溪谷旁的樹枝上，一動也不動地等飛過的蟲。',
     facts: [
@@ -275,7 +275,7 @@ const ALL = [
     ],
   },
   {
-    id: 'flamecrest', spot: [131, -18.5], perch: 'branch', view: 180, dist: 2.2, camH: 3.6, lookY: 3.4,
+    id: 'flamecrest', spot: AM(131, -18.5), perch: 'branch', view: 180, dist: 2.2, camH: 3.6, lookY: 3.4,
     name: '火冠戴菊鳥', sci: 'Regulus goodfellowi', where: '針葉林',
     intro: '台灣特有種，也是台灣最小的鳥之一，只有約 9 公分。頭頂中央一道橘紅色的「火冠」，兩側鑲黑邊。牠住在台灣最高的地方，常在冷杉、鐵杉的枝葉間快速跳動。',
     facts: [
@@ -286,7 +286,7 @@ const ALL = [
     ],
   },
   {
-    id: 'sibia', spot: [158, -7], perch: 'branch', view: 90, dist: 3.0, camH: 3.6, lookY: 3.4,
+    id: 'sibia', spot: AM(158, -7), perch: 'branch', view: 90, dist: 3.0, camH: 3.6, lookY: 3.4,
     name: '白耳畫眉', sci: 'Heterophasia auricularis', where: '山腰的樹冠',
     intro: '台灣特有種。黑頭上一道寬寬的白色過眼線，末端是蓬鬆下垂的白色耳羽，像戴了白色的耳環；肚子是鮮豔的栗橙色，尾巴長長的。中海拔森林裡很常見。',
     facts: [
@@ -297,7 +297,7 @@ const ALL = [
     ],
   },
   {
-    id: 'laughingthrush', spot: [150, 12.5], perch: 'ground', view: 0, dist: 2.6, camH: 1.1, lookY: 0.22,
+    id: 'laughingthrush', spot: AM(150, 12.5), perch: 'ground', view: 0, dist: 2.6, camH: 1.1, lookY: 0.22,
     name: '金翼白眉', sci: 'Trochalopteron morrisonianum', where: '山頂步道',
     intro: '台灣特有種。臉上有白色眉線和白色鬍鬚紋，喉嚨栗紅色，翅膀和尾巴有一大片金黃色。牠住在高海拔，常在山頂的步道、停車場附近走來走去，一點也不怕人。',
     facts: [
@@ -308,7 +308,7 @@ const ALL = [
     ],
   },
   {
-    id: 'rosefinch', spot: [139, 6], perch: 'ground', view: 90, dist: 2.2, camH: 1.0, lookY: 0.2,
+    id: 'rosefinch', spot: AM(139, 6), perch: 'ground', view: 90, dist: 2.2, camH: 1.0, lookY: 0.2,
     name: '台灣朱雀', sci: 'Carpodacus formosanus', where: '山頂箭竹草原',
     intro: '台灣特有種，以前叫酒紅朱雀。公鳥全身酒紅色、眉線是帶銀光的粉紅色，母鳥則是褐色帶縱紋。牠們住在 2,500 公尺以上的高山，常在步道邊的草地上低頭撿草籽。',
     facts: [

@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
   TAU, DOME, MTN, POOL, RAMP, DECK, PATHS, clamp, smoothstep, lerp, angDiff,
-  domeRho, inAlpine, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
+  domeRho, domeB, inAlpine, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
   CCORR, COAST_ON,
 } from './layout.js'
 import { fbm3, noise3, mulberry32 } from './noise.js'
@@ -80,10 +80,12 @@ export function buildSky(scene) {
 /* ---------- 玻璃圓頂 ---------- */
 // 蛋形：西半邊半軸 A、東半邊 AE（layout.js DOME）。ex(p)：方位 p 的 x 半徑
 const ex = (p) => (Math.cos(p) > 0 ? DOME.AE : DOME.A) * Math.cos(p)
+// 方位 p、半徑比例 r 的 z（短半軸照 x 變：山區那側比較寬，layout.js domeB）
+const ez = (p, r = 1) => domeB(ex(p) * r) * r * Math.sin(p)
 // 赤道一圈：u 照弧長分配（東半邊比較長，格網的格子才不會被拉寬），PERIM 是周長
 const EQ = (() => {
   const n = 2048, acc = [0]
-  for (let i = 1; i <= n; i++) { const p0 = ((i - 1) / n) * TAU, p1 = (i / n) * TAU; acc.push(acc[i - 1] + Math.hypot(ex(p1) - ex(p0), DOME.B * (Math.sin(p1) - Math.sin(p0)))) }
+  for (let i = 1; i <= n; i++) { const p0 = ((i - 1) / n) * TAU, p1 = (i / n) * TAU; acc.push(acc[i - 1] + Math.hypot(ex(p1) - ex(p0), ez(p1) - ez(p0))) }
   return { n, acc, L: acc[n] }
 })()
 export const DOME_PERIM = EQ.L
@@ -102,7 +104,7 @@ function domeGeometry(scale = 1, nu = 320, nv = 56) {
     const rho = Math.cos(a), y = DOME.H * Math.sin(a) * scale
     for (let i = 0; i <= nu; i++) {
       const u = i / nu, p = eqAngle(u)
-      pos.push(ex(p) * scale * rho, y, DOME.B * scale * rho * Math.sin(p))
+      pos.push(ex(p) * scale * rho, y, ez(p, scale * rho))
       uv.push(u, v)
     }
   }
@@ -231,7 +233,7 @@ export function buildDome(scene) {
     const p = eqAngle((k + 0.5) / RIBS), pts = []   // 照弧長平均分；錯開半格：西邊入口中間不能有一根主拱肋
     for (let j = 0; j <= 24; j++) {
       const a = (j / 24) * Math.PI / 2 * 0.985
-      pts.push(new THREE.Vector3(ex(p) * 0.99 * Math.cos(a), DOME.H * 0.99 * Math.sin(a), DOME.B * 0.99 * Math.cos(a) * Math.sin(p)))
+      pts.push(new THREE.Vector3(ex(p) * 0.99 * Math.cos(a), DOME.H * 0.99 * Math.sin(a), ez(p, 0.99 * Math.cos(a))))
     }
     ribs.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.32, 6))
   }
@@ -239,7 +241,7 @@ export function buildDome(scene) {
     const a = v * Math.PI / 2, pts = []
     for (let i = 0; i < 128; i++) {
       const p = eqAngle(i / 128)
-      pts.push(new THREE.Vector3(ex(p) * 0.99 * Math.cos(a), DOME.H * 0.99 * Math.sin(a), DOME.B * 0.99 * Math.cos(a) * Math.sin(p)))
+      pts.push(new THREE.Vector3(ex(p) * 0.99 * Math.cos(a), DOME.H * 0.99 * Math.sin(a), ez(p, 0.99 * Math.cos(a))))
     }
     ribs.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 256, 0.26, 6, true))
   }
@@ -253,11 +255,11 @@ export function buildDome(scene) {
   for (let i = 0; i <= N; i++) {
     const p = eqAngle(i / N)
     const c = ex(p), s = Math.sin(p)
-    for (const [sc, y] of [[s1, -0.5], [s1, H], [s2, H], [s2, -0.5]]) wallPos.push(sc * c, y, DOME.B * sc * s)
+    for (const [sc, y] of [[s1, -0.5], [s1, H], [s2, H], [s2, -0.5]]) wallPos.push(sc * c, y, ez(p, sc))
   }
   for (let i = 0; i < N; i++) {
     const p = eqAngle((i + 0.5) / N)
-    const x = ex(p), z = DOME.B * Math.sin(p)
+    const x = ex(p), z = ez(p)
     if (x < 0 && Math.abs(z) < DOOR.W + 0.1) continue
     if (COAST_ON && z < 0 && Math.abs(x) < CCORR.W + 0.1) continue   // 南門
     const a = i * 4, b = (i + 1) * 4

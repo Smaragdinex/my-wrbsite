@@ -519,7 +519,7 @@ function buildInterior(lib, avoid = []) {
       m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(1, 'rgba(0,0,0,0)')
       x.fillStyle = m; x.fillRect(0, 0, w, h)
     }))
-    const zMax = ALP.HZ - 4, X0 = 78, X1 = 182
+    const zMax = ALP.HZ - 4, X0 = 78, X1 = 222
     const place = (s, x) => {
       const u = s.userData
       for (let k = 0; k < 40; k++) {

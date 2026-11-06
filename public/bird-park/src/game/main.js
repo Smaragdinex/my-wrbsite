@@ -141,7 +141,7 @@ await renderer.compileAsync(scene, camera)
 // 再到店裡、店門口、回頭看店、水池邊各預熱一次：每個地方的霧、燈、看得到的東西不一樣，著色器版本也不同；
 // 水面倒影（畫到貼圖）、影子、手和相機也各有自己的版本。沒先編好的話，第一次走過去會整個卡住 0.5～1 秒
 const home = { p: camera.position.clone(), q: camera.quaternion.clone() }
-const WARM = [[-87.6, 0.4, -90], [-74, 0, -90], [-55, 2, 90], [-15, -25, 60], [96, -4, -90], [145, 9, 100]]
+const WARM = [[-87.6, 0.4, -90], [-74, 0, -90], [-55, 2, 90], [-15, -25, 60], [103, -5, -90], [167, 12, 100]]
 for (const [wi, [x, z, yaw]] of WARM.entries()) {
   setLoad(0.8 + 0.18 * wi / WARM.length, '準備畫面…')
   camera.position.set(x, supportAt(x, z, 99).y + 1.7, z); camera.rotation.set(0, yaw * Math.PI / 180, 0, 'YXZ'); camera.updateMatrixWorld()

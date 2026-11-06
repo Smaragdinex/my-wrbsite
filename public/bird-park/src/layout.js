@@ -6,7 +6,12 @@ import { fbm2, fbm3, noise3 } from './noise.js'
 export const TAU = Math.PI * 2
 // 溫室是一顆「蛋」：西半邊（x < 0）是原本的橢圓（長半軸 A），東半邊拉長到 AE，裡面是高山區（2026-11-07 改成一個館：拿掉附屬的高山館和通道）。
 // x = 0 兩邊的半徑都是 B、斜率都是 0，玻璃面是平順接起來的。GA／GB：原本那顆橢圓，熱帶花園的種植坡、植物範圍照它（山區在它外面）。
-export const DOME = { A: 75, AE: 190, B: 55, H: 55 }   // 西半軸、東半軸、短半軸、頂高
+export const DOME = { A: 75, AE: 232, B: 55, BE: 72, H: 72 }   // 西半軸、東半軸、短半軸（西）、東邊山區最寬處的短半軸、頂高
+// 短半軸往東慢慢變寬（西半邊花園照舊 55，山區那側到 72）
+export const domeB = (x) => x > 0 ? DOME.B + (DOME.BE - DOME.B) * smoothstep(0, 90, x) : DOME.B
+// 山區放大（2026-11-07 第三次）：原本的配置（設計座標）以入口 x=76 為原點放大 AS 倍，高度 AHS 倍
+export const AS = 1.32, AHS = 1.25
+export const AM = (x, z) => [76 + (x - 76) * AS, z * AS]
 export const GARDEN = { A: 75, B: 55 }
 export const MTN = { x: 12, z: -6, h: 32 }           // 中央雲霧山
 export const POOL = { x: -3, z: -6, rx: 10, rz: 18, water: -0.55 }   // 西緣不能再往外（環山步道在 x≈-16），所以往南北拉長
@@ -17,7 +22,7 @@ export const DECK = { r: 4.5, x: 0, z: 0, y: 0 }
 export const STORE = { X0: -75.6, X1: -88.6, HZ: 7.5, H: 5.0, DOOR_W: 3.4 }
 // 高山區（alpine.js）：溫室東半邊、原本花園橢圓外面那一塊。花園的 alpine 步道走到 x≈74 接上山的步道；
 // 入口一小片平地、水池，往東爬升到約 26 公尺的山頂，一條溪從東南高處沿山谷流到水池，步道之字形上山、吊橋過溪谷
-export const ALP = { X0: 45, X1: 190, HZ: 56 }   // 山區地形格子的範圍（實際能走的是 inAlpine）
+export const ALP = { X0: 45, X1: 232, HZ: 74 }   // 山區地形格子的範圍（實際能走的是 inAlpine）
 // 第三館：海岸（coast.js，美術用 NatureManufacture「Coast Dunes Environment」，跟《淨灘大作戰》同一套）。圓頂南門（z≈-55）→ 通道（z -53～-74，A 門 -61、B 門 -67）
 // → 玻璃館（z -74～-154、x ±40）：北半邊沙丘、木棧道，中間沙灘，海岸線約 z -128，往南是館裡的淺水潟湖；館外整片都是海（到地平線）
 // 海岸館暫時拿掉（2026-11-07 使用者要求）：關掉就沒有南門、通道、館和海；程式和模型都還在，改回 true 就回來
@@ -40,10 +45,10 @@ export function angDiff(a, b) {
 }
 
 /* ---------- 溫室 ---------- */
-export const domeRho = (x, z) => Math.hypot(x / (x > 0 ? DOME.AE : DOME.A), z / DOME.B)
+export const domeRho = (x, z) => Math.hypot(x / (x > 0 ? DOME.AE : DOME.A), z / domeB(x))
 export const gardenRho = (x, z) => Math.hypot(x / GARDEN.A, z / GARDEN.B)
 export function domeY(x, z) {
-  const r2 = (x / (x > 0 ? DOME.AE : DOME.A)) ** 2 + (z / DOME.B) ** 2
+  const r2 = (x / (x > 0 ? DOME.AE : DOME.A)) ** 2 + (z / domeB(x)) ** 2
   return r2 >= 1 ? 0 : DOME.H * Math.sqrt(1 - r2)
 }
 
@@ -249,15 +254,15 @@ buildHeights()
 /* ---------- 高山區地形（0.5 公尺格子，x 45～190、z ±56；能走的範圍是 inAlpine） ---------- */
 // 溪流、步道都是折線，地形照它們挖溪谷、鋪平步道；結果存成格子（玩家走路、種樹、做網格都查這張）
 // 溪：從山頂東南側的山泉（離觀景台不遠）往下，沿著山谷一路流到入口旁的水池；陡的那幾段是小瀑布
-export const ALP_STREAM = [[151, -2], [150, -8], [147, -13], [142, -16.5], [135, -15.5], [130.5, -14.2], [125.5, -13.4], [120.5, -14.2], [114, -16.5], [109, -18], [100, -19], [94, -18]]
+export const ALP_STREAM = [[151, -2], [150, -8], [147, -13], [142, -16.5], [135, -15.5], [130.5, -14.2], [125.5, -13.4], [120.5, -14.2], [114, -16.5], [109, -18], [100, -19], [94, -18]].map(([x, z]) => AM(x, z))
 // 吊橋底下是一道峽谷：溪在橋的上游掉下一道瀑布，橋面離水面 6～7 公尺
-export const ALP_GORGE = { x: 124.5, z: -12.8, depth: 5.2, r: 7 }
+export const ALP_GORGE = { x: AM(124.5, 0)[0], z: -12.8 * AS, depth: 6.5, r: 7 * AS }
 export const BRIDGE_DIM = { hw: 1.0, sag: 0.5 }   // 吊橋半寬、中間下垂（alpine.js 畫橋、bridgeAt 走路都用）
-export const ALP_POND = { x: 88, z: -17, r: 7, water: -0.45 }
-export const ALP_TRAIL = [[76, 0], [86, 3], [97, 9], [108, 12], [116, 5], [120, -4], [124, -12], [128, -20], [137, -26], [147, -21], [157, -15], [163, -4], [161, 8], [154, 16], [146, 15], [145, 9]]
+export const ALP_POND = { x: AM(88, 0)[0], z: -17 * AS, r: 7 * AS, water: -0.45 }
+export const ALP_TRAIL = [[76, 0], [86, 3], [97, 9], [108, 12], [116, 5], [120, -4], [124, -12], [128, -20], [137, -26], [147, -21], [157, -15], [163, -4], [161, 8], [154, 16], [146, 15], [145, 9]].map(([x, z]) => AM(x, z))
 export const ALP_BRIDGE = { a: 5, b: 6 }   // 步道第 5～7 點（120,-4 → 124,-12 → 128,-20）跨過溪谷：吊橋，橋下不鋪路
-export const ALP_PEAK = { x: 145, z: 8, h: 21 }   // 跟步道終點差不多高：步道才不會在山頂挖出一條溝
-const AG = { x0: ALP.X0, z0: -ALP.HZ, cell: 0.5, nx: 291, nz: 225 }
+export const ALP_PEAK = { x: AM(145, 0)[0], z: 8 * AS, h: 21 }   // 跟步道終點差不多高：步道才不會在山頂挖出一條溝
+const AG = { x0: ALP.X0, z0: -ALP.HZ, cell: 0.5, nx: Math.round((ALP.X1 - ALP.X0) / 0.5) + 1, nz: Math.round(ALP.HZ * 2 / 0.5) + 1 }
 const aHeight = new Float32Array(AG.nx * AG.nz), aTrail = new Float32Array(AG.nx * AG.nz).fill(1e9), aStream = new Float32Array(AG.nx * AG.nz).fill(1e9)
 function segDist(px, pz, ax, az, bx, bz) {
   const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz
@@ -274,16 +279,17 @@ function polyDist(px, pz, P, skip) {
   return [best, bi, bt]
 }
 // 底層地形：入口平，往東爬升到山頂（偏北），南北兩道稜線，山頂後面往東牆降一點；不能頂到玻璃（離玻璃至少 9 公尺，樹才放得下）
-function alpBase(x, z) {
-  const P = ALP_PEAK
+function alpBase(X, Z) {
+  // 用放大前的設計座標算形狀，高度再乘 AHS（山區整個放大）
+  const x = 76 + (X - 76) / AS, z = Z / AS, P = { x: 76 + (ALP_PEAK.x - 76) / AS, z: ALP_PEAK.z / AS, h: ALP_PEAK.h }
   let h = 5 * smoothstep(80, 120, x)                                                             // 入口往東慢慢爬升
-  h += (P.h - 5) * Math.exp(-(((x - P.x) / 27) ** 2) - (((z - P.z) / 21) ** 2))                 // 主峰：一座尖一點的山，山頂往下看得到山谷
+  h += (P.h - 5) * Math.exp(-(((x - P.x) / 27) ** 2) - (((z - P.z) / 21) ** 2))                 // 主峰
   h += 4 * smoothstep(20, 42, Math.abs(z)) * smoothstep(92, 125, x)                               // 南北兩側的稜線
   h -= 5 * smoothstep(160, 186, x)                                                                // 山頂後面往東牆降
-  h += 2.6 * fbm2(x * 0.05 + 11, z * 0.05 - 7, 4) * smoothstep(84, 100, x)
-  h += 1.4 * Math.max(0, fbm2(x * 0.16, z * 0.16, 3)) * smoothstep(86, 105, x)                   // 小岩塊
-  h = Math.min(h, domeY(x, z) - 9)
-  return Math.max(0, h) * smoothstep(1.03, 1.16, gardenRho(x, z))                                 // 花園那側從 0 開始
+  h += 2.6 * fbm2(X * 0.04 + 11, Z * 0.04 - 7, 4) * smoothstep(84, 100, x)
+  h += 1.4 * Math.max(0, fbm2(X * 0.13, Z * 0.13, 3)) * smoothstep(86, 105, x)                   // 小岩塊
+  h = Math.min(h * AHS, domeY(X, Z) - 9)
+  return Math.max(0, h) * smoothstep(1.03, 1.16, gardenRho(X, Z))                                 // 花園那側從 0 開始
 }
 function buildAlpine() {
   // 步道高度：沿線取底層地形再平滑，坡度不超過 30%（走得上去）
