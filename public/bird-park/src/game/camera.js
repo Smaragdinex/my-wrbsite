@@ -27,21 +27,20 @@ const WALK_FOV = 62
 const PHOTO_W = 1200, PHOTO_H = 800
 const KEY = 'birdpark-camera-v1'
 
-// 觀景窗裡的對焦點（像單眼的 AF 點陣）：7×3 個小框，中間那個是現在用的（比較大、四角括弧）；合焦時亮紅色、底下的綠點 ● 亮起
+// 觀景窗裡的對焦點：照單眼經典的 9 點菱形排法（座標照使用者給的參考圖量的，整張 1200×800 對應觀景窗的 3:2 框）
+// 外圍 8 點：上下是橫的小框、其他是直的小框，每個中間一個小點；中間是比較大的方框＋小點，外面一圈點測光圓。
+// 對焦中：中間方框暗灰一閃一閃；合焦：方框、小點、圓圈變紅（外圍點不亮）
 const AF_SVG = (() => {
-  const W = 340, H = 170, pts = []
-  for (let r = -1; r <= 1; r++) for (let c = -3; c <= 3; c++) {
-    if (!r && !c) continue
-    const x = W / 2 + c * 44 - 10, y = H / 2 + r * 44 - 7
-    pts.push(`<rect class="pt" x="${x}" y="${y}" width="20" height="14" rx="1.5"/>`)
-  }
-  // 現用的對焦點：四個角括弧＋中間十字小刻（十字型對焦點）
-  const cx = W / 2, cy = H / 2, w = 17, h = 12, k = 7
-  const corner = (sx, sy) => `M${cx + sx * w},${cy + sy * (h - k)} V${cy + sy * h} H${cx + sx * (w - k)}`
-  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${pts.join('')}
-    <g class="act"><rect class="fill" x="${cx - w}" y="${cy - h}" width="${w * 2}" height="${h * 2}" rx="2"/>
-    <path d="${corner(-1, -1)} ${corner(1, -1)} ${corner(-1, 1)} ${corner(1, 1)}"/>
-    <path class="tick" d="M${cx - 3},${cy} H${cx + 3} M${cx},${cy - 3} V${cy + 3}"/></g></svg>`
+  const W = 1200, H = 800, cx = 600, cy = 400   // 參考圖中心偏了幾像素，這裡對齊畫面正中（遊戲是從畫面正中對焦）
+  const pt = (x, y, w, h) => `<g class="pt"><rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}"/><circle cx="${x}" cy="${y}" r="4.5"/></g>`
+  const pts = [
+    pt(cx, cy - 184, 46, 32), pt(cx, cy + 184, 46, 32),                              // 上、下（橫）
+    pt(cx - 206, cy - 98, 32, 44), pt(cx + 206, cy - 98, 32, 44), pt(cx - 206, cy + 98, 32, 44), pt(cx + 206, cy + 98, 32, 44),   // 四個斜角（直）
+    pt(cx - 344, cy, 32, 44), pt(cx + 344, cy, 32, 44),                            // 最左、最右（直）
+  ]
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${pts.join('')}
+    <g class="act"><circle class="ring" cx="${cx}" cy="${cy}" r="111"/>
+    <rect class="box" x="${cx - 31}" y="${cy - 31}" width="62" height="62"/><circle class="dot" cx="${cx}" cy="${cy}" r="5"/></g></svg>`
 })()
 
 export function createCamera({ world, camera, controls, hud, gear, onShot, onPanel, getSound = () => true }) {
