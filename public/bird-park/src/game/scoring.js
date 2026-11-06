@@ -6,6 +6,7 @@ import * as THREE from 'three'
 export const VALUE = {
   sparrow: 40, dove: 50, bulbul: 60, whiteeye: 80, babbler: 140, barbet: 120, treepie: 90, heron: 110,
   nightheron: 100, egret: 90, moorhen: 90, waterhen: 110, kingfisher: 220, mikado: 300, bluemagpie: 240, blackbulbul: 100,
+  spoonbill: 320, thrush: 150, pheasant: 280, oriole: 220,
 }
 // 收購價：藝術是主觀的，相機行不是資源回收——60 分以下不收；60～70 給正常價的 10%、70～80 25%、80～90 50%、90～99 70%，
 // 100 分才是正常價（基本價 × 3）；超過 100 分每多 1 分多給 5%。同一張拍到好幾隻同種的鳥再 ×1.2

@@ -25,7 +25,11 @@ export const ESCAPE = {
   egret: { r: 11, fly: { speed: 7, hz: 3.2, style: 'glide', k: 2.2 } },
   nightheron: { r: 9, fly: { speed: 7, hz: 3.5, style: 'glide', k: 1.9 } },
   heron: { r: 6, fly: { speed: 6, hz: 3.2, style: 'glide', k: 1.95 } },   // 黑冠麻鷺出了名的不怕人
+  spoonbill: { r: 12, fly: { speed: 7, hz: 3, style: 'glide', k: 2.3 } },
+  thrush: { r: 7, fly: { speed: 9, hz: 9, style: 'flap', k: 0.95 } },
+  oriole: { r: 8, fly: { speed: 9, hz: 8, style: 'bound', k: 1.07 } },
   mikado: { r: 8, run: 7 },
+  pheasant: { r: 8, run: 7 },
   babbler: { r: 5, run: 5 },
   moorhen: { r: 9, swim: 5 },
   waterhen: { r: 9, swim: 5 },

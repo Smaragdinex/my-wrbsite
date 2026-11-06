@@ -22,7 +22,7 @@ export function ruleJudge(p) {
   else if (s.act === 'land') lines.push('降落前翅膀張開的樣子，漂亮。')
   else if (s.act === 'fly') lines.push(pick(['飛行中的鳥能拍清楚，不簡單。', '飛起來的樣子，客人喜歡。']))
   else if (s.act === 'run') lines.push('牠在跑，你還跟得上。')
-  if (['mikado', 'bluemagpie', 'kingfisher'].includes(s.id) && p.score >= 50) lines.push(`${s.name}啊，客人很愛這種。`)
+  if (['mikado', 'bluemagpie', 'kingfisher', 'spoonbill', 'pheasant'].includes(s.id) && p.score >= 50) lines.push(`${s.name}啊，客人很愛這種。`)
   return { price: p.price, comment: lines.join('') }
 }
 
@@ -60,7 +60,7 @@ const toTrad = (t) => t.replace(/拍摄|[这个张对过还没头鸟鲜画准种
 const pct = (x) => `${Math.round(x * 100)}%`
 function facts(p) {
   const s = p.subject
-  const rare = { mikado: '非常稀有', bluemagpie: '稀有', kingfisher: '稀有', babbler: '不常見', waterhen: '普通', sparrow: '很常見', dove: '很常見', bulbul: '很常見' }[s.id] ?? '普通'
+  const rare = { mikado: '非常稀有', spoonbill: '非常稀有', pheasant: '稀有', oriole: '稀有', thrush: '不常見', bluemagpie: '稀有', kingfisher: '稀有', babbler: '不常見', waterhen: '普通', sparrow: '很常見', dove: '很常見', bulbul: '很常見' }[s.id] ?? '普通'
   return [
     `鳥：${s.name}（${rare}）`,
     `遊戲評分：${p.score} 分（100 分是好照片的標準，超過 100 是難得的瞬間）`,

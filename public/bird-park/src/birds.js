@@ -280,17 +280,25 @@ const BUILD = {
   treepie: treepie,
 
   kingfisher, egret, moorhen, sparrow, waterhen, bluemagpie, blackbulbul, babbler, mikado,
+  spoonbill, thrush, pheasant, oriole,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
 const GLB = {}
+const TINT = { 'thrush-rig': 0.5 }
 export async function loadAnimalModels(extra = []) {
   const L = new GLTFLoader(), D = new DRACOLoader()
   D.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
   L.setDRACOLoader(D)
-  const load = (n) => L.loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => { GLB[n] = g.scene })
+  const load = (n) => L.loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => {
+    GLB[n] = g.scene
+    // Tripo 生成的羽色太鮮豔的，載入時壓暗（紫嘯鶇真實是深藍黑、只有光澤是亮藍）
+    const k = TINT[n.replace('-fly', '')]
+    if (k) g.scene.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(k) } })
+  })
   await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
-    'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig'].map(load),
+    'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
+    'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
     ...extra.map((n) => load(n).catch(() => console.warn('[birds] 沒有模型', n)))])
 }
@@ -892,6 +900,30 @@ function bluemagpie(env) {
 function blackbulbul(env) {
   return perchGroup(2, 0.4, -0.6, (blocked) => perchRigged(outer(env, -0.9), { name: 'blackbulbul-rig', k: 0.5, ...TRIPO, foot: 0.004, drop: 0.05, beat: 7,
     hopper: { blocked } }))
+}
+
+// 2026-11-06 新增四種（ChatGPT 參考圖 → Tripo → tools/rig-distance.py，點位在 bird-points.json）
+// 黑面琵鷺：在淺水裡慢慢走、低頭用湯匙嘴掃水面（跟小白鷺同一套涉水動作，步伐更慢）
+function spoonbill(env) {
+  return groundTripo(env, { name: 'spoonbill-rig', H: 1.3, h0: 0.98, ...TRIPO, reach: 0.6, wade: true, bill: 0.38,
+    walk: { radius: 1.0, speed: 0.12 }, swingT: 0.55, lift: 0, knee: [1.0, 1.7], focusY: 0.7,
+    acts: { stand: [3, 3, 6], hunt: [4, 3, 6], walk: [3, 99, 99], turn: [1, 99, 99], strike: [1, 1.4, 1.4], look: [1.5, 1.5, 3] } })
+}
+// 台灣紫嘯鶇：在地上一跳一跳，停下來翹尾巴
+function thrush(env) {
+  return groundTripo(env, { name: 'thrush-rig', H: 0.39, h0: 0.735, ...TRIPO, hop: 0.05, flick: 0.4, flickF: 1.6,
+    walk: { radius: 1.1, speed: 0.22, turn: 3 }, stride: 0.1, swingT: 0.14, lift: 0.045, knee: [0.3, 0.6], focusY: 0.2,
+    acts: { walk: [4, 99, 99], peck: [3, 0.8, 1.4], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
+}
+// 藍腹鷴：跟帝雉一樣在林緣慢慢走、低頭啄食
+function pheasant(env) {
+  return groundTripo(env, { name: 'pheasant-rig', H: 0.63, h0: 0.619, ...TRIPO, bob: 0.02,
+    walk: { radius: 1.6, speed: 0.16 }, stride: 0.16, swingT: 0.32, lift: 0, knee: [0.8, 1.4], focusY: 0.36,
+    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.5, 3], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } })
+}
+// 黃鸝：停在樹冠的枝上跳
+function oriole(env) {
+  return perchRigged(outer(env, -0.9), { name: 'oriole-rig', k: 0.54, ...TRIPO, foot: 0.005, drop: 0.05, beat: 7 })
 }
 
 /* ---------- 停棲處 ---------- */

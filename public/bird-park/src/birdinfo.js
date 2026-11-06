@@ -185,9 +185,53 @@ const ALL = [
       '叫聲變化很多，有像貓叫的，也有清脆的哨音。',
     ],
   },
+  {
+    id: 'spoonbill', spot: [-2, 9], perch: 'ground', y: POOL.water - 0.18, water: POOL.water, dist: 4.6, camH: 1.9, lookY: 0.9,
+    name: '黑面琵鷺', sci: 'Platalea minor', where: '水池淺灘',
+    intro: '全身雪白，臉和嘴是黑色的，最特別的是一支前端又扁又寬、像飯匙一樣的長嘴。牠在淺水裡低著頭、嘴巴微微張開，左右來回掃動，碰到小魚小蝦就立刻夾起來。',
+    facts: [
+      '全世界的數量只有幾千隻，是瀕危的鳥；每年冬天超過一半會到台灣過冬，台南曾文溪口是最重要的度冬地。',
+      '繁殖季頭後面會長出黃色的飾羽，胸前也染上一圈黃色。',
+      '飛的時候脖子和腳都伸得直直的，不像鷺鷥會把脖子縮成 S 形。',
+      '休息時常一群站在一起，把嘴插進背上的羽毛裡睡覺。',
+    ],
+  },
+  {
+    id: 'thrush', spot: [16, 33], perch: 'ground', dist: 2.2, camH: 0.7, lookY: 0.2,
+    name: '台灣紫嘯鶇', sci: 'Myophonus insularis', where: '林下溪邊',
+    intro: '台灣特有種。全身深藍黑色，光線照到時會閃出紫藍色的金屬光澤。常在溪邊的石頭和林道上一跳一跳地找蟲吃，停下來時會把尾巴慢慢張開、再收起來。',
+    facts: [
+      '叫聲又尖又長，像金屬摩擦的「吱——」，在溪谷裡很遠就聽得到。',
+      '吃水生昆蟲、蚯蚓、蝸牛，也會在淺水裡抓小蝦、小螃蟹。',
+      '常把巢築在溪邊的岩壁縫、甚至橋墩下面。',
+      '從低海拔到中海拔的山區溪流都看得到。',
+    ],
+  },
+  {
+    id: 'pheasant', spot: [42, -18], perch: 'ground', dist: 3.0, camH: 1.0, lookY: 0.35,
+    name: '藍腹鷴', sci: 'Lophura swinhoii', where: '森林邊緣',
+    intro: '台灣特有種。雄鳥全身深藍帶紫，臉上是鮮紅色的肉垂，頭頂一撮白色的冠羽，背上一塊栗紅色，尾巴中央是兩根長長的白羽，紅色的腳走在林下特別顯眼。',
+    facts: [
+      '雌鳥全身褐色帶斑紋，和雄鳥差很多，在落葉堆裡很難發現。',
+      '清晨和黃昏最常出來，在林下低頭翻找果實、種子和小蟲。',
+      '很少飛，受到驚擾時通常快步跑進樹林裡。',
+      '英文名紀念第一個把牠介紹給西方的英國博物學家郇和（Robert Swinhoe）；和帝雉一樣是保育類。',
+    ],
+  },
+  {
+    id: 'oriole', spot: [-26, -10], perch: 'branch', dist: 3.0, camH: 3.6, lookY: 3.4,
+    name: '黃鸝', sci: 'Oriolus chinensis', where: '樹冠',
+    intro: '全身金黃色，一條粗粗的黑色過眼線從嘴邊經過眼睛、一直繞到後頸，像綁了一條黑頭巾；嘴是粉紅色的。牠常躲在濃密的樹冠裡，叫聲是悅耳的笛音。',
+    facts: [
+      '杜甫的「兩個黃鸝鳴翠柳」寫的就是牠。',
+      '在台灣數量很少，是保育類，平常只聽得到聲音、不容易看到。',
+      '吃昆蟲和果實，常在樹梢之間快速飛過，留下一道黃色的影子。',
+      '除了好聽的笛音，有時也會發出像貓叫一樣沙啞的聲音。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
-const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'babbler', 'barbet', 'kingfisher', 'waterhen', 'moorhen', 'nightheron', 'egret',
-  'mikado', 'blackbulbul', 'treepie', 'bulbul', 'bluemagpie']
+const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'barbet', 'kingfisher', 'waterhen', 'moorhen', 'nightheron', 'egret', 'spoonbill',
+  'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie']
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))
