@@ -174,8 +174,17 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
   function openPanel() { meterNow(); hover = -1; panelOn = true; renderPanel(); lcdWrap.hidden = false; controls.unlock(); onPanel?.(true) }
   function closePanel() { panelOn = false; lcdWrap.hidden = true; controls.lock(); onPanel?.(false) }
   // 平常（不是設定畫面）螢幕就顯示目前的設定、比較暗
-  let idleT = 0
-  function idleScreen(dt) { if (panelOn || (idleT -= dt) > 0) return; idleT = 0.5; renderPanel() }
+  // 平常（拿在手上、舉著看觀景窗）背面螢幕是關著的，跟真的單眼一樣；只有按 E 開設定才亮
+  let screenOff = false
+  function idleScreen() {
+    if (panelOn) { screenOff = false; return }
+    if (screenOff) return
+    screenOff = true
+    const g = lcd, bg = g.createLinearGradient(0, 0, LW, LH)
+    bg.addColorStop(0, '#0b0d0f'); bg.addColorStop(0.45, '#040506'); bg.addColorStop(1, '#020303')   // 黑玻璃，左上一點點反光
+    g.fillStyle = bg; g.fillRect(0, 0, LW, LH)
+    lcdTex.needsUpdate = true
+  }
 
   // 對焦：觀景窗中心打一條射線，量到的距離變了就重新對焦（要 body.af 秒）
   const ray = new THREE.Raycaster(), center = new THREE.Vector2(0, 0)
@@ -233,7 +242,7 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     hud.root.querySelector('.crosshair')?.classList.toggle('off', st.raised)
     st.cool -= dt
     trackBirds(dt)
-    idleScreen(dt)
+    idleScreen()
     if (!st.raised) return
     if ((st.meterT -= dt) <= 0) { st.meterT = 0.25; meterNow() }
     const d = aim()
