@@ -372,9 +372,15 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
       return
     }
     const m = gearModel[id].clone()
-    if (id[0] === 'l') { m.rotation.x = Math.PI / 2; m.position.set(x, y, z) }
-    else { m.rotation.y = Math.PI + 0.35; m.position.set(x, y + 0.075, z) }
     m.scale.setScalar(1.25)    // 格子裡放大一點，從櫃台外面看得清楚
+    if (id[0] === 'l') m.rotation.x = Math.PI / 2; else m.rotation.y = Math.PI + 0.35
+    // 量大小再擺：立起來放不下（600mm 放大後 76 公分、格子只有 60）就橫躺，鏡頭朝一邊；最後讓它底部貼著層板、置中
+    const fit = () => { m.position.set(0, 0, 0); m.updateMatrixWorld(true); return new THREE.Box3().setFromObject(m) }
+    let bb = fit()
+    if (bb.max.y - bb.min.y > chgt - 0.09) { m.rotation.set(0, Math.PI / 2 + 0.2, 0); bb = fit() }   // 橫躺在層板上、左右方向，稍微斜一點看得到鏡頭前端
+    if (bb.max.z - bb.min.z > SD - 0.06) { m.scale.multiplyScalar((SD - 0.06) / (bb.max.z - bb.min.z)); bb = fit() }   // 也不能從格子前面凸出去
+    if (bb.max.x - bb.min.x > cwid - 0.08) { m.scale.multiplyScalar((cwid - 0.08) / (bb.max.x - bb.min.x)); bb = fit() }
+    m.position.set(x - (bb.min.x + bb.max.x) / 2, y - bb.min.y + 0.002, z - (bb.min.z + bb.max.z) / 2)
     g.add(m)
     box('white', 0.11, 0.045, 0.003, x, y + 0.04, sfz + 0.01)   // 小價格條
   }))
@@ -405,14 +411,48 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   /* ---------- 西北角：三腳架展示台 ---------- */
   box('oak', 2.0, 0.12, 0.9, -87.3, 0.06, HZ - 0.85)
   box('glow', 1.96, 0.01, 0.02, -87.3, 0.125, HZ - 1.3)
-  const tripod = (x, z, hgt, cam) => {
-    const top = V(x, hgt, z)
-    for (let i = 0; i < 3; i++) { const a = i * 2.094 + 0.5; bar('charcoal', top, V(x + Math.cos(a) * hgt * 0.27, 0.13, z + Math.sin(a) * hgt * 0.27), 0.025) }
-    bar('steel', V(x, hgt - 0.35, z), V(x, hgt + 0.08, z), 0.02)
-    box('charcoal', 0.08, 0.06, 0.08, x, hgt + 0.11, z)
-    if (cam) { const b = gearModel[cam].clone(); b.rotation.y = 2.3; b.position.set(x, hgt + 0.14 + 0.075, z); g.add(b) }
+  // 三腳架照真的做：三節伸縮腳（上粗下細、接頭有扳扣）、橡膠腳墊、中間的三角座、中柱、球型雲台＋快拆板；相機底部剛好貼在快拆板上
+  // 腳張開的範圍限制在展示台裡（半徑 0.28），腳不會穿出台子、撞牆或打到隔壁那支
+  const cylG = (k, a, b, r0, r1 = r0, seg = 10) => {
+    const d = new THREE.Vector3().subVectors(b, a), len = d.length()
+    const cg = new THREE.CylinderGeometry(r1, r0, len, seg).translate(0, len / 2, 0)
+    cg.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), d.normalize())).translate(a.x, a.y, a.z)
+    geos[k].push(cg)
   }
-  tripod(-86.6, HZ - 0.9, 1.35, 'b2'); tripod(-87.35, HZ - 0.8, 1.2, null); tripod(-88.05, HZ - 0.95, 1.45, 'b3')
+  const PLAT = 0.12
+  const tripod = (x, z, hgt, cam, rot) => {
+    const apexY = hgt - 0.24, spread = 0.28
+    const apex = V(x, apexY, z)
+    cylG('charcoal', V(x, apexY - 0.03, z), V(x, apexY + 0.03, z), 0.055)                     // 三角座
+    for (let i = 0; i < 3; i++) {
+      const a = rot + i * 2.094, foot = V(x + Math.cos(a) * spread, PLAT + 0.012, z + Math.sin(a) * spread)
+      const top = apex.clone().add(V(Math.cos(a) * 0.045, -0.02, Math.sin(a) * 0.045))
+      const at = (u) => top.clone().lerp(foot, u)
+      cylG('charcoal', top, at(0.4), 0.017, 0.016)                                            // 第一節（最粗）
+      cylG('charcoal', at(0.4), at(0.72), 0.0135, 0.0125)
+      cylG('charcoal', at(0.72), at(0.985), 0.0105, 0.0095)
+      for (const u of [0.4, 0.72]) cylG('steel', at(u - 0.025), at(u + 0.005), u < 0.5 ? 0.021 : 0.017)   // 扳扣
+      cylG('dark', at(0.97), foot, 0.016, 0.018)                                             // 橡膠腳墊
+      cylG('steel', at(0.03), at(0.11), 0.019)                                               // 腳上方的泡棉握套換成金屬環
+    }
+    cylG('steel', V(x, apexY - 0.2, z), V(x, hgt, z), 0.012)                                 // 中柱
+    cylG('charcoal', V(x, apexY + 0.03, z), V(x, apexY + 0.06, z), 0.03)                     // 中柱鎖環
+    cylG('charcoal', V(x, hgt, z), V(x, hgt + 0.025, z), 0.028)                              // 雲台底座
+    const ball = new THREE.SphereGeometry(0.03, 16, 12).translate(x, hgt + 0.05, z); geos.steel.push(ball)   // 球
+    cylG('charcoal', V(x, hgt + 0.07, z), V(x, hgt + 0.085, z), 0.012)
+    box('charcoal', 0.075, 0.016, 0.075, x, hgt + 0.093, z)                                   // 快拆座
+    box('dark', 0.06, 0.008, 0.045, x, hgt + 0.105, z)                                        // 快拆板
+    box('charcoal', 0.012, 0.03, 0.012, x + 0.045, hgt + 0.05, z)                             // 鎖鈕
+    if (cam) {
+      const b = gearModel[cam].clone(); b.rotation.y = 2.3
+      b.position.set(0, 0, 0); b.updateMatrixWorld(true)
+      const bb = new THREE.Box3().setFromObject(b)
+      b.position.set(x - (bb.min.x + bb.max.x) / 2, hgt + 0.109 - bb.min.y, z - (bb.min.z + bb.max.z) / 2)   // 底部剛好坐在快拆板上
+      g.add(b)
+    }
+  }
+  // 一支腳朝牆、兩支朝前（看起來最穩的擺法）；間隔 0.65、腳半徑 0.28 → 隔壁兩支腳尖至少差 17 公分
+  tripod(-86.65, HZ - 0.9, 1.4, 'b2', Math.PI / 2); tripod(-87.3, HZ - 0.9, 1.18, null, Math.PI / 2); tripod(-87.95, HZ - 0.9, 1.5, 'b3', Math.PI / 2)
   addCollider(-87.3, HZ - 0.85, 1.0, 1.5)
 
   /* ---------- 東北角：相機包櫃 ---------- */
