@@ -12,6 +12,10 @@ export const DECK = { r: 4.5, x: 0, z: 0, y: 0 }
 // 相機行：溫室入口外面另外一棟店（像美術館門口的商店），遊戲從店裡開始，穿過玻璃通道的門才進溫室。
 // x 從 X0（靠溫室那面牆，中間開口接通道）到 X1（店門口那面），z ±HZ；通道：x 從 X0 到圓頂門口，寬 ±DOOR_W
 export const STORE = { X0: -75.6, X1: -88.6, HZ: 7.5, H: 5.0, DOOR_W: 3.4 }
+// 第二館：高山雲霧林（alpine.js）。圓頂東邊門口（x≈73）→ 玻璃通道（中間一間氣候緩衝室，兩道自動門 A、B）→ 館（x 92～172，z ±40）
+// 館裡是另一套地形：入口平台 → 往東爬升到約 20 公尺的山頂，一條溪從山上沿著山谷流到入口旁的水池，步道之字形上山、吊橋過溪谷
+export const ALP = { X0: 92, X1: 172, HZ: 40, H: 34 }
+export const CORR = { X0: 72.6, X1: 92, W: 3.2, A: 81, B: 87 }
 export const MENU_VIEW = { x: -30, y: 1.7, z: 20, lx: 6, ly: 10, lz: -8 }   // 首頁背景：溫室裡固定一個鏡頭（站在步道上看中央的山和瀑布），不在店裡
 export const SPAWN = { x: -87.6, z: 0.4, yaw: -90, pitch: 2 }   // 店門口往裡看：右邊是陳列櫃、左前方是櫃台，正前方是通往溫室的門
 
@@ -123,6 +127,7 @@ export const PATHS = [
   { name: 'sw', w: 2.4, curve: curve([onLoop(2.3), [-28, 18], [-14, 15], ringPt(2.3)]) },
   { name: 'nw', w: 2.4, curve: curve([onLoop(-2.4), [-28, -20], [-16, -22], ringPt(-2.5)]) },
   { name: 'spur', w: 2.6, curve: curve([ringPt(1.0), [19.5, 11.6], [14.6, 10.45]]) },
+  { name: 'alpine', w: 3.0, curve: curve([loopPt(0), [62, 0.5], [73.5, 0]]) },   // 往高山館的東門
 ]
 
 /* ---------- 網格：步道距離與地形高度 ---------- */
@@ -193,7 +198,8 @@ function buildHeights() {
       // 相機行那棟和通道底下攤平成 0（不然溫室牆邊的種植坡會從店的地板冒出來）
       const sx = smoothstep(STORE.X0 + 3.5, STORE.X0 + 1.5, x) * smoothstep(STORE.HZ + 2, STORE.HZ, Math.abs(z))
       const sp = smoothstep(-66, -69.5, x) * smoothstep(STORE.DOOR_W + 2.5, STORE.DOOR_W + 0.6, Math.abs(z))
-      h = lerp(h, 0, Math.max(sx, sp))
+      const se = smoothstep(64, 69.5, x) * smoothstep(CORR.W + 2.5, CORR.W + 0.6, Math.abs(z))   // 東邊門口（往高山館的通道）也攤平
+      h = lerp(h, 0, Math.max(sx, sp, se))
       height[k] = h
     }
   }
@@ -223,12 +229,106 @@ buildHeights()
   RAMP.y0 = terrainHeight(MTN.x + mid * Math.cos(s0.th), MTN.z + mid * Math.sin(s0.th)) + 0.02
 }
 
+/* ---------- 高山館地形（館內座標 u = x - ALP.X0：0～80，z ±40） ---------- */
+// 溪流、步道都是折線，地形照它們挖溪谷、鋪平步道；結果存成 0.5 公尺格子（玩家走路、種樹、做網格都查這張）
+export const ALP_STREAM = [[74, -26], [66, -24], [58, -18], [50, -14], [42, -11], [34, -12], [26, -15], [18, -15]].map(([u, v]) => [ALP.X0 + u, v])
+export const ALP_POND = { x: ALP.X0 + 13, z: -15, r: 6.5, water: -0.45 }
+export const ALP_TRAIL = [[1, 0], [9, 2], [18, 8], [27, 10], [33, 3], [37, -4], [40, -10], [43, -16], [49, -20], [57, -12], [62, -2], [66, 8], [69, 13], [71, 15]].map(([u, v]) => [ALP.X0 + u, v])
+export const ALP_BRIDGE = { a: 6, b: 7 }   // 步道第 6～7 點（從 37,-4 到 40,-10 再到 43,-16）跨過溪谷：吊橋，橋下不鋪路
+const AG = { x0: ALP.X0, z0: -ALP.HZ, cell: 0.5, nx: 161, nz: 161 }
+const aHeight = new Float32Array(AG.nx * AG.nz), aTrail = new Float32Array(AG.nx * AG.nz).fill(1e9), aStream = new Float32Array(AG.nx * AG.nz).fill(1e9)
+function segDist(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz
+  const t = L2 ? clamp(((px - ax) * dx + (pz - az) * dz) / L2, 0, 1) : 0
+  return [Math.hypot(px - ax - dx * t, pz - az - dz * t), t]
+}
+function polyDist(px, pz, P, skip) {
+  let best = 1e9, bi = 0, bt = 0
+  for (let i = 0; i < P.length - 1; i++) {
+    if (skip && skip(i)) continue
+    const [d, t] = segDist(px, pz, P[i][0], P[i][1], P[i + 1][0], P[i + 1][1])
+    if (d < best) { best = d; bi = i; bt = t }
+  }
+  return [best, bi, bt]
+}
+// 底層地形：入口平、往東爬升，北邊、南邊各一道稜線，山頂在東北
+function alpBase(x, z) {
+  const u = x - ALP.X0
+  let h = 17 * Math.pow(smoothstep(6, 74, u), 1.25)
+  h += 4 * Math.exp(-(((u - 68) / 10) ** 2) - (((z - 12) / 12) ** 2))                      // 山頂
+  h += 5 * smoothstep(16, 38, Math.abs(z)) * smoothstep(10, 40, u)                          // 南北兩側的稜線
+  h += 2.2 * fbm2(x * 0.06 + 11, z * 0.06 - 7, 4) * smoothstep(5, 20, u)
+  h += 1.2 * Math.max(0, fbm2(x * 0.18, z * 0.18, 3)) * smoothstep(8, 25, u)                // 小岩塊
+  return h * (1 - smoothstep(4, 0, u) * 0.999)
+}
+function buildAlpine() {
+  // 步道高度：沿線取底層地形再平滑，坡度不超過 30%（走得上去）
+  const tr = ALP_TRAIL, prof = tr.map(([x, z]) => alpBase(x, z))
+  prof[0] = 0
+  for (let i = 1; i < prof.length; i++) {
+    const L = Math.hypot(tr[i][0] - tr[i - 1][0], tr[i][1] - tr[i - 1][1])
+    prof[i] = clamp(prof[i], prof[i - 1] - L * 0.3, prof[i - 1] + L * 0.3)
+  }
+  // 吊橋：兩端等高直線
+  prof[ALP_BRIDGE.a + 1] = (prof[ALP_BRIDGE.a] + prof[ALP_BRIDGE.a + 2]) / 2
+  ALP_TRAIL.prof = prof
+  const st = ALP_STREAM, sProf = st.map(([x, z], i) => alpBase(x, z) - 2.2)
+  for (let i = 1; i < sProf.length; i++) sProf[i] = Math.min(sProf[i], sProf[i - 1] - 0.3)     // 溪床一路往下
+  sProf[sProf.length - 1] = Math.min(sProf[sProf.length - 1], ALP_POND.water - 0.3)
+  ALP_STREAM.prof = sProf
+  for (let j = 0; j < AG.nz; j++) for (let i = 0; i < AG.nx; i++) {
+    const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, k = j * AG.nx + i
+    let h = alpBase(x, z)
+    // 溪谷：V 字形，越靠溪越低
+    const [ds, si, stt] = polyDist(x, z, st)
+    const bed = lerp(sProf[si], sProf[si + 1], stt)
+    aStream[k] = ds
+    h = lerp(bed, h, smoothstep(1.2, 9, ds))
+    // 水池
+    const dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
+    h = lerp(ALP_POND.water - 1.1, h, smoothstep(ALP_POND.r * 0.6, ALP_POND.r + 2.5, dp))
+    // 步道：鋪平（吊橋那段不鋪，橋下是溪谷）
+    const [dt, ti, tt] = polyDist(x, z, tr, (i) => i === ALP_BRIDGE.a || i === ALP_BRIDGE.a + 1)
+    aTrail[k] = dt
+    const py = lerp(prof[ti], prof[ti + 1], tt)
+    h = lerp(py, h, smoothstep(1.4, 3.2, dt))
+    aHeight[k] = h
+  }
+}
+buildAlpine()
+const agrid = (arr, x, z) => {
+  const fx = (x - AG.x0) / AG.cell, fz = (z - AG.z0) / AG.cell
+  if (fx < 0 || fz < 0 || fx >= AG.nx - 1 || fz >= AG.nz - 1) return 1e9
+  const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * AG.nx + i
+  return (arr[k] * (1 - u) + arr[k + 1] * u) * (1 - v) + (arr[k + AG.nx] * (1 - u) + arr[k + AG.nx + 1] * u) * v
+}
+export const inAlpine = (x, z, m = 0) => x > ALP.X0 + m && x < ALP.X1 - m && Math.abs(z) < ALP.HZ - m
+export const alpineHeight = (x, z) => inAlpine(x, z) ? agrid(aHeight, x, z) : 0
+export const alpineTrailDist = (x, z) => agrid(aTrail, x, z)
+export const alpineStreamDist = (x, z) => agrid(aStream, x, z)
+export const ALP_GRID = AG
+export { aHeight as ALP_HEIGHTS }
+// 吊橋：橋面是兩端之間的直線（中間微微下垂），寬 1.4 公尺
+export function bridgeAt(x, z) {
+  const a = ALP_TRAIL[ALP_BRIDGE.a], b = ALP_TRAIL[ALP_BRIDGE.a + 2], pa = ALP_TRAIL.prof[ALP_BRIDGE.a], pb = ALP_TRAIL.prof[ALP_BRIDGE.a + 2]
+  const [d, t] = segDist(x, z, a[0], a[1], b[0], b[1])
+  if (d > 0.75 || t <= 0 || t >= 1) return null
+  return lerp(pa, pb, t) - 0.35 * Math.sin(Math.PI * t) + 0.06
+}
+
 /* ---------- 碰撞 ---------- */
 export const colliders = []   // { x, z, r, top }
 export function addCollider(x, z, r, top = 99) { colliders.push({ x, z, r, top }) }
 
 const PLAYER_R = 0.38
 export function supportAt(x, z, feet) {
+  if (inAlpine(x, z)) {
+    let y = alpineHeight(x, z), owner = 0
+    const by = bridgeAt(x, z)
+    if (by != null && by <= feet + 0.5 && by > y - 3) { y = by; owner = 3 }
+    return { y, owner }
+  }
+  if (x > CORR.X0 - 2 && x <= ALP.X0 && Math.abs(z) < CORR.W) return { y: 0, owner: 0 }   // 通道地板
   let y = terrainHeight(x, z), owner = 0
   for (const h of rampHeights(x, z)) if (h <= feet + 0.5 && h > y) { y = h; owner = 1 }
   if (onDeck(x, z) && DECK.y <= feet + 0.5 && DECK.y > y) { y = DECK.y; owner = 2 }
@@ -242,7 +342,25 @@ function ceilingHit(x, z, feet) {
 }
 // 店裡和通道可以走（牆內縮一個人的寬度）
 const inStore = (x, z) => (x < STORE.X0 + 0.1 && x > STORE.X1 + 0.45 && Math.abs(z) < STORE.HZ - 0.45) || (x >= STORE.X0 && x < -70 && Math.abs(z) < STORE.DOOR_W - 0.45)
+const inCorr = (x, z) => x > 70 && x <= ALP.X0 + 0.5 && Math.abs(z) < CORR.W - 0.45
+export let alpineDoors = { a: 1, b: 1 }   // alpine.js 每格更新：自動門開了多少（0 關、1 全開）；關著的門擋人
 export function blocked(x, z, feet) {
+  if (inAlpine(x, z, 0.45)) {
+    // 館內：太陡（一步高過 0.6 公尺）就走不上去；吊橋上不算
+    if (bridgeAt(x, z) != null && Math.abs(bridgeAt(x, z) - feet) < 0.6) return false
+    // 玩家一小步 0.15 公尺：往上超過 0.13（約 41 度）爬不上去；往下只有懸崖（掉超過 2.5 公尺）才擋，跳起來在空中不會被擋住
+    const h = alpineHeight(x, z)
+    // 步道上（本來就平緩）一步可以高到 0.35：吊橋兩端的橋面跟地面差 20～30 公分，不然會卡在橋頭
+    if (h > feet + (alpineTrailDist(x, z) < 1.5 ? 0.35 : 0.13) || h < feet - 2.5) return true
+    if (h < ALP_POND.water + 0.05 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 1) return true   // 水池不能走進去
+    for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
+    return false
+  }
+  if (inCorr(x, z)) {
+    for (const [dx, k] of [[CORR.A, alpineDoors.a], [CORR.B, alpineDoors.b]]) if (k < 0.7 && Math.abs(x - dx) < 0.35) return true
+    return false
+  }
+  if (inAlpine(x, z)) return true
   if (domeRho(x, z) > 0.955 && !inStore(x, z)) return true
   if (feet < 0.6 && poolQ(x, z) < 1.12) return true
   const dx = x - MTN.x, dz = z - MTN.z

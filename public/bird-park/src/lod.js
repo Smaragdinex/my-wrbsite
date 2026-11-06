@@ -80,7 +80,7 @@ export function lodUpdate(camera, force = false) {
         a.set(S.base.subarray(i * 16, i * 16 + 16), j * 16)
         if (ca && co) { ca[j * 3] = co[i * 3]; ca[j * 3 + 1] = co[i * 3 + 1]; ca[j * 3 + 2] = co[i * 3 + 2] }
       }
-      m.count = k; m.visible = k > 0
+      m.count = k   // 不動 visible：高山館切換兩館時會整批藏起來（alpine.js），這裡設 visible 會把它又打開
       m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.addUpdateRange(0, k * 16); m.instanceMatrix.needsUpdate = true
       if (ca && co) { m.instanceColor.clearUpdateRanges(); m.instanceColor.addUpdateRange(0, k * 3); m.instanceColor.needsUpdate = true }
     })
@@ -94,7 +94,6 @@ export function lodUpdate(camera, force = false) {
     const d = Math.max(0, G.c.distanceTo(p) - G.r * 0.5) / zoom
     let f = d < 15 ? 1 : d < 60 ? 1 - 0.8 * (d - 15) / 45 : d < 90 ? 0.2 : 0
     if (!_fr.intersectsSphere(sph)) f = 0
-    G.mesh.visible = f > 0
     G.mesh.geometry.instanceCount = Math.round(G.n * f)
     gd += G.mesh.geometry.instanceCount
   }

@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
   TAU, DOME, MTN, POOL, RAMP, DECK, PATHS, clamp, smoothstep, lerp, angDiff,
   domeRho, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
+  CORR,
 } from './layout.js'
 import { fbm3, noise3, mulberry32 } from './noise.js'
 import * as T from './textures.js'
@@ -58,6 +59,7 @@ export function buildSky(scene) {
   )
   ground.position.y = -1.6   // 要低於池底（-1.5），不然整片蓋住池水
   ground.receiveShadow = true
+  ground.name = 'ground'
   scene.add(ground)
 
   // 遠方天際線
@@ -110,9 +112,10 @@ function cutDoor(mat) {
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvDoorW = (modelMatrix * vec4(transformed, 1.0)).xyz;')
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vDoorW;')
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-        if (vDoorW.x < -60.0 && abs(vDoorW.z) < ${(DOOR.W + 0.02).toFixed(2)} && vDoorW.y < ${DOOR.EAVE.toFixed(2)} + ${(DOOR.RIDGE - DOOR.EAVE).toFixed(2)} * max(0.0, 1.0 - abs(vDoorW.z) / ${DOOR.W.toFixed(1)}) + 0.05) discard;`)
+        if (vDoorW.x < -60.0 && abs(vDoorW.z) < ${(DOOR.W + 0.02).toFixed(2)} && vDoorW.y < ${DOOR.EAVE.toFixed(2)} + ${(DOOR.RIDGE - DOOR.EAVE).toFixed(2)} * max(0.0, 1.0 - abs(vDoorW.z) / ${DOOR.W.toFixed(1)}) + 0.05) discard;
+        if (vDoorW.x > 60.0 && abs(vDoorW.z) < ${(CORR.W + 0.02).toFixed(2)} && vDoorW.y < 3.2 + 1.0 * max(0.0, 1.0 - abs(vDoorW.z) / ${CORR.W.toFixed(1)}) + 0.05) discard;   // 東門（往高山館的通道，alpine.js）`)
   }
-  mat.customProgramCacheKey = () => 'cutDoor'
+  mat.customProgramCacheKey = () => 'cutDoor2'
 }
 function buildEntrance() {
   const g = new THREE.Group()
@@ -239,6 +242,7 @@ export function buildDome(scene) {
     const p = ((i + 0.5) / N) * TAU
     const x = DOME.A * Math.cos(p), z = DOME.B * Math.sin(p)
     if (x < 0 && Math.abs(z) < DOOR.W + 0.1) continue
+    if (x > 0 && Math.abs(z) < CORR.W + 0.1) continue   // 東門
     const a = i * 4, b = (i + 1) * 4
     for (let f = 0; f < 3; f++) wallIdx.push(a + f, b + f, a + f + 1, a + f + 1, b + f, b + f + 1)
   }
@@ -252,6 +256,7 @@ export function buildDome(scene) {
 
   group.add(buildEntrance())
 
+  group.name = 'domeShell'   // 圓頂外殼：在高山館裡也要看得到（alpine.js 不藏它）
   scene.add(group)
 }
 

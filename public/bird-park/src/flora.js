@@ -92,7 +92,7 @@ function randInGarden(rnd) {
 // 根部暗（被其他草擋住）、尖端偶爾枯黃
 const _sunDefault = new THREE.Vector3(-0.45, 0.8, 0.3).normalize()
 // lawn：短草坪用 2 段（3 個三角形）、法線大多朝上（像地面一樣均勻受光，不會一片亮一片黑）
-function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, lawn = false } = {}) {
+export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, lawn = false } = {}) {
   const ys = lawn ? [0, 0.5] : [0, 0.3, 0.56, 0.78], ws = lawn ? [1, 0.55] : [1, 0.85, 0.62, 0.36], P = [], I = []
   ys.forEach((y, i) => P.push(-0.5 * ws[i], y, 0, 0.5 * ws[i], y, 0))
   P.push(0, 1, 0)
