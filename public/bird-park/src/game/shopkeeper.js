@@ -28,13 +28,20 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
   parent.add(model)
   const mixer = new THREE.AnimationMixer(root)
   const acts = {}
+  // 一次性動作只管上半身：Tripo 的 greet_01、wave_goodbye_02 本身會踏步（膝蓋彎 60～70 度，跟走路差不多），站著打招呼看起來像原地踏步。
+  // 所以把它們的髖、腿、腳軌道拿掉（要在 clipAction 之前），下半身改由 idleLegs（idle 只留下半身）接手，比重＝一次性動作的比重 → 腿一直是站姿
+  const LOWER = /(Hips|UpLeg|Leg|Foot|Toe)[^.]*\./
+  const ONCE = ['greet_01', 'agree', 'wave_goodbye_02', 'look_around']
+  let idleLegs = null
   for (const c of gltf.animations) {
     // 原地走路：髖骨的水平位移拿掉，只留上下起伏（Tripo 的 stay in place 還是會有一點飄）
     for (const tr of c.tracks) if (/Hips\.position$/.test(tr.name)) for (let i = 0; i < tr.values.length; i += 3) { tr.values[i] = tr.values[0]; tr.values[i + 2] = tr.values[2] }
+    if (c.name === 'idle') idleLegs = mixer.clipAction(new THREE.AnimationClip('idle_legs', c.duration, c.tracks.filter((tr) => LOWER.test(tr.name)).map((tr) => tr.clone())))
+    if (ONCE.includes(c.name)) c.tracks = c.tracks.filter((tr) => !LOWER.test(tr.name))
     acts[c.name] = mixer.clipAction(c)
   }
-  for (const k of ['greet_01', 'agree', 'wave_goodbye_02', 'look_around']) if (acts[k]) { acts[k].setLoop(THREE.LoopOnce); acts[k].clampWhenFinished = true }
-  acts.idle.play(); acts.walk.play()
+  for (const k of ONCE) if (acts[k]) { acts[k].setLoop(THREE.LoopOnce); acts[k].clampWhenFinished = true }
+  acts.idle.play(); acts.walk.play(); idleLegs.play(); idleLegs.setEffectiveWeight(0)
   let one = null, oneOn = false, oneW = 0, moveW = 0, aSpd = 0   // 一次性動作、它的比重、走路比重、實際移動速度
   function play(name) {   // 只用在一次性的動作（打招呼、點頭、揮手、東張西望）；站／走由速度決定
     const a = acts[name]; if (!a) return
@@ -49,6 +56,7 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     oneW += ((oneOn ? 1 : 0) - oneW) * Math.min(1, dt * 6)
     acts.walk.setEffectiveWeight((1 - oneW) * moveW); acts.idle.setEffectiveWeight((1 - oneW) * (1 - moveW))
     acts.walk.timeScale = Math.max(0.25, aSpd / WALK_CLIP_SPEED)   // 步伐快慢＝實際速度
+    idleLegs.setEffectiveWeight(one ? oneW : 0)   // 一次性動作沒有下半身，那一份比重由站姿的腿補上
     if (one) { one.setEffectiveWeight(oneW); if (!oneOn && oneW < 0.01) { one.stop(); one = null } }
   }
 
