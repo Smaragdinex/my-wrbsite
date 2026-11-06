@@ -249,7 +249,10 @@ buildHeights()
 /* ---------- 高山區地形（0.5 公尺格子，x 45～190、z ±56；能走的範圍是 inAlpine） ---------- */
 // 溪流、步道都是折線，地形照它們挖溪谷、鋪平步道；結果存成格子（玩家走路、種樹、做網格都查這張）
 // 溪：從山頂東南側的山泉（離觀景台不遠）往下，沿著山谷一路流到入口旁的水池；陡的那幾段是小瀑布
-export const ALP_STREAM = [[151, -2], [150, -8], [147, -13], [142, -16.5], [135, -15.5], [127, -13], [118, -15], [109, -18], [100, -19], [94, -18]]
+export const ALP_STREAM = [[151, -2], [150, -8], [147, -13], [142, -16.5], [135, -15.5], [130.5, -14.2], [125.5, -13.4], [120.5, -14.2], [114, -16.5], [109, -18], [100, -19], [94, -18]]
+// 吊橋底下是一道峽谷：溪在橋的上游掉下一道瀑布，橋面離水面 6～7 公尺
+export const ALP_GORGE = { x: 124.5, z: -12.8, depth: 5.2, r: 7 }
+export const BRIDGE_DIM = { hw: 1.0, sag: 0.5 }   // 吊橋半寬、中間下垂（alpine.js 畫橋、bridgeAt 走路都用）
 export const ALP_POND = { x: 88, z: -17, r: 7, water: -0.45 }
 export const ALP_TRAIL = [[76, 0], [86, 3], [97, 9], [108, 12], [116, 5], [120, -4], [124, -12], [128, -20], [137, -26], [147, -21], [157, -15], [163, -4], [161, 8], [154, 16], [146, 15], [145, 9]]
 export const ALP_BRIDGE = { a: 5, b: 6 }   // 步道第 5～7 點（120,-4 → 124,-12 → 128,-20）跨過溪谷：吊橋，橋下不鋪路
@@ -293,7 +296,8 @@ function buildAlpine() {
   // 吊橋：兩端等高直線
   prof[ALP_BRIDGE.a + 1] = (prof[ALP_BRIDGE.a] + prof[ALP_BRIDGE.a + 2]) / 2
   ALP_TRAIL.prof = prof
-  const st = ALP_STREAM, sProf = st.map(([x, z], i) => alpBase(x, z) - 1.3)
+  const gorgeK = (x, z) => Math.exp(-((Math.hypot(x - ALP_GORGE.x, z - ALP_GORGE.z) / ALP_GORGE.r) ** 2))
+  const st = ALP_STREAM, sProf = st.map(([x, z], i) => alpBase(x, z) - 1.3 - ALP_GORGE.depth * gorgeK(x, z))
   for (let i = 1; i < sProf.length; i++) sProf[i] = Math.min(sProf[i], sProf[i - 1] - 0.3)     // 溪床一路往下
   sProf[sProf.length - 1] = Math.min(sProf[sProf.length - 1], ALP_POND.water - 0.3)
   ALP_STREAM.prof = sProf
@@ -304,7 +308,8 @@ function buildAlpine() {
     const [ds, si, stt] = polyDist(x, z, st)
     const bed = lerp(sProf[si], sProf[si + 1], stt)
     aStream[k] = ds
-    h = lerp(bed, h, smoothstep(1.2, 9, ds))
+    const gk = gorgeK(x, z)
+    h = lerp(bed, h, smoothstep(1.0 + 0.3 * gk, 9 - 4.5 * gk, ds))   // 峽谷那段兩岸比較陡
     // 水池
     const dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
     h = lerp(ALP_POND.water - 1.1, h, smoothstep(ALP_POND.r * 0.6, ALP_POND.r + 2.5, dp))
@@ -336,8 +341,8 @@ export { aHeight as ALP_HEIGHTS }
 export function bridgeAt(x, z) {
   const a = ALP_TRAIL[ALP_BRIDGE.a], b = ALP_TRAIL[ALP_BRIDGE.a + 2], pa = ALP_TRAIL.prof[ALP_BRIDGE.a], pb = ALP_TRAIL.prof[ALP_BRIDGE.a + 2]
   const [d, t] = segDist(x, z, a[0], a[1], b[0], b[1])
-  if (d > 0.75 || t <= 0 || t >= 1) return null
-  return lerp(pa, pb, t) - 0.35 * Math.sin(Math.PI * t) + 0.06
+  if (d > BRIDGE_DIM.hw + 0.03 || t <= 0 || t >= 1) return null
+  return lerp(pa, pb, t) - BRIDGE_DIM.sag * Math.sin(Math.PI * t) + 0.06
 }
 
 /* ---------- 海岸館地形（館內 x ±40、z -74～-154，0.5 公尺格子） ---------- */

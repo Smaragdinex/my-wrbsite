@@ -6,7 +6,7 @@
 // 兩館不同時畫：玩家在館裡（或 B 門開著）才畫館內；在圓頂這邊（或 A 門開著）才畫圓頂裡面，緩衝室兩道門都關著的時候切換。
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, alpineHeight, alpineTrailDist, alpineStreamDist, inAlpine, domeY, domeRho, addCollider } from './layout.js'
+import { ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, inAlpine, domeY, domeRho, addCollider } from './layout.js'
 import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
@@ -144,6 +144,7 @@ function buildInterior(lib, avoid = []) {
   // 水面是平的（不沿著岸往上爬），岸邊靠深度測試自然切掉；每個頂點帶「水深」（水面 - 地形）和「坡度」：
   // 深的地方偏墨綠、淺的地方透出溪底，邊緣淡掉並有一圈白沫；看斜的地方反射天空（菲涅耳）、太陽方向有閃光；
   // 坡度大的那幾段流得快、一片白（小瀑布、急流）。水紋是兩層往下游捲動的雜訊，算法線用。
+  const spray = []
   const waterU = { uTime: { value: 0 }, uDay: dayLight, uSun: { value: V(-0.45, 0.8, 0.3).normalize() } }
   const waterM = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide,   // 三角形的方向不管（從上面看才不會被背面剔除）
@@ -193,7 +194,9 @@ function buildInterior(lib, avoid = []) {
         col += vec3(1.0, 0.97, 0.9) * spec * 2.4;
         // 白沫：急流整片、岸邊一圈、石頭後面的碎浪
         float fn = fbm(p * vec2(2.4, 1.2) + vec2(0.0, -uTime * sp * 1.3));
-        float foam = rapids * smoothstep(0.42, 0.68, fn + rapids * 0.1);
+        // 急流、瀑布：沿著水流方向拉長的白色水絲（橫向細、縱向長），中間夾著透出來的深色水
+        float streak = fbm(vec2(vUv.x * 9.0, vUv.y * 0.45 - uTime * sp * 0.8)) * 0.65 + fbm(vec2(vUv.x * 21.0, vUv.y * 1.1 - uTime * sp * 1.1)) * 0.35;
+        float foam = rapids * smoothstep(0.3, 0.62, streak + rapids * 0.12);
         foam += smoothstep(0.06, 0.0, vDepth) * smoothstep(0.55, 0.75, fn) * 0.5;   // 岸邊細細一圈
         foam = clamp(foam, 0.0, 1.0);
         col = mix(col, vec3(0.75, 0.8, 0.8), foam * 0.8);
@@ -229,7 +232,7 @@ function buildInterior(lib, avoid = []) {
     for (let i = 0; i <= N; i++) ys.push(curve.getPointAt(i / N).y)
     for (let i = 0; i <= N; i++) {
       const p = curve.getPointAt(i / N), tg = curve.getTangentAt(i / N), side = V(-tg.z, 0, tg.x).normalize()
-      if (prev) acc += Math.hypot(p.x - prev.x, p.z - prev.z); prev = p
+      if (prev) acc += p.distanceTo(prev); prev = p                                  // 沿著水流的真實距離（瀑布那段才拉得開）
       const a = Math.max(0, i - 2), b = Math.min(N, i + 2), slope = Math.max(0, (ys[a] - ys[b]) / ((b - a) * L / N))
       const w = 1.8 + 0.5 * Math.sin(i * 0.23)
       for (let k = 0; k <= K; k++) {
@@ -242,6 +245,31 @@ function buildInterior(lib, avoid = []) {
     sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(su, 2))
     sg.setAttribute('aDepth', new THREE.Float32BufferAttribute(sd, 1)); sg.setAttribute('aSlope', new THREE.Float32BufferAttribute(ss_, 1)); sg.setIndex(si)
     const stream = new THREE.Mesh(sg, waterM); stream.renderOrder = 2; g.add(stream)
+    // 溪裡的石頭：沿著溪每 2.5 公尺左右，偏離中線放一顆長苔的石頭，一半露出水面（水從旁邊繞過）
+    const rr = mulberry32(77), stones = {}, names = ['rock_moss_set', 'mrock_8', 'mrock_10', 'boulder']
+    for (let u = 0.02; u < 0.97; u += 2.5 / L) {
+      if (rr() < 0.35) continue
+      const p = curve.getPointAt(u), tg = curve.getTangentAt(u), side = V(-tg.z, 0, tg.x).normalize()
+      const q = p.clone().addScaledVector(side, (rr() - 0.5) * 2.4)
+      const k = 0.35 + rr() * 0.45, n = names[Math.floor(rr() * names.length)]
+      ;(stones[n] ||= []).push({ p: V(q.x, alpineHeight(q.x, q.z) - 0.12, q.z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rr() * TAU, 0)), s: V(k, k * (0.7 + rr() * 0.4), k), c: new THREE.Color().setHSL(0.22, 0.12, 0.7 + rr() * 0.15) })
+    }
+    for (const [n, list] of Object.entries(stones)) if (lib[n]) scatter(g, lib[n], list, { cast: true })
+    // 瀑布、急流下面的水花：幾團白色的霧，會一直翻動
+    const sprayT = canvasTex(64, 64, (x, w, h) => { const gr = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.5, 'rgba(240,246,248,0.35)'); gr.addColorStop(1, 'rgba(240,246,248,0)'); x.fillStyle = gr; x.fillRect(0, 0, w, h) })
+    for (let i = 4; i <= N - 4; i++) {
+      const a0 = (ys[i - 4] - ys[i]) / 2, a1 = (ys[i] - ys[i + 4]) / 2
+      if (!(a0 > 0.45 && a1 < 0.35)) continue                                          // 陡的一段剛結束的地方（瀑布底）
+      const p = curve.getPointAt(i / N)
+      for (let k = 0; k < 4; k++) {
+        const sp_ = new THREE.Sprite(new THREE.SpriteMaterial({ map: sprayT, transparent: true, depthWrite: false, fog: true, opacity: 0.5 }))
+        const z0 = 0.8 + rr() * 1.4; sp_.scale.set(z0 * 1.6, z0, 1)
+        sp_.position.set(p.x + (rr() - 0.5) * 1.6, p.y + 0.2 + rr() * 0.6, p.z + (rr() - 0.5) * 1.6)
+        sp_.userData = { y0: sp_.position.y, ph: rr() * TAU, s0: z0 }; sp_.renderOrder = 6
+        g.add(sp_); spray.push(sp_)
+      }
+      i += 8
+    }
   }
   // 吊橋：照台灣山區的人行吊橋做——兩端鋼構橋塔（H 形、漆成深綠，站在混凝土基座上），
   // 兩條主鋼纜從塔頂垂成拋物線、往後拉到地上的錨碇；每 0.6 公尺一根吊索拉著橋面的橫樑；
@@ -249,8 +277,8 @@ function buildInterior(lib, avoid = []) {
   {
     const a = ALP_TRAIL[ALP_BRIDGE.a], b = ALP_TRAIL[ALP_BRIDGE.a + 2], pa = ALP_TRAIL.prof[ALP_BRIDGE.a], pb = ALP_TRAIL.prof[ALP_BRIDGE.a + 2]
     const A = V(a[0], pa, a[1]), B = V(b[0], pb, b[1]), dir = B.clone().sub(A).setY(0), len = dir.length(); dir.normalize()
-    const side = V(-dir.z, 0, dir.x), yaw = Math.atan2(dir.x, dir.z), HW = 0.72
-    const deck = (t) => A.clone().lerp(B, t).add(V(0, -0.35 * Math.sin(Math.PI * t) + 0.06, 0))   // 橋面頂
+    const side = V(-dir.z, 0, dir.x), yaw = Math.atan2(dir.x, dir.z), HW = BRIDGE_DIM.hw
+    const deck = (t) => A.clone().lerp(B, t).add(V(0, -BRIDGE_DIM.sag * Math.sin(Math.PI * t) + 0.06, 0))   // 橋面頂（跟 layout.js bridgeAt 一樣）
     const woodT = canvasTex(256, 64, (x, w, h) => {
       x.fillStyle = '#7a5d40'; x.fillRect(0, 0, w, h)
       for (let i = 0; i < 70; i++) { const y = Math.random() * h; x.strokeStyle = `rgba(${40 + Math.random() * 30},${28 + Math.random() * 20},18,${0.25 + Math.random() * 0.35})`; x.lineWidth = 0.6 + Math.random() * 1.6; x.beginPath(); x.moveTo(0, y); x.bezierCurveTo(w * 0.3, y + (Math.random() - 0.5) * 6, w * 0.7, y + (Math.random() - 0.5) * 6, w, y + (Math.random() - 0.5) * 4); x.stroke() }
@@ -276,7 +304,7 @@ function buildInterior(lib, avoid = []) {
       const t = i / NB, p = deck(t).add(V(0, -0.09, 0))
       box(steels, HW * 2 + 0.12, 0.08, 0.1, p)
     }
-    const NPL = 7, plW = (HW * 2 - 0.08) / NPL
+    const NPL = 9, plW = (HW * 2 - 0.08) / NPL
     for (let i = 0; i < NB; i++) {
       const t0 = i / NB, t1 = (i + 1) / NB, p0 = deck(t0), p1 = deck(t1), mid = p0.clone().lerp(p1, 0.5), pitch = Math.atan2(p1.y - p0.y, Math.hypot(p1.x - p0.x, p1.z - p0.z))
       for (let k = 0; k < NPL; k++) {
@@ -293,7 +321,7 @@ function buildInterior(lib, avoid = []) {
     // 兩邊的邊樑（鋼，沿著橋面）
     for (const s of [-1, 1]) { const pts = []; for (let i = 0; i <= 24; i++) pts.push(deck(i / 24).addScaledVector(side, s * (HW + 0.04)).add(V(0, -0.06, 0))); tube(steels, pts, 0.035) }
     // 橋塔：每端兩根方柱＋上下兩根橫樑，站在混凝土基座上；塔頂比橋面高 2.4
-    const TH = 2.4, ends = [[0, -1], [1, 1]]
+    const TH = 3.6, ends = [[0, -1], [1, 1]]
     const topOf = {}
     for (const [t, out] of ends) {
       const p = deck(t).addScaledVector(dir, out * 0.35)
@@ -301,24 +329,23 @@ function buildInterior(lib, avoid = []) {
         const q = p.clone().addScaledVector(side, s * (HW + 0.18))
         const g0 = Math.min(alpineHeight(q.x, q.z), q.y - 0.3)
         box(concs, 0.55, q.y - g0 + 0.25, 0.55, V(q.x, (q.y + g0) / 2 - 0.1, q.z))                  // 基座
-        box(steels, 0.16, TH + 0.1, 0.16, q.clone().add(V(0, TH / 2, 0)))
+        box(steels, 0.24, TH + 0.1, 0.24, q.clone().add(V(0, TH / 2, 0)))
         topOf[t + ',' + s] = q.clone().add(V(0, TH, 0))
       }
-      const c0 = p.clone().add(V(0, TH, 0)), c1 = p.clone().add(V(0, 1.15, 0))
-      box(steels, HW * 2 + 0.52, 0.14, 0.16, c0)
-      box(steels, HW * 2 + 0.52, 0.1, 0.12, c1)
-      // 斜撐（X）
-      for (const s of [-1, 1]) tube(steels, [p.clone().addScaledVector(side, s * (HW + 0.18)).add(V(0, 1.2, 0)), p.clone().addScaledVector(side, -s * (HW + 0.18)).add(V(0, TH - 0.1, 0))], 0.03, 2)
+      const c0 = p.clone().add(V(0, TH, 0))
+      box(steels, HW * 2 + 0.6, 0.2, 0.22, c0)                                   // 門型上樑（在頭頂上，人從底下走過）
+      // 上角的斜撐（只在頭頂高度，不擋路）
+      for (const s of [-1, 1]) tube(steels, [p.clone().addScaledVector(side, s * (HW + 0.18)).add(V(0, TH - 0.9, 0)), p.clone().addScaledVector(side, s * (HW - 0.45)).add(V(0, TH, 0))], 0.045, 2)
     }
     // 主鋼纜：塔頂到塔頂（拋物線，中間離橋面 1.1）；再從塔頂往外拉到地上的錨碇
     for (const s of [-1, 1]) {
       const T0 = topOf['0,' + s], T1 = topOf['1,' + s], pts = []
-      const sagMid = T0.clone().lerp(T1, 0.5).y - (deck(0.5).y + 1.1)      // 中間垂到離橋面 1.1
+      const sagMid = T0.clone().lerp(T1, 0.5).y - (deck(0.5).y + 1.25)     // 中間垂到離橋面 1.25
       for (let i = 0; i <= 40; i++) {
         const t = i / 40, d = deck(t).addScaledVector(side, s * (HW + 0.06))
         pts.push(V(d.x, T0.y + (T1.y - T0.y) * t - sagMid * 4 * t * (1 - t), d.z))
       }
-      tube(cables, pts, 0.028, 120)
+      tube(cables, pts, 0.04, 120)
       // 吊索
       for (let i = 1; i < 40; i++) {
         const t = i / 40
@@ -326,7 +353,7 @@ function buildInterior(lib, avoid = []) {
         tube(cables, [bot, top], 0.008, 1)
       }
       // 扶手鋼索（離橋面 1.0）
-      const rail = []; for (let i = 0; i <= 40; i++) rail.push(deck(i / 40).addScaledVector(side, s * (HW + 0.05)).add(V(0, 1.0, 0)))
+      const rail = []; for (let i = 0; i <= 40; i++) rail.push(deck(i / 40).addScaledVector(side, s * (HW + 0.05)).add(V(0, 1.15, 0)))
       tube(cables, rail, 0.016, 120)
       // 錨碇：塔頂往外 4 公尺、往下到地面的混凝土塊
       for (const [t, out] of ends) {
@@ -339,7 +366,7 @@ function buildInterior(lib, avoid = []) {
       const np = [], nu = [], ni = []
       for (let i = 0; i <= 40; i++) {
         const t = i / 40, d = deck(t).addScaledVector(side, s * (HW + 0.05))
-        np.push(d.x, d.y - 0.04, d.z, d.x, d.y + 1.0, d.z); nu.push(t, 0, t, 1)
+        np.push(d.x, d.y - 0.04, d.z, d.x, d.y + 1.15, d.z); nu.push(t, 0, t, 1)
         if (i) { const k = (i - 1) * 2; ni.push(k, k + 2, k + 1, k + 1, k + 2, k + 3) }
       }
       const ng = new THREE.BufferGeometry(); ng.setAttribute('position', new THREE.Float32BufferAttribute(np, 3)); ng.setAttribute('uv', new THREE.Float32BufferAttribute(nu, 2)); ng.setIndex(ni); ng.computeVertexNormals()
@@ -531,7 +558,7 @@ function buildInterior(lib, avoid = []) {
       }
     }
   }
-  return { g, mist, waterU, updateMist }
+  return { g, mist, spray, waterU, updateMist }
 }
 
 /* ---------- 對外 ---------- */
@@ -544,6 +571,7 @@ export function createAlpine({ scene, lib, avoid = [] }) {
     animate(t, dt, camera) {
       if (!interior) return
       interior.waterU.uTime.value = t
+      for (const sp of interior.spray) { const u = sp.userData; sp.position.y = u.y0 + Math.sin(t * 2.3 + u.ph) * 0.15; sp.material.opacity = 0.35 + 0.2 * Math.sin(t * 3.1 + u.ph * 2); const k = u.s0 * (1 + 0.12 * Math.sin(t * 1.7 + u.ph)); sp.scale.set(k * 1.6, k, 1) }
       interior.updateMist(t, dt, camera)
     },
   }
