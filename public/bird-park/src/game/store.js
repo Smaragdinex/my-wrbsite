@@ -534,20 +534,24 @@ export async function buildStore(scene, state, plantLib) {
   const items = []
   const spec = (it) => it.af != null ? `對焦 ${it.af}s・連拍 ${it.fps} 張/秒` : `${it.min === it.max ? it.min : it.min + '–' + it.max}mm・f/${it.ap}`
   const place = (it, kind, x, z) => {
-    const tall = kind === 'lens' ? (it.id === 'l5' ? 0.46 : 0.32) : 0.3
+    // 先擺器材、量它的大小，玻璃罩照它開：最長的 600mm 立起來 61 公分，以前固定高度會穿出罩子
+    const m = gearModel[it.id].clone()
+    if (kind === 'lens') { m.rotation.x = Math.PI / 2; m.position.set(x, 0.935, z - 0.04) }
+    else { m.rotation.y = 0.5; m.position.set(x, 1.01, z - 0.04) }
+    m.updateMatrixWorld(true)
+    const mb = new THREE.Box3().setFromObject(m), msz = mb.getSize(V(0, 0, 0))
+    const tall = Math.max(0.3, mb.max.y - 0.91 + 0.07) - 0.1               // 上面留 7 公分
+    const cw = Math.max(0.54, Math.max(msz.x, msz.z) + 0.36)                // 旁邊要放得下產品盒（0.11）還留縫
     box('charcoal', 0.46, 0.86, 0.46, x, 0.43, z - 0.04)                          // 鋼底座
     box('steel', 0.5, 0.03, 0.5, x, 0.045, z - 0.04)
     box('oak', 0.7, 0.05, 0.84, x, 0.885, z + 0.02)                               // 橡木台面（前面多出來放價格卡）
     box('glow', 0.66, 0.008, 0.8, x, 0.856, z + 0.02)                             // 台面底下一圈光
     box('glow', 0.3, 0.025, 0.3, x, 0.922, z - 0.04)                              // 壓克力發光墊
-    const cg = new THREE.Mesh(new THREE.BoxGeometry(0.54, tall + 0.1, 0.54), caseGlass)
+    const cg = new THREE.Mesh(new THREE.BoxGeometry(cw, tall + 0.1, cw), caseGlass)
     cg.position.set(x, 0.91 + (tall + 0.1) / 2, z - 0.04); cg.renderOrder = 6; g.add(cg)
-    box('steel', 0.55, 0.012, 0.55, x, 0.916 + tall + 0.1, z - 0.04)             // 玻璃罩上緣鋁框
-    const m = gearModel[it.id].clone()
-    if (kind === 'lens') { m.rotation.x = Math.PI / 2; m.position.set(x, 0.935, z - 0.04) }
-    else { m.rotation.y = 0.5; m.position.set(x, 1.01, z - 0.04) }
+    box('steel', cw + 0.01, 0.012, cw + 0.01, x, 0.916 + tall + 0.1, z - 0.04)   // 玻璃罩上緣鋁框
     g.add(m)
-    pack(0.11, 0.09, 0.09, x + 0.18, 0.91, z - 0.16, 0.3)                          // 旁邊放個產品盒
+    pack(0.11, 0.09, 0.09, x + cw / 2 - 0.09, 0.91, z - 0.04 - cw / 2 + 0.1, 0.3)   // 罩子裡角落放個產品盒（貼著罩子內側，不碰到器材）
     // 價格卡：斜立在台面前緣
     const draw = labelDraw({ ...it, spec: spec(it) }, state)
     const t = canvasTex(512, 192, draw)
