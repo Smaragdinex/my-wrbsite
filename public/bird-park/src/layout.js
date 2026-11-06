@@ -18,6 +18,8 @@ export const ALP = { X0: 92, X1: 172, HZ: 40, H: 34 }
 export const CORR = { X0: 72.6, X1: 92, W: 3.2, A: 81, B: 87 }
 // 第三館：海岸（coast.js，美術用 NatureManufacture「Coast Dunes Environment」，跟《淨灘大作戰》同一套）。圓頂南門（z≈-55）→ 通道（z -53～-74，A 門 -61、B 門 -67）
 // → 玻璃館（z -74～-154、x ±40）：北半邊沙丘、木棧道，中間沙灘，海岸線約 z -128，往南是館裡的淺水潟湖；館外整片都是海（到地平線）
+// 海岸館暫時拿掉（2026-11-07 使用者要求）：關掉就沒有南門、通道、館和海；程式和模型都還在，改回 true 就回來
+export const COAST_ON = false
 export const CST = { Z0: -74, Z1: -154, HX: 40, H: 22, SEA: 0 }
 export const CCORR = { Z0: -53, Z1: -74, W: 3.2, A: -61, B: -67 }
 export const coastShoreZ = (x) => -128 + 5 * Math.sin(x * 0.07) + 2 * Math.sin(x * 0.19 + 1)   // 海岸線（館內，GLSL 也有一份）
@@ -123,6 +125,7 @@ function onLoop(a) {
   return [best.x, best.z]
 }
 export const PATHS = [
+  ...[
   { name: 'entry', w: 4.2, curve: curve([[-74, 0], [-66, 0], [-58, 0], loopPt(Math.PI)]) },
   { name: 'loop', w: 3.4, curve: LOOP },
   { name: 'ring', w: 3.2, curve: curve(ringPoints(), true) },
@@ -135,6 +138,7 @@ export const PATHS = [
   { name: 'spur', w: 2.6, curve: curve([ringPt(1.0), [19.5, 11.6], [14.6, 10.45]]) },
   { name: 'alpine', w: 3.0, curve: curve([loopPt(0), [62, 0.5], [73.5, 0]]) },   // 往高山館的東門
   { name: 'coast', w: 3.0, curve: curve([loopPt(-Math.PI / 2), [0.5, -46], [0, -53.6]]) },   // 往海岸館的南門
+  ].filter((p) => COAST_ON || p.name !== 'coast'),
 ]
 
 /* ---------- 網格：步道距離與地形高度 ---------- */
@@ -206,7 +210,7 @@ function buildHeights() {
       const sx = smoothstep(STORE.X0 + 3.5, STORE.X0 + 1.5, x) * smoothstep(STORE.HZ + 2, STORE.HZ, Math.abs(z))
       const sp = smoothstep(-66, -69.5, x) * smoothstep(STORE.DOOR_W + 2.5, STORE.DOOR_W + 0.6, Math.abs(z))
       const se = smoothstep(64, 69.5, x) * smoothstep(CORR.W + 2.5, CORR.W + 0.6, Math.abs(z))   // 東邊門口（往高山館的通道）也攤平
-      const ss_ = smoothstep(-44, -49.5, z) * smoothstep(CCORR.W + 2.5, CCORR.W + 0.6, Math.abs(x))   // 南門（往海岸館）
+      const ss_ = !COAST_ON ? 0 : smoothstep(-44, -49.5, z) * smoothstep(CCORR.W + 2.5, CCORR.W + 0.6, Math.abs(x))   // 南門（往海岸館）
       h = lerp(h, 0, Math.max(sx, sp, se, ss_))
       height[k] = h
     }
@@ -388,13 +392,13 @@ export function supportAt(x, z, feet) {
     return { y, owner }
   }
   if (x > CORR.X0 - 2 && x <= ALP.X0 && Math.abs(z) < CORR.W) return { y: 0, owner: 0 }   // 通道地板
-  if (inCoast(x, z)) {
+  if (COAST_ON && inCoast(x, z)) {
     let y = Math.max(coastHeight(x, z), CST.SEA - 0.25), owner = 0                  // 水裡走：腳踩在水面下 25 公分（淺水才走得進去）
     const bw = boardwalkAt(x, z)
     if (bw != null && bw <= feet + 0.5) { y = Math.max(y, bw); owner = bw > y - 0.01 ? 4 : owner }
     return { y, owner }
   }
-  if (z < CCORR.Z0 + 2 && z >= CST.Z0 && Math.abs(x) < CCORR.W) return { y: 0, owner: 0 }   // 南邊通道地板
+  if (COAST_ON && z < CCORR.Z0 + 2 && z >= CST.Z0 && Math.abs(x) < CCORR.W) return { y: 0, owner: 0 }   // 南邊通道地板
   let y = terrainHeight(x, z), owner = 0
   for (const h of rampHeights(x, z)) if (h <= feet + 0.5 && h > y) { y = h; owner = 1 }
   if (onDeck(x, z) && DECK.y <= feet + 0.5 && DECK.y > y) { y = DECK.y; owner = 2 }
@@ -423,7 +427,7 @@ export function blocked(x, z, feet) {
     for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
     return false
   }
-  if (inCoast(x, z, 0.45)) {
+  if (COAST_ON && inCoast(x, z, 0.45)) {
     // 海岸館：淺水才走得進去（沙面低於海面 0.25 以上就擋）；太陡爬不上去（沙丘、岬角）；木棧道上隨便走
     const bw = boardwalkAt(x, z)
     if (bw != null && Math.abs(bw - feet) < 0.5) return false
@@ -433,7 +437,7 @@ export function blocked(x, z, feet) {
     for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
     return false
   }
-  if (z < -50 && z >= CST.Z0 - 0.5 && Math.abs(x) < CCORR.W - 0.45) {
+  if (COAST_ON && z < -50 && z >= CST.Z0 - 0.5 && Math.abs(x) < CCORR.W - 0.45) {
     for (const [dz, k] of [[CCORR.A, coastDoors.a], [CCORR.B, coastDoors.b]]) if (k < 0.7 && Math.abs(z - dz) < 0.35) return true
     return false
   }

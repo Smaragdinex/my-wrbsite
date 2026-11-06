@@ -12,7 +12,7 @@ import { loadAnimalModels, placeAnimal } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden } from './layout.js'
+import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON } from './layout.js'
 import { softDotTex } from './textures.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
@@ -74,7 +74,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     return { def, ...a }
   })
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
-  const halls = createHalls({ scene, sun, halls: [createAlpine({ scene, lib: plantLib }), createCoast({ scene })] })
+  const halls = createHalls({ scene, sun, halls: [createAlpine({ scene, lib: plantLib }), ...(COAST_ON ? [createCoast({ scene })] : [])] })
   const birdStops = birds.map((b) => ({
     bird: b, title: b.def.name, nick: b.def.nick, sci: b.def.sci, tag: b.def.where, text: b.def.intro, facts: b.def.facts,
     pos: b.cam, target: b.target,
