@@ -354,52 +354,33 @@ function buildInterior(lib) {
 }
 
 /* ---------- 對外 ---------- */
-export function createAlpine({ scene, sun, lib }) {
+// 回傳一個「附屬館」給 halls.js：外殼、館內（延後蓋）、門的動畫、哪裡算館內、門開了沒、陰影中心、霧
+export function createAlpine({ scene, lib }) {
   const shell = buildShell()
   scene.add(shell.g)
-  let interior = null, domeObjs = null, mode = 'dome'
-  const fog0 = scene.fog.density
-  function ensureInterior() {
-    if (interior) return
-    interior = buildInterior(lib)
-    interior.g.visible = false
-    scene.add(interior.g)
-  }
-  // 圓頂裡面的東西：場景裡除了燈、天空、圓頂外殼、高山館以外的全部（相機行那棟也算，在館裡看不到）
-  function collectDome() {
-    domeObjs = scene.children.filter((o) => !o.isLight && o !== sun.target && o !== shell.g && o !== interior?.g && !(o.isMesh && o.geometry?.parameters?.radius >= 800) && o.name !== 'domeShell' && o.name !== 'ground')
-  }
+  let interior = null
   const near = (d, px, pz) => Math.abs(px - d.x) < 3.2 && Math.abs(pz) < CORR.W   // 3.2 公尺內就開：跑步（6 m/s）也不會撞到半開的門
-  function tick(t, dt, camera) {
-    const p = camera.position
-    if (p.x > 58) ensureInterior()   // 走到圓頂東半邊就開始蓋（導覽頁的鳥站都在 x < 45，不會觸發）
+  const hall = {
+    name: 'alpine', shell: shell.g, center: { x: XM, z: 0 }, fog: 0.0095,
+    get interior() { return interior?.g },
+    build() { if (!interior) { interior = buildInterior(lib); interior.g.visible = false; scene.add(interior.g) } },
+    inside: (p) => p.x > CORR.B - 0.5,                                  // 過了 B 門那一側
+    nearOpen: () => shell.doors.a.open > 0.02, farOpen: () => shell.doors.b.open > 0.02,
+    approach: (p) => p.x > 58,                                          // 走到圓頂東半邊就先蓋（遊戲載入時已經 prebuild）
     // 自動門：人靠近就開（加速、減速），沒人就慢慢關
-    for (const k of ['a', 'b']) {
-      const d = shell.doors[k], want = near(d, p.x, p.z) ? 1 : 0
-      d.open = clamp(d.open + (want ? 2.0 : -1.0) * dt, 0, 1)
-      const e = d.open * d.open * (3 - 2 * d.open)
-      for (const { p: pn, s } of d.panels) pn.position.z = s * (CORR.W / 2 - 0.02 + e * (CORR.W / 2 - 0.1))
-      alpineDoors[k] = d.open
-    }
-    if (!interior) return
-    // 哪一館要畫：在館裡、或 B 門開著 → 畫館內；在圓頂那邊、或 A 門開著 → 畫圓頂
-    const showAlp = p.x > CORR.B - 0.5 || shell.doors.b.open > 0.02
-    const showDome = p.x < CORR.A + 0.5 || shell.doors.a.open > 0.02
-    const m = (showAlp ? 'A' : '') + (showDome ? 'D' : '')
-    if (m !== mode) {
-      mode = m
-      if (!domeObjs) collectDome()
-      interior.g.visible = showAlp
-      for (const o of domeObjs) o.visible = showDome
-      // 太陽陰影的範圍跟著玩家所在的館走（陰影貼圖只蓋得到一館）
-      sun.target.position.x = showAlp && !showDome ? XM : 0
-      scene.fog.density = showAlp && !showDome ? 0.0095 : fog0   // 雲霧林：霧比較濃
-    }
-    if (showAlp) {
+    doors(t, dt, p) {
+      for (const k of ['a', 'b']) {
+        const d = shell.doors[k], want = near(d, p.x, p.z) ? 1 : 0
+        d.open = clamp(d.open + (want ? 2.0 : -1.0) * dt, 0, 1)
+        const e = d.open * d.open * (3 - 2 * d.open)
+        for (const { p: pn, s } of d.panels) pn.position.z = s * (CORR.W / 2 - 0.02 + e * (CORR.W / 2 - 0.1))
+        alpineDoors[k] = d.open
+      }
+    },
+    animate(t, dt) {
       interior.waterT.offset.y -= dt * 0.35
       for (const s of interior.mist) { const u = s.userData; s.position.x = u.x + Math.sin(t * 0.05 * u.sp + u.ph) * 6; s.position.z = u.z + Math.cos(t * 0.04 * u.sp + u.ph) * 4 }
-    }
+    },
   }
-  // 遊戲載入時就先蓋好（約 1.6 秒，算在載入畫面裡）；走路時才蓋會整個畫面停住一下
-  return { tick, shell, prebuild: ensureInterior, get interior() { return interior }, get mode() { return mode } }
+  return hall
 }

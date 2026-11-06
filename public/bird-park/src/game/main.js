@@ -25,10 +25,10 @@ const world = await buildWorld(document.getElementById('scene'), {
   night: true,
 })
 const { renderer, scene, camera } = world
-// 第二館（高山雲霧林）的館內也在載入畫面時蓋好：走過去才蓋會卡一下
-loadingEl.textContent = '高山館建造中…'
+// 附屬館（高山館、海岸館）的館內也在載入畫面時蓋好：走過去才蓋會卡一下
+loadingEl.textContent = '各館建造中…'
 await new Promise((r) => setTimeout(r, 30))
-world.alpine.prebuild()
+await world.halls.prebuild()
 
 const player = createPlayer(camera, renderer.domElement)
 scene.add(camera)   // 第一人稱的手和相機掛在鏡頭底下，鏡頭要在場景裡才會畫出來

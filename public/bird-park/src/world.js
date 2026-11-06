@@ -2,6 +2,8 @@
 import * as THREE from 'three'
 import { lodUpdate } from './lod.js'
 import { createAlpine } from './alpine.js'
+import { createHalls } from './halls.js'
+import { createCoast } from './coast.js'
 import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants } from './plants.js'
@@ -72,7 +74,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     return { def, ...a }
   })
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
-  const alpine = createAlpine({ scene, sun, lib: plantLib })
+  const halls = createHalls({ scene, sun, halls: [createAlpine({ scene, lib: plantLib }), createCoast({ scene })] })
   const birdStops = birds.map((b) => ({
     bird: b, title: b.def.name, nick: b.def.nick, sci: b.def.sci, tag: b.def.where, text: b.def.intro, facts: b.def.facts,
     pos: b.cam, target: b.target,
@@ -135,7 +137,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 每格：風、水、鳥（只更新鏡頭附近的，骨架動畫很吃 CPU）、水霧、雲
   function tick(t, dt, { phone = false } = {}) {
     lodUpdate(camera)
-    alpine.tick(t, dt, camera)
+    halls.tick(t, dt, camera)
     windUniforms.uTime.value = t
     waterTime.value = t
     pondRipples(t)
@@ -155,7 +157,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     renderer.render(scene, cam)
   }
-  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, quality, plantLib, alpine }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, quality, plantLib, halls }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */

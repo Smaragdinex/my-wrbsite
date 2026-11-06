@@ -16,6 +16,12 @@ export const STORE = { X0: -75.6, X1: -88.6, HZ: 7.5, H: 5.0, DOOR_W: 3.4 }
 // 館裡是另一套地形：入口平台 → 往東爬升到約 20 公尺的山頂，一條溪從山上沿著山谷流到入口旁的水池，步道之字形上山、吊橋過溪谷
 export const ALP = { X0: 92, X1: 172, HZ: 40, H: 34 }
 export const CORR = { X0: 72.6, X1: 92, W: 3.2, A: 81, B: 87 }
+// 第三館：海岸（coast.js，美術用 NatureManufacture「Coast Dunes Environment」，跟《淨灘大作戰》同一套）。圓頂南門（z≈-55）→ 通道（z -53～-74，A 門 -61、B 門 -67）
+// → 玻璃館（z -74～-154、x ±40）：北半邊沙丘、木棧道，中間沙灘，海岸線約 z -128，往南是館裡的淺水潟湖；館外整片都是海（到地平線）
+export const CST = { Z0: -74, Z1: -154, HX: 40, H: 22, SEA: 0 }
+export const CCORR = { Z0: -53, Z1: -74, W: 3.2, A: -61, B: -67 }
+export const coastShoreZ = (x) => -128 + 5 * Math.sin(x * 0.07) + 2 * Math.sin(x * 0.19 + 1)   // 海岸線（館內，GLSL 也有一份）
+export const BOARDWALK = { x0: 0, z0: -74.2, z1: -106, w: 2.2 }   // 木棧道：從入口筆直穿過沙丘到沙灘
 export const MENU_VIEW = { x: -30, y: 1.7, z: 20, lx: 6, ly: 10, lz: -8 }   // 首頁背景：溫室裡固定一個鏡頭（站在步道上看中央的山和瀑布），不在店裡
 export const SPAWN = { x: -87.6, z: 0.4, yaw: -90, pitch: 2 }   // 店門口往裡看：右邊是陳列櫃、左前方是櫃台，正前方是通往溫室的門
 
@@ -128,6 +134,7 @@ export const PATHS = [
   { name: 'nw', w: 2.4, curve: curve([onLoop(-2.4), [-28, -20], [-16, -22], ringPt(-2.5)]) },
   { name: 'spur', w: 2.6, curve: curve([ringPt(1.0), [19.5, 11.6], [14.6, 10.45]]) },
   { name: 'alpine', w: 3.0, curve: curve([loopPt(0), [62, 0.5], [73.5, 0]]) },   // 往高山館的東門
+  { name: 'coast', w: 3.0, curve: curve([loopPt(-Math.PI / 2), [0.5, -46], [0, -53.6]]) },   // 往海岸館的南門
 ]
 
 /* ---------- 網格：步道距離與地形高度 ---------- */
@@ -199,7 +206,8 @@ function buildHeights() {
       const sx = smoothstep(STORE.X0 + 3.5, STORE.X0 + 1.5, x) * smoothstep(STORE.HZ + 2, STORE.HZ, Math.abs(z))
       const sp = smoothstep(-66, -69.5, x) * smoothstep(STORE.DOOR_W + 2.5, STORE.DOOR_W + 0.6, Math.abs(z))
       const se = smoothstep(64, 69.5, x) * smoothstep(CORR.W + 2.5, CORR.W + 0.6, Math.abs(z))   // 東邊門口（往高山館的通道）也攤平
-      h = lerp(h, 0, Math.max(sx, sp, se))
+      const ss_ = smoothstep(-44, -49.5, z) * smoothstep(CCORR.W + 2.5, CCORR.W + 0.6, Math.abs(x))   // 南門（往海岸館）
+      h = lerp(h, 0, Math.max(sx, sp, se, ss_))
       height[k] = h
     }
   }
@@ -316,6 +324,57 @@ export function bridgeAt(x, z) {
   return lerp(pa, pb, t) - 0.35 * Math.sin(Math.PI * t) + 0.06
 }
 
+/* ---------- 海岸館地形（館內 x ±40、z -74～-154，0.5 公尺格子） ---------- */
+const CG = { x0: -CST.HX, z0: CST.Z1, cell: 0.5, nx: 161, nz: 161 }
+const cHeight = new Float32Array(CG.nx * CG.nz)
+function coastBase(x, z) {
+  const zs = coastShoreZ(x), dz = z - zs                                     // dz > 0：岸上；< 0：水裡
+  let h = dz > 0 ? 1.4 * smoothstep(0, 26, dz) + 0.25 * smoothstep(0, 4, dz) : dz * 0.07   // 沙灘緩坡、水裡慢慢變深
+  // 沙丘：北半邊，起伏 2～3 公尺；入口（北牆中間）附近壓平，接通道
+  const gate = smoothstep(9, 4, Math.abs(x)) * smoothstep(-84, -76, z)
+  h += smoothstep(-110, -94, z) * (1 - gate) * (1.6 + 1.4 * fbm2(x * 0.05 + 4, z * 0.07, 3) + 0.8 * Math.sin(x * 0.11 + z * 0.05))
+  // 西邊岬角：岩石高地從沙丘一路伸進海裡（z < -112 最高）
+  const head = smoothstep(-20, -30, x) * smoothstep(-96, -112, z) * (3.2 + 1.2 * fbm2(x * 0.1, z * 0.1, 3))
+  if (head > 0) h = Math.max(h, head)   // 只在岬角那邊墊高（第一版 max(h, 0) 把整片海底都墊成 0，人可以走進海裡）
+  h += 0.12 * fbm2(x * 0.4, z * 0.4, 2) * (dz > 0 ? 1 : 0.3)                // 沙面細小起伏
+  return lerp(h, 0.08, gate * smoothstep(-80, -75, z))
+}
+// 木棧道高度：兩端貼著沙面（入口、沙灘各高 15 公分），中間跟著沙丘最高處＋35 公分，坡度最多 12%；棧道下面和兩側的沙挖低（不會穿出木板）
+const BW_N = Math.round((BOARDWALK.z0 - BOARDWALK.z1) / 0.5) + 1, bwProf = new Float32Array(BW_N)
+{
+  const raw = Array.from({ length: BW_N }, (_, i) => coastBase(BOARDWALK.x0, BOARDWALK.z0 - i * 0.5))
+  const tgt = raw.map((_, i) => { let m = -9; for (let k = -4; k <= 4; k++) m = Math.max(m, raw[clamp(i + k, 0, BW_N - 1)]); return m + 0.35 })
+  bwProf[0] = raw[0] + 0.15
+  for (let i = 1; i < BW_N; i++) bwProf[i] = clamp(tgt[i], bwProf[i - 1] - 0.06, bwProf[i - 1] + 0.06)
+  const end = raw[BW_N - 1] + 0.15
+  bwProf[BW_N - 1] = end
+  for (let i = BW_N - 2; i >= 0; i--) bwProf[i] = Math.min(bwProf[i], bwProf[i + 1] + 0.06)
+}
+const bwAtZ = (z) => { const f = clamp((BOARDWALK.z0 - z) / 0.5, 0, BW_N - 1.001), i = Math.floor(f); return lerp(bwProf[i], bwProf[i + 1], f - i) }
+for (let j = 0; j < CG.nz; j++) for (let i = 0; i < CG.nx; i++) {
+  const x = CG.x0 + i * CG.cell, z = CG.z0 + j * CG.cell
+  let h = coastBase(x, z)
+  if (z <= BOARDWALK.z0 + 0.5 && z >= BOARDWALK.z1 - 0.5) {
+    const d = Math.abs(x - BOARDWALK.x0) - BOARDWALK.w / 2
+    h = lerp(Math.min(h, bwAtZ(z) - 0.3), h, smoothstep(0.4, 2.5, d))
+  }
+  cHeight[j * CG.nx + i] = h
+}
+export const inCoast = (x, z, m = 0) => z < CST.Z0 - m && z > CST.Z1 + m && Math.abs(x) < CST.HX - m
+export function coastHeight(x, z) {
+  const fx = (x - CG.x0) / CG.cell, fz = (z - CG.z0) / CG.cell
+  if (fx < 0 || fz < 0 || fx >= CG.nx - 1 || fz >= CG.nz - 1) return -3
+  const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * CG.nx + i
+  return (cHeight[k] * (1 - u) + cHeight[k + 1] * u) * (1 - v) + (cHeight[k + CG.nx] * (1 - u) + cHeight[k + CG.nx + 1] * u) * v
+}
+export const COAST_GRID = CG
+export { cHeight as COAST_HEIGHTS }
+export function boardwalkAt(x, z) {
+  const B = BOARDWALK
+  if (Math.abs(x - B.x0) > B.w / 2 || z > B.z0 || z < B.z1) return null
+  return bwAtZ(z)
+}
+
 /* ---------- 碰撞 ---------- */
 export const colliders = []   // { x, z, r, top }
 export function addCollider(x, z, r, top = 99) { colliders.push({ x, z, r, top }) }
@@ -329,6 +388,13 @@ export function supportAt(x, z, feet) {
     return { y, owner }
   }
   if (x > CORR.X0 - 2 && x <= ALP.X0 && Math.abs(z) < CORR.W) return { y: 0, owner: 0 }   // 通道地板
+  if (inCoast(x, z)) {
+    let y = Math.max(coastHeight(x, z), CST.SEA - 0.25), owner = 0                  // 水裡走：腳踩在水面下 25 公分（淺水才走得進去）
+    const bw = boardwalkAt(x, z)
+    if (bw != null && bw <= feet + 0.5) { y = Math.max(y, bw); owner = bw > y - 0.01 ? 4 : owner }
+    return { y, owner }
+  }
+  if (z < CCORR.Z0 + 2 && z >= CST.Z0 && Math.abs(x) < CCORR.W) return { y: 0, owner: 0 }   // 南邊通道地板
   let y = terrainHeight(x, z), owner = 0
   for (const h of rampHeights(x, z)) if (h <= feet + 0.5 && h > y) { y = h; owner = 1 }
   if (onDeck(x, z) && DECK.y <= feet + 0.5 && DECK.y > y) { y = DECK.y; owner = 2 }
@@ -343,7 +409,8 @@ function ceilingHit(x, z, feet) {
 // 店裡和通道可以走（牆內縮一個人的寬度）
 const inStore = (x, z) => (x < STORE.X0 + 0.1 && x > STORE.X1 + 0.45 && Math.abs(z) < STORE.HZ - 0.45) || (x >= STORE.X0 && x < -70 && Math.abs(z) < STORE.DOOR_W - 0.45)
 const inCorr = (x, z) => x > 70 && x <= ALP.X0 + 0.5 && Math.abs(z) < CORR.W - 0.45
-export let alpineDoors = { a: 1, b: 1 }   // alpine.js 每格更新：自動門開了多少（0 關、1 全開）；關著的門擋人
+export let alpineDoors = { a: 1, b: 1 }
+export let coastDoors = { a: 1, b: 1 }   // coast.js 每格更新   // alpine.js 每格更新：自動門開了多少（0 關、1 全開）；關著的門擋人
 export function blocked(x, z, feet) {
   if (inAlpine(x, z, 0.45)) {
     // 館內：太陡（一步高過 0.6 公尺）就走不上去；吊橋上不算
@@ -356,6 +423,21 @@ export function blocked(x, z, feet) {
     for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
     return false
   }
+  if (inCoast(x, z, 0.45)) {
+    // 海岸館：淺水才走得進去（沙面低於海面 0.25 以上就擋）；太陡爬不上去（沙丘、岬角）；木棧道上隨便走
+    const bw = boardwalkAt(x, z)
+    if (bw != null && Math.abs(bw - feet) < 0.5) return false
+    const h = coastHeight(x, z)
+    if (h < CST.SEA - 0.3) return true
+    if (h > feet + 0.16 || h < feet - 2.5) return true
+    for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
+    return false
+  }
+  if (z < -50 && z >= CST.Z0 - 0.5 && Math.abs(x) < CCORR.W - 0.45) {
+    for (const [dz, k] of [[CCORR.A, coastDoors.a], [CCORR.B, coastDoors.b]]) if (k < 0.7 && Math.abs(z - dz) < 0.35) return true
+    return false
+  }
+  if (inCoast(x, z)) return true
   if (inCorr(x, z)) {
     for (const [dx, k] of [[CORR.A, alpineDoors.a], [CORR.B, alpineDoors.b]]) if (k < 0.7 && Math.abs(x - dx) < 0.35) return true
     return false
