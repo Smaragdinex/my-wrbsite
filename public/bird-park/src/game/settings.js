@@ -140,7 +140,7 @@ export function createSettings({ world, player }) {
   const seg = (name, items, cur) => `<div class="seg" data-k="${name}">${Object.entries(items).map(([k, v]) =>
     `<button data-v="${k}" class="${k === cur ? 'on' : ''}">${Array.isArray(v) ? v[0] : v}</button>`).join('')}</div>`
   function render() {
-    el.innerHTML = `<h2>設定</h2>
+    el.innerHTML = `<div class="sheet-head"><button class="back x" aria-label="關閉" title="關閉"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button><h2>設定</h2></div>
       <h3>畫質</h3>
       <div class="row main"><div><b>整體畫質</b><small>${st.preset === 'auto' ? `依這台電腦的速度自動調整（目前第 ${auto.level + 1}／6 級，約等於「${LADDER[auto.level].name}」）。顯示卡型號和效能只在你的電腦上用來挑畫質，不會傳出去、也不會存下來` : st.preset === 'custom' ? '電腦跑不順就調低（目前是自訂）' : '電腦跑不順就調低，或選「自動」'}</small></div>${seg('preset', PRESETS, st.preset)}</div>
       ${st.preset === 'auto' ? '' : Object.entries(OPTS).map(([k, o]) => `<div class="row"><div><b>${o.label}</b><small>${o.hint}</small></div>${seg(k, o.items, st[k])}</div>`).join('')}
@@ -150,8 +150,7 @@ export function createSettings({ world, player }) {
       <h3>聲音</h3>
       <div class="row"><div><b>背景音樂</b><small>輕柔的環境音樂</small></div>${seg('music', LEVELS, st.music)}</div>
       <div class="row"><div><b>環境音</b><small>鳥叫、蟲鳴、瀑布水聲</small></div>${seg('amb', LEVELS, st.amb)}</div>
-      <div class="row"><div><b>音效</b><small>按鈕、對焦嗶聲、快門聲</small></div>${seg('sound', { off: '關', on: '開' }, st.sound ? 'on' : 'off')}</div>
-      <button class="back">返回</button>`
+      <div class="row"><div><b>音效</b><small>按鈕、對焦嗶聲、快門聲</small></div>${seg('sound', { off: '關', on: '開' }, st.sound ? 'on' : 'off')}</div>`
   }
   el.addEventListener('click', (e) => {
     const b = e.target.closest('.seg button'); if (!b) return

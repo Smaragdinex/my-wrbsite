@@ -18,6 +18,12 @@ body.in-menu #hud { display: none; }
 .menu nav button:hover { transform: translateX(6px); background: #3f8a5c; }
 .menu-sheet { max-height: 86vh; overflow: auto; }
 .menu-sheet h2 { margin: 0 0 10px; font-size: 24px; }
+/* 設定、操作說明：左上角一個圓形 X 關閉（取代底下的「返回」），捲動時標題列黏在上面 */
+.sheet-head { position: sticky; top: -26px; z-index: 2; display: flex; align-items: center; gap: 12px; margin: -26px -30px 4px; padding: 16px 30px 6px; background: var(--panel); border-radius: 18px 18px 0 0; }
+.sheet-head h2 { margin: 0; }
+.panel button.x { all: unset; box-sizing: border-box; cursor: pointer; flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #34423a; background: rgba(0, 0, 0, 0.06); transition: background 0.15s, transform 0.12s; }
+.panel button.x:hover { background: rgba(0, 0, 0, 0.12); }
+.panel button.x:active { transform: scale(0.94); }
 .settings { width: min(560px, 94vw); }
 .settings h3 { margin: 18px 0 6px; font-size: 14px; color: var(--muted); letter-spacing: 0.08em; }
 .settings .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid rgba(0, 0, 0, 0.07); }
