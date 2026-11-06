@@ -12,6 +12,9 @@ const sets = [], grass = []
 const _fr = new THREE.Frustum(), _pm = new THREE.Matrix4(), _c = new THREE.Vector3()
 const last = { p: new THREE.Vector3(1e9, 0, 0), q: new THREE.Quaternion(), fov: 0 }
 export const lodStats = { instances: 0, drawn: 0, grass: 0, grassDrawn: 0 }
+// 自動畫質（settings.js）會調這個：所有 LOD 距離乘上它（1＝原本、0.5＝一半的距離就開始變稀）
+export const lodQuality = { scale: 1 }
+export const lodSetScale = (k) => { if (Math.abs(lodQuality.scale - k) > 1e-3) { lodQuality.scale = k; last.fov = 0 } }
 
 // meshes：共用同一份擺放清單的 InstancedMesh（一種植物的各個材質）；h：這種植物大概多高（公尺）
 export function lodRegister(meshes, h) {
@@ -52,7 +55,7 @@ export function lodUpdate(camera, force = false) {
   if (!force && p.distanceToSquared(last.p) < 0.25 && Math.abs(q.dot(last.q)) > 0.9997 && Math.abs(camera.fov - last.fov) < 0.5) return
   last.p.copy(p); last.q.copy(q); last.fov = camera.fov
   _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm)
-  const zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(WALK_FOV / 2)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
+  const zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(WALK_FOV / 2)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * lodQuality.scale
   const P = _fr.planes
   let drawn = 0
   for (const S of sets) {
