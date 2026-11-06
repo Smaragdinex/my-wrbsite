@@ -480,22 +480,22 @@ export async function buildStore(scene, state) {
 
   /* ---------- 門口附近：直立數位看板，輪播鳥照（每 6 秒換一張） ---------- */
   const SIGN = { x: X0 - 1.1, z: -3.3 }
-  box('white', 0.14, 1.95, 0.82, SIGN.x, 0.995, SIGN.z); box('steel', 0.5, 0.03, 0.9, SIGN.x, 0.015, SIGN.z)
+  box('white', 0.14, 1.95, 0.82, SIGN.x, 0.995, SIGN.z); box('steel', 0.5, 0.03, 0.9, SIGN.x, 0.045, SIGN.z)   // 底板要高過地板面（地板頂在 y=0.03），貼齊會閃爍破圖
   const scr = document.createElement('canvas'); scr.width = 448; scr.height = 768
   const scrT = new THREE.CanvasTexture(scr); scrT.colorSpace = THREE.SRGBColorSpace
   const scrM = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.2), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: scrT, emissiveIntensity: 0.9, roughness: 0.15 }))
   scrM.rotation.y = -Math.PI / 2; scrM.position.set(SIGN.x - 0.072, 1.2, SIGN.z); g.add(scrM)
-  const caps = [['翠鳥', 'Common Kingfisher'], ['五色鳥', 'Taiwan Barbet'], ['藍鵲', 'Taiwan Blue Magpie'], ['白頭翁', 'Light-vented Bulbul']]
+  const caps = [['藍鵲', 'Taiwan Blue Magpie'], ['五色鳥', 'Taiwan Barbet'], ['翠鳥', 'Common Kingfisher'], ['黑面琵鷺', 'Black-faced Spoonbill']]   // 跟 store-prints.jpg 四格的順序一樣：左上、右上、左下、右下
   let slide = -1
   function drawSlide(k) {
     const x = scr.getContext('2d'), w = scr.width, h = scr.height, im = printT.image, iw = im.width / 2, ih = im.height / 2
     x.fillStyle = '#0f1311'; x.fillRect(0, 0, w, h)
     x.drawImage(im, (k % 2) * iw, (k < 2 ? 0 : 1) * ih, iw, ih, 0, 70, w, w)
-    x.fillStyle = '#7fd19c'; x.font = '600 26px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'left'; x.fillText('BIRD PHOTO OF THE WEEK', 24, 46)
+    x.fillStyle = '#7fd19c'; x.font = '600 22px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'left'; x.fillText('BIRD PHOTO OF THE WEEK', 24, 46)
     x.fillStyle = '#fff'; x.font = 'bold 52px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText(caps[k][0], 24, w + 140)
     x.fillStyle = '#b9c7be'; x.font = '28px "Helvetica Neue", Arial, sans-serif'; x.fillText(caps[k][1], 24, w + 186)
     x.fillStyle = '#2f7d4f'; x.fillRect(24, h - 92, w - 48, 60); x.fillStyle = '#fff'; x.font = 'bold 28px "PingFang TC", sans-serif'; x.fillText('進溫室拍拍看 →', 44, h - 52)
-    for (let i = 0; i < 4; i++) { x.fillStyle = i === k ? '#fff' : '#4a524d'; x.beginPath(); x.arc(w - 110 + i * 24, 40, 6, 0, 7); x.fill() }
+    for (let i = 0; i < 4; i++) { x.fillStyle = i === k ? '#fff' : '#4a524d'; x.beginPath(); x.arc(w - 96 + i * 20, 39, 5, 0, 7); x.fill() }
     scrT.needsUpdate = true
   }
   addCollider(SIGN.x, SIGN.z, 0.45, 2.2)
@@ -523,7 +523,7 @@ export async function buildStore(scene, state) {
   const place = (it, kind, x, z) => {
     const tall = kind === 'lens' ? (it.id === 'l5' ? 0.46 : 0.32) : 0.3
     box('charcoal', 0.46, 0.86, 0.46, x, 0.43, z - 0.04)                          // 鋼底座
-    box('steel', 0.5, 0.03, 0.5, x, 0.015, z - 0.04)
+    box('steel', 0.5, 0.03, 0.5, x, 0.045, z - 0.04)
     box('oak', 0.7, 0.05, 0.84, x, 0.885, z + 0.02)                               // 橡木台面（前面多出來放價格卡）
     box('glow', 0.66, 0.008, 0.8, x, 0.856, z + 0.02)                             // 台面底下一圈光
     box('glow', 0.3, 0.025, 0.3, x, 0.922, z - 0.04)                              // 壓克力發光墊
