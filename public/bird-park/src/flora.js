@@ -9,6 +9,7 @@ import {
 import { mulberry32, fbm2 } from './noise.js'
 import { addWind, windUniforms } from './wind.js'
 import { scatter, nodeHeight } from './plants.js'
+import { lodRegister, lodRegisterGrass } from './lod.js'
 import * as T from './textures.js'
 
 const UP = new THREE.Vector3(0, 1, 0)
@@ -43,7 +44,8 @@ function leafBlade() {
   return g
 }
 /* ---------- 擺放輔助 ---------- */
-function makeInst(geo, mat, list, { cast = true, receive = true, colors = null } = {}) {
+// lod：多高（公尺），矮的東西（花）越遠越稀；不填當成 10 公尺＝只做視野外不畫（長椅、路燈不會遠了就消失）
+function makeInst(geo, mat, list, { cast = true, receive = true, colors = null, lod = 10 } = {}) {
   const m = new THREE.InstancedMesh(geo, mat, Math.max(1, list.length))
   list.forEach((it, i) => {
     _m.compose(it.p, it.q, it.s)
@@ -54,6 +56,7 @@ function makeInst(geo, mat, list, { cast = true, receive = true, colors = null }
   m.castShadow = cast
   m.receiveShadow = receive
   m.computeBoundingSphere()
+  lodRegister([m], lod)
   return m
 }
 const qY = (a) => new THREE.Quaternion().setFromAxisAngle(UP, a)
@@ -568,14 +571,14 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     fl[1].heads.push({ p, q, s, c: new THREE.Color(orchids[k % orchids.length]) })
     fl[1].centers.push({ p, q, s, c: new THREE.Color(0xf2e070) })
   }
-  scene.add(makeInst(new THREE.CylinderGeometry(0.004, 0.006, 1, 5).translate(0, 0.5, 0), mats.stem, stems, { cast: false }))
+  scene.add(makeInst(new THREE.CylinderGeometry(0.004, 0.006, 1, 5).translate(0, 0.5, 0), mats.stem, stems, { cast: false, lod: 0.5 }))
   const leafMat = new THREE.MeshStandardMaterial({ map: T.leafBladeTex(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75 })
-  scene.add(makeInst(leafBlade(), leafMat, leaves, { colors: true, cast: false }))
+  scene.add(makeInst(leafBlade(), leafMat, leaves, { colors: true, cast: false, lod: 0.5 }))
   const centerGeo = (r) => new THREE.SphereGeometry(r, 12, 6).scale(1, 0.45, 1).translate(0, 0.04, 0)
   SPECIES.forEach((S, i) => {
     const mat = new THREE.MeshStandardMaterial({ map: T.petalTex(S.shape), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.55 })
-    scene.add(makeInst(petalHead(S.n, S.len, S.wid, S.cup, S.tilt, 7 + i), mat, fl[i].heads, { colors: true, cast: false }))
-    scene.add(makeInst(centerGeo(S.cr), new THREE.MeshStandardMaterial({ roughness: 0.85 }), fl[i].centers, { colors: true, cast: false }))
+    scene.add(makeInst(petalHead(S.n, S.len, S.wid, S.cup, S.tilt, 7 + i), mat, fl[i].heads, { colors: true, cast: false, lod: 0.5 }))
+    scene.add(makeInst(centerGeo(S.cr), new THREE.MeshStandardMaterial({ roughness: 0.85 }), fl[i].centers, { colors: true, cast: false, lod: 0.5 }))
   })
 
   /* --- 草：一片一片的草葉，成叢長 --- */
@@ -611,9 +614,23 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       }
       clumps++
     }
-    const grass = bladeMesh(A, B, { width: [0.014, 0.016] })
-    grass.frustumCulled = false
-    scene.add(grass)
+    // 切成 14 公尺一塊（lod.js：視野外整塊不畫、越遠越稀）；塊裡的草葉先打亂，instanceCount 變少時是均勻變稀，不是少掉一角
+    const CELL = 14, cells = new Map()
+    for (let i = 0; i < A.length / 4; i++) {
+      const key = Math.floor(A[i * 4] / CELL) + ',' + Math.floor(A[i * 4 + 2] / CELL)
+      let c = cells.get(key); if (!c) cells.set(key, c = [])
+      c.push(i)
+    }
+    for (const [key, idx] of cells) {
+      for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]] }
+      const a = [], b = []
+      for (const i of idx) { a.push(A[i * 4], A[i * 4 + 1], A[i * 4 + 2], A[i * 4 + 3]); b.push(B[i * 4], B[i * 4 + 1], B[i * 4 + 2], B[i * 4 + 3]) }
+      const [cx, cz] = key.split(',').map((v) => (+v + 0.5) * CELL)
+      const grass = bladeMesh(a, b, { width: [0.014, 0.016] })
+      grass.frustumCulled = false
+      scene.add(grass)
+      lodRegisterGrass(grass, new THREE.Vector3(cx, terrainHeight(cx, cz) + 0.4, cz), CELL * 0.72 + 1)
+    }
   }
 
   /* --- 草坪：鳥站附近（鏡頭看得到的地方）一大片又短又密的草，鳥腳會陷進草裡一點；一站一塊，畫面外的整塊不畫 --- */
@@ -639,7 +656,9 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       }
       const m = bladeMesh(A, B, { width: [0.004, 0.004], sun, lawn: true })
       m.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, terrainHeight(cx, cz), cz), R + 0.5)
+      m.frustumCulled = false
       scene.add(m)
+      lodRegisterGrass(m, m.geometry.boundingSphere.center, R + 0.5)   // 草坪本來就是隨機順序，變稀也是均勻的
     }
   }
 

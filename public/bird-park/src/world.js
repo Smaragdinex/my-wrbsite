@@ -1,5 +1,6 @@
 // 整個園區（溫室、山、水、植物、鳥、雲）：導覽頁（main.js）和遊戲（game/main.js）共用同一份，兩邊看到的世界一模一樣
 import * as THREE from 'three'
+import { lodUpdate } from './lod.js'
 import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants } from './plants.js'
@@ -130,6 +131,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
 
   // 每格：風、水、鳥（只更新鏡頭附近的，骨架動畫很吃 CPU）、水霧、雲
   function tick(t, dt, { phone = false } = {}) {
+    lodUpdate(camera)
     windUniforms.uTime.value = t
     waterTime.value = t
     pondRipples(t)

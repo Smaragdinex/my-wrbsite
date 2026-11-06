@@ -1,6 +1,7 @@
 // 寫實植物／岩石模型（models/plants/*.glb，由 tools/export-plants.py 產生）
 // 每個 glb 裡一株一個節點，原點在根部中心、單位公尺；這裡負責載入並用 InstancedMesh 大量擺放
 import * as THREE from 'three'
+import { lodRegister } from './lod.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { addWind } from './wind.js'
@@ -77,6 +78,9 @@ export function scatter(scene, node, list, { wind = 0, cast = true, receive = tr
     scene.add(im)
     meshes.push(im)
   }
+  // LOD（lod.js）：這種植物大概多高＝模型高 × 中位數縮放
+  const ys = list.map((it) => it.s.y).sort((a, b) => a - b)
+  lodRegister(meshes, H * ys[ys.length >> 1])
   return meshes
 }
 
