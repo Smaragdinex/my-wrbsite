@@ -9,6 +9,7 @@ import { scatter } from '../plants.js'
 import { createDoorSfx } from './door-sfx.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { STORE, addCollider, colliders } from '../layout.js'
 import { BODIES, LENSES } from './camera.js'
 import { createShopkeeper } from './shopkeeper.js'
@@ -481,12 +482,88 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   /* ---------- 東北角：相機包櫃 ---------- */
   box('walnut', 2.9, 0.04, 0.45, -77.6, 0.5, HZ - 0.55); box('walnut', 2.9, 0.04, 0.45, -77.6, 1.25, HZ - 0.55)
   for (const x of [-76.15, -79.05]) box('walnut', 0.04, 1.3, 0.45, x, 0.65, HZ - 0.55)
-  const bagM = [0x34393a, 0x5d6445, 0x8a6a48, 0x2c3a4a].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }))
-  ;[[-76.6, 0.52, 0.45, 0.32], [-77.35, 0.52, 0.55, 0.36], [-78.3, 0.52, 0.5, 0.3], [-76.75, 1.27, 0.38, 0.28], [-77.6, 1.27, 0.5, 0.42], [-78.5, 1.27, 0.42, 0.3]].forEach(([x, y, w, h], i) => {
-    const bag = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.3, 2, 2, 2), bagM[i % 4]); bag.position.set(x, y + h / 2, HZ - 0.55); bag.castShadow = true; g.add(bag)
-    const strap = new THREE.Mesh(new THREE.TorusGeometry(w * 0.32, 0.012, 6, 16, Math.PI), mats.charcoal); strap.position.set(x, y + h, HZ - 0.55); g.add(strap)
-    box('steel', 0.05, 0.03, 0.01, x, y + h * 0.6, HZ - 0.71)
-  })
+  // 相機包：照真的做三種——郵差包（翻蓋＋兩條扣帶＋金屬扣＋皮標＋側邊 D 環掛背帶）、後背包（前袋、拉鍊、側邊壓縮帶、網袋、提把）、
+  // 小斜背包（上緣拉鍊、前面小翻蓋）。布料是帆布／尼龍織紋（畫布貼圖＋同一張當凹凸），邊緣有縫線
+  {
+    const weave = canvasTex(256, 256, (x, w, h) => {
+      x.fillStyle = '#ececec'; x.fillRect(0, 0, w, h)   // 底色接近白：貼圖會乘上材質顏色，太灰整個包會變暗
+      for (let y = 0; y < h; y += 2) { x.fillStyle = `rgba(0,0,0,${0.05 + Math.random() * 0.06})`; x.fillRect(0, y, w, 1) }
+      for (let xx = 0; xx < w; xx += 2) { x.fillStyle = `rgba(255,255,255,${0.03 + Math.random() * 0.05})`; x.fillRect(xx, 0, 1, h) }
+      for (let i = 0; i < 1500; i++) { const l = Math.random() < 0.5 ? 0 : 255; x.fillStyle = `rgba(${l},${l},${l},0.05)`; x.fillRect(Math.random() * w, Math.random() * h, 2, 1) }
+    })
+    weave.wrapS = weave.wrapT = THREE.RepeatWrapping; weave.repeat.set(3, 3)
+    // 翻蓋、前袋：織紋＋離邊緣一點點的一圈虛線縫線
+    const stitched = canvasTex(256, 256, (x, w, h) => {
+      x.drawImage(weave.image, 0, 0)
+      x.strokeStyle = 'rgba(235,228,210,0.85)'; x.lineWidth = 2.2; x.setLineDash([7, 5])
+      x.strokeRect(10, 10, w - 20, h - 20)
+    })
+    const fab = (c) => new THREE.MeshStandardMaterial({ color: c, map: weave, bumpMap: weave, bumpScale: 0.6, roughness: 0.9 })
+    const fabS = (c) => new THREE.MeshStandardMaterial({ color: c, map: stitched, bumpMap: weave, bumpScale: 0.6, roughness: 0.9 })
+    const web = new THREE.MeshStandardMaterial({ color: 0x1d1f20, map: weave, bumpMap: weave, bumpScale: 1, roughness: 0.8 })   // 尼龍織帶
+    const metal = new THREE.MeshStandardMaterial({ color: 0xb9b6ad, roughness: 0.28, metalness: 0.9 })
+    const leather = new THREE.MeshStandardMaterial({ color: 0x7a4a2a, roughness: 0.55 })
+    const zipM = new THREE.MeshStandardMaterial({ color: 0x141515, roughness: 0.6 })
+    const rb = (w, h, d, r, m, x, y, z, grp) => { const o = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2, h / 2, d / 2)), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; grp.add(o); return o }
+    const tube = (pts, r, m, grp) => { const o = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, r, 6), m); o.castShadow = true; grp.add(o); return o }
+    const strapV = (x, y0, y1, z, grp, wd = 0.032) => rb(wd, y0 - y1, 0.005, 0.002, web, x, (y0 + y1) / 2, z, grp)
+    const buckle = (x, y, z, grp) => { rb(0.046, 0.034, 0.007, 0.004, metal, x, y, z, grp); rb(0.03, 0.012, 0.009, 0.002, zipM, x, y, z - 0.001, grp) }
+    const dRing = (x, y, z, grp) => { const o = new THREE.Mesh(new THREE.TorusGeometry(0.014, 0.003, 6, 14), metal); o.position.set(x, y, z); o.rotation.y = Math.PI / 2; grp.add(o) }
+    // 背帶：從一邊 D 環出來，往後垂到層板上，再回到另一邊（大部分在包後面）
+    const shoulder = (w, h, d, grp) => tube([V(-w / 2 - 0.01, h - 0.035, 0), V(-w / 2 + 0.005, h - 0.05, d / 2 + 0.015), V(-w * 0.3, h * 0.35, d / 2 + 0.035), V(-w * 0.2, 0.012, d / 2 + 0.07), V(w * 0.2, 0.012, d / 2 + 0.07), V(w * 0.3, h * 0.35, d / 2 + 0.035), V(w / 2 - 0.005, h - 0.05, d / 2 + 0.015), V(w / 2 + 0.01, h - 0.035, 0)], 0.009, web, grp)
+    const handle = (w, h, grp, z = 0) => tube([V(-w, h - 0.005, z), V(-w * 0.7, h + 0.045, z), V(w * 0.7, h + 0.045, z), V(w, h - 0.005, z)], 0.008, web, grp)
+    const zipLine = (pts, grp) => tube(pts, 0.0035, zipM, grp)
+    const pull = (x, y, z, grp) => { rb(0.012, 0.02, 0.006, 0.002, metal, x, y, z, grp); rb(0.01, 0.03, 0.004, 0.002, zipM, x, y - 0.025, z - 0.002, grp) }
+
+    const messenger = (c, w, h, d) => {
+      const grp = new THREE.Group(), F = -d / 2
+      rb(w, h, d, 0.035, fab(c), 0, h / 2, 0, grp)
+      rb(w + 0.012, 0.014, d * 0.8, 0.006, fab(c), 0, h + 0.004, -d * 0.08, grp)                 // 翻蓋蓋過頂面
+      rb(w + 0.012, h * 0.74, 0.014, 0.006, fabS(c), 0, h - h * 0.37 + 0.008, F - 0.007, grp)   // 翻蓋正面（有縫線）
+      for (const sx of [-1, 1]) {
+        strapV(sx * w * 0.27, h * 0.5, h * 0.12, F - 0.016, grp)
+        buckle(sx * w * 0.27, h * 0.3, F - 0.02, grp)
+        dRing(sx * (w / 2 + 0.006), h - 0.035, 0, grp)
+        rb(0.02, h * 0.5, d * 0.7, 0.008, fab(c), sx * (w / 2 + 0.008), h * 0.3, 0, grp)        // 側邊口袋
+      }
+      rb(0.09, 0.038, 0.006, 0.006, leather, 0, h * 0.78, F - 0.016, grp)                         // 皮標
+      shoulder(w + 0.03, h, d, grp); handle(0.06, h + 0.012, grp, -d * 0.1)
+      return grp
+    }
+    const backpack = (c, w, h, d) => {
+      const grp = new THREE.Group(), F = -d / 2
+      rb(w, h, d, 0.06, fab(c), 0, h / 2, 0, grp)
+      rb(w * 0.8, h * 0.42, 0.06, 0.03, fabS(c), 0, h * 0.27, F - 0.02, grp)                      // 前袋
+      // 主袋拉鍊：沿正面上緣成一個倒 U；前袋拉鍊一條橫的
+      zipLine([V(-w / 2 + 0.01, h * 0.55, F - 0.002), V(-w / 2 + 0.03, h - 0.03, F + 0.01), V(0, h + 0.002, F + 0.03), V(w / 2 - 0.03, h - 0.03, F + 0.01), V(w / 2 - 0.01, h * 0.55, F - 0.002)], grp)
+      zipLine([V(-w * 0.36, h * 0.45, F - 0.05), V(w * 0.36, h * 0.45, F - 0.05)], grp)
+      pull(-w * 0.2, h * 0.43, F - 0.053, grp); pull(w * 0.32, h - 0.06, F + 0.004, grp)
+      rb(0.07, 0.03, 0.006, 0.005, leather, 0, h * 0.62, F - 0.002, grp)
+      for (const sx of [-1, 1]) {
+        for (const yy of [0.35, 0.68]) { rb(0.006, 0.025, d * 0.9, 0.002, web, sx * (w / 2 + 0.002), h * yy, 0, grp); rb(0.008, 0.034, 0.046, 0.004, metal, sx * (w / 2 + 0.006), h * yy, -d * 0.12, grp) }   // 側邊插扣
+        rb(0.016, h * 0.3, d * 0.75, 0.006, fab(new THREE.Color(c).multiplyScalar(0.7)), sx * (w / 2 + 0.006), h * 0.17, 0, grp)   // 側邊水壺袋（貼著側面）
+      }
+      handle(0.05, h, grp, 0.02)
+      return grp
+    }
+    const sling = (c, w, h, d) => {
+      const grp = new THREE.Group(), F = -d / 2
+      rb(w, h, d, 0.045, fab(c), 0, h / 2, 0, grp)
+      zipLine([V(-w / 2 + 0.02, h - 0.02, F + 0.02), V(0, h + 0.002, F + 0.03), V(w / 2 - 0.02, h - 0.02, F + 0.02)], grp)
+      pull(w * 0.25, h - 0.03, F + 0.012, grp)
+      rb(w * 0.6, h * 0.42, 0.012, 0.006, fabS(c), 0, h * 0.42, F - 0.006, grp)                    // 前面小翻蓋
+      buckle(0, h * 0.24, F - 0.014, grp)
+      rb(0.06, 0.026, 0.006, 0.005, leather, 0, h * 0.55, F - 0.014, grp)
+      for (const sx of [-1, 1]) dRing(sx * (w / 2 + 0.005), h - 0.03, 0, grp)
+      shoulder(w + 0.02, h, d, grp)
+      return grp
+    }
+    const Z = HZ - 0.55
+    ;[[backpack, 0x2e3335, -76.56, 0.52, 0.32, 0.46, 0.2, 0.12], [messenger, 0x56603f, -77.26, 0.52, 0.44, 0.31, 0.17, -0.06], [messenger, 0x9a7a52, -78.0, 0.52, 0.4, 0.29, 0.16, 0.1],
+      [sling, 0x2b3a4d, -78.7, 0.52, 0.28, 0.2, 0.12, -0.12],
+      [sling, 0x4a4d4f, -76.6, 1.27, 0.28, 0.2, 0.12, 0.1], [backpack, 0x55603f, -77.33, 1.27, 0.3, 0.45, 0.19, -0.08], [messenger, 0x2f3b4c, -78.25, 1.27, 0.44, 0.32, 0.17, 0.08]]
+      .forEach(([mk, c, x, y, w, h, d, ry]) => { const b = mk(c, w, h, d); b.position.set(x, y, Z); b.rotation.y = ry; g.add(b) })
+  }
   addCollider(-77.6, HZ - 0.55, 0.7, 1.5); addCollider(-78.4, HZ - 0.55, 0.7, 1.5)
 
   /* ---------- 天花板軌道燈 ---------- */
