@@ -1,4 +1,5 @@
 // 相簿：Tab 打開，看拍過的照片（鳥種、分數、估價），可以刪掉不要的；賣掉的照片標「已售出」
+import { t as tr, birdName } from '../i18n.js'
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
 export function createAlbum({ photos, onDelete, onClose }) {
@@ -8,13 +9,13 @@ export function createAlbum({ photos, onDelete, onClose }) {
   let big = null
   function render() {
     const list = [...photos].sort((a, b) => b.time - a.time)
-    el.innerHTML = `<div class="sheet-in"><header><h2>相簿</h2><span class="muted">${list.length} 張</span><button class="btn ghost" data-close>關閉（Tab）</button></header>
+    el.innerHTML = `<div class="sheet-in"><header><h2>${tr('相簿')}</h2><span class="muted">${tr('{n} 張', { n: list.length })}</span><button class="btn ghost" data-close>${tr('關閉（Tab）')}</button></header>
       <div class="grid">${list.map((p) => `<figure data-t="${p.time}" class="${p.sold ? 'sold' : ''}"><img src="${p.url}" alt="">
-        <figcaption><b>${esc(p.subject?.name ?? '沒拍到鳥')}</b><span>${p.score} 分</span><span>${p.sold ? '已售出 $' + p.soldFor : '估價 $' + p.price}</span>${p.exif ? `<span class="muted">f/${p.exif.N}・${p.exif.t >= 0.5 ? p.exif.t + '"' : '1/' + Math.round(1 / p.exif.t)}・ISO ${p.exif.iso}</span>` : ''}</figcaption></figure>`).join('') || '<p class="muted">還沒有照片。右鍵按一下舉起相機，左鍵拍照。</p>'}</div>
-      ${big ? `<div class="big"><img src="${big.url}" alt=""><div class="big-info"><h3>${esc(big.subject?.name ?? '沒拍到鳥')}　${big.score} 分</h3>
-        <p>${esc(big.body)}・${esc(big.lens)}・${big.focal}mm</p><p>${esc(big.notes.join('、') || '拍得不錯')}</p>
+        <figcaption><b>${esc(p.subject ? birdName(p.subject.id, p.subject.name) : tr('沒拍到鳥'))}</b><span>${tr('{n} 分', { n: p.score })}</span><span>${p.sold ? tr('已售出 ${p}', { p: p.soldFor }) : tr('估價 ${p}', { p: p.price })}</span>${p.exif ? `<span class="muted">f/${p.exif.N}・${p.exif.t >= 0.5 ? p.exif.t + '"' : '1/' + Math.round(1 / p.exif.t)}・ISO ${p.exif.iso}</span>` : ''}</figcaption></figure>`).join('') || '<p class="muted">還沒有照片。右鍵按一下舉起相機，左鍵拍照。</p>'}</div>
+      ${big ? `<div class="big"><img src="${big.url}" alt=""><div class="big-info"><h3>${esc(big.subject ? birdName(big.subject.id, big.subject.name) : tr('沒拍到鳥'))}　${tr('{n} 分', { n: big.score })}</h3>
+        <p>${esc(big.body)}・${esc(big.lens)}・${big.focal}mm</p><p>${esc(big.notes.join(tr('、')) || tr('拍得不錯'))}</p>
         ${big.judge ? `<p class="judge">「${esc(big.judge)}」</p>` : ''}
-        <button class="btn ghost" data-back>返回</button> ${big.sold ? '' : '<button class="btn danger" data-del>刪除這張</button>'}</div></div>` : ''}</div>`
+        <button class="btn ghost" data-back>${tr('返回')}</button> ${big.sold ? '' : `<button class="btn danger" data-del>${tr('刪除這張')}</button>`}</div></div>` : ''}</div>`
   }
   el.addEventListener('click', (e) => {
     const f = e.target.closest('figure'), t = e.target

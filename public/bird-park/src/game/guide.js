@@ -9,12 +9,13 @@ import { BIRDS } from '../birdinfo.js'
 import { placeAnimal } from '../birds.js'
 import { VALUE } from './scoring.js'
 import { RARITY } from './judge.js'
+import { t as tr, LANG, FONT_SANS, FONT_SERIF } from '../i18n.js'
 
 const PW = 1, PH = 1.32                 // 一頁的寬、高（書的單位）
 const CW = 900, CH = Math.round(CW * PH) // 頁面 canvas 的像素
 const PLATE = { x: 0.09, y: 0.24, w: 0.82, h: 0.66 }   // 右頁插圖的範圍（uv，y 往上）
-const SERIF = '"Songti TC","Noto Serif TC","PMingLiU",serif'
-const SANS = '"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif'
+const SERIF = FONT_SERIF
+const SANS = FONT_SANS
 const INK = '#2d2a24', MUTED = '#7b7262', ACCENT = '#5b6e3c'
 const ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 const clamp01 = (v) => Math.min(1, Math.max(0, v))
@@ -107,23 +108,24 @@ function birdLeft(b, i, rec) {
     const X = 86, W = CW - 2 * X - 20
     let y = 120
     ctx.fillStyle = MUTED; ctx.font = `26px ${SERIF}`; ctx.fillText(`No. ${String(i + 1).padStart(2, '0')}`, X, y)
-    if (rec) stamp(ctx, '已記錄', CW - 190, 118, '#a8442f')
+    if (rec) stamp(ctx, tr('已記錄'), CW - 190, 118, '#a8442f')
     y += 84
-    ctx.fillStyle = INK; ctx.font = `bold 72px ${SERIF}`; ctx.fillText(rec ? b.name : '？？？', X, y)   // 沒拍到：名字跟目錄一樣先藏起來，只給在哪裡
-    if (b.nick && rec) { const w = ctx.measureText(b.name).width; ctx.font = `34px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(`（${b.nick}）`, X + w + 8, y - 6) }
+    ctx.fillStyle = INK; ctx.font = `bold 72px ${SERIF}`; ctx.fillText(rec ? b.name : '？？？', X, y, W)   // 沒拍到：名字跟目錄一樣先藏起來，只給在哪裡
+    if (b.nick && rec && ctx.measureText(b.name).width < W * 0.6) { const w = ctx.measureText(b.name).width; ctx.font = `34px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(`（${b.nick}）`, X + w + 8, y - 6) }
     y += 50
     ctx.font = `italic 32px Georgia, ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(rec ? b.sci : '— — —', X, y)
     y += 34
     ctx.strokeStyle = 'rgba(80,60,30,0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X + W, y); ctx.stroke()
     y += 52
-    const row = (k, v) => { ctx.font = `26px ${SANS}`; ctx.fillStyle = MUTED; ctx.fillText(k, X, y); ctx.fillStyle = INK; ctx.font = `30px ${SANS}`; ctx.fillText(v, X + 130, y); y += 48 }
-    row('棲地', b.where)
-    row('稀有度', rec ? (RARITY[b.id] ?? '普通') : '？')
-    row('收購底價', rec ? `$${(VALUE[b.id] ?? 50) * 3}` : '？')
+    ctx.font = `26px ${SANS}`; const kw = Math.max(130, ...[tr('棲地'), tr('稀有度'), tr('收購底價')].map((k) => ctx.measureText(k).width + 22))   // 標題欄寬：其他語言的字比較長
+    const row = (k, v) => { ctx.font = `26px ${SANS}`; ctx.fillStyle = MUTED; ctx.fillText(k, X, y); ctx.fillStyle = INK; ctx.font = `30px ${SANS}`; ctx.fillText(v, X + kw, y, W - kw); y += 48 }
+    row(tr('棲地'), b.where)
+    row(tr('稀有度'), rec ? tr(RARITY[b.id] ?? '普通') : '？')
+    row(tr('收購底價'), rec ? `$${(VALUE[b.id] ?? 50) * 3}` : '？')
     y += 18
     if (!rec) {
       ctx.font = `30px ${SANS}`; ctx.fillStyle = INK
-      for (const l of wrap(ctx, `還沒拍到這種鳥。到「${b.where}」附近找找看，拍到之後這一頁會補上介紹。`, W)) { ctx.fillText(l, X, y); y += 52 }
+      for (const l of wrap(ctx, tr('還沒拍到這種鳥。到「{where}」附近找找看，拍到之後這一頁會補上介紹。', { where: b.where }), W)) { ctx.fillText(l, X, y); y += 52 }
       pageNo(ctx, i * 2 + 3, 'L')
       return
     }
@@ -135,7 +137,7 @@ function birdLeft(b, i, rec) {
       ctx.font = `${size}px ${SANS}`
       for (const l of wrap(ctx, b.intro, W)) { lay.push([l, X, yy, size, INK]); yy += size * 1.68 }
       yy += size * 0.9
-      lay.push(['小知識', X, yy, size * 0.95, ACCENT, true]); yy += size * 1.7
+      lay.push([tr('小知識'), X, yy, size * 0.95, ACCENT, true]); yy += size * 1.7
       ctx.font = `${size * 0.9}px ${SANS}`
       for (const f of b.facts.slice(0, facts)) {
         const ls = wrap(ctx, f, W - 34)
@@ -164,9 +166,9 @@ function birdRight(b, i, rec, info) {
     ctx.lineWidth = 1; ctx.strokeRect(px - 22, py - 22, pw + 44, ph + 44)
     let y = py + ph + 84
     ctx.textAlign = 'center'
-    ctx.fillStyle = INK; ctx.font = `38px ${SERIF}`; ctx.fillText(`圖 ${i + 1}　${rec ? b.name : '？？？'}`, CW / 2, y)
+    ctx.fillStyle = INK; ctx.font = `38px ${SERIF}`; ctx.fillText(`${tr('圖 {n}', { n: i + 1 })}　${rec ? b.name : '？？？'}`, CW / 2, y, CW - 120)
     y += 46; ctx.fillStyle = MUTED; ctx.font = `24px ${SANS}`
-    ctx.fillText(rec ? `拍過 ${info.n} 張・最高 ${info.best} 分` : '尚未記錄', CW / 2, y)
+    ctx.fillText(rec ? tr('拍過 {n} 張・最高 {best} 分', { n: info.n, best: info.best }) : tr('尚未記錄'), CW / 2, y)
     ctx.textAlign = 'left'
     pageNo(ctx, i * 2 + 4, 'R')
   })
@@ -175,28 +177,28 @@ function contentsLeft(nRec) {
   return canvasTex((ctx) => {
     paper(ctx, 'L')
     ctx.textAlign = 'center'; ctx.fillStyle = INK
-    ctx.font = `bold 92px ${SERIF}`; ctx.fillText('鳥類圖鑑', CW / 2, 330)
-    ctx.font = `30px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText('鳥類生態園・攝影紀錄', CW / 2, 400)
+    ctx.font = `bold 92px ${SERIF}`; ctx.fillText(tr('鳥類圖鑑'), CW / 2, 330, CW - 140)
+    ctx.font = `30px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(tr('鳥類生態園・攝影紀錄'), CW / 2, 400)
     ctx.strokeStyle = 'rgba(80,60,30,0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(CW / 2 - 120, 450); ctx.lineTo(CW / 2 + 120, 450); ctx.stroke()
-    ctx.fillStyle = INK; ctx.font = `40px ${SANS}`; ctx.fillText(`已記錄 ${nRec} / ${BIRDS.length} 種`, CW / 2, 590)
+    ctx.fillStyle = INK; ctx.font = `40px ${SANS}`; ctx.fillText(tr('已記錄 {n} / {m} 種', { n: nRec, m: BIRDS.length }), CW / 2, 590)
     const bw = 460, bx = CW / 2 - bw / 2
     ctx.fillStyle = 'rgba(80,60,30,0.15)'; ctx.fillRect(bx, 628, bw, 18)
     ctx.fillStyle = ACCENT; ctx.fillRect(bx, 628, bw * nRec / BIRDS.length, 18)
     ctx.fillStyle = MUTED; ctx.font = `26px ${SANS}`
-    ;['拍到一種鳥，就會記進這本圖鑑。', '← →、A D 或點書頁翻頁', 'E 或 Esc 闔上'].forEach((t, k) => ctx.fillText(t, CW / 2, 790 + k * 52))
+    ;[tr('拍到一種鳥，就會記進這本圖鑑。'), tr('← →、A D 或點書頁翻頁'), tr('E 或 Esc 闔上')].forEach((t, k) => ctx.fillText(t, CW / 2, 790 + k * 52, CW - 120))
     ctx.textAlign = 'left'
   })
 }
 function contentsRight(recs) {
   return canvasTex((ctx) => {
     paper(ctx, 'R')
-    ctx.fillStyle = INK; ctx.font = `bold 46px ${SERIF}`; ctx.fillText('目錄', 90, 140)
+    ctx.fillStyle = INK; ctx.font = `bold 46px ${SERIF}`; ctx.fillText(tr('目錄'), 90, 140)
     const top = 220, step = Math.min(46, (CH - 160 - top) / BIRDS.length)
     BIRDS.forEach((b, i) => {
       const y = top + i * step, rec = recs[i]
       ctx.font = `26px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(String(i + 1).padStart(2, '0'), 90, y)
-      ctx.font = `30px ${SANS}`; ctx.fillStyle = rec ? INK : 'rgba(45,42,36,0.35)'; ctx.fillText(rec ? b.name : '？？？', 150, y)
-      const w = ctx.measureText(rec ? b.name : '？？？').width
+      ctx.font = `30px ${SANS}`; ctx.fillStyle = rec ? INK : 'rgba(45,42,36,0.35)'; ctx.fillText(rec ? b.name : '？？？', 150, y, CW - 380)
+      const w = Math.min(CW - 380, ctx.measureText(rec ? b.name : '？？？').width)
       ctx.fillStyle = 'rgba(80,60,30,0.3)'; for (let x = 160 + w; x < CW - 190; x += 14) ctx.fillRect(x, y - 8, 3, 3)
       ctx.font = `26px ${SERIF}`; ctx.fillStyle = MUTED; ctx.textAlign = 'right'; ctx.fillText(String(i * 2 + 3), CW - 120, y); ctx.textAlign = 'left'
       if (rec) { ctx.strokeStyle = '#a8442f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(CW - 100, y - 12); ctx.lineTo(CW - 90, y - 2); ctx.lineTo(CW - 72, y - 26); ctx.stroke() }
@@ -296,8 +298,8 @@ function leather(title) {
     g.strokeStyle = '#c9a85a'; g.lineWidth = 3; g.strokeRect(34, 34, c.width - 68, c.height - 68)
     g.lineWidth = 1.5; g.strokeRect(46, 46, c.width - 92, c.height - 92)
     g.fillStyle = '#d7b866'; g.textAlign = 'center'
-    g.font = `bold 66px ${SERIF}`; g.fillText('鳥類圖鑑', c.width / 2, 250)
-    g.font = `24px ${SERIF}`; g.fillText('FIELD GUIDE TO THE BIRDS', c.width / 2, 300)
+    g.font = `bold 66px ${SERIF}`; g.fillText(tr('鳥類圖鑑'), c.width / 2, 250, c.width - 120)
+    if (LANG !== 'en') { g.font = `24px ${SERIF}`; g.fillText('FIELD GUIDE TO THE BIRDS', c.width / 2, 300) }   // 英文標題已經是這句
     // 燙金的小鳥（站在樹枝上）
     g.save(); g.translate(c.width / 2, 440); g.fillStyle = '#d7b866'
     g.beginPath(); g.ellipse(0, 0, 52, 34, -0.25, 0, 7); g.fill()
@@ -307,7 +309,7 @@ function leather(title) {
     g.lineWidth = 5; g.strokeStyle = '#d7b866'; g.beginPath(); g.moveTo(-90, 44); g.quadraticCurveTo(0, 36, 96, 52); g.stroke()
     g.fillStyle = '#2f4a33'; g.beginPath(); g.arc(48, -38, 4, 0, 7); g.fill()
     g.restore()
-    g.font = `22px ${SERIF}`; g.fillStyle = '#c9a85a'; g.fillText('鳥類生態園', c.width / 2, c.height - 90)
+    g.font = `22px ${SERIF}`; g.fillStyle = '#c9a85a'; g.fillText(tr('鳥類生態園'), c.width / 2, c.height - 90)
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8
   return t
@@ -412,8 +414,8 @@ export function createGuide({ renderer, getRecords, onClose }) {
   const st = { open: false, t: 0, target: 0, spread: 0, flip: null, time: 0 }
   const hud = document.createElement('div')
   hud.className = 'guide-ui'; hud.hidden = true
-  hud.innerHTML = `<button class="x" aria-label="關閉"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 3l12 12M15 3L3 15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
-    <div class="guide-hint">← → 翻頁　E 闔上</div>`
+  hud.innerHTML = `<button class="x" aria-label="${tr('關閉')}"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 3l12 12M15 3L3 15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    <div class="guide-hint">${tr('← → 翻頁　E 闔上')}</div>`
   document.body.appendChild(hud)
   hud.querySelector('.x').onclick = () => close()
 

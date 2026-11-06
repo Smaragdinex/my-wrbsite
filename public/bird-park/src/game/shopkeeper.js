@@ -12,6 +12,7 @@
 //       起步加速、快到時減速。打招呼、點頭這種一次性的動作疊在上面淡入淡出。
 // 走路：店裡切 0.2 公尺的格子，用店裡既有的碰撞點（展示島、櫃台、角落的架子…）當障礙，A* 找路再拉直；玩家擋在前面就停下來等。
 import * as THREE from 'three'
+import { t as tr, FONT_SANS } from '../i18n.js'
 
 const CELL = 0.2, SPEED = 1.15, TURN = 5.5, NPC_R = 0.22
 const WALK_CLIP_SPEED = 0.92   // walk 這段動作原本的步伐速度（量腳著地時往後滑的速度），播放速度照實際走的速度調，腳才不會滑
@@ -70,10 +71,10 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
   function say(text, sec = 3.5) {
     const g = bc.getContext('2d'), W = bc.width, H = bc.height
     g.clearRect(0, 0, W, H)
-    g.font = 'bold 40px "PingFang TC", "Noto Sans TC", sans-serif'
-    // 自動換行（中文一個字一個字量）
+    g.font = `bold ${text.length > 40 ? 32 : 40}px ${FONT_SANS}`
+    // 自動換行（中文一個字一個字量；英文、韓文一個字一個字是指整個單字）
     const lines = []; let line = ''
-    for (const ch of text) { if (g.measureText(line + ch).width > W - 80) { lines.push(line); line = ch } else line += ch }
+    for (const ch of text.match(/[A-Za-z0-9'’.,!?()-]+\s?|[\uac00-\ud7af]+\s?|./gu) ?? []) { if (g.measureText(line + ch).width > W - 80 && line) { lines.push(line.trimEnd()); line = ch.trimStart() } else line += ch }
     lines.push(line)
     const bh = 30 + lines.length * 50, bw = Math.min(W - 20, Math.max(...lines.map((l) => g.measureText(l).width)) + 60), bx = (W - bw) / 2, by = H - 30 - bh
     g.fillStyle = 'rgba(255,255,255,0.96)'; g.strokeStyle = 'rgba(31,42,36,0.25)'; g.lineWidth = 3
@@ -188,14 +189,14 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
   function checkout(open) {
     if (pending) return
     engaged = true
-    if (state === 'home' && pos.distanceTo(homeV) < 0.3) { say('好，我幫你看看。', 2); open(); return }
+    if (state === 'home' && pos.distanceTo(homeV) < 0.3) { say(tr('好，我幫你看看。'), 2); open(); return }
     pending = open; path = []
-    say('好，來櫃台這邊結帳！', 3)
+    say(tr('好，來櫃台這邊結帳！'), 3)
     state = 'checkout'
     walkTo(homeV, () => {
       faceYaw = homeYaw; state = 'home'
       const fn = pending; pending = null
-      if (counterZone(P.x, P.y)) fn(); else say('要結帳再來櫃台找我喔', 3)
+      if (counterZone(P.x, P.y)) fn(); else say(tr('要結帳再來櫃台找我喔'), 3)
     })
   }
 
@@ -261,12 +262,12 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
       if (state === 'home') {
         if (passage && greeted) {   // 玩家要走了：在櫃台後面揮手
           greeted = false; ignored = false; lastIntro = null; faceTo(P)
-          doOnce('wave_goodbye_02', '慢走！拍照愉快！', () => { state = 'home' })
+          doOnce('wave_goodbye_02', tr('慢走！拍照愉快！'), () => { state = 'home' })
         } else if (here && !greeted && dP < 9) {
           greeted = true; state = 'greet'
           const to = P.clone().add(new THREE.Vector2().subVectors(pos, P).setLength(NEAR_PLAYER))
           asks = 1; engaged = false; ignoreT = 0
-          walkTo(to, () => { faceTo(P); doOnce('greet_01', '歡迎光臨！需要幫忙嗎？', () => { timer = 40 }) })
+          walkTo(to, () => { faceTo(P); doOnce('greet_01', tr('歡迎光臨！需要幫忙嗎？'), () => { timer = 40 }) })
         } else {
           if (here) faceTo(P); else faceYaw = homeYaw
           if (here) { const a = THREE.MathUtils.euclideanModulo(faceYaw - homeYaw + Math.PI, Math.PI * 2) - Math.PI; faceYaw = homeYaw + THREE.MathUtils.clamp(a, -1.05, 1.05) }
@@ -274,7 +275,7 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
           if (here && greeted && lookItem && lookT > 2.5) introduce()   // 在櫃台也看得到：玩家在一台器材前面站很久就走過來
           else if (!ignored && homeT > 45 && stillT > 2 && !counterZone(P.x, P.y)) {   // 玩家還在店裡慢慢看 → 再出來問問（被晾過就不再來）
             homeT = 0; asks = 1; state = 'greet'; engaged = false; ignoreT = 0
-            walkTo(P.clone().add(new THREE.Vector2().subVectors(pos, P).setLength(NEAR_PLAYER)), () => { faceTo(P); doOnce('greet_01', '還在看嗎？需要幫忙嗎？', () => { timer = 40 }) })
+            walkTo(P.clone().add(new THREE.Vector2().subVectors(pos, P).setLength(NEAR_PLAYER)), () => { faceTo(P); doOnce('greet_01', tr('還在看嗎？需要幫忙嗎？'), () => { timer = 40 }) })
           }
           else if ((idleT -= dt) < 0) { idleT = 25 + Math.random() * 20; if (!here) { play('look_around'); timer = onceDur('look_around'); state = 'anim'; onArrive = () => { state = 'home' } } }
         }
@@ -285,17 +286,17 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
         if (!engaged) ignoreT += dt
         if (lookItem && lookT > 1.2) introduce()
         else if (!engaged && here && ((ignoreT > 1.5 && dP > 3.5) || ignoreT > 7)) {   // 被晾著：走開了，或站著 7 秒都沒看他
-          ignored = true; say('好，慢慢看，有需要再叫我！', 2.5); goHome()
+          ignored = true; say(tr('好，慢慢看，有需要再叫我！'), 2.5); goHome()
         }   // 盯著某台器材看超過 1.2 秒 → 走過去介紹
         else if (engaged && here && stillT > 2.5 && dP < 3.5 && sinceSpoke > 14 && asks < 3) {   // 玩家停下來了，隔一陣子再問一次（換句話）
-          const lines = ['歡迎光臨！需要幫忙嗎？', '想拍什麼鳥？我可以幫你挑器材喔！', '慢慢看，有問題隨時問我！']
+          const lines = [tr('歡迎光臨！需要幫忙嗎？'), tr('想拍什麼鳥？我可以幫你挑器材喔！'), tr('慢慢看，有問題隨時問我！')]
           doOnce(asks % 2 ? 'agree' : 'greet_01', lines[asks], () => { timer = 30 }); asks++
         } else if (passage) {
-          doOnce('wave_goodbye_02', '慢走！拍照愉快！', () => { greeted = false; ignored = false; lastIntro = null; goHome() })
+          doOnce('wave_goodbye_02', tr('慢走！拍照愉快！'), () => { greeted = false; ignored = false; lastIntro = null; goHome() })
         } else if (!here) {
           greeted = false; goHome()
         } else if (timer < 0) {
-          say('有需要再叫我喔！', 2.5); goHome()
+          say(tr('有需要再叫我喔！'), 2.5); goHome()
         }
       }
     }

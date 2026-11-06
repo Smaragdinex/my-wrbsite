@@ -18,6 +18,18 @@ import { createViewmodel } from './viewmodel.js'
 import { createUiFx } from './ui-fx.js'
 import { controlsSvg } from './controls-help.js'
 import { MENU_VIEW, terrainHeight, supportAt } from '../layout.js'
+import { t as tr, LANG, LANGS, setLang } from '../i18n.js'
+
+// 頁面上寫死的字（data-i18n）換成這個語言；標題列
+for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = tr(el.textContent.trim())
+for (const el of document.querySelectorAll('[data-i18n-aria]')) { el.setAttribute('aria-label', tr(el.dataset.i18nAria)); el.title = tr(el.dataset.i18nAria) }
+document.title = tr('鳥類生態園：攝影')
+// 首頁的語言按鈕：換語言就重新載入（貼圖上的字都是一開始畫的）
+{
+  const box = document.getElementById('langs')
+  box.innerHTML = '<div class="globe">LANGUAGE</div>' + LANGS.map((l) => `<button data-lang="${l.id}" class="${l.id === LANG ? 'on' : ''}">${l.label}</button>`).join('')
+  box.onclick = (e) => { const b = e.target.closest('[data-lang]'); if (b && b.dataset.lang !== LANG) setLang(b.dataset.lang) }
+}
 
 const loadingEl = document.getElementById('loading')
 // 載入畫面：下載 0～70%、蓋溫室 70～80%、預熱著色器 80～100%（鳥沿著進度線飛過去）
@@ -31,13 +43,13 @@ function setLoad(f, msg) {
   if (msg) ldMsg.textContent = msg
 }
 const world = await buildWorld(document.getElementById('scene'), {
-  onProgress: (f, stage) => stage === 'build' ? setLoad(0.7, '蓋溫室、種樹…') : setLoad(f * 0.7, '下載植物和鳥…'),
+  onProgress: (f, stage) => stage === 'build' ? setLoad(0.7, tr('蓋溫室、種樹…')) : setLoad(f * 0.7, tr('下載植物和鳥…')),
   extraModels: flyModels(),
   night: true,
 })
 const { renderer, scene, camera } = world
 // 附屬館（高山館、海岸館）的館內也在載入畫面時蓋好：走過去才蓋會卡一下
-setLoad(0.8, '溫室快好了…')
+setLoad(0.8, tr('溫室快好了…'))
 await new Promise((r) => setTimeout(r, 30))
 await world.halls.prebuild()
 
@@ -53,7 +65,7 @@ const hud = createHud(document.getElementById('hud'))
 const state = loadState()
 const photos = await allPhotos()
 // 舊存檔：以前 0 分的照片還有底價，改成「沒拍到鳥、0 元」
-for (const p of photos) if (!p.sold && p.score <= 0 && (p.subject || p.price)) { p.subject = null; p.price = 0; p.notes = ['沒拍到鳥（太小、太糊或看不清楚）']; putPhoto(p) }
+for (const p of photos) if (!p.sold && p.score <= 0 && (p.subject || p.price)) { p.subject = null; p.price = 0; p.notes = [tr('沒拍到鳥（太小、太糊或看不清楚）')]; putPhoto(p) }
 // 收購價改成分數分級（60 分以下不收）：沒賣掉的舊照片照新規則重算估價
 for (const p of photos) if (!p.sold && p.subject) { const np = priceFor(p.subject.id, p.score); if (np !== p.price) { p.price = np; putPhoto(p) } }
 // 圖鑑記錄：拍到過的鳥種（舊存檔從相簿補）
@@ -66,7 +78,7 @@ const cam = createCamera({ world, camera, controls: player.controls, hud, gear, 
   photos.push(p); putPhoto(p)
   if (p.subject && !state.seen.includes(p.subject.id)) { state.seen.push(p.subject.id); save() }   // 圖鑑：拍到過就算記錄（照片賣掉、刪掉也還在）
   // 拍的當下不顯示分數、評語、價錢（使用者要求）：要到相簿或相機行老闆那裡才知道拍得怎樣
-  hud.toast('已存入相簿')
+  hud.toast(tr('已存入相簿'))
 } })
 
 // 面板（相簿、相機行）開著的時候放開滑鼠；關掉再鎖回去
@@ -103,7 +115,7 @@ addEventListener('keydown', (e) => {
     // 換下一支有的鏡頭
     const mine = LENSES.filter((l) => state.owned.includes(l.id))
     state.lensId = mine[(mine.findIndex((l) => l.id === state.lensId) + 1) % mine.length].id
-    save(); hud.toast(`換上 ${gear.lens().name}`)
+    save(); hud.toast(tr('換上 {name}', { name: gear.lens().name }))
   }
 })
 // 日夜：一天 24 分鐘（遊戲裡 1 小時 = 現實 1 分鐘）；網址 ?t=19.5 可以直接從某個時間開始
@@ -116,7 +128,7 @@ const PERIODS = [6, 9, 17, 19.5]
 const nearBench = () => world.time.benches.find((b) => Math.hypot(camera.position.x - b.p.x, camera.position.z - b.p.z) < 1.6)
 function rest() {
   const next = PERIODS.find((p) => p > hour + 0.05) ?? PERIODS[0] + 24
-  hud.fadeThrough(() => { hour = next % 24; world.time.setTime(hour); hud.toast(`休息到${hour < 7 ? '清晨' : hour < 12 ? '早上' : hour < 18 ? '黃昏' : '夜晚'}`) })
+  hud.fadeThrough(() => { hour = next % 24; world.time.setTime(hour); hud.toast(tr('休息到{when}', { when: tr(hour < 7 ? '清晨' : hour < 12 ? '早上' : hour < 18 ? '黃昏' : '夜晚') })) })
 }
 vm.setScreenTexture(cam.lcdTex)
 
@@ -143,7 +155,7 @@ await renderer.compileAsync(scene, camera)
 const home = { p: camera.position.clone(), q: camera.quaternion.clone() }
 const WARM = [[-87.6, 0.4, -90], [-74, 0, -90], [-55, 2, 90], [-15, -25, 60], [103, -5, -90], [167, 12, 100]]
 for (const [wi, [x, z, yaw]] of WARM.entries()) {
-  setLoad(0.8 + 0.18 * wi / WARM.length, '準備畫面…')
+  setLoad(0.8 + 0.18 * wi / WARM.length, tr('準備畫面…'))
   camera.position.set(x, supportAt(x, z, 99).y + 1.7, z); camera.rotation.set(0, yaw * Math.PI / 180, 0, 'YXZ'); camera.updateMatrixWorld()
   world.tick(0, 0.016); store.tick(0, 0.016, camera, { play: false, look: false })
   await renderer.compileAsync(scene, camera)
@@ -154,13 +166,13 @@ camera.position.copy(home.p); camera.quaternion.copy(home.q); camera.updateMatri
 world.tick(0, 0.016)
 await cam.warm()
 world.render()
-setLoad(1, '好了！')
+setLoad(1, tr('好了！'))
 await new Promise((r) => setTimeout(r, 250))
 loadingEl.classList.add('done')
 
 // 老闆的 AI（本地 LLM）：背景下載，好了之前用寫好的評語
 // 老闆的 AI（WebLLM）：桌機瀏覽器有 WebGPU 就在背景載入；手機、沒有 WebGPU、或網址加 ?ai=0 就用寫好的評語
-if (!PHONE && new URLSearchParams(location.search).get('ai') !== '0') loadLLM(() => hud.setStatus(llm.status === 'loading' ? `老闆的 AI 準備中… ${Math.round(llm.progress * 100)}%（第一次要下載約 1 GB）` : ''))
+if (!PHONE && new URLSearchParams(location.search).get('ai') !== '0') loadLLM(() => hud.setStatus(llm.status === 'loading' ? tr('老闆的 AI 準備中… {p}%（第一次要下載約 1 GB）', { p: Math.round(llm.progress * 100) }) : ''))
 
 // 首頁：開始遊戲／設定／操作說明。開始＝鎖定滑鼠（瀏覽器規定要使用者點擊才能鎖）；按 Esc 解鎖就回到這個選單（按鈕變「繼續」）
 const settings = createSettings({ world, player })
@@ -177,7 +189,7 @@ startEl.hidden = false
 document.body.classList.add('in-menu')   // 首頁選單上不顯示右上的錢、時間（HUD）
 const goEl = document.getElementById('go')
 goEl.onclick = () => player.controls.lock()
-player.controls.addEventListener('lock', () => { setMenuCam(false); startEl.hidden = true; document.body.classList.remove('in-menu'); goEl.textContent = '繼續' })
+player.controls.addEventListener('lock', () => { setMenuCam(false); startEl.hidden = true; document.body.classList.remove('in-menu'); goEl.textContent = tr('繼續') })
 player.controls.addEventListener('unlock', () => { if (!panelOpen()) { setMenuCam(true); showSheet(null); startEl.hidden = false; document.body.classList.add('in-menu') } })
 
 const clock = new THREE.Clock()
@@ -197,7 +209,7 @@ function frame() {
   store.tick(t, dt, camera, { play: !menuCam, look: !panelOpen() && player.controls.isLocked && !cam.state.raised })
   flight.tick(t, dt, { sneak: player.state.sneak })
   const sf = !panelOpen() && player.controls.isLocked && !cam.state.raised ? store.focus(camera) : null
-  hud.setHint(!panelOpen() && player.controls.isLocked ? (sf?.type === 'item' ? `${sf.item.name}　${state.owned.includes(sf.item.id) ? '已擁有' : '$' + sf.item.price.toLocaleString()}　按 E 查看` : sf?.type === 'counter' ? '按 E 跟老闆說話（賣照片、買器材）' : nearBench() ? '按 E 坐下休息（跳到下一個時段）' : '') : '')
+  hud.setHint(!panelOpen() && player.controls.isLocked ? (sf?.type === 'item' ? `${sf.item.name}　${state.owned.includes(sf.item.id) ? tr('已擁有') : '$' + sf.item.price.toLocaleString()}　${tr('按 E 查看')}` : sf?.type === 'counter' ? tr('按 E 跟老闆說話（賣照片、買器材）') : nearBench() ? tr('按 E 坐下休息（跳到下一個時段）') : '') : '')
   hud.update(dt)
   settings.tick(dt, player.controls.isLocked)
   world.render()

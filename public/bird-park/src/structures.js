@@ -1,6 +1,7 @@
 // 溫室本體、地面、步道、雲霧山、瀑布、空中步道
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { t as tr, FONT_SANS } from './i18n.js'
 import {
   TAU, DOME, MTN, POOL, RAMP, DECK, PATHS, clamp, smoothstep, lerp, angDiff,
   domeRho, domeB, inAlpine, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
@@ -196,8 +197,8 @@ function buildEntrance() {
   // 綠色出口燈箱（自己發光），掛在內側大樑下面、面向園區
   const c = document.createElement('canvas'); c.width = 256; c.height = 96
   const x2 = c.getContext('2d'); x2.fillStyle = '#1f9a4c'; x2.fillRect(0, 0, 256, 96)
-  x2.fillStyle = '#fff'; x2.font = 'bold 52px "PingFang TC", "Noto Sans TC", sans-serif'; x2.textAlign = 'center'; x2.textBaseline = 'middle'
-  x2.fillText('出口 EXIT', 128, 50)
+  x2.fillStyle = '#fff'; x2.font = `bold 52px ${FONT_SANS}`; x2.textAlign = 'center'; x2.textBaseline = 'middle'
+  x2.fillText(tr('出口 EXIT'), 128, 50, 240)
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace
   const sign = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.06), [alu, alu, alu, alu, new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.9 }), alu])
   sign.material[4].userData.lamp = [0.9, 1.6]

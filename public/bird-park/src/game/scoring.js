@@ -1,6 +1,7 @@
 // 照片的客觀數據：按快門那一刻，畫面裡每隻鳥的種類、大小、有沒有被切到、被擋住多少、有沒有對到焦、在做什麼動作。
 // 這些數字給評分（和之後的 LLM 評審）用。
 import * as THREE from 'three'
+import { t as tr } from '../i18n.js'
 
 // 每種鳥的基本價（越少見、越難拍越貴）
 export const VALUE = {
@@ -21,9 +22,9 @@ export function priceFor(id, score, same = 1) {
 }
 // 特別的瞬間（acts 的名字 → 加成倍數、說明）
 const ACTION = {
-  dive: [2.2, '入水的瞬間'], strike: [1.8, '出手捕食'], worm: [1.6, '叼著蚯蚓'], peck: [1.15, '低頭覓食'],
-  takeoff: [2.0, '起飛的瞬間'], land: [1.8, '降落的瞬間'], fly: [1.7, '飛行中'], run: [1.25, '逃跑中'],
-  call: [1.2, '正在鳴叫'], preen: [1.15, '理毛'], hunt: [1.1, '盯著獵物'], walk: [1.0, ''], look: [1.05, '抬頭張望'],
+  dive: [2.2, tr('入水的瞬間')], strike: [1.8, tr('出手捕食')], worm: [1.6, tr('叼著蚯蚓')], peck: [1.15, tr('低頭覓食')],
+  takeoff: [2.0, tr('起飛的瞬間')], land: [1.8, tr('降落的瞬間')], fly: [1.7, tr('飛行中')], run: [1.25, tr('逃跑中')],
+  call: [1.2, tr('正在鳴叫')], preen: [1.15, tr('理毛')], hunt: [1.1, tr('盯著獵物')], walk: [1.0, ''], look: [1.05, tr('抬頭張望')],
 }
 
 const _box = new THREE.Box3(), _v = new THREE.Vector3(), _c = new THREE.Vector3(), _s = new THREE.Vector3()
@@ -84,7 +85,7 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
 // 評分：挑畫面裡最好的那隻當主角，0～100 分 + 價錢
 // ex：曝光的結果 { over 過曝幾格（負＝欠曝）, noise 雜訊強度, shake 手震像素 }（camera.js 算的）
 export function scorePhoto(found, ex = {}) {
-  if (!found.length) return { score: 0, price: 0, subject: null, notes: ['畫面裡沒有鳥'] }
+  if (!found.length) return { score: 0, price: 0, subject: null, notes: [tr('畫面裡沒有鳥')] }
   // 曝光差半格以內不扣；差越多扣越多（最多扣到 0.3）。雜訊輕微不扣
   const over = ex.over ?? 0, expo = Math.max(0.3, 1 - 0.2 * Math.max(0, Math.abs(over) - 0.5))
   const grain = 1 - THREE.MathUtils.clamp(((ex.noise ?? 0) - 6) / 40, 0, 0.5)
@@ -100,22 +101,22 @@ export function scorePhoto(found, ex = {}) {
   // 一般的好照片最多 85 分；要拍到特別的瞬間（入水、捕食、起飛…）才會到 100 以上（最高 110）
   const score = Math.round(Math.min(110, q * 85 * Math.min(1.3, mult)))
   // 0 分＝等於沒拍到鳥（太小、太糊、被擋住、太暗…）：不算主角、0 元，相機行不收
-  if (score <= 0) return { score: 0, price: 0, subject: null, notes: ['沒拍到鳥（太小、太糊或看不清楚）'] }
+  if (score <= 0) return { score: 0, price: 0, subject: null, notes: [tr('沒拍到鳥（太小、太糊或看不清楚）')] }
   const same = found.filter((f) => f.id === s.id && f.visible > 0.5 && f.sharp > 0.5).length
   const price = priceFor(s.id, score, same)
   const notes = []
-  if (score < MIN_SCORE) notes.push(`未滿 ${MIN_SCORE} 分，相機行不收`)
-  if ((s.focusSharp ?? s.sharp) < 0.5) notes.push('沒對到焦，糊掉了')
-  else if ((ex.shake ?? 0) > 2) notes.push('手震，快門太慢')
-  else if ((s.motion ?? 0) > 3) notes.push('鳥在動，快門不夠快')
-  else if (s.act === 'fly' || s.act === 'takeoff' || s.act === 'land') { if ((s.motion ?? 9) < 1) notes.push('飛行中凍結得很清楚') }
-  if (over > 1) notes.push('曝光過度，太亮')
-  else if (over < -1) notes.push('曝光不足，太暗')
-  if ((ex.noise ?? 0) > 14) notes.push('雜訊很多')
-  if (s.visible < 0.6) notes.push('被東西擋住')
-  if (s.inside < 0.85) notes.push('鳥被畫面切到')
-  if (s.area < 0.006) notes.push('鳥太小了，要再靠近或換長一點的鏡頭')
+  if (score < MIN_SCORE) notes.push(tr('未滿 {n} 分，相機行不收', { n: MIN_SCORE }))
+  if ((s.focusSharp ?? s.sharp) < 0.5) notes.push(tr('沒對到焦，糊掉了'))
+  else if ((ex.shake ?? 0) > 2) notes.push(tr('手震，快門太慢'))
+  else if ((s.motion ?? 0) > 3) notes.push(tr('鳥在動，快門不夠快'))
+  else if (s.act === 'fly' || s.act === 'takeoff' || s.act === 'land') { if ((s.motion ?? 9) < 1) notes.push(tr('飛行中凍結得很清楚')) }
+  if (over > 1) notes.push(tr('曝光過度，太亮'))
+  else if (over < -1) notes.push(tr('曝光不足，太暗'))
+  if ((ex.noise ?? 0) > 14) notes.push(tr('雜訊很多'))
+  if (s.visible < 0.6) notes.push(tr('被東西擋住'))
+  if (s.inside < 0.85) notes.push(tr('鳥被畫面切到'))
+  if (s.area < 0.006) notes.push(tr('鳥太小了，要再靠近或換長一點的鏡頭'))
   if (actNote) notes.push(actNote)
-  if (same > 1) notes.push(`同一張拍到 ${same} 隻`)
+  if (same > 1) notes.push(tr('同一張拍到 {n} 隻', { n: same }))
   return { score, price, subject: s, notes }
 }

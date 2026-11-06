@@ -4,6 +4,7 @@
 // 南半邊：地毯上一座座展示島（鋼底座＋橡木台面＋玻璃罩＋斜立價格卡）。天花板兩條軌道燈。
 // 逛店：走到展示台前面看著它 → 提示名稱、價錢，按 E 打開器材頁（直接跳到那一項）；走到櫃台前 → 按 E 跟老闆說話（賣照片、買器材）。
 // 座標（世界）：x 從 STORE.X0（東牆，接通道）到 STORE.X1（西牆，店門口），z ±STORE.HZ，原點在地面
+import { t as tr, LANG, FONT_SANS } from '../i18n.js'
 import * as THREE from 'three'
 import { scatter } from '../plants.js'
 import { createDoorSfx } from './door-sfx.js'
@@ -55,12 +56,12 @@ function labelDraw(it, state) {
   return (g, w, h) => {
     g.fillStyle = '#f7f8f6'; g.fillRect(0, 0, w, h)
     g.fillStyle = '#2f7d4f'; g.fillRect(0, 0, 10, h)
-    g.fillStyle = '#1f2a24'; g.font = 'bold 34px "PingFang TC", "Noto Sans TC", sans-serif'; g.textBaseline = 'top'
+    g.fillStyle = '#1f2a24'; g.font = `bold 34px ${FONT_SANS}`; g.textBaseline = 'top'
     g.fillText(it.name, 28, 22)
     const own = state.owned.includes(it.id), using = state.bodyId === it.id || state.lensId === it.id
-    g.font = 'bold 40px "PingFang TC", sans-serif'; g.fillStyle = own ? '#2f7d4f' : '#1f2a24'
-    g.fillText(using ? '使用中' : own ? '已擁有' : it.price ? `$${it.price.toLocaleString()}` : '免費', 28, 78)
-    g.font = '24px "PingFang TC", sans-serif'; g.fillStyle = '#5b6a61'
+    g.font = `bold 40px ${FONT_SANS}`; g.fillStyle = own ? '#2f7d4f' : '#1f2a24'
+    g.fillText(using ? tr('使用中') : own ? tr('已擁有') : it.price ? `$${it.price.toLocaleString()}` : tr('免費'), 28, 78)
+    g.font = `24px ${FONT_SANS}`; g.fillStyle = '#5b6a61'
     g.fillText(it.spec, 28, 140)
   }
 }
@@ -78,7 +79,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     const t = canvasTex(512, 128, (x) => {
       x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, 512, 128); x.translate(512, 0); x.scale(-1, 1)
       x.fillStyle = '#e9e9e4'; x.font = 'bold 74px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'
-      x.fillText(b.name.split(' ').slice(1).join(' ').toUpperCase(), 256, 66)
+      x.fillText(b.model.toUpperCase(), 256, 66)
     })
     t.flipY = false; o.material = new THREE.MeshStandardMaterial({ map: t, roughness: 0.45 })
   })
@@ -221,8 +222,12 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     x.fillStyle = 'rgba(255,255,255,0.92)'; x.beginPath(); x.arc(w / 2, h / 2, w / 2 - 4, 0, 7); x.fill()
     x.strokeStyle = '#1f6d45'; x.lineWidth = 10; x.beginPath(); x.arc(w / 2, h / 2, w / 2 - 14, 0, 7); x.stroke()
     x.fillStyle = '#1f6d45'; x.textAlign = 'center'
-    x.font = 'bold 52px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText('自動門', w / 2, h / 2 + 4)
-    x.font = '600 21px "Helvetica Neue", Arial, sans-serif'; x.fillText('AUTOMATIC DOOR', w / 2, h / 2 + 44)
+    // 招牌都是「當地字＋英文小字」；英文版只留英文
+    if (LANG === 'en') { x.font = '700 36px "Helvetica Neue", Arial, sans-serif'; x.fillText('AUTOMATIC', w / 2, h / 2 + 4); x.font = '600 24px "Helvetica Neue", Arial, sans-serif'; x.fillText('DOOR', w / 2, h / 2 + 42) }
+    else {
+      x.font = `bold 52px ${FONT_SANS}`; x.fillText(tr('自動門'), w / 2, h / 2 + 4, 180)
+      x.font = '600 21px "Helvetica Neue", Arial, sans-serif'; x.fillText('AUTOMATIC DOOR', w / 2, h / 2 + 44)
+    }
     x.beginPath(); x.moveTo(w / 2 - 70, h / 2 - 52); x.lineTo(w / 2 - 40, h / 2 - 66); x.lineTo(w / 2 - 40, h / 2 - 38); x.fill()   // ⇆ 箭頭
     x.beginPath(); x.moveTo(w / 2 + 70, h / 2 - 52); x.lineTo(w / 2 + 40, h / 2 - 66); x.lineTo(w / 2 + 40, h / 2 - 38); x.fill()
     x.fillRect(w / 2 - 42, h / 2 - 55, 84, 6)
@@ -250,8 +255,11 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   {
     const t = canvasTex(512, 128, (x, w, h) => {
       x.fillStyle = '#1f2a24'; x.fillRect(0, 0, w, h); x.fillStyle = '#7fd19c'; x.fillRect(0, h - 8, w, 8)
-      x.fillStyle = '#fff'; x.textBaseline = 'middle'; x.font = 'bold 56px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText('溫室', 120, h / 2 - 2)
-      x.font = '600 34px "Helvetica Neue", Arial, sans-serif'; x.fillStyle = '#cfe8d8'; x.fillText('GREENHOUSE', 250, h / 2 + 2)
+      x.fillStyle = '#fff'; x.textBaseline = 'middle'; if (LANG === 'en') { x.font = '700 50px "Helvetica Neue", Arial, sans-serif'; x.fillText('GREENHOUSE', 120, h / 2 + 2) }
+      else {
+        x.font = `bold 56px ${FONT_SANS}`; x.fillText(tr('溫室'), 120, h / 2 - 2, 124)
+        x.font = '600 34px "Helvetica Neue", Arial, sans-serif'; x.fillStyle = '#cfe8d8'; x.fillText('GREENHOUSE', 250, h / 2 + 2)
+      }
       x.strokeStyle = '#fff'; x.lineWidth = 9; x.beginPath(); x.moveTo(62, h - 26); x.lineTo(62, 26); x.moveTo(38, 50); x.lineTo(62, 24); x.lineTo(86, 50); x.stroke()   // 往前直走的箭頭
     })
     const sm = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.5 }))
@@ -368,7 +376,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   {
     const bagT = canvasTex(256, 256, (x, w, h) => {
       x.fillStyle = '#f3efe6'; x.fillRect(0, 0, w, h); x.fillStyle = '#2f7d4f'; x.fillRect(0, h * 0.55, w, h * 0.12)
-      x.fillStyle = '#1f2a24'; x.font = 'bold 40px "PingFang TC", sans-serif'; x.textAlign = 'center'; x.fillText('相機行', w / 2, h * 0.4)
+      x.fillStyle = '#1f2a24'; x.font = `bold 40px ${FONT_SANS}`; x.textAlign = 'center'; x.fillText(tr('相機行'), w / 2, h * 0.4, w - 24)
     })
     const bm = new THREE.MeshStandardMaterial({ map: bagT, roughness: 0.85 }), hm = new THREE.MeshStandardMaterial({ color: 0xcdbb98, roughness: 0.9 })
     ;[[-79.95, 0.26, -0.12], [-80.2, 0.3, 0.15]].forEach(([x, hh, ry]) => {
@@ -418,8 +426,11 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   // 店招：格櫃上面的發光字
   const signT = canvasTex(1024, 192, (x, w, h) => {
     x.clearRect(0, 0, w, h); x.textBaseline = 'middle'; x.textAlign = 'center'
-    x.fillStyle = '#2f7d4f'; x.font = 'bold 110px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText('相機行', w / 2 - 170, h / 2)
-    x.fillStyle = '#5b6a61'; x.font = '600 52px "Helvetica Neue", Arial, sans-serif'; x.fillText('PHOTO & OPTICS', w / 2 + 220, h / 2 + 8)
+    if (LANG === 'en') { x.fillStyle = '#2f7d4f'; x.font = '700 104px "Helvetica Neue", Arial, sans-serif'; x.fillText('PHOTO & OPTICS', w / 2, h / 2 + 4, w - 40) }
+    else {
+      x.fillStyle = '#2f7d4f'; x.font = `bold 110px ${FONT_SANS}`; x.textAlign = 'right'; x.fillText(tr('相機行'), w / 2 - 5, h / 2, w / 2 - 40)   // 靠右對齊：字變長往左長，不會壓到英文
+      x.fillStyle = '#5b6a61'; x.font = '600 52px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'left'; x.fillText('PHOTO & OPTICS', w / 2 + 25, h / 2 + 8)
+    }
   })
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.79), new THREE.MeshStandardMaterial({ map: signT, transparent: true, emissive: 0xffffff, emissiveMap: signT, emissiveIntensity: 0.25 }))
   sign.position.set((SX0 + SX1) / 2, 3.95, HZ - 0.29); sign.rotation.y = Math.PI; g.add(sign)
@@ -674,8 +685,11 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   {
     const t = canvasTex(1024, 128, (x, w, h) => {
       x.clearRect(0, 0, w, h); x.textBaseline = 'middle'; x.textAlign = 'center'
-      x.fillStyle = '#2f7d4f'; x.font = 'bold 72px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText('配件', w / 2 - 150, h / 2)
-      x.fillStyle = '#5b6a61'; x.font = '600 44px "Helvetica Neue", Arial, sans-serif'; x.fillText('ACCESSORIES', w / 2 + 110, h / 2 + 4)
+      if (LANG === 'en') { x.fillStyle = '#2f7d4f'; x.font = '700 68px "Helvetica Neue", Arial, sans-serif'; x.fillText('ACCESSORIES', w / 2, h / 2 + 4) }
+      else {
+        x.fillStyle = '#2f7d4f'; x.font = `bold 72px ${FONT_SANS}`; x.textAlign = 'right'; x.fillText(tr('配件'), w / 2 - 78, h / 2, w / 2 - 100)
+        x.fillStyle = '#5b6a61'; x.font = '600 44px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'left'; x.fillText('ACCESSORIES', w / 2 - 40, h / 2 + 4)
+      }
     })
     const sm = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.3), new THREE.MeshStandardMaterial({ map: t, transparent: true, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.3 }))
     sm.position.set(AXM, 2.66, AZ + 0.51); g.add(sm)
@@ -689,17 +703,17 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
       x.fillStyle = '#d8d8d2'; x.beginPath(); x.ellipse(128, 26, 22, 8, 0, 0, 7); x.fill()   // 掛孔
       x.fillStyle = '#fff'; x.font = 'bold 26px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'center'; x.fillText(label, 128, 48)
       x.save(); x.translate(128, 140); draw(); x.restore()
-      x.fillStyle = '#2b302d'; x.font = 'bold 24px "PingFang TC", sans-serif'; x.fillText(sub, 128, 238)
+      x.fillStyle = '#2b302d'; x.font = `bold 24px ${FONT_SANS}`; x.fillText(sub, 128, 238)
       x.restore()
     }
-    tile(0, () => { x.fillStyle = '#20252a'; x.beginPath(); x.moveTo(-40, -55); x.lineTo(25, -55); x.lineTo(40, -40); x.lineTo(40, 55); x.lineTo(-40, 55); x.fill(); x.fillStyle = '#d33'; x.fillRect(-40, -10, 80, 26); x.fillStyle = '#fff'; x.font = 'bold 20px Arial'; x.fillText('128GB', 0, 10) }, 'SD CARD', '記憶卡', '#c0392b')
-    tile(1, () => { x.fillStyle = '#1b1d1f'; x.fillRect(-32, -58, 64, 112); x.fillStyle = '#c9a24a'; x.fillRect(-18, -58, 36, 8); x.fillStyle = '#9aa'; x.font = 'bold 15px Arial'; x.fillText('2280mAh', 0, 8) }, 'BATTERY', '鋰電池', '#2c3e50')
-    tile(2, () => { x.fillStyle = '#111'; x.beginPath(); x.arc(0, 0, 58, 0, 7); x.fill(); const gr = x.createRadialGradient(-15, -15, 5, 0, 0, 50); gr.addColorStop(0, '#6c6f74'); gr.addColorStop(1, '#202226'); x.fillStyle = gr; x.beginPath(); x.arc(0, 0, 48, 0, 7); x.fill() }, 'ND FILTER', '減光鏡', '#34495e')
-    tile(3, () => { x.fillStyle = '#111'; x.beginPath(); x.arc(0, 0, 58, 0, 7); x.fill(); x.fillStyle = '#cfe6f0'; x.beginPath(); x.arc(0, 0, 48, 0, 7); x.fill(); x.fillStyle = 'rgba(255,255,255,0.8)'; x.beginPath(); x.ellipse(-16, -18, 18, 8, -0.7, 0, 7); x.fill() }, 'UV FILTER', '保護鏡', '#2f7d4f')
-    tile(4, () => { x.rotate(-0.6); x.fillStyle = '#2b2f33'; x.fillRect(-10, -62, 20, 100); x.fillStyle = '#c3c6c9'; x.fillRect(-10, 38, 20, 14); x.fillStyle = '#e8e4da'; x.beginPath(); x.arc(0, 60, 9, 0, 7); x.fill() }, 'LENSPEN', '拭鏡筆', '#8e6c3a')
-    tile(5, () => { x.strokeStyle = '#3d4a3f'; x.lineWidth = 16; x.beginPath(); for (let a = 0; a < 18; a += 0.2) { const r = 12 + a * 2.3; x.lineTo(Math.cos(a) * r, Math.sin(a) * r * 0.6) } x.stroke() }, 'STRAP', '相機背帶', '#556b2f')
-    tile(6, () => { x.fillStyle = '#141516'; x.beginPath(); x.arc(0, 0, 56, 0, 7); x.fill(); x.strokeStyle = '#3a3c3e'; x.lineWidth = 4; x.beginPath(); x.arc(0, 0, 44, 0, 7); x.stroke(); x.fillStyle = '#9a9c9e'; x.fillRect(-60, -8, 12, 16); x.fillRect(48, -8, 12, 16) }, 'LENS CAP', '鏡頭蓋', '#444')
-    tile(7, () => { x.fillStyle = '#1e2124'; x.fillRect(-24, -55, 48, 90); x.fillStyle = '#7fd19c'; x.beginPath(); x.arc(0, -20, 14, 0, 7); x.fill(); x.strokeStyle = '#1e2124'; x.lineWidth = 5; x.beginPath(); x.moveTo(0, 35); x.bezierCurveTo(0, 70, 50, 50, 50, 80); x.stroke() }, 'REMOTE', '快門線', '#7d3c98')
+    tile(0, () => { x.fillStyle = '#20252a'; x.beginPath(); x.moveTo(-40, -55); x.lineTo(25, -55); x.lineTo(40, -40); x.lineTo(40, 55); x.lineTo(-40, 55); x.fill(); x.fillStyle = '#d33'; x.fillRect(-40, -10, 80, 26); x.fillStyle = '#fff'; x.font = 'bold 20px Arial'; x.fillText('128GB', 0, 10) }, 'SD CARD', tr('記憶卡'), '#c0392b')
+    tile(1, () => { x.fillStyle = '#1b1d1f'; x.fillRect(-32, -58, 64, 112); x.fillStyle = '#c9a24a'; x.fillRect(-18, -58, 36, 8); x.fillStyle = '#9aa'; x.font = 'bold 15px Arial'; x.fillText('2280mAh', 0, 8) }, 'BATTERY', tr('鋰電池'), '#2c3e50')
+    tile(2, () => { x.fillStyle = '#111'; x.beginPath(); x.arc(0, 0, 58, 0, 7); x.fill(); const gr = x.createRadialGradient(-15, -15, 5, 0, 0, 50); gr.addColorStop(0, '#6c6f74'); gr.addColorStop(1, '#202226'); x.fillStyle = gr; x.beginPath(); x.arc(0, 0, 48, 0, 7); x.fill() }, 'ND FILTER', tr('減光鏡'), '#34495e')
+    tile(3, () => { x.fillStyle = '#111'; x.beginPath(); x.arc(0, 0, 58, 0, 7); x.fill(); x.fillStyle = '#cfe6f0'; x.beginPath(); x.arc(0, 0, 48, 0, 7); x.fill(); x.fillStyle = 'rgba(255,255,255,0.8)'; x.beginPath(); x.ellipse(-16, -18, 18, 8, -0.7, 0, 7); x.fill() }, 'UV FILTER', tr('保護鏡'), '#2f7d4f')
+    tile(4, () => { x.rotate(-0.6); x.fillStyle = '#2b2f33'; x.fillRect(-10, -62, 20, 100); x.fillStyle = '#c3c6c9'; x.fillRect(-10, 38, 20, 14); x.fillStyle = '#e8e4da'; x.beginPath(); x.arc(0, 60, 9, 0, 7); x.fill() }, 'LENSPEN', tr('拭鏡筆'), '#8e6c3a')
+    tile(5, () => { x.strokeStyle = '#3d4a3f'; x.lineWidth = 16; x.beginPath(); for (let a = 0; a < 18; a += 0.2) { const r = 12 + a * 2.3; x.lineTo(Math.cos(a) * r, Math.sin(a) * r * 0.6) } x.stroke() }, 'STRAP', tr('相機背帶'), '#556b2f')
+    tile(6, () => { x.fillStyle = '#141516'; x.beginPath(); x.arc(0, 0, 56, 0, 7); x.fill(); x.strokeStyle = '#3a3c3e'; x.lineWidth = 4; x.beginPath(); x.arc(0, 0, 44, 0, 7); x.stroke(); x.fillStyle = '#9a9c9e'; x.fillRect(-60, -8, 12, 16); x.fillRect(48, -8, 12, 16) }, 'LENS CAP', tr('鏡頭蓋'), '#444')
+    tile(7, () => { x.fillStyle = '#1e2124'; x.fillRect(-24, -55, 48, 90); x.fillStyle = '#7fd19c'; x.beginPath(); x.arc(0, -20, 14, 0, 7); x.fill(); x.strokeStyle = '#1e2124'; x.lineWidth = 5; x.beginPath(); x.moveTo(0, 35); x.bezierCurveTo(0, 70, 50, 50, 50, 80); x.stroke() }, 'REMOTE', tr('快門線'), '#7d3c98')
   })
   const cardGeo = new THREE.BoxGeometry(0.2, 0.2, 0.012)
   const cardMs = [...Array(8)].map((_, k) => {
@@ -728,16 +742,16 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   const scrT = new THREE.CanvasTexture(scr); scrT.colorSpace = THREE.SRGBColorSpace
   const scrM = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.2), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: scrT, emissiveIntensity: 0.9, roughness: 0.15 }))
   scrM.rotation.y = -Math.PI / 2; scrM.position.set(SIGN.x - 0.072, 1.2, SIGN.z); g.add(scrM)
-  const caps = [['藍鵲', 'Taiwan Blue Magpie'], ['五色鳥', 'Taiwan Barbet'], ['翠鳥', 'Common Kingfisher'], ['黑面琵鷺', 'Black-faced Spoonbill']]   // 跟 store-prints.jpg 四格的順序一樣：左上、右上、左下、右下
+  const caps = [[tr('藍鵲'), 'Taiwan Blue Magpie'], [tr('五色鳥'), 'Taiwan Barbet'], [tr('翠鳥'), 'Common Kingfisher'], [tr('黑面琵鷺'), 'Black-faced Spoonbill']]   // 跟 store-prints.jpg 四格的順序一樣：左上、右上、左下、右下
   let slide = -1
   function drawSlide(k) {
     const x = scr.getContext('2d'), w = scr.width, h = scr.height, im = printT.image, iw = im.width / 2, ih = im.height / 2
     x.fillStyle = '#0f1311'; x.fillRect(0, 0, w, h)
     x.drawImage(im, (k % 2) * iw, (k < 2 ? 0 : 1) * ih, iw, ih, 0, 70, w, w)
     x.fillStyle = '#7fd19c'; x.font = '600 22px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'left'; x.fillText('BIRD PHOTO OF THE WEEK', 24, 46)
-    x.fillStyle = '#fff'; x.font = 'bold 52px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText(caps[k][0], 24, w + 140)
+    x.fillStyle = '#fff'; x.font = `bold 52px ${FONT_SANS}`; x.fillText(caps[k][0], 24, w + 140)
     x.fillStyle = '#b9c7be'; x.font = '28px "Helvetica Neue", Arial, sans-serif'; x.fillText(caps[k][1], 24, w + 186)
-    x.fillStyle = '#2f7d4f'; x.fillRect(24, h - 92, w - 48, 60); x.fillStyle = '#fff'; x.font = 'bold 28px "PingFang TC", sans-serif'; x.fillText('進溫室拍拍看 →', 44, h - 52)
+    x.fillStyle = '#2f7d4f'; x.fillRect(24, h - 92, w - 48, 60); x.fillStyle = '#fff'; x.font = `bold 28px ${FONT_SANS}`; x.fillText(tr('進溫室拍拍看 →'), 44, h - 52, w - 88)
     for (let i = 0; i < 4; i++) { x.fillStyle = i === k ? '#fff' : '#4a524d'; x.beginPath(); x.arc(w - 96 + i * 20, 39, 5, 0, 7); x.fill() }
     scrT.needsUpdate = true
   }
@@ -762,7 +776,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
 
   /* ---------- 展示島（可以逛）：深灰鋼底座＋橡木台面＋玻璃罩＋發光壓克力墊＋斜立價格卡 ---------- */
   const items = []
-  const spec = (it) => it.af != null ? `對焦 ${it.af}s・連拍 ${it.fps} 張/秒` : `${it.min === it.max ? it.min : it.min + '–' + it.max}mm・f/${it.ap}`
+  const spec = (it) => it.af != null ? tr('對焦 {af}s・連拍 {fps} 張/秒', { af: it.af, fps: it.fps }) : `${it.min === it.max ? it.min : it.min + '–' + it.max}mm・f/${it.ap}`
   const place = (it, kind, x, z) => {
     // 先擺器材、量它的大小，玻璃罩照它開：最長的 600mm 立起來 61 公分，以前固定高度會穿出罩子
     const m = gearModel[it.id].clone()
@@ -789,7 +803,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     card.position.set(x, 0.96, z + 0.36); card.rotation.x = -0.55; g.add(card)
     box('charcoal', 0.42, 0.012, 0.06, x, 0.916, z + 0.38)
     addCollider(x, z, 0.48, 1.5)
-    const pitch = state.owned.includes(it.id) ? `${it.name}你已經有了，用得還順手嗎？` : `這${kind === 'lens' ? '支' : '台'}${it.name}，${spec(it)}，按 E 可以看詳細！`
+    const pitch = state.owned.includes(it.id) ? tr('{name}你已經有了，用得還順手嗎？', { name: it.name }) : tr(kind === 'lens' ? '這支{name}，{spec}，按 E 可以看詳細！' : '這台{name}，{spec}，按 E 可以看詳細！', { name: it.name, spec: spec(it) })
     items.push({ ...it, kind, pitch, pos: V(x, 1.1, z), tex: t, draw: () => { labelDraw({ ...it, spec: spec(it) }, state)(t.image.getContext('2d'), 512, 192); t.needsUpdate = true } })
   }
   BODIES.forEach((b, i) => place(b, 'body', -79.6 - i * 3.0, -1.8))

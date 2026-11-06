@@ -196,10 +196,7 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       if (rnd() < 0.55 && !nearCrossing(x, z, 7)) {
         benches.push({ p: v3(x, terrainHeight(x, z), z), q: qY(face), s: sc(1) })
         addCollider(x, z, 0.9, terrainHeight(x, z) + 1)
-      } else {
-        signs.push({ p: v3(x, terrainHeight(x, z), z), q: qY(face), s: sc(1) })
-        addCollider(x, z, 0.4, terrainHeight(x, z) + 1.6)
-      }
+      }   // 其他位置原本放解說牌（空白的木板），2026-11-07 使用者說不要：不放（亂數照抽，其他擺設位置不變）
     }
     // 路燈：另一側、錯開
     for (let k = 35; k < pts.length - 10; k += 55) {
@@ -264,12 +261,7 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     const gl = makeInst(glass, mats.lampGlass, lamps, { cast: false }); gl.renderOrder = 3
     scene.add(gl)
   }
-  {
-    const post = new THREE.BoxGeometry(0.12, 1.1, 0.12).translate(0, 0.55, 0)
-    const board = new THREE.BoxGeometry(0.9, 0.6, 0.06).rotateX(-0.5).translate(0, 1.15, 0.05)
-    const g = mergeGeometries([post, board], true)
-    scene.add(makeInst(g, [mats.metal, mats.wood], signs))
-  }
+
 
   /* --- 寫實植物模型（plants.js） --- */
   const pick = (names) => names[Math.floor(rnd() * names.length)]

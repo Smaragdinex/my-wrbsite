@@ -3,15 +3,16 @@
 // 模式：自動（光圈全開、快門至少 1/焦距、ISO 自動，ISO 到頂還不夠就拉慢快門，最慢 1/15，再不夠就暗）、
 // A 光圈優先（自己定光圈和 ISO，快門自動）、S 快門優先（自己定快門和 ISO，光圈自動）、M 全手動。
 import * as THREE from 'three'
+import { t as tr } from '../i18n.js'
 
 export const APERTURES = [1.4, 2, 2.8, 4, 5.6, 6.3, 8, 11, 16, 22]
 export const SHUTTERS = [1 / 8000, 1 / 4000, 1 / 2000, 1 / 1000, 1 / 500, 1 / 250, 1 / 125, 1 / 60, 1 / 30, 1 / 15, 1 / 8, 1 / 4, 1 / 2, 1]
 export const ISOS = [100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600]
 export const MODES = [
-  { id: 'auto', name: '自動', tip: '相機全部幫你決定。白天很好用；晚上快門會變慢、照片會糊或偏暗。' },
-  { id: 'A', name: 'A 光圈優先', tip: '你定光圈和 ISO，快門自動。光圈開大（數字小）背景比較糊、也比較亮。' },
-  { id: 'S', name: 'S 快門優先', tip: '你定快門和 ISO，光圈自動。拍飛的鳥要 1/2000 以上才凍得住。' },
-  { id: 'M', name: 'M 手動', tip: '全部自己來，看下面的測光表調到 0。' },
+  { id: 'auto', name: tr('自動'), tip: tr('相機全部幫你決定。白天很好用；晚上快門會變慢、照片會糊或偏暗。') },
+  { id: 'A', name: tr('A 光圈優先'), tip: tr('你定光圈和 ISO，快門自動。光圈開大（數字小）背景比較糊、也比較亮。') },
+  { id: 'S', name: tr('S 快門優先'), tip: tr('你定快門和 ISO，光圈自動。拍飛的鳥要 1/2000 以上才凍得住。') },
+  { id: 'M', name: tr('M 手動'), tip: tr('全部自己來，看下面的測光表調到 0。') },
 ]
 export const fmtShutter = (t) => (t >= 0.5 ? `${Math.round(t * 10) / 10}"` : `1/${Math.round(1 / t)}`)
 export const fmtAp = (n) => `f/${n}`

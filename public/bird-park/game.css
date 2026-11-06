@@ -30,6 +30,12 @@ body.in-menu #hud { display: none; }
 .menu nav button { all: unset; cursor: pointer; padding: 13px 22px; border-radius: 12px; font-size: 18px; font-weight: 700; background: var(--accent); color: #fff; transition: transform 0.12s, background 0.12s; }
 .menu nav button.ghost { background: rgba(255, 255, 255, 0.14); backdrop-filter: blur(6px); }
 .menu nav button:hover { transform: translateX(6px); background: #3f8a5c; }
+/* 語言：選單下面一排小按鈕 */
+.langs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 22px; max-width: 320px; }
+.langs button { all: unset; cursor: pointer; padding: 6px 11px; border-radius: 999px; font-size: 14px; color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18); }
+.langs button:hover { background: rgba(255, 255, 255, 0.2); }
+.langs button.on { background: #fff; color: #1f2a24; font-weight: 700; }
+.langs .globe { width: 100%; font-size: 12px; letter-spacing: 0.08em; opacity: 0.6; margin-bottom: 2px; }
 .menu-sheet { max-height: 86vh; overflow: auto; }
 .menu-sheet h2 { margin: 0 0 10px; font-size: 24px; }
 /* 設定、操作說明：左上角一個圓形 X 關閉（取代底下的「返回」），捲動時標題列黏在上面 */

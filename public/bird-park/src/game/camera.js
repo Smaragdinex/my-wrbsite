@@ -6,20 +6,21 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { measurePhoto, scorePhoto } from './scoring.js'
 import { APERTURES, SHUTTERS, ISOS, MODES, NOISE, fmtShutter, fmtAp, settle, createMeter } from './exposure.js'
 import { createCameraSfx } from './camera-sfx.js'
+import { t as tr, LANG, FONT_SANS } from '../i18n.js'
 
 // 機身：af 對焦要幾秒、fps 連拍、iso 最高 ISO（暗處能拍多亮；越高的機身雜訊也越少，見 exposure.js 的 NOISE）
 export const BODIES = [
-  { id: 'b1', name: '入門機身 Lark 100', price: 0, af: 0.7, fps: 3, iso: 1600 },
-  { id: 'b2', name: '中階機身 Kestrel 500', price: 6000, af: 0.3, fps: 8, iso: 6400 },
-  { id: 'b3', name: '旗艦機身 Falcon 9', price: 22000, af: 0.1, fps: 20, iso: 25600 },
+  { id: 'b1', name: tr('入門機身 Lark 100'), model: 'Lark 100', price: 0, af: 0.7, fps: 3, iso: 1600 },
+  { id: 'b2', name: tr('中階機身 Kestrel 500'), model: 'Kestrel 500', price: 6000, af: 0.3, fps: 8, iso: 6400 },
+  { id: 'b3', name: tr('旗艦機身 Falcon 9'), model: 'Falcon 9', price: 22000, af: 0.1, fps: 20, iso: 25600 },
 ]
 // 鏡頭：焦段範圍（mm）、最大光圈（數字越小越亮、景深越淺）
 export const LENSES = [
-  { id: 'l1', name: '18–55mm 標準變焦', price: 0, min: 18, max: 55, ap: 4 },
-  { id: 'l2', name: '70–300mm 望遠變焦', price: 3500, min: 70, max: 300, ap: 5.6 },
-  { id: 'l3', name: '100–400mm 望遠變焦', price: 9000, min: 100, max: 400, ap: 5.6 },
-  { id: 'l4', name: '150–600mm 超望遠', price: 16000, min: 150, max: 600, ap: 6.3 },
-  { id: 'l5', name: '600mm f/4 定焦', price: 48000, min: 600, max: 600, ap: 4 },
+  { id: 'l1', name: tr('18–55mm 標準變焦'), price: 0, min: 18, max: 55, ap: 4 },
+  { id: 'l2', name: tr('70–300mm 望遠變焦'), price: 3500, min: 70, max: 300, ap: 5.6 },
+  { id: 'l3', name: tr('100–400mm 望遠變焦'), price: 9000, min: 100, max: 400, ap: 5.6 },
+  { id: 'l4', name: tr('150–600mm 超望遠'), price: 16000, min: 150, max: 600, ap: 6.3 },
+  { id: 'l5', name: tr('600mm f/4 定焦'), price: 48000, min: 600, max: 600, ap: 4 },
 ]
 export const vfov = (f) => THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * f)))   // 全片幅 36×24
 
@@ -99,7 +100,7 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     if (i < 0) i = ok.reduce((b, x, k) => (Math.abs(Math.log(x / v)) < Math.abs(Math.log(ok[b] / v)) ? k : b), 0)
     return ok[THREE.MathUtils.clamp(i + d, 0, ok.length - 1)]
   }
-  const FONT = '"PingFang TC", "Noto Sans TC", sans-serif', MONO = 'ui-monospace, Menlo, monospace'
+  const FONT = FONT_SANS, MONO = 'ui-monospace, Menlo, monospace'
   function renderPanel() {
     const s = now(), m = cam.mode, L = lens(), B = body(), g = lcd
     const auto = (k) => (m === 'auto' || (m === 'A' && k === 't') || (m === 'S' && k === 'ap'))
@@ -113,12 +114,19 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
       const bx = 18 + i * 248, w = 236, on = x.id === m, hv = hit(bx, 14, w, 74, { mode: x.id })
       g.fillStyle = on ? '#f2c94c' : hv ? '#2c3a40' : '#1a2428'; g.beginPath(); g.roundRect(bx, 14, w, 74, 12); g.fill()
       g.fillStyle = on ? '#111' : '#d7e3e6'; g.font = `600 32px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'
-      g.fillText(x.name, bx + w / 2, 52)
+      g.fillText(x.name, bx + w / 2, 52, w - 14)
     })
     g.textAlign = 'left'; g.fillStyle = '#8fa3a8'; g.font = `24px ${FONT}`
-    g.fillText(MODES.find((x) => x.id === m).tip.slice(0, 38), 22, 116)
+    const tip = MODES.find((x) => x.id === m).tip
+    if (LANG === 'zh') g.fillText(tip.slice(0, 38), 22, 116)
+    else {   // 其他語言比較長：縮小字、折成兩行
+      g.font = `19px ${FONT}`
+      const parts = LANG === 'en' ? tip.split(' ') : [...tip], sep = LANG === 'en' ? ' ' : '', lines = ['']
+      for (const w of parts) { const s = lines[lines.length - 1] ? lines[lines.length - 1] + sep + w : w; if (g.measureText(s).width > LW - 44 && lines.length < 2) lines.push(w); else lines[lines.length - 1] = s }
+      lines.forEach((l, i) => g.fillText(l, 22, 104 + i * 24, LW - 44))
+    }
     // 三排設定：名稱｜◀ 數值 ▶
-    const rows = [['ap', '光圈', fmtAp(s.N)], ['t', '快門', fmtShutter(s.t)], ['iso', 'ISO', String(s.iso)]]
+    const rows = [['ap', tr('光圈'), fmtAp(s.N)], ['t', tr('快門'), fmtShutter(s.t)], ['iso', 'ISO', String(s.iso)]]
     rows.forEach(([k, label, val], i) => {
       const y = 146 + i * 122, a = auto(k)
       g.fillStyle = '#121b1f'; g.beginPath(); g.roundRect(18, y, LW - 36, 108, 14); g.fill()
@@ -129,7 +137,7 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
         g.fillStyle = a ? '#3c4a50' : hv ? '#111' : '#e8f0f2'; g.font = `40px ${FONT}`; g.textAlign = 'center'; g.fillText(ch, dx + 50, y + 56)
       }
       g.fillStyle = a ? '#7f9196' : '#ffffff'; g.font = `700 64px ${MONO}`; g.textAlign = 'center'; g.fillText(val, LW / 2 + 60, y + 48)
-      if (a) { g.font = `24px ${FONT}`; g.fillStyle = '#f2c94c'; g.fillText('自動', LW / 2 + 60, y + 92) }
+      if (a) { g.font = `24px ${FONT}`; g.fillStyle = '#f2c94c'; g.fillText(tr('自動'), LW / 2 + 60, y + 92) }
       g.textAlign = 'left'
     })
     // 測光表：-3 … +3，指針
@@ -139,14 +147,14 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     for (let v = -3; v <= 3; v++) { const x = mx0 + (v + 3) / 6 * (mx1 - mx0); g.fillRect(x - 1.5, my - (v === 0 ? 16 : 9), 3, v === 0 ? 32 : 18); g.fillText(`${v > 0 ? '+' : ''}${v}`, x, my + 30) }
     const ok = Math.abs(s.over) <= 0.5, px = mx0 + (o + 3) / 6 * (mx1 - mx0)
     g.fillStyle = ok ? '#5cf07a' : '#ff9b5a'; g.beginPath(); g.moveTo(px, my - 12); g.lineTo(px - 13, my - 36); g.lineTo(px + 13, my - 36); g.fill()
-    g.font = `600 30px ${FONT}`; g.fillText(ok ? '曝光剛好' : s.over > 0 ? `過曝 ${s.over.toFixed(1)} 格` : `欠曝 ${(-s.over).toFixed(1)} 格`, (mx0 + mx1) / 2, 526)
+    g.font = `600 30px ${FONT}`; g.fillText(ok ? tr('曝光剛好') : s.over > 0 ? tr('過曝 {n} 格', { n: s.over.toFixed(1) }) : tr('欠曝 {n} 格', { n: (-s.over).toFixed(1) }), (mx0 + mx1) / 2, 526)
     // 最下面：警告或機身資訊、關閉
     g.textAlign = 'left'; g.font = `24px ${FONT}`
-    const warn = s.t > 1 / st.focal ? '⚠ 快門比 1/焦距 慢，會手震' : s.iso > 800 && s.iso >= B.iso * 0.5 ? '⚠ ISO 很高，雜訊多' : `${B.name.split(' ').slice(1).join(' ')}・${Math.round(st.focal)}mm・EV ${meter.ev.toFixed(1)}`
+    const warn = s.t > 1 / st.focal ? '⚠ ' + tr('快門比 1/焦距 慢，會手震') : s.iso > 800 && s.iso >= B.iso * 0.5 ? '⚠ ' + tr('ISO 很高，雜訊多') : `${B.model}・${Math.round(st.focal)}mm・EV ${meter.ev.toFixed(1)}`
     g.fillStyle = warn.startsWith('⚠') ? '#ffb36b' : '#7f9196'; g.fillText(warn, 22, LH - 34)
     const hv = hit(LW - 230, LH - 66, 212, 56, { close: true })
     g.fillStyle = hv ? '#f2c94c' : '#26343a'; g.beginPath(); g.roundRect(LW - 230, LH - 66, 212, 56, 12); g.fill()
-    g.fillStyle = hv ? '#111' : '#e8f0f2'; g.textAlign = 'center'; g.font = `600 26px ${FONT}`; g.fillText('完成（E）', LW - 124, LH - 37)
+    g.fillStyle = hv ? '#111' : '#e8f0f2'; g.textAlign = 'center'; g.font = `600 26px ${FONT}`; g.fillText(tr('完成（E）'), LW - 124, LH - 37)
     g.textAlign = 'left'
     lcdTex.needsUpdate = true
   }
@@ -264,8 +272,8 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     $('.vf-iso').textContent = `ISO ${s.iso}`
     $('.vf-meter i').style.left = `${((THREE.MathUtils.clamp(s.over, -2.5, 2.5) + 2.5) / 5) * 100}%`
     $('.vf-meter').classList.toggle('bad', Math.abs(s.over) > 0.5)
-    $('.vf-d').textContent = st.locked ? `對焦 ${st.focus < 100 ? st.focus.toFixed(1) : '∞'} m` : '對焦中…'
-    const warn = s.t > 1 / st.focal ? '手震警告：快門太慢' : s.over < -1.5 ? '太暗' : s.over > 1.5 ? '太亮' : ''
+    $('.vf-d').textContent = st.locked ? tr('對焦 {d} m', { d: st.focus < 100 ? st.focus.toFixed(1) : '∞' }) : tr('對焦中…')
+    const warn = s.t > 1 / st.focal ? tr('手震警告：快門太慢') : s.over < -1.5 ? tr('太暗') : s.over > 1.5 ? tr('太亮') : ''
     $('.vf-warn').textContent = warn; $('.vf-warn').hidden = !warn
   }
 
