@@ -13,7 +13,7 @@ import { loadAnimalModels, placeAnimal } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON } from './layout.js'
+import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight } from './layout.js'
 import { softDotTex } from './textures.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
@@ -66,7 +66,9 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const [plantLib] = await Promise.all([loadPlants(onProgress), loadAnimalModels(extraModels)])
   // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
   const birds = BIRDS.map((def) => {
-    const d = { ...def, y: def.y ?? terrainHeight(...def.spot), groundAt: def.water == null ? terrainHeight : null }
+    // 山區的鳥站在山區的地形上（地面高度查 alpineHeight）
+    const groundH = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)
+    const d = { ...def, y: def.y ?? groundH(...def.spot), groundAt: def.water == null ? groundH : null }
     // 游泳的鳥只在開闊水面：離池邊（石頭）和山腳都要留距離
     if (def.swim) d.swimOK = (x, z) => poolQ(x, z) < 0.7 && Math.hypot(x - MTN.x, z - MTN.z) > mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 4
     // 沒指定方位就讓鏡頭站在「鳥背對山」那一側，背景是雲霧山
@@ -77,7 +79,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   })
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
   // 山區（溫室東半邊）：直接蓋、一直畫。附屬館只剩海岸館（目前關著）
-  const alpine = createAlpine({ scene, lib: plantLib })
+  // 山區的樹、草、岩石避開鳥站的地方和鏡頭那一側
+  const alpine = createAlpine({ scene, lib: plantLib, avoid: birds.filter((b) => inAlpine(...b.def.spot)).map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], cx: b.cam.x, cz: b.cam.z, ground: b.def.perch === 'ground' })) })
   alpine.build()
   const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
   const birdStops = birds.map((b) => ({

@@ -281,6 +281,7 @@ const BUILD = {
 
   kingfisher, egret, moorhen, sparrow, waterhen, bluemagpie, blackbulbul, babbler, mikado,
   spoonbill, thrush, pheasant, oriole,
+  flamecrest, bushrobin, rosefinch, yellowtit, laughingthrush, niltava, yuhina, sibia,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -298,7 +299,8 @@ export async function loadAnimalModels(extra = []) {
   })
   await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
-    'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig'].map(load),
+    'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
     ...extra.map((n) => load(n).catch(() => console.warn('[birds] 沒有模型', n)))])
 }
@@ -924,6 +926,41 @@ function pheasant(env) {
 // 黃鸝：停在樹冠的枝上跳
 function oriole(env) {
   return perchRigged(outer(env, -0.9), { name: 'oriole-rig', k: 0.54, ...TRIPO, foot: 0.005, drop: 0.05, beat: 7 })
+}
+
+// 2026-11-07 高山區 8 種（同一套流程；點位用 tools/side-view.py＋side-grid.py 量）
+// 地上的：栗背林鴝（步道邊跳、翹尾巴）、台灣朱雀（山頂草坡低頭啄草籽）、金翼白眉（山頂步道慢慢走、很親人）
+function bushrobin(env) {
+  return groundTripo(env, { name: 'bushrobin-rig', H: 0.2, h0: 0.763, ...TRIPO, hop: 0.035, flick: 0.35, flickF: 1.8,
+    walk: { radius: 1.0, speed: 0.22, turn: 3 }, stride: 0.08, swingT: 0.12, lift: 0.035, knee: [0.3, 0.6], focusY: 0.12,
+    acts: { walk: [4, 99, 99], peck: [3, 0.7, 1.2], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
+}
+function rosefinch(env) {
+  return groundTripo(env, { name: 'rosefinch-rig', H: 0.2, h0: 0.734, ...TRIPO, hop: 0.035, flick: 0.15,
+    walk: { radius: 1.0, speed: 0.2, turn: 3 }, stride: 0.07, swingT: 0.12, lift: 0.035, knee: [0.3, 0.6], focusY: 0.12,
+    acts: { walk: [4, 99, 99], peck: [5, 0.7, 1.3], look: [2, 0.8, 1.8], stand: [1, 1, 2], turn: [1, 99, 99] } })
+}
+function laughingthrush(env) {
+  return groundTripo(env, { name: 'laughingthrush-rig', H: 0.24, h0: 0.557, ...TRIPO, hop: 0.04, flick: 0.25,
+    walk: { radius: 1.2, speed: 0.2, turn: 3 }, stride: 0.09, swingT: 0.14, lift: 0.04, knee: [0.3, 0.6], focusY: 0.14,
+    acts: { walk: [4, 99, 99], peck: [3, 0.8, 1.4], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
+}
+// 停在樹枝上的：火冠戴菊鳥（很小）、黃山雀、黃腹琉璃、冠羽畫眉、白耳畫眉
+function flamecrest(env) {
+  return perchRigged(outer(env, -0.7), { name: 'flamecrest-rig', k: 0.26, ...TRIPO, foot: 0.004, drop: 0.04, beat: 9 })
+}
+function yellowtit(env) {
+  return perchRigged(outer(env, -0.8), { name: 'yellowtit-rig', k: 0.36, ...TRIPO, foot: 0.004, drop: 0.045, beat: 8 })
+}
+function niltava(env) {
+  return perchRigged(outer(env, -0.9), { name: 'niltava-rig', k: 0.44, ...TRIPO, foot: 0.004, drop: 0.05, beat: 7 })
+}
+function yuhina(env) {
+  return perchGroup(2, 0.35, -0.6, (blocked) => perchRigged(outer(env, -0.8), { name: 'yuhina-rig', k: 0.3, ...TRIPO, foot: 0.004, drop: 0.04, beat: 9,
+    hopper: { blocked } }))
+}
+function sibia(env) {
+  return perchRigged(outer(env, -1.0), { name: 'sibia-rig', k: 0.56, ...TRIPO, foot: 0.004, drop: 0.05, beat: 7 })
 }
 
 /* ---------- 停棲處 ---------- */

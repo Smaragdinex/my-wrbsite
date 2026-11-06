@@ -229,9 +229,99 @@ const ALL = [
       '除了好聽的笛音，有時也會發出像貓叫一樣沙啞的聲音。',
     ],
   },
+  // 2026-11-07 高山區（溫室東半邊）8 種：沿著上山的步道擺，鏡頭（view）從步道那側拍
+  {
+    id: 'yuhina', spot: [88, 8], perch: 'branch', view: 180, dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: '冠羽畫眉', sci: 'Yuhina brunneiceps', where: '山區入口的樹叢',
+    intro: '台灣特有種。頭上一撮高高翹起的褐色羽冠，白臉上畫著黑色的過眼線和鬍鬚紋，看起來總是很有精神。中海拔山區很常見，常一小群在樹叢間吵吵鬧鬧地移動。',
+    facts: [
+      '叫聲聽起來像「吐米酒」，賞鳥人常用這句話記住牠。',
+      '很愛吸花蜜，開花的樹上常一次來一大群。',
+      '繁殖時會好幾隻一起照顧同一窩小鳥，是少見的「合作生殖」。',
+      '興奮或警戒時羽冠會豎得更高。',
+    ],
+  },
+  {
+    id: 'bushrobin', spot: [100, 13.5], perch: 'ground', view: 180, dist: 2.2, camH: 1.0, lookY: 0.2,
+    name: '栗背林鴝', sci: 'Tarsiger johnstoniae', where: '步道邊',
+    intro: '台灣特有種。公鳥黑頭配一道長長的白眉，胸前一圈橘紅色的領子連到栗紅色的背，非常好認。常停在步道邊的矮枝或石頭上，不太怕人，被叫做阿里山的「迎賓鳥」。',
+    facts: [
+      '住在海拔約 2,000～3,000 公尺的森林，冬天會往低一點的地方移動。',
+      '常上下擺動尾巴，一邊跳一邊在地上找小蟲。',
+      '母鳥是低調的橄欖褐色，和公鳥長得很不一樣。',
+      '巢多半藏在山壁的洞或樹根之間。',
+    ],
+  },
+  {
+    id: 'yellowtit', spot: [111, 14], perch: 'branch', view: 180, dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: '黃山雀', sci: 'Machlolophus holsti', where: '闊葉林樹枝',
+    intro: '台灣特有種，也是保育類。全身鮮黃，頭頂有一撮直立的黑色羽冠，背和翅膀是藍灰色，翅上點綴白斑。數量不多，就算在山上也不容易遇到，遇到的人都很幸運。',
+    facts: [
+      '是台灣特有的山雀，常和其他小鳥混成一群在樹冠找蟲。',
+      '母鳥的顏色比公鳥淡，腹部沒有黑色。',
+      '在樹洞裡築巢。',
+      '叫聲細細高高的，常常先聽到才找得到。',
+    ],
+  },
+  {
+    id: 'niltava', spot: [117, -12], perch: 'branch', view: 45, dist: 2.8, camH: 3.6, lookY: 3.4,
+    name: '黃腹琉璃', sci: 'Niltava vivida', where: '溪谷旁的樹',
+    intro: '公鳥上半身是深邃的寶藍色，肚子是鮮豔的橘黃色，橘色還尖尖地往上延伸到喉嚨，像在胸前別了一個箭頭。常停在溪谷旁的樹枝上，一動也不動地等飛過的蟲。',
+    facts: [
+      '在台灣是中海拔森林的留鳥，夏天比較常見。',
+      '會從停棲的枝頭突然飛出去，在空中抓蟲再飛回來。',
+      '母鳥是灰褐色的，和公鳥差很多。',
+      '鳴聲清脆悠揚，在安靜的溪谷裡特別好聽。',
+    ],
+  },
+  {
+    id: 'flamecrest', spot: [131, -18.5], perch: 'branch', view: 180, dist: 2.2, camH: 3.6, lookY: 3.4,
+    name: '火冠戴菊鳥', sci: 'Regulus goodfellowi', where: '針葉林',
+    intro: '台灣特有種，也是台灣最小的鳥之一，只有約 9 公分。頭頂中央一道橘紅色的「火冠」，兩側鑲黑邊。牠住在台灣最高的地方，常在冷杉、鐵杉的枝葉間快速跳動。',
+    facts: [
+      '平均出現的海拔約 2,500 公尺，是台灣分布最高的特有種鳥類之一。',
+      '動作很快、一刻不停，要拍清楚很考驗快門。',
+      '常和其他小型鳥混群，在針葉間找小蟲。',
+      '公鳥興奮時會把火紅的頭冠羽毛豎起來。',
+    ],
+  },
+  {
+    id: 'sibia', spot: [158, -7], perch: 'branch', view: 90, dist: 3.0, camH: 3.6, lookY: 3.4,
+    name: '白耳畫眉', sci: 'Heterophasia auricularis', where: '山腰的樹冠',
+    intro: '台灣特有種。黑頭上一道寬寬的白色過眼線，末端是蓬鬆下垂的白色耳羽，像戴了白色的耳環；肚子是鮮豔的栗橙色，尾巴長長的。中海拔森林裡很常見。',
+    facts: [
+      '叫聲響亮，像口哨一樣「揮揮揮－」，山上常常聽得到。',
+      '吃果實、花蜜，也吃小蟲；冬天會成群移動。',
+      '常在樹冠層活動，偶爾下到步道旁的樹叢。',
+      '長尾巴尾端是白色的，飛起來很明顯。',
+    ],
+  },
+  {
+    id: 'laughingthrush', spot: [150, 12.5], perch: 'ground', view: 0, dist: 2.6, camH: 1.1, lookY: 0.22,
+    name: '金翼白眉', sci: 'Trochalopteron morrisonianum', where: '山頂步道',
+    intro: '台灣特有種。臉上有白色眉線和白色鬍鬚紋，喉嚨栗紅色，翅膀和尾巴有一大片金黃色。牠住在高海拔，常在山頂的步道、停車場附近走來走去，一點也不怕人。',
+    facts: [
+      '合歡山、玉山一帶最常見，是登山客最熟悉的高山鳥之一。',
+      '會撿登山客掉的食物，請不要餵牠。',
+      '叫聲是響亮的「嘰—喔」，很好認。',
+      '冬天下雪時也不會飛走，會躲在箭竹叢裡。',
+    ],
+  },
+  {
+    id: 'rosefinch', spot: [139, 6], perch: 'ground', view: 90, dist: 2.2, camH: 1.0, lookY: 0.2,
+    name: '台灣朱雀', sci: 'Carpodacus formosanus', where: '山頂箭竹草原',
+    intro: '台灣特有種，以前叫酒紅朱雀。公鳥全身酒紅色、眉線是帶銀光的粉紅色，母鳥則是褐色帶縱紋。牠們住在 2,500 公尺以上的高山，常在步道邊的草地上低頭撿草籽。',
+    facts: [
+      '短短粗粗的嘴是嗑種子用的，跟麻雀一樣。',
+      '冬天常成群出現在高山的草坡和停車場旁。',
+      '近年才被確認是台灣特有種，所以改名叫台灣朱雀。',
+      '母鳥的褐色條紋是很好的保護色，躲在草叢裡很難看見。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
 const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'barbet', 'kingfisher', 'waterhen', 'moorhen', 'nightheron', 'egret', 'spoonbill',
-  'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie']
+  'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
+  'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch']
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

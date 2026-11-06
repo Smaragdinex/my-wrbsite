@@ -81,7 +81,16 @@ function coniferGeo(kind) {
 }
 
 /* ---------- 館內 ---------- */
-function buildInterior(lib) {
+// 鳥站附近：r 公尺內、或鳥到鏡頭那條線 w 公尺內就不放（樹不擋鏡頭、不插進停棲的樹）
+function nearBird(avoid, x, z, r, w) {
+  for (const b of avoid) {
+    if (Math.hypot(x - b.x, z - b.z) < r) return true
+    const dx = b.cx - b.x, dz = b.cz - b.z, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - b.x) * dx + (z - b.z) * dz) / L2))
+    if (Math.hypot(x - b.x - dx * t, z - b.z - dz * t) < w) return true
+  }
+  return false
+}
+function buildInterior(lib, avoid = []) {
   const g = new THREE.Group(); g.name = 'alpineInterior'
   const rnd = mulberry32(2026)
   const AG = ALP_GRID
@@ -211,6 +220,7 @@ function buildInterior(lib) {
         // 越高越矮（高山上的冷杉長不高，山頂看得出去）；不能頂到玻璃
         const H = Math.min(((kind === 'fir' ? 9 : 8) + rnd() * 7) * (1 - 0.5 * ss(12, 22, hgt)), domeY(x, z) - hgt - 1.5)
         if (H < 4) continue
+        if (nearBird(avoid, x, z, 5.5, 2.5)) continue
         if (rnd() > ss(86, 100, x)) continue   // 入口一小片空地，先看到山再進林子
         if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 16) continue   // 山頂觀景台四周是箭竹草原，看得出去
         list.push({ p: V(x, hgt - 0.2, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(H * (0.85 + rnd() * 0.3), H, H * (0.85 + rnd() * 0.3)), H })
@@ -233,7 +243,7 @@ function buildInterior(lib) {
     const pick = (a) => a[Math.floor(rnd() * a.length)]
     for (let k = 0; k < 8000; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || alpineTrailDist(x, z) < 2.2) continue
+      if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || alpineTrailDist(x, z) < 2.2 || nearBird(avoid, x, z, 3, 1.5)) continue
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
       const sd = alpineStreamDist(x, z)
       if (sd > 1.4 && sd < 4 && rnd() < 0.25) put(pick(moss), { p: V(x, h - 0.15, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 1.2), c: new THREE.Color().setHSL(0.25, 0.12, 0.85 + rnd() * 0.1) })
@@ -260,6 +270,7 @@ function buildInterior(lib) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
       if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 4.5) continue   // 觀景台上
+      if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.6)) continue   // 地上的鳥走動的地方草矮一點也不行：直接不長
       if (alpineTrailDist(x, z) < 1.5 || alpineStreamDist(x, z) < 1.4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.6) continue
       const h = alpineHeight(x, z)
       const dens = (0.45 + 0.55 * fbm2(x * 0.07, z * 0.07, 3) + 0.4)
@@ -348,10 +359,10 @@ function buildInterior(lib) {
 
 /* ---------- 對外 ---------- */
 // 山區就是溫室東半邊（2026-11-07 改成一個館）：館內一開始就蓋好、一直畫；animate 每格跑（溪水、雲霧）
-export function createAlpine({ scene, lib }) {
+export function createAlpine({ scene, lib, avoid = [] }) {
   let interior = null
   return {
-    build() { if (!interior) { interior = buildInterior(lib); scene.add(interior.g) } return interior.g },
+    build() { if (!interior) { interior = buildInterior(lib, avoid); scene.add(interior.g) } return interior.g },
     get group() { return interior?.g },
     animate(t, dt, camera) {
       if (!interior) return

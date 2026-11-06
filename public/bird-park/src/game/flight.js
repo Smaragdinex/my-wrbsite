@@ -3,7 +3,9 @@
 // 飛的時候換成另一個翅膀張開的模型（ChatGPT 畫飛行姿勢 → Tripo → tools/rig-distance.py 的 fly 骨架：body、head、tail、wingL/R、wingtipL/R）。
 import * as THREE from 'three'
 import { rigged, AX, hasModel } from '../birds.js'
-import { terrainHeight, domeRho, domeY, mtnBase, MTN } from '../layout.js'
+import { terrainHeight as gardenH, domeRho, domeY, mtnBase, MTN, inAlpine, alpineHeight } from '../layout.js'
+// 地面高度：山區查山區的地形（不然鳥會飛進山坡裡）
+const terrainHeight = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : gardenH(x, z)
 
 const { clamp, lerp, smoothstep: ss, randFloat: rnd } = THREE.MathUtils
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
@@ -31,12 +33,21 @@ export const ESCAPE = {
   mikado: { r: 8, run: 7 },
   pheasant: { r: 8, run: 7 },
   babbler: { r: 5, run: 5 },
+  // 高山區 8 種：還沒有自己的飛行模型（先借翠鳥的，大小照停棲模型換算）
+  flamecrest: { r: 5, fly: { speed: 7, hz: 15, style: 'bound' } },
+  yuhina: { r: 5, fly: { speed: 7, hz: 14, style: 'bound' } },
+  yellowtit: { r: 6, fly: { speed: 7, hz: 13, style: 'bound' } },
+  niltava: { r: 7, fly: { speed: 8, hz: 11, style: 'flap' } },
+  sibia: { r: 7, fly: { speed: 8, hz: 9, style: 'bound' } },
+  bushrobin: { r: 4, fly: { speed: 7, hz: 13, style: 'flap' } },   // 不太怕人
+  rosefinch: { r: 6, fly: { speed: 8, hz: 12, style: 'bound' } },
+  laughingthrush: { r: 3.5, run: 5 },                                   // 出了名的親人，靠太近才跑開
   moorhen: { r: 9, swim: 5 },
   waterhen: { r: 9, swim: 5 },
 }
 // 飛行模型（存在才用；還沒做好的先借翠鳥的飛行模型，大小照停棲模型的身高換算）
 const FLY_NAME = (id) => `${id}-fly-rig`
-export const flyModels = () => Object.keys(ESCAPE).filter((id) => ESCAPE[id].fly && id !== 'kingfisher').map(FLY_NAME)
+export const flyModels = () => Object.keys(ESCAPE).filter((id) => ESCAPE[id].fly?.k && id !== 'kingfisher').map(FLY_NAME)   // 沒有 k 的還沒做飛行模型，不去載
 
 const _v = V(), _w = V(), _box = new THREE.Box3(), _q = new THREE.Quaternion()
 
