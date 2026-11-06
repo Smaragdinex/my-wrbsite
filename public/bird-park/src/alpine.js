@@ -6,17 +6,16 @@
 // 兩館不同時畫：玩家在館裡（或 B 門開著）才畫館內；在圓頂這邊（或 A 門開著）才畫圓頂裡面，緩衝室兩道門都關著的時候切換。
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { ALP, CORR, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, alpineHeight, alpineTrailDist, alpineStreamDist, alpineDoors, addCollider } from './layout.js'
+import { ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, alpineHeight, alpineTrailDist, alpineStreamDist, inAlpine, domeY, domeRho, addCollider } from './layout.js'
 import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
-import { lodRegisterGrass } from './lod.js'
+import { lodRegister, lodRegisterGrass } from './lod.js'
 import { mulberry32, fbm2 } from './noise.js'
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
 const { clamp, lerp } = THREE.MathUtils
 const ss = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t) }   // 跟 layout.js 同樣的參數順序（three 的 smoothstep 是 (x, min, max)，第一版用錯，樹全沒長出來）
-const XM = (ALP.X0 + ALP.X1) / 2
 
 function canvasTex(w, h, draw, srgb = true) {
   const c = document.createElement('canvas'); c.width = w; c.height = h
@@ -35,84 +34,6 @@ const quad = (pts, mat, parent, order = 5) => {
   for (let i = 1; i < pts.length - 1; i++) pos.push(...pts[0].toArray(), ...pts[i].toArray(), ...pts[i + 1].toArray())
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals()
   const m = new THREE.Mesh(geo, mat); m.renderOrder = order; parent.add(m); return m
-}
-
-/* ---------- 外殼：通道＋緩衝室＋館的鋼構、霧玻璃 ---------- */
-function buildShell() {
-  const g = new THREE.Group(); g.name = 'alpineShell'
-  const steel = new THREE.MeshStandardMaterial({ color: 0xf2f4f5, roughness: 0.45, metalness: 0.5 })
-  const alu = new THREE.MeshStandardMaterial({ color: 0x3c4246, roughness: 0.35, metalness: 0.8 })
-  const glassM = new THREE.MeshStandardMaterial({ color: 0xcfe4ea, transparent: true, opacity: 0.16, roughness: 0.04, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false })
-  // 館的玻璃是霧面的（裡面是雲霧林），從圓頂看過去是一片白濛濛的大溫室
-  const frost = new THREE.MeshStandardMaterial({ color: 0xe6eef0, transparent: true, opacity: 0.42, roughness: 0.6, side: THREE.DoubleSide, depthWrite: false })
-  const geos = { steel: [], alu: [] }
-  // 通道：x 從圓頂東門到館的西牆，人字屋頂、兩側玻璃
-  const { X0, X1, W } = CORR, EAVE = 3.2, RIDGE = 4.2, L = X1 - X0
-  const posts = [X0, X0 + L / 3, X0 + 2 * L / 3, X1]
-  for (const x of posts) for (const z of [-W, W]) bar(geos.steel, V(x, 0, z), V(x, EAVE, z), 0.22)
-  for (const z of [-W, W]) bar(geos.steel, V(X0, EAVE, z), V(X1, EAVE, z), 0.2, 0.28)
-  for (const x of posts) { bar(geos.steel, V(x, EAVE, -W), V(x, RIDGE, 0), 0.18, 0.24); bar(geos.steel, V(x, EAVE, W), V(x, RIDGE, 0), 0.18, 0.24) }
-  bar(geos.steel, V(X0, RIDGE, 0), V(X1, RIDGE, 0), 0.18)
-  for (const z of [-W, W]) {
-    geos.steel.push(new THREE.BoxGeometry(L, 0.3, 0.12).translate((X0 + X1) / 2, 0.15, z))
-    quad([V(X0, 0.3, z), V(X1, 0.3, z), V(X1, EAVE, z), V(X0, EAVE, z)], glassM, g)
-    for (let x = X0 + 1.2; x < X1; x += 1.2) bar(geos.alu, V(x, 0.3, z), V(x, EAVE, z), 0.05)
-  }
-  for (const s of [-1, 1]) quad([V(X0, EAVE, s * W), V(X1, EAVE, s * W), V(X1, RIDGE, 0), V(X0, RIDGE, 0)], glassM, g)
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(L + 1, 0.08, W * 2), new THREE.MeshStandardMaterial({ color: 0xd9d6cf, roughness: 0.6 }))
-  floor.position.set((X0 + X1) / 2, 0, 0); floor.receiveShadow = true; g.add(floor)
-  // 緩衝室：A、B 兩道玻璃自動門（兩片往兩邊滑），上面門楣
-  const doors = {}
-  for (const [k, x] of [['a', CORR.A], ['b', CORR.B]]) {
-    bar(geos.alu, V(x, 2.6, -W), V(x, 2.6, W), 0.16, 0.22)
-    for (const z of [-W, W]) bar(geos.alu, V(x, 0, z * 0.97), V(x, 2.6, z * 0.97), 0.1)
-    // 門上面那塊（門楣到屋頂）固定玻璃
-    quad([V(x, 2.7, -W), V(x, 2.7, W), V(x, EAVE, W), V(x, RIDGE, 0), V(x, EAVE, -W)], glassM, g)
-    const panels = [-1, 1].map((s) => {
-      const p = new THREE.Group()
-      const gl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 2.5, W - 0.05), glassM); gl.renderOrder = 6; p.add(gl)
-      const fr = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.5, 0.06), alu); fr.position.z = -s * (W - 0.05) / 2; p.add(fr)
-      p.position.set(x, 1.27, s * (W / 2 - 0.02)); g.add(p)
-      return { p, s }
-    })
-    doors[k] = { panels, x, v: 0, open: 0 }
-  }
-  // 館：x 從 ALP.X0 到 X1、z ±HZ、簷高 22、屋脊 34；8 公尺一榀門型鋼架，四面＋屋頂霧玻璃
-  const { X0: H0, X1: H1, HZ, H } = ALP, HE = 22
-  for (let x = H0; x <= H1 + 0.01; x += 8) {
-    for (const z of [-HZ, HZ]) bar(geos.steel, V(x, 0, z), V(x, HE, z), 0.5)
-    bar(geos.steel, V(x, HE, -HZ), V(x, H, 0), 0.45, 0.7); bar(geos.steel, V(x, HE, HZ), V(x, H, 0), 0.45, 0.7)
-  }
-  for (const z of [-HZ, HZ]) { bar(geos.steel, V(H0, HE, z), V(H1, HE, z), 0.4, 0.5); bar(geos.alu, V(H0, 8, z), V(H1, 8, z), 0.12); bar(geos.alu, V(H0, 15, z), V(H1, 15, z), 0.12) }
-  bar(geos.steel, V(H0, H, 0), V(H1, H, 0), 0.4)
-  for (const x of [H0, H1]) for (let z = -HZ + 8; z < HZ; z += 8) bar(geos.steel, V(x, 0, z), V(x, HE + (H - HE) * (1 - Math.abs(z) / HZ), z), 0.4)
-  // 霧玻璃：南北牆、屋頂、東牆、西牆（西牆中間留通道的開口）
-  for (const z of [-HZ, HZ]) quad([V(H0, 0, z), V(H1, 0, z), V(H1, HE, z), V(H0, HE, z)], frost, g)
-  for (const s of [-1, 1]) quad([V(H0, HE, s * HZ), V(H1, HE, s * HZ), V(H1, H, 0), V(H0, H, 0)], frost, g)
-  quad([V(H1, 0, -HZ), V(H1, 0, HZ), V(H1, HE, HZ), V(H1, H, 0), V(H1, HE, -HZ)], frost, g)
-  // 西牆中間留通道開口：拆成四塊凸多邊形（quad 是扇形三角化，凹的多邊形會破）
-  quad([V(H0, 0, W), V(H0, 0, HZ), V(H0, HE, HZ), V(H0, HE, W)], frost, g)
-  quad([V(H0, 0, -HZ), V(H0, 0, -W), V(H0, HE, -W), V(H0, HE, -HZ)], frost, g)
-  quad([V(H0, RIDGE + 0.4, -W), V(H0, RIDGE + 0.4, W), V(H0, HE, W), V(H0, HE, -W)], frost, g)
-  quad([V(H0, HE, -HZ), V(H0, HE, HZ), V(H0, H, 0)], frost, g)
-  // 館名（西牆、通道上方，朝外）
-  const signT = canvasTex(1024, 256, (x, w, h) => {
-    x.fillStyle = '#1f4a36'; x.fillRect(0, 0, w, h)
-    x.fillStyle = '#f2f4ef'; x.textAlign = 'center'; x.textBaseline = 'middle'
-    x.font = 'bold 120px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText('高山雲霧林', w / 2, h * 0.42)
-    x.font = '600 46px "Helvetica Neue", Arial, sans-serif'; x.fillText('ALPINE CLOUD FOREST', w / 2, h * 0.82)
-  })
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), new THREE.MeshStandardMaterial({ map: signT, emissive: 0xffffff, emissiveMap: signT, emissiveIntensity: 0.3 }))
-  sign.position.set(H0 - 0.3, 6.5, 0); sign.rotation.y = -Math.PI / 2; g.add(sign)
-  // 通道裡的指標（從圓頂進來看得到）
-  const tagT = canvasTex(512, 128, (x, w, h) => {
-    x.fillStyle = '#1f4a36'; x.fillRect(0, 0, w, h); x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'
-    x.font = 'bold 56px "PingFang TC", sans-serif'; x.fillText('→ 高山雲霧林', w / 2, h / 2)
-  })
-  const tag = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.5), new THREE.MeshStandardMaterial({ map: tagT, emissive: 0xffffff, emissiveMap: tagT, emissiveIntensity: 0.4 }))
-  tag.position.set(X0 + 0.6, EAVE - 0.5, 0); tag.rotation.y = -Math.PI / 2; g.add(tag)
-  for (const [k, m] of [['steel', steel], ['alu', alu]]) { const mesh = new THREE.Mesh(mergeGeometries(geos[k]), m); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh) }
-  return { g, doors }
 }
 
 /* ---------- 針葉樹（程式做的卡片樹） ---------- */
@@ -171,7 +92,10 @@ function buildInterior(lib) {
       const k = j * nx + i, x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell
       pos.set([x, ALP_HEIGHTS[k], z], k * 3); uv.set([x * 0.25, z * 0.25], k * 2)
     }
-    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; idx.push(a, c, b, b, c, d) }
+    // 只留山區（花園橢圓外、溫室裡）的格子；花園那邊有自己的地面
+    const keep = new Uint8Array(nx * nz)
+    for (let k = 0; k < nx * nz; k++) keep[k] = inAlpine(pos[k * 3], pos[k * 3 + 2], -1) && domeRho(pos[k * 3], pos[k * 3 + 2]) < 1.0 ? 1 : 0
+    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; if (keep[a] | keep[b] | keep[c] | keep[d]) idx.push(a, c, b, b, c, d) }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx)
     geo.computeVertexNormals()
@@ -260,27 +184,46 @@ function buildInterior(lib) {
   {
     const tex = needleTex()
     const needleM = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85, color: 0xb8c8b0 })
+    // 遠處的樹：mipmap 把針葉的透明度平均掉，alphaTest 一切就只剩枝幹（遠看像一根根竹竿）。照 mip 層級把透明度補回來
+    needleM.alphaToCoverage = true
+    needleM.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', `
+        vec2 nDx = dFdx(vMapUv * vec2(256.0, 128.0)), nDy = dFdy(vMapUv * vec2(256.0, 128.0));
+        diffuseColor.a *= 1.0 + max(0.0, 0.5 * log2(max(dot(nDx, nDx), dot(nDy, nDy)))) * 0.35;
+        #include <alphatest_fragment>`)
+    }
+    needleM.customProgramCacheKey = () => 'needleMip'
     const barkM = new THREE.MeshStandardMaterial({ color: 0x4b3a2c, roughness: 0.95 })
+    const coreM = new THREE.MeshStandardMaterial({ color: 0x1f3324, roughness: 1 })
     for (const kind of ['fir', 'hemlock']) {
       const crown = coniferGeo(kind), trunk = new THREE.CylinderGeometry(0.006, 0.022, 0.86, 7).translate(0, 0.43, 0)   // 樹幹到 86% 就停：不然樹梢會冒出一根光禿禿的樹幹
+      // 樹冠裡面一個實心的深綠圓錐：卡片樹側看會透光，遠看只剩枝幹像竹竿；有這個芯遠看才是一棵實心的針葉樹
+      const core = new THREE.ConeGeometry(kind === 'fir' ? 0.1 : 0.16, 0.8, 7, 1, true).translate(0, 0.52, 0)
       const list = []
-      for (let k = 0; k < 4000 && list.length < (kind === 'fir' ? 150 : 110); k++) {
-        const x = ALP.X0 + 6 + rnd() * (ALP.X1 - ALP.X0 - 8), z = -ALP.HZ + 2 + rnd() * (ALP.HZ * 2 - 4)
+      for (let k = 0; k < 12000 && list.length < (kind === 'fir' ? 240 : 180); k++) {
+        const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+        if (!inAlpine(x, z, 3) || domeRho(x, z) > 0.94) continue
         if (alpineTrailDist(x, z) < 3.2 || alpineStreamDist(x, z) < 2.5 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2.5) continue
-        const u = x - ALP.X0, hgt = alpineHeight(x, z)
+        const hgt = alpineHeight(x, z)
         // 冷杉在高處、鐵杉在中坡；山頂附近稀疏（箭竹草原）
-        const want = kind === 'fir' ? ss(6, 14, hgt) * (1 - 0.7 * ss(17, 21, hgt)) : ss(2, 6, hgt) * (1 - ss(12, 17, hgt))
+        const want = kind === 'fir' ? ss(7, 16, hgt) * (1 - 0.85 * ss(17, 22, hgt)) : ss(2.5, 7, hgt) * (1 - ss(14, 20, hgt))
         if (rnd() > want * (0.55 + 0.45 * fbm2(x * 0.05, z * 0.05 + kind.length, 2) + 0.3)) continue
-        const H = (kind === 'fir' ? 9 : 8) + rnd() * 7
+        // 越高越矮（高山上的冷杉長不高，山頂看得出去）；不能頂到玻璃
+        const H = Math.min(((kind === 'fir' ? 9 : 8) + rnd() * 7) * (1 - 0.5 * ss(12, 22, hgt)), domeY(x, z) - hgt - 1.5)
+        if (H < 4) continue
+        if (rnd() > ss(86, 100, x)) continue   // 入口一小片空地，先看到山再進林子
+        if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 16) continue   // 山頂觀景台四周是箭竹草原，看得出去
         list.push({ p: V(x, hgt - 0.2, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(H * (0.85 + rnd() * 0.3), H, H * (0.85 + rnd() * 0.3)), H })
         addCollider(x, z, 0.35, hgt + H)
       }
-      for (const [geo, mat] of [[crown, needleM], [trunk, barkM]]) {
+      const ms = []
+      for (const [geo, mat] of [[crown, needleM], [trunk, barkM], [core, coreM]]) {
         const m = new THREE.InstancedMesh(geo, mat, list.length)
         const mm = new THREE.Matrix4(), c = new THREE.Color()
         list.forEach((it, i) => { m.setMatrixAt(i, mm.compose(it.p, it.q, it.s)); if (mat === needleM) m.setColorAt(i, c.setHSL(0.3 + (rnd() - 0.5) * 0.04, 0.3, 0.75 + rnd() * 0.2)) })
-        m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m)
+        m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m); ms.push(m)
       }
+      lodRegister(ms, 12)   // 視野外的樹不畫（山區變大，樹多了一倍）
     }
   }
   // 岩石：陡坡上的大岩塊、溪邊的長苔石頭（用溫室那批岩石模型）
@@ -288,9 +231,9 @@ function buildInterior(lib) {
     const lists = {}, put = (n, it) => (lists[n] ||= []).push(it)
     const big = ['rock_face', 'rock_face_02', 'boulder', 'mrock_3', 'mrock_7', 'mrock_9', 'mrock_12'], moss = ['rock_moss_set', 'rock_moss_set_02', 'mrock_8', 'mrock_10', 'boulder']
     const pick = (a) => a[Math.floor(rnd() * a.length)]
-    for (let k = 0; k < 3000; k++) {
-      const x = ALP.X0 + 6 + rnd() * 72, z = -ALP.HZ + 2 + rnd() * 76
-      if (alpineTrailDist(x, z) < 2.2) continue
+    for (let k = 0; k < 8000; k++) {
+      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+      if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || alpineTrailDist(x, z) < 2.2) continue
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
       const sd = alpineStreamDist(x, z)
       if (sd > 1.4 && sd < 4 && rnd() < 0.25) put(pick(moss), { p: V(x, h - 0.15, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 1.2), c: new THREE.Color().setHSL(0.25, 0.12, 0.85 + rnd() * 0.1) })
@@ -299,8 +242,9 @@ function buildInterior(lib) {
     for (const [n, list] of Object.entries(lists)) if (lib[n]) scatter(g, lib[n], list, { cast: true })
     // 溪邊、池邊的蕨類
     const ferns = []
-    for (let k = 0; k < 4000 && ferns.length < 260; k++) {
-      const x = ALP.X0 + 4 + rnd() * 72, z = -ALP.HZ + 2 + rnd() * 76
+    for (let k = 0; k < 12000 && ferns.length < 420; k++) {
+      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+      if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.95) continue
       const sd = alpineStreamDist(x, z), dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
       if (!((sd > 1.3 && sd < 4.5) || (dp > ALP_POND.r + 0.8 && dp < ALP_POND.r + 3.5)) || alpineTrailDist(x, z) < 1.6) continue
       ferns.push({ p: V(x, alpineHeight(x, z) - 0.05, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(0.7 + rnd() * 0.5), c: new THREE.Color().setHSL(0.25, 0.15, 0.9) })
@@ -312,11 +256,13 @@ function buildInterior(lib) {
   // 玉山箭竹：坡上一大片黃綠色的高草（跟溫室的草同一套草葉，比較高、比較寬），切成 14 公尺一塊做 LOD
   {
     const A = [], B = [], c = new THREE.Color()
-    for (let k = 0; k < 120000 && A.length / 4 < 210000; k++) {
-      const x = ALP.X0 + 1 + rnd() * 78, z = -ALP.HZ + 1 + rnd() * 78
+    for (let k = 0; k < 260000 && A.length / 4 < 330000; k++) {
+      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+      if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
+      if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 4.5) continue   // 觀景台上
       if (alpineTrailDist(x, z) < 1.5 || alpineStreamDist(x, z) < 1.4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.6) continue
-      const h = alpineHeight(x, z), u = x - ALP.X0
-      const dens = ss(3, 9, u) * (0.45 + 0.55 * fbm2(x * 0.07, z * 0.07, 3) + 0.4)
+      const h = alpineHeight(x, z)
+      const dens = (0.45 + 0.55 * fbm2(x * 0.07, z * 0.07, 3) + 0.4)
       if (rnd() > dens) continue
       const m = 5 + Math.floor(rnd() * 6), a0 = rnd() * TAU, tall = 0.45 + rnd() * 0.5 + 0.3 * ss(10, 20, h)
       c.setHSL(0.17 + rnd() * 0.05, 0.42, 0.34 + rnd() * 0.1)
@@ -337,50 +283,80 @@ function buildInterior(lib) {
       lodRegisterGrass(m, V(cx, alpineHeight(cx, cz) + 0.5, cz), CELL * 0.72 + 1)
     }
   }
-  // 雲霧：一片片很大的柔邊霧（面向鏡頭），在山谷裡慢慢飄
+  // 雲霧：一團團有雲紋的柔邊霧（四種紋路、各自旋轉），多半貼著山谷和低坡、少數掛在山腰；
+  // 順著風慢慢往東飄、飄出山區就從西邊再進來，濃淡會慢慢變；鏡頭靠近就淡掉（走進霧裡不會看到一張平板）。
+  // 遠近的整體霧氣在 fogzone.js（低處濃、高處淡）。
   const mist = []
   {
-    const mt = canvasTex(128, 128, (x, w, h) => { const gr = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(240,245,246,0.55)'); gr.addColorStop(0.6, 'rgba(235,240,242,0.2)'); gr.addColorStop(1, 'rgba(235,240,242,0)'); x.fillStyle = gr; x.fillRect(0, 0, w, h) })
-    const mm = new THREE.SpriteMaterial({ map: mt, depthWrite: false, transparent: true, fog: true })
-    for (let i = 0; i < 46; i++) {
-      const x = ALP.X0 + 8 + rnd() * 66, z = -ALP.HZ + 6 + rnd() * 68
-      const s = new THREE.Sprite(mm); const sz = 10 + rnd() * 14
-      s.scale.set(sz, sz * 0.45, 1); s.position.set(x, alpineHeight(x, z) + 2 + rnd() * 6, z); s.renderOrder = 7
-      s.userData = { x, z, ph: rnd() * TAU, sp: 0.15 + rnd() * 0.25 }
+    const texs = [0, 1, 2, 3].map((seed) => canvasTex(256, 256, (x, w, h) => {
+      const r = mulberry32(90 + seed)
+      x.clearRect(0, 0, w, h)
+      for (let i = 0; i < 70; i++) {
+        const a = r() * TAU, d = Math.pow(r(), 0.7) * w * 0.3, rr = w * (0.08 + r() * 0.16)
+        const cx = w / 2 + Math.cos(a) * d * 1.3, cy = h / 2 + Math.sin(a) * d * 0.6
+        const gr = x.createRadialGradient(cx, cy, 0, cx, cy, rr)
+        gr.addColorStop(0, `rgba(244,247,248,${0.05 + r() * 0.07})`); gr.addColorStop(1, 'rgba(244,247,248,0)')
+        x.fillStyle = gr; x.fillRect(0, 0, w, h)
+      }
+      // 外圈收邊，不留方形的邊
+      x.globalCompositeOperation = 'destination-in'
+      const m = x.createRadialGradient(w / 2, h / 2, w * 0.18, w / 2, h / 2, w * 0.5)
+      m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(1, 'rgba(0,0,0,0)')
+      x.fillStyle = m; x.fillRect(0, 0, w, h)
+    }))
+    const zMax = ALP.HZ - 4, X0 = 78, X1 = 182
+    const place = (s, x) => {
+      const u = s.userData
+      for (let k = 0; k < 40; k++) {
+        const z = -zMax + rnd() * zMax * 2
+        if (!inAlpine(x, z, 4) || domeRho(x, z) > 0.9) { x = X0 + rnd() * (X1 - X0); continue }
+        const gy = alpineHeight(x, z)
+        // 偏好低處（山谷、溪邊）；高處的少一點
+        if (rnd() > 1.15 - gy / 26) { x = X0 + rnd() * (X1 - X0); continue }
+        u.x = x; u.z = z; u.y = gy + u.lift; return
+      }
+      u.x = x; u.z = 0; u.y = alpineHeight(x, 0) + u.lift
+    }
+    for (let i = 0; i < 120; i++) {
+      const mat = new THREE.SpriteMaterial({ map: texs[i % 4], depthWrite: false, transparent: true, fog: true, rotation: (rnd() - 0.5) * 0.4, opacity: 0 })
+      const s = new THREE.Sprite(mat), sz = 9 + rnd() * 16
+      s.scale.set(sz, sz * (0.38 + rnd() * 0.2), 1); s.renderOrder = 7
+      s.userData = { sz, lift: sz * 0.22 + 0.5 + rnd() * 4, op: 0.45 + rnd() * 0.45, ph: rnd() * TAU, sp: 0.25 + rnd() * 0.35, x: 0, z: 0, y: 0 }
+      place(s, X0 + rnd() * (X1 - X0))
       g.add(s); mist.push(s)
     }
+    var updateMist = (t, dt, camera) => {
+      const cp = camera.position
+      for (const s of mist) {
+        const u = s.userData
+        u.x += u.sp * dt; u.z += Math.sin(t * 0.03 + u.ph) * 0.15 * dt
+        if (u.x > X1 || !inAlpine(u.x, u.z, 3)) place(s, X0 + rnd() * 6)
+        // 地形變高就慢慢往上抬，不插進山坡
+        const gy = alpineHeight(u.x, u.z) + u.lift
+        u.y += (gy - u.y) * Math.min(1, dt * 0.3)
+        s.position.set(u.x, u.y + Math.sin(t * 0.2 + u.ph) * 0.4, u.z)
+        const d = s.position.distanceTo(cp)
+        const life = 0.6 + 0.4 * Math.sin(t * 0.05 + u.ph * 3)                     // 慢慢變濃變淡
+        const edge = ss(X0, X0 + 8, u.x) * (1 - ss(X1 - 10, X1, u.x))                // 從西邊進來時淡入
+        s.material.opacity = u.op * life * edge * ss(u.sz * 0.25, u.sz * 0.7, d)     // 太近就淡掉
+        s.visible = s.material.opacity > 0.01
+      }
+    }
   }
-  return { g, mist, waterT }
+  return { g, mist, waterT, updateMist }
 }
 
 /* ---------- 對外 ---------- */
-// 回傳一個「附屬館」給 halls.js：外殼、館內（延後蓋）、門的動畫、哪裡算館內、門開了沒、陰影中心、霧
+// 山區就是溫室東半邊（2026-11-07 改成一個館）：館內一開始就蓋好、一直畫；animate 每格跑（溪水、雲霧）
 export function createAlpine({ scene, lib }) {
-  const shell = buildShell()
-  scene.add(shell.g)
   let interior = null
-  const near = (d, px, pz) => Math.abs(px - d.x) < 3.2 && Math.abs(pz) < CORR.W   // 3.2 公尺內就開：跑步（6 m/s）也不會撞到半開的門
-  const hall = {
-    name: 'alpine', shell: shell.g, center: { x: XM, z: 0 }, fog: 0.0095,
-    get interior() { return interior?.g },
-    build() { if (!interior) { interior = buildInterior(lib); interior.g.visible = false; scene.add(interior.g) } },
-    inside: (p) => p.x > CORR.B - 0.5,                                  // 過了 B 門那一側
-    nearOpen: () => shell.doors.a.open > 0.02, farOpen: () => shell.doors.b.open > 0.02,
-    approach: (p) => p.x > 58,                                          // 走到圓頂東半邊就先蓋（遊戲載入時已經 prebuild）
-    // 自動門：人靠近就開（加速、減速），沒人就慢慢關
-    doors(t, dt, p) {
-      for (const k of ['a', 'b']) {
-        const d = shell.doors[k], want = near(d, p.x, p.z) ? 1 : 0
-        d.open = clamp(d.open + (want ? 2.0 : -1.0) * dt, 0, 1)
-        const e = d.open * d.open * (3 - 2 * d.open)
-        for (const { p: pn, s } of d.panels) pn.position.z = s * (CORR.W / 2 - 0.02 + e * (CORR.W / 2 - 0.1))
-        alpineDoors[k] = d.open
-      }
-    },
-    animate(t, dt) {
+  return {
+    build() { if (!interior) { interior = buildInterior(lib); scene.add(interior.g) } return interior.g },
+    get group() { return interior?.g },
+    animate(t, dt, camera) {
+      if (!interior) return
       interior.waterT.offset.y -= dt * 0.35
-      for (const s of interior.mist) { const u = s.userData; s.position.x = u.x + Math.sin(t * 0.05 * u.sp + u.ph) * 6; s.position.z = u.z + Math.cos(t * 0.04 * u.sp + u.ph) * 4 }
+      interior.updateMist(t, dt, camera)
     },
   }
-  return hall
 }

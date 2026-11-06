@@ -1,4 +1,5 @@
 // 整個園區（溫室、山、水、植物、鳥、雲）：導覽頁（main.js）和遊戲（game/main.js）共用同一份，兩邊看到的世界一模一樣
+import './fogzone.js'   // 一定要在任何材質編譯前（改霧的 shader）
 import * as THREE from 'three'
 import { lodUpdate } from './lod.js'
 import { createAlpine } from './alpine.js'
@@ -46,10 +47,11 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const hemi = new THREE.HemisphereLight(0xdcecf5, 0x5d6e44, 1.35)
   scene.add(hemi)
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.3)
-  sun.position.set(-45, 80, 30)
+  // 溫室是一顆往東拉長的蛋（x -89 相機行 ～ 190）：陰影範圍以 x 50 為中心
+  sun.position.set(5, 80, 30); sun.target.position.set(50, 0, 0)
   sun.castShadow = true
   sun.shadow.mapSize.setScalar(PHONE ? 2048 : 4096)
-  Object.assign(sun.shadow.camera, { left: -96, right: 96, top: 74, bottom: -74, near: 1, far: 260 })   // 要蓋到溫室外面的相機行（x 到 -89）
+  Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 110, bottom: -110, near: 1, far: 300 })   // 要蓋到溫室外面的相機行（x 到 -89）和東邊山區（x 到 190）
   sun.shadow.bias = -0.0004
   sun.shadow.normalBias = 0.06
   sun.shadow.radius = 3
@@ -74,7 +76,10 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     return { def, ...a }
   })
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
-  const halls = createHalls({ scene, sun, halls: [createAlpine({ scene, lib: plantLib }), ...(COAST_ON ? [createCoast({ scene })] : [])] })
+  // 山區（溫室東半邊）：直接蓋、一直畫。附屬館只剩海岸館（目前關著）
+  const alpine = createAlpine({ scene, lib: plantLib })
+  alpine.build()
+  const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
   const birdStops = birds.map((b) => ({
     bird: b, title: b.def.name, nick: b.def.nick, sci: b.def.sci, tag: b.def.where, text: b.def.intro, facts: b.def.facts,
     pos: b.cam, target: b.target,
@@ -138,6 +143,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   function tick(t, dt, { phone = false } = {}) {
     lodUpdate(camera)
     halls.tick(t, dt, camera)
+    alpine.animate(t, dt, camera)
     windUniforms.uTime.value = t
     waterTime.value = t
     pondRipples(t)
@@ -157,7 +163,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     renderer.render(scene, cam)
   }
-  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, quality, plantLib, halls }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, quality, plantLib, halls, alpine }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */

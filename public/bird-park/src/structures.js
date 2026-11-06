@@ -3,8 +3,8 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
   TAU, DOME, MTN, POOL, RAMP, DECK, PATHS, clamp, smoothstep, lerp, angDiff,
-  domeRho, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
-  CORR, CCORR, COAST_ON,
+  domeRho, inAlpine, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
+  CCORR, COAST_ON,
 } from './layout.js'
 import { fbm3, noise3, mulberry32 } from './noise.js'
 import * as T from './textures.js'
@@ -78,14 +78,31 @@ export function buildSky(scene) {
 }
 
 /* ---------- 玻璃圓頂 ---------- */
-function domeGeometry(scale = 1, nu = 160, nv = 48) {
+// 蛋形：西半邊半軸 A、東半邊 AE（layout.js DOME）。ex(p)：方位 p 的 x 半徑
+const ex = (p) => (Math.cos(p) > 0 ? DOME.AE : DOME.A) * Math.cos(p)
+// 赤道一圈：u 照弧長分配（東半邊比較長，格網的格子才不會被拉寬），PERIM 是周長
+const EQ = (() => {
+  const n = 2048, acc = [0]
+  for (let i = 1; i <= n; i++) { const p0 = ((i - 1) / n) * TAU, p1 = (i / n) * TAU; acc.push(acc[i - 1] + Math.hypot(ex(p1) - ex(p0), DOME.B * (Math.sin(p1) - Math.sin(p0)))) }
+  return { n, acc, L: acc[n] }
+})()
+export const DOME_PERIM = EQ.L
+// 弧長比例 u（0～1）→ 方位角
+function eqAngle(u) {
+  const t = u * EQ.L, a = EQ.acc
+  let lo = 0, hi = EQ.n
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (a[m] < t) lo = m; else hi = m }
+  const f = (t - a[lo]) / Math.max(1e-9, a[hi] - a[lo])
+  return ((lo + f) / EQ.n) * TAU
+}
+function domeGeometry(scale = 1, nu = 320, nv = 56) {
   const pos = [], uv = [], idx = []
   for (let j = 0; j <= nv; j++) {
     const v = j / nv, a = v * Math.PI / 2
     const rho = Math.cos(a), y = DOME.H * Math.sin(a) * scale
     for (let i = 0; i <= nu; i++) {
-      const u = i / nu, p = u * TAU
-      pos.push(DOME.A * scale * rho * Math.cos(p), y, DOME.B * scale * rho * Math.sin(p))
+      const u = i / nu, p = eqAngle(u)
+      pos.push(ex(p) * scale * rho, y, DOME.B * scale * rho * Math.sin(p))
       uv.push(u, v)
     }
   }
@@ -113,10 +130,9 @@ function cutDoor(mat) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vDoorW;')
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         if (vDoorW.x < -60.0 && abs(vDoorW.z) < ${(DOOR.W + 0.02).toFixed(2)} && vDoorW.y < ${DOOR.EAVE.toFixed(2)} + ${(DOOR.RIDGE - DOOR.EAVE).toFixed(2)} * max(0.0, 1.0 - abs(vDoorW.z) / ${DOOR.W.toFixed(1)}) + 0.05) discard;
-        if (vDoorW.x > 60.0 && abs(vDoorW.z) < ${(CORR.W + 0.02).toFixed(2)} && vDoorW.y < 3.2 + 1.0 * max(0.0, 1.0 - abs(vDoorW.z) / ${CORR.W.toFixed(1)}) + 0.05) discard;   // 東門（往高山館的通道，alpine.js）
         ${COAST_ON ? '' : '//'}if (vDoorW.z < -50.0 && abs(vDoorW.x) < ${(CCORR.W + 0.02).toFixed(2)} && vDoorW.y < 3.2 + 1.0 * max(0.0, 1.0 - abs(vDoorW.x) / ${CCORR.W.toFixed(1)}) + 0.05) discard;   // 南門（往海岸館，coast.js）`)
   }
-  mat.customProgramCacheKey = () => 'cutDoor3'
+  mat.customProgramCacheKey = () => 'cutDoor4'
 }
 function buildEntrance() {
   const g = new THREE.Group()
@@ -200,7 +216,7 @@ export function buildDome(scene) {
   group.add(glass)
 
   const grid = T.domeGridTex()
-  grid.repeat.set(56, 14)
+  grid.repeat.set(Math.round(56 * DOME_PERIM / 409), 14 * DOME.H / 40)   // 格子大小跟原本（周長約 409、高 40）一樣
   const frame = new THREE.Mesh(domeGeometry(0.998), new THREE.MeshStandardMaterial({
     color: 0xe8ecee, map: grid, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.4,
   }))
@@ -210,22 +226,22 @@ export function buildDome(scene) {
 
   // 主拱肋
   const ribs = []
-  const RIBS = 20
+  const RIBS = Math.round(20 * DOME_PERIM / 409 / 2) * 2
   for (let k = 0; k < RIBS; k++) {
-    const p = ((k + 0.5) / RIBS) * TAU, pts = []   // 錯開半格：θ = π 是入口，不能有一根主拱肋剛好插在門中間
+    const p = eqAngle((k + 0.5) / RIBS), pts = []   // 照弧長平均分；錯開半格：西邊入口中間不能有一根主拱肋
     for (let j = 0; j <= 24; j++) {
       const a = (j / 24) * Math.PI / 2 * 0.985
-      pts.push(new THREE.Vector3(DOME.A * 0.99 * Math.cos(a) * Math.cos(p), DOME.H * 0.99 * Math.sin(a), DOME.B * 0.99 * Math.cos(a) * Math.sin(p)))
+      pts.push(new THREE.Vector3(ex(p) * 0.99 * Math.cos(a), DOME.H * 0.99 * Math.sin(a), DOME.B * 0.99 * Math.cos(a) * Math.sin(p)))
     }
     ribs.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.32, 6))
   }
   for (const v of [0.18, 0.42, 0.66, 0.86]) {
     const a = v * Math.PI / 2, pts = []
-    for (let i = 0; i < 64; i++) {
-      const p = (i / 64) * TAU
-      pts.push(new THREE.Vector3(DOME.A * 0.99 * Math.cos(a) * Math.cos(p), DOME.H * 0.99 * Math.sin(a), DOME.B * 0.99 * Math.cos(a) * Math.sin(p)))
+    for (let i = 0; i < 128; i++) {
+      const p = eqAngle(i / 128)
+      pts.push(new THREE.Vector3(ex(p) * 0.99 * Math.cos(a), DOME.H * 0.99 * Math.sin(a), DOME.B * 0.99 * Math.cos(a) * Math.sin(p)))
     }
-    ribs.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 128, 0.26, 6, true))
+    ribs.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 256, 0.26, 6, true))
   }
   const ribMesh = new THREE.Mesh(mergeGeometries(ribs), new THREE.MeshStandardMaterial({ color: 0xf2f4f5, roughness: 0.45, metalness: 0.5 }))
   ribMesh.castShadow = true
@@ -233,17 +249,16 @@ export function buildDome(scene) {
 
   // 牆腳矮牆（入口留缺口）
   const wallPos = [], wallIdx = []
-  const N = 240, s1 = 0.975, s2 = 0.99, H = 1.1
+  const N = 480, s1 = 0.975, s2 = 0.99, H = 1.1
   for (let i = 0; i <= N; i++) {
-    const p = (i / N) * TAU
-    const c = Math.cos(p), s = Math.sin(p)
-    for (const [sc, y] of [[s1, -0.5], [s1, H], [s2, H], [s2, -0.5]]) wallPos.push(DOME.A * sc * c, y, DOME.B * sc * s)
+    const p = eqAngle(i / N)
+    const c = ex(p), s = Math.sin(p)
+    for (const [sc, y] of [[s1, -0.5], [s1, H], [s2, H], [s2, -0.5]]) wallPos.push(sc * c, y, DOME.B * sc * s)
   }
   for (let i = 0; i < N; i++) {
-    const p = ((i + 0.5) / N) * TAU
-    const x = DOME.A * Math.cos(p), z = DOME.B * Math.sin(p)
+    const p = eqAngle((i + 0.5) / N)
+    const x = ex(p), z = DOME.B * Math.sin(p)
     if (x < 0 && Math.abs(z) < DOOR.W + 0.1) continue
-    if (x > 0 && Math.abs(z) < CORR.W + 0.1) continue   // 東門
     if (COAST_ON && z < 0 && Math.abs(x) < CCORR.W + 0.1) continue   // 南門
     const a = i * 4, b = (i + 1) * 4
     for (let f = 0; f < 3; f++) wallIdx.push(a + f, b + f, a + f + 1, a + f + 1, b + f, b + f + 1)
@@ -258,7 +273,7 @@ export function buildDome(scene) {
 
   group.add(buildEntrance())
 
-  group.name = 'domeShell'   // 圓頂外殼：在高山館裡也要看得到（alpine.js 不藏它）
+  group.name = 'domeShell'
   scene.add(group)
 }
 
@@ -272,7 +287,7 @@ export function buildGround(scene) {
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i)
     const h = terrainHeight(x, z)
-    pos.setY(i, h)
+    pos.setY(i, inAlpine(x, z) ? Math.min(h, 0) - 0.6 : h)   // 山區有自己的地形（alpine.js），這片壓到底下
     uv.setXY(i, x / 5, z / 5)
     const n = fbm3(x * 0.08, 0, z * 0.08, 3)
     c.setRGB(0.5 + n * 0.2, 0.56 + n * 0.18, 0.4 + n * 0.14)   // 偏暗的林下地面，草葉之間不會露出亮綠草坪

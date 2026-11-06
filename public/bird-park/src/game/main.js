@@ -17,7 +17,7 @@ import { priceFor } from './scoring.js'
 import { createViewmodel } from './viewmodel.js'
 import { createUiFx } from './ui-fx.js'
 import { controlsSvg } from './controls-help.js'
-import { MENU_VIEW, terrainHeight } from '../layout.js'
+import { MENU_VIEW, terrainHeight, supportAt } from '../layout.js'
 
 const loadingEl = document.getElementById('loading')
 const world = await buildWorld(document.getElementById('scene'), {
@@ -27,7 +27,7 @@ const world = await buildWorld(document.getElementById('scene'), {
 })
 const { renderer, scene, camera } = world
 // 附屬館（高山館、海岸館）的館內也在載入畫面時蓋好：走過去才蓋會卡一下
-loadingEl.textContent = '各館建造中…'
+loadingEl.textContent = '溫室建造中…'
 await new Promise((r) => setTimeout(r, 30))
 await world.halls.prebuild()
 
@@ -131,8 +131,8 @@ await renderer.compileAsync(scene, camera)
 // 再到店裡、店門口、回頭看店、水池邊各預熱一次：每個地方的霧、燈、看得到的東西不一樣，著色器版本也不同；
 // 水面倒影（畫到貼圖）、影子、手和相機也各有自己的版本。沒先編好的話，第一次走過去會整個卡住 0.5～1 秒
 const home = { p: camera.position.clone(), q: camera.quaternion.clone() }
-for (const [x, z, yaw] of [[-87.6, 0.4, -90], [-74, 0, -90], [-55, 2, 90], [-15, -25, 60]]) {
-  camera.position.set(x, terrainHeight(x, z) + 1.7, z); camera.rotation.set(0, yaw * Math.PI / 180, 0, 'YXZ'); camera.updateMatrixWorld()
+for (const [x, z, yaw] of [[-87.6, 0.4, -90], [-74, 0, -90], [-55, 2, 90], [-15, -25, 60], [96, -4, -90], [145, 9, 100]]) {
+  camera.position.set(x, supportAt(x, z, 99).y + 1.7, z); camera.rotation.set(0, yaw * Math.PI / 180, 0, 'YXZ'); camera.updateMatrixWorld()
   world.tick(0, 0.016); store.tick(0, 0.016, camera, { play: false, look: false })
   await renderer.compileAsync(scene, camera)
   world.water.reflect(renderer, scene, camera, world.quality.reflScale, 1)
