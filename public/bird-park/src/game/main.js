@@ -54,7 +54,7 @@ const cam = createCamera({ world, camera, controls: player.controls, hud, gear, 
 // 面板（相簿、相機行）開著的時候放開滑鼠；關掉再鎖回去
 const relock = () => player.controls.lock()
 const album = createAlbum({ photos, onDelete: (p) => { photos.splice(photos.indexOf(p), 1); deletePhoto(p.time) }, onClose: relock })
-const store = await buildStore(scene, state, world.plantLib)   // 相機行：溫室門口外面那棟店，遊戲從店裡開始
+const store = await buildStore(scene, state, world.plantLib, { getSound: () => settings.state.sound })   // 自動門音效跟著設定的「音效」開關（只在玩的時候才會叫到，那時 settings 已經建好）   // 相機行：溫室門口外面那棟店，遊戲從店裡開始
 const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock })
 const panelOpen = () => album.isOpen || shop.isOpen || cam.panelOpen
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }

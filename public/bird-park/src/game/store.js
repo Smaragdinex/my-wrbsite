@@ -6,6 +6,7 @@
 // 座標（世界）：x 從 STORE.X0（東牆，接通道）到 STORE.X1（西牆，店門口），z ±STORE.HZ，原點在地面
 import * as THREE from 'three'
 import { scatter } from '../plants.js'
+import { createDoorSfx } from './door-sfx.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { STORE, addCollider, colliders } from '../layout.js'
@@ -63,7 +64,7 @@ function labelDraw(it, state) {
   }
 }
 
-export async function buildStore(scene, state, plantLib) {
+export async function buildStore(scene, state, plantLib, { getSound = () => true } = {}) {
   const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
   const loader = new GLTFLoader()
   const load = (p) => loader.loadAsync(`${p}?v=${VER}`).then((r) => r.scene)
@@ -164,11 +165,12 @@ export async function buildStore(scene, state, plantLib) {
 
   /* ---------- 東牆開口：往溫室的自動門 ---------- */
   // 兩片玻璃推拉門（中間對開，往兩邊滑進固定玻璃前面），上面一條門楣＋馬達箱，兩面各一顆感應器（關著紅燈、開門綠燈）。
-  // 人走到門口 3 公尺內就開，離開一秒後慢慢關；關著的時候擋人（動態碰撞點），開到七成以上才讓人過。
+  // 人走到門口 3 公尺內就開，離開 1.5 秒後慢慢關；關著的時候擋人（動態碰撞點），開到七成以上才讓人過。
+// 動作照真的自動門：開得快、關得慢，起步加速、快到底減速，最後幾公分用很慢的「緩衝」靠上去；關到一半有人來會減速再反開。
+// 停下來時門片在滾輪上晃一下。聲音在 door-sfx.js（馬達、皮帶、啟動繼電器、到底的撞擊聲）。
   const DOOR_Y = 2.6, LEAF_W = 1.4, LEAF_H = 2.55, OPEN = 1.36, DX = X0 - 0.12
   box('dark', 0.2, 0.26, DW * 2, X0, DOOR_Y + 0.13, 0)                              // 門楣
   box('steel', 0.2, 0.24, 5.8, X0 - 0.2, DOOR_Y + 0.14, 0)                          // 馬達箱（店內那面）
-  box('steel', 0.02, 0.02, 5.6, DX, 0.01, 0)                                        // 地上導軌
   pane([V(X0, DOOR_Y + 0.26, -DW), V(X0, DOOR_Y + 0.26, DW), V(X0, EAVE, DW), V(X0, RIDGE, 0), V(X0, EAVE, -DW)])   // 門楣上的固定玻璃
   for (const s of [-1, 1]) {
     rect(V(X0, 0.02, s * OPEN), V(X0, 0.02, s * DW), V(X0, DOOR_Y, s * DW), V(X0, DOOR_Y, s * OPEN))                 // 兩邊固定玻璃
@@ -183,6 +185,17 @@ export async function buildStore(scene, state, plantLib) {
     const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.018, 0.04), sensM); lamp.position.set(sx + (sx < X0 ? -0.045 : 0.045), DOOR_Y - 0.04, 0.08); g.add(lamp)
   }
   const bandM = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, roughness: 0.6, side: THREE.DoubleSide })
+  const sealM = new THREE.MeshStandardMaterial({ color: 0x141617, roughness: 0.85 })
+  const stickerM = new THREE.MeshStandardMaterial({ roughness: 0.5, transparent: true, depthWrite: false, map: canvasTex(256, 256, (x, w, h) => {
+    x.fillStyle = 'rgba(255,255,255,0.92)'; x.beginPath(); x.arc(w / 2, h / 2, w / 2 - 4, 0, 7); x.fill()
+    x.strokeStyle = '#1f6d45'; x.lineWidth = 10; x.beginPath(); x.arc(w / 2, h / 2, w / 2 - 14, 0, 7); x.stroke()
+    x.fillStyle = '#1f6d45'; x.textAlign = 'center'
+    x.font = 'bold 52px "PingFang TC", "Noto Sans TC", sans-serif'; x.fillText('自動門', w / 2, h / 2 + 4)
+    x.font = '600 21px "Helvetica Neue", Arial, sans-serif'; x.fillText('AUTOMATIC DOOR', w / 2, h / 2 + 44)
+    x.beginPath(); x.moveTo(w / 2 - 70, h / 2 - 52); x.lineTo(w / 2 - 40, h / 2 - 66); x.lineTo(w / 2 - 40, h / 2 - 38); x.fill()   // ⇆ 箭頭
+    x.beginPath(); x.moveTo(w / 2 + 70, h / 2 - 52); x.lineTo(w / 2 + 40, h / 2 - 66); x.lineTo(w / 2 + 40, h / 2 - 38); x.fill()
+    x.fillRect(w / 2 - 42, h / 2 - 55, 84, 6)
+  }) })
   const leaves = [-1, 1].map((s) => {
     const lf = new THREE.Group(); lf.position.set(DX, 0.03, s * LEAF_W / 2)
     const fr = (w, h, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, w), mats.dark); m.position.set(0, y, z); m.castShadow = true; lf.add(m) }
@@ -191,10 +204,17 @@ export async function buildStore(scene, state, plantLib) {
     const gl = new THREE.Mesh(new THREE.PlaneGeometry(LEAF_W - 0.1, LEAF_H - 0.16), glassM); gl.rotation.y = Math.PI / 2; gl.position.y = LEAF_H / 2 + 0.02; gl.renderOrder = 5; lf.add(gl)
     for (const y of [1.0, 1.06, 1.12]) { const b = new THREE.Mesh(new THREE.PlaneGeometry(LEAF_W - 0.12, 0.025), bandM); b.rotation.y = Math.PI / 2; b.position.set(-0.012, y, 0); lf.add(b) }   // 磨砂防撞帶
     const h = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.02), mats.steel); h.position.set(-0.03, 0.95, -s * (LEAF_W / 2 - 0.12)); lf.add(h)          // 手動拉的小把手
+    const seal = new THREE.Mesh(new THREE.BoxGeometry(0.035, LEAF_H - 0.1, 0.018), sealM); seal.position.set(0, LEAF_H / 2, -s * (LEAF_W / 2 + 0.006)); lf.add(seal)   // 兩片門中間碰在一起的黑色膠條
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.12), sealM); shoe.position.set(0, -0.015, s * (LEAF_W / 2 - 0.2)); lf.add(shoe)                   // 門底的導引滑塊
+    for (const f of [-1, 1]) {   // 「自動門」貼紙，兩面都貼（從店裡看、從通道看都是正的）
+      const st = new THREE.Mesh(new THREE.CircleGeometry(0.11, 40), stickerM); st.rotation.y = f * Math.PI / 2; st.position.set(f * 0.004, 1.42, -s * (LEAF_W / 2 - 0.3)); st.renderOrder = 6; lf.add(st)
+    }
     g.add(lf); return { lf, s }
   })
   const doorCol = [-1.2, -0.6, 0, 0.6, 1.2].map((z) => { addCollider(DX, z, 0.32, 9); return colliders[colliders.length - 1] })
-  const door = { t: 0, hold: 0 }
+  const door = { p: 0, v: 0, hold: 0, want: 0, bounce: 0, bt: 9 }   // p：開了幾公尺；v：速度（m/s）
+  const doorSfx = createDoorSfx({ getSound })
+  const TRAVEL = OPEN + 0.05
   // 店內那面門上：往溫室的指標牌（吊在天花板）
   {
     const t = canvasTex(512, 128, (x, w, h) => {
@@ -589,7 +609,7 @@ export async function buildStore(scene, state, plantLib) {
   addCollider(OWNER.x, OWNER.z, 0.3, 2.2); const keeperCol = colliders[colliders.length - 1]   // 玩家不能穿過老闆（建好找路格子之後才加，不然他會把自己當障礙）
 
   /* ---------- 互動 ---------- */
-  const _d = V(), _f = V(), _p = V()
+  const _d = V(), _f = V(), _p = V(), _r = V()
   // 看著哪個展示台（2.6 公尺內、視線偏不到 12 度）；不然看櫃台前面那一塊
   function focus(camera) {
     camera.getWorldDirection(_f)
@@ -612,15 +632,38 @@ export async function buildStore(scene, state, plantLib) {
     keeperCol.x = keeper.pos.x; keeperCol.z = keeper.pos.y
     // 玩家跟老闆疊在一起時（不管怎麼發生的）先關掉他的碰撞，不然玩家四個方向都會被擋住、WASD 完全不能動
     keeperCol.top = Math.hypot(camPos.x - keeper.pos.x, camPos.z - keeper.pos.y) < 0.6 ? -1 : 2.2   // 正常碰撞會擋在 0.68，進到 0.6 以內代表已經疊在一起
-    // 自動門：人在門口 3 公尺內就開，離開 1 秒後才關；開 0.7 秒、關 1.1 秒，速度頭尾放慢
+    // 自動門：人在門口 3 公尺內就開，離開 1.5 秒後才關
     const near = Math.hypot(camPos.x - X0, camPos.z) < 3.0 && camPos.y < 4
-    door.hold = near ? 1.0 : Math.max(0, door.hold - dt)
+    door.hold = near ? 1.5 : Math.max(0, door.hold - dt)
     const want2 = near || door.hold > 0 ? 1 : 0
-    door.t = THREE.MathUtils.clamp(door.t + (want2 ? dt / 0.7 : -dt / 1.1), 0, 1)
-    const e = door.t * door.t * (3 - 2 * door.t)
-    for (const { lf, s } of leaves) lf.position.z = s * (LEAF_W / 2 + (OPEN + 0.05) * e)
+    // 速度規劃：開 1.1 m/s、關 0.6 m/s；加速度有上限（反向時先煞車）；離終點越近越慢，最後 3 公分用緩衝速度靠上去
+    const [vmax, acc, dec, crawl, zone] = want2 ? [1.1, 2.6, 1.8, 0.16, 0.03] : [0.6, 1.2, 1.0, 0.09, 0.03]
+    const dir = want2 ? 1 : -1, remain = want2 ? TRAVEL - door.p : door.p
+    const vt = remain > 1e-4 ? dir * Math.max(crawl, Math.min(vmax, Math.sqrt(2 * dec * Math.max(0, remain - zone)))) : 0
+    const v0 = door.v
+    door.v += THREE.MathUtils.clamp(vt - door.v, -acc * dt, acc * dt)
+    door.p += door.v * dt
+    if (door.p >= TRAVEL || door.p <= 0) {   // 到底：停住、撞擊聲、門片晃一下
+      const hitV = Math.abs(door.v)
+      door.p = THREE.MathUtils.clamp(door.p, 0, TRAVEL)
+      if (hitV > 0.01) { if (opt.play) (door.p > 0 ? doorSfx.openStop : doorSfx.closeStop)(); door.bounce = Math.min(0.012, hitV * 0.06) * (door.p > 0 ? 1 : -1); door.bt = 0 }
+      door.v = 0
+    }
+    if (Math.abs(v0) < 1e-4 && Math.abs(door.v) > 1e-4 && opt.play) doorSfx.start()
+    door.bt += dt
+    const wob = door.bounce * Math.exp(-door.bt * 9) * Math.sin(door.bt * 38)
+    for (const { lf, s } of leaves) {
+      lf.position.z = s * (LEAF_W / 2 + door.p + wob)
+      lf.rotation.x = -s * wob * 0.15   // 門片吊在上面的滾輪上，停的時候下緣會擺一下
+    }
+    const e = door.p / TRAVEL
     for (const c of doorCol) c.top = e > 0.7 ? -1 : 9
     sensM.emissive.setHex(want2 ? 0x3ad06a : 0xff3a2a)
+    if (opt.play) {   // 聲音：距離衰減＋看門在左邊還右邊
+      const dx = X0 - camPos.x, dz = -camPos.z, d = Math.hypot(dx, dz, 1.3 - camPos.y)
+      const right = _r.setFromMatrixColumn(cam.matrixWorld, 0)
+      doorSfx.tick(Math.abs(door.v) / 1.1, 1 / (1 + (d / 3.5) ** 2), (right.x * dx + right.z * dz) / Math.max(0.5, Math.hypot(dx, dz)))
+    }
     // 看板輪播
     const k = Math.floor(t / 6) % 4
     if (k !== slide && printT.image) { slide = k; drawSlide(k) }
