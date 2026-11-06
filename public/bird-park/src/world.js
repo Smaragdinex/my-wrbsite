@@ -63,7 +63,11 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const mountain = buildMountain(scene)
   const water = buildWater(scene)
   buildRamp(scene)
-  const [plantLib] = await Promise.all([loadPlants(onProgress), loadAnimalModels(extraModels)])
+  // 下載進度：植物（檔案大）佔 75%、鳥 25%
+  let pF = 0, bF = 0
+  const prog = () => onProgress?.(pF * 0.75 + bF * 0.25, 'load')
+  const [plantLib] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() })])
+  onProgress?.(1, 'build')
   // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
   const birds = BIRDS.map((def) => {
     // 山區的鳥站在山區的地形上（地面高度查 alpineHeight）

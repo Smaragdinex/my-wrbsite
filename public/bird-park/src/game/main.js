@@ -20,14 +20,24 @@ import { controlsSvg } from './controls-help.js'
 import { MENU_VIEW, terrainHeight, supportAt } from '../layout.js'
 
 const loadingEl = document.getElementById('loading')
+// 載入畫面：下載 0～70%、蓋溫室 70～80%、預熱著色器 80～100%（鳥沿著進度線飛過去）
+const ldNum = document.getElementById('ld-num'), ldMsg = document.getElementById('ld-msg')
+const ldFill = loadingEl.querySelector('.ld-fill'), ldBird = loadingEl.querySelector('.ld-bird')
+let ldShown = 0
+function setLoad(f, msg) {
+  f = Math.max(ldShown, Math.min(1, f)); ldShown = f   // 只往前走
+  const p = Math.round(f * 100)
+  ldNum.textContent = p; ldFill.style.width = p + '%'; ldBird.style.left = p + '%'
+  if (msg) ldMsg.textContent = msg
+}
 const world = await buildWorld(document.getElementById('scene'), {
-  onProgress: (f) => { loadingEl.textContent = `園區建造中… ${Math.round(f * 100)}%` },
+  onProgress: (f, stage) => stage === 'build' ? setLoad(0.7, '蓋溫室、種樹…') : setLoad(f * 0.7, '下載植物和鳥…'),
   extraModels: flyModels(),
   night: true,
 })
 const { renderer, scene, camera } = world
 // 附屬館（高山館、海岸館）的館內也在載入畫面時蓋好：走過去才蓋會卡一下
-loadingEl.textContent = '溫室建造中…'
+setLoad(0.8, '溫室快好了…')
 await new Promise((r) => setTimeout(r, 30))
 await world.halls.prebuild()
 
@@ -131,7 +141,9 @@ await renderer.compileAsync(scene, camera)
 // 再到店裡、店門口、回頭看店、水池邊各預熱一次：每個地方的霧、燈、看得到的東西不一樣，著色器版本也不同；
 // 水面倒影（畫到貼圖）、影子、手和相機也各有自己的版本。沒先編好的話，第一次走過去會整個卡住 0.5～1 秒
 const home = { p: camera.position.clone(), q: camera.quaternion.clone() }
-for (const [x, z, yaw] of [[-87.6, 0.4, -90], [-74, 0, -90], [-55, 2, 90], [-15, -25, 60], [96, -4, -90], [145, 9, 100]]) {
+const WARM = [[-87.6, 0.4, -90], [-74, 0, -90], [-55, 2, 90], [-15, -25, 60], [96, -4, -90], [145, 9, 100]]
+for (const [wi, [x, z, yaw]] of WARM.entries()) {
+  setLoad(0.8 + 0.18 * wi / WARM.length, '準備畫面…')
   camera.position.set(x, supportAt(x, z, 99).y + 1.7, z); camera.rotation.set(0, yaw * Math.PI / 180, 0, 'YXZ'); camera.updateMatrixWorld()
   world.tick(0, 0.016); store.tick(0, 0.016, camera, { play: false, look: false })
   await renderer.compileAsync(scene, camera)
@@ -142,6 +154,8 @@ camera.position.copy(home.p); camera.quaternion.copy(home.q); camera.updateMatri
 world.tick(0, 0.016)
 await cam.warm()
 world.render()
+setLoad(1, '好了！')
+await new Promise((r) => setTimeout(r, 250))
 loadingEl.classList.add('done')
 
 // 老闆的 AI（本地 LLM）：背景下載，好了之前用寫好的評語

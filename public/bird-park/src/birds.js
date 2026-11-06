@@ -287,11 +287,13 @@ const BUILD = {
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
 const GLB = {}
 const TINT = { 'thrush-rig': 0.5 }
-export async function loadAnimalModels(extra = []) {
+export async function loadAnimalModels(extra = [], onProgress) {
   const L = new GLTFLoader(), D = new DRACOLoader()
   D.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
   L.setDRACOLoader(D)
-  const load = (n) => L.loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => {
+  let done = 0, total = 0
+  const tick = () => onProgress?.(++done / Math.max(1, total))
+  const load = (n) => (total++, L.loadAsync(`models/birds/${n}.glb?v=${VER}`).finally(tick)).then((g) => {
     GLB[n] = g.scene
     // Tripo 生成的羽色太鮮豔的，載入時壓暗（紫嘯鶇真實是深藍黑、只有光澤是亮藍）
     const k = TINT[n.replace('-fly', '')]
