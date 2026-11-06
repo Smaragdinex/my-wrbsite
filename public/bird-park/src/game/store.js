@@ -5,6 +5,7 @@
 // 逛店：走到展示台前面看著它 → 提示名稱、價錢，按 E 打開器材頁（直接跳到那一項）；走到櫃台前 → 按 E 跟老闆說話（賣照片、買器材）。
 // 座標（世界）：x 從 STORE.X0（東牆，接通道）到 STORE.X1（西牆，店門口），z ±STORE.HZ，原點在地面
 import * as THREE from 'three'
+import { scatter } from '../plants.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { STORE, addCollider, colliders } from '../layout.js'
@@ -62,7 +63,7 @@ function labelDraw(it, state) {
   }
 }
 
-export async function buildStore(scene, state) {
+export async function buildStore(scene, state, plantLib) {
   const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
   const loader = new GLTFLoader()
   const load = (p) => loader.loadAsync(`${p}?v=${VER}`).then((r) => r.scene)
@@ -217,42 +218,53 @@ export async function buildStore(scene, state) {
   // 北牆：實心白牆（櫃台後面）
   box('panel', X0 - X1, H, 0.3, XM, H / 2, HZ - 0.15)
 
-  /* ---------- 植物牆（東牆開口兩邊）：深色底板上鋪滿一片片葉子 ---------- */
+  /* ---------- 植物牆（東牆開口兩邊）＋南牆花槽：用溫室同一批寫實植物模型（plants.js） ---------- */
+  // 植物牆：深色底板，前面一株株植物「橫著種」在牆上、往外斜上長（真的植生牆就是這樣），後面一層暗的小葉片補縫
+  const real = (name, list) => plantLib?.[name] && scatter(g, plantLib[name], list, { wind: 0 })
+  const rq = (rz, ry) => new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, rz)).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), ry))
+  const tint = (l = 1) => new THREE.Color().setHSL(0.25 + Math.random() * 0.05, 0.15, Math.min(1, (0.86 + Math.random() * 0.12) * l))   // 每株顏色乘一點點變化（接近白＝原本貼圖的顏色）
   {
-    const leaves = [], col = [], c = new THREE.Color(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler()
+    const WALL = [['calathea_b', 0.8], ['calathea_c', 0.8], ['brom', 0.75], ['anthurium_c', 0.75], ['fern2_c', 0.45], ['calathea_a', 0.55], ['anthurium_b', 0.62]]
+    const lists = WALL.map(() => [])
     for (const s of [-1, 1]) {
       box('dark', 0.08, 3.6, HZ - DW - 0.6, X0 - 0.06, 2.0, s * (DW + (HZ - DW) / 2))
-      for (let i = 0; i < 1400; i++) {
-        const z = s * (DW + 0.35 + Math.random() * (HZ - DW - 0.7)), y = 0.3 + Math.random() * 3.5
-        e.set((Math.random() - 0.5) * 1.2, -Math.PI / 2 + (Math.random() - 0.5) * 1.0, Math.random() * 6.28)
-        const sc = 0.12 + Math.random() * 0.16
-        m4.compose(V(X0 - 0.12 - Math.random() * 0.12, y, z), q.setFromEuler(e), V(sc, sc, sc))
-        leaves.push(m4.clone())
-        c.setHSL(0.27 + Math.random() * 0.08, 0.45 + Math.random() * 0.25, 0.18 + Math.random() * 0.2); col.push(c.clone())
+      for (let y = 0.45; y < 3.7; y += 0.3) for (let z = DW + 0.45; z < HZ - 0.35; z += 0.32) {
+        const k = Math.floor(Math.random() * WALL.length), sc = WALL[k][1] * (0.8 + Math.random() * 0.4)
+        lists[k].push({ p: V(X0 - 0.11, y + (Math.random() - 0.5) * 0.14, s * (z + (Math.random() - 0.5) * 0.14)),
+          q: rq(Math.PI / 2 - 0.25 - Math.random() * 0.35, Math.random() * 6.28), s: V(sc, sc, sc), c: tint() })
       }
     }
-    const lm = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: leafTex(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.6 }), leaves.length)
+    WALL.forEach(([n], k) => real(n, lists[k]))
+    // 補縫：貼著底板的一層暗葉片（從前面看不到底板的黑洞）
+    const leaves = [], col = [], c = new THREE.Color(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler()
+    for (const s of [-1, 1]) for (let i = 0; i < 700; i++) {
+      const z = s * (DW + 0.35 + Math.random() * (HZ - DW - 0.7)), y = 0.3 + Math.random() * 3.5
+      e.set((Math.random() - 0.5) * 1.2, -Math.PI / 2 + (Math.random() - 0.5) * 0.8, Math.random() * 6.28)
+      const sc = 0.14 + Math.random() * 0.14
+      m4.compose(V(X0 - 0.11 - Math.random() * 0.03, y, z), q.setFromEuler(e), V(sc, sc, sc)); leaves.push(m4.clone())
+      c.setHSL(0.28 + Math.random() * 0.05, 0.45, 0.1 + Math.random() * 0.08); col.push(c.clone())
+    }
+    const lm = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: leafTex(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.7 }), leaves.length)
     leaves.forEach((m, i) => { lm.setMatrixAt(i, m); lm.setColorAt(i, col[i]) })
-    lm.castShadow = true; lm.receiveShadow = true
+    lm.receiveShadow = true
     g.add(lm)
   }
-  // 南牆邊一排白色長花槽，種一樣的葉子叢
+  // 南牆邊一排白色長花槽：上面一層土，種竹芋、火鶴、鳳梨、蕨類（直立的）
   {
-    const leaves = [], col = [], c = new THREE.Color(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler()
+    const POT = [['calathea_a', 1.3], ['anthurium_a', 1.25], ['brom', 1.35], ['fern2_b', 1.0], ['calathea_b', 1.6], ['anthurium_b', 1.45]]
+    const lists = POT.map(() => [])
+    const soil = new THREE.MeshStandardMaterial({ color: 0x2e241b, roughness: 1 })
     for (const [x0, x1] of [[X0 - 0.6, -79.2], [-84.4, X1 + 0.6]]) {
       box('panel', x0 - x1, 0.55, 0.7, (x0 + x1) / 2, 0.275, -HZ + 0.5)
-      for (let i = 0; i < 420; i++) {
-        const x = x1 + Math.random() * (x0 - x1), z = -HZ + 0.25 + Math.random() * 0.5, y = 0.6 + Math.random() ** 1.5 * 0.9
-        e.set(-0.3 - Math.random() * 1.0, Math.random() * 6.28, (Math.random() - 0.5) * 0.8)
-        const sc = 0.18 + Math.random() * 0.2
-        m4.compose(V(x, y, z), q.setFromEuler(e), V(sc, sc, sc)); leaves.push(m4.clone())
-        c.setHSL(0.26 + Math.random() * 0.08, 0.5, 0.2 + Math.random() * 0.18); col.push(c.clone())
+      const sm = new THREE.Mesh(new THREE.BoxGeometry(x0 - x1 - 0.08, 0.02, 0.62), soil); sm.position.set((x0 + x1) / 2, 0.545, -HZ + 0.5); sm.receiveShadow = true; g.add(sm)
+      let k = 0
+      for (let x = x1 + 0.22; x < x0 - 0.15; x += 0.22 + Math.random() * 0.1) {   // 兩排交錯、擠一點，花槽才不會稀稀落落
+        const sc = POT[k % POT.length][1] * (0.85 + Math.random() * 0.3)
+        lists[k % POT.length].push({ p: V(x, 0.55, -HZ + 0.5 + (k % 2 ? 0.14 : -0.14) + (Math.random() - 0.5) * 0.08), q: rq(0, Math.random() * 6.28), s: V(sc, sc, sc), c: tint(1.05) })
+        k += 1 + (Math.random() < 0.3 ? 1 : 0)
       }
     }
-    const lm = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: leafTex(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.6 }), leaves.length)
-    leaves.forEach((m, i) => { lm.setMatrixAt(i, m); lm.setColorAt(i, col[i]) })
-    lm.castShadow = true
-    g.add(lm)
+    POT.forEach(([n], k) => real(n, lists[k]))
   }
 
   /* ---------- 櫃台、老闆、身後的燈箱格櫃 ---------- */
@@ -294,7 +306,8 @@ export async function buildStore(scene, state) {
   const pack = (w, h, d, x, y, z, ry = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), boxM); m.position.set(x, y + h / 2, z); m.rotation.y = ry; m.castShadow = true; g.add(m); return m }
   pack(0.2, 0.14, 0.16, -84.5, ch + 0.03, cz - 0.05, 0.2); pack(0.18, 0.12, 0.14, -84.5, ch + 0.17, cz - 0.05, -0.1); pack(0.12, 0.09, 0.1, -84.95, ch + 0.03, cz + 0.1, 0.5)
   box('white', 0.13, 0.12, 0.13, -80.3, ch + 0.09, cz + 0.1)                    // 小盆栽（白盆）
-  addTuft(-80.3, ch + 0.15, cz + 0.1, 0.22)
+  if (plantLib?.calathea_c) real('calathea_c', [{ p: V(-80.3, ch + 0.15, cz + 0.1), q: rq(0, 0.6), s: V(0.42, 0.42, 0.42), c: tint(1.1) }])   // 白盆裡一小株竹芋
+  else addTuft(-80.3, ch + 0.15, cz + 0.1, 0.22)
   box('charcoal', 0.16, 0.06, 0.1, -80.9, ch + 0.06, cz - 0.15)                  // 清潔組：吹球座
   box('oak', 0.035, 0.12, 0.035, -80.95, ch + 0.15, cz - 0.15)
 
