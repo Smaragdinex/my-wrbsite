@@ -630,7 +630,7 @@ export function buildWater(scene) {
     const w = Math.max(64, Math.round(renderer.domElement.width * scale)), h = Math.max(64, Math.round(renderer.domElement.height * scale))
     if (reflRT.width !== w || reflRT.height !== h) reflRT.setSize(w, h)
     camera.updateMatrixWorld()
-    vCam.copy(camera)
+    vCam.copy(camera, false)   // 不要連子物件一起複製：鏡頭底下掛著手和相機（360 個物件），以前每次倒影都多複製一份，越玩越卡
     vCam.layers.set(0)
     // 鏡射：位置、朝向都對水面翻過去
     const Y = POOL.water

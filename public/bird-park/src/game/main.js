@@ -114,6 +114,18 @@ setMenuCam(true)
 // 預熱：先畫一張，著色器編譯完再拿掉載入畫面
 world.tick(0, 0.016)
 await renderer.compileAsync(scene, camera)
+// 再到店裡、店門口、回頭看店、水池邊各預熱一次：每個地方的霧、燈、看得到的東西不一樣，著色器版本也不同；
+// 水面倒影（畫到貼圖）、影子、手和相機也各有自己的版本。沒先編好的話，第一次走過去會整個卡住 0.5～1 秒
+const home = { p: camera.position.clone(), q: camera.quaternion.clone() }
+for (const [x, z, yaw] of [[-87.6, 0.4, -90], [-74, 0, -90], [-55, 2, 90], [-15, -25, 60]]) {
+  camera.position.set(x, terrainHeight(x, z) + 1.7, z); camera.rotation.set(0, yaw * Math.PI / 180, 0, 'YXZ'); camera.updateMatrixWorld()
+  world.tick(0, 0.016); store.tick(0, 0.016, camera, { play: false, look: false })
+  await renderer.compileAsync(scene, camera)
+  world.water.reflect(renderer, scene, camera, world.quality.reflScale, 1)
+  world.render(); vm.render(renderer, scene)
+}
+camera.position.copy(home.p); camera.quaternion.copy(home.q); camera.updateMatrixWorld()
+world.tick(0, 0.016)
 await cam.warm()
 world.render()
 loadingEl.classList.add('done')

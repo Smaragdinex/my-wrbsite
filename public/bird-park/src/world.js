@@ -262,7 +262,7 @@ function buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera 
       const near = lamps.map((p, i) => [p.distanceToSquared(camera.position), i]).sort((a, b) => a[0] - b[0]).slice(0, N)
       near.forEach(([, i], k) => pls[k].position.copy(lamps[i]).add(_v.set(0, -0.25, 0)))
     }
-    for (const l of pls) l.intensity = 14 * st.lamp
+    for (const l of pls) l.intensity = l.userData.off ? 0 : 14 * st.lamp
   }
   setTime(10)
   return { setTime, tick, get hour() { return st.hour }, get day() { return st.day }, lamps, benches: flora.benches, lights: pls }
