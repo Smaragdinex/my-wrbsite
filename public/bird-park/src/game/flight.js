@@ -33,14 +33,14 @@ export const ESCAPE = {
   mikado: { r: 8, run: 7 },
   pheasant: { r: 8, run: 7 },
   babbler: { r: 5, run: 5 },
-  // 高山區 8 種：還沒有自己的飛行模型（先借翠鳥的，大小照停棲模型換算）
-  flamecrest: { r: 5, fly: { speed: 7, hz: 15, style: 'bound' } },
-  yuhina: { r: 5, fly: { speed: 7, hz: 14, style: 'bound' } },
-  yellowtit: { r: 6, fly: { speed: 7, hz: 13, style: 'bound' } },
+  // 高山區 8 種（2026-11-07 飛行模型；k ≈ 停棲模型縮放 × 1.8，翼展約是身長的 1.6～1.8 倍）
+  flamecrest: { r: 5, fly: { speed: 7, hz: 15, style: 'bound', k: 0.47 } },
+  yuhina: { r: 5, fly: { speed: 7, hz: 14, style: 'bound', k: 0.54 } },
+  yellowtit: { r: 6, fly: { speed: 7, hz: 13, style: 'bound', k: 0.65 } },
   niltava: { r: 7, fly: { speed: 8, hz: 11, style: 'flap' } },
-  sibia: { r: 7, fly: { speed: 8, hz: 9, style: 'bound' } },
-  bushrobin: { r: 4, fly: { speed: 7, hz: 13, style: 'flap' } },   // 不太怕人
-  rosefinch: { r: 6, fly: { speed: 8, hz: 12, style: 'bound' } },
+  sibia: { r: 7, fly: { speed: 8, hz: 9, style: 'bound', k: 1.0 } },
+  bushrobin: { r: 4, fly: { speed: 7, hz: 13, style: 'flap', k: 0.47 } },   // 不太怕人
+  rosefinch: { r: 6, fly: { speed: 8, hz: 12, style: 'bound', k: 0.49 } },
   laughingthrush: { r: 3.5, run: 5 },                                   // 出了名的親人，靠太近才跑開
   moorhen: { r: 9, swim: 5 },
   waterhen: { r: 9, swim: 5 },
