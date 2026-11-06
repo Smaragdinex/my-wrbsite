@@ -183,3 +183,9 @@ svg.controls image { mix-blend-mode: multiply; }
 .c-label { font: 600 29px -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; fill: #1f2a24; paint-order: stroke; stroke: rgba(255, 255, 252, 0.95); stroke-width: 8px; stroke-linejoin: round; }
 .c-key { font-weight: 800; fill: #1f5e39; }
 #help .tips { margin: 4px 0 6px; padding-left: 20px; color: var(--muted); font-size: 15px; line-height: 1.7; }
+/* 鳥類圖鑑（書是 3D 畫在畫布上，這裡只有關閉鈕和提示） */
+.guide-ui { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
+.guide-ui[hidden] { display: none; }
+.guide-ui .x { all: unset; pointer-events: auto; position: absolute; top: 18px; left: 18px; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #f2e9d4; background: rgba(0, 0, 0, 0.35); transition: background 0.15s; }
+.guide-ui .x:hover { background: rgba(0, 0, 0, 0.55); }
+.guide-hint { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); color: rgba(242, 233, 212, 0.8); font-size: 14px; letter-spacing: 0.08em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }

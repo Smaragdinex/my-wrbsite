@@ -7,6 +7,7 @@ import { createPlayer } from '../player.js'
 import { createHud } from './hud.js'
 import { createCamera, BODIES, LENSES } from './camera.js'
 import { createAlbum } from './album.js'
+import { createGuide } from './guide.js'
 import { createShop } from './shop.js'
 import { buildStore } from './store.js'
 import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.js'
@@ -45,12 +46,15 @@ const photos = await allPhotos()
 for (const p of photos) if (!p.sold && p.score <= 0 && (p.subject || p.price)) { p.subject = null; p.price = 0; p.notes = ['沒拍到鳥（太小、太糊或看不清楚）']; putPhoto(p) }
 // 收購價改成分數分級（60 分以下不收）：沒賣掉的舊照片照新規則重算估價
 for (const p of photos) if (!p.sold && p.subject) { const np = priceFor(p.subject.id, p.score); if (np !== p.price) { p.price = np; putPhoto(p) } }
+// 圖鑑記錄：拍到過的鳥種（舊存檔從相簿補）
+state.seen = [...new Set([...(state.seen ?? []), ...photos.filter((p) => p.subject).map((p) => p.subject.id)])]
 const save = () => { saveState(state); hud.setMoney(state.money) }
 hud.setMoney(state.money)
 const gear = { body: () => BODIES.find((b) => b.id === state.bodyId), lens: () => LENSES.find((l) => l.id === state.lensId) }
 
 const cam = createCamera({ world, camera, controls: player.controls, hud, gear, getSound: () => settings.state.sound, onShot: (p) => {
   photos.push(p); putPhoto(p)
+  if (p.subject && !state.seen.includes(p.subject.id)) { state.seen.push(p.subject.id); save() }   // 圖鑑：拍到過就算記錄（照片賣掉、刪掉也還在）
   // 拍的當下不顯示分數、評語、價錢（使用者要求）：要到相簿或相機行老闆那裡才知道拍得怎樣
   hud.toast('已存入相簿')
 } })
@@ -60,10 +64,19 @@ const relock = () => player.controls.lock()
 const album = createAlbum({ photos, onDelete: (p) => { photos.splice(photos.indexOf(p), 1); deletePhoto(p.time) }, onClose: relock })
 const store = await buildStore(scene, state, world.plantLib, { getSound: () => settings.state.sound })   // 自動門音效跟著設定的「音效」開關（只在玩的時候才會叫到，那時 settings 已經建好）   // 相機行：溫室門口外面那棟店，遊戲從店裡開始
 const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock })
-const panelOpen = () => album.isOpen || shop.isOpen || cam.panelOpen
+// Esc 闔上：瀏覽器不讓 Esc 重新鎖滑鼠，就回到首頁選單（跟平常按 Esc 一樣）
+const guide = createGuide({ renderer, onClose: (why) => why === 'esc' ? player.controls.dispatchEvent({ type: 'unlock' }) : relock(), getRecords: () => {
+  // 每種鳥：拍過幾張、最高幾分（沒有照片但記錄過的也算記錄）
+  const r = {}
+  for (const id of state.seen) r[id] = { n: 0, best: 0 }
+  for (const p of photos) if (p.subject) { const o = r[p.subject.id] ??= { n: 0, best: 0 }; o.n++; o.best = Math.max(o.best, p.score) }
+  return r
+} })
+const panelOpen = () => album.isOpen || shop.isOpen || cam.panelOpen || guide.isOpen
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
 addEventListener('keydown', (e) => {
+  if (guide.isOpen) { if (e.code === 'KeyE') guide.close(); if (e.code === 'Tab') e.preventDefault(); return }   // 圖鑑開著：翻頁、Esc 在 guide.js 處理
   if (e.code === 'Tab') { e.preventDefault(); if (album.isOpen) album.close(); else if (!shop.isOpen) openPanel(album) }
   // E：舉著相機 → 相機設定；靠近相機行 → 進店；靠近長椅 → 休息
   if (e.code === 'KeyE' && cam.panelOpen) { cam.closePanel(); return }
@@ -74,6 +87,7 @@ addEventListener('keydown', (e) => {
     if (f?.type === 'item') { shop.open('gear', f.item.id); player.controls.unlock() }      // 逛店：看著展示台 → 器材頁跳到那一項
     else if (f?.type === 'counter') store.checkout(() => { shop.open('sell'); player.controls.unlock() })   // 櫃台：老闆不在櫃台就先走回來，到了才開買賣畫面
     else if (!panelOpen() && player.controls.isLocked && nearBench()) rest()
+    else if (!panelOpen() && player.controls.isLocked) { guide.open(); player.controls.unlock() }   // 附近沒有可以按 E 的東西：打開鳥類圖鑑
   }
   if (e.code === 'KeyQ' && player.controls.isLocked) {
     // 換下一支有的鏡頭
@@ -174,6 +188,7 @@ function frame() {
   settings.tick(dt, player.controls.isLocked)
   world.render()
   if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
+  guide.render(dt)   // 圖鑑（書）疊在最上面
 }
-window.__game = { setMenuCam, amb, settings, store, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
+window.__game = { setMenuCam, guide, amb, settings, store, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 frame()

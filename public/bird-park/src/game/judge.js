@@ -57,10 +57,12 @@ const ask = async (messages, opts) => {
 // 小模型偶爾冒出簡體字：常見的幾個換成繁體（只換不會有歧義的）
 const S2T = { 这: '這', 个: '個', 张: '張', 对: '對', 过: '過', 还: '還', 没: '沒', 头: '頭', 鸟: '鳥', 鲜: '鮮', 画: '畫', 准: '準', 种: '種', 拍摄: '拍攝', 镜: '鏡', 稀: '稀', 么: '麼', 们: '們', 时: '時', 会: '會', 让: '讓', 说: '說', 点: '點', 远: '遠', 观: '觀', 动: '動', 当: '當', 实: '實', 质: '質', 价: '價', 钱: '錢', 卖: '賣', 买: '買', 难: '難', 应: '應', 该: '該', 话: '話', 后: '後', 为: '為', 处: '處', 体: '體' }
 const toTrad = (t) => t.replace(/拍摄|[这个张对过还没头鸟鲜画准种镜么们时会让说点远观动当实质价钱卖买难应该话后为处体]/g, (c) => S2T[c] ?? c).replace(/這只/g, '這隻')
+// 稀有度（評語和圖鑑用）
+export const RARITY = { mikado: '非常稀有', spoonbill: '非常稀有', pheasant: '稀有', oriole: '稀有', thrush: '不常見', bluemagpie: '稀有', kingfisher: '稀有', babbler: '不常見', waterhen: '普通', sparrow: '很常見', dove: '很常見', bulbul: '很常見' }
 const pct = (x) => `${Math.round(x * 100)}%`
 function facts(p) {
   const s = p.subject
-  const rare = { mikado: '非常稀有', spoonbill: '非常稀有', pheasant: '稀有', oriole: '稀有', thrush: '不常見', bluemagpie: '稀有', kingfisher: '稀有', babbler: '不常見', waterhen: '普通', sparrow: '很常見', dove: '很常見', bulbul: '很常見' }[s.id] ?? '普通'
+  const rare = RARITY[s.id] ?? '普通'
   return [
     `鳥：${s.name}（${rare}）`,
     `遊戲評分：${p.score} 分（100 分是好照片的標準，超過 100 是難得的瞬間）`,
