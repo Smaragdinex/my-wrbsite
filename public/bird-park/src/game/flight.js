@@ -37,7 +37,7 @@ export const ESCAPE = {
   flamecrest: { r: 5, fly: { speed: 7, hz: 15, style: 'bound', k: 0.47 } },
   yuhina: { r: 5, fly: { speed: 7, hz: 14, style: 'bound', k: 0.54 } },
   yellowtit: { r: 6, fly: { speed: 7, hz: 13, style: 'bound', k: 0.65 } },
-  niltava: { r: 7, fly: { speed: 8, hz: 11, style: 'flap' } },
+  niltava: { r: 7, fly: { speed: 8, hz: 11, style: 'flap', k: 0.8 } },
   sibia: { r: 7, fly: { speed: 8, hz: 9, style: 'bound', k: 1.0 } },
   bushrobin: { r: 4, fly: { speed: 7, hz: 13, style: 'flap', k: 0.47 } },   // 不太怕人
   rosefinch: { r: 6, fly: { speed: 8, hz: 12, style: 'bound', k: 0.49 } },
