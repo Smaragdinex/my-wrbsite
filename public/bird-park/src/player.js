@@ -3,7 +3,8 @@ import * as THREE from 'three'
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js'
 import { supportAt, blocked, SPAWN } from './layout.js'
 
-const EYE = 1.65, EYE_LOW = 1.05, WALK = 4.2, RUN = 8.5, SNEAK = 1.5, GRAV = 22, JUMP = 7
+// 速度照「不會 3D 暈」調：走路 3.2 m/s（原本 4.2 太快）、跑 6.2
+const EYE = 1.65, EYE_LOW = 1.05, WALK = 3.2, RUN = 6.2, SNEAK = 1.3, GRAV = 22, JUMP = 7
 const SLIDE = [0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2].map((d) => d)
 
 export function createPlayer(camera, dom) {
@@ -57,7 +58,8 @@ export function createPlayer(camera, dom) {
     }
     st.sneak = controls.isLocked && keys.has('KeyC')
     if (want.lengthSq() > 0) want.normalize().multiplyScalar(st.sneak ? SNEAK : keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK)
-    const k = st.grounded ? 12 : 3
+    // 起步、停下都慢慢來（原本 12 幾乎是瞬間），停下比起步快一點，才不會覺得滑
+    const k = !st.grounded ? 3 : want.lengthSq() > 0 ? 6 : 8
     vel.x += (want.x - vel.x) * Math.min(1, k * dt)
     vel.z += (want.z - vel.z) * Math.min(1, k * dt)
 
@@ -82,8 +84,11 @@ export function createPlayer(camera, dom) {
     } else {
       st.grounded = false
     }
-    st.eye += ((st.sneak ? EYE_LOW : EYE) - st.eye) * Math.min(1, 10 * dt)
-    camera.position.set(st.x, st.feet + st.eye, st.z)
+    st.eye += ((st.sneak ? EYE_LOW : EYE) - st.eye) * Math.min(1, 6 * dt)
+    // 鏡頭高度另外平滑：上下台階、地面高低不平時腳會一格一格跳，眼睛不要跟著跳（跳躍、掉下去時直接跟）
+    const eyeY = st.feet + st.eye
+    st.camY = st.grounded && st.camY != null && Math.abs(eyeY - st.camY) < 0.6 ? st.camY + (eyeY - st.camY) * Math.min(1, 12 * dt) : eyeY
+    camera.position.set(st.x, st.camY, st.z)
   }
 
   camera.position.set(st.x, st.feet + EYE, st.z)

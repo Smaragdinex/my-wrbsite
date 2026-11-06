@@ -32,7 +32,7 @@ export function createSettings({ world, player }) {
     }
     ;[world.quality.reflScale, world.quality.reflEvery] = val('reflect')
     world.time.lights.forEach((l, i) => { l.visible = i < val('lights') })   // 最近的燈排在前面，關後面的
-    player.controls.pointerSpeed = st.sens
+    player.controls.userSens = st.sens   // camera.js 每格用它乘上焦段的比例（直接設 pointerSpeed 會被蓋掉）
     fpsEl.hidden = !st.fps
   }
 

@@ -80,7 +80,7 @@ export async function createViewmodel(camera) {
     root.visible = st.raise < 0.85
     if (!root.visible) return
     // 走路晃：跟著步伐上下、左右晃；舉起來或看螢幕時不太晃
-    st.bob += dt * (speed > 0.3 ? 6 + speed * 0.9 : 0)
+    st.bob += dt * (speed > 0.3 ? 5 + speed * 0.7 : 0)
     const amp = clamp(speed / 4, 0, 1.6) * (1 - st.raise) * (1 - st.view)
     const breathe = Math.sin(t * 1.3) * 0.003
     // 鏡頭轉動時，手和相機落後一點（慣性）
@@ -93,8 +93,8 @@ export async function createViewmodel(camera) {
     pose.position.copy(A.p).lerp(B.p, st.raise).lerp(C.p, st.view)
     qa.setFromEuler(A.r).slerp(qb.setFromEuler(B.r), st.raise).slerp(_q.setFromEuler(C.r), st.view)
     pose.quaternion.copy(qa)
-    pose.position.x += Math.sin(st.bob) * 0.012 * amp + st.sway.x * (1 - st.raise)
-    pose.position.y += -Math.abs(Math.cos(st.bob)) * 0.014 * amp + breathe + st.sway.y * (1 - st.raise)
+    pose.position.x += Math.sin(st.bob) * 0.006 * amp + st.sway.x * (1 - st.raise)
+    pose.position.y += -Math.abs(Math.cos(st.bob)) * 0.007 * amp + breathe + st.sway.y * (1 - st.raise)
     // 長鏡頭比較重：拿著的時候往下垂一點
     const Ln = LENS[st.lens]
     pose.position.y -= (Ln.L - 0.06) * 0.06 * (1 - st.raise) * (1 - st.view)

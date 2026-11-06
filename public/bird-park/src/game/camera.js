@@ -236,7 +236,7 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     const want = st.raised && !panelOn ? vfov(st.focal) : WALK_FOV   // 看背面螢幕時不是透過鏡頭看
     st.fov += (want - st.fov) * Math.min(1, dt * 12)
     camera.fov = st.fov; camera.updateProjectionMatrix()
-    controls.pointerSpeed = Math.max(0.08, st.fov / WALK_FOV)   // 長焦時滑鼠轉得慢一點才瞄得準
+    controls.pointerSpeed = (controls.userSens ?? 1) * Math.max(0.08, st.fov / WALK_FOV)   // 長焦時滑鼠轉得慢一點才瞄得準；userSens＝設定裡的滑鼠靈敏度
     // 相機舉到眼前（viewmodel 的 raise 到 85%）才出現觀景窗；舉著的時候沒有畫面中間的準星點
     vf.classList.toggle('on', st.raised && !panelOn && (st.vfReady ?? true))
     hud.root.querySelector('.crosshair')?.classList.toggle('off', st.raised)
