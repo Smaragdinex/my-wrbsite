@@ -99,7 +99,8 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   const caseGlass = new THREE.MeshStandardMaterial({ color: 0xe8f4f6, transparent: true, opacity: 0.2, roughness: 0.02, metalness: 0.2, depthWrite: false })
   const led = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff4e2, emissiveIntensity: 1.6 })
   led.userData.lamp = [1.2, 2.2]
-  const geos = { white: [], panel: [], dark: [], led: [], oak: [], walnut: [], charcoal: [], steel: [], glow: [] }
+  const black = new THREE.MeshStandardMaterial({ color: 0x18191a, roughness: 0.45, metalness: 0.5, emissive: 0x0c0d0d, emissiveIntensity: 0.4 })   // 軌道燈的霧黑烤漆
+  const geos = { white: [], panel: [], dark: [], led: [], oak: [], walnut: [], charcoal: [], steel: [], glow: [], black: [] }
   const box = (k, w, h, d, x, y, z) => geos[k].push(new THREE.BoxGeometry(w, h, d).translate(x, y, z))
   const bar = (k, a, b, t = 0.14, t2 = t) => {
     const d = new THREE.Vector3().subVectors(b, a), len = d.length()
@@ -114,7 +115,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     const m = new THREE.Mesh(geo, mat); m.renderOrder = 5; g.add(m); return m
   }
   const rect = (a, b, c, d) => pane([a, b, c, d])
-  const mats = { white, panel, dark, led, oak, walnut, charcoal, steel, glow }
+  const mats = { white, panel, dark, led, oak, walnut, charcoal, steel, glow, black }
   const leafM = new THREE.MeshStandardMaterial({ map: leafTex(), alphaTest: 0.5, side: THREE.DoubleSide, color: 0x6aa05a, roughness: 0.6 })
   const addTuft = (x, y, z, sz) => {   // 小盆栽的葉子：幾片葉子往外斜
     for (let i = 0; i < 9; i++) {
@@ -130,7 +131,26 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   // 屋頂：白色天花板，中間一條天窗（z ±2.2，玻璃），天花板下面掛 LED 燈條
   for (const s of [-1, 1]) box('panel', X0 - X1, 0.25, HZ - 2.2, XM, H + 0.12, s * (2.2 + (HZ - 2.2) / 2))
   rect(V(X0, H + 0.2, -2.2), V(X1, H + 0.2, -2.2), V(X1, H + 0.2, 2.2), V(X0, H + 0.2, 2.2))
-  for (let x = X0 - 1.3; x > X1; x -= 2.6) for (const z of [-4.6, 4.6]) box('led', 0.08, 0.04, 2.4, x, H - 0.05, z)
+  // 嵌入式線型燈：天花板開一條槽，鋁框＋乳白擴散板（中間亮、兩側和兩端暗一點），兩端有端蓋
+  {
+    const difT = canvasTex(64, 512, (x, w, h) => {
+      const gx = x.createLinearGradient(0, 0, w, 0)
+      gx.addColorStop(0, '#d9d3c8'); gx.addColorStop(0.18, '#fbf7ef'); gx.addColorStop(0.5, '#ffffff'); gx.addColorStop(0.82, '#fbf7ef'); gx.addColorStop(1, '#d9d3c8')
+      x.fillStyle = gx; x.fillRect(0, 0, w, h)
+      const gy = x.createLinearGradient(0, 0, 0, h)
+      gy.addColorStop(0, 'rgba(0,0,0,0.22)'); gy.addColorStop(0.06, 'rgba(0,0,0,0)'); gy.addColorStop(0.94, 'rgba(0,0,0,0)'); gy.addColorStop(1, 'rgba(0,0,0,0.22)')
+      x.fillStyle = gy; x.fillRect(0, 0, w, h)
+    })
+    const dif = new THREE.MeshStandardMaterial({ color: 0xf6f3ee, roughness: 0.9, emissive: 0xfff3e0, emissiveMap: difT, emissiveIntensity: 1.6 })
+    dif.userData.lamp = [1.2, 2.2]
+    for (let x = X0 - 1.3; x > X1; x -= 2.6) for (const z of [-4.6, 4.6]) {
+      box('black', 0.13, 0.02, 2.46, x, H - 0.0, z)            // 槽（黑色陰影縫）
+      box('steel', 0.118, 0.012, 2.44, x, H - 0.012, z)         // 鋁框
+      box('steel', 0.1, 0.02, 0.012, x, H - 0.02, z - 1.214); box('steel', 0.1, 0.02, 0.012, x, H - 0.02, z + 1.214)   // 端蓋
+      const d = new THREE.Mesh(new THREE.PlaneGeometry(0.094, 2.41), dif)
+      d.rotation.x = Math.PI / 2; d.position.set(x, H - 0.0195, z); g.add(d)
+    }
+  }
   // 柱子（每 3.25 公尺一根）＋屋頂大樑（橫跨 z）＋天窗兩邊的縱樑
   const NX = 4
   for (let i = 0; i <= NX; i++) {
@@ -469,15 +489,85 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   })
   addCollider(-77.6, HZ - 0.55, 0.7, 1.5); addCollider(-78.4, HZ - 0.55, 0.7, 1.5)
 
-  /* ---------- 天花板軌道燈（照展示台那一區） ---------- */
-  for (const z of [-3.3, 3.0]) {
-    box('charcoal', X0 - X1 - 1.4, 0.04, 0.05, XM, H - 0.03, z)
-    for (let x = X0 - 1.1; x > X1 + 0.8; x -= 1.45) {
-      const hd = new THREE.Group(); hd.position.set(x, H - 0.06, z)
-      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.2, 14), mats.charcoal); can.position.y = -0.12
-      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.05, 14), led); lens.rotation.x = Math.PI / 2; lens.position.y = -0.221
-      can.add(lens); const piv = new THREE.Group(); piv.rotation.x = z < 0 ? -0.35 : 0.3; piv.add(can); hd.add(piv); g.add(hd)
+  /* ---------- 天花板軌道燈 ---------- */
+  // 照真的三迴路軌道燈做：黑色鋁軌（底下一條槽、兩端端蓋、一端有供電盒）；燈具＝轉接盒＋短桿＋U 形支架＋
+  // 圓筒燈頭（後半段一圈散熱鰭片、後蓋）＋前框＋鋁反光杯＋很亮的 LED 透鏡＋一點眩光。每顆都對準一個真的東西：
+  // 南邊那條照展示島（台面上打一圈暖光），北邊那條照櫃台後面的格櫃、牆上的照片、相機包櫃。
+  // 光圈是假的（加法混合的柔邊圓），不另外放真的燈：光源數量一多整個溫室的著色器都會變慢
+  {
+    const spots = []   // [燈的 x, 軌道 z, 目標, 要不要打光圈]
+    const isl = [...BODIES.map((_, i) => [-79.6 - i * 3.0, -1.8]), ...LENSES.map((_, i) => [-78.6 - i * 2.0, -4.6])]
+    for (const z of [-3.3, 3.0]) {
+      const L = X0 - X1 - 1.4
+      box('black', L, 0.034, 0.036, XM, H - 0.017, z)                 // 鋁軌
+      box('dark', L, 0.006, 0.012, XM, H - 0.035, z)                  // 底下的槽
+      for (const sx of [-1, 1]) box('black', 0.012, 0.036, 0.04, XM + sx * L / 2, H - 0.017, z)   // 端蓋
+      box('black', 0.14, 0.05, 0.06, XM + L / 2 - 0.08, H - 0.026, z)  // 供電盒
+      for (let x = X0 - 1.1; x > X1 + 0.8; x -= 1.45) {
+        if (z < 0) {
+          const t = isl.reduce((a, b) => Math.abs(b[0] - x) < Math.abs(a[0] - x) ? b : a)
+          spots.push([x, z, V(t[0], 1.02, t[1] - 0.04), true])
+        } else {
+          const t = x < -86.2 ? V(-87.25, 2.6, HZ - 0.33) : x > -79.0 ? V(-77.6, 1.0, HZ - 0.6) : V(x, 1.7, HZ - 0.4)
+          spots.push([x, z, t, false])
+        }
+      }
     }
+    // 燈具的幾何（燈頭朝 -y；底座在原點）
+    const cylY = (r0, r1, h, y, seg = 20) => new THREE.CylinderGeometry(r1, r0, h, seg).translate(0, y, 0)
+    const baseG = mergeGeometries([
+      new THREE.BoxGeometry(0.11, 0.042, 0.036).translate(0, -0.021, 0),              // 轉接盒
+      cylY(0.008, 0.008, 0.05, -0.066, 10),                                           // 短桿
+      new THREE.BoxGeometry(0.108, 0.008, 0.026).translate(0, -0.093, 0),             // U 形支架上緣
+      new THREE.BoxGeometry(0.006, 0.07, 0.026).translate(-0.051, -0.125, 0),
+      new THREE.BoxGeometry(0.006, 0.07, 0.026).translate(0.051, -0.125, 0),
+    ])
+    const headParts = [new THREE.CylinderGeometry(0.043, 0.043, 0.17, 20, 1, true), cylY(0.046, 0.044, 0.012, 0.085), cylY(0.03, 0.036, 0.012, 0.094)]   // 筒身（中心在支點）、後蓋
+    for (let i = 0; i < 6; i++) headParts.push(cylY(0.049, 0.049, 0.005, 0.016 + i * 0.012))   // 散熱鰭片
+    headParts.push(new THREE.TorusGeometry(0.043, 0.005, 8, 24).rotateX(Math.PI / 2).translate(0, -0.085, 0))   // 前框
+    headParts.push(new THREE.CylinderGeometry(0.006, 0.006, 0.026, 6).rotateZ(Math.PI / 2).translate(0, 0, 0))   // 支點軸
+    const headG = mergeGeometries(headParts.map((q) => q.index ? q.toNonIndexed() : q))
+    const reflG = new THREE.CylinderGeometry(0.013, 0.039, 0.034, 24, 1, true).translate(0, -0.066, 0)   // 反光杯（開口朝下）
+    const lensG = new THREE.CircleGeometry(0.0125, 16).rotateX(Math.PI / 2).translate(0, -0.05, 0)       // LED 透鏡（朝下）
+    const refl = new THREE.MeshStandardMaterial({ color: 0xd8d8d6, roughness: 0.18, metalness: 1, emissive: 0xffe9cc, emissiveIntensity: 0.35, side: THREE.DoubleSide })
+    const lensM = new THREE.MeshBasicMaterial({ color: 0xfff6e8 })
+    const n = spots.length
+    const iBase = new THREE.InstancedMesh(baseG, black, n), iHead = new THREE.InstancedMesh(headG, black, n)
+    const iRefl = new THREE.InstancedMesh(reflG, refl, n), iLens = new THREE.InstancedMesh(lensG, lensM, n)
+    iBase.castShadow = iHead.castShadow = true
+    const glareT = canvasTex(64, 64, (x, w, h) => {
+      const gr = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2)
+      gr.addColorStop(0, 'rgba(255,248,235,0.9)'); gr.addColorStop(0.15, 'rgba(255,236,205,0.35)'); gr.addColorStop(1, 'rgba(255,230,200,0)')
+      x.fillStyle = gr; x.fillRect(0, 0, w, h)
+    })
+    const poolT = canvasTex(128, 128, (x, w, h) => {
+      const gr = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2)
+      gr.addColorStop(0, 'rgba(255,232,196,0.9)'); gr.addColorStop(0.45, 'rgba(255,226,186,0.55)'); gr.addColorStop(0.75, 'rgba(255,220,180,0.18)'); gr.addColorStop(1, 'rgba(255,225,190,0)')
+      x.fillStyle = gr; x.fillRect(0, 0, w, h)
+    })
+    const glareM = new THREE.MeshBasicMaterial({ map: glareT, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })   // 只朝光束方向（從燈後面、旁邊看不到眩光）
+    const glareG = new THREE.PlaneGeometry(0.2, 0.2).rotateX(Math.PI / 2)   // 正面朝 -y
+    const poolM = new THREE.MeshBasicMaterial({ map: poolT, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -2 })
+    const poolFloor = poolM.clone(); poolFloor.opacity = 0.45   // 地毯上只是台子底下漏出來的一點光
+    const m4 = new THREE.Matrix4(), qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), one = V(1, 1, 1), AXX = V(1, 0, 0), AXY = V(0, 1, 0)
+    spots.forEach(([x, z, tgt, pool], i) => {
+      const base = V(x, H - 0.034, z), piv = base.clone().add(V(0, -0.13, 0))
+      const d = tgt.clone().sub(piv), yaw = Math.atan2(d.x, d.z), tilt = Math.atan2(Math.hypot(d.x, d.z), -d.y)
+      qa.setFromAxisAngle(AXY, yaw)
+      m4.compose(base, qa, one); iBase.setMatrixAt(i, m4)
+      qb.setFromAxisAngle(AXX, -tilt); qb.premultiply(qa)
+      m4.compose(piv, qb, one); iHead.setMatrixAt(i, m4); iRefl.setMatrixAt(i, m4); iLens.setMatrixAt(i, m4)
+      const gl = new THREE.Mesh(glareG, glareM); gl.position.copy(V(0, -0.088, 0).applyQuaternion(qb).add(piv)); gl.quaternion.copy(qb); gl.renderOrder = 8; g.add(gl)
+      if (pool) {
+        // 台面上的光圈（橡木台面 0.91、玻璃罩外面一圈）＋地毯上淡淡的一大圈（地毯頂面 0.042）
+                for (const [y, r, pmM] of [[0.913, 0.36, poolM], [0.044, 0.62, poolFloor]]) {
+          const k = (y - piv.y) / d.y, c = piv.clone().addScaledVector(d, k)
+          const pm = new THREE.Mesh(new THREE.CircleGeometry(r, 32).rotateX(-Math.PI / 2), pmM)
+          pm.position.set(c.x, y + 0.002, c.z); pm.scale.set(1, 1, 1 / Math.max(0.55, Math.abs(d.y) / d.length())); pm.rotation.y = yaw; pm.renderOrder = 4; g.add(pm)
+        }
+      }
+    })
+    g.add(iBase, iHead, iRefl, iLens)
   }
 
   /* ---------- 地毯（展示台那一區） ---------- */
