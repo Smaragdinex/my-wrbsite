@@ -71,6 +71,16 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   const ownerP = loader.loadAsync(`models/owner-rigged.glb?v=${VER}`)
   const gear = await Promise.all([...BODIES.map((b) => `models/camera/body-${b.id}.glb`), ...LENSES.map((l) => `models/camera/lens-${l.id}.glb`)].map(load))
   const gearModel = Object.fromEntries([...BODIES, ...LENSES].map((it, i) => [it.id, gear[i]]))
+  // 五稜鏡正面銘牌印上型號（跟手上那台一樣的白字）
+  for (const b of BODIES) gearModel[b.id].traverse((o) => {
+    if (!o.isMesh || o.material.name !== 'Name') return
+    const t = canvasTex(512, 128, (x) => {
+      x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, 512, 128); x.translate(512, 0); x.scale(-1, 1)
+      x.fillStyle = '#e9e9e4'; x.font = 'bold 74px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'
+      x.fillText(b.name.split(' ').slice(1).join(' ').toUpperCase(), 256, 66)
+    })
+    t.flipY = false; o.material = new THREE.MeshStandardMaterial({ map: t, roughness: 0.45 })
+  })
 
   const g = new THREE.Group()
   const white = new THREE.MeshStandardMaterial({ color: 0xf2f4f5, roughness: 0.45, metalness: 0.5 })
@@ -411,7 +421,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   /* ---------- 西北角：三腳架展示台 ---------- */
   box('oak', 2.0, 0.12, 0.9, -87.3, 0.06, HZ - 0.85)
   box('glow', 1.96, 0.01, 0.02, -87.3, 0.125, HZ - 1.3)
-  // 三腳架照真的做：三節伸縮腳（上粗下細、接頭有扳扣）、橡膠腳墊、中間的三角座、中柱、球型雲台＋快拆板；相機底部剛好貼在快拆板上
+  // 三腳架照真的做：三節伸縮腳（上粗下細、接頭有扳扣）、橡膠腳墊、中間的三角座、中柱、球型雲台＋快拆板（只展示腳架，上面不放相機）
   // 腳張開的範圍限制在展示台裡（半徑 0.28），腳不會穿出台子、撞牆或打到隔壁那支
   const cylG = (k, a, b, r0, r1 = r0, seg = 10) => {
     const d = new THREE.Vector3().subVectors(b, a), len = d.length()
@@ -420,7 +430,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     geos[k].push(cg)
   }
   const PLAT = 0.12
-  const tripod = (x, z, hgt, cam, rot) => {
+  const tripod = (x, z, hgt, rot) => {
     const apexY = hgt - 0.24, spread = 0.28
     const apex = V(x, apexY, z)
     cylG('charcoal', V(x, apexY - 0.03, z), V(x, apexY + 0.03, z), 0.055)                     // 三角座
@@ -443,16 +453,9 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     box('charcoal', 0.075, 0.016, 0.075, x, hgt + 0.093, z)                                   // 快拆座
     box('dark', 0.06, 0.008, 0.045, x, hgt + 0.105, z)                                        // 快拆板
     box('charcoal', 0.012, 0.03, 0.012, x + 0.045, hgt + 0.05, z)                             // 鎖鈕
-    if (cam) {
-      const b = gearModel[cam].clone(); b.rotation.y = 2.3
-      b.position.set(0, 0, 0); b.updateMatrixWorld(true)
-      const bb = new THREE.Box3().setFromObject(b)
-      b.position.set(x - (bb.min.x + bb.max.x) / 2, hgt + 0.109 - bb.min.y, z - (bb.min.z + bb.max.z) / 2)   // 底部剛好坐在快拆板上
-      g.add(b)
-    }
   }
   // 一支腳朝牆、兩支朝前（看起來最穩的擺法）；間隔 0.65、腳半徑 0.28 → 隔壁兩支腳尖至少差 17 公分
-  tripod(-86.65, HZ - 0.9, 1.4, 'b2', Math.PI / 2); tripod(-87.3, HZ - 0.9, 1.18, null, Math.PI / 2); tripod(-87.95, HZ - 0.9, 1.5, 'b3', Math.PI / 2)
+  tripod(-86.65, HZ - 0.9, 1.4, Math.PI / 2); tripod(-87.3, HZ - 0.9, 1.18, Math.PI / 2); tripod(-87.95, HZ - 0.9, 1.5, Math.PI / 2)
   addCollider(-87.3, HZ - 0.85, 1.0, 1.5)
 
   /* ---------- 東北角：相機包櫃 ---------- */
