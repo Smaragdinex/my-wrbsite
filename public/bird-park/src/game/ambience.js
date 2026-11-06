@@ -3,9 +3,15 @@
 // 在相機行裡：外面的聲音隔著玻璃（低通濾波＋小聲），音樂稍微大一點。
 // 音樂：慢的環境音樂（D 大調，四個和弦輪流，每個 8 秒），鋪底和弦＋低音＋偶爾幾個撥弦音，經過殘響和回音。
 // 瀏覽器規定要使用者先點過或按過鍵才能出聲，所以第一次點擊／按鍵時才建立 AudioContext。
+// 2026-11-07 使用者挑的音檔（Pixabay，Pixabay Content License：遊戲可用、含商業，不用標示）：
+//   背景音樂 audio/music-ambient-nature.mp3 =「Ambient Nature」AtlasAudio（pixabay.com/music/ambient-ambient-nature-518687/，轉 128k）
+//   鳥叫環境音 audio/birds-forest.mp3 =「Birds Forest Nature」SoundReality（pixabay.com/sound-effects/…-445379/，頭尾 3 秒交叉淡化成無縫循環）
+// 音檔載到之前（或載入失敗）照舊用合成的音樂和鳥叫。
 import { STORE, distToMtn } from '../layout.js'
 
 const VOL = { off: 0, low: 0.35, mid: 0.65, high: 1 }
+// 音檔的音量（對到以前合成版的大小：中音量時溫室白天 音樂約 −45 dB、鳥叫約 −48 dB）
+let MUSIC_K = 0.5, BIRD_K = 0.25   // 量過：中音量溫室白天 音樂約 −42 dB、鳥叫約 −40 dB（鳥叫是主角）
 const rnd = (a, b) => a + Math.random() * (b - a)
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const smooth = (p, v, t, k = 0.4) => p.setTargetAtTime(v, t, k)
@@ -31,6 +37,7 @@ export function createAmbience({ getMusic, getAmb }) {
     ambBus = ac.createGain(); ambBus.gain.value = 0; ambBus.connect(ambFilter); ambFilter.connect(out)
     ambVerb = ac.createConvolver(); ambVerb.buffer = ir; const avg = ac.createGain(); avg.gain.value = 0.6; ambVerb.connect(avg); avg.connect(ambBus)   // 鳥叫的回音也要走環境音那一路（在店裡一起被玻璃擋掉）
     startCicadas(); startWater(); cricketG = ac.createGain(); cricketG.gain.value = 0; cricketG.connect(ambBus)
+    loadFiles()
     loop()
   }
   for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, start)
@@ -42,6 +49,25 @@ export function createAmbience({ getMusic, getAmb }) {
     return b
   }
   const loopNoise = () => { const s = ac.createBufferSource(); s.buffer = noiseBuf(); s.loop = true; s.start(); return s }
+
+  /* ---------- 音檔：背景音樂、鳥叫環境音（無縫循環） ---------- */
+  let musicSrc = null, musicG = null, birdBedG = null
+  async function loadBuf(url) { const r = await fetch(url); return ac.decodeAudioData(await r.arrayBuffer()) }
+  const loopSrc = (buf, dest) => {
+    const s = ac.createBufferSource(); s.buffer = buf; s.loop = true
+    s.loopStart = 0.03; s.loopEnd = buf.duration - 0.03   // mp3 頭尾有一點點編碼器補的空白，跳過才不會「噗」一下
+    s.connect(dest); s.start(); return s
+  }
+  function loadFiles() {
+    loadBuf('audio/music-ambient-nature.mp3').then((b) => {
+      musicG = ac.createGain(); musicG.gain.value = 0; musicG.connect(musicBus)
+      musicSrc = loopSrc(b, musicG); musicG.gain.setTargetAtTime(MUSIC_K, ac.currentTime, 2)
+    }).catch((e) => console.warn('[amb] 音樂載入失敗，用合成的', e))
+    loadBuf('audio/birds-forest.mp3').then((b) => {
+      birdBedG = ac.createGain(); birdBedG.gain.value = 0; birdBedG.connect(ambBus)
+      loopSrc(b, birdBedG)
+    }).catch((e) => console.warn('[amb] 鳥叫音檔載入失敗，用合成的', e))
+  }
 
   /* ---------- 蟬：高頻雜訊、快速振幅抖動、慢慢起伏 ---------- */
   function startCicadas() {
@@ -166,8 +192,11 @@ export function createAmbience({ getMusic, getAmb }) {
       smooth(cicadaG.gain, 0.13 * day * (h > 10 && h < 16 ? 1 : 0.5), now, 2)
       smooth(cricketG.gain, (1 - day) * 0.5 + 0.03, now, 2)
       smooth(waterG.gain, 0.16 * st.water, now, 0.6)
-      if (av > 0) { scheduleBirds(now); if (Math.random() < 0.6) scheduleCrickets(now) }
-      if (mv > 0) scheduleMusic(now); else nextChord = now
+      // 鳥叫環境音：白天整段、清晨最熱鬧，晚上只剩一點點
+      const dawn = Math.exp(-((h - 6.5) ** 2) / 2)
+      if (birdBedG) smooth(birdBedG.gain, BIRD_K * (0.1 + 0.9 * day) * (1 + 0.3 * dawn), now, 2)
+      if (av > 0) { if (!birdBedG) scheduleBirds(now); if (Math.random() < 0.6) scheduleCrickets(now) }
+      if (mv > 0 && !musicSrc) scheduleMusic(now); else nextChord = now
     }, 100)
   }
 
@@ -178,5 +207,5 @@ export function createAmbience({ getMusic, getAmb }) {
     st.store += (inStore - st.store) * Math.min(1, dt * 2)
     st.water = Math.max(0, 1 - Math.max(0, distToMtn(pos.x, pos.z) - 8) / 30)
   }
-  return { tick, start, get ctx() { return ac }, get out() { return out } }
+  return { tick, start, get ctx() { return ac }, get out() { return out }, dbg: { get musicG() { return musicG }, get birdBedG() { return birdBedG }, setK(m, b) { MUSIC_K = m; BIRD_K = b; if (musicG) musicG.gain.value = m } } }
 }
