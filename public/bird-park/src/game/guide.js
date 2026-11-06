@@ -241,30 +241,39 @@ function makeDiorama(def) {
     ground.position.y = water + 0.001   // 影子落在水面上
   }
   // 鏡頭：沿用溫室裡拍這隻鳥的方向，距離照鳥的大小重算（鳥佔插圖高度約一半）
+  // 外框要逐點量（precise）：骨架動畫的 boundingBox 是第一次算的就一直沿用，樹枝上的鳥會差到畫面外
   a.group.updateMatrixWorld(true)
-  const box = new THREE.Box3().setFromObject(a.built.obj), size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3())
+  const box = new THREE.Box3().setFromObject(a.built.obj, true), size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3())
   const cam = new THREE.PerspectiveCamera(30, PLATE.w / PLATE.h * (CW / CH), 0.05, 60)
   const dir = a.cam.clone().sub(a.target).normalize()
   dir.y = Math.min(Math.max(dir.y, 0.12), 0.45); dir.normalize()
   const s = Math.max(size.y, Math.max(size.x, size.z) * 0.75)
-  const dist = s / 0.55 / 2 / Math.tan(THREE.MathUtils.degToRad(15))
-  const look0 = mid.clone(), t0 = a.target.clone()
+  // 一群鳥會散開，退遠一點
+  const dist = s / 0.55 / 2 / Math.tan(THREE.MathUtils.degToRad(15)) * (a.built.birds?.length > 1 ? 1.3 : 1)
+  // 鏡頭對準鳥身上的追蹤點（built.focus，跟溫室跟拍用的同一點），再加上它和外框中心的差：鳥走到哪都在正中間
+  const focusAt = (v) => a.built.obj.parent.localToWorld(v.copy(a.built.focus))
+  const off = mid.clone().sub(focusAt(new THREE.Vector3()))
   if (pond) pond.scale.setScalar(s * 1.1)
-  sun.position.copy(mid).add(new THREE.Vector3(-2, 6, 3)); sun.target.position.copy(mid)
+  const sunOff = new THREE.Vector3(-2, 6, 3)
   // 鳥身上的原本材質（剪影切換用）
   const meshes = []
   a.built.obj.traverse((o) => { if (o.isMesh && !o.userData.catcher) meshes.push([o, o.material]) })
   let sil = null
   const rt = new THREE.WebGLRenderTarget(560, Math.round(560 * (PLATE.h * CH) / (PLATE.w * CW)), { samples: 4 })
-  const look = new THREE.Vector3()
+  const look = mid.clone(), want = new THREE.Vector3()
   return {
     rt, ready: false, scene: sc, cam,
     setSilhouette(on) { if (sil === on) return; sil = on; for (const [o, m] of meshes) o.material = on ? SIL : m },
     update(t, dt) {
       a.update(t, dt)
-      // 鏡頭跟著鳥走一半：看得出牠在走，又不會走出畫面
-      look.copy(look0).addScaledVector(a.target.clone().sub(t0), 0.6)
+      // 鏡頭平順地跟著鳥（高度只跟三成，低頭啄食時畫面不上下晃）；第一格直接對準
+      focusAt(want).add(off)
+      want.y = mid.y + (want.y - mid.y) * 0.3
+      look.lerp(want, t === 0 ? 1 : 1 - Math.exp(-dt * 4))
       cam.position.copy(look).addScaledVector(dir, dist); cam.lookAt(look)
+      // 影子相機跟著走；水鳥的那灘水也跟著（游遠了還在腳下）
+      sun.position.copy(look).add(sunOff); sun.target.position.copy(look)
+      if (pond) pond.position.set(look.x, pond.position.y, look.z)
     },
     render(renderer) {
       const prev = renderer.getRenderTarget(), cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha()
