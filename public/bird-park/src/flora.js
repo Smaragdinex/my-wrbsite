@@ -92,8 +92,9 @@ function randInGarden(rnd) {
 // 根部暗（被其他草擋住）、尖端偶爾枯黃
 const _sunDefault = new THREE.Vector3(-0.45, 0.8, 0.3).normalize()
 // lawn：短草坪用 2 段（3 個三角形）、法線大多朝上（像地面一樣均勻受光，不會一片亮一片黑）
-export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, lawn = false } = {}) {
-  const ys = lawn ? [0, 0.5] : [0, 0.3, 0.56, 0.78], ws = lawn ? [1, 0.55] : [1, 0.85, 0.62, 0.36], P = [], I = []
+// cane：玉山箭竹（2026-11-07）。gB.w > 0 是竹稈（細、直）；gB.w < 0 是葉子：從稈上某個高度長出來、往外斜伸、尾端微垂，葉形是披針形（下三分之一最寬、尖尾）
+export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, lawn = false, cane = false } = {}) {
+  const ys = lawn ? [0, 0.5] : cane ? [0, 0.18, 0.42, 0.7] : [0, 0.3, 0.56, 0.78], ws = lawn ? [1, 0.55] : cane ? [0.3, 0.92, 1, 0.62] : [1, 0.85, 0.62, 0.36], P = [], I = []
   ys.forEach((y, i) => P.push(-0.5 * ws[i], y, 0, 0.5 * ws[i], y, 0))
   P.push(0, 1, 0)
   for (let i = 0; i < ys.length - 1; i++) { const k = i * 2; I.push(k, k + 1, k + 3, k, k + 3, k + 2) }
@@ -122,19 +123,19 @@ export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, law
         // 葉面有弧度：左右兩半的法線各往外歪
         objectNormal = normalize(vec3(nd.x, 0.0, nd.y) * (fract(gA.w * 3.7) > 0.5 ? 1.0 : -1.0) * ${lawn ? '0.2' : '0.55'} + vec3(0.0, ${lawn ? '1.0' : '0.75'}, 0.0) + side * sign(position.x) * ${lawn ? '0.15' : '0.45'});`)
       .replace('#include <begin_vertex>', `
-        float a = gA.w, h = gB.w, y = position.y;
-        float lean = 0.15 + fract(a * 7.13) * 0.6;
+        float a = gA.w, h = abs(gB.w), y = position.y, leaf = ${cane ? 'step(gB.w, 0.0)' : '0.0'};
+        float lean = mix(0.15 + fract(a * 7.13) * 0.6, 1.0 + fract(a * 7.13) * 0.9, leaf);
         float w = sin(uTime * 1.2 + gA.x * 0.3 + gA.z * 0.17) * 0.6 + sin(uTime * 2.9 + gA.x * 2.1 + gA.z * 1.7) * 0.2;
         vec2 dir = vec2(cos(a), sin(a));
-        float wid = ${width[0].toFixed(4)} + fract(a * 5.3) * ${width[1].toFixed(4)};
+        float wid = (${width[0].toFixed(4)} + fract(a * 5.3) * ${width[1].toFixed(4)}) * ${cane ? 'mix(0.22, 1.0, leaf)' : '1.0'};
         vec3 transformed = gA.xyz;
         transformed.xz += vec2(-dir.y, dir.x) * position.x * wid;
         transformed.xz += dir * lean * y * y * h + vec2(0.7, 0.35) * w * y * y * h * 0.25;
-        transformed.y += y * h * (1.0 - 0.18 * lean);
+        transformed.y += y * h * (1.0 - 0.18 * lean) - leaf * y * y * h * 0.45;   // 葉子尾端微垂
         vY = y;
         // 每片草顏色都不一樣一點（亮度、偏黃偏藍），根部暗、往上變亮
         float jit = fract(sin(dot(gA.xz, vec2(12.9898, 78.233))) * 43758.5453);
-        vGcol = gB.rgb * mix(0.82, 1.12, jit) * mix(0.3, ${lawn ? '0.95' : '1.08'}, smoothstep(0.0, 0.85, y));
+        vGcol = gB.rgb * mix(0.82, 1.12, jit) * mix(mix(0.3, 0.62, leaf), ${lawn ? '0.95' : '1.08'}, smoothstep(0.0, 0.85, y));
         vGcol = mix(vGcol, vec3(0.7, 0.66, 0.4) * dot(gB.rgb, vec3(0.5)) * 1.5, smoothstep(0.7, 1.0, y) * step(0.82, fract(a * 13.7)) * 0.4);`)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGw = (modelMatrix * vec4(transformed, 1.0)).xyz;')
     sh.fragmentShader = sh.fragmentShader
@@ -147,7 +148,7 @@ export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, law
         outgoingLight += vGcol * vec3(1.0, 1.15, 0.5) * back * smoothstep(0.3, 0.95, vY) * 0.35;
         #include <opaque_fragment>`)
   }
-  mat.customProgramCacheKey = () => 'grassBlade2' + (lawn ? 'L' : '')
+  mat.customProgramCacheKey = () => 'grassBlade2' + (lawn ? 'L' : '') + (cane ? 'C' : '')
   const m = new THREE.Mesh(g, mat)
   m.receiveShadow = true
   m.layers.set(1)   // 水面倒影不畫草葉（main.js 的鏡頭有開 layer 1）

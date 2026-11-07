@@ -10,6 +10,7 @@ import { buildSummit } from './summit.js'
 import { CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider } from './layout.js'
 import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
+import { addWind } from './wind.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { dayLight, mistLevel } from './structures.js'
@@ -154,7 +155,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < nx * nz; k++) {
       const x = pos[k * 3], z = pos[k * 3 + 2], ny = nrm.getY(k)
       const n = fbm2(x * 0.15, z * 0.15, 3)
-      c.setHSL(0.2 + n * 0.04, 0.38, 0.27 + n * 0.06)                                       // 草地
+      c.setHSL(0.17 + n * 0.04, 0.36, 0.21 + n * 0.06)                                      // 箭竹底下：偏暗的橄欖綠（草叢間的縫看起來是陰影，不是光禿禿的地）
       const rock = ss(0.86, 0.7, ny)
       c.lerp(new THREE.Color().setHSL(0.1, 0.06, 0.36 + n * 0.08), rock)                     // 岩石
       const tr = ss(1.6, 0.9, alpineTrailDist(x, z))
@@ -699,25 +700,39 @@ function buildInterior(lib, avoid = []) {
     for (const f of ferns) (fl[pick(['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a'])] ||= []).push(f)
     for (const [n, list] of Object.entries(fl)) if (lib[n]) scatter(g, lib[n], list, { cast: false })
   }
-  // 玉山箭竹：坡上一大片黃綠色的高草（跟溫室的草同一套草葉，比較高、比較寬），切成 14 公尺一塊做 LOD
+  // 玉山箭竹（2026-11-07 改）：原本是一叢叢細長草葉、中間露出一大片地面，像稀稀落落的刺。
+  // 真的箭竹草原是膝蓋到腰高、密密一整片：每叢幾根細竹稈，稈上不同高度長出披針形的葉子往外斜伸（bladeMesh 的 cane 模式）。
+  // 顏色一片片不一樣：大部分黃綠、有些比較深綠、有些偏枯黃；切成 14 公尺一塊做 LOD（遠的變稀，地面顏色接得上）
   {
-    const A = [], B = [], c = new THREE.Color()
-    for (let k = 0; k < 260000 && A.length / 4 < 330000; k++) {
+    const A = [], B = [], c = new THREE.Color(), MAXI = 450000
+    for (let k = 0; k < 140000 && A.length / 4 < MAXI; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
       if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 5.2) continue   // 觀景台上
-      if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.6)) continue   // 地上的鳥走動的地方草矮一點也不行：直接不長
-      if (Math.hypot(x - CABIN.x, z - CABIN.z) < 4.6) continue   // 小木屋裡面不長草
+      if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.6)) continue   // 地上的鳥走動的地方：不長
+      if (Math.hypot(x - CABIN.x, z - CABIN.z) < 4.6) continue   // 小木屋裡面不長
       if (alpineTrailDist(x, z) < 1.5 || alpineStreamDist(x, z) < 1.4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.6) continue
       const h = alpineHeight(x, z)
-      const dens = (0.45 + 0.55 * fbm2(x * 0.07, z * 0.07, 3) + 0.4)
-      if (rnd() > dens) continue
-      const m = 5 + Math.floor(rnd() * 6), a0 = rnd() * TAU, tall = 0.45 + rnd() * 0.5 + 0.3 * ss(10, 20, h)
-      c.setHSL(0.17 + rnd() * 0.05, 0.42, 0.34 + rnd() * 0.1)
-      for (let j = 0; j < m; j++) {
-        const a = a0 + (j / m) * TAU + (rnd() - 0.5) * 0.6, d = rnd() * 0.12
-        A.push(x + Math.cos(a) * d, h - 0.02, z + Math.sin(a) * d, a)
-        B.push(c.r, c.g, c.b, tall * (0.7 + rnd() * 0.5))
+      const patch = fbm2(x * 0.07, z * 0.07, 3)
+      if (rnd() > 0.55 + 0.6 * patch) continue
+      // 一片片的色調：黃綠為主、深綠、枯黃
+      const tone = fbm2(x * 0.11 + 31, z * 0.11 - 17, 2)
+      const hue = 0.21 + (tone - 0.5) * 0.06 + (rnd() - 0.5) * 0.02, dry = ss(0.62, 0.8, tone)
+      c.setHSL(hue - dry * 0.05, 0.5 - dry * 0.1, 0.22 + rnd() * 0.06 + dry * 0.08)
+      const tall = (0.45 + rnd() * 0.3 + 0.25 * ss(10, 22, h)) * (0.85 + 0.3 * patch)
+      const stems = 2 + Math.floor(rnd() * 3)
+      for (let s = 0; s < stems; s++) {
+        const sx = x + (rnd() - 0.5) * 0.25, sz = z + (rnd() - 0.5) * 0.25, st = tall * (0.75 + rnd() * 0.35), sa = rnd() * TAU
+        A.push(sx, h - 0.02, sz, sa); B.push(c.r * 0.8, c.g * 0.8, c.b * 0.7, st)   // 竹稈
+        // 稈的上半段長葉子：越上面越多、越短
+        const nl = 5 + Math.floor(rnd() * 4)
+        for (let j = 0; j < nl; j++) {
+          const t = 0.3 + (j / nl) * 0.62 + rnd() * 0.06, la = rnd() * TAU, len = (0.24 + rnd() * 0.14) * (1.15 - t * 0.4)
+          const lean = 0.2 * st * t   // 稈本身也斜一點：葉子接在稈的位置上
+          A.push(sx + Math.cos(sa) * lean * t, h - 0.02 + st * t, sz + Math.sin(sa) * lean * t, la)
+          const k2 = 0.95 + rnd() * 0.15
+          B.push(c.r * k2, c.g * k2, c.b * k2 * 0.9, -len)
+        }
       }
     }
     const CELL = 14, cells = new Map()
@@ -727,9 +742,75 @@ function buildInterior(lib, avoid = []) {
       const a = [], b = []
       for (const i of idx) { a.push(A[i * 4], A[i * 4 + 1], A[i * 4 + 2], A[i * 4 + 3]); b.push(B[i * 4], B[i * 4 + 1], B[i * 4 + 2], B[i * 4 + 3]) }
       const [cx, cz] = key.split(',').map((v) => (+v + 0.5) * CELL)
-      const m = bladeMesh(a, b, { width: [0.018, 0.02] }); m.frustumCulled = false; g.add(m)
+      const m = bladeMesh(a, b, { width: [0.042, 0.028], cane: true }); m.frustumCulled = false; g.add(m)
       lodRegisterGrass(m, V(cx, alpineHeight(cx, cz) + 0.5, cz), CELL * 0.72 + 1)
     }
+  }
+  // 箭竹的「叢」：一張畫滿竹葉的透明貼圖，貼在三片交叉的面上（遊戲裡密草的標準做法）。
+  // 一叢就有幾十片葉子，用很少的數量就能把整片坡蓋滿；近處再加上面那些立體的竹稈和葉子，拉近看才有層次。
+  {
+    const leafTex = canvasTex(512, 512, (x, w, h) => {
+      const r = mulberry32(4242)
+      x.clearRect(0, 0, w, h)
+      const leaf = (px, py, ang, L, W, col, dark) => {
+        const dx = Math.cos(ang), dy = Math.sin(ang), nx = -dy, ny = dx
+        const tx = px + dx * L, ty = py + dy * L, droop = L * 0.12
+        x.beginPath(); x.moveTo(px, py)
+        x.quadraticCurveTo(px + dx * L * 0.3 + nx * W, py + dy * L * 0.3 + ny * W, tx, ty + droop)
+        x.quadraticCurveTo(px + dx * L * 0.3 - nx * W, py + dy * L * 0.3 - ny * W, px, py)
+        x.fillStyle = col; x.fill()
+        x.strokeStyle = dark; x.lineWidth = 1; x.beginPath(); x.moveTo(px, py); x.lineTo(px + dx * L * 0.85, py + dy * L * 0.85 + droop * 0.7); x.stroke()   // 中肋
+      }
+      // 由後往前、由下往上畫：底下的葉子暗（被上面遮住），上面的亮
+      // 叢的輪廓是圓頂、高低不齊（原本每根稈都長到差不多高，整叢像一塊方方的綠籬）；稈不畫到最底下那條邊（不然坡上會看到一排黑線）
+      for (let i = 0; i < 70; i++) {
+        const off = (r() + r() + r()) / 3 - 0.5, bx = w * 0.5 + off * w * 0.8
+        const top = h * (0.06 + Math.abs(off) * 0.9 + r() * 0.3), lean = off * w * 0.35 + (r() - 0.5) * w * 0.1, base = h * (0.88 + r() * 0.1)
+        x.strokeStyle = `hsl(${60 + r() * 15}, 32%, ${28 + r() * 10}%)`; x.lineWidth = 1.2 + r() * 0.8
+        x.beginPath(); x.moveTo(bx, base); x.quadraticCurveTo(bx + lean * 0.3, (base + top) / 2, bx + lean, top); x.stroke()
+        const nl = 4 + Math.floor(r() * 5)
+        for (let j = 0; j < nl; j++) {
+          const t = 0.3 + (j / nl) * 0.7, px = bx + lean * t * t, py = base + (top - base) * t
+          const side = r() < 0.5 ? -1 : 1, ang = -Math.PI / 2 + side * (0.55 + r() * 0.75) + lean / w
+          const L = w * (0.1 + r() * 0.09) * (1.1 - t * 0.3), W = L * (0.13 + r() * 0.06)
+          const lum = 20 + t * 22 + r() * 8, hue = 68 + r() * 26, sat = 42 + r() * 18
+          const dry = r() < 0.12
+          leaf(px, py, ang, L, W, dry ? `hsl(${48 + r() * 8}, 40%, ${lum + 6}%)` : `hsl(${hue}, ${sat}%, ${lum}%)`, `hsla(${hue - 10}, 40%, ${lum * 0.6}%, 0.7)`)
+        }
+      }
+    })
+    leafTex.wrapS = leafTex.wrapT = THREE.ClampToEdgeWrapping
+    const parts = [0, 1, 2].map((i) => new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0).rotateY(i * Math.PI / 3))
+    const geo = mergeGeometries(parts)
+    { const n = geo.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0) }   // 法線朝上：三片交叉的面亮度一致（不然轉個角度就一片黑一片白）
+    const mat = addWind(new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.85 }), 0.05)
+    // 雙面材質從背面看，three 會把法線翻過來（變朝下）→ 那一面整片黑。這裡的法線本來就統一朝上，不要翻
+    { const wind = mat.onBeforeCompile; mat.onBeforeCompile = (sh, r) => { wind(sh, r); sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', '')) }; mat.customProgramCacheKey = () => 'caneCard' }
+    const list = [], c = new THREE.Color()
+    for (let k = 0; k < 160000 && list.length < 90000; k++) {
+      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+      if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
+      if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 5.4) continue
+      if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.8)) continue
+      if (Math.hypot(x - CABIN.x, z - CABIN.z) < 4.8) continue
+      if (alpineTrailDist(x, z) < 1.7 || alpineStreamDist(x, z) < 1.6 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.8) continue
+      const patch = fbm2(x * 0.07, z * 0.07, 3)
+      if (rnd() > 0.5 + 0.7 * patch) continue
+      const hh = alpineHeight(x, z), tone = fbm2(x * 0.11 + 31, z * 0.11 - 17, 2), dry = ss(0.62, 0.8, tone)
+      const tall = (0.55 + rnd() * 0.35 + 0.25 * ss(10, 22, hh)) * (0.85 + 0.3 * patch), wide = tall * (1.1 + rnd() * 0.5)
+      c.setHSL(0.24 + (tone - 0.5) * 0.08 - dry * 0.06, 0.35, 0.85 + rnd() * 0.25 + dry * 0.15)   // 貼圖本身有顏色：這裡是一片片的色調（乘上去）
+      // 坡上：叢的下緣要埋進最低的那一角（原本下坡那邊浮在半空、看得到底）
+      const r2 = wide * 0.5, lo = Math.min(hh, alpineHeight(x + r2, z), alpineHeight(x - r2, z), alpineHeight(x, z + r2), alpineHeight(x, z - r2))
+      list.push({ x, y: lo - 0.06, z, yaw: rnd() * TAU, w: wide, h: tall + (hh - lo), c: c.clone() })
+    }
+    const im = new THREE.InstancedMesh(geo, mat, list.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler()
+    list.forEach((it, i) => {
+      m4.compose(V(it.x, it.y, it.z), q.setFromEuler(e.set(0, it.yaw, 0)), V(it.w, it.h, it.w))
+      im.setMatrixAt(i, m4); im.setColorAt(i, it.c)
+    })
+    im.receiveShadow = true; im.castShadow = false; im.layers.set(1)
+    im.computeBoundingSphere(); g.add(im)
+    lodRegister([im], 2.2)   // 比較高的「植物」：28 公尺開始變稀，遠一點才不畫（再遠是地面的顏色接上）
   }
   // 雲霧：一團團有雲紋的柔邊霧（四種紋路、各自旋轉），多半貼著山谷和低坡、少數掛在山腰；
   // 順著風慢慢往東飄、飄出山區就從西邊再進來，濃淡會慢慢變；鏡頭靠近就淡掉（走進霧裡不會看到一張平板）。
