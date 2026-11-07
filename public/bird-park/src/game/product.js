@@ -22,11 +22,14 @@ export function createProductView({ state, getModel, onChange, onClose }) {
   el.className = 'sheet product-sheet'; el.hidden = true
   el.innerHTML = `<div class="product">
     <section class="product-info"></section>
-    <section class="product-view"><canvas></canvas><div class="product-hint">${tr('拖曳旋轉・滾輪縮放')}</div></section>
+    <section class="product-view"><canvas></canvas>
+      <button class="nav prev" data-step="-1" aria-label="${tr('上一個')}" title="${tr('上一個')}"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="nav next" data-step="1" aria-label="${tr('下一個')}" title="${tr('下一個')}"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="product-hint"><span class="count"></span>${tr('拖曳旋轉・滾輪縮放')}</div></section>
   </div>`
   document.body.appendChild(el)
   const info = el.querySelector('.product-info'), view = el.querySelector('.product-view'), canvas = view.querySelector('canvas')
-  let item = null
+  let item = null, list = []   // list：可以左右切換的那一串器材（展示台的順序，或櫃台的器材清單）
 
   /* ---------- 3D：第一次打開才建（多一個 WebGL context，不用的時候不畫） ---------- */
   let r3 = null
@@ -125,13 +128,31 @@ export function createProductView({ state, getModel, onChange, onClose }) {
     if (item.kind === 'body') state.bodyId = item.id; else state.lensId = item.id
     onChange(); render()
   })
-  addEventListener('keydown', (e) => { if (!el.hidden && e.code === 'Escape') close() })
-
-  function open(it) {
+  addEventListener('keydown', (e) => {
+    if (el.hidden) return
+    if (e.code === 'Escape') close()
+    else if (e.code === 'ArrowLeft' || e.code === 'KeyA') step(-1)
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') step(1)
+  })
+  view.querySelectorAll('.nav').forEach((b) => b.addEventListener('click', () => step(+b.dataset.step)))
+  // 左右看上一個、下一個（頭尾接起來）
+  function step(d) {
+    if (list.length < 2) return
+    const i = list.findIndex((x) => x.id === item.id)
+    show(list[(i + d + list.length) % list.length])
+  }
+  function show(it) {
     item = it
-    render(); el.hidden = false
+    render(); setModel(it.id)
+    const i = list.findIndex((x) => x.id === it.id)
+    view.querySelector('.count').textContent = list.length > 1 ? `${i + 1} / ${list.length}　` : ''
+    view.classList.toggle('single', list.length < 2)
+  }
+
+  function open(it, all = [it]) {
+    list = all; el.hidden = false
     if (!r3) init3d()
-    setModel(it.id)
+    show(it)
     cancelAnimationFrame(r3.raf); r3.last = 0; r3.raf = requestAnimationFrame(frame)
   }
   function close() {

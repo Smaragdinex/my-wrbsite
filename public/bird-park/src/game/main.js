@@ -86,7 +86,7 @@ const cam = createCamera({ world, camera, controls: player.controls, hud, gear, 
 const relock = () => player.controls.lock()
 const album = createAlbum({ photos, onDelete: (p) => { photos.splice(photos.indexOf(p), 1); deletePhoto(p.time) }, onClose: relock })
 const store = await buildStore(scene, state, world.plantLib, { getSound: () => settings.state.sound })   // 自動門音效跟著設定的「音效」開關（只在玩的時候才會叫到，那時 settings 已經建好）   // 相機行：溫室門口外面那棟店，遊戲從店裡開始
-const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock })
+const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock, onView: (it, all) => product.open(it, all) })
 // Esc 闔上：瀏覽器不讓 Esc 重新鎖滑鼠，就回到首頁選單（跟平常按 Esc 一樣）
 const guide = createGuide({ renderer, onClose: (why) => why === 'esc' ? player.controls.dispatchEvent({ type: 'unlock' }) : relock(), getRecords: () => {
   // 每種鳥：拍過幾張、最高幾分（沒有照片但記錄過的也算記錄）
@@ -95,7 +95,7 @@ const guide = createGuide({ renderer, onClose: (why) => why === 'esc' ? player.c
   for (const p of photos) if (p.subject) { const o = r[p.subject.id] ??= { n: 0, best: 0 }; o.n++; o.best = Math.max(o.best, p.score) }
   return r
 } })
-const product = createProductView({ state, getModel: (id) => store.gearModel[id], onChange: () => { save(); store.refresh(); shop.render() }, onClose: relock })
+const product = createProductView({ state, getModel: (id) => store.gearModel[id], onChange: () => { save(); store.refresh(); shop.render() }, onClose: () => { if (!shop.isOpen) relock() } })   // 從櫃台的器材清單打開的：關掉回到清單
 const panelOpen = () => album.isOpen || shop.isOpen || product.isOpen || cam.panelOpen || guide.isOpen
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
@@ -106,10 +106,10 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && cam.panelOpen) { cam.closePanel(); return }
   if (e.code === 'KeyE' && cam.state.raised && player.controls.isLocked) { cam.openPanel(); return }
   if (e.code === 'KeyE') {
-    if (shop.isOpen) return shop.close()
     if (product.isOpen) return product.close()
+    if (shop.isOpen) return shop.close()
     const f = !album.isOpen && player.controls.isLocked ? store.focus(camera) : null
-    if (f?.type === 'item') { product.open(f.item); player.controls.unlock() }      // 逛店：看著展示台 → 器材介紹頁（左邊介紹＋購買，右邊 3D 轉著看）
+    if (f?.type === 'item') { product.open(f.item, store.items); player.controls.unlock() }      // 逛店：看著展示台 → 器材介紹頁（左邊介紹＋購買，右邊 3D 轉著看）
     else if (f?.type === 'counter') store.checkout(() => { shop.open('sell'); player.controls.unlock() })   // 櫃台：老闆不在櫃台就先走回來，到了才開買賣畫面
     else if (!panelOpen() && player.controls.isLocked && nearBench()) rest()
     else if (!panelOpen() && player.controls.isLocked) { guide.open(); player.controls.unlock() }   // 附近沒有可以按 E 的東西：打開鳥類圖鑑

@@ -213,7 +213,7 @@ svg.controls image { mix-blend-mode: multiply; }
 /* 器材介紹頁（product.js）：左邊介紹＋購買，右邊 3D 轉著看 */
 .product-sheet { background: rgba(10, 16, 13, 0.62); backdrop-filter: blur(3px); }
 .product { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); width: min(1180px, 94vw); height: min(660px, 86vh); border-radius: 18px; overflow: hidden; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.4); }
-.product-info { background: var(--panel); padding: 26px 30px; overflow: auto; display: flex; flex-direction: column; color: var(--ink); }
+.product-info { background: #fbfbf8; padding: 26px 30px; overflow: auto; display: flex; flex-direction: column; color: var(--ink); }
 .product-info .sheet-head { position: static; margin: -8px 0 10px; padding: 0; background: none; border-radius: 0; }
 .product-info .sheet-head .x { all: unset; box-sizing: border-box; cursor: pointer; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, 0.06); }
 .product-info .sheet-head .x:hover { background: rgba(0, 0, 0, 0.12); }
@@ -236,3 +236,17 @@ svg.controls image { mix-blend-mode: multiply; }
 .product-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .product-hint { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; font-size: 13px; color: rgba(31, 42, 36, 0.55); pointer-events: none; }
 @media (max-width: 760px) { .product { grid-template-columns: 1fr; grid-template-rows: 46% 54%; } .product-view { order: -1; } }
+.product-view .nav { all: unset; box-sizing: border-box; position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #2b3430; background: rgba(255, 255, 255, 0.75); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12); transition: background 0.15s, transform 0.12s; z-index: 1; }
+.product-view .nav:hover { background: #fff; }
+.product-view .nav:active { transform: translateY(-50%) scale(0.94); }
+.product-view .prev { left: 16px; } .product-view .next { right: 16px; }
+.product-view.single .nav { display: none; }
+/* 相機行面板：左上角 X 關閉；器材列可以點開 3D 介紹頁 */
+.sheet header .x { all: unset; box-sizing: border-box; cursor: pointer; flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #34423a; background: rgba(0, 0, 0, 0.06); }
+.sheet header .x:hover { background: rgba(0, 0, 0, 0.12); }
+.sheet header nav { margin-left: auto; }
+.gear-row { cursor: pointer; border-radius: 10px; transition: background 0.12s; }
+.gear-row:hover { background: rgba(47, 125, 79, 0.07); }
+.gear-row .view3d { margin-left: auto; }
+.product-sheet { z-index: 8; }
+.gear-row > :last-child { min-width: 128px; box-sizing: border-box; text-align: center; }   /* 買／換上／使用中 同寬，「360° 查看」才會對齊 */

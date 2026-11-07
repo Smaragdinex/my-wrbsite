@@ -7,7 +7,7 @@ import { t as tr, birdName } from '../i18n.js'
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
 // 面板：賣照片／器材
-export function createShop({ state, photos, judge, onChange, onClose }) {
+export function createShop({ state, photos, judge, onChange, onClose, onView }) {
   const el = document.createElement('div')
   el.className = 'sheet'; el.hidden = true
   document.body.appendChild(el)
@@ -19,13 +19,12 @@ export function createShop({ state, photos, judge, onChange, onClose }) {
     const btn = using ? `<span class="pill">${tr('使用中')}</span>`
       : owned(it.id) ? `<button class="btn ghost" data-use="${kind}:${it.id}">${tr('換上')}</button>`
       : `<button class="btn" data-buy="${kind}:${it.id}" ${state.money < it.price ? 'disabled' : ''}>${tr('買 ${p}', { p: it.price.toLocaleString() })}</button>`
-    return `<div class="row" data-id="${it.id}"><div><b>${esc(it.name)}</b><div class="muted">${spec}</div></div>${btn}</div>`
+    return `<div class="row gear-row" data-id="${it.id}" data-view="${it.id}"><div><b>${esc(it.name)}</b><div class="muted">${spec}</div></div><button class="btn ghost view3d" data-view="${it.id}">${tr('360° 查看')}</button>${btn}</div>`
   }
   function render() {
     const unsold = photos.filter((p) => !p.sold && p.subject && p.score >= MIN_SCORE && p.price > 0).sort((a, b) => b.score - a.score)   // 60 分以下不收
-    el.innerHTML = `<div class="sheet-in"><header><h2>${tr('相機行')}</h2><span class="money-pill">$ ${state.money.toLocaleString()}</span>
-      <nav><button class="tab ${tab === 'sell' ? 'on' : ''}" data-tab="sell">${tr('賣照片')}</button><button class="tab ${tab === 'gear' ? 'on' : ''}" data-tab="gear">${tr('器材')}</button></nav>
-      <button class="btn ghost" data-close>${tr('離開（E）')}</button></header>
+    el.innerHTML = `<div class="sheet-in"><header><button class="x" data-close aria-label="${tr('關閉')}" title="${tr('關閉')}"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button><h2>${tr('相機行')}</h2><span class="money-pill">$ ${state.money.toLocaleString()}</span>
+      <nav><button class="tab ${tab === 'sell' ? 'on' : ''}" data-tab="sell">${tr('賣照片')}</button><button class="tab ${tab === 'gear' ? 'on' : ''}" data-tab="gear">${tr('器材')}</button></nav></header>
       ${tab === 'sell' ? `
         <p class="muted">${tr('老闆：「拍到什麼好照片？拿來給我看看。我這裡不是資源回收，{n} 分以上才收；100 分才給正常價，拍到難得的瞬間超過 100 分還會多給。」', { n: MIN_SCORE })}</p>
         <p class="muted tiers">${tr('60–69 分：一成　70–79：兩成半　80–89：五成　90–99：七成　100：正常價　100 以上：每分多 5%')}</p>
@@ -36,6 +35,9 @@ export function createShop({ state, photos, judge, onChange, onClose }) {
       </div>`
   }
   el.addEventListener('click', async (e) => {
+    // 器材：點一列（或「360° 查看」）→ 器材介紹頁，3D 轉著看、左右換下一個
+    const v = e.target.closest('[data-view]')
+    if (v && !e.target.closest('[data-buy],[data-use]')) { const all = [...BODIES.map((b) => ({ ...b, kind: 'body' })), ...LENSES.map((l) => ({ ...l, kind: 'lens' }))]; return onView?.(all.find((x) => x.id === v.dataset.view), all) }
     const t = e.target.closest('button'); if (!t) return
     if (t.dataset.close != null) return close()
     if (t.dataset.tab) { tab = t.dataset.tab; return render() }

@@ -281,7 +281,10 @@ export const UI = {
  "入門的望遠變焦。300mm 已經可以拍到樹上的鳥，輕巧好帶，是第一支拍鳥鏡頭的好選擇。": "An entry telephoto zoom. 300mm already reaches birds in the trees, and it's light to carry. A great first birding lens.",
  "拍鳥最常見的焦段。400mm 拉得更近，畫質也更好，水池對岸的鳥也能拍得清楚。": "The most popular range for birding. 400mm brings you closer with better image quality, so even birds across the pond come out sharp.",
  "超望遠變焦，拍膽小的鳥不用靠太近。600mm 能把遠處樹梢的小鳥拍成主角；手要穩、快門要快。": "A super-telephoto zoom, so shy birds don't need you up close. At 600mm a tiny bird on a distant treetop becomes the star. Keep steady and use a fast shutter.",
- "大砲級的定焦鏡。f/4 大光圈在昏暗的林下也有快快門，背景糊得像奶油，是許多人夢想中的鏡頭。": "A big-gun prime. The bright f/4 keeps shutter speeds fast even in dim forest, and the background melts like butter. A lot of people's dream lens."
+ "大砲級的定焦鏡。f/4 大光圈在昏暗的林下也有快快門，背景糊得像奶油，是許多人夢想中的鏡頭。": "A big-gun prime. The bright f/4 keeps shutter speeds fast even in dim forest, and the background melts like butter. A lot of people's dream lens.",
+ "上一個": "Previous",
+ "下一個": "Next",
+ "360° 查看": "360° view"
 }
 export const BIRDS = {
  "dove": {
