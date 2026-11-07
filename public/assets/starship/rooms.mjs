@@ -95,7 +95,7 @@ export const ROOMS = [
     cfg: { slab: 0xd5cbf3, wall: '#d9cdf7', wallB: '#b9a6ef', wallLow: 0xa48be8, accent: 0xb48bff, floor: 'wood', planet: '#9b7bea', seed: 4, lampColor: 0xd9c8ff } },
   { key: 'rails', title: 'Wooden Rails', tag: 'Three.js · Track Puzzle', desc: 'A track-laying puzzle built from wooden rails.', url: '/wooden-rails/',
     cfg: { slab: 0xf1d9bf, wall: '#f8e2c4', wallB: '#f2c79d', wallLow: 0xe3b17a, accent: 0xffb35c, floor: 'wood', planet: '#e6a35a', seed: 5 } },
-  { key: 'birds', title: 'Bird Park', tag: 'Three.js · Birdwatching', desc: 'Walk a glass-dome bird park with a camera and photograph rare birds.', url: '/bird-park/',
+  { key: 'birds', title: 'Bird Park', tag: 'Three.js · Birdwatching', desc: 'Walk a glass-dome bird park with a camera and photograph rare birds.', url: '/bird-park/game.html',
     cfg: { slab: 0xd9e8cc, wall: '#e6f0dd', wallB: '#cfe3bf', wallLow: 0x9cc58a, accent: 0xa8e063, floor: 'wood', planet: '#6fbf6a', seed: 6 } },
 ];
 
