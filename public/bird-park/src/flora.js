@@ -193,7 +193,9 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       if (distToMtn(x, z) < mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 2) continue
       const face = Math.atan2(-nx * side, -nz * side)
       // 岔路口（支線接到別條步道的地方，7 公尺內）不放長椅（會擋路、也不好看），改放解說牌；不多抽亂數，其他位置的擺設才不會全部跑掉
-      if (rnd() < 0.55 && !nearCrossing(x, z, 7)) {
+      // 也不能落在別條步道上（步道交會處，往外推的位置可能剛好是另一條路），長椅之間至少 8 公尺（之前有兩張擠在一起）
+      const roomy = pathClearAt(x, z) > 0.35 && !benches.some((b) => Math.hypot(b.p.x - x, b.p.z - z) < 8)
+      if (rnd() < 0.55 && !nearCrossing(x, z, 7) && roomy) {
         benches.push({ p: v3(x, terrainHeight(x, z), z), q: qY(face), s: sc(1) })
         addCollider(x, z, 0.9, terrainHeight(x, z) + 1)
       }   // 其他位置原本放解說牌（空白的木板），2026-11-07 使用者說不要：不放（亂數照抽，其他擺設位置不變）
@@ -203,8 +205,11 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       const a = pts[k - 1], b = pts[k + 1]
       const tx = b.x - a.x, tz = b.z - a.z, tl = Math.hypot(tx, tz)
       const side = (k / 55) % 2 < 1 ? -1 : 1
-      const off = p.w / 2 + 0.45
-      const x = pts[k].x - tz / tl * off * side, z = pts[k].z + tx / tl * off * side
+      // 往外推到離所有步道邊至少 0.4 公尺（岔路口那盞原本站在路中間）；推 2 公尺還在路上就不放
+      let off = p.w / 2 + 0.45, x, z
+      for (; off < p.w / 2 + 2.5; off += 0.25) { x = pts[k].x - tz / tl * off * side; z = pts[k].z + tx / tl * off * side; if (pathClearAt(x, z) > 0.4) break }
+      if (pathClearAt(x, z) <= 0.4) continue
+      if (benches.some((b) => Math.hypot(b.p.x - x, b.p.z - z) < 3)) continue   // 不要貼著長椅
       if (!insideGarden(x, z, 0.92) || poolQ(x, z) < 1.3 || !freeOfColliders(x, z, 0.6) || nearBird(x, z)) continue
       if (distToMtn(x, z) < mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 1.5) continue
       lamps.push({ p: v3(x, terrainHeight(x, z), z), q: qY(0), s: sc(1) })
