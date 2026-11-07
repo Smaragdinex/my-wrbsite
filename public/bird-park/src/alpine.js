@@ -181,71 +181,100 @@ function buildInterior(lib, avoid = []) {
   // 坡度大的那幾段流得快、一片白（小瀑布、急流）。水紋是兩層往下游捲動的雜訊，算法線用。
   const spray = []
   const waterU = { uTime: { value: 0 }, uDay: dayLight, uSun: { value: V(-0.45, 0.8, 0.3).normalize() } }
+  // 2026-11-07 第三版（跟 ChatGPT 討論過，依截圖的三個問題改）：
+  // 1. 反射：低角度看水面反射的是兩岸的樹和石壁（暗綠），不是白色天空；太陽高光縮小——原本像灰白塑膠
+  // 2. 流向圖（uFlow，溪建好時預先算的一張貼圖）：水紋、白沫順著水流方向漂，碰到石頭會分開繞過去；
+  //    石頭邊一圈白沫、上游那面堆起來、下游拖一道 V 字尾跡（B 通道）。兩個相位交替取樣，水紋才不會越拉越長
+  // 3. 跌水分三段：門檻上的水是平滑發亮的（aLip）、往下是一股股白色水絲夾著深色水、底下一片翻滾的白沫
+  const flowTexDummy = new THREE.DataTexture(new Uint8Array([128, 128, 0, 0]), 1, 1); flowTexDummy.needsUpdate = true
   const waterM = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide,   // 三角形的方向不管（從上面看才不會被背面剔除）
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uDay: { value: 1 }, uSun: { value: V() } }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uDay: { value: 1 }, uSun: { value: V() }, uFlowBox: { value: new THREE.Vector4(0, 0, 1, 1) } }]),
     vertexShader: `
-      attribute float aDepth; attribute float aSlope; attribute float aFoam;
-      varying vec2 vUv; varying float vDepth; varying float vSlope; varying float vFoam; varying vec3 vW;
+      attribute float aDepth; attribute float aSlope; attribute float aFoam; attribute float aLip;
+      varying vec2 vUv; varying float vDepth; varying float vSlope; varying float vFoam; varying float vLip; varying vec3 vW;
       #include <fog_pars_vertex>
       void main() {
-        vUv = uv; vDepth = aDepth; vSlope = aSlope; vFoam = aFoam;
+        vUv = uv; vDepth = aDepth; vSlope = aSlope; vFoam = aFoam; vLip = aLip;
         vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz;
         vec4 mvPosition = viewMatrix * wp;
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
       }`,
     fragmentShader: `
-      uniform float uTime; uniform float uDay; uniform vec3 uSun;
-      varying vec2 vUv; varying float vDepth; varying float vSlope; varying float vFoam; varying vec3 vW;
+      uniform float uTime; uniform float uDay; uniform vec3 uSun; uniform sampler2D uFlow; uniform vec4 uFlowBox;
+      varying vec2 vUv; varying float vDepth; varying float vSlope; varying float vFoam; varying float vLip; varying vec3 vW;
       #include <fog_pars_fragment>
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
       float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }
-      float waves(vec2 p, float sp) {
+      float fbm2(vec2 p) { return vnoise(p) * 0.65 + vnoise(p * 2.1 + 3.7) * 0.35; }
+      float ripple(vec2 p) { return fbm(p * 1.3) * 0.6 + fbm2(p * 3.4 + 11.0) * 0.4; }
+      // 跌水面：沿著水流方向（uv）往下拉
+      float fallWaves(vec2 p, float sp) {
         return fbm(p * vec2(1.6, 0.9) + vec2(0.0, -uTime * sp)) * 0.6 + fbm(p * vec2(3.1, 1.7) + vec2(3.0, -uTime * sp * 1.6)) * 0.4;
       }
       void main() {
-        // fall：跌水那幾格（水往下翻）；foam：跌水底下的白沫，往下游漂散
+        // 流向圖：rg＝水流方向（世界 xz，-1.5～1.5），b＝石頭的白沫、尾跡，a＝流速倍率（水池慢）
+        vec2 fuv = (vW.xz - uFlowBox.xy) * uFlowBox.zw;
+        vec4 fl = texture2D(uFlow, clamp(fuv, 0.0, 1.0));
+        float inside = step(0.0, fuv.x) * step(fuv.x, 1.0) * step(0.0, fuv.y) * step(fuv.y, 1.0);
+        vec2 flow = mix(vec2(0.08, 0.05), (fl.rg * 2.0 - 1.0) * 1.5 * mix(0.15, 1.0, fl.a), inside);
+        float rockF = fl.b * inside;
         float fall = smoothstep(0.35, 1.2, vSlope);
-        float sp = 0.45 + fall * 3.0 + vFoam * 0.6;
+        float lip = clamp(vLip, 0.0, 1.0);
+        float fv = clamp(vFoam, 0.0, 1.2);
+        // 兩個相位交替：水紋順著 flow 漂，一個相位拉長之前換另一個接手
+        float spd = 0.55 + fv * 0.5 + rockF * 0.4;
+        float ph0 = fract(uTime * 0.3), ph1 = fract(uTime * 0.3 + 0.5), wB = abs(ph0 - 0.5) * 2.0;
+        vec2 o0 = flow * ph0 * 1.8 * spd, o1 = flow * ph1 * 1.8 * spd;
+        vec2 q = vW.xz;
+        float e = 0.05;
+        float h0 = mix(ripple(q - o0), ripple(q - o1 + 17.3), wB);
+        float hx = mix(ripple(q + vec2(e, 0.0) - o0), ripple(q + vec2(e, 0.0) - o1 + 17.3), wB);
+        float hz = mix(ripple(q + vec2(0.0, e) - o0), ripple(q + vec2(0.0, e) - o1 + 17.3), wB);
+        float rough = (0.55 + fv * 2.2 + rockF * 2.4) * (1.0 - lip * 0.85);      // 潭裡細紋、石頭邊和跌水底下翻滾、門檻上平滑
+        vec3 Np = normalize(vec3((h0 - hx) / e * 0.06 * rough, 1.0, (h0 - hz) / e * 0.06 * rough));
+        // 跌水那面：沿 uv 往下的水紋
+        float sp = 0.45 + fall * 3.0;
         vec2 p = vec2(vUv.x * 1.4, vUv.y * 0.45);
-        float e = 0.06, h0 = waves(p, sp), hx = waves(p + vec2(e, 0.0), sp), hy = waves(p + vec2(0.0, e), sp);
-        float rough = 0.7 + vFoam * 2.6 + fall * 2.0;                        // 潭裡平靜（只有細細的波紋）、跌水底下翻滾
-        vec3 N = normalize(vec3((h0 - hx) * rough, 1.0, (h0 - hy) * rough));
+        float g0 = fallWaves(p, sp), gx = fallWaves(p + vec2(0.06, 0.0), sp), gy = fallWaves(p + vec2(0.0, 0.06), sp);
+        vec3 Nf = normalize(vec3((g0 - gx) * 4.0, 1.0, (g0 - gy) * 4.0));
+        vec3 N = normalize(mix(Np, Nf, fall));
         vec3 Vd = normalize(cameraPosition - vW);
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, Vd), 0.0), 5.0);
         float d = clamp(vDepth / 0.9, 0.0, 1.0);
-        // 顏色是線性空間：山溪清澈，淺處透出褐色石頭、深處墨綠
-        vec3 bed = vec3(0.11, 0.09, 0.055), mid = vec3(0.025, 0.06, 0.05), deep = vec3(0.005, 0.03, 0.03);   // 淺：透出黃褐石頭；深：青綠
+        // 顏色是線性空間：山溪清澈，淺處透出黃褐石頭、深處青綠
+        vec3 bed = vec3(0.11, 0.09, 0.055), mid = vec3(0.025, 0.06, 0.05), deep = vec3(0.005, 0.03, 0.03);
         vec3 col = mix(bed, mid, smoothstep(0.0, 0.45, d));
         col = mix(col, deep, smoothstep(0.45, 1.0, d));
-        col += vec3(0.012, 0.03, 0.024) * h0 * (1.0 - d * 0.5);
-        // 反射：天空和兩岸的樹影交錯
+        col += vec3(0.01, 0.026, 0.02) * (h0 - 0.5) * (1.0 - d * 0.5);
+        // 反射：低角度看過去倒映的是兩岸的樹和石壁（暗綠、一塊深一塊淺），只有幾乎正上方的反射才是天空
         vec3 R = reflect(-Vd, N);
-        vec3 sky = mix(fogColor, vec3(0.80, 0.87, 0.92), 0.5);
-        // 低角度看過去，倒影大多是兩岸的樹和石壁（暗綠），只有接近正上方的反射才是天空
-        vec3 env = mix(vec3(0.012, 0.024, 0.016), sky * 0.8, smoothstep(0.55, 0.97, R.y + (h0 - 0.5) * 0.5));
-        col = mix(col, env, clamp(fres * 1.1 + 0.05, 0.0, 1.0));
-        float spec = pow(max(dot(reflect(-uSun, N), Vd), 0.0), 90.0);
-        col += vec3(1.0, 0.97, 0.9) * spec * 2.2;
-        // 跌水：沿水流方向拉長的白色水簾，中間夾著透出的深色水（不是一整片白）
-        float streak = fbm(vec2(vUv.x * 10.0, vUv.y * 0.5 - uTime * sp * 0.9)) * 0.6 + fbm(vec2(vUv.x * 26.0, vUv.y * 1.3 - uTime * sp * 1.2)) * 0.4;
-        float curtain = fall * smoothstep(0.32, 0.6, streak);
-        // 白沫：一塊塊的泡泡（不是均勻的白），跌水正下方最密，越往下游越碎、越少
-        vec2 fp = vec2(vUv.x * 3.0, vUv.y * 0.9 - uTime * (0.35 + vFoam * 0.4));
-        float blob = fbm(fp * 1.7) * 0.65 + fbm(fp * 5.3 + 4.0) * 0.35;
-        float bubbles = smoothstep(0.6, 0.7, fbm(fp * 6.0 + 9.0));        // 小泡泡點
-        float fv = clamp(vFoam, 0.0, 1.0);
-        float foam = smoothstep(0.78 - fv * 0.38, 0.9 - fv * 0.3, blob) * min(1.0, vFoam * 1.3);
-        foam = max(foam, bubbles * smoothstep(0.08, 0.5, vFoam) * 0.55);
-        foam += smoothstep(0.05, 0.0, vDepth) * smoothstep(0.6, 0.78, blob) * 0.35;   // 岸邊一點點
+        vec3 sky = mix(fogColor, vec3(0.78, 0.85, 0.9), 0.5);
+        float trees = fbm2(vW.xz * 0.3 + R.xz * 0.5);   // 倒影的明暗跟著位置慢慢變（太跟著反射角走，跌水那面會變成豹紋）
+        vec3 bank = mix(vec3(0.008, 0.018, 0.011), vec3(0.03, 0.05, 0.032), trees);
+        vec3 env = mix(bank, sky * 0.75, smoothstep(0.82, 0.99, R.y));
+        col = mix(col, env, clamp(fres * (1.0 + lip * 0.6) * (1.0 - fall * 0.75), 0.0, 0.92));   // 跌水那面是碎水，幾乎不倒影
+        // 太陽高光：小而亮（原本太大一片，看起來像塑膠）
+        float spec = pow(max(dot(reflect(-uSun, N), Vd), 0.0), 260.0);
+        col += vec3(1.0, 0.97, 0.9) * spec * (1.6 + lip * 1.5);
+        // 跌水：一股股白色水絲，中間夾著深色透明的水
+        // 三層：粗的水股、細的水絲、最細的拉絲（長焦拉近看才不會是一片糊糊的白）
+        float streak = fbm(vec2(vUv.x * 12.0, vUv.y * 0.6 - uTime * sp * 0.9)) * 0.5 + fbm(vec2(vUv.x * 38.0, vUv.y * 1.8 - uTime * sp * 1.25)) * 0.3 + vnoise(vec2(vUv.x * 110.0, vUv.y * 5.0 - uTime * sp * 1.6)) * 0.2;
+        float curtain = fall * mix(0.55, 1.0, smoothstep(0.3, 0.48, streak));   // 大部分是白的，只留細細的深色縫（原本白黑各半，拉近看像豹紋）
+        // 白沫：跟著水流漂（同一組相位），一塊塊、邊緣碎；跌水底下＋石頭邊／尾跡
+        float fb = mix(fbm(q * 2.6 - o0 * 1.2) * 0.55 + fbm2(q * 8.0 - o0 * 1.2) * 0.45, fbm(q * 2.6 - o1 * 1.2 + 9.1) * 0.55 + fbm2(q * 8.0 - o1 * 1.2 + 9.1) * 0.45, wB);   // 泡沫要碎（大塊模糊的白像抹上去的）
+        float amt = clamp(fv * 0.75 + rockF * 1.1, 0.0, 1.2);
+        float foam = smoothstep(0.78 - amt * 0.36, 0.86 - amt * 0.3, fb) * min(1.0, amt * 1.3);
+        foam += smoothstep(0.05, 0.0, vDepth) * smoothstep(0.62, 0.78, fb) * 0.3;   // 岸邊一點點
+        foam *= (1.0 - lip * 0.9) * (1.0 - fall);   // 跌水那面不用（白沫是照水平面排的，貼到幾乎垂直的面會拉成一條條糊糊的白），那面只用水絲
         foam = clamp(max(foam, curtain), 0.0, 1.0);
-        vec3 white = vec3(0.78, 0.83, 0.84) * (0.85 + 0.15 * h0);
-        col = mix(col, white, foam * 0.85);
+        vec3 white = vec3(0.8, 0.85, 0.86) * (0.82 + 0.18 * h0);
+        col = mix(col, white, foam * 0.88);
         col *= mix(0.12, 1.0, uDay);
-        float a = mix(0.12, 0.88, d) + foam * 0.55 + fres * 0.3 + fall * 0.15;   // 淺的地方看得到溪底
+        float a = mix(0.12, 0.86, d) + foam * 0.55 + fres * 0.35 + fall * 0.25 + lip * 0.2;   // 淺的地方看得到溪底
         a *= smoothstep(0.0, 0.05, vDepth);                                      // 岸邊淡掉，不會有一條硬邊
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>
@@ -253,6 +282,7 @@ function buildInterior(lib, avoid = []) {
         #include <fog_fragment>
       }`,
   })
+  waterM.uniforms.uFlow = { value: flowTexDummy }
   waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uSun = waterU.uSun
   {
     // 水池：一片比池子大一點的平面，每點的水深照地形算（沒水的地方深度 < 0 → 透明）
@@ -264,7 +294,7 @@ function buildInterior(lib, avoid = []) {
     }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
-    geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); geo.setAttribute('aSlope', new THREE.Float32BufferAttribute(slo, 1)); geo.setAttribute('aFoam', new THREE.Float32BufferAttribute(new Float32Array(slo.length), 1)); geo.setIndex(idx)
+    geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); geo.setAttribute('aSlope', new THREE.Float32BufferAttribute(slo, 1)); geo.setAttribute('aFoam', new THREE.Float32BufferAttribute(new Float32Array(slo.length), 1)); geo.setAttribute('aLip', new THREE.Float32BufferAttribute(new Float32Array(slo.length), 1)); geo.setIndex(idx)
     const pond = new THREE.Mesh(geo, waterM); pond.renderOrder = 2; g.add(pond)
     // 溪（2026-11-07 改成階梯式：一個個水潭、潭和潭之間一道跌水，layout.js buildSteps）
     // 沿著溪中線每 0.25 公尺一個斷面；水面高度照沿溪距離查（潭裡平的、跌水往下彎）。
@@ -273,38 +303,39 @@ function buildInterior(lib, avoid = []) {
     const st = ALP_STREAM, P = []
     for (let i = 0; i < st.length; i++) P.push(V(st[i][0], 0, st[i][1]))
     const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.25), K = 16
-    const sp = [], su = [], sd = [], ss_ = [], sf = [], si = []
+    const sp = [], su = [], sd = [], ss_ = [], sf = [], sl = [], si = []
     const S = []
     for (let i = 0; i <= N; i++) { const p = curve.getPointAt(i / N); S.push(alpineStreamS(p.x, p.z)) }
     const foamAt = (s) => {
       let f = 0
       for (const d of st.drops) {
         const x = s - d.s
-        if (x > -0.5 && x < 0) f += Math.min(1, d.h) * 0.35 * (1 + x / 0.5)          // 門檻上：水開始加速、起一點白
-        if (x >= 0) f += Math.min(1.2, 0.3 + d.h * 0.6) * Math.exp(-x / (0.5 + d.h * 0.45))   // 跌水底下一片白沫，往下游很快散掉
+        if (x >= 0) f += Math.min(1.1, 0.25 + d.h * 0.55) * Math.exp(-x / (0.35 + d.h * 0.35))   // 跌水底下一片白沫，往下游很快散掉
       }
       return Math.min(1.5, f)
     }
+    // 門檻上那一小段：水加速、變薄，表面平滑發亮（真的跌水邊緣是一道亮亮的「玻璃」，翻下去才碎成白色）
+    const lipAt = (s) => { let l = 0; for (const d of st.drops) { const x = s - d.s; if (x > -0.9 && x < 0.15) l = Math.max(l, Math.min(1, d.h * 1.2) * Math.min(1, (x + 0.9) / 0.6) * (x > 0 ? 1 - x / 0.15 : 1)) } return l }
     let acc = 0, prev = null
     for (let i = 0; i <= N; i++) {
       const p = curve.getPointAt(i / N), tg = curve.getTangentAt(i / N), side = V(-tg.z, 0, tg.x).normalize()
       if (prev) acc += p.distanceTo(prev); prev = p
       // 門檻是斜的、彎的（layout.js streamLatOff）：每一排頂點沿水流方向錯開 off，整排剛好落在同一條「等高線」上，
       // 一排的水面高度都一樣——網格不會被斜的門檻切成鋸齒（第一版每個頂點各查各的，跌水那面全是 V 字摺痕）
-      const w = streamWater(S[i]), slope = Math.max(0, (streamWater(S[i] - 0.25) - streamWater(S[i] + 0.25)) / 0.5), f = foamAt(S[i])
+      const w = streamWater(S[i]), slope = Math.max(0, (streamWater(S[i] - 0.25) - streamWater(S[i] + 0.25)) / 0.5), f = foamAt(S[i]), lp = lipAt(S[i])
       const at2 = (lat) => { const o = streamLatOff(S[i], lat); return [p.x + side.x * lat - tg.x * o, p.z + side.z * lat - tg.z * o] }
       const edge = (sgn) => { let r = 0.3; while (r < 6) { const [x, z] = at2(r * sgn); if (alpineHeight(x, z) >= w) break; r += 0.1 } return r + 0.15 }
       const el = edge(-1), er = edge(1)
       for (let k = 0; k <= K; k++) {
         const t = k / K, lat = -el + (el + er) * t, [x, z] = at2(lat)
-        sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(slope); sf.push(f)
+        sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(slope); sf.push(f); sl.push(lp)
       }
       if (i) for (let k = 0; k < K; k++) { const A = (i - 1) * (K + 1) + k, B = A + 1, C = A + K + 1, D = C + 1; si.push(A, C, B, B, C, D) }
     }
     const sg = new THREE.BufferGeometry()
     sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(su, 2))
     sg.setAttribute('aDepth', new THREE.Float32BufferAttribute(sd, 1)); sg.setAttribute('aSlope', new THREE.Float32BufferAttribute(ss_, 1))
-    sg.setAttribute('aFoam', new THREE.Float32BufferAttribute(sf, 1)); sg.setIndex(si)
+    sg.setAttribute('aFoam', new THREE.Float32BufferAttribute(sf, 1)); sg.setAttribute('aLip', new THREE.Float32BufferAttribute(sl, 1)); sg.setIndex(si)
     const stream = new THREE.Mesh(sg, waterM); stream.renderOrder = 2; g.add(stream)
     // 石頭：用溪的折線（地形就是照它挖的）放
     const rr = mulberry32(77), stones = {}
@@ -346,6 +377,76 @@ function buildInterior(lib, avoid = []) {
         const k = 0.16 + rr() * 0.3 + (rr() < 0.15 ? 0.3 : 0)
         put(rr() < 0.25 ? BIG : MOSS, x, z, w - k * 0.55 - rr() * 0.1, k, 0.55)
       }
+    }
+    // 流向圖（給水的 shader，uFlow）：每 0.125 公尺一格，存這裡的水往哪流、石頭邊的白沫。
+    // 基本方向＝最近那段溪的下游方向；碰到冒出水面的石頭：往石頭裡衝的分量拿掉（水從兩側繞過、兩側流快一點），
+    // 石頭邊一圈白沫（上游那面堆得比較多），下游拖一道 V 字尾跡＋正後方一團亂流。
+    {
+      const CELL = 0.125, M = 7
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9
+      for (const [x, z] of st) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z) }
+      x0 -= M; x1 += M; z0 -= M; z1 += M
+      const nx = Math.ceil((x1 - x0) / CELL), nz = Math.ceil((z1 - z0) / CELL)
+      const fx = new Float32Array(nx * nz), fz = new Float32Array(nx * nz), fo = new Float32Array(nx * nz), sa = new Uint8Array(nx * nz)
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+        const x = x0 + (i + 0.5) * CELL, z = z0 + (j + 0.5) * CELL
+        let best = 1e9, tx = 1, tz = 0
+        for (let k = 0; k < st.length - 1; k++) {
+          const ax = st[k][0], az = st[k][1], dx = st[k + 1][0] - ax, dz = st[k + 1][1] - az, l2 = dx * dx + dz * dz
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), ex = x - ax - dx * t, ez = z - az - dz * t, dd = ex * ex + ez * ez
+          if (dd < best) { best = dd; const l = Math.sqrt(l2); tx = dx / l; tz = dz / l }
+        }
+        const id = j * nx + i
+        fx[id] = tx; fz[id] = tz
+        sa[id] = Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2 ? 40 : 255   // 水池裡流得慢
+      }
+      // 冒出水面的石頭（scatter 的原點在模型底部中心）
+      const sizeOf = {}
+      for (const n of Object.keys(stones)) if (lib[n]) { const b = new THREE.Box3().setFromObject(lib[n]), v = b.getSize(V()); sizeOf[n] = v }
+      const rocks = []
+      for (const [n, list] of Object.entries(stones)) {
+        const sz = sizeOf[n]; if (!sz) continue
+        for (const it of list) {
+          const s = alpineStreamS(it.p.x, it.p.z), w = streamWater(s), top = it.p.y + sz.y * it.s.y
+          if (top < w + 0.04 || it.p.y > w - 0.02 || alpineStreamDist(it.p.x, it.p.z) > 3.2) continue
+          rocks.push({ x: it.p.x, z: it.p.z, r: Math.max(0.12, 0.42 * Math.max(sz.x, sz.z) * it.s.x) })
+        }
+      }
+      for (const rk of rocks) {
+        const ext = rk.r * 9, i0 = Math.max(0, Math.floor((rk.x - ext - x0) / CELL)), i1 = Math.min(nx - 1, Math.ceil((rk.x + ext - x0) / CELL))
+        const j0 = Math.max(0, Math.floor((rk.z - ext - z0) / CELL)), j1 = Math.min(nz - 1, Math.ceil((rk.z + ext - z0) / CELL))
+        const ci = Math.min(nx - 1, Math.max(0, Math.floor((rk.x - x0) / CELL))), cj = Math.min(nz - 1, Math.max(0, Math.floor((rk.z - z0) / CELL)))
+        const tx = fx[cj * nx + ci], tz = fz[cj * nx + ci], R = rk.r
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+          const x = x0 + (i + 0.5) * CELL, z = z0 + (j + 0.5) * CELL, dx = x - rk.x, dz = z - rk.z, r = Math.hypot(dx, dz) || 1e-4
+          const along = dx * tx + dz * tz, lat = -dx * tz + dz * tx, id = j * nx + i
+          // 繞過去：往石頭中心的分量拿掉、兩側加速
+          if (r < R * 2.4) {
+            const k = ss(R * 2.4, R, r), nxv = dx / r, nzv = dz / r, into = fx[id] * nxv + fz[id] * nzv
+            if (into < 0) { fx[id] -= nxv * into * k; fz[id] -= nzv * into * k }
+            const boost = 1 + 0.45 * k * Math.min(1, Math.abs(lat) / R)
+            fx[id] *= boost; fz[id] *= boost
+          }
+          // 白沫：石頭邊一圈（上游那面多）、V 字尾跡、正後方亂流
+          let f = Math.exp(-(((r - R) / 0.13) ** 2)) * (along < 0 ? 0.95 : 0.6)
+          if (r < R) f = Math.max(f, 0.6)
+          if (along > 0) {
+            const spread = R * 0.7 + along * 0.3, wid = 0.1 + along * 0.05
+            f = Math.max(f, Math.exp(-(((Math.abs(lat) - spread) / wid) ** 2)) * Math.exp(-along / (R * 4 + 0.6)) * 0.75)
+            f = Math.max(f, Math.exp(-((lat / (R * 0.75)) ** 2)) * Math.exp(-along / (R * 2 + 0.3)) * 0.65)
+          }
+          fo[id] = Math.max(fo[id], f)
+        }
+      }
+      const data = new Uint8Array(nx * nz * 4)
+      for (let k = 0; k < nx * nz; k++) {
+        data[k * 4] = Math.round(clamp(fx[k] / 1.5 * 0.5 + 0.5, 0, 1) * 255); data[k * 4 + 1] = Math.round(clamp(fz[k] / 1.5 * 0.5 + 0.5, 0, 1) * 255)
+        data[k * 4 + 2] = Math.round(clamp(fo[k], 0, 1) * 255); data[k * 4 + 3] = sa[k]
+      }
+      const tex = new THREE.DataTexture(data, nx, nz); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true
+      waterM.uniforms.uFlow.value = tex
+      waterM.uniforms.uFlowBox.value.set(x0, z0, 1 / (x1 - x0), 1 / (z1 - z0))
+      waterM.userData.flowRocks = rocks.length
     }
     for (const [n, list] of Object.entries(stones)) if (lib[n]) scatter(g, lib[n], list, { cast: true })
     // 跌水底下的水花：一團團白霧貼著水面翻動（高的跌水比較多、比較大）
