@@ -59,7 +59,7 @@ export async function loadPlants(onProgress) {
 
 // 一個節點拆成（幾何, 材質）清單；葉子材質改成 alphaTest＋雙面，才有正確的深度和影子
 const partsCache = new Map()
-function parts(node) {
+export function parts(node) {
   if (partsCache.has(node)) return partsCache.get(node)
   const out = []
   node.updateMatrixWorld(true)

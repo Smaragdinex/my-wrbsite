@@ -1137,6 +1137,9 @@ export function buildRamp(scene) {
   const TH = 0.4, GH = 1.08   // 底板厚、玻璃高
   // 只有跟觀景台同一層的那一段才算「在觀景台上」；下面幾圈剛好從觀景台底下經過，欄杆不能拿掉
   const inDeck = (x, z, y) => Math.abs(y - DECK.y) < 1.5 && Math.hypot(x - DECK.x, z - DECK.z) < DECK.r - 0.1
+  // 觀景台欄杆那一圈（跟步道欄杆一樣往內縮 6 公分）：步道外側欄杆進到這圈裡面才拿掉，兩邊的欄杆剛好接在一起
+  const RR = DECK.r - 0.06
+  const inRing = (x, z, y) => Math.abs(y - DECK.y) < 1.5 && Math.hypot(x - DECK.x, z - DECK.z) < RR - 0.01
   const at = (s, r) => {
     const p = rampSample(s)
     return new THREE.Vector3(MTN.x + r * Math.cos(p.th), p.y, MTN.z + r * Math.sin(p.th))
@@ -1181,9 +1184,10 @@ export function buildRamp(scene) {
     // 起點前 0.6 公尺不裝欄杆；跟觀景台重疊的那段外側欄杆拿掉
     const p = rampSample(k / N)
     if (p.y - RAMP.y0 < 0.6) continue
-    const B = at(k / N, p.ro)
-    quads(glassI, k, false, inDeck(B.x, B.z, B.y))
-    quads(edgeI, k, false, inDeck(B.x, B.z, B.y))
+    const B = at(k / N, p.ro - 0.06), B1 = at((k + 1) / N, rampSample((k + 1) / N).ro - 0.06)
+    const cut = inRing(B.x, B.z, B.y) || inRing(B1.x, B1.z, B1.y)
+    quads(glassI, k, false, cut)
+    quads(edgeI, k, false, cut)
   }
   const mk = (P, I, U) => {
     const g = new THREE.BufferGeometry()
@@ -1224,7 +1228,7 @@ export function buildRamp(scene) {
   const startK = railIn.findIndex((v) => v.y - GH - RAMP.y0 > 0.6)
   const rails = [
     new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railIn.slice(startK)), 900, 0.035, 10),
-    ...splitRuns(railOut.slice(startK), (v) => !inDeck(v.x, v.z, v.y - GH)).map((run) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(run), Math.max(8, run.length), 0.035, 10)),
+    ...splitRuns(railOut.slice(startK), (v) => !inRing(v.x, v.z, v.y - GH - 0.03)).map((run) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(run), Math.max(8, run.length), 0.035, 10)),
   ]
   // 玻璃之間的不鏽鋼立柱：每 1.5 公尺一支，順便當作玻璃分片的接縫
   const posts = []
@@ -1237,7 +1241,7 @@ export function buildRamp(scene) {
     const s = k / N, p = rampSample(s)
     for (const r of [p.ri + 0.06, p.ro - 0.06]) {
       const q = at(s, r)
-      if (r > p.ri + 1 && inDeck(q.x, q.z, q.y)) continue
+      if (r > p.ri + 1 && inRing(q.x, q.z, q.y)) continue
       for (const g of [postGeo, shoe]) posts.push(g.clone().rotateY(-p.th).translate(q.x, q.y, q.z))
     }
   }
@@ -1340,23 +1344,41 @@ export function buildRamp(scene) {
   const under = new THREE.Mesh(new THREE.CircleGeometry(DECK.r, 48).rotateX(Math.PI / 2), steel)
   under.position.set(DECK.x, DECK.y - TH, DECK.z)
   scene.add(platform, rim, under)
-  // 觀景台欄杆：跟步道相接的地方留開口
-  const gp = [], gi = [], ring = []
-  const NR = 96
-  let started = false
-  for (let i = 0; i <= NR; i++) {
-    const a = (i / NR) * TAU
-    const x = DECK.x + DECK.r * Math.cos(a), z = DECK.z + DECK.r * Math.sin(a)
-    const open = rampHeights(x, z).some((h) => Math.abs(h - DECK.y) < 0.6)
-    gp.push(x, DECK.y + 0.08, z, x, DECK.y + GH, z)
-    if (i > 0 && !open && started) gi.push((i - 1) * 2, i * 2, (i - 1) * 2 + 1, (i - 1) * 2 + 1, i * 2, i * 2 + 1)
-    started = !open
-    ring.push({ v: new THREE.Vector3(x, DECK.y + GH + 0.03, z), open })
+  // 觀景台欄杆：只有步道進來的那一段開口。開口兩端剛好接上步道內側（山壁那邊、步道終點）和外側的欄杆；
+  // 跟步道一樣有玻璃頂邊、不鏽鋼立柱（以前沒有立柱、扶手跟步道扶手之間還斷了半公尺，看起來像破洞）
+  {
+    const aTan = Math.atan2(MTN.z - DECK.z, MTN.x - DECK.x)   // 平台內緣貼著步道終點內緣的地方
+    const ringPt = (a) => new THREE.Vector3(DECK.x + RR * Math.cos(a), DECK.y, DECK.z + RR * Math.sin(a))
+    const roEnd = rampSample(1).ro - 0.06
+    // 從貼山壁那點往步道進來的方向找：圈上的點離山的距離超過步道外側欄杆，就是開口的另一端
+    let aEnd = aTan
+    for (let i = 1; i < 4000; i++) {
+      const a = aTan + i * 0.0015, q = ringPt(a)
+      if (Math.hypot(q.x - MTN.x, q.z - MTN.z) >= roEnd) { aEnd = a; break }
+    }
+    // 開口方向要對：步道是從 aEnd 那邊進來的（那邊步道高度跟平台一樣）
+    const span = TAU - (aEnd - aTan)
+    const M = Math.ceil(span / 0.03)
+    const gp = [], gi = [], ep = [], ring = []
+    for (let i = 0; i <= M; i++) {
+      const q = ringPt(aEnd + span * (i / M))
+      gp.push(q.x, q.y + 0.08, q.z, q.x, q.y + GH, q.z)
+      ep.push(q.x, q.y + GH - 0.018, q.z, q.x, q.y + GH, q.z)
+      ring.push(new THREE.Vector3(q.x, q.y + GH + 0.03, q.z))
+      if (i > 0) gi.push((i - 1) * 2, i * 2, (i - 1) * 2 + 1, (i - 1) * 2 + 1, i * 2, i * 2 + 1)
+    }
+    scene.add(Object.assign(new THREE.Mesh(mk(gp, gi), glassMat), { renderOrder: 4 }))
+    scene.add(Object.assign(new THREE.Mesh(mk(ep, gi), edgeMat), { renderOrder: 5 }))
+    const dposts = []
+    const nP = Math.max(2, Math.round(span * RR / 1.5))
+    for (let i = 0; i <= nP; i++) {
+      const a = aEnd + span * (i / nP), q = ringPt(a)
+      for (const g of [postGeo, shoe]) dposts.push(g.clone().rotateY(-a).translate(q.x, q.y, q.z).toNonIndexed())
+    }
+    const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ring), M * 2, 0.035, 10)
+    scene.add(new THREE.Mesh(mergeGeometries([tube.toNonIndexed(), ...dposts]), stainless))
+    if (typeof window !== 'undefined') window.__deckRing = { aTan, aEnd, span, RR }
   }
-  scene.add(Object.assign(new THREE.Mesh(mk(gp, gi), glassMat), { renderOrder: 4 }))
-  const runs = splitRuns(ring, (r) => !r.open).map((run) => run.map((r) => r.v))
-  const deckRails = runs.filter((r) => r.length > 2).map((r) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(r), r.length * 2, 0.035, 10))
-  if (deckRails.length) scene.add(new THREE.Mesh(mergeGeometries(deckRails), stainless))
   {
     const e = rampSample(1)
     for (const da of [-0.35, 0, 0.35]) {

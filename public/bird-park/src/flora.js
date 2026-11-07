@@ -2,13 +2,13 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
-  TAU, MTN, PATHS, RAMP, DOME, POOL, clamp, lerp,
+  TAU, MTN, PATHS, RAMP, DOME, POOL, DECK, clamp, lerp,
   domeY, terrainHeight, pathClearAt, poolQ, mtnR, rampSample, rampHeights, rampInner, insideGarden, distToMtn,
   colliders, addCollider,
 } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { addWind, windUniforms } from './wind.js'
-import { scatter, nodeHeight } from './plants.js'
+import { scatter, nodeHeight, parts } from './plants.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
 import * as T from './textures.js'
 
@@ -485,6 +485,47 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     put(name, { p: v3(x, terrainHeight(x, z) - 0.25, z), q: qY(-a + (rnd() - 0.5)), s: sc(0.7 + rnd() * 0.5) })
   }
 
+  // 步道／觀景台的走道空間：山壁上的植物、岩塊用模型真正的頂點檢查，有任何一點伸進走道（或穿過玻璃欄杆）就不放。
+  // 以前只檢查岩塊、而且用估計大小；蕨類、鳳梨、龜背芋完全沒檢查，葉子會伸到步道上
+  const walkHit = (x, y, z) => {
+    const dx = x - MTN.x, dz = z - MTN.z, r = Math.hypot(dx, dz)
+    let base = (Math.atan2(dz, dx) - RAMP.theta0) % TAU
+    if (base < 0) base += TAU
+    for (let k = 0; k <= Math.ceil(RAMP.turns); k++) {
+      const s = (base + k * TAU) / (RAMP.turns * TAU)
+      if (s > 1) break
+      const p = rampSample(s)
+      if (r > p.ri - 0.12 && r < p.ro + 0.12 && y > p.y - 0.5 && y < p.y + 2.5) return true
+    }
+    return Math.hypot(x - DECK.x, z - DECK.z) < DECK.r + 0.12 && y > DECK.y - 0.5 && y < DECK.y + 2.5
+  }
+  const ptsCache = {}
+  const modelPts = (name) => ptsCache[name] ??= (() => {
+    const out = []
+    for (const { geo } of parts(lib[name])) {
+      const a = geo.attributes.position, step = Math.max(1, Math.floor(a.count / 1500))
+      for (let i = 0; i < a.count; i += step) out.push(v3().fromBufferAttribute(a, i))
+    }
+    const R = out.reduce((m, p) => Math.max(m, p.length()), 0)
+    return { out, R }
+  })()
+  const _mm = new THREE.Matrix4(), _pp = v3()
+  const removed = {}
+  for (const [name, list] of Object.entries(lists)) {
+    if (!lib[name]) continue
+    const keep = list.filter((it) => {
+      const { out, R } = modelPts(name), ext = R * Math.max(it.s.x, it.s.y, it.s.z)
+      const rc = Math.hypot(it.p.x - MTN.x, it.p.z - MTN.z)
+      // 粗篩：離山太遠、或高度不在步道範圍
+      if (rc - ext > 40 || it.p.y + ext < RAMP.y0 - 0.5 || it.p.y - ext > DECK.y + 2.5) return true
+      _mm.compose(it.p, it.q, it.s)
+      for (const q of out) { _pp.copy(q).applyMatrix4(_mm); if (walkHit(_pp.x, _pp.y, _pp.z)) return false }
+      return true
+    })
+    if (keep.length !== list.length) { removed[name] = list.length - keep.length; lists[name] = keep }
+  }
+  if (typeof window !== 'undefined') window.__walkRemoved = removed
+
   // 風：樹梢擺幅（公尺）
   const windOf = (name) => name === 'jungle' ? 0.25 : name.startsWith('coco') || name.startsWith('palm') ? 0.35
     : name.startsWith('mrock') || name.startsWith('rock') || name === 'boulder' ? 0 : name.startsWith('fern') ? 0.06 : 0.1
@@ -687,6 +728,17 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       while (L < 9 && mtnR(th, y - L - 0.5) < r0 - 0.25) L += 0.5
       if (L < 2) continue
       list.push({ p: v3(MTN.x + (r0 - 0.1) * Math.cos(th), y, MTN.z + (r0 - 0.1) * Math.sin(th)), q: qY(Math.PI / 2 - th), s: v3(1.2, L, 1) })
+    }
+    // 垂藤不能垂進下一圈步道的走道（步道加寬後，上一圈外緣剛好在下一圈走道正上方）：往下量，碰到走道空間就截短
+    const side = v3()
+    for (let i = list.length - 1; i >= 0; i--) {
+      const it = list[i], top = it.p.y
+      side.set(1, 0, 0).applyQuaternion(it.q).multiplyScalar(0.3 * it.s.x)
+      let L = 0.3
+      while (L < it.s.y && ![-1, 0, 1].some((k) => walkHit(it.p.x + side.x * k, top - L, it.p.z + side.z * k))) L += 0.1
+      L = Math.min(it.s.y, L - 0.15)
+      if (L < 1) list.splice(i, 1)
+      else it.s.y = L
     }
     scene.add(makeInst(geo, mats.vine, list, { receive: true }))
   }
