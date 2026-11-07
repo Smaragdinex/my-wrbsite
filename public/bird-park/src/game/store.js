@@ -893,5 +893,5 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     if (k !== slide && printT.image) { slide = k; drawSlide(k) }
   }
   const refresh = () => items.forEach((it) => it.draw())
-  return { group: g, focus, tick, refresh, items, checkout: keeper.checkout, keeper }
+  return { group: g, focus, tick, refresh, items, checkout: keeper.checkout, keeper, gearModel }
 }

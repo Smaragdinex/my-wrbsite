@@ -9,6 +9,7 @@ import { createCamera, BODIES, LENSES } from './camera.js'
 import { createAlbum } from './album.js'
 import { createGuide } from './guide.js'
 import { createShop } from './shop.js'
+import { createProductView } from './product.js'
 import { buildStore } from './store.js'
 import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.js'
 import { judgePhoto, loadLLM, llm, rawGen } from './judge.js'
@@ -94,19 +95,21 @@ const guide = createGuide({ renderer, onClose: (why) => why === 'esc' ? player.c
   for (const p of photos) if (p.subject) { const o = r[p.subject.id] ??= { n: 0, best: 0 }; o.n++; o.best = Math.max(o.best, p.score) }
   return r
 } })
-const panelOpen = () => album.isOpen || shop.isOpen || cam.panelOpen || guide.isOpen
+const product = createProductView({ state, getModel: (id) => store.gearModel[id], onChange: () => { save(); store.refresh(); shop.render() }, onClose: relock })
+const panelOpen = () => album.isOpen || shop.isOpen || product.isOpen || cam.panelOpen || guide.isOpen
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
 addEventListener('keydown', (e) => {
   if (guide.isOpen) { if (e.code === 'KeyE') guide.close(); if (e.code === 'Tab') e.preventDefault(); return }   // 圖鑑開著：翻頁、Esc 在 guide.js 處理
-  if (e.code === 'Tab') { e.preventDefault(); if (album.isOpen) album.close(); else if (!shop.isOpen) openPanel(album) }
+  if (e.code === 'Tab') { e.preventDefault(); if (album.isOpen) album.close(); else if (!shop.isOpen && !product.isOpen) openPanel(album) }
   // E：舉著相機 → 相機設定；靠近相機行 → 進店；靠近長椅 → 休息
   if (e.code === 'KeyE' && cam.panelOpen) { cam.closePanel(); return }
   if (e.code === 'KeyE' && cam.state.raised && player.controls.isLocked) { cam.openPanel(); return }
   if (e.code === 'KeyE') {
     if (shop.isOpen) return shop.close()
+    if (product.isOpen) return product.close()
     const f = !album.isOpen && player.controls.isLocked ? store.focus(camera) : null
-    if (f?.type === 'item') { shop.open('gear', f.item.id); player.controls.unlock() }      // 逛店：看著展示台 → 器材頁跳到那一項
+    if (f?.type === 'item') { product.open(f.item); player.controls.unlock() }      // 逛店：看著展示台 → 器材介紹頁（左邊介紹＋購買，右邊 3D 轉著看）
     else if (f?.type === 'counter') store.checkout(() => { shop.open('sell'); player.controls.unlock() })   // 櫃台：老闆不在櫃台就先走回來，到了才開買賣畫面
     else if (!panelOpen() && player.controls.isLocked && nearBench()) rest()
     else if (!panelOpen() && player.controls.isLocked) { guide.open(); player.controls.unlock() }   // 附近沒有可以按 E 的東西：打開鳥類圖鑑
@@ -216,5 +219,5 @@ function frame() {
   if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
   guide.render(dt)   // 圖鑑（書）疊在最上面
 }
-window.__game = { setMenuCam, guide, amb, settings, store, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
+window.__game = { setMenuCam, guide, amb, settings, store, product, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 frame()

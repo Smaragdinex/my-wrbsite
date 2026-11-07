@@ -262,7 +262,26 @@ export const UI = {
  "鳥：麻雀（很常見）\n遊戲評分：34 分（滿分 100）\n鳥在畫面裡的大小：佔 1%\n對焦：有點糊\n遮擋：有一點被擋\n鳥完整在畫面裡\n用的鏡頭：18–55mm 標準變焦，30mm": "Bird: Eurasian Tree Sparrow (Very common)\nGame score: 34 pts (out of 100)\nBird size in frame: 1%\nFocus: A bit blurry\nObstruction: Slightly blocked\nWhole bird in frame\nLens used: 18–55mm standard zoom, 30mm",
  "麻雀小小一隻還有點糊，下次靠近一點、換支長鏡頭吧。\n價格：85": "Tiny little sparrow and a bit blurry. Get closer and use a longer lens next time.\nPrice: 85",
  "黃昏": "Dusk",
- "黑面琵鷺": "Black-faced Spoonbill"
+ "黑面琵鷺": "Black-faced Spoonbill",
+ "拖曳旋轉・滾輪縮放": "Drag to rotate · Scroll to zoom",
+ "對焦速度": "AF speed",
+ "連拍": "Burst",
+ "{n} 張/秒": "{n} fps",
+ "最高 ISO": "Max ISO",
+ "焦段": "Focal length",
+ "最大光圈": "Max aperture",
+ "類型": "Type",
+ "定焦": "Prime",
+ "還差 ${p}": "${p} short",
+ "E 或 Esc 關閉": "E or Esc to close",
+ "輕巧好上手的入門機身。對焦慢一點、連拍也不快，白天拍停著不動的鳥綽綽有餘；光線一暗，雜訊就會很明顯。": "A light, easy-to-use entry body. Focus is a bit slow and the burst isn't fast, but it's plenty for perched birds in daylight. Once the light drops, noise becomes obvious.",
+ "進階玩家最愛的中階機身。對焦快了一倍多，連拍每秒 8 張，晚一點的光線也撐得住，拍走動、理毛的鳥更穩。": "The mid-range body enthusiasts love. Focus is more than twice as fast, it shoots 8 fps, and it copes with evening light, so walking or preening birds are much easier to catch.",
+ "職業鳥類攝影師用的旗艦機身。幾乎一瞬間就合焦，每秒 20 張連拍，起飛、入水那一刻都抓得到；高 ISO 也很乾淨。": "The flagship body pro bird photographers use. Focus locks almost instantly and it fires 20 fps, so take-offs and dives are yours to catch. High ISO stays clean too.",
+ "機身附的標準變焦鏡。拍風景、溫室全景很好用，但拍鳥太短了，得走得很近，鳥常常先飛走。": "The kit standard zoom. Great for scenery and wide greenhouse shots, but too short for birds: you have to get very close, and they usually fly off first.",
+ "入門的望遠變焦。300mm 已經可以拍到樹上的鳥，輕巧好帶，是第一支拍鳥鏡頭的好選擇。": "An entry telephoto zoom. 300mm already reaches birds in the trees, and it's light to carry. A great first birding lens.",
+ "拍鳥最常見的焦段。400mm 拉得更近，畫質也更好，水池對岸的鳥也能拍得清楚。": "The most popular range for birding. 400mm brings you closer with better image quality, so even birds across the pond come out sharp.",
+ "超望遠變焦，拍膽小的鳥不用靠太近。600mm 能把遠處樹梢的小鳥拍成主角；手要穩、快門要快。": "A super-telephoto zoom, so shy birds don't need you up close. At 600mm a tiny bird on a distant treetop becomes the star. Keep steady and use a fast shutter.",
+ "大砲級的定焦鏡。f/4 大光圈在昏暗的林下也有快快門，背景糊得像奶油，是許多人夢想中的鏡頭。": "A big-gun prime. The bright f/4 keeps shutter speeds fast even in dim forest, and the background melts like butter. A lot of people's dream lens."
 }
 export const BIRDS = {
  "dove": {

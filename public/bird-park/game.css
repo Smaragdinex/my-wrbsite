@@ -209,3 +209,30 @@ svg.controls image { mix-blend-mode: multiply; }
 .guide-ui .x { all: unset; pointer-events: auto; position: absolute; top: 18px; left: 18px; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #f2e9d4; background: rgba(0, 0, 0, 0.35); transition: background 0.15s; }
 .guide-ui .x:hover { background: rgba(0, 0, 0, 0.55); }
 .guide-hint { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); color: rgba(242, 233, 212, 0.8); font-size: 14px; letter-spacing: 0.08em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+
+/* 器材介紹頁（product.js）：左邊介紹＋購買，右邊 3D 轉著看 */
+.product-sheet { background: rgba(10, 16, 13, 0.62); backdrop-filter: blur(3px); }
+.product { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); width: min(1180px, 94vw); height: min(660px, 86vh); border-radius: 18px; overflow: hidden; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.4); }
+.product-info { background: var(--panel); padding: 26px 30px; overflow: auto; display: flex; flex-direction: column; color: var(--ink); }
+.product-info .sheet-head { position: static; margin: -8px 0 10px; padding: 0; background: none; border-radius: 0; }
+.product-info .sheet-head .x { all: unset; box-sizing: border-box; cursor: pointer; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, 0.06); }
+.product-info .sheet-head .x:hover { background: rgba(0, 0, 0, 0.12); }
+.product-info .kind { font-size: 13px; letter-spacing: 0.08em; color: var(--accent); font-weight: 700; text-transform: uppercase; }
+.product-info .money-pill { margin-left: auto; }
+.product-info h2 { margin: 6px 0 4px; font-size: 28px; line-height: 1.25; }
+.product-info .price { font-size: 30px; font-weight: 800; margin-bottom: 14px; }
+.product-info .price .owned { font-size: 18px; color: var(--accent); }
+.product-info .specs { border-collapse: collapse; width: 100%; margin-bottom: 14px; font-size: 15px; }
+.product-info .specs th { text-align: left; font-weight: 500; color: var(--muted); padding: 7px 0; border-top: 1px solid rgba(0, 0, 0, 0.08); width: 42%; }
+.product-info .specs td { text-align: right; font-weight: 700; padding: 7px 0; border-top: 1px solid rgba(0, 0, 0, 0.08); }
+.product-info .desc { line-height: 1.75; color: #33413a; margin: 0 0 18px; }
+.product-info .buy { margin-top: auto; }
+.product-info .buy .btn { width: 100%; padding: 14px; font-size: 17px; }
+.product-info .buy .pill.using { display: block; text-align: center; padding: 12px; font-size: 16px; }
+.product-info .short { margin: 8px 0 0; color: #b5512e; font-size: 14px; text-align: center; }
+.product-info .keys { margin: 12px 0 0; font-size: 12px; text-align: center; }
+.product-view { position: relative; background: radial-gradient(ellipse at 50% 42%, #f7f8f5 0%, #dfe3de 62%, #c9cfc9 100%); cursor: grab; }
+.product-view.grab { cursor: grabbing; }
+.product-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.product-hint { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; font-size: 13px; color: rgba(31, 42, 36, 0.55); pointer-events: none; }
+@media (max-width: 760px) { .product { grid-template-columns: 1fr; grid-template-rows: 46% 54%; } .product-view { order: -1; } }
