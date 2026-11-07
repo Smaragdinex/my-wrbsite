@@ -14,7 +14,36 @@ const FILES = [
 // 版本號跟著 index.html 的 ?v= 走，上線後模型才不會用到快取的舊版
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 
+// 遠處用的低面數版本：載入時用 meshoptimizer 把每個零件簡化成約 1/4（共用頂點、只換索引，不多佔顯示記憶體）。
+// 模型檔不動（蕨類的原始素材 tropical_pack 已經不在 models/raw，沒辦法回 Blender 重做）。
+let simp = null
+const LOW_RATIO = 0.25, LOW_ERR = 0.04, LOW_MIN_TRIS = 1200
+const lowCache = new Map()
+export function lowGeo(geo) {
+  if (lowCache.has(geo)) return lowCache.get(geo)
+  let out = null
+  const pos = geo.attributes.position
+  if (simp && geo.index && geo.index.count / 3 >= LOW_MIN_TRIS) {
+    const P = new Float32Array(pos.count * 3)
+    for (let i = 0; i < pos.count; i++) { P[i * 3] = pos.getX(i); P[i * 3 + 1] = pos.getY(i); P[i * 3 + 2] = pos.getZ(i) }
+    const idx = new Uint32Array(geo.index.array)
+    // LockBorder：葉子是一片片開放的面，邊緣鎖住，葉形（去背的輪廓）才不會被吃掉
+    const [res] = simp.simplify(idx, P, 3, Math.floor(idx.length * LOW_RATIO / 3) * 3, LOW_ERR, ['LockBorder'])
+    if (res.length < idx.length * 0.7) {
+      out = new THREE.BufferGeometry()
+      for (const [k, a] of Object.entries(geo.attributes)) out.setAttribute(k, a)
+      out.setIndex(new THREE.BufferAttribute(res, 1))
+      if (!geo.boundingSphere) geo.computeBoundingSphere()
+      out.boundingSphere = geo.boundingSphere.clone(); out.boundingBox = geo.boundingBox?.clone() ?? null
+    }
+  }
+  lowCache.set(geo, out)
+  return out
+}
+
 export async function loadPlants(onProgress) {
+  simp = await import('https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_simplifier.module.js')
+    .then(async (m) => { await m.MeshoptSimplifier.ready; return m.MeshoptSimplifier }).catch(() => null)   // 載不到就全部用原本的模型
   const draco = new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/gltf/')
   const loader = new GLTFLoader().setDRACOLoader(draco)
   const lib = {}
@@ -58,7 +87,7 @@ function parts(node) {
 const _m = new THREE.Matrix4()
 export function scatter(scene, node, list, { wind = 0, cast = true, receive = true } = {}) {
   if (!node || !list.length) return []
-  const meshes = []
+  const meshes = [], lows = []
   const box = new THREE.Box3().setFromObject(node)
   const H = Math.max(0.2, box.max.y - box.min.y)
   for (const { geo, mat } of parts(node)) {
@@ -77,10 +106,21 @@ export function scatter(scene, node, list, { wind = 0, cast = true, receive = tr
     im.computeBoundingSphere()
     scene.add(im)
     meshes.push(im)
+    // 遠處的低面數版本：同一份材質、同樣的擺放，一開始 0 株（lod.js 分配）
+    const lg = lowGeo(geo)
+    if (lg) {
+      const lo = new THREE.InstancedMesh(lg, m, list.length)
+      lo.instanceMatrix.array.set(im.instanceMatrix.array)
+      if (im.instanceColor) lo.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(im.instanceColor.array), 3)
+      lo.castShadow = cast; lo.receiveShadow = receive; lo.layers.mask = im.layers.mask
+      lo.boundingSphere = im.boundingSphere.clone(); lo.count = 0
+      scene.add(lo)
+      lows.push(lo)
+    } else lows.push(null)
   }
   // LOD（lod.js）：這種植物大概多高＝模型高 × 中位數縮放
   const ys = list.map((it) => it.s.y).sort((a, b) => a - b)
-  lodRegister(meshes, H * ys[ys.length >> 1])
+  lodRegister(meshes, H * ys[ys.length >> 1], lows)
   return meshes
 }
 

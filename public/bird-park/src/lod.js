@@ -17,8 +17,10 @@ export const lodQuality = { scale: 1 }
 export const lodSetScale = (k) => { if (Math.abs(lodQuality.scale - k) > 1e-3) { lodQuality.scale = k; last.fov = 0 } }
 
 // meshes：共用同一份擺放清單的 InstancedMesh（一種植物的各個材質）；h：這種植物大概多高（公尺）
-export function lodRegister(meshes, h) {
-  meshes = meshes.filter((m) => m?.isInstancedMesh && m.count > 0)
+// lows：（可選）跟 meshes 一一對應的低面數版本（plants.js 的 lowGeo），沒有的放 null；遠處的株改畫低面數版本
+export function lodRegister(meshes, h, lows = []) {
+  const keep = meshes.map((m, i) => m?.isInstancedMesh && m.count > 0 ? i : -1).filter((i) => i >= 0)
+  meshes = keep.map((i) => meshes[i]); lows = keep.map((i) => lows[i] ?? null)
   if (!meshes.length) return
   const m0 = meshes[0], n = m0.count
   const base = m0.instanceMatrix.array.slice(0, n * 16)
@@ -37,8 +39,10 @@ export function lodRegister(meshes, h) {
   const cols = meshes.map((m) => m.instanceColor ? m.instanceColor.array.slice(0, n * 3) : null)
   // 矮的（蕨類、地被）14～40 公尺開始變稀、更遠就不畫；4 公尺以上的樹只做視野外不畫
   const d0 = Math.max(14, h * 14), d1 = h >= 4 ? Infinity : Math.max(32, h * 40)
-  for (const m of meshes) if (m.castShadow) m.userData.lodManaged = true   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
-  sets.push({ meshes, n, base, cols, pos, rad, hash, d0, d1, vis: new Uint32Array(n), proxies: null })
+  for (const m of [...meshes, ...lows]) if (m?.castShadow) m.userData.lodManaged = true   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
+  // 換成低面數的距離：一公尺的蕨類 10 公尺外、越高的越遠才換（長焦時照變焦倍率拉遠）
+  const dL = Math.max(10, h * 10)
+  sets.push({ meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), proxies: null })
   lodStats.instances += n * meshes.length
   last.fov = 0   // 下一格強制更新
 }
@@ -58,9 +62,10 @@ export function lodShadowProxies() {
     if (S.proxies) continue
     if (!S.meshes.every((m) => m.parent)) continue   // 還沒加進場景：下次再做
     S.proxies = []
-    for (const m of S.meshes) {
+    for (const [mi, m] of S.meshes.entries()) {
       if (!m.userData.lodManaged) continue
-      const px = new THREE.InstancedMesh(m.geometry, m.material, S.n)
+      // 影子用低面數版本（陰影貼圖每個貼素約 9 公分，看不出差別，重畫陰影比較快）
+      const px = new THREE.InstancedMesh(S.lows[mi]?.geometry ?? m.geometry, m.material, S.n)
       px.instanceMatrix.array.set(S.base)
       px.position.copy(m.position); px.quaternion.copy(m.quaternion); px.scale.copy(m.scale)
       px.castShadow = true; px.receiveShadow = false
@@ -81,9 +86,9 @@ export function lodUpdate(camera, force = false) {
   _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm)
   const zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(WALK_FOV / 2)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * lodQuality.scale
   const P = _fr.planes
-  let drawn = 0
+  let drawn = 0, lowTris = 0, nearN = 0
   for (const S of sets) {
-    const d0 = S.d0 * zoom, d1 = S.d1 * zoom, d1s = d1 * d1
+    const d0 = S.d0 * zoom, d1 = S.d1 * zoom, d1s = d1 * d1, dLs = (S.dL * zoom) ** 2
     let k = 0
     for (let i = 0; i < S.n; i++) {
       const x = S.pos[i * 3] - p.x, y = S.pos[i * 3 + 1] - p.y, z = S.pos[i * 3 + 2] - p.z
@@ -95,18 +100,30 @@ export function lodUpdate(camera, force = false) {
       let out = false
       for (let j = 0; j < 6; j++) { const pl = P[j]; if (pl.normal.x * cx + pl.normal.y * cy + pl.normal.z * cz + pl.constant < -r) { out = true; break } }
       if (out) continue
+      S.far[k] = dd > dLs ? 1 : 0
       S.vis[k++] = i
     }
-    S.meshes.forEach((m, mi) => {
+    // 把選到的株的矩陣擠到最前面；pick(j)：這一株要不要放進這個 mesh
+    const fill = (m, mi, pick) => {
       const a = m.instanceMatrix.array, ca = m.instanceColor?.array, co = S.cols[mi]
+      let c = 0
       for (let j = 0; j < k; j++) {
+        if (!pick(j)) continue
         const i = S.vis[j]
-        a.set(S.base.subarray(i * 16, i * 16 + 16), j * 16)
-        if (ca && co) { ca[j * 3] = co[i * 3]; ca[j * 3 + 1] = co[i * 3 + 1]; ca[j * 3 + 2] = co[i * 3 + 2] }
+        a.set(S.base.subarray(i * 16, i * 16 + 16), c * 16)
+        if (ca && co) { ca[c * 3] = co[i * 3]; ca[c * 3 + 1] = co[i * 3 + 1]; ca[c * 3 + 2] = co[i * 3 + 2] }
+        c++
       }
-      m.count = k   // 不動 visible：高山館切換兩館時會整批藏起來（alpine.js），這裡設 visible 會把它又打開
-      m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.addUpdateRange(0, k * 16); m.instanceMatrix.needsUpdate = true
-      if (ca && co) { m.instanceColor.clearUpdateRanges(); m.instanceColor.addUpdateRange(0, k * 3); m.instanceColor.needsUpdate = true }
+      m.count = c   // 不動 visible：高山館切換兩館時會整批藏起來（alpine.js），這裡設 visible 會把它又打開
+      m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.addUpdateRange(0, Math.max(1, c) * 16); m.instanceMatrix.needsUpdate = true
+      if (ca && co) { m.instanceColor.clearUpdateRanges(); m.instanceColor.addUpdateRange(0, Math.max(1, c) * 3); m.instanceColor.needsUpdate = true }
+      return c
+    }
+    S.meshes.forEach((m, mi) => {
+      const lo = S.lows[mi]
+      if (!lo) { fill(m, mi, () => true); return }
+      const near = fill(m, mi, (j) => !S.far[j]), far = fill(lo, mi, (j) => S.far[j])
+      lowTris += far * (m.geometry.index.count - lo.geometry.index.count) / 3; nearN += near
     })
     drawn += k * S.meshes.length
   }
@@ -121,6 +138,6 @@ export function lodUpdate(camera, force = false) {
     G.mesh.geometry.instanceCount = Math.round(G.n * f)
     gd += G.mesh.geometry.instanceCount
   }
-  lodStats.drawn = drawn; lodStats.grassDrawn = gd
+  lodStats.drawn = drawn; lodStats.grassDrawn = gd; lodStats.trisSaved = Math.round(lowTris)
 }
 if (typeof window !== 'undefined') window.__lod = { update: lodUpdate, stats: lodStats, sets, grass }
