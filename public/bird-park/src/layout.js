@@ -322,6 +322,69 @@ function alpBase(X, Z) {
   h = Math.min(h * AHS, domeY(X, Z) - 9)
   return lerp(gardenEdgeH(X, Z), Math.max(0, h), smoothstep(1.0, 1.25, gardenRho(X, Z)))          // 花園那側從種植坡的高度接起，往裡面慢慢變成山的形狀
 }
+// 階梯式溪床（step-pool，台灣山溪常見）：水面一段一段是平的（水潭），潭與潭之間是一道落差（小瀑布、跌水）。
+// 沿著溪的距離 s：原本的溪床是一條一路往下的折線（sProf）；把它切成很多段，每段一個水潭，
+// 潭的水面＝那段下游端的溪床再高一點（潭尾的石頭門檻），潭底往上游挖深（瀑布底下的沖刷潭最深）。
+// 陡的地方潭短、落差大；平的地方潭長、落差小（像淺灘）。
+const STEP = 0.25
+function buildSteps(st, sProf) {
+  const S = [0]
+  for (let i = 1; i < st.length; i++) S.push(S[i - 1] + Math.hypot(st[i][0] - st[i - 1][0], st[i][1] - st[i - 1][1]))
+  const L = S[S.length - 1]
+  const lin = (s) => { let i = 0; while (i < S.length - 2 && S[i + 1] < s) i++; return lerp(sProf[i], sProf[i + 1], clamp((s - S[i]) / (S[i + 1] - S[i]), 0, 1)) }
+  // 切段：從上游往下走
+  let seed = 911
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  const pools = []
+  let s0 = 0
+  while (s0 < L - 0.5) {
+    const g = Math.max(0.01, (lin(s0) - lin(Math.min(L, s0 + 4))) / 4)     // 這附近的坡度
+    const want = 0.55 + rnd() * 1.1                                         // 想要的落差（公尺）
+    let len = clamp(want / g, 2.6, 11) * (0.85 + rnd() * 0.3)
+    if (L - (s0 + len) < 2.5) len = L - s0                                  // 最後一小段併進來
+    const s1 = Math.min(L, s0 + len)
+    pools.push({ s0, s1, level: lin(s1) + 0.28 })
+    s0 = s1
+  }
+  // 每一道落差（第 k 個潭的上游端）：上一個潭的水面掉到這個潭的水面
+  const drops = []
+  for (let k = 1; k < pools.length; k++) {
+    const h = pools[k - 1].level - pools[k].level
+    if (h > 0.12) drops.push({ s: pools[k].s0, h, up: pools[k - 1].level, down: pools[k].level })
+  }
+  const FALL = 0.7   // 水從門檻翻下去的水平距離（越高的落差拋得越遠一點）
+  const poolAt = (s) => { let k = 0; while (k < pools.length - 1 && pools[k].s1 < s) k++; return k }
+  // 水面：潭裡是平的；過門檻往下彎成拋物線（水翻過石頭）
+  const water = (s) => {
+    const k = poolAt(s), P = pools[k]
+    if (k > 0) {
+      const up = pools[k - 1].level, h = up - P.level, f = FALL * (0.6 + 0.25 * Math.min(h, 2))
+      if (s < P.s0 + f) { const t = clamp((s - P.s0 + 0.12) / (f + 0.12), 0, 1); return up - h * t * t }
+    }
+    return P.level
+  }
+  // 溪床：潭底比水面低；瀑布正下方的沖刷潭最深，往潭尾變淺到門檻
+  const bed = (s) => {
+    const k = poolAt(s), P = pools[k], t = clamp((s - P.s0) / Math.max(0.1, P.s1 - P.s0), 0, 1)
+    const h = k > 0 ? pools[k - 1].level - P.level : 0
+    let d = 0.3 + 0.35 * (1 - t) + Math.min(1.1, 0.35 + h * 0.4) * Math.exp(-(s - P.s0) / 1.6)
+    if (k > 0 && s < P.s0 + 0.35) d = Math.min(d, lerp(pools[k - 1].level - 0.3 - P.level + 0.3, d, clamp((s - P.s0) / 0.35, 0, 1)))   // 門檻那一點：上一個潭的底
+    return P.level - d
+  }
+  // 預先取樣（地形每一格都要查）
+  const n = Math.ceil(L / STEP) + 1, W = new Float32Array(n), B = new Float32Array(n)
+  for (let i = 0; i < n; i++) { W[i] = water(i * STEP); B[i] = bed(i * STEP) }
+  Object.assign(ALP_STREAM, { S, len: L, pools, drops, W, B })
+}
+const sampleS = (arr, s) => { const f = clamp(s / STEP, 0, arr.length - 1), i = Math.min(arr.length - 2, Math.floor(f)), u = f - i; return arr[i] * (1 - u) + arr[i + 1] * u }
+// 沿溪距離：(x, z) 投影到溪的折線上
+export function alpineStreamS(x, z) {
+  const st = ALP_STREAM, [, i, t] = polyDist(x, z, st)
+  return st.S[i] + t * (st.S[i + 1] - st.S[i])
+}
+export const streamWater = (s) => sampleS(ALP_STREAM.W, s)
+export const streamBed = (s) => sampleS(ALP_STREAM.B, s)
+
 function buildAlpine() {
   // 步道高度：沿線取底層地形再平滑，坡度不超過 30%（走得上去）
   const tr = ALP_TRAIL, prof = tr.map(([x, z]) => alpBase(x, z))
@@ -344,15 +407,22 @@ function buildAlpine() {
   for (let i = 1; i < sProf.length; i++) sProf[i] = Math.min(sProf[i], sProf[i - 1] - 0.3)     // 溪床一路往下
   sProf[sProf.length - 1] = Math.min(sProf[sProf.length - 1], ALP_POND.water - 0.3)
   ALP_STREAM.prof = sProf
+  buildSteps(st, sProf)
   for (let j = 0; j < AG.nz; j++) for (let i = 0; i < AG.nx; i++) {
     const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, k = j * AG.nx + i
     let h = alpBase(x, z)
     // 溪谷：V 字形，越靠溪越低
     const [ds, si, stt] = polyDist(x, z, st)
-    const bed = lerp(sProf[si], sProf[si + 1], stt)
+    const ss_ = st.S[si] + stt * (st.S[si + 1] - st.S[si])
+    const bed = streamBed(ss_), wl = streamWater(ss_)
     aStream[k] = ds
     const gk = gorgeK(x, z)
-    h = lerp(bed, h, smoothstep(1.0 + 0.3 * gk, 9 - 4.5 * gk, ds))   // 峽谷那段兩岸比較陡
+    // 斷面：水裡是 U 形的潭底；水面上方先是一道陡一點的岸（0.4～0.8 公尺），再接原本的坡（峽谷那段比較陡）
+    const half = 1.5 + 0.6 * fbm2(ss_ * 0.18, 3.3, 2) + 0.4 * gk                    // 水面半寬：沿溪寬窄不一
+    const inWater = bed + (wl - bed) * smoothstep(0, half, ds) ** 2
+    const bank = lerp(wl + 0.12, h, smoothstep(half + 0.6, 9 - 4.5 * gk, ds))
+    h = ds < half ? inWater : Math.min(h, lerp(inWater, bank, smoothstep(half, half + 0.6, ds)))
+    if (ds > half) h = Math.max(h, Math.min(bank, wl + 0.12 + (ds - half) * 0.8))   // 岸一定比水面高（水才不會溢出去）
     // 水池
     const dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
     h = lerp(ALP_POND.water - 1.1, h, smoothstep(ALP_POND.r * 0.6, ALP_POND.r + 2.5, dp))
