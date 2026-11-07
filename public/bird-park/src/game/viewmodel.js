@@ -35,6 +35,8 @@ export async function createViewmodel(camera) {
   root.add(camRig)
   for (const m of [...Object.values(bodies), ...Object.values(lenses)]) { m.visible = false; camRig.add(m) }
   camRig.add(hand)
+  // 手掌貼著握把那一片是刪掉 Tripo 相機留下的開口：雙面畫，從開口看進去是手內側的皮膚，不會透過手看到後面（tools/make-hand-grip.py）
+  hand.traverse((o) => { if (o.isMesh) o.material.side = THREE.DoubleSide })
   root.traverse((o) => {
     o.layers.set(VM_LAYER)
     if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false }
