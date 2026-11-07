@@ -692,7 +692,7 @@ function perchTripo(env, cfg) {
       const curl = 0.55 + 0.6 * tuck - 0.2 * push
       l.toes.forEach((tt) => (tt.rotation.x = curl))
     })
-    root.position.set(hp.s, env.branch.top(hp.s) + hp.y, 0)
+    root.position.set(hp.s, env.branch.top(hp.s) + hp.y, env.branch.z?.(hp.s) ?? 0)
     root.rotation.y = hp.h
     focus.set(hp.s, 0.3, 0)
   }
@@ -701,9 +701,30 @@ function perchTripo(env, cfg) {
 /* ---------- 停枝的鳥：用模型自己的腳（骨頭 thigh → shin → foot） ---------- */
 // 跳的節奏和 perchTripo 一樣，只是腳不另外做：蹲低時大腿往前、小腿往後折、身體跟著降低，空中把腳收起來。
 // cfg：name、k、rotY、lat（繞它正轉 = 抬頭、腳往前）、foot 腳底在模型裡的高度、drop 蹲到底時身體降多少（模型單位）
+// 兩隻腳最低的頂點（模型靜止姿勢下，腳骨附近、最低的 40 個），給 cfg.plant 量腳底離枝條多遠
+function soleSamples(r) {
+  let mesh = null
+  r.model.traverse((o) => { if (o.isSkinnedMesh && !mesh) mesh = o })
+  if (!mesh) return null
+  r.model.updateMatrixWorld(true); mesh.skeleton.update()
+  const v = V(), out = []
+  for (const sd of ['L', 'R']) {
+    const f = r.bones['foot' + sd]; if (!f) continue
+    const fp = f.getWorldPosition(V()), cand = []
+    const n = mesh.geometry.attributes.position.count
+    for (let i = 0; i < n; i++) {
+      mesh.getVertexPosition(i, v); mesh.localToWorld(v)
+      if (Math.hypot(v.x - fp.x, v.z - fp.z) < 0.08 * r.model.scale.x && v.y < fp.y) cand.push([v.y, i])
+    }
+    // 腳掌和腳趾都要算（腳趾勾起來後尖端才是最低、最容易插進樹皮的地方）：取最低的 160 個裡每隔一個
+    cand.sort((a, b) => a[0] - b[0])
+    cand.slice(0, 160).forEach(([, i], j) => { if (j % 2 === 0) out.push(i) })
+  }
+  return out.length ? { mesh, idx: out } : null
+}
 function perchRigged(env, cfg) {
   const r = rigged(cfg.name)
-  const k = cfg.k, LAT = cfg.lat
+  const k = cfg.k, LAT = cfg.lat, FWDAX = cfg.fwd ?? V(-1, 0, 0)   // 身體前後軸（模型座標，歪頭用）
   const root = new THREE.Group(), lift = new THREE.Group(), inner = new THREE.Group()
   r.model.scale.setScalar(k); r.model.position.y = -cfg.foot * k
   inner.add(r.model); inner.rotation.y = cfg.rotY
@@ -715,8 +736,40 @@ function perchRigged(env, cfg) {
   const toes = [toesOf(r, 'L'), toesOf(r, 'R')]
   const gl = new Glance([0.5, 1.6], 0.8, 0.3)
   const acts = new Acts(cfg.acts ?? { idle: [4, 2, 5], call: [3, 2, 4], preen: [0.8, 1.5, 3] })
+  // cfg.plant：腳底貼枝。挑出兩隻腳最低的一些頂點（腳掌、腳趾），每格算它們離枝條表面多遠，
+  // 把身體慢慢上下調到剛好踩在樹皮上（不同位置的枝條粗細、彎度、鳥的朝向都不一樣，寫死高度一定有的浮有的陷）
+  const sole = cfg.plant ? soleSamples(r) : null, _sv = V()
+  let plantY = 0
   const dv = { on: false, from: V(), to: V(), h: 0 }
   const c = { yaw: 0, pitch: 0, call: 0 }, focus = V()
+  // cfg.rich：長尾巴的鳥（台灣藍鵲）多一層細節：呼吸、重心左右換、歪頭、
+  // 長尾巴慢慢擺、落地時尾巴往上翹再晃回來、叫的時候尾巴一下一下上揚、偶爾抖一下翅膀
+  const rc = { roll: 0, tailY: 0, tailP: 0, tailV: 0, flick: 0, flickT: rnd(3, 8), wasHop: false }
+  function rich(t, dt, crouch, land, air, beat) {
+    // 呼吸：身體一起一伏
+    const breath = Math.sin(t * 2.2 + cfg.k * 7)
+    r.turn('body', LAT, 0.025 * breath)
+    // 重心慢慢左右換
+    lift.rotation.z = 0.035 * Math.sin(t * 0.45 + cfg.k * 3)
+    // 歪頭看東西（Glance 的 roll）
+    rc.roll = damp(rc.roll, gl.roll, 8, dt)
+    r.turn('head', FWDAX, rc.roll * 0.6)
+    // 尾巴：彈簧。落地、叫、起跳時給它一下，平常隨風慢慢左右擺
+    const hopNow = hp.hopping
+    if (rc.wasHop && !hopNow) rc.tailV += 3.5          // 落地：尾巴往上甩
+    rc.wasHop = hopNow
+    const want = 0.35 * beat - 0.25 * air
+    rc.tailV += ((want - rc.tailP) * 60 - rc.tailV * 7) * dt
+    rc.tailP += rc.tailV * dt
+    rc.tailY = 0.12 * Math.sin(t * 0.7 + cfg.k) + 0.05 * Math.sin(t * 1.9)
+    r.turn('tail', LAT, -rc.tailP * 0.9)
+    r.turn('tail', AX.y, rc.tailY)
+    // 偶爾抖一下翅膀
+    if ((rc.flickT -= dt) <= 0) { rc.flick = 1; rc.flickT = rnd(4, 10) }
+    rc.flick = Math.max(0, rc.flick - dt * 3)
+    const fl = rc.flick > 0 ? Math.sin(rc.flick * Math.PI * 3) * rc.flick : 0
+    for (const [w, sg] of [['wingL', 1], ['wingR', -1]]) r.turn(w, AX.y, sg * 0.25 * Math.abs(fl) + sg * 0.12 * beat)
+  }
   const update = (t, dt) => {
     acts.tick(dt)
     if (acts.name !== 'idle') hp.wait = Math.max(hp.wait, 0.3)
@@ -790,12 +843,25 @@ function perchRigged(env, cfg) {
       r.turn('foot' + s, LAT, bend * 0.6 + tuck * 1.2)
     }
     // 腳趾：平常勾住樹枝，蹬出去時放開、空中半收，落地再抓緊
-    const grip = 0.55 - 0.65 * push - 0.3 * air + 0.25 * land
+    const g0 = cfg.grip ?? 0.55
+    const grip = g0 - (g0 + 0.1) * push - 0.3 * air + 0.25 * land
     toes.forEach((t) => curlToes(r, t, grip))
     lift.position.y = -cfg.drop * k * crouch
-    root.position.set(hp.s, env.branch.top(hp.s) + hp.y, 0)
+    root.position.set(hp.s, env.branch.top(hp.s) + hp.y, env.branch.z?.(hp.s) ?? 0)
     root.rotation.y = hp.h
-    lift.rotation.x = 0
+    lift.rotation.x = 0; lift.rotation.z = 0
+    if (cfg.rich && !dive) rich(t, dt, crouch, land, air, beat)
+    if (sole && !dive && env.branch.gap) {
+      // 跳的時候不貼（在空中），落地後馬上貼回去
+      root.updateMatrixWorld(true); sole.mesh.skeleton.update()
+      let g = Infinity
+      for (const i of sole.idx) {
+        sole.mesh.getVertexPosition(i, _sv); sole.mesh.localToWorld(_sv); root.parent.worldToLocal(_sv)
+        g = Math.min(g, env.branch.gap(_sv.x, _sv.y, _sv.z))
+      }
+      if (!hp.hopping) plantY = clamp(plantY - (g + 0.003) * Math.min(1, dt * 12), -0.08, 0.05)
+      lift.position.y += plantY
+    }
     if (dive) { root.position.copy(dive.p); root.rotation.y = dive.head; lift.rotation.x = dive.pitch }
     focus.set(hp.s, 0.3, 0)
   }
@@ -898,7 +964,7 @@ function mikado(env) {
 }
 // 台灣藍鵲、紅嘴黑鵯：兩隻在同一根枝上
 function bluemagpie(env) {
-  return perchGroup(2, 0.7, -0.9, (blocked) => perchRigged(outer(env, -1.1), { name: 'bluemagpie-rig', k: 1.0, ...TRIPO, foot: 0.145, drop: 0.06, beat: 5,
+  return perchGroup(2, 0.7, -0.9, (blocked) => perchRigged(outer(env, -1.1), { name: 'bluemagpie-rig', k: 1.0, ...TRIPO, foot: 0.145, drop: 0.06, beat: 5, grip: 1.25, rich: true, plant: true,
     hopper: { blocked, hop: [0.25, 0.6] } }))
 }
 function blackbulbul(env) {
@@ -1082,7 +1148,10 @@ export function placeAnimal(def) {
     obj.rotation.y = tree.rotation.y
     env.toCam = toCam.clone().applyAxisAngle(V(0, 1, 0), -obj.rotation.y)
     // 枝條表面的高度（obj 座標，s = 樹的 x - len）
-    env.branch = { min: -len * 0.8, max: 0.15, top: (s) => limb.center(s + len) + limb.radius(s + len) - y }
+    // z(s)：枝條中心左右微微彎（limb.z），鳥要站在正上方，不然會偏到枝條側面、腳踩空
+    env.branch = { min: -len * 0.8, max: 0.15, top: (s) => limb.center(s + len) + limb.radius(s + len) - y, z: (s) => limb.z(s + len),
+      // 點（obj 座標）到枝條表面的距離：正的是浮在外面、負的是陷進去
+      gap: (px, py, pz) => { const x = px + len; return Math.hypot(py - (limb.center(x) - y), pz - limb.z(x)) - limb.radius(x) } }
     env.waterLocal = waterY - gy - y   // 水面在 obj 座標的高度（翠鳥俯衝用）
     target.set(x, 3.6, z)
     dist = 5; camH = 3.4
