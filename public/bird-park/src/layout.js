@@ -213,9 +213,8 @@ function buildHeights() {
       // 水池
       const q = poolQ(x, z)
       h = lerp(-1.5, h, smoothstep(0.55, 1.25, q))
-      // 東邊（山區那側）種植坡往外慢慢降到 0，接上山區的地形；其他方向照舊是牆
-      if (x > 20) h *= smoothstep(1.06, 0.97, rho)
-      if (rho > 1.02) h = 0
+      // 東邊（山區那側）不降到 0：下面第二輪把種植坡的高度往外延伸，山區的地形從這個高度接起（2026-11-07：原本兩邊都降到 0，交界是一條 1.5 公尺深的溝，玩家會掉下去）
+      if (x <= 20 && rho > 1.02) h = 0
       // 相機行那棟和通道底下攤平成 0（不然溫室牆邊的種植坡會從店的地板冒出來）
       const sx = smoothstep(STORE.X0 + 3.5, STORE.X0 + 1.5, x) * smoothstep(STORE.HZ + 2, STORE.HZ, Math.abs(z))
       const sp = smoothstep(-66, -69.5, x) * smoothstep(STORE.DOOR_W + 2.5, STORE.DOOR_W + 0.6, Math.abs(z))
@@ -225,7 +224,25 @@ function buildHeights() {
       height[k] = h
     }
   }
+  // 第二輪：東邊 rho 0.97 以外，高度＝沿半徑往內到 0.97 那一點的高度（種植坡的頂往外平平延伸，接到山區）
+  const edge = height.slice()
+  const at = (x, z) => {
+    const fx = clamp((x - G.x0) / G.cell, 0, G.nx - 1.001), fz = clamp((z - G.z0) / G.cell, 0, G.nz - 1.001)
+    const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * G.nx + i
+    return (edge[k] * (1 - u) + edge[k + 1] * u) * (1 - v) + (edge[k + G.nx] * (1 - u) + edge[k + G.nx + 1] * u) * v
+  }
+  for (let j = 0; j < G.nz; j++) {
+    const z = G.z0 + j * G.cell
+    for (let i = 0; i < G.nx; i++) {
+      const x = G.x0 + i * G.cell, rho = gardenRho(x, z)
+      if (x <= 20 || rho <= 0.97) continue
+      const se = smoothstep(62, 68, x) * smoothstep(5.5, 3.6, Math.abs(z))   // 往山區的步道出口照樣攤平
+      height[j * G.nx + i] = lerp(at(x * 0.97 / rho, z * 0.97 / rho), 0, se)
+    }
+  }
 }
+// 花園東邊邊緣的高度（山區的地形從這裡接起）
+const gardenEdgeH = (x, z) => { const r = gardenRho(x, z); return terrainHeight(x * 0.97 / r, z * 0.97 / r) }
 
 export function terrainHeight(x, z) {
   const fx = (x - G.x0) / G.cell, fz = (z - G.z0) / G.cell
@@ -289,7 +306,7 @@ function alpBase(X, Z) {
   h += 2.6 * fbm2(X * 0.04 + 11, Z * 0.04 - 7, 4) * smoothstep(84, 100, x)
   h += 1.4 * Math.max(0, fbm2(X * 0.13, Z * 0.13, 3)) * smoothstep(86, 105, x)                   // 小岩塊
   h = Math.min(h * AHS, domeY(X, Z) - 9)
-  return Math.max(0, h) * smoothstep(1.03, 1.16, gardenRho(X, Z))                                 // 花園那側從 0 開始
+  return lerp(gardenEdgeH(X, Z), Math.max(0, h), smoothstep(1.0, 1.25, gardenRho(X, Z)))          // 花園那側從種植坡的高度接起，往裡面慢慢變成山的形狀
 }
 function buildAlpine() {
   // 步道高度：沿線取底層地形再平滑，坡度不超過 30%（走得上去）

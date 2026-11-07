@@ -4,7 +4,7 @@
 // 要在任何材質編譯前 import（world.js 第一行）。
 import * as THREE from 'three'
 
-export const FOG_ZONE = { x0: 66, x1: 100, base: 0.8, valley: 2.4, fall: 8 }
+export const FOG_ZONE = { x0: 62, x1: 92, base: 1.3, valley: 3.0, fall: 8 }   // 2026-11-07：交界那邊霧再濃一點、早一點開始
 
 const C = THREE.ShaderChunk
 const patch = (name, a, b) => {

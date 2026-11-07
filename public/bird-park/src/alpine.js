@@ -406,13 +406,16 @@ function buildInterior(lib, avoid = []) {
       // 樹冠裡面一個實心的深綠圓錐：卡片樹側看會透光，遠看只剩枝幹像竹竿；有這個芯遠看才是一棵實心的針葉樹
       const core = new THREE.ConeGeometry(kind === 'fir' ? 0.075 : 0.12, 0.74, 9, 1, true).translate(0, 0.5, 0)
       const list = []
-      for (let k = 0; k < 12000 && list.length < (kind === 'fir' ? 240 : 180); k++) {
+      for (let k = 0; k < 16000 && list.length < (kind === 'fir' ? 270 : 260); k++) {
         const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
         if (!inAlpine(x, z, 3) || domeRho(x, z) > 0.94) continue
         if (alpineTrailDist(x, z) < 3.2 || alpineStreamDist(x, z) < 2.5 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2.5) continue
         const hgt = alpineHeight(x, z)
         // 冷杉在高處、鐵杉在中坡；山頂附近稀疏（箭竹草原）
-        const want = kind === 'fir' ? ss(7, 16, hgt) * (1 - 0.85 * ss(17, 22, hgt)) : ss(2.5, 7, hgt) * (1 - ss(14, 20, hgt))
+        let want = kind === 'fir' ? ss(7, 16, hgt) * (1 - 0.85 * ss(17, 22, hgt)) : ss(2.5, 7, hgt) * (1 - ss(14, 20, hgt))
+        // 一進山區（花園交界往東）：低處也長一片鐵杉、零星冷杉，不要是空地（2026-11-07 使用者：樹多一點但不要滿）
+        const entry = ss(78, 88, x) * (1 - ss(108, 122, x))
+        want = Math.max(want, entry * (kind === 'fir' ? 0.1 : 0.26))
         if (rnd() > want * (0.55 + 0.45 * fbm2(x * 0.05, z * 0.05 + kind.length, 2) + 0.3)) continue
         // 越高越矮（高山上的冷杉長不高，山頂看得出去）；不能頂到玻璃
         const H = Math.min(((kind === 'fir' ? 9 : 8) + rnd() * 7) * (1 - 0.5 * ss(12, 22, hgt)), domeY(x, z) - hgt - 1.5)
@@ -421,7 +424,7 @@ function buildInterior(lib, avoid = []) {
         const crownR = H * (kind === 'fir' ? 0.19 : 0.29)
         if (alpineTrailDist(x, z) < crownR + 1.3 || bridgeDist(x, z) < crownR + 1.5 || alpineStreamDist(x, z) < crownR * 0.6 + 1.2) continue
         if (nearBird(avoid, x, z, 5.5, 2.5)) continue
-        if (rnd() > ss(86, 100, x)) continue   // 入口一小片空地，先看到山再進林子
+        if (Math.hypot(x - ALP_TRAIL[0][0], z - ALP_TRAIL[0][1]) < 7) continue   // 步道一進來的地方留一小塊空地，看得到山
         if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 16) continue   // 山頂觀景台四周是箭竹草原，看得出去
         list.push({ p: V(x, hgt - 0.2, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(H * (0.85 + rnd() * 0.3), H, H * (0.85 + rnd() * 0.3)), H })
         addCollider(x, z, 0.35, hgt + H)
@@ -532,12 +535,12 @@ function buildInterior(lib, avoid = []) {
       }
       u.x = x; u.z = 0; u.y = alpineHeight(x, 0) + u.lift
     }
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 165; i++) {   // 後面 45 團先放在入口那一段（一進山區就是霧茫茫）
       const mat = new THREE.SpriteMaterial({ map: texs[i % 4], depthWrite: false, transparent: true, fog: true, rotation: (rnd() - 0.5) * 0.4, opacity: 0 })
       const s = new THREE.Sprite(mat), sz = 9 + rnd() * 16
       s.scale.set(sz, sz * (0.38 + rnd() * 0.2), 1); s.renderOrder = 7
       s.userData = { sz, lift: sz * 0.22 + 0.5 + rnd() * 4, op: 0.45 + rnd() * 0.45, ph: rnd() * TAU, sp: 0.25 + rnd() * 0.35, x: 0, z: 0, y: 0 }
-      place(s, X0 + rnd() * (X1 - X0))
+      place(s, i < 120 ? X0 + rnd() * (X1 - X0) : X0 + rnd() * 30)
       g.add(s); mist.push(s)
     }
     var updateMist = (t, dt, camera) => {
