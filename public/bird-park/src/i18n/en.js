@@ -536,7 +536,7 @@ export const BIRDS = {
  },
  "yellowtit": {
   "name": "Yellow Tit",
-  "where": "Broadleaf Branches",
+  "where": "End of the north-slope path, broadleaf woods",
   "intro": "Found only in Taiwan, and protected. Bright yellow with an upright black crest, blue-grey back and wings, and white spots on the wings. Not many are around, so even in the mountains it's hard to find; anyone who sees one is lucky.",
   "facts": [
    "It's a tit found only in Taiwan, often joining mixed flocks of small birds to hunt bugs in the canopy.",
@@ -547,7 +547,7 @@ export const BIRDS = {
  },
  "niltava": {
   "name": "Vivid Niltava",
-  "where": "Valley Trees",
+  "where": "Gorge path below the bridge",
   "intro": "Males are deep sapphire blue above with a bright orange belly, the orange reaching up to the throat in a point, like an arrow pinned on the chest. It sits motionless on branches by mountain streams, waiting for passing insects.",
   "facts": [
    "In Taiwan it's a resident of mid-elevation forests, more often seen in summer.",
@@ -558,7 +558,7 @@ export const BIRDS = {
  },
  "flamecrest": {
   "name": "Flamecrest",
-  "where": "Conifer Forest",
+  "where": "End of the south-slope path, fir forest",
   "intro": "Found only in Taiwan and one of its smallest birds, just about 9 cm long. A fiery orange-red stripe runs down the middle of its crown, edged in black. It lives at Taiwan's highest elevations, flitting quickly through fir and hemlock branches.",
   "facts": [
    "It averages around 2,500 m, one of Taiwan's highest-living endemic birds.",

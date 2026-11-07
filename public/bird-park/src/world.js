@@ -48,10 +48,10 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   scene.add(hemi)
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.3)
   // 溫室是一顆往東拉長的蛋（x -89 相機行 ～ 190）：陰影範圍以 x 50 為中心
-  sun.position.set(25, 80, 30); sun.target.position.set(70, 0, 0)
+  sun.position.set(25, 80, 30); sun.target.position.set(90, 0, 0)
   sun.castShadow = true
   sun.shadow.mapSize.setScalar(PHONE ? 2048 : 4096)
-  Object.assign(sun.shadow.camera, { left: -170, right: 170, top: 125, bottom: -125, near: 1, far: 320 })   // 要蓋到溫室外面的相機行（x 到 -89）和東邊山區（x 到 190）
+  Object.assign(sun.shadow.camera, { left: -190, right: 190, top: 130, bottom: -130, near: 1, far: 360 })   // 要蓋到溫室外面的相機行（x 到 -89）和東邊山區（x 到 270）
   sun.shadow.bias = -0.0004
   sun.shadow.normalBias = 0.06
   sun.shadow.radius = 3

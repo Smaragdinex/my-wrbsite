@@ -254,8 +254,8 @@ const ALL = [
     ],
   },
   {
-    id: 'yellowtit', spot: AM(111, 14), perch: 'branch', view: 180, dist: 2.6, camH: 3.6, lookY: 3.4,
-    name: '黃山雀', sci: 'Machlolophus holsti', where: '闊葉林樹枝',
+    id: 'yellowtit', spot: AM(99, 30.5), perch: 'branch', view: 135,   // 北坡支線走到底 dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: '黃山雀', sci: 'Machlolophus holsti', where: '北坡小路盡頭的闊葉林',
     intro: '台灣特有種，也是保育類。全身鮮黃，頭頂有一撮直立的黑色羽冠，背和翅膀是藍灰色，翅上點綴白斑。數量不多，就算在山上也不容易遇到，遇到的人都很幸運。',
     facts: [
       '是台灣特有的山雀，常和其他小鳥混成一群在樹冠找蟲。',
@@ -265,8 +265,8 @@ const ALL = [
     ],
   },
   {
-    id: 'niltava', spot: AM(117, -12), perch: 'branch', view: 45, dist: 2.8, camH: 3.6, lookY: 3.4,
-    name: '黃腹琉璃', sci: 'Niltava vivida', where: '溪谷旁的樹',
+    id: 'niltava', spot: AM(110.5, -21.5), perch: 'branch', view: 117,   // 吊橋下溪谷支線走到底 dist: 2.8, camH: 3.6, lookY: 3.4,
+    name: '黃腹琉璃', sci: 'Niltava vivida', where: '吊橋下的溪谷小路',
     intro: '公鳥上半身是深邃的寶藍色，肚子是鮮豔的橘黃色，橘色還尖尖地往上延伸到喉嚨，像在胸前別了一個箭頭。常停在溪谷旁的樹枝上，一動也不動地等飛過的蟲。',
     facts: [
       '在台灣是中海拔森林的留鳥，夏天比較常見。',
@@ -276,8 +276,8 @@ const ALL = [
     ],
   },
   {
-    id: 'flamecrest', spot: AM(131, -18.5), perch: 'branch', view: 180, dist: 2.2, camH: 3.6, lookY: 3.4,
-    name: '火冠戴菊鳥', sci: 'Regulus goodfellowi', where: '針葉林',
+    id: 'flamecrest', spot: AM(165.5, -31.5), perch: 'branch', view: 292,   // 南坡冷杉林支線走到底 dist: 2.2, camH: 3.6, lookY: 3.4,
+    name: '火冠戴菊鳥', sci: 'Regulus goodfellowi', where: '南坡小路盡頭的冷杉林',
     intro: '台灣特有種，也是台灣最小的鳥之一，只有約 9 公分。頭頂中央一道橘紅色的「火冠」，兩側鑲黑邊。牠住在台灣最高的地方，常在冷杉、鐵杉的枝葉間快速跳動。',
     facts: [
       '平均出現的海拔約 2,500 公尺，是台灣分布最高的特有種鳥類之一。',
