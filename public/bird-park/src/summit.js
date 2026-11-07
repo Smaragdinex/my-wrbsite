@@ -3,7 +3,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { CABIN, ALP_TRAIL, alpineHeight, addCollider } from './layout.js'
-import { mulberry32 } from './noise.js'
+import { mulberry32, fbm2 } from './noise.js'
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
@@ -13,16 +13,47 @@ function canvasTex(w, h, draw, srgb = true) {
   const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8
   return t
 }
-// 木板牆：直條木板（深色護木漆），每片深淺不同、板縫黑
-const plankTex = (base, n = 8) => canvasTex(256, 256, (x, w, h) => {
-  const r = mulberry32(11)
-  for (let i = 0; i < n; i++) {
-    const c = new THREE.Color(base).offsetHSL((r() - 0.5) * 0.02, 0, (r() - 0.5) * 0.08)
-    x.fillStyle = '#' + c.getHexString(); x.fillRect(i * w / n, 0, w / n, h)
-    for (let k = 0; k < 14; k++) { x.strokeStyle = `rgba(30,18,10,${0.12 + r() * 0.2})`; x.lineWidth = 0.6 + r(); const px = i * w / n + r() * w / n; x.beginPath(); x.moveTo(px, 0); x.bezierCurveTo(px + (r() - 0.5) * 6, h * 0.3, px + (r() - 0.5) * 6, h * 0.7, px + (r() - 0.5) * 4, h); x.stroke() }
-    x.fillStyle = 'rgba(15,9,5,0.85)'; x.fillRect(i * w / n, 0, 2, h)
+// 木紋（2026-11-07 改寫實）：每個像素算——年輪條紋順著木頭方向（貼圖的 y），被低頻雜訊和節疤推彎；節疤是深色的橢圓、
+// 旁邊的紋路繞過去；每片板子顏色差一點、板縫是黑的；weather 讓表面偏灰（風吹日曬）。同時出一張凹凸圖（紋路凹、板縫最深）。
+// 回傳 { map, bump }，都是 RepeatWrapping，貼圖一格 = S 公尺（boxAt、圓木照實際尺寸算 UV，不會拉長）
+function woodTex({ seed = 1, light = [196, 150, 104], dark = [120, 82, 50], planks = 1, gap = 0, knots = 5, ring = 0.07, weather = 0 }) {
+  const N = 512, r = mulberry32(seed)
+  const col = new Uint8ClampedArray(N * N * 4), bmp = new Uint8ClampedArray(N * N * 4)
+  const pw = N / planks, tint = Array.from({ length: planks }, () => (r() - 0.5) * 0.25)
+  const K = Array.from({ length: knots }, () => ({ x: r() * N, y: r() * N, s: 4 + r() * 7 }))
+  const g = [light, dark].map((c) => c.map((v) => v * (1 - weather) + 128 * weather))
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const pi = Math.floor(x / pw), lu = x - pi * pw
+    let d = fbm2(x * 0.006 + pi * 7.3 + seed, y * 0.0018, 3) * 46 + Math.sin(y * 0.01 + pi * 2) * 5
+    let kd = 0
+    for (const k of K) {
+      // 節疤：貼圖上下接得起來（y 方向重複）
+      let dx = x - k.x, dy = y - k.y; if (dy > N / 2) dy -= N; if (dy < -N / 2) dy += N
+      const e = dx * dx + (dy * 0.32) ** 2, rr = k.s * k.s
+      d += 16 * k.s * dx / (Math.sqrt(e) + 2) * Math.exp(-e / (rr * 14))   // 紋路繞過節疤
+      kd = Math.max(kd, Math.exp(-(dx * dx + dy * dy) / (rr * 1.4)))
+    }
+    const t = (lu + d) * ring, band = 0.5 + 0.5 * Math.sin(t * Math.PI * 2), late = band ** 4   // 晚材：細細深色的那一圈
+    const fine = fbm2(x * 0.9, y * 0.012, 2)   // 細的導管紋
+    let m = 0.15 + late * 0.55 + fine * 0.22 + tint[pi] + kd * 0.6
+    m += (fbm2(x * 0.02 + 40, y * 0.02, 3)) * 0.15   // 大片的深淺
+    m = Math.min(1, Math.max(0, m))
+    const i = (y * N + x) * 4
+    for (let c = 0; c < 3; c++) col[i + c] = g[0][c] + (g[1][c] - g[0][c]) * m
+    let b = 150 - late * 70 - fine * 30 - kd * 40
+    if (gap && (lu < gap || lu > pw - gap * 0.5)) { for (let c = 0; c < 3; c++) col[i + c] *= 0.25; b = 10 }
+    col[i + 3] = 255; bmp[i] = bmp[i + 1] = bmp[i + 2] = b; bmp[i + 3] = 255
   }
-})
+  const mk = (data, srgb) => { const c = document.createElement('canvas'); c.width = c.height = N; c.getContext('2d').putImageData(new ImageData(data, N, N), 0, 0); const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t }
+  return { map: mk(col, true), bump: mk(bmp, false) }
+}
+const S = 1.4   // 木紋貼圖一格幾公尺
+// BoxGeometry 的 UV 照每一面的實際大小縮放（不然每個盒子都把整張木紋拉進去）
+function boxUV(geo, w, h, d) {
+  const uv = geo.attributes.uv, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]]
+  for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, uv.getX(i) * dims[f][0] / S, uv.getY(i) * dims[f][1] / S) }
+  return geo
+}
 
 export function buildSummit({ g, avoid = [], printsUrl }) {
   const rnd = mulberry32(2026)
@@ -32,15 +63,31 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   const rot = new THREE.Euler(0, C.yaw, 0)
   const lists = {}
   const put = (mat, geo) => (lists[mat] ??= []).push(geo.index ? geo.toNonIndexed() : geo)
-  const boxAt = (mat, w, h, d, u, y, v, ry = 0, rx = 0) => put(mat, new THREE.BoxGeometry(w, h, d).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, C.yaw + ry, 0, 'YXZ')).setPosition(at(u, y, v))))
+  const boxAt = (mat, w, h, d, u, y, v, ry = 0, rx = 0) => put(mat, boxUV(new THREE.BoxGeometry(w, h, d), w, h, d).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, C.yaw + ry, 0, 'YXZ')).setPosition(at(u, y, v))))
   const cylAt = (mat, r0, r1, h, u, y, v, seg = 10) => put(mat, new THREE.CylinderGeometry(r0, r1, h, seg).translate(0, 0, 0).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(rot).setPosition(at(u, y, v))))
   const tubeW = (mat, a, b, r) => put(mat, new THREE.TubeGeometry(new THREE.LineCurve3(a, b), 1, r, 6))
 
+  const woodMat = (o, rough) => { const t = woodTex(o); return new THREE.MeshStandardMaterial({ map: t.map, bumpMap: t.bump, bumpScale: 1.5, roughness: rough }) }
   const mats = {
-    wall: new THREE.MeshStandardMaterial({ map: plankTex('#6b4a32'), roughness: 0.9 }),
-    wallIn: new THREE.MeshStandardMaterial({ map: plankTex('#b8875a', 10), roughness: 0.85 }),
-    trim: new THREE.MeshStandardMaterial({ color: 0x3b2a1e, roughness: 0.85 }),
-    floor: new THREE.MeshStandardMaterial({ map: plankTex('#8a6442', 12), roughness: 0.8 }),
+    log: woodMat({ seed: 3, light: [178, 134, 88], dark: [104, 70, 42], knots: 7, ring: 0.05, weather: 0.12 }, 0.85),   // 圓木：剝了皮、上過護木油的雲杉
+    wall: woodMat({ seed: 5, light: [150, 108, 72], dark: [86, 58, 36], planks: 6, gap: 3, knots: 4, ring: 0.08, weather: 0.25 }, 0.9),   // 山牆的直條木板（比較舊）
+    trim: woodMat({ seed: 9, light: [118, 82, 54], dark: [62, 40, 24], knots: 3, ring: 0.09 }, 0.8),
+    floor: woodMat({ seed: 13, light: [184, 140, 96], dark: [112, 78, 48], planks: 5, gap: 2, knots: 6, ring: 0.07 }, 0.7),
+    chink: new THREE.MeshStandardMaterial({ color: 0xc9c0ad, roughness: 1 }),
+    endgrain: new THREE.MeshStandardMaterial({ roughness: 0.95, map: canvasTex(256, 256, (x, w, h) => {   // 鋸開的木頭端面：同心年輪、放射狀乾裂、外圈一點樹皮色
+      const r = mulberry32(17), cx = w / 2 + 6, cy = h / 2 - 4
+      x.fillStyle = '#7a5a3c'; x.fillRect(0, 0, w, h)
+      for (let k = 60; k > 0; k--) {
+        const rr = k / 60 * w * 0.49, l = 150 + (k % 3 === 0 ? -38 : 0) + r() * 14 - k * 0.6
+        x.fillStyle = `rgb(${l + 30},${l - 5},${l - 45})`; x.beginPath()
+        for (let a = 0; a <= 48; a++) { const t = a / 48 * TAU, j = 1 + 0.03 * Math.sin(t * 3 + k) + 0.015 * Math.sin(t * 7); x.lineTo(cx + Math.cos(t) * rr * j, cy + Math.sin(t) * rr * j) }
+        x.fill()
+      }
+      x.strokeStyle = 'rgba(40,24,12,0.7)'; x.lineWidth = 1.5
+      for (let i = 0; i < 5; i++) { const t = r() * TAU, l0 = 6 + r() * 20, l1 = 60 + r() * 50; x.beginPath(); x.moveTo(cx + Math.cos(t) * l0, cy + Math.sin(t) * l0); x.lineTo(cx + Math.cos(t + 0.05) * l1, cy + Math.sin(t + 0.05) * l1); x.stroke() }
+      const gr = x.createRadialGradient(w / 2, h / 2, w * 0.4, w / 2, h / 2, w * 0.5); gr.addColorStop(0, 'rgba(60,40,24,0)'); gr.addColorStop(1, 'rgba(60,40,24,0.9)')
+      x.fillStyle = gr; x.fillRect(0, 0, w, h)
+    }) }),   // 圓木之間的填縫（灰白的灰泥）
     roof: new THREE.MeshStandardMaterial({ map: canvasTex(256, 256, (x, w, h) => {   // 深灰石板瓦，一排一排錯開
       x.fillStyle = '#3c4044'; x.fillRect(0, 0, w, h)
       const r = mulberry32(5)
@@ -71,8 +118,40 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   for (const [u, v, w, d] of [[0, D / 2, W + 0.2, 0.3], [0, -D / 2, W + 0.2, 0.3], [W / 2, 0, 0.3, D], [-W / 2, 0, 0.3, D]]) boxAt('stone', w, 0.5, d, u, -0.2, v)
   boxAt('floor', W - 0.05, 0.08, D - 0.05, 0, 0.0, 0)
   // 牆：前牆中間留門、兩側開窗；後牆一扇大窗（看出去是山谷）；兩側牆各一扇窗
-  const wall = (u0, u1, v, y0, y1) => { const w = Math.abs(u1 - u0); if (w < 0.01 || y1 <= y0) return; boxAt('wall', w, y1 - y0, T, (u0 + u1) / 2, (y0 + y1) / 2, v); boxAt('wallIn', w, y1 - y0, 0.01, (u0 + u1) / 2, (y0 + y1) / 2, v - Math.sign(v) * (T / 2 + 0.006)) }
-  const wallS = (v0, v1, u, y0, y1) => { const d = Math.abs(v1 - v0); if (d < 0.01 || y1 <= y0) return; boxAt('wall', T, y1 - y0, d, u, (y0 + y1) / 2, (v0 + v1) / 2); boxAt('wallIn', 0.01, y1 - y0, d, u - Math.sign(u) * (T / 2 + 0.006), (y0 + y1) / 2, (v0 + v1) / 2) }
+  // 牆＝一根根橫放的圓木（直徑 0.28，每 0.26 公尺一根，中間填灰白灰泥）；前後牆和兩側牆差半根，轉角的木頭交叉、往外伸出 0.3 公尺
+  const LR = 0.145, LS = 0.26
+  const logRun = (axis, a0, a1, fixed, y0, y1) => {
+    const off = axis === 'u' ? 0 : LS / 2
+    for (let k = 0; ; k++) {
+      const yc = 0.14 + off + k * LS; if (yc > WH + 0.05) break
+      if (yc < y0 - 0.02 || yc > y1 + 0.02) continue
+      const lo = Math.min(a0, a1), hi = Math.max(a0, a1), half = axis === 'u' ? W / 2 : D / 2
+      const e0 = lo <= -half + 0.01 ? lo - 0.32 : lo, e1 = hi >= half - 0.01 ? hi + 0.32 : hi, L = e1 - e0, c = (e0 + e1) / 2
+      const rs = 1 + (Math.sin(k * 3.7 + fixed * 5) * 0.06)   // 每根粗細差一點
+      const geo = new THREE.CylinderGeometry(LR * rs, LR * rs * 1.03, L, 14, 1)
+      const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (TAU * LR) / S * 3 + k * 0.37, uv.getY(i) * L / S)
+      geo.rotateZ(Math.PI / 2)                           // 軸轉成沿 local x
+      if (axis === 'v') geo.rotateY(Math.PI / 2)          // 側牆：沿 local z
+      const p = axis === 'u' ? at(c, yc, fixed) : at(fixed, yc, c)
+      put('log', geo.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(rot).setPosition(p)))
+      // 轉角伸出去的那頭：鋸開的端面看得到年輪
+      for (const [e, sg] of [[e0, -1], [e1, 1]]) {
+        if (Math.abs(e) < half + 0.1) continue
+        const disc = new THREE.CircleGeometry(LR * rs * 1.01, 16).rotateY(sg * Math.PI / 2 + (axis === 'v' ? -Math.PI / 2 : 0))
+        const pe = axis === 'u' ? at(e + sg * 0.003, yc, fixed) : at(fixed, yc, e + sg * 0.003)
+        put('endgrain', disc.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(rot).setPosition(pe)))
+      }
+      // 這根上面的填縫（只在牆的範圍內，轉角伸出去那段沒有）
+      {
+        const sl = hi - lo, cc = (lo + hi) / 2
+        const ch = axis === 'u' ? boxUV(new THREE.BoxGeometry(sl, 0.07, T * 0.9), sl, 0.07, T * 0.9) : boxUV(new THREE.BoxGeometry(T * 0.9, 0.07, sl), T * 0.9, 0.07, sl)
+        const pc = axis === 'u' ? at(cc, yc + LS / 2, fixed) : at(fixed, yc + LS / 2, cc)
+        if (yc + LS / 2 < Math.min(y1, WH)) put('chink', ch.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(rot).setPosition(pc)))
+      }
+    }
+  }
+  const wall = (u0, u1, v, y0, y1) => { if (Math.abs(u1 - u0) > 0.01 && y1 > y0) logRun('u', u0, u1, v, y0, y1) }
+  const wallS = (v0, v1, u, y0, y1) => { if (Math.abs(v1 - v0) > 0.01 && y1 > y0) logRun('v', v0, v1, u, y0, y1) }
   const win = (axis, a0, a1, fixed, y0, y1) => {   // 窗框＋玻璃
     const c = (a0 + a1) / 2, w = a1 - a0, h = y1 - y0, ym = (y0 + y1) / 2
     if (axis === 'u') { boxAt('glass', w, h, 0.02, c, ym, fixed); for (const yy of [y0, y1]) boxAt('trim', w + 0.12, 0.08, T + 0.06, c, yy, fixed); for (const uu of [a0, a1, c]) boxAt('trim', 0.07, h, T + 0.04, uu, ym, fixed) }
@@ -95,7 +174,8 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
     const v = sv * D / 2, tri = new THREE.BufferGeometry()
     const p0 = at(-W / 2, WH, v), p1 = at(W / 2, WH, v), p2 = at(0, PEAK, v)
     tri.setAttribute('position', new THREE.Float32BufferAttribute([p0.x, p0.y, p0.z, p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p0.x, p0.y, p0.z, p2.x, p2.y, p2.z, p1.x, p1.y, p1.z], 3))
-    tri.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 0.5, 0, 0, 0.5, 0.5, 1, 0], 2)); tri.computeVertexNormals()
+    const ux = (u) => (u + W / 2) / S, vy = (y) => y / S
+    tri.setAttribute('uv', new THREE.Float32BufferAttribute([ux(-W / 2), vy(WH), ux(W / 2), vy(WH), ux(0), vy(PEAK), ux(-W / 2), vy(WH), ux(0), vy(PEAK), ux(W / 2), vy(WH)], 2)); tri.computeVertexNormals()
     put('wall', tri)
   }
   // 屋頂：兩片斜板（屋脊沿 u），出簷 0.5；屋脊樑、四角柱
@@ -106,6 +186,9 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
       // 屋脊沿前後（v），兩片往左右（u）斜下去：先轉屋子的方向，再繞屋子的前後軸傾斜
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, C.yaw, 0)).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), -su * ang))
       put('roof', new THREE.BoxGeometry(L, 0.1, D + 1.0).applyMatrix4(new THREE.Matrix4().compose(mid, q, V(1, 1, 1))))
+      // 屋裡看上去是木板天花板（不是石板瓦的背面）
+      const ceil = boxUV(new THREE.BoxGeometry(L, 0.03, D + 1.0), L, 0.03, D + 1.0)
+      put('wall', ceil.applyMatrix4(new THREE.Matrix4().compose(mid.clone().add(V(0, -0.075, 0)), q, V(1, 1, 1))))
     }
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, C.yaw, 0))
     put('trim', new THREE.BoxGeometry(0.16, 0.16, D + 1.0).applyMatrix4(new THREE.Matrix4().compose(at(0, PEAK + 0.05, 0), q, V(1, 1, 1))))
@@ -139,7 +222,7 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   cylAt('stone', 0.045, 0.04, 0.1, -1.4, 0.84, -D / 2 + 0.6)
   boxAt('trim', 0.5, 0.05, 0.5, -1.9, 0.45, -D / 2 + 1.2); for (const [du, dv] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) boxAt('trim', 0.04, 0.45, 0.04, -1.9 + du, 0.22, -D / 2 + 1.2 + dv)   // 小凳子
   // 雙層床（右邊牆）
-  for (const y of [0.4, 1.55]) { boxAt('trim', 0.95, 0.12, 2.0, W / 2 - 0.55, y, -0.6); boxAt('blanket', 0.9, 0.12, 1.6, W / 2 - 0.55, y + 0.12, -0.4); boxAt('wallIn', 0.6, 0.1, 0.35, W / 2 - 0.55, y + 0.17, -1.35) }
+  for (const y of [0.4, 1.55]) { boxAt('trim', 0.95, 0.12, 2.0, W / 2 - 0.55, y, -0.6); boxAt('blanket', 0.9, 0.12, 1.6, W / 2 - 0.55, y + 0.12, -0.4); boxAt('chink', 0.6, 0.1, 0.35, W / 2 - 0.55, y + 0.17, -1.35) }
   for (const [du, dv] of [[-0.5, -1.6], [0.45, -1.6], [-0.5, 0.4], [0.45, 0.4]]) boxAt('trim', 0.07, 2.0, 0.07, W / 2 - 0.55 + du, 1.0, dv)
   // 柴爐（左後角）＋煙管接到煙囪
   boxAt('iron', 0.55, 0.6, 0.5, -W / 2 + 0.5, 0.35, -0.3); cylAt('iron', 0.08, 0.08, WH + 1.4 - 0.65, -W / 2 + 0.5, 0.65 + (WH + 1.4 - 0.65) / 2, -0.3)
