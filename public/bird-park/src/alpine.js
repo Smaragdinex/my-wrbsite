@@ -12,7 +12,7 @@ import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
 import { mulberry32, fbm2 } from './noise.js'
-import { dayLight } from './structures.js'
+import { dayLight, mistLevel } from './structures.js'
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
@@ -780,13 +780,15 @@ function buildInterior(lib, avoid = []) {
         u.x += u.sp * dt; u.z += Math.sin(t * 0.03 + u.ph) * 0.15 * dt
         if (u.x > X1 || !inAlpine(u.x, u.z, 3)) place(s, X0 + rnd() * 6)
         // 地形變高就慢慢往上抬，不插進山坡
-        const gy = alpineHeight(u.x, u.z) + u.lift
+        const mk = mistLevel.value
+        const gy = alpineHeight(u.x, u.z) + u.lift * (1 - 0.45 * mk)                   // 清晨、晚上的霧貼著地面、沉在山谷裡
         u.y += (gy - u.y) * Math.min(1, dt * 0.3)
         s.position.set(u.x, u.y + Math.sin(t * 0.2 + u.ph) * 0.4, u.z)
         const d = s.position.distanceTo(cp)
         const life = 0.6 + 0.4 * Math.sin(t * 0.05 + u.ph * 3)                     // 慢慢變濃變淡
         const edge = ss(X0, X0 + 8, u.x) * (1 - ss(X1 - 10, X1, u.x))                // 從西邊進來時淡入
-        s.material.opacity = u.op * life * edge * ss(u.sz * 0.25, u.sz * 0.7, d)     // 太近就淡掉
+        s.material.opacity = Math.min(1, u.op * life * (1 + 1.1 * mk)) * edge * ss(u.sz * 0.25, u.sz * 0.7, d)     // 太近就淡掉；有霧的時段濃一倍
+        s.material.color.setScalar(0.12 + 0.88 * dayLight.value)   // 霧團不受光：跟著天色變暗（晚上原本白白亮亮的，像在發光）
         s.visible = s.material.opacity > 0.01
       }
     }
@@ -804,7 +806,7 @@ export function createAlpine({ scene, lib, avoid = [] }) {
     animate(t, dt, camera) {
       if (!interior) return
       interior.waterU.uTime.value = t
-      for (const sp of interior.spray) { const u = sp.userData; sp.position.y = u.y0 + Math.sin(t * 2.3 + u.ph) * 0.15; sp.material.opacity = 0.35 + 0.2 * Math.sin(t * 3.1 + u.ph * 2); const k = u.s0 * (1 + 0.12 * Math.sin(t * 1.7 + u.ph)); sp.scale.set(k * 1.6, k, 1) }
+      for (const sp of interior.spray) { const u = sp.userData; sp.position.y = u.y0 + Math.sin(t * 2.3 + u.ph) * 0.15; sp.material.opacity = 0.35 + 0.2 * Math.sin(t * 3.1 + u.ph * 2); const k = u.s0 * (1 + 0.12 * Math.sin(t * 1.7 + u.ph)); sp.scale.set(k * 1.6, k, 1); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value) }
       interior.updateMist(t, dt, camera)
     },
   }

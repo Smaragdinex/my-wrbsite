@@ -1,7 +1,7 @@
 // 第一人稱：WASD 走、Shift 跑、C 蹲低慢慢走（鳥比較不會被嚇跑）、空白鍵跳、滑鼠看
 import * as THREE from 'three'
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js'
-import { supportAt, blocked, SPAWN } from './layout.js'
+import { supportAt, blocked, SPAWN, domeRho } from './layout.js'
 
 // 速度照「不會 3D 暈」調：走路 3.2 m/s（原本 4.2 太快）、跑 6.2
 const EYE = 1.65, EYE_LOW = 1.05, WALK = 3.2, RUN = 6.2, SNEAK = 1.3, GRAV = 22, JUMP = 7
@@ -27,20 +27,26 @@ export function createPlayer(camera, dom) {
 
   addEventListener('keydown', (e) => {
     keys.add(e.code)
-    if (e.code === 'Space' && st.grounded && controls.isLocked) { st.vy = JUMP; st.grounded = false }
+    if (e.code === 'Space' && st.grounded && controls.isLocked) { st.vy = JUMP; st.grounded = false; st.takeoff = st.feet; st.takeoffOwner = st.owner }
   })
   addEventListener('keyup', (e) => keys.delete(e.code))
   addEventListener('blur', () => keys.clear())
 
   const fwd = new THREE.Vector3(), right = new THREE.Vector3()
 
+  // 2026-11-07：玩家會跳下旁邊的山、步道、吊橋，掉到爬不回來的地方（例如中央那座山腳的水池：四面都算「不能走」，整個卡死）。
+  // 規則：走路、跳躍都不能越過「比出發點低太多」的邊——
+  //   站在步道／觀景台／吊橋上（owner ≠ 0）：比腳底低 0.6 公尺以上就是欄杆外，走不過去、也跳不過去
+  //   站在地上：跳起來不能落到比起跳點低 1.5 公尺以上的地方（不能從山坡、懸崖跳下去）
+  // 萬一已經卡在不該站的地方（舊存檔、從外面掉進來），原地本身就算「擋住」：那就放行，讓人自己走出來。
   function tryMove(nx, nz) {
-    if (blocked(nx, nz, st.feet)) return false
-    // 站在步道／觀景台上時，不能從欄杆邊走下去
-    if (st.grounded && st.owner !== 0) {
-      const s = supportAt(nx, nz, st.feet)
-      if (s.y < st.feet - 0.6) return false
+    if (blocked(nx, nz, st.feet)) {
+      if (!blocked(st.x, st.z, st.feet) || domeRho(nx, nz) > 0.955) return false   // 原地是合法的、或前面是溫室的牆：照常擋
     }
+    const ref = st.grounded ? st.feet : (st.takeoff ?? st.feet), owner = st.grounded ? st.owner : (st.takeoffOwner ?? 0)
+    const s = supportAt(nx, nz, st.grounded ? st.feet : Math.max(st.feet, ref))
+    if (owner !== 0 && s.y < ref - 0.6) return false   // 落點是下一圈的步道也一樣擋（第一版只擋落到地面，從螺旋步道跳到下一圈掉了 11 公尺）
+    if (!st.grounded && owner === 0 && s.y < ref - 1.5) return false
     st.x = nx; st.z = nz
     return true
   }

@@ -6,7 +6,7 @@ import { createAlpine } from './alpine.js'
 import { createHalls } from './halls.js'
 import { createShadowCache } from './shadowcache.js'
 import { createCoast } from './coast.js'
-import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight } from './structures.js'
+import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants } from './plants.js'
 import { buildStops } from './stops.js'
@@ -15,6 +15,7 @@ import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
 import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight } from './layout.js'
+const FOG_D0 = 0.0052   // 白天的霧；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
@@ -31,7 +32,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   renderer.toneMappingExposure = 1.05
 
   const scene = new THREE.Scene()
-  scene.fog = new THREE.FogExp2(new THREE.Color(0xc9d8d6), 0.0052)
+  scene.fog = new THREE.FogExp2(new THREE.Color(0xc9d8d6), FOG_D0)
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2000)
   camera.layers.enable(1)   // layer 1：草葉（水面倒影的鏡頭不畫）
 
@@ -117,7 +118,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       s.position.set(MTN.x + Math.cos(a) * r, 22 + Math.random() * 14, MTN.z + Math.sin(a) * r)
       const k = 10 + Math.random() * 14
       s.scale.set(k, k * 0.55, 1)
-      s.userData = { a, r, speed: 0.01 + Math.random() * 0.02, y: s.position.y, ph: Math.random() * 6 }
+      s.userData = { a, r, speed: 0.01 + Math.random() * 0.02, y: s.position.y, ph: Math.random() * 6, op0: m.opacity }
       s.renderOrder = 6
       scene.add(s)
       clouds.push(s)
@@ -147,6 +148,22 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     for (let i = 0; i < n; i++) ripple(x + (Math.random() - 0.5) * 0.4 * i, z + (Math.random() - 0.5) * 0.4 * i, 0.5 + Math.random() * 0.8)
   }
 
+  // 地面的霧（2026-11-07）：晚上、清晨才出現（mistLevel），貼著花園地面一層層慢慢飄；白天完全看不到。
+  // 霧團本身不受光：顏色跟著天色變暗，不然晚上會像一團團發光的東西
+  const groundMist = []
+  {
+    const tex = softDotTex()
+    let n = 0
+    for (let k = 0; k < 800 && n < 110; k++) {
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()), x = Math.cos(a) * r * 70, z = Math.sin(a) * r * 52
+      if (!insideGarden(x, z, 0.92) || poolQ(x, z) < 1.1 || Math.hypot(x - MTN.x, z - MTN.z) < 14) continue
+      const m = new THREE.SpriteMaterial({ map: tex, color: 0xeef3f3, transparent: true, opacity: 0, depthWrite: false, fog: true })
+      const sp = new THREE.Sprite(m), sz = 10 + Math.random() * 12
+      sp.scale.set(sz, sz * 0.32, 1); sp.renderOrder = 6; sp.visible = false
+      sp.userData = { x, z, y: terrainHeight(x, z) + 0.4 + Math.random() * 0.9, sz, op: 0.55 + Math.random() * 0.35, ph: Math.random() * 6, v: 0.15 + Math.random() * 0.2 }
+      scene.add(sp); groundMist.push(sp); n++
+    }
+  }
   // 每格：風、水、鳥（只更新鏡頭附近的，骨架動畫很吃 CPU）、水霧、雲
   function tick(t, dt, { phone = false } = {}) {
     lodUpdate(camera)
@@ -159,6 +176,19 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt, phone)
     water.mist.update(dt, camera)
     time?.tick(t, dt)
+    {
+      const mk = mistLevel.value, tint = 0.2 + 0.8 * Math.min(1, dayLight.value * 1.4), cp = camera.position   // 清晨天剛亮，霧就先白起來
+      for (const sp of groundMist) {
+        const u = sp.userData
+        if (mk < 0.02) { sp.visible = false; continue }
+        u.x += u.v * dt * 0.6; if (!insideGarden(u.x, u.z, 0.93)) u.x -= 40   // 慢慢往東飄，飄到邊就繞回西邊
+        sp.position.set(u.x, u.y + Math.sin(t * 0.15 + u.ph) * 0.2, u.z)
+        const d = sp.position.distanceTo(cp)
+        sp.material.opacity = Math.min(1, u.op * mk * 1.2 * (0.75 + 0.25 * Math.sin(t * 0.07 + u.ph))) * THREE.MathUtils.smoothstep(d, u.sz * 0.2, u.sz * 0.65)
+        sp.material.color.setScalar(tint)
+        sp.visible = sp.material.opacity > 0.01
+      }
+    }
     for (const c of clouds) {
       const u = c.userData
       u.a += u.speed * dt
@@ -261,6 +291,11 @@ function buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera 
     hemi.groundColor.copy(GND_N).lerp(GND_D, day)
     scene.environmentIntensity = lerp(0.05, 0.55, day)
     scene.fog.color.copy(FOG_N).lerp(FOG_D, day).lerp(FOG_K, dusk * 0.6)
+    // 晚上、清晨起霧（2026-11-07）：清晨 6 點最濃，9 點前散掉；晚上 9 點後到天亮一直有霧
+    const hh = st.hour, morning = Math.exp(-(((hh - 6.2) / 1.5) ** 2)), night = Math.max(ss(hh, 19, 21.5), 1 - ss(hh, 3.5, 6)) * 0.75   // three 的 smoothstep 是 (x, min, max)
+    const mk = Math.min(1, Math.max(morning, night)); mistLevel.value = mk
+    scene.fog.density = FOG_D0 * (1 + 0.75 * mk)
+    for (const c of clouds) c.material.opacity = c.userData.op0 * (1 + 1.4 * mk)
     // 晚上眼睛會適應：曝光拉高一點，不然整片黑什麼都看不到
     renderer.toneMappingExposure = lerp(1.7, 1.05, day)
     st.lamp = 1 - ss(day, 0.3, 0.65)

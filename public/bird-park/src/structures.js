@@ -15,6 +15,8 @@ const tmpM = new THREE.Matrix4()
 /* ---------- 天空與外面的城市 ---------- */
 // 日夜共用的亮度：dayLight 白天 1 → 晚上 0；duskLight 黃昏、清晨的那一段（0～1）。world.setTime 改值，各個著色器直接讀
 export const dayLight = { value: 1 }, duskLight = { value: 0 }
+// 霧氣量：白天 0；晚上 0.75、清晨（6 點前後）最濃 1，9 點前散掉。world.setTime 改值，霧、山頂雲、山區的霧團照它加濃
+export const mistLevel = { value: 0 }
 export function buildSky(scene) {
   const geo = new THREE.SphereGeometry(900, 32, 16)
   // 日夜：uDay 白天 1、晚上 0；uDusk 黃昏／清晨那一段地平線變橘；晚上有星星和月亮（world.setTime 在改）

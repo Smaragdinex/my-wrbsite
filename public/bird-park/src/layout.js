@@ -577,8 +577,9 @@ export function blocked(x, z, feet) {
     // 玩家一小步 0.15 公尺：往上超過 0.13（約 41 度）爬不上去；往下只有懸崖（掉超過 2.5 公尺）才擋，跳起來在空中不會被擋住
     const h = alpineHeight(x, z)
     // 步道上（本來就平緩）一步可以高到 0.35：吊橋兩端的橋面跟地面差 20～30 公分，不然會卡在橋頭
-    if (h > feet + (alpineTrailDist(x, z) < 1.5 ? 0.35 : 0.13) || h < feet - 2.5) return true
+    if (h > feet + (alpineTrailDist(x, z) < 1.5 ? 0.35 : 0.13) || h < feet - 0.9) return true   // 往下一步掉超過 0.9 公尺＝懸崖邊，不能走下去（原本 2.5，會走下爬不回來的地方）
     if (h < ALP_POND.water + 0.05 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 1) return true   // 水池不能走進去
+    if (alpineStreamDist(x, z) < 3.5 && streamWater(alpineStreamS(x, z)) - h > 0.3) return true   // 溪裡的潭（水深超過 0.3）不能走進去：潭壁陡，走進去爬不出來
     for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
     return false
   }
