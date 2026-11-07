@@ -382,6 +382,8 @@ export function alpineStreamS(x, z) {
   const st = ALP_STREAM, [, i, t] = polyDist(x, z, st)
   return st.S[i] + t * (st.S[i + 1] - st.S[i])
 }
+// 跌水的門檻不是一條橫的直線：每道門檻斜一點、中間往下游凸一點（很平滑，水面網格跟得上）
+export const streamLatOff = (s, lat) => 0.35 * Math.sin(s * 0.53 + 1.0) * lat + 0.14 * lat * lat
 export const streamWater = (s) => sampleS(ALP_STREAM.W, s)
 export const streamBed = (s) => sampleS(ALP_STREAM.B, s)
 
@@ -413,16 +415,19 @@ function buildAlpine() {
     let h = alpBase(x, z)
     // 溪谷：V 字形，越靠溪越低
     const [ds, si, stt] = polyDist(x, z, st)
-    const ss_ = st.S[si] + stt * (st.S[si + 1] - st.S[si])
-    const bed = streamBed(ss_), wl = streamWater(ss_)
+    const sx = st[si + 1][0] - st[si][0], sz = st[si + 1][1] - st[si][1], lat = ds * (sx * (z - st[si][1]) - sz * (x - st[si][0]) >= 0 ? 1 : -1)
+    const ss_ = st.S[si] + stt * (st.S[si + 1] - st.S[si]), sAdj = ss_ + streamLatOff(ss_, lat)
+    const bed = streamBed(sAdj), wl = streamWater(sAdj)
     aStream[k] = ds
     const gk = gorgeK(x, z)
-    // 斷面：水裡是 U 形的潭底；水面上方先是一道陡一點的岸（0.4～0.8 公尺），再接原本的坡（峽谷那段比較陡）
-    const half = 1.5 + 0.6 * fbm2(ss_ * 0.18, 3.3, 2) + 0.4 * gk                    // 水面半寬：沿溪寬窄不一
+    // 斷面（參考台灣山溪的影片）：水邊不是直的——寬度用 2D 雜訊，兩岸不對稱、一凹一凸；
+    // 水裡是 U 形的潭底；岸是緩緩爬上去的坡，坡上有一塊塊凸起的石頭（不是一面平滑的牆）
+    const half = Math.max(0.9, 1.25 + 1.5 * (fbm2(x * 0.2 + 5.1, z * 0.2 - 2.7, 3) - 0.5) + 0.35 * gk)
     const inWater = bed + (wl - bed) * smoothstep(0, half, ds) ** 2
-    const bank = lerp(wl + 0.12, h, smoothstep(half + 0.6, 9 - 4.5 * gk, ds))
-    h = ds < half ? inWater : Math.min(h, lerp(inWater, bank, smoothstep(half, half + 0.6, ds)))
-    if (ds > half) h = Math.max(h, Math.min(bank, wl + 0.12 + (ds - half) * 0.8))   // 岸一定比水面高（水才不會溢出去）
+    const lump = 1.1 * Math.max(0, fbm2(x * 0.42 - 3.3, z * 0.42 + 8.1, 3) - 0.35) * smoothstep(half, half + 1.2, ds) * smoothstep(10, 4, ds)
+    const bank = lerp(wl + 0.1, h, smoothstep(half + 0.4, Math.max(6.5, 10 - 3 * gk), ds)) + lump
+    h = ds < half ? inWater : Math.min(h + lump, lerp(inWater, bank, smoothstep(half, half + 0.9, ds)))
+    if (ds > half) h = Math.max(h, Math.min(bank, wl + 0.1 + (ds - half) * 0.6))   // 岸一定比水面高（水才不會溢出去）
     // 水池
     const dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
     h = lerp(ALP_POND.water - 1.1, h, smoothstep(ALP_POND.r * 0.6, ALP_POND.r + 2.5, dp))
@@ -445,10 +450,11 @@ function buildAlpine() {
     // 吊橋底下：整段挖下去（原本只有峽谷中間低，兩端的坡比橋面還高，擋在橋前面）；兩端接到橋頭
     {
       const ba = tr[ALP_BRIDGE.a], bb = tr[ALP_BRIDGE.a + 2], [db, tb] = segDist(x, z, ba[0], ba[1], bb[0], bb[1])
-      if (db < BRIDGE_DIM.hw + 9 && tb > 0 && tb < 1) {   // 只在兩個橋頭之間（橋頭外面是步道，不動）
+      if (db < BRIDGE_DIM.hw + 14 && tb > 0 && tb < 1) {   // 只在兩個橋頭之間（橋頭外面是步道，不動）
+        // 2026-11-07：原本挖 7 公尺、兩側 8 公尺內就收，橋下變成一條方方正正的溝；改成淺一點、兩側慢慢收（溪谷本身已經夠深）
         const deckY = lerp(prof[ALP_BRIDGE.a], prof[ALP_BRIDGE.a + 2], tb) - BRIDGE_DIM.sag * Math.sin(Math.PI * tb), m = Math.min(tb, 1 - tb)
-        const under = deckY - 0.45 * smoothstep(0, 0.04, m) - 7 * smoothstep(0.03, 0.3, m)
-        h = Math.min(h, lerp(under, h, smoothstep(BRIDGE_DIM.hw + 1.2, BRIDGE_DIM.hw + 9, db)))
+        const under = deckY - 0.45 * smoothstep(0, 0.04, m) - 2.5 * smoothstep(0.03, 0.35, m)
+        h = Math.min(h, lerp(under, h, smoothstep(BRIDGE_DIM.hw + 0.8, BRIDGE_DIM.hw + 14, db)))
       }
     }
     // 山頂：步道終點一圈削成平台（觀景台在這裡，四周看出去不能被山頭擋住）

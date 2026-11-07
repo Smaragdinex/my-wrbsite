@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, inAlpine, domeY, domeRho, addCollider } from './layout.js'
+import { CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider } from './layout.js'
 import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
@@ -218,7 +218,7 @@ function buildInterior(lib, avoid = []) {
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, Vd), 0.0), 5.0);
         float d = clamp(vDepth / 0.9, 0.0, 1.0);
         // 顏色是線性空間：山溪清澈，淺處透出褐色石頭、深處墨綠
-        vec3 bed = vec3(0.09, 0.085, 0.06), mid = vec3(0.02, 0.05, 0.04), deep = vec3(0.004, 0.02, 0.018);
+        vec3 bed = vec3(0.11, 0.09, 0.055), mid = vec3(0.025, 0.06, 0.05), deep = vec3(0.005, 0.03, 0.03);   // 淺：透出黃褐石頭；深：青綠
         vec3 col = mix(bed, mid, smoothstep(0.0, 0.45, d));
         col = mix(col, deep, smoothstep(0.45, 1.0, d));
         col += vec3(0.012, 0.03, 0.024) * h0 * (1.0 - d * 0.5);
@@ -245,7 +245,7 @@ function buildInterior(lib, avoid = []) {
         vec3 white = vec3(0.78, 0.83, 0.84) * (0.85 + 0.15 * h0);
         col = mix(col, white, foam * 0.85);
         col *= mix(0.12, 1.0, uDay);
-        float a = mix(0.22, 0.9, d) + foam * 0.55 + fres * 0.3 + fall * 0.15;   // 淺的地方看得到溪底
+        float a = mix(0.12, 0.88, d) + foam * 0.55 + fres * 0.3 + fall * 0.15;   // 淺的地方看得到溪底
         a *= smoothstep(0.0, 0.05, vDepth);                                      // 岸邊淡掉，不會有一條硬邊
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>
@@ -272,7 +272,7 @@ function buildInterior(lib, avoid = []) {
     // 每個頂點帶：水深、坡度（跌水那幾格很陡）、白沫量（跌水底下最多，往下游漂散）。
     const st = ALP_STREAM, P = []
     for (let i = 0; i < st.length; i++) P.push(V(st[i][0], 0, st[i][1]))
-    const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.25), K = 10
+    const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.25), K = 16
     const sp = [], su = [], sd = [], ss_ = [], sf = [], si = []
     const S = []
     for (let i = 0; i <= N; i++) { const p = curve.getPointAt(i / N); S.push(alpineStreamS(p.x, p.z)) }
@@ -289,13 +289,15 @@ function buildInterior(lib, avoid = []) {
     for (let i = 0; i <= N; i++) {
       const p = curve.getPointAt(i / N), tg = curve.getTangentAt(i / N), side = V(-tg.z, 0, tg.x).normalize()
       if (prev) acc += p.distanceTo(prev); prev = p
-      // 兩邊的岸：從中線往外找，地面高過水面的地方
-      const w = streamWater(S[i]), slope = Math.max(0, (streamWater(S[i] - 0.25) - streamWater(S[i] + 0.25)) / 0.5)
-      const edge = (sgn) => { let r = 0.3; while (r < 6 && alpineHeight(p.x + side.x * r * sgn, p.z + side.z * r * sgn) < w) r += 0.1; return r + 0.15 }
-      const el = edge(-1), er = edge(1), f = foamAt(S[i])
+      // 門檻是斜的、彎的（layout.js streamLatOff）：每一排頂點沿水流方向錯開 off，整排剛好落在同一條「等高線」上，
+      // 一排的水面高度都一樣——網格不會被斜的門檻切成鋸齒（第一版每個頂點各查各的，跌水那面全是 V 字摺痕）
+      const w = streamWater(S[i]), slope = Math.max(0, (streamWater(S[i] - 0.25) - streamWater(S[i] + 0.25)) / 0.5), f = foamAt(S[i])
+      const at2 = (lat) => { const o = streamLatOff(S[i], lat); return [p.x + side.x * lat - tg.x * o, p.z + side.z * lat - tg.z * o] }
+      const edge = (sgn) => { let r = 0.3; while (r < 6) { const [x, z] = at2(r * sgn); if (alpineHeight(x, z) >= w) break; r += 0.1 } return r + 0.15 }
+      const el = edge(-1), er = edge(1)
       for (let k = 0; k <= K; k++) {
-        const t = k / K, q = p.clone().addScaledVector(side, -el + (el + er) * t)
-        sp.push(q.x, w, q.z); su.push(t, acc); sd.push(w - alpineHeight(q.x, q.z)); ss_.push(slope); sf.push(f)
+        const t = k / K, lat = -el + (el + er) * t, [x, z] = at2(lat)
+        sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(slope); sf.push(f)
       }
       if (i) for (let k = 0; k < K; k++) { const A = (i - 1) * (K + 1) + k, B = A + 1, C = A + K + 1, D = C + 1; si.push(A, C, B, B, C, D) }
     }
@@ -333,6 +335,17 @@ function buildInterior(lib, avoid = []) {
       const c = at(s), sgn = rr() < 0.5 ? -1 : 1
       if (rr() < 0.55) { const r = 1.6 + rr() * 1.2, x = c.x + c.sx * r * sgn, z = c.z + c.sz * r * sgn; put(rr() < 0.4 ? BIG : MOSS, x, z, alpineHeight(x, z) - 0.25, 0.3 + rr() * 0.45) }
       if (rr() < 0.3) { const o = (rr() - 0.5) * 1.8, x = c.x + c.sx * o, z = c.z + c.sz * o, w = streamWater(s); if (w - alpineHeight(x, z) < 0.45) put(MOSS, x, z, w - 0.18, 0.18 + rr() * 0.16, 0.5) }
+    }
+    // 溪床裡一顆顆圓圓的石頭（參考影片：水在石頭之間流，不是一條空的水道）：淺的地方多、冒出水面
+    for (let s = 0.8; s < st.len - 0.8; s += 0.9) {
+      const c = at(s)
+      for (let j = 0; j < 2; j++) {
+        if (rr() < 0.35) continue
+        const o = (rr() - 0.5) * 3.2, x = c.x + c.sx * o, z = c.z + c.sz * o, w = streamWater(s), dep = w - alpineHeight(x, z)
+        if (dep < 0.02 || dep > 0.8) continue
+        const k = 0.16 + rr() * 0.3 + (rr() < 0.15 ? 0.3 : 0)
+        put(rr() < 0.25 ? BIG : MOSS, x, z, w - k * 0.55 - rr() * 0.1, k, 0.55)
+      }
     }
     for (const [n, list] of Object.entries(stones)) if (lib[n]) scatter(g, lib[n], list, { cast: true })
     // 跌水底下的水花：一團團白霧貼著水面翻動（高的跌水比較多、比較大）
