@@ -20,7 +20,7 @@ const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'), 
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
-const SUB = { kitty: 'Web · iOS', stocks: 'Three.js · Board Game', ocean: 'iOS Game', planet: 'Three.js', rails: 'Three.js · Track Puzzle' };
+const SUB = { kitty: 'Web · iOS', stocks: 'Three.js · Board Game', ocean: 'iOS Game', planet: 'Three.js', rails: 'Three.js · Track Puzzle', birds: 'Three.js · Birdwatching' };
 
 // ---------- 艙口裡的縮影:後牆的畫 + 幾件立體小道具 ----------
 const BACK = {
@@ -44,6 +44,10 @@ const BACK = {
   rails(g, W, H, r) { g.fillStyle = '#e9c79c'; g.fillRect(0, 0, W, H); g.fillStyle = '#c9965f'; g.fillRect(0, H * .66, W, H * .34);
     g.fillStyle = '#d8b07c'; g.fillRect(W * .55, H * .1, W * .38, H * .36); g.fillStyle = '#8a5a30'; for (let x = 0; x < 5; x++) for (let y = 0; y < 4; y++) { g.beginPath(); g.arc(W * .58 + x * 40, H * .14 + y * 36, 4, 0, 7); g.fill(); }
     for (const y of [.22, .42]) { g.fillStyle = '#a8703c'; g.fillRect(W * .06, H * y, W * .4, 10); for (let k = 0; k < 4; k++) { g.fillStyle = ['#e85c4a', '#3f8fd9', '#f2c14e', '#5cb87a'][k]; g.fillRect(W * .08 + k * 48, H * y - 30, 36, 30); } } },
+  birds(g, W, H, r) { const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#bfe4f4'); gr.addColorStop(1, '#e6f3df'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#fff1b8'; g.beginPath(); g.arc(W * .75, H * .22, 34, 0, 7); g.fill();
+    for (const [c, b, a] of [['#a6d39a', .62, 40], ['#79bb72', .7, 34], ['#4f9a5c', .8, 26]]) { g.fillStyle = c; g.beginPath(); g.moveTo(0, H); for (let x = 0; x <= W; x += 16) g.lineTo(x, H * b - Math.sin(x / W * 7 + a) * a); g.lineTo(W, H); g.fill(); }
+    g.strokeStyle = '#33404f'; g.lineWidth = 4; for (let k = 0; k < 6; k++) { const x = W * .12 + r() * W * .5, y = H * .15 + r() * H * .25, s = 10 + r() * 8; g.beginPath(); g.moveTo(x - s, y - s * .4); g.quadraticCurveTo(x - s * .4, y - s * .5, x, y); g.quadraticCurveTo(x + s * .4, y - s * .5, x + s, y - s * .4); g.stroke(); } },
 };
 function props(R, key, acc) {
   const scr = (c, i = 1.6) => glow(c, i);
@@ -59,6 +63,11 @@ function props(R, key, acc) {
   if (key === 'rails') { box(R, 1.6, .08, .6, 0xc08a52, { x: .2, y: .62, z: -2.1, r: .02 }); for (const x of [-.5, .9]) cyl(R, .03, .03, .6, 0x8a5a30, { x, y: .3, z: -2.1 });
     const t = new THREE.Mesh(new THREE.TorusGeometry(.42, .03, 6, 40), mat(0xc08a52)); t.rotation.x = -Math.PI / 2; t.scale.set(1.3, 1, 1); t.position.set(-.1, .05, -1.1); R.add(t);
     for (const [x, c] of [[-.45, 0xe85c4a], [-.2, 0x3f8fd9]]) box(R, .2, .14, .12, c, { x, y: .12, z: -.75, r: .03 }); }
+  if (key === 'birds') { cyl(R, .07, .1, 1.3, 0x7a5a40, { x: -.5, y: .65, z: -2.0 }); for (const [x, y, z, rr] of [[-.75, 1.45, -2.0, .4], [-.25, 1.6, -2.05, .36], [-.55, 1.85, -1.95, .34]]) sphere(R, rr, 0x5fae5a, { x, y, z });
+    cyl(R, .02, .02, .9, 0x7a5a40, { x: -.1, y: 1.0, z: -1.8, rz: Math.PI / 2 });
+    for (const [x, c] of [[.05, 0x2c6bd8], [.3, 0xf0c93a]]) { sphere(R, .07, c, { x, y: 1.1, z: -1.8 }); sphere(R, .045, c, { x: x + .05, y: 1.18, z: -1.78 }); }
+    const tri = group(R, .7, 0, -1.3); for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2; const leg = cyl(tri, .015, .015, 1.0, 0x2b2f36, { x: Math.cos(a) * .2, y: .48, z: Math.sin(a) * .2 }); leg.rotation.set(Math.sin(a) * .2, 0, -Math.cos(a) * .2); }
+    box(tri, .14, .1, .1, 0x1c1f24, { y: 1.02, r: .02 }); cyl(tri, .05, .05, .3, 0xece9e2, { x: -.18, y: 1.02, rz: Math.PI / 2 }); }
   // 艙口裡自己的彩色燈
   const l = new THREE.PointLight(acc, 3, 4.2, 1.6); l.position.set(0, 2.1, -1.2); R.add(l);
   return l;
@@ -164,7 +173,7 @@ export function createHall(scene, rooms, opts = {}) {
   const root = new THREE.Group(); scene.add(root);
   const arch = new THREE.Group(); root.add(arch);   // 建築(地板、牆、柱、門框、展示艙、天花板…):烘焙好的模型載入後整組換掉;互動的東西留在 root
   scene.background = new THREE.Color(0x0a0c14);
-  const n = rooms.length, span = 150 * Math.PI / 180;
+  const n = rooms.length, span = n * 30 * Math.PI / 180;   // 每道門 30°(5 道 150°、6 道 180°;跟 tools/blender/hall_build.py 一樣)
   const bearings = rooms.map((_, i) => -span / 2 + span * (i + .5) / n);
   // 色票:Cloud Dancer 亮面白為主;暖白燈條
   const CD = 0xf0eee9, CD2 = 0xe4e0d8, CD3 = 0xd3cdc2, WARM = 0xffd9a8;
@@ -275,7 +284,7 @@ export function createHall(scene, rooms, opts = {}) {
     const enter = new THREE.Mesh(new THREE.PlaneGeometry(1.75, .33), enterM); enter.position.set(0, -.74, .42); sg.add(enter);   // 擺在厚門框前面,不會被擋住
     // 艙內(往牆外凸出):白色內壁 + 天花板燈 + 該艙的後牆畫 + 小道具 + 燈
     const R = group(ga, 0, 0, 0);
-    const floorC = { kitty: 0xf6d6e0, stocks: 0xdfe8e6, ocean: 0xe9d6a8, planet: 0x3a2466, rails: 0xd9b88f }[room.key] ?? 0xeeeeee;
+    const floorC = { kitty: 0xf6d6e0, stocks: 0xdfe8e6, ocean: 0xe9d6a8, planet: 0x3a2466, rails: 0xd9b88f, birds: 0xe3d2b2 }[room.key] ?? 0xeeeeee;
     box(R, DOOR_W + .4, .06, ALC_D, gloss(floorC, .3), { y: .03, z: -ALC_D / 2, r: 0, shadow: false });
     const inner = glossNew(new THREE.Color(CD2).lerp(new THREE.Color(cfg.wall), .25).getHex(), .4);   // 滑過時會變色,每間自己一個
     for (const x of [-1, 1]) box(R, .1, DOOR_H + .4, ALC_D, inner, { x: x * (DOOR_W / 2 + .25), y: (DOOR_H + .4) / 2, z: -ALC_D / 2, r: 0 });
@@ -335,12 +344,12 @@ export function createHall(scene, rooms, opts = {}) {
   const dust = new THREE.Points(dGeo, new THREE.PointsMaterial({ color: 0xffffff, size: .03, transparent: true, opacity: .55, depthWrite: false })); root.add(dust);
 
   // ---------- 入口兩側的大花盆 ----------
-  for (const s of [-1, 1]) { contact(arch, s * 3.6, 5.6, 1.9, 1.9, .32); box(arch, 1.0, .7, 1.0, gloss(0xffffff), { x: s * 3.6, y: .35, z: 5.6, r: .12 }); plant(arch, { x: s * 3.6, y: .7, z: 5.6, r: .32, h: .2, pot: 0xffffff, len: 1.0, n: 14 }); }
+  for (const s of [-1, 1]) { contact(arch, s * 3.0, 6.4, 1.9, 1.9, .32); box(arch, 1.0, .7, 1.0, gloss(0xffffff), { x: s * 3.0, y: .35, z: 6.4, r: .12 }); plant(arch, { x: s * 3.0, y: .7, z: 6.4, r: .32, h: .2, pot: 0xffffff, len: 1.0, n: 14 }); }
 
   // ---------- 圓形沙發(兩側) ----------
   const sofaM = gloss(CD2, .85), cushM = gloss(0xfaf8f4, .9);
   for (const s of [-1, 1]) {
-    const px = s * 5.2, pz = 2.45, so = group(arch, px, 0, pz, Math.atan2(-px, -pz));   // 跟烘焙版一樣:沿大廳的圓往入口挪、面向中心
+    const px = s * 4.75, pz = 3.45, so = group(arch, px, 0, pz, Math.atan2(-px, -pz));   // 跟烘焙版一樣:沿大廳的圓往入口挪、面向中心
     contact(arch, px, pz, 3.0, 3.0, .38); cyl(so, 1.12, 1.12, .12, gloss(CD3), { y: .06, seg: 48 });
     const ringL = new THREE.Mesh(new THREE.TorusGeometry(1.1, .025, 6, 64), warmM(2.4)); ringL.rotation.x = Math.PI / 2; ringL.position.y = .03; so.add(ringL);
     cyl(so, 1.05, 1.08, .3, sofaM, { y: .27, seg: 48 }); cyl(so, .98, .98, .14, cushM, { y: .48, seg: 48 });
@@ -388,7 +397,7 @@ export function createHall(scene, rooms, opts = {}) {
     B.greet = GREET_SEC; B.cx = camPos.x; B.cz = camPos.z;
     return true;
   }
-  const AVOID = [[-4.65, 2.27, 2.6], [5.01, 2.44, 2.1], [-3.6, 5.6, 1.1], [3.6, 5.6, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
+  const AVOID = [[-4.18, 3.04, 2.6], [4.51, 3.27, 2.1], [-3.0, 6.4, 1.1], [3.0, 6.4, 1.1]];      // 休息區、入口花盆:[x, z, 半徑]
   const okPt = (x, z) => AVOID.every(([ax, az, r]) => Math.hypot(x - ax, z - az) > r);
   const clearPath = (x0, z0, x1, z1) => { for (let k = 1; k <= 12; k++) { const u = k / 12, x = x0 + (x1 - x0) * u, z = z0 + (z1 - z0) * u, rr = Math.hypot(x, z); if (!okPt(x, z) || rr < 2.5 || rr > 6.9) return false; } return true; };
   const B = { x: -3.2, z: -2.6, h: Math.PI / 2, tx: 0, tz: 0, wait: 0, speed: 0, dir: 1, greet: 0, cx: 0, cz: 0 };   // dir:沿著圈繞的方向,偶爾掉頭
@@ -468,7 +477,7 @@ export function createHall(scene, rooms, opts = {}) {
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
   // 先讓戰艦模型下載完(第一眼看到的是戰艦、頻寬不要互搶),大廳的模型再接著載;保險起見最多等 20 秒
   if (quality.minimal) baked = true;                                    // 等級 4(精簡):不載烘焙版大廳(3MB 模型 + 大貼圖),直接用上面程式蓋的輕量大廳
-  else Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => quality.minimal ? (baked = true, null) : Promise.all([loadGLB(asset('/assets/starship/models/hall_baked.glb?v=20')), loadGLB(asset('/assets/starship/models/hall_props.glb?v=20'))])).then((pair) => { if (!pair) return; const [hallM, propsM] = pair; window.__crumb?.('hall glb loaded');
+  else Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => quality.minimal ? (baked = true, null) : Promise.all([loadGLB(asset('/assets/starship/models/hall_baked.glb?v=21')), loadGLB(asset('/assets/starship/models/hall_props.glb?v=21'))])).then((pair) => { if (!pair) return; const [hallM, propsM] = pair; window.__crumb?.('hall glb loaded');
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光

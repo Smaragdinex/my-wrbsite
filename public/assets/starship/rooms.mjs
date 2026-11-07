@@ -95,6 +95,8 @@ export const ROOMS = [
     cfg: { slab: 0xd5cbf3, wall: '#d9cdf7', wallB: '#b9a6ef', wallLow: 0xa48be8, accent: 0xb48bff, floor: 'wood', planet: '#9b7bea', seed: 4, lampColor: 0xd9c8ff } },
   { key: 'rails', title: 'Wooden Rails', tag: 'Three.js · Track Puzzle', desc: 'A track-laying puzzle built from wooden rails.', url: '/wooden-rails/',
     cfg: { slab: 0xf1d9bf, wall: '#f8e2c4', wallB: '#f2c79d', wallLow: 0xe3b17a, accent: 0xffb35c, floor: 'wood', planet: '#e6a35a', seed: 5 } },
+  { key: 'birds', title: 'Bird Park', tag: 'Three.js · Birdwatching', desc: 'Walk a glass-dome bird park with a camera and photograph rare birds.', url: '/bird-park/',
+    cfg: { slab: 0xd9e8cc, wall: '#e6f0dd', wallB: '#cfe3bf', wallLow: 0x9cc58a, accent: 0xa8e063, floor: 'wood', planet: '#6fbf6a', seed: 6 } },
 ];
 
 const D = {};
@@ -271,11 +273,24 @@ D.rails = (R, ctx) => {
   } };
 };
 
+// Bird Park:賞鳥小屋 —— 一棵室內樹(橫枝上三隻鳥)、攝影腳架、餵鳥台,一隻小鳥在房間裡繞圈飛(真的房間載好前的小模型)
+D.birds = (R) => {
+  cyl(R, .55, .45, .45, 0xf4f1ea, { x: -1.2, y: .22, z: -.9 }); cyl(R, .09, .13, 2.2, 0x7a5a40, { x: -1.2, y: 1.3, z: -.9 });
+  for (const [x, y, z, r] of [[-1.6, 2.5, -1.1, .55], [-.8, 2.6, -.8, .5], [-1.2, 2.95, -.9, .5], [-1.3, 2.4, -.4, .4]]) sphere(R, r, 0x58a84e, { x, y, z, seg: 10 });
+  cyl(R, .04, .03, 1.3, 0x7a5a40, { x: -.6, y: 1.5, z: -.6, rz: Math.PI / 2 + .2 });
+  for (const [x, c] of [[-.85, 0x2c6bd8], [-.55, 0xf0c93a], [-.3, 0x93c23e]]) { sphere(R, .07, c, { x, y: 1.6 - (x + .6) * .2, z: -.6 }); sphere(R, .045, c, { x: x + .05, y: 1.68 - (x + .6) * .2, z: -.58 }); }
+  const tri = group(R, 1.2, 0, .3); for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2; const leg = cyl(tri, .015, .015, 1.3, 0x2b2f36, { x: Math.cos(a) * .25, y: .62, z: Math.sin(a) * .25 }); leg.rotation.set(Math.sin(a) * .2, 0, -Math.cos(a) * .2); }
+  box(tri, .16, .12, .12, 0x1c1f24, { y: 1.33, r: .02 }); cyl(tri, .05, .06, .45, 0xece9e2, { x: -.28, y: 1.35, rz: Math.PI / 2 });
+  cyl(R, .025, .025, 1.2, 0x8a6040, { x: 1.9, y: .6, z: -1.8 }); box(R, .45, .04, .45, 0xd8b07a, { x: 1.9, y: 1.22, z: -1.8 });
+  const bird = group(R); sphere(bird, .08, 0x3aa0e6, {}); const wl = box(bird, .1, .01, .22, 0x2a4f9a, { z: .12, r: 0 }), wr = box(bird, .1, .01, .22, 0x2a4f9a, { z: -.12, r: 0 });
+  return { update(t) { const a = t * .7; bird.position.set(.3 + Math.cos(a) * 1.4, 2.4 + Math.sin(t * 1.3) * .15, .2 + Math.sin(a) * 1.1); bird.rotation.y = -a - Math.PI / 2; const f = Math.sin(t * 16) * .7; wl.rotation.x = f; wr.rotation.x = -f; } };
+};
+
 // ---------- 真的房間(Blender 建模 + 烘光,tools/blender/room_build.py / room_bake.py)----------
 // 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
 // 房間裡不放作品截圖(使用者:截圖跟環境不搭),點房間裡的家具 / 擺設就進作品。
 // 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
-const REAL = { kitty: { v: 6, props: false }, stocks: { v: 7, props: true }, ocean: { v: 5, props: false }, planet: { v: 8, props: true }, rails: { v: 5, props: true } };   // 盆栽全部拿掉(使用者:每間都不需要);props 只剩會動的東西
+const REAL = { kitty: { v: 6, props: false }, stocks: { v: 7, props: true }, ocean: { v: 5, props: false }, planet: { v: 8, props: true }, rails: { v: 5, props: true }, birds: { v: 1, props: true } };   // 盆栽全部拿掉(使用者:每間都不需要);props 只剩會動的東西
 // 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
 const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { value: hzOff } }, vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: `varying vec3 vW; uniform float uHz;
@@ -362,6 +377,19 @@ function realRoom(R, key, ctx) {
         c.o.position.set(CX + Math.cos(a) * RX, c.y0 + Math.abs(Math.sin(t * 14 + c.k)) * .004, -(CY + Math.sin(a) * RY));
         c.o.rotation.set(0, Math.atan2(dy, dx), 0);                      // Blender 繞 z 轉 = 網頁繞 y 轉
       } };
+    }
+    if (key === 'birds' && props) {                                      // Bird Park:一隻小鳥沿著橢圓繞房間中間飛(轉彎往內傾、上下起伏),翅膀一直拍
+      const b = props.getObjectByName('prop_birdfly'), wl = props.getObjectByName('prop_birdfly_wl'), wr = props.getObjectByName('prop_birdfly_wr');
+      if (b) {
+        const CX = .6, CY = 4.8, RX = 1.4, RY = 1.0, W = .55, H0 = 2.4; b.rotation.order = 'YXZ';   // 圓心、半徑(Blender 座標;網頁 x = x、z = -y),避開左邊的樹冠和右邊的腳架
+        st.tick = (t) => {
+          const a = t * W, dx = -Math.sin(a) * RX, dy = Math.cos(a) * RY;
+          b.position.set(CX + Math.cos(a) * RX, H0 + Math.sin(t * 1.1) * .2, -(CY + Math.sin(a) * RY));
+          b.rotation.set(-.3, Math.atan2(dy, dx), 0);
+          const glide = (t % 6) > 4.6, f = glide ? .25 : Math.sin(t * 17) * .75;   // 偶爾滑翔一下
+          if (wl) wl.rotation.x = f; if (wr) wr.rotation.x = -f;
+        };
+      }
     }
     const warm = new THREE.PointLight(0xffe6cc, 6, 12, 1.4); warm.position.set(0, 3.6, -4.5); top.add(warm);   // 給植物的暖光(建築的光已經烘在貼圖裡)
     if (key === 'planet') {                                                    // Tiny Planet:原本大廳中間的全息地球儀,浮在左後方的台座上(台座在 Blender 的 (-2.2, 5.4),頂面高 .63)

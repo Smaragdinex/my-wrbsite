@@ -779,7 +779,148 @@ def rails():
     for sd in (-1, 1): box(f'toy_side_{sd}', (.4, .04, 2.1), sh + Vector((0, sd * .8, 1.05)), M_OAK, bevel=.01)
     pendant('pd_a', c.x - .9, c.y, mat('ind_shade', '#2b2f3a', .4, metal=.4), 1.15, .24, cone=True); pendant('pd_b', c.x + .9, c.y, mat('ind_shade', '#2b2f3a', .4), 1.15, .24, cone=True)
 
-THEMES = {'kitty': kitty, 'stocks': stocks, 'ocean': ocean, 'planet': planet, 'rails': rails}
+# ================= Bird Park:賞鳥小屋(鼠尾草綠、淺木地板)=================
+def _bpart(nm, kind, sc, off, m, face, p, rot=None, seg=(20, 12)):
+    """小鳥零件:在原點(面朝 +x、腳在 z 0)做好,轉向 face、放到 p"""
+    bm = bmesh.new()
+    if kind == 'sph': bmesh.ops.create_uvsphere(bm, u_segments=seg[0], v_segments=seg[1], radius=1)
+    else:
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=1, radius2=0, depth=1)
+        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(math.pi / 2, 3, 'Y'), verts=bm.verts)   # 尖端朝 +x
+    bmesh.ops.scale(bm, vec=sc, verts=bm.verts)
+    if rot: bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=rot, verts=bm.verts)
+    bmesh.ops.translate(bm, vec=off, verts=bm.verts)
+    bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(face, 3, 'Z'), verts=bm.verts)
+    bmesh.ops.translate(bm, vec=p, verts=bm.verts)
+    return mesh_obj(nm, bm, m)
+def songbird(nm, p, face, body, head, belly, beak='#3a3a3a', tail=.1, s=1.0, crest=False, tail_up=0.0, wings=True):
+    mb, mh, mbl = mat(f'bd_{body}', body, .55), mat(f'bd_{head}', head, .55), mat(f'bd_{belly}', belly, .6)
+    S = lambda *v: Vector(v) * s
+    out = [_bpart(f'{nm}_body', 'sph', S(.085, .058, .062), S(0, 0, .085), mb, face, p, Matrix.Rotation(-.25, 3, 'Y')),
+           _bpart(f'{nm}_belly', 'sph', S(.066, .05, .05), S(.025, 0, .068), mbl, face, p),
+           _bpart(f'{nm}_head', 'sph', S(.046, .044, .044), S(.072, 0, .14), mh, face, p),
+           _bpart(f'{nm}_beak', 'cone', S(.034, .013, .012), S(.13, 0, .137), mat(f'bk_{beak}', beak, .4), face, p),
+           _bpart(f'{nm}_tail', 'sph', S(tail, .03, .01), S(-.075 - tail * .85, 0, .07 + tail_up), mb, face, p, Matrix.Rotation(.35 - tail_up * 3, 3, 'Y'))]
+    for sd in (-1, 1):
+        out.append(_bpart(f'{nm}_eye_{sd + 1}', 'sph', S(.009, .009, .009), S(.1, sd * .032, .152), mat('bird_eye', '#0d0d10', .2), face, p, seg=(10, 6)))
+        if wings: out.append(_bpart(f'{nm}_wing_{sd + 1}', 'sph', S(.07, .012, .036), S(-.012, sd * .052, .095), mh if head != belly else mb, face, p, Matrix.Rotation(-.3, 3, 'Y')))
+        out.append(_bpart(f'{nm}_leg_{sd + 1}', 'sph', S(.006, .006, .024), S(.01, sd * .02, .018), mat('bird_leg', '#9a7a5a', .6), face, p, seg=(8, 6)))
+    if crest: out.append(_bpart(f'{nm}_crest', 'cone', S(.05, .014, .016), S(.04, 0, .19), mh, face, p, Matrix.Rotation(-2.4, 3, 'Y')))
+    return out
+def _poly(name, pts, y, m, th=.012):
+    bm = bmesh.new(); vs = [bm.verts.new((x, 0, z)) for x, z in pts]; bm.faces.new(vs); bm.normal_update()
+    bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=th); bmesh.ops.translate(bm, vec=(0, y, 0), verts=bm.verts)
+    return mesh_obj(name, bm, m, smooth=False)
+def _rod(name, a, b, r0, r1, m, verts=16):
+    d = b - a; return cyl(name, r0, d.length, (a + b) / 2, m, verts, r2=r1, rot=Vector((0, 0, 1)).rotation_difference(d).to_matrix())
+def birds():
+    t = dict(floor='planks', planks=[('#e3c9a2', '#d2b48a'), ('#ecd6b2', '#dcc199'), ('#d6b98f', '#c4a57a')], wall_a='#e6f0dd', wall_b='#dbe8cf', wains='#9cc58a', rail='#f5fbef', accent='#a8e063')
+    shell(t); base_lights(1.0, warm=(1, .95, .86))
+    hero('BIRD PARK', '#5cf08a', z=3.64)
+    # 後牆:壁畫(天空 + 三層山 + 太陽 + 一群飛鳥剪影)
+    yb = wall_board('mural', 4.6, 2.0, 2.25, '#bfe4f4', '#8a6a48')
+    _poly('mural_sun', [(1.2 + math.cos(a / 24 * math.tau) * .28, 2.75 + math.sin(a / 24 * math.tau) * .28) for a in range(24)], yb - .006, mat('mural_sun', '#fff1b8', .7))
+    for k, (hx, base, amp, ph) in enumerate((('#a6d39a', 1.75, .55, .3), ('#79bb72', 1.5, .45, 1.9), ('#4f9a5c', 1.32, .32, 3.1))):
+        pts = [(-2.3, 1.27)] + [(-2.3 + 4.6 * i / 40, base + amp * (.55 + .45 * math.sin(i / 40 * 7 + ph)) * (.6 + .4 * math.sin(i / 40 * 3.1 + ph * 2))) for i in range(41)] + [(2.3, 1.27)]
+        _poly(f'mural_hill_{k}', pts, yb - .008 - k * .006, mat(f'mural_h{k}', hx, .8))
+    for k, (x, z, s_) in enumerate(((-1.4, 2.9, 1), (-1.0, 3.0, .8), (-.6, 2.78, .9), (-.15, 2.95, .7), (.3, 2.7, .6))):
+        for sd in (-1, 1): _poly(f'mural_bird_{k}_{sd + 1}', [(x, z), (x + sd * .13 * s_, z + .06 * s_), (x + sd * .15 * s_, z + .045 * s_), (x + sd * .02 * s_, z - .012)], yb - .03, mat('mural_bird', '#33404f', .7), th=.006)
+    M_OAK = woodmat('oak_b', '#d8b07a', '#bf955f'); M_LEG = woodmat('leg_b', '#8a6040', '#6e4a30')
+    M_BARK = woodmat('bark', '#7a5a40', '#5e4430', 3); M_LEAF = [mat('leaf_a', '#3f8f45', .65), mat('leaf_b', '#58a84e', .65), mat('leaf_c', '#2f7a3c', .65)]
+    # 中間偏左:一棵室內樹(大圓盆)+ 一根往前伸的橫枝,三隻鳥站在上面
+    c = Vector((-2.1, 5.6, 0))
+    cyl('pot_big', .72, .55, c + Vector((0, 0, .275)), mat('pot_big', '#f4f1ea', .35, coat=.4), 64, r2=.6, bevel=.03)
+    cyl('pot_soil', .66, .02, c + Vector((0, 0, .53)), mat('soil_b', '#4a3a2c', .95), 48)
+    _rod('trunk', c + Vector((0, 0, .5)), c + Vector((.1, .05, 2.4)), .14, .08, M_BARK, 20)
+    perch_a, perch_b = c + Vector((.05, 0, 1.55)), c + Vector((1.55, -.75, 1.72))
+    _rod('branch_perch', perch_a, perch_b, .06, .035, M_BARK)
+    for k, (d, z0, ln) in enumerate(((Vector((-.8, .3, .6)), 1.9, 1.0), (Vector((.5, .6, .7)), 2.1, .9), (Vector((-.3, -.7, .8)), 2.3, .8), (Vector((.7, -.2, .9)), 2.35, .7))):
+        a = c + Vector((.06, .03, z0)); _rod(f'branch_{k}', a, a + d.normalized() * ln, .05, .025, M_BARK, 12)
+    leaf_pts = [(-0.9, .4, 2.75, .55), (.5, .6, 2.85, .55), (-.25, -.55, 2.95, .5), (.65, -.25, 2.95, .45), (.05, .1, 3.25, .6), (-.6, -.15, 3.15, .45), (.25, .7, 3.2, .4)]
+    for k, (x, y, z, r) in enumerate(leaf_pts):
+        bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=r)
+        for v in bm.verts: v.co *= 1 + rng.uniform(-.12, .12); v.co.z *= .78
+        bmesh.ops.translate(bm, vec=c + Vector((x, y, z)), verts=bm.verts); mesh_obj(f'leaves_{k}', bm, M_LEAF[k % 3], smooth=False)
+    def on_perch(u): return perch_a.lerp(perch_b, u) + Vector((0, 0, .045 - u * .01))
+    face_cam = math.atan2(-1, .35)                                           # 大致朝鏡頭(入口)
+    songbird('bird_magpie', on_perch(.38), face_cam + .5, '#2c6bd8', '#16191f', '#3b7de6', beak='#e0302a', tail=.24, s=1.25, tail_up=-.03)
+    songbird('bird_tit', on_perch(.62), face_cam - .3, '#f0c93a', '#1d1e22', '#ffe27a', tail=.08, s=1.0, crest=True)
+    songbird('bird_eye', on_perch(.84), face_cam + .2, '#93c23e', '#a4cd48', '#eef4b8', tail=.07, s=.9)
+    # 樹上掛一個鳥屋
+    bh = c + Vector((-.7, .3, 2.05))
+    cyl('birdhouse_rope', .006, .35, bh + Vector((0, 0, .38)), M_DARK, 8)
+    box('birdhouse_body', (.26, .24, .3), bh, mat('bh_body', '#f2e2c4', .55), .4, bevel=.015)
+    house('birdhouse_top', bh + Vector((0, 0, -.1)), 1.6, '#f2e2c4', '#c96a4a', .4); bpy.data.objects.remove(bpy.data.objects['birdhouse_top_body'], do_unlink=True)
+    cyl('birdhouse_hole', .045, .02, bh + Vector((math.sin(-.4) * -.13, -math.cos(.4) * .13, .03)), M_DARK, 24, rot=Matrix.Rotation(math.pi / 2, 3, 'X') @ Matrix.Rotation(0, 3, 'Z'))
+    # 攝影腳架 + 長鏡頭相機,對著樹枝上的鳥
+    tp = Vector((2.3, 4.4, 0)); top = tp + Vector((0, 0, 1.32)); M_TRI = mat('tripod', '#2b2f36', .35, metal=.4)
+    for k in range(3):
+        a = k / 3 * math.tau + .5; _rod(f'tripod_leg_{k}', tp + Vector((math.cos(a) * .48, math.sin(a) * .48, 0)), top, .016, .022, M_TRI, 10)
+    cyl('tripod_head', .05, .1, top + Vector((0, 0, .04)), M_TRI, 20)
+    aim = (on_perch(.55) + Vector((0, 0, .12)) - (top + Vector((0, 0, .15)))).normalized(); cam_c = top + Vector((0, 0, .16))
+    yaw = math.atan2(aim.y, aim.x)
+    box('camera_body', (.16, .14, .12), cam_c, mat('cam_body', '#1c1f24', .4), yaw, bevel=.02)
+    box('camera_grip', (.06, .05, .1), cam_c + Vector((-math.sin(yaw) * .08, math.cos(yaw) * .08, -.01)), mat('cam_grip', '#121418', .7), yaw, bevel=.015)
+    _rod('camera_lens', cam_c + aim * .06, cam_c + aim * .52, .055, .07, mat('lens_w', '#ece9e2', .35, coat=.5), 32)
+    _rod('camera_hood', cam_c + aim * .52, cam_c + aim * .64, .078, .082, mat('lens_hood', '#1c1f24', .5), 32)
+    _rod('camera_ring', cam_c + aim * .3, cam_c + aim * .34, .064, .064, mat('lens_ring', '#2a2e35', .5), 32)
+    # 右牆:三張鳥照片(相框)+ 底下長凳
+    def photo(bodyc, headc, beakc):
+        def draw(p, f, sd):
+            box(f'art_ph_branch_{bodyc}', (.02, .5, .03), p + f * .005 + Vector((0, 0, -.12)), M_BARK, math.radians(90) + .15)
+            sphere(f'art_ph_body_{bodyc}', .1, p + f * .02 + Vector((0, 0, -.02)), mat(f'ph_{bodyc}', bodyc, .6), scale=(.25, 1.35, .9))
+            sphere(f'art_ph_head_{bodyc}', .065, p + f * .03 + sd * -.12 + Vector((0, 0, .08)), mat(f'ph_{headc}', headc, .6), scale=(.25, 1, 1))
+            box(f'art_ph_beak_{bodyc}', (.01, .06, .02), p + f * .035 + sd * -.2 + Vector((0, 0, .08)), mat(f'ph_{beakc}', beakc, .5), math.radians(90))
+        return draw
+    for k, (y, args) in enumerate(((2.3, ('#2c6bd8', '#16191f', '#e0302a', '#cfe8f2')), (4.3, ('#f0c93a', '#1d1e22', '#333333', '#e4efd6')), (6.3, ('#c8443a', '#3a2a24', '#3a3a3a', '#f3e6d4')))):
+        framed(f'art_photo_{k}', Vector((W / 2 - .05, y, 2.2)), math.radians(-90), 1.2, .85, args[3], photo(*args[:3]))
+    plank_table('bench', Vector((W / 2 - .45, 4.3, 0)), .5, 2.6, .46, M_OAK, M_LEG)
+    # 右後:書桌(圖鑑、望遠鏡、筆記本)
+    dk = Vector((3.2, 7.9, 0)); plank_table('desk', dk, 1.8, .8, .76, M_OAK, M_LEG)
+    for k, (hx, th) in enumerate((('#3f6f4a', .05), ('#c96a4a', .04), ('#2c4f7c', .06))):
+        box(f'book_{k}', (.3, .22, th), dk + Vector((-.55, 0, .76 + sum([.05, .04, .06][:k]) + th / 2)), mat(f'book{k}', hx, .6), .1 * k, bevel=.006)
+    for sd in (-1, 1):
+        box(f'guide_page_{sd + 1}', (.24, .32, .012), dk + Vector((.05 + sd * .125, .05, .775)), mat('page', '#fbf7ee', .7), sd * -.06, bevel=.003)
+    for sd in (-1, 1): cyl(f'binocular_{sd + 1}', .035, .16, dk + Vector((.6, -.1 + sd * .045, .81)), mat('bino', '#2a2e35', .45), 20, rot=Matrix.Rotation(math.pi / 2, 3, 'Y'))
+    box('binocular_bridge', (.06, .06, .02), dk + Vector((.6, -.1, .83)), mat('bino', '#2a2e35', .45), bevel=.008)
+    cyl('mug', .045, .1, dk + Vector((-.15, -.25, .81)), mat('mug', '#f4f1ea', .3, coat=.5), 24)
+    cyl('stool_desk', .24, .48, dk + Vector((-.1, -.85, .24)), M_OAK, 32, bevel=.03)
+    pendant('pd_desk', dk.x, dk.y - .1, mat('rattan', '#d6b98f', .7), 1.25, .26, cone=True)
+    # 左邊窗前:餵鳥台(立柱 + 托盤 + 小屋頂 + 種子)
+    fd = Vector((-3.9, 3.0, 0))
+    cyl('feeder_pole', .03, 1.25, fd + Vector((0, 0, .625)), M_LEG, 16)
+    cyl('feeder_base', .22, .04, fd + Vector((0, 0, .02)), M_LEG, 32)
+    box('feeder_tray', (.5, .5, .04), fd + Vector((0, 0, 1.27)), M_OAK, bevel=.01)
+    for k, (dx, dy) in enumerate(((-.23, -.23), (.23, -.23), (-.23, .23), (.23, .23))): cyl(f'feeder_post_{k}', .012, .3, fd + Vector((dx, dy, 1.43)), M_LEG, 8)
+    house('feeder_roof', fd + Vector((0, 0, 1.1)), 2.6, '#d8b07a', '#7fae6a'); bpy.data.objects.remove(bpy.data.objects['feeder_roof_body'], do_unlink=True)
+    for k in range(40):
+        a, r = rng.uniform(0, math.tau), rng.uniform(0, .2); sphere(f'seed_{k}', .012, fd + Vector((math.cos(a) * r, math.sin(a) * r, 1.3)), mat('seed', '#c9a46a', .7), scale=(1.3, 1, .6), seg=8)
+    songbird('bird_sparrow', fd + Vector((.12, -.1, 1.29)), math.radians(-60), '#8a6a4a', '#7a5238', '#e8dccb', tail=.07, s=.85)
+    # 角落盆栽(蕨類球)+ 圓地毯
+    for k, (x, y) in enumerate(((-4.4, 8.4), (4.5, .7), (-4.4, .8))):
+        cyl(f'pot_{k}', .26, .42, Vector((x, y, .21)), mat('pot_s', '#f4f1ea', .35, coat=.4), 40, r2=.21, bevel=.02)
+        for j in range(3):
+            bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=.28 - j * .05)
+            for v in bm.verts: v.co.z *= .8
+            bmesh.ops.translate(bm, vec=(x + (j - 1) * .08, y + (j % 2) * .06, .62 + j * .14), verts=bm.verts); mesh_obj(f'fern_{k}_{j}', bm, M_LEAF[(k + j) % 3], smooth=False)
+    cyl('rug', 1.7, .02, Vector((.2, 4.4, .012)), mat('rug_b', '#cfe3bf', .95), 96)
+    cyl('rug_rim', 1.78, .015, Vector((.2, 4.4, .008)), mat('rug_rim', '#8fbf7a', .95), 96)
+    # 會飛的小鳥(網頁上繞著房間飛、翅膀拍動):零件掛在空物件 prop_birdfly 底下,左右翅膀各掛在 prop_birdfly_wl / _wr(網頁上轉)
+    fp = Vector((1.3, 4.6, 2.3)); nmf = 'prop_birdfly'
+    parts = songbird(nmf, fp - Vector((0, 0, .1)), 0.0, '#3aa0e6', '#2a4f9a', '#e8f4fb', beak='#e8a23a', tail=.09, s=1.1, wings=False)
+    e = bpy.data.objects.new(nmf, None); col.objects.link(e); e.location = fp
+    wings_ = []
+    for sd, nmw in ((1, 'wl'), (-1, 'wr')):
+        sh = bpy.data.objects.new(f'{nmf}_{nmw}', None); col.objects.link(sh); sh.location = fp + Vector((0, sd * .04, 0))
+        w_ = _bpart(f'{nmf}_{nmw}_feather', 'sph', Vector((.07, .13, .012)), Vector((-.01, sd * .14, 0)), mat('bd_#2a4f9a', '#2a4f9a', .55), 0.0, fp)
+        wings_.append((sh, w_))
+    bpy.context.view_layer.update()
+    for o in parts: o.parent = e; o.matrix_parent_inverse = e.matrix_world.inverted()
+    for sh, w_ in wings_: sh.parent = e; sh.matrix_parent_inverse = e.matrix_world.inverted()
+    bpy.context.view_layer.update()
+    for sh, w_ in wings_: w_.parent = sh; w_.matrix_parent_inverse = sh.matrix_world.inverted()
+
+THEMES = {'kitty': kitty, 'stocks': stocks, 'ocean': ocean, 'planet': planet, 'rails': rails, 'birds': birds}
 THEMES[ROOM]()
 
 world = bpy.data.worlds.new('space'); scene.world = world; world.use_nodes = True

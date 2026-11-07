@@ -10,16 +10,16 @@ ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 import os
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.abspath(os.path.join(ROOT, '..', '..'))
-SHOTS = ['kittycafe.jpg', 'cat-board.jpg', 'oceancleanup.jpg', 'tinyplanet.jpg', 'woodenrails.jpg']
+SHOTS = ['kittycafe.jpg', 'cat-board.jpg', 'oceancleanup.jpg', 'tinyplanet.jpg', 'woodenrails.jpg', 'birdpark.jpg']
 MODE = ARGS[0] if ARGS else 'preview'
 OUT = ARGS[1] if len(ARGS) > 1 else '/tmp/hall_preview.png'
 
 HALL_R, WALL_T, WALL_H = 8.0, 0.5, 5.4
 DOOR_W, DOOR_H, FD = 2.4, 2.75, 1.1
 CEIL_Y = WALL_H + 3.0
-N_DOORS, SPAN = 5, math.radians(150)
+N_DOORS, SPAN = 6, math.radians(180)                # 6 道門:每道仍是 30°(跟原本 5 道 / 150° 一樣寬)
 BEARINGS = [-SPAN / 2 + SPAN * (i + .5) / N_DOORS for i in range(N_DOORS)]
-ACCENTS = ['#ff8fb0', '#7fe0a0', '#5ad0ff', '#b48bff', '#ffb35c']
+ACCENTS = ['#ff8fb0', '#7fe0a0', '#5ad0ff', '#b48bff', '#ffb35c', '#a8e063']
 
 # ---------------- 場景 ----------------
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -336,18 +336,18 @@ for i, b in enumerate(pillars):
     else: place('calathea_orbifolia_01', pp, rz, 2.1, keep=['calathea_orbifolia_01_a'])
 # 入口兩側:大白色圓花盆(上緣 z = .62)+ 發財樹;花盆本身不烘光(見下面 prop_ 的說明)
 for sx in (-1, 1):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=128, radius=.5, depth=.62, location=(sx * 3.6, -5.6, .31)); o = link(bpy.context.active_object); o.name = f'prop_planter_round_{sx}'; o.data.materials.append(M_CERAMIC)   # prop_:不烘光、網頁即時打光(烘的時候圓角邊緣分到的貼圖太細,會出現黑色髒邊)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=128, radius=.5, depth=.62, location=(sx * 3.0, -6.4, .31)); o = link(bpy.context.active_object); o.name = f'prop_planter_round_{sx}'; o.data.materials.append(M_CERAMIC)   # prop_:不烘光、網頁即時打光(烘的時候圓角邊緣分到的貼圖太細,會出現黑色髒邊)
     for pl in o.data.polygons: pl.use_smooth = True                      # 即時打光看得到每一面 → 平滑著色、128 段(不然側面一條條)
     bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .04; bv.segments = 4; bv.limit_method = 'ANGLE'; bv.harden_normals = True
-    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.44, depth=DEPTH * 2, location=(sx * 3.6, -5.6, .62)); dig(o, bpy.context.active_object); bpy.context.active_object.name = f'cut_soil_round_{sx}'
+    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.44, depth=DEPTH * 2, location=(sx * 3.0, -6.4, .62)); dig(o, bpy.context.active_object); bpy.context.active_object.name = f'cut_soil_round_{sx}'
     top = .62 - SOIL_DOWN
-    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.437, depth=DEPTH - SOIL_DOWN, location=(sx * 3.6, -5.6, .62 - DEPTH + (DEPTH - SOIL_DOWN) / 2))
+    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=.437, depth=DEPTH - SOIL_DOWN, location=(sx * 3.0, -6.4, .62 - DEPTH + (DEPTH - SOIL_DOWN) / 2))
     so = link(bpy.context.active_object); so.name = f'soil_round_{sx}'; so.data.materials.append(M_SOIL)
     def rd(sx=sx):                                                          # 圓盆土面上的隨機一點
         a_, r_ = rng.uniform(0, math.tau), .41 * math.sqrt(rng.random())
-        return (sx * 3.6 + math.cos(a_) * r_, -5.6 + math.sin(a_) * r_)
+        return (sx * 3.0 + math.cos(a_) * r_, -6.4 + math.sin(a_) * r_)
     clumps(f'pebbles_round_{sx + 1}', [0] * 30, top, rd)
-    place('pachira_aquatica_01', (sx * 3.6, -5.6, top - .04), sx * .8, 1.0, keep=['_d'])
+    place('pachira_aquatica_01', (sx * 3.0, -6.4, top - .04), sx * .8, 1.0, keep=['_d'])
 soil_cut.hide_render = True; soil_cut.hide_viewport = True
 # 左側休息區:弧形沙發 + 未來感茶几(在右側沙發後面蓋,因為要用到 curve_obj)
 # 右側休息區:中古風躺椅 + 腳凳 + 邊桌 + 小盆栽
@@ -440,7 +440,7 @@ p, nv = spine_frame(int(N * .68)); tx, ty = p.x + nv.x * .62, p.y + nv.y * .62
 for nm, r, d, z in (('top', .26, .02, .55), ('stem', .02, .54, .27), ('foot', .16, .015, .008)):
     bpy.ops.mesh.primitive_cylinder_add(vertices=64 if r > .05 else 24, radius=r, depth=d, location=(tx, ty, z)); e = link(bpy.context.active_object); e.data.materials.append(M_BRONZE); e.name = f'prop_sofa_sidetable_{nm}'; sofa.append(e)
 # 整組擺進大廳:沙發中心 C(沿著大廳的圓,往入口那邊挪,方位角 116°、半徑 5.87),正面(-y)朝大廳中心、背靠牆(順著圓弧)
-SOFA_B, SOFA_R = math.radians(116), 5.87
+SOFA_B, SOFA_R = math.radians(126), 5.87                                 # 6 道門(180°)後往入口再挪 13°,不擋第 6 道門
 Cx, Cy = math.sin(SOFA_B) * SOFA_R, math.cos(SOFA_B) * SOFA_R
 fx, fy = -Cx, -Cy; _n = math.hypot(fx, fy); fx, fy = fx / _n, fy / _n
 th = math.atan2(fx, -fy)
@@ -478,7 +478,7 @@ M_LACQUER = mat('lacquer_white', '#f6f4f0', .12, coat=.8)
 M_CHAMPAGNE = mat('champagne', '#c9b48e', .3, metal=1.0)
 M_CHROME = mat('chrome', '#c4c6ca', .2, metal=1.0)
 M_GOLDLED = mat('gold_led', '#000000', 1, emit='#ffc26b', emit_k=18)
-LOUNGE_B, LOUNGE_R = math.radians(-116), 5.17                                 # 茶几中心:沿著大廳的圓往入口那邊挪(跟右邊沙發對稱)
+LOUNGE_B, LOUNGE_R = math.radians(-126), 5.17                                 # 茶几中心:沿著大廳的圓往入口那邊挪(跟右邊沙發對稱)
 TX, TY = math.sin(LOUNGE_B) * LOUNGE_R, math.cos(LOUNGE_B) * LOUNGE_R
 fx, fy = -TX, -TY; _n = math.hypot(fx, fy); fx, fy = fx / _n, fy / _n          # 朝大廳中心:弧形沙發包在牆那一側(順著圓弧)
 ab = math.atan2(-fy, -fx); SP = math.radians(72); A0, A1 = ab - SP, ab + SP     # 沙發包在玩家的反方向
@@ -559,7 +559,7 @@ elif VIEW == 'lounge': # 左邊休息區(弧形沙發 + 茶几)
 elif VIEW == 'planter': # 柱腳花盆特寫(看土)
     b = pillars[2]; eye, look, fov = at(b, HALL_R - 2.4, 1.6), at(b, HALL_R - .9, .5), 45
 elif VIEW == 'entry': # 入口的大圓花盆(發財樹)
-    eye, look, fov = Vector((1.6, -3.6, 1.9)), Vector((3.6, -5.6, .45)), 45
+    eye, look, fov = Vector((1.6, -3.6, 1.9)), Vector((3.0, -6.4, .45)), 45
 elif VIEW == 'rlounge': # 右邊休息區(躺椅)
     eye, look, fov = Vector((2.2, -4.6, 1.5)), Vector((5.6, -.4, .9)), 50
 cam_d.angle = math.radians(fov); cam.location = eye
