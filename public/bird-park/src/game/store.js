@@ -800,7 +800,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     const draw = labelDraw({ ...it, spec: spec(it) }, state)
     const t = canvasTex(512, 192, draw)
     const card = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.15), new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 }))
-    card.position.set(x, 0.96, z + 0.36); card.rotation.x = -0.55; g.add(card)
+    card.position.set(x, 0.99, z + 0.36); card.rotation.x = -0.55; g.add(card)   // 下緣（中心往下 0.064）要靠在前面那條擋邊上（頂 0.922），太低最下面那行規格會被台面吃掉
     box('charcoal', 0.42, 0.012, 0.06, x, 0.916, z + 0.38)
     addCollider(x, z, 0.48, 1.5)
     const pitch = state.owned.includes(it.id) ? tr('{name}你已經有了，用得還順手嗎？', { name: it.name }) : tr(kind === 'lens' ? '這支{name}，{spec}，按 E 可以看詳細！' : '這台{name}，{spec}，按 E 可以看詳細！', { name: it.name, spec: spec(it) })
