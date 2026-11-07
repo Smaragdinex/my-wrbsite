@@ -217,7 +217,8 @@ function buildHeights() {
       if (x <= 20 && rho > 1.02) h = 0
       // 相機行那棟和通道底下攤平成 0（不然溫室牆邊的種植坡會從店的地板冒出來）
       const sx = smoothstep(STORE.X0 + 3.5, STORE.X0 + 1.5, x) * smoothstep(STORE.HZ + 2, STORE.HZ, Math.abs(z))
-      const sp = smoothstep(-66, -69.5, x) * smoothstep(STORE.DOOR_W + 2.5, STORE.DOOR_W + 0.6, Math.abs(z))
+      // 通道（寬 ±4）兩側各留一段平地再慢慢接回種植坡：以前坡從通道玻璃邊直接爬上去，從通道裡往左右看整面都是草牆
+      const sp = smoothstep(-64, -68.5, x) * smoothstep(STORE.DOOR_W + 7.5, STORE.DOOR_W + 3.2, Math.abs(z))
       const se = smoothstep(62, 68, x) * smoothstep(5.5, 3.6, Math.abs(z))   // 往山區的步道出口攤平
       const ss_ = !COAST_ON ? 0 : smoothstep(-44, -49.5, z) * smoothstep(CCORR.W + 2.5, CCORR.W + 0.6, Math.abs(x))   // 南門（往海岸館）
       h = lerp(h, 0, Math.max(sx, sp, se, ss_))

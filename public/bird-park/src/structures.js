@@ -260,14 +260,23 @@ export function buildDome(scene) {
     const c = ex(p), s = Math.sin(p)
     for (const [sc, y] of [[s1, -0.5], [s1, H], [s2, H], [s2, -0.5]]) wallPos.push(sc * c, y, ez(p, sc))
   }
+  // 入口的缺口：兩端都要封起來（以前斷面是空的，從通道看出去像一片白板浮在半空）
+  const gapAt = (i) => { const p = eqAngle(i / N), x = ex(p) * s1, z = ez(p, s1); return x < 0 && Math.abs(z) < DOOR.W + 0.25 }
+  const caps = []
   for (let i = 0; i < N; i++) {
     const p = eqAngle((i + 0.5) / N)
     const x = ex(p), z = ez(p)
-    if (x < 0 && Math.abs(z) < DOOR.W + 0.1) continue
+    if (gapAt(i) || gapAt(i + 1)) {
+      // 這一段不畫；旁邊那段有畫的話，在交界的頂點補一片封口
+      if (!gapAt(i)) caps.push(i)
+      if (!gapAt(i + 1)) caps.push(i + 1)
+      continue
+    }
     if (COAST_ON && z < 0 && Math.abs(x) < CCORR.W + 0.1) continue   // 南門
     const a = i * 4, b = (i + 1) * 4
     for (let f = 0; f < 3; f++) wallIdx.push(a + f, b + f, a + f + 1, a + f + 1, b + f, b + f + 1)
   }
+  for (const i of caps) { const a = i * 4; wallIdx.push(a, a + 1, a + 2, a, a + 2, a + 3) }
   const wg = new THREE.BufferGeometry()
   wg.setAttribute('position', new THREE.Float32BufferAttribute(wallPos, 3))
   wg.setIndex(wallIdx)
