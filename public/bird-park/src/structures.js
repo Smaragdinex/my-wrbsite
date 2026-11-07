@@ -123,6 +123,87 @@ function domeGeometry(scale = 1, nu = 320, nv = 56) {
   return g
 }
 
+
+/* ---------- 寫實材質（著色器裡畫細節，不用貼圖檔） ---------- */
+// 用世界座標算的雜訊、磚縫、模板紋；細節小於一個像素時淡掉，遠看不閃。
+const SURF_GLSL = `
+  varying vec3 vSW; varying vec3 vSN;
+  float sHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float sNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(sHash(i), sHash(i + vec2(1, 0)), f.x), mix(sHash(i + vec2(0, 1)), sHash(i + vec2(1, 1)), f.x), f.y); }
+  float sFbm(vec2 p) { return sNoise(p) * 0.55 + sNoise(p * 2.13 + 7.1) * 0.3 + sNoise(p * 4.7 - 3.3) * 0.15; }
+  // 整數位置（x = 0, 1, 2…）上的一條線，寬 w（以一格為 1）；抗鋸齒
+  float sLine(float x, float w) { float f = abs(fract(x) - 0.5); float aa = fwidth(x) + 1e-4; return smoothstep(0.5 - w - aa, 0.5 - w + aa, f); }
+`
+function surface(mat, key, body) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSW; varying vec3 vSN;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSW = (modelMatrix * vec4(transformed, 1.0)).xyz; vSN = normalize(mat3(modelMatrix) * objectNormal);')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + SURF_GLSL)
+      .replace('#include <color_fragment>', '#include <color_fragment>\n{\n' + body + '\n}')
+  }
+  mat.customProgramCacheKey = () => key
+  return mat
+}
+// 牆腳矮牆：清水模（一塊塊模板的接縫、繫結螺栓孔、深淺斑），頂上一條花崗石壓頂，牆腳返潮變深、帶一點青苔
+function kneeWallMaterial(H) {
+  return surface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, side: THREE.DoubleSide }), 'kneeWall1', `
+    vec3 c = vec3(0.70, 0.69, 0.66);
+    float top = step(0.5, vSN.y);
+    float u = vSW.x * 0.71 + vSW.z * 0.7;            // 沿牆的大約距離
+    float near = 1.0 - smoothstep(4.0, 30.0, length(vViewPosition));
+    // 模板：1.2 公尺一塊，接縫和螺栓孔
+    float seam = sLine(u / 1.2, 0.012) * (1.0 - top);
+    vec2 cell = vec2(fract(u / 0.6), fract((vSW.y + 0.5) / 0.55));
+    float hole = (1.0 - smoothstep(0.02, 0.04, length((cell - 0.5) * vec2(0.6, 0.55)))) * (1.0 - top) * near;
+    c *= 0.9 + 0.16 * sFbm(vec2(u, vSW.y) * 1.3) + 0.05 * sNoise(vec2(u, vSW.y) * 9.0) * near;
+    c *= 1.0 - 0.18 * seam - 0.35 * hole;
+    // 壓頂：最上面 8 公分＋頂面是深一點的花崗石，細碎斑點
+    float cope = max(top, smoothstep(${(H - 0.09).toFixed(3)}, ${(H - 0.08).toFixed(3)}, vSW.y));
+    vec3 g = vec3(0.56, 0.56, 0.55) * (0.88 + 0.2 * sNoise(vSW.xz * 70.0) * near + 0.1 * sFbm(vSW.xz * 0.8));
+    c = mix(c, g, cope);
+    // 牆腳返潮、青苔
+    float damp = (1.0 - smoothstep(0.0, 0.35, vSW.y)) * (1.0 - top);
+    c = mix(c, c * vec3(0.62, 0.68, 0.58), damp * (0.6 + 0.4 * sFbm(vec2(u * 2.0, vSW.y * 3.0))));
+    // 雨水流下的痕跡
+    c *= 1.0 - 0.08 * smoothstep(0.55, 0.8, sNoise(vec2(u * 3.0, 0.5))) * (1.0 - top) * smoothstep(${H.toFixed(2)}, 0.2, vSW.y);
+    diffuseColor.rgb = c;`)
+}
+// 通道地板：60 公分見方的灰色花崗石磚，石縫、每塊深淺不同、細碎晶斑；靠溫室那頭一條不鏽鋼排水溝蓋
+function corridorFloorMaterial(xGrate) {
+  return surface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55 }), 'corridorFloor1', `
+    vec2 q = vSW.xz / 0.6;
+    vec2 id = floor(q);
+    float grout = max(sLine(q.x, 0.022), sLine(q.y, 0.022));
+    float near = 1.0 - smoothstep(3.0, 20.0, length(vViewPosition));
+    vec3 c = vec3(0.74, 0.73, 0.70) * (0.9 + 0.14 * sHash(id));
+    c *= 0.92 + 0.1 * sFbm(vSW.xz * 3.0);
+    c *= 1.0 + (sNoise(vSW.xz * 90.0) - 0.5) * 0.18 * near + (sNoise(vSW.xz * 23.0) - 0.5) * 0.08;      // 花崗石的晶斑
+    c = mix(c, vec3(0.42, 0.42, 0.40), grout * 0.85);
+    // 排水溝蓋：一條 20 公分寬的不鏽鋼格柵
+    float gx = abs(vSW.x - (${xGrate.toFixed(2)}));
+    float grate = 1.0 - smoothstep(0.1, 0.105, gx);
+    float slot = sLine(vSW.z / 0.025, 0.18) * (1.0 - smoothstep(0.085, 0.09, gx));
+    c = mix(c, mix(vec3(0.62, 0.63, 0.64), vec3(0.08), slot), grate);
+    // 走道中間被踩得比較亮、比較光滑的一條
+    c *= 1.0 + 0.05 * (1.0 - smoothstep(0.4, 1.6, abs(vSW.z)));
+    diffuseColor.rgb = c;`)
+}
+// 玻璃：正面看幾乎透明，斜斜看反射天空、地面變亮（菲涅耳）；有一點點綠色的玻璃邊色
+function realGlass(mat) {
+  const prev = mat.onBeforeCompile
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.(sh, r)
+    sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
+      { vec3 Vv = normalize(vViewPosition); float fr = pow(1.0 - abs(dot(normalize(vNormal), Vv)), 4.0);
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.86, 0.92, 0.95), fr * 0.7);
+        gl_FragColor.a = clamp(gl_FragColor.a + fr * 0.55, 0.0, 0.85); }`)
+  }
+  const k = mat.customProgramCacheKey?.() ?? ''
+  mat.customProgramCacheKey = () => k + 'glassF'
+  return mat
+}
+
 // 入口：圓頂門口到相機行（溫室外面另一棟店，store.js）之間的玻璃通道。
 // 鋼構漆白（跟圓頂主拱肋同色）：角柱、簷樑、人字屋頂、玻璃分隔條；兩頭都是開口，靠溫室那頭上面掛綠色「出口」燈箱。
 // 圓頂的玻璃和斜格網在門口挖掉（cutDoor），主拱肋錯開半格，門中間不會有柱子。
@@ -143,7 +224,7 @@ function buildEntrance() {
   const g = new THREE.Group()
   const steel = new THREE.MeshStandardMaterial({ color: 0xf2f4f5, roughness: 0.45, metalness: 0.5 })
   const alu = new THREE.MeshStandardMaterial({ color: 0x3c4246, roughness: 0.35, metalness: 0.8 })
-  const glassM = new THREE.MeshStandardMaterial({ color: 0xcfe4ea, transparent: true, opacity: 0.16, roughness: 0.04, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false })
+  const glassM = realGlass(new THREE.MeshStandardMaterial({ color: 0xcfe4ea, transparent: true, opacity: 0.12, roughness: 0.04, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false }))
   const { W, X0, X1, EAVE, RIDGE } = DOOR, L = X0 - X1, XM = (X0 + X1) / 2
   const geos = { steel: [], alu: [] }
   // 兩點之間拉一根方管（a、b 世界座標、t 管徑）
@@ -189,7 +270,7 @@ function buildEntrance() {
   // 內側（接圓頂）：開口的門框，上面一根大樑
   bar(geos.steel, V(X0, EAVE, -W), V(X0, EAVE, W), 0.26, 0.4)
   // 地板：通道鋪石材
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(L + 0.2, 0.08, W * 2), new THREE.MeshStandardMaterial({ color: 0xd9d6cf, roughness: 0.6 }))
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(L + 0.2, 0.08, W * 2), corridorFloorMaterial(X0 - 0.35))
   floor.position.set(XM, 0.0, 0); floor.receiveShadow = true; g.add(floor)
   for (const [k, m] of [['steel', steel], ['alu', alu]]) {
     const mesh = new THREE.Mesh(mergeGeometries(geos[k]), m)
@@ -281,7 +362,7 @@ export function buildDome(scene) {
   wg.setAttribute('position', new THREE.Float32BufferAttribute(wallPos, 3))
   wg.setIndex(wallIdx)
   wg.computeVertexNormals()
-  const wall = new THREE.Mesh(wg, new THREE.MeshStandardMaterial({ color: 0xcfc8ba, roughness: 0.9, side: THREE.DoubleSide }))
+  const wall = new THREE.Mesh(wg, kneeWallMaterial(H))
   wall.receiveShadow = true
   group.add(wall)
 
