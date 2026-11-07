@@ -1173,8 +1173,11 @@ export function buildRamp(scene) {
     const a = k * 2, b = a + 2
     deckI.push(a, b, a + 1, a + 1, b, b + 1)
     const s = k * 4, t = s + 4
-    for (let f = 0; f < 3; f++) sideI.push(s + f, t + f, s + f + 1, s + f + 1, t + f, t + f + 1)
-    quads(ledI, k, false, false)
+    // 跟觀景台重疊的那段：外側的側板和燈條不畫（以前側板的上緣會變成一根金屬條橫過平台地板）
+    const pk = rampSample(k / N), Bk = at(k / N, pk.ro), Bk1 = at((k + 1) / N, rampSample((k + 1) / N).ro)
+    const outOnDeck = inDeck(Bk.x, Bk.z, Bk.y) || inDeck(Bk1.x, Bk1.z, Bk1.y)
+    for (let f = 0; f < 3; f++) if (!(outOnDeck && f >= 1)) sideI.push(s + f, t + f, s + f + 1, s + f + 1, t + f, t + f + 1)
+    quads(ledI, k, false, outOnDeck)
     // 起點前 0.6 公尺不裝欄杆；跟觀景台重疊的那段外側欄杆拿掉
     const p = rampSample(k / N)
     if (p.y - RAMP.y0 < 0.6) continue
@@ -1329,8 +1332,8 @@ export function buildRamp(scene) {
   const dg = new THREE.CircleGeometry(DECK.r, 48).rotateX(-Math.PI / 2)
   const du = dg.attributes.uv
   for (let i = 0; i < du.count; i++) du.setXY(i, du.getX(i) * DECK.r * 0.5, du.getY(i) * DECK.r)
-  const platform = new THREE.Mesh(dg, deckMat)
-  platform.position.set(DECK.x, DECK.y + 0.005, DECK.z)
+  const platform = new THREE.Mesh(dg, new THREE.MeshStandardMaterial({ map: T.woodDeckTex(false), roughness: 0.72, metalness: 0.05 }))
+  platform.position.set(DECK.x, DECK.y + 0.012, DECK.z)   // 蓋在步道末段上面（同高，差 1 公分才不會閃）
   platform.receiveShadow = platform.castShadow = true
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(DECK.r, DECK.r, TH, 48, 1, true), steel)
   rim.position.set(DECK.x, DECK.y - TH / 2, DECK.z)

@@ -78,7 +78,7 @@ function groundOK(x, z, { clear = 1, mtnPad = 1.2, pool = 1.3, rho = 0.94 } = {}
   if (d < mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + mtnPad) return false
   // 低矮步道正下方不種，免得穿出步道
   const gy = terrainHeight(x, z)
-  if (d < 20 && rampHeights(x, z).some((h) => h - gy < 2.5)) return false
+  if (d < 23 && rampHeights(x, z).some((h) => h - gy < 2.5)) return false
   return true
 }
 function randInGarden(rnd) {
@@ -274,6 +274,9 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
   const tint = (h = 0.06, l = 0.12) => new THREE.Color().setHSL(0.25 + (rnd() - 0.5) * h, 0.15, 0.92 + (rnd() - 0.5) * l)
   const lists = {}
   const put = (name, it) => (lists[name] ||= []).push(it)
+  // 模型（縮放 1 時）離中心最遠的距離：岩塊轉向任意，所以用包圍盒對角線的一半
+  const extCache = {}
+  const rockExt = (name) => extCache[name] ??= (lib[name] ? new THREE.Box3().setFromObject(lib[name]).getSize(v3()).length() / 2 : 1)
   const H = (name) => nodeHeight(lib[name])
 
   // 導覽站用的「主角」：固定位置，鏡頭對著拍（stops.js 用回傳的 heroes）
@@ -455,7 +458,12 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     // 岩塊的「上面」（長苔那面）朝外上方
     const q = new THREE.Quaternion().setFromUnitVectors(UP, out.clone().add(v3(0, 1.2, 0)).normalize()).multiply(qY(rnd() * TAU))
     const d = r + show - 0.7 * s
-    put(pick(rockNames), { p: v3(MTN.x + d * out.x, y, MTN.z + d * out.z), q, s: sc(s), c: new THREE.Color().setHSL(0.22, 0.12, 0.85 + rnd() * 0.1) })
+    // 用模型真正的大小檢查：岩塊最外面要離步道內緣 25 公分以上（只在它的高度範圍內有步道經過時）
+    const nm = pick(rockNames), ext = rockExt(nm) * s
+    const lv = rampHeights(MTN.x + (rampInner(y) + 0.5) * out.x, MTN.z + (rampInner(y) + 0.5) * out.z)
+    if (lv.some((h) => y - ext < h + 2.4 && y + ext > h - 0.5) && d + ext > rampInner(y) - 0.25) continue
+    if (typeof window !== 'undefined') (window.__mtnRocks ||= []).push({ x: MTN.x + d * out.x, y, z: MTN.z + d * out.z, ext, th, d })   // 除錯：檢查有沒有凸到步道
+    put(nm, { p: v3(MTN.x + d * out.x, y, MTN.z + d * out.z), q, s: sc(s), c: new THREE.Color().setHSL(0.22, 0.12, 0.85 + rnd() * 0.1) })
     placed++
   }
   // 地上散石與池邊石

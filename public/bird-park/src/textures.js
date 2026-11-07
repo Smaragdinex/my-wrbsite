@@ -63,7 +63,8 @@ export function gratingTex() {
 }
 
 // 空中步道木棧板：u 橫跨整個步道寬（0～1，兩側是不鏽鋼收邊），v 沿步道每格 2 公尺
-export function woodDeckTex() {
+// edge：兩側畫不鏽鋼收邊（步道用）；觀景台是整片重複貼，不能有收邊，不然地板上會出現一條條金屬條
+export function woodDeckTex(edge = true) {
   const W = 512, H = 512, rnd = mulberry32(17)
   const [c, g] = canvas(W, H)
   const planks = 14, ph = H / planks
@@ -86,10 +87,12 @@ export function woodDeckTex() {
     for (const x of [W * 0.12, W * 0.5, W * 0.88]) { g.beginPath(); g.arc(x, i * ph + ph / 2, 2.2, 0, TAU); g.fill() }
   }
   // 兩側不鏽鋼收邊
-  const eg = g.createLinearGradient(0, 0, W * 0.05, 0)
-  eg.addColorStop(0, '#8d9596'); eg.addColorStop(0.8, '#c7cdcd'); eg.addColorStop(1, '#6f7677')
-  g.fillStyle = eg; g.fillRect(0, 0, W * 0.05, H)
-  g.save(); g.translate(W, 0); g.scale(-1, 1); g.fillStyle = eg; g.fillRect(0, 0, W * 0.05, H); g.restore()
+  if (edge) {
+    const eg = g.createLinearGradient(0, 0, W * 0.05, 0)
+    eg.addColorStop(0, '#8d9596'); eg.addColorStop(0.8, '#c7cdcd'); eg.addColorStop(1, '#6f7677')
+    g.fillStyle = eg; g.fillRect(0, 0, W * 0.05, H)
+    g.save(); g.translate(W, 0); g.scale(-1, 1); g.fillStyle = eg; g.fillRect(0, 0, W * 0.05, H); g.restore()
+  }
   return toTex(c, { repeat: true })
 }
 

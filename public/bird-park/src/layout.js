@@ -15,8 +15,9 @@ export const AM = (x, z) => [76 + (x - 76) * AS, z * AS]
 export const GARDEN = { A: 75, B: 55 }
 export const MTN = { x: 12, z: -6, h: 32 }           // 中央雲霧山
 export const POOL = { x: -3, z: -6, rx: 10, rz: 18, water: -0.55 }   // 西緣不能再往外（環山步道在 x≈-16），所以往南北拉長
-export const RAMP = { theta0: Math.PI / 2, turns: 2.2, y0: 0, y1: 24, width: 3, gap: 2.1 }
-export const DECK = { r: 4.5, x: 0, z: 0, y: 0 }
+// width：步道寬（2026-11-07 從 3 加寬到 4.2）；flat：最後這段（比例）不再爬升，和觀景台一樣高，走上平台不會有一階
+export const RAMP = { theta0: Math.PI / 2, turns: 2.2, y0: 0, y1: 24, width: 4.2, gap: 2.1, flat: 0.035 }
+export const DECK = { r: 7, x: 0, z: 0, y: 0 }   // 頂端圓形觀景台（2026-11-07 從半徑 4.5 放大到 7）
 // 相機行：溫室入口外面另外一棟店（像美術館門口的商店），遊戲從店裡開始，穿過玻璃通道的門才進溫室。
 // x 從 X0（靠溫室那面牆，中間開口接通道）到 X1（店門口那面），z ±HZ；通道：x 從 X0 到圓頂門口，寬 ±DOOR_W
 export const STORE = { X0: -75.6, X1: -88.6, HZ: 7.5, H: 5.0, DOOR_W: 3.4 }
@@ -72,7 +73,7 @@ export function mtnR(theta, y) {
 export const rampInner = (y) => mtnBase(y) + RAMP.gap
 export function rampSample(s) {
   const th = RAMP.theta0 + s * RAMP.turns * TAU
-  const y = RAMP.y0 + (RAMP.y1 - RAMP.y0) * s
+  const y = RAMP.y0 + (RAMP.y1 - RAMP.y0) * Math.min(1, s / (1 - RAMP.flat))
   const ri = rampInner(y)
   return { th, y, ri, ro: ri + RAMP.width }
 }
@@ -91,8 +92,9 @@ export function rampHeights(x, z) {
   return out
 }
 function initDeck() {
+  // 觀景台的內緣對齊步道末端的內緣：步道最後一段（平的）整段落在平台上，平台把它蓋住，接起來沒有縫、沒有一階
   const e = rampSample(1)
-  const rc = e.ro + 2.2
+  const rc = e.ri + DECK.r
   DECK.x = MTN.x + rc * Math.cos(e.th)
   DECK.z = MTN.z + rc * Math.sin(e.th)
   DECK.y = e.y
