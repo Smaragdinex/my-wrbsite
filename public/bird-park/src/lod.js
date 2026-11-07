@@ -37,7 +37,8 @@ export function lodRegister(meshes, h) {
   const cols = meshes.map((m) => m.instanceColor ? m.instanceColor.array.slice(0, n * 3) : null)
   // 矮的（蕨類、地被）14～40 公尺開始變稀、更遠就不畫；4 公尺以上的樹只做視野外不畫
   const d0 = Math.max(14, h * 14), d1 = h >= 4 ? Infinity : Math.max(32, h * 40)
-  sets.push({ meshes, n, base, cols, pos, rad, hash, d0, d1, vis: new Uint32Array(n) })
+  for (const m of meshes) if (m.castShadow) m.userData.lodManaged = true   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
+  sets.push({ meshes, n, base, cols, pos, rad, hash, d0, d1, vis: new Uint32Array(n), proxies: null })
   lodStats.instances += n * meshes.length
   last.fov = 0   // 下一格強制更新
 }
@@ -47,6 +48,29 @@ export function lodRegisterGrass(mesh, center, r) {
   grass.push({ mesh, c: center.clone(), r, n: mesh.geometry.instanceCount })
   lodStats.grass += mesh.geometry.instanceCount
   last.fov = 0
+}
+
+// 陰影替身：LOD 只留看得到的那幾株，陰影卻要整片都有（陰影貼圖會留著重複用）。
+// 每種會投影的植物多放一份「全部的株、不變稀、不剔除」的 InstancedMesh，只放在陰影層（shadowcache.js），主畫面看不到。
+// 共用幾何和材質，只多一份矩陣。
+export function lodShadowProxies() {
+  for (const S of sets) {
+    if (S.proxies) continue
+    if (!S.meshes.every((m) => m.parent)) continue   // 還沒加進場景：下次再做
+    S.proxies = []
+    for (const m of S.meshes) {
+      if (!m.userData.lodManaged) continue
+      const px = new THREE.InstancedMesh(m.geometry, m.material, S.n)
+      px.instanceMatrix.array.set(S.base)
+      px.position.copy(m.position); px.quaternion.copy(m.quaternion); px.scale.copy(m.scale)
+      px.castShadow = true; px.receiveShadow = false
+      px.customDepthMaterial = m.customDepthMaterial
+      px.layers.set(5); px.userData.shadowProxy = true; px.name = (m.name || 'lod') + ':shadow'
+      px.computeBoundingSphere()
+      m.parent.add(px)
+      S.proxies.push(px)
+    }
+  }
 }
 
 export function lodUpdate(camera, force = false) {

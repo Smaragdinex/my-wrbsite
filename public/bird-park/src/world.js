@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { lodUpdate } from './lod.js'
 import { createAlpine } from './alpine.js'
 import { createHalls } from './halls.js'
+import { createShadowCache } from './shadowcache.js'
 import { createCoast } from './coast.js'
 import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight } from './structures.js'
 import { buildFlora } from './flora.js'
@@ -166,11 +167,14 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   // 畫質設定（遊戲的設定畫面會改）：水面倒影的解析度、幾格更新一次
   const quality = { reflScale: PHONE ? 0.3 : 0.5, reflEvery: PHONE ? 3 : 2 }
+  const shadows = createShadowCache({ renderer, scene, sun, camera })
+  let lastR = performance.now()
   function render(cam = camera) {
+    const now = performance.now(); shadows.update(Math.min(0.1, (now - lastR) / 1000)); lastR = now
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     renderer.render(scene, cam)
   }
-  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, quality, plantLib, halls, alpine }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */
