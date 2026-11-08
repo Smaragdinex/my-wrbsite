@@ -802,6 +802,14 @@ function perchRigged(env, cfg) {
   r.model.scale.setScalar(k); r.model.position.y = -cfg.foot * k
   inner.add(r.model); inner.rotation.y = cfg.rotY
   lift.add(inner); root.add(lift)
+  // 兩隻腳的中點要落在停棲點（樹枝中線）上：有的模型原點在身體中心（藍鵲尾巴很長，腳在原點前面 27 公分），
+  // 停在枝上時腳整個懸在樹枝前面（2026-11-09 使用者：第 20 隻沒站在樹枝上）。量一次、把模型往回挪
+  if (r.bones.footL && r.bones.footR) {
+    root.updateMatrixWorld(true)
+    const inv = new THREE.Matrix4().copy(root.matrixWorld).invert()
+    const mid = r.bones.footL.getWorldPosition(V()).add(r.bones.footR.getWorldPosition(V())).multiplyScalar(0.5).applyMatrix4(inv)
+    if (Math.hypot(mid.x, mid.z) > 0.015) { inner.position.x -= mid.x; inner.position.z -= mid.z }
+  }
   // 飛行用的第二個模型（翅膀張開生成、另外綁翅膀骨架）：離開樹枝時換成它，回到枝上再換回來
   const fr = cfg.fly ? rigged(cfg.fly.name) : null
   if (fr) { fr.model.scale.setScalar(cfg.fly.k); fr.model.position.y = cfg.fly.y; fr.model.visible = false; inner.add(fr.model) }
