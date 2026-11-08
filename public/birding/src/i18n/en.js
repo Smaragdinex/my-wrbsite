@@ -593,6 +593,94 @@ export const BIRDS = {
   "It is a protected raptor — keep your distance and don't disturb it."
  ]
 },
+ "mandarin": {
+  "name": "Mandarin Duck",
+  "where": "Lake at the Mountain Entrance",
+  "intro": "Taiwan's most ornate duck. The male has a red bill, a broad white eyebrow, orange \"whiskers\" and a pair of upright orange sail feathers on its back. In Taiwan it is a rare resident of clean mid- to high-elevation streams and lakes, nesting in tree holes.",
+  "facts": [
+   "The female is plain grey-brown with a thin white line behind the eye — very different from the male.",
+   "A small breeding population lives along the Qijiawan and Yousheng creeks.",
+   "It nests in tree holes by the water; ducklings jump down from the hole soon after hatching.",
+   "Its name is a symbol of a loving couple, but in fact the pairs change partners every year."
+  ]
+ },
+ "spotbill": {
+  "name": "Eastern Spot-billed Duck",
+  "where": "Lake at the Mountain Entrance",
+  "intro": "One of Taiwan's most common resident ducks. Its dark-brown feathers have pale edges like fish scales, the face is pale with a dark eye-stripe, and the black bill has a bright yellow tip, as if dipped in egg yolk.",
+  "facts": [
+   "Males and females look almost identical, which is unusual among ducks.",
+   "The blue-purple wing patch edged in white shows best in flight.",
+   "Found from lowland ponds and river mouths up to mountain lakes.",
+   "It eats water plants and seeds, often upending with its tail in the air."
+  ]
+ },
+ "partridge": {
+  "name": "Taiwan Partridge",
+  "where": "Forest Floor by the South Slope Trail",
+  "intro": "Endemic to Taiwan. A round body, almost no tail and bright red legs. A white throat is ringed by a black collar with an orange spot in the middle; the breast and flanks are blue-grey with white streaks.",
+  "facts": [
+   "It lives on the floor of old broadleaf forest and is so shy that it is usually only heard.",
+   "Small groups scratch through leaf litter for seeds and insects.",
+   "Its call is a rising series of \"gurr-gurr\" notes, often sung by several birds together.",
+   "It nests at the base of trees or bamboo, laying three or four eggs."
+  ]
+ },
+ "nuthatch": {
+  "name": "Eurasian Nuthatch",
+  "where": "Woods by the High Trail",
+  "intro": "An endemic subspecies with a big head, short tail and long straight bill. Blue-grey above, with a long black eye-stripe, white throat and buff underparts. It can walk head-first down a tree trunk.",
+  "facts": [
+   "Its strong feet let it walk up and down trunks, often spiralling around big trees.",
+   "It picks insects and eggs from bark crevices and also eats seeds.",
+   "It wedges hard nuts into cracks and hammers them open.",
+   "It nests in tree holes and plasters the entrance with mud to make it smaller."
+  ]
+ },
+ "finchbill": {
+  "name": "Collared Finchbill",
+  "where": "Fruit Trees at the Mountain Entrance",
+  "intro": "An endemic subspecies with a thick, ivory, parrot-like bill, a grey-black head, a bold white collar and olive to yellow-green body. Small flocks sit on treetops or wires, giving short, loud calls.",
+  "facts": [
+   "It lives on forest edges, scrub and orchards at low to mid elevations, gathering in fruiting trees.",
+   "It also eats insects and seeds; the stout bill cracks hard husks.",
+   "Its cup-shaped nest is woven from grass stems and leaves in a low bush.",
+   "Both parents raise the chicks."
+  ]
+ },
+ "minivet": {
+  "name": "Grey-chinned Minivet",
+  "where": "Canopy by the South Slope Trail",
+  "intro": "The male is the most striking red bird in the mountains: dark grey head and back, pale grey throat, fiery orange-red underparts, a red wing bar and red edges on the long tail. The female has the same pattern in bright yellow.",
+  "facts": [
+   "Red males and yellow females often fly through the canopy together in mixed flocks.",
+   "It lives in the canopy of low to mid-elevation broadleaf forest.",
+   "It calls in thin, high notes while catching insects among the leaves.",
+   "Taiwan's population is an endemic subspecies."
+  ]
+ },
+ "pitta": {
+  "name": "Fairy Pitta",
+  "where": "Forest Floor Leaf Litter",
+  "intro": "A summer visitor that arrives from Southeast Asia in late April to breed. It really is many-coloured: chestnut crown, black mask, white throat, buff breast, scarlet belly, green back and a shining sky-blue shoulder patch.",
+  "facts": [
+   "It is rare worldwide and protected; birders travel to Taiwan just to see it.",
+   "It lives on the floor of lowland broadleaf forest, digging earthworms from the leaf litter.",
+   "Its two-note call sounds like \"white-wright\", heard most at dawn.",
+   "It flies south again in autumn, so it can only be seen in Taiwan for a few summer months."
+  ]
+ },
+ "grassowl": {
+  "name": "Eastern Grass Owl",
+  "where": "Grassland by the Entrance",
+  "intro": "An endangered owl in Taiwan. Its heart-shaped face is pale pinkish-white with a dark-brown rim and small dark eyes; the back and wings are chocolate brown with golden markings, and it has long legs. It lives not in forest but in open lowland cogon grassland.",
+  "facts": [
+   "By day it rests hidden in tall grass; at night it flies low over the grass hunting rodents.",
+   "Only a few hundred at most remain in Taiwan; grassland loss and rat poison are the biggest threats.",
+   "It nests on the ground inside grass clumps, making tunnels of flattened grass.",
+   "Some farmers now grow crops without rat poison to help it survive."
+  ]
+ },
  "woodowl": {
  "name": "Brown Wood Owl",
  "where": "Forest by the Gorge",

@@ -103,7 +103,11 @@ function backLink(ctx) {
   ctx.fillRect(CW - 70 - w, CH - 46, w, 2); ctx.textAlign = 'left'
 }
 // 目錄每一行的位置（畫和點擊判斷共用）
-const TOC_TOP = 220, tocStep = () => Math.min(46, (CH - 160 - TOC_TOP) / BIRDS.length)
+// 2026-11-09 鳥變 38 種：一欄放不下（每行只剩 21 像素、字疊在一起），超過 30 種分兩欄
+const TOC_TOP = 220, TOC_COLS = () => BIRDS.length > 30 ? 2 : 1, TOC_ROWS = () => Math.ceil(BIRDS.length / TOC_COLS())
+const tocStep = () => Math.min(46, (CH - 160 - TOC_TOP) / TOC_ROWS())
+const TOC_X0 = 76, tocColW = () => (CW - 120) / TOC_COLS()
+const tocPos = (i) => { const r = TOC_ROWS(), c = Math.floor(i / r); return { x0: TOC_X0 + c * tocColW(), y: TOC_TOP + (i % r) * tocStep() } }
 // 沒讀過的新紀錄：紅底白字的小膠囊「NEW」，(x, y) 是左邊、文字基線
 function newTag(ctx, x, y, size = 22) {
   ctx.save(); ctx.font = `bold ${size}px ${SANS}`
@@ -213,16 +217,17 @@ function contentsRight(recs, unread) {
   return canvasTex((ctx) => {
     paper(ctx, 'R')
     ctx.fillStyle = INK; ctx.font = `bold 46px ${SERIF}`; ctx.fillText(tr('目錄'), 90, 140)
-    const top = TOC_TOP, step = tocStep()
+    const two = TOC_COLS() > 1, cw = tocColW(), fs = two ? 25 : 30, ns = two ? 22 : 26
     BIRDS.forEach((b, i) => {
-      const y = top + i * step, rec = recs[i]
-      ctx.font = `26px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(String(i + 1).padStart(2, '0'), 90, y)
-      ctx.font = `30px ${SANS}`; ctx.fillStyle = rec ? INK : 'rgba(45,42,36,0.35)'; ctx.fillText(rec ? b.name : '？？？', 150, y, CW - 380)
-      let w = Math.min(CW - 380, ctx.measureText(rec ? b.name : '？？？').width)
-      if (unread[i]) w += 12 + newTag(ctx, 150 + w + 12, y - 2, 20)
-      ctx.fillStyle = 'rgba(80,60,30,0.3)'; for (let x = 160 + w; x < CW - 190; x += 14) ctx.fillRect(x, y - 8, 3, 3)
-      ctx.font = `26px ${SERIF}`; ctx.fillStyle = MUTED; ctx.textAlign = 'right'; ctx.fillText(String(i * 2 + 3), CW - 120, y); ctx.textAlign = 'left'
-      if (rec) { ctx.strokeStyle = '#a8442f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(CW - 100, y - 12); ctx.lineTo(CW - 90, y - 2); ctx.lineTo(CW - 72, y - 26); ctx.stroke() }
+      const { x0, y } = tocPos(i), rec = recs[i], X1 = x0 + cw   // 這一欄的左右邊
+      ctx.font = `${ns}px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(String(i + 1).padStart(2, '0'), x0 + 14, y)
+      const nx = x0 + (two ? 54 : 74), maxW = X1 - nx - (two ? 120 : 230)
+      ctx.font = `${fs}px ${SANS}`; ctx.fillStyle = rec ? INK : 'rgba(45,42,36,0.35)'; ctx.fillText(rec ? b.name : '？？？', nx, y, maxW)
+      let w = Math.min(maxW, ctx.measureText(rec ? b.name : '？？？').width)
+      if (unread[i]) w += 10 + newTag(ctx, nx + w + 10, y - 2, two ? 17 : 20)
+      ctx.fillStyle = 'rgba(80,60,30,0.3)'; for (let x = nx + 10 + w; x < X1 - (two ? 92 : 114); x += 14) ctx.fillRect(x, y - 8, 3, 3)
+      ctx.font = `${ns}px ${SERIF}`; ctx.fillStyle = MUTED; ctx.textAlign = 'right'; ctx.fillText(String(i * 2 + 3), X1 - (two ? 44 : 44), y); ctx.textAlign = 'left'
+      if (rec) { const cx = X1 - (two ? 34 : 24); ctx.strokeStyle = '#a8442f'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(cx, y - 11); ctx.lineTo(cx + 9, y - 2); ctx.lineTo(cx + 25, y - 24); ctx.stroke() }
     })
   })
 }
@@ -481,10 +486,10 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     if (!hit?.uv) return null
     const x = hit.uv.x * CW, y = (1 - hit.uv.y) * CH
     if (st.spread === 0 && hit.object === rightPage) {
-      const i = Math.round((y - TOC_TOP + 12) / tocStep())
-      if (i >= 0 && i < BIRDS.length && x > 80 && x < CW - 50 && Math.abs(y - (TOC_TOP + i * tocStep()) + 12) < tocStep() / 2 + 2) {
-        const yc = TOC_TOP + i * tocStep() - 12
-        return { to: i + 1, key: 'row' + i, page: rightPage, box: [76, yc - tocStep() / 2 + 1, CW - 56, yc + tocStep() / 2 - 1] }
+      const c = Math.floor((x - TOC_X0) / tocColW()), r = Math.round((y - TOC_TOP + 12) / tocStep()), i = c * TOC_ROWS() + r
+      if (c >= 0 && c < TOC_COLS() && r >= 0 && r < TOC_ROWS() && i < BIRDS.length && Math.abs(y - (TOC_TOP + r * tocStep()) + 12) < tocStep() / 2 + 2) {
+        const yc = TOC_TOP + r * tocStep() - 12, x0 = TOC_X0 + c * tocColW()
+        return { to: i + 1, key: 'row' + i, page: rightPage, box: [x0, yc - tocStep() / 2 + 1, x0 + tocColW() - 6, yc + tocStep() / 2 - 1] }
       }
     }
     if (st.spread > 0 && hit.object === leftPage && x > BACK.x0 && x < BACK.x1 && y > BACK.y0 && y < BACK.y1) return { to: 0, key: 'back', page: leftPage, box: [BACK.x0 + 20, BACK.y0 + 6, BACK.x1, BACK.y1 - 4] }

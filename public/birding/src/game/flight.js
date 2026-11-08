@@ -45,6 +45,11 @@ export const ESCAPE = {
   rosefinch: { r: 6, fly: { speed: 8, hz: 12, style: 'bound', k: 0.49 } },
   laughingthrush: { r: 3.5, run: 5 },                                   // 出了名的親人，靠太近才跑開
   moorhen: { r: 9, swim: 5 },
+  mandarin: { r: 12, swim: 5 },      // 2026-11-09：鴛鴦很怕人
+  spotbill: { r: 10, swim: 5 },
+  partridge: { r: 7, run: 6 },       // 林下三五成群，受驚快步跑進灌叢
+  pitta: { r: 7, run: 5 },
+  grassowl: { r: 6, run: 3 },
   waterhen: { r: 9, swim: 5 },
 }
 // 飛行模型（存在才用；還沒做好的先借翠鳥的飛行模型，大小照停棲模型的身高換算）

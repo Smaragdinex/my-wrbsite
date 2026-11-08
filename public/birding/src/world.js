@@ -17,7 +17,7 @@ import { loadAnimalModels, placeAnimal } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight } from './layout.js'
+import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 
@@ -80,7 +80,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     const groundH = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)
     const d = { ...def, y: def.y ?? groundH(...def.spot), groundAt: def.water == null ? groundH : null }
     // 游泳的鳥只在開闊水面：離池邊（石頭）和山腳都要留距離
-    if (def.swim) d.swimOK = (x, z) => poolQ(x, z) < 0.7 && Math.hypot(x - MTN.x, z - MTN.z) > mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 4
+    if (def.swim === 'alpPond') d.swimOK = (x, z) => Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r * 0.78   // 山區入口的湖（鴛鴦、花嘴鴨）
+    else if (def.swim) d.swimOK = (x, z) => poolQ(x, z) < 0.7 && Math.hypot(x - MTN.x, z - MTN.z) > mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 4
     // 沒指定方位就讓鏡頭站在「鳥背對山」那一側，背景是雲霧山
     if (d.view == null) d.view = THREE.MathUtils.radToDeg(Math.atan2(def.spot[0] - MTN.x, def.spot[1] - MTN.z))
     const a = placeAnimal(d)

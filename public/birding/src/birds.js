@@ -283,6 +283,7 @@ const BUILD = {
   spoonbill, thrush, pheasant, oriole,
   flamecrest, bushrobin, rosefinch, yellowtit, laughingthrush, niltava, yuhina, sibia,
   goshawk, woodowl,
+  mandarin, spotbill, partridge, nuthatch, finchbill, minivet, pitta, grassowl,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -304,7 +305,8 @@ export async function loadAnimalModels(extra = [], onProgress) {
   await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig'].map(load),
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig',
+    'mandarin-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
     ...extra.map((n) => load(n).catch(() => console.warn('[birds] 沒有模型', n)))])
 }
@@ -1139,6 +1141,47 @@ function yuhina(env) {
 // 2026-11-08 山區猛禽：鳳頭蒼鷹（中海拔林緣的大樹上）、褐林鴞（溪谷旁的森林裡）。ChatGPT 參考圖 → Tripo → rig-distance（點位在 bird-points.json）
 function goshawk(env) {
   return perchRigged(outer(env, -1.1), { name: 'goshawk-rig', k: 0.42, ...TRIPO, foot: 0.045, drop: 0.05, beat: 5, grip: 1.2 })
+}
+// 2026-11-09 新增 8 種（使用者挑的；ChatGPT 參考圖 → Tripo → rig-distance.py，點位在 bird-points.json）
+// 鴛鴦、花嘴鴨：在山區入口的湖裡游（跟紅冠水雞同一套游泳動作）
+function mandarin(env) {
+  return groundTripo(env, { name: 'mandarin-rig', H: 0.33, h0: 0.714, ...TRIPO, swim: true, bill: 0.1, bob: 0.025,
+    walk: { radius: 1.6, speed: 0.13, avoid: env.swimOK }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.24,
+    acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } })
+}
+function spotbill(env) {
+  return groundTripo(env, { name: 'spotbill-rig', H: 0.42, h0: 0.716, ...TRIPO, swim: true, bill: 0.13, bob: 0.03,
+    walk: { radius: 1.8, speed: 0.14, avoid: env.swimOK }, stride: 0.11, swingT: 0.35, lift: 0, knee: [0.7, 1.3], focusY: 0.28,
+    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } })
+}
+// 臺灣山鷓鴣：林下三隻一群，圓滾滾地慢慢走、低頭翻落葉
+function partridge(env) {
+  return groundGroup(3, 0.32, (avoid) => groundTripo(env, { name: 'partridge-rig', H: 0.23, h0: 0.89, ...TRIPO, bob: 0.02,
+    walk: { radius: 1.3, speed: 0.16, avoid }, stride: 0.08, swingT: 0.16, lift: 0.02, knee: [0.4, 0.8], focusY: 0.13,
+    acts: { walk: [4, 99, 99], peck: [4, 0.8, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }))
+}
+// 八色鳥：花園林下一跳一跳，停下來翻落葉找蚯蚓
+function pitta(env) {
+  return groundTripo(env, { name: 'pitta-rig', H: 0.17, h0: 0.9, ...TRIPO, hop: 0.045, flick: 0.2, flickF: 1.4,
+    walk: { radius: 1.1, speed: 0.2, turn: 3 }, stride: 0.09, swingT: 0.13, lift: 0.04, knee: [0.3, 0.6], focusY: 0.1,
+    acts: { walk: [4, 99, 99], peck: [4, 0.8, 1.4], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
+}
+// 草鴞：站在草地上幾乎不動，偶爾轉頭、走兩步
+function grassowl(env) {
+  return groundTripo(env, { name: 'grassowl-rig', H: 0.36, h0: 0.983, ...TRIPO,
+    walk: { radius: 0.5, speed: 0.08 }, stride: 0.1, swingT: 0.4, lift: 0, knee: [0.6, 1.2], focusY: 0.28,
+    acts: { stand: [6, 3, 7], look: [4, 1.5, 3], walk: [1, 99, 99], turn: [1, 99, 99] } })
+}
+// 停在枝上的：茶腹鳾、白環鸚嘴鵯（一對）、灰喉山椒鳥（腳在模型的 0.065、0.2：長尾巴垂得比腳低）
+function nuthatch(env) {
+  return perchRigged(outer(env, -0.9), { name: 'nuthatch-rig', k: 0.14, ...TRIPO, foot: 0.004, drop: 0.03, beat: 9 })
+}
+function finchbill(env) {
+  return perchGroup(2, 0.32, -0.7, (blocked) => perchRigged(outer(env, -0.8), { name: 'finchbill-rig', k: 0.22, ...TRIPO, foot: 0.065, drop: 0.04, beat: 7,
+    hopper: { blocked } }))
+}
+function minivet(env) {
+  return perchRigged(outer(env, -0.9), { name: 'minivet-rig', k: 0.19, ...TRIPO, foot: 0.2, drop: 0.05, beat: 7 })
 }
 function woodowl(env) {
   return perchRigged(outer(env, -1.0), { name: 'woodowl-rig', k: 0.46, ...TRIPO, foot: 0.05, drop: 0.04, beat: 4 })

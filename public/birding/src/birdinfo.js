@@ -1,7 +1,7 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL, AM } from './layout.js'
+import { POOL, AM, ALP_POND } from './layout.js'
 import { birdText } from './i18n.js'
 
 const ALL = [
@@ -344,11 +344,101 @@ const ALL = [
       '母鳥的褐色條紋是很好的保護色，躲在草叢裡很難看見。',
     ],
   },
+  // 2026-11-09 新增 8 種（使用者從《臺灣野鳥圖鑑》挑的；介紹是依公開資料自己寫的，不是書上的文字）
+  {
+    id: 'mandarin', spot: AM(88, -11.5), perch: 'ground', swim: 'alpPond', view: 0, y: ALP_POND.water - 0.25, water: ALP_POND.water, dist: 12, camH: 1.6, lookY: 0.25,
+    name: '鴛鴦', sci: 'Aix galericulata', where: '山區入口的湖',
+    intro: '公鳥是台灣最華麗的鴨子：紅嘴、大白眉、橘色的「鬢毛」，背上一對直立的橘色帆羽像兩片小帆。牠們在台灣是稀有的留鳥，住在中高海拔乾淨的溪流和湖泊旁，常在樹洞裡築巢。',
+    facts: [
+      '母鳥全身灰褐色，眼睛後面有一道白色細線，跟公鳥差很多。',
+      '七家灣溪、有勝溪一帶有固定在繁殖的族群。',
+      '巢多半在水邊的樹洞，小鴨孵出來沒多久就從高高的樹洞跳下來。',
+      '名字裡的「鴛鴦」常被拿來比喻成雙成對，其實牠們每年都會換伴侶。',
+    ],
+  },
+  {
+    id: 'spotbill', spot: AM(84, -14), perch: 'ground', swim: 'alpPond', view: 340, y: ALP_POND.water - 0.25, water: ALP_POND.water, dist: 12, camH: 1.6, lookY: 0.3,
+    name: '花嘴鴨', sci: 'Anas zonorhyncha', where: '山區入口的湖',
+    intro: '台灣最常見的留鳥鴨子之一。全身深褐色、羽毛邊緣顏色淡，像一片片魚鱗；臉是淡米色，有一道深色過眼線。最好認的是黑色的嘴、嘴尖一塊黃色，像沾了蛋黃。',
+    facts: [
+      '公鳥母鳥長得幾乎一樣，這在鴨子裡很少見。',
+      '翅膀上有一塊藍紫色、前後鑲白邊的「翼鏡」，飛起來才看得清楚。',
+      '從平地的埤塘、河口到山上的湖都看得到。',
+      '吃水草、種子，也會把頭伸進水裡、屁股朝天找食物。',
+    ],
+  },
+  {
+    id: 'partridge', spot: AM(123.06, -26.43), perch: 'ground', view: 0, dist: 3.0, camH: 1.0, lookY: 0.15,
+    name: '臺灣山鷓鴣', sci: 'Arborophila crudigularis', where: '南坡步道旁的林下',
+    intro: '台灣特有種，又叫「深山竹雞」。圓滾滾的身體、短到幾乎看不見的尾巴、鮮紅色的腳。白色的喉嚨外面一圈黑色頸環，頸環中間一點橘紅；胸和身體兩側是藍灰色，有一道道白色的條紋。',
+    facts: [
+      '住在中低海拔原始闊葉林的底層，非常隱密，常常只聽得到叫聲。',
+      '常三五隻一起在落葉堆裡翻找種子和小蟲。',
+      '叫聲是一連串越來越高的「咕嚕—咕嚕」，常常好幾隻一起合唱。',
+      '巢做在樹根或竹叢的基部，用落葉和細枝鋪成，一窩約三、四顆蛋。',
+    ],
+  },
+  {
+    id: 'nuthatch', spot: AM(164.42, 7.57), perch: 'branch', view: 248, dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: '茶腹鳾', sci: 'Sitta europaea formosana', where: '高處步道旁的樹林',
+    intro: '台灣特有亞種的小鳥，頭大尾短、嘴又長又直。背是藍灰色，一道很長的黑色過眼線從嘴邊一直拉到脖子，喉嚨白色、肚子是淡淡的茶色。牠最厲害的是可以頭朝下沿著樹幹往下走。',
+    facts: [
+      '腳很有力，能在樹幹上垂直上下走，常繞著大樹幹螺旋往上爬。',
+      '啄食樹皮縫裡的昆蟲和蟲卵，也吃植物的種子。',
+      '會把硬硬的果實卡在樹縫裡，再用嘴把它敲開。',
+      '在樹洞裡築巢，會用泥巴把洞口糊小，防止別的動物進去。',
+    ],
+  },
+  {
+    id: 'finchbill', spot: AM(78.52, -1.99), perch: 'branch', view: 0, dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: '白環鸚嘴鵯', sci: 'Spizixos semitorques', where: '山區入口的果樹旁',
+    intro: '台灣特有亞種。厚厚短短、象牙白色的嘴有點像鸚鵡，頭是灰黑色，前頸一道明顯的白色頸環，身體是橄欖綠到黃綠色。常一小群停在枝頭或電線上，叫聲短促響亮。',
+    facts: [
+      '住在中低海拔的林緣、灌叢和果園，常聚在結果的樹上吃果實。',
+      '也吃昆蟲和種子，粗短的嘴很會嗑硬殼。',
+      '巢做在灌叢或低矮的樹上，是用草莖、樹葉編成的碗形巢。',
+      '公鳥母鳥一起照顧小鳥。',
+    ],
+  },
+  {
+    id: 'minivet', spot: AM(150.94, -27.34), perch: 'branch', view: 0, dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: '灰喉山椒鳥', sci: 'Pericrocotus solaris', where: '南坡步道旁的樹冠',
+    intro: '公鳥是山上最搶眼的紅色小鳥：頭和背深灰黑色，喉嚨淡灰，胸腹是鮮豔的橘紅色，黑色翅膀上一道橘紅色的翅斑，細長的尾巴兩邊也是紅的。母鳥則是同樣花紋的亮黃色。',
+    facts: [
+      '又叫「紅山椒鳥」；公鳥紅、母鳥黃，常常一群紅黃交錯地飛過樹冠。',
+      '住在中低海拔的闊葉林，喜歡在樹冠層活動。',
+      '一邊飛一邊發出尖細的叫聲，在枝葉間捕捉昆蟲。',
+      '台灣的族群是特有亞種。',
+    ],
+  },
+  {
+    id: 'pitta', spot: [-46, -30], perch: 'ground', dist: 2.0, camH: 0.6, lookY: 0.1,
+    name: '八色鳥', sci: 'Pitta nympha', where: '林下落葉堆',
+    intro: '每年四月底從東南亞飛來台灣繁殖的夏候鳥，身上真的有很多種顏色：栗褐色的頭頂、黑色過眼線、白喉、米黃色的胸、鮮紅的下腹、深綠色的背，肩膀還有一塊閃亮的天藍色。',
+    facts: [
+      '全世界的數量很少，是保育類，很多人專程來台灣看牠。',
+      '住在低海拔的闊葉林底層，在落葉堆裡翻找蚯蚓。',
+      '叫聲像「White-Wright」兩個音節，清晨最常聽到。',
+      '秋天又飛回南方過冬，台灣看得到牠的時間只有夏天幾個月。',
+    ],
+  },
+  {
+    id: 'grassowl', spot: [-62, 20], perch: 'ground', dist: 3.2, camH: 0.9, lookY: 0.3,
+    name: '草鴞', sci: 'Tyto longimembris', where: '入口旁的草地',
+    intro: '台灣瀕臨絕種的保育類貓頭鷹。心形的臉盤是淡粉米白色，外圈一道深褐色的邊，眼睛小小黑黑的；背和翅膀深巧克力褐色帶金黃色斑紋，腿很長。牠不住森林，而是住在低海拔開闊的白茅草原。',
+    facts: [
+      '白天躲在白茅草叢裡休息，晚上在草地上空低飛抓老鼠。',
+      '台灣的數量估計只有幾百隻以下，草原開發和毒鼠藥是最大的威脅。',
+      '巢就做在草叢裡的地上，用壓扁的草鋪成，像一條條隧道。',
+      '有些農民改用友善的方式種田、不放毒鼠藥，幫助牠們留下來。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
 const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'barbet', 'kingfisher', 'waterhen', 'moorhen', 'nightheron', 'egret', 'spoonbill',
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
-  'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl']
+  'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
+  'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))
