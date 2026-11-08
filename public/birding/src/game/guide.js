@@ -270,22 +270,25 @@ function makeDiorama(def) {
   }
   // 鏡頭：沿用溫室裡拍這隻鳥的方向，距離照鳥的大小重算（鳥佔插圖高度約一半）
   // 外框要逐點量（precise）：骨架動畫的 boundingBox 是第一次算的就一直沿用，樹枝上的鳥會差到畫面外
+  // 2026-11-09 使用者：一群的鳥（鴨子、麻雀、鷓鴣、成對停枝的…）在圖鑑裡每隻都很小 → 只留第一隻、鏡頭照牠一隻取景
+  const one = a.built.birds?.length > 1 ? a.built.birds[0] : a.built
+  if (one !== a.built) for (const b of a.built.birds) if (b !== one) b.obj.visible = false
   a.group.updateMatrixWorld(true)
-  const box = new THREE.Box3().setFromObject(a.built.obj, true), size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3())
+  const box = new THREE.Box3().setFromObject(one.obj, true), size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3())
   const cam = new THREE.PerspectiveCamera(30, PLATE.w / PLATE.h * (CW / CH), 0.05, 60)
   const dir = a.cam.clone().sub(a.target).normalize()
   dir.y = Math.min(Math.max(dir.y, 0.12), 0.45); dir.normalize()
   const s = Math.max(size.y, Math.max(size.x, size.z) * 0.75)
   // 一群鳥會散開，退遠一點
-  const dist = s / 0.55 / 2 / Math.tan(THREE.MathUtils.degToRad(15)) * (a.built.birds?.length > 1 ? 1.3 : 1)
+  const dist = s / 0.55 / 2 / Math.tan(THREE.MathUtils.degToRad(15))
   // 鏡頭對準鳥身上的追蹤點（built.focus，跟溫室跟拍用的同一點），再加上它和外框中心的差：鳥走到哪都在正中間
-  const focusAt = (v) => a.built.obj.parent.localToWorld(v.copy(a.built.focus))
+  const focusAt = (v) => one.obj.parent.localToWorld(v.copy(one.focus))
   const off = mid.clone().sub(focusAt(new THREE.Vector3()))
   if (pond) pond.scale.setScalar(s * 1.1)
   const sunOff = new THREE.Vector3(-2, 6, 3)
   // 鳥身上的原本材質（剪影切換用）
   const meshes = []
-  a.built.obj.traverse((o) => { if (o.isMesh && !o.userData.catcher) meshes.push([o, o.material]) })
+  one.obj.traverse((o) => { if (o.isMesh && !o.userData.catcher) meshes.push([o, o.material]) })
   let sil = null
   const rt = new THREE.WebGLRenderTarget(560, Math.round(560 * (PLATE.h * CH) / (PLATE.w * CW)), { samples: 4 })
   const look = mid.clone(), want = new THREE.Vector3()
