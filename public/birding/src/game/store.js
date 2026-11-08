@@ -363,7 +363,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   // 2026-11-09 寫實化（使用者：櫃台的螢幕太敷衍）：
   //   結帳平板＝圓角黑邊平板＋鋁合金旋轉立架，螢幕是真的收銀畫面（購物清單、金額、收款鍵、數字鍵）；
   //   刷卡機＝圓角機身、上半小螢幕（感應付款圖示）、下半實體按鍵；收據機＝圓角機身、出紙口、印好字的收據；
-  //   另外加一台面向客人的修圖螢幕（薄邊框、鋁腳架），畫面是修圖軟體開著一張鳥照（直方圖、滑桿、底片條）
+  //   另外加一台老闆用的修圖螢幕（薄邊框、鋁腳架），畫面是修圖軟體開著一張鳥照（直方圖、滑桿、底片條）
   const devM = new THREE.MeshStandardMaterial({ color: 0x0d0e10, roughness: 0.3, metalness: 0.2 })
   const aluM = new THREE.MeshStandardMaterial({ color: 0xb9bcc0, roughness: 0.28, metalness: 0.9 })
   const scrMat = (tex, k = 1) => new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.85 * k, color: 0x202020, roughness: 0.12 })
@@ -389,7 +389,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
       for (let k = 0; k < 12; k++) { const cx = 672 + (k % 3) * 104, cy = 262 + Math.floor(k / 3) * 74; rr(x, cx, cy, 96, 64, 10, '#eef0f2'); ui(x, ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'][k], cx + 48, cy + 42, 26, '#2a3136', '600', 'center') }
       rr(x, 672, 568, 304, 88, 14, '#2f7d4f'); ui(x, 'Charge  ' + money(Math.round(sub * 1.05)), 824, 622, 26, '#ffffff', '700', 'center')
     })
-    const dev = new THREE.Group(); dev.position.set(-81.7, ch + 0.03, cz + 0.1); dev.rotation.y = Math.PI; g.add(dev)
+    const dev = new THREE.Group(); dev.position.set(-81.7, ch + 0.03, cz - 0.05); dev.rotation.y = 0.15; g.add(dev)   // 螢幕朝老闆（櫃台裡面 +z）：是他在用的；客人從前面看到的是平板背面
     const base = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.08, 0.014, 32), aluM); base.position.y = 0.007; dev.add(base)
     const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.02, 0.15, 16), aluM); neck.position.set(0, 0.085, -0.02); neck.rotation.x = -0.25; dev.add(neck)
     const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.06, 16).rotateZ(Math.PI / 2), aluM); hinge.position.set(0, 0.16, -0.04); dev.add(hinge)
@@ -468,7 +468,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     drawUI(null)
     const monT = new THREE.CanvasTexture(cv); monT.colorSpace = THREE.SRGBColorSpace; monT.anisotropy = 8
     new THREE.ImageLoader().load('models/store-prints.jpg', (img) => { drawUI(img); monT.needsUpdate = true })
-    const mon = new THREE.Group(); mon.position.set(-83.35, ch + 0.03, cz + 0.18); mon.rotation.y = Math.PI + 0.12; g.add(mon)
+    const mon = new THREE.Group(); mon.position.set(-83.35, ch + 0.03, cz - 0.12); mon.rotation.y = -0.12; g.add(mon)   // 朝老闆那邊（他修圖、看客人賣的照片）
     const foot = new THREE.Mesh(new RoundedBoxGeometry(0.24, 0.012, 0.18, 2, 0.005), aluM); foot.position.y = 0.006; mon.add(foot)
     const arm = new THREE.Mesh(new RoundedBoxGeometry(0.06, 0.3, 0.014, 2, 0.006), aluM); arm.position.set(0, 0.15, -0.05); arm.rotation.x = -0.12; mon.add(arm)
     const panel = new THREE.Group(); panel.position.set(0, 0.36, -0.035); panel.rotation.x = -0.06; mon.add(panel)
