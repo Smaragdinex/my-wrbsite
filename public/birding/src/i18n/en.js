@@ -100,6 +100,7 @@ export const UI = {
  "拍過 {n} 張・最高 {best} 分": "{n} photos taken · best {best} pts",
  "拭鏡筆": "Lens pen",
  "按 E 坐下休息（跳到下一個時段）": "Press E to sit and rest (skip to next time of day)",
+ "按 E 睡一下（跳到下一個時段）": "Press E to take a nap (skip to next time of day)",
  "按 E 查看": "Press E to view",
  "按 E 跟老闆說話（賣照片、買器材）": "Press E to talk to the owner (sell photos, buy gear)",
  "按住蹲低、慢慢靠近鳥": "Hold to crouch and sneak up on birds",

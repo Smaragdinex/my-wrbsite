@@ -60,6 +60,8 @@ function boxUV(geo, w, h, d) {
   return geo
 }
 
+// 2026-11-09 可以休息的地方（小木屋的床）：世界座標，game/main.js 跟長椅一樣按 E 跳時段
+export const summitRests = []
 export function buildSummit({ g, avoid = [], printsUrl }) {
   const rnd = mulberry32(2026)
   const C = CABIN, Y = C.y
@@ -324,6 +326,7 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   // 枕頭；上鋪靠房間那側有護欄，床尾一座梯子。床頭朝後牆（-v），房間那側是 -u
   {
     const BU = W / 2 - 0.55, BV = -D / 2 + 1.65, HU = 0.44, HV = 0.98
+    summitRests.length = 0; summitRests.push({ p: at(BU - HU - 0.3, 0, BV), r: 1.3, kind: 'bed' })   // 站在床邊（房間那側）
     for (const [du, dv] of [[-HU, -HV], [HU, -HV], [-HU, HV], [HU, HV]]) {
       logUV('log', BU + du, 0, BV + dv, BU + du, 2.06, BV + dv, 0.068, 0.062)
       put('endgrain', new THREE.CircleGeometry(0.062, 12).rotateX(-Math.PI / 2).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(rot).setPosition(at(BU + du, 2.061, BV + dv))))

@@ -20,6 +20,7 @@ import { createUiFx } from './ui-fx.js'
 import { controlsSvg } from './controls-help.js'
 import { MENU_VIEW, terrainHeight, supportAt } from '../layout.js'
 import { t as tr, LANG, LANGS, setLang } from '../i18n.js'
+import { summitRests } from '../summit.js'
 
 // 頁面上寫死的字（data-i18n）換成這個語言；標題列
 for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = tr(el.textContent.trim())
@@ -143,6 +144,7 @@ world.time.setTime(hour)
 // 長椅：坐下休息，跳到下一個時段（清晨 6、早上 9、黃昏 17、夜晚 19:30）
 const PERIODS = [6, 9, 17, 19.5]
 const nearBench = () => world.time.benches.find((b) => Math.hypot(camera.position.x - b.p.x, camera.position.z - b.p.z) < 1.6)
+  ?? summitRests.find((b) => Math.hypot(camera.position.x - b.p.x, camera.position.z - b.p.z) < b.r && Math.abs(camera.position.y - b.p.y) < 2.5)   // 小木屋的床
 function rest() {
   const next = PERIODS.find((p) => p > hour + 0.05) ?? PERIODS[0] + 24
   hud.fadeThrough(() => { hour = next % 24; world.time.setTime(hour); hud.toast(tr('休息到{when}', { when: tr(hour < 7 ? '清晨' : hour < 12 ? '早上' : hour < 18 ? '黃昏' : '夜晚') })) })
@@ -232,7 +234,7 @@ function tick(dt, t) {
   store.tick(t, dt, camera, { play: !menuCam, look: !panelOpen() && player.controls.isLocked && !cam.state.raised })
   flight.tick(t, dt, { sneak: player.state.sneak })
   const sf = !panelOpen() && player.controls.isLocked && !cam.state.raised ? store.focus(camera) : null
-  hud.setHint(!panelOpen() && player.controls.isLocked ? (sf?.type === 'item' ? `${sf.item.name}　${state.owned.includes(sf.item.id) ? tr('已擁有') : '$' + sf.item.price.toLocaleString()}　${tr('按 E 查看')}` : sf?.type === 'counter' ? tr('按 E 跟老闆說話（賣照片、買器材）') : nearBench() ? tr('按 E 坐下休息（跳到下一個時段）') : '') : '')
+  hud.setHint(!panelOpen() && player.controls.isLocked ? (sf?.type === 'item' ? `${sf.item.name}　${state.owned.includes(sf.item.id) ? tr('已擁有') : '$' + sf.item.price.toLocaleString()}　${tr('按 E 查看')}` : sf?.type === 'counter' ? tr('按 E 跟老闆說話（賣照片、買器材）') : nearBench() ? tr(nearBench().kind === 'bed' ? '按 E 睡一下（跳到下一個時段）' : '按 E 坐下休息（跳到下一個時段）') : '') : '')
   hud.update(dt)
   settings.tick(dt, player.controls.isLocked)
   world.render()
