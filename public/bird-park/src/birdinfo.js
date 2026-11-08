@@ -276,7 +276,7 @@ const ALL = [
     ],
   },
   {
-    id: 'flamecrest', spot: AM(165.5, -31.5), perch: 'branch', view: 292,   // 南坡冷杉林支線走到底 dist: 2.2, camH: 3.6, lookY: 3.4,
+    id: 'flamecrest', spot: AM(161, -25), perch: 'branch', view: 292,   // 南坡冷杉林支線走到底 dist: 2.2, camH: 3.6, lookY: 3.4,
     name: '火冠戴菊鳥', sci: 'Regulus goodfellowi', where: '南坡小路盡頭的冷杉林',
     intro: '台灣特有種，也是台灣最小的鳥之一，只有約 9 公分。頭頂中央一道橘紅色的「火冠」，兩側鑲黑邊。牠住在台灣最高的地方，常在冷杉、鐵杉的枝葉間快速跳動。',
     facts: [
