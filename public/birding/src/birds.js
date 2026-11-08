@@ -306,7 +306,7 @@ export async function loadAnimalModels(extra = [], onProgress) {
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
     'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig',
-    'mandarin-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig'].map(load),
+    'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
     ...extra.map((n) => load(n).catch(() => console.warn('[birds] 沒有模型', n)))])
 }
@@ -1146,10 +1146,12 @@ function goshawk(env) {
 // 鴛鴦、花嘴鴨：在山區入口的湖裡游（跟紅冠水雞同一套游泳動作）
 // 2026-11-09 使用者：湖裡只有一隻太孤單 → 鴛鴦 4 隻（兩對常常游在一起）、花嘴鴨 5 隻一小群；彼此不穿透（groundGroup），只在開闊水面
 const swimAvoid = (env, mates) => (x, z, p) => mates(x, z, p) || (env.swimOK ? env.swimOK(x, z, p) : false)
+// 鴛鴦公母長得完全不一樣（2026-11-09 使用者）：公的花俏（帆羽、橘色鬃毛）、母的灰褐色白眼圈 → 公母交錯，2 公 2 母
 function mandarin(env) {
-  return groundGroup(4, 0.7, (avoid) => groundTripo(env, { name: 'mandarin-rig', H: 0.33, h0: 0.714, ...TRIPO, swim: true, bill: 0.1, bob: 0.025,
+  let k = 0   // 母的小一點（H 0.31）
+  return groundGroup(4, 0.7, (avoid) => { const f = k++ % 2 === 1; return groundTripo(env, { name: f ? 'mandarinf-rig' : 'mandarin-rig', H: f ? 0.31 : 0.33, h0: f ? 0.702 : 0.714, ...TRIPO, swim: true, bill: 0.1, bob: 0.025,
     walk: { radius: 3.2, speed: 0.13, avoid: swimAvoid(env, avoid) }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.24,
-    acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }))
+    acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }) })
 }
 function spotbill(env) {
   return groundGroup(5, 0.9, (avoid) => groundTripo(env, { name: 'spotbill-rig', H: 0.42, h0: 0.716, ...TRIPO, swim: true, bill: 0.13, bob: 0.03,
