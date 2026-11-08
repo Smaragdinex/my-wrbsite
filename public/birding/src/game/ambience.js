@@ -25,7 +25,9 @@ export function createAmbience({ getMusic, getAmb }) {
     ac = new AudioContext()
     out = ac.createGain(); out.gain.value = 0.9
     const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 3
-    out.connect(comp); comp.connect(ac.destination)
+    // 最後一道限幅（2026-11-09 使用者：下雨很吵、破音）：好幾層雜訊（雨、雷）疊起來會超過 0 dB 被削掉，聽起來劈哩啪啦
+    const lim = ac.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.15
+    out.connect(comp); comp.connect(lim); lim.connect(ac.destination)
     // 殘響：自己做一段衰減的雜訊當空間（溫室挑高的感覺）
     verb = ac.createConvolver()
     const len = ac.sampleRate * 2.6, ir = ac.createBuffer(2, len, ac.sampleRate)
@@ -90,12 +92,28 @@ export function createAmbience({ getMusic, getAmb }) {
     n.connect(lp); lp.connect(hp); hp.connect(waterG)
   }
 
-  /* ---------- 雨（2026-11-08 天氣）：沙沙的高頻雜訊＋一層低沉的雨聲，大小照 weather.rain ---------- */
+  /* ---------- 雨（2026-11-08 天氣）：沙沙的雜訊＋一層低沉的雨聲，大小照 weather.rain ---------- */
+  // 2026-11-09 改柔：以前是 600～7000 Hz 的白噪音（刺耳的嘶嘶聲），改成粉紅噪音（高頻比較弱）、只留 350～3200 Hz，
+  // 再慢慢忽大忽小（雨一陣一陣），音量也小很多
+  const pinkBuf = () => {
+    const b = ac.createBuffer(1, ac.sampleRate * 4, ac.sampleRate), d = b.getChannelData(0)
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0
+    for (let i = 0; i < d.length; i++) {
+      const w = Math.random() * 2 - 1
+      b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852
+      b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898
+      d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926
+    }
+    return b
+  }
   function startRain() {
     rainG = ac.createGain(); rainG.gain.value = 0; rainG.connect(ambBus)
-    const n = loopNoise(), hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 600
-    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7000
-    n.connect(hp); hp.connect(lp); lp.connect(rainG)
+    const n = ac.createBufferSource(); n.buffer = pinkBuf(); n.loop = true; n.start()
+    const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 350
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200; lp.Q.value = 0.5
+    const gust = ac.createGain(); gust.gain.value = 0.8
+    const lfo = ac.createOscillator(); lfo.frequency.value = 0.09; const lfoG = ac.createGain(); lfoG.gain.value = 0.2; lfo.connect(lfoG); lfoG.connect(gust.gain); lfo.start()
+    n.connect(hp); hp.connect(lp); lp.connect(gust); gust.connect(rainG)
     rainLowG = ac.createGain(); rainLowG.gain.value = 0; rainLowG.connect(ambBus)
     const n2 = loopNoise(), lp2 = ac.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 420
     n2.connect(lp2); lp2.connect(rainLowG)
@@ -106,7 +124,7 @@ export function createAmbience({ getMusic, getAmb }) {
     const t0 = ac.currentTime + delay, buf = noiseBuf()
     const crack = ac.createBufferSource(); crack.buffer = buf
     const cf = ac.createBiquadFilter(); cf.type = 'lowpass'; cf.frequency.value = 900 + 2400 * strength
-    const cg = ac.createGain(); cg.gain.setValueAtTime(0, t0); cg.gain.linearRampToValueAtTime(0.9 * strength * strength, t0 + 0.02); cg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5)
+    const cg = ac.createGain(); cg.gain.setValueAtTime(0, t0); cg.gain.linearRampToValueAtTime(0.3 * strength * strength, t0 + 0.02); cg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5)
     crack.connect(cf); cf.connect(cg); cg.connect(ambBus); crack.start(t0); crack.stop(t0 + 0.6)
     const dur = 4 + Math.random() * 3
     const rum = ac.createBufferSource(); rum.buffer = buf; rum.loop = true
@@ -114,8 +132,8 @@ export function createAmbience({ getMusic, getAmb }) {
     const rf2 = ac.createBiquadFilter(); rf2.type = 'lowpass'; rf2.frequency.value = 220
     const rg = ac.createGain(); rg.gain.setValueAtTime(0, t0)
     let tt = t0 + 0.05
-    rg.gain.linearRampToValueAtTime(1.6 * strength, tt + 0.25)
-    while (tt < t0 + dur) { tt += 0.25 + Math.random() * 0.6; rg.gain.linearRampToValueAtTime(1.6 * strength * (0.25 + 0.75 * Math.random()) * (1 - (tt - t0) / dur), tt) }
+    rg.gain.linearRampToValueAtTime(0.6 * strength, tt + 0.25)
+    while (tt < t0 + dur) { tt += 0.25 + Math.random() * 0.6; rg.gain.linearRampToValueAtTime(0.6 * strength * (0.25 + 0.75 * Math.random()) * (1 - (tt - t0) / dur), tt) }
     rg.gain.linearRampToValueAtTime(0, t0 + dur + 0.5)
     rum.connect(rf); rf.connect(rf2); rf2.connect(rg); rg.connect(ambBus); rg.connect(ambVerb); rum.start(t0); rum.stop(t0 + dur + 0.6)
   }
@@ -220,7 +238,7 @@ export function createAmbience({ getMusic, getAmb }) {
       smooth(ambFilter.frequency, 18000 - 16800 * st.store, now, 0.6)
       const h = st.hour, day = h > 6 && h < 18.5 ? Math.min(1, (h - 6) / 1.5, (18.5 - h) / 1.5) : 0
       const dry = 1 - 0.85 * st.rain   // 下雨時蟬、鳥都安靜下來
-      smooth(rainG.gain, 0.2 * st.rain, now, 1.5); smooth(rainLowG.gain, 0.35 * st.rain * (0.6 + 0.4 * st.storm), now, 1.5)
+      smooth(rainG.gain, 0.32 * st.rain, now, 2.5); smooth(rainLowG.gain, 0.1 * st.rain * (0.6 + 0.4 * st.storm), now, 2.5)
       smooth(cicadaG.gain, 0.13 * day * (h > 10 && h < 16 ? 1 : 0.5) * dry, now, 2)
       smooth(cricketG.gain, (1 - day) * 0.5 + 0.03, now, 2)
       smooth(waterG.gain, 0.16 * st.water, now, 0.6)
