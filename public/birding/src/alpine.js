@@ -534,48 +534,77 @@ function buildInterior(lib, avoid = []) {
     }
     // 兩邊的邊樑（鋼，沿著橋面）
     for (const s of [-1, 1]) { const pts = []; for (let i = 0; i <= 24; i++) pts.push(deck(i / 24).addScaledVector(side, s * (HW + 0.04)).add(V(0, -0.06, 0))); tube(steels, pts, 0.035) }
-    // 橋塔：每端兩根方柱＋上下兩根橫樑，站在混凝土基座上；塔頂比橋面高 2.4
-    const TH = 6.5, ends = [[0, -1], [1, 1]]   // 2026-11-07 加大
-    const topOf = {}
+    // 橋塔與橋台（2026-11-09 使用者：支撐和水泥不夠精準、要寫實、左右對稱）
+    // 每一端：一整座混凝土橋台（橋面寬＋兩邊各 0.7 公尺、順著橋 2.6 公尺，往下一直埋到最低的地面下 0.6 公尺，頂面跟橋面齊），
+    // 橋面最後一段木板鋪到橋台上；兩根鋼柱（下粗上細）用鋼底板鎖在橋台頂上，塔頂有鞍座讓主鋼纜跨過去；
+    // 柱間：頭頂上一道門型上樑＋一道橫樑，兩者之間 X 型斜撐。兩端用同一個函式蓋，左右完全對稱
+    const TH = 6.5, ends = [[0, -1], [1, 1]]
+    const topOf = {}, abut = {}
+    const lowestGround = (c, hw, hl, ry) => {   // 橋台底面：腳印範圍裡最低的地面
+      let m = Infinity
+      for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const q = c.clone().addScaledVector(side, hw * i / 2).addScaledVector(dir, hl * j / 2); m = Math.min(m, alpineHeight(q.x, q.z)) }
+      return m
+    }
     for (const [t, out] of ends) {
-      const p = deck(t).addScaledVector(dir, out * 0.35)
-      for (const s of [-1, 1]) {
-        const q = p.clone().addScaledVector(side, s * (HW + 0.18))
-        const g0 = Math.min(alpineHeight(q.x, q.z), q.y - 0.3)
-        box(concs, 0.85, q.y - g0 + 0.35, 0.85, V(q.x, (q.y + g0) / 2 - 0.1, q.z))                  // 基座
-        box(steels, 0.36, TH + 0.1, 0.36, q.clone().add(V(0, TH / 2, 0)))
-        topOf[t + ',' + s] = q.clone().add(V(0, TH, 0))
+      const p = deck(t).addScaledVector(dir, out * 0.35)          // 橋塔中心（橋面端外 0.35）
+      const AW = HW + 0.7, AL = 1.3, ac = p.clone().addScaledVector(dir, out * 0.3)
+      const topY = deck(t).y - 0.05, botY = Math.min(lowestGround(ac, AW, AL), topY - 1.2) - 0.6
+      box(concs, AW * 2, topY - botY, AL * 2, V(ac.x, (topY + botY) / 2, ac.z))                                 // 橋台
+      box(concs, AW * 2 + 0.3, 0.12, AL * 2 + 0.3, V(ac.x, topY - 0.55, ac.z))                                  // 頂下一圈收邊（施工縫的線腳）
+      abut[t] = { topY, ac }
+      for (let k = 0; k < 4; k++) { const q = ac.clone().addScaledVector(dir, out * (-0.9 + k * 0.6)), pl = new THREE.BoxGeometry(HW * 2 - 0.08, 0.04, 0.58)   // 橋台上的木板
+        pl.applyMatrix4(new THREE.Matrix4().makeRotationY(yaw).setPosition(V(q.x, topY + 0.02, q.z))); const c = []; col.setHSL(0.075, 0.35, 0.6 + rnd2() * 0.15); for (let v = 0; v < pl.attributes.position.count; v++) c.push(col.r, col.g, col.b); pl.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); woods.push(pl) }
+      for (const sd of [-1, 1]) {
+        const q = p.clone().addScaledVector(side, sd * (HW + 0.3)); q.y = topY
+        box(steels, 0.62, 0.05, 0.62, q.clone().add(V(0, 0.025, 0)))                                            // 底板
+        for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) steels.push(new THREE.CylinderGeometry(0.025, 0.025, 0.08, 6).translate(0, 0.08, 0).applyMatrix4(new THREE.Matrix4().makeRotationY(yaw).setPosition(q.clone().addScaledVector(side, dx * 0.24).addScaledVector(dir, dz * 0.24))))   // 地腳螺栓
+        steels.push(new THREE.BoxGeometry(1, 1, 1).applyMatrix4(new THREE.Matrix4().makeRotationY(yaw)).applyMatrix4(new THREE.Matrix4().makeScale(1, 1, 1)))
+        steels.pop()
+        // 柱：下 0.42 上 0.3 的方管（用 4 邊的圓柱做錐形方柱）
+        const colG = new THREE.CylinderGeometry(0.3 / Math.SQRT2, 0.42 / Math.SQRT2, TH, 4).rotateY(Math.PI / 4).translate(0, TH / 2 + 0.05, 0)
+        steels.push(colG.applyMatrix4(new THREE.Matrix4().makeRotationY(yaw).setPosition(q)))
+        const T0 = q.clone().add(V(0, TH + 0.05, 0))
+        box(steels, 0.42, 0.22, 0.6, T0.clone().add(V(0, 0.11, 0)))                                              // 鞍座
+        topOf[t + ',' + sd] = T0.clone().add(V(0, 0.26, 0))
       }
-      const c0 = p.clone().add(V(0, TH, 0))
-      box(steels, HW * 2 + 0.8, 0.3, 0.3, c0); box(steels, HW * 2 + 0.5, 0.2, 0.22, c0.clone().add(V(0, -2.2, 0)))   // 門型上樑＋第二道橫樑（都在頭頂上，人從底下走過）
-      // 上角的斜撐（只在頭頂高度，不擋路）
-      for (const s of [-1, 1]) tube(steels, [p.clone().addScaledVector(side, s * (HW + 0.18)).add(V(0, TH - 0.9, 0)), p.clone().addScaledVector(side, s * (HW - 0.45)).add(V(0, TH, 0))], 0.045, 2)
+      const L = p.clone().addScaledVector(side, -(HW + 0.3)), R = p.clone().addScaledVector(side, HW + 0.3)
+      const yTop = abut[t].topY + TH - 0.1, yLow = abut[t].topY + TH - 2.1
+      box(steels, (HW + 0.3) * 2 + 0.5, 0.32, 0.34, V(p.x, yTop, p.z))                                            // 門型上樑
+      box(steels, (HW + 0.3) * 2, 0.22, 0.26, V(p.x, yLow, p.z))                                                  // 第二道橫樑（頭頂 3.8 公尺以上）
+      for (const [s0, s1] of [[-1, 1], [1, -1]]) tube(steels, [L.clone().lerp(R, (s0 + 1) / 2).setY(yTop - 0.15), L.clone().lerp(R, (s1 + 1) / 2).setY(yLow + 0.12)], 0.05, 2)   // X 斜撐
     }
     // 主鋼纜：塔頂到塔頂（拋物線，中間離橋面 1.1）；再從塔頂往外拉到地上的錨碇
     for (const s of [-1, 1]) {
-      const T0 = topOf['0,' + s], T1 = topOf['1,' + s], pts = []
-      const sagMid = T0.clone().lerp(T1, 0.5).y - (deck(0.5).y + 1.25)     // 中間垂到離橋面 1.25
-      const NC = Math.round(len / 0.6)
-      for (let i = 0; i <= NC; i++) {
-        const t = i / NC, d = deck(t).addScaledVector(side, s * (HW + 0.06))
-        pts.push(V(d.x, T0.y + (T1.y - T0.y) * t - sagMid * 4 * t * (1 - t), d.z))
-      }
+      const T0 = topOf['0,' + s], T1 = topOf['1,' + s]
+      // 鋼纜從這一端的鞍座拉到另一端的鞍座（塔在橋面端外 0.35 公尺，所以 u 跟橋面的 t 換算一下），中間垂到離橋面 1.25
+      const span = len + 0.7, uOf = (t) => (t * len + 0.35) / span
+      const cab = (u) => { const q = T0.clone().lerp(T1, u); return q }
+      const sagMid = T0.clone().lerp(T1, 0.5).y - (deck(0.5).y + 1.25)
+      const cableAt = (u) => cab(u).add(V(0, -sagMid * 4 * u * (1 - u), 0))
+      const NC = Math.round(len / 0.6), pts = []
+      for (let i = 0; i <= 80; i++) pts.push(cableAt(i / 80))
       tube(cables, pts, 0.06, 160)
-      // 吊索
+      // 吊索：每根橫樑兩端一根，從鋼纜正下方垂直往下到橋面邊樑（鋼纜在塔上比橋面寬 0.26，吊索微微往內斜）
       for (let i = 1; i < NC; i++) {
-        const t = i / NC
-        const top = pts[i], bot = deck(t).addScaledVector(side, s * (HW + 0.04)).add(V(0, -0.06, 0))
-        tube(cables, [bot, top], 0.008, 1)
+        const t = i / NC, top = cableAt(uOf(t)), bot = deck(t).addScaledVector(side, s * (HW + 0.04)).add(V(0, -0.06, 0))
+        tube(cables, [bot, top], 0.009, 1)
+        steels.push(new THREE.SphereGeometry(0.03, 6, 4).translate(top.x, top.y, top.z))                         // 鋼纜上的夾具
       }
       // 扶手鋼索（離橋面 1.0）
       const rail = []; for (let i = 0; i <= 40; i++) rail.push(deck(i / 40).addScaledVector(side, s * (HW + 0.05)).add(V(0, 1.15, 0)))
       tube(cables, rail, 0.016, 120)
-      // 錨碇：塔頂往外 4 公尺、往下到地面的混凝土塊
+      // 錨碇（後拉）：主鋼纜跨過鞍座、沿著橋的方向往後 9 公尺斜下去，進到埋在地裡的混凝土錨碇。
+      // 兩邊位置完全對稱（同一端左右兩塊在同一個高度：取兩邊比較低的地面，另一邊比較高就整塊埋進土裡）
       for (const [t, out] of ends) {
-        const T = topOf[t + ',' + s], q = T.clone().addScaledVector(dir, out * 7).addScaledVector(side, s * 0.5)
-        q.y = alpineHeight(q.x, q.z) + 0.15
-        tube(cables, [T, q], 0.04, 2)
-        box(concs, 1.1, 0.7, 1.1, q.clone().add(V(0, 0.05, 0)))
+        const T = topOf[t + ',' + s]
+        const q = T.clone().addScaledVector(dir, out * 9).addScaledVector(side, s * 0.6)
+        const qo = T.clone().addScaledVector(dir, out * 9).addScaledVector(side, -s * 0.6).addScaledVector(side, -s * 2 * (HW + 0.3))
+        const gy = Math.min(alpineHeight(q.x, q.z), alpineHeight(qo.x, qo.z))
+        q.y = gy + 0.35
+        tube(cables, [T, q], 0.05, 2)
+        const bot = Math.min(gy, alpineHeight(q.x, q.z)) - 1.0
+        box(concs, 1.4, q.y + 0.25 - bot, 1.6, V(q.x, (q.y + 0.25 + bot) / 2, q.z))
+        box(steels, 0.3, 0.3, 0.5, q.clone().add(V(0, 0.32, 0)))                                                   // 鋼纜錨頭
       }
       // 兩側鋼絲網：橋面到扶手
       const np = [], nu = [], ni = []
@@ -603,7 +632,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 20000 && FIGPOS.length < 18; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2, td = alpineTrailDist(x, z)
       if (td < 5 || td > 12 || x > 230 || !inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineHeight(x, z) > 18) continue
-      if (alpineStreamDist(x, z) < 3 || bridgeDist(x, z) < 4 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 3 || nearBird(avoid, x, z, 5, 2.5)) continue
+      if (alpineStreamDist(x, z) < 3 || bridgeDist(x, z) < 10 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 3 || nearBird(avoid, x, z, 5, 2.5)) continue
       if (FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < 16)) continue
       FIGPOS.push({ x, z, H: 7 + rnd() * 3.5 })
     }
