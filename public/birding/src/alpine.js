@@ -306,8 +306,8 @@ function buildInterior(lib, avoid = []) {
         col += vec3(1.0, 0.97, 0.9) * spec * (1.6 + lip * 1.5);
         // 跌水：一股股白色水絲，中間夾著深色透明的水
         // 三層：粗的水股、細的水絲、最細的拉絲（長焦拉近看才不會是一片糊糊的白）
-        float streak = fbm(vec2(vUv.x * 12.0, vUv.y * 0.6 - uTime * sp * 0.9)) * 0.5 + fbm(vec2(vUv.x * 38.0, vUv.y * 1.8 - uTime * sp * 1.25)) * 0.3 + vnoise(vec2(vUv.x * 110.0, vUv.y * 5.0 - uTime * sp * 1.6)) * 0.2;
-        float curtain = fall * mix(0.55, 1.0, smoothstep(0.3, 0.48, streak));   // 大部分是白的，只留細細的深色縫（原本白黑各半，拉近看像豹紋）
+        float streak = fbm(vec2(vUv.x * 22.0, vUv.y * 0.35 - uTime * sp * 0.9)) * 0.5 + fbm(vec2(vUv.x * 38.0, vUv.y * 1.8 - uTime * sp * 1.25)) * 0.3 + vnoise(vec2(vUv.x * 110.0, vUv.y * 5.0 - uTime * sp * 1.6)) * 0.2;
+        float curtain = fall * (0.4 + 0.6 * smoothstep(0.36, 0.52, streak)) * (0.75 + 0.25 * smoothstep(0.0, 0.6, vUv.x * (1.0 - vUv.x) * 4.0));   // 2026-11-09：以前八成以上是白的，像一塊白色塑膠板 → 一股股白水絲之間露出透明的深色水；兩邊比中間薄
         // 白沫：跟著水流漂（同一組相位），一塊塊、邊緣碎；跌水底下＋石頭邊／尾跡
         float fb = mix(fbm(q * 2.6 - o0 * 1.2) * 0.55 + fbm2(q * 8.0 - o0 * 1.2) * 0.45, fbm(q * 2.6 - o1 * 1.2 + 9.1) * 0.55 + fbm2(q * 8.0 - o1 * 1.2 + 9.1) * 0.45, wB);   // 泡沫要碎（大塊模糊的白像抹上去的）
         float amt = clamp(fv * 0.75 + rockF * 1.1, 0.0, 1.2);
@@ -318,7 +318,8 @@ function buildInterior(lib, avoid = []) {
         vec3 white = vec3(0.8, 0.85, 0.86) * (0.82 + 0.18 * h0);
         col = mix(col, white, foam * 0.88);
         col *= mix(0.12, 1.0, uDay);
-        float a = mix(0.12, 0.86, d) + foam * 0.55 + fres * 0.35 + fall * 0.25 + lip * 0.2;   // 淺的地方看得到溪底
+        float a = mix(0.12, 0.86, d) + foam * 0.55 + fres * 0.35 + fall * 0.1 + lip * 0.2;
+        a = mix(a, 0.35 + 0.6 * curtain, fall);   // 跌水那面：水絲不透明、水絲之間半透明   // 淺的地方看得到溪底
         a *= smoothstep(0.0, 0.05, vDepth);                                      // 岸邊淡掉，不會有一條硬邊
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>
@@ -368,10 +369,14 @@ function buildInterior(lib, avoid = []) {
       // 一排的水面高度都一樣——網格不會被斜的門檻切成鋸齒（第一版每個頂點各查各的，跌水那面全是 V 字摺痕）
       const w = streamWater(S[i]), slope = Math.max(0, (streamWater(S[i] - 0.25) - streamWater(S[i] + 0.25)) / 0.5), f = foamAt(S[i]), lp = lipAt(S[i])
       const at2 = (lat) => { const o = streamLatOff(S[i], lat); return [p.x + side.x * lat - tg.x * o, p.z + side.z * lat - tg.z * o] }
-      const edge = (sgn) => { let r = 0.3; while (r < 6) { const [x, z] = at2(r * sgn); if (alpineHeight(x, z) >= w) break; r += 0.1 } return r + 0.15 }
-      const el = edge(-1), er = edge(1)
+      // 2026-11-09：斷面以前從平滑曲線的中心往兩邊找岸，但溪谷是照折線挖的，轉彎處曲線會偏離溪谷快 1 公尺——
+      // 中心落在岸上、只找到一小段，半條溪沒有水面（看起來是乾的溪床）。改成在 ±4 公尺內，從第一個比水面低的點到最後一個都鋪水面
+      let a0 = null, b0 = null
+      for (let lat = -4; lat <= 4.001; lat += 0.1) { const [x, z] = at2(lat); if (alpineHeight(x, z) < w) { if (a0 === null) a0 = lat; b0 = lat } }
+      const best = a0 === null ? null : { a: a0, b: b0 }   // 中間凸出水面的石頭、沙洲：那幾格水深 < 0，shader 自己會透明
+      const la = best ? best.a - 0.15 : -0.45, lb = best ? best.b + 0.15 : 0.45
       for (let k = 0; k <= K; k++) {
-        const t = k / K, lat = -el + (el + er) * t, [x, z] = at2(lat)
+        const t = k / K, lat = la + (lb - la) * t, [x, z] = at2(lat)
         sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(slope); sf.push(f); sl.push(lp)
       }
       if (i) for (let k = 0; k < K; k++) { const A = (i - 1) * (K + 1) + k, B = A + 1, C = A + K + 1, D = C + 1; si.push(A, C, B, B, C, D) }

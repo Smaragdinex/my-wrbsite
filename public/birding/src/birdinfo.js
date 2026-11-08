@@ -346,7 +346,7 @@ const ALL = [
   },
   // 2026-11-09 新增 8 種（使用者從《臺灣野鳥圖鑑》挑的；介紹是依公開資料自己寫的，不是書上的文字）
   {
-    id: 'mandarin', spot: AM(88, -11.5), perch: 'ground', swim: 'alpPond', view: 0, y: ALP_POND.water - 0.25, water: ALP_POND.water, dist: 12, camH: 1.6, lookY: 0.25,
+    id: 'mandarin', spot: AM(88, -11.5), perch: 'ground', swim: 'alpPond', view: 0, y: ALP_POND.water - 0.14, water: ALP_POND.water, dist: 12, camH: 1.6, lookY: 0.25,   // 2026-11-09 y 原本 -0.25 整隻泡在水裡（身體只露 7 公分）；浮著的鴨子吃水約身高的 1/3
     name: '鴛鴦', sci: 'Aix galericulata', where: '山區入口的湖',
     intro: '公鳥是台灣最華麗的鴨子：紅嘴、大白眉、橘色的「鬢毛」，背上一對直立的橘色帆羽像兩片小帆。牠們在台灣是稀有的留鳥，住在中高海拔乾淨的溪流和湖泊旁，常在樹洞裡築巢。',
     facts: [
@@ -357,7 +357,7 @@ const ALL = [
     ],
   },
   {
-    id: 'spotbill', spot: AM(84, -14), perch: 'ground', swim: 'alpPond', view: 340, y: ALP_POND.water - 0.25, water: ALP_POND.water, dist: 12, camH: 1.6, lookY: 0.3,
+    id: 'spotbill', spot: AM(84, -14), perch: 'ground', swim: 'alpPond', view: 340, y: ALP_POND.water - 0.17, water: ALP_POND.water, dist: 12, camH: 1.6, lookY: 0.3,
     name: '花嘴鴨', sci: 'Anas zonorhyncha', where: '山區入口的湖',
     intro: '台灣最常見的留鳥鴨子之一。全身深褐色、羽毛邊緣顏色淡，像一片片魚鱗；臉是淡米色，有一道深色過眼線。最好認的是黑色的嘴、嘴尖一塊黃色，像沾了蛋黃。',
     facts: [

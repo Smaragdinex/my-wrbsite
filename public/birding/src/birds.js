@@ -1144,15 +1144,17 @@ function goshawk(env) {
 }
 // 2026-11-09 新增 8 種（使用者挑的；ChatGPT 參考圖 → Tripo → rig-distance.py，點位在 bird-points.json）
 // 鴛鴦、花嘴鴨：在山區入口的湖裡游（跟紅冠水雞同一套游泳動作）
+// 2026-11-09 使用者：湖裡只有一隻太孤單 → 鴛鴦 4 隻（兩對常常游在一起）、花嘴鴨 5 隻一小群；彼此不穿透（groundGroup），只在開闊水面
+const swimAvoid = (env, mates) => (x, z, p) => mates(x, z, p) || (env.swimOK ? env.swimOK(x, z, p) : false)
 function mandarin(env) {
-  return groundTripo(env, { name: 'mandarin-rig', H: 0.33, h0: 0.714, ...TRIPO, swim: true, bill: 0.1, bob: 0.025,
-    walk: { radius: 1.6, speed: 0.13, avoid: env.swimOK }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.24,
-    acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } })
+  return groundGroup(4, 0.7, (avoid) => groundTripo(env, { name: 'mandarin-rig', H: 0.33, h0: 0.714, ...TRIPO, swim: true, bill: 0.1, bob: 0.025,
+    walk: { radius: 3.2, speed: 0.13, avoid: swimAvoid(env, avoid) }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.24,
+    acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }))
 }
 function spotbill(env) {
-  return groundTripo(env, { name: 'spotbill-rig', H: 0.42, h0: 0.716, ...TRIPO, swim: true, bill: 0.13, bob: 0.03,
-    walk: { radius: 1.8, speed: 0.14, avoid: env.swimOK }, stride: 0.11, swingT: 0.35, lift: 0, knee: [0.7, 1.3], focusY: 0.28,
-    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } })
+  return groundGroup(5, 0.9, (avoid) => groundTripo(env, { name: 'spotbill-rig', H: 0.42, h0: 0.716, ...TRIPO, swim: true, bill: 0.13, bob: 0.03,
+    walk: { radius: 3.6, speed: 0.14, avoid: swimAvoid(env, avoid) }, stride: 0.11, swingT: 0.35, lift: 0, knee: [0.7, 1.3], focusY: 0.28,
+    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } }))
 }
 // 臺灣山鷓鴣：林下三隻一群，圓滾滾地慢慢走、低頭翻落葉
 function partridge(env) {
