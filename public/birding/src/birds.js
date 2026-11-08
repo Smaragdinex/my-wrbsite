@@ -296,6 +296,7 @@ export async function loadAnimalModels(extra = [], onProgress) {
   const tick = () => onProgress?.(++done / Math.max(1, total))
   const load = (n) => (total++, L.loadAsync(`models/birds/${n}.glb?v=${VER}`).finally(tick)).then((g) => {
     GLB[n] = g.scene
+    g.scene.traverse((o) => { if (o.isMesh) fixWinding(o.geometry) })
     // Tripo 生成的羽色太鮮豔的，載入時壓暗（紫嘯鶇真實是深藍黑、只有光澤是亮藍）
     const k = TINT[n.replace('-fly', '')]
     if (k) g.scene.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(k) } })
@@ -340,6 +341,23 @@ export function rigged(name, { straight = {} } = {}) {
       b.quaternion.multiply(_q.setFromAxisAngle(_a.copy(axis).applyQuaternion(b.userData.inv).normalize(), angle))
     },
   }
+}
+// 減面時翻掉的三角形（頂點順序跟法線相反）：只畫正面時會變成破洞，看到後面深色的翅膀、樹枝——身上一片片碎片。
+// 樹鵲、綠繡眼、白頭翁約 9% 的面是反的（2026-11-08 使用者回報 17 號樹鵲破圖）。載入時照頂點法線把順序轉回來。
+function fixWinding(g) {
+  const p = g.attributes.position, n = g.attributes.normal, ix = g.index
+  if (!p || !n || !ix) return
+  const a = ix.array
+  let e1x, e1y, e1z, e2x, e2y, e2z
+  for (let i = 0; i < a.length; i += 3) {
+    const i0 = a[i], i1 = a[i + 1], i2 = a[i + 2]
+    e1x = p.getX(i1) - p.getX(i0); e1y = p.getY(i1) - p.getY(i0); e1z = p.getZ(i1) - p.getZ(i0)
+    e2x = p.getX(i2) - p.getX(i0); e2y = p.getY(i2) - p.getY(i0); e2z = p.getZ(i2) - p.getZ(i0)
+    const fx = e1y * e2z - e1z * e2y, fy = e1z * e2x - e1x * e2z, fz = e1x * e2y - e1y * e2x
+    const nx = n.getX(i0) + n.getX(i1) + n.getX(i2), ny = n.getY(i0) + n.getY(i1) + n.getY(i2), nz = n.getZ(i0) + n.getZ(i1) + n.getZ(i2)
+    if (fx * nx + fy * ny + fz * nz < 0) { a[i + 1] = i2; a[i + 2] = i1 }
+  }
+  ix.needsUpdate = true
 }
 // 版本號跟著 index.html 的 ?v= 走，模型檔才不會用到快取的舊版
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''

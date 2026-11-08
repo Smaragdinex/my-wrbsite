@@ -71,15 +71,20 @@ for (const p of photos) if (!p.sold && p.score <= 0 && (p.subject || p.price)) {
 for (const p of photos) if (!p.sold && p.subject) { const np = priceFor(p.subject.id, p.score); if (np !== p.price) { p.price = np; putPhoto(p) } }
 // 圖鑑記錄：拍到過的鳥種（舊存檔從相簿補）
 state.seen = [...new Set([...(state.seen ?? []), ...photos.filter((p) => p.subject).map((p) => p.subject.id)])]
+// 圖鑑讀過的頁：拍到新鳥種＝未讀，翻到那一頁才算讀過（舊存檔沒有這欄：已經記錄的都當讀過，不會一打開滿滿的 NEW）
+state.read ??= [...state.seen]
+const unreadN = () => state.seen.filter((id) => !state.read.includes(id)).length
 const save = () => { saveState(state); hud.setMoney(state.money) }
-hud.setMoney(state.money)
+hud.setMoney(state.money); hud.setGuideNew(unreadN())
 const gear = { body: () => BODIES.find((b) => b.id === state.bodyId), lens: () => LENSES.find((l) => l.id === state.lensId) }
 
 const cam = createCamera({ world, camera, controls: player.controls, hud, gear, getSound: () => settings.state.sound, onShot: (p) => {
   photos.push(p); putPhoto(p)
-  if (p.subject && !state.seen.includes(p.subject.id)) { state.seen.push(p.subject.id); save() }   // 圖鑑：拍到過就算記錄（照片賣掉、刪掉也還在）
-  // 拍的當下不顯示分數、評語、價錢（使用者要求）：要到相簿或相機行老闆那裡才知道拍得怎樣
-  hud.toast(tr('已存入相簿'))
+  // 圖鑑：拍到過就算記錄（照片賣掉、刪掉也還在）；新的鳥種先記成未讀，右上角亮「圖鑑 N 筆新紀錄」
+  const isNew = p.subject && !state.seen.includes(p.subject.id)
+  if (isNew) { state.seen.push(p.subject.id); save(); hud.setGuideNew(unreadN()) }
+  // 拍的當下不顯示分數、評語、價錢（使用者要求）：要到相簿或相機行老闆那裡才知道拍得怎樣——新鳥種只說「圖鑑多了一筆」
+  hud.toast(isNew ? tr('已存入相簿\n圖鑑新增一筆紀錄！') : tr('已存入相簿'), isNew ? 3.2 : 2.2)
 } })
 
 // 面板（相簿、相機行）開著的時候放開滑鼠；關掉再鎖回去
@@ -95,8 +100,9 @@ const guide = createGuide({ renderer, sfx: (k) => uiFx?.play(k), onClose: (why) 
   const r = {}
   for (const id of state.seen) r[id] = { n: 0, best: 0 }
   for (const p of photos) if (p.subject) { const o = r[p.subject.id] ??= { n: 0, best: 0 }; o.n++; o.best = Math.max(o.best, p.score) }
+  for (const id in r) r[id].unread = !state.read.includes(id)
   return r
-} })
+}, onRead: (id) => { if (!state.read.includes(id)) { state.read.push(id); save(); hud.setGuideNew(unreadN()) } } })
 const product = createProductView({ state, getModel: (id) => store.gearModel[id], onChange: () => { save(); store.refresh(); shop.render() }, onClose: () => { if (!shop.isOpen) relock() } })   // 從櫃台的器材清單打開的：關掉回到清單
 const panelOpen = () => album.isOpen || shop.isOpen || product.isOpen || cam.panelOpen || guide.isOpen
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }

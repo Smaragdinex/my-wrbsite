@@ -70,9 +70,12 @@ body.in-menu #hud { display: none; }
 .clock { position: absolute; right: 18px; top: 54px; background: rgba(0, 0, 0, 0.45); color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 14px; }
 .fade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 0.6s; }
 .fade.on { opacity: 1; }
+.guide-new { position: absolute; right: 18px; top: 92px; background: #c2412d; color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 14px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.3); animation: guide-new-pulse 1.6s ease-in-out infinite; }
+.guide-new::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #fff; margin-right: 7px; vertical-align: 1px; }
+@keyframes guide-new-pulse { 50% { transform: scale(1.06); } }
 .money { position: absolute; right: 18px; top: 16px; background: rgba(0, 0, 0, 0.45); color: #fff; padding: 6px 14px; border-radius: 99px; font-weight: 700; }
 .hint { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); background: rgba(0, 0, 0, 0.45); color: #fff; padding: 6px 14px; border-radius: 99px; font-size: 14px; white-space: nowrap; }
-.toast { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.6); color: #fff; padding: 8px 18px; border-radius: 10px; font-size: 15px; transition: opacity 0.4s; }
+.toast { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.6); color: #fff; padding: 8px 18px; border-radius: 10px; font-size: 15px; transition: opacity 0.4s; white-space: pre-line; text-align: center; }
 /* 觀景窗 */
 .viewfinder { position: absolute; inset: 0; opacity: 0; transition: opacity 0.15s; }
 .viewfinder.on { opacity: 1; }

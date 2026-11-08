@@ -104,6 +104,14 @@ function backLink(ctx) {
 }
 // 目錄每一行的位置（畫和點擊判斷共用）
 const TOC_TOP = 220, tocStep = () => Math.min(46, (CH - 160 - TOC_TOP) / BIRDS.length)
+// 沒讀過的新紀錄：紅底白字的小膠囊「NEW」，(x, y) 是左邊、文字基線
+function newTag(ctx, x, y, size = 22) {
+  ctx.save(); ctx.font = `bold ${size}px ${SANS}`
+  const w = ctx.measureText('NEW').width + size * 0.9, h = size * 1.3
+  ctx.fillStyle = '#c2412d'; ctx.beginPath(); ctx.roundRect(x, y - size * 0.98, w, h, h / 2); ctx.fill()
+  ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic'; ctx.fillText('NEW', x + size * 0.45, y - size * 0.08)
+  ctx.restore(); return w
+}
 function stamp(ctx, text, x, y, color) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(-0.12)
   ctx.font = `bold 30px ${SANS}`; const w = ctx.measureText(text).width + 34
@@ -112,12 +120,13 @@ function stamp(ctx, text, x, y, color) {
   ctx.restore()
 }
 
-function birdLeft(b, i, rec) {
+function birdLeft(b, i, rec, unread) {
   return canvasTex((ctx) => {
     paper(ctx, 'L')
     const X = 86, W = CW - 2 * X - 20
     let y = 120
     ctx.fillStyle = MUTED; ctx.font = `26px ${SERIF}`; ctx.fillText(`No. ${String(i + 1).padStart(2, '0')}`, X, y)
+    if (unread) newTag(ctx, X + ctx.measureText(`No. ${String(i + 1).padStart(2, '0')}`).width + 16, y, 24)
     if (rec) stamp(ctx, tr('已記錄'), CW - 190, 118, '#a8442f')
     y += 84
     ctx.fillStyle = INK; ctx.font = `bold 72px ${SERIF}`; ctx.fillText(rec ? b.name : '？？？', X, y, W)   // 沒拍到：名字跟目錄一樣先藏起來，只給在哪裡
@@ -183,7 +192,7 @@ function birdRight(b, i, rec, info) {
     pageNo(ctx, i * 2 + 4, 'R')
   })
 }
-function contentsLeft(nRec) {
+function contentsLeft(nRec, nNew) {
   return canvasTex((ctx) => {
     paper(ctx, 'L')
     ctx.textAlign = 'center'; ctx.fillStyle = INK
@@ -194,12 +203,13 @@ function contentsLeft(nRec) {
     const bw = 460, bx = CW / 2 - bw / 2
     ctx.fillStyle = 'rgba(80,60,30,0.15)'; ctx.fillRect(bx, 628, bw, 18)
     ctx.fillStyle = ACCENT; ctx.fillRect(bx, 628, bw * nRec / BIRDS.length, 18)
+    if (nNew) { ctx.fillStyle = '#c2412d'; ctx.font = `bold 30px ${SANS}`; ctx.fillText(tr('{n} 筆新紀錄還沒看（目錄裡標 NEW）', { n: nNew }), CW / 2, 708, CW - 120) }
     ctx.fillStyle = MUTED; ctx.font = `26px ${SANS}`
     ;[tr('拍到一種鳥，就會記進這本圖鑑。'), tr('← →、A D 或點書頁翻頁'), tr('點目錄裡的鳥，直接翻到那一頁'), tr('E 或 Esc 闔上')].forEach((t, k) => ctx.fillText(t, CW / 2, 790 + k * 52, CW - 120))
     ctx.textAlign = 'left'
   })
 }
-function contentsRight(recs) {
+function contentsRight(recs, unread) {
   return canvasTex((ctx) => {
     paper(ctx, 'R')
     ctx.fillStyle = INK; ctx.font = `bold 46px ${SERIF}`; ctx.fillText(tr('目錄'), 90, 140)
@@ -208,7 +218,8 @@ function contentsRight(recs) {
       const y = top + i * step, rec = recs[i]
       ctx.font = `26px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(String(i + 1).padStart(2, '0'), 90, y)
       ctx.font = `30px ${SANS}`; ctx.fillStyle = rec ? INK : 'rgba(45,42,36,0.35)'; ctx.fillText(rec ? b.name : '？？？', 150, y, CW - 380)
-      const w = Math.min(CW - 380, ctx.measureText(rec ? b.name : '？？？').width)
+      let w = Math.min(CW - 380, ctx.measureText(rec ? b.name : '？？？').width)
+      if (unread[i]) w += 12 + newTag(ctx, 150 + w + 12, y - 2, 20)
       ctx.fillStyle = 'rgba(80,60,30,0.3)'; for (let x = 160 + w; x < CW - 190; x += 14) ctx.fillRect(x, y - 8, 3, 3)
       ctx.font = `26px ${SERIF}`; ctx.fillStyle = MUTED; ctx.textAlign = 'right'; ctx.fillText(String(i * 2 + 3), CW - 120, y); ctx.textAlign = 'left'
       if (rec) { ctx.strokeStyle = '#a8442f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(CW - 100, y - 12); ctx.lineTo(CW - 90, y - 2); ctx.lineTo(CW - 72, y - 26); ctx.stroke() }
@@ -325,7 +336,7 @@ function leather(title) {
   return t
 }
 
-export function createGuide({ renderer, getRecords, onClose, sfx = () => {} }) {
+export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, sfx = () => {} }) {
   const scene = new THREE.Scene()
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50)
   scene.add(cam)
@@ -378,20 +389,20 @@ export function createGuide({ renderer, getRecords, onClose, sfx = () => {} }) {
 
   // 跨頁 0 是目錄；跨頁 s（1～）是 BIRDS[s - 1]
   const NS = BIRDS.length + 1
-  let recs = [], infos = []
+  let recs = [], infos = [], unread = []
   const mats = new Map()   // key 'L3' / 'R3' / 'B3'（背面用的左頁）→ 材質
   const dioramas = new Map()
   function refresh() {
     const r = getRecords()
-    infos = BIRDS.map((b) => r[b.id] ?? null); recs = infos.map(Boolean)
+    infos = BIRDS.map((b) => r[b.id] ?? null); recs = infos.map(Boolean); unread = infos.map((o) => !!o?.unread)
     for (const m of mats.values()) m.uniforms.map.value.dispose()
     mats.clear()
     for (const [id, d] of dioramas) d.setSilhouette(!r[id])
   }
   function texFor(side, s) {
-    if (s === 0) return side === 'L' ? contentsLeft(recs.filter(Boolean).length) : contentsRight(recs)
+    if (s === 0) return side === 'L' ? contentsLeft(recs.filter(Boolean).length, unread.filter(Boolean).length) : contentsRight(recs, unread)
     const i = s - 1
-    return side === 'L' ? birdLeft(BIRDS[i], i, recs[i]) : birdRight(BIRDS[i], i, recs[i], infos[i])
+    return side === 'L' ? birdLeft(BIRDS[i], i, recs[i], unread[i]) : birdRight(BIRDS[i], i, recs[i], infos[i])
   }
   function mat(kind, s) {
     const k = kind + s
@@ -418,6 +429,12 @@ export function createGuide({ renderer, getRecords, onClose, sfx = () => {} }) {
     }
     return d
   }
+  // 翻到某隻鳥那一頁＝讀過：存檔、目錄重畫（那一頁這次還留著 NEW，下次打開才拿掉）
+  function markRead(s) {
+    if (s < 1 || !unread[s - 1]) return
+    unread[s - 1] = false; onRead(BIRDS[s - 1].id)
+    for (const k of ['L0', 'R0', 'B0']) { const m = mats.get(k); if (m) { if (k !== 'B0') m.uniforms.map.value.dispose(); mats.delete(k) } }
+  }
   const warmAround = (s) => { for (const k of [s - 1, s, s + 1, s + 2]) if (k > 0 && k < NS) diorama(k) }
 
   // 狀態
@@ -433,7 +450,7 @@ export function createGuide({ renderer, getRecords, onClose, sfx = () => {} }) {
     if (st.open) return
     refresh()
     st.open = true; st.target = 1; hud.hidden = false
-    warmAround(st.spread)
+    warmAround(st.spread); markRead(st.spread)
   }
   function close(why) {
     if (!st.open) return
@@ -538,7 +555,7 @@ export function createGuide({ renderer, getRecords, onClose, sfx = () => {} }) {
     if (f) {
       f.p = Math.min(1, f.p + dt / 0.75)
       if (f.p >= 1) {
-        st.spread = f.to
+        st.spread = f.to; markRead(f.to)
         const q = f.queue; st.flip = null
         if (q) turn(q)
       }
