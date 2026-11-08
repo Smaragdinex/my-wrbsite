@@ -360,13 +360,57 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   })
   for (let i = 0; i < 7; i++) addCollider(cx1 + 0.4 + i * (cw - 0.8) / 6, cz, 0.5, ch + 0.2)
   // 檯面上：結帳平板（立架）、刷卡機、一疊產品盒、小盆栽、鏡頭清潔組
-  box('steel', 0.08, 0.16, 0.08, -81.7, ch + 0.1, cz + 0.12)
-  {
-    const pos = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.015), new THREE.MeshStandardMaterial({ color: 0x111416, roughness: 0.25, metalness: 0.4, emissive: 0x9fc6b0, emissiveIntensity: 0.25 }))
-    pos.position.set(-81.7, ch + 0.24, cz + 0.1); pos.rotation.set(-0.45, Math.PI, 0); g.add(pos)
+  // 2026-11-09 寫實化（使用者：櫃台的螢幕太敷衍）：
+  //   結帳平板＝圓角黑邊平板＋鋁合金旋轉立架，螢幕是真的收銀畫面（購物清單、金額、收款鍵、數字鍵）；
+  //   刷卡機＝圓角機身、上半小螢幕（感應付款圖示）、下半實體按鍵；收據機＝圓角機身、出紙口、印好字的收據；
+  //   另外加一台面向客人的修圖螢幕（薄邊框、鋁腳架），畫面是修圖軟體開著一張鳥照（直方圖、滑桿、底片條）
+  const devM = new THREE.MeshStandardMaterial({ color: 0x0d0e10, roughness: 0.3, metalness: 0.2 })
+  const aluM = new THREE.MeshStandardMaterial({ color: 0xb9bcc0, roughness: 0.28, metalness: 0.9 })
+  const scrMat = (tex, k = 1) => new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.85 * k, color: 0x202020, roughness: 0.12 })
+  const ui = (x, txt, px, py, size, col = '#e9ecef', weight = '500', align = 'left') => { x.font = `${weight} ${size}px ${FONT_SANS}`; x.fillStyle = col; x.textAlign = align; x.fillText(txt, px, py) }
+  const rr = (x, px, py, w, h, r, col) => { x.fillStyle = col; x.beginPath(); x.roundRect(px, py, w, h, r); x.fill() }
+  const money = (n) => 'NT$ ' + n.toLocaleString('en-US')
+  {   // 結帳平板
+    const posT = canvasTex(1024, 704, (x, w, h) => {
+      x.fillStyle = '#f4f5f7'; x.fillRect(0, 0, w, h)
+      x.fillStyle = '#1f2a24'; x.fillRect(0, 0, w, 64); ui(x, tr('相機行'), 28, 42, 28, '#ffffff', '700'); ui(x, '11:42', w - 28, 42, 24, '#cfd8d2', '500', 'right')
+      const items = [[LENSES[2], 1], [BODIES[1], 1], [{ name: 'SD 128GB V90' , price: 1290 }, 2], [{ name: 'Lens cleaning kit', price: 450 }, 1]]
+      let y = 96, sub = 0
+      for (const [it, q] of items) {
+        rr(x, 24, y, 600, 92, 10, '#ffffff'); rr(x, 38, y + 12, 68, 68, 8, '#dfe3e6'); x.fillStyle = '#9aa3aa'; x.beginPath(); x.arc(72, y + 46, 20, 0, 7); x.fill(); x.fillStyle = '#5b646b'; x.beginPath(); x.arc(72, y + 46, 11, 0, 7); x.fill()
+        ui(x, it.name, 124, y + 40, 24, '#1d2327', '600'); ui(x, `× ${q}`, 124, y + 72, 20, '#6b747b'); ui(x, money((it.price || 2990) * q), 604, y + 56, 24, '#1d2327', '600', 'right')
+        sub += (it.price || 2990) * q; y += 104
+      }
+      rr(x, 648, 88, 352, 592, 14, '#ffffff')
+      ui(x, 'Subtotal', 672, 136, 22, '#6b747b'); ui(x, money(sub), 976, 136, 22, '#1d2327', '500', 'right')
+      ui(x, 'Tax 5%', 672, 172, 22, '#6b747b'); ui(x, money(Math.round(sub * 0.05)), 976, 172, 22, '#1d2327', '500', 'right')
+      x.fillStyle = '#e3e6e8'; x.fillRect(672, 190, 304, 2)
+      ui(x, 'Total', 672, 236, 28, '#1d2327', '700'); ui(x, money(Math.round(sub * 1.05)), 976, 236, 30, '#1d2327', '700', 'right')
+      for (let k = 0; k < 12; k++) { const cx = 672 + (k % 3) * 104, cy = 262 + Math.floor(k / 3) * 74; rr(x, cx, cy, 96, 64, 10, '#eef0f2'); ui(x, ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'][k], cx + 48, cy + 42, 26, '#2a3136', '600', 'center') }
+      rr(x, 672, 568, 304, 88, 14, '#2f7d4f'); ui(x, 'Charge  ' + money(Math.round(sub * 1.05)), 824, 622, 26, '#ffffff', '700', 'center')
+    })
+    const dev = new THREE.Group(); dev.position.set(-81.7, ch + 0.03, cz + 0.1); dev.rotation.y = Math.PI; g.add(dev)
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.08, 0.014, 32), aluM); base.position.y = 0.007; dev.add(base)
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.02, 0.15, 16), aluM); neck.position.set(0, 0.085, -0.02); neck.rotation.x = -0.25; dev.add(neck)
+    const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.06, 16).rotateZ(Math.PI / 2), aluM); hinge.position.set(0, 0.16, -0.04); dev.add(hinge)
+    const head = new THREE.Group(); head.position.set(0, 0.17, -0.02); head.rotation.x = -0.38; dev.add(head)
+    const slab = new THREE.Mesh(new RoundedBoxGeometry(0.31, 0.215, 0.011, 3, 0.012), devM); slab.position.set(0, 0.07, 0); head.add(slab)
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.29, 0.197), scrMat(posT)); scr.position.set(0, 0.07, 0.0058); head.add(scr)
+    dev.traverse((m) => { if (m.isMesh) m.castShadow = true })
   }
-  box('charcoal', 0.09, 0.03, 0.15, -82.25, ch + 0.045, cz - 0.15)
-  box('glow', 0.06, 0.004, 0.04, -82.25, ch + 0.062, cz - 0.17)
+  {   // 刷卡機
+    const padT = canvasTex(256, 512, (x, w, h) => {
+      x.fillStyle = '#16181b'; x.fillRect(0, 0, w, h)
+      rr(x, 22, 22, w - 44, 200, 10, '#0f2732'); ui(x, 'NT$ 31,437', w / 2, 92, 30, '#ffffff', '700', 'center')
+      x.strokeStyle = '#7fd3ff'; x.lineWidth = 5; for (let k = 0; k < 3; k++) { x.beginPath(); x.arc(w / 2 - 30, 160, 16 + k * 13, -0.8, 0.8); x.stroke() }
+      ui(x, 'TAP / INSERT', w / 2 + 34, 168, 20, '#bfe9ff', '600', 'center')
+      for (let k = 0; k < 12; k++) { const cx = 34 + (k % 3) * 66, cy = 248 + Math.floor(k / 3) * 58; rr(x, cx, cy, 56, 44, 8, k === 9 ? '#b8322a' : k === 11 ? '#2f7d4f' : k === 10 ? '#3a3e44' : '#3a3e44'); ui(x, ['1', '2', '3', '4', '5', '6', '7', '8', '9', '✕', '0', '✓'][k], cx + 28, cy + 31, 22, '#f2f2f2', '600', 'center') }
+    })
+    const t = new THREE.Group(); t.position.set(-82.25, ch + 0.03, cz - 0.15); t.rotation.y = Math.PI + 0.25; g.add(t)
+    const body = new THREE.Mesh(new RoundedBoxGeometry(0.085, 0.035, 0.17, 3, 0.012), devM); body.position.y = 0.02; body.rotation.x = 0.12; t.add(body)
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.075, 0.15), scrMat(padT, 0.7)); face.rotation.set(-Math.PI / 2 + 0.12, 0, 0); face.position.set(0, 0.0385, 0); t.add(face)
+    body.castShadow = true
+  }
   const boxM = new THREE.MeshStandardMaterial({ map: canvasTex(256, 256, packDraw), roughness: 0.55 })
   const pack = (w, h, d, x, y, z, ry = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), boxM); m.position.set(x, y + h / 2, z); m.rotation.y = ry; m.castShadow = true; g.add(m); return m }
   pack(0.2, 0.14, 0.16, -84.5, ch + 0.03, cz - 0.05, 0.2); pack(0.18, 0.12, 0.14, -84.5, ch + 0.17, cz - 0.05, -0.1); pack(0.12, 0.09, 0.1, -84.95, ch + 0.03, cz + 0.1, 0.5)
@@ -377,8 +421,62 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   box('oak', 0.035, 0.12, 0.035, -80.95, ch + 0.15, cz - 0.15)
 
   // 收據機（平板旁邊，吐出一小段紙）、紙袋（櫃台東端，綠色腰帶＋扭繩提把）
-  box('charcoal', 0.13, 0.1, 0.15, -81.25, ch + 0.08, cz + 0.12)
-  { const pp = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.09), new THREE.MeshStandardMaterial({ color: 0xfbfbf8, roughness: 0.9, side: THREE.DoubleSide })); pp.position.set(-81.25, ch + 0.17, cz + 0.04); pp.rotation.x = -0.5; g.add(pp) }
+  {   // 收據機：圓角機身、前面出紙口，吐出一段印好的收據（彎彎的）
+    const rcT = canvasTex(128, 256, (x, w, h) => {
+      x.fillStyle = '#fbfbf7'; x.fillRect(0, 0, w, h); ui(x, tr('相機行'), w / 2, 26, 15, '#222', '700', 'center')
+      for (let k = 0; k < 9; k++) { x.fillStyle = '#4a4a4a'; x.fillRect(10, 42 + k * 16, 40 + ((k * 37) % 50), 4); x.fillRect(w - 40, 42 + k * 16, 30, 4) }
+      x.fillRect(10, 196, w - 20, 2); ui(x, 'TOTAL', 10, 222, 14, '#111', '700'); ui(x, '31,437', w - 10, 222, 14, '#111', '700', 'right')
+      for (let k = 0; k < 30; k++) x.fillRect(14 + k * 3.4, 234, k % 3 ? 1.4 : 2.4, 16)   // 條碼
+    })
+    const pr = new THREE.Group(); pr.position.set(-81.2, ch + 0.03, cz + 0.12); pr.rotation.y = Math.PI; g.add(pr)
+    const pb = new THREE.Mesh(new RoundedBoxGeometry(0.13, 0.1, 0.16, 3, 0.02), new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.45 })); pb.position.y = 0.05; pr.add(pb); pb.castShadow = true
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.006, 0.01), devM); slot.position.set(0, 0.085, 0.08); pr.add(slot)
+    const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.075, 0.15, 1, 8), new THREE.MeshStandardMaterial({ map: rcT, roughness: 0.9, side: THREE.DoubleSide }))
+    const pp = paper.geometry.attributes.position; for (let i = 0; i < pp.count; i++) { const v = (pp.getY(i) + 0.075) / 0.15; pp.setZ(i, 0.06 * (1 - v) * (1 - v)); pp.setY(i, pp.getY(i) * 0.9) }   // 從出紙口垂下來、末端往外捲
+    paper.geometry.computeVertexNormals(); paper.position.set(0, 0.06, 0.088); paper.rotation.x = -0.15; pr.add(paper)
+  }
+  {   // 面向客人的修圖螢幕
+    const W2 = 1280, H2 = 736
+    const cv = document.createElement('canvas'); cv.width = W2; cv.height = H2
+    const x = cv.getContext('2d')
+    const drawUI = (img) => {
+      x.fillStyle = '#1e1f22'; x.fillRect(0, 0, W2, H2)
+      x.fillStyle = '#2a2b2f'; x.fillRect(0, 0, W2, 34); ['File', 'Edit', 'Image', 'Layer', 'Filter', 'View', 'Window'].forEach((m, k) => ui(x, m, 16 + k * 74, 23, 15, '#c9ccd1'))
+      x.fillStyle = '#26272b'; x.fillRect(0, 34, 46, H2 - 34); for (let k = 0; k < 12; k++) rr(x, 9, 48 + k * 40, 28, 28, 5, k === 3 ? '#3d6fd9' : '#34363b')   // 工具列
+      x.fillStyle = '#26272b'; x.fillRect(W2 - 280, 34, 280, H2 - 34)
+      // 直方圖
+      rr(x, W2 - 268, 46, 256, 120, 6, '#18191c')
+      for (const [col, ph] of [['rgba(230,80,80,0.55)', 0], ['rgba(90,200,110,0.55)', 0.9], ['rgba(90,140,240,0.55)', 1.8]]) { x.fillStyle = col; x.beginPath(); x.moveTo(W2 - 262, 162); for (let i = 0; i <= 120; i++) { const t = i / 120; x.lineTo(W2 - 262 + t * 244, 162 - 100 * Math.exp(-((t - 0.45 - ph * 0.08) ** 2) / 0.04) * (0.6 + 0.4 * Math.sin(t * 9 + ph))) } x.lineTo(W2 - 18, 162); x.fill() }
+      // 調整滑桿
+      ;['Exposure', 'Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Texture', 'Clarity', 'Vibrance', 'Saturation'].forEach((nm, k) => {
+        const yy = 196 + k * 46, v = [0.56, 0.62, 0.38, 0.66, 0.53, 0.45, 0.6, 0.58, 0.64, 0.52][k]
+        ui(x, nm, W2 - 264, yy, 14, '#b9bdc3'); ui(x, (v > 0.5 ? '+' : '') + Math.round((v - 0.5) * 200), W2 - 16, yy, 14, '#b9bdc3', '500', 'right')
+        rr(x, W2 - 264, yy + 10, 248, 4, 2, '#45484e'); x.fillStyle = '#e8eaed'; x.beginPath(); x.arc(W2 - 264 + 248 * v, yy + 12, 7, 0, 7); x.fill()
+      })
+      // 底片條
+      x.fillStyle = '#17181a'; x.fillRect(46, H2 - 104, W2 - 326, 104)
+      // 照片
+      const PX = 70, PY = 52, PW = W2 - 280 - 94, PH = H2 - 104 - 70
+      x.fillStyle = '#121314'; x.fillRect(PX - 6, PY - 6, PW + 12, PH + 12)
+      if (img) {
+        const sw = img.width / 2, sh = img.height / 2
+        x.drawImage(img, sw, 0, sw, sh, PX + (PW - PH * 1.5) / 2, PY, PH * 1.5, PH)
+        for (let k = 0; k < 8; k++) { const q = k % 4; x.drawImage(img, (q % 2) * sw, Math.floor(q / 2) * sh, sw, sh, 60 + k * 112, H2 - 92, 100, 72); if (k === 1) { x.strokeStyle = '#3d6fd9'; x.lineWidth = 3; x.strokeRect(60 + k * 112, H2 - 92, 100, 72) } }
+      }
+      ui(x, 'IMG_4127.CR3   ƒ/6.3   1/2000s   ISO 800   600mm', 70, H2 - 112, 14, '#8d9198')
+    }
+    drawUI(null)
+    const monT = new THREE.CanvasTexture(cv); monT.colorSpace = THREE.SRGBColorSpace; monT.anisotropy = 8
+    new THREE.ImageLoader().load('models/store-prints.jpg', (img) => { drawUI(img); monT.needsUpdate = true })
+    const mon = new THREE.Group(); mon.position.set(-83.35, ch + 0.03, cz + 0.18); mon.rotation.y = Math.PI + 0.12; g.add(mon)
+    const foot = new THREE.Mesh(new RoundedBoxGeometry(0.24, 0.012, 0.18, 2, 0.005), aluM); foot.position.y = 0.006; mon.add(foot)
+    const arm = new THREE.Mesh(new RoundedBoxGeometry(0.06, 0.3, 0.014, 2, 0.006), aluM); arm.position.set(0, 0.15, -0.05); arm.rotation.x = -0.12; mon.add(arm)
+    const panel = new THREE.Group(); panel.position.set(0, 0.36, -0.035); panel.rotation.x = -0.06; mon.add(panel)
+    const shell = new THREE.Mesh(new RoundedBoxGeometry(0.62, 0.37, 0.022, 3, 0.008), new THREE.MeshStandardMaterial({ color: 0xd9dadc, roughness: 0.35, metalness: 0.7 })); panel.add(shell)
+    const bez = new THREE.Mesh(new THREE.PlaneGeometry(0.612, 0.362), devM); bez.position.z = 0.0112; panel.add(bez)
+    const ms = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.345), scrMat(monT, 0.9)); ms.position.set(0, 0.006, 0.0115); panel.add(ms)
+    mon.traverse((m) => { if (m.isMesh) m.castShadow = true })
+  }
   {
     const bagT = canvasTex(256, 256, (x, w, h) => {
       x.fillStyle = '#f3efe6'; x.fillRect(0, 0, w, h); x.fillStyle = '#2f7d4f'; x.fillRect(0, h * 0.55, w, h * 0.12)

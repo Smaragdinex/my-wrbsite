@@ -319,8 +319,42 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   const DK = L0 + 3.0   // 桌子中心（後窗前面，爐子右邊、三腳架左邊）
   boxAt('trim', 1.6, 0.05, 0.7, DK, 0.76, -D / 2 + 0.45)
   for (const [uu, vv] of [[DK - 0.7, -D / 2 + 0.2], [DK + 0.7, -D / 2 + 0.2], [DK - 0.7, -D / 2 + 0.75], [DK + 0.7, -D / 2 + 0.75]]) boxAt('trim', 0.05, 0.74, 0.05, uu, 0.37, vv)
-  boxAt('black', 0.36, 0.02, 0.25, DK, 0.795, -D / 2 + 0.5); boxAt('black', 0.36, 0.24, 0.015, DK, 0.92, -D / 2 + 0.38, 0, -0.25)
-  cylAt('stone', 0.045, 0.04, 0.1, DK + 0.5, 0.84, -D / 2 + 0.6)
+  // 桌上（2026-11-09 寫實化）：太空灰鋁殼筆電（圓角機身、鍵盤、觸控板、螢幕亮著一張鳥照）、白瓷咖啡杯（有把手、杯裡是咖啡）、
+  // 記憶卡盒、讀卡機、筆記本＋筆、鏡頭蓋
+  {
+    const TOP = 0.785, LV = -D / 2 + 0.52
+    const alu = new THREE.MeshStandardMaterial({ color: 0x8c8f94, roughness: 0.32, metalness: 0.85 })
+    const keysT = canvasTex(512, 256, (x, w, h) => {
+      x.fillStyle = '#7d8086'; x.fillRect(0, 0, w, h)
+      x.fillStyle = '#1b1c1f'; x.fillRect(16, 10, w - 32, h * 0.6)
+      const rows = [14, 14, 13, 12, 11], kw = (w - 40) / 14.6
+      rows.forEach((n, ri) => { for (let k = 0; k < n; k++) { const ww = ri === 4 && k === 5 ? kw * 4.6 : kw * 0.9; const xx = 20 + k * kw + (ri === 4 && k > 5 ? kw * 3.6 : 0) + (14 - n) * kw * 0.25; x.fillStyle = '#2a2b2f'; x.fillRect(xx, 14 + ri * h * 0.115, ww, h * 0.1); x.fillStyle = 'rgba(255,255,255,0.06)'; x.fillRect(xx, 14 + ri * h * 0.115, ww, 2) } })
+      x.fillStyle = '#868a90'; x.fillRect(w * 0.3, h * 0.68, w * 0.4, h * 0.28); x.strokeStyle = 'rgba(0,0,0,0.25)'; x.strokeRect(w * 0.3, h * 0.68, w * 0.4, h * 0.28)   // 觸控板
+    })
+    rbox('_alu', 0.34, 0.012, 0.235, DK, TOP + 0.006, LV, 0.005)
+    const deck = new THREE.Mesh(new THREE.PlaneGeometry(0.33, 0.225), new THREE.MeshStandardMaterial({ map: keysT, roughness: 0.5, metalness: 0.4 }))
+    deck.rotation.set(-Math.PI / 2, 0, 0, 'YXZ'); deck.rotation.y = C.yaw; deck.position.copy(at(DK, TOP + 0.0125, LV)); g.add(deck)
+    // 螢幕：鉸鏈在機身後緣，打開約 110 度
+    const lid = new THREE.Group(); lid.position.copy(at(DK, TOP + 0.012, LV - 0.117)); lid.rotation.order = 'YXZ'; lid.rotation.y = C.yaw; lid.rotation.x = -0.35; g.add(lid)
+    const shell = new THREE.Mesh(new RoundedBoxGeometry(0.34, 0.225, 0.007, 2, 0.003), alu); shell.position.set(0, 0.1125, -0.0035); lid.add(shell)
+    const bezel = new THREE.Mesh(new THREE.PlaneGeometry(0.334, 0.219), new THREE.MeshStandardMaterial({ color: 0x0a0a0b, roughness: 0.2 })); bezel.position.set(0, 0.1125, 0.0002); lid.add(bezel)
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.312, 0.195), new THREE.MeshStandardMaterial({ color: 0x223040, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.15 })); scr.position.set(0, 0.116, 0.0006); lid.add(scr)
+    if (printsUrl) new THREE.TextureLoader().load(printsUrl, (tx) => { tx.colorSpace = THREE.SRGBColorSpace; tx.repeat.set(0.5, 0.5 * 0.625); tx.offset.set(0, 0.5 + 0.09); scr.material.map = tx; scr.material.emissiveMap = tx; scr.material.color.set(0x111111); scr.material.needsUpdate = true })
+    mats._alu = alu
+    // 咖啡杯：白瓷、杯口一圈、把手（甜甜圈的一半）、裡面深色咖啡
+    const ceramic = new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.25 })
+    const mug = new THREE.Mesh(new THREE.LatheGeometry([V(0, 0), V(0.038, 0), V(0.041, 0.006), V(0.042, 0.09), V(0.0385, 0.09), V(0.0365, 0.008), V(0, 0.008)], 24), ceramic)
+    mug.position.copy(at(DK + 0.5, TOP, -D / 2 + 0.62)); g.add(mug)
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.0055, 8, 16, Math.PI), ceramic); handle.position.copy(mug.position).add(V(0, 0.047, 0)).addScaledVector(right, 0.04); handle.rotation.set(0, C.yaw + Math.PI / 2, -Math.PI / 2, 'YXZ'); g.add(handle)
+    const cof = new THREE.Mesh(new THREE.CircleGeometry(0.037, 20).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x2a160a, roughness: 0.1 })); cof.position.copy(mug.position).add(V(0, 0.075, 0)); g.add(cof)
+    // 記憶卡盒（半透明塑膠盒裡一張卡）疊三個、讀卡機、筆記本＋筆、鏡頭蓋
+    for (let k = 0; k < 3; k++) { rbox('black', 0.04, 0.0045, 0.035, DK - 0.3 + k * 0.004, TOP + 0.0025 + k * 0.0048, -D / 2 + 0.66, 0.0015, 0.2 * k - 0.2); boxAt(k === 1 ? 'cardB' : 'cardR', 0.024, 0.0012, 0.032, DK - 0.3 + k * 0.004, TOP + 0.0045 + k * 0.0048, -D / 2 + 0.66, 0.2 * k - 0.2) }
+    rbox('black', 0.06, 0.012, 0.03, DK - 0.27, TOP + 0.006, -D / 2 + 0.36, 0.004, 0.4)
+    boxAt('notebook', 0.15, 0.012, 0.21, DK + 0.33, TOP + 0.006, -D / 2 + 0.36, -0.15); cylW('cardB', at(DK + 0.3, TOP + 0.015, -D / 2 + 0.3), at(DK + 0.36, TOP + 0.015, -D / 2 + 0.44), 0.0035)
+    put('black', new THREE.CylinderGeometry(0.041, 0.041, 0.012, 24).translate(...at(DK - 0.45, TOP + 0.006, -D / 2 + 0.5).toArray()))
+    mats.cardR = new THREE.MeshStandardMaterial({ color: 0xb8322a, roughness: 0.4 }); mats.cardB = new THREE.MeshStandardMaterial({ color: 0x23406e, roughness: 0.4 })
+    mats.notebook = new THREE.MeshStandardMaterial({ color: 0x4d5a3a, roughness: 0.85 })
+  }
   boxAt('trim', 0.5, 0.05, 0.5, DK, 0.45, -D / 2 + 1.2); for (const [du, dv] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) boxAt('trim', 0.04, 0.45, 0.04, DK + du, 0.22, -D / 2 + 1.2 + dv)   // 小凳子
   // 雙層床（右邊牆，2026-11-09 寫實化）：圓木床柱和橫桿、一條條床板、圓角的條紋床墊、紅黑格子毛毯（兩側垂下來、床頭那端反摺捲起）、
   // 枕頭；上鋪靠房間那側有護欄，床尾一座梯子。床頭朝後牆（-v），房間那側是 -u
@@ -416,7 +450,22 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   }
   // 左牆：鏡頭架（三層，擺幾支鏡頭和相機）
   for (const y of [1.0, 1.4, 1.8]) boxAt('trim', 0.3, 0.04, 1.4, -W / 2 + 0.2, y, D / 2 - 1.2)
-  for (let i = 0; i < 7; i++) { const y = [1.0, 1.4, 1.8][i % 3] + 0.1, vv = D / 2 - 1.7 + (i * 0.37) % 1.2, len = 0.12 + (i % 3) * 0.08; put('black', new THREE.CylinderGeometry(0.045, 0.045, len, 12).applyMatrix4(new THREE.Matrix4().compose(at(-W / 2 + 0.2, y + len / 2 - 0.08, vv), new THREE.Quaternion(), V(1, 1, 1)))) }
+  // 架上（2026-11-09 寫實化）：遊戲裡真的機身和鏡頭模型（相機行賣的那幾支），鏡頭直立擺（後蓋朝下）、機身側放；架子下面有鐵托架
+  for (const y of [1.0, 1.4, 1.8]) for (const vv of [D / 2 - 1.75, D / 2 - 0.65]) boxAt('iron', 0.22, 0.03, 0.02, -W / 2 + LR + 0.11, y - 0.04, vv)
+  {
+    const ld2 = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/gltf/'))
+    const items = [['body-b1', 1.0, D / 2 - 1.6, 'body'], ['lens-l1', 1.0, D / 2 - 1.15, 'lens'], ['lens-l2', 1.0, D / 2 - 0.85, 'lens'], ['body-b2', 1.4, D / 2 - 1.45, 'body'], ['lens-l3', 1.4, D / 2 - 0.9, 'lens'], ['lens-l5', 1.8, D / 2 - 1.3, 'lens']]
+    for (const [name, y, vv, kind] of items) ld2.loadAsync(`models/camera/${name}.glb`).then((gl) => {
+      const o = gl.scene, holder = new THREE.Group(); holder.add(o)
+      if (kind === 'lens') o.rotation.x = -Math.PI / 2   // 鏡頭朝 -Z → 轉成朝上（後蓋朝下立著）
+      else o.rotation.y = 0.5
+      const bb = new THREE.Box3().setFromObject(holder), ctr = bb.getCenter(V())
+      o.position.sub(V(ctr.x, bb.min.y, ctr.z))
+      holder.position.copy(at(-W / 2 + LR + 0.13, y + 0.02, vv)); holder.rotation.y = C.yaw + (kind === 'body' ? Math.PI / 2 : 0)
+      holder.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true } })
+      g.add(holder)
+    }).catch(() => {})
+  }
   // 牆上：地圖、鳥照（相機行那四張）、掛燈
   {
     const pm = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.68), mats.paper)
@@ -434,9 +483,57 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
       }
     })
   }
-  boxAt('lamp', 0.16, 0.22, 0.16, 0, WH - 0.35, 0); tubeW('iron', at(0, WH - 0.24, 0), at(0, PEAK - 0.1, 0), 0.01)
+  // 燈（2026-11-09 寫實化）：屋子中間一盞工業風吊燈（黑色鐵燈罩、裡面白琺瑯、愛迪生燈泡、鐵鍊吊在屋脊），
+  // 一盞暖色點光源真的照亮屋裡；桌上一盞小檯燈。亮度跟著路燈（lamp 材質的發光強度：白天弱、晚上亮），每格在燈泡的 onBeforeRender 更新
+  const bulbM = Object.assign(new THREE.MeshStandardMaterial({ color: 0xfff1d0, emissive: 0xffb25a, emissiveIntensity: 1.2 }), { userData: { lamp: [0.8, 3] } })
+  const lampAt = (u, y, v, opt) => {
+    const grp = new THREE.Group(); grp.position.copy(at(u, y, v)); g.add(grp)
+    const sh = new THREE.Mesh(new THREE.LatheGeometry([V(0.02, 0.1), V(0.03, 0.09), V(0.05, 0.075), V(opt.r * 0.75, 0.02), V(opt.r, -0.04), V(opt.r + 0.004, -0.045)], 28), new THREE.MeshStandardMaterial({ color: 0x1c1d1f, roughness: 0.45, metalness: 0.6, side: THREE.FrontSide }))
+    const inner = new THREE.Mesh(sh.geometry, new THREE.MeshStandardMaterial({ color: 0xf3efe6, roughness: 0.35, side: THREE.BackSide, emissive: 0xffd9a0, emissiveIntensity: 0.15 }))
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(opt.b, 16, 12).scale(1, 1.3, 1), bulbM); bulb.position.y = -0.01
+    grp.add(sh, inner, bulb)
+    const light = new THREE.PointLight(opt.col, 0, opt.dist, 2); light.position.y = -0.06; grp.add(light)
+    bulb.onBeforeRender = () => { light.intensity = opt.k * bulbM.emissiveIntensity }
+    return grp
+  }
+  const pend = lampAt(0, WH - 0.55, 0.1, { r: 0.19, b: 0.035, col: 0xffc78a, dist: 11, k: 4.2 })
+  for (let y = WH - 0.45; y < PEAK - 0.1; y += 0.05) put('iron', new THREE.TorusGeometry(0.012, 0.0035, 5, 10).rotateY(y * 40).translate(...at(0, y, 0.1).toArray()))   // 鐵鍊
+  // 檯燈：圓鐵座、斜的燈臂、小燈罩朝筆電那邊
+  {
+    const bu = L0 + 2.35, bv = -D / 2 + 0.3
+    put('iron', new THREE.CylinderGeometry(0.06, 0.07, 0.02, 20).translate(...at(bu, 0.795, bv).toArray()))
+    tubeW('iron', at(bu, 0.8, bv), at(bu + 0.05, 1.1, bv + 0.05), 0.007); tubeW('iron', at(bu + 0.05, 1.1, bv + 0.05), at(bu + 0.15, 1.15, bv + 0.12), 0.006)
+    const dl = lampAt(bu + 0.17, 1.12, bv + 0.14, { r: 0.07, b: 0.018, col: 0xffd2a0, dist: 3.5, k: 0.9 }); dl.rotation.z = 0.5; dl.rotation.y = C.yaw
+  }
   // 地毯
-  boxAt('cloth', 2.4, 0.01, 1.6, 0, 0.045, 0.5)
+  // 地毯：手織的 kilim（紅底、靛藍和米白的菱形花紋、兩端流蘇）
+  mats.cloth = new THREE.MeshStandardMaterial({ roughness: 1, map: canvasTex(512, 340, (x, w, h) => {
+    const r = mulberry32(61)
+    x.fillStyle = '#8e2f22'; x.fillRect(0, 0, w, h)
+    x.fillStyle = '#e7dcc4'; for (let i = 0; i < w; i += 6) { x.fillRect(i, 0, 3, 12); x.fillRect(i, h - 12, 3, 12) }   // 流蘇
+    x.strokeStyle = '#2b3550'; x.lineWidth = 10; x.strokeRect(26, 22, w - 52, h - 44); x.strokeStyle = '#e2cfa3'; x.lineWidth = 3; x.strokeRect(38, 34, w - 76, h - 68)
+    for (let k = 0; k < 3; k++) {   // 中間三顆大菱形
+      const cx = w * (0.25 + k * 0.25), cy = h / 2
+      for (const [sz, col] of [[70, '#2b3550'], [52, '#e2cfa3'], [36, '#a5422e'], [18, '#2b3550']]) { x.fillStyle = col; x.beginPath(); x.moveTo(cx, cy - sz); x.lineTo(cx + sz * 0.7, cy); x.lineTo(cx, cy + sz); x.lineTo(cx - sz * 0.7, cy); x.fill() }
+    }
+    for (let i = 52; i < w - 52; i += 18) { x.fillStyle = '#e2cfa3'; x.beginPath(); x.moveTo(i, 50); x.lineTo(i + 6, 58); x.lineTo(i, 66); x.lineTo(i - 6, 58); x.fill(); x.beginPath(); x.moveTo(i, h - 50); x.lineTo(i + 6, h - 58); x.lineTo(i, h - 66); x.lineTo(i - 6, h - 58); x.fill() }
+    const img = x.getImageData(0, 0, w, h), d = img.data; for (let i = 0; i < d.length; i += 4) { const n = (r() - 0.5) * 22 + ((i / 4) % w % 3 === 0 ? -8 : 0); d[i] += n; d[i + 1] += n; d[i + 2] += n } x.putImageData(img, 0, 0)   // 織紋
+  }) })
+  boxAt('cloth', 2.4, 0.008, 1.6, 0, 0.044, 0.5)
+  // 門邊的掛鉤：登山外套、帽子、望遠鏡（吊帶）；爐子旁一堆柴；床尾一個登山背包
+  {
+    const hv = D / 2 - LR - 0.06
+    boxAt('trim', 1.1, 0.08, 0.025, 1.45, 1.75, hv)
+    for (let k = 0; k < 4; k++) tubeW('iron', at(1.0 + k * 0.3, 1.75, hv - 0.01), at(1.0 + k * 0.3, 1.8, hv - 0.08), 0.007)
+    rbox('jacket', 0.42, 0.75, 0.12, 1.3, 1.38, hv - 0.09, 0.05); rbox('jacket', 0.12, 0.6, 0.1, 1.08, 1.42, hv - 0.11, 0.04, 0, 0.08); rbox('jacket', 0.12, 0.6, 0.1, 1.52, 1.42, hv - 0.11, 0.04, 0, -0.08)   // 外套＋兩隻袖子
+    put('jacket2', new THREE.SphereGeometry(0.11, 16, 10, 0, TAU, 0, Math.PI / 2).scale(1, 0.75, 1).translate(...at(1.9, 1.73, hv - 0.13).toArray()))   // 毛帽
+    for (const du of [-0.035, 0.035]) cylW('black', at(1.6 + du, 1.5, hv - 0.1), at(1.6 + du, 1.63, hv - 0.1), 0.026, 0.022)   // 望遠鏡
+    tubeW('black', at(1.565, 1.63, hv - 0.1), at(1.6, 1.79, hv - 0.08), 0.004); tubeW('black', at(1.635, 1.63, hv - 0.1), at(1.6, 1.79, hv - 0.08), 0.004)
+    for (let row = 0; row < 3; row++) for (let k = 0; k < 4 - row; k++) logUV('log', SU + 0.55, 0.1 + row * 0.14, SV - 0.25 + k * 0.15 + row * 0.075, SU + 0.95, 0.1 + row * 0.14, SV - 0.25 + k * 0.15 + row * 0.075, 0.065)   // 柴
+    rbox('pack', 0.34, 0.55, 0.22, W / 2 - 1.2, 0.3, -D / 2 + 2.85, 0.07, 0.3, -0.12); rbox('pack2', 0.24, 0.2, 0.08, W / 2 - 1.2, 0.22, -D / 2 + 2.98, 0.04, 0.3, -0.12)   // 背包＋前袋
+    mats.jacket = new THREE.MeshStandardMaterial({ color: 0x2f5a46, roughness: 0.75 }); mats.jacket2 = new THREE.MeshStandardMaterial({ color: 0xb8a37e, roughness: 1 })
+    mats.pack = new THREE.MeshStandardMaterial({ color: 0xc0581f, roughness: 0.8 }); mats.pack2 = new THREE.MeshStandardMaterial({ color: 0x3a3c40, roughness: 0.8 })
+  }
 
   // 碰撞：牆一圈小圓（門口留空）；床、爐子、桌子
   const wallCol = (ax, az, bx, bz, skip) => { const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 0.3); for (let i = 0; i <= n; i++) { const t = i / n, u = ax + (bx - ax) * t, v = az + (bz - az) * t; if (skip && skip(u, v)) continue; const p = at(u, 0, v); addCollider(p.x, p.z, 0.12, Y + WH + 2) } }

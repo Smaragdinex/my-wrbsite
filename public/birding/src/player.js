@@ -40,8 +40,9 @@ export function createPlayer(camera, dom) {
   //   站在地上：跳起來不能落到比起跳點低 1.5 公尺以上的地方（不能從山坡、懸崖跳下去）
   // 萬一已經卡在不該站的地方（舊存檔、從外面掉進來），原地本身就算「擋住」：那就放行，讓人自己走出來。
   function tryMove(nx, nz) {
-    if (blocked(nx, nz, st.feet)) {
-      if (!blocked(st.x, st.z, st.feet) || domeRho(nx, nz) > 0.955) return false   // 原地是合法的、或前面是溫室的牆：照常擋
+    const cliffRef = st.grounded ? st.feet : Math.min(st.feet, st.takeoff ?? st.feet)   // 空中：懸崖照起跳點算（見 layout.js blocked）
+    if (blocked(nx, nz, st.feet, cliffRef)) {
+      if (!blocked(st.x, st.z, st.feet, cliffRef) || domeRho(nx, nz) > 0.955) return false   // 原地是合法的、或前面是溫室的牆：照常擋
     }
     const ref = st.grounded ? st.feet : (st.takeoff ?? st.feet), owner = st.grounded ? st.owner : (st.takeoffOwner ?? 0)
     const s = supportAt(nx, nz, st.grounded ? st.feet : Math.max(st.feet, ref))

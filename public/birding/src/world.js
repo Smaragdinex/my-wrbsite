@@ -20,6 +20,7 @@ import { windUniforms } from './wind.js'
 import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
+import { createCloudSea } from './cloudsea.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
 export const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
@@ -138,6 +139,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     }
   }
 
+  const cloudSea = createCloudSea(scene, { sun })   // 山區下面的雲海（爬到雲層上面才看得到）
   const time = night ? buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera }) : null
   const weather = createWeather({ scene, camera, sun, hemi, renderer, time })   // 天氣：預設晴天、不自己變；遊戲（game/main.js）打開自動換
 
@@ -190,6 +192,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt, phone)
     water.mist.update(dt, camera)
     time?.tick(t, dt)
+    cloudSea.tick(t, camera, { day: dayLight.value })
     weather.tick(t, dt)
     {
       const mk = mistLevel.value, tint = 0.2 + 0.8 * Math.min(1, dayLight.value * 1.4), cp = camera.position   // 清晨天剛亮，霧就先白起來

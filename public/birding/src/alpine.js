@@ -155,6 +155,23 @@ function bridgeDist(x, z) {
   return Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t)
 }
 const GB_OUT = 22, GB_K = [1, 1, 1]   // 山區接花園那一圈的寬度（公尺）、顏色微調
+// 2026-11-09 石頭要擋人：照模型的包圍盒算每顆石頭的腳印（XZ 半徑）和高度，加一個圓形碰撞；比腳印小一點（石頭是不規則的，邊緣斜下去），
+// 太小（踩得過去）或埋在水裡的不加；top 是石頭頂，跳得比頂高就能站上去／跳過
+const rockBox = new Map()
+function rockColliders(node, list, { minR = 0.25, shrink = 0.78 } = {}) {
+  if (!rockBox.has(node)) { node.updateMatrixWorld(true); rockBox.set(node, new THREE.Box3().setFromObject(node)) }
+  const bb = rockBox.get(node), cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2
+  const rx = (bb.max.x - bb.min.x) / 2, rz = (bb.max.z - bb.min.z) / 2, c = new THREE.Vector3()
+  for (const it of list) {
+    const sxz = Math.max(it.s.x, it.s.z), r = Math.min(rx, rz) * 0.5 + Math.max(rx, rz) * 0.5
+    const R = r * sxz * shrink, top = it.p.y + bb.max.y * it.s.y
+    if (R < minR || top < alpineHeight(it.p.x, it.p.z) + 0.2) continue
+    c.set(cx * it.s.x, 0, cz * it.s.z).applyQuaternion(it.q)
+    const X = it.p.x + c.x, Z = it.p.z + c.z
+    if (alpineTrailDist(X, Z) < R + 0.7) continue   // 步道上（例如過溪的地方）不能被石頭的碰撞擋住
+    addCollider(X, Z, R, top)
+  }
+}
 function buildInterior(lib, avoid = []) {
   const g = new THREE.Group(); g.name = 'alpineInterior'
   const rnd = mulberry32(2026)
@@ -475,7 +492,7 @@ function buildInterior(lib, avoid = []) {
       waterM.uniforms.uFlowBox.value.set(x0, z0, 1 / (x1 - x0), 1 / (z1 - z0))
       waterM.userData.flowRocks = rocks.length
     }
-    for (const [n, list] of Object.entries(stones)) if (lib[n]) scatter(g, lib[n], list, { cast: true })
+    for (const [n, list] of Object.entries(stones)) if (lib[n]) { scatter(g, lib[n], list, { cast: true }); rockColliders(lib[n], list) }
     // 跌水底下的水花：一團團白霧貼著水面翻動（高的跌水比較多、比較大）
     const sprayT = canvasTex(64, 64, (x, w, h) => { const gr = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.5, 'rgba(240,246,248,0.35)'); gr.addColorStop(1, 'rgba(240,246,248,0)'); x.fillStyle = gr; x.fillRect(0, 0, w, h) })
     for (const d of st.drops) {
@@ -960,7 +977,7 @@ function buildInterior(lib, avoid = []) {
         put(pick(big), { p: V(x, h - 0.6, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(k), c: new THREE.Color().setHSL(0.1, 0.05, 0.8 + rnd() * 0.12) })
       }
     }
-    for (const [n, list] of Object.entries(lists)) if (lib[n]) scatter(g, lib[n], list, { cast: true })
+    for (const [n, list] of Object.entries(lists)) if (lib[n]) { scatter(g, lib[n], list, { cast: true }); rockColliders(lib[n], list) }
     // 溪邊、池邊的蕨類
     const ferns = []
     for (let k = 0; k < 12000 * AK && ferns.length < 420 * AK; k++) {
