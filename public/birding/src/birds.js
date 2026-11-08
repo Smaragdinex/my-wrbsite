@@ -375,7 +375,7 @@ function groundTripo(env, cfg) {
     if (n === 'turn') w.want = w.h + a.sgn * rnd(0.6, 2)
   })
   const glance = new Glance([0.6, 1.8], 0.7, 0.25)
-  const c = { lean: 0, neck: 0, head: 0, yaw: 0, phase: 0, amp: 0, sway: 0, reach: 0, roll: 0, hb: 0, hb0: 0, thrust: 9, prevPhase: 0 }, focus = V()
+  const c = { lean: 0, neck: 0, head: 0, yaw: 0, phase: 0, amp: 0, sway: 0, reach: 0, roll: 0, hb: 0, hb0: 0, thrust: 9, prevPhase: 0, run: 0, runPh: 0 }, focus = V()
   // 腳：踩在地上的那一點固定不動（不會滑），離身體太遠就抬起來跨到前面；一次只抬一隻。
   // 大腿、小腿用兩節 IK 對到腳踝目標，腳掌保持原本貼地的角度。全部在模型座標的側面（FWD、y）平面裡算
   const N = FWD.clone().cross(AX.y).normalize()   // 繞 N 轉 = 在側面平面裡從 FWD 轉向上
@@ -507,6 +507,10 @@ function groundTripo(env, cfg) {
       } else if (kk < 0.75) { lean = 0.2; neck = 0.05; head = -0.05; reach = 0.85; rate = 8 }
       else { lean = 0.05; neck = -0.35; head = -0.6 + 0.08 * Math.sin(t * 9); reach = 0.9; rate = 7 }
     }
+    // 跑（被人嚇到逃跑，速度是走路的好幾倍）：身體前傾、脖子往前伸；腳改用跑步循環（下面）
+    const baseV = cfg.walk?.speed ?? 0.16
+    c.run = damp(c.run, w.v > baseV * 2.5 ? 1 : 0, 8, dt)
+    lean += 0.28 * c.run; neck += 0.25 * c.run; head -= 0.15 * c.run
     c.lean = damp(c.lean, lean, rate, dt); c.neck = damp(c.neck, neck, rate, dt); c.head = damp(c.head, head, rate, dt)
     c.reach = damp(c.reach, reach * (cfg.reach ?? 0), rate, dt)
     if (n === 'look' || n === 'stand') glance.update(dt)
@@ -540,7 +544,11 @@ function groundTripo(env, cfg) {
     // 抬腳那一下身體微微升起
     const up = legs.reduce((a, L) => a + (L.t < 1 ? Math.sin(Math.PI * L.t) : 0), 0)
     // 跟著地形走：腳下那一點的地面高度（相對鳥群原點）；涉水的鳥不用（水底看不到）
-    const liftY = cfg.hop ? 0 : 0.012 * cfg.H * up, gyHere = env.groundAt ? env.groundAt(P.x, P.y) : 0
+    // 跑步循環的相位：每跑 runStride 公尺一個循環（步幅照速度放大，最多走路的 2.6 倍）
+    const runStride = stride * clamp(Math.sqrt(Math.max(1, w.v / baseV)), 1, 2.6) * 1.6
+    if (c.run > 0.01) c.runPh += (w.v * dt) / runStride
+    const runBob = c.run * 0.02 * cfg.H * Math.abs(Math.sin(c.runPh * Math.PI * 2))   // 每一步身體上下一下
+    const liftY = (cfg.hop ? 0 : 0.012 * cfg.H * up * (1 - c.run)) + runBob, gyHere = env.groundAt ? env.groundAt(P.x, P.y) : 0
     c.gy = c.gy == null ? gyHere : damp(c.gy, gyHere, 12, dt)
     root.position.set(P.x, c.gy + liftY + hopY, P.y); root.rotation.y = w.h
     root.updateWorldMatrix(true, true)
@@ -570,6 +578,16 @@ function groundTripo(env, cfg) {
     if (!cfg.swim) legs.forEach((L, li) => {
       const home = r.model.localToWorld(L.rest.clone()); home.y -= liftY
       if (!L.plant) { L.plant = home.clone(); L.pos.copy(home) }
+      // 跑：不用「踩住、落後太多才跨」（7 倍速時腳跟不上，會縮在肚子下被拖著走），
+      // 改成兩腳半個循環錯開，前後擺動、往前擺的那一半抬離地面（2026-11-08 帝雉）
+      if (c.run > 0.5 && !cfg.hop) {
+        const a = (c.runPh + li * 0.5) * Math.PI * 2
+        L.pos.copy(home).addScaledVector(fwd, runStride * 0.5 * Math.cos(a))
+        L.pos.y += 0.1 * cfg.H * Math.max(0, -Math.sin(a))   // 往前擺（cos 變大）的那半圈離地；往後蹬的那半圈踩在地上
+        L.plant.copy(L.pos); L.t = 1
+        ik(L, L.pos)
+        return
+      }
       const other = legs.find((o) => o !== L)
       if (L.t < 1) {
         L.t = Math.min(1, L.t + dt / swing)

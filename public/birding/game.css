@@ -300,3 +300,6 @@ svg.controls image { mix-blend-mode: multiply; }
 .cp-dpad [data-k="right"] { grid-area: 2 / 3; } .cp-dpad [data-k="down"] { grid-area: 3 / 2; }
 .cp-dpad .set { border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3b3f43, #1a1c1e 70%); font: 700 calc(var(--u) * 1.1) system-ui, sans-serif; width: 82%; height: 82%; box-shadow: 0 0 0 1px #0a0b0c; }
 .cp-hint { color: #9aa3a8; font: 13px system-ui, sans-serif; letter-spacing: 0.02em; }
+/* 相機行：一鍵全部賣出 */
+.sell-all { margin: 10px 0 14px; }
+.sell-all .btn { width: 100%; box-sizing: border-box; padding: 12px 16px; font-size: 16px; }
