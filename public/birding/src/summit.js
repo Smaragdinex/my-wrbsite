@@ -199,9 +199,16 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   }
   // 煙囪（後面左邊）：石砌＋鐵管
   {
-    // 煙囪底部要剛好插進斜屋頂（屋頂在這個 u 的高度＋板厚），往上到屋脊上方 0.9 公尺
-    const cu = L0 + 1.4, ry = PEAK - (PEAK - WH) * Math.abs(cu) / (W / 2) + 0.12, y0 = ry - 0.25, y1 = PEAK + 0.9
-    boxAt('stone', 0.7, y1 - y0, 0.7, cu, (y0 + y1) / 2, -D / 2 + 1.05); cylAt('iron', 0.09, 0.09, 0.5, cu, y1 + 0.2, -D / 2 + 1.05)
+    // 煙囪底要跟著斜屋頂切：平底的話，靠屋裡那一側屋頂比較高，煙囪底會從天花板下面露出來（灰色石板）；
+    // 靠外那一側屋頂比較低，從外面看又會有縫。底面每個頂點放在「那個 u 的屋頂板中間」高度（天花板上面、屋頂瓦下面）
+    const cu = L0 + 1.4, roofY = (u) => PEAK - (PEAK - WH) * Math.abs(u) / (W / 2) + 0.12, y1 = PEAK + 0.9, cw = 0.7
+    {
+      const y0 = roofY(cu) - 0.05, h = y1 - y0, geo = boxUV(new THREE.BoxGeometry(cw, h, cw), cw, h, cw), p = geo.attributes.position
+      for (let i = 0; i < p.count; i++) if (p.getY(i) < 0) p.setY(i, roofY(cu + p.getX(i)) - 0.03 - (y0 + h / 2))
+      geo.computeVertexNormals()
+      put('stone', geo.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0, C.yaw, 0)).setPosition(at(cu, y0 + h / 2, -D / 2 + 1.05))))
+    }
+    cylAt('iron', 0.09, 0.09, 0.5, cu, y1 + 0.2, -D / 2 + 1.05)
   }   // 底部藏在屋頂下面一點點，不要穿進屋裡
   // 門廊：前面一小塊木平台＋一張長椅＋門口的提燈
   boxAt('floor', W, 0.08, 1.4, 0, 0.0, D / 2 + 0.75)
@@ -243,7 +250,9 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   // 牆上：地圖、鳥照（相機行那四張）、掛燈
   {
     const pm = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.68), mats.paper)
-    pm.position.copy(at(-W / 2 + LR + 0.03, 1.7, -0.6)); pm.rotation.y = C.yaw + Math.PI / 2; g.add(pm)
+    // 左牆窗戶（v ±0.7）後面那段實心的牆（v -D/2～-0.7）中間；以前在 v -0.6，整張蓋在窗戶上（2026-11-08）
+    pm.position.copy(at(-W / 2 + LR + 0.03, 1.65, -D / 4 - 0.35)); pm.rotation.y = C.yaw + Math.PI / 2; g.add(pm)
+    const pf = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.74, 0.96), mats.trim); pf.position.copy(pm.position).addScaledVector(right, -0.012); pf.rotation.y = C.yaw; g.add(pf)   // 木框
     if (printsUrl) new THREE.TextureLoader().load(printsUrl, (tx) => {
       tx.colorSpace = THREE.SRGBColorSpace
       for (let k = 0; k < 4; k++) {
