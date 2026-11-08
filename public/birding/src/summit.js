@@ -525,14 +525,103 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
     const hv = D / 2 - LR - 0.06
     boxAt('trim', 1.1, 0.08, 0.025, 1.45, 1.75, hv)
     for (let k = 0; k < 4; k++) tubeW('iron', at(1.0 + k * 0.3, 1.75, hv - 0.01), at(1.0 + k * 0.3, 1.8, hv - 0.08), 0.007)
-    rbox('jacket', 0.42, 0.75, 0.12, 1.3, 1.38, hv - 0.09, 0.05); rbox('jacket', 0.12, 0.6, 0.1, 1.08, 1.42, hv - 0.11, 0.04, 0, 0.08); rbox('jacket', 0.12, 0.6, 0.1, 1.52, 1.42, hv - 0.11, 0.04, 0, -0.08)   // 外套＋兩隻袖子
-    put('jacket2', new THREE.SphereGeometry(0.11, 16, 10, 0, TAU, 0, Math.PI / 2).scale(1, 0.75, 1).translate(...at(1.9, 1.73, hv - 0.13).toArray()))   // 毛帽
-    for (const du of [-0.035, 0.035]) cylW('black', at(1.6 + du, 1.5, hv - 0.1), at(1.6 + du, 1.63, hv - 0.1), 0.026, 0.022)   // 望遠鏡
-    tubeW('black', at(1.565, 1.63, hv - 0.1), at(1.6, 1.79, hv - 0.08), 0.004); tubeW('black', at(1.635, 1.63, hv - 0.1), at(1.6, 1.79, hv - 0.08), 0.004)
+    // 掛著的東西（2026-11-09 第二版寫實化：第一版外套是三個圓角方塊、帽子是飄著的半球、望遠鏡是兩根黑棍）
+    const hangAt = (u, y) => { const grp = new THREE.Group(); grp.position.copy(at(u, y, hv - 0.075)); grp.rotation.y = C.yaw + Math.PI; g.add(grp); return grp }   // 區域座標：+z 朝屋裡、+y 朝上、原點＝掛鉤尖
+    // 登山外套：用領口的掛繩掛在鉤子上——肩膀往下垂、下襬比較寬，身上一道道垂直的皺褶；兩隻袖子從肩膀垂到下襬兩側、袖口收束；
+    // 帽兜塌在背後；布料是深綠色防潑水尼龍（細格紋）、前面一條拉鍊、胸前拉鍊口袋、兩個手插口袋、肩線和腰部的車縫線
+    {
+      const cloth = (x, w, h) => {
+        x.fillStyle = '#2d5844'; x.fillRect(0, 0, w, h)
+        const r = mulberry32(5)
+        for (let i = 0; i < w; i += 6) { x.fillStyle = 'rgba(0,0,0,0.06)'; x.fillRect(i, 0, 1, h); x.fillRect(0, i, w, 1) }   // 細格紋（ripstop）
+        for (let i = 0; i < 2600; i++) { const l = r() < 0.5 ? 0 : 255; x.fillStyle = `rgba(${l},${l},${l},0.035)`; x.fillRect(r() * w, r() * h, 2, 2) }
+      }
+      const plainT = canvasTex(256, 256, (x, w, h) => { cloth(x, w, h); x.strokeStyle = 'rgba(10,25,18,0.45)'; x.lineWidth = 2; x.beginPath(); x.moveTo(0, h * 0.5); x.lineTo(w, h * 0.5); x.stroke() })   // 袖子：素面＋一條車縫線
+      const fabT = canvasTex(512, 512, (x, w, h) => {
+        cloth(x, w, h)
+        const seam = (x0, y0, x1, y1) => { x.strokeStyle = 'rgba(10,25,18,0.55)'; x.lineWidth = 2; x.beginPath(); x.moveTo(x0, y0); x.lineTo(x1, y1); x.stroke(); x.strokeStyle = 'rgba(120,160,135,0.25)'; x.lineWidth = 1; x.setLineDash([4, 3]); x.beginPath(); x.moveTo(x0, y0 + 3); x.lineTo(x1, y1 + 3); x.stroke(); x.setLineDash([]) }
+        // u：0 背面中心 → 0.5 正面中心；v：0 下襬 → 1 領口（canvas 的 y 往下，所以 y = (1-v)*h）
+        x.fillStyle = '#16211c'; x.fillRect(w * 0.5 - 4, 0, 8, h)                                   // 拉鍊布條
+        for (let y = 0; y < h; y += 4) { x.fillStyle = '#4a4f4c'; x.fillRect(w * 0.5 - 2, y, 4, 2) }   // 拉鍊齒
+        x.fillStyle = '#9aa09c'; x.fillRect(w * 0.5 - 4, h * 0.05, 8, 14)                           // 拉鍊頭
+        seam(0, h * 0.2, w, h * 0.2)                                                                // 肩線（育克）
+        seam(w * 0.3, h * 0.92, w * 0.7, h * 0.92)                                                  // 下襬收邊
+        for (const cx of [w * 0.38, w * 0.62]) { x.fillStyle = '#1d2b24'; x.fillRect(cx - 34, h * 0.62, 68, 5); seam(cx - 40, h * 0.6, cx + 40, h * 0.6) }   // 手插口袋（拉鍊口）
+        x.fillStyle = '#1d2b24'; x.fillRect(w * 0.56, h * 0.3, 4, 60)                              // 胸前直拉鍊口袋
+        x.fillStyle = '#c6d0c9'; x.fillRect(w * 0.56 - 1, h * 0.3, 6, 8)
+        x.fillStyle = '#1b2721'; x.fillRect(0, h * 0.94, w, h * 0.06)                               // 下襬的鬆緊帶
+      })
+      const fab = new THREE.MeshStandardMaterial({ map: fabT, roughness: 0.62, metalness: 0.02 }), fabP = new THREE.MeshStandardMaterial({ map: plainT, roughness: 0.62, metalness: 0.02 })
+      const jk = hangAt(1.3, 1.79)
+      // 身體：橢圓截面的筒，照高度改寬度（肩膀垂、下襬寬），再加垂直皺褶
+      const Hh = 0.74, body = new THREE.CylinderGeometry(1, 1, 1, 48, 24, false, Math.PI, TAU).translate(0, 0.5, 0)
+      const bp = body.attributes.position
+      for (let i = 0; i < bp.count; i++) {
+        const vx = bp.getX(i), vz = bp.getZ(i), t = bp.getY(i), th = Math.atan2(vx, vz)
+        const wd = t > 0.74 ? THREE.MathUtils.lerp(0.212, 0.07, Math.pow((t - 0.74) / 0.26, 0.85)) : THREE.MathUtils.lerp(0.232, 0.212, t / 0.74)   // 半寬：肩膀從領口斜斜垂下來（掛鉤只勾住領口）
+        const dp = (t > 0.74 ? THREE.MathUtils.lerp(0.058, 0.03, (t - 0.74) / 0.26) : 0.058) * (vz < 0 ? 0.55 : 1)   // 背面貼牆比較扁
+        const fold = (Math.sin(th * 7 + 1.3) * 0.5 + Math.sin(th * 13 + t * 4) * 0.3) * 0.009 * (1 - t) + Math.sin(th * 5) * 0.004 * Math.sin(t * 9)
+        bp.setXYZ(i, vx * (wd + fold * 0.4), t * Hh, vz * (dp + fold))
+      }
+      body.computeVertexNormals()
+      const bm = new THREE.Mesh(body, fab); bm.position.y = -Hh - 0.035; jk.add(bm)
+      // 袖子：從肩點往外下垂、慢慢收細，貼著身體兩側，袖口一圈黑色收邊
+      for (const sg of [-1, 1]) {
+        const pts = [V(sg * 0.15, -0.13, 0.015), V(sg * 0.235, -0.3, 0.05), V(sg * 0.25, -0.5, 0.06), V(sg * 0.24, -0.67, 0.058)]
+        const cur = new THREE.CatmullRomCurve3(pts), sl = new THREE.TubeGeometry(cur, 20, 1, 14), sp = sl.attributes.position, c = new THREE.Vector3(), v = new THREE.Vector3()
+        for (let k = 0; k < sp.count; k++) { const ti = Math.floor(k / 15) / 20; cur.getPointAt(Math.min(1, ti), c); v.fromBufferAttribute(sp, k).sub(c); const rr = THREE.MathUtils.lerp(0.052, 0.038, ti) * (1 + 0.08 * Math.sin(ti * 30 + k)); v.multiplyScalar(rr); v.z *= 0.75; sp.setXYZ(k, c.x + v.x, c.y + v.y, c.z + v.z) }
+        sl.computeVertexNormals()
+        const sm = new THREE.Mesh(sl, fabP); jk.add(sm)
+        const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.041, 0.043, 0.04, 14).scale(1, 1, 0.75), new THREE.MeshStandardMaterial({ color: 0x1a2620, roughness: 0.8 })); cuff.position.copy(pts[3]).add(V(0, -0.015, 0)); jk.add(cuff)
+      }
+      // 帽兜塌在背後、領口兩側立起來一點；掛繩
+      const hood = new THREE.Mesh(new THREE.SphereGeometry(0.12, 18, 12).scale(1, 0.7, 0.35), fabP); hood.position.set(0, -0.09, -0.04); jk.add(hood)
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.06, 20, 1, true).scale(1, 1, 0.5), fabP.clone()); collar.material.side = THREE.DoubleSide; collar.position.set(0, -0.06, 0.005); jk.add(collar)
+      const loop = new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.003, 6, 12), new THREE.MeshStandardMaterial({ color: 0x15201a, roughness: 0.8 })); loop.position.set(0, -0.015, -0.005); jk.add(loop)
+      jk.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true } })
+    }
+    // 毛帽：羅紋針織（直條紋＋一點毛絨）、反摺的帽緣、頂上一顆毛球；用毛球掛在鉤子上，整頂倒著垂下來
+    {
+      const knitT = canvasTex(256, 128, (x, w, h) => {
+        x.fillStyle = '#b39a72'; x.fillRect(0, 0, w, h); const r = mulberry32(8)
+        for (let i = 0; i < w; i += 8) { x.fillStyle = 'rgba(60,40,20,0.28)'; x.fillRect(i, 0, 3, h); x.fillStyle = 'rgba(255,240,210,0.12)'; x.fillRect(i + 4, 0, 2, h) }
+        for (let i = 0; i < 1500; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '255,245,220' : '60,40,20'},0.12)`; x.fillRect(r() * w, r() * h, 1, 3) }
+      })
+      knitT.wrapS = knitT.wrapT = THREE.RepeatWrapping; knitT.repeat.set(3, 1)
+      const knit = new THREE.MeshStandardMaterial({ map: knitT, roughness: 1 })
+      const hat = hangAt(1.9, 1.79)
+      const pts = []; for (let k = 0; k <= 14; k++) { const t = k / 14, a = t * Math.PI / 2; pts.push(new THREE.Vector2(0.095 * Math.cos(a) * (1 + 0.04 * Math.sin(t * 20)), 0.13 * Math.sin(a))) }
+      const crown = new THREE.Mesh(new THREE.LatheGeometry(pts.reverse(), 28), knit); crown.material.side = THREE.DoubleSide
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.099, 0.099, 0.05, 28, 1, true), knit)
+      const pom = new THREE.Mesh(new THREE.SphereGeometry(0.04, 20, 14), new THREE.MeshStandardMaterial({ color: 0xe9e1d1, roughness: 1 }))
+      const pp = pom.geometry.attributes.position; for (let i = 0; i < pp.count; i++) { const x0 = pp.getX(i), y0 = pp.getY(i), z0 = pp.getZ(i), k = 1 + 0.07 * Math.sin(x0 * 260) * Math.sin(y0 * 230 + 1) * Math.sin(z0 * 250 + 2); pp.setXYZ(i, x0 * k, y0 * k, z0 * k) } pom.geometry.computeVertexNormals()   // 毛球表面一點點凹凸（用位置算，接縫兩邊的頂點移一樣多，不會裂開）
+      const inner = new THREE.Group(); inner.add(crown, cuff, pom); crown.position.y = 0.0; cuff.position.y = 0.0; pom.position.y = 0.155
+      inner.position.set(0, -0.19, 0.03); inner.rotation.z = 0.12; inner.scale.set(1, 1, 0.7); hat.add(inner)   // 毛球勾在鉤子上（跟戴著一樣：毛球在上、開口朝下），被牆壓扁一點
+      hat.traverse((m) => { if (m.isMesh) m.castShadow = true })
+    }
+    // 望遠鏡（8×42 屋脊式）：兩支橡膠包覆的鏡筒、中間連接橋、調焦輪、眼罩；吊帶掛在鉤子上，物鏡朝下垂著
+    {
+      const rub = new THREE.MeshStandardMaterial({ color: 0x24302a, roughness: 0.85 }), blk = new THREE.MeshStandardMaterial({ color: 0x0c0d0e, roughness: 0.5, metalness: 0.3 })
+      const lensM = new THREE.MeshStandardMaterial({ color: 0x22304a, roughness: 0.05, metalness: 0.6 })
+      const bin = hangAt(1.6, 1.79), body = new THREE.Group(); body.position.set(0, -0.24, 0.035); body.rotation.z = 0.05; bin.add(body)
+      for (const sg of [-1, 1]) {
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.029, 0.13, 24), rub); barrel.position.set(sg * 0.032, 0, 0); body.add(barrel)
+        const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.0285, 0.0285, 0.05, 24), new THREE.MeshStandardMaterial({ color: 0x1b211e, roughness: 0.95 })); grip.position.set(sg * 0.032, -0.01, 0); body.add(grip)
+        const obj = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 24), blk); obj.position.set(sg * 0.032, -0.071, 0); body.add(obj)
+        const glass = new THREE.Mesh(new THREE.CircleGeometry(0.024, 24).rotateX(Math.PI / 2), lensM); glass.position.set(sg * 0.032, -0.0775, 0); body.add(glass)
+        const eye = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.022, 0.03, 20), blk); eye.position.set(sg * 0.03, 0.08, 0); body.add(eye)
+        const lug = new THREE.Mesh(new THREE.TorusGeometry(0.006, 0.002, 6, 10), blk); lug.position.set(sg * 0.058, 0.055, 0); lug.rotation.y = Math.PI / 2; body.add(lug)
+      }
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.022), rub); bridge.position.y = 0.04; body.add(bridge)
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.026, 16).rotateZ(Math.PI / 2), blk); wheel.position.set(0, 0.062, 0.006); body.add(wheel)
+      // 吊帶：從兩邊的吊耳往上收到鉤子
+      const strapM = new THREE.MeshStandardMaterial({ color: 0x15181a, roughness: 0.9 })
+      for (const sg of [-1, 1]) { const cur = new THREE.CatmullRomCurve3([V(sg * 0.058, -0.185, 0.035), V(sg * 0.045, -0.1, 0.02), V(sg * 0.012, -0.02, 0.005), V(0, 0, 0)]); const st = new THREE.TubeGeometry(cur, 10, 0.004, 4); st.scale(1, 1, 0.4); bin.add(new THREE.Mesh(st, strapM)) }
+      bin.traverse((m) => { if (m.isMesh) m.castShadow = true })
+    }
     for (let row = 0; row < 3; row++) for (let k = 0; k < 4 - row; k++) logUV('log', SU + 0.55, 0.1 + row * 0.14, SV - 0.25 + k * 0.15 + row * 0.075, SU + 0.95, 0.1 + row * 0.14, SV - 0.25 + k * 0.15 + row * 0.075, 0.065)   // 柴
     rbox('pack', 0.34, 0.55, 0.22, W / 2 - 1.2, 0.3, -D / 2 + 2.85, 0.07, 0.3, -0.12); rbox('pack2', 0.24, 0.2, 0.08, W / 2 - 1.2, 0.22, -D / 2 + 2.98, 0.04, 0.3, -0.12)   // 背包＋前袋
-    mats.jacket = new THREE.MeshStandardMaterial({ color: 0x2f5a46, roughness: 0.75 }); mats.jacket2 = new THREE.MeshStandardMaterial({ color: 0xb8a37e, roughness: 1 })
-    mats.pack = new THREE.MeshStandardMaterial({ color: 0xc0581f, roughness: 0.8 }); mats.pack2 = new THREE.MeshStandardMaterial({ color: 0x3a3c40, roughness: 0.8 })
+        mats.pack = new THREE.MeshStandardMaterial({ color: 0xc0581f, roughness: 0.8 }); mats.pack2 = new THREE.MeshStandardMaterial({ color: 0x3a3c40, roughness: 0.8 })
   }
 
   // 碰撞：牆一圈小圓（門口留空）；床、爐子、桌子
