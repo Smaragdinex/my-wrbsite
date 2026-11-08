@@ -144,6 +144,7 @@ export const UI = {
  "清楚": "Sharp",
  "減光鏡": "ND filter",
  "準備畫面…": "Preparing scene…",
+ "開始下雨了": "It's starting to rain",
  "公園": "Park",
  "公園快好了…": "Park almost ready…",
  "滑鼠靈敏度": "Mouse sensitivity",

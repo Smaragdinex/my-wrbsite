@@ -17,14 +17,16 @@ const tmpM = new THREE.Matrix4()
 export const dayLight = { value: 1 }, duskLight = { value: 0 }
 // 霧氣量：白天 0；晚上 0.75、清晨（6 點前後）最濃 1，9 點前散掉。world.setTime 改值，霧、山頂雲、山區的霧團照它加濃
 export const mistLevel = { value: 0 }
+// 天氣（weather.js 改值）：雲量 0～1、陰暗 0～1、閃電亮光 0～1、遠處的雨霧 0～1
+export const weatherU = { cloud: { value: 0 }, gloom: { value: 0 }, flash: { value: 0 }, haze: { value: 0 } }
 export function buildSky(scene) {
   const geo = new THREE.SphereGeometry(900, 32, 16)
   // 日夜：uDay 白天 1、晚上 0；uDusk 黃昏／清晨那一段地平線變橘；晚上有星星和月亮（world.setTime 在改）
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime },
+    uniforms: { sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime, uCloud: weatherU.cloud, uGloom: weatherU.gloom, uFlash: weatherU.flash },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `varying vec3 vDir; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime;
+    fragmentShader: `varying vec3 vDir; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCloud; uniform float uGloom; uniform float uFlash;
       float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -42,20 +44,24 @@ export function buildSky(scene) {
         vec3 gnd = hor * 0.6;
         vec3 c = h > 0.0 ? mix(hor, top, pow(h, 0.55)) : mix(hor, gnd, -h*5.0);
         float s = max(dot(d, sunDir), 0.0);
-        c += vec3(1.0,0.9,0.7) * (pow(s, 600.0) * 4.0 + pow(s, 12.0) * 0.25) * smoothstep(-0.06, 0.04, sunDir.y);
+        c += vec3(1.0,0.9,0.7) * (pow(s, 600.0) * 4.0 + pow(s, 12.0) * 0.25) * smoothstep(-0.06, 0.04, sunDir.y) * (1.0 - uGloom);
+        // 陰天：整片天空變灰（亮度照原本的天色），太陽被雲遮住
+        c = mix(c, vec3(dot(c, vec3(0.3, 0.5, 0.2))) * vec3(0.92, 0.95, 1.0) * (1.0 - 0.35 * uGloom), uGloom * 0.85);
         // 雲（2026-11-08 拿掉溫室後加）：天空投影到一片高空的平面上，fbm 雜訊當雲量，慢慢往東飄；
         // 雲底偏灰、迎著太陽那邊亮，黃昏染橘、晚上變暗；靠地平線淡掉（遠山前面不會有一條白邊）
         float cloudA = 0.0;
         if (d.y > 0.0) {
           vec2 cp = d.xz / (d.y + 0.12) * 1.6 + vec2(uTime * 0.006, uTime * 0.002);
           float n = fbm(cp), n2 = fbm(cp * 2.1 + 5.0);
-          float cov = smoothstep(0.48, 0.75, n + 0.12 * n2);
+          float cov = smoothstep(0.48 - 0.42 * uCloud, 0.75 - 0.3 * uCloud, n + 0.12 * n2);   // 雲量：陰天、下雨整片蓋滿
           cloudA = cov * smoothstep(0.0, 0.18, d.y);
           float lit = 0.72 + 0.28 * smoothstep(0.35, 0.85, n2) + 0.35 * pow(max(dot(d, sunDir), 0.0), 6.0);
           vec3 cc = mix(vec3(0.05, 0.06, 0.09), vec3(0.97, 0.98, 1.0), uDay) * lit;
           cc = mix(cc, vec3(1.0, 0.68, 0.48) * lit, uDusk * 0.7);
+          cc *= 1.0 - 0.55 * uGloom * (0.6 + 0.4 * n);   // 雨雲：灰黑、厚的地方更暗
           c = mix(c, cc, cloudA * 0.92);
         }
+        c += vec3(0.75, 0.8, 1.0) * uFlash * (0.6 + 0.4 * cloudA);   // 閃電：整片雲被照亮
         float night = (1.0 - uDay) * (1.0 - cloudA);
         if (d.y > 0.0 && night > 0.01) {
           vec3 cell = d * 260.0, g = floor(cell);

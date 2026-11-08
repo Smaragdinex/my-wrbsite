@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { CABIN, ALP_TRAIL, alpineHeight, addCollider } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
+import { softDotTex } from './textures.js'
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
@@ -244,6 +245,61 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   const SV = -D / 2 + 1.05, SU = L0 + 1.4
   boxAt('iron', 0.55, 0.6, 0.5, SU, 0.35, SV); cylAt('iron', 0.08, 0.08, PEAK - 0.65, SU, 0.65 + (PEAK - 0.65) / 2, SV)
   boxAt('stone', 0.9, 0.04, 0.9, SU, 0.03, SV)
+  // 爐火（2026-11-08）：爐子正面一個小玻璃火窗，裡面的火用著色器畫（往上竄的雜訊火舌＋底下的炭火），
+  // 一盞橘色點光源跟著火的亮暗閃（照亮爐子前面的地板和牆）；煙囪頂冒煙。每格的更新掛在火窗的 onBeforeRender（看得到才算）
+  {
+    const FW = 0.32, FH = 0.24, fv = SV + 0.252
+    const fireM = new THREE.ShaderMaterial({
+      uniforms: { uT: { value: 0 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `varying vec2 vUv; uniform float uT;
+        float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
+        float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { s += a * vn(p); p *= 2.1; a *= 0.5; } return s; }
+        void main(){
+          vec2 p = vUv;
+          float n = fbm(vec2(p.x * 5.0, p.y * 3.0 - uT * 2.6)), n2 = fbm(vec2(p.x * 9.0 + 3.0, p.y * 6.0 - uT * 4.0));
+          float flame = (1.0 - p.y) * 1.45 - 0.45 + n * 0.85 + n2 * 0.25 - abs(p.x - 0.5) * 1.1;
+          vec3 c = vec3(0.06, 0.015, 0.0);
+          c = mix(c, vec3(0.95, 0.32, 0.04), smoothstep(0.15, 0.5, flame));
+          c = mix(c, vec3(1.0, 0.72, 0.28), smoothstep(0.55, 0.85, flame));
+          c = mix(c, vec3(1.0, 0.95, 0.75), smoothstep(0.9, 1.1, flame));
+          float coal = smoothstep(0.78, 0.95, 1.0 - p.y) * (0.55 + 0.45 * fbm(vec2(p.x * 14.0, uT * 0.7)));   // 底下的炭火
+          c += vec3(0.9, 0.22, 0.02) * coal;
+          gl_FragColor = vec4(c * 1.7, 1.0);
+          #include <colorspace_fragment>
+        }`,
+    })
+    const fire = new THREE.Mesh(new THREE.PlaneGeometry(FW, FH), fireM)
+    fire.position.copy(at(SU, 0.33, fv)); fire.rotation.y = C.yaw; g.add(fire)
+    // 火窗的鐵框
+    for (const yy of [0.33 - FH / 2 - 0.02, 0.33 + FH / 2 + 0.02]) boxAt('iron', FW + 0.08, 0.04, 0.03, SU, yy, fv)
+    for (const uu of [SU - FW / 2 - 0.02, SU + FW / 2 + 0.02]) boxAt('iron', 0.04, FH + 0.08, 0.03, uu, 0.33, fv)
+    boxAt('iron', 0.04, 0.03, 0.06, SU + FW / 2 - 0.02, 0.5, fv + 0.03)   // 門把
+    const light = new THREE.PointLight(0xff8636, 0, 7.5, 1.6)
+    light.position.copy(at(SU, 0.55, SV + 0.55)); g.add(light)
+    // 煙：煙囪頂一串慢慢往上飄、越來越大越淡的灰煙
+    const smokeT = softDotTex(), puffs = []
+    const top = at(L0 + 1.4, PEAK + 1.25, -D / 2 + 1.05)
+    for (let i = 0; i < 12; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeT, color: 0x9d9d98, transparent: true, opacity: 0, depthWrite: false }))
+      sp.userData.ph = i / 12; sp.renderOrder = 6; g.add(sp); puffs.push(sp)
+    }
+    const upd = () => {
+      const t = performance.now() / 1000
+      fireM.uniforms.uT.value = t
+      // 火光閃：幾個不同頻率疊起來，偶爾一下比較暗
+      const fl = 0.78 + 0.12 * Math.sin(t * 7.3) + 0.07 * Math.sin(t * 13.1 + 1.3) + 0.05 * Math.sin(t * 23.7)
+      light.intensity = 3.5 * fl
+      for (const sp of puffs) {
+        const k = (t * 0.06 + sp.userData.ph) % 1
+        sp.position.copy(top).add(V(Math.sin(k * 5 + sp.userData.ph * 9) * 0.3 * k + k * 1.2, k * 5.5, Math.cos(k * 4 + sp.userData.ph * 7) * 0.3 * k))
+        const sz = 0.5 + k * 2.6; sp.scale.set(sz, sz, 1)
+        sp.material.opacity = 0.6 * Math.sin(Math.PI * Math.min(1, k * 1.4)) * (1 - k)
+      }
+    }
+    fire.onBeforeRender = upd; puffs[0].onBeforeRender = upd   // 在屋外看不到火窗時，煙也要繼續飄
+  }
   // 左牆：鏡頭架（三層，擺幾支鏡頭和相機）
   for (const y of [1.0, 1.4, 1.8]) boxAt('trim', 0.3, 0.04, 1.4, -W / 2 + 0.2, y, D / 2 - 1.2)
   for (let i = 0; i < 7; i++) { const y = [1.0, 1.4, 1.8][i % 3] + 0.1, vv = D / 2 - 1.7 + (i * 0.37) % 1.2, len = 0.12 + (i % 3) * 0.08; put('black', new THREE.CylinderGeometry(0.045, 0.045, len, 12).applyMatrix4(new THREE.Matrix4().compose(at(-W / 2 + 0.2, y + len / 2 - 0.08, vv), new THREE.Quaternion(), V(1, 1, 1)))) }

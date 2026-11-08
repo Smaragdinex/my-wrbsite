@@ -125,6 +125,11 @@ addEventListener('keydown', (e) => {
 const DAY_SEC = 24 * 60
 const qs = new URLSearchParams(location.search)
 let hour = qs.has('t') ? +qs.get('t') : 9
+// 天氣：遊戲裡自己隨機變（晴／多雲／下雨／雷雨）；?weather=rain 之類可以固定一開始的天氣
+world.weather.auto(true)
+if (qs.has('weather')) world.weather.set(qs.get('weather'), true)
+world.weather.onThunder((delay, strength) => amb.thunder?.(delay, strength))
+let wasRaining = false
 world.time.setTime(hour)
 // 長椅：坐下休息，跳到下一個時段（清晨 6、早上 9、黃昏 17、夜晚 19:30）
 const PERIODS = [6, 9, 17, 19.5]
@@ -203,7 +208,8 @@ function frame() {
   cam.update(dt)
   if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }
   hud.setClock(hour)
-  amb.tick(dt, { hour, pos: camera.position })
+  amb.tick(dt, { hour, pos: camera.position, rain: world.weather.rain, storm: world.weather.storm })
+  if (world.weather.rain > 0.3 !== wasRaining) { wasRaining = !wasRaining; if (wasRaining && !menuCam) hud.toast(tr('開始下雨了')) }
   vm.setGear(state.bodyId, state.lensId)
   cam.setScreen(vm.screen)
   vm.update(dt, { raise: cam.state.raised ? 1 : 0, view: 0, speed: flight.speed, t })

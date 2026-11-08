@@ -277,6 +277,27 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   // 北牆：實心白牆（櫃台後面）
   box('panel', X0 - X1, H, 0.3, XM, H / 2, HZ - 0.15)
 
+  /* ---------- 店外招牌：朝公園那面（東牆）自動門上方的燈箱，從公園走過來就看得到 ---------- */
+  {
+    const t = canvasTex(1024, 256, (x, w, h) => {
+      x.fillStyle = '#1f2a24'; x.fillRect(0, 0, w, h); x.fillStyle = '#7fd19c'; x.fillRect(0, h - 14, w, 14)
+      // 左邊一個鏡頭圓圈標誌
+      x.strokeStyle = '#7fd19c'; x.lineWidth = 12; x.beginPath(); x.arc(118, h / 2 - 6, 70, 0, 7); x.stroke()
+      x.fillStyle = '#7fd19c'; x.beginPath(); x.arc(118, h / 2 - 6, 30, 0, 7); x.fill()
+      x.textBaseline = 'middle'; x.fillStyle = '#fff'
+      if (LANG === 'en') { x.font = '700 110px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'left'; x.fillText('PHOTO & OPTICS', 220, h / 2 - 4, w - 250) }
+      else {
+        x.font = `bold 120px ${FONT_SANS}`; x.textAlign = 'left'; x.fillText(tr('相機行'), 220, h / 2 - 8, 420)
+        x.fillStyle = '#cfe8d8'; x.font = '600 52px "Helvetica Neue", Arial, sans-serif'; x.fillText('PHOTO & OPTICS', 640, h / 2 + 4, w - 660)
+      }
+    })
+    const face = new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.75, roughness: 0.5 })
+    const SW = 5.6, SH = 1.4, SY = 3.55, sx = X0 + 0.42   // 東牆外面（植物牆板子外緣 X0 + 0.3）再往外一點
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.16, SH, SW), [face, black, black, black, black, black])   // +x 那面（朝公園）是字
+    box.position.set(sx, SY, 0); box.castShadow = true; g.add(box)
+    for (const z of [-SW / 2 + 0.5, SW / 2 - 0.5]) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.06), black); arm.position.set(X0 + 0.27, SY, z); g.add(arm) }   // 固定架
+  }
+
   /* ---------- 植物牆（東牆開口兩邊）＋南牆花槽：用溫室同一批寫實植物模型（plants.js） ---------- */
   // 植物牆：深色底板，前面一株株植物「橫著種」在牆上、往外斜上長（真的植生牆就是這樣），後面一層暗的小葉片補縫
   const real = (name, list) => plantLib?.[name] && scatter(g, plantLib[name], list, { wind: 0 })
@@ -423,17 +444,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     g.add(m)
     box('white', 0.11, 0.045, 0.003, x, y + 0.04, sfz + 0.01)   // 小價格條
   }))
-  // 店招：格櫃上面的發光字
-  const signT = canvasTex(1024, 192, (x, w, h) => {
-    x.clearRect(0, 0, w, h); x.textBaseline = 'middle'; x.textAlign = 'center'
-    if (LANG === 'en') { x.fillStyle = '#2f7d4f'; x.font = '700 104px "Helvetica Neue", Arial, sans-serif'; x.fillText('PHOTO & OPTICS', w / 2, h / 2 + 4, w - 40) }
-    else {
-      x.fillStyle = '#2f7d4f'; x.font = `bold 110px ${FONT_SANS}`; x.textAlign = 'right'; x.fillText(tr('相機行'), w / 2 - 5, h / 2, w / 2 - 40)   // 靠右對齊：字變長往左長，不會壓到英文
-      x.fillStyle = '#5b6a61'; x.font = '600 52px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'left'; x.fillText('PHOTO & OPTICS', w / 2 + 25, h / 2 + 8)
-    }
-  })
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.79), new THREE.MeshStandardMaterial({ map: signT, transparent: true, emissive: 0xffffff, emissiveMap: signT, emissiveIntensity: 0.25 }))
-  sign.position.set((SX0 + SX1) / 2, 3.95, HZ - 0.29); sign.rotation.y = Math.PI; g.add(sign)
+  // 店招：2026-11-08 使用者要求店裡不放（以前在格櫃上面），改掛在店外朝公園那面（見「店外招牌」）
 
   /* ---------- 牆上的鳥類攝影作品（ChatGPT 畫的四張，一張圖切四格） ---------- */
   const printT = await new THREE.TextureLoader().loadAsync(`models/store-prints.jpg?v=${VER}`)

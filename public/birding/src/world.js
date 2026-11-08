@@ -7,6 +7,7 @@ import { createHalls } from './halls.js'
 import { createShadowCache } from './shadowcache.js'
 import { createCoast } from './coast.js'
 import { buildOutside } from './outside.js'
+import { createWeather } from './weather.js'
 import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants } from './plants.js'
@@ -128,6 +129,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
 
   const time = night ? buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera }) : null
+  const weather = createWeather({ scene, camera, sun, hemi, renderer, time })   // 天氣：預設晴天、不自己變；遊戲（game/main.js）打開自動換
 
   function resize() {
     renderer.setSize(innerWidth, innerHeight, false)
@@ -178,6 +180,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt, phone)
     water.mist.update(dt, camera)
     time?.tick(t, dt)
+    weather.tick(t, dt)
     {
       const mk = mistLevel.value, tint = 0.2 + 0.8 * Math.min(1, dayLight.value * 1.4), cp = camera.position   // 清晨天剛亮，霧就先白起來
       for (const sp of groundMist) {
@@ -206,7 +209,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     renderer.render(scene, cam)
   }
-  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */

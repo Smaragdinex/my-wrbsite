@@ -193,7 +193,7 @@ class Walker {
       this.p.x += Math.sin(this.h) * step; this.p.y += Math.cos(this.h) * step
       if (d - step < 0.02) this.goal = null
     } else if (Math.abs(diff) < 0.02) this.want = null
-    this.v = step / dt
+    this.v = dt > 0 ? step / dt : 0   // 同一格更新兩次（dt = 0）時 0/0 = NaN，會一路傳到頭的姿勢、整隻鳥破圖（2026-11-08 帝雉）
     return step + Math.abs(dh) * 0.12
   }
   get busy() { return !!(this.goal || this.want != null) }
@@ -465,7 +465,9 @@ function groundTripo(env, cfg) {
     wormMesh.geometry.dispose()
     wormMesh.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => root.parent.worldToLocal(p))), 18, 0.0065, 5)
   }
+  const C0 = { ...c }
   const update = (t, dt) => {
+    if (!(dt > 0)) return   // dt = 0（同一格第二次）不用動
     acts.tick(dt)
     const d = w.update(dt)
     // 用跳的：身體停在 dp，落後 walker 一個步幅就整隻跳過去（兩腳一起），walker 停了也要跳到定點
@@ -610,6 +612,10 @@ function groundTripo(env, cfg) {
       }
     }
     focus.set(w.p.x, cfg.focusY ?? 0.6, w.p.y)
+    // 保險：任何一個姿勢值或骨頭變成 NaN（一旦出現就會一直卡著，頂點亂飛＝破圖）就整個歸回原本的樣子
+    if (Object.values(c).some((v) => typeof v === 'number' && !Number.isFinite(v))) Object.assign(c, C0)
+    for (const b of Object.values(r.bones)) if (!Number.isFinite(b.quaternion.x + b.quaternion.w + b.position.x + b.position.y)) { b.quaternion.copy(b.userData.rest); b.position.copy(b.userData.restP) }
+    if (!Number.isFinite(w.p.x + w.p.y + w.h)) { w.p.set(0, 0); w.h = 0; w.goal = null; w.want = null }
   }
   return { obj: root, focus, update, acts, walker: w, legs }
 }

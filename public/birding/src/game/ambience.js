@@ -17,8 +17,8 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const smooth = (p, v, t, k = 0.4) => p.setTargetAtTime(v, t, k)
 
 export function createAmbience({ getMusic, getAmb }) {
-  let ac = null, out, musicBus, ambBus, ambFilter, verb, ambVerb, cicadaG, cricketG, waterG
-  const st = { hour: 9, store: 0, water: 0 }
+  let ac = null, out, musicBus, ambBus, ambFilter, verb, ambVerb, cicadaG, cricketG, waterG, rainG, rainLowG
+  const st = { hour: 9, store: 0, water: 0, rain: 0, storm: 0 }
 
   function start() {
     if (ac) { if (ac.state === 'suspended') ac.resume(); return }
@@ -36,7 +36,7 @@ export function createAmbience({ getMusic, getAmb }) {
     ambFilter = ac.createBiquadFilter(); ambFilter.type = 'lowpass'; ambFilter.frequency.value = 18000
     ambBus = ac.createGain(); ambBus.gain.value = 0; ambBus.connect(ambFilter); ambFilter.connect(out)
     ambVerb = ac.createConvolver(); ambVerb.buffer = ir; const avg = ac.createGain(); avg.gain.value = 0.6; ambVerb.connect(avg); avg.connect(ambBus)   // 鳥叫的回音也要走環境音那一路（在店裡一起被玻璃擋掉）
-    startCicadas(); startWater(); cricketG = ac.createGain(); cricketG.gain.value = 0; cricketG.connect(ambBus)
+    startCicadas(); startWater(); startRain(); cricketG = ac.createGain(); cricketG.gain.value = 0; cricketG.connect(ambBus)
     loadFiles()
     loop()
   }
@@ -88,6 +88,36 @@ export function createAmbience({ getMusic, getAmb }) {
     const n = loopNoise(), lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100
     const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 120
     n.connect(lp); lp.connect(hp); hp.connect(waterG)
+  }
+
+  /* ---------- 雨（2026-11-08 天氣）：沙沙的高頻雜訊＋一層低沉的雨聲，大小照 weather.rain ---------- */
+  function startRain() {
+    rainG = ac.createGain(); rainG.gain.value = 0; rainG.connect(ambBus)
+    const n = loopNoise(), hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 600
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7000
+    n.connect(hp); hp.connect(lp); lp.connect(rainG)
+    rainLowG = ac.createGain(); rainLowG.gain.value = 0; rainLowG.connect(ambBus)
+    const n2 = loopNoise(), lp2 = ac.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 420
+    n2.connect(lp2); lp2.connect(rainLowG)
+  }
+  // 雷聲：delay 秒後（閃電到雷聲的時間差），先一聲劈啪（近的才明顯），再一段 4～7 秒忽大忽小的低沉隆隆聲
+  function thunder(delay, strength) {
+    if (!ac || ac.state !== 'running') return
+    const t0 = ac.currentTime + delay, buf = noiseBuf()
+    const crack = ac.createBufferSource(); crack.buffer = buf
+    const cf = ac.createBiquadFilter(); cf.type = 'lowpass'; cf.frequency.value = 900 + 2400 * strength
+    const cg = ac.createGain(); cg.gain.setValueAtTime(0, t0); cg.gain.linearRampToValueAtTime(0.9 * strength * strength, t0 + 0.02); cg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5)
+    crack.connect(cf); cf.connect(cg); cg.connect(ambBus); crack.start(t0); crack.stop(t0 + 0.6)
+    const dur = 4 + Math.random() * 3
+    const rum = ac.createBufferSource(); rum.buffer = buf; rum.loop = true
+    const rf = ac.createBiquadFilter(); rf.type = 'lowpass'; rf.frequency.value = 140
+    const rf2 = ac.createBiquadFilter(); rf2.type = 'lowpass'; rf2.frequency.value = 220
+    const rg = ac.createGain(); rg.gain.setValueAtTime(0, t0)
+    let tt = t0 + 0.05
+    rg.gain.linearRampToValueAtTime(1.6 * strength, tt + 0.25)
+    while (tt < t0 + dur) { tt += 0.25 + Math.random() * 0.6; rg.gain.linearRampToValueAtTime(1.6 * strength * (0.25 + 0.75 * Math.random()) * (1 - (tt - t0) / dur), tt) }
+    rg.gain.linearRampToValueAtTime(0, t0 + dur + 0.5)
+    rum.connect(rf); rf.connect(rf2); rf2.connect(rg); rg.connect(ambBus); rg.connect(ambVerb); rum.start(t0); rum.stop(t0 + dur + 0.6)
   }
 
   /* ---------- 單一聲音的小工具 ---------- */
@@ -189,23 +219,25 @@ export function createAmbience({ getMusic, getAmb }) {
       smooth(ambBus.gain, av * (1 - 0.7 * st.store), now, 0.8)
       smooth(ambFilter.frequency, 18000 - 16800 * st.store, now, 0.6)
       const h = st.hour, day = h > 6 && h < 18.5 ? Math.min(1, (h - 6) / 1.5, (18.5 - h) / 1.5) : 0
-      smooth(cicadaG.gain, 0.13 * day * (h > 10 && h < 16 ? 1 : 0.5), now, 2)
+      const dry = 1 - 0.85 * st.rain   // 下雨時蟬、鳥都安靜下來
+      smooth(rainG.gain, 0.2 * st.rain, now, 1.5); smooth(rainLowG.gain, 0.35 * st.rain * (0.6 + 0.4 * st.storm), now, 1.5)
+      smooth(cicadaG.gain, 0.13 * day * (h > 10 && h < 16 ? 1 : 0.5) * dry, now, 2)
       smooth(cricketG.gain, (1 - day) * 0.5 + 0.03, now, 2)
       smooth(waterG.gain, 0.16 * st.water, now, 0.6)
       // 鳥叫環境音：白天整段、清晨最熱鬧，晚上只剩一點點
       const dawn = Math.exp(-((h - 6.5) ** 2) / 2)
-      if (birdBedG) smooth(birdBedG.gain, BIRD_K * (0.1 + 0.9 * day) * (1 + 0.3 * dawn), now, 2)
+      if (birdBedG) smooth(birdBedG.gain, BIRD_K * (0.1 + 0.9 * day) * (1 + 0.3 * dawn) * dry, now, 2)
       if (av > 0) { if (!birdBedG) scheduleBirds(now); if (Math.random() < 0.6) scheduleCrickets(now) }
       if (mv > 0 && !musicSrc) scheduleMusic(now); else nextChord = now
     }, 100)
   }
 
   // 每格更新：現在幾點、在店裡還是溫室、離瀑布多遠
-  function tick(dt, { hour, pos }) {
-    st.hour = hour
+  function tick(dt, { hour, pos, rain = 0, storm = 0 }) {
+    st.hour = hour; st.rain = rain; st.storm = storm
     const inStore = pos.x < STORE.X0 && pos.x > STORE.X1 && Math.abs(pos.z) < STORE.HZ ? 1 : pos.x < -70 && Math.abs(pos.z) < 5 ? 0.5 : 0
     st.store += (inStore - st.store) * Math.min(1, dt * 2)
     st.water = Math.max(0, 1 - Math.max(0, distToMtn(pos.x, pos.z) - 8) / 30)
   }
-  return { tick, start, get ctx() { return ac }, get out() { return out }, dbg: { get musicG() { return musicG }, get birdBedG() { return birdBedG }, setK(m, b) { MUSIC_K = m; BIRD_K = b; if (musicG) musicG.gain.value = m } } }
+  return { tick, start, thunder, get ctx() { return ac }, get out() { return out }, dbg: { get musicG() { return musicG }, get birdBedG() { return birdBedG }, setK(m, b) { MUSIC_K = m; BIRD_K = b; if (musicG) musicG.gain.value = m } } }
 }

@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { TAU, domeRho, inAlpine, alpineHeight, terrainHeight, smoothstep, lerp } from './layout.js'
 import { fbm3, mulberry32 } from './noise.js'
-import { dayLight, duskLight } from './structures.js'
+import { dayLight, duskLight, weatherU } from './structures.js'
 import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { lodRegister } from './lod.js'
@@ -186,15 +186,16 @@ export function buildOutside() {
   {
     const mtnMat = new THREE.ShaderMaterial({
       fog: false,
-      uniforms: { uDay: dayLight, uDusk: duskLight },
+      uniforms: { uDay: dayLight, uDusk: duskLight, uHaze: weatherU.haze, uFlash: weatherU.flash },
       vertexShader: `attribute float aHaze; varying float vHaze;
         void main(){ vHaze = aHaze; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `varying float vHaze; uniform float uDay; uniform float uDusk;
+      fragmentShader: `varying float vHaze; uniform float uDay; uniform float uDusk; uniform float uHaze; uniform float uFlash;
         void main(){
           vec3 hor = mix(vec3(0.035, 0.05, 0.09), vec3(0.86, 0.91, 0.93), uDay);
           hor = mix(hor, vec3(0.9, 0.6, 0.42), uDusk * 0.6);
           vec3 base = mix(vec3(0.02, 0.03, 0.04), vec3(0.22, 0.32, 0.28), uDay);
-          gl_FragColor = vec4(mix(base, hor, clamp(vHaze, 0.0, 1.0)), 1.0);
+          hor = mix(hor, vec3(dot(hor, vec3(0.3, 0.5, 0.2))) * 0.8, uHaze);   // 下雨：地平線灰掉
+          gl_FragColor = vec4(mix(base, hor, clamp(vHaze + 0.5 * uHaze, 0.0, 1.0)) + vec3(0.5, 0.55, 0.7) * uFlash * 0.4, 1.0);
           #include <colorspace_fragment>
         }`,
     })
