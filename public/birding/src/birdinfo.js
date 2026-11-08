@@ -154,7 +154,8 @@ const ALL = [
     ],
   },
   {
-    id: 'mikado', spot: [-11, 25], perch: 'ground', dist: 2.5, camH: 0.9, lookY: 0.32,
+    id: 'mikado', spot: AM(116.7, -4.5), perch: 'ground', view: 62, dist: 2.5,   // 2026-11-08 搬到山區：中海拔針葉林邊，步道旁 6 公尺
+    camH: 0.9, lookY: 0.32,
     name: '帝雉', sci: 'Syrmaticus mikado', where: '森林邊緣',
     intro: '台灣特有種，被稱為「迷霧森林中的王者」，也曾印在千元鈔票上。雄鳥全身深藍帶紫，有金屬般的光澤，臉上是一塊紅色的皮膚，長長的尾巴上有一條條白色橫紋。牠住在中高海拔的森林裡，常在清晨或起霧的時候出來覓食。',
     facts: [
@@ -198,7 +199,8 @@ const ALL = [
     ],
   },
   {
-    id: 'thrush', spot: [16, 33], perch: 'ground', dist: 2.2, camH: 0.7, lookY: 0.2,
+    id: 'thrush', spot: AM(142.25, -17.6), perch: 'ground', view: 153, dist: 2.2,   // 2026-11-08 搬到山區溪邊（平的岸上；離步道 10 公尺，要走下去找）
+    camH: 0.7, lookY: 0.2,
     name: '台灣紫嘯鶇', sci: 'Myophonus insularis', where: '林下溪邊',
     intro: '台灣特有種。全身深藍黑色，光線照到時會閃出紫藍色的金屬光澤。常在溪邊的石頭和林道上一跳一跳地找蟲吃，停下來時會把尾巴慢慢張開、再收起來。',
     facts: [
@@ -209,7 +211,8 @@ const ALL = [
     ],
   },
   {
-    id: 'pheasant', spot: [42, -18], perch: 'ground', dist: 3.0, camH: 1.0, lookY: 0.35,
+    id: 'pheasant', spot: AM(89.9, 0.75), perch: 'ground', view: 330, dist: 3.0,   // 2026-11-08 搬到山區：一進山的低海拔林緣
+    camH: 1.0, lookY: 0.35,
     name: '藍腹鷴', sci: 'Lophura swinhoii', where: '森林邊緣',
     intro: '台灣特有種。雄鳥全身深藍帶紫，臉上是鮮紅色的肉垂，頭頂一撮白色的冠羽，背上一塊栗紅色，尾巴中央是兩根長長的白羽，紅色的腳走在林下特別顯眼。',
     facts: [

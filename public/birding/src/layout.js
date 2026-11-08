@@ -6,11 +6,11 @@ import { fbm2, fbm3, noise3 } from './noise.js'
 export const TAU = Math.PI * 2
 // 溫室是一顆「蛋」：西半邊（x < 0）是原本的橢圓（長半軸 A），東半邊拉長到 AE，裡面是高山區（2026-11-07 改成一個館：拿掉附屬的高山館和通道）。
 // x = 0 兩邊的半徑都是 B、斜率都是 0，玻璃面是平順接起來的。GA／GB：原本那顆橢圓，熱帶花園的種植坡、植物範圍照它（山區在它外面）。
-export const DOME = { A: 75, AE: 270, B: 55, BE: 74, H: 72 }   // 西半軸、東半軸、短半軸（西）、東邊山區最寬處的短半軸、頂高
+export const DOME = { A: 75, AE: 328, B: 55, BE: 96, H: 92 }   // 西半軸、東半軸、短半軸（西）、東邊山區最寬處的短半軸、頂高
 // 短半軸往東慢慢變寬（西半邊花園照舊 55，山區那側到 72）
-export const domeB = (x) => x > 0 ? DOME.B + (DOME.BE - DOME.B) * smoothstep(0, 90, x) : DOME.B
+export const domeB = (x) => x > 0 ? DOME.B + (DOME.BE - DOME.B) * smoothstep(20, 110, x) : DOME.B   // 2026-11-08 從 x 20 才開始變寬：花園那片地面網格只到 z ±62
 // 山區放大（2026-11-07 第四次，1.32→1.55）：原本的配置（設計座標）以入口 x=76 為原點放大 AS 倍，高度 AHS 倍
-export const AS = 1.55, AHS = 1.4
+export const AS = 2.015, AHS = 1.82   // 2026-11-08 第五次放大 ×1.3（1.55→2.015，高度 1.4→1.82，坡度不變）；東邊界 AE 270→328、南北 BE 74→96，頂高 72→92（樹高、飛行高度的上限）
 export const AM = (x, z) => [76 + (x - 76) * AS, z * AS]
 export const GARDEN = { A: 75, B: 55 }
 export const MTN = { x: 12, z: -6, h: 32 }           // 中央雲霧山
@@ -23,7 +23,7 @@ export const DECK = { r: 7, x: 0, z: 0, y: 0 }   // 頂端圓形觀景台（2026
 export const STORE = { X0: -75.6, X1: -88.6, HZ: 7.5, H: 5.0, DOOR_W: 3.4 }
 // 高山區（alpine.js）：溫室東半邊、原本花園橢圓外面那一塊。花園的 alpine 步道走到 x≈74 接上山的步道；
 // 入口一小片平地、水池，往東爬升到約 26 公尺的山頂，一條溪從東南高處沿山谷流到水池，步道之字形上山、吊橋過溪谷
-export const ALP = { X0: 45, X1: 270, HZ: 76 }   // 山區地形格子的範圍（實際能走的是 inAlpine）
+export const ALP = { X0: 25, X1: 328, HZ: 99 }   // X0 45→25：inAlpine 從 x 30 就開始，以前 30～45 那一小段沒有地形資料（高度 1e9）   // 山區地形格子的範圍（實際能走的是 inAlpine）
 // 第三館：海岸（coast.js，美術用 NatureManufacture「Coast Dunes Environment」，跟《淨灘大作戰》同一套）。圓頂南門（z≈-55）→ 通道（z -53～-74，A 門 -61、B 門 -67）
 // → 玻璃館（z -74～-154、x ±40）：北半邊沙丘、木棧道，中間沙灘，海岸線約 z -128，往南是館裡的淺水潟湖；館外整片都是海（到地平線）
 // 海岸館暫時拿掉（2026-11-07 使用者要求）：關掉就沒有南門、通道、館和海；程式和模型都還在，改回 true 就回來
@@ -279,7 +279,7 @@ buildHeights()
 // 溪：從山頂東南側的山泉（離觀景台不遠）往下，沿著山谷一路流到入口旁的水池；陡的那幾段是小瀑布
 export const ALP_STREAM = [[151, -2], [150, -8], [147, -13], [142, -16.5], [135, -15.5], [130.5, -14.2], [125.5, -13.4], [120.5, -14.2], [114, -16.5], [109, -18], [100, -19], [94, -18]].map(([x, z]) => AM(x, z))
 // 吊橋底下是一道峽谷：溪在橋的上游掉下一道瀑布，橋面離水面 6～7 公尺
-export const ALP_GORGE = { x: AM(124.5, 0)[0], z: -12.8 * AS, depth: 6.5, r: 7 * AS }
+export const ALP_GORGE = { x: AM(124.5, 0)[0], z: -12.8 * AS, depth: 8.5, r: 7 * AS }
 export const BRIDGE_DIM = { hw: 1.6, sag: 0.8 }   // 2026-11-07 加大：寬 3.2 公尺   // 吊橋半寬、中間下垂（alpine.js 畫橋、bridgeAt 走路都用）
 export const ALP_POND = { x: AM(88, 0)[0], z: -17 * AS, r: 7 * AS, water: -0.45 }
 const ALP_TRAIL_D = [[76, 0], [86, 3], [97, 9], [108, 12], [116, 5], [118.5, -1], [124, -12], [129.5, -22.5], [137, -26], [147, -21], [157, -15], [163, -4], [161, 8], [154, 16], [146, 15], [145, 9]]
@@ -327,7 +327,7 @@ function alpBase(X, Z) {
   h -= 5 * smoothstep(160, 186, x)                                                                // 山頂後面往東牆降
   h += 2.6 * fbm2(X * 0.04 + 11, Z * 0.04 - 7, 4) * smoothstep(84, 100, x)
   h += 1.4 * Math.max(0, fbm2(X * 0.13, Z * 0.13, 3)) * smoothstep(86, 105, x)                   // 小岩塊
-  h = Math.min(h * AHS, domeY(X, Z) - 9)
+  h = h * AHS   // 2026-11-08：以前 min(…, domeY - 9)（不能頂到玻璃）——圓頂拿掉之後，這個上限在邊界附近把地形壓成一面懸崖；邊界外的草地（outside.js）會從邊界的高度慢慢降下去
   return lerp(gardenEdgeH(X, Z), Math.max(0, h), smoothstep(1.0, 1.25, gardenRho(X, Z)))          // 花園那側從種植坡的高度接起，往裡面慢慢變成山的形狀
 }
 // 階梯式溪床（step-pool，台灣山溪常見）：水面一段一段是平的（水潭），潭與潭之間是一道落差（小瀑布、跌水）。

@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider } from './layout.js'
+import { AS, CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider } from './layout.js'
 import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
 import { addWind } from './wind.js'
@@ -17,6 +17,8 @@ import { dayLight, mistLevel } from './structures.js'
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
+// 山區面積比 1.55 倍那版大多少（2026-11-08 再放大 ×1.3）：樹、石頭、蕨類、箭竹的數量照面積加，密度跟以前一樣
+const AK = (AS / 1.55) ** 2
 const { clamp, lerp } = THREE.MathUtils
 const ss = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t) }   // 跟 layout.js 同樣的參數順序（three 的 smoothstep 是 (x, min, max)，第一版用錯，樹全沒長出來）
 
@@ -599,7 +601,7 @@ function buildInterior(lib, avoid = []) {
       // 樹冠裡面一個實心的深綠圓錐：卡片樹側看會透光，遠看只剩枝幹像竹竿；有這個芯遠看才是一棵實心的針葉樹
       const core = new THREE.ConeGeometry(kind === 'fir' ? 0.075 : 0.12, 0.74, 9, 1, true).translate(0, 0.5, 0)
       const list = []
-      for (let k = 0; k < 30000 && list.length < (kind === 'fir' ? 400 : 430); k++) {
+      for (let k = 0; k < 30000 * AK && list.length < (kind === 'fir' ? 400 : 430) * AK; k++) {
         const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
         if (!inAlpine(x, z, 3) || domeRho(x, z) > 0.94 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4.4) continue
         if (alpineTrailDist(x, z) < 3.2 || alpineStreamDist(x, z) < 2.5 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2.5) continue
@@ -659,12 +661,12 @@ function buildInterior(lib, avoid = []) {
       })()
       const jun = coniferGeo('hemlock')
       const E = ALP_TRAIL.at(-1), EY = ALP_TRAIL.prof.at(-1), J = [], RH = []
-      for (let k = 0; k < 1500 && (J.length < 60 || RH.length < 40); k++) {
+      for (let k = 0; k < 1500 * AK && (J.length < 60 * AK || RH.length < 40 * AK); k++) {
         const a = rnd() * TAU, d = 6 + Math.pow(rnd(), 0.7) * 36, x = E[0] + Math.cos(a) * d, z = E[1] + Math.sin(a) * d
         if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineTrailDist(x, z) < 1.8 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 1.9 || nearBird(avoid, x, z, 3.5, 1.5)) continue
         const y = alpineHeight(x, z); if (y < EY - 10) continue
         const sz = 0.7 + rnd() * 0.9, q = new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, rnd() * TAU, (rnd() - 0.5) * 0.3))
-        if (rnd() < 0.6 ? J.length < 60 : RH.length >= 40) J.push({ p: V(x, y - 0.1, z), q, s: V(3.2 * sz, 1.1 * sz, 3.2 * sz) })
+        if (rnd() < 0.6 ? J.length < 60 * AK : RH.length >= 40 * AK) J.push({ p: V(x, y - 0.1, z), q, s: V(3.2 * sz, 1.1 * sz, 3.2 * sz) })
         else RH.push({ p: V(x, y - 0.05, z), q, s: V(1, 1, 1).multiplyScalar(1.1 + rnd() * 0.9) })
       }
       for (const [geo, mat, list] of [[jun, needleM, J], [rhodo, leafM, RH]]) {
@@ -679,7 +681,7 @@ function buildInterior(lib, avoid = []) {
     const lists = {}, put = (n, it) => (lists[n] ||= []).push(it)
     const big = ['rock_face', 'rock_face_02', 'boulder', 'mrock_3', 'mrock_7', 'mrock_9', 'mrock_12'], moss = ['rock_moss_set', 'rock_moss_set_02', 'mrock_8', 'mrock_10', 'boulder']
     const pick = (a) => a[Math.floor(rnd() * a.length)]
-    for (let k = 0; k < 8000; k++) {
+    for (let k = 0; k < 8000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 2.4 || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
@@ -694,7 +696,7 @@ function buildInterior(lib, avoid = []) {
     for (const [n, list] of Object.entries(lists)) if (lib[n]) scatter(g, lib[n], list, { cast: true })
     // 溪邊、池邊的蕨類
     const ferns = []
-    for (let k = 0; k < 12000 && ferns.length < 420; k++) {
+    for (let k = 0; k < 12000 * AK && ferns.length < 420 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.95) continue
       const sd = alpineStreamDist(x, z), dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
@@ -709,8 +711,8 @@ function buildInterior(lib, avoid = []) {
   // 真的箭竹草原是膝蓋到腰高、密密一整片：每叢幾根細竹稈，稈上不同高度長出披針形的葉子往外斜伸（bladeMesh 的 cane 模式）。
   // 顏色一片片不一樣：大部分黃綠、有些比較深綠、有些偏枯黃；切成 14 公尺一塊做 LOD（遠的變稀，地面顏色接得上）
   {
-    const A = [], B = [], c = new THREE.Color(), MAXI = 450000
-    for (let k = 0; k < 140000 && A.length / 4 < MAXI; k++) {
+    const A = [], B = [], c = new THREE.Color(), MAXI = 450000 * AK
+    for (let k = 0; k < 140000 * AK && A.length / 4 < MAXI; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
             if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.6)) continue   // 地上的鳥走動的地方：不長
@@ -791,7 +793,7 @@ function buildInterior(lib, avoid = []) {
     // 雙面材質從背面看，three 會把法線翻過來（變朝下）→ 那一面整片黑。這裡的法線本來就統一朝上，不要翻
     { const wind = mat.onBeforeCompile; mat.onBeforeCompile = (sh, r) => { wind(sh, r); sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', '')) }; mat.customProgramCacheKey = () => 'caneCard' }
     const list = [], c = new THREE.Color()
-    for (let k = 0; k < 160000 && list.length < 90000; k++) {
+    for (let k = 0; k < 160000 * AK && list.length < 90000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
       if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.8)) continue
