@@ -13,6 +13,7 @@ const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a))
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt))
 
 // 每種鳥：r 驚飛距離（公尺，走路靠近時）；fly 飛行（speed 公尺/秒、hz 拍翅頻率、style：flap 一直拍、bound 拍幾下收翅滑一段（雀類波浪飛）、glide 慢拍＋長滑翔（鷺）、
+// （2026-11-09 新加的 14 隻：k ＝ 站姿模型的身長 × 真實的翼展／身長比，例如八色鳥 2、鴨 1.5、雉 1.1）
 // k 飛行模型縮放（tools/fly-points.py 擺正後翼展約 1；和停棲模型並排比頭的大小定的），名稱照 models/birds/<id>-fly-rig.glb）；run 用跑的（速度倍數）；swim 游開
 export const ESCAPE = {
   sparrow: { r: 5, fly: { speed: 8, hz: 13, style: 'bound', k: 0.58 } },
@@ -30,9 +31,9 @@ export const ESCAPE = {
   spoonbill: { r: 12, fly: { speed: 7, hz: 3, style: 'glide', k: 2.3 } },
   thrush: { r: 7, fly: { speed: 9, hz: 9, style: 'flap', k: 0.95 } },
   oriole: { r: 8, fly: { speed: 9, hz: 8, style: 'bound', k: 1.07 } },
-  mikado: { r: 8, run: 7 },
-  pheasant: { r: 8, run: 7 },
-  babbler: { r: 5, run: 5 },
+  mikado: { r: 8, run: 7, fly: { speed: 9, hz: 9, style: 'glide', k: 1.49 } },   // 2026-11-09 雉類：平常用跑的，被逼急才「噗嚕嚕」快拍幾下滑到樹上
+  pheasant: { r: 8, run: 7, fly: { speed: 9, hz: 9, style: 'glide', k: 1.18 } },
+  babbler: { r: 5, run: 5, fly: { speed: 6, hz: 11, style: 'flap', k: 0.556 } },
   // 高山區 8 種（2026-11-07 飛行模型；k ≈ 停棲模型縮放 × 1.8，翼展約是身長的 1.6～1.8 倍）
   flamecrest: { r: 5, fly: { speed: 7, hz: 15, style: 'bound', k: 0.47 } },
   yuhina: { r: 5, fly: { speed: 7, hz: 14, style: 'bound', k: 0.54 } },
@@ -43,14 +44,17 @@ export const ESCAPE = {
   woodowl: { r: 8, fly: { speed: 7, hz: 3.5, style: 'glide', k: 0.95 } },   // 褐林鴞翼展約 1 公尺，飛得慢、很安靜
   bushrobin: { r: 4, fly: { speed: 7, hz: 13, style: 'flap', k: 0.47 } },   // 不太怕人
   rosefinch: { r: 6, fly: { speed: 8, hz: 12, style: 'bound', k: 0.49 } },
-  laughingthrush: { r: 3.5, run: 5 },                                   // 出了名的親人，靠太近才跑開
-  moorhen: { r: 9, swim: 5 },
-  mandarin: { r: 12, swim: 5 },      // 2026-11-09：鴛鴦很怕人
-  spotbill: { r: 10, swim: 5 },
-  partridge: { r: 7, run: 6 },       // 林下三五成群，受驚快步跑進灌叢
-  pitta: { r: 7, run: 5 },
-  grassowl: { r: 6, run: 3 },
-  waterhen: { r: 9, swim: 5 },
+  laughingthrush: { r: 3.5, run: 5, fly: { speed: 6, hz: 10, style: 'flap', k: 0.509 } },                                   // 出了名的親人，靠太近才跑開
+  moorhen: { r: 9, swim: 5, fly: { speed: 7, hz: 7, style: 'flap', k: 1.12 } },   // 秧雞飛的時候腳拖在後面（飛行模型照這樣畫的）
+  mandarin: { r: 12, swim: 5, fly: { speed: 12, hz: 6, style: 'flap', k: 0.773 } },      // 2026-11-09：鴛鴦很怕人
+  spotbill: { r: 10, swim: 5, fly: { speed: 12, hz: 5.5, style: 'flap', k: 1.0 } },
+  partridge: { r: 7, run: 6, fly: { speed: 8, hz: 14, style: 'glide', k: 0.412 } },       // 林下三五成群，受驚快步跑進灌叢，逼急了才飛
+  pitta: { r: 7, run: 5, fly: { speed: 7, hz: 11, style: 'flap', k: 0.43 } },
+  grassowl: { r: 6, run: 3, fly: { speed: 6, hz: 3.5, style: 'glide', k: 1.01 } },
+  nuthatch: { r: 5, fly: { speed: 7, hz: 14, style: 'bound', k: 0.26 } },
+  finchbill: { r: 6, fly: { speed: 8, hz: 11, style: 'bound', k: 0.368 } },
+  minivet: { r: 7, fly: { speed: 8, hz: 10, style: 'flap', k: 0.294 } },
+  waterhen: { r: 9, swim: 5, fly: { speed: 7, hz: 7, style: 'flap', k: 1.07 } },
 }
 // 飛行模型（存在才用；還沒做好的先借翠鳥的飛行模型，大小照停棲模型的身高換算）
 const FLY_NAME = (id) => `${id}-fly-rig`
@@ -121,15 +125,16 @@ export function createFlight(world, player) {
     }
     return false
   }
-  function outbound(S, away, flock) {
+  // short：地上的鳥被逼到很近才起飛，只飛一小段（10～18 公尺）到旁邊的樹上（離地 4～8 公尺）躲著
+  function outbound(S, away, flock, short = false) {
     for (let i = 0; i < 60; i++) {
       const a = Math.atan2(away.x, away.z) + rnd(-0.6, 0.6) * (1 + i / 20)
-      const d = V(Math.sin(a), 0, Math.cos(a)), dist = rnd(30, 45)
+      const d = V(Math.sin(a), 0, Math.cos(a)), dist = short ? rnd(10, 18) : rnd(30, 45)
       const F = flock?.F.clone() ?? S.clone().addScaledVector(d, dist)
-      if (!flock) F.y = Math.max(terrainHeight(F.x, F.z) + rnd(9, 14), S.y + 5)
+      if (!flock) F.y = short ? terrainHeight(F.x, F.z) + rnd(4, 8) : Math.max(terrainHeight(F.x, F.z) + rnd(9, 14), S.y + 5)
       else F.add(V(rnd(-1.5, 1.5), rnd(-1, 1), rnd(-1.5, 1.5)))
       const dir = F.clone().sub(S).setY(0).normalize()
-      const curve = new THREE.CubicBezierCurve3(S.clone(), S.clone().addScaledVector(dir, 2.5).add(V(0, 3, 0)), F.clone().addScaledVector(dir, -10), F)
+      const curve = new THREE.CubicBezierCurve3(S.clone(), S.clone().addScaledVector(dir, 2.5).add(V(0, 3, 0)), F.clone().addScaledVector(dir, short ? -4 : -10), F)
       if (!blockedPath(curve)) return curve
       if (flock) flock = null
     }
@@ -146,10 +151,11 @@ export function createFlight(world, player) {
   }
 
   /* ---------- 驚飛 ---------- */
-  function flush(u, t) {
+  function flush(u, t, short = false) {
     u.state = 'away'
     const P = world.camera.position
     if (u.esc.fly) {
+      for (const s of u.ms) restoreWalker(s)   // 剛剛在跑：起飛前把走路速度還原（落地後照平常走）
       let flock = null
       u.ms.forEach((s, i) => {
         const m = s.m
@@ -159,24 +165,25 @@ export function createFlight(world, player) {
         m.obj.getWorldDirection(_w); s.faceH = Math.atan2(_w.x, _w.z)
         const away = s.home.clone().sub(P).setY(0)
         if (away.lengthSq() < 1e-4) away.set(1, 0, 0)
-        s.curve = outbound(s.home, away.normalize(), flock)
+        s.curve = outbound(s.home, away.normalize(), flock, short)
         flock ??= { F: s.curve.v3 }
         s.len = s.curve.getLength(); s.dist = 0; s.t = 0
         s.delay = i === 0 ? 0 : rnd(0.05, 0.45)   // 一群裡第一隻先飛，其他跟著
         s.mode = 'wait'; s.head = s.faceH
-        s.wait = rnd(20, 38)
+        s.wait = short ? rnd(12, 25) : rnd(20, 38)
       })
     } else {
       u.ms.forEach((s) => fleeOnGround(u, s))
     }
   }
-  // 跑或游開：目的地在背離玩家的方向 2～3 公尺（游泳的要在開闊水面）
+  const restoreWalker = (s) => { const w = s.m.walker; if (w && s.mode === 'flee') { w.speed = s.speed0; w.turn = s.turn0; s.mode = 'perch'; s.act = '' } }
+  // 跑或游開：目的地在背離玩家的方向 2～3 公尺（游泳的要在開闊水面）；會飛的地上鳥沒有 run/swim 就用跳的（走路速度 2.5 倍）
   function fleeOnGround(u, s) {
     const m = s.m, w = m.walker
     if (!w) return
     if (s.mode !== 'flee') { s.speed0 = w.speed; s.turn0 = w.turn; s.radius0 = w.radius }
     s.mode = 'flee'
-    w.speed = s.speed0 * (u.esc.run ?? u.esc.swim); w.turn = 7
+    w.speed = s.speed0 * (u.esc.run ?? u.esc.swim ?? 2.5); w.turn = 7
     const g = u.b.group.position, P = world.camera.position
     const a0 = Math.atan2(g.x + w.p.x - P.x, g.z + w.p.y - P.z)
     m.acts.next('walk')
@@ -272,7 +279,22 @@ export function createFlight(world, player) {
         // 警戒值：靠得越近漲得越快（距離 R 不漲、0.7R 一秒、0.5R 三分之一秒），走遠就慢慢消
         if (d < R) u.alarm += dt * Math.min(10, (R / d) ** 2 - 1)
         else u.alarm = Math.max(0, u.alarm - dt * 0.4)
-        if (u.alarm >= 1) { u.alarm = 0; flush(u, t) }
+        // 2026-11-09 使用者：不怕人的先跳開，人真的很近才飛一下到樹上。地上走的鳥（有 walker）先跑／跳／游開（'ground'），
+        // 玩家還是逼到 near（預設驚飛距離的一半）以內才起飛、只飛到旁邊的樹上；停在樹上的鳥照舊直接飛走
+        if (u.alarm >= 1) {
+          u.alarm = 0
+          if (u.esc.fly && u.ms.some((s) => s.m.walker)) { u.state = 'ground'; u.calm = 0; for (const s of u.ms) fleeOnGround(u, s) }
+          else flush(u, t)
+        }
+      } else if (u.state === 'ground') {
+        let d = Infinity
+        for (const s of u.ms) { s.m.obj.getWorldPosition(_v); d = Math.min(d, _v.distanceTo(P)) }
+        // 慢慢走過去：牠一直往後退、保持距離（跑回家附近的範圍內，退到底被追上才飛）；用跑的衝過來（> 4 m/s），還有 0.7 倍距離就起飛
+        const near = speed > 4 ? u.esc.r * 0.7 : (u.esc.near ?? u.esc.r * 0.45) * mult
+        if (d < near) { flush(u, t, true); continue }
+        u.calm = d > u.esc.r * mult * 1.3 ? u.calm + dt : 0
+        for (const s of u.ms) { if (s.m.walker && !s.m.walker.goal && u.calm < 1.5) fleeOnGround(u, s); s.act = 'run' }
+        if (u.calm > 4) { for (const s of u.ms) restoreWalker(s); u.state = 'home'; u.alarm = 0 }
       } else if (u.esc.fly) {
         for (const s of u.ms) if (s.mode !== 'perch') flyStep(u, s, t, dt)
         if (u.ms.every((s) => s.mode === 'perch')) u.state = 'home'
