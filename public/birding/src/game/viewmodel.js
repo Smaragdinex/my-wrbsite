@@ -1,5 +1,5 @@
 // 第一人稱的手和相機：走路時相機拿在胸前（跟著腳步晃）、右鍵舉到眼前（舉到底就換成觀景窗）、按 E 把相機拿近看背面螢幕調設定。
-// 手：models/hand-grip.glb（ChatGPT 畫手拿單眼的四視圖 → Tripo 建模 → tools/make-hand-grip.py 刪掉相機、對齊到我們機身的卡口），整隻手跟著相機動
+// 手：models/hand-grip3.glb（女生的右手；ChatGPT 先畫手真的握單眼、再把相機拿掉 → Tripo），整隻手跟著相機動
 // 相機：models/camera/body-*.glb＋lens-*.glb（tools/make-camera.py；卡口中心＝原點、鏡頭朝 -Z、背面螢幕朝 +Z）
 // 只用右手拿相機：手指是 Tripo 生出來的真實握法（中指到小指繞握把前面、食指在快門、拇指在背面）。
 // 整組掛在玩家鏡頭底下，放在 layer 3：拍照、測光的鏡頭不畫這層。
@@ -29,22 +29,22 @@ const POSES = {
 export async function createViewmodel(camera) {
   const root = new THREE.Group()
   camera.add(root)
-  const [handModel, ...cams] = await Promise.all(['models/hand-grip2.glb', 'models/camera/body-b1.glb', 'models/camera/body-b2.glb', 'models/camera/body-b3.glb',
+  const [handModel, ...cams] = await Promise.all(['models/hand-grip3.glb', 'models/camera/body-b1.glb', 'models/camera/body-b2.glb', 'models/camera/body-b3.glb',
     'models/camera/lens-l1.glb', 'models/camera/lens-l2.glb', 'models/camera/lens-l3.glb', 'models/camera/lens-l4.glb', 'models/camera/lens-l5.glb'].map(load))
   const bodies = { b1: cams[0], b2: cams[1], b3: cams[2] }, lenses = { l1: cams[3], l2: cams[4], l3: cams[5], l4: cams[6], l5: cams[7] }
   const camRig = new THREE.Group()
   root.add(camRig)
   for (const m of [...Object.values(bodies), ...Object.values(lenses)]) { m.visible = false; camRig.add(m) }
-  // 2026-11-09 第二版手：ChatGPT 畫「空手握著握把的手勢」（手裡什麼都沒拿）→ Tripo → 減面（models/hand-grip2.glb）。
+  // 手模型（第三版在下面）。
   // 第一版是手拿相機一起生成再把相機刪掉，手掌貼握把那一大片跟著被刪，只剩一條手指搭在機頂，看起來很怪。
   // 對齊在這裡做（fit：位置、角度、大小），手包住我們機身右邊的握把
   const hand = new THREE.Group(), fit = new THREE.Group()
   fit.add(handModel); hand.add(fit)
-  // Tripo 模型：前臂朝 -x、手指朝 +x，0.3 倍；先轉成手背朝外、手指從右邊包住握把，再微調（在遊戲畫面裡一格格比對出來的）
-  fit.quaternion.setFromEuler(new THREE.Euler(0.15, -0.45, 0.1)).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.65, Math.PI / 2, 0)))
-  fit.position.set(0.092, -0.16, 0.015); fit.scale.setScalar(0.3)
+  // 2026-11-09 第三版（使用者：要女生的手、四指在前拿機身、拇指在後、不要綠色外套）：ChatGPT 先畫女生手真的握單眼，再叫它把相機拿掉
+  // （手勢不變）→ Tripo → models/hand-grip3.glb。對齊照手自己的幾何算：拇指尖→四指指尖＝機身背面→正面、掌心→指縫＝右→左，指縫中心放在握把中間
+  fit.quaternion.set(0.0712, 0.8366, 0.3686, 0.3989)
+  fit.position.set(0.2205, -0.1771, -0.0765); fit.scale.setScalar(0.3)
   camRig.add(hand)
-  // 手掌貼著握把那一片是刪掉 Tripo 相機留下的開口：雙面畫，從開口看進去是手內側的皮膚，不會透過手看到後面（tools/make-hand-grip.py）
   root.traverse((o) => {
     o.layers.set(VM_LAYER)
     if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false }
