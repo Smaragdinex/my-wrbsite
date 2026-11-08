@@ -89,7 +89,8 @@ const album = createPlayback({ photos, onDelete: (p) => { const i = photos.index
 const store = await buildStore(scene, state, world.plantLib, { getSound: () => settings.state.sound })   // 自動門音效跟著設定的「音效」開關（只在玩的時候才會叫到，那時 settings 已經建好）   // 相機行：溫室門口外面那棟店，遊戲從店裡開始
 const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock, onView: (it, all) => product.open(it, all) })
 // Esc 闔上：瀏覽器不讓 Esc 重新鎖滑鼠，就回到首頁選單（跟平常按 Esc 一樣）
-const guide = createGuide({ renderer, onClose: (why) => why === 'esc' ? player.controls.dispatchEvent({ type: 'unlock' }) : relock(), getRecords: () => {
+let uiFx = null   // 下面 createUiFx 才建；圖鑑的按鈕、翻頁音效用它
+const guide = createGuide({ renderer, sfx: (k) => uiFx?.play(k), onClose: (why) => why === 'esc' ? player.controls.dispatchEvent({ type: 'unlock' }) : relock(), getRecords: () => {
   // 每種鳥：拍過幾張、最高幾分（沒有照片但記錄過的也算記錄）
   const r = {}
   for (const id of state.seen) r[id] = { n: 0, best: 0 }
@@ -187,7 +188,7 @@ if (!PHONE && new URLSearchParams(location.search).get('ai') !== '0') loadLLM(()
 // 首頁：開始遊戲／設定／操作說明。開始＝鎖定滑鼠（瀏覽器規定要使用者點擊才能鎖）；按 Esc 解鎖就回到這個選單（按鈕變「繼續」）
 const settings = createSettings({ world, player })
 const amb = createAmbience({ getMusic: () => settings.state.music, getAmb: () => settings.state.amb })   // 背景音樂＋溫室環境音（程式合成）
-createUiFx({ getSound: () => settings.state.sound })   // 滑鼠圓圈＋按鈕音效
+uiFx = createUiFx({ getSound: () => settings.state.sound })   // 滑鼠圓圈＋按鈕音效
 const startEl = document.getElementById('start'), menuEl = document.getElementById('menu'), helpEl = document.getElementById('help')
 startEl.append(settings.el)
 helpEl.querySelector('.ctl').innerHTML = controlsSvg()   // 鍵盤滑鼠按鍵圖

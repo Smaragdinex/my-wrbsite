@@ -4,7 +4,8 @@
 const HOT = 'button, a, input, select, label, .tab, .grid figure'
 
 export function createUiFx({ getSound }) {
-  if (!matchMedia('(pointer: fine)').matches) return
+  let ac = null   // 放最前面：手機提早 return 的時候 play 也要用得到
+  if (!matchMedia('(pointer: fine)').matches) return { play }   // 手機：沒有滑鼠圓圈，但圖鑑翻頁之類的音效照樣可以叫
   const ring = document.createElement('div')
   ring.className = 'cursor-ring'
   document.body.append(ring)
@@ -34,13 +35,24 @@ export function createUiFx({ getSound }) {
   addEventListener('pointerup', () => ring.classList.remove('down'))
 
   /* ---------- 音效 ---------- */
-  let ac = null
   function play(kind) {
     if (!getSound()) return
     ac ??= new AudioContext()
     if (ac.state === 'suspended') ac.resume()
     const t = ac.currentTime
     const out = ac.createGain(); out.connect(ac.destination)
+    if (kind === 'page') {
+      // 翻紙（圖鑑翻頁）：一段帶通雜訊，頻率從低往高掃、先大後小，像紙擦過去的沙沙聲
+      const len = Math.floor(ac.sampleRate * 0.42)
+      const buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0)
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / len) ** 1.5
+      const s = ac.createBufferSource(); s.buffer = buf
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.9
+      bp.frequency.setValueAtTime(900, t); bp.frequency.exponentialRampToValueAtTime(3800, t + 0.35)
+      out.gain.value = 0.16
+      s.connect(bp); bp.connect(out); s.start(t)
+      return
+    }
     if (kind === 'hover') {
       // 很輕的「滴」：短正弦波，音高往上滑一點
       const o = ac.createOscillator(); o.type = 'sine'
@@ -61,4 +73,5 @@ export function createUiFx({ getSound }) {
       o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.12)
     }
   }
+  return { play }
 }

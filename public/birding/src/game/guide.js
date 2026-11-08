@@ -325,7 +325,7 @@ function leather(title) {
   return t
 }
 
-export function createGuide({ renderer, getRecords, onClose }) {
+export function createGuide({ renderer, getRecords, onClose, sfx = () => {} }) {
   const scene = new THREE.Scene()
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50)
   scene.add(cam)
@@ -437,6 +437,7 @@ export function createGuide({ renderer, getRecords, onClose }) {
   }
   function close(why) {
     if (!st.open) return
+    setHover(null)
     st.open = false; st.target = 0; hud.hidden = true; st.flip = null
     onClose?.(why)
   }
@@ -449,6 +450,7 @@ export function createGuide({ renderer, getRecords, onClose }) {
   function jump(to) {
     if (!st.open || st.t < 0.98 || st.flip || to === st.spread || to < 0 || to >= NS) return
     st.flip = { dirn: Math.sign(to - st.spread), from: st.spread, to, p: 0, queue: 0 }
+    sfx('page'); setHover(null)
     warmAround(to)
   }
   // 點書頁：打到哪一頁、換成畫布像素，看是不是點到目錄的一行、或「回到目錄」
@@ -463,10 +465,29 @@ export function createGuide({ renderer, getRecords, onClose }) {
     const x = hit.uv.x * CW, y = (1 - hit.uv.y) * CH
     if (st.spread === 0 && hit.object === rightPage) {
       const i = Math.round((y - TOC_TOP + 12) / tocStep())
-      if (i >= 0 && i < BIRDS.length && x > 80 && x < CW - 50 && Math.abs(y - (TOC_TOP + i * tocStep()) + 12) < tocStep() / 2 + 2) return { to: i + 1 }
+      if (i >= 0 && i < BIRDS.length && x > 80 && x < CW - 50 && Math.abs(y - (TOC_TOP + i * tocStep()) + 12) < tocStep() / 2 + 2) {
+        const yc = TOC_TOP + i * tocStep() - 12
+        return { to: i + 1, key: 'row' + i, page: rightPage, box: [76, yc - tocStep() / 2 + 1, CW - 56, yc + tocStep() / 2 - 1] }
+      }
     }
-    if (st.spread > 0 && hit.object === leftPage && x > BACK.x0 && x < BACK.x1 && y > BACK.y0 && y < BACK.y1) return { to: 0 }
+    if (st.spread > 0 && hit.object === leftPage && x > BACK.x0 && x < BACK.x1 && y > BACK.y0 && y < BACK.y1) return { to: 0, key: 'back', page: leftPage, box: [BACK.x0 + 20, BACK.y0 + 6, BACK.x1, BACK.y1 - 4] }
     return null
+  }
+  // 滑過／按下的反白（按鈕手感）：一片半透明的綠色方塊疊在那一行（或「回到目錄」）上面，按下去變深、縮一點
+  const hl = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x5b6e3c, transparent: true, opacity: 0, depthWrite: false }))
+  hl.visible = false; hl.renderOrder = 3
+  let hover = null, pressed = false
+  function setHover(pk) {
+    const key = pk?.key ?? null
+    if (key !== (hover?.key ?? null) && key) sfx('hover')
+    hover = pk
+    if (!pk) { hl.visible = false; return }
+    const [x0, y0, x1, y1] = pk.box   // 畫布像素 → 頁面座標（頁面 x 0～PW、y -PH/2～PH/2）
+    pk.page.add(hl)
+    hl.position.set((x0 + x1) / 2 / CW * PW, (0.5 - (y0 + y1) / 2 / CH) * PH, 0.0015)
+    hl.scale.set((x1 - x0) / CW * PW * (pressed ? 0.985 : 1), (y1 - y0) / CH * PH * (pressed ? 0.92 : 1), 1)
+    hl.material.opacity = pressed ? 0.28 : 0.16
+    hl.visible = true
   }
   addEventListener('keydown', (e) => {
     if (!st.open) return
@@ -478,9 +499,17 @@ export function createGuide({ renderer, getRecords, onClose }) {
   renderer.domElement.addEventListener('click', (e) => {
     if (!st.open) return
     const pk = pagePick(e)
-    if (pk) jump(pk.to); else turn(e.clientX > innerWidth / 2 ? 1 : -1)
+    pressed = false; setHover(null)
+    if (pk) { sfx('click'); jump(pk.to) } else turn(e.clientX > innerWidth / 2 ? 1 : -1)
   })
-  renderer.domElement.addEventListener('mousemove', (e) => { if (st.open) renderer.domElement.style.cursor = pagePick(e) ? 'pointer' : '' })
+  renderer.domElement.addEventListener('mousemove', (e) => {
+    if (!st.open) return
+    const pk = pagePick(e)
+    renderer.domElement.style.cursor = pk ? 'pointer' : ''
+    setHover(pk)
+  })
+  renderer.domElement.addEventListener('mousedown', (e) => { if (st.open && hover) { pressed = true; setHover(hover) } })
+  addEventListener('mouseup', () => { if (pressed) { pressed = false; if (hover) setHover(hover) } })
   let wheelT = 0
   addEventListener('wheel', (e) => { if (!st.open || performance.now() - wheelT < 350 || Math.abs(e.deltaY) < 4) return; wheelT = performance.now(); turn(e.deltaY > 0 ? 1 : -1) })
 
