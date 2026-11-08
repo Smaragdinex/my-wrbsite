@@ -358,6 +358,15 @@ function fixWinding(g) {
     if (fx * nx + fy * ny + fz * nz < 0) { a[i + 1] = i2; a[i + 2] = i1 }
   }
   ix.needsUpdate = true
+  // 有些頂點的法線本身就是反的（約 1.5%）：打光時那一小塊亮暗顛倒，胸口出現亮白鋸齒。
+  // 用轉好的面重算一次法線，只換掉跟原本方向相反的那些頂點（其他保留原本平滑的法線）
+  const keep = n.clone()
+  g.computeVertexNormals()
+  const nn = g.attributes.normal
+  for (let i = 0; i < nn.count; i++) {
+    if (keep.getX(i) * nn.getX(i) + keep.getY(i) * nn.getY(i) + keep.getZ(i) * nn.getZ(i) >= 0) nn.setXYZ(i, keep.getX(i), keep.getY(i), keep.getZ(i))
+  }
+  nn.needsUpdate = true
 }
 // 版本號跟著 index.html 的 ?v= 走，模型檔才不會用到快取的舊版
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
