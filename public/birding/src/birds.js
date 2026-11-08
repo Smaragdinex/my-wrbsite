@@ -934,15 +934,43 @@ function perchGroup(n, gap, start, mk) {
 // 地上兩隻：各走各的，選目的地和走的路線都會避開另一隻
 function groundGroup(n, gap, mk) {
   const birds = []
+  let HA = gap * 0.5, HB = gap * 0.35, measured = false   // 身體橢圓的半長、半寬（下面第一次更新時從模型量）
   const near = (x, z, me) => birds.some((b) => {
-    const w = b.walker
+    const w = b.walker, G = Math.max(gap, 2 * HA)   // 挑目的地：至少隔一個身長，走到了才不會頭尾相疊
     if (w.p === me) return false
-    return Math.hypot(x - w.p.x, z - w.p.y) < gap || (w.goal && Math.hypot(x - w.goal.x, z - w.goal.y) < gap)
+    return Math.hypot(x - w.p.x, z - w.p.y) < G || (w.goal && Math.hypot(x - w.goal.x, z - w.goal.y) < G)
   })
   const avoid = (x, z, p) => { for (let k = 1; k <= 8; k++) if (near(lerp(p.x, x, k / 8), lerp(p.y, z, k / 8), p)) return true; return false }
   for (let i = 0; i < n; i++) birds.push(mk(avoid))
   birds.forEach((b, i) => b.walker.p.set((i - (n - 1) / 2) * gap * 1.5, (i % 2) * 0.2))
-  return group(birds, () => birds.reduce((a, b) => a.add(b.focus), V()).divideScalar(n), true)
+  const g = group(birds, () => birds.reduce((a, b) => a.add(b.focus), V()).divideScalar(n), true)
+  // 走路途中也不能穿過彼此（2026-11-08 使用者回報斑鳩、麻雀互相穿透）：只在挑目的地時避開不夠——兩隻同時走、轉彎會畫弧線。
+  // 身體當成沿著頭的方向的橢圓（斑鳩頭到尾 0.74 公尺、寬 0.24）：兩隻中心連線方向上，各自的橢圓半徑加起來就是最近能靠多近。
+  // 每格先把靠太近的兩隻往兩邊推開；正在往對方走的那隻放棄目的地，等下一個動作再挑。尺寸第一次更新時從模型量
+  const rad = (h, ux, uz) => { const c = Math.sin(h) * ux + Math.cos(h) * uz, s = Math.cos(h) * ux - Math.sin(h) * uz; return 1 / Math.hypot(c / HA, s / HB) }
+  const upd = g.update
+  g.update = (t, dt) => {
+    if (!measured && birds[0].obj.parent) {
+      measured = true
+      const o = birds[0].obj; o.updateWorldMatrix(true, true)
+      const inv = new THREE.Matrix4().copy(o.matrixWorld).invert(), bx = new THREE.Box3()
+      o.traverse((m) => { if (m.isSkinnedMesh) bx.union(new THREE.Box3().setFromObject(m, true).applyMatrix4(inv)) })
+      if (!bx.isEmpty()) { const s = bx.getSize(V()); HA = s.z * 0.45; HB = Math.min(s.x, s.z) * 0.45 }   // 尾巴末端很細：長度打九折
+    }
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const a = birds[i].walker, b = birds[j].walker
+      const dx = b.p.x - a.p.x, dz = b.p.y - a.p.y, d = Math.hypot(dx, dz)
+      if (d > 2 * HA) continue
+      const ux = d > 1e-4 ? dx / d : 1, uz = d > 1e-4 ? dz / d : 0
+      const minD = rad(a.h, ux, uz) + rad(b.h, ux, uz)
+      if (d >= minD) continue
+      const push = (minD - d) / 2
+      a.p.x -= ux * push; a.p.y -= uz * push; b.p.x += ux * push; b.p.y += uz * push
+      for (const [w, s] of [[a, 1], [b, -1]]) if (w.goal && (Math.sin(w.h) * ux + Math.cos(w.h) * uz) * s > 0.3) w.goal = null
+    }
+    upd(t, dt)
+  }
+  return g
 }
 // lead：手機畫面窄、整群放不下時，鏡頭只跟著第一隻（地上走的一群、三隻以上停在枝上的）
 function group(birds, center, lead) {
