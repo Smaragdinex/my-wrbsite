@@ -866,7 +866,7 @@ function buildInterior(lib, avoid = []) {
     }
     const vcol = (geo, k = 1) => { const c = new Float32Array(geo.attributes.position.count * 3).fill(k); geo.setAttribute('color', new THREE.BufferAttribute(c, 3)); return geo }
     // 雀榕的樣板（高 1、寬約 1.1；擺放時乘樹高）：樹幹＋5 根主枝、樹冠卡片、實心的深綠芯、榕果
-    const r8 = mulberry32(53), branches = [], fruits = [], crown = []
+    const r8 = mulberry32(53), branches = [], fruits = [], crown = [], limbs = [], roots = []
     // 榕果（2026-11-09 寫實化）：小小一顆（直徑約 1 公分多）、一大串擠在枝上；顏色從白綠、粉紅熟到紫紅、深紫，表面有淡色小斑點（用頂點色）
     const FIGC = [[0.82, 0.74, 0.66], [0.92, 0.55, 0.62], [0.86, 0.36, 0.5], [0.6, 0.16, 0.34], [0.36, 0.08, 0.2]]
     const figBall = (rad, x0, y0, z0) => {
@@ -888,7 +888,7 @@ function buildInterior(lib, avoid = []) {
     for (let i = 0; i < 6; i++) {
       const a = i / 6 * TAU + r8() * 0.5, el = 0.45 + r8() * 0.4, len = 0.34 + r8() * 0.12
       const a0 = V(0, 0.4 + r8() * 0.08, 0), dir = V(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)), b = a0.clone().addScaledVector(dir, len)
-      branches.push(limb(a0, dir, len, 0.03, 0.016))
+      branches.push(limb(a0, dir, len, 0.03, 0.016)); limbs.push({ a0, dir, len })
       for (let k = 0; k < 120; k++) {   // 榕果：沿著主枝一串串（雀榕的果長在老枝上）
         const t = 0.1 + r8() * 0.9, p = a0.clone().addScaledVector(dir, len * t), side = V(r8() - 0.5, r8() - 0.5, r8() - 0.5).normalize().multiplyScalar(0.022 + 0.008 * (1 - t))
         fruits.push(figBall(0.0055 + r8() * 0.0025, p.x + side.x, p.y + side.y, p.z + side.z))
@@ -900,11 +900,24 @@ function buildInterior(lib, avoid = []) {
       }
     }
     for (let k = 0; k < 60; k++) { const y = 0.1 + r8() * 0.32, a = r8() * TAU; fruits.push(figBall(0.006, Math.cos(a) * 0.062, y, Math.sin(a) * 0.062)) }   // 樹幹上也有
-    // 氣根：主枝下面垂下來的細根（有的垂到地、有的半空），樹幹外面再纏幾條細的（絞殺榕把宿主包起來的樣子）
-    for (let i = 0; i < 16; i++) {
-      const a = r8() * TAU, rr = 0.08 + r8() * 0.22, y0 = 0.36 + r8() * 0.12, y1 = r8() < 0.45 ? 0 : y0 * (0.3 + r8() * 0.5)
-      const pts = []; for (let k = 0; k <= 5; k++) { const t = k / 5; pts.push(V(Math.cos(a) * rr * (1 - 0.15 * t) + Math.sin(t * 5 + i) * 0.006, y0 + (y1 - y0) * t, Math.sin(a) * rr * (1 - 0.15 * t))) }
-      trunkG.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 6, 0.0025 + r8() * 0.002, 4))
+    // 氣根（2026-11-09 第二版：第一版太粗、筆直、一樣粗、整排插到地上，像竹竿）：
+    // 從主枝下面一束一束垂下來，細、越往下越細、微微彎；大多掛在半空，少數幾條垂到地面；顏色偏紅褐（新的氣根）
+    const taper = (pts, r0, r1, seg = 12) => {
+      const curve = new THREE.CatmullRomCurve3(pts), tg = new THREE.TubeGeometry(curve, seg, r0, 4), p = tg.attributes.position, c = new THREE.Vector3(), v = new THREE.Vector3()
+      for (let k = 0; k < p.count; k++) { const i = Math.floor(k / 5), t = i / seg; curve.getPointAt(Math.min(1, t), c); v.fromBufferAttribute(p, k).sub(c).multiplyScalar(1 + (r1 / r0 - 1) * t).add(c); p.setXYZ(k, v.x, v.y, v.z) }
+      tg.computeVertexNormals(); return tg
+    }
+    for (const L of limbs) {
+      const nb = 1 + Math.floor(r8() * 2)
+      for (let b = 0; b < nb; b++) {
+        const anc = L.a0.clone().addScaledVector(L.dir, L.len * (0.35 + r8() * 0.5)), n = 3 + Math.floor(r8() * 4)
+        for (let k = 0; k < n; k++) {
+          const ground = r8() < 0.12, len = ground ? anc.y : anc.y * (0.2 + r8() * 0.45)
+          const ox = (r8() - 0.5) * 0.03, oz = (r8() - 0.5) * 0.03, sw = (r8() - 0.5) * 0.04, ph = r8() * 6, pts = []
+          for (let j = 0; j <= 6; j++) { const t = j / 6; pts.push(V(anc.x + ox + Math.sin(t * 3 + ph) * 0.006 + sw * t * t, anc.y - 0.012 - len * t, anc.z + oz + Math.cos(t * 2.4 + ph) * 0.006 + sw * 0.5 * t * t)) }
+          roots.push(taper(pts, 0.0017 + r8() * 0.0008, ground ? 0.0012 : 0.00035))
+        }
+      }
     }
     for (let i = 0; i < 6; i++) {
       const a = r8() * TAU, pts = []
@@ -919,7 +932,8 @@ function buildInterior(lib, avoid = []) {
         const cs = 0.75 + r8() * 0.5; crown.push(new THREE.PlaneGeometry(0.24 * cs, 0.2 * cs).rotateX(-0.6 - r8() * 0.8).rotateY(az + Math.PI / 2).translate(c.x, c.y, c.z).toNonIndexed())
       }
     }
-    const figTrunk = vcol(mergeGeometries([...trunkG.map((q) => q.toNonIndexed()), ...branches.map((q) => q.toNonIndexed())]))
+    const colG = (q, r, gg, bb) => { q = q.index ? q.toNonIndexed() : q; const c = new Float32Array(q.attributes.position.count * 3); for (let i = 0; i < c.length; i += 3) { c[i] = r; c[i + 1] = gg; c[i + 2] = bb } q.setAttribute('color', new THREE.BufferAttribute(c, 3)); return q }
+    const figTrunk = mergeGeometries([...trunkG.map((q) => colG(q, 1, 1, 1)), ...branches.map((q) => colG(q, 1, 1, 1)), ...roots.map((q) => colG(q, 0.78, 0.55, 0.42))])   // 氣根偏紅褐
     const figFruit = mergeGeometries(fruits)
     const figCrown = (() => { const gg = mergeGeometries(crown), pp = gg.attributes.position, nn = gg.attributes.normal, cc = new Float32Array(pp.count * 3)
       for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i), l = Math.hypot(x, z) || 1; nn.setXYZ(i, x / l * 0.5, 0.85, z / l * 0.5); const k = (0.75 + 0.25 * Math.min(1, l / 0.5)) * (0.85 + 0.25 * Math.min(1, Math.max(0, y - 0.6) / 0.4)); cc[i * 3] = cc[i * 3 + 1] = cc[i * 3 + 2] = k }
