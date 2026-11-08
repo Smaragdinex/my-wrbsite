@@ -13,7 +13,7 @@ import { bladeMesh } from './flora.js'
 import { addWind } from './wind.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
 import { mulberry32, fbm2 } from './noise.js'
-import { dayLight, mistLevel } from './structures.js'
+import { dayLight, mistLevel, wetify } from './structures.js'
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
@@ -190,7 +190,7 @@ function buildInterior(lib, avoid = []) {
       for (let i = 0; i < 5000; i++) { const l = 150 + Math.random() * 105; x.fillStyle = `rgba(${l},${l},${l},0.5)`; x.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 1 + Math.random() * 3) }
     })
     detail.wrapS = detail.wrapT = THREE.RepeatWrapping
-    const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.95 }))
+    const ground = new THREE.Mesh(geo, wetify(new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.95 }), { dark: 0.32, rough: 0.45 }))
     ground.receiveShadow = true; ground.userData.terrain = true; g.add(ground)   // terrain：拍照算遮擋時用高度表，不逐個三角形打射線（scoring.js）
   }
   // 水池＋溪：自己寫的水 shader（溪和池共用）。

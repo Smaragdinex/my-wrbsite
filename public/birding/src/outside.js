@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { TAU, domeRho, inAlpine, alpineHeight, terrainHeight, smoothstep, lerp } from './layout.js'
 import { fbm3, mulberry32 } from './noise.js'
-import { dayLight, duskLight, weatherU } from './structures.js'
+import { dayLight, duskLight, weatherU, wetify } from './structures.js'
 import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { lodRegister } from './lod.js'
@@ -66,7 +66,7 @@ export function buildOutside() {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
     geo.setIndex(idx); geo.computeVertexNormals()
-    const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: T.grassGroundTex(), vertexColors: true, roughness: 1 }))
+    const ground = new THREE.Mesh(geo, wetify(new THREE.MeshStandardMaterial({ map: T.grassGroundTex(), vertexColors: true, roughness: 1 }), { dark: 0.3, rough: 0.55 }))
     ground.receiveShadow = true; ground.userData.terrain = true
     g.add(ground)
   }
@@ -204,7 +204,9 @@ export function buildOutside() {
       for (let i = 0; i <= N; i++) {
         const a = (i / N) * TAU, cx = Math.cos(a), sz = Math.sin(a)
         const n = fbm3(cx * 2.2 + seed, seed * 0.3, sz * 2.2, 5)
-        const ridge = H * (0.25 + 0.75 * Math.max(0, n * 0.9 + 0.45)) * (0.55 + 0.45 * Math.abs(fbm3(cx * 0.7, seed, sz * 0.7, 2) * 2))
+        // 日出、日落的方向（world.js 的太陽在地平線時往 (∓0.8, 0, 0.35)）壓成山谷：太陽從谷口升起、落下，在山上拍得到
+        const valley = 1 - 0.8 * smoothstep(0.82, 0.97, Math.max(...[[-0.8, 0.35], [0.8, 0.35]].map(([sx, szz]) => (cx * sx + sz * szz) / Math.hypot(sx, szz))))
+        const ridge = H * valley * (0.25 + 0.75 * Math.max(0, n * 0.9 + 0.45)) * (0.55 + 0.45 * Math.abs(fbm3(cx * 0.7, seed, sz * 0.7, 2) * 2))
         P.push(cx * R, -20, sz * R, cx * R, ridge, sz * R)
         HZ.push(haze + 0.22, haze)   // 山腳在地面的霧氣裡更淡
       }

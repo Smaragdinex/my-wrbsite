@@ -3,7 +3,7 @@
 //   一開始顯示最後拍的那張；◀ ▶（方向鍵、A/D、滾輪）上一張、下一張
 //   縮小鍵（Q、−）：單張 → 4 張 → 9 張 → 36 張的索引畫面，方向鍵移動選取框，SET（Enter）回到單張
 //   放大鍵（E、＋）：單張時放大 2×、4×、8×（從鳥的位置開始），方向鍵移動看哪裡；索引畫面時是回到少一點張數
-//   INFO（I）：資訊切換——只有照片 → 拍攝資料（張數、光圈快門 ISO、焦距、時間）→ 詳細（鳥種、分數、估價、評語）
+//   INFO（I）：資訊開關——只有照片 ↔ 拍攝資料（張數、光圈、快門、ISO、焦距、曝光補償、時間）；分數和估價要到相機行老闆那裡才知道
 //   刪除鍵（Delete、X）：螢幕上跳出確認，預設停在「取消」；賣掉的照片有鎖、不能刪
 //   Tab、Esc 關掉
 // 照片照時間排：最舊的在第一張（跟相機的檔案編號一樣）。
@@ -72,11 +72,6 @@ export function createPlayback({ photos, onDelete, onClose }) {
       o += `<div class="cp-top"><span>▶</span><span>${st.i + 1}/${n}</span>${p.sold ? '<span>🔒</span>' : ''}${G === 1 && ZOOMS[st.zoom] > 1 ? `<span>×${ZOOMS[st.zoom]}</span>` : ''}</div>`
       if (G === 1 && p.exif) o += `<div class="cp-bot"><span>f/${p.exif.N}</span><span>${shutterStr(p.exif.t)}</span><span>ISO ${p.exif.iso}</span><span>${p.focal}mm</span><span>${p.exif.over > 0 ? '+' : ''}${p.exif.over ?? 0}EV</span><span class="r">${when(p.time)}</span></div>`
     }
-    if (st.info >= 2 && G === 1) {
-      const name = p.subject ? birdName(p.subject.id, p.subject.name) : tr('沒拍到鳥')
-      o += `<div class="cp-detail"><b>${esc(name)}</b><span>${tr('{n} 分', { n: p.score })}</span><span>${p.sold ? tr('已售出 ${p}', { p: p.soldFor }) : tr('估價 ${p}', { p: p.price })}</span>
-        <p>${esc(p.body ?? '')}・${esc(p.lens ?? '')}</p><p>${esc((p.notes ?? []).join(tr('、')) || tr('拍得不錯'))}</p>${p.judge ? `<p class="judge">「${esc(p.judge)}」</p>` : ''}</div>`
-    }
     if (st.confirm) o += `<div class="cp-confirm"><p>${tr('刪除這張')}？</p><div><span class="${st.confirm.yes ? 'on' : ''}" data-c="yes">${tr('刪除')}</span><span class="${st.confirm.yes ? '' : 'on'}" data-c="no">${tr('取消')}</span></div></div>`
     if (st.msg) o += `<div class="cp-msg">${esc(st.msg)}</div>`
     osd.innerHTML = o
@@ -93,7 +88,7 @@ export function createPlayback({ photos, onDelete, onClose }) {
       } else if (k === 'del' || k === 'back') st.confirm = null
       return render()
     }
-    if (k === 'info') st.info = (st.info + 1) % 3
+    if (k === 'info') st.info = (st.info + 1) % 2   // 只有開／關拍攝資料（2026-11-08 使用者：不顯示估價，跟真的相機一樣只看設定值）
     else if (!n) return render()
     else if (k === 'play') { st.grid = 0; st.zoom = 0 }
     else if (k === 'del') { if (cur().sold) flash(tr('已售出的照片不能刪除')); else st.confirm = { yes: false } }

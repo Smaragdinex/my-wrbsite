@@ -8,6 +8,7 @@ import { createShadowCache } from './shadowcache.js'
 import { createCoast } from './coast.js'
 import { buildOutside } from './outside.js'
 import { createWeather } from './weather.js'
+import { wetify } from './structures.js'
 import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants } from './plants.js'
@@ -108,6 +109,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     m.map = rep(src.map); m.normalMap = rep(src.normalMap); m.normalScale.set(1.4, 1.4)
     m.bumpMap = null
     m.color.setScalar(1.35)
+    wetify(m, { dark: 0.4, rough: 0.35 })   // 下雨岩壁變濕變亮
     m.needsUpdate = true
   }
   // 山頂雲霧

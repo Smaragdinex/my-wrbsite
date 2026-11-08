@@ -36,6 +36,7 @@ export function createWeather({ scene, camera, sun, hemi, renderer, time }) {
     weatherU.gloom.value = Math.min(1, cl * 0.75 + st.storm * 0.25)
     weatherU.flash.value = f
     weatherU.haze.value = cl * 0.5 + r * 0.4
+    weatherU.rain.value = r
   }
 
   /* ---------- 雨絲 ---------- */
@@ -74,6 +75,8 @@ export function createWeather({ scene, camera, sun, hemi, renderer, time }) {
   })
   const rain = new THREE.LineSegments(rg, rainM)
   rain.frustumCulled = false; rain.renderOrder = 7; rain.visible = false
+  // 第 4 層：畫面和照片看得到（照片鏡頭複製主鏡頭的圖層），水池倒影的鏡頭只畫第 0 層——以前雨絲被倒映到湖面上，看起來雨往上飛
+  rain.layers.set(4); camera.layers.enable(4)
   scene.add(rain)
 
   /* ---------- 閃電 ---------- */
@@ -120,6 +123,8 @@ export function createWeather({ scene, camera, sun, hemi, renderer, time }) {
     }
     st.w += clamp(st.target - st.w, -dt / 45, dt / 45)   // 一個等級大概 30～45 秒變過去
     st.cloud = ss(0.08, 0.55, st.w); st.rain = ss(0.5, 0.72, st.w); st.storm = ss(0.82, 0.98, st.w)
+    // 地面濕：下雨時一兩分鐘就濕透，雨停後三分鐘左右慢慢乾
+    weatherU.wet.value = clamp(weatherU.wet.value + (st.rain > 0.2 ? dt / 70 * st.rain : -dt / 180), 0, 1)
     // 閃電
     if (st.storm > 0.3 && (st.nextBolt -= dt) <= 0) { lightning(); st.nextBolt = rnd(7, 22) / st.storm }
     if (strike) {
@@ -145,7 +150,7 @@ export function createWeather({ scene, camera, sun, hemi, renderer, time }) {
   }
   function setName(n) { st.name = n; st.target = WEATHER[n] ?? 0 }
   // set('rain')：慢慢變過去；set('rain', true)：馬上變
-  function set(n, now = false) { setName(n); if (now) st.w = st.target; st.seg = rnd(180, 300) }
+  function set(n, now = false) { setName(n); if (now) { st.w = st.target; weatherU.wet.value = st.target >= 0.7 ? 1 : 0 } st.seg = rnd(180, 300) }
   return {
     tick, set, apply,
     auto(on = true) { st.auto = on },

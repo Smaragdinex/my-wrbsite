@@ -18,7 +18,21 @@ export const dayLight = { value: 1 }, duskLight = { value: 0 }
 // 霧氣量：白天 0；晚上 0.75、清晨（6 點前後）最濃 1，9 點前散掉。world.setTime 改值，霧、山頂雲、山區的霧團照它加濃
 export const mistLevel = { value: 0 }
 // 天氣（weather.js 改值）：雲量 0～1、陰暗 0～1、閃電亮光 0～1、遠處的雨霧 0～1
-export const weatherU = { cloud: { value: 0 }, gloom: { value: 0 }, flash: { value: 0 }, haze: { value: 0 } }
+export const weatherU = { cloud: { value: 0 }, gloom: { value: 0 }, flash: { value: 0 }, haze: { value: 0 }, rain: { value: 0 }, wet: { value: 0 } }   // rain 正在下多大、wet 地面濕到什麼程度（雨停後慢慢乾）
+// 下雨地面變濕（2026-11-08）：顏色變深、表面變亮滑（粗糙度降低，會反天光）。地面、山區地形、圍牆外草地、雲霧山的岩壁都套
+export function wetify(mat, { dark = 0.36, rough = 0.32 } = {}) {
+  const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey?.bind(mat)
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r)
+    sh.uniforms.uWet = weatherU.wet
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uWet;')
+      .replace('#include <color_fragment>', `#include <color_fragment>\n diffuseColor.rgb *= 1.0 - ${dark.toFixed(2)} * uWet;`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, ${rough.toFixed(2)}, uWet * 0.85);`)
+  }
+  mat.customProgramCacheKey = () => (prevKey ? prevKey() : '') + '|wet'
+  return mat
+}
 export function buildSky(scene) {
   const geo = new THREE.SphereGeometry(900, 32, 16)
   // 日夜：uDay 白天 1、晚上 0；uDusk 黃昏／清晨那一段地平線變橘；晚上有星星和月亮（world.setTime 在改）
@@ -44,7 +58,13 @@ export function buildSky(scene) {
         vec3 gnd = hor * 0.6;
         vec3 c = h > 0.0 ? mix(hor, top, pow(h, 0.55)) : mix(hor, gnd, -h*5.0);
         float s = max(dot(d, sunDir), 0.0);
-        c += vec3(1.0,0.9,0.7) * (pow(s, 600.0) * 4.0 + pow(s, 12.0) * 0.25) * smoothstep(-0.06, 0.04, sunDir.y) * (1.0 - uGloom);
+        // 太陽（2026-11-08 加大）：看得到的日輪（半徑約 0.6 度、邊緣暗一點），日出日落時變橘紅、光暈變大；
+        // 在地平線下就看不到日輪（光暈留一點，天邊還有餘暉）。雲（下面）會蓋住它
+        float sunUp = smoothstep(-0.02, 0.012, d.y);
+        vec3 sunCol = mix(vec3(1.0, 0.42, 0.12), vec3(1.0, 0.96, 0.88), smoothstep(0.02, 0.3, sunDir.y));
+        float disk = smoothstep(0.99989, 0.999945, s) * (0.75 + 0.25 * smoothstep(0.99989, 1.0, s));
+        float glow = pow(s, 900.0) * 2.5 + pow(s, 60.0) * (0.25 + 0.6 * uDusk) + pow(s, 8.0) * (0.08 + 0.25 * uDusk);
+        c += sunCol * (disk * 26.0 * sunUp + glow) * smoothstep(-0.12, 0.0, sunDir.y) * (1.0 - 0.95 * uGloom);
         // 陰天：整片天空變灰（亮度照原本的天色），太陽被雲遮住
         c = mix(c, vec3(dot(c, vec3(0.3, 0.5, 0.2))) * vec3(0.92, 0.95, 1.0) * (1.0 - 0.35 * uGloom), uGloom * 0.85);
         // 雲（2026-11-08 拿掉溫室後加）：天空投影到一片高空的平面上，fbm 雜訊當雲量，慢慢往東飄；
@@ -328,7 +348,7 @@ export function buildGround(scene) {
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
   g.computeVertexNormals()
-  const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: T.grassGroundTex(), vertexColors: true, roughness: 1 }))
+  const ground = new THREE.Mesh(g, wetify(new THREE.MeshStandardMaterial({ map: T.grassGroundTex(), vertexColors: true, roughness: 1 }), { dark: 0.3, rough: 0.55 }))
   ground.receiveShadow = true
   ground.userData.terrain = true   // 拍照算遮擋時用高度表（scoring.js）：16 萬個三角形逐個打射線，一張照片要好幾秒
   scene.add(ground)
@@ -347,6 +367,7 @@ export function buildGround(scene) {
   const pathMat = new THREE.MeshStandardMaterial({ roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
   pathMat.onBeforeCompile = (sh) => {
     sh.uniforms.uDist = { value: distTex }
+    sh.uniforms.uWet = weatherU.wet
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWp;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;')
@@ -373,7 +394,8 @@ export function buildGround(scene) {
           return vec3(sqrt(md), ed, h22(i + mg).x);
         }
         float pathEdge;   // 到步道邊的距離（公尺，負的在步道裡）
-        float stoneH;     // 石板高度（給法線用）`)
+        float stoneH;     // 石板高度（給法線用）
+        uniform float uWet; float wetPud;   // 下雨：整片變濕＋一灘灘積水`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           vec2 gp = (vWp.xz - vec2(${G.x0.toFixed(1)}, ${G.z0.toFixed(1)})) / ${G.cell.toFixed(2)};
@@ -404,8 +426,15 @@ export function buildGround(scene) {
           // 靠邊髒一點：泥土、一點青苔
           float dirt = smoothstep(-1.0, -0.2, pathEdge) * (0.5 + 0.5 * snoise(vWp.xz * 2.3));
           col = mix(col, col * vec3(0.78, 0.8, 0.66), clamp(dirt, 0.0, 1.0) * 0.55);
+          // 濕：整片變深；積水（低頻雜訊的窪處）更深、表面平（不畫石縫起伏）、很亮滑會倒映天空
+          wetPud = smoothstep(0.32, 0.55, snoise(vWp.xz * 0.21) * 0.7 + snoise(vWp.xz * 0.83 + 3.0) * 0.3) * uWet;
+          col *= (1.0 - 0.38 * uWet) * (1.0 - 0.3 * wetPud);
+          stoneH *= 1.0 - wetPud;
           diffuseColor.rgb = col;
         }`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.3, uWet * 0.8);
+        roughnessFactor = mix(roughnessFactor, 0.03, wetPud);`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         {
           // 石板凸、石縫凹：用高度的螢幕空間微分去歪法線（three 的 perturbNormalArb 同一套算法）
@@ -417,7 +446,7 @@ export function buildGround(scene) {
           normal = normalize(abs(det) * normal - grad);
         }`)
   }
-  pathMat.customProgramCacheKey = () => 'flagstonePath'
+  pathMat.customProgramCacheKey = () => 'flagstonePath-wet'
   const geos = []
   PATHS.forEach((p, pi) => {
     const pts = p.points
@@ -551,7 +580,7 @@ export function buildWater(scene) {
   const poolMat = new THREE.MeshStandardMaterial({ color: 0x1b4644, roughness: 0.05, metalness: 0.0, transparent: true, opacity: 0.93, envMapIntensity: 1.4 })
   poolMat.onBeforeCompile = (sh) => {
     sh.uniforms.uWT = waterTime; sh.uniforms.uRip = ripVal; sh.uniforms.uDayL = dayLight
-    sh.uniforms.uRefl = uRefl; sh.uniforms.uReflMat = uReflMat; sh.uniforms.uReflOn = uReflOn
+    sh.uniforms.uRefl = uRefl; sh.uniforms.uReflMat = uReflMat; sh.uniforms.uReflOn = uReflOn; sh.uniforms.uRainW = weatherU.rain
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWp;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;')
@@ -560,7 +589,7 @@ export function buildWater(scene) {
         varying vec3 vWp;
         uniform float uWT; uniform float uDayL;
         uniform vec4 uRip[${RIPPLES}];
-        uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
+        uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn; uniform float uRainW;
         ${GLSL_NOISE}
         const vec2 FALL = vec2(${FX.toFixed(2)}, ${FZ.toFixed(2)});
         float foamLace(vec2 p) {
@@ -651,9 +680,15 @@ export function buildWater(scene) {
           vec4 rc = uReflMat * vec4(vWp, 1.0);
           vec2 ruv = rc.xy / rc.w + ws * 0.1;
           vec3 refl = texture2D(uRefl, ruv).rgb;
+          // 下雨：水面被雨打得坑坑巴巴，倒影散開（四點模糊＋一點亂抖）、變淡，不再像鏡子
+          if (uRainW > 0.01) {
+            vec2 j = vec2(snoise(vWp.xz * 6.0 + uWT * 3.0), snoise(vWp.xz * 6.0 - uWT * 2.7)) * 0.012 * uRainW;
+            float o = 0.008 * uRainW;
+            refl = (texture2D(uRefl, ruv + j + vec2(o, 0.0)).rgb + texture2D(uRefl, ruv + j - vec2(o, 0.0)).rgb + texture2D(uRefl, ruv + j + vec2(0.0, o)).rgb + texture2D(uRefl, ruv + j - vec2(0.0, o)).rgb) * 0.25;
+          }
           // 水面倒影比實景暗一點、帶水的顏色（不是鏡子）
           refl = mix(refl, refl * vec3(0.75, 0.88, 0.85), 0.5) * 0.85;
-          outgoingLight = mix(outgoingLight, refl, clamp(fres * 1.1, 0.0, 0.8));
+          outgoingLight = mix(outgoingLight, refl, clamp(fres * 1.1, 0.0, 0.8) * (1.0 - 0.45 * uRainW));
           diffuseColor.a = mix(diffuseColor.a, 1.0, fres);
         }
         #include <opaque_fragment>`)
