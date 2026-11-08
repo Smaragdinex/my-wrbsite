@@ -39,6 +39,8 @@ export const ESCAPE = {
   yellowtit: { r: 6, fly: { speed: 7, hz: 13, style: 'bound', k: 0.65 } },
   niltava: { r: 7, fly: { speed: 8, hz: 11, style: 'flap', k: 0.8 } },
   sibia: { r: 7, fly: { speed: 8, hz: 9, style: 'bound', k: 1.0 } },
+  goshawk: { r: 12, fly: { speed: 11, hz: 5, style: 'glide', k: 0.85 } },   // 2026-11-08 猛禽：翼展約 85 公分、拍幾下就滑翔
+  woodowl: { r: 8, fly: { speed: 7, hz: 3.5, style: 'glide', k: 0.95 } },   // 褐林鴞翼展約 1 公尺，飛得慢、很安靜
   bushrobin: { r: 4, fly: { speed: 7, hz: 13, style: 'flap', k: 0.47 } },   // 不太怕人
   rosefinch: { r: 6, fly: { speed: 8, hz: 12, style: 'bound', k: 0.49 } },
   laughingthrush: { r: 3.5, run: 5 },                                   // 出了名的親人，靠太近才跑開

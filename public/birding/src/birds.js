@@ -282,6 +282,7 @@ const BUILD = {
   kingfisher, egret, moorhen, sparrow, waterhen, bluemagpie, blackbulbul, babbler, mikado,
   spoonbill, thrush, pheasant, oriole,
   flamecrest, bushrobin, rosefinch, yellowtit, laughingthrush, niltava, yuhina, sibia,
+  goshawk, woodowl,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -302,7 +303,7 @@ export async function loadAnimalModels(extra = [], onProgress) {
   await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig'].map(load),
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
     ...extra.map((n) => load(n).catch(() => console.warn('[birds] 沒有模型', n)))])
 }
@@ -1032,6 +1033,13 @@ function niltava(env) {
 function yuhina(env) {
   return perchGroup(2, 0.35, -0.6, (blocked) => perchRigged(outer(env, -0.8), { name: 'yuhina-rig', k: 0.3, ...TRIPO, foot: 0.004, drop: 0.04, beat: 9,
     hopper: { blocked } }))
+}
+// 2026-11-08 山區猛禽：鳳頭蒼鷹（中海拔林緣的大樹上）、褐林鴞（溪谷旁的森林裡）。ChatGPT 參考圖 → Tripo → rig-distance（點位在 bird-points.json）
+function goshawk(env) {
+  return perchRigged(outer(env, -1.1), { name: 'goshawk-rig', k: 0.42, ...TRIPO, foot: 0.045, drop: 0.05, beat: 5, grip: 1.2 })
+}
+function woodowl(env) {
+  return perchRigged(outer(env, -1.0), { name: 'woodowl-rig', k: 0.46, ...TRIPO, foot: 0.05, drop: 0.04, beat: 4 })
 }
 function sibia(env) {
   return perchRigged(outer(env, -1.0), { name: 'sibia-rig', k: 0.56, ...TRIPO, foot: 0.004, drop: 0.05, beat: 7 })

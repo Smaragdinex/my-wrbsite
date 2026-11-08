@@ -301,6 +301,28 @@ const ALL = [
     ],
   },
   {
+    id: 'goshawk', spot: AM(112.97, 17.87), perch: 'branch', view: 286, dist: 3.4, camH: 3.6, lookY: 3.5,   // 2026-11-08 北坡支線旁的林緣大樹
+    name: '鳳頭蒼鷹', sci: 'Accipiter trivirgatus', where: '北坡林緣的大樹',
+    intro: '台灣最常見的森林猛禽之一，從平地公園到中海拔山區都有。後腦有一小撮短短的冠羽，喉嚨中央一條黑色縱紋，胸前是褐色縱紋、腹部是褐色橫斑，眼睛是橙黃色的。常停在大樹的枝幹上，安靜地觀察四周。',
+    facts: [
+      '飛行時尾下覆羽是蓬鬆的白色，從下面看像穿了一件白色短褲。',
+      '春天繁殖期會在空中盤旋、鼓翅炫耀，邊飛邊發出「嘿－嘿－」的叫聲。',
+      '主要吃鳥、松鼠、蜥蜴和大型昆蟲，從樹枝上衝下去突襲。',
+      '受保護的猛禽，看到牠時請保持距離、不要驚擾。',
+    ],
+  },
+  {
+    id: 'woodowl', spot: AM(135.31, -20.84), perch: 'branch', view: 204, dist: 3.4, camH: 3.6, lookY: 3.5,   // 2026-11-08 南坡溪谷旁的森林
+    name: '褐林鴞', sci: 'Strix leptogrammica', where: '溪谷旁的森林',
+    intro: '台灣中高海拔原始森林裡稀有的大型貓頭鷹。圓圓的頭沒有耳羽，栗紅色的臉盤上有兩道白色的眉斑，深褐色的大眼睛；胸腹是淡黃褐色，密布細細的橫紋。白天大多躲在濃密的樹冠裡休息，傍晚以後才出來活動。',
+    facts: [
+      '叫聲是低沉的「呼、呼－呼」，夜裡在山谷間迴盪。',
+      '羽毛邊緣很柔軟，飛起來幾乎沒有聲音，獵物很難察覺。',
+      '吃老鼠、飛鼠和其他小型動物，偶爾也抓鳥。',
+      '族群很少，需要大面積的老森林，是珍貴稀有的保育類。',
+    ],
+  },
+  {
     id: 'laughingthrush', spot: AM(150, 12.5), perch: 'ground', view: 0, dist: 2.6, camH: 1.1, lookY: 0.22,
     name: '金翼白眉', sci: 'Trochalopteron morrisonianum', where: '山頂步道',
     intro: '台灣特有種。臉上有白色眉線和白色鬍鬚紋，喉嚨栗紅色，翅膀和尾巴有一大片金黃色。牠住在高海拔，常在山頂的步道、停車場附近走來走去，一點也不怕人。',
@@ -327,6 +349,6 @@ const ALL = [
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
 const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'barbet', 'kingfisher', 'waterhen', 'moorhen', 'nightheron', 'egret', 'spoonbill',
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
-  'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch']
+  'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

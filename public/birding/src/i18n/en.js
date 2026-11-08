@@ -576,6 +576,28 @@ export const BIRDS = {
    "Excited males raise their fiery crest feathers."
   ]
  },
+ "goshawk": {
+ "name": "Crested Goshawk",
+ "where": "Big Tree at the North Slope Forest Edge",
+ "intro": "One of Taiwan's most common forest raptors, found from city parks to mid-elevation mountains. It has a short crest on the back of the head, a black stripe down the middle of the throat, brown streaks on the chest and brown bars on the belly, and orange-yellow eyes. It often perches quietly on a big branch, watching everything around it.",
+ "facts": [
+  "In flight its fluffy white undertail feathers look like a pair of white shorts from below.",
+  "In spring it soars and shows off with stiff wingbeats, calling \"hee-hee\" as it flies.",
+  "It hunts birds, squirrels, lizards and large insects, diving down from a branch to ambush them.",
+  "It is a protected raptor — keep your distance and don't disturb it."
+ ]
+},
+ "woodowl": {
+ "name": "Brown Wood Owl",
+ "where": "Forest by the Gorge",
+ "intro": "A rare large owl of Taiwan's old-growth forests at mid to high elevations. Its round head has no ear tufts; a chestnut facial disc with two white eyebrows frames big dark-brown eyes, and the buff chest and belly are covered in fine bars. By day it hides and rests in thick canopy, coming out after dusk.",
+ "facts": [
+  "Its deep \"hoo, hoo-hoo\" call echoes through the valleys at night.",
+  "Soft feather edges make its flight almost silent, so prey rarely notices it coming.",
+  "It eats rats, flying squirrels and other small animals, and sometimes birds.",
+  "It is scarce and needs large areas of old forest — a precious protected species."
+ ]
+},
  "sibia": {
   "name": "White-eared Sibia",
   "where": "Mountainside Canopy",
