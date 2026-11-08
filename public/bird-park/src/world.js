@@ -6,6 +6,7 @@ import { createAlpine } from './alpine.js'
 import { createHalls } from './halls.js'
 import { createShadowCache } from './shadowcache.js'
 import { createCoast } from './coast.js'
+import { buildOutside } from './outside.js'
 import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants } from './plants.js'
@@ -15,7 +16,7 @@ import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
 import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight } from './layout.js'
-const FOG_D0 = 0.0052   // 白天的霧；晚上、清晨照 mistLevel 加濃（setTime）
+const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
@@ -61,6 +62,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
 
   /* 場景 */
   buildDome(scene)
+  scene.add(buildOutside())   // 公園外面：圍籬、草地、樹林帶、遠山（2026-11-08 拿掉溫室）
   buildGround(scene)
   const mountain = buildMountain(scene)
   const water = buildWater(scene)

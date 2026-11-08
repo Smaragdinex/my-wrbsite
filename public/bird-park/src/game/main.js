@@ -44,13 +44,13 @@ function setLoad(f, msg) {
   if (msg) ldMsg.textContent = msg
 }
 const world = await buildWorld(document.getElementById('scene'), {
-  onProgress: (f, stage) => stage === 'build' ? setLoad(0.7, tr('蓋溫室、種樹…')) : setLoad(f * 0.7, tr('下載植物和鳥…')),
+  onProgress: (f, stage) => stage === 'build' ? setLoad(0.7, tr('蓋公園、種樹…')) : setLoad(f * 0.7, tr('下載植物和鳥…')),
   extraModels: flyModels(),
   night: true,
 })
 const { renderer, scene, camera } = world
 // 附屬館（高山館、海岸館）的館內也在載入畫面時蓋好：走過去才蓋會卡一下
-setLoad(0.8, tr('溫室快好了…'))
+setLoad(0.8, tr('公園快好了…'))
 await new Promise((r) => setTimeout(r, 30))
 await world.halls.prebuild()
 

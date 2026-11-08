@@ -14,7 +14,7 @@ export const AS = 1.55, AHS = 1.4
 export const AM = (x, z) => [76 + (x - 76) * AS, z * AS]
 export const GARDEN = { A: 75, B: 55 }
 export const MTN = { x: 12, z: -6, h: 32 }           // 中央雲霧山
-export const POOL = { x: -3, z: -6, rx: 10, rz: 18, water: -0.55 }   // 西緣不能再往外（環山步道在 x≈-16），所以往南北拉長
+export const POOL = { x: -7, z: -6, rx: 15, rz: 21, water: -0.55 }   // 2026-11-08 放大（原本 x -3、10×18）：環山步道西側往外推 12 公尺讓出位置（RING_BULGE）
 // width：步道寬（2026-11-07 從 3 加寬到 4.2）；flat：最後這段（比例）不再爬升，和觀景台一樣高，走上平台不會有一階
 export const RAMP = { theta0: Math.PI / 2, turns: 2.2, y0: 0, y1: 24, width: 4.2, gap: 2.1, flat: 0.035 }
 export const DECK = { r: 7, x: 0, z: 0, y: 0 }   // 頂端圓形觀景台（2026-11-07 從半徑 4.5 放大到 7）
@@ -106,7 +106,10 @@ const onDeck = (x, z) => Math.hypot(x - DECK.x, z - DECK.z) <= DECK.r
 /* ---------- 步道 ---------- */
 const loopPt = (a) => [52 * Math.cos(a), 38 * Math.sin(a)]
 export const RING_R = 28   // 環山步道半徑（水池放大後往外推，原本 23）
-const ringPt = (a) => [MTN.x + RING_R * Math.cos(a), MTN.z + RING_R * Math.sin(a)]
+// 西側（瀑布那一面）往外鼓：湖放大要讓位置，最西邊多 RING_BULGE 公尺，南北兩側不變（再大會撞到繞園步道）
+export const RING_BULGE = 12
+const ringR = (a) => RING_R + RING_BULGE * Math.max(0, -Math.cos(a))
+const ringPt = (a) => [MTN.x + ringR(a) * Math.cos(a), MTN.z + ringR(a) * Math.sin(a)]
 function curve(pts, closed = false) {
   return new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), closed, 'centripetal')
 }
@@ -122,7 +125,7 @@ function loopPoints() {
 }
 function ringPoints() {
   const pts = []
-  for (let i = 0; i < 20; i++) pts.push(ringPt((i / 20) * TAU))
+  for (let i = 0; i < 24; i++) pts.push(ringPt((i / 24) * TAU))
   return pts
 }
 // 繞園步道會左右蜿蜒，所以 loopPt(a) 不一定在真的步道上；支線要從「步道上離它最近的那一點」出發，
@@ -139,12 +142,12 @@ export const PATHS = [
   { name: 'entry', w: 4.2, curve: curve([[-74, 0], [-66, 0], [-58, 0], loopPt(Math.PI)]) },
   { name: 'loop', w: 3.4, curve: LOOP },
   { name: 'ring', w: 3.2, curve: curve(ringPoints(), true) },
-  { name: 'west', w: 3.0, curve: curve([loopPt(Math.PI), [-38, 3], [-24, -1], ringPt(Math.PI - 0.12)]) },
+  { name: 'west', w: 3.0, curve: curve([loopPt(Math.PI), [-38, 3], ringPt(Math.PI - 0.12)]) },
   { name: 'south', w: 2.6, curve: curve([loopPt(Math.PI / 2), [6, 30], [11, 22.5], ringPt(Math.PI / 2)]) },
   { name: 'east', w: 2.6, curve: curve([loopPt(0), [44, -3], ringPt(-0.12)]) },
   { name: 'north', w: 2.6, curve: curve([loopPt(-Math.PI / 2), [1, -36], ringPt(-1.85)]) },
-  { name: 'sw', w: 2.4, curve: curve([onLoop(2.3), [-28, 18], [-14, 15], ringPt(2.3)]) },
-  { name: 'nw', w: 2.4, curve: curve([onLoop(-2.4), [-28, -20], [-16, -22], ringPt(-2.5)]) },
+  { name: 'sw', w: 2.4, curve: curve([onLoop(2.3), [-29, 20], ringPt(2.3)]) },
+  { name: 'nw', w: 2.4, curve: curve([onLoop(-2.4), [-30, -24], ringPt(-2.5)]) },
   { name: 'spur', w: 2.6, curve: curve([ringPt(1.0), [19.5, 11.6], [14.6, 10.45]]) },
   { name: 'alpine', w: 3.0, curve: curve([loopPt(0), [62, 0.5], [73.5, 0]]) },   // 往高山館的東門
   { name: 'coast', w: 3.0, curve: curve([loopPt(-Math.PI / 2), [0.5, -46], [0, -53.6]]) },   // 往海岸館的南門

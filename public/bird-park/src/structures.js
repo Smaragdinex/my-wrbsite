@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { t as tr, FONT_SANS } from './i18n.js'
 import {
   TAU, DOME, MTN, POOL, RAMP, DECK, PATHS, clamp, smoothstep, lerp, angDiff,
-  domeRho, domeB, inAlpine, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
+  domeRho, domeB, inAlpine, alpineHeight, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
   CCORR, COAST_ON,
 } from './layout.js'
 import { fbm3, noise3, mulberry32 } from './noise.js'
@@ -22,10 +22,14 @@ export function buildSky(scene) {
   // 日夜：uDay 白天 1、晚上 0；uDusk 黃昏／清晨那一段地平線變橘；晚上有星星和月亮（world.setTime 在改）
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight },
+    uniforms: { sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `varying vec3 vDir; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk;
+    fragmentShader: `varying vec3 vDir; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime;
       float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
+      float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 6; i++) { s += a * vn(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return s; }
       void main(){
         vec3 d = normalize(vDir);
         float h = clamp(d.y, -0.2, 1.0);
@@ -39,7 +43,20 @@ export function buildSky(scene) {
         vec3 c = h > 0.0 ? mix(hor, top, pow(h, 0.55)) : mix(hor, gnd, -h*5.0);
         float s = max(dot(d, sunDir), 0.0);
         c += vec3(1.0,0.9,0.7) * (pow(s, 600.0) * 4.0 + pow(s, 12.0) * 0.25) * smoothstep(-0.06, 0.04, sunDir.y);
-        float night = 1.0 - uDay;
+        // 雲（2026-11-08 拿掉溫室後加）：天空投影到一片高空的平面上，fbm 雜訊當雲量，慢慢往東飄；
+        // 雲底偏灰、迎著太陽那邊亮，黃昏染橘、晚上變暗；靠地平線淡掉（遠山前面不會有一條白邊）
+        float cloudA = 0.0;
+        if (d.y > 0.0) {
+          vec2 cp = d.xz / (d.y + 0.12) * 1.6 + vec2(uTime * 0.006, uTime * 0.002);
+          float n = fbm(cp), n2 = fbm(cp * 2.1 + 5.0);
+          float cov = smoothstep(0.48, 0.75, n + 0.12 * n2);
+          cloudA = cov * smoothstep(0.0, 0.18, d.y);
+          float lit = 0.72 + 0.28 * smoothstep(0.35, 0.85, n2) + 0.35 * pow(max(dot(d, sunDir), 0.0), 6.0);
+          vec3 cc = mix(vec3(0.05, 0.06, 0.09), vec3(0.97, 0.98, 1.0), uDay) * lit;
+          cc = mix(cc, vec3(1.0, 0.68, 0.48) * lit, uDusk * 0.7);
+          c = mix(c, cc, cloudA * 0.92);
+        }
+        float night = (1.0 - uDay) * (1.0 - cloudA);
         if (d.y > 0.0 && night > 0.01) {
           vec3 cell = d * 260.0, g = floor(cell);
           float r = hash(g), star = step(0.996, r) * smoothstep(0.42, 0.0, length(fract(cell) - 0.5));
@@ -55,28 +72,6 @@ export function buildSky(scene) {
   sky.renderOrder = -10
   scene.add(sky)
 
-  // 外面的草地
-  const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(700, 64).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x6f8a58, roughness: 1 })
-  )
-  ground.position.y = -1.6   // 要低於池底（-1.5），不然整片蓋住池水
-  ground.receiveShadow = true
-  ground.name = 'ground'
-  scene.add(ground)
-
-  // 遠方天際線
-  const rnd = mulberry32(77)
-  const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)
-  const n = 90
-  const city = new THREE.InstancedMesh(box, new THREE.MeshStandardMaterial({ color: 0xa9b6bf, roughness: 0.8 }), n)
-  for (let i = 0; i < n; i++) {
-    const a = rnd() * TAU, d = 330 + rnd() * 200
-    const h = 15 + rnd() ** 2 * 70, w = 14 + rnd() * 24
-    tmpM.compose(new THREE.Vector3(Math.cos(a) * d, 0, Math.sin(a) * d), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), new THREE.Vector3(w, h, w * (0.6 + rnd() * 0.8)))
-    city.setMatrixAt(i, tmpM)
-  }
-  scene.add(city)
   return { sky, skyMat: mat }
 }
 
@@ -220,6 +215,12 @@ function cutDoor(mat) {
   }
   mat.customProgramCacheKey = () => 'cutDoor4'
 }
+function entranceFloor() {
+  const { W, X0, X1 } = DOOR, L = X0 - X1
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(L + 0.2, 0.08, W * 2), corridorFloorMaterial(X0 - 0.35))
+  floor.position.set((X0 + X1) / 2, 0.0, 0); floor.receiveShadow = true
+  return floor
+}
 function buildEntrance() {
   const g = new THREE.Group()
   const steel = new THREE.MeshStandardMaterial({ color: 0xf2f4f5, roughness: 0.45, metalness: 0.5 })
@@ -291,82 +292,11 @@ function buildEntrance() {
   return g
 }
 
+// 2026-11-08 拿掉溫室：玻璃、格網、拱肋都不畫了，原本圓頂的範圍就是公園的邊界（玩家一樣走到那裡被擋，layout.js domeRho）。
+// 牆腳的矮牆也拿掉（大部分埋在土裡，只露出一段段白色）：改成 outside.js 沿著地形的木頭圍籬；入口的玻璃通道也拿掉，走出相機行就是公園（只留通道的石材地板）
 export function buildDome(scene) {
   const group = new THREE.Group()
-  const glass = new THREE.Mesh(domeGeometry(1), new THREE.MeshStandardMaterial({
-    color: 0xdfeff5, transparent: true, opacity: 0.1, roughness: 0.05, metalness: 0.1,
-    side: THREE.DoubleSide, depthWrite: false,
-  }))
-  glass.renderOrder = 5
-  cutDoor(glass.material)
-  group.add(glass)
-
-  const grid = T.domeGridTex()
-  grid.repeat.set(Math.round(56 * DOME_PERIM / 409), 14 * DOME.H / 40)   // 格子大小跟原本（周長約 409、高 40）一樣
-  const frame = new THREE.Mesh(domeGeometry(0.998), new THREE.MeshStandardMaterial({
-    color: 0xe8ecee, map: grid, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.4,
-  }))
-  cutDoor(frame.material)
-  frame.castShadow = true
-  group.add(frame)
-
-  // 主拱肋
-  const ribs = []
-  const RIBS = Math.round(20 * DOME_PERIM / 409 / 2) * 2
-  for (let k = 0; k < RIBS; k++) {
-    const p = eqAngle((k + 0.5) / RIBS), pts = []   // 照弧長平均分；錯開半格：西邊入口中間不能有一根主拱肋
-    for (let j = 0; j <= 24; j++) {
-      const a = (j / 24) * Math.PI / 2 * 0.985
-      pts.push(new THREE.Vector3(ex(p) * 0.99 * Math.cos(a), DOME.H * 0.99 * Math.sin(a), ez(p, 0.99 * Math.cos(a))))
-    }
-    ribs.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.32, 6))
-  }
-  for (const v of [0.18, 0.42, 0.66, 0.86]) {
-    const a = v * Math.PI / 2, pts = []
-    for (let i = 0; i < 128; i++) {
-      const p = eqAngle(i / 128)
-      pts.push(new THREE.Vector3(ex(p) * 0.99 * Math.cos(a), DOME.H * 0.99 * Math.sin(a), ez(p, 0.99 * Math.cos(a))))
-    }
-    ribs.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 256, 0.26, 6, true))
-  }
-  const ribMesh = new THREE.Mesh(mergeGeometries(ribs), new THREE.MeshStandardMaterial({ color: 0xf2f4f5, roughness: 0.45, metalness: 0.5 }))
-  ribMesh.castShadow = true
-  group.add(ribMesh)
-
-  // 牆腳矮牆（入口留缺口）
-  const wallPos = [], wallIdx = []
-  const N = 480, s1 = 0.975, s2 = 0.99, H = 1.1
-  for (let i = 0; i <= N; i++) {
-    const p = eqAngle(i / N)
-    const c = ex(p), s = Math.sin(p)
-    for (const [sc, y] of [[s1, -0.5], [s1, H], [s2, H], [s2, -0.5]]) wallPos.push(sc * c, y, ez(p, sc))
-  }
-  // 入口的缺口：兩端都要封起來（以前斷面是空的，從通道看出去像一片白板浮在半空）
-  const gapAt = (i) => { const p = eqAngle(i / N), x = ex(p) * s1, z = ez(p, s1); return x < 0 && Math.abs(z) < DOOR.W + 0.25 }
-  const caps = []
-  for (let i = 0; i < N; i++) {
-    const p = eqAngle((i + 0.5) / N)
-    const x = ex(p), z = ez(p)
-    if (gapAt(i) || gapAt(i + 1)) {
-      // 這一段不畫；旁邊那段有畫的話，在交界的頂點補一片封口
-      if (!gapAt(i)) caps.push(i)
-      if (!gapAt(i + 1)) caps.push(i + 1)
-      continue
-    }
-    if (COAST_ON && z < 0 && Math.abs(x) < CCORR.W + 0.1) continue   // 南門
-    const a = i * 4, b = (i + 1) * 4
-    for (let f = 0; f < 3; f++) wallIdx.push(a + f, b + f, a + f + 1, a + f + 1, b + f, b + f + 1)
-  }
-  for (const i of caps) { const a = i * 4; wallIdx.push(a, a + 1, a + 2, a, a + 2, a + 3) }
-  const wg = new THREE.BufferGeometry()
-  wg.setAttribute('position', new THREE.Float32BufferAttribute(wallPos, 3))
-  wg.setIndex(wallIdx)
-  wg.computeVertexNormals()
-  const wall = new THREE.Mesh(wg, kneeWallMaterial(H))
-  wall.receiveShadow = true
-  group.add(wall)
-
-  group.add(buildEntrance())
+  group.add(entranceFloor())
 
   group.name = 'domeShell'
   scene.add(group)
@@ -382,13 +312,12 @@ export function buildGround(scene) {
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i)
     const h = terrainHeight(x, z)
-    pos.setY(i, inAlpine(x, z) ? Math.min(h, 0) - 0.6 : h)   // 山區有自己的地形（alpine.js），這片壓到底下
+    pos.setY(i, inAlpine(x, z) ? Math.min(h, 0) - 0.6 : domeRho(x, z) > 1 ? h - 0.5 : h)   // 山區有自己的地形（alpine.js），這片壓到底下；圍牆外是 buildOutside 那片草地
     uv.setXY(i, x / 5, z / 5)
     const n = fbm3(x * 0.08, 0, z * 0.08, 3)
     c.setRGB(0.5 + n * 0.2, 0.56 + n * 0.18, 0.4 + n * 0.14)   // 偏暗的林下地面，草葉之間不會露出亮綠草坪
     const q = poolQ(x, z)
     if (q < 1.3) c.lerp(new THREE.Color(0.35, 0.3, 0.22), smoothstep(1.3, 0.8, q))
-    if (domeRho(x, z) > 0.975) c.setRGB(0.75, 0.72, 0.65)
     col.push(c.r, c.g, c.b)
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))

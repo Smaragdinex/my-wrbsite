@@ -255,10 +255,10 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   {
     const t = canvasTex(512, 128, (x, w, h) => {
       x.fillStyle = '#1f2a24'; x.fillRect(0, 0, w, h); x.fillStyle = '#7fd19c'; x.fillRect(0, h - 8, w, 8)
-      x.fillStyle = '#fff'; x.textBaseline = 'middle'; if (LANG === 'en') { x.font = '700 50px "Helvetica Neue", Arial, sans-serif'; x.fillText('GREENHOUSE', 120, h / 2 + 2) }
+      x.fillStyle = '#fff'; x.textBaseline = 'middle'; if (LANG === 'en') { x.font = '700 50px "Helvetica Neue", Arial, sans-serif'; x.fillText('PARK', 120, h / 2 + 2) }
       else {
-        x.font = `bold 56px ${FONT_SANS}`; x.fillText(tr('溫室'), 120, h / 2 - 2, 124)
-        x.font = '600 34px "Helvetica Neue", Arial, sans-serif'; x.fillStyle = '#cfe8d8'; x.fillText('GREENHOUSE', 250, h / 2 + 2)
+        x.font = `bold 56px ${FONT_SANS}`; x.fillText(tr('公園'), 120, h / 2 - 2, 124)
+        x.font = '600 34px "Helvetica Neue", Arial, sans-serif'; x.fillStyle = '#cfe8d8'; x.fillText('PARK', 250, h / 2 + 2)
       }
       x.strokeStyle = '#fff'; x.lineWidth = 9; x.beginPath(); x.moveTo(62, h - 26); x.lineTo(62, 26); x.moveTo(38, 50); x.lineTo(62, 24); x.lineTo(86, 50); x.stroke()   // 往前直走的箭頭
     })
@@ -751,7 +751,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     x.fillStyle = '#7fd19c'; x.font = '600 22px "Helvetica Neue", Arial, sans-serif'; x.textAlign = 'left'; x.fillText('BIRD PHOTO OF THE WEEK', 24, 46)
     x.fillStyle = '#fff'; x.font = `bold 52px ${FONT_SANS}`; x.fillText(caps[k][0], 24, w + 140)
     x.fillStyle = '#b9c7be'; x.font = '28px "Helvetica Neue", Arial, sans-serif'; x.fillText(caps[k][1], 24, w + 186)
-    x.fillStyle = '#2f7d4f'; x.fillRect(24, h - 92, w - 48, 60); x.fillStyle = '#fff'; x.font = `bold 28px ${FONT_SANS}`; x.fillText(tr('進溫室拍拍看 →'), 44, h - 52, w - 88)
+    x.fillStyle = '#2f7d4f'; x.fillRect(24, h - 92, w - 48, 60); x.fillStyle = '#fff'; x.font = `bold 28px ${FONT_SANS}`; x.fillText(tr('進公園拍拍看 →'), 44, h - 52, w - 88)
     for (let i = 0; i < 4; i++) { x.fillStyle = i === k ? '#fff' : '#4a524d'; x.beginPath(); x.arc(w - 96 + i * 20, 39, 5, 0, 7); x.fill() }
     scrT.needsUpdate = true
   }

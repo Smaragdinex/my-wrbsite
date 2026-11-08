@@ -123,7 +123,8 @@ export function lodUpdate(camera, force = false) {
       const lo = S.lows[mi]
       if (!lo) { fill(m, mi, () => true); return }
       const near = fill(m, mi, (j) => !S.far[j]), far = fill(lo, mi, (j) => S.far[j])
-      lowTris += far * (m.geometry.index.count - lo.geometry.index.count) / 3; nearN += near
+      const vc = (q) => q.index ? q.index.count : q.attributes.position.count   // 沒有索引的幾何（outside.js 的樹）用頂點數
+      lowTris += far * (vc(m.geometry) - vc(lo.geometry)) / 3; nearN += near
     })
     drawn += k * S.meshes.length
   }

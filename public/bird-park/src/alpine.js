@@ -75,10 +75,25 @@ export function needleTex() {
   })
   return t
 }
+// 針葉卡片的材質（山區的冷杉、鐵杉、圓柏和公園外面的樹林帶共用）
+export function needleMaterial() {
+  const tex = needleTex()
+  const needleM = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85, color: 0xd2dccb, vertexColors: true })
+  // 遠處的樹：mipmap 把針葉的透明度平均掉，alphaTest 一切就只剩枝幹（遠看像一根根竹竿）。照 mip 層級把透明度補回來
+  needleM.alphaToCoverage = true
+  needleM.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', `
+      vec2 nDx = dFdx(vMapUv * vec2(512.0, 256.0)), nDy = dFdy(vMapUv * vec2(512.0, 256.0));
+      diffuseColor.a *= 1.0 + max(0.0, 0.5 * log2(max(dot(nDx, nDx), dot(nDy, nDy)))) * 0.35;
+      #include <alphatest_fragment>`)
+  }
+  needleM.customProgramCacheKey = () => 'needleMip'
+  return needleM
+}
 // kind 'fir'：冷杉，細長尖塔、枝條平伸、層次分明；'hemlock'：鐵杉，比較寬、枝條下垂、頂端的芽歪向一邊。高度 1（擺放時縮放）
 // 每根側枝兩片交叉的卡片（從側面、從上面看都有厚度）；每層枝數、長度、角度都有亂數，偶爾缺一枝（看得到樹幹，比較自然）
 // 頂點顏色：樹冠裡面、下面比較暗（自己遮自己），外面、上面比較亮——卡片樹最缺的就是這個
-function coniferGeo(kind) {
+export function coniferGeo(kind) {
   const fir = kind === 'fir', R = fir ? 0.19 : 0.29, tiers = fir ? 22 : 17, rnd = mulberry32(fir ? 3 : 5)
   const cards = []
   for (let i = 0; i < tiers; i++) {
@@ -576,17 +591,7 @@ function buildInterior(lib, avoid = []) {
   buildSummit({ g, avoid, printsUrl: 'models/store-prints.jpg' })
   // 針葉樹
   {
-    const tex = needleTex()
-    const needleM = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85, color: 0xd2dccb, vertexColors: true })
-    // 遠處的樹：mipmap 把針葉的透明度平均掉，alphaTest 一切就只剩枝幹（遠看像一根根竹竿）。照 mip 層級把透明度補回來
-    needleM.alphaToCoverage = true
-    needleM.onBeforeCompile = (sh) => {
-      sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', `
-        vec2 nDx = dFdx(vMapUv * vec2(512.0, 256.0)), nDy = dFdy(vMapUv * vec2(512.0, 256.0));
-        diffuseColor.a *= 1.0 + max(0.0, 0.5 * log2(max(dot(nDx, nDx), dot(nDy, nDy)))) * 0.35;
-        #include <alphatest_fragment>`)
-    }
-    needleM.customProgramCacheKey = () => 'needleMip'
+    const needleM = needleMaterial()
     const barkM = new THREE.MeshStandardMaterial({ color: 0x5a4636, roughness: 0.95 })
     const coreM = new THREE.MeshStandardMaterial({ color: 0x223a26, roughness: 1 })   // 跟針葉同色系，從上面看不會是一顆黑色金字塔
     for (const kind of ['fir', 'hemlock']) {

@@ -1,5 +1,5 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
-// spot：溫室座標（公尺）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
+// spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
 import { POOL, AM } from './layout.js'
 import { birdText } from './i18n.js'
@@ -30,7 +30,7 @@ const ALL = [
     ],
   },
   {
-    id: 'nightheron', spot: [-9.5, -4], perch: 'ground', y: POOL.water - 0.12, water: POOL.water, view: 285, dist: 3.6, camH: 3.0, lookY: 0.55,
+    id: 'nightheron', spot: [-16.8, -3.7], perch: 'ground', y: POOL.water - 0.12, water: POOL.water, view: 285, dist: 3.6, camH: 3.0, lookY: 0.55,
     name: '夜鷺', sci: 'Nycticorax nycticorax', where: '瀑布水池',
     intro: '常縮著脖子站在水邊，看起來像在打瞌睡，其實在等魚游過來。牠是很有耐心的獵人，可以在同一個地方站很久，看準時機才猛然把頭伸出去。名字裡有「夜」，傍晚和晚上最活躍，白天常在池邊的樹上休息。',
     facts: [
@@ -87,7 +87,7 @@ const ALL = [
   },
   // ---------- 2026-11 新增（ChatGPT 參考圖 → Tripo） ----------
   {
-    id: 'kingfisher', spot: [-10.5, -11], perch: 'branch', y: POOL.water - 1.6, water: POOL.water, dist: 3.6, camH: 3.8, lookY: 2.65,   // 樹整棵往下沉 1.6 公尺：枝條離水面約 1.6 公尺，俯衝整段都在畫面裡
+    id: 'kingfisher', spot: [-18.3, -11.8], perch: 'branch', y: POOL.water - 1.6, water: POOL.water, dist: 3.6, camH: 3.8, lookY: 2.65,   // 樹整棵往下沉 1.6 公尺：枝條離水面約 1.6 公尺，俯衝整段都在畫面裡
     name: '翠鳥', sci: 'Alcedo atthis', where: '水池上方的枝頭',
     intro: '藍綠色的背、橘色的肚子，在水邊一閃而過，像一顆會飛的寶石。牠常停在水面上方的樹枝上，一動也不動地盯著水裡的小魚，看準了就一頭栽進水裡，叼著魚飛回枝頭。',
     facts: [
@@ -98,7 +98,7 @@ const ALL = [
     ],
   },
   {
-    id: 'egret', spot: [-6, 4], perch: 'ground', view: 230, y: POOL.water - 0.18, water: POOL.water, dist: 4.2, camH: 1.7, lookY: 0.75,
+    id: 'egret', spot: [-11.5, 5.7], perch: 'ground', view: 230, y: POOL.water - 0.18, water: POOL.water, dist: 4.2, camH: 1.7, lookY: 0.75,
     name: '小白鷺', sci: 'Egretta garzetta', where: '水池淺灘',
     intro: '全身雪白，嘴和腳是黑色的，腳趾卻是黃色的，像穿了一雙黃襪子。牠常在淺水裡慢慢地走，用腳攪動水底，把躲起來的小魚、小蝦趕出來，再閃電般地啄下去。',
     facts: [
@@ -109,7 +109,7 @@ const ALL = [
     ],
   },
   {
-    id: 'moorhen', spot: [-5, -14], perch: 'ground', swim: true, view: 320, y: POOL.water - 0.25, water: POOL.water, dist: 3.2, camH: 0.9, lookY: 0.32,
+    id: 'moorhen', spot: [-10, -15.3], perch: 'ground', swim: true, view: 320, y: POOL.water - 0.25, water: POOL.water, dist: 3.2, camH: 0.9, lookY: 0.32,
     name: '紅冠水雞', sci: 'Gallinula chloropus', where: '水池',
     intro: '黑灰色的身體，配上紅色的額頭和嘴、黃色的嘴尖，很好認。牠很會游泳，游的時候頭會一前一後地點；長長的腳趾也能踩在水草和浮葉上走。',
     facts: [
@@ -120,7 +120,7 @@ const ALL = [
     ],
   },
   {
-    id: 'waterhen', spot: [-6, -20], perch: 'ground', swim: true, view: 340, y: POOL.water - 0.25, water: POOL.water, dist: 2.8, camH: 0.9, lookY: 0.35,
+    id: 'waterhen', spot: [-11.5, -22.3], perch: 'ground', swim: true, view: 340, y: POOL.water - 0.25, water: POOL.water, dist: 2.8, camH: 0.9, lookY: 0.35,
     name: '白腹秧雞', sci: 'Amaurornis phoenicurus', where: '水池',
     intro: '臉和胸前是一大片白色，背是深灰色，尾巴下面卻是紅褐色。牠常在水邊和草叢之間走動，也會下水游泳，游的時候腳收在身體下面划水，短短的尾巴一直上下擺動。',
     facts: [
@@ -187,7 +187,7 @@ const ALL = [
     ],
   },
   {
-    id: 'spoonbill', spot: [-2, 9], perch: 'ground', y: POOL.water - 0.18, water: POOL.water, dist: 4.6, camH: 1.9, lookY: 0.9,
+    id: 'spoonbill', spot: [-5.5, 11.5], perch: 'ground', y: POOL.water - 0.18, water: POOL.water, dist: 4.6, camH: 1.9, lookY: 0.9,
     name: '黑面琵鷺', sci: 'Platalea minor', where: '水池淺灘',
     intro: '全身雪白，臉和嘴是黑色的，最特別的是一支前端又扁又寬、像飯匙一樣的長嘴。牠在淺水裡低著頭、嘴巴微微張開，左右來回掃動，碰到小魚小蝦就立刻夾起來。',
     facts: [
