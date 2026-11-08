@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { AS, CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider } from './layout.js'
+import { AS, CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho } from './layout.js'
 import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
 import { addWind } from './wind.js'
@@ -20,6 +20,7 @@ const TAU = Math.PI * 2
 // 山區面積比 1.55 倍那版大多少（2026-11-08 再放大 ×1.3）：樹、石頭、蕨類、箭竹的數量照面積加，密度跟以前一樣
 // 雀榕的位置（新的吃果子的鳥停在上面）
 export const FIG_TREES = []
+export const FLORA_SPOTS = {}   // 除錯／截圖用：鵝掌藤、野花的位置
 const FIGPOS = []
 const AK = Math.min((AS / 1.55) ** 2, (2.015 / 1.55) ** 2 * 1.2)   // 2026-11-09 山再放大 ×1.2：樹的密度不跟著全加（效能），多出來的地方給果樹、花
 const { clamp, lerp } = THREE.MathUtils
@@ -153,6 +154,7 @@ function bridgeDist(x, z) {
   const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz)))
   return Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t)
 }
+const GB_OUT = 22, GB_K = [1, 1, 1]   // 山區接花園那一圈的寬度（公尺）、顏色微調
 function buildInterior(lib, avoid = []) {
   const g = new THREE.Group(); g.name = 'alpineInterior'
   const rnd = mulberry32(2026)
@@ -171,11 +173,15 @@ function buildInterior(lib, avoid = []) {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx)
     geo.computeVertexNormals()
-    const nrm = geo.attributes.normal, c = new THREE.Color()
+    const nrm = geo.attributes.normal, c = new THREE.Color(), gardenCol = new THREE.Color()
     for (let k = 0; k < nx * nz; k++) {
       const x = pos[k * 3], z = pos[k * 3 + 2], ny = nrm.getY(k)
       const n = fbm2(x * 0.15, z * 0.15, 3)
       c.setHSL(0.17 + n * 0.04, 0.36, 0.21 + n * 0.06)                                      // 箭竹底下：偏暗的橄欖綠（草叢間的縫看起來是陰影，不是光禿禿的地）
+      // 2026-11-09 跟花園的草地接起來：一進山區那一圈（花園邊往外約 15 公尺）從花園的綠慢慢變成山上的橄欖綠，不再一條線就換色
+      // 花園地面 = 草地貼圖平均色 × 頂點色；這邊的細節貼圖是灰的，所以換算成「乘上灰貼圖後跟花園一樣」的顏色（線性色彩）
+      const gr = gardenRho(x, z), gb = 1 - ss(0, GB_OUT, Math.hypot(x, z) * (1 - 1.03 / gr))   // 離花園邊幾公尺（沿著半徑量）
+      if (gb > 0) c.lerp(gardenCol.setRGB((0.084 + n * 0.03) * GB_K[0], (0.19 + n * 0.05) * GB_K[1], (0.023 + n * 0.01) * GB_K[2]), gb)
       const rock = ss(0.86, 0.7, ny)
       c.lerp(new THREE.Color().setHSL(0.1, 0.06, 0.36 + n * 0.08), rock)                     // 岩石
       const tr = ss(1.6, 0.9, alpineTrailDist(x, z))
@@ -729,39 +735,108 @@ function buildInterior(lib, avoid = []) {
       m.customProgramCacheKey = () => 'leafNoFlip'
       return m
     }
-    // 卵形的葉子：一片片疊成一叢（中間深、外面亮）
-    const ovate = (x, cx, cy, a, L, l, r) => {
+    // 2026-11-09 寫實化：葉子＝葉柄＋橢圓葉身（尾端漸尖）、正面亮暗漸層（光從上面來）、主脈＋側脈、葉緣一圈深色、反光的亮點
+    // c：{h, s, l} 葉色（HSL）；wr：葉寬/葉長
+    const leaf = (x, cx, cy, a, L, c, r, wr = 0.38) => {
       x.save(); x.translate(cx, cy); x.rotate(a)
-      const gr = x.createLinearGradient(0, -L * 0.3, 0, L * 0.3); gr.addColorStop(0, `rgb(${l + 18},${l + 70},${l + 10})`); gr.addColorStop(1, `rgb(${l - 6},${l + 38},${l - 8})`)
-      x.fillStyle = gr; x.beginPath(); x.moveTo(0, 0); x.bezierCurveTo(L * 0.25, -L * 0.36, L * 0.8, -L * 0.3, L, 0); x.bezierCurveTo(L * 0.8, L * 0.3, L * 0.25, L * 0.36, 0, 0); x.fill()
-      x.strokeStyle = 'rgba(220,235,190,0.45)'; x.lineWidth = 1; x.beginPath(); x.moveTo(0, 0); x.lineTo(L * 0.95, 0); x.stroke(); x.restore()
+      const W = L * wr, pt = L * 0.12
+      x.strokeStyle = `hsl(${c.h - 10},${c.s - 10}%,${c.l - 4}%)`; x.lineWidth = Math.max(1, L * 0.035); x.beginPath(); x.moveTo(-pt, 0); x.lineTo(0, 0); x.stroke()   // 葉柄
+      const path = () => { x.beginPath(); x.moveTo(0, 0); x.bezierCurveTo(L * 0.18, -W * 0.95, L * 0.62, -W * 0.85, L, 0); x.bezierCurveTo(L * 0.62, W * 0.85, L * 0.18, W * 0.95, 0, 0) }
+      const gr = x.createLinearGradient(0, -W * 0.6, 0, W * 0.6)
+      gr.addColorStop(0, `hsl(${c.h},${c.s}%,${c.l + 9}%)`); gr.addColorStop(0.5, `hsl(${c.h + 2},${c.s + 4}%,${c.l + 2}%)`); gr.addColorStop(1, `hsl(${c.h + 4},${c.s}%,${c.l - 7}%)`)
+      path(); x.fillStyle = gr; x.fill()
+      x.strokeStyle = `hsla(${c.h},${c.s}%,${c.l - 14}%,0.7)`; x.lineWidth = 1; x.stroke()                                         // 葉緣
+      x.strokeStyle = `hsla(${c.h - 25},${c.s - 15}%,${c.l + 30}%,0.55)`; x.lineWidth = Math.max(0.8, L * 0.025)                  // 主脈（淡黃綠）
+      x.beginPath(); x.moveTo(0, 0); x.quadraticCurveTo(L * 0.5, W * 0.06, L * 0.97, 0); x.stroke()
+      x.lineWidth = Math.max(0.5, L * 0.012); x.strokeStyle = `hsla(${c.h - 20},${c.s - 15}%,${c.l + 22}%,0.35)`
+      for (let k = 1; k <= 6; k++) { const t = k / 7.5; for (const sg of [-1, 1]) { x.beginPath(); x.moveTo(L * t, 0); x.quadraticCurveTo(L * (t + 0.06), sg * W * 0.35, L * (t + 0.12), sg * W * 0.62 * Math.sin(Math.PI * Math.min(1, t + 0.12))); x.stroke() } }   // 側脈
+      const hl = x.createRadialGradient(L * 0.38, -W * 0.25, 0, L * 0.38, -W * 0.25, L * 0.32)                                    // 葉面的反光
+      hl.addColorStop(0, 'rgba(255,255,240,0.22)'); hl.addColorStop(1, 'rgba(255,255,240,0)'); path(); x.fillStyle = hl; x.fill()
+      x.restore()
     }
-    const figLeafT = leafCard(31, (x, w, h, r) => { for (let i = 0; i < 34; i++) { const cx = 30 + r() * (w - 60), cy = 30 + r() * (h - 60); ovate(x, cx, cy, r() * TAU, 30 + r() * 16, 52 + r() * 30, r) } })
-    const scheffT = leafCard(37, (x, w, h, r) => {
-      for (let i = 0; i < 12; i++) {   // 掌狀複葉：7～9 片小葉從一點放射出去
-        const cx = 30 + r() * (w - 60), cy = 30 + r() * (h - 60), n = 7 + Math.floor(r() * 3), a0 = r() * TAU, l = 30 + r() * 25
-        for (let k = 0; k < n; k++) ovate(x, cx, cy, a0 + k / n * TAU, 22 + r() * 8, l, r)
-      }
-      for (let i = 0; i < 6; i++) {   // 橘黃的果串（細梗上一顆顆小果）
-        const cx = 30 + r() * (w - 60), cy = 20 + r() * (h * 0.6)
-        x.strokeStyle = 'rgba(150,90,40,0.8)'; x.lineWidth = 1.2
-        for (let k = 0; k < 14; k++) { const a = r() * TAU, d = 4 + r() * 16, px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d * 0.7; x.beginPath(); x.moveTo(cx, cy); x.lineTo(px, py); x.stroke(); x.fillStyle = `rgb(${235 + r() * 20},${120 + r() * 60},${20 + r() * 30})`; x.beginPath(); x.arc(px, py, 3 + r() * 1.5, 0, TAU); x.fill() }
+    // 雀榕的葉：橢圓、尾端尖，深綠有光澤；新芽是黃綠色、偶爾一片快掉的黃葉
+    const figLeafT = leafCard(31, (x, w, h, r) => {
+      for (let i = 0; i < 46; i++) {
+        const cx = 26 + r() * (w - 52), cy = 26 + r() * (h - 52), u = r()
+        const c = u < 0.07 ? { h: 82 + r() * 10, s: 50, l: 36 + r() * 6 } : u < 0.085 ? { h: 50 + r() * 8, s: 55, l: 44 } : { h: 104 + r() * 14, s: 36 + r() * 16, l: 19 + r() * 11 }
+        leaf(x, cx, cy, r() * TAU, 26 + r() * 18, c, r, 0.36 + r() * 0.06)
       }
     })
+    // 雀榕的樹皮：灰白、光滑，一塊塊淡綠/白色的地衣，一條條橫的皮孔
+    const barkT = canvasTex(256, 256, (x, w, h) => {
+      const r = mulberry32(77)
+      x.fillStyle = '#a49e92'; x.fillRect(0, 0, w, h)
+      for (let i = 0; i < 1400; i++) { const l = 120 + r() * 70; x.fillStyle = `rgba(${l},${l - 4},${l - 14},0.18)`; x.fillRect(r() * w, r() * h, 2 + r() * 10, 2 + r() * 14) }   // 斑駁
+      for (let i = 0; i < 26; i++) {   // 地衣
+        const cx = r() * w, cy = r() * h, rr = 6 + r() * 18, gr = x.createRadialGradient(cx, cy, 0, cx, cy, rr)
+        const col = r() < 0.5 ? '210,214,196' : '176,190,160'; gr.addColorStop(0, `rgba(${col},0.55)`); gr.addColorStop(1, `rgba(${col},0)`); x.fillStyle = gr; x.fillRect(cx - rr, cy - rr, rr * 2, rr * 2)
+      }
+      for (let i = 0; i < 160; i++) { x.fillStyle = `rgba(70,62,52,${0.25 + r() * 0.3})`; x.fillRect(r() * w, r() * h, 3 + r() * 6, 1 + r() * 1.2) }                   // 皮孔（橫的短線）
+      for (let i = 0; i < 9; i++) { const xx = r() * w; x.strokeStyle = 'rgba(80,72,62,0.22)'; x.lineWidth = 1 + r() * 2; x.beginPath(); x.moveTo(xx, 0); for (let y = 0; y <= h; y += 16) x.lineTo(xx + Math.sin(y * 0.05 + i) * 5, y); x.stroke() }   // 縱向的淺紋
+    })
+    barkT.wrapS = barkT.wrapT = THREE.RepeatWrapping; barkT.repeat.set(1, 3)
+    // 鵝掌藤：掌狀複葉（7～9 片倒卵形小葉從葉柄頂端放射）、有光澤的深綠；果序是一把把放射的細梗，果子從橘黃熟成紅、紫黑
+    const scheffT = leafCard(37, (x, w, h, r) => {
+      for (let i = 0; i < 14; i++) {
+        const cx = 34 + r() * (w - 68), cy = 34 + r() * (h - 68), n = 7 + Math.floor(r() * 3), a0 = r() * TAU, L = 22 + r() * 9
+        const c = { h: 105 + r() * 12, s: 45 + r() * 15, l: 20 + r() * 10 }
+        x.strokeStyle = `hsl(${c.h - 20},35%,30%)`; x.lineWidth = 1.6; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(a0 + 2) * 30, cy + Math.sin(a0 + 2) * 30); x.stroke()   // 長葉柄
+        for (let k = 0; k < n; k++) leaf(x, cx, cy, a0 + (k / n) * TAU * 0.92, L * (0.8 + 0.25 * Math.sin(k / (n - 1) * Math.PI)), c, r, 0.4)
+      }
+      for (let i = 0; i < 5; i++) {
+        const cx = 34 + r() * (w - 68), cy = 22 + r() * (h * 0.55), ripe = r()
+        for (let k = 0; k < 9; k++) {   // 一把果序：九根放射的梗，每根上面一小團果
+          const a = -Math.PI / 2 + (r() - 0.5) * 2.6, d = 14 + r() * 14, ex = cx + Math.cos(a) * d, ey = cy + Math.sin(a) * d
+          x.strokeStyle = 'rgba(140,120,60,0.9)'; x.lineWidth = 1.1; x.beginPath(); x.moveTo(cx, cy); x.lineTo(ex, ey); x.stroke()
+          for (let m = 0; m < 6; m++) {
+            const px = ex + (r() - 0.5) * 9, py = ey + (r() - 0.5) * 9, t = Math.min(1, ripe + (r() - 0.5) * 0.5), rr = 2.2 + r() * 1.3
+            const col = t < 0.4 ? [244, 170 + r() * 40, 40] : t < 0.75 ? [222, 70 + r() * 30, 40] : [80, 30, 50]
+            const gr = x.createRadialGradient(px - rr * 0.35, py - rr * 0.35, 0.3, px, py, rr)
+            gr.addColorStop(0, `rgb(${Math.min(255, col[0] + 40)},${Math.min(255, col[1] + 50)},${col[2] + 40})`); gr.addColorStop(1, `rgb(${col[0] * 0.7},${col[1] * 0.6},${col[2] * 0.7})`)
+            x.fillStyle = gr; x.beginPath(); x.arc(px, py, rr, 0, TAU); x.fill()
+          }
+        }
+      }
+    })
+    // 野花：細長的莖、互生的線形葉，花用漸層畫出立體感
     const flowerT = (kind) => leafCard({ lily: 41, hyper: 43, gent: 47 }[kind], (x, w, h, r) => {
-      for (let i = 0; i < 9; i++) {   // 細長的莖和葉
-        const bx = 20 + r() * (w - 40), top = h * (0.15 + r() * 0.35)
-        x.strokeStyle = 'rgb(70,120,58)'; x.lineWidth = 2.5; x.beginPath(); x.moveTo(bx, h); x.quadraticCurveTo(bx + (r() - 0.5) * 30, (h + top) / 2, bx + (r() - 0.5) * 16, top); x.stroke()
-        for (let k = 0; k < 4; k++) { const yy = h - (h - top) * (0.2 + k * 0.18); ovate(x, bx, yy, (k % 2 ? 0.3 : Math.PI - 0.3) - Math.PI / 2 * 0, 18 + r() * 8, 50, r) }
-        const fx = bx + (r() - 0.5) * 16, fy = top
-        if (kind === 'lily') {   // 台灣百合：白色喇叭花、外面帶一點紫紅
-          x.save(); x.translate(fx, fy); x.rotate(-0.5 + r());
-          for (const sgn of [-1, 0, 1]) { x.fillStyle = sgn ? '#f4f1ea' : '#ffffff'; x.beginPath(); x.moveTo(0, 0); x.quadraticCurveTo(sgn * 14, -10, sgn * 12 + 2, -30); x.quadraticCurveTo(sgn * 4, -20, 0, 0); x.fill() }
-          x.strokeStyle = 'rgba(150,70,110,0.5)'; x.lineWidth = 2; x.beginPath(); x.moveTo(0, 0); x.lineTo(0, -18); x.stroke(); x.restore()
-        } else {
-          const col = kind === 'hyper' ? ['#f6c81e', '#e8a812'] : ['#6c5bd0', '#4b3fa8']
-          for (let k = 0; k < (kind === 'hyper' ? 5 : 6); k++) { const a = k / 5 * TAU; x.fillStyle = col[k % 2]; x.beginPath(); x.ellipse(fx + Math.cos(a) * 6, fy + Math.sin(a) * 6, 7, 4, a, 0, TAU); x.fill() }
-          x.fillStyle = kind === 'hyper' ? '#c46a10' : '#f2f2ff'; x.beginPath(); x.arc(fx, fy, 3, 0, TAU); x.fill()
+      const N = kind === 'lily' ? 7 : 11
+      for (let i = 0; i < N; i++) {
+        const bx = 18 + r() * (w - 36), top = h * (kind === 'lily' ? 0.12 + r() * 0.25 : 0.3 + r() * 0.35), tx = bx + (r() - 0.5) * 18
+        x.strokeStyle = `hsl(${95 + r() * 15},40%,${28 + r() * 8}%)`; x.lineWidth = kind === 'lily' ? 3 : 2; x.beginPath(); x.moveTo(bx, h); x.quadraticCurveTo(bx + (r() - 0.5) * 24, (h + top) / 2, tx, top); x.stroke()
+        const nl = kind === 'lily' ? 9 : 5
+        for (let k = 0; k < nl; k++) {   // 葉：百合是很多片細長的線形葉，其他是小的對生葉
+          const t = 0.12 + k / nl * 0.7, yy = h - (h - top) * t, xx = bx + (tx - bx) * t, sg = k % 2 ? 1 : -1
+          leaf(x, xx, yy, -Math.PI / 2 + sg * (0.7 + r() * 0.4), kind === 'lily' ? 26 + r() * 10 : 12 + r() * 6, { h: 100 + r() * 10, s: 42, l: 30 + r() * 8 }, r, kind === 'lily' ? 0.12 : 0.34)
+        }
+        if (kind === 'lily') {   // 台灣百合：白色長喇叭花，側著或微微下垂，花瓣外側一條紫紅色帶，花口外翻
+          x.save(); x.translate(tx, top); x.rotate(-0.2 + (r() - 0.5) * 1.2 + (r() < 0.5 ? Math.PI * 0.5 : -Math.PI * 0.5) * 0.5)
+          const Lf = 34 + r() * 8
+          for (const sg of [-1, 1, 0]) {
+            const gr = x.createLinearGradient(0, 0, Lf, 0); gr.addColorStop(0, '#d9e6c8'); gr.addColorStop(0.35, '#fbfaf5'); gr.addColorStop(1, '#ffffff')
+            x.fillStyle = gr; x.beginPath(); x.moveTo(0, 0); x.quadraticCurveTo(Lf * 0.6, sg * 5, Lf, sg * 12 + (sg ? 0 : -1)); x.quadraticCurveTo(Lf * 0.92, sg * 4, Lf * 0.98, sg * -2); x.quadraticCurveTo(Lf * 0.6, sg * 1.5, 0, 0); x.fill()
+            x.strokeStyle = 'rgba(160,60,100,0.55)'; x.lineWidth = 1.6; x.beginPath(); x.moveTo(2, sg * 0.6); x.quadraticCurveTo(Lf * 0.5, sg * 2.6, Lf * 0.8, sg * 6); x.stroke()   // 紫紅色帶
+            x.strokeStyle = 'rgba(190,190,170,0.6)'; x.lineWidth = 0.7; x.beginPath(); x.moveTo(0, 0); x.quadraticCurveTo(Lf * 0.6, sg * 5, Lf, sg * 12); x.stroke()
+          }
+          x.strokeStyle = '#e0b23a'; x.lineWidth = 1; for (let m = 0; m < 4; m++) { x.beginPath(); x.moveTo(Lf * 0.7, 0); x.lineTo(Lf * 1.08, (m - 1.5) * 3); x.stroke() }   // 花藥
+          x.restore()
+        } else if (kind === 'hyper') {   // 玉山金絲桃：五片金黃花瓣（微微歪斜、像風車），中間一大把細長的雄蕊
+          const R0 = 7 + r() * 3, a0 = r() * TAU
+          for (let k = 0; k < 5; k++) {
+            const a = a0 + k / 5 * TAU, px = tx + Math.cos(a) * R0 * 0.75, py = top + Math.sin(a) * R0 * 0.6
+            const gr = x.createRadialGradient(tx, top, 0, px, py, R0 * 1.1); gr.addColorStop(0, '#f2a80c'); gr.addColorStop(0.6, '#fbd23a'); gr.addColorStop(1, '#ffe57a')
+            x.fillStyle = gr; x.beginPath(); x.ellipse(px, py, R0 * 0.85, R0 * 0.55, a + 0.3, 0, TAU); x.fill()
+          }
+          x.strokeStyle = 'rgba(230,170,20,0.95)'; x.lineWidth = 0.7
+          for (let m = 0; m < 22; m++) { const a = r() * TAU, d = R0 * (0.4 + r() * 0.5); x.beginPath(); x.moveTo(tx, top); x.lineTo(tx + Math.cos(a) * d, top + Math.sin(a) * d * 0.8); x.stroke(); x.fillStyle = '#c87a0a'; x.fillRect(tx + Math.cos(a) * d - 0.8, top + Math.sin(a) * d * 0.8 - 0.8, 1.6, 1.6) }
+          x.fillStyle = '#9a7a20'; x.beginPath(); x.arc(tx, top, 1.6, 0, TAU); x.fill()
+        } else {   // 龍膽：直立的筒狀小鐘，藍紫色、花口五裂往外張，筒身有深色條紋，萼片綠
+          const Hc = 13 + r() * 5, Wc = 5 + r() * 2
+          const gr = x.createLinearGradient(tx - Wc, 0, tx + Wc, 0); gr.addColorStop(0, '#3b2f8a'); gr.addColorStop(0.45, '#6d5fd6'); gr.addColorStop(1, '#2f2672')
+          x.fillStyle = gr; x.beginPath(); x.moveTo(tx - Wc * 0.45, top + Hc); x.quadraticCurveTo(tx - Wc * 0.8, top + Hc * 0.4, tx - Wc * 1.2, top); x.lineTo(tx + Wc * 1.2, top); x.quadraticCurveTo(tx + Wc * 0.8, top + Hc * 0.4, tx + Wc * 0.45, top + Hc); x.closePath(); x.fill()
+          for (let k = 0; k < 5; k++) { const px = tx + (k - 2) * Wc * 0.55; x.fillStyle = k % 2 ? '#7f72e6' : '#6658d0'; x.beginPath(); x.ellipse(px, top - 1, Wc * 0.32, 3, (k - 2) * 0.35, 0, TAU); x.fill() }   // 花口的五個裂片
+          x.strokeStyle = 'rgba(30,20,70,0.55)'; x.lineWidth = 0.8; for (let k = -1; k <= 1; k++) { x.beginPath(); x.moveTo(tx + k * Wc * 0.4, top + 2); x.lineTo(tx + k * Wc * 0.2, top + Hc - 1); x.stroke() }
+          x.fillStyle = '#4f7a3a'; x.beginPath(); x.moveTo(tx - Wc * 0.5, top + Hc); x.lineTo(tx, top + Hc - 5); x.lineTo(tx + Wc * 0.5, top + Hc); x.lineTo(tx, top + Hc + 2); x.fill()   // 萼片
         }
       }
     })
@@ -775,6 +850,13 @@ function buildInterior(lib, avoid = []) {
     const vcol = (geo, k = 1) => { const c = new Float32Array(geo.attributes.position.count * 3).fill(k); geo.setAttribute('color', new THREE.BufferAttribute(c, 3)); return geo }
     // 雀榕的樣板（高 1、寬約 1.1；擺放時乘樹高）：樹幹＋5 根主枝、樹冠卡片、實心的深綠芯、榕果
     const r8 = mulberry32(53), branches = [], fruits = [], crown = []
+    // 榕果（2026-11-09 寫實化）：小小一顆（直徑約 1 公分多）、一大串擠在枝上；顏色從白綠、粉紅熟到紫紅、深紫，表面有淡色小斑點（用頂點色）
+    const FIGC = [[0.82, 0.74, 0.66], [0.92, 0.55, 0.62], [0.86, 0.36, 0.5], [0.6, 0.16, 0.34], [0.36, 0.08, 0.2]]
+    const figBall = (rad, x0, y0, z0) => {
+      const q = new THREE.IcosahedronGeometry(rad * 0.62, 0).scale(1, 1.08, 1).toNonIndexed(), base = FIGC[[0, 1, 1, 2, 2, 2, 3, 3, 4][Math.floor(r8() * 9)]], cc = new Float32Array(q.attributes.position.count * 3)
+      for (let i = 0; i < cc.length / 3; i++) { const sp = r8() < 0.18 ? 0.25 : 0, k = 0.9 + r8() * 0.15; cc[i * 3] = Math.min(1, base[0] * k + sp); cc[i * 3 + 1] = Math.min(1, base[1] * k + sp); cc[i * 3 + 2] = Math.min(1, base[2] * k + sp) }
+      q.setAttribute('color', new THREE.BufferAttribute(cc, 3)); return q.translate(x0, y0, z0)
+    }
     const limb = (a0, dir, len, r0, r1) => new THREE.CylinderGeometry(r1, r0, len, 8).translate(0, len / 2, 0).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir.clone().normalize())).translate(a0.x, a0.y, a0.z)
     // 樹幹：三股扭在一起往上（雀榕是絞殺榕，氣根包著樹幹長成一束一束）
     const trunkG = []
@@ -790,34 +872,45 @@ function buildInterior(lib, avoid = []) {
       const a = i / 6 * TAU + r8() * 0.5, el = 0.45 + r8() * 0.4, len = 0.34 + r8() * 0.12
       const a0 = V(0, 0.4 + r8() * 0.08, 0), dir = V(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)), b = a0.clone().addScaledVector(dir, len)
       branches.push(limb(a0, dir, len, 0.03, 0.016))
-      for (let k = 0; k < 70; k++) {   // 榕果：沿著主枝一串串（雀榕的果長在老枝上）
-        const t = 0.1 + r8() * 0.9, p = a0.clone().addScaledVector(dir, len * t), side = V(r8() - 0.5, r8() - 0.5, r8() - 0.5).normalize().multiplyScalar(0.02 + 0.008 * (1 - t))
-        fruits.push(new THREE.IcosahedronGeometry(0.0055 + r8() * 0.0025, 1).translate(p.x + side.x, p.y + side.y, p.z + side.z))
+      for (let k = 0; k < 120; k++) {   // 榕果：沿著主枝一串串（雀榕的果長在老枝上）
+        const t = 0.1 + r8() * 0.9, p = a0.clone().addScaledVector(dir, len * t), side = V(r8() - 0.5, r8() - 0.5, r8() - 0.5).normalize().multiplyScalar(0.022 + 0.008 * (1 - t))
+        fruits.push(figBall(0.0055 + r8() * 0.0025, p.x + side.x, p.y + side.y, p.z + side.z))
       }
       for (const sgn of [-1, 1]) {
         const d2 = dir.clone().applyAxisAngle(V(0, 1, 0), sgn * (0.35 + r8() * 0.3)).setY(dir.y + 0.15).normalize(), l2 = 0.2 + r8() * 0.1
         branches.push(limb(b, d2, l2, 0.016, 0.008)); tips.push(b.clone().addScaledVector(d2, l2))
-        for (let k = 0; k < 22; k++) { const t = r8(), p = b.clone().addScaledVector(d2, l2 * t); fruits.push(new THREE.IcosahedronGeometry(0.005 + r8() * 0.002, 1).translate(p.x + (r8() - 0.5) * 0.03, p.y + (r8() - 0.5) * 0.03, p.z + (r8() - 0.5) * 0.03)) }
+        for (let k = 0; k < 34; k++) { const t = r8(), p = b.clone().addScaledVector(d2, l2 * t); fruits.push(figBall(0.005 + r8() * 0.002, p.x + (r8() - 0.5) * 0.03, p.y + (r8() - 0.5) * 0.03, p.z + (r8() - 0.5) * 0.03)) }
       }
     }
-    for (let k = 0; k < 60; k++) { const y = 0.1 + r8() * 0.32, a = r8() * TAU; fruits.push(new THREE.IcosahedronGeometry(0.006, 1).translate(Math.cos(a) * 0.06, y, Math.sin(a) * 0.06)) }   // 樹幹上也有
+    for (let k = 0; k < 60; k++) { const y = 0.1 + r8() * 0.32, a = r8() * TAU; fruits.push(figBall(0.006, Math.cos(a) * 0.062, y, Math.sin(a) * 0.062)) }   // 樹幹上也有
+    // 氣根：主枝下面垂下來的細根（有的垂到地、有的半空），樹幹外面再纏幾條細的（絞殺榕把宿主包起來的樣子）
+    for (let i = 0; i < 16; i++) {
+      const a = r8() * TAU, rr = 0.08 + r8() * 0.22, y0 = 0.36 + r8() * 0.12, y1 = r8() < 0.45 ? 0 : y0 * (0.3 + r8() * 0.5)
+      const pts = []; for (let k = 0; k <= 5; k++) { const t = k / 5; pts.push(V(Math.cos(a) * rr * (1 - 0.15 * t) + Math.sin(t * 5 + i) * 0.006, y0 + (y1 - y0) * t, Math.sin(a) * rr * (1 - 0.15 * t))) }
+      trunkG.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 6, 0.0025 + r8() * 0.002, 4))
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = r8() * TAU, pts = []
+      for (let k = 0; k <= 8; k++) { const t = k / 8, tw = a + t * (1.2 + r8() * 0.3); pts.push(V(Math.cos(tw) * (0.05 - t * 0.016), t * 0.44, Math.sin(tw) * (0.05 - t * 0.016))) }
+      trunkG.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 10, 0.008 + r8() * 0.005, 6))
+    }
     // 樹冠：每個枝梢一團葉（十幾片卡片圍成半球），團跟團之間有空隙，看得到枝和果
     for (const tp of [...tips, V(0, 0.98, 0), V(0.15, 0.92, 0.1), V(-0.12, 0.94, -0.12)]) {
-      for (let k = 0; k < 13; k++) {
-        const az = r8() * TAU, el = r8() * 1.2, rr = 0.11 + r8() * 0.05
+      for (let k = 0; k < 17; k++) {
+        const az = r8() * TAU, el = r8() * 1.2, rr = 0.1 + r8() * 0.07
         const c = tp.clone().add(V(Math.cos(az) * Math.cos(el) * rr, Math.sin(el) * rr * 0.8 - 0.02, Math.sin(az) * Math.cos(el) * rr))
-        crown.push(new THREE.PlaneGeometry(0.24, 0.2).rotateX(-0.6 - r8() * 0.8).rotateY(az + Math.PI / 2).translate(c.x, c.y, c.z).toNonIndexed())
+        const cs = 0.75 + r8() * 0.5; crown.push(new THREE.PlaneGeometry(0.24 * cs, 0.2 * cs).rotateX(-0.6 - r8() * 0.8).rotateY(az + Math.PI / 2).translate(c.x, c.y, c.z).toNonIndexed())
       }
     }
     const figTrunk = vcol(mergeGeometries([...trunkG.map((q) => q.toNonIndexed()), ...branches.map((q) => q.toNonIndexed())]))
-    const figFruit = vcol(mergeGeometries(fruits.map((q) => q.toNonIndexed())))
+    const figFruit = mergeGeometries(fruits)
     const figCrown = (() => { const gg = mergeGeometries(crown), pp = gg.attributes.position, nn = gg.attributes.normal, cc = new Float32Array(pp.count * 3)
       for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i), l = Math.hypot(x, z) || 1; nn.setXYZ(i, x / l * 0.5, 0.85, z / l * 0.5); const k = (0.75 + 0.25 * Math.min(1, l / 0.5)) * (0.85 + 0.25 * Math.min(1, Math.max(0, y - 0.6) / 0.4)); cc[i * 3] = cc[i * 3 + 1] = cc[i * 3 + 2] = k }
       gg.setAttribute('color', new THREE.BufferAttribute(cc, 3)); return gg })()
     const figCore = vcol(new THREE.SphereGeometry(0.2, 10, 6).scale(1.2, 0.5, 1.2).translate(0, 0.8, 0), 1)
-    const bark = new THREE.MeshStandardMaterial({ color: 0x9a948a, roughness: 0.9, vertexColors: true })   // 雀榕的樹皮灰白
-    const figM = leafMat(figLeafT, { roughness: 0.45, color: 0xd8ead0 }), coreM = new THREE.MeshStandardMaterial({ color: 0x3d6234, roughness: 1, vertexColors: true })
-    const fruitM = new THREE.MeshStandardMaterial({ color: 0xd98aa0, roughness: 0.5, vertexColors: true })
+    const bark = new THREE.MeshStandardMaterial({ map: barkT, color: 0xe8e4dc, roughness: 0.85, vertexColors: true })   // 雀榕的樹皮灰白（地衣、皮孔）
+    const figM = leafMat(figLeafT, { roughness: 0.4, color: 0xdfe8d8 }), coreM = new THREE.MeshStandardMaterial({ color: 0x3d6234, roughness: 1, vertexColors: true })
+    const fruitM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.38, vertexColors: true })
     const FIG = [], SCH = [], FLW = { lily: [], hyper: [], gent: [] }
     const okHere = (x, z, trail, r) => inAlpine(x, z, 2) && domeRho(x, z) < 0.93 && trail >= r && alpineStreamDist(x, z) > 2.5 && bridgeDist(x, z) > 3 && Math.hypot(x - CABIN.x, z - CABIN.z) > CABIN.R + 3 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) > ALP_POND.r + 2 && !nearBird(avoid, x, z, 4, 2)
     for (const f of FIGPOS) {
@@ -833,9 +926,9 @@ function buildInterior(lib, avoid = []) {
       if (nearFig(x, z, 1.5)) continue
       if (SCH.length < 60 && hgt < 30 && td > 2.6 && td < 7 && okHere(x, z, td, 2.6)) {
         SCH.push({ p: V(x, hgt - 0.05, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(1.1 + rnd() * 0.7) })
-      } else if (td > 1.6 && td < 4.5 && okHere(x, z, td, 1.6)) {
+      } else if (td > 1.25 && td < 3.6 && okHere(x, z, td, 1.25)) {   // 2026-11-09 靠步道一點：以前 1.6～4.5 公尺常被箭竹整叢蓋住
         const kind = hgt < 14 ? 'lily' : hgt < 32 ? 'hyper' : 'gent'
-        if (FLW[kind].length < 160) FLW[kind].push({ p: V(x, hgt - 0.02, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(kind === 'lily' ? 0.9 + rnd() * 0.5 : 0.5 + rnd() * 0.3) })
+        if (FLW[kind].length < 160) FLW[kind].push({ p: V(x, hgt - 0.02, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(kind === 'lily' ? 0.9 + rnd() * 0.5 : kind === 'hyper' ? 0.85 + rnd() * 0.35 : 0.65 + rnd() * 0.3) })
       }
     }
     const inst = (geo, mat, list, cast = true) => {
@@ -848,6 +941,7 @@ function buildInterior(lib, avoid = []) {
     lodRegister([inst(crossCards(9, 1.0, 1.1, 0, 61, 0.3), leafMat(scheffT), SCH)], 6)
     for (const [kind, list] of Object.entries(FLW)) if (list.length) lodRegister([inst(crossCards(5, 0.7, 0.75, 0, 70 + kind.length, 0.12), leafMat(flowerT(kind)), list, false)], 3)
     FIG_TREES.push(...FIG.map((f) => ({ x: f.p.x, y: f.p.y, z: f.p.z, H: f.H })))
+    Object.assign(FLORA_SPOTS, { sch: SCH.map((it) => it.p), ...Object.fromEntries(Object.entries(FLW).map(([k, l]) => [k, l.map((it) => it.p)])) })
   }
   // 岩石：陡坡上的大岩塊、溪邊的長苔石頭（用溫室那批岩石模型）
   {
