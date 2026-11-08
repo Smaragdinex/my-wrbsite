@@ -200,7 +200,7 @@ class Walker {
 }
 // 沿樹枝跳
 class Hopper {
-  constructor(env, { hop = [0.15, 0.4], rest = [0.8, 3.5], dur = 0.26, span = [0.45, 1.25], blocked } = {}) {
+  constructor(env, { hop = [0.15, 0.4], rest = [0.8, 3.5], dur = 0.26, span = [0.85, 1.35], blocked } = {}) {   // span：身體往鏡頭（步道那側）轉多少（2026-11-09 使用者：要面對走道，以前 0.45～1.25 太多是側身）
     Object.assign(this, { env, hopR: hop, restR: rest, dur, span, blocked })
     const { min, max } = env.branch
     this.s = rnd(min + 0.2, max - 0.1); this.k = 1; this.y = 0; this.wait = rnd(...rest); this.landed = 9
@@ -959,7 +959,7 @@ function perchGroup(n, gap, start, mk) {
   const birds = []
   const blocked = (s1, me) => birds.some((b) => b.hopper !== me && Math.abs(b.hopper.s - s1) < gap)
   for (let i = 0; i < n; i++) birds.push(mk(blocked))
-  birds.forEach((b, i) => { b.hopper.s = start + i * gap * 1.4 })
+  birds.forEach((b, i) => { const br = b.hopper.env.branch; b.hopper.s = clamp(start + i * gap * 1.4, br.min + 0.1, br.max) })   // 第二隻不能排到枝條末端外面
   return group(birds, () => V(birds.reduce((a, b) => a + b.hopper.s, 0) / n, 0.3, 0), n >= 3)
 }
 // 地上兩隻：各走各的，選目的地和走的路線都會避開另一隻
@@ -1308,7 +1308,8 @@ export function placeAnimal(def) {
     env.toCam = toCam.clone().applyAxisAngle(V(0, 1, 0), -obj.rotation.y)
     // 枝條表面的高度（obj 座標，s = 樹的 x - len）
     // z(s)：枝條中心左右微微彎（limb.z），鳥要站在正上方，不然會偏到枝條側面、腳踩空
-    env.branch = { min: -len * 0.8, max: 0.15, top: (s) => limb.center(s + len) + limb.radius(s + len) - y, z: (s) => limb.z(s + len),
+    env.branch = { min: -len * 0.8, max: -0.18,   // max：2026-11-09 以前 0.15 超出枝條末端，鳥站在葉團上、腳踩空（藍鵲）
+      top: (s) => limb.center(s + len) + limb.radius(s + len) - y, z: (s) => limb.z(s + len),
       // 點（obj 座標）到枝條表面的距離：正的是浮在外面、負的是陷進去
       gap: (px, py, pz) => { const x = px + len; return Math.hypot(py - (limb.center(x) - y), pz - limb.z(x)) - limb.radius(x) } }
     env.waterLocal = waterY - gy - y   // 水面在 obj 座標的高度（翠鳥俯衝用）
