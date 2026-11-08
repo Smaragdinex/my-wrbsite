@@ -251,22 +251,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   const door = { p: 0, v: 0, hold: 0, want: 0, bounce: 0, bt: 9 }   // p：開了幾公尺；v：速度（m/s）
   const doorSfx = createDoorSfx({ getSound })
   const TRAVEL = OPEN + 0.05
-  // 店內那面門上：往溫室的指標牌（吊在天花板）
-  {
-    const t = canvasTex(512, 128, (x, w, h) => {
-      x.fillStyle = '#1f2a24'; x.fillRect(0, 0, w, h); x.fillStyle = '#7fd19c'; x.fillRect(0, h - 8, w, 8)
-      x.fillStyle = '#fff'; x.textBaseline = 'middle'; if (LANG === 'en') { x.font = '700 50px "Helvetica Neue", Arial, sans-serif'; x.fillText('PARK', 120, h / 2 + 2) }
-      else {
-        x.font = `bold 56px ${FONT_SANS}`; x.fillText(tr('公園'), 120, h / 2 - 2, 124)
-        x.font = '600 34px "Helvetica Neue", Arial, sans-serif'; x.fillStyle = '#cfe8d8'; x.fillText('PARK', 250, h / 2 + 2)
-      }
-      x.strokeStyle = '#fff'; x.lineWidth = 9; x.beginPath(); x.moveTo(62, h - 26); x.lineTo(62, 26); x.moveTo(38, 50); x.lineTo(62, 24); x.lineTo(86, 50); x.stroke()   // 往前直走的箭頭
-    })
-    const sm = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.5 }))
-    sm.rotation.y = -Math.PI / 2; sm.position.set(X0 - 0.9, 3.55, 0); g.add(sm)
-    box('dark', 0.04, 0.37, 1.42, X0 - 0.87, 3.55, 0)
-    for (const z of [-0.55, 0.55]) bar('steel', V(X0 - 0.88, 3.72, z), V(X0 - 0.88, H, z), 0.012)
-  }
+  // 店內那面門上原本吊一塊「公園 PARK」指標牌：2026-11-09 使用者要拿掉
   const mat2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.02, 2.6), mat.material); mat2.position.set(X0 - 0.95, 0.04, 0); mat2.receiveShadow = true; g.add(mat2)   // 門內腳踏墊
   // 防盜感應門（EAS）：兩根白色立板夾著門口
   for (const s of [-1, 1]) {
