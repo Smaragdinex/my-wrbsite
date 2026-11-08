@@ -94,6 +94,16 @@ function canvasTex(draw) {
   return t
 }
 const pageNo = (ctx, n, side) => { ctx.font = `26px ${SERIF}`; ctx.fillStyle = MUTED; ctx.textAlign = side === 'L' ? 'left' : 'right'; ctx.fillText(String(n), side === 'L' ? 70 : CW - 70, CH - 56); ctx.textAlign = 'left' }
+// 每一頁鳥的左頁下方：「↩ 回到目錄」（點了翻回目錄；範圍給 createGuide 的點擊判斷用，畫布像素）
+const BACK = { x0: CW - 360, x1: CW - 50, y0: CH - 100, y1: CH - 30 }
+function backLink(ctx) {
+  ctx.font = `28px ${SANS}`; ctx.fillStyle = ACCENT; ctx.textAlign = 'right'
+  ctx.fillText('↩ ' + tr('回到目錄'), CW - 70, CH - 56)
+  const w = ctx.measureText('↩ ' + tr('回到目錄')).width
+  ctx.fillRect(CW - 70 - w, CH - 46, w, 2); ctx.textAlign = 'left'
+}
+// 目錄每一行的位置（畫和點擊判斷共用）
+const TOC_TOP = 220, tocStep = () => Math.min(46, (CH - 160 - TOC_TOP) / BIRDS.length)
 function stamp(ctx, text, x, y, color) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(-0.12)
   ctx.font = `bold 30px ${SANS}`; const w = ctx.measureText(text).width + 34
@@ -126,7 +136,7 @@ function birdLeft(b, i, rec) {
     if (!rec) {
       ctx.font = `30px ${SANS}`; ctx.fillStyle = INK
       for (const l of wrap(ctx, tr('還沒拍到這種鳥。到「{where}」附近找找看，拍到之後這一頁會補上介紹。', { where: b.where }), W)) { ctx.fillText(l, X, y); y += 52 }
-      pageNo(ctx, i * 2 + 3, 'L')
+      pageNo(ctx, i * 2 + 3, 'L'); backLink(ctx)
       return
     }
     // 介紹＋小知識：放不下就把字縮小一點，再放不下就少放幾條小知識
@@ -151,7 +161,7 @@ function birdLeft(b, i, rec) {
       ctx.font = `${bold ? 'bold ' : ''}${s}px ${SANS}`; ctx.fillStyle = c; ctx.fillText(t, x, yy)
       if (dot) { ctx.fillStyle = ACCENT; ctx.beginPath(); ctx.arc(X + 12, yy - s * 0.35, 5, 0, 7); ctx.fill() }
     }
-    pageNo(ctx, i * 2 + 3, 'L')
+    pageNo(ctx, i * 2 + 3, 'L'); backLink(ctx)
   })
 }
 function birdRight(b, i, rec, info) {
@@ -185,7 +195,7 @@ function contentsLeft(nRec) {
     ctx.fillStyle = 'rgba(80,60,30,0.15)'; ctx.fillRect(bx, 628, bw, 18)
     ctx.fillStyle = ACCENT; ctx.fillRect(bx, 628, bw * nRec / BIRDS.length, 18)
     ctx.fillStyle = MUTED; ctx.font = `26px ${SANS}`
-    ;[tr('拍到一種鳥，就會記進這本圖鑑。'), tr('← →、A D 或點書頁翻頁'), tr('E 或 Esc 闔上')].forEach((t, k) => ctx.fillText(t, CW / 2, 790 + k * 52, CW - 120))
+    ;[tr('拍到一種鳥，就會記進這本圖鑑。'), tr('← →、A D 或點書頁翻頁'), tr('點目錄裡的鳥，直接翻到那一頁'), tr('E 或 Esc 闔上')].forEach((t, k) => ctx.fillText(t, CW / 2, 790 + k * 52, CW - 120))
     ctx.textAlign = 'left'
   })
 }
@@ -193,7 +203,7 @@ function contentsRight(recs) {
   return canvasTex((ctx) => {
     paper(ctx, 'R')
     ctx.fillStyle = INK; ctx.font = `bold 46px ${SERIF}`; ctx.fillText(tr('目錄'), 90, 140)
-    const top = 220, step = Math.min(46, (CH - 160 - top) / BIRDS.length)
+    const top = TOC_TOP, step = tocStep()
     BIRDS.forEach((b, i) => {
       const y = top + i * step, rec = recs[i]
       ctx.font = `26px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(String(i + 1).padStart(2, '0'), 90, y)
@@ -415,7 +425,7 @@ export function createGuide({ renderer, getRecords, onClose }) {
   const hud = document.createElement('div')
   hud.className = 'guide-ui'; hud.hidden = true
   hud.innerHTML = `<button class="x" aria-label="${tr('關閉')}"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 3l12 12M15 3L3 15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
-    <div class="guide-hint">${tr('← → 翻頁　E 闔上')}</div>`
+    <div class="guide-hint">${tr('← → 翻頁　Home 回目錄　E 闔上')}</div>`
   document.body.appendChild(hud)
   hud.querySelector('.x').onclick = () => close()
 
@@ -433,25 +443,51 @@ export function createGuide({ renderer, getRecords, onClose }) {
   function turn(dirn) {
     if (!st.open || st.t < 0.98) return
     if (st.flip) { if (st.flip.queue === 0) st.flip.queue = dirn; return }
-    const to = st.spread + dirn
-    if (to < 0 || to >= NS) return
-    st.flip = { dirn, from: st.spread, to, p: 0, queue: 0 }
+    jump(st.spread + dirn)
+  }
+  // 直接翻到第 to 個跨頁（目錄點鳥名、回到目錄）：一張紙翻過去，紙的正面是現在的右頁、背面是目標的左頁
+  function jump(to) {
+    if (!st.open || st.t < 0.98 || st.flip || to === st.spread || to < 0 || to >= NS) return
+    st.flip = { dirn: Math.sign(to - st.spread), from: st.spread, to, p: 0, queue: 0 }
     warmAround(to)
+  }
+  // 點書頁：打到哪一頁、換成畫布像素，看是不是點到目錄的一行、或「回到目錄」
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2()
+  function pagePick(e) {
+    if (st.flip || st.t < 0.98) return null
+    const r = renderer.domElement.getBoundingClientRect()
+    ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+    ray.setFromCamera(ndc, cam)
+    const hit = ray.intersectObjects([leftPage, rightPage], false)[0]
+    if (!hit?.uv) return null
+    const x = hit.uv.x * CW, y = (1 - hit.uv.y) * CH
+    if (st.spread === 0 && hit.object === rightPage) {
+      const i = Math.round((y - TOC_TOP + 12) / tocStep())
+      if (i >= 0 && i < BIRDS.length && x > 80 && x < CW - 50 && Math.abs(y - (TOC_TOP + i * tocStep()) + 12) < tocStep() / 2 + 2) return { to: i + 1 }
+    }
+    if (st.spread > 0 && hit.object === leftPage && x > BACK.x0 && x < BACK.x1 && y > BACK.y0 && y < BACK.y1) return { to: 0 }
+    return null
   }
   addEventListener('keydown', (e) => {
     if (!st.open) return
     if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'PageDown') turn(1)
     else if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'PageUp') turn(-1)
+    else if (e.code === 'Home' || e.code === 'KeyT') jump(0)
     else if (e.code === 'Escape') close('esc')
   })
-  renderer.domElement.addEventListener('click', (e) => { if (st.open) turn(e.clientX > innerWidth / 2 ? 1 : -1) })
+  renderer.domElement.addEventListener('click', (e) => {
+    if (!st.open) return
+    const pk = pagePick(e)
+    if (pk) jump(pk.to); else turn(e.clientX > innerWidth / 2 ? 1 : -1)
+  })
+  renderer.domElement.addEventListener('mousemove', (e) => { if (st.open) renderer.domElement.style.cursor = pagePick(e) ? 'pointer' : '' })
   let wheelT = 0
   addEventListener('wheel', (e) => { if (!st.open || performance.now() - wheelT < 350 || Math.abs(e.deltaY) < 4) return; wheelT = performance.now(); turn(e.deltaY > 0 ? 1 : -1) })
 
   function render(dt) {
     if (st.t <= 0 && !st.open) return
     st.time += dt
-    st.t = st.target > st.t ? Math.min(1, st.t + dt / 1.5) : Math.max(0, st.t - dt / 0.6)
+    st.t = st.target >= st.t ? Math.min(1, st.t + dt / 1.5) : Math.max(0, st.t - dt / 0.6)   // >=：以前開到 1 之後會被當成「要闔上」扣一點，t 在 0.97～1 之間跳，翻頁（要 ≥ 0.98）約一半按了沒反應
     const t = st.t
     // 0～0.35：從下面升上來；0.3～0.85：封面翻開；鏡頭一路拉近
     const rise = ease(clamp01(t / 0.35)), opn = ease(clamp01((t - 0.3) / 0.55))
@@ -480,7 +516,7 @@ export function createGuide({ renderer, getRecords, onClose }) {
     }
     const F = st.flip
     let A, B
-    if (F) { A = Math.min(F.from, F.to); B = A + 1 } else A = B = st.spread
+    if (F) { A = Math.min(F.from, F.to); B = Math.max(F.from, F.to) } else A = B = st.spread   // 跳頁時 A、B 不相鄰：左頁 A、右頁 B，翻的紙正面 A 的右頁、背面 B 的左頁
     leftPage.material = mat('L', A); rightPage.material = mat('R', B)
     leafF.visible = leafB.visible = !!F
     if (F) {
@@ -511,5 +547,5 @@ export function createGuide({ renderer, getRecords, onClose }) {
     renderer.render(scene, cam)
     renderer.autoClear = ac
   }
-  return { open, close, render, turn, get isOpen() { return st.open }, get visible() { return st.t > 0 }, st, dbg: { scene, cam, leftPage, rightPage, mats, dim, dioramas } }
+  return { open, close, render, turn, jump, get isOpen() { return st.open }, get visible() { return st.t > 0 }, st, dbg: { scene, cam, leftPage, rightPage, mats, dim, dioramas } }
 }
