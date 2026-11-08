@@ -5,10 +5,11 @@
 // 整組掛在玩家鏡頭底下，放在 layer 3：拍照、測光的鏡頭不畫這層。
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 
 export const VM_LAYER = 3
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
-const loader = new GLTFLoader()
+const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/'))
 const load = (p) => loader.loadAsync(`${p}?v=${VER}`).then((g) => g.scene)
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const { clamp, lerp, smoothstep: ss } = THREE.MathUtils
@@ -28,15 +29,22 @@ const POSES = {
 export async function createViewmodel(camera) {
   const root = new THREE.Group()
   camera.add(root)
-  const [hand, ...cams] = await Promise.all(['models/hand-grip.glb', 'models/camera/body-b1.glb', 'models/camera/body-b2.glb', 'models/camera/body-b3.glb',
+  const [handModel, ...cams] = await Promise.all(['models/hand-grip2.glb', 'models/camera/body-b1.glb', 'models/camera/body-b2.glb', 'models/camera/body-b3.glb',
     'models/camera/lens-l1.glb', 'models/camera/lens-l2.glb', 'models/camera/lens-l3.glb', 'models/camera/lens-l4.glb', 'models/camera/lens-l5.glb'].map(load))
   const bodies = { b1: cams[0], b2: cams[1], b3: cams[2] }, lenses = { l1: cams[3], l2: cams[4], l3: cams[5], l4: cams[6], l5: cams[7] }
   const camRig = new THREE.Group()
   root.add(camRig)
   for (const m of [...Object.values(bodies), ...Object.values(lenses)]) { m.visible = false; camRig.add(m) }
+  // 2026-11-09 第二版手：ChatGPT 畫「空手握著握把的手勢」（手裡什麼都沒拿）→ Tripo → 減面（models/hand-grip2.glb）。
+  // 第一版是手拿相機一起生成再把相機刪掉，手掌貼握把那一大片跟著被刪，只剩一條手指搭在機頂，看起來很怪。
+  // 對齊在這裡做（fit：位置、角度、大小），手包住我們機身右邊的握把
+  const hand = new THREE.Group(), fit = new THREE.Group()
+  fit.add(handModel); hand.add(fit)
+  // Tripo 模型：前臂朝 -x、手指朝 +x，0.3 倍；先轉成手背朝外、手指從右邊包住握把，再微調（在遊戲畫面裡一格格比對出來的）
+  fit.quaternion.setFromEuler(new THREE.Euler(0.15, -0.45, 0.1)).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.65, Math.PI / 2, 0)))
+  fit.position.set(0.092, -0.16, 0.015); fit.scale.setScalar(0.3)
   camRig.add(hand)
   // 手掌貼著握把那一片是刪掉 Tripo 相機留下的開口：雙面畫，從開口看進去是手內側的皮膚，不會透過手看到後面（tools/make-hand-grip.py）
-  hand.traverse((o) => { if (o.isMesh) o.material.side = THREE.DoubleSide })
   root.traverse((o) => {
     o.layers.set(VM_LAYER)
     if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false }
@@ -119,7 +127,7 @@ export async function createViewmodel(camera) {
   }
   // 鏡頭被程式直接搬走（首頁 ↔ 遊戲）時呼叫：不要把這一跳當成甩頭、跑步，手才不會一進遊戲就晃
   function snap() { st.lastYaw = camera.rotation.y; st.lastPitch = camera.rotation.x; st.sway.set(0, 0, 0); st.bob = 0 }
-  const vm = { root, camRig, hand, bodies, lenses, screens, tune, setGear, update, render, st, POSES, setScreenTexture, snap, get screen() { return screens[st.body] } }
+  const vm = { root, camRig, hand, fit, handModel, bodies, lenses, screens, tune, setGear, update, render, st, POSES, setScreenTexture, snap, get screen() { return screens[st.body] } }
   window.__vm = vm
   return vm
 }
