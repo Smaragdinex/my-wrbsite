@@ -634,6 +634,9 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     const base = new THREE.Color(), c = new THREE.Color()
     tries = 0
     let clumps = 0
+    const GB_R0 = 3.5
+    const groundBirds = stops.map((st) => st.bird?.def).filter((d) => d?.perch === 'ground' && d.water == null && !d.swim).map((d) => d.spot)
+    window.__groundBirds = groundBirds
     // 一半撒全園，一半集中在步道兩旁 5 公尺內（鏡頭最常看的地方）
     while (clumps < 80000 && tries++ < 500000) {
       let x, z
@@ -646,12 +649,17 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       if (!groundOK(x, z, { clear: 0.12, mtnPad: 0.4, pool: 1.1, rho: 0.96 })) continue
       // 鏡頭腳下不長草（近距離的草葉會大到擋住畫面）
       if (stops.some((st) => (st.pos.x - x) ** 2 + (st.pos.z - z) ** 2 < 9)) continue
+      // 地上走的鳥（斑鳩、麻雀…）四周不長高草：鳥只有 20～40 公分高，從步道拉長焦拍，中間隔一叢 50 公分的草就整隻擋住（2026-11-08）。
+      // 走動範圍＋3.5 公尺內不長，再往外 3 公尺慢慢從矮草長回原本高度
+      const gb = groundBirds.reduce((m, b) => Math.min(m, Math.hypot(x - b[0], z - b[1])), 99)
+      if (gb < GB_R0) continue
+      const gk = Math.min(1, 0.25 + 0.75 * (gb - GB_R0) / 3)
       // 大片的疏密：有的地方是草坪，有的只稀稀落落
       const dens = fbm2(x * 0.06 + 3, z * 0.06)
       if (rnd() > 0.45 + dens * 1.4) continue
       const gy = terrainHeight(x, z) - 0.01
       base.setHSL(0.24 + dens * 0.05 + (rnd() - 0.5) * 0.03, 0.5, 0.33 + rnd() * 0.08)
-      const m = 4 + Math.floor(rnd() * 6), a0 = rnd() * TAU, tall = 0.22 + rnd() * 0.35 + Math.max(0, dens) * 0.3
+      const m = 4 + Math.floor(rnd() * 6), a0 = rnd() * TAU, tall = (0.22 + rnd() * 0.35 + Math.max(0, dens) * 0.3) * gk
       for (let j = 0; j < m; j++) {
         const a = a0 + (j / m) * TAU + (rnd() - 0.5) * 0.7, d = rnd() * 0.06
         c.copy(base)
