@@ -6,7 +6,7 @@ import { createAmbience } from './ambience.js'
 import { createPlayer } from '../player.js'
 import { createHud } from './hud.js'
 import { createCamera, BODIES, LENSES } from './camera.js'
-import { createAlbum } from './album.js'
+import { createPlayback } from './playback.js'
 import { createGuide } from './guide.js'
 import { createShop } from './shop.js'
 import { createProductView } from './product.js'
@@ -84,7 +84,8 @@ const cam = createCamera({ world, camera, controls: player.controls, hud, gear, 
 
 // 面板（相簿、相機行）開著的時候放開滑鼠；關掉再鎖回去
 const relock = () => player.controls.lock()
-const album = createAlbum({ photos, onDelete: (p) => { photos.splice(photos.indexOf(p), 1); deletePhoto(p.time) }, onClose: relock })
+// Tab：相機背面螢幕的回放（playback.js，2026-11-08 取代網頁式的相簿）
+const album = createPlayback({ photos, onDelete: (p) => { const i = photos.indexOf(p); if (i >= 0) photos.splice(i, 1); deletePhoto(p.time) }, onClose: relock })
 const store = await buildStore(scene, state, world.plantLib, { getSound: () => settings.state.sound })   // 自動門音效跟著設定的「音效」開關（只在玩的時候才會叫到，那時 settings 已經建好）   // 相機行：溫室門口外面那棟店，遊戲從店裡開始
 const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock, onView: (it, all) => product.open(it, all) })
 // Esc 闔上：瀏覽器不讓 Esc 重新鎖滑鼠，就回到首頁選單（跟平常按 Esc 一樣）
@@ -101,6 +102,7 @@ const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
 addEventListener('keydown', (e) => {
   if (guide.isOpen) { if (e.code === 'KeyE') guide.close(); if (e.code === 'Tab') e.preventDefault(); return }   // 圖鑑開著：翻頁、Esc 在 guide.js 處理
+  if (album.key(e)) return   // 回放開著：方向鍵、Q/E、刪除…都給它（Tab、Esc 關掉）
   if (e.code === 'Tab') { e.preventDefault(); if (album.isOpen) album.close(); else if (!shop.isOpen && !product.isOpen) openPanel(album) }
   // E：舉著相機 → 相機設定；靠近相機行 → 進店；靠近長椅 → 休息
   if (e.code === 'KeyE' && cam.panelOpen) { cam.closePanel(); return }

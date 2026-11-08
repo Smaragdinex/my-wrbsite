@@ -26,6 +26,9 @@ export const vfov = (f) => THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * f)))
 
 const WALK_FOV = 62
 const PHOTO_W = 1200, PHOTO_H = 800
+// 雜訊表：三個均勻亂數相加減 1.5（跟以前每個像素現算的分佈一樣），2^18 個
+const GM = (1 << 18) - 1, GN = new Float32Array(GM + 1)
+for (let i = 0; i <= GM; i++) GN[i] = Math.random() + Math.random() + Math.random() - 1.5
 const KEY = 'birdpark-camera-v1'
 
 // 觀景窗裡的對焦點：照單眼經典的 9 點菱形排法（座標照使用者給的參考圖量的，整張 1200×800 對應觀景窗的 3:2 框）
@@ -301,10 +304,11 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     for (let i = 0; i < n; i++) { const u = i / (n - 1) - 0.5; dst.globalAlpha = 1 / (i + 1); dst.drawImage(src, dx * u, dy * u) }
     dst.restore(); dst.globalAlpha = 1
   }
+  let devQ = Promise.resolve()
   function shoot() {
     if (st.cool > 0) return
     st.cool = 1 / body().fps
-    meterNow()
+    // 測光：update 每 0.25 秒量一次，按快門直接用最近那次（以前這裡再量一次：多畫一張圖＋讀回，約 20～50 毫秒）
     const s = now()
     sfx.shutter(s.t, { fast: body().fps >= 15 })
     const sc = photoCam()
@@ -335,16 +339,28 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     outPass.render(r, rtOut, rt)
     r.toneMappingExposure = ex0
     r.setRenderTarget(prev)
+    // 快門閃一下（慢快門閃久一點）：馬上閃，不等照片處理完
+    const fl = $('.vf-flash'); fl.style.animationDuration = `${Math.max(0.18, Math.min(1, s.t * 2))}s`; fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go')
+    // 讀回照片改成非同步（2026-11-08）：以前同步讀回要等 GPU 畫完（約 50 毫秒），按快門那一格會卡一下。
+    // 讀回的指令現在就發出去（照片內容就是這一刻的畫面），後面的模糊、雜訊、存 JPEG 等資料回來再做
     const px = new Uint8Array(PHOTO_W * PHOTO_H * 4)
-    r.readRenderTargetPixels(rtOut, 0, 0, PHOTO_W, PHOTO_H, px)
+    const job = { s, found, result, shake, shakeDir, noise, locked: st.locked }
+    const ready = r.readRenderTargetPixelsAsync(rtOut, 0, 0, PHOTO_W, PHOTO_H, px)
+    devQ = devQ.then(() => ready).then(() => develop(px, job)).catch((e) => console.warn('[camera] 沖洗失敗', e))   // 連拍時一張一張沖（共用畫布）
+  }
+  // 沖洗：把讀回來的像素做成照片（對焦模糊、手震、動態模糊、雜訊），存成 JPEG 交給 onShot
+  // 分三段做、中間讓出一格（每段 20～40 毫秒），不會一次卡 100 多毫秒
+  const nextFrame = () => new Promise((q) => setTimeout(q, 0))
+  async function develop(px, { s, found, result, shake, shakeDir, noise, locked }) {
     const img = rctx.createImageData(PHOTO_W, PHOTO_H)
     for (let y = 0; y < PHOTO_H; y++) img.data.set(px.subarray((PHOTO_H - 1 - y) * PHOTO_W * 4, (PHOTO_H - y) * PHOTO_W * 4), y * PHOTO_W * 4)
     rctx.putImageData(img, 0, 0)
     // 1. 對焦：沒對到主角就整張照誤差糊（之前的做法）
     const sub = result.subject
-    const defocus = sub ? (1 - sub.focusSharp) * 6 : (st.locked ? 0 : 3)
+    const defocus = sub ? (1 - sub.focusSharp) * 6 : (locked ? 0 : 3)
     ctx.filter = defocus > 0.3 ? `blur(${defocus.toFixed(1)}px)` : 'none'
     ctx.drawImage(raw, 0, 0); ctx.filter = 'none'
+    await nextFrame()
     // 2. 手震：整張沿一個方向拖
     if (shake > 0.8) { tctx.clearRect(0, 0, PHOTO_W, PHOTO_H); tctx.drawImage(canvas, 0, 0); smear(ctx, tmp, Math.cos(shakeDir) * shake, Math.sin(shakeDir) * shake) }
     // 3. 鳥在動：只拖鳥那一塊（沿牠在畫面上移動的方向）
@@ -361,15 +377,16 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     // 4. 雜訊：ISO 越高、曝光越不足越多；亮度雜訊＋一點彩色雜訊
     if (noise > 1.5) {
       const d = ctx.getImageData(0, 0, PHOTO_W, PHOTO_H), a = d.data
+      // 亂數查表（預先算好的一大張雜訊表，從隨機位置開始讀）：以前每個像素叫 5 次 Math.random，一張要 30～45 毫秒
+      let j = (Math.random() * GN.length) | 0
       for (let i = 0; i < a.length; i += 4) {
-        const g = (Math.random() + Math.random() + Math.random() - 1.5) * noise
-        a[i] += g + (Math.random() - 0.5) * noise * 0.5; a[i + 1] += g; a[i + 2] += g + (Math.random() - 0.5) * noise * 0.5
+        const g = GN[j] * noise, c1 = GN[(j + 7919) & GM] * noise * 0.29, c2 = GN[(j + 104729) & GM] * noise * 0.29; j = (j + 1) & GM
+        a[i] += g + c1; a[i + 1] += g; a[i + 2] += g + c2
       }
       ctx.putImageData(d, 0, 0)
     }
+    await nextFrame()
     const url = canvas.toDataURL('image/jpeg', 0.85)
-    // 快門閃一下（慢快門閃久一點）
-    const fl = $('.vf-flash'); fl.style.animationDuration = `${Math.max(0.18, Math.min(1, s.t * 2))}s`; fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go')
     onShot?.({ url, ...result, found: found.map(({ obj, ...f }) => f), focal: Math.round(st.focal), lens: lens().name, body: body().name, time: Date.now(),
       exif: { mode: cam.mode, N: s.N, t: s.t, iso: s.iso, over: Math.round(s.over * 10) / 10, ev: Math.round(meter.ev * 10) / 10 } })
   }

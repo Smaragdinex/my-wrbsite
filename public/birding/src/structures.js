@@ -330,6 +330,7 @@ export function buildGround(scene) {
   g.computeVertexNormals()
   const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: T.grassGroundTex(), vertexColors: true, roughness: 1 }))
   ground.receiveShadow = true
+  ground.userData.terrain = true   // 拍照算遮擋時用高度表（scoring.js）：16 萬個三角形逐個打射線，一張照片要好幾秒
   scene.add(ground)
 
   // 步道帶

@@ -2,6 +2,7 @@
 // 這些數字給評分（和之後的 LLM 評審）用。
 import * as THREE from 'three'
 import { t as tr } from '../i18n.js'
+import { terrainHeight, inAlpine, alpineHeight } from '../layout.js'
 
 // 每種鳥的基本價（越少見、越難拍越貴）
 export const VALUE = {
@@ -27,7 +28,7 @@ const ACTION = {
   call: [1.2, tr('正在鳴叫')], preen: [1.15, tr('理毛')], hunt: [1.1, tr('盯著獵物')], walk: [1.0, ''], look: [1.05, tr('抬頭張望')],
 }
 
-const _box = new THREE.Box3(), _v = new THREE.Vector3(), _c = new THREE.Vector3(), _s = new THREE.Vector3()
+const _box = new THREE.Box3(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _c = new THREE.Vector3(), _s = new THREE.Vector3()
 const ray = new THREE.Raycaster()
 
 // 一隻鳥（一群的話是每一隻）
@@ -36,8 +37,41 @@ function members(b) { return b.built.birds ?? [b.built] }
 // cam：拍照用的鏡頭；focusDist：對焦距離；dofTol：景深容許的距離誤差（公尺）
 export function measurePhoto(world, cam, { focusDist, dofTol }) {
   cam.updateMatrixWorld()
+  // 擋住鳥的東西（2026-11-08 加速：以前每條射線都跟全場 2300 多個模型逐一比，一張照片要 4 秒、按快門卡一下）：
+  // 1. 地形（地面、山區、圍牆外的草地）不打射線，改沿著射線取點比高度表
+  // 2. 其他模型先算好世界座標的包圍球，每條射線只拿「球有碰到射線」的那幾個去精算
   const occluders = []
-  world.scene.traverse((o) => { if ((o.isMesh || o.isInstancedMesh) && o.visible && !o.isSkinnedMesh && o.layers.test(ray.layers) && !o.material?.transparent) occluders.push(o) })
+  world.scene.traverse((o) => {
+    if (!(o.isMesh || o.isInstancedMesh) || o.isSkinnedMesh || o.userData.terrain || o.material?.transparent || !o.layers.test(ray.layers)) return
+    for (let p = o; p; p = p.parent) if (!p.visible) return
+    const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere()
+    if (o.isInstancedMesh) o.computeBoundingSphere()   // LOD 會改 count、換掉矩陣順序：每次重算（raycast 也用這個球）
+    const sph = (o.isInstancedMesh ? o.boundingSphere : g.boundingSphere).clone().applyMatrix4(o.matrixWorld)
+    if (Number.isFinite(sph.radius)) occluders.push({ o, c: sph.center, r: sph.radius })
+  })
+  const _cand = []
+  const blocked = (from, to) => {
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z, L = Math.hypot(dx, dy, dz)
+    // 地形：每 0.5 公尺取一點（頭尾各留 0.3 公尺，鳥腳邊的地面不算擋）
+    const n = Math.max(2, Math.ceil(L / 0.5))
+    for (let i = 1; i < n; i++) {
+      const t = i / n; if (t * L < 0.3 || (1 - t) * L < 0.3) continue
+      const x = from.x + dx * t, z = from.z + dz * t, y = from.y + dy * t
+      if (y < (inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)) - 0.02) return true
+    }
+    // 模型：球心到射線的距離小於半徑才算候選
+    const ux = dx / L, uy = dy / L, uz = dz / L
+    _cand.length = 0
+    for (const q of occluders) {
+      const px = q.c.x - from.x, py = q.c.y - from.y, pz = q.c.z - from.z, s = px * ux + py * uy + pz * uz
+      if (s < -q.r || s > L + q.r) continue
+      const ex = px - ux * s, ey = py - uy * s, ez = pz - uz * s
+      if (ex * ex + ey * ey + ez * ez <= q.r * q.r) _cand.push(q.o)
+    }
+    if (!_cand.length) return false
+    ray.set(from, _v2.set(ux, uy, uz)); ray.far = L - 0.05
+    return ray.intersectObjects(_cand, false).length > 0
+  }
   const found = []
   for (const b of world.birds) {
     const d0 = b.target.distanceTo(cam.position)
@@ -62,14 +96,14 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
       // 被擋住：從鏡頭打 9 條射線到鳥身上（中心＋往內縮的 8 個角）
       let seen = 0
       const dist = cam.position.distanceTo(_c)
-      for (let i = 0; i < 9; i++) {
+      // 小到算不了分的（畫面 0.2% 以下，評分的大小分數是 0）不用打射線：當成被擋一半（不算進「同一張好幾隻」）
+      const tiny = area < 0.002
+      if (!tiny) for (let i = 0; i < 9; i++) {
         if (i === 8) _v.copy(_c)
         else _v.set(i & 1 ? 0.3 : -0.3, i & 2 ? 0.3 : -0.3, i & 4 ? 0.3 : -0.3).multiply(_s).add(_c)
-        ray.set(cam.position, _v.clone().sub(cam.position).normalize())
-        ray.far = cam.position.distanceTo(_v) - 0.05
-        if (!ray.intersectObjects(occluders, false).length) seen++
+        if (!blocked(cam.position, _v)) seen++
       }
-      const visible = seen / 9
+      const visible = tiny ? 0.5 : seen / 9
       if (visible === 0) continue
       const focusErr = Math.abs(dist - focusDist)
       const sharp = 1 - THREE.MathUtils.smoothstep(focusErr, dofTol, dofTol * 3)

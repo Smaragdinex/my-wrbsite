@@ -250,3 +250,53 @@ svg.controls image { mix-blend-mode: multiply; }
 .gear-row .view3d { margin-left: auto; }
 .product-sheet { z-index: 8; }
 .gear-row > :last-child { min-width: 128px; box-sizing: border-box; text-align: center; }   /* 買／換上／使用中 同寬，「360° 查看」才會對齊 */
+
+/* 相機回放（playback.js）：整個畫面是相機背面——黑色機身、左邊 3:2 螢幕、右邊一排按鈕和十字鍵 */
+.cam-play { position: fixed; inset: 0; z-index: 8; background: radial-gradient(ellipse at 50% 40%, #2a2d30 0%, #0b0c0d 70%); display: grid; place-items: center; align-content: center; gap: 14px; user-select: none; }
+.cam-play[hidden] { display: none; }
+.cp-body { --u: min(1vw, 1.55vh); position: relative; display: flex; align-items: center; gap: calc(var(--u) * 2.4); padding: calc(var(--u) * 3) calc(var(--u) * 3.2);
+  width: calc(var(--u) * 98); border-radius: calc(var(--u) * 4.5);
+  background: radial-gradient(circle at 30% 20%, #2b2d30 0%, #18191b 55%, #101112 100%);
+  box-shadow: 0 0 0 1px #3a3d40 inset, 0 2px 0 #44474a inset, 0 30px 80px rgba(0, 0, 0, 0.75); }
+.cp-body::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0.25;   /* 機身的細顆粒皮紋 */
+  background-image: radial-gradient(#000 0.6px, transparent 0.8px); background-size: 3px 3px; }
+.cp-lcd { position: relative; flex: none; width: calc(var(--u) * 66); aspect-ratio: 3 / 2; background: #000; overflow: hidden; border-radius: calc(var(--u) * 0.8);
+  box-shadow: 0 0 0 calc(var(--u) * 1.2) #070808, 0 0 0 calc(var(--u) * 1.35) #2c2f31, inset 0 0 calc(var(--u) * 3) rgba(255, 255, 255, 0.04); }
+.cp-lcd::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, transparent 35%); }   /* 螢幕玻璃反光 */
+.cp-view { position: absolute; inset: 0; }
+.cp-one { position: absolute; object-fit: cover; image-rendering: auto; }
+.cp-nav { position: absolute; right: 3%; bottom: 14%; width: 16%; aspect-ratio: 3 / 2; border: 1px solid rgba(255, 255, 255, 0.7); background: rgba(0, 0, 0, 0.35); }
+.cp-nav i { position: absolute; border: 2px solid #ffd54a; box-sizing: border-box; }
+.cp-grid { position: absolute; inset: 1.5%; display: grid; gap: 1.2%; }
+.cp-cell { position: relative; overflow: hidden; background: #111; cursor: pointer; }
+.cp-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cp-cell.sel { outline: 3px solid #ffd54a; outline-offset: -3px; z-index: 1; }
+.cp-cell.empty { background: #050505; cursor: default; }
+.cp-cell .lock { position: absolute; right: 4%; top: 4%; font-size: calc(var(--u, 1vw) * 1.2); }
+.cp-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #d8dde0; font: 600 calc(min(1vw, 1.55vh) * 2.2) system-ui, sans-serif; letter-spacing: 0.1em; }
+.cp-osd { position: absolute; inset: 0; pointer-events: none; color: #fff; font: 500 calc(min(1vw, 1.55vh) * 1.5) ui-monospace, Menlo, monospace; text-shadow: 0 1px 2px #000; }
+.cp-top { position: absolute; left: 0; right: 0; top: 0; display: flex; gap: 1.6em; padding: 0.6em 1em; background: linear-gradient(rgba(0, 0, 0, 0.55), transparent); }
+.cp-bot { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 1.4em; padding: 0.6em 1em; background: linear-gradient(transparent, rgba(0, 0, 0, 0.65)); }
+.cp-bot .r { margin-left: auto; }
+.cp-detail { position: absolute; left: 3%; top: 14%; max-width: 48%; padding: 0.8em 1em; background: rgba(0, 0, 0, 0.62); border-radius: 0.4em; font-family: system-ui, sans-serif; display: grid; gap: 0.25em; }
+.cp-detail b { font-size: 1.35em; } .cp-detail p { margin: 0.15em 0 0; font-size: 0.9em; opacity: 0.9; } .cp-detail .judge { font-style: italic; }
+.cp-confirm { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: auto; background: rgba(10, 12, 14, 0.92); border: 1px solid #555; border-radius: 0.5em; padding: 1em 1.6em; text-align: center; font-family: system-ui, sans-serif; }
+.cp-confirm p { margin: 0 0 0.8em; font-size: 1.2em; }
+.cp-confirm div { display: flex; gap: 0.8em; justify-content: center; }
+.cp-confirm span { padding: 0.35em 1.2em; border-radius: 0.3em; background: #2a2e31; cursor: pointer; }
+.cp-confirm span.on { background: #ffd54a; color: #111; text-shadow: none; }
+.cp-msg { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.75); padding: 0.4em 1em; border-radius: 0.3em; font-family: system-ui, sans-serif; }
+.cp-side { display: flex; flex-direction: column; gap: calc(var(--u) * 1.5); align-items: center; margin-left: auto; align-self: flex-start; }
+.cp-btn { width: calc(var(--u) * 5.6); height: calc(var(--u) * 5.6); border-radius: 50%; border: none; cursor: pointer; color: #d9dde0; font-size: calc(var(--u) * 2); line-height: 1;
+  background: radial-gradient(circle at 35% 30%, #3b3f43, #1c1e20 70%); box-shadow: 0 0 0 calc(var(--u) * 0.35) #0b0c0d, 0 2px 0 #4a4e52 inset, 0 3px 6px rgba(0, 0, 0, 0.6); }
+.cp-btn.txt { font: 700 calc(var(--u) * 1.2) system-ui, sans-serif; letter-spacing: 0.05em; }
+.cp-btn.del { font-size: calc(var(--u) * 1.9); }
+.cp-btn:active, .cp-dpad button:active { transform: translateY(1px); filter: brightness(1.3); }
+.cp-dpad { position: absolute; right: calc(var(--u) * 10.8); bottom: calc(var(--u) * 3); width: calc(var(--u) * 13); height: calc(var(--u) * 13); border-radius: 50%;
+  background: radial-gradient(circle, #222528 0 38%, #121314 39% 100%); box-shadow: 0 0 0 calc(var(--u) * 0.4) #0a0b0c, 0 2px 0 #3d4044 inset, 0 4px 10px rgba(0, 0, 0, 0.6);
+  display: grid; grid-template: 1fr 1.2fr 1fr / 1fr 1.2fr 1fr; place-items: center; }
+.cp-dpad button { border: none; background: none; color: #c9ced2; cursor: pointer; font-size: calc(var(--u) * 1.4); width: 100%; height: 100%; }
+.cp-dpad [data-k="up"] { grid-area: 1 / 2; } .cp-dpad [data-k="left"] { grid-area: 2 / 1; } .cp-dpad [data-k="set"] { grid-area: 2 / 2; }
+.cp-dpad [data-k="right"] { grid-area: 2 / 3; } .cp-dpad [data-k="down"] { grid-area: 3 / 2; }
+.cp-dpad .set { border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3b3f43, #1a1c1e 70%); font: 700 calc(var(--u) * 1.1) system-ui, sans-serif; width: 82%; height: 82%; box-shadow: 0 0 0 1px #0a0b0c; }
+.cp-hint { color: #9aa3a8; font: 13px system-ui, sans-serif; letter-spacing: 0.02em; }

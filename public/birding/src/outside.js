@@ -67,7 +67,7 @@ export function buildOutside() {
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
     geo.setIndex(idx); geo.computeVertexNormals()
     const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: T.grassGroundTex(), vertexColors: true, roughness: 1 }))
-    ground.receiveShadow = true
+    ground.receiveShadow = true; ground.userData.terrain = true
     g.add(ground)
   }
 

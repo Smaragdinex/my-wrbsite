@@ -189,7 +189,7 @@ function buildInterior(lib, avoid = []) {
     })
     detail.wrapS = detail.wrapT = THREE.RepeatWrapping
     const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.95 }))
-    ground.receiveShadow = true; g.add(ground)
+    ground.receiveShadow = true; ground.userData.terrain = true; g.add(ground)   // terrain：拍照算遮擋時用高度表，不逐個三角形打射線（scoring.js）
   }
   // 水池＋溪：自己寫的水 shader（溪和池共用）。
   // 水面是平的（不沿著岸往上爬），岸邊靠深度測試自然切掉；每個頂點帶「水深」（水面 - 地形）和「坡度」：
