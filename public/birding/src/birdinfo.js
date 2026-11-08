@@ -412,7 +412,7 @@ const ALL = [
     ],
   },
   {
-    id: 'pitta', spot: [-46, -30], perch: 'ground', dist: 2.0, camH: 0.6, lookY: 0.1,
+    id: 'pitta', spot: [-44.3, -25.3], perch: 'ground', view: 20, dist: 2.0, camH: 0.6, lookY: 0.1,
     name: '八色鳥', sci: 'Pitta nympha', where: '林下落葉堆',
     intro: '每年四月底從東南亞飛來台灣繁殖的夏候鳥，身上真的有很多種顏色：栗褐色的頭頂、黑色過眼線、白喉、米黃色的胸、鮮紅的下腹、深綠色的背，肩膀還有一塊閃亮的天藍色。',
     facts: [
