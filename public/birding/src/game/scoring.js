@@ -45,8 +45,10 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
     if (!(o.isMesh || o.isInstancedMesh) || o.isSkinnedMesh || o.userData.terrain || o.material?.transparent || !o.layers.test(ray.layers)) return
     for (let p = o; p; p = p.parent) if (!p.visible) return
     const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere()
-    if (o.isInstancedMesh) o.computeBoundingSphere()   // LOD 會改 count、換掉矩陣順序：每次重算（raycast 也用這個球）
-    const sph = (o.isInstancedMesh ? o.boundingSphere : g.boundingSphere).clone().applyMatrix4(o.matrixWorld)
+    // 一群植物（InstancedMesh）：用 LOD 登記時存的「包住全部植株」的球。不要在這裡重算 o.boundingSphere——
+    // 重算時只算得到目前畫面裡的那幾株（畫面外沒有就變成空球），three.js 之後用它整組剔除，路燈、樹叢會整組不見（2026-11-08 的 bug）
+    if (o.isInstancedMesh && !o.boundingSphere) o.computeBoundingSphere()
+    const sph = (o.isInstancedMesh ? (o.userData.fullSphere ?? o.boundingSphere) : g.boundingSphere).clone().applyMatrix4(o.matrixWorld)
     if (Number.isFinite(sph.radius)) occluders.push({ o, c: sph.center, r: sph.radius })
   })
   const _cand = []

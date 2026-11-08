@@ -23,6 +23,8 @@ export function lodRegister(meshes, h, lows = []) {
   meshes = keep.map((i) => meshes[i]); lows = keep.map((i) => lows[i] ?? null)
   if (!meshes.length) return
   const m0 = meshes[0], n = m0.count
+  // 每株自己做視野剔除：整組的 three.js 剔除關掉（它的包圍球被 LOD 改過 count 之後會過時，整組被誤判在視野外、全部不畫）
+  for (const m of [...meshes, ...lows]) if (m) { if (!m.boundingSphere) m.computeBoundingSphere(); m.userData.fullSphere ??= m.boundingSphere.clone(); m.frustumCulled = false }
   const base = m0.instanceMatrix.array.slice(0, n * 16)
   const pos = new Float32Array(n * 3), rad = new Float32Array(n), hash = new Float32Array(n)
   const g = m0.geometry
