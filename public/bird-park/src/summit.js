@@ -1,4 +1,4 @@
-// 山頂（2026-11-07 重做）：攝影玩家的小木屋（走得進去）、加大的觀景台（長椅、投幣望遠鏡）、三角點、石堆。
+// 山頂（2026-11-07 重做）：攝影玩家的小木屋（走得進去；2026-11-08 放大）、三角點、石堆。2026-11-08 拿掉觀景台：山頂就是自然的箭竹草原。
 // 玉山圓柏、玉山杜鵑在 alpine.js（跟針葉樹同一套卡片）。位置都在 layout.js（CABIN、步道終點）。
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -113,7 +113,8 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   }
 
   /* ---------- 小木屋 ---------- */
-  const W = C.W, D = C.D, WH = 2.7, PEAK = 4.1, T = 0.14, DOOR = 1.15, DOORH = 2.15
+  const W = C.W, D = C.D, WH = 3.0, PEAK = 4.9, T = 0.14, DOOR = 1.2, DOORH = 2.2
+  const L0 = -W / 2   // 左牆（u 最小）：屋裡的擺設照左牆、後牆的距離放，屋子放大後位置跟著走
   // 石砌基礎（地面到地板）＋地板
   for (const [u, v, w, d] of [[0, D / 2, W + 0.2, 0.3], [0, -D / 2, W + 0.2, 0.3], [W / 2, 0, 0.3, D], [-W / 2, 0, 0.3, D]]) boxAt('stone', w, 0.5, d, u, -0.2, v)
   boxAt('floor', W - 0.05, 0.08, D - 0.05, 0, 0.0, 0)
@@ -158,17 +159,19 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
     else { boxAt('glass', 0.02, h, w, fixed, ym, c); for (const yy of [y0, y1]) boxAt('trim', T + 0.06, 0.08, w + 0.12, fixed, yy, c); for (const vv of [a0, a1, c]) boxAt('trim', T + 0.04, h, 0.07, fixed, ym, vv) }
   }
   // 前牆（v = +D/2）：門在中間，門右邊一扇小窗
-  wall(-W / 2, -DOOR / 2, D / 2, 0, WH); wall(DOOR / 2, 1.3, D / 2, 0, WH); wall(2.4, W / 2, D / 2, 0, WH)
-  wall(1.3, 2.4, D / 2, 0, 1.0); wall(1.3, 2.4, D / 2, 2.1, WH); win('u', 1.3, 2.4, D / 2, 1.0, 2.1)
+  const fw0 = W / 2 - 1.9, fw1 = W / 2 - 0.7   // 門右邊的小窗
+  wall(-W / 2, -DOOR / 2, D / 2, 0, WH); wall(DOOR / 2, fw0, D / 2, 0, WH); wall(fw1, W / 2, D / 2, 0, WH)
+  wall(fw0, fw1, D / 2, 0, 1.0); wall(fw0, fw1, D / 2, 2.1, WH); win('u', fw0, fw1, D / 2, 1.0, 2.1)
   wall(-DOOR / 2, DOOR / 2, D / 2, DOORH, WH)
   for (const uu of [-DOOR / 2, DOOR / 2]) boxAt('trim', 0.1, DOORH, T + 0.06, uu, DOORH / 2, D / 2); boxAt('trim', DOOR + 0.2, 0.1, T + 0.06, 0, DOORH, D / 2)
   // 門板：往裡開著
   boxAt('trim', 0.05, DOORH - 0.05, DOOR - 0.06, -DOOR / 2 + 0.04, DOORH / 2, D / 2 - (DOOR - 0.06) / 2 - 0.08)   // 開 90 度，貼著門框左邊往屋裡
   // 後牆（v = -D/2）：一整排大窗（攝影窗）
-  wall(-W / 2, -2.2, -D / 2, 0, WH); wall(2.2, W / 2, -D / 2, 0, WH); wall(-2.2, 2.2, -D / 2, 0, 0.9); wall(-2.2, 2.2, -D / 2, 2.2, WH)
-  win('u', -2.2, 2.2, -D / 2, 0.9, 2.2)
+  const bw = W / 2 - 1.0
+  wall(-W / 2, -bw, -D / 2, 0, WH); wall(bw, W / 2, -D / 2, 0, WH); wall(-bw, bw, -D / 2, 0, 0.9); wall(-bw, bw, -D / 2, 2.3, WH)
+  win('u', -bw, bw, -D / 2, 0.9, 2.3)
   // 兩側牆：各一扇窗
-  for (const su of [-1, 1]) { const u = su * W / 2; wallS(-D / 2, -0.6, u, 0, WH); wallS(0.6, D / 2, u, 0, WH); wallS(-0.6, 0.6, u, 0, 1.0); wallS(-0.6, 0.6, u, 2.0, WH); win('v', -0.6, 0.6, u, 1.0, 2.0) }
+  for (const su of [-1, 1]) { const u = su * W / 2; wallS(-D / 2, -0.7, u, 0, WH); wallS(0.7, D / 2, u, 0, WH); wallS(-0.7, 0.7, u, 0, 1.0); wallS(-0.7, 0.7, u, 2.1, WH); win('v', -0.7, 0.7, u, 1.0, 2.1) }
   // 山牆（三角形）：兩側 u = ±W/2 往上到屋脊（屋脊沿 v 方向）——改成屋脊沿 u：前後牆是山牆
   for (const sv of [-1, 1]) {
     const v = sv * D / 2, tri = new THREE.BufferGeometry()
@@ -195,7 +198,11 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
     for (const su of [-1, 1]) for (const sv of [-1, 1]) boxAt('trim', 0.18, WH, 0.18, su * W / 2, WH / 2, sv * D / 2)
   }
   // 煙囪（後面左邊）：石砌＋鐵管
-  boxAt('stone', 0.6, 1.5, 0.6, -1.6, PEAK + 0.1, -1.2); cylAt('iron', 0.09, 0.09, 0.5, -1.6, PEAK + 1.05, -1.2)   // 底部藏在屋頂下面一點點，不要穿進屋裡
+  {
+    // 煙囪底部要剛好插進斜屋頂（屋頂在這個 u 的高度＋板厚），往上到屋脊上方 0.9 公尺
+    const cu = L0 + 1.4, ry = PEAK - (PEAK - WH) * Math.abs(cu) / (W / 2) + 0.12, y0 = ry - 0.25, y1 = PEAK + 0.9
+    boxAt('stone', 0.7, y1 - y0, 0.7, cu, (y0 + y1) / 2, -D / 2 + 1.05); cylAt('iron', 0.09, 0.09, 0.5, cu, y1 + 0.2, -D / 2 + 1.05)
+  }   // 底部藏在屋頂下面一點點，不要穿進屋裡
   // 門廊：前面一小塊木平台＋一張長椅＋門口的提燈
   boxAt('floor', W, 0.08, 1.4, 0, 0.0, D / 2 + 0.75)
   for (const su of [-1, 1]) boxAt('trim', 0.12, 2.6, 0.12, su * (W / 2 - 0.1), 1.3, D / 2 + 1.38)
@@ -203,8 +210,8 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, C.yaw, 0)).multiply(new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), 0.32))
     put('roof', new THREE.BoxGeometry(W + 0.4, 0.08, 1.7).applyMatrix4(new THREE.Matrix4().compose(at(0, WH + 0.05, D / 2 + 0.8), q, V(1, 1, 1))))   // 門廊的小屋簷
   }
-  boxAt('trim', 1.6, 0.06, 0.4, -1.9, 0.45, D / 2 + 1.0); for (const uu of [-2.6, -1.2]) boxAt('trim', 0.06, 0.45, 0.36, uu, 0.22, D / 2 + 1.0)
-  boxAt('lamp', 0.14, 0.2, 0.14, 0.85, 2.2, D / 2 + 0.12)
+  boxAt('trim', 1.6, 0.06, 0.4, L0 + 1.4, 0.45, D / 2 + 1.0); for (const uu of [L0 + 0.7, L0 + 2.1]) boxAt('trim', 0.06, 0.45, 0.36, uu, 0.22, D / 2 + 1.0)
+  boxAt('lamp', 0.14, 0.2, 0.14, DOOR / 2 + 0.3, 2.3, D / 2 + 0.12)
 
   /* ---------- 屋裡：攝影玩家的據點 ---------- */
   // 後面大窗前：三腳架＋長鏡頭相機對著窗外
@@ -216,64 +223,54 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
     put('black', lens.applyMatrix4(new THREE.Matrix4().compose(at(0.3, 1.44, -D / 2 + 0.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.08, C.yaw, 0, 'YXZ')), V(1, 1, 1))))
   }
   // 窗邊的工作桌：筆電（螢幕是鳥照）、一疊記憶卡盒、咖啡杯
-  boxAt('trim', 1.6, 0.05, 0.7, -1.9, 0.76, -D / 2 + 0.45)
-  for (const [uu, vv] of [[-2.6, -D / 2 + 0.2], [-1.2, -D / 2 + 0.2], [-2.6, -D / 2 + 0.75], [-1.2, -D / 2 + 0.75]]) boxAt('trim', 0.05, 0.74, 0.05, uu, 0.37, vv)
-  boxAt('black', 0.36, 0.02, 0.25, -1.9, 0.795, -D / 2 + 0.5); boxAt('black', 0.36, 0.24, 0.015, -1.9, 0.92, -D / 2 + 0.38, 0, -0.25)
-  cylAt('stone', 0.045, 0.04, 0.1, -1.4, 0.84, -D / 2 + 0.6)
-  boxAt('trim', 0.5, 0.05, 0.5, -1.9, 0.45, -D / 2 + 1.2); for (const [du, dv] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) boxAt('trim', 0.04, 0.45, 0.04, -1.9 + du, 0.22, -D / 2 + 1.2 + dv)   // 小凳子
+  const DK = L0 + 3.0   // 桌子中心（後窗前面，爐子右邊、三腳架左邊）
+  boxAt('trim', 1.6, 0.05, 0.7, DK, 0.76, -D / 2 + 0.45)
+  for (const [uu, vv] of [[DK - 0.7, -D / 2 + 0.2], [DK + 0.7, -D / 2 + 0.2], [DK - 0.7, -D / 2 + 0.75], [DK + 0.7, -D / 2 + 0.75]]) boxAt('trim', 0.05, 0.74, 0.05, uu, 0.37, vv)
+  boxAt('black', 0.36, 0.02, 0.25, DK, 0.795, -D / 2 + 0.5); boxAt('black', 0.36, 0.24, 0.015, DK, 0.92, -D / 2 + 0.38, 0, -0.25)
+  cylAt('stone', 0.045, 0.04, 0.1, DK + 0.5, 0.84, -D / 2 + 0.6)
+  boxAt('trim', 0.5, 0.05, 0.5, DK, 0.45, -D / 2 + 1.2); for (const [du, dv] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) boxAt('trim', 0.04, 0.45, 0.04, DK + du, 0.22, -D / 2 + 1.2 + dv)   // 小凳子
   // 雙層床（右邊牆）
-  for (const y of [0.4, 1.55]) { boxAt('trim', 0.95, 0.12, 2.0, W / 2 - 0.55, y, -0.6); boxAt('blanket', 0.9, 0.12, 1.6, W / 2 - 0.55, y + 0.12, -0.4); boxAt('chink', 0.6, 0.1, 0.35, W / 2 - 0.55, y + 0.17, -1.35) }
-  for (const [du, dv] of [[-0.5, -1.6], [0.45, -1.6], [-0.5, 0.4], [0.45, 0.4]]) boxAt('trim', 0.07, 2.0, 0.07, W / 2 - 0.55 + du, 1.0, dv)
+  for (const y of [0.4, 1.55]) { boxAt('trim', 0.95, 0.12, 2.0, W / 2 - 0.55, y, -D / 2 + 1.65); boxAt('blanket', 0.9, 0.12, 1.6, W / 2 - 0.55, y + 0.12, -D / 2 + 1.85); boxAt('chink', 0.6, 0.1, 0.35, W / 2 - 0.55, y + 0.17, -D / 2 + 0.9) }
+  for (const [du, dv] of [[-0.5, -1.0], [0.45, -1.0], [-0.5, 1.0], [0.45, 1.0]]) boxAt('trim', 0.07, 2.0, 0.07, W / 2 - 0.55 + du, 1.0, -D / 2 + 1.65 + dv)
   // 柴爐（左後角）＋煙管接到煙囪
-  boxAt('iron', 0.55, 0.6, 0.5, -W / 2 + 0.5, 0.35, -0.3); cylAt('iron', 0.08, 0.08, WH + 1.4 - 0.65, -W / 2 + 0.5, 0.65 + (WH + 1.4 - 0.65) / 2, -0.3)
-  boxAt('stone', 0.9, 0.04, 0.9, -W / 2 + 0.5, 0.03, -0.3)
+  // 爐子放在煙囪正下方（左後角），煙管直直往上接煙囪
+  const SV = -D / 2 + 1.05, SU = L0 + 1.4
+  boxAt('iron', 0.55, 0.6, 0.5, SU, 0.35, SV); cylAt('iron', 0.08, 0.08, PEAK - 0.65, SU, 0.65 + (PEAK - 0.65) / 2, SV)
+  boxAt('stone', 0.9, 0.04, 0.9, SU, 0.03, SV)
   // 左牆：鏡頭架（三層，擺幾支鏡頭和相機）
-  for (const y of [1.0, 1.4, 1.8]) boxAt('trim', 0.3, 0.04, 1.4, -W / 2 + 0.2, y, 1.1)
-  for (let i = 0; i < 7; i++) { const y = [1.0, 1.4, 1.8][i % 3] + 0.1, vv = 0.6 + (i * 0.37) % 1.2, len = 0.12 + (i % 3) * 0.08; put('black', new THREE.CylinderGeometry(0.045, 0.045, len, 12).applyMatrix4(new THREE.Matrix4().compose(at(-W / 2 + 0.2, y + len / 2 - 0.08, vv), new THREE.Quaternion(), V(1, 1, 1)))) }
+  for (const y of [1.0, 1.4, 1.8]) boxAt('trim', 0.3, 0.04, 1.4, -W / 2 + 0.2, y, D / 2 - 1.2)
+  for (let i = 0; i < 7; i++) { const y = [1.0, 1.4, 1.8][i % 3] + 0.1, vv = D / 2 - 1.7 + (i * 0.37) % 1.2, len = 0.12 + (i % 3) * 0.08; put('black', new THREE.CylinderGeometry(0.045, 0.045, len, 12).applyMatrix4(new THREE.Matrix4().compose(at(-W / 2 + 0.2, y + len / 2 - 0.08, vv), new THREE.Quaternion(), V(1, 1, 1)))) }
   // 牆上：地圖、鳥照（相機行那四張）、掛燈
   {
     const pm = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.68), mats.paper)
-    pm.position.copy(at(-W / 2 + T / 2 + 0.02, 1.7, -0.9)); pm.rotation.y = C.yaw + Math.PI / 2; g.add(pm)
+    pm.position.copy(at(-W / 2 + LR + 0.03, 1.7, -0.6)); pm.rotation.y = C.yaw + Math.PI / 2; g.add(pm)
     if (printsUrl) new THREE.TextureLoader().load(printsUrl, (tx) => {
       tx.colorSpace = THREE.SRGBColorSpace
       for (let k = 0; k < 4; k++) {
         const t = tx.clone(); t.repeat.set(0.5, 0.5); t.offset.set((k % 2) * 0.5, k < 2 ? 0.5 : 0); t.needsUpdate = true
         const m = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 }))
-        m.position.copy(at(-1.6 + k * 0.65 + 1.1, 1.75, D / 2 - T / 2 - 0.02)); m.rotation.y = C.yaw + Math.PI; g.add(m)
+        // 掛在前牆門左邊那一整面實心的牆上（以前排在 -0.5～1.45，剛好蓋在門口和窗戶上）；貼著圓木內側表面，不陷進木頭
+        m.position.copy(at(-DOOR / 2 - 0.55 - (3 - k) * 0.7, 1.75, D / 2 - LR - 0.035)); m.rotation.y = C.yaw + Math.PI; g.add(m)
         const f = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.02), mats.trim); f.position.copy(m.position).addScaledVector(fwd, 0.012); f.rotation.y = C.yaw; g.add(f)
       }
     })
   }
-  boxAt('lamp', 0.16, 0.22, 0.16, 0, WH - 0.35, 0); tubeW('iron', at(0, WH - 0.24, 0), at(0, WH, 0), 0.01)
+  boxAt('lamp', 0.16, 0.22, 0.16, 0, WH - 0.35, 0); tubeW('iron', at(0, WH - 0.24, 0), at(0, PEAK - 0.1, 0), 0.01)
   // 地毯
-  boxAt('cloth', 1.8, 0.01, 1.2, 0, 0.045, 0.6)
+  boxAt('cloth', 2.4, 0.01, 1.6, 0, 0.045, 0.5)
 
   // 碰撞：牆一圈小圓（門口留空）；床、爐子、桌子
   const wallCol = (ax, az, bx, bz, skip) => { const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 0.3); for (let i = 0; i <= n; i++) { const t = i / n, u = ax + (bx - ax) * t, v = az + (bz - az) * t; if (skip && skip(u, v)) continue; const p = at(u, 0, v); addCollider(p.x, p.z, 0.12, Y + WH + 2) } }
   wallCol(-W / 2, D / 2, W / 2, D / 2, (u) => Math.abs(u) < DOOR / 2 + 0.12)
   wallCol(-W / 2, -D / 2, W / 2, -D / 2); wallCol(-W / 2, -D / 2, -W / 2, D / 2); wallCol(W / 2, -D / 2, W / 2, D / 2)
-  for (const [u, v, r] of [[W / 2 - 0.55, -1.0, 0.5], [W / 2 - 0.55, 0.0, 0.5], [-W / 2 + 0.5, -0.3, 0.4], [-1.9, -D / 2 + 0.45, 0.45], [-1.5, -D / 2 + 0.45, 0.4], [0.3, -D / 2 + 0.9, 0.35]]) { const p = at(u, 0, v); addCollider(p.x, p.z, r, Y + 2) }
+  for (const [u, v, r] of [[W / 2 - 0.55, -D / 2 + 1.2, 0.5], [W / 2 - 0.55, -D / 2 + 2.2, 0.5], [SU, SV, 0.4], [DK - 0.4, -D / 2 + 0.45, 0.45], [DK + 0.4, -D / 2 + 0.45, 0.45], [0.3, -D / 2 + 0.9, 0.35]]) { const p = at(u, 0, v); addCollider(p.x, p.z, r, Y + 2) }
 
-  /* ---------- 觀景台：步道終點（加大，有長椅、投幣望遠鏡） ---------- */
-  const E = ALP_TRAIL[ALP_TRAIL.length - 1], EY = ALP_TRAIL.prof[ALP_TRAIL.prof.length - 1]
+  /* ---------- 步道終點：三角點＋石堆（2026-11-08 拿掉觀景台） ---------- */
   {
-    const P = ALP_TRAIL[ALP_TRAIL.length - 2], dx = E[0] - P[0], dz = E[1] - P[1], L = Math.hypot(dx, dz), f = V(dx / L, 0, dz / L), r = V(f.z, 0, -f.x)
-    const yawE = Math.atan2(f.x, f.z), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yawE, 0))
-    const o = (a, y, b) => V(E[0], EY, E[1]).addScaledVector(r, a).addScaledVector(f, b).add(V(0, y, 0))
-    const bx = (mat, w, h, d, a, y, b) => put(mat, new THREE.BoxGeometry(w, h, d).applyMatrix4(new THREE.Matrix4().compose(o(a, y, b), q, V(1, 1, 1))))
-    bx('floor', 7, 0.12, 4.2, 0, 0.06, 0.6)
-    for (const a of [-3.45, 3.45]) for (const b of [-1.4, 1.2, 2.6]) bx('trim', 0.12, 1.15, 0.12, a, 0.6, b)
-    for (const a of [-3.45, 3.45]) { bx('trim', 0.08, 0.08, 4.0, a, 1.12, 0.6); bx('trim', 0.06, 0.06, 4.0, a, 0.6, 0.6) }
-    bx('trim', 7, 0.08, 0.08, 0, 1.12, 2.6); bx('trim', 7, 0.06, 0.06, 0, 0.6, 2.6)
-    for (const a of [-3.45, -1, 1, 3.45]) bx('trim', 0.12, 1.15, 0.12, a, 0.6, 2.6)
-    // 長椅（面向前方）
-    bx('trim', 1.8, 0.06, 0.42, -1.6, 0.46, 1.7); bx('trim', 1.8, 0.4, 0.06, -1.6, 0.68, 1.48); for (const a of [-2.4, -0.8]) bx('trim', 0.07, 0.44, 0.38, a, 0.22, 1.7)
-    // 投幣望遠鏡：鐵柱＋雙筒
-    bx('iron', 0.12, 1.1, 0.12, 1.8, 0.62, 2.0); bx('iron', 0.34, 0.2, 0.42, 1.8, 1.25, 2.05); for (const a of [1.7, 1.9]) put('iron', new THREE.CylinderGeometry(0.05, 0.06, 0.3, 10).rotateX(Math.PI / 2).applyMatrix4(new THREE.Matrix4().compose(o(a, 1.27, 2.3), q, V(1, 1, 1))))
-    for (const [a, b] of [[-3.45, 0], [3.45, 0], [0, 2.6]]) { const n = 12; for (let i = 0; i <= n; i++) { const t = i / n, pa = a === 0 ? -3.45 + 6.9 * t : a, pb = a === 0 ? b : -1.4 + 4.0 * t, p = o(pa, 0, pb); addCollider(p.x, p.z, 0.08, EY + 1.2) } }   // 欄杆
-    { const p = o(1.8, 0, 2.0); addCollider(p.x, p.z, 0.15, EY + 1.4) }
-    // 三角點：花崗岩方柱（刻十字）＋旁邊一堆石頭
-    const tp = o(-2.2, 0, -2.6), ty = alpineHeight(tp.x, tp.z)
+    const E = ALP_TRAIL[ALP_TRAIL.length - 1], P = ALP_TRAIL[ALP_TRAIL.length - 2], dx = E[0] - P[0], dz = E[1] - P[1], L = Math.hypot(dx, dz), f = V(dx / L, 0, dz / L), r = V(f.z, 0, -f.x)
+    const o = (a, b) => V(E[0], 0, E[1]).addScaledVector(r, a).addScaledVector(f, b)
+    // 三角點：花崗岩方柱（刻十字）＋旁邊一堆石頭，在步道終點前方一點
+    const tp = o(-1.2, 1.6), ty = alpineHeight(tp.x, tp.z)
     put('stone', new THREE.BoxGeometry(0.22, 0.6, 0.22).translate(tp.x, ty + 0.3, tp.z)); addCollider(tp.x, tp.z, 0.15, ty + 0.6)
     for (let i = 0; i < 18; i++) { const a = rnd() * TAU, d = rnd() * 0.6, sz = 0.12 + rnd() * 0.2, cx = tp.x + 1.4 + Math.cos(a) * d, cz = tp.z + 0.2 + Math.sin(a) * d, cy = alpineHeight(cx, cz) + sz * 0.6 + (0.6 - d) * 0.6 * (i / 18); put('stone', new THREE.DodecahedronGeometry(sz, 0).scale(1, 0.7, 1).translate(cx, cy, cz)) }
     addCollider(tp.x + 1.4, tp.z + 0.2, 0.5, ty + 0.9)

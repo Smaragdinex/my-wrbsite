@@ -1,5 +1,5 @@
 // 第二館：高山雲霧林。圓頂東門 → 玻璃通道（中間是氣候緩衝室，兩道自動門）→ 一棟玻璃溫室，裡面是台灣高山的地形：
-// 入口平台、水池，往東爬升到約 20 公尺的山頂；溪流從山上沿山谷流下來（中途一段小瀑布），步道之字形上山、吊橋過溪谷，山頂有觀景台。
+// 入口平台、水池，往東爬升到約 30 公尺的山頂；溪流從山上沿山谷流下來（中途一段小瀑布），步道之字形上山、吊橋過溪谷，山頂有小木屋和三角點。
 // 植物：冷杉（細長尖塔）、鐵杉（較寬、枝條下垂）——程式做的針葉卡片樹；坡上一整片玉山箭竹；溪邊蕨類、長苔的岩石；雲霧一直在飄。
 // 地形、步道、溪、吊橋的形狀在 layout.js（玩家走路也要用）。
 // 效能：外殼（通道、館的鋼構和霧玻璃）一開始就蓋，很便宜；館裡面等玩家走到東邊才蓋。
@@ -572,7 +572,7 @@ function buildInterior(lib, avoid = []) {
       mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh)
     }
   }
-  // 山頂：小木屋、觀景台、三角點、灌叢（summit.js）
+  // 山頂：小木屋、三角點、灌叢（summit.js）
   buildSummit({ g, avoid, printsUrl: 'models/store-prints.jpg' })
   // 針葉樹
   {
@@ -594,16 +594,16 @@ function buildInterior(lib, avoid = []) {
       // 樹冠裡面一個實心的深綠圓錐：卡片樹側看會透光，遠看只剩枝幹像竹竿；有這個芯遠看才是一棵實心的針葉樹
       const core = new THREE.ConeGeometry(kind === 'fir' ? 0.075 : 0.12, 0.74, 9, 1, true).translate(0, 0.5, 0)
       const list = []
-      for (let k = 0; k < 20000 && list.length < (kind === 'fir' ? 330 : 320); k++) {
+      for (let k = 0; k < 30000 && list.length < (kind === 'fir' ? 400 : 430); k++) {
         const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-        if (!inAlpine(x, z, 3) || domeRho(x, z) > 0.94 || Math.hypot(x - CABIN.x, z - CABIN.z) < 9) continue
+        if (!inAlpine(x, z, 3) || domeRho(x, z) > 0.94 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4.4) continue
         if (alpineTrailDist(x, z) < 3.2 || alpineStreamDist(x, z) < 2.5 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2.5) continue
         const hgt = alpineHeight(x, z)
         // 冷杉在高處、鐵杉在中坡；山頂附近稀疏（箭竹草原）
         let want = kind === 'fir' ? ss(7, 16, hgt) * (1 - 0.85 * ss(17, 22, hgt)) : ss(2.5, 7, hgt) * (1 - ss(14, 20, hgt))
-        // 一進山區（花園交界往東）：低處也長一片鐵杉、零星冷杉，不要是空地（2026-11-07 使用者：樹多一點但不要滿）
-        const entry = ss(78, 88, x) * (1 - ss(108, 122, x))
-        want = Math.max(want, entry * (kind === 'fir' ? 0.1 : 0.26))
+        // 一進山區（花園交界往東）：低處也長一片鐵杉、零星冷杉，不要是空地（2026-11-07 使用者：樹多一點但不要滿；2026-11-08 再多一點、延伸遠一點）
+        const entry = ss(78, 86, x) * (1 - ss(118, 134, x))
+        want = Math.max(want, entry * (kind === 'fir' ? 0.28 : 0.62))
         if (rnd() > want * (0.55 + 0.45 * fbm2(x * 0.05, z * 0.05 + kind.length, 2) + 0.3)) continue
         // 越高越矮（高山上的冷杉長不高，山頂看得出去）；不能頂到玻璃
         const H = Math.min(((kind === 'fir' ? 9 : 8) + rnd() * 7) * (1 - 0.5 * ss(12, 22, hgt)), domeY(x, z) - hgt - 1.5)
@@ -613,7 +613,7 @@ function buildInterior(lib, avoid = []) {
         if (alpineTrailDist(x, z) < crownR + 1.3 || bridgeDist(x, z) < crownR + 1.5 || alpineStreamDist(x, z) < crownR * 0.6 + 1.2) continue
         if (nearBird(avoid, x, z, 5.5, 2.5)) continue
         if (Math.hypot(x - ALP_TRAIL[0][0], z - ALP_TRAIL[0][1]) < 7) continue   // 步道一進來的地方留一小塊空地，看得到山
-        if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 16) continue   // 山頂觀景台四周是箭竹草原，看得出去
+        if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 16) continue   // 山頂四周是箭竹草原，看得出去
         list.push({ p: V(x, hgt - 0.2, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(H * (0.85 + rnd() * 0.3), H, H * (0.85 + rnd() * 0.3)), H })
         addCollider(x, z, 0.35, hgt + H)
       }
@@ -656,7 +656,7 @@ function buildInterior(lib, avoid = []) {
       const E = ALP_TRAIL.at(-1), EY = ALP_TRAIL.prof.at(-1), J = [], RH = []
       for (let k = 0; k < 1500 && (J.length < 60 || RH.length < 40); k++) {
         const a = rnd() * TAU, d = 6 + Math.pow(rnd(), 0.7) * 36, x = E[0] + Math.cos(a) * d, z = E[1] + Math.sin(a) * d
-        if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineTrailDist(x, z) < 1.8 || Math.hypot(x - CABIN.x, z - CABIN.z) < 6.5 || nearBird(avoid, x, z, 3.5, 1.5)) continue
+        if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineTrailDist(x, z) < 1.8 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 1.9 || nearBird(avoid, x, z, 3.5, 1.5)) continue
         const y = alpineHeight(x, z); if (y < EY - 10) continue
         const sz = 0.7 + rnd() * 0.9, q = new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, rnd() * TAU, (rnd() - 0.5) * 0.3))
         if (rnd() < 0.6 ? J.length < 60 : RH.length >= 40) J.push({ p: V(x, y - 0.1, z), q, s: V(3.2 * sz, 1.1 * sz, 3.2 * sz) })
@@ -676,7 +676,7 @@ function buildInterior(lib, avoid = []) {
     const pick = (a) => a[Math.floor(rnd() * a.length)]
     for (let k = 0; k < 8000; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || Math.hypot(x - CABIN.x, z - CABIN.z) < 7 || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
+      if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 2.4 || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
       const sd = alpineStreamDist(x, z)
       if (sd > 1.4 && sd < 4 && rnd() < 0.25) put(pick(moss), { p: V(x, h - 0.15, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 1.2), c: new THREE.Color().setHSL(0.25, 0.12, 0.85 + rnd() * 0.1) })
@@ -708,9 +708,8 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 140000 && A.length / 4 < MAXI; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
-      if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 5.2) continue   // 觀景台上
-      if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.6)) continue   // 地上的鳥走動的地方：不長
-      if (Math.hypot(x - CABIN.x, z - CABIN.z) < 4.6) continue   // 小木屋裡面不長
+            if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.6)) continue   // 地上的鳥走動的地方：不長
+      if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R) continue   // 小木屋裡面不長
       if (alpineTrailDist(x, z) < 1.5 || alpineStreamDist(x, z) < 1.4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.6) continue
       const h = alpineHeight(x, z)
       const patch = fbm2(x * 0.07, z * 0.07, 3)
@@ -790,9 +789,8 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 160000 && list.length < 90000; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
-      if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 5.4) continue
       if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.8)) continue
-      if (Math.hypot(x - CABIN.x, z - CABIN.z) < 4.8) continue
+      if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 0.2) continue
       if (alpineTrailDist(x, z) < 1.7 || alpineStreamDist(x, z) < 1.6 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.8) continue
       const patch = fbm2(x * 0.07, z * 0.07, 3)
       if (rnd() > 0.5 + 0.7 * patch) continue

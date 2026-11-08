@@ -288,14 +288,16 @@ export const ALP_SPURS = [
   { name: 'gorge', from: 7, pts: [[123, -24], [117, -24.5], [112.5, -22.5]] },  // 吊橋下去，沿溪谷：黃腹琉璃
   { name: 'cabin', from: 14, pts: [[142.5, 15.6], [140, 16.2]] },               // 山頂步道 → 攝影小木屋的門口
 ].map((sp) => ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
-// 攝影小木屋：cabin 支線走到底就是門口；屋子中心再往裡 2.7 公尺，門朝來的方向（buildAlpine 算好高度）
+// 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
 export const CABIN = (() => {
   const sp = ALP_SPURS.find((q) => q.name === 'cabin'), e = sp.pts[sp.pts.length - 1], p = sp.pts[sp.pts.length - 2]
   const dx = e[0] - p[0], dz = e[1] - p[1], L = Math.hypot(dx, dz)
-  return { x: e[0] + dx / L * 2.7, z: e[1] + dz / L * 2.7, door: e, yaw: Math.atan2(-dx, -dz), W: 6, D: 4.5, y: 0 }   // yaw：門（前面）朝哪個方向
+  // 2026-11-08 放大：6×4.5 → 8.4×6.3；R＝屋子連門廊的外接半徑（地形攤平、樹讓開都用它）
+  const W = 8.4, D = 6.3, back = D / 2 + 0.45
+  return { x: e[0] + dx / L * back, z: e[1] + dz / L * back, door: e, yaw: Math.atan2(-dx, -dz), W, D, R: Math.hypot(W / 2 + 0.6, D / 2 + 1.6), y: 0 }   // yaw：門（前面）朝哪個方向
 })()
 export const ALP_BRIDGE = { a: 5, b: 6 }   // 步道第 5～7 點（120,-4 → 124,-12 → 128,-20）跨過溪谷：吊橋，橋下不鋪路
-export const ALP_PEAK = { x: AM(145, 0)[0], z: 8 * AS, h: 21 }   // 跟步道終點差不多高：步道才不會在山頂挖出一條溝
+export const ALP_PEAK = { x: AM(145, 0)[0], z: 8 * AS, h: 27, rx: 33, rz: 26 }   // 2026-11-08 山放大：高 21→27、範圍 27×21→33×26（設計座標）   // 跟步道終點差不多高：步道才不會在山頂挖出一條溝
 const AG = { x0: ALP.X0, z0: -ALP.HZ, cell: 0.5, nx: Math.round((ALP.X1 - ALP.X0) / 0.5) + 1, nz: Math.round(ALP.HZ * 2 / 0.5) + 1 }
 const aHeight = new Float32Array(AG.nx * AG.nz), aTrail = new Float32Array(AG.nx * AG.nz).fill(1e9), aStream = new Float32Array(AG.nx * AG.nz).fill(1e9)
 function segDist(px, pz, ax, az, bx, bz) {
@@ -317,7 +319,7 @@ function alpBase(X, Z) {
   // 用放大前的設計座標算形狀，高度再乘 AHS（山區整個放大）
   const x = 76 + (X - 76) / AS, z = Z / AS, P = { x: 76 + (ALP_PEAK.x - 76) / AS, z: ALP_PEAK.z / AS, h: ALP_PEAK.h }
   let h = 5 * smoothstep(80, 120, x)                                                             // 入口往東慢慢爬升
-  h += (P.h - 5) * Math.exp(-(((x - P.x) / 27) ** 2) - (((z - P.z) / 21) ** 2))                 // 主峰
+  h += (P.h - 5) * Math.exp(-(((x - P.x) / ALP_PEAK.rx) ** 2) - (((z - P.z) / ALP_PEAK.rz) ** 2))   // 主峰
   h += 4 * smoothstep(20, 42, Math.abs(z)) * smoothstep(92, 125, x)                               // 南北兩側的稜線
   h -= 5 * smoothstep(160, 186, x)                                                                // 山頂後面往東牆降
   h += 2.6 * fbm2(X * 0.04 + 11, Z * 0.04 - 7, 4) * smoothstep(84, 100, x)
@@ -449,7 +451,7 @@ function buildAlpine() {
     aTrail[k] = dAll
     // 小木屋底下和四周攤平（門口那塊空地也是）
     const dc = Math.hypot(x - CABIN.x, z - CABIN.z)
-    if (dc < 10) h = lerp(CABIN.y, h, smoothstep(4.6, 9, dc))
+    if (dc < CABIN.R + 5) h = lerp(CABIN.y, h, smoothstep(CABIN.R, CABIN.R + 4.4, dc))
     // 吊橋底下：整段挖下去（原本只有峽谷中間低，兩端的坡比橋面還高，擋在橋前面）；兩端接到橋頭
     {
       const ba = tr[ALP_BRIDGE.a], bb = tr[ALP_BRIDGE.a + 2], [db, tb] = segDist(x, z, ba[0], ba[1], bb[0], bb[1])
@@ -460,10 +462,10 @@ function buildAlpine() {
         h = Math.min(h, lerp(under, h, smoothstep(BRIDGE_DIM.hw + 0.8, BRIDGE_DIM.hw + 14, db)))
       }
     }
-    // 山頂：步道終點一圈削成平台（觀景台在這裡，四周看出去不能被山頭擋住）
+    // 山頂：步道終點一小塊平地（2026-11-08 拿掉觀景台，不再削一大片平台）；終點旁邊的山頭不能比終點高太多，步道才不會走在溝裡
     const pe = tr[tr.length - 1], dpk = Math.hypot(x - pe[0], z - pe[1])
-    h = lerp(prof[prof.length - 1] + 0.02, h, smoothstep(5.5, 9, dpk))   // 觀景台底下（終點 5.5 公尺內）整片平的，低的也墊起來
-    h = lerp(Math.min(h, prof[prof.length - 1] + 0.1 + 0.08 * Math.max(0, dpk - 4)), h, smoothstep(9, 16, dpk))
+    h = lerp(prof[prof.length - 1] + 0.02, h, smoothstep(2.5, 5, dpk))
+    h = lerp(Math.min(h, prof[prof.length - 1] + 0.3 + 0.12 * Math.max(0, dpk - 3)), h, smoothstep(6, 14, dpk))
     aHeight[k] = h
   }
 }
