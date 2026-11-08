@@ -360,11 +360,16 @@ function fixWinding(g) {
   ix.needsUpdate = true
   // 有些頂點的法線本身就是反的（約 1.5%）：打光時那一小塊亮暗顛倒，胸口出現亮白鋸齒。
   // 用轉好的面重算一次法線，只換掉跟原本方向相反的那些頂點（其他保留原本平滑的法線）
+  // 早期那三隻（樹鵲、綠繡眼、白頭翁）約 10% 的法線歪了 60° 以上（只換反向的還留下白色碎片）：這種模型整個用重算的法線
   const keep = n.clone()
   g.computeVertexNormals()
   const nn = g.attributes.normal
-  for (let i = 0; i < nn.count; i++) {
-    if (keep.getX(i) * nn.getX(i) + keep.getY(i) * nn.getY(i) + keep.getZ(i) * nn.getZ(i) >= 0) nn.setXYZ(i, keep.getX(i), keep.getY(i), keep.getZ(i))
+  let off = 0
+  for (let i = 0; i < nn.count; i++) if (keep.getX(i) * nn.getX(i) + keep.getY(i) * nn.getY(i) + keep.getZ(i) * nn.getZ(i) < 0.5) off++
+  if (off / nn.count < 0.08) {
+    for (let i = 0; i < nn.count; i++) {
+      if (keep.getX(i) * nn.getX(i) + keep.getY(i) * nn.getY(i) + keep.getZ(i) * nn.getZ(i) >= 0) nn.setXYZ(i, keep.getX(i), keep.getY(i), keep.getZ(i))
+    }
   }
   nn.needsUpdate = true
 }
@@ -568,6 +573,22 @@ function groundTripo(env, cfg) {
     const flick = cfg.flick ? cfg.flick * Math.pow(Math.max(0, Math.sin(t * (cfg.flickF ?? 2.4))), 6) : 0
     r.turn('tail', LAT, 0.1 * c.lean + 0.06 * Math.sin(ph * 2 + 1) * c.amp + flick + (cfg.swim ? 0.3 : 0)); r.turn('tail', AX.y, 0.08 * Math.sin(ph) * c.amp)
     for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) r.turn(wg, AX.y, sg * (0.02 * breath / 0.025 + 0.04 * Math.abs(roll) / 0.07))
+    // 用跳的鳥：以前整隻只是上下平移，身體像一塊板（2026-11-08 使用者：紫嘯鶇跳起來很僵硬）。
+    // 起跳身體往前傾、空中抬頭＋翅膀微張＋尾巴上揚、落地往前一沉＋尾巴往上一翹（平衡），頭盡量保持水平
+    let hopDip = 0
+    if (cfg.hop) {
+      const hT = c.hopT ?? 1, air = hT < 1 ? Math.sin(Math.PI * hT) : 0
+      if (hT < 1) c.landT = -1
+      else if (c.landT === -1) c.landT = 0
+      if (c.landT >= 0) c.landT += dt
+      const land = c.landT >= 0 ? Math.exp(-c.landT * 9) * Math.max(0, Math.cos(c.landT * 14)) : 0
+      const tilt = hT < 1 ? 0.2 * Math.sin(2 * Math.PI * hT) : 0   // 前半段前傾、後半段抬頭準備落地
+      r.turn('body', LAT, -tilt - 0.2 * land)
+      r.turn('head', LAT, 0.7 * tilt + 0.15 * land)
+      r.turn('tail', LAT, 0.35 * air + 0.5 * land)
+      for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) r.turn(wg, AX.y, sg * 0.22 * air)
+      hopDip = -cfg.hop * 0.35 * land
+    }
     // 抬腳那一下身體微微升起
     const up = legs.reduce((a, L) => a + (L.t < 1 ? Math.sin(Math.PI * L.t) : 0), 0)
     // 跟著地形走：腳下那一點的地面高度（相對鳥群原點）；涉水的鳥不用（水底看不到）
@@ -577,7 +598,7 @@ function groundTripo(env, cfg) {
     const runBob = c.run * 0.02 * cfg.H * Math.abs(Math.sin(c.runPh * Math.PI * 2))   // 每一步身體上下一下
     const liftY = (cfg.hop ? 0 : 0.012 * cfg.H * up * (1 - c.run)) + runBob, gyHere = env.groundAt ? env.groundAt(P.x, P.y) : 0
     c.gy = c.gy == null ? gyHere : damp(c.gy, gyHere, 12, dt)
-    root.position.set(P.x, c.gy + liftY + hopY, P.y); root.rotation.y = w.h
+    root.position.set(P.x, c.gy + liftY + hopY + hopDip, P.y); root.rotation.y = w.h
     root.updateWorldMatrix(true, true)
     const fwd = _t.set(Math.sin(w.h), 0, Math.cos(w.h)).clone(), moving = c.amp > 0.3
     // 走路時左右腳照節拍輪流跨：每走 stride 公尺一個循環，左腳在 0、右腳在半圈，步伐才平均

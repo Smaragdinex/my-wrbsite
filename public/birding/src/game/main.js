@@ -210,9 +210,14 @@ player.controls.addEventListener('lock', () => { setMenuCam(false); startEl.hidd
 player.controls.addEventListener('unlock', () => { if (!panelOpen()) { setMenuCam(true); showSheet(null); startEl.hidden = false; document.body.classList.add('in-menu') } })
 
 const clock = new THREE.Clock()
+// 錄影模式（?rec=1，宣傳影片用，tools/record/）：不自己跑迴圈，由錄影腳本呼叫 __game.step(dt) 一格一格推進（每格固定 1/30 秒、畫完截圖）
+const REC = qs.has('rec')
+let recT = 0
 function frame() {
   requestAnimationFrame(frame)
-  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime
+  tick(Math.min(clock.getDelta(), 0.05), clock.elapsedTime)
+}
+function tick(dt, t) {
   if (!panelOpen() && !menuCam) player.update(dt)
   cam.update(dt)
   if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }
@@ -234,5 +239,5 @@ function frame() {
   if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
   guide.render(dt)   // 圖鑑（書）疊在最上面
 }
-window.__game = { setMenuCam, guide, amb, settings, store, product, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
-frame()
+window.__game = { step: (dt) => { recT += dt; tick(dt, recT) }, REC, setMenuCam, guide, amb, settings, store, product, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
+if (!REC) frame()
