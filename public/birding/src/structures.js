@@ -338,10 +338,16 @@ export function buildGround(scene) {
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i)
     const h = terrainHeight(x, z)
-    pos.setY(i, inAlpine(x, z) ? Math.min(h, 0) - 0.6 : domeRho(x, z) > 1 ? h - 0.5 : h)   // 山區有自己的地形（alpine.js），這片壓到底下；圍牆外是 buildOutside 那片草地
+    // 2026-11-09 邊界接縫：以前邊界外第一排格點直接壓低 0.5 公尺，跨邊界那格變成一道陡坡（邊界內側凹一條溝、法線歪掉照得特別亮），
+    // 從店門口看過去是一整圈亮白的線。改成邊界外慢慢壓下去（從 5 公分開始，約 2 公尺壓到 0.5 公尺），一直藏在外面草地底下（邊界外地形還會先微微隆起）
+    const rho = domeRho(x, z)
+    pos.setY(i, inAlpine(x, z) ? Math.min(h, 0) - 0.6 : rho > 1 ? h - Math.min(0.5, 0.05 + 20 * (rho - 1)) : h)   // 山區有自己的地形（alpine.js），這片壓到底下；圍牆外是 buildOutside 那片草地
     uv.setXY(i, x / 5, z / 5)
     const n = fbm3(x * 0.08, 0, z * 0.08, 3)
     c.setRGB(0.5 + n * 0.2, 0.56 + n * 0.18, 0.4 + n * 0.14)   // 偏暗的林下地面，草葉之間不會露出亮綠草坪
+    // 靠邊界慢慢換成外面草地的顏色（outside.js 同一個算法），接起來看不出兩塊
+    const ko = smoothstep(0.95, 0.995, rho)
+    if (ko > 0) { const n2 = fbm3(x * 0.03, 0, z * 0.03, 3); c.lerp(new THREE.Color(0.42 + n2 * 0.12, 0.52 + n2 * 0.12, 0.3 + n2 * 0.08), ko) }
     const q = poolQ(x, z)
     if (q < 1.3) c.lerp(new THREE.Color(0.35, 0.3, 0.22), smoothstep(1.3, 0.8, q))
     col.push(c.r, c.g, c.b)

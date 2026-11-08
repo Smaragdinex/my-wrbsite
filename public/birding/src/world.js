@@ -17,7 +17,7 @@ import { loadAnimalModels, placeAnimal } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND } from './layout.js'
+import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 
@@ -84,6 +84,13 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     else if (def.swim) d.swimOK = (x, z) => poolQ(x, z) < 0.7 && Math.hypot(x - MTN.x, z - MTN.z) > mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 4
     // 沒指定方位就讓鏡頭站在「鳥背對山」那一側，背景是雲霧山
     if (d.view == null) d.view = THREE.MathUtils.radToDeg(Math.atan2(def.spot[0] - MTN.x, def.spot[1] - MTN.z))
+    // 2026-11-09 樹上的鳥：鏡頭（鳥面對的方向）如果和最近的步道差超過 90°，玩家從步道看到的會是背；改成朝步道
+    if (def.view == null && def.perch === 'branch') {
+      const [x, z] = def.spot; let best = 1e9, q = null
+      for (const p of PATHS) for (const t of p.points) { const k = Math.hypot(t.x - x, t.z - z); if (k < best) { best = k; q = t } }
+      const pv = THREE.MathUtils.radToDeg(Math.atan2(q.x - x, q.z - z))
+      if (Math.abs(((pv - d.view) % 360 + 540) % 360 - 180) > 90) d.view = pv
+    }
     const a = placeAnimal(d)
     scene.add(a.group)
     return { def, ...a }

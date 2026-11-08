@@ -69,7 +69,15 @@ export function createAmbience({ getMusic, getAmb }) {
       birdBedG = ac.createGain(); birdBedG.gain.value = 0; birdBedG.connect(ambBus)
       loopSrc(b, birdBedG)
     }).catch((e) => console.warn('[amb] 鳥叫音檔載入失敗，用合成的', e))
+    // 2026-11-09 使用者挑的錄音：雨 R8（Gentle Rain 07，DRAGON-STUDIO）、雷 T2（Dry Thunder，DRAGON-STUDIO）切成 7 聲；Pixabay 授權
+    loadBuf('audio/rain-loop.mp3').then((b) => {
+      rainFileG = ac.createGain(); rainFileG.gain.value = 0; rainFileG.connect(ambBus)
+      loopSrc(b, rainFileG)
+    }).catch((e) => console.warn('[amb] 雨聲音檔載入失敗，用合成的', e))
+    for (let i = 1; i <= 7; i++) loadBuf(`audio/thunder-${i}.mp3`).then((b) => thunderBufs.push(b)).catch(() => {})
   }
+  let rainFileG = null, lastThunder = -1
+  const thunderBufs = []
 
   /* ---------- 蟬：高頻雜訊、快速振幅抖動、慢慢起伏 ---------- */
   function startCicadas() {
@@ -121,6 +129,17 @@ export function createAmbience({ getMusic, getAmb }) {
   // 雷聲：delay 秒後（閃電到雷聲的時間差），先一聲劈啪（近的才明顯），再一段 4～7 秒忽大忽小的低沉隆隆聲
   function thunder(delay, strength) {
     if (!ac || ac.state !== 'running') return
+    if (thunderBufs.length) {
+      // 錄音版：隨機一聲（不連續重複同一聲）；遠的雷（strength 小）更小聲、高頻更少
+      let k = Math.floor(Math.random() * thunderBufs.length)
+      if (k === lastThunder && thunderBufs.length > 1) k = (k + 1) % thunderBufs.length
+      lastThunder = k
+      const t0 = ac.currentTime + delay, src = ac.createBufferSource(); src.buffer = thunderBufs[k]
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200 + 9000 * strength * strength
+      const g = ac.createGain(); g.gain.value = 0.5 * (0.35 + 0.65 * strength)
+      src.connect(lp); lp.connect(g); g.connect(ambBus); src.start(t0)
+      return
+    }
     const t0 = ac.currentTime + delay, buf = noiseBuf()
     const crack = ac.createBufferSource(); crack.buffer = buf
     const cf = ac.createBiquadFilter(); cf.type = 'lowpass'; cf.frequency.value = 900 + 2400 * strength
@@ -238,7 +257,8 @@ export function createAmbience({ getMusic, getAmb }) {
       smooth(ambFilter.frequency, 18000 - 16800 * st.store, now, 0.6)
       const h = st.hour, day = h > 6 && h < 18.5 ? Math.min(1, (h - 6) / 1.5, (18.5 - h) / 1.5) : 0
       const dry = 1 - 0.85 * st.rain   // 下雨時蟬、鳥都安靜下來
-      smooth(rainG.gain, 0.32 * st.rain, now, 2.5); smooth(rainLowG.gain, 0.1 * st.rain * (0.6 + 0.4 * st.storm), now, 2.5)
+      smooth(rainG.gain, rainFileG ? 0 : 0.32 * st.rain, now, 2.5); smooth(rainLowG.gain, (rainFileG ? 0.04 : 0.1) * st.rain * (0.6 + 0.4 * st.storm), now, 2.5)
+      if (rainFileG) smooth(rainFileG.gain, 2.0 * st.rain * (0.85 + 0.15 * st.storm), now, 2.5)
       smooth(cicadaG.gain, 0.13 * day * (h > 10 && h < 16 ? 1 : 0.5) * dry, now, 2)
       smooth(cricketG.gain, (1 - day) * 0.5 + 0.03, now, 2)
       smooth(waterG.gain, 0.16 * st.water, now, 0.6)
