@@ -92,7 +92,11 @@ export async function judgePhoto(p) {
   if (llm.status !== 'ready') return { ...base, by: 'rule' }
   try {
     // 稍微有一點隨機（同樣的照片不會每次講一樣的話）
-    const text = (await ask([{ role: 'system', content: SYSTEM }, ...EXAMPLE, { role: 'user', content: facts(p) }], { max_tokens: 70, temperature: 0.6, top_p: 0.9 })).trim()
+    // 模型卡住（WebGPU 掉了、分頁在背景）就不等了：8 秒沒回改用寫好的評語，賣照片不會卡死
+    const text = (await Promise.race([
+      ask([{ role: 'system', content: SYSTEM }, ...EXAMPLE, { role: 'user', content: facts(p) }], { max_tokens: 70, temperature: 0.6, top_p: 0.9 }),
+      new Promise((_, no) => setTimeout(() => no(new Error('老闆想太久（8 秒）')), 8000)),
+    ])).trim()
     if (/(.{4,})\1\1/s.test(text) || !text) throw new Error('模型輸出重複：' + text)
     const m = text.match(new RegExp(`(?:價格|${tr('價格')})\\s*[:：]\\s*(\\d{2,3})`, 'i'))
     const k = Math.min(120, Math.max(80, m ? +m[1] : 100))

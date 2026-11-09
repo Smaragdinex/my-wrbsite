@@ -28,7 +28,7 @@ export function createShop({ state, photos, judge, onChange, onClose, onView }) 
       ${tab === 'sell' ? `
         <p class="muted">${tr('老闆：「拍到什麼好照片？拿來給我看看。我這裡不是資源回收，{n} 分以上才收；100 分才給正常價，拍到難得的瞬間超過 100 分還會多給。」', { n: MIN_SCORE })}</p>
         <p class="muted tiers">${tr('60–69 分：一成　70–79：兩成半　80–89：五成　90–99：七成　100：正常價　100 以上：每分多 5%')}</p>
-        ${unsold.length > 1 ? `<div class="sell-all"><button class="btn" data-sellall ${busy ? 'disabled' : ''}>${prog ? tr('老闆在看… {i}/{n}', prog) : tr('一鍵全部賣出（{n} 張，估價 ${p}）', { n: unsold.length, p: unsold.reduce((a, q) => a + q.price, 0).toLocaleString() })}</button></div>` : ''}
+        ${unsold.length > 0 ? `<div class="sell-all"><button class="btn" data-sellall ${busy ? 'disabled' : ''}>${prog ? tr('老闆在看… {i}/{n}', prog) : tr('一鍵全部賣出（{n} 張，估價 ${p}）', { n: unsold.length, p: unsold.reduce((a, q) => a + q.price, 0).toLocaleString() })}</button></div>` : ''}
         ${batch ? `<div class="judged"><img src="${batch.best.url}" alt=""><div><h3>${tr('全部賣出：{n} 張，共 ${p}', { n: batch.n, p: batch.total.toLocaleString() })}</h3><p class="judge">「${esc(batch.best.judge)}」</p></div></div>` : ''}
         ${last && !batch ? `<div class="judged"><img src="${last.url}" alt=""><div><h3>${esc(birdName(last.subject.id, last.subject.name))}　${tr('賣了 ${p}', { p: last.soldFor })}</h3><p class="judge">「${esc(last.judge)}」</p></div></div>` : ''}
         <div class="grid">${unsold.map((p) => `<figure data-t="${p.time}"><img src="${p.url}" alt=""><figcaption><b>${esc(birdName(p.subject.id, p.subject.name))}</b><span>${tr('{n} 分', { n: p.score })}</span><span>${tr('估價 ${p}', { p: p.price })}</span>
@@ -56,25 +56,32 @@ export function createShop({ state, photos, judge, onChange, onClose, onView }) 
       const list = photos.filter((q) => !q.sold && q.subject && q.score >= MIN_SCORE && q.price > 0)
       if (!list.length) return
       busy = true; batch = null; last = null
-      let total = 0, best = null
-      for (let i = 0; i < list.length; i++) {
-        prog = { i: i + 1, n: list.length }; render()
-        const q = list[i], r = await judge(q)
-        if (!Number.isFinite(r.price)) r.price = 0
-        q.sold = true; q.soldFor = r.price; q.judge = r.comment
-        state.money += r.price; state.sold++; state.earned += r.price; total += r.price
-        if (!best || q.score > best.score) best = q
-        onChange(q)
+      let total = 0, best = null, n = 0
+      try {
+        for (let i = 0; i < list.length; i++) {
+          prog = { i: i + 1, n: list.length }; render()
+          const q = list[i], r = await judge(q)
+          if (!Number.isFinite(r.price)) r.price = 0
+          q.sold = true; q.soldFor = r.price; q.judge = r.comment
+          state.money += r.price; state.sold++; state.earned += r.price; total += r.price; n++
+          if (!best || q.score > best.score) best = q
+          onChange(q)
+        }
+      } finally {
+        // 中間出錯也要把按鈕放回來（以前會一直卡在「老闆在看…」、再也按不了）
+        prog = null; busy = false
+        if (n) batch = { n, total, best }
+        render()
       }
-      prog = null; busy = false; batch = { n: list.length, total, best }
-      return render()
+      return
     }
     if (t.dataset.sell && !busy) {
       batch = null
       const p = photos.find((x) => x.time === +t.dataset.sell)
       if (!p || !p.subject || p.score < MIN_SCORE) return   // 保險：60 分以下一律不收
       busy = true; render()
-      const r = await judge(p)                       // { price, comment }
+      let r
+      try { r = await judge(p) } catch (err) { console.warn('[shop] 賣照片出錯', err); busy = false; return render() }   // { price, comment }
       if (!Number.isFinite(r.price)) r.price = 0      // 不管哪裡算錯，錢都不能變成 NaN 存進存檔
       p.sold = true; p.soldFor = r.price; p.judge = r.comment
       state.money += r.price; state.sold++; state.earned += r.price
