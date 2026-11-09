@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>body{margin:0;background:#9ab}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"}}</script>
+</head><body><script type="module">
+import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(innerWidth, innerHeight); document.body.append(r.domElement)
+r.toneMapping = THREE.ACESFilmicToneMapping
+const s = new THREE.Scene(); s.background = new THREE.Color(0xb8c8c8)
+s.add(new THREE.HemisphereLight(0xdcecf5, 0x5d6e44, 1.4)); const sun = new THREE.DirectionalLight(0xfff1dc, 2.4); sun.position.set(-5, 10, 6); s.add(sun)
+const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 500)
+const ctl = new OrbitControls(cam, r.domElement)
+const grid = new THREE.GridHelper(200, 200, 0x445, 0x667); s.add(grid)
+const dl = new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/gltf/')
+const L = new GLTFLoader().setDRACOLoader(dl)
+const files = (new URLSearchParams(location.search).get('f') || 'tropical_pack').split(',')
+let x = 0
+for (const f of files) {
+  const g = await L.loadAsync(f + '.glb?' + Date.now())
+  for (const o of [...g.scene.children]) {
+    const b = new THREE.Box3().setFromObject(o), w = b.max.x - b.min.x
+    o.position.x = x + w / 2; x += w + 0.3
+    s.add(o)
+  }
+}
+const H = +(new URLSearchParams(location.search).get('h') || 4)
+cam.position.set(x / 2, H * 0.8, Math.max(x * 0.75, H * 2)); ctl.target.set(x / 2, H * 0.4, 0); ctl.update()
+window.__cam = cam; window.__ctl = ctl
+r.setAnimationLoop(() => r.render(s, cam))
+</script></body></html>

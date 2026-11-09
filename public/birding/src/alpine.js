@@ -10,6 +10,7 @@ import { buildSummit } from './summit.js'
 import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight } from './layout.js'
 import { scatter } from './plants.js'
 import { nearGiant, forestK } from './giants.js'
+import { barkMaterial } from './bark.js'
 import { bladeMesh } from './flora.js'
 import { addWind } from './wind.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
@@ -50,8 +51,10 @@ const quad = (pts, mat, parent, order = 5) => {
 // 2026-11-07 改寫得比較寫實：一根側枝＝主枝＋兩側一排排的小枝，小枝上密密的短針葉；針葉裡深外淺、枝梢是嫩綠的新芽，
 // 沒有黑色描邊（原本每根針都描深色，看起來像漫畫）。透明底（alphaTest）。
 export function needleTex() {
-  const t = canvasTex(512, 256, (x, w, h) => {
-    x.clearRect(0, 0, w, h)
+  // 2026-11-10 畫在兩倍大的畫布上（1024×512）：針葉更細、近看不糊。座標還是用 512×256 的單位畫
+  const t = canvasTex(1024, 512, (x, W, H) => {
+    x.clearRect(0, 0, W, H); x.scale(2, 2)
+    const w = W / 2, h = H / 2
     const rnd = mulberry32(7)
     const needle = (px, py, a, len, tip) => {
       const g = 95 + rnd() * 45 + tip * 45, r = 48 + rnd() * 20 + tip * 45, b = 46 + rnd() * 16
@@ -80,6 +83,7 @@ export function needleTex() {
     }
     for (let k = 0; k < 160; k++) { const u = rnd() * 0.97, [px, py] = main(u); needle(px, py, (rnd() - 0.5) * 3, 8 + rnd() * 8, u > 0.88 ? 1 : 0) }   // 主枝本身也長針
   })
+  t.anisotropy = 8
   return t
 }
 // 針葉卡片的材質（山區的冷杉、鐵杉、圓柏和公園外面的樹林帶共用）
@@ -100,8 +104,9 @@ export function needleMaterial() {
 // kind 'fir'：冷杉，細長尖塔、枝條平伸、層次分明；'hemlock'：鐵杉，比較寬、枝條下垂、頂端的芽歪向一邊。高度 1（擺放時縮放）
 // 每根側枝兩片交叉的卡片（從側面、從上面看都有厚度）；每層枝數、長度、角度都有亂數，偶爾缺一枝（看得到樹幹，比較自然）
 // 頂點顏色：樹冠裡面、下面比較暗（自己遮自己），外面、上面比較亮——卡片樹最缺的就是這個
-export function coniferGeo(kind) {
-  const fir = kind === 'fir', R = fir ? 0.19 : 0.29, tiers = fir ? 22 : 17, rnd = mulberry32(fir ? 3 : 5)
+// tiers：層數（2026-11-10 巨木的枝葉團用少層數的輕量版，一棵巨木掛幾十團）
+export function coniferGeo(kind, tiersN) {
+  const fir = kind === 'fir', R = fir ? 0.19 : 0.29, tiers = tiersN ?? (fir ? 22 : 17), rnd = mulberry32(fir ? 3 : 5)
   const cards = []
   for (let i = 0; i < tiers; i++) {
     const t = i / (tiers - 1), y = 0.08 + Math.pow(t, 0.95) * 0.9 + (rnd() - 0.5) * 0.015
@@ -667,7 +672,7 @@ function buildInterior(lib, avoid = []) {
   // 針葉樹
   {
     const needleM = needleMaterial()
-    const barkM = new THREE.MeshStandardMaterial({ color: 0x5a4636, roughness: 0.95 })
+    const barkM = barkMaterial('pine_bark', { normal: 1.2, color: [1.3, 1.2, 1.1] })   // 2026-11-10 掃描的松樹皮（以前是一個純色）
     const coreM = new THREE.MeshStandardMaterial({ color: 0x223a26, roughness: 1 })   // 跟針葉同色系，從上面看不會是一顆黑色金字塔
     // 雀榕的位置先挑好（低海拔、步道邊 5～12 公尺、彼此隔 16 公尺），針葉樹再避開它周圍 9 公尺：不然雀榕整棵被鐵杉林包住看不到
     for (let k = 0; k < 20000 && FIGPOS.length < 18; k++) {
@@ -678,7 +683,8 @@ function buildInterior(lib, avoid = []) {
       FIGPOS.push({ x, z, H: 7 + rnd() * 3.5 })
     }
     for (const kind of ['fir', 'hemlock']) {
-      const crown = coniferGeo(kind), trunk = new THREE.CylinderGeometry(0.006, 0.026, 0.86, 8).translate(0, 0.43, 0)   // 樹幹到 86% 就停：不然樹梢會冒出一根光禿禿的樹幹
+      const crown = coniferGeo(kind), trunk = new THREE.CylinderGeometry(0.006, 0.026, 0.86, 14, 6).translate(0, 0.43, 0)
+      { const u = trunk.attributes.uv; for (let i = 0; i < u.count; i++) u.setXY(i, u.getX(i) * 2, u.getY(i) * 8) }   // 樹皮貼圖照真實大小重複   // 樹幹到 86% 就停：不然樹梢會冒出一根光禿禿的樹幹
       // 樹冠裡面一個實心的深綠圓錐：卡片樹側看會透光，遠看只剩枝幹像竹竿；有這個芯遠看才是一棵實心的針葉樹
       const core = new THREE.ConeGeometry(kind === 'fir' ? 0.075 : 0.12, 0.74, 9, 1, true).translate(0, 0.5, 0)
       const list = []
