@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight } from './layout.js'
+import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { nearGiant, forestK } from './giants.js'
 import { barkMaterial } from './bark.js'
@@ -693,6 +693,7 @@ function buildInterior(lib, avoid = []) {
         const inB = BAND(x, z)
         if ((!inAlpine(x, z, 3) && !inB) || domeRho(x, z) > 0.94 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4.4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4.4)) continue
         if (alpineTrailDist(x, z) < 3.2 || alpineStreamDist(x, z) < 2.5 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2.5) continue
+        if (YOSE.inside(x, z)) continue   // 2026-11-10 優勝美地區：這裡種西黃松（yosemite.js），不種冷杉、鐵杉
         const hgt = GY(x, z)
         // 冷杉在高處、鐵杉在中坡；山頂附近稀疏（箭竹草原）
         let want = kind === 'fir' ? ss(7, 16, hgt) * (1 - 0.85 * ss(17, 22, hgt)) : ss(2.5, 7, hgt) * (1 - ss(14, 20, hgt))

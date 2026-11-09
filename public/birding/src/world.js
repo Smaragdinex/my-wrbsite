@@ -24,6 +24,7 @@ import { createCloudSea } from './cloudsea.js'
 import { buildOwlNest } from './owlnest.js'
 import { buildCamp } from './camp.js'
 import { buildPondLife } from './pondlife.js'
+import { buildYosemite } from './yosemite.js'
 import { buildGiants, giantSpots } from './giants.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
@@ -128,6 +129,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   alpine.build()
   const camp = buildCamp(scene)
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉
+  const yose = buildYosemite(scene, { lib: plantLib })   // 2026-11-10 帳篷區後面的花崗岩壁、瀑布、西黃松
   const giants = buildGiants(scene, { sun, avoid: alpAvoid, lib: plantLib })
   const _forestFog = new THREE.Color()   // 阿里山／紅杉林那種巨木林帶（步道中段）   // 右邊岔路上去的營地（三頂帳篷＋營火）
   const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
@@ -224,6 +226,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     cloudSea.tick(t, camera, { day: dayLight.value })
     camp.tick(t, dt, { day: dayLight.value })
     pondLife.tick(t, dt)
+    yose.tick(t)
     giants.tick(t, camera, { day: dayLight.value })
     weather.tick(t, dt)
     {

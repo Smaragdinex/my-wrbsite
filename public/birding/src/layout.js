@@ -294,6 +294,9 @@ export const ALP_SPURS = [
   { name: 'cabin', from: 14, pts: [[142.5, 15.6], [140, 16.2]] },               // 山頂步道 → 攝影小木屋的門口
   // 2026-11-09 使用者：右邊岔路加大、上面做一個休息的營地（三頂帳篷圍著營火）。跟黃山雀那條共用第一段，到岔口往上坡走到一塊平台
   { name: 'camp', from: 3, pts: [[110, 19], [112.8, 24], [114.25, 28.95]], clear: 7.5 },
+  // 2026-11-10 使用者：帳篷區那邊路線拉長、換一種風景（優勝美地）→ 從主線第 13 點（山頂步道東段）往西下坡，沿北邊的花崗岩壁、瀑布走到營地，跟 camp 支線連成一圈。
+  // join：終點接到別條支線的終點（營地），高度兩頭都要對上、盡頭不另外攤平
+  { name: 'yose', from: 13, join: 'camp', pts: [[151.27, 19.85], [145.89, 23.57], [138.86, 26.88], [131.42, 29.36], [123.15, 31.02], [114.25, 28.95]] },
 ].map((sp) => ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
 // 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
 export const CABIN = (() => {
@@ -304,6 +307,15 @@ export const CABIN = (() => {
   return { x: e[0] + dx / L * back, z: e[1] + dz / L * back, door: e, yaw: Math.atan2(-dx, -dz), W, D, R: Math.hypot(W / 2 + 0.6, D / 2 + 1.6), y: 0 }   // yaw：門（前面）朝哪個方向
 })()
 // 營地：camp 支線的盡頭（三頂帳篷圍著營火，camp.js）；R＝帳篷外圍的半徑（樹、石頭、箭竹讓開）
+// 2026-11-10 優勝美地區（yosemite.js）：x0～x1 沿著溫室玻璃的北邊立一面花崗岩壁；edge(x)＝那裡玻璃邊（domeRho 0.93）的 z，base(x)＝牆腳（往裡 8 公尺）
+export const YOSE = (() => {
+  const edgeCache = new Map()
+  const edge = (x) => { const k = Math.round(x * 4); if (!edgeCache.has(k)) { let z = 40; while (domeRho(x, z) < 0.93 && z < 140) z += 0.25; edgeCache.set(k, z) } return edgeCache.get(k) }
+  const Y = { x0: 176, x1: 248, edge, base: (x) => edge(x) - 8 }
+  Y.fall = { x: 200, z: Y.base(200) - 2.2, r: 2.2 }
+  Y.inside = (x, z) => x > Y.x0 - 12 && x < Y.x1 + 10 && z > Y.base(Math.min(Y.x1, Math.max(Y.x0, x))) - 30
+  return Y
+})()
 export const CAMP = (() => { const e = ALP_SPURS.find((q) => q.name === 'camp').pts.at(-1); return { x: e[0], z: e[1], R: 6.8, y: 0 } })()
 export const ALP_BRIDGE = { a: 5, b: 6 }   // 步道第 5～7 點（120,-4 → 124,-12 → 128,-20）跨過溪谷：吊橋，橋下不鋪路
 export const ALP_PEAK = { x: AM(145, 0)[0], z: 8 * AS, h: 27, rx: 33, rz: 26 }   // 2026-11-08 山放大：高 21→27、範圍 27×21→33×26（設計座標）   // 跟步道終點差不多高：步道才不會在山頂挖出一條溝
@@ -414,7 +426,12 @@ function buildAlpine() {
   ALP_TRAIL.prof = prof
   for (const sp of ALP_SPURS) {   // 支線：從主步道那一點的高度開始，一樣坡度最多 22%
     const pp = sp.pts.map(([x, z]) => alpBase(x, z)); pp[0] = prof[sp.from]
-    for (let i = 1; i < pp.length; i++) { const L = Math.hypot(sp.pts[i][0] - sp.pts[i - 1][0], sp.pts[i][1] - sp.pts[i - 1][1]); pp[i] = clamp(pp[i], pp[i - 1] - L * 0.22, pp[i - 1] + L * 0.22) }
+    const k = sp.join ? 0.26 : 0.22, seg = (i) => Math.hypot(sp.pts[i][0] - sp.pts[i - 1][0], sp.pts[i][1] - sp.pts[i - 1][1])
+    for (let i = 1; i < pp.length; i++) pp[i] = clamp(pp[i], pp[i - 1] - seg(i) * k, pp[i - 1] + seg(i) * k)
+    if (sp.join) {   // 終點要剛好接上那條支線的終點：從終點往回再夾一次坡度
+      pp[pp.length - 1] = ALP_SPURS.find((q) => q.name === sp.join).prof.at(-1)
+      for (let i = pp.length - 2; i > 0; i--) pp[i] = clamp(pp[i], pp[i + 1] - seg(i + 1) * k, pp[i + 1] + seg(i + 1) * k)
+    }
     sp.prof = pp
   }
   CABIN.y = ALP_SPURS.find((q) => q.name === 'cabin').prof.at(-1)
@@ -455,7 +472,7 @@ function buildAlpine() {
       const [d2, i2, t2] = polyDist(x, z, sp.pts), y2 = lerp(sp.prof[i2], sp.prof[i2 + 1], t2)
       const e = sp.pts[sp.pts.length - 1], de = Math.hypot(x - e[0], z - e[1]), C0 = sp.clear ?? 3.5, C1 = C0 + 4.5   // clear：盡頭空地多大（營地比較大）
       if (d2 < 6) h = lerp(y2, h, smoothstep(1.0, 4, d2))
-      if (de < C1 + 1) h = lerp(sp.prof[sp.prof.length - 1], h, smoothstep(C0, C1, de))
+      if (!sp.join && de < C1 + 1) h = lerp(sp.prof[sp.prof.length - 1], h, smoothstep(C0, C1, de))
       dAll = Math.min(dAll, d2 + 0.35)   // 小路畫得窄一點（alpineTrailDist 用來畫路面、樹讓開）
     }
     aTrail[k] = dAll
