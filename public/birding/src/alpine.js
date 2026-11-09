@@ -643,8 +643,12 @@ function buildInterior(lib, avoid = []) {
       // 兩邊位置完全對稱（同一端左右兩塊在同一個高度：取兩邊比較低的地面，另一邊比較高就整塊埋進土裡）
       for (const [t, out] of ends) {
         const T = topOf[t + ',' + s]
-        const q = T.clone().addScaledVector(dir, out * 9).addScaledVector(side, s * 0.6)
-        const qo = T.clone().addScaledVector(dir, out * 9).addScaledVector(side, -s * 0.6).addScaledVector(side, -s * 2 * (HW + 0.3))
+        // 2026-11-10 使用者：錨碇擋在步道上（步道在橋頭轉彎，橋的直線延長線會切到木棧道）→ 往外挪到離步道中線 3 公尺以上；
+        // 左右兩塊用同一個外移量（取兩邊需要的最大值），保持對稱
+        const need = (sg) => { const Ts = topOf[t + ',' + sg]; let o = 0.6; while (o < 6 && alpineTrailDist(...(() => { const p = Ts.clone().addScaledVector(dir, out * 9).addScaledVector(side, sg * o); return [p.x, p.z] })()) < 3.0) o += 0.2; return o }
+        const off = Math.max(need(1), need(-1))
+        const q = T.clone().addScaledVector(dir, out * 9).addScaledVector(side, s * off)
+        const qo = T.clone().addScaledVector(dir, out * 9).addScaledVector(side, -s * off).addScaledVector(side, -s * 2 * (HW + 0.3))
         const gy = Math.min(alpineHeight(q.x, q.z), alpineHeight(qo.x, qo.z))
         q.y = gy + 0.35
         tube(cables, [T, q], 0.05, 2)
