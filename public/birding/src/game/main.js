@@ -191,7 +191,11 @@ loadingEl.classList.add('done')
 
 // 老闆的 AI（本地 LLM）：背景下載，好了之前用寫好的評語
 // 老闆的 AI（WebLLM）：桌機瀏覽器有 WebGPU 就在背景載入；手機、沒有 WebGPU、或網址加 ?ai=0 就用寫好的評語
-if (!PHONE && new URLSearchParams(location.search).get('ai') !== '0') loadLLM(() => hud.setStatus(llm.status === 'loading' ? tr('老闆的 AI 準備中… {p}%（第一次要下載約 1 GB）', { p: Math.round(llm.progress * 100) }) : ''))
+// 2026-11-09 學校電腦開不起來：AI 老闆（Qwen 1.5B）第一次要下載約 1 GB、再吃約 1 GB 顯示記憶體，加上遊戲本身約 1.4 GB。
+// 記憶體不到 8 GB 的電腦（navigator.deviceMemory）不載，改用寫好的評語（價錢照樣算）；?ai=1 可以強制開
+const BIG_PC = (navigator.deviceMemory ?? 8) >= 8
+const AI_Q = new URLSearchParams(location.search).get('ai')
+if (!PHONE && AI_Q !== '0' && (BIG_PC || AI_Q === '1')) loadLLM(() => hud.setStatus(llm.status === 'loading' ? tr('老闆的 AI 準備中… {p}%（第一次要下載約 1 GB）', { p: Math.round(llm.progress * 100) }) : ''))
 
 // 首頁：開始遊戲／設定／操作說明。開始＝鎖定滑鼠（瀏覽器規定要使用者點擊才能鎖）；按 Esc 解鎖就回到這個選單（按鈕變「繼續」）
 const settings = createSettings({ world, player })
