@@ -22,6 +22,7 @@ const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0
 import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
 import { buildOwlNest } from './owlnest.js'
+import { buildCamp } from './camp.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
 export const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
@@ -122,6 +123,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
   alpine.build()
+  const camp = buildCamp(scene)   // 右邊岔路上去的營地（三頂帳篷＋營火）
   const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
   const birdStops = birds.map((b) => ({
     bird: b, title: b.def.name, nick: b.def.nick, sci: b.def.sci, tag: b.def.where, text: b.def.intro, facts: b.def.facts,
@@ -214,6 +216,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     water.mist.update(dt, camera)
     time?.tick(t, dt)
     cloudSea.tick(t, camera, { day: dayLight.value })
+    camp.tick(t, dt, { day: dayLight.value })
     weather.tick(t, dt)
     {
       const mk = mistLevel.value, tint = 0.2 + 0.8 * Math.min(1, dayLight.value * 1.4), cp = camera.position   // 清晨天剛亮，霧就先白起來

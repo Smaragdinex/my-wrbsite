@@ -292,6 +292,8 @@ export const ALP_SPURS = [
   // 2026-11-09 使用者：過橋後馬上往左折回去很彆扭 → 改成過橋先往前直走一段，再往左繞一個大彎（繞過鷓鴣北邊）到同一塊空地
   { name: 'gorge', from: 7, pts: [[129.35, -26.5], [125.2, -29.4], [119, -29], [114, -25.6], [112.5, -22.5]] },  // 吊橋下去，沿溪谷：黃腹琉璃
   { name: 'cabin', from: 14, pts: [[142.5, 15.6], [140, 16.2]] },               // 山頂步道 → 攝影小木屋的門口
+  // 2026-11-09 使用者：右邊岔路加大、上面做一個休息的營地（三頂帳篷圍著營火）。跟黃山雀那條共用第一段，到岔口往上坡走到一塊平台
+  { name: 'camp', from: 3, pts: [[110, 19], [112.8, 24], [114.25, 28.95]], clear: 7.5 },
 ].map((sp) => ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
 // 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
 export const CABIN = (() => {
@@ -301,6 +303,8 @@ export const CABIN = (() => {
   const W = 8.4, D = 6.3, back = D / 2 + 0.45
   return { x: e[0] + dx / L * back, z: e[1] + dz / L * back, door: e, yaw: Math.atan2(-dx, -dz), W, D, R: Math.hypot(W / 2 + 0.6, D / 2 + 1.6), y: 0 }   // yaw：門（前面）朝哪個方向
 })()
+// 營地：camp 支線的盡頭（三頂帳篷圍著營火，camp.js）；R＝帳篷外圍的半徑（樹、石頭、箭竹讓開）
+export const CAMP = (() => { const e = ALP_SPURS.find((q) => q.name === 'camp').pts.at(-1); return { x: e[0], z: e[1], R: 6.8, y: 0 } })()
 export const ALP_BRIDGE = { a: 5, b: 6 }   // 步道第 5～7 點（120,-4 → 124,-12 → 128,-20）跨過溪谷：吊橋，橋下不鋪路
 export const ALP_PEAK = { x: AM(145, 0)[0], z: 8 * AS, h: 27, rx: 33, rz: 26 }   // 2026-11-08 山放大：高 21→27、範圍 27×21→33×26（設計座標）   // 跟步道終點差不多高：步道才不會在山頂挖出一條溝
 const AG = { x0: ALP.X0, z0: -ALP.HZ, cell: 0.5, nx: Math.round((ALP.X1 - ALP.X0) / 0.5) + 1, nz: Math.round(ALP.HZ * 2 / 0.5) + 1 }
@@ -414,6 +418,7 @@ function buildAlpine() {
     sp.prof = pp
   }
   CABIN.y = ALP_SPURS.find((q) => q.name === 'cabin').prof.at(-1)
+  CAMP.y = ALP_SPURS.find((q) => q.name === 'camp').prof.at(-1)
   const gorgeK = (x, z) => Math.exp(-((Math.hypot(x - ALP_GORGE.x, z - ALP_GORGE.z) / ALP_GORGE.r) ** 2))
   const st = ALP_STREAM, sProf = st.map(([x, z], i) => alpBase(x, z) - 1.3 - ALP_GORGE.depth * gorgeK(x, z))
   for (let i = 1; i < sProf.length; i++) sProf[i] = Math.min(sProf[i], sProf[i - 1] - 0.3)     // 溪床一路往下
@@ -448,9 +453,9 @@ function buildAlpine() {
     let dAll = dt
     for (const sp of ALP_SPURS) {   // 支線：窄一點；走到底那一小塊空地攤平
       const [d2, i2, t2] = polyDist(x, z, sp.pts), y2 = lerp(sp.prof[i2], sp.prof[i2 + 1], t2)
-      const e = sp.pts[sp.pts.length - 1], de = Math.hypot(x - e[0], z - e[1])
+      const e = sp.pts[sp.pts.length - 1], de = Math.hypot(x - e[0], z - e[1]), C0 = sp.clear ?? 3.5, C1 = C0 + 4.5   // clear：盡頭空地多大（營地比較大）
       if (d2 < 6) h = lerp(y2, h, smoothstep(1.0, 4, d2))
-      if (de < 9) h = lerp(sp.prof[sp.prof.length - 1], h, smoothstep(3.5, 8, de))
+      if (de < C1 + 1) h = lerp(sp.prof[sp.prof.length - 1], h, smoothstep(C0, C1, de))
       dAll = Math.min(dAll, d2 + 0.35)   // 小路畫得窄一點（alpineTrailDist 用來畫路面、樹讓開）
     }
     aTrail[k] = dAll

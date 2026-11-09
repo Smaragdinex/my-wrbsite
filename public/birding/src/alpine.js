@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { AS, CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight } from './layout.js'
+import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight } from './layout.js'
 import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
 import { addWind } from './wind.js'
@@ -670,7 +670,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 20000 && FIGPOS.length < 18; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2, td = alpineTrailDist(x, z)
       if (td < 5 || td > 12 || x > 230 || !inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineHeight(x, z) > 18) continue
-      if (alpineStreamDist(x, z) < 3 || bridgeDist(x, z) < 10 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 3 || nearBird(avoid, x, z, 5, 2.5)) continue
+      if (alpineStreamDist(x, z) < 3 || bridgeDist(x, z) < 10 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4) || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 3 || nearBird(avoid, x, z, 5, 2.5)) continue
       if (FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < 16)) continue
       FIGPOS.push({ x, z, H: 7 + rnd() * 3.5 })
     }
@@ -682,7 +682,7 @@ function buildInterior(lib, avoid = []) {
       for (let k = 0; k < 30000 * AK && list.length < (kind === 'fir' ? 400 : 430) * AK; k++) {
         const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
         const inB = BAND(x, z)
-        if ((!inAlpine(x, z, 3) && !inB) || domeRho(x, z) > 0.94 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4.4) continue
+        if ((!inAlpine(x, z, 3) && !inB) || domeRho(x, z) > 0.94 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4.4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4.4)) continue
         if (alpineTrailDist(x, z) < 3.2 || alpineStreamDist(x, z) < 2.5 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2.5) continue
         const hgt = GY(x, z)
         // 冷杉在高處、鐵杉在中坡；山頂附近稀疏（箭竹草原）
@@ -745,7 +745,7 @@ function buildInterior(lib, avoid = []) {
       const E = ALP_TRAIL.at(-1), EY = ALP_TRAIL.prof.at(-1), J = [], RH = []
       for (let k = 0; k < 1500 * AK && (J.length < 60 * AK || RH.length < 40 * AK); k++) {
         const a = rnd() * TAU, d = 6 + Math.pow(rnd(), 0.7) * 36, x = E[0] + Math.cos(a) * d, z = E[1] + Math.sin(a) * d
-        if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineTrailDist(x, z) < 1.8 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 1.9 || nearBird(avoid, x, z, 3.5, 1.5)) continue
+        if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineTrailDist(x, z) < 1.8 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 1.9 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 1.9) || nearBird(avoid, x, z, 3.5, 1.5)) continue
         const y = alpineHeight(x, z); if (y < EY - 10) continue
         const sz = 0.7 + rnd() * 0.9, q = new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, rnd() * TAU, (rnd() - 0.5) * 0.3))
         if (rnd() < 0.6 ? J.length < 60 * AK : RH.length >= 40 * AK) J.push({ p: V(x, y - 0.1, z), q, s: V(3.2 * sz, 1.1 * sz, 3.2 * sz) })
@@ -961,7 +961,7 @@ function buildInterior(lib, avoid = []) {
     const figM = leafMat(figLeafT, { roughness: 0.4, color: 0xdfe8d8 }), coreM = new THREE.MeshStandardMaterial({ color: 0x3d6234, roughness: 1, vertexColors: true })
     const fruitM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.38, vertexColors: true })
     const FIG = [], SCH = [], FLW = { lily: [], hyper: [], gent: [] }
-    const okHere = (x, z, trail, r) => inAlpine(x, z, 2) && domeRho(x, z) < 0.93 && trail >= r && alpineStreamDist(x, z) > 2.5 && bridgeDist(x, z) > 3 && Math.hypot(x - CABIN.x, z - CABIN.z) > CABIN.R + 3 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) > ALP_POND.r + 2 && !nearBird(avoid, x, z, 4, 2)
+    const okHere = (x, z, trail, r) => inAlpine(x, z, 2) && domeRho(x, z) < 0.93 && trail >= r && alpineStreamDist(x, z) > 2.5 && bridgeDist(x, z) > 3 && Math.hypot(x - CABIN.x, z - CABIN.z) > CABIN.R + 3 && Math.hypot(x - CAMP.x, z - CAMP.z) > CAMP.R + 4 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) > ALP_POND.r + 2 && !nearBird(avoid, x, z, 4, 2)
     for (const f of FIGPOS) {
       const y = alpineHeight(f.x, f.z), H = f.H
       FIG.push({ p: V(f.x, y - 0.15, f.z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(H * (1 + rnd() * 0.2), H, H * (1 + rnd() * 0.2)), H })
@@ -1053,7 +1053,7 @@ function buildInterior(lib, avoid = []) {
     const pick = (a) => a[Math.floor(rnd() * a.length)]
     for (let k = 0; k < 8000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 2.4 || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
+      if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 2.4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 2.4) || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
       const sd = alpineStreamDist(x, z)
       if (sd > 1.4 && sd < 4 && rnd() < 0.25) put(pick(moss), { p: V(x, h - 0.15, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 1.2), c: new THREE.Color().setHSL(0.25, 0.12, 0.85 + rnd() * 0.1) })
@@ -1103,7 +1103,7 @@ function buildInterior(lib, avoid = []) {
       if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955) continue
             if (groundClear(avoid, x, z, 1.6)) continue   // 地上的鳥走動的地方、到鏡頭那條線：不長
             if (bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8) continue   // 吊橋兩端橋面貼近地面：箭竹會從木板縫長出來（2026-11-09）
-      if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R) continue   // 小木屋裡面不長
+      if ((Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R)) continue   // 小木屋裡面不長
       if (alpineTrailDist(x, z) < 1.5 || alpineStreamDist(x, z) < 1.4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.6) continue
       const h = GY(x, z)
       const patch = fbm2(x * 0.07, z * 0.07, 3)
@@ -1184,7 +1184,7 @@ function buildInterior(lib, avoid = []) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955) continue
       if (groundClear(avoid, x, z, 1.8) || bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8) continue
-      if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 0.2) continue
+      if ((Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 0.2 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 0.2)) continue
       if (alpineTrailDist(x, z) < 1.7 || alpineStreamDist(x, z) < 1.6 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.8) continue
       const patch = fbm2(x * 0.07, z * 0.07, 3)
       if (rnd() > 0.5 + 0.7 * patch) continue
