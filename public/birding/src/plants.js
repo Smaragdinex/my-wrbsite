@@ -9,7 +9,7 @@ import { addWind } from './wind.js'
 const FILES = [
   'tropical_pack', 'palm2', 'jungle_tree', 'bromeliads', 'anthurium', 'calathea_orbifolia', 'fern_02',
   'pachira_aquatica', 'rock_moss_set', 'rock_moss_set_02', 'boulder', 'rock_face', 'rock_face_02',
-  'tree_stump_1k', 'dead_tree_trunk_1k',   // 2026-11-10 巨木林的樹頭、倒木
+  'tree_stump_1k', 'dead_tree_trunk_1k', 'figtree',   // 2026-11-10 雀榕（tools/make-figtree.py）   // 2026-11-10 巨木林的樹頭、倒木
 ]
 
 // 版本號跟著 index.html 的 ?v= 走，上線後模型才不會用到快取的舊版

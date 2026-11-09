@@ -186,13 +186,13 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
     for (let k = 0; k < nL; k++) {
       const h = t.H * (0.44 + 0.46 * (k / nL) + rnd() * 0.03), a = k * 2.39 + rnd() * 0.8, up = 0.35 + rnd() * 0.4   // 跟水平的夾角；螺旋排列，不會擠在同一邊
       const yy = h / t.H, rr = R * 1.6 * (0.5 * (1 - yy) + 0.12 * (1 - yy) ** 2 + 0.06)   // 那個高度樹幹的半徑（跟 trunkGeo 一樣的收細）
-      const len = t.H * (0.15 + rnd() * 0.1) * (1.25 - h / t.H), rad = R * (0.14 + rnd() * 0.08) * (1.15 - h / t.H)
+      const len = t.H * (0.15 + rnd() * 0.1) * (1.25 - h / t.H), rad = R * (0.08 + rnd() * 0.05) * (1.15 - h / t.H)
       const dir = v.set(Math.cos(a) * Math.cos(up), Math.sin(up), Math.sin(a) * Math.cos(up))
       const base = new THREE.Vector3(t.x + Math.cos(a) * rr * 0.6, t.y + h, t.z + Math.sin(a) * rr * 0.6)
       limbs.push({ p: base, q: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir), s: new THREE.Vector3(rad, len, rad) })
       // 枝葉團：沿著大枝掛 3 團（中段、外段、枝梢），越往上越小
       const sz = (1.25 - yy) * (0.9 + rnd() * 0.5)
-      for (const u of [0.4, 0.75, 1.05]) {
+      for (const u of [0.22, 0.6, 0.98]) {   // 從靠近樹幹就開始有葉：不然近看是一根根光禿禿的棍子插在樹幹上
         const S = (4.2 + rnd() * 3) * sz * (u > 1 ? 0.85 : 1)
         const cp = base.clone().addScaledVector(dir, len * u).add(new THREE.Vector3((rnd() - 0.5) * 1.2, -S * 0.35 + (rnd() - 0.5), (rnd() - 0.5) * 1.2))
         clumps.push({ p: cp, q: new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.9, rnd() * TAU, (rnd() - 0.5) * 0.9)), s: new THREE.Vector3(S * 1.15, S, S * 1.15), c: cc.clone().offsetHSL(0, 0, (rnd() - 0.5) * 0.08) })

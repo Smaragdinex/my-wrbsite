@@ -8,7 +8,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
 import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight } from './layout.js'
-import { scatter } from './plants.js'
+import { scatter, parts } from './plants.js'
 import { nearGiant, forestK } from './giants.js'
 import { barkMaterial } from './bark.js'
 import { bladeMesh } from './flora.js'
@@ -995,8 +995,37 @@ function buildInterior(lib, avoid = []) {
       list.forEach((it, i) => { m.setMatrixAt(i, mm.compose(it.p, it.q, it.s)); m.setColorAt(i, c.setHSL(0.3, 0.1, 0.92 + rnd() * 0.12)) })
       m.castShadow = cast; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m); return m
     }
-    const crownMesh = inst(figCrown, figM, FIG); crownMesh.receiveShadow = false   // 葉團自己互相遮的陰影會讓整片樹冠從下面看全黑
-    lodRegister([crownMesh, inst(figTrunk, bark, FIG), inst(figFruit, fruitM, FIG)], 12)
+    if (lib.figtree) {
+      // 2026-11-10 寫實版：樹幹、枝條、葉子用掃描的樹（Poly Haven island_tree_01 縮減，tools/make-figtree.py）；
+      // 榕果、氣根照這棵樹真正的枝條位置長：從細枝、樹幹上段的頂點挑點，一處一串榕果，少數幾處垂下氣根
+      // 掃描的樹偏暗：雀榕的葉子是亮綠有光澤、樹皮灰白，材質顏色提亮
+      for (const { mat } of parts(lib.figtree)) { if (/leaves/.test(mat.name)) { mat.color.setRGB(1.3, 1.45, 1.1); mat.roughness = 0.55 } else mat.color.setRGB(1.6, 1.55, 1.5) }
+      scatter(g, lib.figtree, FIG, { wind: 0.12 })
+      const pts = []
+      for (const { geo, mat } of parts(lib.figtree)) {
+        if (/leaves/.test(mat.name)) continue
+        const p = geo.attributes.position
+        for (let i = 0; i < p.count; i += 7) { const y = p.getY(i); if (y > 0.3 && y < 0.82) pts.push(V(p.getX(i), y, p.getZ(i))) }
+      }
+      const rf = mulberry32(91), pick = () => pts[Math.floor(rf() * pts.length)]
+      const fr = [], rt = []
+      for (let c = 0; c < 90 && pts.length; c++) {   // 一串擠在枝上
+        const o = pick(), n = 14 + Math.floor(rf() * 14)   // 果子小（樹高 9 公尺時直徑約 2～3 公分），一串擠在一起
+        for (let k = 0; k < n; k++) fr.push(figBall(0.0022 + rf() * 0.0012, o.x + (rf() - 0.5) * 0.022, o.y + (rf() - 0.5) * 0.018, o.z + (rf() - 0.5) * 0.022))
+      }
+      for (let c = 0; c < 9 && pts.length; c++) {   // 氣根：從枝下垂，大多掛在半空
+        const anc = pick(), n = 3 + Math.floor(rf() * 4)
+        for (let k = 0; k < n; k++) {
+          const ground = rf() < 0.15, len = ground ? anc.y : anc.y * (0.2 + rf() * 0.4), ox = (rf() - 0.5) * 0.025, oz = (rf() - 0.5) * 0.025, ph = rf() * 6, q = []
+          for (let j = 0; j <= 6; j++) { const t = j / 6; q.push(V(anc.x + ox + Math.sin(t * 3 + ph) * 0.005, anc.y - 0.01 - len * t, anc.z + oz + Math.cos(t * 2.4 + ph) * 0.005)) }
+          rt.push(colG(taper(q, 0.0016 + rf() * 0.0007, ground ? 0.0011 : 0.0003), 0.78, 0.55, 0.42))
+        }
+      }
+      lodRegister([inst(mergeGeometries(fr), fruitM, FIG), inst(mergeGeometries(rt), bark, FIG)], 12)
+    } else {
+      const crownMesh = inst(figCrown, figM, FIG); crownMesh.receiveShadow = false   // 葉團自己互相遮的陰影會讓整片樹冠從下面看全黑
+      lodRegister([crownMesh, inst(figTrunk, bark, FIG), inst(figFruit, fruitM, FIG)], 12)
+    }
     lodRegister([inst(crossCards(9, 1.0, 1.1, 0, 61, 0.3), leafMat(scheffT), SCH)], 6)
     for (const [kind, list] of Object.entries(FLW)) if (list.length) lodRegister([inst(crossCards(5, 0.7, 0.75, 0, 70 + kind.length, 0.12), leafMat(flowerT(kind)), list, false)], 3)
     FIG_TREES.push(...FIG.map((f) => ({ x: f.p.x, y: f.p.y, z: f.p.z, H: f.H })))
