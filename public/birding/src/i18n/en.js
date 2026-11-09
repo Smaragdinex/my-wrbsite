@@ -713,6 +713,28 @@ export const BIRDS = {
    "Some farmers now grow crops without rat poison to help it survive."
   ]
  },
+ "jacana": {
+  "name": "Pheasant-tailed Jacana",
+  "where": "Lotus Leaves on the West Side of the Mountain Lake",
+  "intro": "Its extremely long toes spread its weight so it can walk across lotus and water-caltrop leaves as if strolling on water, earning it the nickname \"fairy walking on waves\". In breeding plumage the head and neck are snow-white with a golden nape, the body is dark brown, and the tail is longer than the body; the almost all-white wings flash in flight.",
+  "facts": [
+   "Taiwan's jacanas once fell below 50 birds; after water-caltrop fields in Guantian, Tainan were restored they recovered to over a thousand.",
+   "It is polyandrous: the female lays and moves on to the next male, who incubates and raises the chicks alone.",
+   "In danger the male tucks the chicks under his wings and carries them away, leaving a row of long legs dangling.",
+   "In winter it moults into a plainer plumage and loses the long tail."
+  ]
+ },
+ "psnipe": {
+  "name": "Greater Painted-snipe",
+  "where": "Mudflat on the Southwest Shore of the Mountain Lake",
+  "intro": "Unlike ordinary snipes, the female is the showier sex: a deep chestnut head and neck, a bold white eye-ring trailing back like spectacles, and a white shoulder strap; the back is olive-brown with golden spots, and the open wings show rows of gold discs. Its long, slightly curved bill probes the mud for food.",
+  "facts": [
+   "Roles are reversed: the bright female courts and fights, while the plain male incubates and raises the young.",
+   "When alarmed it spreads its wings to flash rows of golden spots at the threat.",
+   "It favours rice paddies and marshy mud, is most active at dusk and night, and hides in vegetation by day.",
+   "It bobs its tail up and down as it walks."
+  ]
+ },
  "scopsowl": {
   "name": "Collared Scops Owl",
   "where": "Big Tree beside the Garden Path",

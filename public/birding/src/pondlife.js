@@ -92,6 +92,8 @@ export function buildPondLife(scene, { lib } = {}) {
 
   // ---------- 荷花 ----------
   const pads = [], raised = [], stalks = [], flowers = [], buds = [], pods = []
+  // 水雉（birdinfo.js 的 jacana）站的地方：先鋪幾片大的浮葉，牠走來走去都踩在葉子上
+  for (const [dx, dz, sz] of [[0, 0, 0.5], [0.55, 0.25, 0.42], [-0.5, 0.3, 0.45], [0.1, -0.55, 0.44], [-0.45, -0.4, 0.4], [0.6, -0.35, 0.38]]) pads.push({ x: 89.2 + dx, z: -46.9 + dz, size: sz, rot: rnd() * TAU })
   // 4 叢：西、南、東南、東北（鴨子在北邊靠步道那一側游，那裡留空給牠們）
   for (const ang of [200, 268, 318, 30]) {
     const a = ang / 180 * Math.PI, cx = ALP_POND.x + Math.cos(a) * R * 0.8, cz = ALP_POND.z + Math.sin(a) * R * 0.8
@@ -101,11 +103,13 @@ export function buildPondLife(scene, { lib } = {}) {
       if (dep < 0.15 || dep > 1.4 || rOf(x, z) > R * 0.97) continue
       const size = 0.26 + rnd() * 0.26
       if ([...pads, ...raised].some((p) => Math.hypot(p.x - x, p.z - z) < (p.size + size) * 0.62)) continue
-      const up = rnd() < 0.55
+      const nearJ = Math.hypot(x - 89.2, z + 46.9) < 2.4   // 水雉旁邊只鋪浮葉（挺水葉、花會擋住牠）
+      const up = rnd() < 0.55 && !nearJ
       if (up) {   // 挺水葉：葉柄 0.3～1 公尺、葉面微傾
         const h = 0.12 + rnd() * 0.4
         raised.push({ x, z, size: size * 1.15, h, tx: (rnd() - 0.5) * 0.4, tz: (rnd() - 0.5) * 0.4, rot: rnd() * TAU })
       } else pads.push({ x, z, size, rot: rnd() * TAU })
+      if (nearJ) continue
       if (rnd() < 0.13) flowers.push({ x: x + (rnd() - 0.5) * 0.3, z: z + (rnd() - 0.5) * 0.3, h: 0.4 + rnd() * 0.35, open: 0.5 + rnd() * 0.5, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.25 })
       else if (rnd() < 0.08) buds.push({ x: x + (rnd() - 0.5) * 0.3, z: z + (rnd() - 0.5) * 0.3, h: 0.35 + rnd() * 0.3, rot: rnd() * TAU })
       else if (rnd() < 0.05) pods.push({ x: x + (rnd() - 0.5) * 0.3, z: z + (rnd() - 0.5) * 0.3, h: 0.3 + rnd() * 0.3, rot: rnd() * TAU })

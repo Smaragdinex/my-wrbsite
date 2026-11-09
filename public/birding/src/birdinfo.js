@@ -433,6 +433,29 @@ const ALL = [
       '有些農民改用友善的方式種田、不放毒鼠藥，幫助牠們留下來。',
     ],
   },
+  // 2026-11-10 山下湖的水鳥：水雉（荷葉上）、彩鷸（泥灘）
+  {
+    id: 'jacana', spot: [89.2, -46.9], perch: 'ground', water: ALP_POND.water, y: ALP_POND.water + 0.03, view: -110, dist: 2.6, camH: 1.0, lookY: 0.15,
+    name: "水雉", sci: 'Hydrophasianus chirurgus', where: "山下湖西邊的荷葉上",
+    intro: "腳趾非常非常長，把體重分散開，可以在荷葉、菱角葉上走來走去，像在水面上散步，所以被叫做「凌波仙子」。繁殖期頭頸雪白、後頸一片金黃，身體深褐色，尾巴長得比身體還長；翅膀幾乎全白，飛起來很顯眼。",
+    facts: [
+      "台灣的水雉曾經只剩不到 50 隻，台南官田的菱角田復育後已經回升到上千隻。",
+      "一妻多夫：雌鳥生完蛋就去找下一隻雄鳥，孵蛋、帶小孩都是雄鳥負責。",
+      "遇到危險時，雄鳥會把小鳥夾在翅膀下面帶走，翅膀下垂出一雙雙長腳。",
+      "冬天換成比較樸素的非繁殖羽，長尾巴也會掉。",
+    ],
+  },
+  {
+    id: 'psnipe', spot: [89.4, -58.6], perch: 'ground', view: -130, dist: 2.4, camH: 0.9, lookY: 0.12,
+    name: "彩鷸", sci: 'Rostratula benghalensis', where: "山下湖西南邊的泥灘",
+    intro: "長得跟一般的鷸很不一樣：雌鳥比雄鳥漂亮——頭頸深栗紅色，眼睛一圈白色的眼圈往後拉成一條白線，像戴了眼鏡，肩膀一條白帶；背上是橄欖褐色帶金黃斑點，翅膀張開有一排排金色圓斑。嘴長而微彎，在泥灘上低頭探找食物。",
+    facts: [
+      "角色顛倒：雌鳥漂亮、會求偶、會打架；雄鳥樸素，負責孵蛋和照顧小鳥。",
+      "受驚時會張開翅膀、展示一排排金色圓斑嚇敵人。",
+      "喜歡水田、沼澤邊的泥地，常在黃昏和夜裡活動，白天躲在草叢裡。",
+      "走路時尾巴會上下擺動。",
+    ],
+  },
   // 2026-11-09 角鴞兩種：領角鴞（花園）、黃嘴角鴞（山上巨木林）
   {
     id: 'scopsowl', spot: [-18, 26], perch: 'branch', dist: 3.0, camH: 3.6, lookY: 3.4,
@@ -651,6 +674,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
-  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops']
+  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

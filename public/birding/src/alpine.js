@@ -1000,8 +1000,9 @@ function buildInterior(lib, avoid = []) {
       // 2026-11-10 寫實版：樹幹、枝條、葉子用掃描的樹（Poly Haven island_tree_01 縮減，tools/make-figtree.py）；
       // 榕果、氣根照這棵樹真正的枝條位置長：從細枝、樹幹上段的頂點挑點，一處一串榕果，少數幾處垂下氣根
       // 掃描的樹偏暗：雀榕的葉子是亮綠有光澤、樹皮灰白，材質顏色提亮
-      for (const { mat } of parts(lib.figtree)) { if (/leaves/.test(mat.name)) { mat.color.setRGB(1.3, 1.45, 1.1); mat.roughness = 0.55 } else mat.color.setRGB(1.6, 1.55, 1.5) }
-      scatter(g, lib.figtree, FIG, { wind: 0.12 })
+      // 風：只有葉子輕輕晃（樹高 9 公尺時樹梢約 5 公分）；樹幹、枝不動——以前整棵一起彎（樹梢擺 1 公尺），樹扭來扭去、榕果和氣根跟不上
+      for (const { mat } of parts(lib.figtree)) { if (/leaves/.test(mat.name)) { mat.color.setRGB(1.3, 1.45, 1.1); mat.roughness = 0.55; addWind(mat, 0.006) } else mat.color.setRGB(1.6, 1.55, 1.5) }
+      scatter(g, lib.figtree, FIG)
       const pts = []
       for (const { geo, mat } of parts(lib.figtree)) {
         if (/leaves/.test(mat.name)) continue
