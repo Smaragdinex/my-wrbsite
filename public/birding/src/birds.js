@@ -645,7 +645,11 @@ function groundTripo(env, cfg) {
     let rockNeck = 0, headAnchor = null
     if (cfg.rock && r.bones.head) {
       c.rockA = damp(c.rockA ?? 0, c.amp > 0.2 ? 1 : 0.3 * ss(Math.sin(t * 0.7), 0.2, 1), 4, dt)
-      const rk = c.amp > 0.2 ? Math.sin(ph * 2) : Math.sin(t * 5.5), A = cfg.rock * c.rockA
+      // 搖的節奏用自己的相位累加：走路時跟步伐（每步一下），但限制在每秒 1.2～3 下、慢慢變速；
+      // 以前直接用步伐相位，剛起步 walker 一衝就變成每秒十下的抖動，走／停切換也會跳
+      c.rf = damp(c.rf ?? 0.9, c.amp > 0.2 ? clamp(2 * w.v / stride, 1.2, 3) : 0.9, 3, dt)
+      c.rph = (c.rph ?? 0) + dt * c.rf * Math.PI * 2
+      const rk = Math.sin(c.rph), A = cfg.rock * c.rockA
       inner.position.z = 0; inner.updateWorldMatrix(true, true)        // 上一格的位移要先歸零再量
       headAnchor = root.worldToLocal(r.bones.head.getWorldPosition(V()))
       inner.position.z = A * cfg.H * 0.18 * rk                               // 身體前後移
