@@ -14,7 +14,7 @@ import { canopyGeometry, leafify, barkify, leafCardGeometry, leafCardMaterial } 
 const { clamp, lerp, smoothstep: ss, randFloat: rnd } = THREE.MathUtils
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 // 山鷸搖擺的不對稱曲線（2026-11-10 ChatGPT 建議）：0.2 到最前、0.35 前面稍停、0.65 到最後、0.8 開始回來；週期性 Hermite，速度連續
-const ROCK_KEYS = [[0, 0], [0.2, 1], [0.35, 0.85], [0.65, -1], [0.8, -0.65], [1, 0]]
+const ROCK_KEYS = [[0, 0], [0.2, 1], [0.35, 0.75], [0.6, -1], [0.8, -0.35], [1, 0]]   // 第三輪：往前推、往後收的節奏更分明
 function rockCurve(t) {
   const p = ((t % 1) + 1) % 1, K = ROCK_KEYS, n = K.length
   for (let i = 0; i < n - 1; i++) {
@@ -590,8 +590,13 @@ function groundTripo(env, cfg) {
     let gate = 1
     if (cfg.rock) {
       c.rf = damp(c.rf ?? 0.9, c.amp > 0.2 ? (cfg.rockHz ?? 2) : 0.9, 2, dt)
-      c.rph = (c.rph ?? 0) + dt * c.rf * Math.PI * 2
-      gate = 1 + 0.12 * Math.sin(c.rph)   // 速度幾乎固定（ChatGPT：原本 0.4～2.8 倍的忽快忽慢是不順的主因之一）
+      // 走走停停（ChatGPT 第四輪：牠的招牌是「兩腳踩著不動、身體照樣前後扭」）：每 1.4～2.6 秒停 0.3～0.5 秒，停的時候腳步相位也停
+      c.pz = (c.pz ?? 1.5) - dt; c.pzLen ??= 0.4
+      if (c.pz < -c.pzLen) { c.pz = rnd(1.4, 2.6); c.pzLen = rnd(0.3, 0.5) }
+      c.mv = damp(c.mv ?? 1, c.pz < 0 ? 0 : 1, 14, dt)
+      c.rph = (c.rph ?? 0) + dt * c.rf * Math.PI * 2 * c.mv                  // 步態相位（腳）
+      c.kph = (c.kph ?? 0) + dt * c.rf * (cfg.rockMul ?? 1) * Math.PI * 2    // 搖擺相位（身體）一直在跑，跟腳步各自獨立
+      gate = c.mv * (1 + 0.08 * Math.sin(c.kph))   // 速度幾乎固定（原本 0.4～2.8 倍的忽快忽慢是不順的主因之一）
     }
     const d = w.update(dt * gate)
     // 用跳的：身體停在 dp，落後 walker 一個步幅就整隻跳過去（兩腳一起），walker 停了也要跳到定點
@@ -610,7 +615,7 @@ function groundTripo(env, cfg) {
     const P = cfg.hop ? c.dp : w.p
     if ((acts.name === 'walk' || acts.name === 'turn') && !w.busy) acts.next()
     // 山鷸：腳步跟搖擺共用同一個相位（一個搖擺週期＝左右各一步），不再各算各的而慢慢錯開
-    if (cfg.rock) c.phase += w.busy ? dt * c.rf : 0
+    if (cfg.rock) c.phase += w.busy ? dt * c.rf * c.mv : 0
     else c.phase += d / stride
     c.amp = damp(c.amp, w.busy ? 1 : 0, 6, dt)
     const n = acts.name, kk = acts.k
@@ -668,16 +673,16 @@ function groundTripo(env, cfg) {
     let rockNeck = 0, headAnchor = null
     if (cfg.rock && r.bones.head) {
       c.rockA = damp(c.rockA ?? 0, c.amp > 0.2 ? 1 : 0.3 * ss(Math.sin(t * 0.7), 0.2, 1), 4, dt)
-      // 節奏 c.rph 在上面 w.update 前算：自己的相位累加，走路每秒 rockHz 下（山鷸 2.6：影片裡每 0.3～0.4 秒一小步、每步搖一下）、站著 0.9 下，慢慢變速
-      // （以前直接用步伐相位，剛起步 walker 一衝就變成每秒十下的抖動）
-      const rk = rockCurve(c.rph / (Math.PI * 2)), A = cfg.rock * c.rockA
+      // 節奏在上面 w.update 前算：c.kph 身體搖擺（rockHz×rockMul，一直跑）、c.rph 腳步（停下時也停），各自慢慢變速
+      // rockMul：每個步態週期搖幾下（山鷸 2：每一步搖一下，腳踩著不動時身體自己前後扭——ChatGPT 第三輪：這才是牠獨特的舞步）
+      const rp = c.kph / (Math.PI * 2), rk = rockCurve(rp), A = cfg.rock * c.rockA
       inner.position.z = 0; inner.position.y = 0; inner.updateWorldMatrix(true, true)        // 上一格的位移要先歸零再量
       headAnchor = root.worldToLocal(r.bones.head.getWorldPosition(V()))
-      inner.position.z = A * cfg.H * 0.046 * rk                               // 身體前後移
-      inner.position.y = -A * cfg.H * 0.01 * (1 - rk) / 2                    // 往後坐時身體微微下沉
-      r.turn('body', LAT, -0.065 * A * rk); r.turn('chest', LAT, -0.04 * A * rk)   // 往前推時身體前傾、尾端翹起（兩節分攤，背部彎得比較順）
-      r.turn('tail', LAT, 0.035 * A * rockCurve(c.rph / (Math.PI * 2) - 0.05))   // 尾巴跟著身體、慢一點點
-      rockNeck = 0.085 * A * rk                                               // 頭的角度補回來，保持水平
+      inner.position.z = A * cfg.H * 0.069 * rk                               // 身體前後移
+      inner.position.y = A * cfg.H * 0.0077 * rockCurve(rp - 0.25)                    // 往後坐時身體微微下沉
+      r.turn('body', LAT, -0.025 * A * rk); r.turn('chest', LAT, -0.015 * A * rockCurve(rp - 0.04))   // 往前推時身體前傾、尾端翹起（兩節分攤，背部彎得比較順）
+      r.turn('tail', LAT, 0.035 * A * rockCurve(rp - 0.08))   // 尾巴跟著身體、慢一點點
+      rockNeck = 0.035 * A * rk                                               // 頭的角度補回來，保持水平
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
     // 尾巴：前傾時翹起、走路時跟著步伐上下左右擺
@@ -716,8 +721,8 @@ function groundTripo(env, cfg) {
     if (headAnchor) {
       const want = root.localToWorld(headAnchor.clone()); want.y -= liftY
       if (!c.hw || c.hw.distanceTo(want) > 0.06) c.hw = want.clone()
-      else c.hw.lerp(want, 1 - Math.exp(-15 * dt))
-      const hNow = r.bones.head.getWorldPosition(V()), hTgt = hNow.clone().lerp(c.hw, 0.65)   // 只穩 65%，頭還是跟身體有一點點連動，不會像浮在空中
+      else c.hw.lerp(want, 1 - Math.exp(-20 * dt))
+      const hNow = r.bones.head.getWorldPosition(V()), hTgt = hNow.clone().lerp(c.hw, 0.9)   // 穩 90%，頭還是跟身體有一點點連動，不會像浮在空中
       for (const [b, f] of [['neck', 1 / 3], ['neck2', 1 / 2], ['head', 1]]) {   // 位移分三段吃：脖子根、脖子中段、頭，脖子伸縮才平順
         const bn = r.bones[b] ?? r.bones.head
         bn.parent.updateWorldMatrix(true, false)
@@ -1330,7 +1335,7 @@ function sibia(env) {
 
 /* ---------- 2026-11-09 補齊台灣特有種（17 種，ChatGPT 參考圖 → Tripo → rig-distance，點位在 tools/bird-points.json） ---------- */
 // 地上走的：H 顯示身高（公尺）、h0 模型高度（side-view 的 BOUNDS y）、size 小鳥跳著走
-const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name, H, h0, ...TRIPO, patrol: o.patrol, rock: o.rock, rockHz: o.rockHz, hop: o.hop ?? 0.035, flick: o.flick ?? 0.2, flickF: 1.6, bob: o.bob,
+const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name, H, h0, ...TRIPO, patrol: o.patrol, rock: o.rock, rockHz: o.rockHz, rockMul: o.rockMul, hop: o.hop ?? 0.035, flick: o.flick ?? 0.2, flickF: 1.6, bob: o.bob,
   walk: { radius: o.radius ?? 1.1, speed: o.speed ?? 0.2, turn: 3, ...(o.walk ?? {}) }, stride: o.stride ?? 0.08, swingT: o.swingT ?? 0.13, lift: o.lift ?? 0.035, knee: [0.3, 0.6], focusY: H * 0.6,
   acts: o.acts ?? { walk: [4, 99, 99], peck: [3, 0.7, 1.3], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
 // （BUILD 在檔案前面就用到這些名字：要用 function 宣告才會提升，const 會在載入時出錯）
@@ -1362,7 +1367,7 @@ function mtscops(env) { return endemicPerch('mtscops-rig', 0.17, 6)(env) }
 function jacana(env) { return endemicGround('jacana-rig', 0.3, 0.724, { hop: 0, flick: 0.05, radius: 0.45, speed: 0.08, stride: 0.1 })(env) }
 function psnipe(env) { return endemicGround('psnipe-rig', 0.24, 0.717, { hop: 0, flick: 0.3, radius: 0.9, speed: 0.12, stride: 0.07 })(env) }
 // 2026-11-10 山鷸：步道上兩點之間走過去走回來，每一步身體前後搖（rock）、頭不動；偶爾停下來用長嘴往地上探
-function woodcock(env) { return endemicGround('woodcock-rig', 0.26, 0.573, { hop: 0, flick: 0, speed: 0.065, stride: 0.043, swingT: 0.25, lift: 0.008, patrol: env.patrol, rock: 1, rockHz: 1.5, acts: { walk: [6, 99, 99], peck: [2, 1, 1.8], stand: [1.5, 0.8, 2], look: [1, 0.8, 1.5] } })(env) }
+function woodcock(env) { return endemicGround('woodcock-rig', 0.26, 0.573, { hop: 0, flick: 0, speed: 0.065, stride: 0.043, swingT: 0.2, lift: 0.006, patrol: env.patrol, rock: 1, rockHz: 1.5, rockMul: 2, acts: { walk: [6, 99, 99], peck: [2, 1, 1.8], stand: [1.5, 0.8, 2], look: [1, 0.8, 1.5] } })(env) }
 // 2026-11-10 山下湖：黃麻鴨（兩隻游）、紫鷺（涉水捕魚）、高蹺鴴（三隻涉水）、西方澤鵟（站在草地上）
 function shelduck(env) {
   return groundGroup(2, 1.1, (avoid) => groundTripo(env, { name: 'shelduck-rig', H: 0.5, h0: 0.719, ...TRIPO, swim: true, bill: 0.14, bob: 0.03,
