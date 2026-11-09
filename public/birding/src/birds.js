@@ -641,7 +641,7 @@ function groundTripo(env, cfg) {
     }
     // cfg.rock：山鷸的「搖擺步」（2026-11-10 照影片與研究重做）：身體在腳上前後搖、頭在空中幾乎完全不動。
     // 頭和身體分開算：先記下「沒搖時」頭在鳥本身座標的位置，套上身體的搖擺後，再把脖子／頭的骨頭推回那個位置
-    // （脖子根一半、頭一半，讓脖子跟著伸縮），頭的角度也反向補回身體的前傾，看起來就是身體在頭底下滑來滑去
+    // （2026-11-10 骨架加到身體兩節＋脖子三節，位移分給脖子根、中段、頭），頭的角度也反向補回身體的前傾，看起來就是身體在頭底下滑來滑去
     let rockNeck = 0, headAnchor = null
     if (cfg.rock && r.bones.head) {
       c.rockA = damp(c.rockA ?? 0, c.amp > 0.2 ? 1 : 0.3 * ss(Math.sin(t * 0.7), 0.2, 1), 4, dt)
@@ -649,13 +649,13 @@ function groundTripo(env, cfg) {
       inner.position.z = 0; inner.updateWorldMatrix(true, true)        // 上一格的位移要先歸零再量
       headAnchor = root.worldToLocal(r.bones.head.getWorldPosition(V()))
       inner.position.z = A * cfg.H * 0.18 * rk                               // 身體前後移
-      r.turn('body', LAT, -0.2 * A * rk)                                     // 往前推時身體前傾、尾端翹起
+      r.turn('body', LAT, -0.12 * A * rk); r.turn('chest', LAT, -0.08 * A * rk)   // 往前推時身體前傾、尾端翹起（兩節分攤，背部彎得比較順）
       r.turn('tail', LAT, 0.3 * A * rk)
       rockNeck = 0.2 * A * rk                                                // 頭的角度補回來，保持水平
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
     if (headAnchor) {
-      for (const [b, f] of [['neck', 0.5], ['head', 1]]) {
+      for (const [b, f] of [['neck', 1 / 3], ['neck2', 1 / 2], ['head', 1]]) {   // 位移分三段吃：脖子根、脖子中段、頭，脖子伸縮才平順
         const bn = r.bones[b] ?? r.bones.head
         inner.updateWorldMatrix(true, true)
         const want = root.localToWorld(headAnchor.clone()), now = r.bones.head.getWorldPosition(V())
