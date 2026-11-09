@@ -7,7 +7,7 @@
 //   背景音樂 audio/music-ambient-nature.mp3 =「Ambient Nature」AtlasAudio（pixabay.com/music/ambient-ambient-nature-518687/，轉 128k）
 //   鳥叫環境音 audio/birds-forest.mp3 =「Birds Forest Nature」SoundReality（pixabay.com/sound-effects/…-445379/，頭尾 3 秒交叉淡化成無縫循環）
 // 音檔載到之前（或載入失敗）照舊用合成的音樂和鳥叫。
-import { STORE, distToMtn } from '../layout.js'
+import { STORE, distToMtn, YOSE } from '../layout.js'
 
 const VOL = { off: 0, low: 0.35, mid: 0.65, high: 1 }
 // 音檔的音量（對到以前合成版的大小：中音量時溫室白天 音樂約 −45 dB、鳥叫約 −48 dB）
@@ -17,8 +17,8 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const smooth = (p, v, t, k = 0.4) => p.setTargetAtTime(v, t, k)
 
 export function createAmbience({ getMusic, getAmb }) {
-  let ac = null, out, musicBus, ambBus, ambFilter, verb, ambVerb, cicadaG, cricketG, waterG, rainG, rainLowG
-  const st = { hour: 9, store: 0, water: 0, rain: 0, storm: 0 }
+  let ac = null, out, musicBus, ambBus, ambFilter, verb, ambVerb, cicadaG, cricketG, waterG, rainG, rainLowG, yfallG
+  const st = { hour: 9, store: 0, water: 0, rain: 0, storm: 0, yfall: 0 }
 
   function start() {
     if (ac) { if (ac.state === 'suspended') ac.resume(); return }
@@ -38,7 +38,7 @@ export function createAmbience({ getMusic, getAmb }) {
     ambFilter = ac.createBiquadFilter(); ambFilter.type = 'lowpass'; ambFilter.frequency.value = 18000
     ambBus = ac.createGain(); ambBus.gain.value = 0; ambBus.connect(ambFilter); ambFilter.connect(out)
     ambVerb = ac.createConvolver(); ambVerb.buffer = ir; const avg = ac.createGain(); avg.gain.value = 0.6; ambVerb.connect(avg); avg.connect(ambBus)   // 鳥叫的回音也要走環境音那一路（在店裡一起被玻璃擋掉）
-    startCicadas(); startWater(); startRain(); cricketG = ac.createGain(); cricketG.gain.value = 0; cricketG.connect(ambBus)
+    startCicadas(); startWater(); startYFall(); startRain(); cricketG = ac.createGain(); cricketG.gain.value = 0; cricketG.connect(ambBus)
     loadFiles()
     loop()
   }
@@ -98,6 +98,18 @@ export function createAmbience({ getMusic, getAmb }) {
     const n = loopNoise(), lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100
     const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 120
     n.connect(lp); lp.connect(hp); hp.connect(waterG)
+  }
+
+  // 2026-11-10 優勝美地大瀑布的轟隆聲：低沉的褐色雜訊（水打到潭裡）＋一層中頻的嘩啦聲，越靠近越大
+  function startYFall() {
+    yfallG = ac.createGain(); yfallG.gain.value = 0; yfallG.connect(ambBus)
+    const b = ac.createBuffer(1, ac.sampleRate * 4, ac.sampleRate), d = b.getChannelData(0); let last = 0
+    for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5 }
+    const src = ac.createBufferSource(); src.buffer = b; src.loop = true
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 650
+    src.connect(lp); lp.connect(yfallG); src.start()
+    const n = loopNoise(), bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 0.6
+    const hg = ac.createGain(); hg.gain.value = 0.35; n.connect(bp); bp.connect(hg); hg.connect(yfallG)
   }
 
   /* ---------- 雨（2026-11-08 天氣）：沙沙的雜訊＋一層低沉的雨聲，大小照 weather.rain ---------- */
@@ -262,6 +274,7 @@ export function createAmbience({ getMusic, getAmb }) {
       smooth(cicadaG.gain, 0.13 * day * (h > 10 && h < 16 ? 1 : 0.5) * dry, now, 2)
       smooth(cricketG.gain, (1 - day) * 0.5 + 0.03, now, 2)
       smooth(waterG.gain, 0.16 * st.water, now, 0.6)
+      if (yfallG) smooth(yfallG.gain, 0.55 * st.yfall, now, 0.5)
       // 鳥叫環境音：白天整段、清晨最熱鬧，晚上只剩一點點
       const dawn = Math.exp(-((h - 6.5) ** 2) / 2)
       if (birdBedG) smooth(birdBedG.gain, BIRD_K * (0.1 + 0.9 * day) * (1 + 0.3 * dawn) * dry, now, 2)
@@ -276,6 +289,7 @@ export function createAmbience({ getMusic, getAmb }) {
     const inStore = pos.x < STORE.X0 && pos.x > STORE.X1 && Math.abs(pos.z) < STORE.HZ ? 1 : pos.x < -70 && Math.abs(pos.z) < 5 ? 0.5 : 0
     st.store += (inStore - st.store) * Math.min(1, dt * 2)
     st.water = Math.max(0, 1 - Math.max(0, distToMtn(pos.x, pos.z) - 8) / 30)
+    st.yfall = Math.max(0, 1 - Math.max(0, Math.hypot(pos.x - YOSE.fall.x, pos.z - YOSE.fall.z) - 6) / 50) ** 1.6
   }
   return { tick, start, thunder, get ctx() { return ac }, get out() { return out }, dbg: { get musicG() { return musicG }, get birdBedG() { return birdBedG }, setK(m, b) { MUSIC_K = m; BIRD_K = b; if (musicG) musicG.gain.value = m } } }
 }

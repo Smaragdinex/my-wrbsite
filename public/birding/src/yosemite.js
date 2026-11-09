@@ -64,7 +64,8 @@ export function buildYosemite(scene, { lib } = {}) {
       // 黑色水痕：一條條縱向（只看 x），從上往下淡；淡色剝落面：大塊
       const streak = Math.max(0, fbm2(px * 0.35, 7.1, 3) - 0.52) * 3.2 * ss(g0, g0 + Ht, py)
       const pale = Math.max(0, fbm2(px * 0.06, py * 0.06 + 4, 3) - 0.55) * 1.6
-      const k = Math.max(0.35, 1 - streak * 0.75 + pale * 0.25)
+      const wet = Math.exp(-(((px - YOSE.fall.x) / 4.2) ** 2)) * (0.55 + 0.45 * ss(g0, g0 + 3, py))   // 瀑布後面濕掉的黑色岩壁
+      const k = Math.max(0.3, (1 - streak * 0.75 + pale * 0.25) * (1 - 0.55 * wet))
       col.push(k * (1 - streak * 0.05), k, k * (1 + streak * 0.02))
     }
   }
@@ -82,11 +83,21 @@ export function buildYosemite(scene, { lib } = {}) {
   // 岩壁腳下的落石堆：掃描的岩石、大石頭，沿牆腳 1～4 公尺
   if (lib) {
     const names = ['boulder', 'mrock_1', 'mrock_3', 'mrock_5', 'mrock_8', 'mrock_11'].filter((n) => lib[n]), lists = Object.fromEntries(names.map((n) => [n, []]))
+    // 2026-11-10 使用者：石頭再大、再寫實 → 落石堆的石頭放大 1.6 倍；水潭四周一圈 1.5～4 公尺的大石頭（濕的、顏色深）；石頭不能壓到步道（照石頭大小算）
+    const FL = YOSE.fall, inPool = (x, z, pad) => ((x - FL.x) / (FL.rx + pad)) ** 2 + ((z - FL.z) / (FL.rz + pad)) ** 2 < 1
+    const wetC = (x) => { const w = Math.exp(-(((x - FL.x) / 9) ** 2)); return new THREE.Color().setScalar(1.35 - 0.3 * w) }
+    const putRock = (n, x, z, k2, sink = 0.25) => lists[n].push({ p: V(x, alpineHeight(x, z) - sink * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * (0.7 + rnd() * 0.5), k2), c: wetC(x) })
     for (let k = 0; k < 260; k++) {
-      const x = X0 + 4 + rnd() * (X1 - X0 - 8), z = YOSE.base(x) - 0.5 - rnd() * 3.5
-      if (alpineTrailDist(x, z) < 4 || Math.hypot(x - YOSE.fall.x, z - YOSE.fall.z) < YOSE.fall.r + 1) continue
-      const n = names[Math.floor(rnd() * names.length)], k2 = n === 'boulder' ? 0.25 + rnd() * 0.35 : 0.6 + rnd() * 0.9
-      lists[n].push({ p: V(x, alpineHeight(x, z) - 0.25, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * (0.7 + rnd() * 0.5), k2) })
+      const x = X0 + 4 + rnd() * (X1 - X0 - 8), z = YOSE.base(x) - 0.5 - rnd() * 4
+      const n = names[Math.floor(rnd() * names.length)], k2 = (n === 'boulder' ? 0.25 + rnd() * 0.35 : 0.6 + rnd() * 0.9) * 1.6
+      if (alpineTrailDist(x, z) < 3.2 + k2 * (n === 'boulder' ? 2.2 : 0.7) || inPool(x, z, 0.6)) continue
+      putRock(n, x, z, k2)
+    }
+    for (let k = 0, made = 0; k < 400 && made < 16; k++) {   // 水潭邊的大石頭（不擋住看瀑布的那一面：步道那側少放）
+      const a = rnd() * TAU, x = FL.x + Math.cos(a) * (FL.rx + 0.6 + rnd() * 1.6), z = FL.z + Math.sin(a) * (FL.rz + 0.5 + rnd() * 1.4)
+      const n = rnd() < 0.5 && lib.boulder ? 'boulder' : names[1 + Math.floor(rnd() * (names.length - 1))], k2 = n === 'boulder' ? 0.45 + rnd() * 0.5 : 1.6 + rnd() * 1.6
+      if (!lists[n] || alpineTrailDist(x, z) < 3.4 + k2 * (n === 'boulder' ? 2.2 : 0.7) || (Math.sin(a) < -0.3 && rnd() < 0.7)) continue
+      putRock(n, x, z, k2, 0.3); addCollider(x, z, k2 * (n === 'boulder' ? 1.6 : 0.6), alpineHeight(x, z) + k2 * 0.8); made++
     }
     // 岩石改成灰白（花崗岩）：材質複製一份、顏色去飽和再提亮（原本掃描的是褐色、長青苔的石頭），跟岩壁一致
     for (const n of names) {
@@ -94,57 +105,83 @@ export function buildYosemite(scene, { lib } = {}) {
       for (const { geo, mat } of parts(lib[n])) {
         const m2 = mat.clone()
         m2.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
-          float gl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = vec3(gl) * vec3(1.55, 1.53, 1.48) + 0.04;`) }
+          float gl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(vec3(gl) * vec3(1.5, 1.48, 1.43) + 0.03, diffuseColor.rgb * 1.25, 0.3);`) }   // 留三成原本的顏色（青苔、鏽斑），比較寫實
         m2.customProgramCacheKey = () => 'granite'
         const im = new THREE.InstancedMesh(geo, m2, lists[n].length)
-        lists[n].forEach((it, i) => im.setMatrixAt(i, m4.compose(it.p, it.q, it.s)))
+        lists[n].forEach((it, i) => { im.setMatrixAt(i, m4.compose(it.p, it.q, it.s)); im.setColorAt(i, it.c) })
         im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
       }
     }
   }
 
-  // ---------- 瀑布＋水潭 ----------
+  // ---------- 瀑布＋水潭（2026-11-10 使用者：更大、更長、更寫實、更有臨場感）----------
+  // 三層水簾：後面一層慢、暗（有厚度）；主水簾一條條往下加速的水絲＋白色的「馬尾」水團；前面下半段一層水霧簾
+  // 落點：500 顆水花往上往外噴、慢慢飄散；大片水霧；橢圓水潭（13×6.4 公尺）、兩層白沫一圈圈往外；岩壁背後濕黑一條
   const F = YOSE.fall, fc = cols.reduce((a, c) => Math.abs(c.x - F.x) < Math.abs(a.x - F.x) ? c : a)
-  const topY = fc.g0 + fc.Ht, poolY = alpineHeight(F.x, F.z) + 0.12, fz = fc.zb + 0.6
+  let poolY = 1e9
+  for (let a = 0; a < 16; a++) for (const k of [0, 0.5, 0.9]) poolY = Math.min(poolY, alpineHeight(F.x + Math.cos(a / 16 * TAU) * F.rx * k, F.z + Math.sin(a / 16 * TAU) * F.rz * k))
+  poolY += 0.15
+  const topY = fc.g0 + fc.Ht, fz = fc.zb + 0.6
   const uT = { value: 0 }
-  const fallM = new THREE.ShaderMaterial({
+  const fallMat = (o) => new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    uniforms: { uT },
+    uniforms: { uT, uSpd: { value: o.spd }, uA: { value: o.a }, uDark: { value: o.dark ?? 0 }, uLow: { value: o.low ?? 0 } },
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `
-      varying vec2 vUv; uniform float uT;
+      varying vec2 vUv; uniform float uT, uSpd, uA, uDark, uLow;
       float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
       float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+      float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++){ s += a * n(p); p *= 2.03; a *= 0.5; } return s; }
       void main(){
-        // 一條條往下流的水絲（橫向細、縱向拉長），越往下越散、越白
         float x = vUv.x, y = vUv.y;
-        float s1 = n(vec2(x * 22.0, y * 3.0 + uT * 2.6)), s2 = n(vec2(x * 47.0 + 3.0, y * 5.0 + uT * 3.4));
-        float str = smoothstep(0.35, 0.85, s1 * 0.6 + s2 * 0.5);
-        float edge = smoothstep(0.0, 0.18, x) * smoothstep(1.0, 0.82, x);
-        float a = (0.25 + 0.65 * str) * edge * mix(0.75, 1.0, 1.0 - y);
-        gl_FragColor = vec4(mix(vec3(0.78, 0.84, 0.86), vec3(1.0), str), a);
+        float fall = y * y * 1.6 + y * 0.6;                         // 越往下流越快（重力加速）
+        float t = uT * uSpd;
+        float s1 = n(vec2(x * 26.0, fall * 4.0 - t * 2.4)), s2 = n(vec2(x * 61.0 + 3.0, fall * 7.0 - t * 3.6));
+        float str = smoothstep(0.32, 0.86, s1 * 0.55 + s2 * 0.5);
+        float plume = smoothstep(0.48, 0.8, fbm(vec2(x * 7.0, fall * 2.2 - t * 1.7)));   // 白色的水團（馬尾瀑）
+        float spread = mix(0.16, 0.06, y);
+        float edge = smoothstep(0.0, spread, x) * smoothstep(1.0, 1.0 - spread, x);
+        edge *= 0.75 + 0.25 * n(vec2(x * 9.0, fall * 3.0 - t * 1.5));                     // 邊緣破碎
+        float low = mix(1.0, smoothstep(0.35, 0.75, y), uLow);                               // 水霧簾只在下半段
+        float a = (0.22 + 0.55 * str + 0.45 * plume) * edge * low * uA * mix(0.85, 1.0, y);
+        vec3 c = mix(vec3(0.72, 0.8, 0.84), vec3(1.0), clamp(str * 0.6 + plume, 0.0, 1.0));
+        gl_FragColor = vec4(mix(c, c * 0.6, uDark), clamp(a, 0.0, 1.0));
       }`,
   })
   {
-    // 水簾：上窄下寬、離岩壁一點點；分 24 段，越往下越往前（水往外拋）
-    const N = 24, P = [], U = [], I = []
-    for (let k = 0; k <= N; k++) {
-      const v = k / N, y = topY + 0.3 - (topY + 0.3 - poolY) * v, w = 1.3 + 2.2 * v, out = 0.5 + 2.2 * v * v
-      P.push(F.x - w, y, fz - out, F.x + w, y, fz - out); U.push(0, v, 1, v)
-      if (k) { const a = (k - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) }
+    const sheet = (wTop, wBot, back, outK, mat, ro, v0 = 0) => {
+      const N = 40, P = [], U = [], I = []
+      for (let k = 0; k <= N; k++) {
+        const v = v0 + (1 - v0) * k / N, y = topY + 0.3 - (topY + 0.3 - poolY) * v, w = wTop + (wBot - wTop) * v, out = back + outK * v * v
+        P.push(F.x - w, y, fz - out, F.x + w, y, fz - out); U.push(0, v, 1, v)
+        if (k) { const a = (k - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) }
+      }
+      const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); fg.setIndex(I)
+      const m = new THREE.Mesh(fg, mat); m.renderOrder = ro; g.add(m)
     }
-    const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); fg.setIndex(I)
-    const fall = new THREE.Mesh(fg, fallM); fall.renderOrder = 3; g.add(fall)
-    // 水潭：深綠的水面，落點一圈白沫
-    const poolM = new THREE.MeshStandardMaterial({ color: 0x2f5a52, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.88 })
-    const pool = new THREE.Mesh(new THREE.CircleGeometry(F.r, 40).rotateX(-Math.PI / 2), poolM); pool.position.set(F.x, poolY, F.z); pool.receiveShadow = true; g.add(pool)
-    const foamT = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), r = mulberry32(9); for (let i = 0; i < 500; i++) { const a = r() * TAU, d = Math.sqrt(r()) * 60; x.fillStyle = `rgba(255,255,255,${0.15 + r() * 0.4})`; x.beginPath(); x.arc(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 1 + r() * 4, 0, TAU); x.fill() } return new THREE.CanvasTexture(c) })()
-    const foam = new THREE.Mesh(new THREE.CircleGeometry(3, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: 0.85 }))
-    foam.position.set(F.x, poolY + 0.02, fz - 2.7); g.add(foam)
-    // 水霧：幾片朝鏡頭的霧（Sprite），在落點附近慢慢飄
-    const mistT = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,0.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c) })()
-    for (let k = 0; k < 12; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.45 })); sp.position.set(F.x + (rnd() - 0.5) * 5, poolY + 0.8 + rnd() * 4, fz - 2.6 + (rnd() - 0.5) * 3); sp.scale.setScalar(3.5 + rnd() * 3); sp.userData.ph = rnd() * TAU; g.add(sp); mist.push(sp) }
-    addCollider(F.x, F.z, F.r * 0.85, poolY + 0.6)
+    sheet(2.2, 5.2, 0.25, 1.6, fallMat({ spd: 0.7, a: 0.55, dark: 0.35 }), 3)          // 後層
+    sheet(2.5, 6.0, 0.5, 2.6, fallMat({ spd: 1.0, a: 1.0 }), 4)                         // 主水簾
+    sheet(3.2, 7.5, 0.9, 3.4, fallMat({ spd: 1.35, a: 0.45, low: 1 }), 5, 0.3)          // 前面的水霧簾
+    // 水潭：橢圓、深綠帶一點藍
+    const poolM = new THREE.MeshStandardMaterial({ color: 0x2c5a55, roughness: 0.06, metalness: 0.15, transparent: true, opacity: 0.9 })
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(1, 56).rotateX(-Math.PI / 2), poolM); pool.scale.set(F.rx, 1, F.rz); pool.position.set(F.x, poolY, F.z); pool.receiveShadow = true; g.add(pool)
+    const foamT = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'), r = mulberry32(9); for (let i = 0; i < 1600; i++) { const a = r() * TAU, d = Math.pow(r(), 0.7) * 120; x.fillStyle = `rgba(255,255,255,${(0.1 + r() * 0.45) * (1 - d / 130)})`; x.beginPath(); x.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 1 + r() * 5, 0, TAU); x.fill() } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t })()
+    for (const [k, sc] of [[0, 6.5], [1, 4.2]]) {
+      const fm = new THREE.Mesh(new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: 0.8 }))
+      fm.scale.set(sc, 1, sc * 0.6); fm.position.set(F.x, poolY + 0.02 + k * 0.01, fz - 3.2); fm.userData = { sc, k }; fm.renderOrder = 2; g.add(fm); foams.push(fm)
+    }
+    // 水霧：大片、慢慢飄、有的往步道那邊飄過來
+    const mistT = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c) })()
+    for (let k = 0; k < 26; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.4 })); const p0 = V(F.x + (rnd() - 0.5) * 11, poolY + 0.6 + rnd() * 9, fz - 2.8 - rnd() * 4); sp.position.copy(p0); sp.scale.setScalar(4 + rnd() * 6); sp.userData = { ph: rnd() * TAU, p0 }; sp.renderOrder = 6; g.add(sp); mist.push(sp) }
+    // 水花：落點往上往外噴的小水滴（加色、會飄散）
+    const NS = 500, sp = new Float32Array(NS * 3), sv = []
+    const reset = (i, first) => { const x = F.x + (rnd() - 0.5) * 9, z = fz - 2.6 - rnd() * 1.8; sp[i * 3] = x; sp[i * 3 + 1] = poolY + (first ? rnd() * 5 : 0.1); sp[i * 3 + 2] = z; sv[i] = V((rnd() - 0.5) * 1.6, 2 + rnd() * 4.5, -(0.4 + rnd() * 2.2)) }
+    for (let i = 0; i < NS; i++) reset(i, true)
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3))
+    const sprayM = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.55, depthWrite: false, map: mistT, blending: THREE.AdditiveBlending })
+    const spray = new THREE.Points(sg, sprayM); spray.frustumCulled = false; spray.renderOrder = 7; g.add(spray)
+    sprayU = (dt) => { for (let i = 0; i < NS; i++) { sv[i].y -= 3.2 * dt; sv[i].multiplyScalar(1 - 0.9 * dt); sp[i * 3] += sv[i].x * dt; sp[i * 3 + 1] += sv[i].y * dt; sp[i * 3 + 2] += sv[i].z * dt; if (sp[i * 3 + 1] < poolY || rnd() < 0.004) reset(i, false) } sg.attributes.position.needsUpdate = true }
+    for (let k = -2; k <= 2; k++) addCollider(F.x + k * F.rx * 0.38, F.z + 0.4, F.rz * 0.8, poolY + 0.6)
   }
 
   // ---------- 瀑布步道：之字形花崗岩石階＋頂上觀景台（layout.js YOSE.stairs；站的高度用 YOSE.stairAt，跟這裡畫的一致） ----------
@@ -181,7 +218,7 @@ export function buildYosemite(scene, { lib } = {}) {
   for (let k = 0; k < 4000 && PINES.length < 30; k++) {
     const x = X0 - 6 + rnd() * (X1 - X0 + 10), z = YOSE.base(x) - 3 - rnd() * 30
     if (!YOSE.inside(x, z) || domeRho(x, z) > 0.9) continue
-    if (alpineTrailDist(x, z) < 3 || Math.hypot(x - F.x, z - F.z) < F.r + 3 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue
+    if (alpineTrailDist(x, z) < 3 || Math.hypot(x - F.x, z - F.z) < 14 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue
     if (Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4 || YOSE.behind(x, z)) continue   // 營地裡、石階步道上不長
     const y = alpineHeight(x, z), H = Math.min(18 + rnd() * 8, domeY(x, z) - y - 2)
     if (H < 10) continue
@@ -217,10 +254,15 @@ export function buildYosemite(scene, { lib } = {}) {
     for (const m of [trunk, limbM, tuftM]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m) }
   }
 
+  let lastT = 0
   function tick(t) {
+    const dt = Math.min(0.1, Math.max(0, t - lastT)); lastT = t
     uT.value = t
-    for (const sp of mist) { sp.material.opacity = 0.3 + 0.15 * Math.sin(t * 0.7 + sp.userData.ph); sp.position.y += Math.sin(t * 0.5 + sp.userData.ph) * 0.002 }
+    for (const sp of mist) { const u = sp.userData; sp.material.opacity = 0.28 + 0.16 * Math.sin(t * 0.6 + u.ph); sp.position.set(u.p0.x + Math.sin(t * 0.13 + u.ph) * 1.5, u.p0.y + Math.sin(t * 0.21 + u.ph) * 0.8, u.p0.z - (0.5 + 0.5 * Math.sin(t * 0.09 + u.ph)) * 2.5) }
+    for (const f of foams) { const k = (t * (f.userData.k ? 0.35 : 0.22) + f.userData.k * 0.5) % 1; f.rotation.y = t * (f.userData.k ? -0.05 : 0.03); f.material.opacity = 0.85 * (1 - k * 0.6) }
+    if (sprayU && dt > 0) sprayU(dt)
   }
   return { group: g, tick, pines: PINES }
 }
-const mist = []
+const mist = [], foams = []
+let sprayU = null

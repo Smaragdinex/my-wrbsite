@@ -312,7 +312,7 @@ export const YOSE = (() => {
   const edgeCache = new Map()
   const edge = (x) => { const k = Math.round(x * 4); if (!edgeCache.has(k)) { let z = 40; while (domeRho(x, z) < 0.93 && z < 140) z += 0.25; edgeCache.set(k, z) } return edgeCache.get(k) }
   const Y = { x0: 168, x1: 262, edge, base: (x) => edge(x) - 20 }   // 2026-11-10 溫室加大後：牆腳往裡 20 公尺（那裡玻璃高，岩壁才能 30 公尺以上）
-  Y.fall = { x: 200, z: Y.base(200) - 3, r: 3.2 }
+  Y.fall = { x: 200, z: Y.base(200) - 3, r: 3.2, rx: 6.5, rz: 3.2 }   // 2026-11-10 水潭加大成橢圓（沿岩壁 13 公尺寬、往外 6.4 公尺，不壓到步道）
   // 岩壁高：yosemite.js 畫、步道算高度都用這個（2026-11-10 頂上留 6 公尺給玻璃：石階步道走到頂上的觀景台，人不會頂到玻璃）
   const ssY = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
   Y.g0 = (x) => alpineHeight(x, Y.base(x))
@@ -503,6 +503,11 @@ function buildAlpine() {
     const [dt, ti, tt] = polyDist(x, z, tr, (i) => i === ALP_BRIDGE.a || i === ALP_BRIDGE.a + 1)
     const py = lerp(prof[ti], prof[ti + 1], tt)
     h = lerp(py, h, smoothstep(1.4, 5, dt))   // 步道兩側的切坡放緩（3.2 時像一面牆）
+    // 2026-11-10 使用者：往山頂那段（第 11～12 段）步道左手邊一座小山丘擋住視野（步道夾在兩邊高起來的地形中間）→ 左手邊壓低到步道高度＋0.5，6～13 公尺慢慢接回原地形
+    if (ti === 11 || ti === 12 || (ti === 13 && tt < 0.3)) {
+      const [sx, sz] = tr[ti], [ex, ez] = tr[ti + 1], cr = (ex - sx) * (z - sz) - (ez - sz) * (x - sx)
+      if (cr < 0 && h > py + 0.5) h = lerp(py + 0.5, h, smoothstep(6, 13, dt))
+    }
     let dAll = dt
     for (const sp of ALP_SPURS) {   // 支線：窄一點；走到底那一小塊空地攤平
       const [d2, i2, t2] = polyDist(x, z, sp.pts), y2 = lerp(sp.prof[i2], sp.prof[i2 + 1], t2)
