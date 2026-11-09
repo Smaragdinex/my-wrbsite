@@ -216,8 +216,8 @@ class Walker {
 }
 // 沿樹枝跳
 class Hopper {
-  constructor(env, { hop = [0.15, 0.4], rest = [0.8, 3.5], dur = 0.26, span = [0.85, 1.35], blocked, fix } = {}) {   // span：身體往鏡頭（步道那側）轉多少（2026-11-09 使用者：要面對走道，以前 0.45～1.25 太多是側身）
-    Object.assign(this, { env, hopR: hop, restR: rest, dur, span, blocked, fix })   // fix：永遠朝同一邊（啄木鳥在樹幹上一定頭朝上，往下是倒退）
+  constructor(env, { hop = [0.15, 0.4], rest = [0.8, 3.5], dur = 0.26, span = [0.85, 1.35], blocked, fix, preT = 0.12, arc = [0.06, 0.3], apex = 0.5 } = {}) {   // span：身體往鏡頭（步道那側）轉多少（2026-11-09 使用者：要面對走道，以前 0.45～1.25 太多是側身）
+    Object.assign(this, { env, hopR: hop, restR: rest, dur, span, blocked, fix, preT, arcP: arc, apex })   // preT 起跳前蹲多久、arc 跳多高（基本＋距離倍數）、apex 最高點在哪（0.5＝正中間）   // fix：永遠朝同一邊（啄木鳥在樹幹上一定頭朝上，往下是倒退）
     const { min, max } = env.branch
     this.s = rnd(min + 0.2, max - 0.1); this.k = 1; this.y = 0; this.wait = rnd(...rest); this.landed = 9
     this.h = this.wantH = this.face(sgn())
@@ -232,7 +232,8 @@ class Hopper {
     if (this.k < 1) {
       this.k = Math.min(1, this.k + dt / this.dur)
       const e = this.k * this.k * (3 - 2 * this.k)
-      this.s = lerp(this.s0, this.s1, e); this.y = this.arc * Math.sin(Math.PI * this.k)
+      const wk = this.k < this.apex ? this.k / this.apex * 0.5 : 0.5 + (this.k - this.apex) / (1 - this.apex) * 0.5
+      this.s = lerp(this.s0, this.s1, e); this.y = this.arc * Math.sin(Math.PI * wk)
       if (this.k >= 1) { this.landed = 0; this.y = 0 }
     } else if ((this.wait -= dt) <= 0) this.jump()
     this.h = dampAngle(this.h, this.wantH, 14, dt)
@@ -244,11 +245,11 @@ class Hopper {
     if (this.s + dir * len > max || this.s + dir * len < min) dir = -dir
     const s1 = clamp(this.s + dir * len, min, max)
     if (this.blocked?.(s1, this)) { this.wait = 0.4; return }
-    Object.assign(this, { s0: this.s, s1, k: 0, arc: 0.06 + len * 0.3, wait: rnd(...this.restR) })
+    Object.assign(this, { s0: this.s, s1, k: 0, arc: this.arcP[0] + len * this.arcP[1], wait: rnd(...this.restR) })
     this.wantH = this.face(len ? dir : -Math.sign(Math.sin(this.h)) || 1)
   }
   get hopping() { return this.k < 1 }
-  get pre() { return this.k >= 1 ? 1 - clamp(this.wait / 0.12, 0, 1) : 0 }   // 起跳前蹲一下
+  get pre() { return this.k >= 1 ? 1 - clamp(this.wait / this.preT, 0, 1) : 0 }   // 起跳前蹲一下
 }
 
 /* ---------- 影子 ---------- */
@@ -987,6 +988,51 @@ function perchRigged(env, cfg) {
     const fl = rc.flick > 0 ? Math.sin(rc.flick * Math.PI * 3) * rc.flick : 0
     for (const [w, sg] of [['wingL', 1], ['wingR', -1]]) r.turn(w, AX.y, sg * 0.25 * Math.abs(fl) + sg * 0.12 * beat)
   }
+  // 2026-11-10 貓頭鷹的跳（使用者：跳的時候腳跟身體太僵硬 → 照 ChatGPT 看影片給的修法）：
+  // 腳主導起跳（先蹲 0.11 秒、最後 0.05 秒快速蹬直）、兩腳錯開（前腳先抬先伸、後腳晚 25 ms 蹬離、晚 45 ms 落地）、
+  // 收腳只收一點點；身體壓扁／拉長一點；落地是腳先著地、身體再往下沉一次再回來（不再彈跳抖動）；
+  // 頭穩住、慢半拍反向補身體的前傾、落地後輕點一下頭；翅膀幾乎不開；尾巴慢 50 ms；腳趾分開放開、再抓緊
+  const owlS = { bp: 0, lead: 1, ox: 0 }, _fa = V(), _fb = V()
+  const owlPose = (t, dt) => {
+    const pre = hp.pre, hop = hp.hopping, k01 = hop ? hp.k : 1, L = hp.landed
+    const crA = pre < 0.69 ? ss(pre, 0, 0.69) : 1 - 0.85 * ss(pre, 0.69, 1)      // 蹲下 → 最後一下蹬直
+    const ext = hop ? 1 - ss(k01, 0, 0.18) : ss(pre, 0.69, 1)                   // 蹬直（起跳那一刻最大）
+    const air = hop ? Math.sin(Math.PI * k01) : 0
+    const lc = (x) => x < 0 ? 0 : x < 0.07 ? ss(x, 0, 0.07) : 1 - ss(x, 0.07, 0.23)   // 落地：往下沉一次再回來
+    const landC = hop ? 0 : lc(L), landD = hop ? 0 : lc(L - 0.05)
+    const nod = hop ? 0 : ss(L, 0.05, 0.1) * (1 - ss(L, 0.12, 0.26))
+    // 哪一隻腳是前腳（朝跳的方向那一側）
+    if (hop && k01 < 0.05) {
+      r.bones.footL.getWorldPosition(_fa); r.bones.footR.getWorldPosition(_fb)
+      const pa = root.parent.worldToLocal(_fa), pb = root.parent.worldToLocal(_fb)
+      owlS.lead = Math.sign((pa.x - pb.x) * (hp.s1 - hp.s0)) || 1
+    }
+    // 第二輪：落地分兩拍——前腳先著地，後腳晚 45 ms；身體前傾限制在 ±0.11（空中）／±0.06（落地後），頭反向補 75%
+    const legT = (s) => { const lead = (s === 'L') === (owlS.lead > 0); return hop ? (lead ? ss(k01, 0.04, 0.28) * (1 - ss(k01, 0.62, 0.95)) : ss(k01, 0.12, 0.36) * (1 - ss(k01, 0.8, 1) * 0.7)) : lead ? 0 : 0.3 * (1 - ss(L, 0, 0.045)) }
+    const bodyP = clamp(-0.1 * crA + 0.06 * ext - 0.04 * air - 0.06 * landC, -0.11, 0.11)
+    owlS.ox = hop || hp.s1 == null ? 0 : 0.007 * (Math.sign(hp.s1 - hp.s0) || 0) * (L < 0.15 ? Math.sin(Math.PI * L / 0.15) : 0)   // 落地往前多滑一點點再回來
+    owlS.bp = damp(owlS.bp, bodyP, 28, dt)   // 頭慢半拍（約 35 ms）跟著補
+    r.reset()
+    r.turn('body', LAT, bodyP + 0.03 * (c.call > 0 ? Math.max(0, Math.sin(t * (cfg.beat ?? 9))) * c.call : 0))
+    r.turn('neck', AX.y, c.yaw * 0.45); r.turn('neck', LAT, c.pitch * 0.4 + 0.06 * crA - 0.35 * owlS.bp)
+    r.turn('head', AX.y, c.yaw * 0.55); r.turn('head', LAT, c.pitch * 0.6 - 0.4 * owlS.bp + 0.03 * nod)
+    r.turn('tail', LAT, 0.12 * ext + 0.06 * crA - 0.1 * air - 0.2 * landD)
+    for (const [w, sg] of [['wingL', 1], ['wingR', -1]]) r.turn(w, AX.y, sg * (0.16 * air + 0.05 * ext))
+    for (const s of ['L', 'R']) {
+      const lt = legT(s), bend = crA + 0.75 * landC
+      r.turn('thigh' + s, LAT, 0.35 * bend - 0.08 * ext + 0.35 * lt)
+      r.turn('shin' + s, LAT, -0.55 * bend + 0.12 * ext - 0.6 * lt)
+      r.turn('foot' + s, LAT, 0.3 * bend - 0.05 * ext + 0.4 * lt)
+    }
+    // 腳趾：蹲的時候抓緊、起跳前 30 ms 放開；空中放鬆；落地後 75 ms 內抓回去
+    const rel = ss(pre, 0.8, 1)
+    const g = hop ? lerp(0.35, 0.05, ss(k01, 0, 0.1)) - 0.05 * ss(k01, 0.8, 1) : pre > 0 ? 0.38 - 0.33 * rel : 0.05 + 0.33 * ss(L, 0, 0.075)
+    toes.forEach((tt) => curlToes(r, tt, g))
+    // 身體壓扁／拉長（蹲 0.96、蹬直 1.025、落地 50 ms 0.97），整隻往下沉
+    const sq = 1 - 0.04 * crA + 0.025 * ext - 0.03 * (hop ? 0 : 1 - ss(L, 0, 0.05)) * (L < 1 ? 1 : 0)
+    inner.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq))
+    lift.position.y = -0.022 * crA - 0.016 * landC
+  }
   const update = (t, dt) => {
     acts.tick(dt)
     if (acts.name !== 'idle') hp.wait = Math.max(hp.wait, 0.3)
@@ -1067,7 +1113,8 @@ function perchRigged(env, cfg) {
     const grip = g0 - (g0 + 0.1) * push - 0.3 * air + 0.25 * land
     toes.forEach((t) => curlToes(r, t, grip))
     lift.position.y = -cfg.drop * k * crouch
-    root.position.set(hp.s, env.branch.top(hp.s) + hp.y, env.branch.z?.(hp.s) ?? 0)
+    if (cfg.owlHop && !dive) owlPose(t, dt)
+    root.position.set(hp.s + (cfg.owlHop ? owlS.ox : 0), env.branch.top(hp.s) + hp.y, env.branch.z?.(hp.s) ?? 0)
     root.rotation.y = hp.h
     lift.rotation.x = 0; lift.rotation.z = 0
     if (cfg.rich && !dive) rich(t, dt, crouch, land, air, beat)
@@ -1345,7 +1392,8 @@ const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name,
   acts: o.acts ?? { walk: [4, 99, 99], peck: [3, 0.7, 1.3], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
 // （BUILD 在檔案前面就用到這些名字：要用 function 宣告才會提升，const 會在載入時出錯）
 // 停枝的：k 縮放（= 想要的身高 / 模型高度），腳底在模型 y≈0；腳趾輕輕勾住（grip 0.35）、腳底貼枝
-const endemicPerch = (name, k, beat = 8) => (env) => perchRigged(outer(env, -0.9), { name, k, ...TRIPO, foot: 0.004, drop: 0.045, beat, grip: 0.35, plant: true })
+const endemicPerch = (name, k, beat = 8, more = {}) => (env) => perchRigged(outer(env, -0.9), { name, k, ...TRIPO, foot: 0.004, drop: 0.045, beat, grip: 0.35, plant: true, ...more })
+const OWL_HOP = { owlHop: true, hopper: { preT: 0.16, dur: 0.3, arc: [0.075, 0.1], apex: 0.44 } }   // 第二輪：跳高一點，腳要明顯離開樹枝
 function liocichla(env) { return endemicGround('liocichla-rig', 0.22, 0.652)(env) }
 function whitebrow(env) { return endemicGround('whitebrow-rig', 0.2, 0.727, { flick: 0.35 })(env) }
 function islandthrush(env) { return endemicGround('islandthrush-rig', 0.26, 0.705, { hop: 0.045, stride: 0.1 })(env) }
@@ -1366,8 +1414,8 @@ function barwing(env) { return endemicPerch('barwing-rig', 0.22 / 0.65, 8)(env) 
 function tit(env) { return endemicPerch('tit-rig', 0.18 / 0.65, 9)(env) }
 function styan(env) { return endemicPerch('styan-rig', 0.22 / 0.637, 7)(env) }
 // 2026-11-09 角鴞：白天停在樹枝上不太動，拍翅慢
-function scopsowl(env) { return endemicPerch('scopsowl-rig', 0.21, 5)(env) }
-function mtscops(env) { return endemicPerch('mtscops-rig', 0.17, 6)(env) }
+function scopsowl(env) { return endemicPerch('scopsowl-rig', 0.21, 5, OWL_HOP)(env) }
+function mtscops(env) { return endemicPerch('mtscops-rig', 0.17, 6, OWL_HOP)(env) }
 // 2026-11-10 水雉：慢慢在荷葉上走（範圍小，不會走出荷葉外）；彩鷸：泥灘上低頭探找、尾巴上下擺
 function jacana(env) { return endemicGround('jacana-rig', 0.3, 0.724, { hop: 0, flick: 0.05, radius: 0.45, speed: 0.08, stride: 0.1 })(env) }
 function psnipe(env) { return endemicGround('psnipe-rig', 0.24, 0.717, { hop: 0, flick: 0.3, radius: 0.9, speed: 0.12, stride: 0.07 })(env) }
