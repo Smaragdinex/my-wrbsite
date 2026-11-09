@@ -149,20 +149,26 @@ export function buildCamp(scene) {
     for (const s of [1, -1]) for (const z of [-L / 2 + 0.3, L / 2 - 0.3]) { const q = V(s * (W / 2 + 0.55), 0.02, z); rope(V(s * W / 4, H / 2, z), q); peg(q.x, q.z) }
     return t
   }
-  const R = 4.3
+  // 2026-11-10 兩個出入口都留開：camp 支線（下面來）和 yose 支線（往瀑布山谷）——以前只讓開 camp 那邊，綠帳篷剛好擋在往瀑布的路上
+  const ysp = ALP_SPURS.find((q) => q.name === 'yose'), yo = ysp ? ysp.pts[ysp.pts.length - 2] : null
+  const outA = yo ? Math.atan2(yo[0] - cx, yo[1] - cz) : inA + Math.PI
+  const arcA = ((outA - inA) % TAU + TAU) % TAU, arcs = [[inA, arcA], [outA, TAU - arcA]].sort((p, q) => q[1] - p[1])
+  const nBig = arcs[1][1] > 2.2 ? 2 : 3, tentAng = []
+  for (let k = 1; k <= nBig; k++) tentAng.push(arcs[0][0] + arcs[0][1] * k / (nBig + 1))
+  if (nBig < 3) tentAng.push(arcs[1][0] + arcs[1][1] / 2)
+  const R = 5.4
   for (let i = 0; i < 3; i++) {
-    // 入口方向留開：三頂帳篷排在另外那一邊（間隔 95°）
-    const ang = inA + Math.PI + (i - 1) * 1.65
+    const ang = tentAng[i]
     const px = cx + Math.sin(ang) * R, pz = cz + Math.cos(ang) * R
-    const tt = tent(tentCols[i]); tt.position.set(px, gy(px, pz), pz)
+    const tt = tent(tentCols[i], 3.6, 2.9, 2.0); tt.position.set(px, gy(px, pz), pz)   // 2026-11-10 使用者：帳篷大一點（2.6×2.1×1.45 → 3.6×2.9×2.0）
     tt.rotation.y = Math.atan2(cx - px, cz - pz)   // 帳篷的 +z（門）朝營火
     g.add(tt)
-    addCollider(px, pz, 1.25, gy(px, pz) + 1.5)
+    addCollider(px, pz, 1.7, gy(px, pz) + 2)
   }
   // ---------- 原木長椅（帳篷之間、圍著火）＋ 樹墩、營燈、背包、柴堆 ----------
   const seats = []
   for (let i = 0; i < 2; i++) {
-    const ba = inA + Math.PI + (i - 0.5) * 1.65   // 兩頂帳篷之間
+    const ba = (tentAng[i] + tentAng[i + 1]) / 2 + (Math.abs(tentAng[i + 1] - tentAng[i]) > Math.PI ? Math.PI : 0)   // 兩頂帳篷之間
     const bx = cx + Math.sin(ba) * 2.2, bz = cz + Math.cos(ba) * 2.2, by = gy(bx, bz)
     const tx = Math.cos(ba), tz = -Math.sin(ba)   // 長椅沿著圓周方向
     g.add(between(V(bx - tx * 0.75, by + 0.2, bz - tz * 0.75), V(bx + tx * 0.75, by + 0.2, bz + tz * 0.75), 0.2))

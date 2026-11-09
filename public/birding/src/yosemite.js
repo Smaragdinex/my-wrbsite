@@ -3,7 +3,7 @@
 // 瀑布：從岩壁頂一條細長的水簾（像優勝美地瀑布），落到岩壁下的水潭，濺起水霧
 // 樹：西黃松（Ponderosa）——高、直、橘紅色的鱗片樹皮，樹冠只在上半段、一簇簇的長針葉；這一區原本的冷杉、鐵杉讓開（alpine.js 用 inYose）
 import * as THREE from 'three'
-import { ALP_SPURS, alpineHeight, alpineTrailDist, domeRho, domeY, addCollider, YOSE } from './layout.js'
+import { ALP_SPURS, alpineHeight, alpineTrailDist, domeRho, domeY, addCollider, YOSE, CAMP } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { barkMaterial } from './bark.js'
@@ -39,8 +39,7 @@ export function buildYosemite(scene, { lib } = {}) {
   for (let i = 0; i <= NX; i++) {
     const x = X0 + (X1 - X0) * i / NX, zb = YOSE.base(x), ze = YOSE.edge(x) - 0.8
     const g0 = alpineHeight(x, zb)
-    const end = Math.min(ss(X0, X0 + 7, x), ss(X1, X1 - 7, x))   // 兩端收矮，接進山坡
-    const Ht = Math.max(3, Math.min(28 + 9 * fbm2(x * 0.05, 3.7, 3), domeY(x, zb + 2.5) - g0 - 2.5) * (0.35 + 0.65 * end))
+    const Ht = YOSE.Ht(x)   // layout.js：兩端收矮、頂上留空間給玻璃（石階步道走得上去）
     cols.push({ x, zb, g0, Ht })
     const row = []
     for (let k = 0; k <= FACE + TOP; k++) {
@@ -148,12 +147,42 @@ export function buildYosemite(scene, { lib } = {}) {
     addCollider(F.x, F.z, F.r * 0.85, poolY + 0.6)
   }
 
+  // ---------- 瀑布步道：之字形花崗岩石階＋頂上觀景台（layout.js YOSE.stairs；站的高度用 YOSE.stairAt，跟這裡畫的一致） ----------
+  {
+    const st = YOSE.stairs(), stepM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xd8d4cc, roughness: 0.85, ...(rockN ? { normalMap: rockN } : {}) })
+    const wallM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xe6e2da, roughness: 0.95, emissive: 0x2a2826, ...(rockN ? { normalMap: rockN } : {}) })   // 跟岩壁同色、背光面也不會黑成一塊
+    const steps = [], walls = [], posts = [], rails = []
+    for (let i = 1; i < st.pts.length; i++) {
+      const [ax, az] = st.pts[i - 1], [bx, bz] = st.pts[i], mx = (ax + bx) / 2, mz = (az + bz) / 2
+      const len = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az)
+      const s0 = st.S[i - 1] + len / 2, top = Math.floor(st.h(s0) / 0.2) * 0.2 + 0.2, gy = alpineHeight(mx, mz)
+      steps.push({ p: V(mx, top - 0.09, mz), yaw, s: V(1.9, 0.18, len + 0.04) })   // 踏面
+      if (top - 0.18 > gy - 0.4) walls.push({ p: V(mx, (top - 0.18 + gy - 0.6) / 2, mz), yaw, s: V(2.0, top - 0.18 - gy + 0.6, len + 0.05) })   // 底下的砌石
+      // 外側（離岩壁遠的那邊）欄杆：每 1.6 公尺一根柱子
+      if (i % 3 === 0 && Math.abs(bx - ax) > Math.abs(bz - az) * 2) { const px = mx, pz = mz - 0.95; posts.push(V(px, top, pz)); addCollider(px, pz, 0.12, top + 1.1) }   // 轉彎那一小段不放（會擋在下一段上）
+    }
+    const P = st.plat
+    steps.push({ p: V((P.x0 + P.x1) / 2, P.y - 0.15, (P.z0 + P.z1) / 2), yaw: 0, s: V(P.x1 - P.x0 + 0.2, 0.3, P.z1 - P.z0 + 0.2) })
+    { const cx = (P.x0 + P.x1) / 2, cz = (P.z0 + P.z1) / 2, gy = alpineHeight(cx, cz); walls.push({ p: V(cx, (P.y - 0.3 + gy - 0.6) / 2, cz), yaw: 0, s: V(P.x1 - P.x0, P.y - 0.3 - gy + 0.6, P.z1 - P.z0) }) }
+    // 觀景台三邊欄杆（靠瀑布那邊、前面、東邊；岩壁那邊不用）
+    for (let x = P.x0 + 0.1; x <= P.x1 - 0.1; x += 0.8) { posts.push(V(x, P.y, P.z0 + 0.1)); addCollider(x, P.z0 + 0.1, 0.15, P.y + 1.1) }
+    for (let z = P.z0 + 0.9; z <= P.z1 - 0.1; z += 0.8) { posts.push(V(P.x0 + 0.1, P.y, z)); addCollider(P.x0 + 0.1, z, 0.15, P.y + 1.1) }
+    const box = new THREE.BoxGeometry(1, 1, 1)
+    const im = (list, mat) => { const m = new THREE.InstancedMesh(box, mat, list.length); list.forEach((b, i) => m.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), b.s))); m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m) }
+    im(steps, stepM); im(walls, wallM)
+    const ironM = new THREE.MeshStandardMaterial({ color: 0x3b3d3f, roughness: 0.5, metalness: 0.6 })
+    const pg = new THREE.CylinderGeometry(0.035, 0.035, 1.05, 6).translate(0, 0.52, 0), pm = new THREE.InstancedMesh(pg, ironM, posts.length)
+    posts.forEach((p, i) => pm.setMatrixAt(i, m4.makeTranslation(p.x, p.y, p.z))); pm.castShadow = true; g.add(pm)
+    for (let i = 1; i < posts.length; i++) { const a = posts[i - 1], b = posts[i]; if (a.distanceTo(b) > 2.6) continue; const d = b.clone().sub(a), r = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, d.length(), 5), ironM); r.position.copy(a).add(b).multiplyScalar(0.5).setY((a.y + b.y) / 2 + 1.0); r.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); g.add(r) }
+  }
+
   // ---------- 西黃松 ----------
   const PINES = []
   for (let k = 0; k < 4000 && PINES.length < 30; k++) {
     const x = X0 - 6 + rnd() * (X1 - X0 + 10), z = YOSE.base(x) - 3 - rnd() * 30
     if (!YOSE.inside(x, z) || domeRho(x, z) > 0.9) continue
     if (alpineTrailDist(x, z) < 3 || Math.hypot(x - F.x, z - F.z) < F.r + 3 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue
+    if (Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4 || YOSE.behind(x, z)) continue   // 營地裡、石階步道上不長
     const y = alpineHeight(x, z), H = Math.min(18 + rnd() * 8, domeY(x, z) - y - 2)
     if (H < 10) continue
     PINES.push({ x, z, y, H, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.05 })

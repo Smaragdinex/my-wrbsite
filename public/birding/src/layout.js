@@ -313,7 +313,40 @@ export const YOSE = (() => {
   const edge = (x) => { const k = Math.round(x * 4); if (!edgeCache.has(k)) { let z = 40; while (domeRho(x, z) < 0.93 && z < 140) z += 0.25; edgeCache.set(k, z) } return edgeCache.get(k) }
   const Y = { x0: 168, x1: 262, edge, base: (x) => edge(x) - 20 }   // 2026-11-10 溫室加大後：牆腳往裡 20 公尺（那裡玻璃高，岩壁才能 30 公尺以上）
   Y.fall = { x: 200, z: Y.base(200) - 3, r: 3.2 }
-  Y.behind = (x, z) => x > Y.x0 - 3 && x < Y.x1 + 3 && z > Y.base(x) - 1.5   // 岩壁裡面、後面（石頭、草不要長在這裡，會從岩壁表面凸出來）
+  // 岩壁高：yosemite.js 畫、步道算高度都用這個（2026-11-10 頂上留 6 公尺給玻璃：石階步道走到頂上的觀景台，人不會頂到玻璃）
+  const ssY = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
+  Y.g0 = (x) => alpineHeight(x, Y.base(x))
+  Y.Ht = (x) => { const end = Math.min(ssY(Y.x0, Y.x0 + 7, x), ssY(Y.x1, Y.x1 - 7, x)); return Math.max(3, Math.min(28 + 9 * fbm2(x * 0.05, 3.7, 3), domeY(x, Y.base(x) + 2.5) - Y.g0(x) - 6) * (0.35 + 0.65 * end)) }
+  // 瀑布步道（像優勝美地的 Mist Trail）：瀑布東邊，貼著岩壁前面四段之字形的花崗岩石階，一段比一段靠近岩壁、一段比一段高，最上面接到瀑布口旁邊的觀景台
+  // legs：[x 起點, x 終點, 離牆腳多遠]；高度沿總長線性從步道爬到岩壁頂
+  Y.stairs = (() => {
+    let built = null
+    return () => {
+      if (built) return built
+      const legs = [[206, 221, 7.6], [221, 207, 5.6], [207, 221, 3.6], [221, 204.5, 1.7]], pts = []
+      for (const [xa, xb, back] of legs) for (let k = 0; k <= 30; k++) { const x = xa + (xb - xa) * k / 30; pts.push([x, Y.base(x) - back]) }
+      let L = 0; const S = [0]; for (let i = 1; i < pts.length; i++) { L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); S.push(L) }
+      const h0 = alpineHeight(pts[0][0], pts[0][1]), top = Y.g0(Y.fall.x) + Y.Ht(Y.fall.x)
+      const plat = { x0: 201.6, x1: 205.6, z0: Y.base(203.6) - 3.4, z1: Y.base(203.6) - 0.6, y: top }
+      built = { pts, S, L, h0, top, plat, h: (s) => h0 + (top - h0) * s / L }
+      return built
+    }
+  })()
+  // 站在石階上的高度（一階 0.2 公尺）；觀景台平的；不在上面回傳 null
+  Y.stairAt = (x, z) => {
+    if (x < 199 || x > 224) return null
+    const st = Y.stairs(), P = st.plat
+    if (x > P.x0 && x < P.x1 && z > P.z0 && z < P.z1) return P.y
+    let best = 1e9, sAt = 0
+    for (let i = 1; i < st.pts.length; i++) {
+      const [ax, az] = st.pts[i - 1], [bx, bz] = st.pts[i], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(x - ax - dx * t, z - az - dz * t)
+      if (d < best) { best = d; sAt = st.S[i - 1] + Math.sqrt(l2) * t }
+    }
+    if (best > 0.95) return null
+    return Math.floor(st.h(sAt) / 0.2) * 0.2 + 0.2
+  }
+  Y.behind = (x, z) => (x > Y.x0 - 3 && x < Y.x1 + 3 && z > Y.base(x) - 1.5) || (x > 199 && x < 224 && z > Y.base(x) - 10)   // 岩壁裡面、後面（石頭、草不要長在這裡，會從岩壁表面凸出來）
   Y.inside = (x, z) => x > Y.x0 - 12 && x < Y.x1 + 10 && z > Y.base(Math.min(Y.x1, Math.max(Y.x0, x))) - 30
   return Y
 })()
@@ -579,6 +612,8 @@ export function supportAt(x, z, feet) {
     let y = alpineHeight(x, z), owner = 0
     const by = bridgeAt(x, z)
     if (by != null && by <= feet + 0.5 && by > y - 3) { y = by; owner = 3 }
+    const sy = YOSE.stairAt(x, z)   // 瀑布步道的石階、觀景台
+    if (sy != null && sy <= feet + 0.5 && sy > y) { y = sy; owner = 5 }
     return { y, owner }
   }
   if (COAST_ON && inCoast(x, z)) {
