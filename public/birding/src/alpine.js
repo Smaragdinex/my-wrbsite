@@ -1026,7 +1026,54 @@ function buildInterior(lib, avoid = []) {
       const crownMesh = inst(figCrown, figM, FIG); crownMesh.receiveShadow = false   // 葉團自己互相遮的陰影會讓整片樹冠從下面看全黑
       lodRegister([crownMesh, inst(figTrunk, bark, FIG), inst(figFruit, fruitM, FIG)], 12)
     }
-    lodRegister([inst(crossCards(9, 1.0, 1.1, 0, 61, 0.3), leafMat(scheffT), SCH)], 6)
+    // 2026-11-10 鵝掌藤立體版（以前是 9 片交叉的平面卡片）：6 根從基部彎上來的莖；每個節一片掌狀複葉＝葉柄＋7～9 片倒卵形小葉像傘一樣放射；
+    // 莖頂一把把放射的果序（繖形），果子從橘黃熟到紅、紫黑。高約 1.1（擺放時再乘 1.1～1.8）
+    {
+      const r = mulberry32(64), stems = [], leaves = [], berries = []
+      const leafletT = canvasTex(128, 256, (x, w, h) => { x.clearRect(0, 0, w, h); leaf(x, w / 2, h - 6, -Math.PI / 2, h - 14, { h: 108, s: 52, l: 24 }, mulberry32(3), 0.42) })
+      leafletT.anisotropy = 8
+      const leaflet = (L, W) => {   // 一片小葉：沿 +y 長 L，中間微微折起（V 形）、尾端往下彎
+        const q = new THREE.PlaneGeometry(W, L, 2, 4).translate(0, L / 2, 0), p = q.attributes.position
+        for (let i = 0; i < p.count; i++) { const t = p.getY(i) / L, sx = Math.abs(p.getX(i)) / (W / 2); p.setZ(i, sx * W * 0.18 - t * t * L * 0.3) }
+        q.rotateX(-Math.PI / 2); q.computeVertexNormals(); return q
+      }
+      const berry = (c, rad, ripe) => {
+        const q = new THREE.IcosahedronGeometry(rad, 0).toNonIndexed(), col = ripe < 0.45 ? [0.95, 0.55 + r() * 0.15, 0.08] : ripe < 0.8 ? [0.85, 0.2 + r() * 0.1, 0.07] : [0.25, 0.07, 0.15]
+        const cc = new Float32Array(q.attributes.position.count * 3); for (let i = 0; i < cc.length; i += 3) { cc[i] = col[0]; cc[i + 1] = col[1]; cc[i + 2] = col[2] }
+        q.setAttribute('color', new THREE.BufferAttribute(cc, 3)); return q.translate(c.x, c.y, c.z)
+      }
+      for (let s = 0; s < 6; s++) {
+        const a = s / 6 * TAU + r() * 0.7, lean = 0.1 + r() * 0.22, H = 0.75 + r() * 0.4, pts = []
+        for (let k = 0; k <= 6; k++) { const t = k / 6; pts.push(V(Math.cos(a) * lean * t * (0.6 + t), H * t, Math.sin(a) * lean * t * (0.6 + t))) }
+        stems.push(taper(pts, 0.008, 0.0035, 8))
+        const curve = new THREE.CatmullRomCurve3(pts), nL = 6 + Math.floor(r() * 3)
+        for (let k = 0; k < nL; k++) {   // 葉：莖的上 2/3 互生
+          const t = 0.35 + 0.62 * (k / nL), c0 = curve.getPointAt(t), b = a + k * 2.3 + r() * 0.5
+          const dir = V(Math.cos(b) * 0.8, 0.45 + r() * 0.3, Math.sin(b) * 0.8).normalize(), pl = 0.09 + r() * 0.06
+          stems.push(limb(c0, dir, pl, 0.0022, 0.0014))
+          const c = c0.clone().addScaledVector(dir, pl), n = 7 + Math.floor(r() * 3), tilt = 0.15 + r() * 0.25
+          for (let j = 0; j < n; j++) {
+            const psi = j / n * TAU + b, L = (0.075 + r() * 0.03) * (0.8 + 0.25 * Math.cos(j / n * TAU))
+            leaves.push(leaflet(L, L * 0.42).rotateX(tilt).rotateY(psi).translate(c.x, c.y + 0.004, c.z))
+          }
+        }
+        if (s < 4) {   // 果序：莖頂一把，9～12 根放射的梗，每根末端一小團果
+          const top = pts[6], ripe = r(), nr = 9 + Math.floor(r() * 4)
+          for (let k = 0; k < nr; k++) {
+            const ra = r() * TAU, d = V(Math.cos(ra) * 0.7, 0.55 + r() * 0.4, Math.sin(ra) * 0.7).normalize(), rl = 0.06 + r() * 0.04
+            stems.push(limb(top, d, rl, 0.0018, 0.0012))
+            const e2 = top.clone().addScaledVector(d, rl)
+            for (let m = 0; m < 5; m++) berries.push(berry(e2.clone().add(V((r() - 0.5) * 0.022, (r() - 0.5) * 0.018, (r() - 0.5) * 0.022)), 0.0065 + r() * 0.002, Math.min(1, ripe + (r() - 0.5) * 0.4)))
+          }
+        }
+      }
+      const stemM = new THREE.MeshStandardMaterial({ color: 0x5c6b3c, roughness: 0.8 })
+      const lg = vcol(mergeGeometries(leaves.map((q) => q.toNonIndexed())), 1)
+      { const cc = lg.attributes.color, pp = lg.attributes.position; for (let i = 0; i < cc.count; i++) { const k = 0.7 + 0.3 * Math.min(1, pp.getY(i) / 1.1); cc.setXYZ(i, k, k, k) } }   // 下面的葉暗一點
+      const sg = mergeGeometries(stems.map((q) => q.index ? q.toNonIndexed() : q).map((q) => { q.deleteAttribute('color'); return q }))
+      const scheffM = leafMat(leafletT, { roughness: 0.35, color: 0xf0f6e8 })
+      lodRegister([inst(lg, scheffM, SCH), inst(sg, stemM, SCH), inst(mergeGeometries(berries), fruitM, SCH)], 6)
+    }
     for (const [kind, list] of Object.entries(FLW)) if (list.length) lodRegister([inst(crossCards(5, 0.7, 0.75, 0, 70 + kind.length, 0.12), leafMat(flowerT(kind)), list, false)], 3)
     FIG_TREES.push(...FIG.map((f) => ({ x: f.p.x, y: f.p.y, z: f.p.z, H: f.H })))
     Object.assign(FLORA_SPOTS, { sch: SCH.map((it) => it.p), ...Object.fromEntries(Object.entries(FLW).map(([k, l]) => [k, l.map((it) => it.p)])) })
