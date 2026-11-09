@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { AS, CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho } from './layout.js'
+import { AS, CABIN, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight } from './layout.js'
 import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
 import { addWind } from './wind.js'
@@ -180,6 +180,12 @@ function buildInterior(lib, avoid = []) {
   const g = new THREE.Group(); g.name = 'alpineInterior'
   const rnd = mulberry32(2026)
   const AG = ALP_GRID
+  // 2026-11-09 使用者：山的入口左右很空。花園的植物只種到花園邊、山區的只從 inAlpine 開始（gardenRho 1.03 以外再留邊），
+  // 中間那一圈（花園邊緣到山區）是光禿禿的草坡。BAND＝入口兩側這一圈：鐵杉、箭竹、岩石、蕨類也種過來；GY＝那裡看得到的地面高度
+  const BAND = (x, z) => x > 46 && x < 104 && Math.abs(z) < 64 && gardenRho(x, z) > 0.95 && gardenRho(x, z) < 1.12 && pathClearAt(x, z) > 1.4
+    && !(x < 80 && Math.abs(z) < 4.2)   // 步道一進來的那一段兩側留開：看得到山、也看得到入口的門
+  const GY = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)
+  const OPEN = (x, z) => avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 10)   // 地上的鳥（草鴞）那片草原留開：不種樹、不放石頭
   // 地形網格：坡度決定顏色（緩坡箭竹草地的黃綠、陡坡岩石灰、步道泥土、溪邊濕的深色），再加一張細節雜訊貼圖
   {
     const nx = AG.nx, nz = AG.nz, pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2), idx = []
@@ -675,14 +681,16 @@ function buildInterior(lib, avoid = []) {
       const list = []
       for (let k = 0; k < 30000 * AK && list.length < (kind === 'fir' ? 400 : 430) * AK; k++) {
         const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-        if (!inAlpine(x, z, 3) || domeRho(x, z) > 0.94 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4.4) continue
+        const inB = BAND(x, z)
+        if ((!inAlpine(x, z, 3) && !inB) || domeRho(x, z) > 0.94 || Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4.4) continue
         if (alpineTrailDist(x, z) < 3.2 || alpineStreamDist(x, z) < 2.5 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2.5) continue
-        const hgt = alpineHeight(x, z)
+        const hgt = GY(x, z)
         // 冷杉在高處、鐵杉在中坡；山頂附近稀疏（箭竹草原）
         let want = kind === 'fir' ? ss(7, 16, hgt) * (1 - 0.85 * ss(17, 22, hgt)) : ss(2.5, 7, hgt) * (1 - ss(14, 20, hgt))
         // 一進山區（花園交界往東）：低處也長一片鐵杉、零星冷杉，不要是空地（2026-11-07 使用者：樹多一點但不要滿；2026-11-08 再多一點、延伸遠一點）
         const entry = ss(78, 86, x) * (1 - ss(118, 134, x))
         want = Math.max(want, entry * (kind === 'fir' ? 0.28 : 0.62))
+        if (inB) want = Math.max(want, kind === 'fir' ? 0.18 : 0.55)   // 入口兩側：一片鐵杉林、零星冷杉
         if (rnd() > want * (0.55 + 0.45 * fbm2(x * 0.05, z * 0.05 + kind.length, 2) + 0.3)) continue
         // 越高越矮（高山上的冷杉長不高，山頂看得出去）；不能頂到玻璃
         const H = Math.min(((kind === 'fir' ? 9 : 8) + rnd() * 7) * (1 - 0.5 * ss(12, 22, hgt)), domeY(x, z) - hgt - 1.5)
@@ -691,6 +699,7 @@ function buildInterior(lib, avoid = []) {
         const crownR = H * (kind === 'fir' ? 0.19 : 0.29)
         if (alpineTrailDist(x, z) < crownR + 1.3 || bridgeDist(x, z) < crownR + 1.5 || alpineStreamDist(x, z) < crownR * 0.6 + 1.2) continue
         if (nearBird(avoid, x, z, 5.5, 2.5)) continue
+        if (inB && (pathClearAt(x, z) < crownR + 1.2 || OPEN(x, z))) continue   // 花園步道上也不能有樹冠
         if (FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < 9)) continue   // 雀榕四周留空
         if (Math.hypot(x - ALP_TRAIL[0][0], z - ALP_TRAIL[0][1]) < 7) continue   // 步道一進來的地方留一小塊空地，看得到山
         if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 16) continue   // 山頂四周是箭竹草原，看得出去
@@ -983,6 +992,60 @@ function buildInterior(lib, avoid = []) {
     FIG_TREES.push(...FIG.map((f) => ({ x: f.p.x, y: f.p.y, z: f.p.z, H: f.H })))
     Object.assign(FLORA_SPOTS, { sch: SCH.map((it) => it.p), ...Object.fromEntries(Object.entries(FLW).map(([k, l]) => [k, l.map((it) => it.p)])) })
   }
+  // 登山口的門（2026-11-09 入口太空）：兩根原木柱＋上面一根橫樑、斜撐，橫樑下掛一塊木牌（燒刻山和鳥的圖案，不寫字），
+  // 柱腳一圈石頭。跨在步道剛進山區那一段，從花園走過來第一眼就看到「這裡開始上山」
+  {
+    const [x0, z0] = ALP_TRAIL[0], [x1, z1] = ALP_TRAIL[1]
+    const L = Math.hypot(x1 - x0, z1 - z0), dx = (x1 - x0) / L, dz = (z1 - z0) / L
+    const gx = x0 + dx * 5, gz = z0 + dz * 5, sx = -dz, sz = dx, HW = 2.5, Hp = 3.6
+    const barkT = canvasTex(128, 256, (x, w, h) => {
+      x.fillStyle = '#6a4e36'; x.fillRect(0, 0, w, h); const r = mulberry32(77)
+      for (let i = 0; i < 70; i++) { x.strokeStyle = `rgba(${30 + r() * 30},${20 + r() * 20},${12},${0.25 + r() * 0.35})`; x.lineWidth = 1 + r() * 3; const xx = r() * w; x.beginPath(); x.moveTo(xx, 0); x.bezierCurveTo(xx + (r() - 0.5) * 10, h * 0.3, xx + (r() - 0.5) * 10, h * 0.7, xx + (r() - 0.5) * 8, h); x.stroke() }
+      for (let i = 0; i < 8; i++) { x.fillStyle = 'rgba(40,26,14,0.5)'; x.beginPath(); x.ellipse(r() * w, r() * h, 3 + r() * 4, 5 + r() * 6, 0, 0, TAU); x.fill() }
+    })
+    barkT.wrapS = barkT.wrapT = THREE.RepeatWrapping
+    const logM = new THREE.MeshStandardMaterial({ map: barkT, roughness: 0.9 })
+    const endM = new THREE.MeshStandardMaterial({ color: 0xb08a5e, roughness: 0.8 })
+    const gate = new THREE.Group(); gate.name = 'trailheadGate'
+    const log = (r0, r1, len) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 12, 1), [logM, endM, endM]); m.castShadow = true; m.receiveShadow = true; return m }
+    const between = (a, b, r) => { const d = b.clone().sub(a), m = log(r, r, d.length()); m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); return m }
+    const gy0 = Math.max(GY(gx + sx * HW, gz + sz * HW), GY(gx - sx * HW, gz - sz * HW))
+    for (const s of [-1, 1]) {
+      const px = gx + sx * HW * s, pz = gz + sz * HW * s, py = GY(px, pz)
+      const top = gy0 + Hp + 0.25, bot = py - 0.3
+      const post = log(0.17, 0.15, top - bot); post.position.set(px, (top + bot) / 2, pz); gate.add(post)
+      addCollider(px, pz, 0.25)
+      // 斜撐：柱子和橫樑之間
+      gate.add(between(V(px - sx * s * 0.1, gy0 + Hp - 0.85, pz - sz * s * 0.1), V(px - sx * s * 0.85, gy0 + Hp - 0.05, pz - sz * s * 0.85), 0.065))
+      // 柱腳的石頭
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * TAU + rnd(), st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.14 + rnd() * 0.08, 0), new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.1, 0.06, 0.4 + rnd() * 0.15), roughness: 1, flatShading: true }))
+        st.position.set(px + Math.cos(a) * 0.32, py + 0.02, pz + Math.sin(a) * 0.32); st.rotation.set(rnd() * 3, rnd() * 3, 0); st.scale.y = 0.6; st.castShadow = true; gate.add(st)
+      }
+    }
+    gate.add(between(V(gx - sx * (HW + 0.45), gy0 + Hp, gz - sz * (HW + 0.45)), V(gx + sx * (HW + 0.45), gy0 + Hp, gz + sz * (HW + 0.45)), 0.15))
+    // 木牌：燒刻圖案（山稜線＋一隻飛的鳥＋樹），兩條麻繩掛在橫樑下
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192
+    const c = cv.getContext('2d'), r = mulberry32(5)
+    c.fillStyle = '#a27a50'; c.fillRect(0, 0, 512, 192)
+    for (let i = 0; i < 60; i++) { c.strokeStyle = `rgba(80,52,30,${0.08 + r() * 0.15})`; c.lineWidth = 1 + r() * 2; const y = r() * 192; c.beginPath(); c.moveTo(0, y); c.bezierCurveTo(170, y + (r() - 0.5) * 10, 340, y + (r() - 0.5) * 10, 512, y + (r() - 0.5) * 8); c.stroke() }
+    c.strokeStyle = '#3a2412'; c.lineWidth = 10; c.strokeRect(10, 10, 492, 172)
+    c.fillStyle = '#3e2714'
+    c.beginPath(); c.moveTo(40, 160); c.lineTo(140, 70); c.lineTo(190, 110); c.lineTo(270, 38); c.lineTo(350, 112); c.lineTo(400, 82); c.lineTo(472, 160); c.closePath(); c.fill()
+    c.fillStyle = '#a27a50'; c.beginPath(); c.moveTo(270, 38); c.lineTo(292, 58); c.lineTo(276, 56); c.lineTo(262, 66); c.lineTo(252, 55); c.closePath(); c.fill()   // 山頂的雪
+    for (const [tx, ts] of [[95, 1], [118, 0.8], [420, 0.9], [442, 1.1]]) { c.fillStyle = '#2c1a0c'; c.beginPath(); c.moveTo(tx, 160 - 56 * ts); c.lineTo(tx + 16 * ts, 160); c.lineTo(tx - 16 * ts, 160); c.closePath(); c.fill() }
+    c.strokeStyle = '#2c1a0c'; c.lineWidth = 6; c.lineCap = 'round'
+    c.beginPath(); c.moveTo(330, 52); c.quadraticCurveTo(350, 36, 368, 50); c.quadraticCurveTo(386, 36, 406, 52); c.stroke()   // 飛鳥
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace
+    const boardM = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 })
+    const board = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.79, 0.07), [endM, endM, endM, endM, boardM, boardM])
+    board.position.set(gx, gy0 + Hp - 0.75, gz); board.castShadow = true
+    board.lookAt(gx - dx, gy0 + Hp - 0.75, gz - dz)   // 圖案朝花園那邊（走過來的方向）
+    gate.add(board)
+    const ropeM = new THREE.MeshStandardMaterial({ color: 0xc9b48a, roughness: 1 })
+    for (const s of [-0.8, 0.8]) { const rp = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.36, 5), ropeM); rp.position.set(gx + sx * s, gy0 + Hp - 0.2, gz + sz * s); gate.add(rp) }
+    g.add(gate)
+  }
   // 岩石：陡坡上的大岩塊、溪邊的長苔石頭（用溫室那批岩石模型）
   {
     const lists = {}, put = (n, it) => (lists[n] ||= []).push(it)
@@ -1013,6 +1076,22 @@ function buildInterior(lib, avoid = []) {
     const fl = {}
     for (const f of ferns) (fl[pick(['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a'])] ||= []).push(f)
     for (const [n, list] of Object.entries(fl)) if (lib[n]) scatter(g, lib[n], list, { cast: false })
+    // 入口兩側（BAND）：長苔的大石頭、一叢叢蕨類（林下）
+    const bl = {}, bf = {}
+    for (let k = 0; k < 9000; k++) {
+      const x = 46 + rnd() * 58, z = -64 + rnd() * 128
+      if (!BAND(x, z) || OPEN(x, z) || nearBird(avoid, x, z, 3.5, 1.5) || alpineTrailDist(x, z) < 2.4) continue
+      const h = GY(x, z), r = rnd()
+      if (r < 0.035) {
+        const k2 = 0.7 + rnd() * 1.4
+        if (pathClearAt(x, z) < 1.4 + k2 || alpineTrailDist(x, z) < 2.4 + k2) continue
+        ;(bl[pick(rnd() < 0.5 ? moss : big)] ||= []).push({ p: V(x, h - 0.25 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(k2), c: new THREE.Color().setHSL(0.22, 0.1, 0.78 + rnd() * 0.15) })
+      } else if (r < 0.2 && fbm2(x * 0.09 + 5, z * 0.09, 2) > 0.45) {
+        (bf[pick(['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a', 'fern_b'])] ||= []).push({ p: V(x, h - 0.05, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 0.6), c: new THREE.Color().setHSL(0.25, 0.15, 0.85 + rnd() * 0.1) })
+      }
+    }
+    for (const [n, list] of Object.entries(bl)) if (lib[n]) { scatter(g, lib[n], list, { cast: true }); rockColliders(lib[n], list) }
+    for (const [n, list] of Object.entries(bf)) if (lib[n]) scatter(g, lib[n], list, { cast: false })
   }
   // 玉山箭竹（2026-11-07 改）：原本是一叢叢細長草葉、中間露出一大片地面，像稀稀落落的刺。
   // 真的箭竹草原是膝蓋到腰高、密密一整片：每叢幾根細竹稈，稈上不同高度長出披針形的葉子往外斜伸（bladeMesh 的 cane 模式）。
@@ -1021,12 +1100,12 @@ function buildInterior(lib, avoid = []) {
     const A = [], B = [], c = new THREE.Color(), MAXI = 450000 * AK
     for (let k = 0; k < 140000 * AK && A.length / 4 < MAXI; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
+      if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955) continue
             if (groundClear(avoid, x, z, 1.6)) continue   // 地上的鳥走動的地方、到鏡頭那條線：不長
             if (bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8) continue   // 吊橋兩端橋面貼近地面：箭竹會從木板縫長出來（2026-11-09）
       if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R) continue   // 小木屋裡面不長
       if (alpineTrailDist(x, z) < 1.5 || alpineStreamDist(x, z) < 1.4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.6) continue
-      const h = alpineHeight(x, z)
+      const h = GY(x, z)
       const patch = fbm2(x * 0.07, z * 0.07, 3)
       if (rnd() > 0.55 + 0.6 * patch) continue
       // 一片片的色調：黃綠為主、深綠、枯黃
@@ -1103,17 +1182,17 @@ function buildInterior(lib, avoid = []) {
     const list = [], c = new THREE.Color()
     for (let k = 0; k < 160000 * AK && list.length < 90000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
+      if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955) continue
       if (groundClear(avoid, x, z, 1.8) || bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8) continue
       if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 0.2) continue
       if (alpineTrailDist(x, z) < 1.7 || alpineStreamDist(x, z) < 1.6 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.8) continue
       const patch = fbm2(x * 0.07, z * 0.07, 3)
       if (rnd() > 0.5 + 0.7 * patch) continue
-      const hh = alpineHeight(x, z), tone = fbm2(x * 0.11 + 31, z * 0.11 - 17, 2), dry = ss(0.62, 0.8, tone)
+      const hh = GY(x, z), tone = fbm2(x * 0.11 + 31, z * 0.11 - 17, 2), dry = ss(0.62, 0.8, tone)
       const tall = (0.55 + rnd() * 0.35 + 0.25 * ss(10, 22, hh)) * (0.85 + 0.3 * patch), wide = tall * (1.1 + rnd() * 0.5)
       c.setHSL(0.24 + (tone - 0.5) * 0.08 - dry * 0.06, 0.35, 0.85 + rnd() * 0.25 + dry * 0.15)   // 貼圖本身有顏色：這裡是一片片的色調（乘上去）
       // 坡上：叢的下緣要埋進最低的那一角（原本下坡那邊浮在半空、看得到底）
-      const r2 = wide * 0.5, lo = Math.min(hh, alpineHeight(x + r2, z), alpineHeight(x - r2, z), alpineHeight(x, z + r2), alpineHeight(x, z - r2))
+      const r2 = wide * 0.5, lo = Math.min(hh, GY(x + r2, z), GY(x - r2, z), GY(x, z + r2), GY(x, z - r2))
       list.push({ x, y: lo - 0.06, z, yaw: rnd() * TAU, w: wide, h: tall + (hh - lo), c: c.clone() })
     }
     const im = new THREE.InstancedMesh(geo, mat, list.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler()

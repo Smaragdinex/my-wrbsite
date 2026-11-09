@@ -150,7 +150,7 @@ export const PATHS = [
   { name: 'sw', w: 2.4, curve: curve([onLoop(2.3), [-29, 20], ringPt(2.3)]) },
   { name: 'nw', w: 2.4, curve: curve([onLoop(-2.4), [-30, -24], ringPt(-2.5)]) },
   { name: 'spur', w: 2.6, curve: curve([ringPt(1.0), [19.5, 11.6], [14.6, 10.45]]) },
-  { name: 'alpine', w: 3.0, curve: curve([loopPt(0), [62, 0.5], [73.5, 0]]) },   // 往高山館的東門
+  { name: 'alpine', w: 3.0, curve: curve([loopPt(0), [62, 0.5], [76.6, 0]]) },   // 往高山館的東門（2026-11-09 73.5→76.6：跟山區泥土步道接上，中間不再空一段草地）
   { name: 'coast', w: 3.0, curve: curve([loopPt(-Math.PI / 2), [0.5, -46], [0, -53.6]]) },   // 往海岸館的南門
   ].filter((p) => COAST_ON || p.name !== 'coast'),
 ]

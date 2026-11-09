@@ -114,6 +114,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       if (td > 2.2 && td < 2.8 && inAlpine(sx, sz, 1) && k < best) { best = k; sign = [sx, sz] }
     }
     if (sign) { const [sx, sz] = sign, e = 0.2; sign.push(Math.atan2(alpineTrailDist(sx - e, sz) - alpineTrailDist(sx + e, sz), alpineTrailDist(sx, sz - e) - alpineTrailDist(sx, sz + e))) }
+    // 從步道（木樁那邊）看得到牠：鳥到木樁之間也不長箭竹（像草叢裡一條被踩出來的通道）
+    if (sign) alpAvoid.push({ x: ox, z: oz, cx: sign[0], cz: sign[1], ground: true })
     scene.add(buildOwlNest({ x: nx, z: nz, face: Math.atan2(ux, uz), groundAt: alpineHeight, owl: [ox, oz], sign }))
     addCollider(nx, nz, 0.55, alpineHeight(nx, nz) + 0.6)
     if (sign) addCollider(sign[0], sign[1], 0.12)
