@@ -333,6 +333,9 @@ export const UI = {
  "委託完成：{c}（獎金 ${p}）": "Request complete: {c} (bonus ${p})",
  "符合委託 +${p}": "Request +${p}",
  "正在吃果實": "eating fruit",
+ "手電筒：開": "Flashlight: on",
+ "手電筒：關": "Flashlight: off",
+ "手電筒（晚上用）": "Flashlight (for night)",
 }
 export const BIRDS = {
  "dove": {

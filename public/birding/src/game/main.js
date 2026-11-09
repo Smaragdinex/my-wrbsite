@@ -132,6 +132,11 @@ addEventListener('keydown', (e) => {
     else if (!panelOpen() && player.controls.isLocked && nearBench()) rest()
     else if (!panelOpen() && player.controls.isLocked) { guide.open(); player.controls.unlock() }   // 附近沒有可以按 E 的東西：打開鳥類圖鑑
   }
+  // F：手電筒（2026-11-10）——晚上照路、照鳥（白天也能開，只是看不太出來）
+  if (e.code === 'KeyF' && player.controls.isLocked) {
+    torch.visible = !torch.visible
+    hud.toast(tr(torch.visible ? '手電筒：開' : '手電筒：關'), 1.2)
+  }
   if (e.code === 'KeyQ' && player.controls.isLocked) {
     // 換下一支有的鏡頭
     const mine = LENSES.filter((l) => state.owned.includes(l.id))
@@ -139,6 +144,10 @@ addEventListener('keydown', (e) => {
     save(); hud.toast(tr('換上 {name}', { name: gear.lens().name }))
   }
 })
+// 手電筒：掛在鏡頭上的聚光燈（照向準星），暖白色、邊緣柔、照 35 公尺；不投影子（效能）
+const torch = new THREE.SpotLight(0xfff1d6, 90, 35, 0.42, 0.55, 1.4)
+torch.position.set(0.18, -0.12, 0); torch.target.position.set(0, -0.6, -10)
+camera.add(torch, torch.target); torch.visible = false
 // 日夜：一天 24 分鐘（遊戲裡 1 小時 = 現實 1 分鐘）；網址 ?t=19.5 可以直接從某個時間開始
 const DAY_SEC = 24 * 60
 const qs = new URLSearchParams(location.search)
@@ -254,5 +263,5 @@ function tick(dt, t) {
   if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
   guide.render(dt)   // 圖鑑（書）疊在最上面
 }
-window.__game = { comm, step: (dt) => { recT += dt; tick(dt, recT) }, REC, setMenuCam, guide, amb, settings, store, product, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
+window.__game = { torch, comm, step: (dt) => { recT += dt; tick(dt, recT) }, REC, setMenuCam, guide, amb, settings, store, product, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 if (!REC) frame()
