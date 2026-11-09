@@ -305,8 +305,9 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     const ring = [['monstera_b', 0, 0, 1.25], ['monstera_d', -0.9, 1.3, 1.05], ['anthurium_a', -1.5, -0.7, 1.5], ['calathea_a', 0.7, -1.3, 1.5],
       ['banana_b', 1.8, 1.4, 1.15], ['banana_a', 2.6, -0.3, 1], ['fern_b', -0.6, -1.9, 1.05], ['anthurium_b', -2.3, 0.8, 1.4], ['monstera_a', 1.2, 2.6, 1]]
     for (const [name, dx, dz, sc0] of ring) {
-      const px = x + dx, pz = z + dz
-      put(name, { p: v3(px, terrainHeight(px, pz) - 0.04, pz), q: qY(rnd() * TAU), s: sc(sc0), c: tint() })
+      const px = x + dx, pz = z + dz, rot = rnd() * TAU, col = tint()
+      if (pathClearAt(px, pz) < 0.5) continue   // 2026-11-10 這一叢往外散到 2.6 公尺，有幾株（火鶴、龜背芋）長在步道上、還有碰撞擋住人：落在步道上的不種（亂數照抽，其他植物不變）
+      put(name, { p: v3(px, terrainHeight(px, pz) - 0.04, pz), q: qY(rot), s: sc(sc0), c: col })
       addCollider(px, pz, 0.5, terrainHeight(px, pz) + 2)
     }
   }
