@@ -643,12 +643,23 @@ function buildInterior(lib, avoid = []) {
       // 兩邊位置完全對稱（同一端左右兩塊在同一個高度：取兩邊比較低的地面，另一邊比較高就整塊埋進土裡）
       for (const [t, out] of ends) {
         const T = topOf[t + ',' + s]
-        // 2026-11-10 使用者：錨碇擋在步道上（步道在橋頭轉彎，橋的直線延長線會切到木棧道）→ 往外挪到離步道中線 3 公尺以上；
-        // 左右兩塊用同一個外移量（取兩邊需要的最大值），保持對稱
-        const need = (sg) => { const Ts = topOf[t + ',' + sg]; let o = 0.6; while (o < 6 && alpineTrailDist(...(() => { const p = Ts.clone().addScaledVector(dir, out * 9).addScaledVector(side, sg * o); return [p.x, p.z] })()) < 3.0) o += 0.2; return o }
-        const off = Math.max(need(1), need(-1))
-        const q = T.clone().addScaledVector(dir, out * 9).addScaledVector(side, s * off)
-        const qo = T.clone().addScaledVector(dir, out * 9).addScaledVector(side, -s * off).addScaledVector(side, -s * 2 * (HW + 0.3))
+        // 2026-11-10 使用者：錨碇擋在步道上、後來又變成鋼纜穿過木棧道（步道在橋頭轉彎，橋軸線往後拉的鋼纜會切過棧道）
+        // → 錨碇的位置（往後多遠 back、往外多遠 off）用搜的：錨碇本身離步道中線 3 公尺以上，而且整條鋼纜在離地 2.4 公尺以下的那段都要離步道 2.3 公尺以上；
+        //    左右兩塊用同一組 back/off（取兩邊都過的），保持對稱
+        const okAt = (sg, back, o) => {
+          const Ts = topOf[t + ',' + sg], p = Ts.clone().addScaledVector(dir, out * back).addScaledVector(side, sg * o)
+          if (alpineTrailDist(p.x, p.z) < 3.0) return false
+          const gq = alpineHeight(p.x, p.z) + 0.35
+          for (let u = 0.05; u <= 1; u += 0.05) {
+            const x = Ts.x + (p.x - Ts.x) * u, z = Ts.z + (p.z - Ts.z) * u, y = Ts.y + (gq - Ts.y) * u
+            if (y - alpineHeight(x, z) < 2.4 && alpineTrailDist(x, z) < 2.3 && bridgeDist(x, z) > HW + 0.4) return false
+          }
+          return true
+        }
+        let back = 9, off = 0.6
+        search: for (const b of [9, 7.5, 10.5, 6, 12, 4.5]) for (let o = 0.6; o <= 7; o += 0.4) if (okAt(1, b, o) && okAt(-1, b, o)) { back = b; off = o; break search }
+        const q = T.clone().addScaledVector(dir, out * back).addScaledVector(side, s * off)
+        const qo = T.clone().addScaledVector(dir, out * back).addScaledVector(side, -s * off).addScaledVector(side, -s * 2 * (HW + 0.3))
         const gy = Math.min(alpineHeight(q.x, q.z), alpineHeight(qo.x, qo.z))
         q.y = gy + 0.35
         tube(cables, [T, q], 0.05, 2)

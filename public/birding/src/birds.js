@@ -1599,6 +1599,11 @@ export function placeAnimal(def) {
     tree.position.copy(side).multiplyScalar(-len)
     tree.rotation.y = Math.atan2(-side.z, side.x)
     g.add(tree)
+    // 2026-11-10 樹幹是在鳥旁邊 2.6 公尺，那裡的地面可能比鳥的站點低（斜坡）→ 樹懸空（星鴉那棵浮了 2 公尺）：樹幹往下接到地面
+    if (def.groundAt) {
+      const gap = gy - def.groundAt(x + tree.position.x, z + tree.position.z)
+      if (gap > 0.05) tree.add(stick(0.34, 0.38, gap + 0.5, BARK, [0, 0.2, 0], [0, 0, 0], 14))
+    }
     if (def.onFig) dressFig(tree, x, z, gy)
     // obj 的 +x 就是枝條方向，原點在枝條的軸上
     obj.position.y = y

@@ -92,6 +92,7 @@ export function giantSpots(avoid = []) {
     if (!free(x, z, D * 0.5)) continue
     const y = alpineHeight(x, z); let lo = y
     for (let a = 0; a < 8; a++) lo = Math.min(lo, alpineHeight(x + Math.cos(a * 0.785) * D * 0.55, z + Math.sin(a * 0.785) * D * 0.55))
+    if (y - lo > 0.9) continue   // 2026-11-10 太陡的坡不放（以前為了蓋過上坡那側把樹頭拉高到 3 倍，掃描模型被拉成一片碎三角形，使用者看不出是什麼）
     stumps.push({ x, z, y: lo - 0.15, D, H: (y - lo) + 1.4 + dr() * 1.6, rot: dr() * TAU, sapling: dr() < 0.45 })
   }
   for (let k = 0; k < 8000 && logs.length < 9; k++) {
@@ -245,7 +246,8 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
   const STUMP = lib?.stump ? { w: 1.5, h: 0.57 } : null
   if (stumps.length && STUMP) {
     // 原模型是矮矮的小樹頭：橫向放大到直徑 D（根盤再大一點），高度拉到 H
-    const list = stumps.map((t) => { const k = t.D / STUMP.w * 1.35, ky = Math.max(k * 0.9, t.H / STUMP.h); t.top = t.y + STUMP.h * ky; return { p: new THREE.Vector3(t.x, t.y, t.z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, t.rot, 0)), s: new THREE.Vector3(k, ky, k) } })
+    // 2026-11-10 高度最多拉到橫向的 1.25 倍（以前拉到 3 倍，掃描的樹頭變成一片碎三角形）
+    const list = stumps.map((t) => { const k = t.D / STUMP.w * 1.35, ky = Math.min(Math.max(k * 0.9, t.H / STUMP.h), k * 1.25); t.top = t.y + STUMP.h * ky; return { p: new THREE.Vector3(t.x, t.y, t.z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, t.rot, 0)), s: new THREE.Vector3(k, ky, k) } })
     scatter(g, lib.stump, list)
     stumps.forEach((t) => addCollider(t.x, t.z, t.D * 0.35, t.top))
     const sap = stumps.filter((q) => q.sapling), sapM = new THREE.InstancedMesh(coniferGeo('hemlock'), crownA.material, Math.max(1, sap.length))
