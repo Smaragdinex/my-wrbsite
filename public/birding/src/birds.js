@@ -286,7 +286,7 @@ const BUILD = {
   goshawk, woodowl,
   mandarin, spotbill, partridge, nuthatch, finchbill, minivet, pitta, grassowl,
   liocichla, whitebrow, bullfinch, barwing, islandthrush, tit, rustylt, whitethroat, hwamei, styan, scimitar, fulvetta, bamboo, flowing, bushwarbler, cupwing, shortwing,
-  scopsowl, mtscops, jacana, psnipe,
+  scopsowl, mtscops, jacana, psnipe, woodcock,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -308,7 +308,7 @@ export async function loadAnimalModels(extra = [], onProgress) {
   await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
@@ -471,6 +471,8 @@ function groundTripo(env, cfg) {
   root.add(inner)
   const w = new Walker({ radius: 0.7, speed: 0.16, turn: 1.0, ...cfg.walk })
   w.h = env.face(sgn(), rnd(0.3, 0.8))
+  // cfg.patrol：[[x,z],[x,z]]（鳥群座標）在兩點之間走過去、走回來（山鷸在步道上）；每次走到端點附近隨機一點
+  if (cfg.patrol) { let e = 0; w.pick = () => { e ^= 1; const [x, z] = cfg.patrol[e]; w.goal = new THREE.Vector2(x + rnd(-0.15, 0.15), z + rnd(-0.15, 0.15)); w.want = null; return true } }
   const acts = new Acts(cfg.acts, (n, a) => {
     if (n === 'walk' && !w.pick(0.25)) a.next('look')
     if (n === 'turn') w.want = w.h + a.sgn * rnd(0.6, 2)
@@ -637,7 +639,18 @@ function groundTripo(env, cfg) {
       r.turn('neck', LAT, -c.neck * 0.8); r.turn('neck', AX.y, c.yaw * 0.5 + c.sway)
       r.stretch('head', c.reach)
     }
-    r.turn('head', LAT, -c.neck * 0.3 - c.head); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
+    // cfg.rock：山鷸的「搖擺步」（照影片）：每跨一步整個身體前後搖一下——身體往前推、尾端翹起，再往後坐；
+    // 頭在空中幾乎不動（脖子反向補償），步子小而慢、一頓一頓；停下來時也偶爾輕輕搖
+    let rockNeck = 0
+    if (cfg.rock) {
+      c.rockA = damp(c.rockA ?? 0, c.amp > 0.2 ? 1 : 0.25 * ss(Math.sin(t * 0.7), 0.3, 1), 4, dt)
+      const rk = c.amp > 0.2 ? Math.sin(ph * 2) : Math.sin(t * 5.5), A = cfg.rock * c.rockA
+      inner.position.z = A * cfg.H * 0.32 * rk                               // 身體前後移
+      r.turn('body', LAT, -0.22 * A * rk)                                    // 往前推時身體前傾、尾端翹起
+      r.turn('tail', LAT, 0.25 * A * rk)
+      rockNeck = 0.3 * A * rk                                                // 脖子反向，頭留在原地
+    }
+    r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
     // 尾巴：前傾時翹起、走路時跟著步伐上下左右擺
     const flick = cfg.flick ? cfg.flick * Math.pow(Math.max(0, Math.sin(t * (cfg.flickF ?? 2.4))), 6) : 0
     r.turn('tail', LAT, 0.1 * c.lean + 0.06 * Math.sin(ph * 2 + 1) * c.amp + flick + (cfg.swim ? 0.3 : 0)); r.turn('tail', AX.y, 0.08 * Math.sin(ph) * c.amp)
@@ -1273,7 +1286,7 @@ function sibia(env) {
 
 /* ---------- 2026-11-09 補齊台灣特有種（17 種，ChatGPT 參考圖 → Tripo → rig-distance，點位在 tools/bird-points.json） ---------- */
 // 地上走的：H 顯示身高（公尺）、h0 模型高度（side-view 的 BOUNDS y）、size 小鳥跳著走
-const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name, H, h0, ...TRIPO, hop: o.hop ?? 0.035, flick: o.flick ?? 0.2, flickF: 1.6, bob: o.bob,
+const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name, H, h0, ...TRIPO, patrol: o.patrol, rock: o.rock, hop: o.hop ?? 0.035, flick: o.flick ?? 0.2, flickF: 1.6, bob: o.bob,
   walk: { radius: o.radius ?? 1.1, speed: o.speed ?? 0.2, turn: 3, ...(o.walk ?? {}) }, stride: o.stride ?? 0.08, swingT: 0.13, lift: 0.035, knee: [0.3, 0.6], focusY: H * 0.6,
   acts: o.acts ?? { walk: [4, 99, 99], peck: [3, 0.7, 1.3], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
 // （BUILD 在檔案前面就用到這些名字：要用 function 宣告才會提升，const 會在載入時出錯）
@@ -1304,6 +1317,8 @@ function mtscops(env) { return endemicPerch('mtscops-rig', 0.17, 6)(env) }
 // 2026-11-10 水雉：慢慢在荷葉上走（範圍小，不會走出荷葉外）；彩鷸：泥灘上低頭探找、尾巴上下擺
 function jacana(env) { return endemicGround('jacana-rig', 0.3, 0.724, { hop: 0, flick: 0.05, radius: 0.45, speed: 0.08, stride: 0.1 })(env) }
 function psnipe(env) { return endemicGround('psnipe-rig', 0.24, 0.717, { hop: 0, flick: 0.3, radius: 0.9, speed: 0.12, stride: 0.07 })(env) }
+// 2026-11-10 山鷸：步道上兩點之間走過去走回來，每一步身體前後搖（rock）、頭不動；偶爾停下來用長嘴往地上探
+function woodcock(env) { return endemicGround('woodcock-rig', 0.26, 0.573, { hop: 0, flick: 0.05, speed: 0.11, stride: 0.07, patrol: env.patrol, rock: 1, acts: { walk: [6, 99, 99], peck: [2, 1, 1.8], stand: [1.5, 0.8, 2], look: [1, 0.8, 1.5] } })(env) }
 function fulvetta(env) { return endemicPerch('fulvetta-rig', 0.18 / 0.618, 9)(env) }
 function flowing(env) { return endemicPerch('flowing-rig', 0.17 / 0.572, 10)(env) }
 
@@ -1436,6 +1451,7 @@ export function placeAnimal(def) {
   // 游泳的鳥：目的地和游過去的路線都要在開闊水面（不撞山、不撞池邊的石頭）；def.swimOK 吃溫室座標
   if (def.swimOK) env.swimOK = (lx, lz, p) => { for (let k = 1; k <= 8; k++) if (!def.swimOK(x + lerp(p.x, lx, k / 8), z + lerp(p.y, lz, k / 8))) return true; return false }
   // 地上走的鳥：鳥群座標 (lx, lz) 的地面高度，相對鳥群原點（ground 鳥的 obj 沒有旋轉）
+  if (def.patrol) env.patrol = def.patrol   // 在兩點之間來回走（山鷸）
   if (def.groundAt && def.perch === 'ground') env.groundAt = (lx, lz) => def.groundAt(x + lx, z + lz) - gy
   const target = V()
   let dist = 5.5, camH = 1.6

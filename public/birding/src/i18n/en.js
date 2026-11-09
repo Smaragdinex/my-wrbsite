@@ -714,6 +714,17 @@ export const BIRDS = {
    "Some farmers now grow crops without rat poison to help it survive."
   ]
  },
+ "woodcock": {
+  "name": "Eurasian Woodcock",
+  "where": "On the North Slope Spur Trail",
+  "intro": "A round-bodied, short-legged bird with a long straight bill; its rufous back is barred black and white like a dead leaf. Its eyes are set high and far back, giving almost all-round vision. It hides in woodland by day and comes out after dusk, probing the soil for earthworms.",
+  "facts": [
+   "Its walk is unique: with every step the whole body rocks back and forth while the head stays almost still, like a dance.",
+   "Some think the rocking makes earthworms move underfoot so they are easier to find.",
+   "In Taiwan it is an uncommon winter visitor, often seen on mountain roadsides and forest edges.",
+   "When flushed its wings whistle; it flies a short way and drops back into the forest."
+  ]
+ },
  "jacana": {
   "name": "Pheasant-tailed Jacana",
   "where": "Lotus Leaves on the West Side of the Mountain Lake",

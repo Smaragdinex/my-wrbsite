@@ -433,6 +433,18 @@ const ALL = [
       '有些農民改用友善的方式種田、不放毒鼠藥，幫助牠們留下來。',
     ],
   },
+  // 2026-11-10 山鷸：在北坡支線的步道上走過去走回來（搖擺步）
+  {
+    id: 'woodcock', spot: [152.17, 53.20], perch: 'ground', onTrail: true, patrol: [[2.05, -2.46], [-2.05, 2.46]], view: 60, dist: 3.2, camH: 1.0, lookY: 0.15,
+    name: "山鷸", sci: 'Scolopax rusticola', where: "北坡支線的步道上",
+    intro: "圓滾滾的身體、短腳、又長又直的嘴，背上紅褐色布滿黑白橫斑，像一片枯葉；眼睛長得很高很後面，幾乎看得到身後。白天躲在林子裡，黃昏後才出來，用長嘴插進泥土找蚯蚓。",
+    facts: [
+      "走路的樣子很特別：每跨一步，整個身體就前後搖一下，頭卻幾乎不動，像在跳舞。",
+      "有人認為這樣搖可以讓腳下的蚯蚓動起來，比較好找。",
+      "在台灣是冬候鳥，數量不多，常出現在山區路邊、林緣草叢。",
+      "被驚起時翅膀「咻咻」作響，飛一小段又鑽回林中。",
+    ],
+  },
   // 2026-11-10 山下湖的水鳥：水雉（荷葉上）、彩鷸（泥灘）
   {
     id: 'jacana', spot: [89.2, -46.9], perch: 'ground', water: ALP_POND.water, y: ALP_POND.water + 0.03, view: -110, dist: 2.6, camH: 1.0, lookY: 0.15,
@@ -674,6 +686,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
-  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe']
+  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))
