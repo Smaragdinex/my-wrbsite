@@ -1023,6 +1023,7 @@ function buildInterior(lib, avoid = []) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
             if (groundClear(avoid, x, z, 1.6)) continue   // 地上的鳥走動的地方、到鏡頭那條線：不長
+            if (bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8) continue   // 吊橋兩端橋面貼近地面：箭竹會從木板縫長出來（2026-11-09）
       if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R) continue   // 小木屋裡面不長
       if (alpineTrailDist(x, z) < 1.5 || alpineStreamDist(x, z) < 1.4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.6) continue
       const h = alpineHeight(x, z)
@@ -1103,7 +1104,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 160000 * AK && list.length < 90000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
-      if (groundClear(avoid, x, z, 1.8)) continue
+      if (groundClear(avoid, x, z, 1.8) || bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8) continue
       if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 0.2) continue
       if (alpineTrailDist(x, z) < 1.7 || alpineStreamDist(x, z) < 1.6 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.8) continue
       const patch = fbm2(x * 0.07, z * 0.07, 3)
