@@ -4,7 +4,7 @@
 // 樹冠縫隙有一束束斜射的陽光（跟著太陽方向和時間變，晚上沒有）。
 // 全部用 InstancedMesh：一份樹幹、一份樹冠、一份光束，記憶體只多一點（學校電腦）。
 import * as THREE from 'three'
-import { ALP_TRAIL, ALP_BRIDGE, ALP_POND, ALP_SPURS, CABIN, CAMP, inAlpine, alpineHeight, alpineTrailDist, alpineStreamDist, domeY, domeRho, addCollider } from './layout.js'
+import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, ALP_POND, ALP_SPURS, CABIN, CAMP, inAlpine, alpineHeight, alpineTrailDist, alpineStreamDist, domeY, domeRho, addCollider } from './layout.js'
 import { mulberry32 } from './noise.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { lodRegister } from './lod.js'
@@ -311,17 +311,21 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
   // 木棧道：巨木林這幾段步道（吊橋前、吊橋後）鋪上橫向木板，兩側每 2.4 公尺一根欄杆柱、上下兩道扶手
   {
     const planks = [], posts = []
+    // 2026-11-10 使用者：橋頭跟木棧道重疊（步道在橋頭轉彎，第一段棧道直接從橋面末端長出去，斜斜壓在橋面和混凝土基座上）
+    // → 換到吊橋的座標量：在橋面範圍（含兩端各 1.8 公尺的塔座、基座）、離中線 BRIDGE_DIM.hw + 1.6 以內的不鋪，棧道往後退到橋頭外面才開始
+    const bA = ALP_TRAIL[ALP_BRIDGE.a], bB = ALP_TRAIL[ALP_BRIDGE.a + 2], bL = Math.hypot(bB[0] - bA[0], bB[1] - bA[1]), bdx = (bB[0] - bA[0]) / bL, bdz = (bB[1] - bA[1]) / bL
+    const onBridgeHead = (x, z, pad) => { const rx = x - bA[0], rz = z - bA[1], al = rx * bdx + rz * bdz, lat = Math.abs(rx * bdz - rz * bdx); return al > -1.8 - pad && al < bL + 1.8 + pad && lat < BRIDGE_DIM.hw + 1.6 + pad }
     for (const i of [3, 4, 7, 8]) {
       const [ax, az] = ALP_TRAIL[i], [bx, bz] = ALP_TRAIL[i + 1], L = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / L, dz = (bz - az) / L
       for (let u = 0.2; u < L; u += 0.3) {
         const x = ax + dx * u, z = az + dz * u
-        if (bridgeDist(x, z) < 1.5) continue
+        if (bridgeDist(x, z) < 1.5 || onBridgeHead(x, z, 0)) continue
         const h = alpineHeight(x, z), slope = Math.atan2(alpineHeight(x + dx * 0.2, z + dz * 0.2) - alpineHeight(x - dx * 0.2, z - dz * 0.2), 0.4)
         planks.push({ x, z, y: h + 0.05 + (Math.sin(u * 7.1) * 0.006), yaw: Math.atan2(dx, dz), slope, k: 0.9 + Math.sin(u * 3.7 + i) * 0.1 })
       }
       for (let u = 1.2; u < L - 0.5; u += 2.4) for (const sd of [-1, 1]) {
         const x = ax + dx * u - dz * sd * 1.45, z = az + dz * u + dx * sd * 1.45
-        if (bridgeDist(x, z) < 2) continue
+        if (bridgeDist(x, z) < 2 || onBridgeHead(x, z, 0.3)) continue
         posts.push({ x, z, y: alpineHeight(x, z), seg: i, sd, u })
       }
     }
