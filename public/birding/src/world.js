@@ -17,10 +17,11 @@ import { loadAnimalModels, placeAnimal } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS } from './layout.js'
+import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
+import { buildOwlNest } from './owlnest.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
 export const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
@@ -99,7 +100,25 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
   // 山區（溫室東半邊）：直接蓋、一直畫。附屬館只剩海岸館（目前關著）
   // 山區的樹、草、岩石避開鳥站的地方和鏡頭那一側
-  const alpine = createAlpine({ scene, lib: plantLib, avoid: birds.filter((b) => inAlpine(...b.def.spot)).map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], cx: b.cam.x, cz: b.cam.z, ground: b.def.perch === 'ground' })) })
+  const alpAvoid = birds.filter((b) => inAlpine(...b.def.spot)).map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], cx: b.cam.x, cz: b.cam.z, ground: b.def.perch === 'ground' }))
+  // 草鴞的巢（2026-11-09）：在鳥後面 1 公尺、偏旁邊一點，巢口朝鏡頭；巢那一圈山區的箭竹不長（巢自己有一叢白茅）
+  const owlB = birds.find((b) => b.def.id === 'grassowl')
+  if (owlB && inAlpine(...owlB.def.spot)) {
+    const [ox, oz] = owlB.def.spot, tx = owlB.cam.x - ox, tz = owlB.cam.z - oz, tl = Math.hypot(tx, tz), ux = tx / tl, uz = tz / tl
+    const nx = ox - ux * 1.05 + uz * 0.55, nz = oz - uz * 1.05 - ux * 0.55
+    alpAvoid.push({ x: nx, z: nz, cx: owlB.cam.x, cz: owlB.cam.z, ground: true })
+    // 步道邊的木樁：山區步道旁 2.2～2.8 公尺、離鳥最近的那一點，木板朝步道
+    let sign = null, best = 1e9
+    for (let sx = ox - 30; sx <= ox + 30; sx += 0.5) for (let sz = oz - 30; sz <= oz + 30; sz += 0.5) {
+      const td = alpineTrailDist(sx, sz), k = Math.hypot(sx - ox, sz - oz)
+      if (td > 2.2 && td < 2.8 && inAlpine(sx, sz, 1) && k < best) { best = k; sign = [sx, sz] }
+    }
+    if (sign) { const [sx, sz] = sign, e = 0.2; sign.push(Math.atan2(alpineTrailDist(sx - e, sz) - alpineTrailDist(sx + e, sz), alpineTrailDist(sx, sz - e) - alpineTrailDist(sx, sz + e))) }
+    scene.add(buildOwlNest({ x: nx, z: nz, face: Math.atan2(ux, uz), groundAt: alpineHeight, owl: [ox, oz], sign }))
+    addCollider(nx, nz, 0.55, alpineHeight(nx, nz) + 0.6)
+    if (sign) addCollider(sign[0], sign[1], 0.12)
+  }
+  const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
   alpine.build()
   const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
   const birdStops = birds.map((b) => ({

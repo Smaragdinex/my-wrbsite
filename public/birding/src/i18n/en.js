@@ -673,7 +673,7 @@ export const BIRDS = {
  },
  "grassowl": {
   "name": "Eastern Grass Owl",
-  "where": "Grassland by the Entrance",
+  "where": "Cogon Meadow by the Forest Entrance",
   "intro": "An endangered owl in Taiwan. Its heart-shaped face is pale pinkish-white with a dark-brown rim and small dark eyes; the back and wings are chocolate brown with golden markings, and it has long legs. It lives not in forest but in open lowland cogon grassland.",
   "facts": [
    "By day it rests hidden in tall grass; at night it flies low over the grass hunting rodents.",

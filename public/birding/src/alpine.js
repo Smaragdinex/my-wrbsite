@@ -148,6 +148,10 @@ function nearBird(avoid, x, z, r, w) {
   }
   return false
 }
+// 地上的鳥：身邊 r 公尺、和鳥到鏡頭那條線 0.9 公尺內不長草（2026-11-09 草鴞前面一叢箭竹把整隻鳥擋掉）
+function groundClear(avoid, x, z, r) {
+  return nearBird(avoid.filter((b) => b.ground), x, z, r, 0.9)
+}
 // 到吊橋中線的距離（吊橋那段不算步道，alpineTrailDist 量不到）
 function bridgeDist(x, z) {
   const a = ALP_TRAIL[ALP_BRIDGE.a], b = ALP_TRAIL[ALP_BRIDGE.a + 2], dx = b[0] - a[0], dz = b[1] - a[1]
@@ -1018,7 +1022,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 140000 * AK && A.length / 4 < MAXI; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
-            if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.6)) continue   // 地上的鳥走動的地方：不長
+            if (groundClear(avoid, x, z, 1.6)) continue   // 地上的鳥走動的地方、到鏡頭那條線：不長
       if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R) continue   // 小木屋裡面不長
       if (alpineTrailDist(x, z) < 1.5 || alpineStreamDist(x, z) < 1.4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.6) continue
       const h = alpineHeight(x, z)
@@ -1099,7 +1103,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 160000 * AK && list.length < 90000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.955) continue
-      if (avoid.some((b) => b.ground && Math.hypot(x - b.x, z - b.z) < 1.8)) continue
+      if (groundClear(avoid, x, z, 1.8)) continue
       if (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 0.2) continue
       if (alpineTrailDist(x, z) < 1.7 || alpineStreamDist(x, z) < 1.6 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.8) continue
       const patch = fbm2(x * 0.07, z * 0.07, 3)

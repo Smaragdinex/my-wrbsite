@@ -423,8 +423,8 @@ const ALL = [
     ],
   },
   {
-    id: 'grassowl', spot: [-62, 20], perch: 'ground', dist: 3.2, camH: 0.9, lookY: 0.3,
-    name: '草鴞', sci: 'Tyto longimembris', where: '入口旁的草地',
+    id: 'grassowl', spot: [80, 12.5], view: 180, perch: 'ground', dist: 3.2, camH: 0.9, lookY: 0.3,
+    name: '草鴞', sci: 'Tyto longimembris', where: '山林入口旁的白茅草地',
     intro: '台灣瀕臨絕種的保育類貓頭鷹。心形的臉盤是淡粉米白色，外圈一道深褐色的邊，眼睛小小黑黑的；背和翅膀深巧克力褐色帶金黃色斑紋，腿很長。牠不住森林，而是住在低海拔開闊的白茅草原。',
     facts: [
       '白天躲在白茅草叢裡休息，晚上在草地上空低飛抓老鼠。',
