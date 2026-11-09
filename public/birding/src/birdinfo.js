@@ -433,12 +433,201 @@ const ALL = [
       '有些農民改用友善的方式種田、不放毒鼠藥，幫助牠們留下來。',
     ],
   },
+  // 2026-11-09 補齊台灣特有種（2026 年臺灣鳥類名錄 32 種特有種裡還缺的 17 種）
+  {
+    id: 'liocichla', spot: [120.2, 24.4], perch: 'ground', view: 151, dist: 2.4, camH: 1.0, lookY: 0.2,
+    name: "黃胸藪眉", sci: 'Liocichla steerii', where: "山林入口上坡的步道邊",
+    intro: "台灣特有種，中海拔山區最親人的鳥之一。灰色頭頂有細黑紋、眼睛前面一塊亮黃，胸腹黃色、背是橄欖綠，翅膀上有紅橙色和黃色的翼斑，尾巴末端黑白兩色。",
+    facts: [
+      "常在步道邊、遊客休息的地方出現，不太怕人，是拍鳥新手的好目標。",
+      "喜歡在低矮灌叢和地面翻找昆蟲、果實。",
+      "大雪山、阿里山的停車場附近常常看得到牠成群出現。",
+      "叫聲清亮多變，有時會模仿其他鳥。",
+    ],
+  },
+  {
+    id: 'whitebrow', spot: [238, -61.7], perch: 'ground', view: -27, dist: 2.2, camH: 1.0, lookY: 0.18,
+    name: "臺灣白眉林鴝", sci: 'Tarsiger formosanus', where: "南坡高處的林下",
+    intro: "台灣特有種（2023 年起獨立成種）。雄鳥全身深藍灰色，一條長長的白色眉線從嘴基延伸到腦後，喉和胸是橙棕色、腹部白色，腳很長。",
+    facts: [
+      "住在中高海拔陰暗潮濕的林下，常在地面或低枝跳躍。",
+      "會不停上下擺動尾巴。",
+      "以前和喜馬拉雅山區的白眉林鴝算同一種，現在確認是台灣特有種。",
+      "母鳥是橄欖褐色，眉線比較不明顯。",
+    ],
+  },
+  {
+    id: 'bullfinch', spot: [170.7, 2.7], perch: 'branch', dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: "灰鷽", sci: 'Pyrrhula owstoni', where: "山腰步道旁的樹上",
+    intro: "台灣特有種。圓胖的身材、短粗的黑嘴，嘴基和眼睛一圈黑色，身體灰色，翅膀和尾巴黑色帶藍紫光澤，腰是白的。雄鳥下腹帶一點淡橙紅。",
+    facts: [
+      "住在中高海拔森林，常成小群在樹上吃果實和嫩芽。",
+      "動作慢、很安靜，常常停在同一根枝上很久，很好拍。",
+      "叫聲是柔和的口哨聲。",
+      "2023 年起被確認為台灣特有種。",
+    ],
+  },
+  {
+    id: 'barwing', spot: [181.9, -75.8], perch: 'branch', dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: "紋翼畫眉", sci: 'Actinodura morrisoniana', where: "溪谷支線旁的樹上",
+    intro: "台灣特有種。整個頭是栗紅褐色、頭頂羽毛有點蓬，喉和胸有白色細縱紋，翅膀和長尾巴上有一條條細細的黑色橫紋，名字就是這樣來的。",
+    facts: [
+      "中高海拔森林很常見，常和其他小鳥混成一群在樹上找蟲。",
+      "會沿著長滿苔蘚的樹枝慢慢爬、翻找縫隙。",
+      "也愛吃花蜜和果實。",
+      "叫聲是一串清脆的「啾啾」聲。",
+    ],
+  },
+  {
+    id: 'islandthrush', spot: [199.6, -74.5], perch: 'ground', view: -35, dist: 2.6, camH: 1.0, lookY: 0.22,
+    name: "白頭鶇", sci: 'Turdus niveiceps', where: "溪谷支線的林下",
+    intro: "台灣特有種，非常稀有。雄鳥整個頭和喉純白，嘴和眼圈黃色，背、翅膀、尾巴是黑色，胸和兩脇橙棕色。",
+    facts: [
+      "數量很少，平常很難遇到，是許多鳥友的夢幻鳥。",
+      "每年冬春山桐子結果時，會到大雪山吃果實，吸引大批攝影師守候。",
+      "多半單獨或成對活動，很安靜、很警覺。",
+      "母鳥頭部是灰褐色，沒有雄鳥那麼白。",
+    ],
+  },
+  {
+    id: 'tit', spot: [8, -41], perch: 'branch', dist: 2.4, camH: 3.6, lookY: 3.4,
+    name: "赤腹山雀", sci: 'Sittiparus castaneoventris', where: "花園南邊步道旁的樹上",
+    intro: "台灣特有種。頭頂到後頸黑色，額頭和臉頰乳白，喉黑色，胸腹和兩脇是栗紅色，背和翅膀藍灰色。小巧圓潤、動作靈活。",
+    facts: [
+      "住在中低海拔闊葉林，常和其他小鳥混群。",
+      "會把種子夾在腳間、用嘴敲開來吃。",
+      "在樹洞裡築巢。",
+      "2023 年起被確認為台灣特有種，以前和日本的雜色山雀算同一種。",
+    ],
+  },
+  {
+    id: 'rustylt', spot: [137.7, 60.5], perch: 'ground', view: 41, dist: 2.6, camH: 1.1, lookY: 0.22,
+    name: "棕噪眉", sci: 'Pterorhinus poecilorhynchus', where: "北坡小路旁的林下",
+    intro: "台灣特有種。全身暖棕褐色，眼睛周圍一圈裸露的藍色皮膚非常醒目，腹部轉為灰色，尾巴長。",
+    facts: [
+      "住在中海拔森林底層和竹林，很害羞，常常只聽到聲音。",
+      "常三五隻成群在地面翻落葉找食物。",
+      "藍色的眼圈是辨認牠最好的特徵。",
+      "叫聲是一串響亮、有點吵的哨音。",
+    ],
+  },
+  {
+    id: 'whitethroat', spot: [26, 40], perch: 'ground', view: 195, dist: 2.6, camH: 1.1, lookY: 0.22,
+    name: "臺灣白喉噪眉", sci: 'Pterorhinus ruficeps', where: "花園北邊的林下",
+    intro: "台灣特有種，數量稀少。頭頂栗紅色，喉到上胸是一大片純白，臉頰暗褐，胸腹和兩脇是橙棕色，背和翅膀橄欖褐色。",
+    facts: [
+      "住在中低海拔闊葉林，常十幾隻成群、一邊走一邊大聲叫。",
+      "一群經過時非常熱鬧，常常整片樹林都是牠們的聲音。",
+      "數量不多，名錄上列為「稀有」。",
+      "雜食，吃昆蟲、蚯蚓和果實。",
+    ],
+  },
+  {
+    id: 'hwamei', spot: [44, 25], perch: 'ground', view: 195, dist: 2.6, camH: 1.1, lookY: 0.22,
+    name: "臺灣畫眉", sci: 'Garrulax taewanus', where: "花園東邊步道旁的草叢",
+    intro: "台灣特有種。全身橄欖黃褐色，頭、喉、胸有暗褐色細縱紋，和大陸畫眉不同的是「沒有」白色眉線。很會唱歌。",
+    facts: [
+      "住在低海拔灌叢、草叢和林緣，常躲在濃密的植物裡。",
+      "歌聲婉轉多變，以前常被抓來當籠鳥，現在是保育類。",
+      "最大的威脅是和人為放生的大陸畫眉雜交，讓純種的臺灣畫眉越來越少。",
+      "分辨方法：看眼睛後面有沒有白色眉線，沒有的才是臺灣畫眉。",
+    ],
+  },
+  {
+    id: 'styan', spot: [-43, 34], perch: 'branch', dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: "烏頭翁", sci: 'Pycnonotus taivanus', where: "花園西邊步道旁的樹上",
+    intro: "台灣特有種，只分布在台灣東部和恆春半島。長得很像白頭翁，但頭頂是黑色、沒有白色的後枕，嘴角下有一個小小的橙紅色斑點。",
+    facts: [
+      "只住在花東和恆春，和西部的白頭翁剛好分開。",
+      "近年白頭翁往東部擴散，兩種雜交是很受關注的保育問題。",
+      "喜歡停在電線和樹梢上，很容易看到。",
+      "吃果實和昆蟲，叫聲和白頭翁很像。",
+    ],
+  },
+  {
+    id: 'scimitar', spot: [-13, -44], perch: 'ground', view: 15, dist: 2.6, camH: 1.1, lookY: 0.2,
+    name: "大彎嘴", sci: 'Erythrogenys erythrocnemis', where: "花園南邊步道旁的林下",
+    intro: "台灣特有種。長長向下彎的灰白色嘴是最大特徵，頭和背暖褐色，臉頰灰色，白色的喉和胸上有一圈黑色縱斑像項鍊，兩脇橙棕色。",
+    facts: [
+      "住在低中海拔森林底層和灌叢，很少離開地面。",
+      "用彎彎的長嘴在落葉堆和泥土裡挖蟲吃。",
+      "常成對活動，會一唱一和地對叫。",
+      "比小彎嘴大很多，嘴也更粗。",
+    ],
+  },
+  {
+    id: 'fulvetta', spot: [166.6, -67.7], perch: 'branch', dist: 2.4, camH: 3.6, lookY: 3.4,
+    name: "繡眼畫眉", sci: 'Alcippe morrisonia', where: "南坡溪谷支線旁的樹上",
+    intro: "台灣特有種。灰色的頭配上一圈明顯的白眼圈，背和翅膀橄欖褐色，胸腹淡黃褐色。小小圓圓，非常常見。",
+    facts: [
+      "中低海拔森林數量最多的鳥之一，常常是混群的核心。",
+      "一群繡眼畫眉經過時，常帶著其他小鳥一起移動。",
+      "什麼都吃：昆蟲、果實、花蜜。",
+      "叫聲是一串輕快的「嘰嘰喳喳」。",
+    ],
+  },
+  {
+    id: 'bamboo', spot: [47, -29], perch: 'ground', view: 285, dist: 3.0, camH: 1.0, lookY: 0.15,
+    name: "臺灣竹雞", sci: 'Bambusicola sonorivox', where: "花園東南邊的草叢",
+    intro: "台灣特有種。臉和上胸藍灰色，臉頰和喉旁栗紅色，腹部橙棕色、兩脇有大大的黑褐色斑點，背有栗色和黑色斑紋。圓滾滾的，像一隻小雞。",
+    facts: [
+      "叫聲是大家都熟悉的「雞狗乖、雞狗乖」，又響又急。",
+      "常三五隻成群在林緣草叢裡邊走邊啄。",
+      "受驚時會先快跑，逼急了才飛。",
+      "2023 年起被確認為台灣特有種。",
+    ],
+  },
+  {
+    id: 'flowing', spot: [237.8, 24.8], perch: 'branch', dist: 2.2, camH: 3.6, lookY: 3.4,
+    name: "褐頭花翼", sci: 'Fulvetta formosana', where: "山頂步道旁的箭竹叢",
+    intro: "台灣特有種。頭頂暖褐色、兩側有暗色側冠紋，喉有細縱紋，翅膀上有一塊紅褐、黑和藍灰白相間的「花翼」，尾巴紅褐色。",
+    facts: [
+      "住在高海拔箭竹草原和針葉林下的灌叢，常成小群在竹叢裡穿梭。",
+      "動作很快，很少停在同一個地方，要眼明手快才拍得到。",
+      "2023 年起被確認為台灣特有種。",
+      "秋冬會和其他小鳥混群，到比較低的地方覓食。",
+    ],
+  },
+  {
+    id: 'bushwarbler', spot: [271.3, 39.4], perch: 'ground', view: -131, dist: 2.0, camH: 0.9, lookY: 0.15,
+    name: "臺灣叢樹鶯", sci: 'Locustella alishanensis', where: "高山步道旁的草坡",
+    intro: "台灣特有種。全身暖褐色，一條細細的淡色眉線，白色的喉上有小小的暗色點斑，尾下覆羽有淡色鱗紋，尾巴長而圓。",
+    facts: [
+      "住在高海拔的箭竹和草坡，非常會躲，幾乎只聽得到聲音。",
+      "叫聲很特別，像昆蟲一樣「嘶—嘶—」的機械聲。",
+      "能拍到清楚的照片算是很大的成就。",
+      "2023 年改名為臺灣叢樹鶯（以前叫褐色叢樹鶯）。",
+    ],
+  },
+  {
+    id: 'cupwing', spot: [203.6, -39.2], perch: 'ground', view: -118, dist: 1.9, camH: 0.8, lookY: 0.1,
+    name: "臺灣鷦眉", sci: 'Pnoepyga formosana', where: "溪邊的林下",
+    intro: "台灣特有種。身體圓滾滾像一顆小球，幾乎沒有尾巴。上半身暗褐色帶淡色小點，下半身白色、每片羽毛有黑褐色的邊，看起來像魚鱗。",
+    facts: [
+      "住在中海拔潮濕的林下和溪邊，貼著地面在苔蘚和落葉間鑽來鑽去。",
+      "體型非常小，又躲在陰暗處，很難發現。",
+      "叫聲是細細高高的一聲哨音，常常只聽到不見其鳥。",
+      "因為沒有尾巴，走起路來像一隻小老鼠。",
+    ],
+  },
+  {
+    id: 'shortwing', spot: [218.5, -66.6], perch: 'ground', view: 25, dist: 2.0, camH: 0.9, lookY: 0.15,
+    name: "小翼鶇", sci: 'Brachypteryx goodfellowi', where: "南坡步道旁的林下",
+    intro: "台灣特有種，非常難見到。雄鳥全身深藍灰色，眼睛上方有一條短短的白眉（常被蓋住），翅膀和尾巴都很短，腳很長。",
+    facts: [
+      "住在中高海拔濃密潮濕的林下，幾乎都在地面活動，非常隱密。",
+      "名字的由來就是牠短短的翅膀，不太愛飛。",
+      "歌聲是一串快速、清亮的旋律，常常只聞其聲。",
+      "能好好拍到牠，是很多鳥友多年的目標。",
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
 const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'barbet', 'kingfisher', 'waterhen', 'moorhen', 'nightheron', 'egret', 'spoonbill',
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
-  'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl']
+  'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
+  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

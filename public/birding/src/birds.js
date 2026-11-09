@@ -284,6 +284,7 @@ const BUILD = {
   flamecrest, bushrobin, rosefinch, yellowtit, laughingthrush, niltava, yuhina, sibia,
   goshawk, woodowl,
   mandarin, spotbill, partridge, nuthatch, finchbill, minivet, pitta, grassowl,
+  liocichla, whitebrow, bullfinch, barwing, islandthrush, tit, rustylt, whitethroat, hwamei, styan, scimitar, fulvetta, bamboo, flowing, bushwarbler, cupwing, shortwing,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -306,7 +307,8 @@ export async function loadAnimalModels(extra = [], onProgress) {
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
     'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig',
-    'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig'].map(load),
+    'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
+    'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
     ...extra.map((n) => load(n).catch(() => console.warn('[birds] 沒有模型', n)))])
 }
@@ -1262,6 +1264,37 @@ function woodowl(env) {
 function sibia(env) {
   return perchRigged(outer(env, -1.0), { name: 'sibia-rig', k: 0.56, ...TRIPO, foot: 0.004, drop: 0.05, beat: 7 })
 }
+
+
+/* ---------- 2026-11-09 補齊台灣特有種（17 種，ChatGPT 參考圖 → Tripo → rig-distance，點位在 tools/bird-points.json） ---------- */
+// 地上走的：H 顯示身高（公尺）、h0 模型高度（side-view 的 BOUNDS y）、size 小鳥跳著走
+const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name, H, h0, ...TRIPO, hop: o.hop ?? 0.035, flick: o.flick ?? 0.2, flickF: 1.6, bob: o.bob,
+  walk: { radius: o.radius ?? 1.1, speed: o.speed ?? 0.2, turn: 3, ...(o.walk ?? {}) }, stride: o.stride ?? 0.08, swingT: 0.13, lift: 0.035, knee: [0.3, 0.6], focusY: H * 0.6,
+  acts: o.acts ?? { walk: [4, 99, 99], peck: [3, 0.7, 1.3], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
+// （BUILD 在檔案前面就用到這些名字：要用 function 宣告才會提升，const 會在載入時出錯）
+// 停枝的：k 縮放（= 想要的身高 / 模型高度），腳底在模型 y≈0；腳趾輕輕勾住（grip 0.35）、腳底貼枝
+const endemicPerch = (name, k, beat = 8) => (env) => perchRigged(outer(env, -0.9), { name, k, ...TRIPO, foot: 0.004, drop: 0.045, beat, grip: 0.35, plant: true })
+function liocichla(env) { return endemicGround('liocichla-rig', 0.22, 0.652)(env) }
+function whitebrow(env) { return endemicGround('whitebrow-rig', 0.2, 0.727, { flick: 0.35 })(env) }
+function islandthrush(env) { return endemicGround('islandthrush-rig', 0.26, 0.705, { hop: 0.045, stride: 0.1 })(env) }
+function rustylt(env) { return endemicGround('rustylt-rig', 0.27, 0.598, { hop: 0.04, flick: 0.25 })(env) }
+function whitethroat(env) { return endemicGround('whitethroat-rig', 0.26, 0.62, { hop: 0.04, flick: 0.25 })(env) }
+function hwamei(env) { return endemicGround('hwamei-rig', 0.25, 0.628, { hop: 0.04 })(env) }
+function scimitar(env) { return endemicGround('scimitar-rig', 0.25, 0.573, { hop: 0.04, acts: { walk: [4, 99, 99], peck: [5, 0.9, 1.6], look: [2, 0.8, 1.8], stand: [1, 1, 2], turn: [1, 99, 99] } })(env) }
+function bamboo(env) {   // 臺灣竹雞：三五隻一起在林緣草叢邊走邊啄
+  return groundGroup(3, 0.34, (avoid) => groundTripo(env, { name: 'bamboo-rig', H: 0.24, h0: 0.699, ...TRIPO, bob: 0.02,
+    walk: { radius: 1.3, speed: 0.17, avoid }, stride: 0.08, swingT: 0.16, lift: 0.02, knee: [0.4, 0.8], focusY: 0.14,
+    acts: { walk: [4, 99, 99], peck: [4, 0.8, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }))
+}
+function bushwarbler(env) { return endemicGround('bushwarbler-rig', 0.17, 0.57, { hop: 0.03, radius: 0.8, flick: 0.3 })(env) }
+function cupwing(env) { return endemicGround('cupwing-rig', 0.15, 0.887, { hop: 0.03, radius: 0.7, flick: 0 })(env) }
+function shortwing(env) { return endemicGround('shortwing-rig', 0.17, 0.88, { hop: 0.035, radius: 0.8, flick: 0.3 })(env) }
+function bullfinch(env) { return endemicPerch('bullfinch-rig', 0.21 / 0.651, 7)(env) }
+function barwing(env) { return endemicPerch('barwing-rig', 0.22 / 0.65, 8)(env) }
+function tit(env) { return endemicPerch('tit-rig', 0.18 / 0.65, 9)(env) }
+function styan(env) { return endemicPerch('styan-rig', 0.22 / 0.637, 7)(env) }
+function fulvetta(env) { return endemicPerch('fulvetta-rig', 0.18 / 0.618, 9)(env) }
+function flowing(env) { return endemicPerch('flowing-rig', 0.17 / 0.572, 10)(env) }
 
 /* ---------- 停棲處 ---------- */
 const BARK = 0x6d5544

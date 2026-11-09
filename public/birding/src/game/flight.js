@@ -55,6 +55,24 @@ export const ESCAPE = {
   finchbill: { r: 6, fly: { speed: 8, hz: 11, style: 'bound', k: 0.368 } },
   minivet: { r: 7, fly: { speed: 8, hz: 10, style: 'flap', k: 0.294 } },
   waterhen: { r: 9, swim: 5, fly: { speed: 7, hz: 7, style: 'flap', k: 1.07 } },
+  // 2026-11-09 台灣特有種 17 種（k ≈ 停棲模型縮放 × 1.5）
+  liocichla: { r: 4, fly: { speed: 7, hz: 12, style: 'flap', k: 0.506 } },   // 很親人
+  whitebrow: { r: 5, fly: { speed: 7, hz: 13, style: 'flap', k: 0.413 } },
+  bullfinch: { r: 5, fly: { speed: 8, hz: 11, style: 'bound', k: 0.484 } },   // 動作慢、不太怕人
+  barwing: { r: 6, fly: { speed: 7, hz: 11, style: 'flap', k: 0.508 } },
+  islandthrush: { r: 10, fly: { speed: 10, hz: 9, style: 'flap', k: 0.553 } },   // 非常警覺
+  tit: { r: 6, fly: { speed: 7, hz: 14, style: 'bound', k: 0.415 } },
+  rustylt: { r: 8, run: 5, fly: { speed: 7, hz: 10, style: 'flap', k: 0.677 } },   // 害羞，先跑進灌叢
+  whitethroat: { r: 7, run: 5, fly: { speed: 7, hz: 10, style: 'flap', k: 0.629 } },
+  hwamei: { r: 8, run: 5, fly: { speed: 7, hz: 10, style: 'flap', k: 0.597 } },
+  styan: { r: 7, fly: { speed: 9, hz: 9, style: 'bound', k: 0.518 } },
+  scimitar: { r: 7, run: 5, fly: { speed: 7, hz: 10, style: 'flap', k: 0.654 } },
+  fulvetta: { r: 5, fly: { speed: 7, hz: 14, style: 'bound', k: 0.437 } },
+  bamboo: { r: 7, run: 6, fly: { speed: 8, hz: 14, style: 'glide', k: 0.515 } },   // 受驚先快跑，逼急了才飛
+  flowing: { r: 5, fly: { speed: 7, hz: 15, style: 'bound', k: 0.446 } },
+  bushwarbler: { r: 6, run: 4, fly: { speed: 6, hz: 14, style: 'flap', k: 0.447 } },   // 很會躲
+  cupwing: { r: 5, run: 4, fly: { speed: 5, hz: 16, style: 'flap', k: 0.254 } },
+  shortwing: { r: 7, run: 4, fly: { speed: 6, hz: 14, style: 'flap', k: 0.290 } },   // 翅膀短，不太愛飛
 }
 // 飛行模型（存在才用；還沒做好的先借翠鳥的飛行模型，大小照停棲模型的身高換算）
 const FLY_NAME = (id) => `${id}-fly-rig`

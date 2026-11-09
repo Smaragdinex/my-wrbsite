@@ -682,6 +682,193 @@ export const BIRDS = {
    "Some farmers now grow crops without rat poison to help it survive."
   ]
  },
+ "liocichla": {
+  "name": "Steere's Liocichla",
+  "where": "Trailside above the Forest Entrance",
+  "intro": "A Taiwan endemic and one of the friendliest birds of the mid-elevation mountains. Grey crown with fine black streaks, a bright yellow patch before the eye, yellow underparts, olive back, red-orange and yellow wing patches, and a black-and-white tail tip.",
+  "facts": [
+   "It often turns up beside trails and rest areas and is not shy—a great first target for new bird photographers.",
+   "It forages for insects and fruit in low shrubs and on the ground.",
+   "At Dasyueshan and Alishan it is often seen in groups near parking areas.",
+   "Its clear, varied song sometimes mimics other birds."
+  ]
+ },
+ "whitebrow": {
+  "name": "Taiwan Whitebrow",
+  "where": "Forest Floor on the High South Slope",
+  "intro": "A Taiwan endemic, recognised as a separate species since 2023. The male is deep slate-blue with a long white eyebrow running from the bill to the back of the head, an orange-buff throat and breast, white belly and long legs.",
+  "facts": [
+   "It lives on the dim, damp forest floor at mid to high elevations, hopping on the ground and low branches.",
+   "It keeps flicking its tail up and down.",
+   "It used to be lumped with the White-browed Bush Robin of the Himalayas; it is now confirmed as a Taiwan endemic.",
+   "The female is olive-brown with a fainter eyebrow."
+  ]
+ },
+ "bullfinch": {
+  "name": "Taiwan Bullfinch",
+  "where": "Trees beside the Mountainside Trail",
+  "intro": "A Taiwan endemic. Plump, with a short thick black bill; black around the bill base and eye, grey body, glossy blue-black wings and tail, and a white rump. The male has a faint orange-pink wash on the belly.",
+  "facts": [
+   "It lives in mid- to high-elevation forest, often in small flocks eating fruit and buds.",
+   "It moves slowly and quietly and often sits on one branch for a long time—easy to photograph.",
+   "Its call is a soft whistle.",
+   "It was confirmed as a Taiwan endemic in 2023."
+  ]
+ },
+ "barwing": {
+  "name": "Taiwan Barwing",
+  "where": "Trees by the Gorge Trail",
+  "intro": "A Taiwan endemic. The whole head is chestnut with a slightly fluffy crown, the throat and breast have fine white streaks, and the wings and long tail are crossed by thin black bars—hence the name.",
+  "facts": [
+   "It is common in mid- to high-elevation forest, often joining mixed flocks of small birds searching trees for insects.",
+   "It creeps slowly along mossy branches, probing crevices.",
+   "It also likes nectar and fruit.",
+   "Its call is a string of crisp chirps."
+  ]
+ },
+ "islandthrush": {
+  "name": "Taiwan Thrush",
+  "where": "Forest Floor on the Gorge Trail",
+  "intro": "A very rare Taiwan endemic. The male has a pure white head and throat, yellow bill and eye-ring, black back, wings and tail, and orange-buff breast and flanks.",
+  "facts": [
+   "There are very few of them and it is hard to find—a dream bird for many birders.",
+   "When Idesia trees fruit in winter and spring it comes to Dasyueshan to feed, drawing crowds of photographers.",
+   "It is usually alone or in pairs, quiet and wary.",
+   "The female has a grey-brown head, much less white than the male."
+  ]
+ },
+ "tit": {
+  "name": "Chestnut-bellied Tit",
+  "where": "Trees beside the Garden's South Path",
+  "intro": "A Taiwan endemic. Black crown and nape, creamy forehead and cheeks, black throat, chestnut breast, belly and flanks, and blue-grey back and wings. Small, round and nimble.",
+  "facts": [
+   "It lives in low- to mid-elevation broadleaf forest, often in mixed flocks.",
+   "It holds seeds between its feet and hammers them open with its bill.",
+   "It nests in tree holes.",
+   "It was confirmed as a Taiwan endemic in 2023; it used to be lumped with the Varied Tit of Japan."
+  ]
+ },
+ "rustylt": {
+  "name": "Rusty Laughingthrush",
+  "where": "Forest Floor beside the North Slope Path",
+  "intro": "A Taiwan endemic. Warm rufous-brown all over with a striking ring of bare blue skin around the eye, a greyer belly and a long tail.",
+  "facts": [
+   "It lives on the floor of mid-elevation forest and bamboo, and is so shy it is often only heard.",
+   "Small groups turn over leaf litter on the ground looking for food.",
+   "The blue eye-ring is the best clue to its identity.",
+   "Its call is a loud, rather noisy series of whistles."
+  ]
+ },
+ "whitethroat": {
+  "name": "Taiwan White-throated Laughingthrush",
+  "where": "Forest Floor north of the Garden",
+  "intro": "An uncommon Taiwan endemic. Chestnut crown, a big pure white throat and upper breast, dark brown cheeks, orange-buff underparts and flanks, and olive-brown back and wings.",
+  "facts": [
+   "It lives in low- to mid-elevation broadleaf forest, often in noisy flocks of a dozen or more.",
+   "When a flock passes, the whole forest fills with their calls.",
+   "It is uncommon and listed as \"rare\" in the checklist.",
+   "It is omnivorous, eating insects, earthworms and fruit."
+  ]
+ },
+ "hwamei": {
+  "name": "Taiwan Hwamei",
+  "where": "Thickets beside the Garden's East Path",
+  "intro": "A Taiwan endemic. Olive-buff all over with fine dark streaks on the head, throat and breast, and—unlike the Chinese Hwamei—no white eyebrow. A superb singer.",
+  "facts": [
+   "It lives in lowland scrub, grass and forest edges, usually hidden in dense vegetation.",
+   "Its rich, varied song made it a popular cage bird; it is now protected.",
+   "Its biggest threat is hybridising with released Chinese Hwameis, leaving fewer pure Taiwan Hwameis.",
+   "To tell them apart, look behind the eye: no white eyebrow means Taiwan Hwamei."
+  ]
+ },
+ "styan": {
+  "name": "Styan's Bulbul",
+  "where": "Trees beside the Garden's West Path",
+  "intro": "A Taiwan endemic found only in eastern Taiwan and the Hengchun Peninsula. It looks like the Light-vented Bulbul but has a black crown with no white nape, and a small orange-red spot below the bill.",
+  "facts": [
+   "It lives only in Hualien, Taitung and Hengchun, neatly separated from the Light-vented Bulbul of the west.",
+   "Light-vented Bulbuls have been spreading east, and hybridisation between the two is a major conservation concern.",
+   "It likes to perch on wires and treetops, so it is easy to see.",
+   "It eats fruit and insects; its calls sound much like the Light-vented Bulbul's."
+  ]
+ },
+ "scimitar": {
+  "name": "Black-necklaced Scimitar Babbler",
+  "where": "Forest Floor beside the Garden's South Path",
+  "intro": "A Taiwan endemic. Its long, down-curved pale grey bill is the giveaway; warm brown head and back, grey cheeks, a white throat and breast with a necklace of black streaks, and orange-buff flanks.",
+  "facts": [
+   "It lives on the floor of low- to mid-elevation forest and scrub and rarely leaves the ground.",
+   "It digs insects out of leaf litter and soil with its curved bill.",
+   "Pairs often sing back and forth in duet.",
+   "It is much bigger than the Taiwan Scimitar Babbler, with a thicker bill."
+  ]
+ },
+ "fulvetta": {
+  "name": "Grey-cheeked Fulvetta",
+  "where": "Trees beside the South Gorge Trail",
+  "intro": "A Taiwan endemic. A grey head with a bold white eye-ring, olive-brown back and wings, and pale buff underparts. Small, round and very common.",
+  "facts": [
+   "It is one of the most numerous birds of low- to mid-elevation forest and often the core of mixed flocks.",
+   "When a flock of fulvettas passes, other small birds often travel with it.",
+   "It eats almost anything: insects, fruit and nectar.",
+   "Its call is a lively string of chattering notes."
+  ]
+ },
+ "bamboo": {
+  "name": "Taiwan Bamboo Partridge",
+  "where": "Grass in the Garden's South-east",
+  "intro": "A Taiwan endemic. Blue-grey face and upper breast, chestnut cheeks and throat sides, orange-buff belly with big dark-brown spots on the flanks, and a chestnut-and-black patterned back. Round, like a little chicken.",
+  "facts": [
+   "Its loud, urgent \"ji-gou-guai, ji-gou-guai\" call is familiar to everyone in Taiwan.",
+   "Small groups walk and peck along grassy forest edges.",
+   "When startled it runs first and only flies if pressed.",
+   "It was confirmed as a Taiwan endemic in 2023."
+  ]
+ },
+ "flowing": {
+  "name": "Taiwan Fulvetta",
+  "where": "Bamboo Grass beside the Summit Trail",
+  "intro": "A Taiwan endemic. Warm brown crown with dark side stripes, a finely streaked throat, a wing panel of rufous, black and blue-white (the \"flower wing\") and a rufous tail.",
+  "facts": [
+   "It lives in high-elevation bamboo grassland and the shrubs under conifers, moving through the bamboo in small flocks.",
+   "It is fast and rarely stays put—you need quick reflexes to photograph it.",
+   "It was confirmed as a Taiwan endemic in 2023.",
+   "In autumn and winter it joins mixed flocks and feeds lower down."
+  ]
+ },
+ "bushwarbler": {
+  "name": "Taiwan Bush Warbler",
+  "where": "Grassy Slope beside the High Trail",
+  "intro": "A Taiwan endemic. Warm brown all over with a thin pale eyebrow, a white throat dotted with small dark spots, scaly-tipped undertail coverts and a long, rounded tail.",
+  "facts": [
+   "It lives in high-elevation bamboo and grassy slopes and is a master skulker—usually only heard.",
+   "Its song is unusual: a mechanical, insect-like \"zzzt—zzzt\".",
+   "Getting a clear photo is a real achievement.",
+   "It was renamed Taiwan Bush Warbler in 2023."
+  ]
+ },
+ "cupwing": {
+  "name": "Taiwan Cupwing",
+  "where": "Forest Floor by the Stream",
+  "intro": "A Taiwan endemic. A round little ball of a bird with almost no tail. Dark brown above with small pale dots; white below with every feather edged dark brown, giving a scaly look.",
+  "facts": [
+   "It lives on damp forest floors and stream banks at mid elevation, creeping through moss and leaf litter.",
+   "It is tiny and keeps to dark places, so it is very hard to spot.",
+   "Its song is a single thin, high whistle—often heard but not seen.",
+   "With no tail to speak of, it scurries along like a little mouse."
+  ]
+ },
+ "shortwing": {
+  "name": "Taiwan Shortwing",
+  "where": "Forest Floor beside the South Slope Trail",
+  "intro": "A very elusive Taiwan endemic. The male is deep slate-blue with a short white eyebrow above the eye (often hidden), very short wings and tail, and long legs.",
+  "facts": [
+   "It lives on the dense, damp floor of mid- to high-elevation forest, almost always on the ground and very secretive.",
+   "It is named for its short wings—it does not like to fly much.",
+   "Its song is a fast, bright tune, usually heard rather than seen.",
+   "A good photo of it is a goal many birders chase for years."
+  ]
+ },
  "woodowl": {
  "name": "Brown Wood Owl",
  "where": "Forest by the Gorge",
