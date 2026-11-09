@@ -15,8 +15,10 @@ const { clamp, lerp, smoothstep: ss, randFloat: rnd } = THREE.MathUtils
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 // 山鷸搖擺的不對稱曲線（2026-11-10 ChatGPT 建議）：0.2 到最前、0.35 前面稍停、0.65 到最後、0.8 開始回來；週期性 Hermite，速度連續
 const ROCK_KEYS = [[0, 0], [0.2, 1], [0.35, 0.75], [0.6, -1], [0.8, -0.35], [1, 0]]   // 第三輪：往前推、往後收的節奏更分明
-function rockCurve(t) {
-  const p = ((t % 1) + 1) % 1, K = ROCK_KEYS, n = K.length
+// 頭的節奏（ChatGPT 第五輪：停一下→往前探 4 mm→停→收回，像縮小版的鴿子）
+const HEAD_KEYS = [[0, 0], [0.15, 0], [0.4, 1], [0.65, 1], [0.9, 0], [1, 0]]
+function rockCurve(t, K = ROCK_KEYS) {
+  const p = ((t % 1) + 1) % 1, n = K.length
   for (let i = 0; i < n - 1; i++) {
     const [a, va] = K[i], [b, vb] = K[i + 1]
     if (p < a || p > b) continue
@@ -682,7 +684,8 @@ function groundTripo(env, cfg) {
       inner.position.y = A * cfg.H * 0.0077 * rockCurve(rp - 0.25)                    // 往後坐時身體微微下沉
       r.turn('body', LAT, -0.025 * A * rk); r.turn('chest', LAT, -0.015 * A * rockCurve(rp - 0.04))   // 往前推時身體前傾、尾端翹起（兩節分攤，背部彎得比較順）
       r.turn('tail', LAT, 0.035 * A * rockCurve(rp - 0.08))   // 尾巴跟著身體、慢一點點
-      rockNeck = 0.035 * A * rk                                               // 頭的角度補回來，保持水平
+      c.hph = rp
+      rockNeck = 0.035 * A * rk - 0.024 * A * (rockCurve(rp - 0.13, HEAD_KEYS) - 0.5)   // 頭往前探到底時嘴尖微微往下點（±0.7°，比位移慢 0.05 週期）                                               // 頭的角度補回來，保持水平
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
     // 尾巴：前傾時翹起、走路時跟著步伐上下左右擺
@@ -721,8 +724,9 @@ function groundTripo(env, cfg) {
     if (headAnchor) {
       const want = root.localToWorld(headAnchor.clone()); want.y -= liftY
       if (!c.hw || c.hw.distanceTo(want) > 0.06) c.hw = want.clone()
-      else c.hw.lerp(want, 1 - Math.exp(-20 * dt))
-      const hNow = r.bones.head.getWorldPosition(V()), hTgt = hNow.clone().lerp(c.hw, 0.9)   // 穩 90%，頭還是跟身體有一點點連動，不會像浮在空中
+      else c.hw.lerp(want, 1 - Math.exp(-24 * dt))
+      const hNow = r.bones.head.getWorldPosition(V()), hTgt = hNow.clone().lerp(c.hw, 0.78)   // 穩 78%
+      hTgt.addScaledVector(V(Math.sin(w.h), 0, Math.cos(w.h)), (0.003 + 0.001 * (c.mv ?? 1)) * c.rockA * rockCurve((c.hph ?? 0) - 0.08, HEAD_KEYS))   // 頭自己的前探節奏（停步時 3 mm、走路 4 mm），頭還是跟身體有一點點連動，不會像浮在空中
       for (const [b, f] of [['neck', 1 / 3], ['neck2', 1 / 2], ['head', 1]]) {   // 位移分三段吃：脖子根、脖子中段、頭，脖子伸縮才平順
         const bn = r.bones[b] ?? r.bones.head
         bn.parent.updateWorldMatrix(true, false)
