@@ -242,7 +242,7 @@ function softDisc() {
   return (discTex = new THREE.CanvasTexture(c))
 }
 /* ---------- 右頁的小場景（一種鳥一個，打開過就留著） ---------- */
-const SIL = new THREE.MeshBasicMaterial({ color: 0x2b2722 })
+const SIL = new THREE.MeshBasicMaterial({ color: 0x2b2722, side: THREE.DoubleSide })   // 鳥身上零星反的小碎片：剪影也要畫兩面（不然有白點）
 function makeDiorama(def) {
   const sc = new THREE.Scene()
   sc.add(new THREE.HemisphereLight(0xf6f2e8, 0x8a7c66, 1.7))

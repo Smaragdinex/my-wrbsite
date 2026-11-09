@@ -349,29 +349,92 @@ export function rigged(name, { straight = {} } = {}) {
 function fixWinding(g) {
   const p = g.attributes.position, n = g.attributes.normal, ix = g.index
   if (!p || !n || !ix) return
-  const a = ix.array
-  let e1x, e1y, e1z, e2x, e2y, e2z
-  for (let i = 0; i < a.length; i += 3) {
-    const i0 = a[i], i1 = a[i + 1], i2 = a[i + 2]
-    e1x = p.getX(i1) - p.getX(i0); e1y = p.getY(i1) - p.getY(i0); e1z = p.getZ(i1) - p.getZ(i0)
-    e2x = p.getX(i2) - p.getX(i0); e2y = p.getY(i2) - p.getY(i0); e2z = p.getZ(i2) - p.getZ(i0)
+  const a = ix.array, T = a.length / 3
+  // 每個面「照頂點法線看是不是反的」的分數（>0 正、<0 反）
+  const vote = new Float32Array(T)
+  for (let t = 0; t < T; t++) {
+    const i0 = a[t * 3], i1 = a[t * 3 + 1], i2 = a[t * 3 + 2]
+    const e1x = p.getX(i1) - p.getX(i0), e1y = p.getY(i1) - p.getY(i0), e1z = p.getZ(i1) - p.getZ(i0)
+    const e2x = p.getX(i2) - p.getX(i0), e2y = p.getY(i2) - p.getY(i0), e2z = p.getZ(i2) - p.getZ(i0)
     const fx = e1y * e2z - e1z * e2y, fy = e1z * e2x - e1x * e2z, fz = e1x * e2y - e1y * e2x
     const nx = n.getX(i0) + n.getX(i1) + n.getX(i2), ny = n.getY(i0) + n.getY(i1) + n.getY(i2), nz = n.getZ(i0) + n.getZ(i1) + n.getZ(i2)
-    if (fx * nx + fy * ny + fz * nz < 0) { a[i + 1] = i2; a[i + 2] = i1 }
+    vote[t] = Math.sign(fx * nx + fy * ny + fz * nz) * Math.hypot(fx, fy, fz)   // 面積加權
+  }
+  // 2026-11-09 第二版（使用者又回報 4、17、18 號破圖）：只看頂點法線不夠——翻掉的面附近，頂點法線也跟著歪，
+  // 那幾片照法線判斷還是錯的。改成看網格的連接：相鄰兩個面共用的邊，方向要相反才是一致的；
+  // 從一個面開始往外擴散，把整塊連在一起的面轉成同一個方向，最後整塊照多數面的法線投票決定朝外還是朝內。
+  // 頂點在 UV 接縫會拆開，所以先照位置把同一點併起來再找相鄰
+  const vid = new Int32Array(p.count), pos = new Map()
+  for (let i = 0; i < p.count; i++) {
+    const k = Math.round(p.getX(i) * 1e5) + ',' + Math.round(p.getY(i) * 1e5) + ',' + Math.round(p.getZ(i) * 1e5)
+    let v = pos.get(k); if (v === undefined) { v = pos.size; pos.set(k, v) } vid[i] = v
+  }
+  const NV = pos.size, edges = new Map()   // 無向邊 → [面, 方向(+1: 小→大)]…
+  for (let t = 0; t < T; t++) for (let e = 0; e < 3; e++) {
+    const u = vid[a[t * 3 + e]], w = vid[a[t * 3 + (e + 1) % 3]]
+    if (u === w) continue
+    const key = u < w ? u * NV + w : w * NV + u
+    let l = edges.get(key); if (!l) edges.set(key, l = [])
+    l.push(t, u < w ? 1 : -1)
+  }
+  const nb = Array.from({ length: T }, () => [])   // 相鄰面：[面, 同向(1)/反向(0)]
+  for (const l of edges.values()) if (l.length === 4) { nb[l[0]].push(l[2], l[1] === l[3] ? 1 : 0); nb[l[2]].push(l[0], l[1] === l[3] ? 1 : 0) }
+  if (!g.boundingBox) g.computeBoundingBox()
+  const C = g.boundingBox.getCenter(new THREE.Vector3())
+  const flip = new Int8Array(T), seen = new Uint8Array(T), comp = []
+  for (let s = 0; s < T; s++) {
+    if (seen[s]) continue
+    comp.length = 0; seen[s] = 1; flip[s] = 0; comp.push(s)
+    for (let q = 0; q < comp.length; q++) {
+      const t = comp[q], L2 = nb[t]
+      for (let j = 0; j < L2.length; j += 2) {
+        const o = L2[j]; if (seen[o]) continue
+        seen[o] = 1; flip[o] = flip[t] ^ L2[j + 1]; comp.push(o)   // 共用的邊同向＝其中一個是反的
+      }
+    }
+    let sum = 0
+    if (comp.length > T * 0.05) for (const t of comp) sum += flip[t] ? -vote[t] : vote[t]
+    else {
+      // 小碎片（減面切出來、跟身體只靠一個點相連）：連頂點法線都跟著反了，投票會投錯。
+      // 改用形狀判斷：面要朝「離開身體中心」的方向（鳥身體是一團，翅膀尾巴也大致朝外）
+      for (const t of comp) {
+        const i0 = a[t * 3], i1 = a[t * 3 + 1], i2 = a[t * 3 + 2]
+        const e1x = p.getX(i1) - p.getX(i0), e1y = p.getY(i1) - p.getY(i0), e1z = p.getZ(i1) - p.getZ(i0)
+        const e2x = p.getX(i2) - p.getX(i0), e2y = p.getY(i2) - p.getY(i0), e2z = p.getZ(i2) - p.getZ(i0)
+        const fx = e1y * e2z - e1z * e2y, fy = e1z * e2x - e1x * e2z, fz = e1x * e2y - e1y * e2x
+        const d = fx * (p.getX(i0) - C.x) + fy * (p.getY(i0) - C.y) + fz * (p.getZ(i0) - C.z)
+        sum += flip[t] ? -d : d
+      }
+    }
+    const all = sum < 0 ? 1 : 0
+    for (const t of comp) if (flip[t] ^ all) { const x = a[t * 3 + 1]; a[t * 3 + 1] = a[t * 3 + 2]; a[t * 3 + 2] = x }
   }
   ix.needsUpdate = true
   // 有些頂點的法線本身就是反的（約 1.5%）：打光時那一小塊亮暗顛倒，胸口出現亮白鋸齒。
   // 用轉好的面重算一次法線，只換掉跟原本方向相反的那些頂點（其他保留原本平滑的法線）
   // 早期那三隻（樹鵲、綠繡眼、白頭翁）約 10% 的法線歪了 60° 以上（只換反向的還留下白色碎片）：這種模型整個用重算的法線
-  const keep = n.clone()
-  g.computeVertexNormals()
-  const nn = g.attributes.normal
+  // 2026-11-09：重算的法線改成「同一個位置的頂點併起來算」（UV 接縫兩邊一樣平滑，不會出現硬邊），
+  // 原本的法線跟它差超過約 50° 就換掉（以前只換反向的，歪一半的還是會在肚子上亮出白色碎點）
+  const keep = n.clone(), acc = new Float32Array(NV * 3)
+  for (let t = 0; t < T; t++) {
+    const i0 = a[t * 3], i1 = a[t * 3 + 1], i2 = a[t * 3 + 2]
+    const e1x = p.getX(i1) - p.getX(i0), e1y = p.getY(i1) - p.getY(i0), e1z = p.getZ(i1) - p.getZ(i0)
+    const e2x = p.getX(i2) - p.getX(i0), e2y = p.getY(i2) - p.getY(i0), e2z = p.getZ(i2) - p.getZ(i0)
+    const fx = e1y * e2z - e1z * e2y, fy = e1z * e2x - e1x * e2z, fz = e1x * e2y - e1y * e2x
+    for (const i of [i0, i1, i2]) { const v = vid[i] * 3; acc[v] += fx; acc[v + 1] += fy; acc[v + 2] += fz }
+  }
+  const nn = n
   let off = 0
-  for (let i = 0; i < nn.count; i++) if (keep.getX(i) * nn.getX(i) + keep.getY(i) * nn.getY(i) + keep.getZ(i) * nn.getZ(i) < 0.5) off++
-  if (off / nn.count < 0.08) {
-    for (let i = 0; i < nn.count; i++) {
-      if (keep.getX(i) * nn.getX(i) + keep.getY(i) * nn.getY(i) + keep.getZ(i) * nn.getZ(i) >= 0) nn.setXYZ(i, keep.getX(i), keep.getY(i), keep.getZ(i))
-    }
+  const W = new Float32Array(p.count * 3)
+  for (let i = 0; i < p.count; i++) {
+    const v = vid[i] * 3, l = Math.hypot(acc[v], acc[v + 1], acc[v + 2]) || 1
+    W[i * 3] = acc[v] / l; W[i * 3 + 1] = acc[v + 1] / l; W[i * 3 + 2] = acc[v + 2] / l
+    if (keep.getX(i) * W[i * 3] + keep.getY(i) * W[i * 3 + 1] + keep.getZ(i) * W[i * 3 + 2] < 0.5) off++
+  }
+  const all = off / p.count >= 0.08   // 早期那三隻（樹鵲、綠繡眼、白頭翁）歪的很多：整個用重算的
+  for (let i = 0; i < p.count; i++) {
+    const d = keep.getX(i) * W[i * 3] + keep.getY(i) * W[i * 3 + 1] + keep.getZ(i) * W[i * 3 + 2]
+    if (all || d < 0.65) nn.setXYZ(i, W[i * 3], W[i * 3 + 1], W[i * 3 + 2])
   }
   nn.needsUpdate = true
 }
@@ -1074,8 +1137,9 @@ function mikado(env) {
     acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.5, 3], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } })
 }
 // 台灣藍鵲、紅嘴黑鵯：兩隻在同一根枝上
+// 2026-11-09 使用者：20 號腳趾收成拳頭、不像抓樹枝 → grip 1.25 改 0.35：腳趾張開平貼枝上，趾尖勾過枝條前緣
 function bluemagpie(env) {
-  return perchGroup(2, 0.7, -0.9, (blocked) => perchRigged(outer(env, -1.1), { name: 'bluemagpie-rig', k: 1.0, ...TRIPO, foot: 0.145, drop: 0.06, beat: 5, grip: 1.25, rich: true, plant: true,
+  return perchGroup(2, 0.7, -0.9, (blocked) => perchRigged(outer(env, -1.1), { name: 'bluemagpie-rig', k: 1.0, ...TRIPO, foot: 0.145, drop: 0.06, beat: 5, grip: 0.35, rich: true, plant: true,
     hopper: { blocked, hop: [0.25, 0.6] } }))
 }
 function blackbulbul(env) {
