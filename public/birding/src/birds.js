@@ -1296,7 +1296,7 @@ function mandarin(env) {
     acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }) })
 }
 function spotbill(env) {
-  return groundGroup(5, 0.9, (avoid) => groundTripo(env, { name: 'spotbill-rig', H: 0.42, h0: 0.716, ...TRIPO, swim: true, bill: 0.13, bob: 0.03,
+  return groundGroup(2, 0.9, (avoid) => groundTripo(env, { name: 'spotbill-rig', H: 0.42, h0: 0.716, ...TRIPO, swim: true, bill: 0.13, bob: 0.03,
     walk: { radius: 3.6, speed: 0.14, avoid: swimAvoid(env, avoid) }, stride: 0.11, swingT: 0.35, lift: 0, knee: [0.7, 1.3], focusY: 0.28,
     acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } }))
 }

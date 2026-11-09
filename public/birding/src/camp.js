@@ -96,7 +96,7 @@ export function buildCamp(scene) {
 
   // ---------- 三頂帳篷 ----------
   // 三角帳：兩片斜的布面（中間微微下凹）、前後三角形（前面門簾捲起一半露出黑色的內帳門）、底布、兩根營柱、營繩＋營釘
-  const tentCols = [0xd9692a, 0x4f7d48, 0x3e6a96]
+  const tentCols = [0xd9692a, 0x4f7d48, 0x3e6a96, 0xc9a33a, 0x9a3b3b]
   const ropeM = new THREE.MeshStandardMaterial({ color: 0xd8cfb8, roughness: 1 })
   const pegM = new THREE.MeshStandardMaterial({ color: 0xb9bcc0, roughness: 0.4, metalness: 0.7 })
   const dark = new THREE.MeshStandardMaterial({ color: 0x15130f, roughness: 1, side: THREE.DoubleSide })
@@ -153,23 +153,23 @@ export function buildCamp(scene) {
   const ysp = ALP_SPURS.find((q) => q.name === 'yose'), yo = ysp ? ysp.pts[ysp.pts.length - 2] : null
   const outA = yo ? Math.atan2(yo[0] - cx, yo[1] - cz) : inA + Math.PI
   const arcA = ((outA - inA) % TAU + TAU) % TAU, arcs = [[inA, arcA], [outA, TAU - arcA]].sort((p, q) => q[1] - p[1])
-  const nBig = arcs[1][1] > 2.2 ? 2 : 3, tentAng = []
-  for (let k = 1; k <= nBig; k++) tentAng.push(arcs[0][0] + arcs[0][1] * k / (nBig + 1))
-  if (nBig < 3) tentAng.push(arcs[1][0] + arcs[1][1] / 2)
-  const R = 5.4
-  for (let i = 0; i < 3; i++) {
-    const ang = tentAng[i]
+  // 2026-11-10 使用者：帳篷區再大一點 → 空地 R 6.8→10、帳篷離火 5.4→7.6 m、依兩段弧長各自塞得下幾頂就放幾頂（最多 5 頂）
+  const R = 7.6, tentAng = []
+  for (const [a0, len] of arcs) { const n = Math.max(0, Math.min(3, Math.floor(len * R / 5.4) - 1)); for (let k = 1; k <= n; k++) tentAng.push([a0 + len * k / (n + 1), a0]) }
+  tentAng.splice(5)
+  tentAng.forEach(([ang], i) => {
     const px = cx + Math.sin(ang) * R, pz = cz + Math.cos(ang) * R
-    const tt = tent(tentCols[i], 3.6, 2.9, 2.0); tt.position.set(px, gy(px, pz), pz)   // 2026-11-10 使用者：帳篷大一點（2.6×2.1×1.45 → 3.6×2.9×2.0）
+    const tt = tent(tentCols[i % tentCols.length], 3.6, 2.9, 2.0); tt.position.set(px, gy(px, pz), pz)   // 2026-11-10 使用者：帳篷大一點（2.6×2.1×1.45 → 3.6×2.9×2.0）
     tt.rotation.y = Math.atan2(cx - px, cz - pz)   // 帳篷的 +z（門）朝營火
     g.add(tt)
     addCollider(px, pz, 1.7, gy(px, pz) + 2)
-  }
-  // ---------- 原木長椅（帳篷之間、圍著火）＋ 樹墩、營燈、背包、柴堆 ----------
+  })
+  // ---------- 原木長椅（同一段弧上相鄰兩頂帳篷之間、圍著火）＋ 樹墩、營燈、背包、柴堆 ----------
   const seats = []
-  for (let i = 0; i < 2; i++) {
-    const ba = (tentAng[i] + tentAng[i + 1]) / 2 + (Math.abs(tentAng[i + 1] - tentAng[i]) > Math.PI ? Math.PI : 0)   // 兩頂帳篷之間
-    const bx = cx + Math.sin(ba) * 2.2, bz = cz + Math.cos(ba) * 2.2, by = gy(bx, bz)
+  for (let i = 0; i + 1 < tentAng.length; i++) {
+    if (tentAng[i][1] !== tentAng[i + 1][1]) continue
+    const ba = (tentAng[i][0] + tentAng[i + 1][0]) / 2
+    const bx = cx + Math.sin(ba) * 2.6, bz = cz + Math.cos(ba) * 2.6, by = gy(bx, bz)
     const tx = Math.cos(ba), tz = -Math.sin(ba)   // 長椅沿著圓周方向
     g.add(between(V(bx - tx * 0.75, by + 0.2, bz - tz * 0.75), V(bx + tx * 0.75, by + 0.2, bz + tz * 0.75), 0.2))
     addCollider(bx, bz, 0.5, by + 0.4)
