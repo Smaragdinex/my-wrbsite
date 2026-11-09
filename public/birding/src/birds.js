@@ -1000,12 +1000,17 @@ function perchRigged(env, cfg) {
     if (sole && !dive && env.branch.gap) {
       // 跳的時候不貼（在空中），落地後馬上貼回去
       root.updateMatrixWorld(true); sole.mesh.skeleton.update()
-      let g = Infinity
+      // 只看踩在枝條上半部的腳掌、腳趾（離正上方 0.6 個半徑內）：勾過枝條前後緣的趾尖本來就該包住樹皮往下，
+      // 拿它們來算會把整隻鳥頂高（2026-11-09 藍鵲腳趾改張開後整隻浮在枝上 5 公分）
+      let g = Infinity, g2 = Infinity
       for (const i of sole.idx) {
         sole.mesh.getVertexPosition(i, _sv); sole.mesh.localToWorld(_sv); root.parent.worldToLocal(_sv)
-        g = Math.min(g, env.branch.gap(_sv.x, _sv.y, _sv.z))
+        const gg = env.branch.gap(_sv.x, _sv.y, _sv.z)
+        if (!env.branch.side || env.branch.side(_sv.x, _sv.z) < 0.6) g = Math.min(g, gg); else g2 = Math.min(g2, gg)
       }
-      if (!hp.hopping) plantY = clamp(plantY - (g + 0.003) * Math.min(1, dt * 12), -0.08, 0.05)
+      if (g === Infinity) g = g2
+      // g 是「還沒加 plantY 之前」量的，所以 plantY 要直接追 -g（以前寫成每格累加 -g，只要有一點點陷進去就一路加到上限 5 公分，整隻浮起來）
+      if (!hp.hopping) plantY += (clamp(-(g + 0.003), -0.08, 0.05) - plantY) * Math.min(1, dt * 12)
       lift.position.y += plantY
     }
     if (dive) { root.position.copy(dive.p); root.rotation.y = dive.head; lift.rotation.x = dive.pitch }
@@ -1379,7 +1384,8 @@ export function placeAnimal(def) {
     env.branch = { min: -len * 0.8, max: -0.18,   // max：2026-11-09 以前 0.15 超出枝條末端，鳥站在葉團上、腳踩空（藍鵲）
       top: (s) => limb.center(s + len) + limb.radius(s + len) - y, z: (s) => limb.z(s + len),
       // 點（obj 座標）到枝條表面的距離：正的是浮在外面、負的是陷進去
-      gap: (px, py, pz) => { const x = px + len; return Math.hypot(py - (limb.center(x) - y), pz - limb.z(x)) - limb.radius(x) } }
+      gap: (px, py, pz) => { const x = px + len; return Math.hypot(py - (limb.center(x) - y), pz - limb.z(x)) - limb.radius(x) },
+      side: (px, pz) => { const x = px + len; return Math.abs(pz - limb.z(x)) / limb.radius(x) } }   // 離枝條正上方多遠（半徑的倍數）
     env.waterLocal = waterY - gy - y   // 水面在 obj 座標的高度（翠鳥俯衝用）
     target.set(x, 3.6, z)
     dist = 5; camH = 3.4
