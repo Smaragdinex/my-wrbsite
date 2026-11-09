@@ -472,9 +472,10 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
   tries = 0; n = 0
   while (n < 70 && tries++ < 3000) {
     const [x, z] = randInGarden(rnd)
-    if (!groundOK(x, z, { clear: 0.8 })) continue
     const name = pick(['mrock_3', 'mrock_7', 'mrock_8', 'mrock_9', 'mrock_10', 'mrock_12', 'boulder'])
     const s = 0.5 + rnd() ** 2 * 1.1
+    // 2026-11-10 使用者：石頭壓在石板路上 → 離步道的距離要算進石頭本身的大小（以前一律 0.8，大顆的半徑就超過了）
+    if (!groundOK(x, z, { clear: 0.9 + s * 1.1 })) continue
     put(name, { p: v3(x, terrainHeight(x, z) - 0.12 * s, z), q: qY(rnd() * TAU), s: sc(s) })
     if (s > 0.8) addCollider(x, z, s, terrainHeight(x, z) + s * 0.6)
     n++

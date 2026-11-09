@@ -1033,6 +1033,34 @@ function perchRigged(env, cfg) {
     inner.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq))
     lift.position.y = -0.022 * crA - 0.016 * landC
   }
+  // 2026-11-10 啄木鳥攀在樹幹上（使用者：腳在樹幹上是錯的 → ChatGPT 給的攀爬姿勢）：三點支撐——兩腳在髖部下前方抓樹皮、
+  // 跗蹠往樹幹斜 30～50°、腳趾彎起來抓、硬尾羽頂在腳下面 10～15 公分的樹皮上；身體上半往後仰 ~12°、肚子離樹皮幾公分。
+  // 實測（側面剪影＋樹皮平面）：身體後仰 0.4、大腿 -0.6、小腿 0.9（腳往前伸到肚子下的樹皮）、尾巴 1.0——大腿、小腿、尾巴的正負跟 ChatGPT 給的相反
+  // 擺完姿勢再量兩隻腳離樹皮多遠，整隻往樹幹推到腳剛好貼住（樹皮平面＝擺放點、法線＝obj 的 +z）
+  const cl = { push: null }, _cn = V(), _co = V(), _cf = V()
+  if (cfg.cling && typeof window !== 'undefined' && new URLSearchParams(location.search).has('rec')) window.__cling = cfg.cling   // 除錯：rec 模式可以即時調姿勢
+  const clingPose = (t, dt) => {
+    const k = cfg.cling, pk = acts.name === 'eat' ? Math.max(0, Math.sin(acts.k * 26)) * (acts.k < 0.8 ? 1 : 0) : 0   // 啄樹皮：上半身往前敲
+    r.turn('body', LAT, (k.body ?? 0.4) - 0.25 * pk)
+    r.turn('chest', LAT, -0.15 * pk)
+    for (const sd of ['L', 'R']) {
+      const st = sd === 'L' ? 1 : -1
+      r.turn('thigh' + sd, LAT, (k.thigh ?? -0.6) + 0.04 * st)
+      r.turn('shin' + sd, LAT, (k.shin ?? 0.9) - 0.05 * st)
+      r.turn('foot' + sd, LAT, k.foot ?? 0.35)
+    }
+    toes.forEach((tt) => curlToes(r, tt, k.toes ?? 0.75))
+    r.turn('tail', LAT, k.tail ?? 1.0)   // 尾巴尖頂在腳下面的樹皮上
+    // 腳貼樹皮
+    const g = root.parent.parent   // 擺放點（樹皮表面）
+    root.parent.updateWorldMatrix(true, false); root.updateMatrixWorld(true)
+    _cn.set(0, 0, 1).transformDirection(root.parent.matrixWorld); g.getWorldPosition(_co)
+    let d = 1e9
+    for (const sd of ['L', 'R']) d = Math.min(d, r.bones['foot' + sd].getWorldPosition(_cf).sub(_co).dot(_cn))
+    const want = cl.push == null ? d - 0.012 : cl.push + (d - 0.012) * Math.min(1, dt * 10)
+    cl.push = want
+    lift.position.copy(root.worldToLocal(_cf.copy(root.getWorldPosition(V())).addScaledVector(_cn, -want)))
+  }
   const update = (t, dt) => {
     acts.tick(dt)
     if (acts.name !== 'idle') hp.wait = Math.max(hp.wait, 0.3)
@@ -1114,6 +1142,7 @@ function perchRigged(env, cfg) {
     toes.forEach((t) => curlToes(r, t, grip))
     lift.position.y = -cfg.drop * k * crouch
     if (cfg.owlHop && !dive) owlPose(t, dt)
+    if (cfg.cling && !dive) clingPose(t, dt)
     root.position.set(hp.s + (cfg.owlHop ? owlS.ox : 0), env.branch.top(hp.s) + hp.y, env.branch.z?.(hp.s) ?? 0)
     root.rotation.y = hp.h
     lift.rotation.x = 0; lift.rotation.z = 0
@@ -1444,7 +1473,7 @@ function harrier(env) {
 }
 function wbwood(env) {
   // 2026-11-10 大赤啄木：直立貼在神木樹幹上（sacredUpright），臉朝樹幹、偶爾左右挪一點；eat 動作＝往樹皮啄
-  return perchRigged(env, { name: 'wbwood-rig', k: 0.25, ...TRIPO, foot: 0.1, drop: 0.03, beat: 9, eat: true,
+  return perchRigged(env, { name: 'wbwood-rig', k: 0.25, ...TRIPO, foot: 0.1, drop: 0.03, beat: 9, eat: true, cling: {},
     fly: null, hopper: { span: [Math.PI / 2, Math.PI / 2], hop: [0.04, 0.1], rest: [3, 7] }, acts: { idle: [3, 2, 4], call: [1, 1.5, 2.5], preen: [0.5, 1.5, 2.5], eat: [4, 2.5, 4] } })
 }
 function nutcracker(env) {
