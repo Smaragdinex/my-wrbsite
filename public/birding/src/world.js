@@ -81,7 +81,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const [plantLib] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() })])
   onProgress?.(1, 'build')
   // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
-  const birds = BIRDS.map((def) => {
+  const placeDef = (def) => {
     // 山區的鳥站在山區的地形上（地面高度查 alpineHeight）
     const groundH = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)
     const d = { ...def, y: def.y ?? groundH(...def.spot), groundAt: def.water == null ? groundH : null }
@@ -101,7 +101,9 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     const a = placeAnimal(d)
     scene.add(a.group)
     return { def, ...a }
-  })
+  }
+  // 停在神木上的鳥（茶腹鳾）要等神木蓋好、量到樹皮表面才能擺，先跳過（也不能進 alpAvoid，不然神木會躲開牠、換位置）
+  const birds = BIRDS.filter((d) => d.perch !== 'sacred').map(placeDef)
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
   // 山區（溫室東半邊）：直接蓋、一直畫。附屬館只剩海岸館（目前關著）
   // 山區的樹、草、岩石避開鳥站的地方和鏡頭那一側
@@ -132,6 +134,26 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉
   const yose = buildYosemite(scene, { lib: plantLib })   // 2026-11-10 帳篷區後面的花崗岩壁、瀑布、西黃松
   const giants = buildGiants(scene, { sun, avoid: alpAvoid, lib: plantLib })
+  // 2026-11-10 神木上的鳥：從步道那一側朝神木中心打一條射線，打到樹皮的那一點就是鳥的位置、法線朝外（鳥背貼著樹、肚子朝樹皮）
+  {
+    const S = giantSpots().find((q) => q.sacred)
+    if (S) {
+      scene.updateMatrixWorld(true)
+      let best = null
+      for (let k = 0; k < 72; k++) { const a = k / 72 * Math.PI * 2, td = alpineTrailDist(S.x + Math.sin(a) * 9, S.z + Math.cos(a) * 9); if (!best || td < best.td) best = { a, td } }
+      for (const def of BIRDS.filter((d) => d.perch === 'sacred')) {
+        const a = best.a + (def.sacredTurn ?? 0), hy = S.y + 0.3 + (def.sacredH ?? 2.4)
+        const ray = new THREE.Raycaster(new THREE.Vector3(S.x + Math.sin(a) * 12, hy, S.z + Math.cos(a) * 12), new THREE.Vector3(-Math.sin(a), 0, -Math.cos(a)), 0, 12)
+        const hit = ray.intersectObject(giants.group ?? scene, true).find((h) => Math.hypot(h.point.x - S.x, h.point.z - S.z) < S.D)
+        if (!hit) continue
+        const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(Math.sin(a), 0, Math.cos(a))
+        n.y = 0; n.normalize()
+        def.spot = [hit.point.x, hit.point.z]; def.normal = [n.x, n.z]; def.view = THREE.MathUtils.radToDeg(best.a)   // 鏡頭還是在步道那一側；鳥繞到樹幹側邊（sacredTurn），看得到側面而不是只看到背
+        const b = placeDef({ ...def, y: hit.point.y }); b.def = def
+        birds.push(b)
+      }
+    }
+  }
   const _forestFog = new THREE.Color()   // 阿里山／紅杉林那種巨木林帶（步道中段）   // 右邊岔路上去的營地（三頂帳篷＋營火）
   const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
   const birdStops = birds.map((b) => ({

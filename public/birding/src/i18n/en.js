@@ -664,7 +664,7 @@ export const BIRDS = {
  },
  "nuthatch": {
   "name": "Eurasian Nuthatch",
-  "where": "Woods by the High Trail",
+  "where": "On the Trunk of the Sacred Giant Tree",
   "intro": "An endemic subspecies with a big head, short tail and long straight bill. Blue-grey above, with a long black eye-stripe, white throat and buff underparts. It can walk head-first down a tree trunk.",
   "facts": [
    "Its strong feet let it walk up and down trunks, often spiralling around big trees.",
@@ -715,6 +715,28 @@ export const BIRDS = {
    "Only a few hundred at most remain in Taiwan; grassland loss and rat poison are the biggest threats.",
    "It nests on the ground inside grass clumps, making tunnels of flattened grass.",
    "Some farmers now grow crops without rat poison to help it survive."
+  ]
+ },
+ "nutcracker": {
+  "name": "Spotted Nutcracker",
+  "where": "A Branch by the Trail near the Sacred Giant Tree",
+  "intro": "The emblem bird of the high-mountain conifer forest, built like a small crow. Its chocolate-brown body is covered in white teardrop spots like a sky full of stars; wings and tail are black with a blue-green sheen, and the tail is tipped white. It gives harsh, loud calls, often from the very top of a tree.",
+  "facts": [
+   "An endemic subspecies living in pine and fir forest above 2,000 m.",
+   "It loves pine seeds; in autumn it buries them in the ground, and one bird can cache tens of thousands.",
+   "Its memory is remarkable: it finds most of its caches in winter, and the forgotten ones grow into new pines.",
+   "Its thick, pointed bill can crack open hard pine cones."
+  ]
+ },
+ "wbwood": {
+  "name": "White-backed Woodpecker",
+  "where": "On the Trunk of the Sacred Giant Tree",
+  "intro": "One of Taiwan's largest woodpeckers. The male has a red crown, white cheeks with a black moustache stripe, a black back with a white lower back, black wings barred with rows of white spots, and a lovely pink belly and undertail. It hitches up big trunks, chiselling at the bark for insects.",
+  "facts": [
+   "It lives only in old-growth forest at mid to high elevations, where there are big old trees and dead wood.",
+   "Its stiff, pointed tail feathers work as a third leg, propping it against the trunk.",
+   "Its hammering is not just for food: it also drums to claim territory, and the sound carries far.",
+   "Two toes point forward and two back, giving it a very firm grip on bark."
   ]
  },
  "shelduck": {

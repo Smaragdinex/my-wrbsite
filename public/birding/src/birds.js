@@ -216,13 +216,14 @@ class Walker {
 }
 // 沿樹枝跳
 class Hopper {
-  constructor(env, { hop = [0.15, 0.4], rest = [0.8, 3.5], dur = 0.26, span = [0.85, 1.35], blocked } = {}) {   // span：身體往鏡頭（步道那側）轉多少（2026-11-09 使用者：要面對走道，以前 0.45～1.25 太多是側身）
-    Object.assign(this, { env, hopR: hop, restR: rest, dur, span, blocked })
+  constructor(env, { hop = [0.15, 0.4], rest = [0.8, 3.5], dur = 0.26, span = [0.85, 1.35], blocked, fix } = {}) {   // span：身體往鏡頭（步道那側）轉多少（2026-11-09 使用者：要面對走道，以前 0.45～1.25 太多是側身）
+    Object.assign(this, { env, hopR: hop, restR: rest, dur, span, blocked, fix })   // fix：永遠朝同一邊（啄木鳥在樹幹上一定頭朝上，往下是倒退）
     const { min, max } = env.branch
     this.s = rnd(min + 0.2, max - 0.1); this.k = 1; this.y = 0; this.wait = rnd(...rest); this.landed = 9
     this.h = this.wantH = this.face(sgn())
   }
   face(dir) {
+    if (this.fix) dir = this.fix
     const tc = this.env.toCam, turn = rnd(...this.span)
     return Math.atan2(dir * Math.cos(turn) + tc.x * Math.sin(turn), tc.z * Math.sin(turn))
   }
@@ -301,7 +302,7 @@ const BUILD = {
   goshawk, woodowl,
   mandarin, spotbill, partridge, nuthatch, finchbill, minivet, pitta, grassowl,
   liocichla, whitebrow, bullfinch, barwing, islandthrush, tit, rustylt, whitethroat, hwamei, styan, scimitar, fulvetta, bamboo, flowing, bushwarbler, cupwing, shortwing,
-  scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier,
+  scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier, nutcracker, wbwood,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -323,7 +324,7 @@ export async function loadAnimalModels(extra = [], onProgress) {
   await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'nutcracker-rig', 'wbwood-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
@@ -1393,6 +1394,16 @@ function harrier(env) {
     walk: { radius: 0.6, speed: 0.1 }, swingT: 0.4, lift: 0.02, knee: [0.6, 1.2], focusY: 0.45,
     acts: { stand: [4, 3, 6], look: [3, 1.2, 2.5], walk: [0.6, 99, 99], turn: [1, 99, 99] } })
 }
+function wbwood(env) {
+  // 2026-11-10 大赤啄木：直立貼在神木樹幹上（sacredUpright），臉朝樹幹、偶爾左右挪一點；eat 動作＝往樹皮啄
+  return perchRigged(env, { name: 'wbwood-rig', k: 0.25, ...TRIPO, foot: 0.1, drop: 0.03, beat: 9, eat: true,
+    fly: null, hopper: { span: [Math.PI / 2, Math.PI / 2], hop: [0.04, 0.1], rest: [3, 7] }, acts: { idle: [3, 2, 4], call: [1, 1.5, 2.5], preen: [0.5, 1.5, 2.5], eat: [4, 2.5, 4] } })
+}
+function nutcracker(env) {
+  // 2026-11-10 星鴉：高山針葉林的鴉科，停在神木附近步道旁的枝頭
+  return perchRigged(outer(env, -1.0), { name: 'nutcracker-rig', k: 0.21, ...TRIPO, foot: 0.02, drop: 0.05, beat: 5, eat: true,
+    hopper: { hop: [0.15, 0.4] } })
+}
 function fulvetta(env) { return endemicPerch('fulvetta-rig', 0.18 / 0.618, 9)(env) }
 function flowing(env) { return endemicPerch('flowing-rig', 0.17 / 0.572, 10)(env) }
 
@@ -1555,6 +1566,27 @@ export function placeAnimal(def) {
     env.waterLocal = waterY - gy - y   // 水面在 obj 座標的高度（翠鳥俯衝用）
     target.set(x, 3.6, z)
     dist = 5; camH = 3.4
+  } else if (def.perch === 'sacred') {
+    // 2026-11-10 茶腹鳾搬到神木：直接貼在神木樹皮上（world.js 用射線量到的表面點＝def.spot/def.y、法線 def.normal）。
+    // 借用停枝鳥的整套動作：把「枝條」轉成沿樹幹往下的直線——obj +x＝往下、+y＝朝外（鳥的背朝外、腳抓樹皮），沿 x 跳就是在樹幹上上下爬
+    const n0 = (def.normal ? V(def.normal[0], 0, def.normal[1]) : toCam.clone()).normalize(), down = V(0, -1, 0)
+    if (def.sacredUpright) {
+      // 直立的模型（啄木鳥）：身體本來就是直的，不用翻倒——y 朝上、面向樹幹（-n），胸口貼樹皮所以整隻往外挪 sacredOff
+      const tx = V().crossVectors(V(0, 1, 0), n0)
+      obj.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(tx, V(0, 1, 0), n0))
+      obj.position.copy(n0).multiplyScalar(def.sacredOff ?? 0.05)
+      env.toCam = V(0, 0, -1)
+      env.branch = { min: -0.15, max: 0.15, top: () => 0, z: () => 0, gap: (px, py) => py, side: () => 0 }
+      target.set(x, 0, z); dist = 4.6; camH = -0.7
+    } else {
+    // 身體繞著樹幹方向側翻一點、側面朝鏡頭（茶腹鳾抓樹皮時常側著身子、頭往外抬），不然從步道只看得到藍灰色的背
+    const rollS = Math.sign(V().crossVectors(down, n0).dot(toCam)) || 1, n = n0.clone().applyAxisAngle(down, rollS * (def.sacredRoll ?? 0.7)), zz = V().crossVectors(down, n)
+    obj.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(down, n, zz))
+    env.toCam = V(0, 1, 0)   // 不要轉頭朝鏡頭（那樣只會看到背）：頭一定沿著樹幹朝上或朝下，從側面看得到側臉和過眼線
+    env.branch = { min: -0.5, max: 0.5, top: () => 0, z: () => 0, gap: (px, py) => py, side: () => 0 }
+    target.set(x, 0, z)
+    dist = 4.6; camH = -0.7
+    }
   } else if (def.perch === 'trunk') {
     const R = 0.42
     const trunk = stick(R * 0.95, R * 1.08, 8, BARK, [0, 8, 0], [0, 0, 0], 16)

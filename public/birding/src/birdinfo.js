@@ -379,8 +379,9 @@ const ALL = [
     ],
   },
   {
-    id: 'nuthatch', spot: AM(164.42, 7.57), perch: 'branch', view: 248, dist: 2.6, camH: 3.6, lookY: 3.4,
-    name: '茶腹鳾', sci: 'Sitta europaea formosana', where: '高處步道旁的樹林',
+    // 2026-11-10 使用者：搬到神木上（spot/view 在 world.js 量神木樹皮後填入；這裡的 spot 只是蓋好之前的暫時值）
+    id: 'nuthatch', spot: AM(164.42, 7.57), perch: 'sacred', sacredH: 2.4, sacredTurn: 1.1, dist: 6, lookY: 0,
+    name: '茶腹鳾', sci: 'Sitta europaea formosana', where: '步道旁的神木樹幹上',
     intro: '台灣特有亞種的小鳥，頭大尾短、嘴又長又直。背是藍灰色，一道很長的黑色過眼線從嘴邊一直拉到脖子，喉嚨白色、肚子是淡淡的茶色。牠最厲害的是可以頭朝下沿著樹幹往下走。',
     facts: [
       '腳很有力，能在樹幹上垂直上下走，常繞著大樹幹螺旋往上爬。',
@@ -431,6 +432,28 @@ const ALL = [
       '台灣的數量估計只有幾百隻以下，草原開發和毒鼠藥是最大的威脅。',
       '巢就做在草叢裡的地上，用壓扁的草鋪成，像一條條隧道。',
       '有些農民改用友善的方式種田、不放毒鼠藥，幫助牠們留下來。',
+    ],
+  },
+  {
+    id: 'wbwood', spot: [231.5, -72.8], perch: 'sacred', sacredUpright: true, sacredOff: 0.05, sacredH: 4.2, sacredTurn: -1.0, dist: 6.5, lookY: 0.12,
+    name: "大赤啄木", sci: 'Dendrocopos leucotos insularis', where: "步道旁的神木樹幹上",
+    intro: "台灣最大的啄木鳥之一，雄鳥頭頂紅色，臉頰白、一條黑色顎線；背黑、下背白，翅膀黑色帶一排排白色橫斑，肚子到尾下是漂亮的粉紅色。常在大樹幹上一邊往上跳、一邊用鑿子般的嘴敲樹皮找蟲。",
+    facts: [
+      "只住在中高海拔的原始森林，需要很大的老樹和枯木。",
+      "尾羽又硬又尖，攀在樹幹上時當作第三隻腳撐住身體。",
+      "敲樹幹不只找蟲，也是在「打鼓」宣示地盤，聲音可以傳很遠。",
+      "腳趾兩根朝前、兩根朝後，抓樹幹特別穩。",
+    ],
+  },
+  {
+    id: 'nutcracker', spot: [231.5, -52.8], perch: 'branch', dist: 4.6, camH: 3.0, lookY: 3.45,   // 2026-11-10 神木北邊 20 公尺、步道旁
+    name: "星鴉", sci: 'Nucifraga caryocatactes owstoni', where: "神木附近步道旁的枝頭",
+    intro: "高山針葉林的代表鳥，體型像小烏鴉。全身巧克力褐色、布滿白色水滴狀斑點，像滿天星星，所以叫星鴉；翅膀和尾巴黑色帶藍綠光澤，尾端白色。叫聲沙啞響亮，常站在樹梢最高處。",
+    facts: [
+      "台灣特有亞種，住在海拔 2000 公尺以上的松林、冷杉林。",
+      "最愛吃松子，秋天會把種子藏在地下，一隻可以藏上萬顆。",
+      "記性超好，冬天能找回大部分藏起來的種子；沒找回的就長成新的松樹。",
+      "嘴巴又粗又尖，可以敲開堅硬的松毬果。",
     ],
   },
   // 2026-11-10 山下湖再加四種：黃麻鴨（湖中游）、紫鷺（北岸淺水，避開蓮花叢）、高蹺鴴（西邊淺水，三隻）、西方澤鵟（南岸草地）
@@ -731,6 +754,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
-  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier']
+  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'wbwood', 'nutcracker']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))
