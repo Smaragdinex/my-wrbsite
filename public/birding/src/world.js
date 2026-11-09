@@ -11,13 +11,14 @@ import { createWeather } from './weather.js'
 import { wetify } from './structures.js'
 import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel } from './structures.js'
 import { buildFlora } from './flora.js'
-import { loadPlants } from './plants.js'
+import { loadPlants, parts } from './plants.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildStops } from './stops.js'
 import { loadAnimalModels, placeAnimal } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt } from './layout.js'
+import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt, FIG_FORCED } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
@@ -103,7 +104,10 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     return { def, ...a }
   }
   // 停在神木上的鳥（茶腹鳾）要等神木蓋好、量到樹皮表面才能擺，先跳過（也不能進 alpAvoid，不然神木會躲開牠、換位置）
-  const birds = BIRDS.filter((d) => d.perch !== 'sacred').map(placeDef)
+  const birds = BIRDS.filter((d) => d.perch !== 'sacred' && !d.onFig).map(placeDef)
+  // 2026-11-10 吃果實的鳥：雀榕直接種在鳥的站點（FIG_FORCED），樹種好之後再到這棵樹真正的枝條上找位置站（下面 findFigPerch）
+  const figDefs = BIRDS.filter((d) => d.onFig)
+  for (const d of figDefs) FIG_FORCED.push({ x: d.spot[0], z: d.spot[1], y: alpineHeight(...d.spot), def: d })
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
   // 山區（溫室東半邊）：直接蓋、一直畫。附屬館只剩海岸館（目前關著）
   // 山區的樹、草、岩石避開鳥站的地方和鏡頭那一側
@@ -134,6 +138,76 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉
   const yose = buildYosemite(scene, { lib: plantLib })   // 2026-11-10 帳篷區後面的花崗岩壁、瀑布、西黃松
   const giants = buildGiants(scene, { sun, avoid: alpAvoid, lib: plantLib })
+  // 2026-11-10 果樹上的鳥：在掃描的雀榕（不含葉子）上，從上往下打射線找「上面有空間、左右各一段差不多水平的直枝」，
+  // 要在朝步道那一側、離地 2.2～3.4 公尺（鏡頭退到 6 公尺外，看起來比較平視）；枝的方向盡量跟鏡頭方向垂直（看得到鳥的側面）
+  if (plantLib.figtree) {
+    const geos = parts(plantLib.figtree).filter((q) => !/leaves/.test(q.mat.name)).map((q) => { const c = q.geo.index ? q.geo.toNonIndexed() : q.geo.clone(); for (const k of Object.keys(c.attributes)) if (k !== 'position') c.deleteAttribute(k); return c })
+    const figMesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
+    const ray = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0)
+    for (const f of FIG_FORCED.filter((q) => q.def && q.T)) {
+      const T = f.T, base = T.p.y
+      figMesh.matrix.compose(T.p, T.q, T.s); figMesh.matrixWorld.copy(figMesh.matrix)
+      const hitsAt = (x, z, top) => { ray.set(new THREE.Vector3(x, top, z), DOWN); ray.far = top - base; return ray.intersectObject(figMesh, false) }
+      let ta = null
+      for (let k = 0; k < 72; k++) { const a = k / 72 * Math.PI * 2, td = alpineTrailDist(f.x + Math.sin(a) * 8, f.z + Math.cos(a) * 8); if (!ta || td < ta.td) ta = { a, td } }
+      const toCam = new THREE.Vector3(Math.sin(ta.a), 0, Math.cos(ta.a))
+      let best = null; const cands = []
+      for (const [h0, h1] of [[2.2, 3.4], [2.2, 4.4], [1.8, 5.5]]) {   // 低的枝優先；這棵樹低處沒有合適的枝才往上找
+      if (cands.length) break
+      for (let r = 0.6; r <= 3.6; r += 0.2) for (let da = -1.1; da <= 1.1; da += 0.08) {
+        const a = ta.a + da, x = f.x + Math.sin(a) * r, z = f.z + Math.cos(a) * r
+        const hs = hitsAt(x, z, base + 7)
+        for (let i = 0; i < hs.length; i++) {
+          const h = hs[i], hy = h.point.y
+          if (hy - base < h0 || hy - base > h1) continue   // 低一點：人眼 1.6 公尺往上看，枝越高越會擋住鳥的身體
+          if (i > 0 && hs[i - 1].point.y < hy + 0.35) continue   // 頭上要有空間
+          const n = h.face.normal.clone().transformDirection(figMesh.matrixWorld); if (Math.abs(n.y) < 0.5) continue
+          // 從步道那邊的鏡頭看得到：鏡頭（站點外 3.8 公尺、人眼高）到鳥身上（枝上 8 公分）之間不能有這棵樹的枝幹擋住
+          { const eye = new THREE.Vector3(x + toCam.x * 6, base + 1.6, z + toCam.z * 6), tgt = new THREE.Vector3(x, hy + 0.08, z), dv = tgt.clone().sub(eye)
+            ray.set(eye, dv.clone().normalize()); ray.far = dv.length() - 0.02; if (ray.intersectObject(figMesh, false).length) continue }
+          for (let j = 0; j < 12; j++) {
+            const b = j / 12 * Math.PI, u = new THREE.Vector3(Math.cos(b), 0, Math.sin(b))
+            let L = 0, slope = 0
+            for (const d of [0.08, 0.16, 0.24, 0.32, 0.4]) {
+              const ok = [1, -1].map((sg) => { const q = hitsAt(x + u.x * d * sg, z + u.z * d * sg, hy + 0.3)[0]; return q && Math.abs(q.point.y - hy) < 0.05 + 0.25 * d ? q.point.y - hy : null })
+              if (ok[0] == null || ok[1] == null) break
+              L = d; slope = (ok[0] - ok[1]) / (2 * d)
+            }
+            if (L < 0.16) continue
+            const side = Math.abs(u.x * toCam.z - u.z * toCam.x)   // 1＝跟鏡頭方向垂直
+            const score = L * 3 + side * 1.2 - Math.abs(da) * 0.6 - Math.abs(hy - base - 2.5) * 0.8 - Math.abs(slope) * 2
+            cands.push({ score, x, z, y: hy, u, L, slope })
+          }
+        }
+      }
+      }
+      // 分數高的先試：整個場景（石頭、別的樹…）也不能擋在鏡頭和鳥之間；雀榕自己的葉子、透明的東西不算
+      cands.sort((p, q) => q.score - p.score)
+      scene.updateMatrixWorld(true)
+      // 只拿這棵樹附近 12 公尺內的東西來測（整個場景一起打射線太慢，載入會卡住）；草、花這種幾百上千株的 InstancedMesh 不算
+      const nearObjs = []
+      scene.traverse((o) => {
+        if (!o.isMesh || !o.visible || o === figMesh) return
+        const m = o.material; if (!m || Array.isArray(m) || m.transparent || /leaves/.test(m.name ?? '')) return
+        if (o.isInstancedMesh && o.count > 300) return
+        if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere()
+        if (!o.isInstancedMesh) { const c = o.geometry.boundingSphere.center.clone().applyMatrix4(o.matrixWorld), r = o.geometry.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis(); if (Math.hypot(c.x - f.x, c.z - f.z) > 12 + r) return }
+        nearObjs.push(o)
+      })
+      for (const c of cands.slice(0, 60)) {
+        const eye = new THREE.Vector3(c.x + toCam.x * 6, base + 1.6, c.z + toCam.z * 6), tgt = new THREE.Vector3(c.x, c.y + 0.08, c.z), dv = tgt.clone().sub(eye)
+        ray.set(eye, dv.clone().normalize()); ray.far = dv.length() - 0.05
+        const blk = ray.intersectObjects(nearObjs, false)[0]
+        if (!blk) { best = c; break }
+      }
+      if (!best) { console.warn('fig perch not found', f.def.id); best = cands[0]; if (!best) continue }
+      const def = f.def
+      def.perch = 'fig'; def.spot = [best.x, best.z]; def.figDir = [best.u.x, best.u.z]; def.figLen = Math.max(0.08, best.L - 0.06); def.figSlope = best.slope
+      def.view = THREE.MathUtils.radToDeg(ta.a); def.figCamH = base + 1.6 - best.y; def.lookY = 0.08; def.dist = 6
+      const b = placeDef({ ...def, y: best.y }); b.def = def
+      birds.push(b)
+    }
+  }
   // 2026-11-10 神木上的鳥：從步道那一側朝神木中心打一條射線，打到樹皮的那一點就是鳥的位置、法線朝外（鳥背貼著樹、肚子朝樹皮）
   {
     const S = giantSpots().find((q) => q.sacred)

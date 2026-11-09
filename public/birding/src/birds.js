@@ -1170,7 +1170,7 @@ function bulbul(env) {
 /* ---------- 2026-11 新增的 9 種（ChatGPT 參考圖 → Tripo → tools/rig-distance.py，點位在 tools/bird-points.json） ---------- */
 const TRIPO = { rotY: Math.PI / 2, lat: V(0, 0, -1) }   // Tripo 模型都是頭朝 -x
 // 只在枝條外段跳：靠樹幹那段在寬螢幕上會被左邊的卡片蓋住
-const outer = (env, min) => ({ ...env, branch: { ...env.branch, min } })
+const outer = (env, min) => env.branch?.lock ? env : ({ ...env, branch: { ...env.branch, min } })   // lock：真的樹枝量好的長度，不能再往外延
 // 翠鳥：停在水池上方的枝頭，偶爾一頭栽進水裡抓魚、再飛回同一根枝
 function kingfisher(env) {
   // 飛行模型（第二版：附站姿參考圖生成，頭部花紋一致）用「頭和嘴的大小」對齊停棲模型（tools/compare-scale.py 並排比過）；
@@ -1566,6 +1566,16 @@ export function placeAnimal(def) {
     env.waterLocal = waterY - gy - y   // 水面在 obj 座標的高度（翠鳥俯衝用）
     target.set(x, 3.6, z)
     dist = 5; camH = 3.4
+  } else if (def.perch === 'fig') {
+    // 2026-11-10 使用者：果樹上不要另外加一根枝，鳥直接站在雀榕真正的枝條上（world.js findFigPerch 用射線在掃描樹上量到的一段直枝：
+    // 中點＝def.spot/def.y、方向 def.figDir、可走的半長 def.figLen、坡度 def.figSlope）
+    const u = V(def.figDir[0], 0, def.figDir[1]).normalize(), up = V(0, 1, 0)
+    obj.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(u, up, V().crossVectors(u, up)))
+    env.toCam = toCam.clone().applyQuaternion(obj.quaternion.clone().invert())
+    const L = def.figLen, k = def.figSlope ?? 0
+    env.branch = { min: -L, max: L, lock: true, top: (s) => s * k, z: () => 0, gap: (px, py) => py - px * k, side: () => 0 }
+    target.set(x, 0, z)
+    dist = 3.6; camH = def.figCamH ?? -1.6
   } else if (def.perch === 'sacred') {
     // 2026-11-10 茶腹鳾搬到神木：直接貼在神木樹皮上（world.js 用射線量到的表面點＝def.spot/def.y、法線 def.normal）。
     // 借用停枝鳥的整套動作：把「枝條」轉成沿樹幹往下的直線——obj +x＝往下、+y＝朝外（鳥的背朝外、腳抓樹皮），沿 x 跳就是在樹幹上上下爬

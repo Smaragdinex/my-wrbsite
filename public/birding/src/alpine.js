@@ -675,7 +675,7 @@ function buildInterior(lib, avoid = []) {
     const barkM = barkMaterial('pine_bark', { normal: 1.2, color: [1.3, 1.2, 1.1] })   // 2026-11-10 掃描的松樹皮（以前是一個純色）
     const coreM = new THREE.MeshStandardMaterial({ color: 0x223a26, roughness: 1 })   // 跟針葉同色系，從上面看不會是一顆黑色金字塔
     // 雀榕的位置先挑好（低海拔、步道邊 5～12 公尺、彼此隔 16 公尺），針葉樹再避開它周圍 9 公尺：不然雀榕整棵被鐵杉林包住看不到
-    for (const f of FIG_FORCED) FIGPOS.push({ x: f.x, z: f.z, H: 9.5, forced: true })   // 吃果實的鳥停的那幾棵（birds.js dressFig）
+    for (const f of FIG_FORCED) FIGPOS.push({ x: f.x, z: f.z, H: 9.5, forced: true, ref: f })   // 吃果實的鳥停的那幾棵（birds.js dressFig）
     for (let k = 0; k < 20000 && FIGPOS.length < 18; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2, td = alpineTrailDist(x, z)
       if (td < 5 || td > 12 || x > 230 || !inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineHeight(x, z) > 18) continue
@@ -979,6 +979,7 @@ function buildInterior(lib, avoid = []) {
     for (const f of FIGPOS) {
       const y = alpineHeight(f.x, f.z), H = f.H
       FIG.push({ p: V(f.x, y - 0.15, f.z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(H * (1 + rnd() * 0.2), H, H * (1 + rnd() * 0.2)), H })
+      if (f.ref) f.ref.T = FIG.at(-1)   // 吃果實的鳥那幾棵：記下擺放矩陣，world.js 要在這棵樹真正的枝條上找站的位置
       addCollider(f.x, f.z, 0.6, y + H)
     }
     const nearFig = (x, z, r) => FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < r)

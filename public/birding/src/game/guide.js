@@ -254,7 +254,7 @@ function makeDiorama(def) {
   const water = def.water != null ? def.water - (def.y ?? 0) : null
   const d = { ...def, y: 0, water: water ?? undefined, groundAt: null, view: def.view ?? 200 }
   if (def.swim) d.swimOK = (x, z) => Math.hypot(x - def.spot[0], z - def.spot[1]) < 1.4
-  if (def.perch === 'sacred') d.perch = 'branch'   // 神木上的茶腹鳾：圖鑑插圖沒有神木，畫成停在樹枝上
+  if (def.perch === 'sacred' || def.perch === 'fig') d.perch = 'branch'   // 神木、雀榕上的鳥：圖鑑插圖沒有那棵樹，畫成停在樹枝上
   const a = placeAnimal(d)
   sc.add(a.group)
   const [x, z] = def.spot
