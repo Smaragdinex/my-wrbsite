@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE } from './layout.js'
+import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { nearGiant, forestK } from './giants.js'
 import { barkMaterial } from './bark.js'
@@ -675,6 +675,7 @@ function buildInterior(lib, avoid = []) {
     const barkM = barkMaterial('pine_bark', { normal: 1.2, color: [1.3, 1.2, 1.1] })   // 2026-11-10 掃描的松樹皮（以前是一個純色）
     const coreM = new THREE.MeshStandardMaterial({ color: 0x223a26, roughness: 1 })   // 跟針葉同色系，從上面看不會是一顆黑色金字塔
     // 雀榕的位置先挑好（低海拔、步道邊 5～12 公尺、彼此隔 16 公尺），針葉樹再避開它周圍 9 公尺：不然雀榕整棵被鐵杉林包住看不到
+    for (const f of FIG_FORCED) FIGPOS.push({ x: f.x, z: f.z, H: 9.5, forced: true })   // 吃果實的鳥停的那幾棵（birds.js dressFig）
     for (let k = 0; k < 20000 && FIGPOS.length < 18; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2, td = alpineTrailDist(x, z)
       if (td < 5 || td > 12 || x > 230 || !inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineHeight(x, z) > 18) continue

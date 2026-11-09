@@ -27,7 +27,7 @@ export function priceFor(id, score, same = 1) {
 const ACTION = {
   dive: [2.2, tr('入水的瞬間')], strike: [1.8, tr('出手捕食')], worm: [1.6, tr('叼著蚯蚓')], peck: [1.15, tr('低頭覓食')],
   takeoff: [2.0, tr('起飛的瞬間')], land: [1.8, tr('降落的瞬間')], fly: [1.7, tr('飛行中')], run: [1.25, tr('逃跑中')],
-  call: [1.2, tr('正在鳴叫')], preen: [1.15, tr('理毛')], hunt: [1.1, tr('盯著獵物')], walk: [1.0, ''], look: [1.05, tr('抬頭張望')],
+  call: [1.2, tr('正在鳴叫')], eat: [1.5, tr('正在吃果實')], preen: [1.15, tr('理毛')], hunt: [1.1, tr('盯著獵物')], walk: [1.0, ''], look: [1.05, tr('抬頭張望')],
 }
 
 const _box = new THREE.Box3(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _c = new THREE.Vector3(), _s = new THREE.Vector3()

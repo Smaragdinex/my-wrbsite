@@ -8,6 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { ripple } from './structures.js'
+import { FIG_FORCED } from './layout.js'
 import { canopyGeometry, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'
 
 const { clamp, lerp, smoothstep: ss, randFloat: rnd } = THREE.MathUtils
@@ -884,7 +885,7 @@ function perchRigged(env, cfg) {
   const hp = new Hopper(env, { rest: [2, 7], dur: 0.32, ...cfg.hopper })
   const toes = [toesOf(r, 'L'), toesOf(r, 'R')]
   const gl = new Glance([0.5, 1.6], 0.8, 0.3)
-  const acts = new Acts(cfg.acts ?? { idle: [4, 2, 5], call: [3, 2, 4], preen: [0.8, 1.5, 3] })
+  const acts = new Acts(cfg.acts ?? (cfg.eat ? { idle: [3, 2, 4], call: [1.5, 2, 3], preen: [0.6, 1.5, 3], eat: [3.5, 2.2, 3.2] } : { idle: [4, 2, 5], call: [3, 2, 4], preen: [0.8, 1.5, 3] }))
   // cfg.plant：腳底貼枝。挑出兩隻腳最低的一些頂點（腳掌、腳趾），每格算它們離枝條表面多遠，
   // 把身體慢慢上下調到剛好踩在樹皮上（不同位置的枝條粗細、彎度、鳥的朝向都不一樣，寫死高度一定有的浮有的陷）
   const sole = cfg.plant ? soleSamples(r) : null, _sv = V()
@@ -970,12 +971,15 @@ function perchRigged(env, cfg) {
       }
     } else { dv.on = false; if (fr) { r.model.visible = true; fr.model.visible = false } }
     c.yaw = damp(c.yaw, acts.name === 'preen' ? 1.2 * acts.sgn : dive ? 0 : gl.yaw, acts.name === 'preen' ? 6 : 18, dt)
-    c.pitch = damp(c.pitch, acts.name === 'preen' ? -0.5 : dive ? 0 : -gl.hp, 18, dt)
+    // 吃果實（cfg.eat）：低頭往枝上的榕果啄，一下一下，最後仰頭吞下去
+    const eat = acts.name === 'eat' ? acts.k : -1, peck = eat >= 0 && eat < 0.8 ? 0.9 + 0.5 * Math.max(0, Math.sin(eat * 26)) : 0, gulp = eat >= 0.8 ? -0.6 * Math.sin((eat - 0.8) / 0.2 * Math.PI) : 0
+    c.eat = damp(c.eat ?? 0, eat >= 0 && eat < 0.85 ? 1 : 0, 8, dt)   // 吃的時候身體往前傾
+    c.pitch = damp(c.pitch, acts.name === 'preen' ? -0.5 : dive ? 0 : eat >= 0 ? -(peck + gulp) * (cfg.eatSign ?? 1) : -gl.hp, eat >= 0 ? 24 : 18, dt)
     c.call = damp(c.call, acts.name === 'call' ? 1 : 0, 6, dt)
     const beat = c.call * Math.max(0, Math.sin(t * (cfg.beat ?? 9)))
     r.reset()
     // 身體蹲低時前傾、起跳時伸直；頭保持水平
-    r.turn('body', LAT, -0.3 * crouch + 0.1 * push - 0.06 * air + 0.03 * beat)
+    r.turn('body', LAT, -0.3 * crouch + 0.1 * push - 0.06 * air + 0.03 * beat - 0.35 * (c.eat ?? 0) * (cfg.eatSign ?? 1))
     r.turn('neck', AX.y, c.yaw * 0.45); r.turn('neck', LAT, c.pitch * 0.4 - 0.12 * beat + 0.15 * crouch)
     r.turn('head', AX.y, c.yaw * 0.55); r.turn('head', LAT, c.pitch * 0.6 - 0.18 * beat + 0.15 * crouch)
     r.turn('tail', LAT, -0.45 * land + 0.3 * hp.pre - 0.2 * air)
@@ -1253,7 +1257,7 @@ function nuthatch(env) {
   return perchRigged(outer(env, -0.9), { name: 'nuthatch-rig', k: 0.14, ...TRIPO, foot: 0.004, drop: 0.03, beat: 9 })
 }
 function finchbill(env) {
-  return perchGroup(2, 0.32, -0.7, (blocked) => perchRigged(outer(env, -0.8), { name: 'finchbill-rig', k: 0.22, ...TRIPO, foot: 0.065, drop: 0.04, beat: 7,
+  return perchGroup(2, 0.32, -0.7, (blocked) => perchRigged(outer(env, -0.8), { name: 'finchbill-rig', eat: true, k: 0.22, ...TRIPO, foot: 0.065, drop: 0.04, beat: 7,
     hopper: { blocked } }))
 }
 function minivet(env) {
@@ -1263,7 +1267,7 @@ function woodowl(env) {
   return perchRigged(outer(env, -1.0), { name: 'woodowl-rig', k: 0.46, ...TRIPO, foot: 0.05, drop: 0.04, beat: 4 })
 }
 function sibia(env) {
-  return perchRigged(outer(env, -1.0), { name: 'sibia-rig', k: 0.56, ...TRIPO, foot: 0.004, drop: 0.05, beat: 7 })
+  return perchRigged(outer(env, -1.0), { name: 'sibia-rig', eat: true, k: 0.56, ...TRIPO, foot: 0.004, drop: 0.05, beat: 7 })
 }
 
 
@@ -1331,6 +1335,35 @@ const barkPaint = (o, u, s, c, p) => o.copy(tmp.set(BARK)).multiplyScalar(0.85 +
 // 沿 [[x, y, z, r], ...] 長一根逐漸變細的枝
 function bough(pts) {
   return loft(pts.map(([x, y, z, r]) => [x, y, z, r, r]), barkPaint, { seg: 12, sub: 4, up: V(0, 0, 1), material: mat(BARK, 0.9) })
+}
+// 2026-11-10 停在雀榕上的鳥（def.onFig）：自帶的樹只留那根枝（改成雀榕灰白的樹皮、掛滿一串串榕果），
+// 樹幹、樹冠藏起來，真正的雀榕由 alpine.js 種在同一個位置（FIG_FORCED），枝條看起來就是從雀榕樹幹長出來的
+let figBarkM = null
+function dressFig(tree, x, z, gy) {
+  const branch = tree.children[1]
+  tree.children.forEach((o) => { o.visible = o === branch })   // 樹幹、小枝的葉、樹冠藏起來（只留這根枝）
+  branch.material = figBarkM ??= barkify(new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.9 }))   // 雀榕灰褐色的樹皮（sRGB；clone 會掉樹皮紋路，另外做一個）
+  // 榕果：沿枝條 x 0.4～2.9（鳥站在 1.8～2.4）一串串擠在枝的下半圈和側面；粉紅、紫紅、深紫
+  const C = [[0.95, 0.62, 0.68], [0.86, 0.36, 0.5], [0.62, 0.16, 0.34], [0.4, 0.09, 0.22]], r = (a, b) => a + Math.random() * (b - a)
+  const parts = []
+  for (let c = 0; c < 34; c++) {
+    const bx = r(0.4, 2.9), cy = limb.center(bx), cz = limb.z(bx), rad = limb.radius(bx), a0 = r(-2.4, 2.4)
+    for (let k = 0; k < 7; k++) {
+      const a = a0 + r(-0.5, 0.5), q = new THREE.IcosahedronGeometry(r(0.011, 0.016), 1).toNonIndexed()
+      q.translate(bx + r(-0.04, 0.04), cy - Math.cos(a) * (rad + 0.012), cz + Math.sin(a) * (rad + 0.012))
+      const col = C[Math.floor(Math.random() * C.length)], cc = new Float32Array(q.attributes.position.count * 3)
+      for (let i = 0; i < cc.length; i += 3) { cc[i] = col[0]; cc[i + 1] = col[1]; cc[i + 2] = col[2] }
+      q.setAttribute('color', new THREE.BufferAttribute(cc, 3)); parts.push(q)
+    }
+  }
+  let n = 0; for (const q of parts) n += q.attributes.position.count
+  const P = new Float32Array(n * 3), N = new Float32Array(n * 3), Cc = new Float32Array(n * 3); let o = 0
+  for (const q of parts) { P.set(q.attributes.position.array, o * 3); N.set(q.attributes.normal.array, o * 3); Cc.set(q.attributes.color.array, o * 3); o += q.attributes.position.count }
+  const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.BufferAttribute(P, 3)); fg.setAttribute('normal', new THREE.BufferAttribute(N, 3)); fg.setAttribute('color', new THREE.BufferAttribute(Cc, 3))
+  const fm = new THREE.Mesh(fg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4 })); fm.castShadow = true
+  tree.add(fm)
+  tree.updateMatrix()
+  FIG_FORCED.push({ x: x + tree.position.x, z: z + tree.position.z, y: gy })
 }
 function heroTree(away = -1) {
   // away：樹座標裡背對鏡頭的 z 方向；小枝往那邊長，才不會擋住停在枝上的動物
@@ -1417,6 +1450,7 @@ export function placeAnimal(def) {
     tree.position.copy(side).multiplyScalar(-len)
     tree.rotation.y = Math.atan2(-side.z, side.x)
     g.add(tree)
+    if (def.onFig) dressFig(tree, x, z, gy)
     // obj 的 +x 就是枝條方向，原點在枝條的軸上
     obj.position.y = y
     obj.rotation.y = tree.rotation.y

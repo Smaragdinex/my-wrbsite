@@ -332,6 +332,7 @@ export const UI = {
  "完成 {n} 個委託，獎金 ${p}": "Completed {n} request(s), bonus ${p}",
  "委託完成：{c}（獎金 ${p}）": "Request complete: {c} (bonus ${p})",
  "符合委託 +${p}": "Request +${p}",
+ "正在吃果實": "eating fruit",
 }
 export const BIRDS = {
  "dove": {

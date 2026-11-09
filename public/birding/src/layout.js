@@ -350,6 +350,8 @@ export const YOSE = (() => {
   Y.inside = (x, z) => x > Y.x0 - 12 && x < Y.x1 + 10 && z > Y.base(Math.min(Y.x1, Math.max(Y.x0, x))) - 30
   return Y
 })()
+// 2026-11-10 吃果實的鳥停在雀榕上：birds.js 擺鳥時把自帶那棵樹的樹幹位置放進來，alpine.js 先在這些位置種雀榕
+export const FIG_FORCED = []
 export const CAMP = (() => { const e = ALP_SPURS.find((q) => q.name === 'camp').pts.at(-1); return { x: e[0], z: e[1], R: 6.8, y: 0 } })()
 export const ALP_BRIDGE = { a: 5, b: 6 }   // 步道第 5～7 點（120,-4 → 124,-12 → 128,-20）跨過溪谷：吊橋，橋下不鋪路
 export const ALP_PEAK = { x: AM(145, 0)[0], z: 8 * AS, h: 27, rx: 33, rz: 26 }   // 2026-11-08 山放大：高 21→27、範圍 27×21→33×26（設計座標）   // 跟步道終點差不多高：步道才不會在山頂挖出一條溝
