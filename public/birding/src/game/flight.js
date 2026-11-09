@@ -50,6 +50,8 @@ export const ESCAPE = {
   spotbill: { r: 10, swim: 5, fly: { speed: 12, hz: 5.5, style: 'flap', k: 1.0 } },
   partridge: { r: 7, run: 6, fly: { speed: 8, hz: 14, style: 'glide', k: 0.412 } },       // 林下三五成群，受驚快步跑進灌叢，逼急了才飛
   pitta: { r: 7, run: 5, fly: { speed: 7, hz: 11, style: 'flap', k: 0.43 } },
+  scopsowl: { r: 5, fly: { speed: 7, hz: 5, style: 'glide', k: 0.43 } },   // 2026-11-09 領角鴞：不太怕人，翅膀寬圓、飛得慢又安靜
+  mtscops: { r: 5, fly: { speed: 6.5, hz: 6, style: 'glide', k: 0.35 } },
   grassowl: { r: 6, run: 3, fly: { speed: 6, hz: 3.5, style: 'glide', k: 1.01 } },
   nuthatch: { r: 5, fly: { speed: 7, hz: 14, style: 'bound', k: 0.26 } },
   finchbill: { r: 6, fly: { speed: 8, hz: 11, style: 'bound', k: 0.368 } },

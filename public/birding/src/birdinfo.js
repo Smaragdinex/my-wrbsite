@@ -433,6 +433,29 @@ const ALL = [
       '有些農民改用友善的方式種田、不放毒鼠藥，幫助牠們留下來。',
     ],
   },
+  // 2026-11-09 角鴞兩種：領角鴞（花園）、黃嘴角鴞（山上巨木林）
+  {
+    id: 'scopsowl', spot: [-18, 26], perch: 'branch', dist: 3.0, camH: 3.6, lookY: 3.4,
+    name: "領角鴞", sci: 'Otus lettia glabripes', where: "花園步道旁的大樹上",
+    intro: "台灣低海拔最常見的貓頭鷹，連都市公園、校園的老樹上都住得到。頭上有一對豎起來的耳羽，灰褐色的身體布滿黑色細紋，像一塊樹皮；後頸有一圈淡黃白色的頸環，所以叫「領」角鴞。眼睛是暗橘褐色。",
+    facts: [
+      "白天縮著身體、瞇著眼停在濃密的枝葉裡，羽色跟樹皮幾乎一樣，很難發現。",
+      "晚上會發出「嗚、嗚」單調的叫聲，大約每十幾秒叫一次。",
+      "吃大型昆蟲、老鼠、壁虎和小鳥。",
+      "常在樹洞裡築巢，公園裡掛的巢箱也會用。",
+    ],
+  },
+  {
+    id: 'mtscops', spot: [150, 49], perch: 'branch', view: 85, dist: 2.6, camH: 3.6, lookY: 3.4,
+    name: "黃嘴角鴞", sci: 'Otus spilocephalus hambroecki', where: "巨木林步道旁的樹上",
+    intro: "台灣中海拔森林裡的小型貓頭鷹，台灣特有亞種。全身是紅褐色，布滿細細的黑色橫紋；嘴是淡黃色，所以叫「黃嘴」角鴞，眼睛鮮黃色；耳羽短短的不太明顯，肩上有一排白色的大斑點。",
+    facts: [
+      "夜裡在山林間發出「呼、呼」兩聲一組的口哨聲，整晚叫個不停。",
+      "體長只有 18 公分左右，比領角鴞小很多。",
+      "主要吃蛾、甲蟲之類的大型昆蟲。",
+      "住在中海拔的闊葉林和針闊葉混合林，白天躲在濃密的樹葉裡。",
+    ],
+  },
   // 2026-11-09 補齊台灣特有種（2026 年臺灣鳥類名錄 32 種特有種裡還缺的 17 種）
   {
     id: 'liocichla', spot: [120.2, 24.4], perch: 'ground', view: 151, dist: 2.4, camH: 1.0, lookY: 0.2,
@@ -628,6 +651,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
-  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing']
+  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

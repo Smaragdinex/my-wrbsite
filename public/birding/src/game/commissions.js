@@ -64,7 +64,7 @@ export function condText(c) {
 
 // 每日委託：從玩家拍過的鳥（加上門口幾種常見鳥）挑，保證做得到
 const EASY = ['sparrow', 'dove', 'bulbul', 'whiteeye', 'egret', 'heron', 'moorhen']
-const OWLS = ['woodowl', 'grassowl']
+const OWLS = ['woodowl', 'grassowl', 'scopsowl', 'mtscops']
 function rollDaily(seen, rnd) {
   const pool = [...new Set([...EASY, ...seen])].filter((id) => VALUE[id])
   const pick = (a) => a[Math.floor(rnd() * a.length)]

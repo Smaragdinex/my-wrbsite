@@ -713,6 +713,28 @@ export const BIRDS = {
    "Some farmers now grow crops without rat poison to help it survive."
   ]
  },
+ "scopsowl": {
+  "name": "Collared Scops Owl",
+  "where": "Big Tree beside the Garden Path",
+  "intro": "The most common owl in Taiwan's lowlands, living even in old trees in city parks and on campuses. A pair of raised ear tufts tops its head, and its grey-brown body is covered in fine black streaks like bark. A pale buff collar circles the back of its neck, and its eyes are dark orange-brown.",
+  "facts": [
+   "By day it sits hunched with half-closed eyes in dense foliage, its plumage almost identical to bark.",
+   "At night it gives a monotonous \"woop\" call roughly every ten-odd seconds.",
+   "It eats large insects, mice, geckos and small birds.",
+   "It nests in tree holes and will use nest boxes put up in parks."
+  ]
+ },
+ "mtscops": {
+  "name": "Mountain Scops Owl",
+  "where": "Tree beside the Giant Forest Trail",
+  "intro": "A small owl of Taiwan's mid-elevation forests, an endemic subspecies. It is rufous-brown all over with fine black bars; its bill is pale yellow and its eyes bright yellow. The ear tufts are short and inconspicuous, and a row of large white spots runs along the shoulder.",
+  "facts": [
+   "At night it whistles a paired \"hoo-hoo\" through the mountain forest, calling all night long.",
+   "It is only about 18 cm long, much smaller than the Collared Scops Owl.",
+   "It mainly eats large insects such as moths and beetles.",
+   "It lives in mid-elevation broadleaf and mixed forest, hiding in dense leaves by day."
+  ]
+ },
  "liocichla": {
   "name": "Steere's Liocichla",
   "where": "Trailside above the Forest Entrance",
