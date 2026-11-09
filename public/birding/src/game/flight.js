@@ -50,6 +50,10 @@ export const ESCAPE = {
   spotbill: { r: 10, swim: 5, fly: { speed: 12, hz: 5.5, style: 'flap', k: 1.0 } },
   partridge: { r: 7, run: 6, fly: { speed: 8, hz: 14, style: 'glide', k: 0.412 } },       // 林下三五成群，受驚快步跑進灌叢，逼急了才飛
   pitta: { r: 7, run: 5, fly: { speed: 7, hz: 11, style: 'flap', k: 0.43 } },
+  shelduck: { r: 12, swim: 5, fly: { speed: 12, hz: 5, style: 'flap', k: 1.2 } },
+  pheron: { r: 12, fly: { speed: 7, hz: 3, style: 'glide', k: 2.2 } },
+  stilt: { r: 9, fly: { speed: 9, hz: 6, style: 'flap', k: 0.95 } },
+  harrier: { r: 14, fly: { speed: 9, hz: 3.5, style: 'glide', k: 1.35 } },
   woodcock: { r: 4, fly: { speed: 7, hz: 9, style: 'flap', k: 0.55 } },   // 2026-11-10 山鷸：不太怕人，靠很近才「咻咻」飛起
   jacana: { r: 7, fly: { speed: 7, hz: 5, style: 'glide', k: 0.58 } },   // 2026-11-10 水雉：翅膀幾乎全白，飛起來長腳往後伸
   psnipe: { r: 5, run: 4, fly: { speed: 7, hz: 7, style: 'flap', k: 0.45 } },

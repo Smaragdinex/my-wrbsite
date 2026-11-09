@@ -717,6 +717,50 @@ export const BIRDS = {
    "Some farmers now grow crops without rat poison to help it survive."
   ]
  },
+ "shelduck": {
+  "name": "Ruddy Shelduck",
+  "where": "Mountain Lake",
+  "intro": "A large, orange-brown duck with a pale buff head and whitish face; breeding males wear a thin black collar. In flight the white forewing, black flight feathers and green speculum make a striking contrast.",
+  "facts": [
+   "A rare winter visitor to Taiwan, with one or two occasionally turning up on lakes, estuaries or farmland.",
+   "It breeds on the steppes of Central Asia and Mongolia.",
+   "It nests in tree holes, rock crevices or even burrows, not necessarily near water.",
+   "Its loud goose-like \"aang\" call carries far."
+  ]
+ },
+ "pheron": {
+  "name": "Purple Heron",
+  "where": "Shallows on the North Shore of the Mountain Lake",
+  "intro": "Its slender chestnut neck has a black stripe down each side, the crown is bluish-black with long thin plumes, and the blue-grey back carries trailing chestnut shoulder plumes. It hides at the edge of reeds and waterweed, standing motionless to wait for fish.",
+  "facts": [
+   "It is slimmer than the Grey Heron, with a thinner neck often held in an S-curve.",
+   "When fishing it shoots its neck out with startling speed.",
+   "In Taiwan it is an uncommon resident and winter visitor, more often seen on Kinmen and in Yilan.",
+   "In flight the neck is drawn into an S and the long legs trail behind the tail."
+  ]
+ },
+ "stilt": {
+  "name": "Black-winged Stilt",
+  "where": "Shallows on the West Side of the Mountain Lake",
+  "intro": "Crisp black-and-white plumage set on pink legs longer than its body, as if walking on stilts. The bill is thin and black and the eye red. Small groups wade gracefully through shallows, picking insects from the surface.",
+  "facts": [
+   "Legs make up about 60% of its height, one of the most extreme leg ratios of any bird.",
+   "A common winter visitor to Taiwan, with some birds staying to breed.",
+   "When disturbed it circles overhead yapping loudly in protest.",
+   "In flight the long legs trail far behind the tail, making it easy to identify."
+  ]
+ },
+ "harrier": {
+  "name": "Western Marsh Harrier",
+  "where": "Grass on the South Shore of the Mountain Lake",
+  "intro": "A medium-large raptor; in flight the male is a three-toned black, brown and white: white leading edge, rufous coverts, pale grey flight feathers and black wingtips. It quarters low over marsh and grassland with wings raised in a shallow V, head down hunting.",
+  "facts": [
+   "In Taiwan it is a vagrant: a lost bird turns up only occasionally, and birders travel specially to see it.",
+   "It closely resembles the Eastern Marsh Harrier; the male's rufous belly is the key difference.",
+   "It usually perches on the ground or a grass tussock rather than high in a tree.",
+   "It eats small mammals, birds, frogs and fish."
+  ]
+ },
  "woodcock": {
   "name": "Eurasian Woodcock",
   "where": "On the North Slope Spur Trail",

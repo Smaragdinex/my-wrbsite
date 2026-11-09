@@ -286,7 +286,7 @@ const BUILD = {
   goshawk, woodowl,
   mandarin, spotbill, partridge, nuthatch, finchbill, minivet, pitta, grassowl,
   liocichla, whitebrow, bullfinch, barwing, islandthrush, tit, rustylt, whitethroat, hwamei, styan, scimitar, fulvetta, bamboo, flowing, bushwarbler, cupwing, shortwing,
-  scopsowl, mtscops, jacana, psnipe, woodcock,
+  scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -308,7 +308,7 @@ export async function loadAnimalModels(extra = [], onProgress) {
   await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
@@ -639,18 +639,30 @@ function groundTripo(env, cfg) {
       r.turn('neck', LAT, -c.neck * 0.8); r.turn('neck', AX.y, c.yaw * 0.5 + c.sway)
       r.stretch('head', c.reach)
     }
-    // cfg.rock：山鷸的「搖擺步」（照影片）：每跨一步整個身體前後搖一下——身體往前推、尾端翹起，再往後坐；
-    // 頭在空中幾乎不動（脖子反向補償），步子小而慢、一頓一頓；停下來時也偶爾輕輕搖
-    let rockNeck = 0
-    if (cfg.rock) {
-      c.rockA = damp(c.rockA ?? 0, c.amp > 0.2 ? 1 : 0.25 * ss(Math.sin(t * 0.7), 0.3, 1), 4, dt)
+    // cfg.rock：山鷸的「搖擺步」（2026-11-10 照影片與研究重做）：身體在腳上前後搖、頭在空中幾乎完全不動。
+    // 頭和身體分開算：先記下「沒搖時」頭在鳥本身座標的位置，套上身體的搖擺後，再把脖子／頭的骨頭推回那個位置
+    // （脖子根一半、頭一半，讓脖子跟著伸縮），頭的角度也反向補回身體的前傾，看起來就是身體在頭底下滑來滑去
+    let rockNeck = 0, headAnchor = null
+    if (cfg.rock && r.bones.head) {
+      c.rockA = damp(c.rockA ?? 0, c.amp > 0.2 ? 1 : 0.3 * ss(Math.sin(t * 0.7), 0.2, 1), 4, dt)
       const rk = c.amp > 0.2 ? Math.sin(ph * 2) : Math.sin(t * 5.5), A = cfg.rock * c.rockA
-      inner.position.z = A * cfg.H * 0.32 * rk                               // 身體前後移
-      r.turn('body', LAT, -0.22 * A * rk)                                    // 往前推時身體前傾、尾端翹起
-      r.turn('tail', LAT, 0.25 * A * rk)
-      rockNeck = 0.3 * A * rk                                                // 脖子反向，頭留在原地
+      inner.position.z = 0; inner.updateWorldMatrix(true, true)        // 上一格的位移要先歸零再量
+      headAnchor = root.worldToLocal(r.bones.head.getWorldPosition(V()))
+      inner.position.z = A * cfg.H * 0.18 * rk                               // 身體前後移
+      r.turn('body', LAT, -0.2 * A * rk)                                     // 往前推時身體前傾、尾端翹起
+      r.turn('tail', LAT, 0.3 * A * rk)
+      rockNeck = 0.2 * A * rk                                                // 頭的角度補回來，保持水平
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
+    if (headAnchor) {
+      for (const [b, f] of [['neck', 0.5], ['head', 1]]) {
+        const bn = r.bones[b] ?? r.bones.head
+        inner.updateWorldMatrix(true, true)
+        const want = root.localToWorld(headAnchor.clone()), now = r.bones.head.getWorldPosition(V())
+        const pw = bn.parent.worldToLocal(want.clone()), pn = bn.parent.worldToLocal(now)
+        bn.position.addScaledVector(pw.sub(pn), f)
+      }
+    }
     // 尾巴：前傾時翹起、走路時跟著步伐上下左右擺
     const flick = cfg.flick ? cfg.flick * Math.pow(Math.max(0, Math.sin(t * (cfg.flickF ?? 2.4))), 6) : 0
     r.turn('tail', LAT, 0.1 * c.lean + 0.06 * Math.sin(ph * 2 + 1) * c.amp + flick + (cfg.swim ? 0.3 : 0)); r.turn('tail', AX.y, 0.08 * Math.sin(ph) * c.amp)
@@ -1319,6 +1331,27 @@ function jacana(env) { return endemicGround('jacana-rig', 0.3, 0.724, { hop: 0, 
 function psnipe(env) { return endemicGround('psnipe-rig', 0.24, 0.717, { hop: 0, flick: 0.3, radius: 0.9, speed: 0.12, stride: 0.07 })(env) }
 // 2026-11-10 山鷸：步道上兩點之間走過去走回來，每一步身體前後搖（rock）、頭不動；偶爾停下來用長嘴往地上探
 function woodcock(env) { return endemicGround('woodcock-rig', 0.26, 0.573, { hop: 0, flick: 0.05, speed: 0.11, stride: 0.07, patrol: env.patrol, rock: 1, acts: { walk: [6, 99, 99], peck: [2, 1, 1.8], stand: [1.5, 0.8, 2], look: [1, 0.8, 1.5] } })(env) }
+// 2026-11-10 山下湖：黃麻鴨（兩隻游）、紫鷺（涉水捕魚）、高蹺鴴（三隻涉水）、西方澤鵟（站在草地上）
+function shelduck(env) {
+  return groundGroup(2, 1.1, (avoid) => groundTripo(env, { name: 'shelduck-rig', H: 0.5, h0: 0.719, ...TRIPO, swim: true, bill: 0.14, bob: 0.03,
+    walk: { radius: 3.2, speed: 0.13, avoid: swimAvoid(env, avoid) }, stride: 0.12, swingT: 0.35, lift: 0, knee: [0.7, 1.3], focusY: 0.32,
+    acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.4], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } }))
+}
+function pheron(env) {
+  return groundTripo(env, { name: 'pheron-rig', H: 1.0, h0: 0.979, ...TRIPO, reach: 0.9, wade: true, bill: 0.3,
+    walk: { radius: 0.9, speed: 0.12 }, swingT: 0.5, lift: 0, knee: [1.0, 1.7], focusY: 0.6,
+    acts: { stand: [3, 3, 6], hunt: [4, 3, 6], walk: [2, 99, 99], turn: [1, 99, 99], strike: [1, 1.4, 1.4], look: [1.5, 1.5, 3] } })
+}
+function stilt(env) {
+  return groundGroup(3, 0.8, (avoid) => groundTripo(env, { name: 'stilt-rig', H: 0.46, h0: 0.98, ...TRIPO, reach: 0.6, wade: true, bill: 0.17,
+    walk: { radius: 1.6, speed: 0.16, avoid }, swingT: 0.42, lift: 0, knee: [0.9, 1.6], focusY: 0.7,
+    acts: { walk: [4, 99, 99], peck: [3, 0.8, 1.4], stand: [1.5, 1.5, 3], look: [1.5, 1, 2], turn: [1, 99, 99] } }))
+}
+function harrier(env) {
+  return groundTripo(env, { name: 'harrier-rig', H: 0.56, h0: 0.95, ...TRIPO, bill: 0.07,
+    walk: { radius: 0.6, speed: 0.1 }, swingT: 0.4, lift: 0.02, knee: [0.6, 1.2], focusY: 0.45,
+    acts: { stand: [4, 3, 6], look: [3, 1.2, 2.5], walk: [0.6, 99, 99], turn: [1, 99, 99] } })
+}
 function fulvetta(env) { return endemicPerch('fulvetta-rig', 0.18 / 0.618, 9)(env) }
 function flowing(env) { return endemicPerch('flowing-rig', 0.17 / 0.572, 10)(env) }
 

@@ -433,6 +433,51 @@ const ALL = [
       '有些農民改用友善的方式種田、不放毒鼠藥，幫助牠們留下來。',
     ],
   },
+  // 2026-11-10 山下湖再加四種：黃麻鴨（湖中游）、紫鷺（北岸淺水，避開蓮花叢）、高蹺鴴（西邊淺水，三隻）、西方澤鵟（南岸草地）
+  {
+    id: 'shelduck', spot: [112, -47], perch: 'ground', swim: 'alpPond', view: 128, y: ALP_POND.water - 0.17, water: ALP_POND.water, dist: 10, camH: 1.6, lookY: 0.3,
+    name: "黃麻鴨", sci: 'Tadorna ferruginea', where: "山下的湖",
+    intro: "全身橙黃褐色的大型鴨子，頭頸淡棕黃、臉偏白，雄鳥繁殖期頸上一圈黑色細環。飛起來翅膀前半全白、飛羽黑色、還有綠色翼鏡，對比非常強烈。",
+    facts: [
+      "在台灣是稀有的冬候鳥，偶爾一兩隻出現在湖泊、河口或農田。",
+      "別名「赤麻鴨」，在中亞、蒙古草原繁殖。",
+      "常在樹洞、岩縫甚至土洞裡築巢，不一定在水邊。",
+      "叫聲像鵝一樣「昂—昂—」，很響亮。",
+    ],
+  },
+  {
+    id: 'pheron', spot: [95.8, -25.6], perch: 'ground', view: 330, y: ALP_POND.water - 0.2, water: ALP_POND.water, dist: 4.2, camH: 1.6, lookY: 0.75,
+    name: "紫鷺", sci: 'Ardea purpurea', where: "山下湖北岸的淺水",
+    intro: "細長的脖子是栗紅色、兩側各有一條黑線，頭頂藍黑色，後頭有細長飾羽；背和翅膀藍灰色，肩上掛著一縷縷栗紅色的蓑羽。喜歡躲在蘆葦、水草邊，一動也不動地等魚。",
+    facts: [
+      "比蒼鷺瘦長，脖子更細、更彎，常彎成 S 形。",
+      "捕魚時脖子突然「彈」出去，速度非常快。",
+      "在台灣是不普遍的留鳥和冬候鳥，金門、宜蘭比較常見。",
+      "飛行時脖子縮成 S 形、長腳伸到尾巴後面。",
+    ],
+  },
+  {
+    id: 'stilt', spot: [85.6, -37.7], perch: 'ground', view: 280, y: ALP_POND.water - 0.24, water: ALP_POND.water, dist: 3.4, camH: 1.0, lookY: 0.4,
+    name: "高蹺鴴", sci: 'Himantopus himantopus', where: "山下湖西邊的淺水",
+    intro: "黑白分明的身體配上一雙比身體還長的粉紅色長腳，像踩著高蹺，所以叫高蹺鴴。嘴黑色細長、眼睛紅色。常一小群在淺水裡優雅地走來走去，低頭啄水面的小蟲。",
+    facts: [
+      "腳長佔了身高的六成，是腿長比例最誇張的鳥之一。",
+      "在台灣是普遍的冬候鳥，也有留下來繁殖的族群。",
+      "被打擾時會「叫叫叫」地大聲抗議，在頭頂盤旋。",
+      "飛起來長腳拖在尾巴後面很遠，非常好認。",
+    ],
+  },
+  {
+    id: 'harrier', spot: [95.5, -67.2], perch: 'ground', view: 200, dist: 3.4, camH: 1.0, lookY: 0.35,
+    name: "西方澤鵟", sci: 'Circus aeruginosus', where: "山下湖南岸的草地",
+    intro: "中大型猛禽，雄鳥飛起來是黑、褐、白三色：翅膀前緣白、覆羽紅褐、飛羽灰白、翼尖黑。常貼著沼澤、草地低空盤旋，雙翼上揚成淺 V 字，低頭找獵物。",
+    facts: [
+      "在台灣是「迷鳥」，偶爾才有一隻迷路過來，賞鳥人會專程去看。",
+      "跟東方澤鵟很像，雄鳥腹部紅褐色是分辨重點。",
+      "停棲時常站在地面或草堆上，而不是高高的樹上。",
+      "吃小型哺乳類、鳥、蛙和魚。",
+    ],
+  },
   // 2026-11-10 山鷸：在北坡支線的步道上走過去走回來（搖擺步）
   {
     id: 'woodcock', spot: [152.17, 53.20], perch: 'ground', onTrail: true, patrol: [[2.05, -2.46], [-2.05, 2.46]], view: 60, dist: 3.2, camH: 1.0, lookY: 0.15,
@@ -686,6 +731,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
-  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock']
+  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))
