@@ -9,6 +9,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
 import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight } from './layout.js'
 import { scatter } from './plants.js'
+import { nearGiant, forestK } from './giants.js'
 import { bladeMesh } from './flora.js'
 import { addWind } from './wind.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
@@ -209,8 +210,10 @@ function buildInterior(lib, avoid = []) {
       // 花園地面 = 草地貼圖平均色 × 頂點色；這邊的細節貼圖是灰的，所以換算成「乘上灰貼圖後跟花園一樣」的顏色（線性色彩）
       const gr = gardenRho(x, z), gb = 1 - ss(0, GB_OUT, Math.hypot(x, z) * (1 - 1.03 / gr))   // 離花園邊幾公尺（沿著半徑量）
       if (gb > 0) c.lerp(gardenCol.setRGB((0.084 + n * 0.03) * GB_K[0], (0.19 + n * 0.05) * GB_K[1], (0.023 + n * 0.01) * GB_K[2]), gb)
-      const rock = ss(0.86, 0.7, ny)
-      c.lerp(new THREE.Color().setHSL(0.1, 0.06, 0.36 + n * 0.08), rock)                     // 岩石
+      const rock = ss(0.86, 0.7, ny), fk = forestK(x, z)
+      // 巨木林帶（giants.js）：地上是厚厚的落葉、針葉堆（暗紅褐）；陡坡不是灰石頭，是長滿青苔的土坡
+      if (fk > 0) c.lerp(new THREE.Color().setHSL(0.07 + n * 0.03, 0.32, 0.15 + n * 0.05), 0.55 * fk)
+      c.lerp(new THREE.Color().setHSL(0.1, 0.06, 0.36 + n * 0.08).lerp(new THREE.Color().setHSL(0.2 + n * 0.04, 0.35, 0.16 + n * 0.06), fk), rock)                     // 岩石（林裡是青苔）
       const tr = ss(1.6, 0.9, alpineTrailDist(x, z))
       c.lerp(new THREE.Color().setHSL(0.08, 0.28, 0.33 + n * 0.04), tr * 0.9)               // 步道泥土
       // 溪床、池底：濕的深色石頭和砂（水是透明的，看得到底下）；岸上一圈濕地
@@ -671,7 +674,7 @@ function buildInterior(lib, avoid = []) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2, td = alpineTrailDist(x, z)
       if (td < 5 || td > 12 || x > 230 || !inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineHeight(x, z) > 18) continue
       if (alpineStreamDist(x, z) < 3 || bridgeDist(x, z) < 10 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4) || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 3 || nearBird(avoid, x, z, 5, 2.5)) continue
-      if (FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < 16)) continue
+      if (FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < 16) || nearGiant(x, z, 8)) continue
       FIGPOS.push({ x, z, H: 7 + rnd() * 3.5 })
     }
     for (const kind of ['fir', 'hemlock']) {
@@ -701,6 +704,7 @@ function buildInterior(lib, avoid = []) {
         if (nearBird(avoid, x, z, 5.5, 2.5)) continue
         if (inB && (pathClearAt(x, z) < crownR + 1.2 || OPEN(x, z))) continue   // 花園步道上也不能有樹冠
         if (FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < 9)) continue   // 雀榕四周留空
+        if (nearGiant(x, z, 4.5)) continue   // 巨木（giants.js）四周留空
         if (Math.hypot(x - ALP_TRAIL[0][0], z - ALP_TRAIL[0][1]) < 7) continue   // 步道一進來的地方留一小塊空地，看得到山
         if (Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1]) < 16) continue   // 山頂四周是箭竹草原，看得出去
         list.push({ p: V(x, hgt - 0.2, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(H * (0.85 + rnd() * 0.3), H, H * (0.85 + rnd() * 0.3)), H })
@@ -1102,7 +1106,7 @@ function buildInterior(lib, avoid = []) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955) continue
             if (groundClear(avoid, x, z, 1.6)) continue   // 地上的鳥走動的地方、到鏡頭那條線：不長
-            if (bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8) continue   // 吊橋兩端橋面貼近地面：箭竹會從木板縫長出來（2026-11-09）
+            if (bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8 || nearGiant(x, z, 0.1)) continue   // 吊橋兩端橋面貼近地面：箭竹會從木板縫長出來（2026-11-09）；巨木樹幹裡不長
       if ((Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R)) continue   // 小木屋裡面不長
       if (alpineTrailDist(x, z) < 1.5 || alpineStreamDist(x, z) < 1.4 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.6) continue
       const h = GY(x, z)
@@ -1183,7 +1187,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 160000 * AK && list.length < 90000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955) continue
-      if (groundClear(avoid, x, z, 1.8) || bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8) continue
+      if (groundClear(avoid, x, z, 1.8) || bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8 || nearGiant(x, z, 0.2)) continue
       if ((Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 0.2 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 0.2)) continue
       if (alpineTrailDist(x, z) < 1.7 || alpineStreamDist(x, z) < 1.6 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.8) continue
       const patch = fbm2(x * 0.07, z * 0.07, 3)

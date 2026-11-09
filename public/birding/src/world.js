@@ -23,6 +23,7 @@ import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
 import { buildOwlNest } from './owlnest.js'
 import { buildCamp } from './camp.js'
+import { buildGiants, giantSpots } from './giants.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
 export const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
@@ -121,9 +122,12 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     scene.add(buildOwlNest({ x: nx, z: nz, face: Math.atan2(ux, uz), groundAt: alpineHeight, owl: [ox, oz], sign: null }))
     addCollider(nx, nz, 0.55, alpineHeight(nx, nz) + 0.6)
   }
+  giantSpots(alpAvoid)   // 巨木的位置先算好：山區的其他樹、草要避開
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
   alpine.build()
-  const camp = buildCamp(scene)   // 右邊岔路上去的營地（三頂帳篷＋營火）
+  const camp = buildCamp(scene)
+  const giants = buildGiants(scene, { sun, avoid: alpAvoid })
+  const _forestFog = new THREE.Color()   // 阿里山／紅杉林那種巨木林帶（步道中段）   // 右邊岔路上去的營地（三頂帳篷＋營火）
   const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
   const birdStops = birds.map((b) => ({
     bird: b, title: b.def.name, nick: b.def.nick, sci: b.def.sci, tag: b.def.where, text: b.def.intro, facts: b.def.facts,
@@ -217,7 +221,19 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     time?.tick(t, dt)
     cloudSea.tick(t, camera, { day: dayLight.value })
     camp.tick(t, dt, { day: dayLight.value })
+    giants.tick(t, camera, { day: dayLight.value })
     weather.tick(t, dt)
+    {
+      // 走進巨木林：樹冠把天空遮住，林下比較暗、帶一點藍綠色的霧（天氣每格都會把燈光重設，所以這裡乘上去不會累積）
+      const fk = giants.inside(camera)
+      if (fk > 0.001) {
+        hemi.intensity *= 1 - 0.42 * fk
+        scene.environmentIntensity *= 1 - 0.5 * fk
+        scene.fog.density *= 1 + 0.9 * fk
+        const l = scene.fog.color.r * 0.3 + scene.fog.color.g * 0.5 + scene.fog.color.b * 0.2
+        scene.fog.color.lerp(_forestFog.setRGB(l * 0.62, l * 0.78, l * 0.72), 0.6 * fk)
+      }
+    }
     {
       const mk = mistLevel.value, tint = 0.2 + 0.8 * Math.min(1, dayLight.value * 1.4), cp = camera.position   // 清晨天剛亮，霧就先白起來
       for (const sp of groundMist) {
