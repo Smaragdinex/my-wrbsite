@@ -9,6 +9,7 @@ import { createCamera, BODIES, LENSES } from './camera.js'
 import { createPlayback } from './playback.js'
 import { createGuide } from './guide.js'
 import { createShop } from './shop.js'
+import { createCommissions } from './commissions.js'
 import { createProductView } from './product.js'
 import { buildStore } from './store.js'
 import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.js'
@@ -77,15 +78,22 @@ state.read ??= [...state.seen]
 const unreadN = () => state.seen.filter((id) => !state.read.includes(id)).length
 const save = () => { saveState(state); hud.setMoney(state.money) }
 hud.setMoney(state.money); hud.setGuideNew(unreadN())
+// 老闆委託：主線＋每日 3 個（commissions.js）；右上角時鐘下面一直顯示目前的主線委託
+const comm = createCommissions(state, { onChange: (why) => { save(); showQuest(); if (why === 'day') hud.toast(tr('老闆有新的每日委託')) } })
+const showQuest = () => hud.setQuest(comm.main ? tr('委託：{c}', { c: comm.condText(comm.main) }) : '')
+showQuest(); saveState(state)   // 第一次產生的每日委託要存起來，不然每次重新整理都換一批
 const gear = { body: () => BODIES.find((b) => b.id === state.bodyId), lens: () => LENSES.find((l) => l.id === state.lensId) }
 
 const cam = createCamera({ world, camera, controls: player.controls, hud, gear, getSound: () => settings.state.sound, onShot: (p) => {
+  // 委託要看拍的時段、有沒有在下雨
+  p.hour = hour; p.rain = world.weather.rain; p.weather = world.weather.name
   photos.push(p); putPhoto(p)
   // 圖鑑：拍到過就算記錄（照片賣掉、刪掉也還在）；新的鳥種先記成未讀，右上角亮「圖鑑 N 筆新紀錄」
   const isNew = p.subject && !state.seen.includes(p.subject.id)
   if (isNew) { state.seen.push(p.subject.id); save(); hud.setGuideNew(unreadN()) }
   // 拍的當下不顯示分數、評語、價錢（使用者要求）：要到相簿或相機行老闆那裡才知道拍得怎樣——新鳥種只說「圖鑑多了一筆」
-  hud.toast(isNew ? tr('已存入相簿\n圖鑑新增一筆紀錄！') : tr('已存入相簿'), isNew ? 3.2 : 2.2)
+  const hit = comm.matchFor(p)
+  hud.toast((isNew ? tr('已存入相簿\n圖鑑新增一筆紀錄！') : tr('已存入相簿')) + (hit ? '\n' + tr('這張符合老闆的委託！拿去相機行') : ''), isNew || hit ? 3.2 : 2.2)
 } })
 
 // 面板（相簿、相機行）開著的時候放開滑鼠；關掉再鎖回去
@@ -93,7 +101,7 @@ const relock = () => player.controls.lock()
 // Tab：相機背面螢幕的回放（playback.js，2026-11-08 取代網頁式的相簿）
 const album = createPlayback({ photos, onDelete: (p) => { const i = photos.indexOf(p); if (i >= 0) photos.splice(i, 1); deletePhoto(p.time) }, onClose: relock })
 const store = await buildStore(scene, state, world.plantLib, { getSound: () => settings.state.sound })   // 自動門音效跟著設定的「音效」開關（只在玩的時候才會叫到，那時 settings 已經建好）   // 相機行：溫室門口外面那棟店，遊戲從店裡開始
-const shop = createShop({ state, photos, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock, onView: (it, all) => product.open(it, all) })
+const shop = createShop({ state, photos, comm, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock, onView: (it, all) => product.open(it, all) })
 // Esc 闔上：瀏覽器不讓 Esc 重新鎖滑鼠，就回到首頁選單（跟平常按 Esc 一樣）
 let uiFx = null   // 下面 createUiFx 才建；圖鑑的按鈕、翻頁音效用它
 const guide = createGuide({ renderer, sfx: (k) => uiFx?.play(k), onClose: (why) => why === 'esc' ? player.controls.dispatchEvent({ type: 'unlock' }) : relock(), getRecords: () => {
@@ -228,6 +236,7 @@ function tick(dt, t) {
   cam.update(dt)
   if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }
   hud.setClock(hour)
+  comm.tickHour(hour)
   amb.tick(dt, { hour, pos: camera.position, rain: world.weather.rain, storm: world.weather.storm })
   if (world.weather.rain > 0.3 !== wasRaining) { wasRaining = !wasRaining; if (wasRaining && !menuCam) hud.toast(tr('開始下雨了')) }
   vm.setGear(state.bodyId, state.lensId)
@@ -245,5 +254,5 @@ function tick(dt, t) {
   if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
   guide.render(dt)   // 圖鑑（書）疊在最上面
 }
-window.__game = { step: (dt) => { recT += dt; tick(dt, recT) }, REC, setMenuCam, guide, amb, settings, store, product, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
+window.__game = { comm, step: (dt) => { recT += dt; tick(dt, recT) }, REC, setMenuCam, guide, amb, settings, store, product, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }
 if (!REC) frame()

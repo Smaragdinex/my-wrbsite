@@ -1,14 +1,15 @@
 // 畫面上的資訊：準星、錢、提示、短暫的訊息
 import { t as tr } from '../i18n.js'
 export function createHud(root) {
-  root.innerHTML = '<div class="crosshair"></div><div class="money" hidden></div><div class="clock" hidden></div><div class="guide-new" hidden></div><div class="fade"></div><div class="status" hidden></div><div class="hint" hidden></div><div class="toast" style="opacity:0"></div>'
-  const money = root.querySelector('.money'), hint = root.querySelector('.hint'), toast = root.querySelector('.toast'), status = root.querySelector('.status'), clock = root.querySelector('.clock'), guideNew = root.querySelector('.guide-new'), fade = root.querySelector('.fade')
+  root.innerHTML = '<div class="crosshair"></div><div class="money" hidden></div><div class="clock" hidden></div><div class="guide-new" hidden></div><div class="quest" hidden></div><div class="fade"></div><div class="status" hidden></div><div class="hint" hidden></div><div class="toast" style="opacity:0"></div>'
+  const money = root.querySelector('.money'), hint = root.querySelector('.hint'), toast = root.querySelector('.toast'), status = root.querySelector('.status'), clock = root.querySelector('.clock'), guideNew = root.querySelector('.guide-new'), fade = root.querySelector('.fade'), quest = root.querySelector('.quest')
   let toastT = 0
   return {
     root,
     setMoney(v) { money.hidden = false; money.textContent = `$ ${v.toLocaleString()}` },
     // 圖鑑有沒讀過的新紀錄：右上角一直亮著，讀完（翻到那一頁）才消失
     setGuideNew(n) { guideNew.hidden = !n; if (n) guideNew.textContent = tr('圖鑑 {n} 筆新紀錄（E）', { n }) },
+    setQuest(text) { quest.hidden = !text; if (text) quest.textContent = text },
     setStatus(text) { status.hidden = !text; if (text) status.textContent = text },
     // 時鐘：幾點幾分＋時段
     setClock(h) {

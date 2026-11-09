@@ -70,7 +70,8 @@ body.in-menu #hud { display: none; }
 .clock { position: absolute; right: 18px; top: 54px; background: rgba(0, 0, 0, 0.45); color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 14px; }
 .fade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 0.6s; }
 .fade.on { opacity: 1; }
-.guide-new { position: absolute; right: 18px; top: 92px; background: #c2412d; color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 14px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.3); animation: guide-new-pulse 1.6s ease-in-out infinite; }
+.quest { position: absolute; right: 18px; top: 92px; max-width: 46vw; background: rgba(120, 72, 20, 0.72); color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.guide-new { position: absolute; right: 18px; top: 128px; background: #c2412d; color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 14px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.3); animation: guide-new-pulse 1.6s ease-in-out infinite; }
 .guide-new::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #fff; margin-right: 7px; vertical-align: 1px; }
 @keyframes guide-new-pulse { 50% { transform: scale(1.06); } }
 .money { position: absolute; right: 18px; top: 16px; background: rgba(0, 0, 0, 0.45); color: #fff; padding: 6px 14px; border-radius: 99px; font-weight: 700; }
@@ -306,3 +307,18 @@ svg.controls image { mix-blend-mode: multiply; }
 /* 相機行：一鍵全部賣出 */
 .sell-all { margin: 10px 0 14px; }
 .sell-all .btn { width: 100%; box-sizing: border-box; padding: 12px 16px; font-size: 16px; }
+/* 老闆委託（commissions.js） */
+.comms { background: #fbf5ea; border: 1px solid #ecdcc0; border-radius: 12px; padding: 10px 14px; margin: 10px 0 14px; }
+.comms h3 { margin: 2px 0 8px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.comms h3 .muted { font-size: 12px; font-weight: 400; }
+.comm { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px dashed #e4d2b0; }
+.comm:first-of-type { border-top: 0; }
+.comm p { margin: 3px 0 0; }
+.comm .tag { display: inline-block; font-size: 11px; font-weight: 700; color: #fff; background: #b07a2a; border-radius: 99px; padding: 1px 8px; margin-right: 8px; vertical-align: 1px; }
+.comm.main .tag { background: #9c3b22; }
+.comm .reward { font-weight: 700; color: #8a5a12; white-space: nowrap; }
+.comm.done { opacity: 0.5; }
+.comm.done b { text-decoration: line-through; }
+.comms > p.muted { font-size: 12px; margin: 6px 0 0; }
+.comm-hit { color: #8a5a12; font-weight: 700; margin: 4px 0; }
+.comm-badge { display: block; color: #fff; background: #b07a2a; border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 700; margin: 2px 0; }
