@@ -17,7 +17,7 @@ import { loadAnimalModels, placeAnimal } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider } from './layout.js'
+import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
@@ -97,6 +97,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       const pv = THREE.MathUtils.radToDeg(Math.atan2(q.x - x, q.z - z))
       if (Math.abs(((pv - d.view) % 360 + 540) % 360 - 180) > 90) d.view = pv
     }
+    d.trunkBad = (x, z) => inAlpine(x, z) ? alpineTrailDist(x, z) < 2 : pathClearAt(x, z) < 1.2
     const a = placeAnimal(d)
     scene.add(a.group)
     return { def, ...a }

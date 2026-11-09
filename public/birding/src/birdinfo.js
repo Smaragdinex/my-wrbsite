@@ -42,7 +42,7 @@ const ALL = [
     ],
   },
   {
-    id: 'barbet', spot: [-24, -25], perch: 'branch', dist: 2.6, camH: 3.6, lookY: 3.45,
+    id: 'barbet', spot: [-30.9, -19.2], perch: 'branch', dist: 2.6, camH: 3.6, lookY: 3.45,
     name: '五色鳥', sci: 'Psilopogon nuchalis', where: '樹冠',
     intro: '台灣特有種。身上有綠、藍、黃、紅、黑五種顏色，因為臉上的花紋像化了妝，也被叫做「花和尚」。牠的身體大部分是綠色，停在樹冠裡幾乎和樹葉融在一起，所以常常只聽得到叫聲、找不到鳥。',
     facts: [
@@ -223,7 +223,7 @@ const ALL = [
     ],
   },
   {
-    id: 'oriole', spot: [-26, -10], perch: 'branch', dist: 3.0, camH: 3.6, lookY: 3.4,
+    id: 'oriole', spot: [-33.5, -7.3], perch: 'branch', dist: 3.0, camH: 3.6, lookY: 3.4,
     name: '黃鸝', sci: 'Oriolus chinensis', where: '樹冠',
     intro: '全身金黃色，一條粗粗的黑色過眼線從嘴邊經過眼睛、一直繞到後頸，像綁了一條黑頭巾；嘴是粉紅色的。牠常躲在濃密的樹冠裡，叫聲是悅耳的笛音。',
     facts: [

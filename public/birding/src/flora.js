@@ -211,6 +211,7 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
       for (; off < p.w / 2 + 2.5; off += 0.25) { x = pts[k].x - tz / tl * off * side; z = pts[k].z + tx / tl * off * side; if (pathClearAt(x, z) > 0.4) break }
       if (pathClearAt(x, z) <= 0.4) continue
       if (benches.some((b) => Math.hypot(b.p.x - x, b.p.z - z) < 3)) continue   // 不要貼著長椅
+      if (lamps.some((l) => Math.hypot(l.p.x - x, l.p.z - z) < 12)) continue   // 2026-11-10 兩條步道並排的地方，兩邊的路燈會擠在一起：12 公尺內只留一盞
       if (!insideGarden(x, z, 0.92) || poolQ(x, z) < 1.3 || !freeOfColliders(x, z, 0.6) || nearBird(x, z)) continue
       if (distToMtn(x, z) < mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 1.5) continue
       lamps.push({ p: v3(x, terrainHeight(x, z), z), q: qY(0), s: sc(1) })

@@ -1390,6 +1390,8 @@ export function placeAnimal(def) {
   const v = THREE.MathUtils.degToRad(def.view)
   const toCam = V(Math.sin(v), 0, Math.cos(v))     // 從動物指向鏡頭
   const side = V(toCam.z, 0, -toCam.x)              // 和視線垂直
+  // 2026-11-10 樹上的鳥：自帶的那棵樹（樹幹在鳥的側邊 BRANCH.len）如果落在步道上，就換到另一側（五色鳥的樹幹插在路中間）
+  if (def.perch === 'branch' && def.trunkBad?.(x - side.x * BRANCH.len, z - side.z * BRANCH.len)) side.negate()
   const g = new THREE.Group(), obj = new THREE.Group()
   g.position.set(x, gy, z); g.add(obj)
   // 朝向：沿著 side 方向，再往鏡頭轉 turn 弧度，看起來是四分之三側面

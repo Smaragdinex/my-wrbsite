@@ -103,12 +103,12 @@ export function buildPondLife(scene, { lib } = {}) {
       if ([...pads, ...raised].some((p) => Math.hypot(p.x - x, p.z - z) < (p.size + size) * 0.62)) continue
       const up = rnd() < 0.55
       if (up) {   // 挺水葉：葉柄 0.3～1 公尺、葉面微傾
-        const h = 0.3 + rnd() * 0.7
+        const h = 0.12 + rnd() * 0.4
         raised.push({ x, z, size: size * 1.15, h, tx: (rnd() - 0.5) * 0.4, tz: (rnd() - 0.5) * 0.4, rot: rnd() * TAU })
       } else pads.push({ x, z, size, rot: rnd() * TAU })
-      if (rnd() < 0.13) flowers.push({ x: x + (rnd() - 0.5) * 0.3, z: z + (rnd() - 0.5) * 0.3, h: 0.7 + rnd() * 0.6, open: 0.5 + rnd() * 0.5, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.25 })
-      else if (rnd() < 0.08) buds.push({ x: x + (rnd() - 0.5) * 0.3, z: z + (rnd() - 0.5) * 0.3, h: 0.6 + rnd() * 0.5, rot: rnd() * TAU })
-      else if (rnd() < 0.05) pods.push({ x: x + (rnd() - 0.5) * 0.3, z: z + (rnd() - 0.5) * 0.3, h: 0.6 + rnd() * 0.5, rot: rnd() * TAU })
+      if (rnd() < 0.13) flowers.push({ x: x + (rnd() - 0.5) * 0.3, z: z + (rnd() - 0.5) * 0.3, h: 0.4 + rnd() * 0.35, open: 0.5 + rnd() * 0.5, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.25 })
+      else if (rnd() < 0.08) buds.push({ x: x + (rnd() - 0.5) * 0.3, z: z + (rnd() - 0.5) * 0.3, h: 0.35 + rnd() * 0.3, rot: rnd() * TAU })
+      else if (rnd() < 0.05) pods.push({ x: x + (rnd() - 0.5) * 0.3, z: z + (rnd() - 0.5) * 0.3, h: 0.3 + rnd() * 0.3, rot: rnd() * TAU })
     }
   }
   const padT = padTex()
