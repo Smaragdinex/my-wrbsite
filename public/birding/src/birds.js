@@ -652,16 +652,16 @@ function groundTripo(env, cfg) {
     let rockNeck = 0, headAnchor = null
     if (cfg.rock && r.bones.head) {
       c.rockA = damp(c.rockA ?? 0, c.amp > 0.2 ? 1 : 0.3 * ss(Math.sin(t * 0.7), 0.2, 1), 4, dt)
-      // 節奏 c.rph 在上面 w.update 前算：自己的相位累加，走路每秒 2 下、站著 0.9 下，慢慢變速
+      // 節奏 c.rph 在上面 w.update 前算：自己的相位累加，走路每秒 rockHz 下（山鷸 2.6：影片裡每 0.3～0.4 秒一小步、每步搖一下）、站著 0.9 下，慢慢變速
       // （以前直接用步伐相位，剛起步 walker 一衝就變成每秒十下的抖動）
       const rk = Math.sin(c.rph), A = cfg.rock * c.rockA
       inner.position.z = 0; inner.position.y = 0; inner.updateWorldMatrix(true, true)        // 上一格的位移要先歸零再量
       headAnchor = root.worldToLocal(r.bones.head.getWorldPosition(V()))
-      inner.position.z = A * cfg.H * 0.18 * rk                               // 身體前後移
+      inner.position.z = A * cfg.H * 0.13 * rk                               // 身體前後移
       inner.position.y = -A * cfg.H * 0.025 * (1 - rk) / 2                    // 往後坐時身體微微下沉
-      r.turn('body', LAT, -0.12 * A * rk); r.turn('chest', LAT, -0.08 * A * rk)   // 往前推時身體前傾、尾端翹起（兩節分攤，背部彎得比較順）
+      r.turn('body', LAT, -0.17 * A * rk); r.turn('chest', LAT, -0.1 * A * rk)   // 往前推時身體前傾、尾端翹起（兩節分攤，背部彎得比較順）
       r.turn('tail', LAT, 0.3 * A * rk)
-      rockNeck = 0.2 * A * rk                                                // 頭的角度補回來，保持水平
+      rockNeck = 0.27 * A * rk                                               // 頭的角度補回來，保持水平
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
     if (headAnchor) {
@@ -1308,7 +1308,7 @@ function sibia(env) {
 
 /* ---------- 2026-11-09 補齊台灣特有種（17 種，ChatGPT 參考圖 → Tripo → rig-distance，點位在 tools/bird-points.json） ---------- */
 // 地上走的：H 顯示身高（公尺）、h0 模型高度（side-view 的 BOUNDS y）、size 小鳥跳著走
-const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name, H, h0, ...TRIPO, patrol: o.patrol, rock: o.rock, hop: o.hop ?? 0.035, flick: o.flick ?? 0.2, flickF: 1.6, bob: o.bob,
+const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name, H, h0, ...TRIPO, patrol: o.patrol, rock: o.rock, rockHz: o.rockHz, hop: o.hop ?? 0.035, flick: o.flick ?? 0.2, flickF: 1.6, bob: o.bob,
   walk: { radius: o.radius ?? 1.1, speed: o.speed ?? 0.2, turn: 3, ...(o.walk ?? {}) }, stride: o.stride ?? 0.08, swingT: o.swingT ?? 0.13, lift: o.lift ?? 0.035, knee: [0.3, 0.6], focusY: H * 0.6,
   acts: o.acts ?? { walk: [4, 99, 99], peck: [3, 0.7, 1.3], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
 // （BUILD 在檔案前面就用到這些名字：要用 function 宣告才會提升，const 會在載入時出錯）
@@ -1340,7 +1340,7 @@ function mtscops(env) { return endemicPerch('mtscops-rig', 0.17, 6)(env) }
 function jacana(env) { return endemicGround('jacana-rig', 0.3, 0.724, { hop: 0, flick: 0.05, radius: 0.45, speed: 0.08, stride: 0.1 })(env) }
 function psnipe(env) { return endemicGround('psnipe-rig', 0.24, 0.717, { hop: 0, flick: 0.3, radius: 0.9, speed: 0.12, stride: 0.07 })(env) }
 // 2026-11-10 山鷸：步道上兩點之間走過去走回來，每一步身體前後搖（rock）、頭不動；偶爾停下來用長嘴往地上探
-function woodcock(env) { return endemicGround('woodcock-rig', 0.26, 0.573, { hop: 0, flick: 0.05, speed: 0.07, stride: 0.09, swingT: 0.42, lift: 0.028, patrol: env.patrol, rock: 1, acts: { walk: [6, 99, 99], peck: [2, 1, 1.8], stand: [1.5, 0.8, 2], look: [1, 0.8, 1.5] } })(env) }
+function woodcock(env) { return endemicGround('woodcock-rig', 0.26, 0.573, { hop: 0, flick: 0.05, speed: 0.065, stride: 0.05, swingT: 0.22, lift: 0.04, patrol: env.patrol, rock: 1, rockHz: 2.6, acts: { walk: [6, 99, 99], peck: [2, 1, 1.8], stand: [1.5, 0.8, 2], look: [1, 0.8, 1.5] } })(env) }
 // 2026-11-10 山下湖：黃麻鴨（兩隻游）、紫鷺（涉水捕魚）、高蹺鴴（三隻涉水）、西方澤鵟（站在草地上）
 function shelduck(env) {
   return groundGroup(2, 1.1, (avoid) => groundTripo(env, { name: 'shelduck-rig', H: 0.5, h0: 0.719, ...TRIPO, swim: true, bill: 0.14, bob: 0.03,
