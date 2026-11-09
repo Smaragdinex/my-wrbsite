@@ -145,8 +145,9 @@ addEventListener('keydown', (e) => {
   }
 })
 // 手電筒：掛在鏡頭上的聚光燈（照向準星），暖白色、邊緣柔、照 35 公尺；不投影子（效能）
-const torch = new THREE.SpotLight(0xfff1d6, 90, 35, 0.42, 0.55, 1.4)
-torch.position.set(0.18, -0.12, 0); torch.target.position.set(0, -0.6, -10)
+// 2026-11-10 使用者：從左邊出來（以前在右下，光被手上的相機擋住）、不要那麼亮、柔和 → 亮度 90→32、邊緣全柔（penumbra 0.95）、角度放寬、偏暖
+const torch = new THREE.SpotLight(0xffe6c4, 32, 30, 0.55, 0.95, 1.5)
+torch.position.set(-0.32, -0.08, -0.3); torch.target.position.set(0.4, -0.7, -10)
 camera.add(torch, torch.target); torch.visible = false
 // 日夜：一天 24 分鐘（遊戲裡 1 小時 = 現實 1 分鐘）；網址 ?t=19.5 可以直接從某個時間開始
 const DAY_SEC = 24 * 60
