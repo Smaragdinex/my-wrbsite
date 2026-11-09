@@ -578,7 +578,7 @@ function groundTripo(env, cfg) {
     if (cfg.rock) {
       c.rf = damp(c.rf ?? 0.9, c.amp > 0.2 ? (cfg.rockHz ?? 2) : 0.9, 2, dt)
       c.rph = (c.rph ?? 0) + dt * c.rf * Math.PI * 2
-      gate = 4 * Math.max(0, Math.sin(c.rph)) ** 2
+      gate = 0.4 + 2.4 * Math.max(0, Math.sin(c.rph)) ** 2   // 平均 1；往後坐時還保留 0.4 的速度，頭不會完全停死再突然衝（使用者嫌不順）
     }
     const d = w.update(dt * gate)
     // 用跳的：身體停在 dp，落後 walker 一個步幅就整隻跳過去（兩腳一起），walker 停了也要跳到定點
@@ -664,15 +664,6 @@ function groundTripo(env, cfg) {
       rockNeck = 0.27 * A * rk                                               // 頭的角度補回來，保持水平
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
-    if (headAnchor) {
-      for (const [b, f] of [['neck', 1 / 3], ['neck2', 1 / 2], ['head', 1]]) {   // 位移分三段吃：脖子根、脖子中段、頭，脖子伸縮才平順
-        const bn = r.bones[b] ?? r.bones.head
-        inner.updateWorldMatrix(true, true)
-        const want = root.localToWorld(headAnchor.clone()), now = r.bones.head.getWorldPosition(V())
-        const pw = bn.parent.worldToLocal(want.clone()), pn = bn.parent.worldToLocal(now)
-        bn.position.addScaledVector(pw.sub(pn), f)
-      }
-    }
     // 尾巴：前傾時翹起、走路時跟著步伐上下左右擺
     const flick = cfg.flick ? cfg.flick * Math.pow(Math.max(0, Math.sin(t * (cfg.flickF ?? 2.4))), 6) : 0
     r.turn('tail', LAT, 0.1 * c.lean + 0.06 * Math.sin(ph * 2 + 1) * c.amp + flick + (cfg.swim ? 0.3 : 0)); r.turn('tail', AX.y, 0.08 * Math.sin(ph) * c.amp)
@@ -704,6 +695,20 @@ function groundTripo(env, cfg) {
     c.gy = c.gy == null ? gyHere : damp(c.gy, gyHere, 12, dt)
     root.position.set(P.x, c.gy + liftY + hopY + hopDip, P.y); root.rotation.y = w.h
     root.updateWorldMatrix(true, true)
+    // 山鷸的頭：要等整隻鳥這一格的位置擺好之後才能釘（以前在擺位置前釘，頭永遠慢一格，每抬一次腳就上下抖 4～5 mm）。
+    // 目標 = 沒搖時頭的位置，扣掉抬腳那一下的身體升起，再低通平滑一下（速度變化不會一頓一頓）
+    if (headAnchor) {
+      const want = root.localToWorld(headAnchor.clone()); want.y -= liftY
+      if (!c.hw || c.hw.distanceTo(want) > 0.06) c.hw = want.clone()
+      else c.hw.lerp(want, 1 - Math.exp(-12 * dt))
+      for (const [b, f] of [['neck', 1 / 3], ['neck2', 1 / 2], ['head', 1]]) {   // 位移分三段吃：脖子根、脖子中段、頭，脖子伸縮才平順
+        const bn = r.bones[b] ?? r.bones.head
+        bn.parent.updateWorldMatrix(true, false)
+        const pw = bn.parent.worldToLocal(c.hw.clone()), pn = bn.parent.worldToLocal(r.bones.head.getWorldPosition(V()))
+        bn.position.addScaledVector(pw.sub(pn), f)
+        bn.updateMatrixWorld(true)
+      }
+    }
     const fwd = _t.set(Math.sin(w.h), 0, Math.cos(w.h)).clone(), moving = c.amp > 0.3
     // 走路時左右腳照節拍輪流跨：每走 stride 公尺一個循環，左腳在 0、右腳在半圈，步伐才平均
     const beat = legs.map((L, i) => moving && Math.floor(c.phase + i * 0.5) > Math.floor(c.prevPhase + i * 0.5))
