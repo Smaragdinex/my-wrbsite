@@ -40,7 +40,7 @@ export function buildYosemite(scene, { lib } = {}) {
     const x = X0 + (X1 - X0) * i / NX, zb = YOSE.base(x), ze = YOSE.edge(x) - 0.8
     const g0 = alpineHeight(x, zb)
     const end = Math.min(ss(X0, X0 + 7, x), ss(X1, X1 - 7, x))   // 兩端收矮，接進山坡
-    const Ht = Math.max(3, Math.min(14 + 6 * fbm2(x * 0.05, 3.7, 3), domeY(x, zb + 2.5) - g0 - 2.5) * (0.35 + 0.65 * end))
+    const Ht = Math.max(3, Math.min(28 + 9 * fbm2(x * 0.05, 3.7, 3), domeY(x, zb + 2.5) - g0 - 2.5) * (0.35 + 0.65 * end))
     cols.push({ x, zb, g0, Ht })
     const row = []
     for (let k = 0; k <= FACE + TOP; k++) {
@@ -130,7 +130,7 @@ export function buildYosemite(scene, { lib } = {}) {
     // 水簾：上窄下寬、離岩壁一點點；分 24 段，越往下越往前（水往外拋）
     const N = 24, P = [], U = [], I = []
     for (let k = 0; k <= N; k++) {
-      const v = k / N, y = topY + 0.3 - (topY + 0.3 - poolY) * v, w = 0.7 + 1.1 * v, out = 0.4 + 1.4 * v * v
+      const v = k / N, y = topY + 0.3 - (topY + 0.3 - poolY) * v, w = 1.3 + 2.2 * v, out = 0.5 + 2.2 * v * v
       P.push(F.x - w, y, fz - out, F.x + w, y, fz - out); U.push(0, v, 1, v)
       if (k) { const a = (k - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) }
     }
@@ -140,18 +140,18 @@ export function buildYosemite(scene, { lib } = {}) {
     const poolM = new THREE.MeshStandardMaterial({ color: 0x2f5a52, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.88 })
     const pool = new THREE.Mesh(new THREE.CircleGeometry(F.r, 40).rotateX(-Math.PI / 2), poolM); pool.position.set(F.x, poolY, F.z); pool.receiveShadow = true; g.add(pool)
     const foamT = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), r = mulberry32(9); for (let i = 0; i < 500; i++) { const a = r() * TAU, d = Math.sqrt(r()) * 60; x.fillStyle = `rgba(255,255,255,${0.15 + r() * 0.4})`; x.beginPath(); x.arc(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 1 + r() * 4, 0, TAU); x.fill() } return new THREE.CanvasTexture(c) })()
-    const foam = new THREE.Mesh(new THREE.CircleGeometry(1.8, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: 0.85 }))
-    foam.position.set(F.x, poolY + 0.02, fz - 1.9); g.add(foam)
+    const foam = new THREE.Mesh(new THREE.CircleGeometry(3, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: 0.85 }))
+    foam.position.set(F.x, poolY + 0.02, fz - 2.7); g.add(foam)
     // 水霧：幾片朝鏡頭的霧（Sprite），在落點附近慢慢飄
     const mistT = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,0.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c) })()
-    for (let k = 0; k < 7; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.45 })); sp.position.set(F.x + (rnd() - 0.5) * 3, poolY + 0.6 + rnd() * 2.2, fz - 1.8 + (rnd() - 0.5) * 2); sp.scale.setScalar(2.5 + rnd() * 2); sp.userData.ph = rnd() * TAU; g.add(sp); mist.push(sp) }
+    for (let k = 0; k < 12; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.45 })); sp.position.set(F.x + (rnd() - 0.5) * 5, poolY + 0.8 + rnd() * 4, fz - 2.6 + (rnd() - 0.5) * 3); sp.scale.setScalar(3.5 + rnd() * 3); sp.userData.ph = rnd() * TAU; g.add(sp); mist.push(sp) }
     addCollider(F.x, F.z, F.r * 0.85, poolY + 0.6)
   }
 
   // ---------- 西黃松 ----------
   const PINES = []
-  for (let k = 0; k < 4000 && PINES.length < 18; k++) {
-    const x = X0 - 6 + rnd() * (X1 - X0 + 10), z = YOSE.base(x) - 3 - rnd() * 26
+  for (let k = 0; k < 4000 && PINES.length < 30; k++) {
+    const x = X0 - 6 + rnd() * (X1 - X0 + 10), z = YOSE.base(x) - 3 - rnd() * 30
     if (!YOSE.inside(x, z) || domeRho(x, z) > 0.9) continue
     if (alpineTrailDist(x, z) < 3 || Math.hypot(x - F.x, z - F.z) < F.r + 3 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue
     const y = alpineHeight(x, z), H = Math.min(18 + rnd() * 8, domeY(x, z) - y - 2)
