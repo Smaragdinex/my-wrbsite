@@ -320,6 +320,9 @@ export const ALP_SPURS = [
   { name: 'grass', from: 12, noClear: true, pts: [[293, 20], [291, 42], [303, 45], [290, 57], [276, 67], [282, 75], [298, 74], [316, 77], [330, 86]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
   // 2026-11-10 ridge：瀑布頂東端（平台 75.8 m）沿新的岩脊之字形下到草原西北角，接上 grass 支線（坡度 ≤25%、轉彎有懲罰的 A*（tools/plan3.js），約 226 m，離草鴞巢 ≥26 m）。
   // world：點已經是世界座標、從 y0 這個高度開始（不是從主步道岔出去）；endOn：終點高度＝那條支線在同一點的高度（兩條路接起來沒有落差）
+  // 2026-11-10 使用者：南坡溪谷（吊橋下那條溪谷小路的盡頭）接到山下入口的湖，湖邊有路可以走上來。走溪的南岸（不用過溪），
+  // 坡度 ≤20% 的 A*：直接走太陡（29%），往南繞一個之字形，約 80 m；起點在湖的東南岸（離水 5 m）
+  { name: 'lakeGorge', world: true, k: 0.22, noClear: true, endOn: 'gorge', pts: [[123, -63], [129, -74], [142, -85], [145, -89], [157, -67], [164.3, -54.4]] },
   { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, landings: true, endOn: 'grass', pts: null },   // pts：ridgeTrailPts()（EAST.ridge 定義之後）
 ].map((sp) => sp.world ? sp : ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
 // 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
@@ -653,7 +656,7 @@ function buildAlpine() {
   prof[ALP_BRIDGE.a + 1] = (prof[ALP_BRIDGE.a] + prof[ALP_BRIDGE.a + 2]) / 2
   ALP_TRAIL.prof = prof
   for (const sp of ALP_SPURS) {   // 支線：從主步道那一點的高度開始，一樣坡度最多 22%
-    const pp = sp.pts.map(([x, z]) => alpBase(x, z)); pp[0] = sp.y0 ?? prof[sp.from]
+    const pp = sp.pts.map(([x, z]) => alpBase(x, z)); pp[0] = sp.y0 ?? (sp.world ? alpBase(...sp.pts[0]) : prof[sp.from])
     const k = sp.k ?? (sp.join ? 0.26 : 0.22), seg = (i) => Math.hypot(sp.pts[i][0] - sp.pts[i - 1][0], sp.pts[i][1] - sp.pts[i - 1][1])
     for (let i = 1; i < pp.length; i++) pp[i] = clamp(pp[i], pp[i - 1] - seg(i) * k, pp[i - 1] + seg(i) * k)
     if (sp.join) {   // 終點要剛好接上那條支線的終點：從終點往回再夾一次坡度
