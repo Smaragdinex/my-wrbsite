@@ -464,14 +464,17 @@ function buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera 
     skyMat.uniforms.sunDir.value.copy(sunDir)
     skyMat.uniforms.moonDir.value.copy(MOON_DIR)
     // 太陽／月光：同一盞平行光，太陽下山後轉向月亮
-    const sunI = 2.3 * ss(sunDir.y, -0.02, 0.3), moonI = 0.32 * (1 - day)
+    // 2026-11-11 使用者：太陽出來的光要很漂亮（ChatGPT 光照 V2，linear RGB）：正午 3.0、上午／下午 2.6～2.8；
+    // 顏色照太陽高度：黃金時刻 (1, .43, .20) → 上午 (1, .88, .72) → 正午 (1, .96, .88)；天光 1.65、環境 0.75（樹幹背光面不要黑）
+    const sunI = 3.0 * ss(sunDir.y, -0.02, 0.3) * (0.82 + 0.18 * ss(sunDir.y, 0.3, 0.8)), moonI = 0.32 * (1 - day)
     sun.position.copy(sun.target.position).addScaledVector(sunI > moonI ? sunDir : MOON_DIR, 100)
     sun.intensity = sunI + moonI
-    sun.color.copy(sunI > moonI ? SUN_K.clone().lerp(SUN_D, ss(sunDir.y, 0.02, 0.4)) : MOON)
-    hemi.intensity = lerp(0.22, 1.35, day)
+    if (sunI > moonI) { const e1 = ss(sunDir.y, 0.0, 0.35), e2 = ss(sunDir.y, 0.35, 0.8); sun.color.setRGB(1, lerp(lerp(0.43, 0.88, e1), 0.96, e2), lerp(lerp(0.2, 0.72, e1), 0.88, e2)) }
+    else sun.color.copy(MOON)
+    hemi.intensity = lerp(0.22, 1.65, day)
     hemi.color.copy(SKY_N).lerp(SKY_D, day).lerp(FOG_K, dusk * 0.35)
     hemi.groundColor.copy(GND_N).lerp(GND_D, day)
-    scene.environmentIntensity = lerp(0.05, 0.55, day)
+    scene.environmentIntensity = lerp(0.05, 0.75, day)
     scene.fog.color.copy(FOG_N).lerp(FOG_D, day).lerp(FOG_K, dusk * 0.6)
     // 晚上、清晨起霧（2026-11-07）：清晨 6 點最濃，9 點前散掉；晚上 9 點後到天亮一直有霧
     const hh = st.hour, morning = Math.exp(-(((hh - 6.2) / 1.5) ** 2)), night = Math.max(ss(hh, 19, 21.5), 1 - ss(hh, 3.5, 6)) * 0.75   // three 的 smoothstep 是 (x, min, max)

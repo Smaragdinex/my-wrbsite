@@ -26,9 +26,13 @@ export function createWeather({ scene, camera, sun, hemi, renderer, time }) {
   const grey = new THREE.Color()
   function apply() {
     const cl = st.cloud, r = st.rain, f = st.flash
-    sun.intensity = base.sun * (1 - 0.82 * cl) + f * 2.5
-    hemi.intensity = base.hemi * (1 - 0.3 * cl) + f * 6
-    scene.environmentIntensity = base.env * (1 - 0.45 * cl)
+    // 2026-11-11 使用者：有時候特別暗（ChatGPT 光照 V2）：多雲只把直射陽光壓下去，天空漫射光幾乎不變、曝光補一點——陰影變柔和，不是森林變成晚上
+    // 乘數（cloud 0 / 0.45 / 0.72 / 1）：太陽 1 / .48 / .12 / .04、天光 1 / 1.05 / .88 / .72、環境 1 / .95 / .82 / .72、曝光 ×(1＋0.15·cloud)
+    const w = st.w, pw = (a, b, c, d2) => w < 0.45 ? lerp(a, b, w / 0.45) : w < 0.72 ? lerp(b, c, (w - 0.45) / 0.27) : lerp(c, d2, clamp((w - 0.72) / 0.28, 0, 1))   // 照天氣值 w（晴 0／多雲 .45／雨 .72／雷雨 1），不是 cloud（cloud 在多雲就已經 0.86）
+    sun.intensity = base.sun * pw(1, 0.48, 0.12, 0.04) + f * 2.5
+    hemi.intensity = base.hemi * pw(1, 1.05, 0.88, 0.72) + f * 6
+    scene.environmentIntensity = base.env * pw(1, 0.95, 0.82, 0.72)
+    renderer.toneMappingExposure = base.exp * pw(1, 1.05, 1.12, 1.15)
     // 2026-11-10 使用者：下雨後整片白 → 霧不要那麼濃（雨天 ×2.75 → ×1.85），顏色壓成雨天的暗灰（以前還是晴天那個亮灰綠，一濃就是一片白牆）
     scene.fog.density = base.fog * (1 + 0.5 * cl + 0.75 * r)
     const lum = base.fogC.r * 0.3 + base.fogC.g * 0.5 + base.fogC.b * 0.2, dk = 0.86 - 0.36 * Math.min(1, r / 0.72)
