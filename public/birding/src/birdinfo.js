@@ -400,7 +400,7 @@ const ALL = [
     ],
   },
   {
-    id: 'finchbill', onFig: true, spot: AM(78.52, -1.99), perch: 'branch', view: 0, dist: 2.6, camH: 3.6, lookY: 3.4,
+    id: 'finchbill', onFig: true, figExtra: [[89.5, 10.5]], spot: AM(78.52, -1.99), perch: 'branch', view: 0, dist: 2.6, camH: 3.6, lookY: 3.4,
     name: '白環鸚嘴鵯', sci: 'Spizixos semitorques', where: '山區入口的果樹旁',
     intro: '台灣特有亞種。厚厚短短、象牙白色的嘴有點像鸚鵡，頭是灰黑色，前頸一道明顯的白色頸環，身體是橄欖綠到黃綠色。常一小群停在枝頭或電線上，叫聲短促響亮。',
     facts: [
@@ -435,7 +435,7 @@ const ALL = [
   },
   {
     // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [80, 12.5]）
-    id: 'grassowl', spot: [303, 102], view: 171, perch: 'ground', dist: 3.2, camH: 0.9, lookY: 0.3,
+    id: 'grassowl', spot: EAST.owlNest, view: 90, perch: 'ground', dist: 3.2, camH: 0.9, lookY: 0.3,
     name: '草鴞', sci: 'Tyto longimembris', where: '東部草原的高草深處',
     intro: '台灣瀕臨絕種的保育類貓頭鷹。心形的臉盤是淡粉米白色，外圈一道深褐色的邊，眼睛小小黑黑的；背和翅膀深巧克力褐色帶金黃色斑紋，腿很長。牠不住森林，而是住在低海拔開闊的白茅草原。',
     facts: [

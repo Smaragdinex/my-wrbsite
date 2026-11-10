@@ -112,6 +112,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 2026-11-10 吃果實的鳥：雀榕直接種在鳥的站點（FIG_FORCED），樹種好之後再到這棵樹真正的枝條上找位置站（下面 findFigPerch）
   const figDefs = BIRDS.filter((d) => d.onFig)
   for (const d of figDefs) FIG_FORCED.push({ x: d.spot[0], z: d.spot[1], y: alpineHeight(...d.spot), def: d })
+  // 2026-11-10 figExtra：同一種鳥在別棵雀榕上再放一隻（一棵樹一隻；使用者：兩隻疊在同一根枝上）。自然長的雀榕樹冠低、葉子會把鳥蓋住，所以也種一棵指定的
+  for (const d of figDefs) for (const s of d.figExtra ?? []) FIG_FORCED.push({ x: s[0], z: s[1], y: alpineHeight(...s), def: { ...d, spot: s, extra: true } })
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
   // 山區（溫室東半邊）：直接蓋、一直畫。附屬館只剩海岸館（目前關著）
   // 山區的樹、草、岩石避開鳥站的地方和鏡頭那一側
@@ -129,8 +131,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       if (td > 2.2 && td < 2.8 && inAlpine(sx, sz, 1) && k < best) { best = k; sign = [sx, sz] }
     }
     if (sign) { const [sx, sz] = sign, e = 0.2; sign.push(Math.atan2(alpineTrailDist(sx - e, sz) - alpineTrailDist(sx + e, sz), alpineTrailDist(sx, sz - e) - alpineTrailDist(sx, sz + e))) }
-    // 從步道（木樁那邊）看得到牠：鳥到木樁之間也不長箭竹（像草叢裡一條被踩出來的通道）
-    if (sign) alpAvoid.push({ x: ox, z: oz, cx: sign[0], cz: sign[1], ground: true })
+    // 2026-11-10 使用者：巢要隱密 → 不再從步道清出一條通到巢的草叢通道（那條路等於指路）
     // 2026-11-09 使用者：外面不用那根木樁（sign 只拿來決定草叢通道的方向，不再擺出來）
     scene.add(buildOwlNest({ x: nx, z: nz, face: Math.atan2(ux, uz), groundAt: alpineHeight, owl: [ox, oz], sign: null }))
     addCollider(nx, nz, 0.55, alpineHeight(nx, nz) + 0.6)
@@ -235,7 +236,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   const _forestFog = new THREE.Color()   // 阿里山／紅杉林那種巨木林帶（步道中段）   // 右邊岔路上去的營地（三頂帳篷＋營火）
   const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
-  const birdStops = birds.map((b) => ({
+  const birdStops = birds.filter((b) => !b.def.extra).map((b) => ({
     bird: b, title: b.def.name, nick: b.def.nick, sci: b.def.sci, tag: b.def.where, text: b.def.intro, facts: b.def.facts,
     pos: b.cam, target: b.target,
   }))

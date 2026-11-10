@@ -43,7 +43,8 @@ export function buildEast({ avoid = [] } = {}) {
       if (slope > 0.8) continue   // 西緣的岩坡不長
       const lark = 1 - ss(0.7, 1.25, Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz))
       // 高草藏身區（草鴞、環頸雉）偏西北；整片用雜訊分成一塊塊，不要均勻
-      const tallZone = ss(312, 290, x) * ss(108, 96, z) * ss(70, 76, z)
+      const [ox, oz] = EAST.owlNest, od = Math.hypot(x - ox, z - oz)
+      const tallZone = Math.max(ss(312, 290, x) * ss(108, 96, z) * ss(70, 76, z), 1.6 * (1 - ss(6, 14, od)))   // 草鴞的巢四周一圈最密的芒草（藏起來）
       const patch = fbm2(x * 0.06 + 3, z * 0.06 - 8, 3)
       const pMis = Math.max(0, (0.15 + 0.75 * tallZone + 0.6 * (patch - 0.5)) * (1 - lark))
       const r = rnd()

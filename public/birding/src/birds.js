@@ -1482,7 +1482,8 @@ function nuthatch(env) {
   return perchRigged(outer(env, -0.9), { name: 'nuthatch-rig', k: 0.14, ...TRIPO, foot: 0.004, drop: 0.03, beat: 9 })
 }
 function finchbill(env) {
-  return perchGroup(2, 0.32, -0.7, (blocked) => perchRigged(outer(env, -0.8), { name: 'finchbill-rig', eat: true, k: 0.22, ...TRIPO, foot: 0.065, drop: 0.04, beat: 7,
+  // 2026-11-10 使用者：吃果的白環鸚嘴鵯兩隻疊在一起（雀榕的果枝短，第二隻被夾回同一個位置）→ 一棵樹一隻，另一隻在別棵雀榕（birdinfo figExtra）
+  return perchGroup(1, 0.32, -0.7, (blocked) => perchRigged(outer(env, -0.8), { name: 'finchbill-rig', eat: true, k: 0.22, ...TRIPO, foot: 0.065, drop: 0.04, beat: 7,
     hopper: { blocked } }))
 }
 function minivet(env) {
