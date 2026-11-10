@@ -730,7 +730,7 @@ export const BIRDS = {
  },
  "skylark": {
   "name": "Oriental Skylark",
-  "where": "The Meadow by the Lake",
+  "where": "Grassland Behind the Grass Owl, by the Forest Entrance",
   "intro": "Sandy brown streaked with dark, with a short crest it raises when alarmed or singing. Its colours match dry grass so well that it is very hard to spot when it crouches.",
   "facts": [
    "It is famous for its song flight: it rises straight up on fluttering wings, singing nonstop for minutes from high in the sky.",

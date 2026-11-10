@@ -457,7 +457,7 @@ const ALL = [
     ],
   },
   {
-    id: 'rnpheasant', lawn: true, spot: [74, -46], perch: 'ground', view: 10, dist: 3.6, camH: 1.1, lookY: 0.25,
+    id: 'rnpheasant', lawn: true, spot: [77, -40], perch: 'ground', view: 10, dist: 3.6, camH: 1.1, lookY: 0.25,
     name: "環頸雉", sci: 'Phasianus colchicus formosanus', where: "湖前的草地",
     intro: "雄鳥非常華麗：頭頸是帶金屬光澤的藍綠色，臉上一大塊鮮紅的裸皮，脖子一圈白環；身體紅銅色帶斑紋，尾羽又細又長。母鳥全身是低調的褐色斑紋，方便躲在草裡孵蛋。",
     facts: [
@@ -468,8 +468,8 @@ const ALL = [
     ],
   },
   {
-    id: 'skylark', lawn: true, spot: [78, -62], perch: 'ground', view: -10, dist: 2.4, camH: 0.8, lookY: 0.1,
-    name: "小雲雀", sci: 'Alauda gulgula', where: "湖前的草地",
+    id: 'skylark', lawn: true, spot: [86, 27], perch: 'ground', view: 180, dist: 2.4, camH: 0.8, lookY: 0.1,
+    name: "小雲雀", sci: 'Alauda gulgula', where: "山林入口草鴞後面的草原",
     intro: "全身沙褐色帶深色縱紋，頭頂有一小撮短短的羽冠，緊張或唱歌時會豎起來。顏色和枯草幾乎一樣，蹲在地上時很難發現。",
     facts: [
       "最有名的是「空中唱歌」：一邊鼓翅直直往上升到很高的地方，一邊連續唱好幾分鐘。",
@@ -479,7 +479,7 @@ const ALL = [
     ],
   },
   {
-    id: 'cisticola', lawn: true, spot: [68, -55], perch: 'stem', stemH: 0.9, view: 20, dist: 2.6, camH: 1.0, lookY: 0.95,
+    id: 'cisticola', lawn: true, spot: [64, -61], perch: 'stem', stemH: 0.9, view: 20, dist: 2.6, camH: 1.0, lookY: 0.95,
     name: "棕扇尾鶯", sci: 'Cisticola juncidis', where: "湖前的草地",
     intro: "很小、圓滾滾的鳥，頭頂和背是黃褐色帶粗黑縱紋，肚子乾淨的白色；短短的尾巴張開像一把扇子，末端有黑白斑點。常抓在高草的頂端東張西望。",
     facts: [
