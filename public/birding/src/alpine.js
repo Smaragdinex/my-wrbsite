@@ -223,8 +223,14 @@ function buildInterior(lib, avoid = []) {
       // 巨木林帶（giants.js）：地上是厚厚的落葉、針葉堆（暗紅褐）；陡坡不是灰石頭，是長滿青苔的土坡
       if (fk > 0) c.lerp(new THREE.Color().setHSL(0.07 + n * 0.03, 0.32, 0.15 + n * 0.05), 0.55 * fk)
       c.lerp(new THREE.Color().setHSL(0.1, 0.06, 0.36 + n * 0.08).lerp(new THREE.Color().setHSL(0.2 + n * 0.04, 0.35, 0.16 + n * 0.06), fk), rock)                     // 岩石（林裡是青苔）
-      const tr = ss(1.6, 0.9, alpineTrailDist(x, z))
-      c.lerp(new THREE.Color().setHSL(0.08, 0.28, 0.33 + n * 0.04), tr * 0.9)               // 步道泥土
+      const tdd = alpineTrailDist(x, z), tr = ss(1.6, 0.9, tdd)
+      // 2026-11-10 ChatGPT：路面不要一整片同樣的棕色 → 中間踩實的深色泥土、兩側碎石較淺、一塊塊沖刷的痕跡
+      { const g1 = fbm2(x * 2.1, z * 2.1, 2), er = Math.max(0, fbm2(x * 0.6 + 3, z * 0.6, 2) - 0.6) * 2
+        const dirt = new THREE.Color().setHSL(0.08, 0.28, 0.33 + n * 0.04)
+        dirt.lerp(new THREE.Color().setHSL(0.075, 0.3, 0.25 + g1 * 0.05), ss(0.85, 0.15, tdd) * 0.65)
+        dirt.lerp(new THREE.Color().setHSL(0.1, 0.1, 0.4 + g1 * 0.1), ss(0.55, 1.2, tdd) * ss(1.7, 1.15, tdd) * 0.55)
+        dirt.lerp(new THREE.Color().setHSL(0.09, 0.2, 0.42), er * 0.35)
+        c.lerp(dirt, tr * 0.9) }
       // 溪床、池底：濕的深色石頭和砂（水是透明的，看得到底下）；岸上一圈濕地
       const sd = alpineStreamDist(x, z), dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z) - ALP_POND.r
       const wet = Math.max(ss(4.5, 1.2, sd), ss(3, 0, dp))

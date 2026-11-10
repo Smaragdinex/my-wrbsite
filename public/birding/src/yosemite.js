@@ -29,6 +29,7 @@ function graniteTex() {
   return t
 }
 
+const SHELTER = { x: 222, z: 99.5 }   // 岩壁頂上的涼亭
 export function buildYosemite(scene, { lib } = {}) {
   const M0 = YOSE.mist
   const g = new THREE.Group(); g.name = 'yosemite'; scene.add(g)
@@ -538,7 +539,8 @@ export function buildYosemite(scene, { lib } = {}) {
     const box = (k, w, h, d, x, y, z, ry = 0) => parts[k].push(new THREE.BoxGeometry(w, h, d).applyMatrix4(new THREE.Matrix4().makeRotationY(ry).setPosition(x, y, z)))
     const Y0 = (x) => YOSE.topY(x) + 0.05
     // 涼亭（4.4 × 5 m）：四根粗木柱站在石墩上，人字形屋頂
-    const sx = 244.5, sz = YOSE.base(244.5) + 9.5, sy = Y0(sx)
+    // 2026-11-10 ChatGPT：涼亭以前正對石階出口（6 公尺），還沒爬到頂就看到 → 移到平台中間偏西、出口側面 20 多公尺
+    const sx = SHELTER.x, sz = SHELTER.z, sy = Y0(sx)
     for (const dx of [-2.0, 2.0]) for (const dz of [-2.3, 2.3]) { box('stone', 0.5, 0.35, 0.5, sx + dx, sy + 0.17, sz + dz); box('wood', 0.26, 2.6, 0.26, sx + dx, sy + 1.6, sz + dz); addCollider(sx + dx, sz + dz, 0.25, sy + 3) }
     for (const dz of [-2.3, 2.3]) box('wood', 4.6, 0.22, 0.24, sx, sy + 2.95, sz + dz)
     for (const sgn of [-1, 1]) { const r = new THREE.BoxGeometry(2.9, 0.12, 5.8).applyMatrix4(new THREE.Matrix4().makeRotationZ(sgn * 0.42).setPosition(sx + sgn * 1.3, sy + 3.55, sz)); parts.dark.push(r) }
@@ -548,21 +550,22 @@ export function buildYosemite(scene, { lib } = {}) {
     for (const dx of [-0.85, 0.85]) { box('wood', 0.32, 0.06, 2.2, sx + dx, sy + 0.46, sz); for (const dz of [-0.9, 0.9]) box('wood', 0.08, 0.44, 0.08, sx + dx, sy + 0.22, sz + dz) }
     addCollider(sx, sz, 1.0, sy + 0.9)
     // 看出去的原木長椅（面向山谷）
-    for (const bx of [214, 222, 247]) { const bz = YOSE.topFront(bx) + 1.6, by = Y0(bx); box('wood', 1.8, 0.1, 0.4, bx, by + 0.45, bz); box('wood', 1.8, 0.4, 0.08, bx, by + 0.7, bz + 0.2); for (const dx of [-0.7, 0.7]) box('wood', 0.12, 0.42, 0.36, bx + dx, by + 0.21, bz); addCollider(bx, bz, 0.5, by + 0.6) }
+    for (const bx of [214, 231, 247]) { const bz = YOSE.topFront(bx) + 1.6, by = Y0(bx); box('wood', 1.8, 0.1, 0.4, bx, by + 0.45, bz); box('wood', 1.8, 0.4, 0.08, bx, by + 0.7, bz + 0.2); for (const dx of [-0.7, 0.7]) box('wood', 0.12, 0.42, 0.36, bx + dx, by + 0.21, bz); addCollider(bx, bz, 0.5, by + 0.6) }
     // 步道指標（石階頂）
     { const x = M0.XB + 2.2, z = YOSE.topFront(M0.XB) + 1.8, y = Y0(x); box('wood', 0.14, 1.9, 0.14, x, y + 0.95, z); const sg = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.38, 0.05), [wood, wood, wood, wood, new THREE.MeshStandardMaterial({ map: signT, roughness: 0.8 }), new THREE.MeshStandardMaterial({ map: signT, roughness: 0.8 })]); sg.position.set(x, y + 1.6, z + 0.1); sg.castShadow = true; g.add(sg); addCollider(x, z, 0.15, y + 2) }
     // 解說牌＋望遠鏡（瀑布口旁的觀景台）
     { const x = 204.2, z = YOSE.topFront(204.2) + 1.2, y = Y0(x); for (const dx of [-0.5, 0.5]) box('wood', 0.1, 0.9, 0.1, x + dx, y + 0.45, z); const pm = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 0.78), new THREE.MeshStandardMaterial({ map: panelT, roughness: 0.7 })); pm.rotation.x = -0.6; pm.position.set(x, y + 1.05, z + 0.05); g.add(pm); addCollider(x, z, 0.5, y + 1.2) }
     { const x = 206.4, z = YOSE.topFront(206.4) + 0.9, y = Y0(x); box('metal', 0.12, 1.1, 0.12, x, y + 0.55, z); box('metal', 0.22, 0.2, 0.5, x, y + 1.2, z - 0.05); parts.metal.push(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 10).rotateX(Math.PI / 2).translate(x - 0.06, y + 1.22, z - 0.35), new THREE.CylinderGeometry(0.06, 0.06, 0.2, 10).rotateX(Math.PI / 2).translate(x + 0.06, y + 1.22, z - 0.35)); addCollider(x, z, 0.2, y + 1.3) }
     // 垃圾桶（防熊的那種鐵箱）
-    { const x = 241, z = YOSE.base(241) + 6.5, y = Y0(x); box('metal', 0.9, 1.0, 0.6, x, y + 0.5, z); addCollider(x, z, 0.5, y + 1.1) }
+    // 防熊垃圾桶跟著涼亭（以前在石階出口旁邊）
+    { const x = SHELTER.x + 3.6, z = SHELTER.z - 2.6, y = Y0(x); box('metal', 0.9, 1.0, 0.6, x, y + 0.5, z); addCollider(x, z, 0.5, y + 1.1) }
     for (const [k, list] of Object.entries(parts)) if (list.length) { const m = new THREE.Mesh(mergeGeometries(list.map((q) => q.index ? q.toNonIndexed() : q)), { wood, dark, stone, metal }[k]); m.castShadow = true; m.receiveShadow = true; g.add(m) }
   }
   // 2026-11-11 岩壁頂上也長樹（以前光禿禿）：西黃松、矮一點，離邊 4 公尺以上；觀景台、走道、溪讓開
   for (let k = 0, n = 0; k < 3000 && n < 16; k++) {
     const x = X0 + 8 + rnd() * (X1 - X0 - 16), zb = YOSE.base(x), ze = YOSE.edge(x) - 2, zf = (x > YOSE.mist.XA - 2 && x < YOSE.mist.XB + 2) ? YOSE.topFront(x) : zb + 3
     const z = zf + 4 + rnd() * (ze - zf - 4)
-    if (ze - zf < 6 || Math.abs(x - YOSE.fall.x) < 6 || (x > 199 && x < 252 && z < YOSE.edge(x) - 4.5) || Math.hypot(x - 244.5, z - YOSE.base(244.5) - 9.5) < 6 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 6)) continue
+    if (ze - zf < 6 || Math.abs(x - YOSE.fall.x) < 6 || (x > 199 && x < 252 && z < YOSE.edge(x) - 4.5) || Math.hypot(x - SHELTER.x, z - SHELTER.z) < 6 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 6)) continue
     PINES.push({ x, z, y: YOSE.topY(x) - 0.2, H: 9 + rnd() * 6, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.08 }); n++
   }
   // 2026-11-10 ChatGPT QA：山頂平台一大片灰色像水泥 → 樹下一圈松針落葉土、平台上零星幾片砂土／碎石、散幾顆小石頭
@@ -588,11 +591,33 @@ export function buildYosemite(scene, { lib } = {}) {
       const names = ['mrock_1', 'mrock_3', 'mrock_5'].filter((n) => lib[n]), rl = Object.fromEntries(names.map((n) => [n, []]))
       for (let k = 0, n = 0; k < 600 && n < 40 && names.length; k++) {
         const x = 202 + rnd() * 47, zf = YOSE.topFront(x) + 1.2, ze = YOSE.edge(x) - 2.2, z = zf + rnd() * (ze - zf)
-        if (ze < zf || Math.hypot(x - 244.5, z - YOSE.base(244.5) - 9.5) < 4.5 || alpineTrailDist(x, z) < 1.5) continue
+        if (ze < zf || Math.hypot(x - SHELTER.x, z - SHELTER.z) < 4.5 || alpineTrailDist(x, z) < 1.5) continue
         const k2 = 0.25 + rnd() * 0.45, nm = names[Math.floor(rnd() * names.length)]
         rl[nm].push({ p: V(x, YOSE.topY(x) - 0.12 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * 0.6, k2) }); n++
       }
       for (const n of names) if (rl[n].length) scatter(g, lib[n], rl[n], { cast: true })
+      // 2026-11-10 ChatGPT：抵達感——石階最後幾階從兩塊大花崗岩中間穿出去（缺口約 2 公尺），出口前看不到平台，走出去視野才打開；
+      // 平台上再散幾塊半埋的大岩盤，打破整片平地
+      {
+        const st = YOSE.stairs(), e = st.pts.at(-1), b4 = st.pts.at(-4), dx = e[0] - b4[0], dz = e[1] - b4[1], dl = Math.hypot(dx, dz), ux = dx / dl, uz = dz / dl, nx = -uz, nz = ux
+        const big = names.includes('mrock_5') ? 'mrock_5' : names[0], gate = { [big]: [] }
+        // 擺在最後一段石階內側（平台前緣石牆後面 1 公尺），擋住從石階往平台看的視線；不擋出口（出口在石階盡頭往北轉上平台）
+        for (const [dxe, k2] of [[-6.2, 2.3], [-3.9, 1.9]]) {
+          const x = e[0] + dxe, z = YOSE.topFront(x) + 1.1
+          gate[big].push({ p: V(x, YOSE.topY(x) - 0.35 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.2, rnd() * TAU, rnd() * 0.2)), s: V(k2, k2 * 1.25, k2 * 0.8) })
+          addCollider(x, z, 0.42 * k2, YOSE.topY(x) + k2)
+        }
+        scatter(g, lib[big], gate[big], { cast: true })
+        const out = Object.fromEntries(names.map((n) => [n, []]))
+        for (let k = 0, n = 0; k < 400 && n < 8; k++) {
+          const x = 204 + rnd() * 44, zf = YOSE.topFront(x) + 2.5, ze = YOSE.edge(x) - 3, z = zf + rnd() * (ze - zf)
+          if (ze < zf + 1 || Math.hypot(x - SHELTER.x, z - SHELTER.z) < 6 || Math.hypot(x - e[0], z - e[1]) < 9 || alpineTrailDist(x, z) < 2) continue
+          const k2 = 1.0 + rnd() * 0.8, nm = names[Math.floor(rnd() * names.length)]
+          out[nm].push({ p: V(x, YOSE.topY(x) - 0.45 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.25, rnd() * TAU, rnd() * 0.25)), s: V(k2 * 1.3, k2 * 0.7, k2) }); n++
+          addCollider(x, z, 0.55 * k2, YOSE.topY(x) + 0.4 * k2)
+        }
+        for (const n of names) if (out[n].length) scatter(g, lib[n], out[n], { cast: true })
+      }
     }
   }
   if (PINES.length) {

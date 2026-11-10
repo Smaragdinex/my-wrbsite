@@ -91,7 +91,8 @@ export function createCloudSea(scene, { sun }) {
     // 雲的顏色：白天白、黃昏帶一點暖色（照太陽光色）、晚上暗藍灰
     common.uSunCol.value.copy(sun.color).multiplyScalar(0.3 + 0.95 * day).lerp(new THREE.Color(0.07, 0.085, 0.13), 1 - Math.min(1, day * 1.5))   // 2026-11-11 夜裡的雲海原本一大片平平的亮灰（使用者：遠景只有一片灰）→ 暗一點、偏藍，山的剪影才出得來
     common.uShade.value.setRGB(0.5, 0.56, 0.66).multiplyScalar(0.1 + 0.9 * day)
-    common.uCamFade.value = THREE.MathUtils.smoothstep(camera.position.y, SEA.y - 6, SEA.y + 4)
+    // 2026-11-10 使用者：瀑布山下面破洞、左邊也是 → 其實是雲海的底面：瀑布湖邊鏡頭約 31 公尺，以前從 26 公尺就開始出現，一條灰色的「天花板」橫切過岩壁，看起來像破洞看到外面。改成鏡頭在雲層上面才出現
+    common.uCamFade.value = THREE.MathUtils.smoothstep(camera.position.y, SEA.y + 1, SEA.y + 8)
     group.visible = common.uCamFade.value > 0.001
   }
   return { tick, group }

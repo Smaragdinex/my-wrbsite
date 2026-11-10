@@ -619,7 +619,7 @@ function buildAlpine() {
     const [dt, ti, tt] = polyDist(x, z, tr, (i) => i === ALP_BRIDGE.a || i === ALP_BRIDGE.a + 1)
     const py = lerp(prof[ti], prof[ti + 1], tt)
     const hRiver = h   // 石橋底下保留河道（下面路面攤平之後再挖回來）
-    h = lerp(py, h, smoothstep(1.4, 5, dt))   // 步道兩側的切坡放緩（3.2 時像一面牆）
+    h = lerp(py, h, smoothstep(1.4, 7.5, dt))   // 步道兩側的切坡放緩（3.2 時像一面牆；2026-11-10 ChatGPT：路肩跟山坡交界太硬 → 5→7.5 公尺）
     // 2026-11-10 使用者：往山頂那段（第 11～12 段）步道左手邊一座小山丘擋住視野（步道夾在兩邊高起來的地形中間）→ 左手邊壓低到步道高度＋0.5，6～13 公尺慢慢接回原地形
     if (ti === 11 || ti === 12 || (ti === 13 && tt < 0.3)) {
       const [sx, sz] = tr[ti], [ex, ez] = tr[ti + 1], cr = (ex - sx) * (z - sz) - (ez - sz) * (x - sx)
