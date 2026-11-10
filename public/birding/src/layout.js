@@ -140,7 +140,7 @@ function onLoop(a) {
 }
 export const PATHS = [
   ...[
-  { name: 'entry', w: 4.2, curve: curve([[-74, 0], [-66, 0], [-58, 0], loopPt(Math.PI)]) },
+  { name: 'entry', w: 4.2, curve: curve([[-72.75, 0], [-66, 0], [-58, 0], loopPt(Math.PI)]) },   // 2026-11-11 起點從 -74 移到 -72.75：相機行門口的石磚地板到 -72.9，以前石頭路疊在磚上面閃爍
   { name: 'loop', w: 3.4, curve: LOOP },
   { name: 'ring', w: 3.2, curve: curve(ringPoints(), true) },
   { name: 'west', w: 3.0, curve: curve([loopPt(Math.PI), [-38, 3], ringPt(Math.PI - 0.12)]) },
@@ -305,7 +305,7 @@ export const ALP_SPURS = [
   // 2026-11-10 使用者：帳篷區那邊路線拉長、換一種風景（優勝美地）→ 從主線第 13 點（山頂步道東段）往西下坡，沿北邊的花崗岩壁、瀑布走到營地，跟 camp 支線連成一圈。
   // join：終點接到別條支線的終點（營地），高度兩頭都要對上、盡頭不另外攤平
   // 2026-11-11 使用者：瀑布底下要有一座湖、湖再流出一條河 → 原本貼著岩壁走過瀑布前面的那段，改從湖的南岸繞過去、在湖的出水口過一座石橋（世界座標寫的，換回設計座標）
-  { name: 'yose', from: 13, join: 'camp', pts: [[152.92, 22.75], [147.96, 26.47], [140.52, 29.78], ...[[222, 68], [210, 64.5], [197, 63.5], [186, 66], [178, 71]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]), [114.25, 28.95]] },
+  { name: 'yose', from: 13, join: 'camp', pts: [[152.92, 22.75], [147.96, 26.47], ...[[236, 65.5], [222, 64.5], [210, 63.5], [197, 63.5], [186, 66], [178, 71]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]), [114.25, 28.95]] },
 ].map((sp) => ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
 // 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
 export const CABIN = (() => {
@@ -332,20 +332,20 @@ export const YOSE = (() => {
   const HtRaw = (x) => { const end = Math.min(ssY(Y.x0, Y.x0 + 9, x), ssY(Y.x1, Y.x1 - 9, x)), peak = Math.exp(-(((x - 200) / 38) ** 2)); return Math.max(3, (30 + 16 * peak + 12 * fbm2(x * 0.05, 3.7, 3)) * (0.3 + 0.7 * end)) }
   // 2026-11-11 瀑布口到石階頂那一段（x 194～230）岩壁頂是平的（同一個高度 P0）：溪從頂上流到瀑布口、人走到頂上的觀景台
   let P0 = null
-  Y.flatK = (x) => Math.min(ssY(188, 196, x), ssY(236, 229, x))
-  Y.topY = (x) => { if (P0 == null) P0 = Y.g0(200) + HtRaw(200); const k = Math.min(ssY(188, 196, x), ssY(236, 229, x)); return lerp(Y.g0(x) + HtRaw(x), P0, k) }
+  Y.flatK = (x) => Math.min(ssY(184, 192, x), ssY(256, 249, x))   // 2026-11-11 平的岩壁頂加寬（瀑布口到石階頂再往東，頂上一大片平地）
+  Y.topY = (x) => { if (P0 == null) P0 = Y.g0(200) + HtRaw(200); const k = Y.flatK(x); return lerp(Y.g0(x) + HtRaw(x), P0, k) }
   Y.Ht = (x) => Y.topY(x) - Y.g0(x)
   // 瀑布步道（像優勝美地的 Mist Trail／Upper Yosemite Fall Trail）：瀑布東邊，花崗岩壁被鑿成一層層的平台，
   // 8 段之字形石階一路爬到岩壁頂（2026-11-11 使用者：以前只到半山腰、兩邊破圖、後面空的 → 真的爬上去）。
   // 第 k 段的踏面在「離牆腳 d_k」那一條（d_k＝-7.5＋2.5k，負的是在牆腳前面），寬 2.5 公尺（外側 0.35 是矮石牆）；
   // 每段的內側就是上一層平台的石壁（高度＝上一段踏面）——整面岩壁看起來是一階一階的。最下面從 yose 支線（228, 70.4）接上來
-  Y.mist = { XA: 212, XB: 229, NL: 8, W: 2.5, D0: -7.5, start: [228, 70.4] }
+  Y.mist = { XA: 209, XB: 238, NL: 6, W: 3.4, D0: -9, start: [242, 65.0] }   // 2026-11-11 第二版（使用者：步道再寬一點；ChatGPT：可走 2.8 m、每段 25～30 m、坡度約 20%）：6 段、每段 29 m、帶寬 3.4（外側 0.4 是石牆）
   Y.stairs = (() => {
     let built = null
     return () => {
       if (built) return built
       const M = Y.mist, pts = [], legOf = []
-      const zAt = (x, k) => Y.base(x) + M.D0 + M.W * k + 0.17
+      const zAt = (x, k) => Y.base(x) + M.D0 + M.W * k + 0.2
       // 進場：從支線往北走到第 0 段的起點（東端）
       const [sx, sz] = M.start, ex = M.XB + 0.8, ez = zAt(ex, 0)
       for (let i = 0; i <= 12; i++) { pts.push([lerp(sx, ex, i / 12), lerp(sz, ez, i / 12)]); legOf.push(-1) }
@@ -373,7 +373,7 @@ export const YOSE = (() => {
   })()
   // 站在石階上的高度（一階 0.2 公尺）；不在上面回傳 null
   Y.stairAt = (x, z) => {
-    if (x < Y.mist.XA - 2.2 || x > Y.mist.XB + 2.2 || z < Y.mist.start[1] - 1.5) return null
+    if (x < Y.mist.XA - 2.2 || x > Math.max(Y.mist.XB + 2.2, Y.mist.start[0] + 1.6) || z < Y.mist.start[1] - 1.5) return null   // 進場那段在 XB 外面，要算進來
     const st = Y.stairs()
     let best = 1e9, sAt = 0
     for (let i = 1; i < st.pts.length; i++) {
@@ -381,12 +381,12 @@ export const YOSE = (() => {
       const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(x - ax - dx * t, z - az - dz * t)
       if (d < best) { best = d; sAt = st.S[i - 1] + Math.sqrt(l2) * t }
     }
-    if (best > 1.05) return null
+    if (best > 1.45) return null
     return Math.floor(st.h(sAt) / 0.2) * 0.2 + 0.2
   }
   // 岩壁頂上走得到的地方（平的，高 topY）：石階頂（東端）往西到瀑布口旁邊的觀景台；前緣＝平台的石壁／岩壁的邊，後面到玻璃前
-  Y.topFront = (x) => x >= Y.mist.XA - 1.3 ? Y.base(x) + Y.mist.D0 + Y.mist.W * (Y.mist.NL - 0.5) : Y.base(x) + 3.2
-  Y.topAt = (x, z) => (x > 201.2 && x < Y.mist.XB + 1.8 && z > Y.topFront(x) - 0.05 && z < Y.edge(x) - 2.2) ? Y.topY(x) + 0.05 : null
+  Y.topFront = (x) => x >= Y.mist.XA - 1.3 && x <= Y.mist.XB + 1.3 ? Y.base(x) + Y.mist.D0 + Y.mist.W * (Y.mist.NL - 0.5) : Y.base(x) + 3.2
+  Y.topAt = (x, z) => (x > 201.2 && x < 250 && z > Y.topFront(x) - 0.05 && z < Y.edge(x) - 2.2) ? Y.topY(x) + 0.05 : null   // 岩壁頂上的平地：瀑布口東邊到 x 250
   Y.behind = (x, z) => (x > Y.x0 - 3 && x < Y.x1 + 3 && z > Y.base(x) - 1.5) || (x > Y.mist.XA - 4 && x < Y.mist.XB + 4 && z > Y.base(x) + Y.mist.D0 - 3)   // 岩壁、石階平台上（石頭、草不要長在這裡）
   Y.inside = (x, z) => x > Y.x0 - 12 && x < Y.x1 + 10 && z > Y.base(Math.min(Y.x1, Math.max(Y.x0, x))) - 30
   return Y
