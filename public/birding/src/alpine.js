@@ -91,13 +91,14 @@ export function needleMaterial() {
   const tex = needleTex()
   const needleM = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85, color: 0xd2dccb, vertexColors: true })
   // 遠處的樹：mipmap 把針葉的透明度平均掉，alphaTest 一切就只剩枝幹（遠看像一根根竹竿）。照 mip 層級把透明度補回來
+  // 2026-11-10 白天補償 0.35 太弱，遠處冷杉只剩樹幹像一根根尖錐（ChatGPT QA 圖 2）→ 拉回 0.95～1.1
   // 2026-11-11 alphaToCoverage 拿掉：葉緣變成一圈白白的霧（白天看起來結霜、夜裡一點一點在閃，使用者回報）；遠處補透明度靠下面的 mip 補償就夠
   needleM.onBeforeCompile = (sh) => {
     // 2026-11-11 夜裡天比樹亮：針葉之間的小縫透出天空，遠處的樹看起來一點一點白白在閃（使用者回報）→ 夜裡遠處補得更多，樹冠比較實
     sh.uniforms.uDayN = dayLight
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uDayN;').replace('#include <alphatest_fragment>', `
       vec2 nDx = dFdx(vMapUv * vec2(512.0, 256.0)), nDy = dFdy(vMapUv * vec2(512.0, 256.0));
-      diffuseColor.a *= 1.0 + max(0.0, 0.5 * log2(max(dot(nDx, nDx), dot(nDy, nDy)))) * mix(0.8, 0.35, uDayN);
+      diffuseColor.a *= 1.0 + max(0.0, 0.5 * log2(max(dot(nDx, nDx), dot(nDy, nDy)))) * mix(1.1, 0.95, uDayN);
       #include <alphatest_fragment>`)
   }
   needleM.customProgramCacheKey = () => 'needleMip'

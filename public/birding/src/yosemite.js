@@ -257,7 +257,12 @@ export function buildYosemite(scene, { lib } = {}) {
         const edge = x < XL || x > XR ? ss(0, 1, Math.min(Math.abs(x - XL), Math.abs(x - XR)) / TAP) : 0
         const z = z0 + Math.max(0, bump) * (1 - edge) + edge * 0.6 * (fbm2(x * 0.35, y * 0.3, 3) - 0.5)   // 收回岩壁那段：凹凸改成跟岩壁一樣的大塊起伏
         fp.push(x, y, z); fu.push(x * 0.22, y * 0.22)
-        const kc = 0.85 + 0.3 * fbm2(x * 0.3, y * 0.3 + 9, 2); fc.push(kc, kc, kc * 0.98)
+        // 2026-11-10 ChatGPT QA：石壁一整片淺灰像水泥牆 → 底色壓暗、加往下流的水痕（垂直深色條）、每層踏面下緣一圈青苔、越低越髒
+        let dTop = 9; for (let k = 0; k < M.NL; k++) { const hk = Hk(k, x); if (hk >= y) dTop = Math.min(dTop, hk - y) }
+        const moss = 0.65 * ss(0.7, 0.05, dTop) * (0.6 + 0.4 * fbm2(x * 0.8, y * 0.8 + 3, 2))
+        const streak = Math.max(0, fbm2(x * 1.6 + 4, y * 0.05, 2) - 0.45) * 0.9, low = 0.12 * ss(st.h0 + 3, st.h0 - 1, y)
+        const kc = (0.66 + 0.24 * fbm2(x * 0.3, y * 0.3 + 9, 2)) * (1 - streak - low)
+        fc.push(kc * (1 - 0.38 * moss), kc * (1 - 0.1 * moss), kc * (0.97 - 0.5 * moss))
       }
     }
     const R = NYF + 1
@@ -274,7 +279,23 @@ export function buildYosemite(scene, { lib } = {}) {
     const terr = new THREE.Mesh(tg, cliffM); terr.castShadow = true; terr.receiveShadow = true; g.add(terr)
 
     // 石階：每一階一塊花崗岩踏板，下面墊到平台（看不到懸空）
-    const stepM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xd9d5cd, roughness: 0.88, ...(rockN ? { normalMap: rockN } : {}) })
+    // 2026-11-10 ChatGPT QA：踏板是盒子，整張花崗岩圖照 UV 貼在 3 公尺寬的側面上，白色晶斑被放大成一個個白色「鳥形」→ 也改成照世界座標投影（triplanar），不用 UV、不用法線圖
+    const stepM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xc4c0b8, roughness: 0.88 })
+    stepM.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTpW; varying vec3 vTpN;')
+        .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+          vec4 tpP = vec4(transformed, 1.0); vec3 tpN = objectNormal;
+          #ifdef USE_INSTANCING
+            tpP = instanceMatrix * tpP; tpN = mat3(instanceMatrix) * tpN;
+          #endif
+          vTpW = (modelMatrix * tpP).xyz; vTpN = normalize(mat3(modelMatrix) * tpN);`)
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTpW; varying vec3 vTpN;')
+        .replace('#include <map_fragment>', `
+          vec3 tpB = pow(abs(normalize(vTpN)), vec3(5.0)); tpB /= (tpB.x + tpB.y + tpB.z + 1e-4);
+          vec4 tpC = texture2D(map, vTpW.zy * 0.45) * tpB.x + texture2D(map, vTpW.xz * 0.45) * tpB.y + texture2D(map, vTpW.xy * 0.45) * tpB.z;
+          diffuseColor *= mix(vec4(0.8), tpC, 0.7);`)
+    }
+    stepM.customProgramCacheKey = () => 'stepTriplanar'
     const steps = []
     let lastY = -1e9
     for (let s0 = 0.2; s0 < st.L; s0 += 0.1) {
@@ -300,10 +321,10 @@ export function buildYosemite(scene, { lib } = {}) {
       for (let x = x0; x < x1; x += 0.5) {
         if (x > open0 && x < open1) continue
         const y = yOf(x), z = zOf(x), y2 = yOf(x + 0.5)
-        cores.push({ p: V(x + 0.25, (y + y2) / 2 + 0.33, z), yaw: 0, s: V(0.56, 0.72, 0.4), c: 0.88 })
+        cores.push({ p: V(x + 0.25, (y + y2) / 2 + 0.3, z), yaw: 0, s: V(0.56, 0.62, 0.26), c: 0.88 })   // 2026-11-10 牆心變薄（0.4→0.26）：砌石的角以前剛好戳出牆心表面，一片片白色「鳥形」
         for (let c = 0; c < 3; c++) for (let j = 0; j < 2; j++) {
           const w = 0.34 + rnd() * 0.22, h = 0.2 + rnd() * 0.08
-          stones.push({ p: V(x + j * 0.27 + (c % 2) * 0.13, y + 0.12 + c * 0.22, z + (rnd() - 0.5) * 0.05), yaw: (rnd() - 0.5) * 0.2, s: V(w, h, 0.47), c: 0.78 + rnd() * 0.3 })
+          stones.push({ p: V(x + j * 0.27 + (c % 2) * 0.13, y + 0.12 + c * 0.22, z + (rnd() - 0.5) * 0.05), yaw: (rnd() - 0.5) * 0.2, s: V(w, h, 0.5), c: 0.72 + rnd() * 0.3 })
         }
         stones.push({ p: V(x + 0.25, (y + y2) / 2 + 0.74, z), yaw: (rnd() - 0.5) * 0.06, s: V(0.62, 0.09, 0.5), c: 0.95 + rnd() * 0.1 })   // 蓋頂石
         addCollider(x + 0.25, z, 0.3, y + 0.95)
@@ -319,7 +340,8 @@ export function buildYosemite(scene, { lib } = {}) {
     // 最上一層平台前緣（站在岩壁頂上往下看石階）：石牆，轉上來那頭留開口
     wallLine(M.NL, XL + 0.3, XR - 0.3, (x) => YOSE.base(x) + M.D0 + M.W * (M.NL - 0.5) + 0.2, () => topYm, M.XB + 0.8 - OPEN, M.XB + 0.8 + OPEN)
     {
-      const wallM = new THREE.MeshStandardMaterial({ color: 0xc9c4ba, roughness: 0.95 }), coreM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xa9a49b, roughness: 0.98 })
+      // 2026-11-10 ChatGPT QA：牆心盒子貼整張花崗岩圖 → 圖上的白色晶斑被放大成一個個白色「鳥形」；牆心改素色、砌石壓暗一點
+      const wallM = new THREE.MeshStandardMaterial({ color: 0xaaa59b, roughness: 0.95 }), coreM = new THREE.MeshStandardMaterial({ color: 0x77736c, roughness: 0.98 })
       const stoneG = new THREE.DodecahedronGeometry(0.5, 1); { const pp = stoneG.attributes.position; for (let i = 0; i < pp.count; i++) { const k = 0.9 + 0.2 * Math.sin(i * 12.9898) ; pp.setXYZ(i, pp.getX(i) * k, Math.sign(pp.getY(i)) * Math.min(Math.abs(pp.getY(i)), 0.32), pp.getZ(i) * k) } stoneG.computeVertexNormals() }
       for (const [list, geo, mat] of [[stones, stoneG, wallM], [cores, new THREE.BoxGeometry(1, 1, 1), coreM]]) {
         const im = new THREE.InstancedMesh(geo, mat, list.length), cc = new THREE.Color()
@@ -423,7 +445,7 @@ export function buildYosemite(scene, { lib } = {}) {
     // 看出去的原木長椅（面向山谷）
     for (const bx of [214, 222, 247]) { const bz = YOSE.topFront(bx) + 1.6, by = Y0(bx); box('wood', 1.8, 0.1, 0.4, bx, by + 0.45, bz); box('wood', 1.8, 0.4, 0.08, bx, by + 0.7, bz + 0.2); for (const dx of [-0.7, 0.7]) box('wood', 0.12, 0.42, 0.36, bx + dx, by + 0.21, bz); addCollider(bx, bz, 0.5, by + 0.6) }
     // 步道指標（石階頂）
-    { const x = M0.XB + 2.2, z = YOSE.topFront(M0.XB) + 1.8, y = Y0(x); box('wood', 0.14, 1.9, 0.14, x, y + 0.95, z); const sg = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.38), new THREE.MeshStandardMaterial({ map: signT, roughness: 0.8 })); sg.position.set(x, y + 1.6, z + 0.08); g.add(sg); addCollider(x, z, 0.15, y + 2) }
+    { const x = M0.XB + 2.2, z = YOSE.topFront(M0.XB) + 1.8, y = Y0(x); box('wood', 0.14, 1.9, 0.14, x, y + 0.95, z); const sg = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.38, 0.05), [wood, wood, wood, wood, new THREE.MeshStandardMaterial({ map: signT, roughness: 0.8 }), new THREE.MeshStandardMaterial({ map: signT, roughness: 0.8 })]); sg.position.set(x, y + 1.6, z + 0.1); sg.castShadow = true; g.add(sg); addCollider(x, z, 0.15, y + 2) }
     // 解說牌＋望遠鏡（瀑布口旁的觀景台）
     { const x = 204.2, z = YOSE.topFront(204.2) + 1.2, y = Y0(x); for (const dx of [-0.5, 0.5]) box('wood', 0.1, 0.9, 0.1, x + dx, y + 0.45, z); const pm = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 0.78), new THREE.MeshStandardMaterial({ map: panelT, roughness: 0.7 })); pm.rotation.x = -0.6; pm.position.set(x, y + 1.05, z + 0.05); g.add(pm); addCollider(x, z, 0.5, y + 1.2) }
     { const x = 206.4, z = YOSE.topFront(206.4) + 0.9, y = Y0(x); box('metal', 0.12, 1.1, 0.12, x, y + 0.55, z); box('metal', 0.22, 0.2, 0.5, x, y + 1.2, z - 0.05); parts.metal.push(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 10).rotateX(Math.PI / 2).translate(x - 0.06, y + 1.22, z - 0.35), new THREE.CylinderGeometry(0.06, 0.06, 0.2, 10).rotateX(Math.PI / 2).translate(x + 0.06, y + 1.22, z - 0.35)); addCollider(x, z, 0.2, y + 1.3) }
@@ -437,6 +459,36 @@ export function buildYosemite(scene, { lib } = {}) {
     const z = zf + 4 + rnd() * (ze - zf - 4)
     if (ze - zf < 6 || Math.abs(x - YOSE.fall.x) < 6 || (x > 199 && x < 252 && z < YOSE.edge(x) - 4.5) || Math.hypot(x - 244.5, z - YOSE.base(244.5) - 9.5) < 6 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 6)) continue
     PINES.push({ x, z, y: YOSE.topY(x) - 0.2, H: 9 + rnd() * 6, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.08 }); n++
+  }
+  // 2026-11-10 ChatGPT QA：山頂平台一大片灰色像水泥 → 樹下一圈松針落葉土、平台上零星幾片砂土／碎石、散幾顆小石頭
+  {
+    const T = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'), gr = x.createRadialGradient(128, 128, 20, 128, 128, 128)
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(255,255,255,0.75)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 256, 256)
+      const img = x.getImageData(0, 0, 256, 256), d = img.data
+      for (let i = 0; i < d.length; i += 4) { const n = Math.random(); d[i] = 105 + n * 40; d[i + 1] = 92 + n * 34; d[i + 2] = 74 + n * 26; d[i + 3] *= 0.3 + 0.35 * Math.random() }
+      x.putImageData(img, 0, 0); for (let k = 0; k < 500; k++) { x.strokeStyle = `rgba(${70 + Math.random() * 40},${55 + Math.random() * 25},35,0.35)`; x.lineWidth = 1; const px = Math.random() * 256, py = Math.random() * 256, an = Math.random() * 6.3; if (Math.hypot(px - 128, py - 128) > 115) continue; x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(an) * 9, py + Math.sin(an) * 9); x.stroke() }
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t })()
+    const dm = new THREE.MeshStandardMaterial({ map: T, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+    const pts = []
+    for (const p of PINES) if (Math.abs(p.y - YOSE.topY(p.x)) < 0.5) pts.push([p.x, p.z, 2.4 + rnd() * 0.8])
+    for (let k = 0, n = 0; k < 400 && n < 16; k++) {
+      const x = 202 + rnd() * 47, zf = YOSE.topFront(x) + 1.5, ze = YOSE.edge(x) - 2.5
+      if (ze < zf) continue
+      pts.push([x, zf + rnd() * (ze - zf), 1.0 + rnd() * 1.6]); n++
+    }
+    const im = new THREE.InstancedMesh(new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2), dm, pts.length)
+    pts.forEach(([x, z, r], i) => im.setMatrixAt(i, m4.compose(V(x, YOSE.topY(x) + 0.02, z), q.setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s.set(r * (0.8 + rnd() * 0.4), 1, r))))
+    im.receiveShadow = true; im.renderOrder = 1; g.add(im)
+    if (lib) {
+      const names = ['mrock_1', 'mrock_3', 'mrock_5'].filter((n) => lib[n]), rl = Object.fromEntries(names.map((n) => [n, []]))
+      for (let k = 0, n = 0; k < 600 && n < 40 && names.length; k++) {
+        const x = 202 + rnd() * 47, zf = YOSE.topFront(x) + 1.2, ze = YOSE.edge(x) - 2.2, z = zf + rnd() * (ze - zf)
+        if (ze < zf || Math.hypot(x - 244.5, z - YOSE.base(244.5) - 9.5) < 4.5 || alpineTrailDist(x, z) < 1.5) continue
+        const k2 = 0.25 + rnd() * 0.45, nm = names[Math.floor(rnd() * names.length)]
+        rl[nm].push({ p: V(x, YOSE.topY(x) - 0.12 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * 0.6, k2) }); n++
+      }
+      for (const n of names) if (rl[n].length) scatter(g, lib[n], rl[n], { cast: true })
+    }
   }
   if (PINES.length) {
     const pbark = barkMaterial('pine_bark', { normal: 1.5, color: [1.75, 1.15, 0.8] })   // 西黃松的樹皮：橘紅色的大鱗片，裂縫黑
