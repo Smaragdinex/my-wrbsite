@@ -326,6 +326,8 @@ export const ALP_SPURS = [
   // 2026-11-10 使用者：入口的湖再接回一開始的公園（那邊有兩條路）→ 從主步道起點（花園東出口外 76,0）往南，繞湖西岸（離水 ≥6 m）、
   // 湖南岸（離水雉、彩鷸 ≥12 m），接到湖東南岸 lakeGorge 的起點（往上就是南坡溪谷）。幾乎平的（0～5 m），約 125 m（A* 找的）
   // 2026-11-10 岩簷步道（松龍岩那種）：湖西岸的步道往北，沿著湖跟岩壁之間走進岩簷底下，盡頭是瀑布側後方的觀景平台（離水簾 4～5 m）
+  // 2026-11-10 濕地 V2（ChatGPT C 節）：步道靠近水邊那段改低矮木棧道（寬 1.7），從主步道沿著觀察屋東側下到水邊一個小平台；east.js 鋪木板
+  { name: 'wetBoard', world: true, k: 0.15, pts: [[321.5, -27.3], [322.6, -31], [326, -34], [330.5, -35.3], [334.2, -34.8]] },
   { name: 'cave', world: true, k: 0.12, pts: [[177, 70.5], [179.5, 77], [182.5, 84], [186, 90.3], [190, 94.4], [195, 95.4], [199.5, 94.9]] },
   { name: 'lakeLoop', world: true, y0: 0, k: 0.15, noClear: true, endOn: 'lakeGorge', pts: [[76.5, 0], [78.2, -6], [78, -12], [76.5, -35], [77, -57], [84, -73], [98, -78], [123, -63]] },
   { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, landings: true, endOn: 'grass', pts: null },   // pts：ridgeTrailPts()（EAST.ridge 定義之後）
@@ -477,6 +479,10 @@ export const EAST = {
   spring: [254.5, 121.2],                      // 瀑布頂上游的湧泉（小岩丘頂）
   owlNest: [292, 114],                         // 草鴞的巢（2026-11-10 使用者：巢要放在隱密的地方）：草原南緣高草最深處，離步道 40 m，四周一圈密密的芒草          // 觀察屋 O7、O8（east.js 蓋）：四周 6 m 不長樹、箭竹
 }
+// 2026-11-10 ChatGPT「濕地 V2」：不是一個水池 → 主水域（深 0.35～0.8）＋淺水覓食區（0.03～0.18）＋裸露泥灘＋兩座泥島＋一條西北往東南彎的水道（寬 2.5～4.5、深 0.3～0.6）
+EAST.mainPool = { x: 341, z: -53, rx: 8.5, rz: 10 }
+EAST.channel = [[318.5, -40.5], [323, -45.5], [328.5, -48], [333, -51.5], [338, -53], [343, -57.5], [347, -63]]
+EAST.islands = [{ x: 330.5, z: -58.5, rx: 3.6, rz: 2.1, rot: 0.5, h: 0.2 }, { x: 337.5, z: -42.5, rx: 2.1, rz: 1.6, rot: -0.3, h: 0.14 }]
 EAST.wetBox = [306, 362, -82, -22]; EAST.grassBox = [258, 352, 52, 132]
 // 邊界加雜訊：多邊形的直邊在遊戲裡一看就是六角形（2026-11-10 第一版從空中看是一塊褐色六角形）→ 岸線、草原邊緣彎彎曲曲
 export const wetSD = (x, z) => sdPoly(EAST.water, x, z) + 5 * (fbm2(x * 0.05 + 13, z * 0.05 - 2, 3) - 0.5) + 1.2 * (fbm2(x * 0.2, z * 0.2 + 5, 2) - 0.5)
@@ -548,15 +554,24 @@ function eastShape0(X, Z, h) {
     const W = EAST.W, sd = wetSD(X, Z), n = fbm2(X * 0.09 + 5, Z * 0.09 - 3, 3) - 0.5
     if (sd < 0) {
       // 水裡：邊上 5 公分、往裡 8 公尺到 45 公分；深潭 1.1 m；西半邊（x < 331）慢慢墊高成剛好露出水面的泥灘，泥灘上有積水窪
-      let dep = 0.05 + 0.4 * smoothstep(0, 8, -sd) + 0.06 * n
-      const pd = Math.hypot(X - EAST.pool.x, Z - EAST.pool.z)
-      dep = Math.max(dep, 1.1 * (1 - smoothstep(EAST.pool.r * 0.4, EAST.pool.r, pd)))
+      // V2：大部分是淺水覓食區（0.03～0.18）；主水域 0.35～0.8；水道 0.3～0.6
+      let dep = 0.04 + 0.12 * smoothstep(0, 6, -sd) + 0.05 * n
+      const MP = EAST.mainPool, pr = Math.hypot((X - MP.x) / MP.rx, (Z - MP.z) / MP.rz) + 0.25 * (fbm2(X * 0.15, Z * 0.15 + 3, 2) - 0.5)
+      dep = Math.max(dep, (0.35 + 0.45 * smoothstep(0.75, 0.15, pr)) * smoothstep(1.15, 0.8, pr))
+      const chd = polyDist(X, Z, EAST.channel)[0], chw = 1.3 + 0.9 * (fbm2(X * 0.1 + 7, Z * 0.1, 2))
+      dep = Math.max(dep, (0.3 + 0.25 * fbm2(X * 0.2, Z * 0.2 - 4, 2)) * smoothstep(chw + 0.9, chw, chd))
       let y = W - dep
-      const mud = smoothstep(333, 324, X) * smoothstep(0, 2.5, -sd)
+      const mud = smoothstep(328, 321, X) * smoothstep(0, 2.5, -sd)   // V2：裸露泥灘約 20%（以前西半邊整片）
       y = lerp(y, W + 0.06 + 0.22 * n, mud)
       // 潮溝：溪底比泥灘低 0.35、寬 1.5 m，彎彎地穿過泥灘接到開闊水面
       const cd = polyDist(X, Z, EAST.creek)[0]
       y = Math.min(y, lerp(W - 0.3, y, smoothstep(0.5, 1.3, cd)))
+      // 泥島：高出水面 0.08～0.25，邊坡很緩（1～4%）、岸線不規則
+      for (const I of EAST.islands) {
+        const c = Math.cos(I.rot), s2 = Math.sin(I.rot), dx = X - I.x, dz = Z - I.z, u = (dx * c + dz * s2) / I.rx, v = (-dx * s2 + dz * c) / I.rz
+        const r = Math.hypot(u, v) + 0.22 * (fbm2(X * 0.4 + I.x, Z * 0.4, 2) - 0.5)
+        y = lerp(y, W + 0.04 + I.h * smoothstep(1, 0.2, r) + 0.04 * n, smoothstep(1.35, 0.95, r))
+      }
       return y
     }
     // 岸：西邊原本是 45% 的坡，直接接會在水邊變成一道 10 m 的土崖 → 坡頂壓低成一個往外慢慢變陡的凹坡（山腳堆積坡的樣子）：

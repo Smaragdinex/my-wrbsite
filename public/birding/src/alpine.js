@@ -399,7 +399,7 @@ function buildInterior(lib, avoid = []) {
       for (let j = 0; j <= nzw; j++) for (let i = 0; i <= nxw; i++) {
         const x = x0 + i * cs, z = z0 + j * cs
         const dd = EAST.W - alpineHeight(x, z)
-        P.push(x, EAST.W, z); U.push(x * 0.35, z * 0.35); D.push(dd > 0 ? dd * 1.8 + 0.08 : dd); S0.push(0)   // 濕地的水是混濁的（不像山溪清澈見底）：深度給 shader 加倍，比較不透、比較反光
+        P.push(x, EAST.W, z); U.push(x * 0.35, z * 0.35); D.push(dd > 0 ? dd * 1.7 + 0.07 : dd); S0.push(0)   // 濕地的水是混濁的（不像山溪清澈見底）：深度給 shader 加倍，比較不透、比較反光
       }
       for (let j = 0; j < nzw; j++) for (let i = 0; i < nxw; i++) {
         const a = j * (nxw + 1) + i, b = a + 1, c2 = a + nxw + 1, d = c2 + 1
@@ -1560,7 +1560,7 @@ function buildInterior(lib, avoid = []) {
       const u = s.userData
       for (let k = 0; k < 40; k++) {
         const z = -zMax + rnd() * zMax * 2
-        if (!inAlpine(x, z, 4) || domeRho(x, z) > 0.9) { x = X0 + rnd() * (X1 - X0); continue }
+        if (!inAlpine(x, z, 4) || domeRho(x, z) > 0.9 || eastZone(x, z)) { x = X0 + rnd() * (X1 - X0); continue }   // 2026-11-10 東部濕地／草原不要飄一團白霧（觀察屋旁一大團像牆）
         const gy = alpineHeight(x, z)
         // 偏好低處（山谷、溪邊）；高處的少一點
         if (rnd() > 1.15 - gy / 26) { x = X0 + rnd() * (X1 - X0); continue }
@@ -1581,7 +1581,7 @@ function buildInterior(lib, avoid = []) {
       for (const s of mist) {
         const u = s.userData
         u.x += u.sp * dt; u.z += Math.sin(t * 0.03 + u.ph) * 0.15 * dt
-        if (u.x > X1 || !inAlpine(u.x, u.z, 3)) place(s, X0 + rnd() * 6)
+        if (u.x > X1 || !inAlpine(u.x, u.z, 3) || eastZone(u.x, u.z)) place(s, X0 + rnd() * 6)
         // 地形變高就慢慢往上抬，不插進山坡
         const mk = mistLevel.value
         const gy = alpineHeight(u.x, u.z) + u.lift * (1 - 0.45 * mk)                   // 清晨、晚上的霧貼著地面、沉在山谷裡

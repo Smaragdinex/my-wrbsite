@@ -6,9 +6,10 @@
 import * as THREE from 'three'
 import { bladeMesh } from './flora.js'
 import { lodRegisterGrass } from './lod.js'
-import { EAST, wetSD, grassSD, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss } from './layout.js'
+import { EAST, wetSD, grassSD, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss, ALP_SPURS } from './layout.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { fbm2, mulberry32 } from './noise.js'
+import { scatter } from './plants.js'
 
 const TAU = Math.PI * 2
 
@@ -23,7 +24,15 @@ function nearBirdLane(avoid, x, z) {
   return false
 }
 
-export function buildEast({ avoid = [] } = {}) {
+// 觀察屋窗前的扇形（18 m 內、左右 ±40°）：高的草、蘆葦不長（擋住看鳥）
+function sightBlock(x, z) {
+  for (const h of HIDES) {
+    const fx = h.look[0] - h.x, fz = h.look[1] - h.z, L = Math.hypot(fx, fz), dx = x - h.x, dz = z - h.z, d = Math.hypot(dx, dz)
+    if (d < 18 && d > 0.5 && (dx * fx + dz * fz) / (d * L) > 0.77) return true
+  }
+  return false
+}
+export function buildEast({ avoid = [], lib = null } = {}) {
   const g = new THREE.Group(); g.name = 'east'
   const rnd = mulberry32(1110)
   const layers = { cane: [[], []], plume: [[], []], tall: [[], []], blade: [[], []], low: [[], []] }   // plume：花穗（跟 cane 同順序、不打亂：遠的變稀時稈和穗一起消失）   // cane：有稈的（芒草、蘆葦）；blade：白茅、莎草；low：短草
@@ -83,16 +92,28 @@ export function buildEast({ avoid = [] } = {}) {
   /* ---------- 濕地 ---------- */
   {
     const [x0, x1, z0, z1] = EAST.wetBox, W = EAST.W
-    let nReed = 0, nSedge = 0, nSalt = 0
-    for (let k = 0; k < 50000 && (nReed < 1500 || nSedge < 1000 || nSalt < 2500); k++) {
+    let nReed = 0, nSedge = 0, nSalt = 0, nCat = 0
+    for (let k = 0; k < 90000 && (nReed < 1500 || nSedge < 1800 || nSalt < 2500); k++) {   // V2：莎草 1000 → 1800（岸邊、泥灘一叢叢）
       const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0)
       const sd = wetSD(x, z)
       if (sd > 14 || !ok(x, z)) continue
       const y = alpineHeight(x, z), dep = W - y
       // 蘆葦：北邊那一帶（z < -60）一整片，其他岸邊零星一叢叢；只長在水深 0.3 以內、岸上 1.5 m 以內
       const north = ss(-57, -63, z), patch = fbm2(x * 0.12 + 9, z * 0.12, 3)
-      const reedOK = dep < 0.3 && sd > -9 && sd < 1.5
-      const pReed = reedOK ? Math.min(1, 0.95 * north + 0.35 * ss(0.5, 0.7, patch)) : 0
+      // V2（ChatGPT）：觀察屋前 18 m 視線不長高草；岸線留 35～45% 開放泥灘（其他地方的蘆葦只長在一塊塊群落裡）；島上不長蘆葦
+      const view = sightBlock(x, z), onIsl = EAST.islands.some((I) => Math.hypot((x - I.x) / I.rx, (z - I.z) / I.rz) < 1.2)
+      const reedOK = dep < 0.25 && sd > -6 && sd < 1.5 && !view && !onIsl
+      const pReed = reedOK ? Math.min(1, 0.95 * north + 0.6 * ss(0.56, 0.68, patch)) : 0
+      // 香蒲：局部淺水灣（水深 0.05～0.2），一叢叢；穗是深褐色的長條
+      if (!view && !onIsl && dep > 0.04 && dep < 0.2 && ss(0.6, 0.7, fbm2(x * 0.18 - 3, z * 0.18 + 11, 2)) > rnd() * 1.6 && nCat < 500) {
+        nCat++
+        c.setHSL(0.19 + rnd() * 0.03, 0.42, 0.22 + rnd() * 0.05)
+        const H = 1.2 + rnd() * 0.9, base = W - dep - 0.03
+        for (let j = 0; j < 7; j++) push('tall', x + (rnd() - 0.5) * 0.25, base, z + (rnd() - 0.5) * 0.25, rnd() * TAU, c.clone().multiplyScalar(0.9 + rnd() * 0.2), H * (0.75 + rnd() * 0.35))
+        const pc = new THREE.Color().setHSL(0.06, 0.45, 0.12 + rnd() * 0.04)
+        for (let j = 0; j < 2; j++) { const st = H * (0.9 + rnd() * 0.25); push('cane', x + (rnd() - 0.5) * 0.2, base, z + (rnd() - 0.5) * 0.2, rnd() * TAU, c, st); push('plume', x + (rnd() - 0.5) * 0.05, base + st * 0.82, z, rnd() * TAU, pc, 0.22) }
+        continue
+      }
       if (rnd() < pReed && nReed < 1500) {
         nReed++
         const ns = 3 + Math.floor(rnd() * 4), H = 1.8 + rnd() * 0.8
@@ -108,7 +129,7 @@ export function buildEast({ avoid = [] } = {}) {
         continue
       }
       // 莎草：水邊（水深 0.15 到岸上 2.5 m）
-      if (dep < 0.15 && sd > -1.5 && sd < 2.5 && rnd() < 0.55 && nSedge < 1000) {
+      if (dep < 0.15 && sd > -1.5 && sd < 2.5 && rnd() < (view ? 0.2 : 0.75) * (0.3 + ss(0.4, 0.6, patch)) && nSedge < 1800) {
         nSedge++
         c.setHSL(0.24 + rnd() * 0.04, 0.42, 0.18 + rnd() * 0.06)
         const H = 0.4 + rnd() * 0.35
@@ -145,42 +166,169 @@ export function buildEast({ avoid = [] } = {}) {
     }
   }
   g.userData.blades = n
+  // V2：水中枯木與樹樁（ChatGPT：倒木 2～4 根 1.5～4 m、自然樹樁 2～5 個 0.3～1.2 m；集中在岸邊、水道彎；開闊泥灘中間不放）
+  if (lib?.deadlog) {
+    const L = [[346.5, -44.5, 0.5, 3.4, 0.3], [321.5, -61, 2.1, 2.6, 0.22], [349, -59.5, 1.2, 2.0, 0.18], [334, -64.5, -0.4, 3.8, 0.34]]
+    scatter(g, lib.deadlog, L.map(([x, z, yaw, len, D]) => ({ p: new THREE.Vector3(x, Math.min(EAST.W, alpineHeight(x, z)) - D * 0.35, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.06, yaw, 0.04, 'YXZ')), s: new THREE.Vector3(len / 3.05, D / 0.28, D / 0.28) })))
+  }
+  if (lib?.stump) {
+    const S = [[336.5, -62.8, 0.9, 0.9], [344.5, -47.5, 0.6, 0.5], [325.5, -43.5, 0.7, 0.7], [348, -52, 0.5, 1.1]]
+    scatter(g, lib.stump, S.map(([x, z, D, H]) => ({ p: new THREE.Vector3(x, alpineHeight(x, z) - 0.15, z), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), x), s: new THREE.Vector3(D / 1.5 * 1.35, Math.min(H / 0.57, D / 1.5 * 1.35 * 1.25), D / 1.5 * 1.35) })))
+  }
   g.add(buildHides())
+  g.add(buildBoardwalk())
   return g
 }
 
-// 觀察屋（ChatGPT V2 的 O7 草原、O8 濕地）：木頭小屋，三面牆＋單斜屋頂，背面（步道那側）開著讓人走進去；
-// 正面一條橫的觀察窗（窗台 1.25 m、窗高 0.5 m，站著平視、剛好架相機），窗下一條長木板凳。牆有碰撞（circle collider 一排）
+// 觀察屋（ChatGPT V2 的 O7 草原、O8 濕地）
+// 2026-11-10 重做（使用者：涼亭很低階建模；ChatGPT「濕地 V2」A 節）：台灣濕地公園那種低調的木造賞鳥屋——
+// 6.0×3.2 m、前牆 2.35／後牆 2.75 的單斜頂（約 7°）、立縫金屬屋頂＋外露椽木、屋簷前挑 0.75 側挑 0.45；
+// 牆是一片片橫向木板（寬 0.12～0.19、厚 0.025、縫 0.006～0.012，每片色差 ±8～15%，65% 灰褐／25% 深褐／10% 深色結構）；
+// 正面三個觀察窗（各寬 1.4、下緣 1.05、高 0.5、中間 0.15 木柱）、窗台深 0.24、窗上掀開 55° 的木遮板；後面步道側一個 0.95 m 的門；屋裡長椅 0.42 m
 export const HIDES = [
-  { name: 'O7', x: EAST.hides[0][0], z: EAST.hides[0][1], look: [318, 101], w: 4, d: 3 },
-  { name: 'O8', x: EAST.hides[1][0], z: EAST.hides[1][1], look: [336, -51], w: 5, d: 3 },
+  { name: 'O7', x: EAST.hides[0][0], z: EAST.hides[0][1], look: [318, 101], w: 6, d: 3.2 },
+  { name: 'O8', x: EAST.hides[1][0], z: EAST.hides[1][1], look: [336, -51], w: 6, d: 3.2 },
 ]
+function woodTex() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64
+  const x = c.getContext('2d'), r = mulberry32(42)
+  x.fillStyle = '#d8d8d8'; x.fillRect(0, 0, 256, 64)
+  for (let i = 0; i < 90; i++) {   // 木紋：沿長邊的細線、深淺不一，偶爾一個節
+    const y = r() * 64, a = 0.05 + r() * 0.14
+    x.strokeStyle = `rgba(40,30,20,${a})`; x.lineWidth = 0.6 + r() * 1.4; x.beginPath(); x.moveTo(0, y)
+    for (let k = 0; k <= 256; k += 16) x.lineTo(k, y + Math.sin(k * 0.03 + i) * 1.5 + (r() - 0.5) * 0.8)
+    x.stroke()
+  }
+  for (let i = 0; i < 3; i++) { const cx = r() * 256, cy = r() * 64; x.fillStyle = 'rgba(50,35,20,0.35)'; x.beginPath(); x.ellipse(cx, cy, 3 + r() * 3, 2 + r() * 2, 0, 0, Math.PI * 2); x.fill() }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4
+  return t
+}
 function buildHides() {
   const G = new THREE.Group(); G.name = 'hides'
-  const wood = new THREE.MeshStandardMaterial({ color: 0x7a5a3c, roughness: 0.9 }), dark = new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.95 })
+  const tex = woodTex(), r = mulberry32(606)
+  const woodM = new THREE.MeshStandardMaterial({ map: tex, vertexColors: true, roughness: 0.86 })
+  const roofM = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.09, 0.11, 0.10), roughness: 0.62, metalness: 0.45 })
+  // 線性色（貼圖平均約 0.75 → 頂點色 ×1.3）
+  const GREY = [0.28, 0.25, 0.20], BROWN = [0.22, 0.15, 0.09], STRUCT = [0.13, 0.10, 0.075]
   for (const h of HIDES) {
-    const a = Math.atan2(h.look[0] - h.x, h.look[1] - h.z)   // 正面朝向
-    let y = -1e9
-    y = alpineHeight(h.x, h.z) + 0.04   // layout.js eastShape 已經把底下攤平
-    const W = h.w, D = h.d, H0 = 2.3, H1 = 2.0, T = 0.08, parts = [], darkParts = []
-    const box = (sx, sy, sz, x, yy, z, arr = parts) => arr.push(new THREE.BoxGeometry(sx, sy, sz).translate(x, yy, z))
-    box(W, 0.1, D, 0, -0.05, 0, darkParts)                           // 地板
-    for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.14, 2.6, 0.14, u * (W / 2 - 0.07), -1.0 + 1.3 - 0.3, v * (D / 2 - 0.07), darkParts)   // 柱子（往下埋到坡裡）
-    // 正面（+z 局部）：窗下的牆、窗上的牆，中間一條 0.35 m 的窗
-    box(W, 1.25, T, 0, 0.625, D / 2); box(W, H0 - 1.75, T, 0, 1.75 + (H0 - 1.75) / 2, D / 2)   // 窗 1.25～1.75 m（站著眼睛 1.6 剛好平視）
-    // 兩側：從前面 2.3 m 斜到後面 2.0 m（用兩段近似）
-    for (const u of [-1, 1]) { box(T, H1, D, u * W / 2, H1 / 2, 0); box(T, H0 - H1, D / 2, u * W / 2, H1 + (H0 - H1) / 2, D / 4) }
-    box(W - 0.2, 0.05, 0.3, 0, 1.23, D / 2 - 0.2, darkParts)         // 窗台（放鏡頭）
-    box(W - 0.4, 0.06, 0.35, 0, 0.45, D / 2 - 0.65, darkParts)       // 長板凳
-    const roof = new THREE.BoxGeometry(W + 0.5, 0.08, D + 0.6).rotateX(-Math.atan2(H0 - H1, D)).translate(0, (H0 + H1) / 2 + 0.06, 0.05)
-    darkParts.push(roof)
-    const m = new THREE.Mesh(mergeGeometries(parts), wood), m2 = new THREE.Mesh(mergeGeometries(darkParts), dark)
+    const a = Math.atan2(h.look[0] - h.x, h.look[1] - h.z)
+    const y = alpineHeight(h.x, h.z) + 0.03
+    const W = h.w, D = h.d, HF = 2.35, HB = 2.75, T = 0.025
+    const wood = [], roof = []
+    const col = (base, v = 0.12) => { const k = 1.3 * (1 + (r() - 0.5) * 2 * v); return [base[0] * k, base[1] * k, base[2] * k] }
+    const plankCol = () => { const q = r(); return col(q < 0.7 ? GREY : BROWN) }
+    const box = (sx, sy, sz, x, yy, z, c, rx = 0, ry = 0, rz = 0) => {
+      const g2 = new THREE.BoxGeometry(sx, sy, sz)
+      // 木紋沿著最長的那一邊：uv 依尺寸縮放（不然短板子的紋被拉長）
+      const uv = g2.attributes.uv, L = Math.max(sx, sy, sz)
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * L * 0.7 + r() * 0.0, uv.getY(i) * 0.25 + (sx + sy + sz) * 3.1 % 1)
+      if (rx || ry || rz) g2.rotateX(rx).rotateY(ry).rotateZ(rz)
+      g2.translate(x, yy, z)
+      const n = g2.attributes.position.count, cc = new Float32Array(n * 3)
+      for (let i = 0; i < n; i++) cc.set(c, i * 3)
+      g2.setAttribute('color', new THREE.BufferAttribute(cc, 3))
+      wood.push(g2.toNonIndexed ? g2.toNonIndexed() : g2)
+    }
+    const hAt = (z) => HB + (HF - HB) * (z + D / 2) / D   // 牆高（後高前低）
+    // 地板：沿 x 的木板
+    for (let z = -D / 2 + 0.08; z < D / 2; z += 0.155) box(W - 0.02, 0.04, 0.145, 0, 0.02, z, plankCol())
+    // 立柱（深色結構）
+    const posts = [[-W / 2, -D / 2], [W / 2, -D / 2], [-W / 2, D / 2], [W / 2, D / 2], [-0.55, -D / 2], [0.55, -D / 2], [-W / 2, 0], [W / 2, 0]]
+    for (const [px, pz] of posts) { const hh = hAt(pz); box(0.14, hh + 0.35, 0.14, px, (hh - 0.35) / 2, pz, col(STRUCT, 0.06)) }
+    // 正面：三個窗
+    const WIN = [-1.55, 0, 1.55], WW = 1.4, SILL = 1.15, WH = 0.65   // 玩家眼睛 1.65：窗 1.2～1.75 站著平視（ChatGPT 的 1.05 是給比較矮的視線）
+    const inWin = (x0, x1, yy) => yy > SILL - 0.01 && yy < SILL + WH && WIN.some((c) => x1 > c - WW / 2 + 0.01 && x0 < c + WW / 2 - 0.01)
+    const PITCH = 0.168
+    const plankRow = (yy, x0, x1, z, cut) => {
+      // 一排橫板；遇到窗就斷開
+      const seg = []; let s0 = x0
+      for (const c of [...WIN].sort((p, q) => p - q)) { if (cut && yy > SILL - 0.01 && yy < SILL + WH) { seg.push([s0, c - WW / 2]); s0 = c + WW / 2 } }
+      seg.push([s0, x1])
+      for (const [u0, u1] of seg) if (u1 - u0 > 0.05) box(u1 - u0, 0.155 + (r() - 0.5) * 0.03, T, (u0 + u1) / 2, yy, z + (r() - 0.5) * 0.004, plankCol())
+    }
+    for (let yy = 0.12; yy < HF - 0.04; yy += PITCH) plankRow(yy, -W / 2, W / 2, D / 2, true)
+    // 窗：窗台（裡外）、窗頂橫樑、窗間木柱、往上掀 55° 的遮板＋兩根撐桿
+    box(W - 0.3, 0.05, 0.24, 0, SILL - 0.025, D / 2 - 0.12, col(BROWN, 0.05))
+    box(W - 0.3, 0.04, 0.1, 0, SILL - 0.03, D / 2 + 0.06, col(BROWN, 0.05))
+    box(W, 0.18, 0.1, 0, SILL + WH + 0.09, D / 2 - 0.03, col(STRUCT, 0.05))
+    for (const c of WIN) {
+      for (const sx of [-1, 1]) box(0.15, WH, 0.12, c + sx * (WW / 2 + 0.075), SILL + WH / 2, D / 2 - 0.02, col(STRUCT, 0.05))
+      const fl = new THREE.BoxGeometry(WW - 0.04, WH, 0.03).translate(0, -WH / 2, 0).rotateX(-1.25).translate(c, SILL + WH + 0.02, D / 2 + 0.05)
+      const n = fl.attributes.position.count, cc = new Float32Array(n * 3), fc = col(GREY, 0.1); for (let i = 0; i < n; i++) cc.set(fc, i * 3); fl.setAttribute('color', new THREE.BufferAttribute(cc, 3)); wood.push(fl.toNonIndexed())
+      for (const sx of [-0.55, 0.55]) box(0.025, 0.42, 0.025, c + sx, SILL + WH * 0.72, D / 2 + 0.3, col(STRUCT, 0.05), 1.0)
+    }
+    // 兩側：橫板，上緣照屋頂斜度截
+    for (const u of [-1, 1]) for (let yy = 0.12; yy < HB - 0.05; yy += PITCH) {
+      let z0 = -D / 2, z1 = D / 2
+      if (yy > HF - 0.05) z1 = -D / 2 + D * (HB - yy) / (HB - HF)
+      if (z1 - z0 > 0.1) box(T, 0.155 + (r() - 0.5) * 0.03, z1 - z0, u * W / 2, yy, (z0 + z1) / 2, plankCol())
+    }
+    // 後牆：門（寬 0.95、高 2.05）兩側
+    for (let yy = 0.12; yy < HB - 0.04; yy += PITCH) {
+      if (yy < 2.05) { box(W / 2 - 0.55, 0.155, T, -(W / 2 + 0.55) / 2, yy, -D / 2, plankCol()); box(W / 2 - 0.55, 0.155, T, (W / 2 + 0.55) / 2, yy, -D / 2, plankCol()) }
+      else box(W, 0.155, T, 0, yy, -D / 2, plankCol())
+    }
+    box(1.2, 0.12, 0.1, 0, 2.11, -D / 2 - 0.03, col(STRUCT, 0.05))   // 門楣
+    // 角板（深色直條）
+    for (const [px, pz] of [[-W / 2, D / 2], [W / 2, D / 2], [-W / 2, -D / 2], [W / 2, -D / 2]]) box(0.1, hAt(pz), 0.1, px + Math.sign(px) * 0.03, hAt(pz) / 2, pz + Math.sign(pz) * 0.03, col(STRUCT, 0.05))
+    // 屋裡：長椅＋相機架
+    box(W - 0.6, 0.05, 0.36, 0, 0.42, D / 2 - 0.95, col(BROWN, 0.06))
+    for (const sx of [-2.2, 0, 2.2]) box(0.08, 0.4, 0.3, sx, 0.2, D / 2 - 0.95, col(STRUCT, 0.05))
+    // 屋頂：椽木（外露，每 0.5 m）＋前緣封簷板＋金屬板＋立縫
+    const slope = Math.atan2(HB - HF, D), RL = (D + 0.75 + 0.3) / Math.cos(slope), zc = (0.75 - 0.3) / 2
+    const roofY = (z) => hAt(z) + 0.08
+    for (let x = -W / 2 - 0.4; x <= W / 2 + 0.41; x += 0.5) box(0.06, 0.12, RL, x, roofY(zc) - 0.07, zc, col(STRUCT, 0.06), slope)
+    box(W + 0.9, 0.2, 0.04, 0, roofY(D / 2 + 0.75) - 0.06, D / 2 + 0.77, col(BROWN, 0.05))
+    box(W + 0.9, 0.16, 0.04, 0, roofY(-D / 2 - 0.3) - 0.04, -D / 2 - 0.32, col(BROWN, 0.05))
+    roof.push(new THREE.BoxGeometry(W + 0.9, 0.03, RL + 0.04).rotateX(slope).translate(0, roofY(zc) + 0.005, zc))
+    for (let x = -W / 2 - 0.42; x <= W / 2 + 0.43; x += 0.45) roof.push(new THREE.BoxGeometry(0.025, 0.04, RL + 0.04).rotateX(slope).translate(x, roofY(zc) + 0.035, zc))
+    const m = new THREE.Mesh(mergeGeometries(wood), woodM), m2 = new THREE.Mesh(mergeGeometries(roof.map((q) => q.toNonIndexed())), roofM)
     for (const o of [m, m2]) { o.position.set(h.x, y, h.z); o.rotation.y = a; o.castShadow = true; o.receiveShadow = true; G.add(o) }
     h.y = y; h.a = a
-    // 牆的碰撞：正面、兩側每 0.5 m 一個圓
+    // 碰撞：正面、兩側、後牆（門口留空）
     const c = Math.cos(a), sn = Math.sin(a), P = (lx, lz) => [h.x + lx * c + lz * sn, h.z - lx * sn + lz * c]
-    for (let t = -W / 2; t <= W / 2 + 1e-3; t += 0.5) { const [px, pz] = P(t, D / 2); addCollider(px, pz, 0.22, y + H0) }
-    for (const u of [-1, 1]) for (let t = -D / 2; t <= D / 2 + 1e-3; t += 0.5) { const [px, pz] = P(u * W / 2, t); addCollider(px, pz, 0.22, y + H0) }
+    for (let t = -W / 2; t <= W / 2 + 1e-3; t += 0.5) { const [px, pz] = P(t, D / 2); addCollider(px, pz, 0.22, y + HF) }
+    for (const u of [-1, 1]) for (let t = -D / 2; t <= D / 2 + 1e-3; t += 0.5) { const [px, pz] = P(u * W / 2, t); addCollider(px, pz, 0.22, y + HB) }
+    for (let t = -W / 2; t <= W / 2 + 1e-3; t += 0.5) { if (Math.abs(t) < 0.8) continue; const [px, pz] = P(t, -D / 2); addCollider(px, pz, 0.22, y + HB) }
   }
+  return G
+}
+
+// 低矮木棧道（ChatGPT：寬 1.6～1.8、板寬 0.12～0.16、厚 0.04、縫 0.008；支柱 1.5～2 m；靠水那段 1.1 m 欄杆）：沿 wetBoard 支線鋪，盡頭 3×3 m 平台
+function buildBoardwalk() {
+  const G = new THREE.Group(), sp = ALP_SPURS.find((q) => q.name === 'wetBoard')
+  if (!sp) return G
+  const r = mulberry32(919), parts = [], W = 1.7, P = sp.pts
+  const add = (geo, c) => { const n = geo.attributes.position.count, cc = new Float32Array(n * 3); for (let i = 0; i < n; i++) cc.set(c, i * 3); geo.setAttribute('color', new THREE.BufferAttribute(cc, 3)); parts.push(geo.toNonIndexed()) }
+  const wc = () => { const k = 1.3 * (0.88 + r() * 0.24), b = r() < 0.7 ? [0.28, 0.25, 0.20] : [0.22, 0.15, 0.09]; return [b[0] * k, b[1] * k, b[2] * k] }
+  const S = [0]; for (let i = 1; i < P.length; i++) S.push(S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]))
+  const at = (s) => { let i = 1; while (i < P.length - 1 && S[i] < s) i++; const t = (s - S[i - 1]) / (S[i] - S[i - 1]), dx = P[i][0] - P[i - 1][0], dz = P[i][1] - P[i - 1][1], l = Math.hypot(dx, dz); return { x: P[i - 1][0] + dx * t, z: P[i - 1][1] + dz * t, dx: dx / l, dz: dz / l, seg: i } }
+  const Ltot = S.at(-1)
+  for (let s = 1.2; s < Ltot; s += 0.155) {
+    const a = at(s), y = alpineHeight(a.x, a.z) + 0.1, yaw = Math.atan2(a.dx, a.dz)
+    add(new THREE.BoxGeometry(W, 0.04, 0.145).rotateY(yaw).translate(a.x, y, a.z), wc())
+  }
+  // 平台
+  const E = at(Ltot), ey = alpineHeight(E.x, E.z) + 0.1
+  for (let u = -1.4; u <= 1.4; u += 0.155) add(new THREE.BoxGeometry(3.0, 0.04, 0.145).rotateY(Math.atan2(E.dx, E.dz)).translate(E.x + E.dx * (1.4 + u), ey, E.z + E.dz * (1.4 + u)), wc())
+  // 欄杆：棧道後半段兩側、平台三邊；柱子＋兩根橫木
+  const rails = []
+  for (let s = Ltot * 0.45; s <= Ltot; s += 1.6) for (const sd of [-1, 1]) { const a = at(s); rails.push([a.x - a.dz * sd * (W / 2 + 0.05), a.z + a.dx * sd * (W / 2 + 0.05), sd]) }
+  const nx = -E.dz, nz = E.dx
+  for (let u = 0; u <= 2.8; u += 1.4) for (const sd of [-1, 1]) rails.push([E.x + E.dx * u + nx * sd * 1.55, E.z + E.dz * u + nz * sd * 1.55, sd])
+  for (let v = -1.4; v <= 1.4; v += 1.4) rails.push([E.x + E.dx * 2.9 + nx * v, E.z + E.dz * 2.9 + nz * v, 2])
+  const post = (x, z) => { const y = alpineHeight(x, z); add(new THREE.BoxGeometry(0.1, 1.25, 0.1).translate(x, y + 0.5, z), [0.17, 0.13, 0.1]); addCollider(x, z, 0.12, y + 1.2) }
+  for (const [x, z] of rails) post(x, z)
+  for (const sd of [-1, 1, 2]) {
+    const L = rails.filter((q) => q[2] === sd)
+    for (let i = 1; i < L.length; i++) {
+      const [ax, az] = L[i - 1], [bx, bz] = L[i], d = Math.hypot(bx - ax, bz - az); if (d > 2) continue
+      for (const hh of [0.55, 1.05]) { const ya = alpineHeight(ax, az) + hh, yb = alpineHeight(bx, bz) + hh, len = Math.hypot(d, yb - ya); const geo = new THREE.BoxGeometry(len, 0.07, 0.06); geo.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(bx - ax, yb - ya, bz - az).normalize()))); geo.translate((ax + bx) / 2, (ya + yb) / 2, (az + bz) / 2); add(geo, wc()) }
+    }
+  }
+  // 兩條縱樑（從側面看得到棧道有厚度）
+  for (let s = 1.2; s < Ltot; s += 1.0) for (const sd of [-1, 1]) { const a = at(s), b = at(Math.min(Ltot, s + 1.0)); const ax = a.x - a.dz * sd * 0.7, az = a.z + a.dx * sd * 0.7, bx = b.x - b.dz * sd * 0.7, bz = b.z + b.dx * sd * 0.7; const ya = alpineHeight(ax, az) + 0.02, yb = alpineHeight(bx, bz) + 0.02, len = Math.hypot(bx - ax, yb - ya, bz - az); if (len < 0.2) continue; const geo = new THREE.BoxGeometry(len, 0.12, 0.08); geo.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(bx - ax, yb - ya, bz - az).normalize()))); geo.translate((ax + bx) / 2, (ya + yb) / 2, (az + bz) / 2); add(geo, [0.15, 0.12, 0.09]) }
+  const m = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ map: woodTex(), vertexColors: true, roughness: 0.85 }))
+  m.castShadow = true; m.receiveShadow = true; G.add(m)
   return G
 }

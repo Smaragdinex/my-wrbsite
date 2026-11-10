@@ -138,7 +138,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   giantSpots(alpAvoid)   // 巨木的位置先算好：山區的其他樹、草要避開
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
-  scene.add(buildEast({ avoid: alpAvoid }))   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
+  scene.add(buildEast({ avoid: alpAvoid, lib: plantLib }))   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
   alpine.build()
   const camp = buildCamp(scene)
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉
