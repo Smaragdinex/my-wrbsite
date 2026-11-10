@@ -382,7 +382,9 @@ export const YOSE = (() => {
       if (d < best) { best = d; sAt = st.S[i - 1] + Math.sqrt(l2) * t }
     }
     if (best > 1.45) return null
-    return Math.floor(st.h(sAt) / 0.2) * 0.2 + 0.2
+    // 2026-11-10 ChatGPT：走樓梯＝看得到的石階＋看不到的斜坡碰撞。以前回傳一階一階的高度（每 1.2 公尺跳 0.2），走起來一頓一頓；
+    // 改回傳連續的坡道高度（在每階踏面的上下 0.1 公尺內，第一人稱看不出腳陷進去）
+    return st.h(sAt) + 0.1
   }
   // 岩壁頂上走得到的地方（平的，高 topY）：石階頂（東端）往西到瀑布口旁邊的觀景台；前緣＝平台的石壁／岩壁的邊，後面到玻璃前
   Y.topFront = (x) => x >= Y.mist.XA - 1.3 && x <= Y.mist.XB + 1.3 ? Y.base(x) + Y.mist.D0 + Y.mist.W * (Y.mist.NL - 0.5) : Y.base(x) + 3.2

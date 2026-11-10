@@ -1,7 +1,7 @@
 // 第一人稱：WASD 走、Shift 跑、C 蹲低慢慢走（鳥比較不會被嚇跑）、空白鍵跳、滑鼠看
 import * as THREE from 'three'
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js'
-import { supportAt, blocked, SPAWN, domeRho } from './layout.js'
+import { supportAt, blocked, SPAWN, domeRho, YOSE } from './layout.js'
 
 // 速度照「不會 3D 暈」調：走路 3.2 m/s（原本 4.2 太快）、跑 6.2
 const EYE = 1.65, EYE_LOW = 1.05, WALK = 3.2, RUN = 6.2, SNEAK = 1.3, GRAV = 22, JUMP = 7
@@ -64,7 +64,7 @@ export function createPlayer(camera, dom) {
       if (keys.has('KeyA') || keys.has('ArrowLeft')) want.sub(right)
     }
     st.sneak = controls.isLocked && keys.has('KeyC')
-    if (want.lengthSq() > 0) want.normalize().multiplyScalar(st.sneak ? SNEAK : keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK)
+    if (want.lengthSq() > 0) want.normalize().multiplyScalar((st.sneak ? SNEAK : keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK) * (st.owner === 5 && st.grounded && YOSE.stairAt(st.x, st.z) != null ? 0.65 : 1))   // 石階上走慢一點（ChatGPT：上樓約平地的 7 成）
     // 起步、停下都慢慢來（原本 12 幾乎是瞬間），停下比起步快一點，才不會覺得滑
     const k = !st.grounded ? 3 : want.lengthSq() > 0 ? 6 : 8
     vel.x += (want.x - vel.x) * Math.min(1, k * dt)
@@ -93,8 +93,11 @@ export function createPlayer(camera, dom) {
     }
     st.eye += ((st.sneak ? EYE_LOW : EYE) - st.eye) * Math.min(1, 6 * dt)
     // 鏡頭高度另外平滑：上下台階、地面高低不平時腳會一格一格跳，眼睛不要跟著跳（跳躍、掉下去時直接跟）
+    // 2026-11-10 使用者：瀑布石階走起來很卡、不順。量了：每階 0.2 公尺、踏面 1.2 公尺，鏡頭「平—跳 0.2—平—跳」，一秒一頓。
+    // 眼睛改跟「前後 0.6 公尺內地面高度的平均」（沿走路方向取五點）：台階變成一條順的斜坡，腳還是一階一階踩
+    // 第一版用前後 0.6 公尺地面平均，ChatGPT 指出會「還沒到樓梯鏡頭就先升」→ 改成石階本身是連續斜坡（layout.js stairAt），鏡頭只做 0.16 秒的時間平滑
     const eyeY = st.feet + st.eye
-    st.camY = st.grounded && st.camY != null && Math.abs(eyeY - st.camY) < 0.6 ? st.camY + (eyeY - st.camY) * Math.min(1, 12 * dt) : eyeY
+    st.camY = st.grounded && st.camY != null && Math.abs(eyeY - st.camY) < 0.6 ? st.camY + (eyeY - st.camY) * (1 - Math.exp(-dt / 0.16)) : eyeY
     camera.position.set(st.x, st.camY, st.z)
   }
 

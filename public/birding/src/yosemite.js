@@ -233,9 +233,12 @@ export function buildYosemite(scene, { lib } = {}) {
     const M = YOSE.mist, st = YOSE.stairs(), XL = M.XA - 1.3, XR = M.XB + 1.3, topYm = YOSE.topY(M.XB)
     const dEdge = (x, k) => YOSE.base(x) + M.D0 + M.W * k + M.W / 2          // 第 k 段的內側（上一層石壁的腳）
     const Hk = (k, x) => st.legH(k, x)
+    // 2026-11-10 ChatGPT QA：石階右半邊一條條閃的條紋＝這片石壁在兩層之間轉折的那條斜面（照坡道高度 Hk）從踏板中間穿出來（踏板是一階一階的，斜面忽上忽下）。
+    // 轉折點壓低 0.25 公尺：斜面永遠藏在踏板底下
+    const DROP = 0.25
     const faceZ = (x, y) => {
-      if (y <= Hk(0, x)) return YOSE.base(x) + M.D0 - M.W / 2
-      for (let k = 0; k < M.NL - 1; k++) if (y <= Hk(k + 1, x)) return dEdge(x, k)
+      if (y <= Hk(0, x) - DROP) return YOSE.base(x) + M.D0 - M.W / 2
+      for (let k = 0; k < M.NL - 1; k++) if (y <= Hk(k + 1, x) - DROP) return dEdge(x, k)
       return dEdge(x, M.NL - 1)
     }
     // 2026-11-11 使用者：平台兩端那條白白的直縫 → 不再用一片平的側面封口；平台在兩端外面 TAP 公尺內慢慢「收」回岩壁裡
@@ -253,7 +256,9 @@ export function buildYosemite(scene, { lib } = {}) {
       const x = XL2 + (XR2 - XL2) * i / NXF
       for (let j = 0; j <= NYF; j++) {
         const y = yLo + (topYm + 0.05 - yLo) * j / NYF, z0 = faceAt(x, y)
-        const bump = 0.45 * Math.max(0, fbm2(x * 0.55, y * 0.45, 3) - 0.32) + 0.12 * Math.sin(x * 2.3 + y * 0.7)   // 只往裡凹
+        // 2026-11-10 ChatGPT QA：內側岩壁像一面平滑的水泥牆 → 大塊凹凸（每 1～3 公尺、深 10～35 公分）＋ 直的節理裂縫 ＋ 細碎起伏；一樣只往裡凹（不擋石階）
+        const crack = 0.22 * Math.pow(Math.max(0, 1 - Math.abs(Math.sin(x * 1.9 + 1.3 * fbm2(x * 0.2, y * 0.15, 2)))), 6)
+        const bump = 0.55 * Math.max(0, fbm2(x * 0.45, y * 0.38, 3) - 0.18) + 0.1 * Math.abs(fbm2(x * 1.6, y * 1.3 + 4, 2)) + crack + 0.08 * Math.sin(x * 2.3 + y * 0.7)
         const edge = x < XL || x > XR ? ss(0, 1, Math.min(Math.abs(x - XL), Math.abs(x - XR)) / TAP) : 0
         const z = z0 + Math.max(0, bump) * (1 - edge) + edge * 0.6 * (fbm2(x * 0.35, y * 0.3, 3) - 0.5)   // 收回岩壁那段：凹凸改成跟岩壁一樣的大塊起伏
         fp.push(x, y, z); fu.push(x * 0.22, y * 0.22)
@@ -311,9 +316,52 @@ export function buildYosemite(scene, { lib } = {}) {
     function at(st, s) { let i = 1; while (i < st.S.length - 1 && st.S[i] < s) i++; const u = (s - st.S[i - 1]) / Math.max(1e-6, st.S[i] - st.S[i - 1]); return [lerpN(st.pts[i - 1][0], st.pts[i][0], u), lerpN(st.pts[i - 1][1], st.pts[i][1], u)] }
     const box = new THREE.BoxGeometry(1, 1, 1)
     {
-      const im = new THREE.InstancedMesh(box, stepM, steps.length), cc = new THREE.Color()
-      steps.forEach((b, i) => { im.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), b.s)); im.setColorAt(i, cc.setScalar(b.c)) })
-      im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
+      // 2026-11-10 ChatGPT QA：一階一個灰色方盒子太整齊 → 每階 1～3 塊不規則花崗岩石板（55% 一塊、35% 兩塊錯縫、10% 三塊），
+      // 石板輪廓 12 點、邊緣崩角、上面微微起伏、下緣倒角；10 種外形輪流用（InstancedMesh，一種一個）。踏面主要落腳區維持平（±1.5 公分）
+      const rr = (a, b) => a + rnd() * (b - a)
+      const NV = 10, slabGeo = []
+      for (let v = 0; v < NV; v++) {
+        const pts = [], N = 12
+        for (let i = 0; i < N; i++) {
+          const a = (i / N) * Math.PI * 2 + 0.26, cx = Math.cos(a), cz = Math.sin(a)
+          // 圓角方形（四個角各兩點）＋每點往內崩 0～6%
+          const sq = 1 / Math.max(Math.abs(cx), Math.abs(cz)), k = 0.5 * Math.min(sq, 1.32) * (1 - 0.06 * rnd())
+          pts.push(new THREE.Vector2(cx * k, cz * k))
+        }
+        const sh = new THREE.Shape(pts)
+        const eg = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.025, bevelSegments: 1, curveSegments: 1, steps: 1 })
+        eg.rotateX(Math.PI / 2)   // 擠出方向朝下：y 0（上面）→ -1
+        eg.computeBoundingBox()
+        const bb = eg.boundingBox, pp = eg.attributes.position
+        for (let i = 0; i < pp.count; i++) {
+          let x = (pp.getX(i) - (bb.min.x + bb.max.x) / 2) / (bb.max.x - bb.min.x), z = (pp.getZ(i) - (bb.min.z + bb.max.z) / 2) / (bb.max.z - bb.min.z)
+          let y = (pp.getY(i) - bb.max.y) / (bb.max.y - bb.min.y) + 0.5   // 上面 0.5、下面 -0.5
+          if (y > 0.45) y += 0.03 * Math.sin(x * 7 + v) * Math.cos(z * 5 + v * 1.7)   // 表面微微起伏
+          pp.setXYZ(i, x, y, z)
+        }
+        eg.computeVertexNormals(); slabGeo.push(eg)
+      }
+      const lists = Array.from({ length: NV }, () => [])
+      for (const b of steps) {
+        const r = rnd(), n = r < 0.55 ? 1 : r < 0.9 ? 2 : 3
+        // 寬度方向（盒子的 x）切幾塊，切點亂一點；往內側（+z，靠岩壁）多 0.1 公尺嵌進牆裡
+        const W = b.s.x + 0.1, cuts = n === 1 ? [0, 1] : n === 2 ? [0, rr(0.35, 0.65), 1] : [0, rr(0.25, 0.4), rr(0.6, 0.75), 1]
+        const ax = V(1, 0, 0).applyAxisAngle(V(0, 1, 0), b.yaw)
+        const shift = ax.z >= 0 ? 0.05 : -0.05
+        for (let j = 0; j < n; j++) {
+          const u0 = cuts[j], u1 = cuts[j + 1], w = (u1 - u0) * W - 0.025, off = ((u0 + u1) / 2 - 0.5) * W + shift
+          const p = b.p.clone().addScaledVector(ax, off)
+          p.y += rr(-0.012, 0.012)
+          lists[Math.floor(rnd() * NV)].push({ p, yaw: b.yaw + rr(-0.025, 0.025), s: V(w, b.s.y, b.s.z * rr(0.97, 1.02)), c: b.c * rr(0.9, 1.08) })
+        }
+      }
+      const cc = new THREE.Color()
+      lists.forEach((list, v) => {
+        if (!list.length) return
+        const im = new THREE.InstancedMesh(slabGeo[v], stepM, list.length)
+        list.forEach((b, i) => { im.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), b.s)); im.setColorAt(i, cc.setScalar(b.c)) })
+        im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
+      })
     }
     // 矮石牆：沿每段外側（第 0 段是前面、其他段是跟下一層之間），兩層砌石；碰撞也照這條線
     const stones = [], cores = [], wallLine = (k, x0, x1, zOf, yOf, open0, open1) => {
