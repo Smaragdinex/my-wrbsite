@@ -236,6 +236,14 @@ function buildInterior(lib, avoid = []) {
       const wet = Math.max(ss(4.5, 1.2, sd), ss(3, 0, dp))
       const stone = fbm2(x * 1.3, z * 1.3, 2)
       c.lerp(new THREE.Color().setHSL(0.11 + stone * 0.04, 0.16, 0.1 + stone * 0.07), wet)
+      // 2026-11-11 山下湖的岸（ChatGPT 湖泊 V2）：水下泥底暗、水線一圈深色濕泥、往上草和土一塊塊混（以前一大圈灰褐泥地）
+      if (dp < 10) {
+        const hW = pos[k * 3 + 1] - ALP_POND.water, nt = 1 - tr
+        c.lerp(new THREE.Color().setRGB(0.094, 0.088, 0.069), ss(0.0, -0.15, hW) * nt)
+        c.lerp(new THREE.Color().setRGB(0.14, 0.12, 0.094), ss(-0.05, 0.0, hW) * ss(0.4, 0.12, hW) * nt)
+        const patch = ss(0.42, 0.62, fbm2(x * 0.28 + 5, z * 0.28, 2))
+        c.lerp(new THREE.Color().setHSL(0.2 + n * 0.05, 0.36, 0.17 + n * 0.05), ss(0.3, 1.1, hW) * ss(10, 5, dp) * nt * (0.45 + 0.45 * patch))
+      }
       // 2026-11-11 瀑布湖的岸：陡的湖岸不畫成灰白的光岩（使用者：左岸一片米色的坡）→ 青苔、草的綠，水邊一圈濕的深色泥砂
       {
         const LK = YOSE.lake, e = Math.hypot((x - LK.x) / LK.rx, (z - LK.z) / LK.rz)
@@ -344,6 +352,12 @@ function buildInterior(lib, avoid = []) {
         vec3 bed = vec3(0.11, 0.09, 0.055), mid = vec3(0.025, 0.06, 0.05), deep = vec3(0.005, 0.03, 0.03);
         vec3 col = mix(bed, mid, smoothstep(0.0, 0.45, d));
         col = mix(col, deep, smoothstep(0.45, 1.0, d));
+        #ifdef LAKE
+          // 2026-11-11 使用者：湖邊很淡很透明、不像湖（ChatGPT 湖泊 V2，linear RGB）：前 0.35 m 就轉成看得出來的湖水色
+          col = mix(vec3(0.075, 0.115, 0.085), vec3(0.030, 0.080, 0.070), smoothstep(0.02, 0.35, vDepth));
+          col = mix(col, vec3(0.010, 0.040, 0.045), smoothstep(0.30, 0.95, vDepth));
+          col += vec3(0.006, 0.014, 0.01) * (h0 - 0.5);
+        #endif
         col += vec3(0.01, 0.026, 0.02) * (h0 - 0.5) * (1.0 - d * 0.5);
         // 反射：低角度看過去倒映的是兩岸的樹和石壁（暗綠、一塊深一塊淺），只有幾乎正上方的反射才是天空
         vec3 R = reflect(-Vd, N);
@@ -351,7 +365,11 @@ function buildInterior(lib, avoid = []) {
         float trees = fbm2(vW.xz * 0.3 + R.xz * 0.5);   // 倒影的明暗跟著位置慢慢變（太跟著反射角走，跌水那面會變成豹紋）
         vec3 bank = mix(vec3(0.008, 0.018, 0.011), vec3(0.03, 0.05, 0.032), trees);
         vec3 env = mix(bank, sky * 0.75, smoothstep(0.82, 0.99, R.y));
-        col = mix(col, env, clamp(fres * (1.0 + lip * 0.6) * (1.0 - fall * 0.75), 0.0, 0.92));   // 跌水那面是碎水，幾乎不倒影
+        #ifdef LAKE
+          col = mix(col, env, 0.08 + 0.77 * fres);   // 菲涅耳只管倒影多少（俯視看水色、斜看越來越多天空和樹的倒影）
+        #else
+        col = mix(col, env, clamp(fres * (1.0 + lip * 0.6) * (1.0 - fall * 0.75), 0.0, 0.92));
+        #endif   // 跌水那面是碎水，幾乎不倒影
         // 太陽高光：小而亮（原本太大一片，看起來像塑膠）
         float spec = pow(max(dot(reflect(-uSun, N), Vd), 0.0), 260.0);
         col += vec3(1.0, 0.97, 0.9) * spec * (1.6 + lip * 1.5);
@@ -378,7 +396,10 @@ function buildInterior(lib, avoid = []) {
         float edgeD = min(vUv.x, 1.0 - vUv.x);
         a *= mix(1.0, smoothstep(0.0, 0.06 + 0.14 * vnoise(vec2(vUv.x * 40.0, vUv.y * 1.5 - uTime * 4.0)), edgeD), fall);
         col = mix(col, col * 0.45, fall * (1.0 - strands) * (1.0 - foam));   // 跌水那面：水絲不透明、水絲之間半透明   // 淺的地方看得到溪底
-        a *= smoothstep(0.0, 0.05, vDepth);                                      // 岸邊淡掉，不會有一條硬邊
+        a *= smoothstep(0.0, 0.05, vDepth);
+        #ifdef LAKE
+          a = clamp((0.55 + 0.42 * (1.0 - exp(-vDepth / 0.22)) + foam * 0.3) * smoothstep(0.0, 0.015, vDepth), 0.0, 0.97);   // 1 cm 就 55%，水線只淡 1.5 cm（以前 5 cm 才 31%）
+        #endif                                      // 岸邊淡掉，不會有一條硬邊
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -398,7 +419,8 @@ function buildInterior(lib, avoid = []) {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
     geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); geo.setAttribute('aSlope', new THREE.Float32BufferAttribute(slo, 1)); geo.setAttribute('aFoam', new THREE.Float32BufferAttribute(new Float32Array(slo.length), 1)); geo.setAttribute('aLip', new THREE.Float32BufferAttribute(new Float32Array(slo.length), 1)); geo.setIndex(idx)
-    const pond = new THREE.Mesh(geo, waterM); pond.renderOrder = 2; g.add(pond)
+    const lakeM = waterM.clone(); lakeM.uniforms = waterM.uniforms; lakeM.defines = { ...(waterM.defines || {}), LAKE: 1 }
+    const pond = new THREE.Mesh(geo, lakeM); pond.renderOrder = 2; g.add(pond)
     // 2026-11-10 東部人工濕地：方格水面蓋住整個盆地，每點水深照地形算（岸上深度 < 0 → 透明），岸線自然由深度測試切出來
     {
       const [x0, x1, z0, z1] = EAST.wetBox, cs = 0.75, nxw = Math.ceil((x1 - x0) / cs), nzw = Math.ceil((z1 - z0) / cs)
@@ -533,7 +555,8 @@ function buildInterior(lib, avoid = []) {
           // 從潭邊一層層疊上去到岩唇高度，一半埋進坡裡；沿著潭岸往下游也排兩排（蓋住左邊那片大灰坡）
           for (let row = 0; row < 5; row++) for (let j = 0; j < 5; j++) {
             const b = at(d.s - 1.6 + j * 1.6 + rr() * 0.7), o = (hw + 0.6 + row * 1.5 + rr() * 0.7) * sgn, k = 1.1 + rr() * 0.8 - row * 0.12
-            const x = b.x + b.sx * o, z = b.z + b.sz * o
+            const x = b.x + b.sx * o, z = b.z + b.sz * o, h0r = alpineHeight(x, z)
+            if (Math.hypot(alpineHeight(x + 0.6, z) - h0r, alpineHeight(x, z + 0.6) - h0r) / 0.6 > 1.7) continue   // 檢查員：坡度 > 60° 的牆面上不放（看起來黏在牆上懸空）
             put(rr() < 0.75 ? BIG : MOSS, x, z, Math.max(d.down - 0.5 * k, alpineHeight(x, z) - 0.45 * k), k, 0.8)   // 坐在坡面上、一半埋進去
           }
         }
@@ -687,7 +710,7 @@ function buildInterior(lib, avoid = []) {
           x.putImageData(img, 0, 0)
         })
         const ang = Math.atan2(P.sx, P.sz)
-        for (const [rad, op, sq] of [[2.6, 0.85, 0.7], [5.5, 0.4, 0.75]]) {
+        for (const [rad, op, sq] of [[2.6, 1.0, 0.7], [1.5, 0.95, 0.8], [5.5, 0.45, 0.75]]) {   // 落點再加一層小而密的白水（檢查員：白水偏淡、看不出力道）
           const fm = new THREE.Mesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: op, fog: true }))   // 正方形：邊界由貼圖自己淡掉
           fm.position.set(cx, yW + 0.015 + (rad > 3 ? 0 : 0.005), cz); fm.rotation.y = ang; fm.scale.set(rad, 1, rad * sq); fm.renderOrder = 3
           fm.userData = { foam: true, op, rad, sq }; g.add(fm); fallFx.push(fm)
