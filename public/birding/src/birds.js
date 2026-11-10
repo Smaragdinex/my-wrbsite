@@ -1779,6 +1779,43 @@ function rock(r, seed) {
 
 // 依鳥的資料把模型擺進溫室，回傳鏡頭要看的目標點與鏡頭位置
 // def.y：腳下的高度（地面或水池底）；def.water：水面高度（涉水的鳥才用）
+// 2026-11-10 玩家回饋（有在賞鳥的）：綠繡眼跟五色鳥遠看快一樣大。量了 69 種：早期的鳥放大約 2 倍（綠繡眼 3.5 倍、五色鳥 3 倍），
+// 後來加的二十幾種幾乎是原尺寸（八色鳥 0.97、鴛鴦 1.0、鳳頭蒼鷹 1.04）——大小順序全亂了。
+// 統一：遊戲裡的身長＝真實全長 × 放大倍數，30 公分以下一律 1.6 倍，越大的鳥倍數慢慢降到 80 公分時 1.25 倍（大小順序永遠跟真的一樣）。
+// 放好之後量鳥自己座標系裡的身長（max(前後, 高)，直立的鷺、鴞、攀在樹幹上的看高度），照目標縮放。真實全長：台灣野鳥圖鑑常見值（公分，雉類、長尾鳥含尾）
+export const REAL_CM = {
+  sparrow: 14, dove: 30, heron: 49, whiteeye: 11, oriole: 26, babbler: 21, barbet: 20, kingfisher: 16, waterhen: 32, moorhen: 33,
+  nightheron: 58, egret: 60, spoonbill: 76, mikado: 70, blackbulbul: 25, thrush: 30, treepie: 36, bulbul: 19, pheasant: 72, bluemagpie: 65,
+  yuhina: 13, bushrobin: 13, yellowtit: 13, niltava: 18, flamecrest: 9, laughingthrush: 26, rosefinch: 16, goshawk: 42, woodowl: 50,
+  mandarin: 45, spotbill: 60, partridge: 25, minivet: 18, pitta: 19, grassowl: 35, liocichla: 18, whitebrow: 15, bullfinch: 16, barwing: 19,
+  islandthrush: 22, tit: 12, rustylt: 26, whitethroat: 28, hwamei: 23, styan: 18, scimitar: 25, fulvetta: 11, bamboo: 30, flowing: 14,
+  bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
+  stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
+}
+export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
+const _fsInv = new THREE.Matrix4(), _fsV = V()
+function bodyLen(o0) {
+  o0.updateMatrixWorld(true); _fsInv.copy(o0.matrixWorld).invert()
+  const box = new THREE.Box3()
+  o0.traverseVisible((o) => {
+    if (!o.isMesh || o.userData.catcher) return
+    const p = o.geometry.attributes.position, step = Math.max(1, Math.floor(p.count / 3000))
+    for (let i = 0; i < p.count; i += step) {
+      if (o.isSkinnedMesh) o.getVertexPosition(i, _fsV); else _fsV.fromBufferAttribute(p, i)
+      box.expandByPoint(_fsV.applyMatrix4(o.matrixWorld).applyMatrix4(_fsInv))
+    }
+  })
+  return Math.max(box.max.z - box.min.z, box.max.y - box.min.y)
+}
+function fixSize(id, built) {
+  const cm = REAL_CM[id]
+  if (!cm) return
+  const ms = built.birds ?? [built]
+  const k = gameLen(cm) / bodyLen(ms[0].obj)
+  if (!(k > 0) || Math.abs(k - 1) < 0.06) return
+  for (const m of ms) m.obj.scale.multiplyScalar(k)
+  built.sizeFix = k
+}
 export function placeAnimal(def) {
   const [x, z] = def.spot, gy = def.y ?? 0, waterY = def.water ?? -99
   const v = THREE.MathUtils.degToRad(def.view)
@@ -1943,6 +1980,7 @@ export function placeAnimal(def) {
   g.updateMatrixWorld(true)
   built.update(0, 0.016)
   g.updateMatrixWorld(true)
+  fixSize(def.id, built)
   obj.localToWorld(f0.set(0, built.focus.y, 0))
   const update = (t, dt, phone = false) => {
     env.sway?.(t)

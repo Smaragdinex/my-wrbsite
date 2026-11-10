@@ -13,7 +13,7 @@ import { createCommissions } from './commissions.js'
 import { createProductView } from './product.js'
 import { buildStore } from './store.js'
 import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.js'
-import { judgePhoto, loadLLM, llm, rawGen } from './judge.js'
+import { judgePhoto, loadLLM, llm, rawGen, RARITY } from './judge.js'
 import { createFlight, flyModels } from './flight.js'
 import { priceFor } from './scoring.js'
 import { createViewmodel } from './viewmodel.js'
@@ -242,7 +242,30 @@ function frame() {
   requestAnimationFrame(frame)
   tick(Math.min(clock.getDelta(), 0.05), clock.elapsedTime)
 }
+// 2026-11-10 玩家回饋（有在賞鳥的）：「轉個身就看到八色鳥」→ 稀有的鳥不是隨時都在。每 2 個遊戲小時一個時段，
+// 照稀有度決定這個時段在不在（很常見 100%、普通 90%、不常見 65%、稀有 45%、非常稀有 30%）；不在＝看不到、拍不到。
+// 玩家 45 公尺內、或鳥正在飛的不換（不會在眼前憑空消失／出現）
+const PRESENT = { '很常見': 1, '普通': 0.9, '不常見': 0.65, '稀有': 0.45, '非常稀有': 0.3 }
+let presDay = 0, presLastH = hour, presSlot = null
+const presHash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return ((h >>> 0) % 10000) / 10000 }
+function updatePresence() {
+  if (REC) return   // 錄宣傳影片（rec=1）：鳥全部都在
+  if (hour < presLastH - 12) presDay++
+  presLastH = hour
+  const slot = presDay * 12 + Math.floor(hour / 2)
+  for (const b of world.birds) {
+    if (b.presSlot === slot) continue
+    const busy = (b.built.birds ?? [b.built]).some((m) => m.flight && m.flight.mode !== 'perch')
+    if (busy || b.target.distanceTo(camera.position) < 45) continue
+    b.presSlot = slot
+    const on = presHash(b.def.id + ':' + slot) < (PRESENT[RARITY[b.def.id] ?? '普通'] ?? 0.9)
+    b.absent = !on
+    for (const m of b.built.birds ?? [b.built]) m.obj.visible = on   // 只藏鳥（自帶的那棵樹、巢留著）
+    if (b.built.extra) b.built.extra.visible = on
+  }
+}
 function tick(dt, t) {
+  updatePresence()
   if (!panelOpen() && !menuCam) player.update(dt)
   cam.update(dt)
   if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }

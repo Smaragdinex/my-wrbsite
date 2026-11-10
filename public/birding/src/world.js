@@ -317,7 +317,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     waterTime.value = t
     pondRipples(t)
     foliageTime.value = t
-    for (const b of birds) if (b.target.distanceTo(camera.position) < 70) b.update(t, dt, phone)
+    for (const b of birds) if (!b.absent && b.target.distanceTo(camera.position) < 70) b.update(t, dt, phone)
     water.mist.update(dt, camera)
     time?.tick(t, dt)
     cloudSea.tick(t, camera, { day: dayLight.value })

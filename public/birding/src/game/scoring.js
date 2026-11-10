@@ -79,6 +79,7 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
   }
   const found = []
   for (const b of world.birds) {
+    if (b.absent) continue
     const d0 = b.target.distanceTo(cam.position)
     if (d0 > 160) continue
     for (const m of members(b)) {

@@ -304,6 +304,7 @@ export function createFlight(world, player) {
     // 玩家越快越容易驚動；蹲低慢慢走只有一半距離；站著不動也會被注意到，但比較近才會
     const mult = sneak ? 0.5 : speed > 6 ? 1.5 : speed > 0.6 ? 1 : 0.7
     for (const u of units) {
+      if (u.b.absent) continue   // 這個時段不在（main.js presence）
       if (u.state === 'home') {
         let d = Infinity
         for (const s of u.ms) { s.m.obj.getWorldPosition(_v); d = Math.min(d, _v.distanceTo(P)) }
