@@ -55,7 +55,6 @@ export function buildYosemite(scene, { lib } = {}) {
         const t = (k - FACE) / TOP
         y = g0 + Ht + Math.sin(t * Math.PI * 0.5) * 0.8 - t * t * 0.6
         z = zb + 3.0 + (ze - zb - 3.0) * t
-        y = Math.min(y, domeY(x, z) - 0.6)
       }
       row.push([x, y, z])
     }
@@ -159,9 +158,9 @@ export function buildYosemite(scene, { lib } = {}) {
       const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); fg.setIndex(I)
       const m = new THREE.Mesh(fg, mat); m.renderOrder = ro; g.add(m)
     }
-    sheet(2.2, 5.2, 0.25, 1.6, fallMat({ spd: 0.7, a: 0.55, dark: 0.35 }), 3)          // 後層
-    sheet(2.5, 6.0, 0.5, 2.6, fallMat({ spd: 1.0, a: 1.0 }), 4)                         // 主水簾
-    sheet(3.2, 7.5, 0.9, 3.4, fallMat({ spd: 1.35, a: 0.45, low: 1 }), 5, 0.3)          // 前面的水霧簾
+    sheet(2.6, 5.4, 0.25, 2.2, fallMat({ spd: 0.7, a: 0.55, dark: 0.35 }), 3)          // 後層
+    sheet(3.0, 6.2, 0.5, 3.6, fallMat({ spd: 1.0, a: 1.0 }), 4)                         // 主水簾（岩壁變高了，下面往外拋多一點）
+    sheet(3.6, 7.8, 0.9, 4.6, fallMat({ spd: 1.35, a: 0.45, low: 1 }), 5, 0.3)          // 前面的水霧簾
     // 水潭：橢圓、深綠帶一點藍
     const poolM = new THREE.MeshStandardMaterial({ color: 0x2c5a55, roughness: 0.06, metalness: 0.15, transparent: true, opacity: 0.9 })
     const pool = new THREE.Mesh(new THREE.CircleGeometry(1, 56).rotateX(-Math.PI / 2), poolM); pool.scale.set(F.rx, 1, F.rz); pool.position.set(F.x, poolY, F.z); pool.receiveShadow = true; g.add(pool)
@@ -220,7 +219,7 @@ export function buildYosemite(scene, { lib } = {}) {
     if (!YOSE.inside(x, z) || domeRho(x, z) > 0.9) continue
     if (alpineTrailDist(x, z) < 3 || Math.hypot(x - F.x, z - F.z) < 14 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue
     if (Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4 || YOSE.behind(x, z)) continue   // 營地裡、石階步道上不長
-    const y = alpineHeight(x, z), H = Math.min(18 + rnd() * 8, domeY(x, z) - y - 2)
+    const y = alpineHeight(x, z), H = 18 + rnd() * 10
     if (H < 10) continue
     PINES.push({ x, z, y, H, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.05 })
   }

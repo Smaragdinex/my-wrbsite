@@ -316,7 +316,8 @@ export const YOSE = (() => {
   // 岩壁高：yosemite.js 畫、步道算高度都用這個（2026-11-10 頂上留 6 公尺給玻璃：石階步道走到頂上的觀景台，人不會頂到玻璃）
   const ssY = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
   Y.g0 = (x) => alpineHeight(x, Y.base(x))
-  Y.Ht = (x) => { const end = Math.min(ssY(Y.x0, Y.x0 + 7, x), ssY(Y.x1, Y.x1 - 7, x)); return Math.max(3, Math.min(28 + 9 * fbm2(x * 0.05, 3.7, 3), domeY(x, Y.base(x) + 2.5) - Y.g0(x) - 6) * (0.35 + 0.65 * end)) }
+  // 2026-11-10 使用者：玻璃早就拆了 → 拿掉「頂上留空間給玻璃」的上限；岩壁中段 40～58 公尺（瀑布那一帶最高），兩端收矮
+  Y.Ht = (x) => { const end = Math.min(ssY(Y.x0, Y.x0 + 9, x), ssY(Y.x1, Y.x1 - 9, x)), peak = Math.exp(-(((x - 200) / 38) ** 2)); return Math.max(3, (30 + 16 * peak + 12 * fbm2(x * 0.05, 3.7, 3)) * (0.3 + 0.7 * end)) }
   // 瀑布步道（像優勝美地的 Mist Trail）：瀑布東邊，貼著岩壁前面四段之字形的花崗岩石階，一段比一段靠近岩壁、一段比一段高，最上面接到瀑布口旁邊的觀景台
   // legs：[x 起點, x 終點, 離牆腳多遠]；高度沿總長線性從步道爬到岩壁頂
   Y.stairs = (() => {
@@ -326,7 +327,7 @@ export const YOSE = (() => {
       const legs = [[206, 221, 7.6], [221, 207, 5.6], [207, 221, 3.6], [221, 204.5, 1.7]], pts = []
       for (const [xa, xb, back] of legs) for (let k = 0; k <= 30; k++) { const x = xa + (xb - xa) * k / 30; pts.push([x, Y.base(x) - back]) }
       let L = 0; const S = [0]; for (let i = 1; i < pts.length; i++) { L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); S.push(L) }
-      const h0 = alpineHeight(pts[0][0], pts[0][1]), top = Y.g0(Y.fall.x) + Y.Ht(Y.fall.x)
+      const h0 = alpineHeight(pts[0][0], pts[0][1]), top = Y.g0(Y.fall.x) + Math.min(Y.Ht(Y.fall.x), 24)   // 石階只爬到瀑布半山腰的觀景台（24 公尺），瀑布從上面更高的地方落下來
       const plat = { x0: 201.6, x1: 205.6, z0: Y.base(203.6) - 3.4, z1: Y.base(203.6) - 0.6, y: top }
       built = { pts, S, L, h0, top, plat, h: (s) => h0 + (top - h0) * s / L }
       return built
