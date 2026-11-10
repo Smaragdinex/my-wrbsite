@@ -88,12 +88,17 @@ function wrap(ctx, text, w) {
   return lines
 }
 // k：畫布放大倍數（字小的頁面，例如目錄，畫高解析一點；版面一樣用 CW × CH 的座標）
+// 2026-11-11 使用者／玩家回報：圖鑑太糊 → 每頁的畫布照螢幕放大（一頁大約佔滿螢幕高：CH 對應 innerHeight×DPR），最少 1.4 倍、最多 2 倍
+const K_SCREEN = Math.min(2, Math.max(1.4, (innerHeight * Math.min(devicePixelRatio || 1, 2) * 0.95) / CH))
+let MAX_ANISO = 8
+export function guideAniso(r) { MAX_ANISO = r.capabilities.getMaxAnisotropy?.() || 8 }
 function canvasTex(draw, k = 1) {
+  k = Math.max(k, K_SCREEN)
   const c = document.createElement('canvas'); c.width = Math.round(CW * k); c.height = Math.round(CH * k)
   const g = c.getContext('2d'); g.scale(k, k)
   draw(g)
   const t = new THREE.CanvasTexture(c)
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = MAX_ANISO
   return t
 }
 const pageNo = (ctx, n, side) => { ctx.font = `26px ${SERIF}`; ctx.fillStyle = MUTED; ctx.textAlign = side === 'L' ? 'left' : 'right'; ctx.fillText(String(n), side === 'L' ? 70 : CW - 70, CH - 56); ctx.textAlign = 'left' }

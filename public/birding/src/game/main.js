@@ -7,7 +7,7 @@ import { createPlayer } from '../player.js'
 import { createHud } from './hud.js'
 import { createCamera, BODIES, LENSES } from './camera.js'
 import { createPlayback } from './playback.js'
-import { createGuide } from './guide.js'
+import { createGuide, guideAniso } from './guide.js'
 import { createShop } from './shop.js'
 import { createCommissions } from './commissions.js'
 import { createProductView } from './product.js'
@@ -105,6 +105,7 @@ const store = await buildStore(scene, state, world.plantLib, { getSound: () => s
 const shop = createShop({ state, photos, comm, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock, onView: (it, all) => product.open(it, all) })
 // Esc 闔上：瀏覽器不讓 Esc 重新鎖滑鼠，就回到首頁選單（跟平常按 Esc 一樣）
 let uiFx = null   // 下面 createUiFx 才建；圖鑑的按鈕、翻頁音效用它
+guideAniso(renderer)
 const guide = createGuide({ renderer, sfx: (k) => uiFx?.play(k), onClose: (why) => why === 'esc' ? player.controls.dispatchEvent({ type: 'unlock' }) : relock(), getRecords: () => {
   // 每種鳥：拍過幾張、最高幾分（沒有照片但記錄過的也算記錄）
   const r = {}
@@ -147,6 +148,7 @@ addEventListener('keydown', (e) => {
 })
 // 手電筒：掛在鏡頭上的聚光燈（照向準星），暖白色、邊緣柔、照 35 公尺；不投影子（效能）
 // 2026-11-10 使用者：從左邊出來（以前在右下，光被手上的相機擋住）、不要那麼亮、柔和 → 亮度 90→32、邊緣全柔（penumbra 0.95）、角度放寬、偏暖
+let guideHi = false
 const torch = new THREE.SpotLight(0xffe6c4, 32, 30, 0.55, 0.95, 1.5)
 torch.position.set(-0.32, -0.08, -0.3); torch.target.position.set(0.4, -0.7, -10)
 // 2026-11-10 使用者：第一次按手電筒都會卡 → 以前開關是 visible，燈的數量一變，所有材質的 shader 都要重新編譯（卡 1～2 秒）。
@@ -270,6 +272,9 @@ function tick(dt, t) {
   settings.tick(dt, player.controls.isLocked)
   world.render()
   if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
+  // 2026-11-11 圖鑑太糊：自動畫質會把解析度降到 0.65 倍，書也跟著糊 → 書打開時用螢幕原生解析度（書的場景很輕），闔上再交回自動畫質
+  if (guide.visible) { const hi = Math.min(devicePixelRatio || 1, 2); if (Math.abs(renderer.getPixelRatio() - hi) > 1e-3) { renderer.setPixelRatio(hi); guideHi = true } }
+  else if (guideHi) { guideHi = false; settings.apply() }
   guide.render(dt)   // 圖鑑（書）疊在最上面
 }
 window.__game = { torch, comm, step: (dt) => { recT += dt; tick(dt, recT) }, REC, setMenuCam, guide, amb, settings, store, product, world, player, hud, scene, camera, renderer, cam, gear, photos, state, album, shop, llm, judgePhoto, rawGen, flight, vm, setHour: (h) => { hour = h; world.time.setTime(h) } }

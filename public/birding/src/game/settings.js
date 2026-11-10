@@ -172,5 +172,5 @@ export function createSettings({ world, player }) {
     save(); apply()
   })
   render(); apply()
-  return { el, tick, auto, get state() { return st } }
+  return { el, tick, auto, apply, get state() { return st } }
 }
