@@ -281,7 +281,7 @@ buildHeights()
 export const ALP_STREAM = [[151, -2], [150, -8], [147, -13], [142, -16.5], [135, -15.5], [130.5, -14.2], [125.5, -13.4], [120.5, -14.2], [114, -16.5], [109, -18], [100, -19], [94, -18]].map(([x, z]) => AM(x, z))
 // 2026-11-11 瀑布湖流出來的河（世界座標）：從湖的西岸出水口往西南，繞過營地南邊、穿過營地支線和主步道（各一座石橋），一路下坡流進山下湖（溪口旁邊，兩股水在湖口會合）。
 // 路線是照地形找的最省力下坡（湖 31 m → 山下湖 0 m），中間不會往上爬
-export const ALP_RIVER = [[185, 76], [180, 66], [176, 58], [168, 49], [160, 41], [151, 36], [142, 31], [135, 25], [129, 18], [124, 10], [122, 0], [121, -10], [120, -20], [119, -28]]   // 中段往東南讓開栗背林鴝（134, 33）和黃嘴角鴞那棵樹；過營地支線的地方離岔路口 7 公尺（橋不能蓋在岔路口上）
+export const ALP_RIVER = [[185, 76], [183.4, 73.8], [180, 66], [176, 58], [168, 49], [160, 41], [151, 36], [142, 31], [135, 25], [129, 18], [124, 10], [122, 0], [121, -10], [120, -20], [119, -28]]   // 中段往東南讓開栗背林鴝（134, 33）和黃嘴角鴞那棵樹；過營地支線的地方離岔路口 7 公尺（橋不能蓋在岔路口上）
 export const ALP_STREAMS = [ALP_STREAM, ALP_RIVER]
 // 河過步道的地方：石拱橋（橋面＝步道高度；橋下照河挖，不鋪路）。buildAlpine 算出 x, z, y, dir
 export const RIVER_BRIDGES = []
@@ -429,7 +429,7 @@ function alpBase(X, Z) {
 // 潭的水面＝那段下游端的溪床再高一點（潭尾的石頭門檻），潭底往上游挖深（瀑布底下的沖刷潭最深）。
 // 陡的地方潭短、落差大；平的地方潭長、落差小（像淺灘）。
 const STEP = 0.25
-function buildSteps(st, sProf, seed0 = 911, { want0 = 0.55, wantR = 1.1, len0 = 2.6 } = {}) {
+function buildSteps(st, sProf, seed0 = 911, { want0 = 0.55, wantR = 1.1, len0 = 2.6, pin0 = false } = {}) {
   const S = [0]
   for (let i = 1; i < st.length; i++) S.push(S[i - 1] + Math.hypot(st[i][0] - st[i - 1][0], st[i][1] - st[i - 1][1]))
   const L = S[S.length - 1]
@@ -439,6 +439,7 @@ function buildSteps(st, sProf, seed0 = 911, { want0 = 0.55, wantR = 1.1, len0 = 
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
   const pools = []
   let s0 = 0
+  if (pin0) { pools.push({ s0: 0, s1: S[1], level: sProf[1] + 0.28 }); s0 = S[1] }   // 第一個潭剛好到第 1 點（瀑布湖的出水口：湖面平平地流到缺口）
   while (s0 < L - 0.5) {
     const g = Math.max(0.01, (lin(s0) - lin(Math.min(L, s0 + 4))) / 4)     // 這附近的坡度
     const want = want0 + rnd() * wantR                                      // 想要的落差（公尺）
@@ -536,14 +537,16 @@ function buildAlpine() {
       if (XS.some((b) => Math.hypot(b.x - x, b.z - z) < 3)) continue   // 兩條路共用的那段只算一次
       const dx = P.pts[i + 1][0] - P.pts[i][0], dz = P.pts[i + 1][1] - P.pts[i][1], l = Math.hypot(dx, dz), py = lerp(P.prof[i], P.prof[i + 1], t)
       XS.push({ x, z, j, py, k: (P.prof[i + 1] - P.prof[i]) / l, dir: [dx / l, dz / l] })   // k：步道的坡度（橋面跟著斜，兩頭才接得上路）
-      rp[j] = Math.min(rp[j], py - 1.6); rp[j + 1] = Math.min(rp[j + 1], py - 1.6)
+      if (j > 1) rp[j] = Math.min(rp[j], py - 1.6)   // 第 0、1 點（湖裡、湖岸缺口）＝湖面，不能壓（壓了湖面會浮在出水口的河道上）
+      rp[j + 1] = Math.min(rp[j + 1], py - 1.6)
     }
     // 壓低的地方往上游攤開（坡度最多 28%）：不然一個點突然掉 8 公尺，水面是一條扭來扭去的白帶
     for (let i = rp.length - 2; i >= 1; i--) rp[i] = Math.min(rp[i], rp[i + 1] + 0.28 * Math.hypot(rv[i + 1][0] - rv[i][0], rv[i + 1][1] - rv[i][1]))
-    for (let i = 1; i < rp.length; i++) rp[i] = Math.min(rp[i], rp[i - 1] - 0.3)
+    rp[0] = YOSE.lake.water - 0.25; rp[1] = YOSE.lake.water - 0.27   // 出水口：湖岸缺口那一點以前，河面＝湖面（第一個潭的水面＝溪床＋0.28），過了缺口才往下跌
+    for (let i = 2; i < rp.length; i++) rp[i] = Math.min(rp[i], rp[i - 1] - 0.3)
     rp[rp.length - 1] = Math.min(rp[rp.length - 1], ALP_POND.water - 0.3)
     rv.prof = rp
-    buildSteps(rv, rp, 4242, { want0: 0.3, wantR: 0.45, len0: 1.3 })   // 河比溪陡（湖口往下一路跌）：落差小、次數多，才不會一道道白色的牆
+    buildSteps(rv, rp, 4242, { want0: 0.3, wantR: 0.45, len0: 1.3, pin0: true })   // 河比溪陡（湖口往下一路跌）：落差小、次數多，才不會一道道白色的牆
     for (const c of XS) RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(rv.sAt(c.x, c.z)) + 1.2), half: 4.2, hw: 1.3 })
   }
   // 斷面（參考台灣山溪的影片）：水邊不是直的——寬度用 2D 雜訊，兩岸不對稱、一凹一凸；

@@ -227,6 +227,15 @@ function buildInterior(lib, avoid = []) {
       const wet = Math.max(ss(4.5, 1.2, sd), ss(3, 0, dp))
       const stone = fbm2(x * 1.3, z * 1.3, 2)
       c.lerp(new THREE.Color().setHSL(0.11 + stone * 0.04, 0.16, 0.1 + stone * 0.07), wet)
+      // 2026-11-11 瀑布湖的岸：陡的湖岸不畫成灰白的光岩（使用者：左岸一片米色的坡）→ 青苔、草的綠，水邊一圈濕的深色泥砂
+      {
+        const LK = YOSE.lake, e = Math.hypot((x - LK.x) / LK.rx, (z - LK.z) / LK.rz)
+        if (e < 4.2 && !YOSE.behind(x, z)) {
+          const shore = ss(4.2, 2.6, e) * (1 - tr)
+          c.lerp(new THREE.Color().setHSL(0.21 + n * 0.05, 0.38, 0.17 + n * 0.07), shore * 0.85)
+          c.lerp(new THREE.Color().setHSL(0.1 + stone * 0.03, 0.2, 0.11 + stone * 0.05), ss(1.22, 1.0, e) * 0.9)
+        }
+      }
       col.set([c.r, c.g, c.b], k * 3)
     }
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
