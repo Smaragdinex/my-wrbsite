@@ -529,8 +529,13 @@ function buildInterior(lib, avoid = []) {
         for (const sgn of [-1, 1]) {
           for (let y = d.up - 0.2; y > d.down - 0.3; y -= 0.9 + rr() * 0.5) { const b = at(d.s - 0.5 - rr() * 0.4), o = (hw + 0.25 + rr() * 0.5) * sgn, k = 0.7 + rr() * 0.6; put(rr() < 0.6 ? BIG : MOSS, b.x + b.sx * o, b.z + b.sz * o, y - 0.55 * k, k, 0.85) }   // 疊在水簾兩側的岩壁上（岩唇線往後、水寬外面），不擋在水前面
           for (let j = 0; j < 2 + (rr() < 0.5 ? 1 : 0); j++) { const b = at(d.s + 2 + rr() * 3), o = (hw + 0.6 + rr() * 1.4) * sgn, k = 0.7 + rr() * 0.6; put(rr() < 0.5 ? BIG : MOSS, b.x + b.sx * o, b.z + b.sz * o, d.down - 0.6 * k, k, 0.85) }
-          // 檢查員：瀑布兩側、後方是一大片光滑的灰土坡（像水泥牆）→ 用掃描的岩壁模型（rock_face）一塊塊貼上去，從潭邊疊到岩唇高度
-          for (let j = 0; j < 4; j++) { const A = rr() < 0.5, k = A ? 0.55 + rr() * 0.25 : 0.9 + rr() * 0.4, half = (A ? 2.2 : 1.25) * k, b = at(d.s - 1.4 + j * 1.7 + rr() * 0.5), o = (hw + 0.5 + half) * sgn; put(A ? ['rockface_a'] : ['rockface_b'], b.x + b.sx * o, b.z + b.sz * o, d.down - 0.9 + (j < 2 ? d.h * 0.5 : 0) * (0.4 + rr() * 0.6), k, 0.9) }   // rockface_a 原本 5×3.6×3.8 m、b 2.7×2.5×2.1 m：都縮成約 3 m 一塊，中心放在水寬外面（不蓋到水簾）
+          // 檢查員：瀑布兩側、後方是一大片光滑的灰土坡（像水泥牆）；第二輪：rockface 像一片片扁平卡片 → 改成有厚度的大石頭（mrock 3/7/9/12、boulder）
+          // 從潭邊一層層疊上去到岩唇高度，一半埋進坡裡；沿著潭岸往下游也排兩排（蓋住左邊那片大灰坡）
+          for (let row = 0; row < 5; row++) for (let j = 0; j < 5; j++) {
+            const b = at(d.s - 1.6 + j * 1.6 + rr() * 0.7), o = (hw + 0.6 + row * 1.5 + rr() * 0.7) * sgn, k = 1.1 + rr() * 0.8 - row * 0.12
+            const x = b.x + b.sx * o, z = b.z + b.sz * o
+            put(rr() < 0.75 ? BIG : MOSS, x, z, Math.max(d.down - 0.5 * k, alpineHeight(x, z) - 0.45 * k), k, 0.8)   // 坐在坡面上、一半埋進去
+          }
         }
         continue
       }
@@ -667,10 +672,23 @@ function buildInterior(lib, avoid = []) {
           sp_.userData = { rise: true, y0: yW + 0.1, x0: sp_.position.x, z0: sp_.position.z, ph: rr(), s0: 1.2 + rr() * 1.2, h: 1.0 + rr() * 1.2, sp: 0.18 + rr() * 0.12 }
           g.add(sp_); spray.push(sp_)
         }
-        const foamT = canvasTex(256, 256, (x, w, h) => { const r9 = mulberry32(77); for (let i = 0; i < 1400; i++) { const a = r9() * TAU, dd = Math.pow(r9(), 0.75) * w * 0.48; x.fillStyle = `rgba(255,255,255,${(0.12 + r9() * 0.5) * (1 - dd / (w * 0.5))})`; x.beginPath(); x.arc(w / 2 + Math.cos(a) * dd, h / 2 + Math.sin(a) * dd, 1.5 + r9() * 7, 0, TAU); x.fill() } })
+        // 檢查員第二輪：白沫是一片硬邊的正圓盤 → 逐像素畫：中心最白；往外用兩層雜訊打碎成一塊塊、加上往外放射的一條條泡沫紋，外緣在正方形裡面就淡到 0（沒有圓的邊界）
+        const foamT = canvasTex(256, 256, (x, w, h) => {
+          const img = x.createImageData(w, h), r9 = mulberry32(77), G = 32, gr = Array.from({ length: (G + 1) * (G + 1) }, () => r9())
+          const vn = (u, v) => { const i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j, a = gr[(j % G) * (G + 1) + (i % G)], b = gr[(j % G) * (G + 1) + ((i + 1) % G)], c2 = gr[((j + 1) % G) * (G + 1) + (i % G)], d2 = gr[((j + 1) % G) * (G + 1) + ((i + 1) % G)], su = fu * fu * (3 - 2 * fu), sv = fv * fv * (3 - 2 * fv); return (a + (b - a) * su) * (1 - sv) + (c2 + (d2 - c2) * su) * sv }
+          for (let py = 0; py < h; py++) for (let px = 0; px < w; px++) {
+            const u = px / w - 0.5, v = py / h - 0.5, rr2 = Math.hypot(u, v) * 2, ang = Math.atan2(v, u)
+            const n1 = vn(px / 16 + 3, py / 16 + 7), n2 = vn(px / 5, py / 5), streak = vn((ang + Math.PI) * 6, rr2 * 3)
+            const fall = Math.max(0, 1 - Math.pow(rr2 + 0.25 * (n1 - 0.5), 1.4))
+            const blot = Math.min(1, Math.max(0, (n1 * 0.6 + n2 * 0.4 - 0.62 + 0.55 * fall) * 3.2)) * (0.75 + 0.25 * streak)
+            const a = Math.min(1, Math.pow(fall, 1.6) * 1.15) * blot
+            const k = (py * w + px) * 4; img.data[k] = img.data[k + 1] = img.data[k + 2] = 255; img.data[k + 3] = Math.round(a * 255)
+          }
+          x.putImageData(img, 0, 0)
+        })
         const ang = Math.atan2(P.sx, P.sz)
         for (const [rad, op, sq] of [[2.6, 0.85, 0.7], [5.5, 0.4, 0.75]]) {
-          const fm = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: op, fog: true }))
+          const fm = new THREE.Mesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: op, fog: true }))   // 正方形：邊界由貼圖自己淡掉
           fm.position.set(cx, yW + 0.015 + (rad > 3 ? 0 : 0.005), cz); fm.rotation.y = ang; fm.scale.set(rad, 1, rad * sq); fm.renderOrder = 3
           fm.userData = { foam: true, op, rad, sq }; g.add(fm); fallFx.push(fm)
         }
@@ -1709,7 +1727,7 @@ export function createAlpine({ scene, lib, avoid = [] }) {
       for (const o of interior.fallFx) {
         const u = o.userData, dl = 0.12 + 0.88 * dayLight.value
         if (u.foam) { o.material.map.offset.set(Math.sin(t * 0.3) * 0.02, t * 0.015 % 1); o.material.map.center.set(0.5, 0.5); o.material.map.rotation = t * (u.rad > 3 ? 0.03 : -0.06); o.material.opacity = u.op * (0.85 + 0.15 * Math.sin(t * 2.1)); o.material.color.setScalar(dl) }
-        else if (u.ring) { const f = (t * 0.33 + u.ph) % 1, r = 1.5 + f * 6; o.scale.set(r * (1 + 0.08 * Math.sin(t + u.ph * 7)), 1, r * 0.75); o.material.opacity = 0.13 * (1 - f) * Math.min(1, f * 6); o.material.color.setScalar(dl) }
+        else if (u.ring) { const f = (t * 0.33 + u.ph) % 1, r = 1.5 + f * 6; o.scale.set(r * (1 + 0.08 * Math.sin(t + u.ph * 7)), 1, r * 0.75); o.material.opacity = 0.06 * (1 - f) * Math.min(1, f * 6); o.material.color.setScalar(dl) }
       }
       for (const sp of interior.spray) { const u = sp.userData; if (u.rise) { const f = (t * u.sp + u.ph) % 1; sp.position.set(u.x0 + Math.sin(t * 0.7 + u.ph * 9) * 0.3, u.y0 + f * u.h, u.z0); const k = u.s0 * (0.7 + f * 0.9); sp.scale.set(k * 1.5, k, 1); sp.material.opacity = 0.42 * Math.sin(f * Math.PI); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value); continue } sp.position.y = u.y0 + Math.sin(t * 2.3 + u.ph) * 0.15; sp.material.opacity = 0.35 + 0.2 * Math.sin(t * 3.1 + u.ph * 2); const k = u.s0 * (1 + 0.12 * Math.sin(t * 1.7 + u.ph)); sp.scale.set(k * 1.6, k, 1); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value) }
       interior.updateMist(t, dt, camera)
