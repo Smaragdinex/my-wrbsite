@@ -8,10 +8,10 @@
 // 那次 render 的鏡頭只開 SHADOW_LAYER，所有投影的東西都加進這一層；LOD 管的植物在這一層放一份完整、不剔除的替身。
 // three.js 的陰影 pass 用「呼叫 render 的那台鏡頭」的 layers 篩選，主畫面那台鏡頭沒開這一層，替身不會出現在畫面上。
 import * as THREE from 'three'
-import { lodShadowProxies } from './lod.js'
+import { lodShadowProxies, lodShadowCull } from './lod.js'
 
 export const SHADOW_LAYER = 5
-const MOVE_DEG = 0.25, RATE_DYN = 30, NEAR_DYN = 30, RESCAN = 2
+const MOVE_DEG = 0.6, RATE_DYN = 30, NEAR_DYN = 30, RESCAN = 2
 
 export function createShadowCache({ renderer, scene, sun, camera }) {
   sun.shadow.autoUpdate = false
@@ -87,6 +87,7 @@ export function createShadowCache({ renderer, scene, sun, camera }) {
     if (why === 'init') scan()
     dirty = false; lastSize = size; lastDir.copy(dir); lastTgt.copy(sun.target.position); dynT = 0
     sun.shadow.needsUpdate = true
+    { const C = sun.shadow.camera; lodShadowCull(sun.target.position.x, sun.target.position.z, Math.max(Math.abs(C.left), Math.abs(C.right), Math.abs(C.top), Math.abs(C.bottom)) * 1.45 + 8) }
     const prevRT = renderer.getRenderTarget(), auto = renderer.shadowMap.autoUpdate
     renderer.shadowMap.autoUpdate = true
     renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(prevRT)

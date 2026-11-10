@@ -64,6 +64,9 @@ export function lodShadowProxies() {
     if (S.proxies) continue
     if (!S.meshes.every((m) => m.parent)) continue   // 還沒加進場景：下次再做
     S.proxies = []
+    // 2026-11-10 整片陰影只有一張 1024 貼圖蓋 380×260 公尺（一個貼素約 37 公分）：2 公尺以下的植物（蕨類、草叢、花）投的影子只剩一團糊，
+    // 但它們的替身佔了陰影重畫一半以上的三角形 → 不投影
+    if (S.d0 < 28) continue
     for (const [mi, m] of S.meshes.entries()) {
       if (!m.userData.lodManaged) continue
       // 影子用低面數版本（陰影貼圖每個貼素約 9 公分，看不出差別，重畫陰影比較快）
@@ -80,6 +83,27 @@ export function lodShadowProxies() {
   }
 }
 
+// 2026-11-10 玩家回饋「好卡」：每次重畫陰影都把替身「全部」的株（整座山上幾千棵）畫進陰影貼圖（一次多 600 萬個三角形、一格 26→56 毫秒，每秒一次頓一下）。
+// 陰影貼圖只蓋太陽目標附近 r 公尺：重畫前只留那一圈裡的株
+export function lodShadowCull(cx, cz, r) {
+  for (const S of sets) {
+    if (!S.proxies?.length) continue
+    let k = 0
+    const src = S.base, n = S.n
+    S.shIdx ??= new Uint32Array(n)
+    for (let i = 0; i < n; i++) {
+      const dx = S.pos[i * 3] - cx, dz = S.pos[i * 3 + 2] - cz, rr = r + S.rad[i]
+      if (dx * dx + dz * dz < rr * rr) S.shIdx[k++] = i
+    }
+    for (const px of S.proxies) {
+      const a = px.instanceMatrix.array
+      for (let j = 0; j < k; j++) { const i = S.shIdx[j]; for (let e = 0; e < 16; e++) a[j * 16 + e] = src[i * 16 + e] }
+      px.count = k; px.instanceMatrix.needsUpdate = true
+    }
+  }
+}
+
+const TF0 = 230, TF1 = 330
 export function lodUpdate(camera, force = false) {
   camera.updateMatrixWorld()
   const p = camera.getWorldPosition(_c.clone()), q = camera.getWorldQuaternion(new THREE.Quaternion())
@@ -96,6 +120,9 @@ export function lodUpdate(camera, force = false) {
       const x = S.pos[i * 3] - p.x, y = S.pos[i * 3 + 1] - p.y, z = S.pos[i * 3 + 2] - p.z
       const dd = x * x + y * y + z * z
       if (dd > d1s && S.hash[i] >= 0) continue
+      // 2026-11-10 玩家回饋「好卡」：高的樹以前多遠都畫（站在花園水池邊，山區、巨木林幾千棵樹全畫，一格 1000 多萬個三角形）。
+      // 230～330 公尺之間慢慢變稀（150～210 試過：山頂往下看整片森林不見）（每株照自己的雜湊值，不會一條線整排消失），再遠不畫；霧已經把那麼遠的樹蓋得很淡。長鏡頭拉近時照倍率拉遠
+      if (dd > TF0 * TF0 * zoom * zoom) { const d = Math.sqrt(dd) / zoom; if (d > TF1 || ((i * 0.6180339887) % 1) < (d - TF0) / (TF1 - TF0)) continue }
       if (d1 !== Infinity) { const d = Math.sqrt(dd); if (d > d0 && S.hash[i] > 1 - (d - d0) / (d1 - d0)) continue }
       // 視野外不畫；邊界多留 6 公尺（畫面外的植物影子會投進畫面）＋距離的 8%（約 4.6 度）：
       // 鏡頭轉不到 2.8 度不重算，遠處的樹以前只留 6 公尺（200 公尺外不到 2 度），慢慢轉頭時畫面邊緣的樹會突然冒出來、消失（2026-11-08 山上）

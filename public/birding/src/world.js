@@ -14,7 +14,7 @@ import { buildFlora } from './flora.js'
 import { loadPlants, parts } from './plants.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildStops } from './stops.js'
-import { loadAnimalModels, placeAnimal } from './birds.js'
+import { loadAnimalModels, placeAnimal, REAL_CM, gameLen } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
@@ -62,8 +62,10 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 溫室是一顆往東拉長的蛋（x -89 相機行 ～ 190）：陰影範圍以 x 50 為中心
   sun.position.set(25, 80, 30); sun.target.position.set(90, 0, 0)
   sun.castShadow = true
-  sun.shadow.mapSize.setScalar(PHONE ? 2048 : 4096)
-  Object.assign(sun.shadow.camera, { left: -190, right: 190, top: 130, bottom: -130, near: 1, far: 360 })   // 要蓋到溫室外面的相機行（x 到 -89）和東邊山區（x 到 270）
+  // 2026-11-10 玩家回饋「好卡」：以前一張 4096 陰影貼圖蓋整個園區（380×260 公尺），每次重畫都把全區的樹畫一遍（＋1000 多萬個三角形）。
+  // 改成跟著玩家的 150×150 公尺（2048 貼圖，一個貼素 7 公分、比以前還細）；走出 24 公尺格子才搬家重畫。遠處地面的影子本來就是烘焙的
+  sun.shadow.mapSize.setScalar(2048)
+  Object.assign(sun.shadow.camera, { left: -75, right: 75, top: 75, bottom: -75, near: 1, far: 360 })   // 要蓋到溫室外面的相機行（x 到 -89）和東邊山區（x 到 270）
   sun.shadow.bias = -0.0004
   sun.shadow.normalBias = 0.06
   sun.shadow.radius = 3
@@ -101,7 +103,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     d.trunkBad = (x, z) => inAlpine(x, z) ? alpineTrailDist(x, z) < 2 : pathClearAt(x, z) < 1.2
     const a = placeAnimal(d)
     scene.add(a.group)
-    return { def, ...a }
+    return { def, ...a, size: REAL_CM[def.id] ? gameLen(REAL_CM[def.id]) : 0.3 }   // size：遊戲裡的身長（公尺），畫面像素剔除用
   }
   // 停在神木上的鳥（茶腹鳾）要等神木蓋好、量到樹皮表面才能擺，先跳過（也不能進 alpAvoid，不然神木會躲開牠、換位置）
   const birds = BIRDS.filter((d) => d.perch !== 'sacred' && !d.onFig).map(placeDef)
@@ -309,15 +311,30 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     }
   }
   // 每格：風、水、鳥（只更新鏡頭附近的，骨架動畫很吃 CPU）、水霧、雲
+  const _sd = new THREE.Vector3()
   function tick(t, dt, { phone = false } = {}) {
     lodUpdate(camera)
     halls.tick(t, dt, camera)
+    if (halls.mode.endsWith('D')) {   // 陰影範圍跟著玩家（在館內時由 halls.js 指定館的中心）
+      const gx = Math.round(camera.position.x / 24) * 24, gz = Math.round(camera.position.z / 24) * 24
+      if (sun.target.position.x !== gx || sun.target.position.z !== gz) {
+        _sd.subVectors(sun.position, sun.target.position)
+        sun.target.position.set(gx, 0, gz); sun.position.copy(sun.target.position).add(_sd)
+      }
+    }
     alpine.animate(t, dt, camera)
     windUniforms.uTime.value = t
     waterTime.value = t
     pondRipples(t)
     foliageTime.value = t
-    for (const b of birds) if (!b.absent && b.target.distanceTo(camera.position) < 70) b.update(t, dt, phone)
+    // 2026-11-10 玩家回饋「好卡」：每隻鳥的模型 3～4 萬個三角形，以前遠到只剩一個點也照畫（一個畫面幾百萬個三角形）。
+    // 在畫面上不到 3 像素高的鳥不畫（照鏡頭焦距算：長鏡頭拉近時遠的鳥照樣畫出來）；藏的是鳥底下那層，不跟驚飛、出現時段的開關打架
+    const pxK = renderer.domElement.clientHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
+    for (const b of birds) {
+      const d = b.target.distanceTo(camera.position), show = (b.size ?? 0.3) * pxK / Math.max(d, 0.1) > 3
+      if (b.shown !== show) { b.shown = show; for (const m of b.built.birds ?? [b.built]) for (const ch of m.obj.children) ch.visible = show }
+      if (!b.absent && d < 70) b.update(t, dt, phone)
+    }
     water.mist.update(dt, camera)
     time?.tick(t, dt)
     cloudSea.tick(t, camera, { day: dayLight.value })
