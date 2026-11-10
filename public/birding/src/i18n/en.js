@@ -336,6 +336,16 @@ export const UI = {
  "手電筒：開": "Flashlight: on",
  "手電筒：關": "Flashlight: off",
  "手電筒（晚上用）": "Flashlight (for night)",
+  "前言": "Preface",
+  "這本圖鑑收錄園區裡可以遇見的 {m} 種野鳥。每拍到一種，就會在這裡留下紀錄：插圖、習性，還有你拍下的最好成績。": "This guide covers the {m} wild birds you can meet in the park. Each species you photograph is recorded here — its plate, its habits, and your best shot.",
+  "觀察進度": "PROGRESS",
+  "使用方法": "HOW TO USE",
+  "尚未發現": "Not yet found",
+  "新紀錄": "new record",
+  "鳥種": "SPECIES",
+  "紀錄": "SEEN",
+  "頁": "PAGE",
+  "觀察・辨識・記錄": "Observe · Identify · Record",
 }
 export const BIRDS = {
  "dove": {

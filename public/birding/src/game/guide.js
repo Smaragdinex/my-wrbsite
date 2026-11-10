@@ -3,7 +3,7 @@
 // 每格畫到一張貼圖，再像插圖一樣疊在紙上（只疊鳥和影子，背景是紙）。
 // 翻頁：→ / D / 點右半邊 / 滾輪往下 = 下一頁，← / A / 點左半邊 = 上一頁；翻的那張紙沿書脊轉過去、外緣慢一點，看起來會彎。
 // E、Esc、左上角 X 關閉（書闔起來沉下去）。
-// 還沒拍到的鳥：右頁是剪影，左頁只寫名字和在哪裡，介紹要拍到才解鎖。第一個跨頁是目錄和收集進度。
+// 還沒拍到的鳥：右頁是剪影，左頁只寫名字和在哪裡，介紹要拍到才解鎖。第一個跨頁是扉頁＋前言（收集進度），第二個跨頁是目錄（左右兩頁）。
 import * as THREE from 'three'
 import { BIRDS } from '../birdinfo.js'
 import { placeAnimal } from '../birds.js'
@@ -24,7 +24,7 @@ const clamp01 = (v) => Math.min(1, Math.max(0, v))
 const PAGE_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`
 const PAGE_FS = `
   varying vec2 vUv;
-  uniform sampler2D map; uniform sampler2D plate; uniform float hasPlate; uniform vec4 rect; uniform float shade; uniform float flip;
+  uniform sampler2D map; uniform sampler2D plate; uniform float hasPlate; uniform vec4 rect; uniform float fade; uniform float shade; uniform float flip;
   // 插圖畫到貼圖時還沒 tone mapping：這裡用 three.js 內建、跟遊戲畫面一樣的 ACES（toneMappingExposure 跟著遊戲）
   void main() {
     vec2 uv = vec2(flip > 0.5 ? 1.0 - vUv.x : vUv.x, vUv.y);
@@ -34,7 +34,7 @@ const PAGE_FS = `
       if (q.x > 0.0 && q.y > 0.0 && q.x < 1.0 && q.y < 1.0) {
         vec4 p = texture2D(plate, q);
         // 插圖邊緣淡出（像水彩暈開），不會有一條硬邊
-        float e = smoothstep(0.0, 0.05, min(min(q.x, 1.0 - q.x), min(q.y, 1.0 - q.y)));
+        float e = smoothstep(0.0, fade, min(min(q.x, 1.0 - q.x), min(q.y, 1.0 - q.y)));
         c = c * (1.0 - p.a * e) + ACESFilmicToneMapping(p.rgb) * e;
       }
     }
@@ -44,7 +44,7 @@ const PAGE_FS = `
 function pageMat(map, flip = 0) {
   return new THREE.ShaderMaterial({
     vertexShader: PAGE_VS, fragmentShader: PAGE_FS,
-    uniforms: { map: { value: map }, plate: { value: null }, hasPlate: { value: 0 }, rect: { value: new THREE.Vector4(PLATE.x, PLATE.y, PLATE.w, PLATE.h) }, shade: { value: 1 }, flip: { value: flip } },
+    uniforms: { map: { value: map }, plate: { value: null }, hasPlate: { value: 0 }, rect: { value: new THREE.Vector4(PLATE.x, PLATE.y, PLATE.w, PLATE.h) }, fade: { value: 0.05 }, shade: { value: 1 }, flip: { value: flip } },
   })
 }
 
@@ -80,15 +80,17 @@ function wrap(ctx, text, w) {
   for (const para of String(text).split('\n')) {
     let line = ''
     for (const tok of para.match(/[A-Za-z0-9'’.,()-]+\s?|./gu) ?? []) {
-      if (ctx.measureText(line + tok).width > w && line) { lines.push(line); line = tok.trimStart() } else line += tok
+      if (ctx.measureText(line + tok).width > w && line && !/^[，。、；：！？）」』,.;:!?)]/.test(tok)) { lines.push(line); line = tok.trimStart() } else line += tok
     }
     lines.push(line)
   }
   return lines
 }
-function canvasTex(draw) {
-  const c = document.createElement('canvas'); c.width = CW; c.height = CH
-  draw(c.getContext('2d'))
+// k：畫布放大倍數（字小的頁面，例如目錄，畫高解析一點；版面一樣用 CW × CH 的座標）
+function canvasTex(draw, k = 1) {
+  const c = document.createElement('canvas'); c.width = Math.round(CW * k); c.height = Math.round(CH * k)
+  const g = c.getContext('2d'); g.scale(k, k)
+  draw(g)
   const t = new THREE.CanvasTexture(c)
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8
   return t
@@ -103,17 +105,41 @@ function backLink(ctx) {
   ctx.fillRect(CW - 70 - w, CH - 46, w, 2); ctx.textAlign = 'left'
 }
 // 目錄每一行的位置（畫和點擊判斷共用）
-// 2026-11-09 鳥變 38 種：一欄放不下（每行只剩 21 像素、字疊在一起），超過 30 種分兩欄
-const TOC_TOP = 220, TOC_COLS = () => BIRDS.length > 30 ? 2 : 1, TOC_ROWS = () => Math.ceil(BIRDS.length / TOC_COLS())
-const tocStep = () => Math.min(46, (CH - 160 - TOC_TOP) / TOC_ROWS())
-const TOC_X0 = 76, tocColW = () => (CW - 120) / TOC_COLS()
-const tocPos = (i) => { const r = TOC_ROWS(), c = Math.floor(i / r); return { x0: TOC_X0 + c * tocColW(), y: TOC_TOP + (i % r) * tocStep() } }
-// 沒讀過的新紀錄：紅底白字的小膠囊「NEW」，(x, y) 是左邊、文字基線
+// 2026-11-10 改成像真的書（ChatGPT 建議）：跨頁 0 是扉頁＋前言，接著目錄跨頁（一頁一欄、每頁最多 35 種，左右兩頁），再來每種鳥一個跨頁
+// 鳥變多時目錄自動加頁（湊成偶數頁，維持完整跨頁）
+const TOC_PER = 35
+const TOC_PAGES = Math.max(2, Math.ceil(Math.ceil(BIRDS.length / TOC_PER) / 2) * 2)
+const FRONT = 1 + TOC_PAGES / 2   // 鳥的第一個跨頁
+const TOC_Y0 = 262, TOC_X0 = 74, TOC_X1 = CW - 74
+const tocStep = () => Math.min(34, (CH - 96 - TOC_Y0) / (TOC_PER - 1))
+// 印在頁角的頁碼：扉頁、前言不編號；目錄 1、2…；鳥的左頁、右頁接著
+const birdPageNo = (i) => TOC_PAGES + i * 2 + 1
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI']
+const NEWRED = '#b5452c'
+// 小型大寫的字（字距拉開）：英文標題、頁眉用
+function spaced(ctx, text, x, y, px, color, align = 'center', track = 0.22) {
+  ctx.save(); ctx.font = `${px}px ${SERIF}`; ctx.fillStyle = color
+  const chars = [...text], w = chars.reduce((s, c) => s + ctx.measureText(c).width, 0) + track * px * (chars.length - 1)
+  let cx = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x
+  ctx.textAlign = 'left'
+  for (const c of chars) { ctx.fillText(c, cx, y); cx += ctx.measureText(c).width + track * px }
+  ctx.restore(); return w
+}
+function rule(ctx, x0, x1, y, a = 0.35, w = 1.5) { ctx.strokeStyle = `rgba(80,60,30,${a})`; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke() }
+// 小菱形花飾（兩條細線中間一顆）
+function fleuron(ctx, x, y, half) {
+  rule(ctx, x - half, x - 12, y, 0.4); rule(ctx, x + 12, x + half, y, 0.4)
+  ctx.fillStyle = 'rgba(91,110,60,0.75)'; ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.fill()
+}
+// 頁眉：外側一行字距拉開的小字＋一條細線
+function runningHead(ctx, text, side) {
+  spaced(ctx, text, side === 'L' ? 74 : CW - 74, 70, 15, MUTED, side === 'L' ? 'left' : 'right', 0.28)
+  rule(ctx, 74, CW - 74, 86, 0.22, 1)
+}
+// 沒讀過的新紀錄：朱紅色小字 NEW（不加底色框），(x, y) 是左邊、文字基線
 function newTag(ctx, x, y, size = 22) {
-  ctx.save(); ctx.font = `bold ${size}px ${SANS}`
-  const w = ctx.measureText('NEW').width + size * 0.9, h = size * 1.3
-  ctx.fillStyle = '#c2412d'; ctx.beginPath(); ctx.roundRect(x, y - size * 0.98, w, h, h / 2); ctx.fill()
-  ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic'; ctx.fillText('NEW', x + size * 0.45, y - size * 0.08)
+  ctx.save(); ctx.font = `bold ${size * 0.72}px ${SANS}`; ctx.fillStyle = NEWRED
+  let w = 0; for (const c of 'NEW') { ctx.fillText(c, x + w, y - size * 0.12); w += ctx.measureText(c).width + size * 0.08 }
   ctx.restore(); return w
 }
 function stamp(ctx, text, x, y, color) {
@@ -149,7 +175,7 @@ function birdLeft(b, i, rec, unread) {
     if (!rec) {
       ctx.font = `30px ${SANS}`; ctx.fillStyle = INK
       for (const l of wrap(ctx, tr('還沒拍到這種鳥。到「{where}」附近找找看，拍到之後這一頁會補上介紹。', { where: b.where }), W)) { ctx.fillText(l, X, y); y += 52 }
-      pageNo(ctx, i * 2 + 3, 'L'); backLink(ctx)
+      pageNo(ctx, birdPageNo(i), 'L'); backLink(ctx)
       return
     }
     // 介紹＋小知識：放不下就把字縮小一點，再放不下就少放幾條小知識
@@ -174,7 +200,7 @@ function birdLeft(b, i, rec, unread) {
       ctx.font = `${bold ? 'bold ' : ''}${s}px ${SANS}`; ctx.fillStyle = c; ctx.fillText(t, x, yy)
       if (dot) { ctx.fillStyle = ACCENT; ctx.beginPath(); ctx.arc(X + 12, yy - s * 0.35, 5, 0, 7); ctx.fill() }
     }
-    pageNo(ctx, i * 2 + 3, 'L'); backLink(ctx)
+    pageNo(ctx, birdPageNo(i), 'L'); backLink(ctx)
   })
 }
 function birdRight(b, i, rec, info) {
@@ -193,43 +219,105 @@ function birdRight(b, i, rec, info) {
     y += 46; ctx.fillStyle = MUTED; ctx.font = `24px ${SANS}`
     ctx.fillText(rec ? tr('拍過 {n} 張・最高 {best} 分', { n: info.n, best: info.best }) : tr('尚未記錄'), CW / 2, y)
     ctx.textAlign = 'left'
-    pageNo(ctx, i * 2 + 4, 'R')
+    pageNo(ctx, birdPageNo(i) + 1, 'R')
   })
 }
-function contentsLeft(nRec, nNew) {
+// 扉頁（第一個跨頁的左頁）：系列名、書名、中間一幅會動的插圖（FRONTIS，小場景畫上去）、下面出版資訊
+const FRONTIS = { x: 0.13, y: 1 - 930 / CH, w: 0.74, h: 490 / CH }   // 插圖範圍（uv，y 往上）
+function titlePage() {
   return canvasTex((ctx) => {
     paper(ctx, 'L')
+    const cx = CW / 2
+    spaced(ctx, 'X-ARTS NATURAL HISTORY SERIES', cx, 112, 17, MUTED)
+    spaced(ctx, 'VOL. 01', cx, 140, 14, MUTED)
+    fleuron(ctx, cx, 172, 150)
+    spaced(ctx, 'A FIELD GUIDE TO THE BIRDS', cx, 234, 21, ACCENT, 'center', 0.2)
     ctx.textAlign = 'center'; ctx.fillStyle = INK
-    ctx.font = `bold 92px ${SERIF}`; ctx.fillText(tr('鳥類圖鑑'), CW / 2, 330, CW - 140)
-    ctx.font = `30px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(tr('鳥類生態園・攝影紀錄'), CW / 2, 400)
-    ctx.strokeStyle = 'rgba(80,60,30,0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(CW / 2 - 120, 450); ctx.lineTo(CW / 2 + 120, 450); ctx.stroke()
-    ctx.fillStyle = INK; ctx.font = `40px ${SANS}`; ctx.fillText(tr('已記錄 {n} / {m} 種', { n: nRec, m: BIRDS.length }), CW / 2, 590)
-    const bw = 460, bx = CW / 2 - bw / 2
-    ctx.fillStyle = 'rgba(80,60,30,0.15)'; ctx.fillRect(bx, 628, bw, 18)
-    ctx.fillStyle = ACCENT; ctx.fillRect(bx, 628, bw * nRec / BIRDS.length, 18)
-    if (nNew) { ctx.fillStyle = '#c2412d'; ctx.font = `bold 30px ${SANS}`; ctx.fillText(tr('{n} 筆新紀錄還沒看（目錄裡標 NEW）', { n: nNew }), CW / 2, 708, CW - 120) }
-    ctx.fillStyle = MUTED; ctx.font = `26px ${SANS}`
-    ;[tr('拍到一種鳥，就會記進這本圖鑑。'), tr('← →、A D 或點書頁翻頁'), tr('點目錄裡的鳥，直接翻到那一頁'), tr('E 或 Esc 闔上')].forEach((t, k) => ctx.fillText(t, CW / 2, 790 + k * 52, CW - 120))
+    ctx.font = `600 84px ${SERIF}`; ctx.fillText(tr('鳥類圖鑑'), cx, 330, CW - 160)
+    ctx.font = `italic 32px Georgia, ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText('Birds of the Park', cx, 382)
+    // 插圖底：一片淡淡的水彩
+    const px = FRONTIS.x * CW, py = (1 - FRONTIS.y - FRONTIS.h) * CH, pw = FRONTIS.w * CW, ph = FRONTIS.h * CH
+    const g = ctx.createRadialGradient(cx, py + ph * 0.62, 10, cx, py + ph * 0.55, pw * 0.55)
+    g.addColorStop(0, 'rgba(182,196,158,0.40)'); g.addColorStop(0.7, 'rgba(182,196,158,0.12)'); g.addColorStop(1, 'rgba(182,196,158,0)')
+    ctx.fillStyle = g; ctx.fillRect(px, py, pw, ph)
+    ctx.textAlign = 'center'
+    ctx.font = `26px ${SERIF}`; ctx.fillStyle = INK; ctx.fillText(tr('觀察・辨識・記錄'), cx, 990)
+    ctx.font = `italic 20px Georgia, ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText('An Illustrated Field Guide', cx, 1024)
+    fleuron(ctx, cx, 1068, 110)
+    spaced(ctx, 'X-ARTS · 2026', cx, 1118, 15, MUTED)
     ctx.textAlign = 'left'
   })
 }
-function contentsRight(recs, unread) {
+// 前言（第一個跨頁的右頁）：一段簡介、觀察進度、使用方法
+function prefacePage(nRec, nNew) {
   return canvasTex((ctx) => {
     paper(ctx, 'R')
-    ctx.fillStyle = INK; ctx.font = `bold 46px ${SERIF}`; ctx.fillText(tr('目錄'), 90, 140)
-    const two = TOC_COLS() > 1, cw = tocColW(), fs = two ? 25 : 30, ns = two ? 22 : 26
-    BIRDS.forEach((b, i) => {
-      const { x0, y } = tocPos(i), rec = recs[i], X1 = x0 + cw   // 這一欄的左右邊
-      ctx.font = `${ns}px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(String(i + 1).padStart(2, '0'), x0 + 14, y)
-      const nx = x0 + (two ? 54 : 74), maxW = X1 - nx - (two ? 120 : 230)
-      ctx.font = `${fs}px ${SANS}`; ctx.fillStyle = rec ? INK : 'rgba(45,42,36,0.35)'; ctx.fillText(rec ? b.name : '？？？', nx, y, maxW)
-      let w = Math.min(maxW, ctx.measureText(rec ? b.name : '？？？').width)
-      if (unread[i]) w += 10 + newTag(ctx, nx + w + 10, y - 2, two ? 17 : 20)
-      ctx.fillStyle = 'rgba(80,60,30,0.3)'; for (let x = nx + 10 + w; x < X1 - (two ? 92 : 114); x += 14) ctx.fillRect(x, y - 8, 3, 3)
-      ctx.font = `${ns}px ${SERIF}`; ctx.fillStyle = MUTED; ctx.textAlign = 'right'; ctx.fillText(String(i * 2 + 3), X1 - (two ? 44 : 44), y); ctx.textAlign = 'left'
-      if (rec) { const cx = X1 - (two ? 34 : 24); ctx.strokeStyle = '#a8442f'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(cx, y - 11); ctx.lineTo(cx + 9, y - 2); ctx.lineTo(cx + 25, y - 24); ctx.stroke() }
-    })
+    runningHead(ctx, 'PREFACE', 'R')
+    const X = 96, W = CW - 2 * X
+    ctx.fillStyle = INK; ctx.font = `600 46px ${SERIF}`; ctx.fillText(tr('前言'), X, 176)
+    let y = 252
+    ctx.font = `28px ${SERIF}`
+    for (const l of wrap(ctx, tr('這本圖鑑收錄園區裡可以遇見的 {m} 種野鳥。每拍到一種，就會在這裡留下紀錄：插圖、習性，還有你拍下的最好成績。', { m: BIRDS.length }), W)) { ctx.fillText(l, X, y); y += 48 }
+    y += 46
+    spaced(ctx, tr('觀察進度'), X, y, 18, ACCENT, 'left', 0.25); y += 22
+    rule(ctx, X, X + W, y, 0.25, 1); y += 84
+    ctx.fillStyle = INK; ctx.font = `600 72px ${SERIF}`; ctx.fillText(String(nRec), X, y)
+    let w = ctx.measureText(String(nRec)).width
+    ctx.font = `36px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(` / ${BIRDS.length}`, X + w + 4, y)
+    ctx.textAlign = 'right'; ctx.font = `26px ${SANS}`; ctx.fillText(tr('已記錄 {n} / {m} 種', { n: nRec, m: BIRDS.length }), X + W, y); ctx.textAlign = 'left'
+    y += 30
+    ctx.fillStyle = 'rgba(80,60,30,0.13)'; ctx.fillRect(X, y, W, 10)
+    ctx.fillStyle = ACCENT; ctx.fillRect(X, y, W * nRec / BIRDS.length, 10)
+    y += 62
+    if (nNew) { ctx.fillStyle = NEWRED; ctx.font = `26px ${SANS}`; ctx.fillText(tr('{n} 筆新紀錄還沒看（目錄裡標 NEW）', { n: nNew }), X, y, W); y += 30 }
+    y += 60
+    spaced(ctx, tr('使用方法'), X, y, 18, ACCENT, 'left', 0.25); y += 22
+    rule(ctx, X, X + W, y, 0.25, 1); y += 56
+    ctx.font = `26px ${SANS}`
+    for (const t of [tr('拍到一種鳥，就會記進這本圖鑑。'), tr('← →、A D 或點書頁翻頁'), tr('點目錄裡的鳥，直接翻到那一頁'), tr('E 或 Esc 闔上')]) {
+      ctx.fillStyle = ACCENT; ctx.beginPath(); ctx.arc(X + 6, y - 9, 4, 0, 7); ctx.fill()
+      ctx.fillStyle = INK; ctx.fillText(t, X + 26, y, W - 26); y += 50
+    }
+    ctx.textAlign = 'right'; ctx.font = `italic 22px Georgia, ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText('— X-ARTS Field Notes', X + W, CH - 90); ctx.textAlign = 'left'
   })
+}
+// 目錄第 p 頁（0 起）：一欄，編號／鳥名／紀錄／頁碼
+function tocPage(p, recs, unread) {
+  const side = p % 2 ? 'R' : 'L'
+  return canvasTex((ctx) => {
+    paper(ctx, side)
+    runningHead(ctx, `CONTENTS · ${ROMAN[p] ?? p + 1}`, side)
+    const a = p * TOC_PER, b = Math.min(BIRDS.length, a + TOC_PER)
+    ctx.fillStyle = INK; ctx.font = `600 44px ${SERIF}`; ctx.fillText(tr('目錄'), TOC_X0, 160)
+    if (b > a) { ctx.textAlign = 'right'; ctx.font = `24px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(`${String(a + 1).padStart(2, '0')} — ${String(b).padStart(2, '0')}`, TOC_X1, 160); ctx.textAlign = 'left' }
+    // 表頭
+    const CHK = TOC_X1 - 96, NX = TOC_X0 + 52
+    spaced(ctx, 'NO.', TOC_X0, 214, 13, MUTED, 'left', 0.2)
+    spaced(ctx, tr('鳥種'), NX, 214, 13, MUTED, 'left', 0.2)
+    spaced(ctx, tr('紀錄'), CHK + 10, 214, 13, MUTED, 'center', 0.2)
+    spaced(ctx, tr('頁'), TOC_X1, 214, 13, MUTED, 'right', 0.2)
+    rule(ctx, TOC_X0, TOC_X1, 228, 0.4, 1.5)
+    const step = tocStep()
+    for (let i = a; i < b; i++) {
+      const y = TOC_Y0 + (i - a) * step, rec = recs[i]
+      ctx.font = `19px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(String(i + 1).padStart(2, '0'), TOC_X0, y)
+      const name = rec ? BIRDS[i].name : tr('尚未發現'), maxW = CHK - 40 - NX - 60
+      ctx.font = rec ? `23px ${SANS}` : `italic 21px ${SANS}`; ctx.fillStyle = rec ? INK : 'rgba(45,42,36,0.36)'
+      ctx.fillText(name, NX, y, maxW)
+      let w = Math.min(maxW, ctx.measureText(name).width)
+      if (unread[i]) w += 10 + newTag(ctx, NX + w + 10, y, 22)
+      ctx.fillStyle = 'rgba(80,60,30,0.22)'; for (let x = NX + 14 + w; x < CHK - 26; x += 11) ctx.fillRect(x, y - 6, 2, 2)
+      if (rec) { const cx = CHK; ctx.strokeStyle = ACCENT; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx, y - 9); ctx.lineTo(cx + 7, y - 2); ctx.lineTo(cx + 20, y - 18); ctx.stroke() }
+      ctx.font = `19px ${SERIF}`; ctx.fillStyle = MUTED; ctx.textAlign = 'right'; ctx.fillText(String(birdPageNo(i)), TOC_X1, y); ctx.textAlign = 'left'
+    }
+    if (p === TOC_PAGES - 1) {
+      // 最後一頁目錄的頁腳：圖例
+      ctx.font = `19px ${SANS}`; ctx.fillStyle = MUTED; ctx.textAlign = 'center'
+      const lg = `✓ ${tr('已記錄')}　　NEW ${tr('新紀錄')}`
+      ctx.fillText(lg, CW / 2, CH - 52); ctx.textAlign = 'left'
+    }
+    pageNo(ctx, p + 1, side)
+  }, 1.5)
 }
 
 let discTex = null
@@ -243,7 +331,7 @@ function softDisc() {
 }
 /* ---------- 右頁的小場景（一種鳥一個，打開過就留著） ---------- */
 const SIL = new THREE.MeshBasicMaterial({ color: 0x2b2722, side: THREE.DoubleSide })   // 鳥身上零星反的小碎片：剪影也要畫兩面（不然有白點）
-function makeDiorama(def) {
+function makeDiorama(def, P = PLATE, zoom = 1) {
   const sc = new THREE.Scene()
   sc.add(new THREE.HemisphereLight(0xf6f2e8, 0x8a7c66, 1.7))
   const sun = new THREE.DirectionalLight(0xfff3df, 2.4)
@@ -276,12 +364,12 @@ function makeDiorama(def) {
   if (one !== a.built) for (const b of a.built.birds) if (b !== one) b.obj.visible = false
   a.group.updateMatrixWorld(true)
   const box = new THREE.Box3().setFromObject(one.obj, true), size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3())
-  const cam = new THREE.PerspectiveCamera(30, PLATE.w / PLATE.h * (CW / CH), 0.05, 60)
+  const cam = new THREE.PerspectiveCamera(30, P.w / P.h * (CW / CH), 0.05, 60)
   const dir = a.cam.clone().sub(a.target).normalize()
   dir.y = Math.min(Math.max(dir.y, 0.12), 0.45); dir.normalize()
   const s = Math.max(size.y, Math.max(size.x, size.z) * 0.75)
   // 一群鳥會散開，退遠一點
-  const dist = s / 0.55 / 2 / Math.tan(THREE.MathUtils.degToRad(15))
+  const dist = s / 0.55 / 2 / Math.tan(THREE.MathUtils.degToRad(15)) / zoom
   // 鏡頭對準鳥身上的追蹤點（built.focus，跟溫室跟拍用的同一點），再加上它和外框中心的差：鳥走到哪都在正中間
   const focusAt = (v) => one.obj.parent.localToWorld(v.copy(one.focus))
   const off = mid.clone().sub(focusAt(new THREE.Vector3()))
@@ -291,7 +379,7 @@ function makeDiorama(def) {
   const meshes = []
   one.obj.traverse((o) => { if (o.isMesh && !o.userData.catcher) meshes.push([o, o.material]) })
   let sil = null
-  const rt = new THREE.WebGLRenderTarget(560, Math.round(560 * (PLATE.h * CH) / (PLATE.w * CW)), { samples: 4 })
+  const rt = new THREE.WebGLRenderTarget(560, Math.round(560 * (P.h * CH) / (P.w * CW)), { samples: 4 })
   const look = mid.clone(), want = new THREE.Vector3()
   return {
     rt, ready: false, scene: sc, cam,
@@ -396,8 +484,9 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     p.needsUpdate = true; leafGeo.computeBoundingSphere()
   }
 
-  // 跨頁 0 是目錄；跨頁 s（1～）是 BIRDS[s - 1]
-  const NS = BIRDS.length + 1
+  // 跨頁 0 是扉頁＋前言；1～FRONT-1 是目錄；跨頁 s（FRONT～）是 BIRDS[s - FRONT]
+  const NS = BIRDS.length + FRONT
+  const TOC_S = 1
   let recs = [], infos = [], unread = []
   const mats = new Map()   // key 'L3' / 'R3' / 'B3'（背面用的左頁）→ 材質
   const dioramas = new Map()
@@ -409,8 +498,9 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     for (const [id, d] of dioramas) d.setSilhouette(!r[id])
   }
   function texFor(side, s) {
-    if (s === 0) return side === 'L' ? contentsLeft(recs.filter(Boolean).length, unread.filter(Boolean).length) : contentsRight(recs, unread)
-    const i = s - 1
+    if (s === 0) return side === 'L' ? titlePage() : prefacePage(recs.filter(Boolean).length, unread.filter(Boolean).length)
+    if (s < FRONT) return tocPage((s - 1) * 2 + (side === 'R' ? 1 : 0), recs, unread)
+    const i = s - FRONT
     return side === 'L' ? birdLeft(BIRDS[i], i, recs[i], unread[i]) : birdRight(BIRDS[i], i, recs[i], infos[i])
   }
   function mat(kind, s) {
@@ -420,18 +510,23 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
       mats.set(k, m)
     }
     const m = mats.get(k)
-    if (kind === 'R' && s > 0) {
+    if (kind === 'L' && s === 0) {
+      const d = frontis()
+      m.uniforms.plate.value = d.rt.texture; m.uniforms.hasPlate.value = d.ready ? 1 : 0
+      m.uniforms.rect.value.set(FRONTIS.x, FRONTIS.y, FRONTIS.w, FRONTIS.h); m.uniforms.fade.value = 0.2
+    }
+    if (kind === 'R' && s >= FRONT) {
       const d = diorama(s)
       m.uniforms.plate.value = d.rt.texture; m.uniforms.hasPlate.value = d.ready ? 1 : 0
     }
     return m
   }
   function diorama(s) {
-    const b = BIRDS[s - 1]
+    const b = BIRDS[s - FRONT]
     let d = dioramas.get(b.id)
     if (!d) {
       d = makeDiorama(b); dioramas.set(b.id, d)
-      d.setSilhouette(!recs[s - 1])
+      d.setSilhouette(!recs[s - FRONT])
       d.update(0, 0.016)
       // 先在背景編好著色器（鳥的材質在這個小場景裡的燈光組合不一樣），好了才開始畫
       renderer.compileAsync(d.scene, d.cam).then(() => { d.ready = true })
@@ -440,11 +535,22 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
   }
   // 翻到某隻鳥那一頁＝讀過：存檔、目錄重畫（那一頁這次還留著 NEW，下次打開才拿掉）
   function markRead(s) {
-    if (s < 1 || !unread[s - 1]) return
-    unread[s - 1] = false; onRead(BIRDS[s - 1].id)
-    for (const k of ['L0', 'R0', 'B0']) { const m = mats.get(k); if (m) { if (k !== 'B0') m.uniforms.map.value.dispose(); mats.delete(k) } }
+    if (s < FRONT || !unread[s - FRONT]) return
+    unread[s - FRONT] = false; onRead(BIRDS[s - FRONT].id)
+    // 前言（新紀錄數）和目錄（NEW）重畫
+    for (let q = 0; q < FRONT; q++) for (const k of (q ? ['L', 'R', 'B'] : ['R']).map((c) => c + q)) { const m = mats.get(k); if (m) { if (k[0] !== 'B') m.uniforms.map.value.dispose(); mats.delete(k) } }
   }
-  const warmAround = (s) => { for (const k of [s - 1, s, s + 1, s + 2]) if (k > 0 && k < NS) diorama(k) }
+  // 扉頁插圖：帝雉（地上的鳥，沒有樹枝被切到），永遠是彩色（跟有沒有拍到無關），自己一個小場景
+  let frontD = null
+  function frontis() {
+    if (!frontD) {
+      frontD = makeDiorama(BIRDS.find((b) => b.id === 'mikado') ?? BIRDS[0], FRONTIS, 1.45)
+      frontD.update(0, 0.016)
+      renderer.compileAsync(frontD.scene, frontD.cam).then(() => { frontD.ready = true })
+    }
+    return frontD
+  }
+  const warmAround = (s) => { for (const k of [s - 1, s, s + 1, s + 2]) if (k >= FRONT && k < NS) diorama(k) }
 
   // 狀態
   const st = { open: false, t: 0, target: 0, spread: 0, flip: null, time: 0 }
@@ -489,14 +595,15 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     const hit = ray.intersectObjects([leftPage, rightPage], false)[0]
     if (!hit?.uv) return null
     const x = hit.uv.x * CW, y = (1 - hit.uv.y) * CH
-    if (st.spread === 0 && hit.object === rightPage) {
-      const c = Math.floor((x - TOC_X0) / tocColW()), r = Math.round((y - TOC_TOP + 12) / tocStep()), i = c * TOC_ROWS() + r
-      if (c >= 0 && c < TOC_COLS() && r >= 0 && r < TOC_ROWS() && i < BIRDS.length && Math.abs(y - (TOC_TOP + r * tocStep()) + 12) < tocStep() / 2 + 2) {
-        const yc = TOC_TOP + r * tocStep() - 12, x0 = TOC_X0 + c * tocColW()
-        return { to: i + 1, key: 'row' + i, page: rightPage, box: [x0, yc - tocStep() / 2 + 1, x0 + tocColW() - 6, yc + tocStep() / 2 - 1] }
+    if (st.spread >= 1 && st.spread < FRONT) {
+      const p = (st.spread - 1) * 2 + (hit.object === rightPage ? 1 : 0), step = tocStep()
+      const r = Math.round((y - TOC_Y0 + 8) / step), i = p * TOC_PER + r
+      if (r >= 0 && r < TOC_PER && i < BIRDS.length && x > TOC_X0 - 10 && x < TOC_X1 + 10) {
+        const yc = TOC_Y0 + r * step - 8
+        return { to: i + FRONT, key: 'row' + i, page: hit.object, box: [TOC_X0 - 12, yc - step / 2 + 1, TOC_X1 + 12, yc + step / 2 - 1] }
       }
     }
-    if (st.spread > 0 && hit.object === leftPage && x > BACK.x0 && x < BACK.x1 && y > BACK.y0 && y < BACK.y1) return { to: 0, key: 'back', page: leftPage, box: [BACK.x0 + 20, BACK.y0 + 6, BACK.x1, BACK.y1 - 4] }
+    if (st.spread >= FRONT && hit.object === leftPage && x > BACK.x0 && x < BACK.x1 && y > BACK.y0 && y < BACK.y1) return { to: TOC_S, key: 'back', page: leftPage, box: [BACK.x0 + 20, BACK.y0 + 6, BACK.x1, BACK.y1 - 4] }
     return null
   }
   // 滑過／按下的反白（按鈕手感）：一片半透明的綠色方塊疊在那一行（或「回到目錄」）上面，按下去變深、縮一點
@@ -519,7 +626,7 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     if (!st.open) return
     if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'PageDown') turn(1)
     else if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'PageUp') turn(-1)
-    else if (e.code === 'Home' || e.code === 'KeyT') jump(0)
+    else if (e.code === 'Home' || e.code === 'KeyT') jump(TOC_S)
     else if (e.code === 'Escape') close('esc')
   })
   renderer.domElement.addEventListener('click', (e) => {
@@ -589,13 +696,15 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     leftPage.visible = opn > 0.5
     // 看得到的右頁插圖：每格更新鳥的動作、畫到貼圖
     for (const s of new Set(F ? [A, B] : [A])) {
-      if (s === 0 || (!F && s !== st.spread)) continue
+      if (s < FRONT || (!F && s !== st.spread)) continue
       const d = diorama(s)
       if (!d.ready) continue
       d.update(st.time, dt); d.render(renderer)
       mat('R', s).uniforms.hasPlate.value = 1
     }
-    if (st.spread > 0 && !F) { const d = diorama(st.spread); if (d.ready) { mat('R', st.spread).uniforms.hasPlate.value = 1 } }
+    // 扉頁的插圖：看得到左頁 0 時也每格畫
+    if (A === 0 && opn > 0.3) { const d = frontis(); if (d.ready) { d.update(st.time, dt); d.render(renderer); mat('L', 0).uniforms.hasPlate.value = 1 } }
+    if (st.spread >= FRONT && !F) { const d = diorama(st.spread); if (d.ready) { mat('R', st.spread).uniforms.hasPlate.value = 1 } }
 
     const ac = renderer.autoClear
     renderer.autoClear = false; renderer.clearDepth()
