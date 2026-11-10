@@ -358,7 +358,10 @@ function buildInterior(lib, avoid = []) {
         // 跌水：一股股白色水絲，中間夾著深色透明的水
         // 三層：粗的水股、細的水絲、最細的拉絲（長焦拉近看才不會是一片糊糊的白）
         float streak = fbm(vec2(vUv.x * 22.0, vUv.y * 0.35 - uTime * sp * 0.9)) * 0.5 + fbm(vec2(vUv.x * 38.0, vUv.y * 1.8 - uTime * sp * 1.25)) * 0.3 + vnoise(vec2(vUv.x * 110.0, vUv.y * 5.0 - uTime * sp * 1.6)) * 0.2;
-        float curtain = fall * (0.4 + 0.6 * smoothstep(0.36, 0.52, streak)) * (0.75 + 0.25 * smoothstep(0.0, 0.6, vUv.x * (1.0 - vUv.x) * 4.0));   // 2026-11-09：以前八成以上是白的，像一塊白色塑膠板 → 一股股白水絲之間露出透明的深色水；兩邊比中間薄
+        float curtain = fall * (0.4 + 0.6 * smoothstep(0.36, 0.52, streak)) * (0.75 + 0.25 * smoothstep(0.0, 0.6, vUv.x * (1.0 - vUv.x) * 4.0));
+        // 2026-11-10 使用者：河口的水要 extremely realistic（ChatGPT：下緣分成 3～6 股、不要整片白）→ 水簾橫向分成幾股粗水柱（往下越分越開），股與股之間是很薄的水、透出後面濕黑的岩壁
+        float strands = smoothstep(0.34, 0.6, fbm(vec2(vUv.x * 4.2 + 1.3, vUv.y * 0.05)) + 0.12 * (1.0 - fall) - 0.1 * fall * vnoise(vec2(vUv.x * 9.0, vUv.y * 0.3)));
+        curtain *= mix(0.3, 1.0, strands);   // 2026-11-09：以前八成以上是白的，像一塊白色塑膠板 → 一股股白水絲之間露出透明的深色水；兩邊比中間薄
         // 白沫：跟著水流漂（同一組相位），一塊塊、邊緣碎；跌水底下＋石頭邊／尾跡
         float fb = mix(fbm(q * 2.6 - o0 * 1.2) * 0.55 + fbm2(q * 8.0 - o0 * 1.2) * 0.45, fbm(q * 2.6 - o1 * 1.2 + 9.1) * 0.55 + fbm2(q * 8.0 - o1 * 1.2 + 9.1) * 0.45, wB);   // 泡沫要碎（大塊模糊的白像抹上去的）
         float amt = clamp(fv * 0.75 + rockF * 1.1, 0.0, 1.2);
@@ -370,7 +373,8 @@ function buildInterior(lib, avoid = []) {
         col = mix(col, white, foam * 0.88);
         col *= mix(0.12, 1.0, uDay);
         float a = mix(0.28, 0.86, d) + foam * 0.55 + fres * 0.35 + fall * 0.1 + lip * 0.2;
-        a = mix(a, 0.35 + 0.6 * curtain, fall);   // 跌水那面：水絲不透明、水絲之間半透明   // 淺的地方看得到溪底
+        a = mix(a, mix(0.18, 0.4, strands) + 0.58 * curtain, fall);
+        col = mix(col, col * 0.45, fall * (1.0 - strands) * (1.0 - foam));   // 跌水那面：水絲不透明、水絲之間半透明   // 淺的地方看得到溪底
         a *= smoothstep(0.0, 0.05, vDepth);                                      // 岸邊淡掉，不會有一條硬邊
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>
@@ -514,6 +518,16 @@ function buildInterior(lib, avoid = []) {
     }
     // 2026-11-11 寬的河（ChatGPT：落差要有「石門檻」——整排大石頭橫過河道、兩端埋進岸裡、比上游水面高，中間留 1～2 個缺口讓水從缺口落下）
     if (st.wide) for (const d of st.drops) {
+      if (d.fall) {
+        // 2026-11-10 河口的真瀑布（layout.js lipS）：不排整排石門檻（會變成一道 5 m 的石牆擋在水簾前面）；
+        // 水簾兩側沿著岩壁一顆顆往下疊（擋住 15～30% 的水、蓋住岸的直邊），消能潭兩側各兩三顆半沉的大石，正前方留空看得到瀑布
+        const hw = st.halfAt(d.s - 0.3)
+        for (const sgn of [-1, 1]) {
+          for (let y = d.up - 0.2; y > d.down - 0.3; y -= 0.9 + rr() * 0.5) { const b = at(d.s - 0.5 - rr() * 0.4), o = (hw + 0.25 + rr() * 0.5) * sgn, k = 0.7 + rr() * 0.6; put(rr() < 0.6 ? BIG : MOSS, b.x + b.sx * o, b.z + b.sz * o, y - 0.55 * k, k, 0.85) }   // 疊在水簾兩側的岩壁上（岩唇線往後、水寬外面），不擋在水前面
+          for (let j = 0; j < 2 + (rr() < 0.5 ? 1 : 0); j++) { const b = at(d.s + 2 + rr() * 3), o = (hw + 0.6 + rr() * 1.4) * sgn, k = 0.7 + rr() * 0.6; put(rr() < 0.5 ? BIG : MOSS, b.x + b.sx * o, b.z + b.sz * o, d.down - 0.6 * k, k, 0.85) }
+        }
+        continue
+      }
       const c = at(d.s - 0.2), hw = st.halfAt(d.s), gaps = [(rr() - 0.5) * hw * 0.8]
       if (hw > 2.2 && rr() < 0.6) gaps.push(-gaps[0] * 0.9 + (rr() - 0.5) * 0.6)
       for (let o = -hw - 0.6; o <= hw + 0.6; o += 0.55 + rr() * 0.35) {
@@ -528,6 +542,7 @@ function buildInterior(lib, avoid = []) {
     { let a = null; for (let x = 0; x <= st.len; x += 0.25) { const on = slopeAt(x) > 0.4; if (on && a === null) a = x; if (!on && a !== null) { const h = st.water(a) - st.water(x); if (h > 0.8) steep.push({ s0: a, s1: x, h, down: st.water(x) }); a = null } } }
     const putS = (n, x, z, y, k, f) => { if (alpineTrailDist(x, z) < 1.5 + k * 0.9) return; put(n, x, z, y, k, f) }   // 有碰撞，小溪也不能擋到步道
     for (const r of steep) {
+      if (st.drops.some((d) => d.fall && d.s > r.s0 - 1.5 && d.s < r.s1 + 1.5)) continue   // 真瀑布那段另外放（上面 d.fall），不要在半空中的水簾裡放石頭
       for (let x = r.s0; x <= r.s1 + 0.6; x += 0.6 + rr() * 0.4) {
         const c = at(x), hw = st.wide ? st.halfAt(x) : 1.25, w = st.water(x)
         for (const sgn of [-1, 1]) { const o = (hw + 0.15 + rr() * 0.6) * sgn, k = (st.wide ? 0.75 : 0.5) + rr() * 0.6; putS(rr() < 0.6 ? BIG : MOSS, c.x + c.sx * o, c.z + c.sz * o, w - 0.45 * k, k, 0.8) }

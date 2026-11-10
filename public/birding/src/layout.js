@@ -769,9 +769,35 @@ function buildAlpine() {
         rv.W[i] = lerp(rv.W[i], ALP_POND.water + 0.008, t)
         rv.B[i] = Math.min(rv.B[i], lerp(Math.min(bEnd, ALP_POND.water - 0.9), ALP_POND.water - 0.95, smoothstep(sEnd, sL, sv)) * t + rv.B[i] * (1 - t))
       }
+      // 2026-11-10 使用者：河口那道水「改得很不好、要 extremely realistic」→ 以前是 8 m 掉 6 m 的一條斜坡急流（像水泥溢洪道，被切成幾層平潭）。
+      // 改成真的瀑布（ChatGPT 河流規格：主河水簾上緣 4～6 m、底部白水、深的消能潭）：
+      //   上游 7.4 m 一段亂石急流（掉 1 m）→ 一道微彎的岩唇 → 自由落下約 5 m（水平拋出 1.4 m）→ 湖口的消能潭（深 1.4 m）→ 河口進湖
+      const sA = sEnd - 11, sLip = sEnd - 3.6, THROW = 1.4, Wl = ALP_POND.water + 0.008
+      const WA = rv.water(sA), WL = WA - 1.0
+      for (let i = 0; i < rv.W.length; i++) {
+        const sv = i * STEP
+        if (sv < sA) continue
+        let w, b
+        if (sv < sLip) {
+          const t = (sv - sA) / (sLip - sA)
+          w = WA - 1.0 * Math.pow(t, 1.25) + 0.05 * Math.sin(t * 19) * t * (1 - t) * 4   // 急流：越近岩唇越急，水面有幾道小坎
+          b = w - 0.3 - 0.08 * Math.sin(t * 13 + 1)
+        } else if (sv < sLip + THROW) {
+          const t = (sv - sLip) / THROW
+          w = WL - (WL - Wl) * t * t                                                       // 拋物線落下
+          b = Math.min(w - 0.4, WL - 0.3 - (WL - Wl + 0.9) * Math.pow(t, 0.6))              // 水簾後面是垂直的岩壁（往下挖到消能潭底）
+        } else {
+          w = Wl
+          b = lerp(Wl - 1.45, ALP_POND.water - 0.95, smoothstep(sLip + THROW + 0.5, sL, sv))   // 消能潭：落水點最深
+        }
+        rv.W[i] = w; rv.B[i] = b
+      }
+      rv.drops = rv.drops.filter((d) => d.s < sA - 1)
+      rv.drops.push({ s: sLip, h: WL - Wl, up: WL, down: Wl, fall: true })
       const h0 = rv.halfAt
-      rv.halfAt = (sv) => lerp(h0(sv), 4.2, smoothstep(sEnd - 9, sEnd + 1, sv))
-      rv.mouthS = sEnd
+      // 岩唇那段收窄成 5.4 m 寬的水簾；落下去之後在消能潭、河口慢慢放寬到 8.4 m
+      rv.halfAt = (sv) => sv < sLip + 0.5 ? lerp(h0(sv), 2.7, smoothstep(sA, sLip - 2.5, sv)) : lerp(2.7, 4.2, smoothstep(sLip + 0.5, sEnd + 1.5, sv))
+      rv.mouthS = sEnd; rv.lipS = sLip
     }
     for (const c of XS) { const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 1.2), half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
   }
