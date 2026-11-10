@@ -3,13 +3,14 @@
 // 瀑布：從岩壁頂一條細長的水簾（像優勝美地瀑布），落到岩壁下的水潭，濺起水霧
 // 樹：西黃松（Ponderosa）——高、直、橘紅色的鱗片樹皮，樹冠只在上半段、一簇簇的長針葉；這一區原本的冷杉、鐵杉讓開（alpine.js 用 inYose）
 import * as THREE from 'three'
-import { ALP_SPURS, alpineHeight, alpineTrailDist, domeRho, domeY, addCollider, YOSE, CAMP } from './layout.js'
+import { ALP_SPURS, alpineHeight, alpineTrailDist, alpineStreamDist, domeRho, domeY, addCollider, YOSE, CAMP } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { barkMaterial } from './bark.js'
 import { parts, scatter } from './plants.js'
 
 const TAU = Math.PI * 2, V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
+const lerpN = (a, b, t) => a + (b - a) * t
 const ss = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
 
 // 花崗岩的顏色貼圖：淺灰底、黑白雲母、石英的小斑點，淡淡的鐵鏽色
@@ -39,8 +40,11 @@ export function buildYosemite(scene, { lib } = {}) {
   for (let i = 0; i <= NX; i++) {
     const x = X0 + (X1 - X0) * i / NX, zb = YOSE.base(x), ze = YOSE.edge(x) - 0.8
     const g0 = alpineHeight(x, zb)
-    const Ht = YOSE.Ht(x)   // layout.js：兩端收矮、頂上留空間給玻璃（石階步道走得上去）
-    cols.push({ x, zb, g0, Ht })
+    const Ht = YOSE.Ht(x)   // layout.js：兩端收矮；瀑布口到石階頂那段頂上是平的
+    // 2026-11-11 石階平台那一段（XA～XB）：岩壁本體往後退到最上一層平台的後面，前面是一階一階的平台（下面另外畫）
+    const M = YOSE.mist, terr = x > M.XA - 1.6 && x < M.XB + 1.6, push = terr ? zb + M.D0 + M.W * (M.NL - 0.5) + 0.15 : -1e9, fk = YOSE.flatK(x)
+    const fallK = Math.exp(-(((x - YOSE.fall.x) / 8) ** 2))   // 瀑布口那幾公尺：岩壁不往後仰、頂上不凸，水簾貼著岩壁落下（以前瀑布口浮在岩壁前面）
+    cols.push({ x, zb, g0, Ht, terr })
     const row = []
     for (let k = 0; k <= FACE + TOP; k++) {
       let y, z
@@ -50,18 +54,18 @@ export function buildYosemite(scene, { lib } = {}) {
         // 往後仰一點；縱向的稜溝（x 方向變化快、y 方向變化慢）＋大塊的凹凸；頂端圓圓地收
         const flute = 0.45 * Math.sin(x * 1.7 + Math.sin(y * 0.11) * 2.2) + 0.25 * Math.sin(x * 4.3 + y * 0.05)
         const lump = 1.6 * (fbm2(x * 0.09, y * 0.07, 4) - 0.5)
-        z = zb + v * 1.8 + (flute + lump) * ss(0, 0.08, v) - v * v * v * 0.0 + ss(0.9, 1, v) * 1.2
+        z = Math.max(push, zb + v * 1.8 * (1 - 0.85 * fallK) + (flute + lump) * ss(0, 0.08, v) * (1 - 0.6 * fallK) + ss(0.9, 1, v) * 1.2 * (1 - fallK))
       } else {
-        const t = (k - FACE) / TOP
-        y = g0 + Ht + Math.sin(t * Math.PI * 0.5) * 0.8 - t * t * 0.6
-        z = zb + 3.0 + (ze - zb - 3.0) * t
+        const t = (k - FACE) / TOP, z0 = Math.max(zb + 3.0 - 2.4 * fallK, push)
+        y = g0 + Ht + lerpN(Math.sin(t * Math.PI * 0.5) * 0.8 - t * t * 0.6, -0.04 * t, fk)   // 平的那段：頂上平平的、往後微微低一點
+        z = z0 + (ze - z0) * t
       }
       row.push([x, y, z])
     }
-    for (const [px, py, pz] of row) {
-      pos.push(px, py, pz); uv.push(px * 0.22, py * 0.22)
+    for (const [ri, [px, py, pz]] of row.entries()) {
+      pos.push(px, py, pz); uv.push(px * 0.22, ri > FACE ? pz * 0.22 + 40 : py * 0.22)   // 頂上那幾排用 z 當貼圖座標（以前用 y，頂面被拉成一條條）
       // 黑色水痕：一條條縱向（只看 x），從上往下淡；淡色剝落面：大塊
-      const streak = Math.max(0, fbm2(px * 0.35, 7.1, 3) - 0.52) * 3.2 * ss(g0, g0 + Ht, py)
+      const streak = Math.max(0, fbm2(px * 0.35, 7.1, 3) - 0.52) * 3.2 * ss(g0, g0 + Ht, py) * (ri > FACE ? 0.1 : 1)   // 頂面不畫縱向水痕（會變一條條）
       const pale = Math.max(0, fbm2(px * 0.06, py * 0.06 + 4, 3) - 0.55) * 1.6
       const wet = Math.exp(-(((px - YOSE.fall.x) / 4.2) ** 2)) * (0.55 + 0.45 * ss(g0, g0 + 3, py))   // 瀑布後面濕掉的黑色岩壁
       const k = Math.max(0.3, (1 - streak * 0.75 + pale * 0.25) * (1 - 0.55 * wet))
@@ -77,7 +81,7 @@ export function buildYosemite(scene, { lib } = {}) {
   if (rockN) { rockN.wrapS = rockN.wrapT = THREE.RepeatWrapping }
   const cliffM = new THREE.MeshStandardMaterial({ map: graniteTex(), vertexColors: true, roughness: 0.82, side: THREE.DoubleSide, ...(rockN ? { normalMap: rockN, normalScale: new THREE.Vector2(1.2, 1.2) } : {}) })
   const cliff = new THREE.Mesh(cg, cliffM); cliff.castShadow = true; cliff.receiveShadow = true; g.add(cliff)
-  for (const c of cols) if (Math.round(c.x * 2) % 3 === 0) addCollider(c.x, c.zb + 0.9, 1.3, c.g0 + c.Ht)
+  for (const c of cols) if (!(c.x > YOSE.mist.XA - 3.4 && c.x < YOSE.mist.XB + 3.4) && Math.round(c.x * 2) % 3 === 0) addCollider(c.x, c.zb + 0.9, 1.3, c.g0 + c.Ht)   // 石階平台兩端外面也不放（半徑 1.3 會伸進轉彎的平台）
 
   // 岩壁腳下的落石堆：掃描的岩石、大石頭，沿牆腳 1～4 公尺
   if (lib) {
@@ -89,13 +93,13 @@ export function buildYosemite(scene, { lib } = {}) {
     for (let k = 0; k < 260; k++) {
       const x = X0 + 4 + rnd() * (X1 - X0 - 8), z = YOSE.base(x) - 0.5 - rnd() * 4
       const n = names[Math.floor(rnd() * names.length)], k2 = (n === 'boulder' ? 0.25 + rnd() * 0.35 : 0.6 + rnd() * 0.9) * 1.6
-      if (alpineTrailDist(x, z) < 3.2 + k2 * (n === 'boulder' ? 2.2 : 0.7) || inPool(x, z, 0.6)) continue
+      if (alpineTrailDist(x, z) < 3.2 + k2 * (n === 'boulder' ? 2.2 : 0.7) || inPool(x, z, 0.6) || YOSE.inLake(x, z, 1.5) || alpineStreamDist(x, z) < 2.5 || (x > YOSE.mist.XA - 5 && x < YOSE.mist.XB + 5)) continue
       putRock(n, x, z, k2)
     }
     for (let k = 0, made = 0; k < 400 && made < 16; k++) {   // 水潭邊的大石頭（不擋住看瀑布的那一面：步道那側少放）
       const a = rnd() * TAU, x = FL.x + Math.cos(a) * (FL.rx + 0.6 + rnd() * 1.6), z = FL.z + Math.sin(a) * (FL.rz + 0.5 + rnd() * 1.4)
       const n = rnd() < 0.5 && lib.boulder ? 'boulder' : names[1 + Math.floor(rnd() * (names.length - 1))], k2 = n === 'boulder' ? 0.45 + rnd() * 0.5 : 1.6 + rnd() * 1.6
-      if (!lists[n] || alpineTrailDist(x, z) < 3.4 + k2 * (n === 'boulder' ? 2.2 : 0.7) || (Math.sin(a) < -0.3 && rnd() < 0.7)) continue
+      if (!lists[n] || alpineTrailDist(x, z) < 3.4 + k2 * (n === 'boulder' ? 2.2 : 0.7) || (Math.sin(a) < -0.3 && rnd() < 0.7) || YOSE.inLake(x, z, -0.5)) continue
       putRock(n, x, z, k2, 0.3); addCollider(x, z, k2 * (n === 'boulder' ? 1.6 : 0.6), alpineHeight(x, z) + k2 * 0.8); made++
     }
     // 岩石改成灰白（花崗岩）：材質複製一份、顏色去飽和再提亮（原本掃描的是褐色、長青苔的石頭），跟岩壁一致
@@ -117,9 +121,7 @@ export function buildYosemite(scene, { lib } = {}) {
   // 三層水簾：後面一層慢、暗（有厚度）；主水簾一條條往下加速的水絲＋白色的「馬尾」水團；前面下半段一層水霧簾
   // 落點：500 顆水花往上往外噴、慢慢飄散；大片水霧；橢圓水潭（13×6.4 公尺）、兩層白沫一圈圈往外；岩壁背後濕黑一條
   const F = YOSE.fall, fc = cols.reduce((a, c) => Math.abs(c.x - F.x) < Math.abs(a.x - F.x) ? c : a)
-  let poolY = 1e9
-  for (let a = 0; a < 16; a++) for (const k of [0, 0.5, 0.9]) poolY = Math.min(poolY, alpineHeight(F.x + Math.cos(a / 16 * TAU) * F.rx * k, F.z + Math.sin(a / 16 * TAU) * F.rz * k))
-  poolY += 0.15
+  const poolY = YOSE.lake.water   // 2026-11-11 落到湖裡（layout.js YOSE.lake）
   const topY = fc.g0 + fc.Ht, fz = fc.zb + 0.6
   const uT = { value: 0 }
   const fallMat = (o) => new THREE.ShaderMaterial({
@@ -151,7 +153,7 @@ export function buildYosemite(scene, { lib } = {}) {
     const sheet = (wTop, wBot, back, outK, mat, ro, v0 = 0) => {
       const N = 40, P = [], U = [], I = []
       for (let k = 0; k <= N; k++) {
-        const v = v0 + (1 - v0) * k / N, y = topY + 0.3 - (topY + 0.3 - poolY) * v, w = wTop + (wBot - wTop) * v, out = back + outK * v * v
+        const v = v0 + (1 - v0) * k / N, y = topY + 0.05 - (topY + 0.05 - poolY) * v, w = wTop + (wBot - wTop) * v, out = back + outK * v * v
         P.push(F.x - w, y, fz - out, F.x + w, y, fz - out); U.push(0, v, 1, v)
         if (k) { const a = (k - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) }
       }
@@ -163,7 +165,8 @@ export function buildYosemite(scene, { lib } = {}) {
     sheet(3.6, 7.8, 0.9, 4.6, fallMat({ spd: 1.35, a: 0.45, low: 1 }), 5, 0.3)          // 前面的水霧簾
     // 水潭：橢圓、深綠帶一點藍
     const poolM = new THREE.MeshStandardMaterial({ color: 0x2c5a55, roughness: 0.06, metalness: 0.15, transparent: true, opacity: 0.9 })
-    const pool = new THREE.Mesh(new THREE.CircleGeometry(1, 56).rotateX(-Math.PI / 2), poolM); pool.scale.set(F.rx, 1, F.rz); pool.position.set(F.x, poolY, F.z); pool.receiveShadow = true; g.add(pool)
+    // 湖：比湖岸大一點的橢圓（岸比水面高，邊緣自然被岸蓋住）
+    const LK = YOSE.lake, pool = new THREE.Mesh(new THREE.CircleGeometry(1, 72).rotateX(-Math.PI / 2), poolM); pool.scale.set(LK.rx * 1.12, 1, LK.rz * 1.12); pool.position.set(LK.x, poolY, LK.z); pool.receiveShadow = true; g.add(pool)
     const foamT = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'), r = mulberry32(9); for (let i = 0; i < 1600; i++) { const a = r() * TAU, d = Math.pow(r(), 0.7) * 120; x.fillStyle = `rgba(255,255,255,${(0.1 + r() * 0.45) * (1 - d / 130)})`; x.beginPath(); x.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 1 + r() * 5, 0, TAU); x.fill() } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t })()
     for (const [k, sc] of [[0, 6.5], [1, 4.2]]) {
       const fm = new THREE.Mesh(new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: 0.8 }))
@@ -180,36 +183,147 @@ export function buildYosemite(scene, { lib } = {}) {
     const sprayM = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.55, depthWrite: false, map: mistT, blending: THREE.AdditiveBlending })
     const spray = new THREE.Points(sg, sprayM); spray.frustumCulled = false; spray.renderOrder = 7; g.add(spray)
     sprayU = (dt) => { for (let i = 0; i < NS; i++) { sv[i].y -= 3.2 * dt; sv[i].multiplyScalar(1 - 0.9 * dt); sp[i * 3] += sv[i].x * dt; sp[i * 3 + 1] += sv[i].y * dt; sp[i * 3 + 2] += sv[i].z * dt; if (sp[i * 3 + 1] < poolY || rnd() < 0.004) reset(i, false) } sg.attributes.position.needsUpdate = true }
-    for (let k = -2; k <= 2; k++) addCollider(F.x + k * F.rx * 0.38, F.z + 0.4, F.rz * 0.8, poolY + 0.6)
   }
 
-  // ---------- 瀑布步道：之字形花崗岩石階＋頂上觀景台（layout.js YOSE.stairs；站的高度用 YOSE.stairAt，跟這裡畫的一致） ----------
+  // ---------- 瀑布步道（2026-11-11 重做）：岩壁被鑿成 8 層平台、之字形石階一路爬到岩壁頂 ----------
+  // 1) 平台的石壁：一張網格（x × 高度），每個高度 y 的「前緣」在哪一層：y 在第 k 段和第 k+1 段踏面之間 → 前緣＝第 k 段的內側（d_k＋W/2）。
+  //    踏面那一排網格剛好跨過一層，等於一塊平台；石壁表面往裡加一點凹凸（只往裡，不會擋到步道）
+  // 2) 石階：每 0.2 公尺一階的花崗岩踏板（踏板下面墊高，蓋住平台）
+  // 3) 外側矮石牆：一顆顆花崗岩砌的（像優勝美地步道邊那種），轉彎處留開口
+  // 4) 兩端的側面封起來；頂上：觀景台欄杆、溪從後面流到瀑布口
   {
-    const st = YOSE.stairs(), stepM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xd8d4cc, roughness: 0.85, ...(rockN ? { normalMap: rockN } : {}) })
-    const wallM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xe6e2da, roughness: 0.95, emissive: 0x2a2826, ...(rockN ? { normalMap: rockN } : {}) })   // 跟岩壁同色、背光面也不會黑成一塊
-    const steps = [], walls = [], posts = [], rails = []
-    for (let i = 1; i < st.pts.length; i++) {
-      const [ax, az] = st.pts[i - 1], [bx, bz] = st.pts[i], mx = (ax + bx) / 2, mz = (az + bz) / 2
-      const len = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az)
-      const s0 = st.S[i - 1] + len / 2, top = Math.floor(st.h(s0) / 0.2) * 0.2 + 0.2, gy = alpineHeight(mx, mz)
-      steps.push({ p: V(mx, top - 0.09, mz), yaw, s: V(1.9, 0.18, len + 0.04) })   // 踏面
-      if (top - 0.18 > gy - 0.4) walls.push({ p: V(mx, (top - 0.18 + gy - 0.6) / 2, mz), yaw, s: V(2.0, top - 0.18 - gy + 0.6, len + 0.05) })   // 底下的砌石
-      // 外側（離岩壁遠的那邊）欄杆：每 1.6 公尺一根柱子
-      if (i % 3 === 0 && Math.abs(bx - ax) > Math.abs(bz - az) * 2) { const px = mx, pz = mz - 0.95; posts.push(V(px, top, pz)); addCollider(px, pz, 0.12, top + 1.1) }   // 轉彎那一小段不放（會擋在下一段上）
+    const M = YOSE.mist, st = YOSE.stairs(), XL = M.XA - 1.3, XR = M.XB + 1.3, topYm = YOSE.topY(M.XB)
+    const dEdge = (x, k) => YOSE.base(x) + M.D0 + M.W * k + M.W / 2          // 第 k 段的內側（上一層石壁的腳）
+    const Hk = (k, x) => st.legH(k, x)
+    const faceZ = (x, y) => {
+      if (y <= Hk(0, x)) return YOSE.base(x) + M.D0 - M.W / 2
+      for (let k = 0; k < M.NL - 1; k++) if (y <= Hk(k + 1, x)) return dEdge(x, k)
+      return dEdge(x, M.NL - 1)
     }
-    const P = st.plat
-    steps.push({ p: V((P.x0 + P.x1) / 2, P.y - 0.15, (P.z0 + P.z1) / 2), yaw: 0, s: V(P.x1 - P.x0 + 0.2, 0.3, P.z1 - P.z0 + 0.2) })
-    { const cx = (P.x0 + P.x1) / 2, cz = (P.z0 + P.z1) / 2, gy = alpineHeight(cx, cz); walls.push({ p: V(cx, (P.y - 0.3 + gy - 0.6) / 2, cz), yaw: 0, s: V(P.x1 - P.x0, P.y - 0.3 - gy + 0.6, P.z1 - P.z0) }) }
-    // 觀景台三邊欄杆（靠瀑布那邊、前面、東邊；岩壁那邊不用）
-    for (let x = P.x0 + 0.1; x <= P.x1 - 0.1; x += 0.8) { posts.push(V(x, P.y, P.z0 + 0.1)); addCollider(x, P.z0 + 0.1, 0.15, P.y + 1.1) }
-    for (let z = P.z0 + 0.9; z <= P.z1 - 0.1; z += 0.8) { posts.push(V(P.x0 + 0.1, P.y, z)); addCollider(P.x0 + 0.1, z, 0.15, P.y + 1.1) }
+    const yLo = Math.min(st.h0, alpineHeight(XR, YOSE.base(XR) + M.D0)) - 2.5, NXF = Math.round((XR - XL) / 0.3), NYF = Math.round((topYm + 0.05 - yLo) / 0.12)
+    const fp = [], fu = [], fc = [], fi = []
+    for (let i = 0; i <= NXF; i++) {
+      const x = XL + (XR - XL) * i / NXF
+      for (let j = 0; j <= NYF; j++) {
+        const y = yLo + (topYm + 0.05 - yLo) * j / NYF, z0 = faceZ(x, y)
+        const bump = 0.45 * Math.max(0, fbm2(x * 0.55, y * 0.45, 3) - 0.32) + 0.12 * Math.sin(x * 2.3 + y * 0.7)   // 只往裡凹
+        const z = z0 + Math.max(0, bump)
+        fp.push(x, y, z); fu.push(x * 0.22, y * 0.22)
+        const kc = 0.85 + 0.3 * fbm2(x * 0.3, y * 0.3 + 9, 2); fc.push(kc, kc, kc * 0.98)
+      }
+    }
+    const R = NYF + 1
+    for (let i = 0; i < NXF; i++) for (let j = 0; j < NYF; j++) { const a = i * R + j, b = a + R; fi.push(a, b, a + 1, a + 1, b, b + 1) }
+    // 兩端側面：從石壁前緣一路接到後面的岩壁本體
+    const cap = (x, flip) => {
+      const base = fp.length / 3, zBack = YOSE.base(x) + M.D0 + M.W * (M.NL - 0.5) + 0.3
+      for (let j = 0; j <= NYF; j++) { const y = yLo + (topYm + 0.05 - yLo) * j / NYF; fp.push(x, y, faceZ(x, y) - 0.02, x, y, zBack); fu.push(0, y * 0.22, 3, y * 0.22); fc.push(0.9, 0.9, 0.88, 0.9, 0.9, 0.88) }
+      for (let j = 0; j < NYF; j++) { const a = base + j * 2, b = a + 1, c = a + 2, d = a + 3; if (flip) fi.push(a, b, c, b, d, c); else fi.push(a, c, b, b, c, d) }
+    }
+    cap(XL, false); cap(XR, true)
+    const tg = new THREE.BufferGeometry()
+    tg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3)); tg.setAttribute('uv', new THREE.Float32BufferAttribute(fu, 2)); tg.setAttribute('color', new THREE.Float32BufferAttribute(fc, 3))
+    tg.setIndex(fi); tg.computeVertexNormals()
+    const terr = new THREE.Mesh(tg, cliffM); terr.castShadow = true; terr.receiveShadow = true; g.add(terr)
+
+    // 石階：每一階一塊花崗岩踏板，下面墊到平台（看不到懸空）
+    const stepM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xd9d5cd, roughness: 0.88, ...(rockN ? { normalMap: rockN } : {}) })
+    const steps = []
+    let lastY = -1e9
+    for (let s0 = 0.2; s0 < st.L; s0 += 0.1) {
+      const y = Math.floor(st.h(s0) / 0.2) * 0.2 + 0.2
+      if (y === lastY) continue
+      lastY = y
+      // 這一階從 s0 到下一階開始（同一高度那一段）的中間
+      let s1 = s0; while (s1 < st.L && Math.floor(st.h(s1) / 0.2) * 0.2 + 0.2 === y) s1 += 0.05
+      const pa = at(st, s0), pb = at(st, Math.min(st.L, s1)), mx = (pa[0] + pb[0]) / 2, mz = (pa[1] + pb[1]) / 2, len = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]) + 0.06
+      const yaw = Math.atan2(pb[0] - pa[0], pb[1] - pa[1]), under = Math.min(1.4, y - alpineHeight(mx, mz) + 0.5)
+      steps.push({ p: V(mx, y - under / 2, mz), yaw, s: V(2.15, Math.max(0.2, under), Math.max(0.15, len)), c: 0.9 + rnd() * 0.18 })
+    }
+    function at(st, s) { let i = 1; while (i < st.S.length - 1 && st.S[i] < s) i++; const u = (s - st.S[i - 1]) / Math.max(1e-6, st.S[i] - st.S[i - 1]); return [lerpN(st.pts[i - 1][0], st.pts[i][0], u), lerpN(st.pts[i - 1][1], st.pts[i][1], u)] }
     const box = new THREE.BoxGeometry(1, 1, 1)
-    const im = (list, mat) => { const m = new THREE.InstancedMesh(box, mat, list.length); list.forEach((b, i) => m.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), b.s))); m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m) }
-    im(steps, stepM); im(walls, wallM)
-    const ironM = new THREE.MeshStandardMaterial({ color: 0x3b3d3f, roughness: 0.5, metalness: 0.6 })
+    {
+      const im = new THREE.InstancedMesh(box, stepM, steps.length), cc = new THREE.Color()
+      steps.forEach((b, i) => { im.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), b.s)); im.setColorAt(i, cc.setScalar(b.c)) })
+      im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
+    }
+    // 矮石牆：沿每段外側（第 0 段是前面、其他段是跟下一層之間），兩層砌石；碰撞也照這條線
+    const stones = [], cores = [], wallLine = (k, x0, x1, zOf, yOf, open0, open1) => {
+      // 2026-11-11 第一版一疊一疊分開像石堆 → 中間一道連續的牆心（盒子），外面再貼一顆顆互相交疊的砌石、上面一排長條蓋頂石
+      for (let x = x0; x < x1; x += 0.5) {
+        if (x > open0 && x < open1) continue
+        const y = yOf(x), z = zOf(x), y2 = yOf(x + 0.5)
+        cores.push({ p: V(x + 0.25, (y + y2) / 2 + 0.33, z), yaw: 0, s: V(0.56, 0.72, 0.4), c: 0.88 })
+        for (let c = 0; c < 3; c++) for (let j = 0; j < 2; j++) {
+          const w = 0.34 + rnd() * 0.22, h = 0.2 + rnd() * 0.08
+          stones.push({ p: V(x + j * 0.27 + (c % 2) * 0.13, y + 0.12 + c * 0.22, z + (rnd() - 0.5) * 0.05), yaw: (rnd() - 0.5) * 0.2, s: V(w, h, 0.47), c: 0.78 + rnd() * 0.3 })
+        }
+        stones.push({ p: V(x + 0.25, (y + y2) / 2 + 0.74, z), yaw: (rnd() - 0.5) * 0.06, s: V(0.62, 0.09, 0.5), c: 0.95 + rnd() * 0.1 })   // 蓋頂石
+        addCollider(x + 0.25, z, 0.3, y + 0.95)
+      }
+    }
+    const OPEN = 2.6
+    for (let k = 0; k < M.NL; k++) {
+      // 第 k 段外側那條線：第 0 段在最前面；k ≥ 1 在第 k-1 段的內側（同一條線，牆的高度以第 k 段為準）
+      const zOf = (x) => YOSE.base(x) + M.D0 + M.W * k - M.W / 2 + 0.2
+      const turnX = k === 0 ? M.XB + 0.8 : (k % 2 === 1 ? M.XA - 0.8 : M.XB + 0.8)   // 這段的起點（從上一段轉上來的那頭）留開口
+      wallLine(k, XL + 0.3, XR - 0.3, zOf, (x) => Hk(k, x), turnX - OPEN, turnX + OPEN)
+    }
+    // 最上一層平台前緣（站在岩壁頂上往下看石階）：石牆，轉上來那頭留開口
+    wallLine(M.NL, XL + 0.3, XR - 0.3, (x) => YOSE.base(x) + M.D0 + M.W * (M.NL - 0.5) + 0.2, () => topYm, M.XB + 0.8 - OPEN, M.XB + 0.8 + OPEN)
+    {
+      const wallM = new THREE.MeshStandardMaterial({ color: 0xc9c4ba, roughness: 0.95 }), coreM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xa9a49b, roughness: 0.98 })
+      const stoneG = new THREE.DodecahedronGeometry(0.5, 1); { const pp = stoneG.attributes.position; for (let i = 0; i < pp.count; i++) { const k = 0.9 + 0.2 * Math.sin(i * 12.9898) ; pp.setXYZ(i, pp.getX(i) * k, Math.sign(pp.getY(i)) * Math.min(Math.abs(pp.getY(i)), 0.32), pp.getZ(i) * k) } stoneG.computeVertexNormals() }
+      for (const [list, geo, mat] of [[stones, stoneG, wallM], [cores, new THREE.BoxGeometry(1, 1, 1), coreM]]) {
+        const im = new THREE.InstancedMesh(geo, mat, list.length), cc = new THREE.Color()
+        list.forEach((b, i) => { im.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), b.s)); im.setColorAt(i, cc.setScalar(b.c)) })
+        im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
+      }
+    }
+    // 每一層內側的石壁：碰撞（站在第 k 段，往裡是第 k+1 段的石壁，高到第 k+1 段的踏面）
+    for (let k = 0; k < M.NL; k++) for (let x = XL + 0.3; x < XR - 0.3; x += 0.5) {
+      const top = k + 1 < M.NL ? Hk(k + 1, x) : topYm
+      const turnEnd = k % 2 === 0 ? M.XA - 0.8 : M.XB + 0.8   // 第 k 段的終點＝轉上第 k+1 段的地方：那裡不擋
+      if (top - Hk(k, x) > 0.45 && Math.abs(x - turnEnd) > 1.7) addCollider(x, YOSE.base(x) + M.D0 + M.W * k + M.W / 2 + 0.35, 0.3, top - 0.1)
+    }
+    // 兩端：不能從平台側面走出去（掉下去）
+    for (const xe of [XL - 0.6, XR + 0.6]) for (let k = 0; k <= M.NL; k++) for (const o of [-0.6, 0.6]) addCollider(xe, YOSE.base(xe) + M.D0 + M.W * k - 1.25 + 0.6 + o, 0.42, topYm + 1)   // 轉彎平台在 XA-0.8／XB+0.8，柱子放在外面 0.6 才不會擋到轉彎
+
+    // 岩壁頂上：觀景台（瀑布口東邊）欄杆＋後面不能走出去
+    const ironM = new THREE.MeshStandardMaterial({ color: 0x3b3d3f, roughness: 0.5, metalness: 0.6 }), posts = []
+    for (let x = 201.4; x < XL; x += 0.9) posts.push(V(x, YOSE.topY(x), YOSE.topFront(x) + 0.15))
+    for (let z = YOSE.topFront(XL - 0.2) + 0.15; z < YOSE.base(XL) + M.D0 + M.W * (M.NL - 0.5); z += 0.9) posts.push(V(XL - 0.2, YOSE.topY(XL), z))
+    for (let z = YOSE.topFront(201.4) + 0.15; z < YOSE.edge(201.4) - 2.2; z += 0.9) posts.push(V(201.3, YOSE.topY(201.3), z))   // 西邊（溪那側）
+    for (const p of posts) addCollider(p.x, p.z, 0.2, p.y + 1.1)
+    for (let x = 201.2; x < XR + 2; x += 1) addCollider(x, YOSE.edge(x) - 1.9, 0.35, topYm + 3)
     const pg = new THREE.CylinderGeometry(0.035, 0.035, 1.05, 6).translate(0, 0.52, 0), pm = new THREE.InstancedMesh(pg, ironM, posts.length)
     posts.forEach((p, i) => pm.setMatrixAt(i, m4.makeTranslation(p.x, p.y, p.z))); pm.castShadow = true; g.add(pm)
-    for (let i = 1; i < posts.length; i++) { const a = posts[i - 1], b = posts[i]; if (a.distanceTo(b) > 2.6) continue; const d = b.clone().sub(a), r = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, d.length(), 5), ironM); r.position.copy(a).add(b).multiplyScalar(0.5).setY((a.y + b.y) / 2 + 1.0); r.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); g.add(r) }
+    for (let i = 1; i < posts.length; i++) { const a = posts[i - 1], b = posts[i]; if (a.distanceTo(b) > 1.4) continue; const d = b.clone().sub(a), r = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, d.length(), 5), ironM); r.position.copy(a).add(b).multiplyScalar(0.5).setY((a.y + b.y) / 2 + 1.0); r.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); g.add(r) }
+
+    // 岩壁頂上的溪：從後面（玻璃前）流到瀑布口，越靠瀑布口越寬、越快；兩岸一顆顆花崗岩
+    {
+      const F2 = YOSE.fall, zLip = YOSE.base(F2.x) + 0.45, zSrc = YOSE.edge(F2.x) - 2.5, NS = 40, P = [], U = [], I = []
+      const cx = (t) => F2.x + 1.6 * Math.sin(t * 2.6 + 0.5) * (1 - t) - 0.8 * (1 - t)
+      for (let i = 0; i <= NS; i++) {
+        const t = i / NS, z = lerpN(zSrc, zLip, t), x = cx(t), w = lerpN(1.6, 3.0, t * t), y = YOSE.topY(x) + 0.07 - 0.02 * t
+        P.push(x - w, y, z, x + w, y, z); U.push(0, t * 5, 1, t * 5)
+        if (i) { const a = (i - 1) * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3) }
+      }
+      const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); sg.setIndex(I)
+      const creek = new THREE.Mesh(sg, fallMat({ spd: 0.55, a: 0.85, dark: 0.15 })); creek.renderOrder = 3; g.add(creek)
+      const bed = new THREE.Mesh(sg.clone(), new THREE.MeshStandardMaterial({ color: 0x3d4f4c, roughness: 0.3, metalness: 0.1 })); bed.position.y = -0.03; g.add(bed)
+      if (lib) {
+        const names = ['boulder', 'mrock_3', 'mrock_5', 'mrock_8'].filter((n) => lib[n])
+        const list = Object.fromEntries(names.map((n) => [n, []]))
+        for (let i = 0; i < 46; i++) {
+          const t = rnd(), z = lerpN(zSrc, zLip, t), w = lerpN(1.6, 3.0, t * t), sd = rnd() < 0.5 ? -1 : 1, x = cx(t) + sd * (w + 0.2 + rnd() * 1.4)
+          if (x > 201) continue   // 觀景台那邊不放（會擋路）
+          const n = names[Math.floor(rnd() * names.length)], k2 = n === 'boulder' ? 0.25 + rnd() * 0.3 : 0.5 + rnd() * 0.7
+          list[n].push({ p: V(x, YOSE.topY(x) - 0.15 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * 0.8, k2) })
+        }
+        for (const n of names) if (list[n].length) scatter(g, lib[n], list[n], { cast: true })
+      }
+    }
   }
 
   // ---------- 西黃松 ----------
@@ -218,10 +332,17 @@ export function buildYosemite(scene, { lib } = {}) {
     const x = X0 - 6 + rnd() * (X1 - X0 + 10), z = YOSE.base(x) - 3 - rnd() * 30
     if (!YOSE.inside(x, z) || domeRho(x, z) > 0.9) continue
     if (alpineTrailDist(x, z) < 3 || Math.hypot(x - F.x, z - F.z) < 14 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue
-    if (Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4 || YOSE.behind(x, z)) continue   // 營地裡、石階步道上不長
+    if (Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4 || YOSE.behind(x, z) || YOSE.inLake(x, z, 4) || alpineStreamDist(x, z) < 4) continue   // 營地裡、石階、湖、河上不長
     const y = alpineHeight(x, z), H = 18 + rnd() * 10
     if (H < 10) continue
     PINES.push({ x, z, y, H, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.05 })
+  }
+  // 2026-11-11 岩壁頂上也長樹（以前光禿禿）：西黃松、矮一點，離邊 4 公尺以上；觀景台、走道、溪讓開
+  for (let k = 0, n = 0; k < 3000 && n < 16; k++) {
+    const x = X0 + 8 + rnd() * (X1 - X0 - 16), zb = YOSE.base(x), ze = YOSE.edge(x) - 2, zf = (x > YOSE.mist.XA - 2 && x < YOSE.mist.XB + 2) ? YOSE.topFront(x) : zb + 3
+    const z = zf + 4 + rnd() * (ze - zf - 4)
+    if (ze - zf < 6 || Math.abs(x - YOSE.fall.x) < 6 || (x > 200 && x < YOSE.mist.XB + 3 && z < zf + 7) || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 6)) continue
+    PINES.push({ x, z, y: YOSE.topY(x) - 0.2, H: 9 + rnd() * 6, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.08 }); n++
   }
   if (PINES.length) {
     const pbark = barkMaterial('pine_bark', { normal: 1.5, color: [1.75, 1.15, 0.8] })   // 西黃松的樹皮：橘紅色的大鱗片，裂縫黑
