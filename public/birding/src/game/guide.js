@@ -9,6 +9,7 @@ import { BIRDS } from '../birdinfo.js'
 import { placeAnimal } from '../birds.js'
 import { VALUE } from './scoring.js'
 import { RARITY } from './judge.js'
+import { activityLabel } from './presence.js'
 import { t as tr, LANG, FONT_SANS, FONT_SERIF } from '../i18n.js'
 
 const PW = 1, PH = 1.32                 // 一頁的寬、高（書的單位）
@@ -166,9 +167,10 @@ function birdLeft(b, i, rec, unread) {
     y += 34
     ctx.strokeStyle = 'rgba(80,60,30,0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X + W, y); ctx.stroke()
     y += 52
-    ctx.font = `26px ${SANS}`; const kw = Math.max(130, ...[tr('棲地'), tr('稀有度'), tr('收購底價')].map((k) => ctx.measureText(k).width + 22))   // 標題欄寬：其他語言的字比較長
+    ctx.font = `26px ${SANS}`; const kw = Math.max(130, ...[tr('棲地'), tr('出沒時間'), tr('稀有度'), tr('收購底價')].map((k) => ctx.measureText(k).width + 22))   // 標題欄寬：其他語言的字比較長
     const row = (k, v) => { ctx.font = `26px ${SANS}`; ctx.fillStyle = MUTED; ctx.fillText(k, X, y); ctx.fillStyle = INK; ctx.font = `30px ${SANS}`; ctx.fillText(v, X + kw, y, W - kw); y += 48 }
     row(tr('棲地'), b.where)
+    row(tr('出沒時間'), tr(activityLabel(b.id)))   // 沒拍到也給：晚上才出來的鳥要讓玩家知道晚上來找
     row(tr('稀有度'), rec ? tr(RARITY[b.id] ?? '普通') : '？')
     row(tr('收購底價'), rec ? `$${(VALUE[b.id] ?? 50) * 3}` : '？')
     y += 18

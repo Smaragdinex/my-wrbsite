@@ -241,6 +241,7 @@ export function createFlight(world, player) {
       root.position.copy(s.home); s.mode = 'out'; s.t = 0
     }
     if (s.mode === 'away') {
+      if (u.leaving) return   // 時段到了飛走（presence.js）：不回來
       s.wait -= dt
       const far = world.camera.position.distanceTo(s.home) > u.esc.r * 1.8
       if (s.wait <= 0 && far) {
@@ -357,8 +358,42 @@ export function createFlight(world, player) {
     if (s.mode === 'out' || s.mode === 'back') return { obj: s.root, act: s.act }
     return { obj: m.obj, act: s.mode === 'flee' ? 'run' : m.acts?.name ?? '' }
   }
+  // 2026-11-10 時間到才飛來、時間到飛走（presence.js；PARK_PLAN.md 第三節）
+  // arrive：從 30～45 公尺外、離地 9～14 公尺的地方飛進來，降落在原本的位置（一群的話一起飛來）
+  const unitOf = (b) => units.find((x) => x.b === b)
+  function arrive(b) {
+    const u = unitOf(b)
+    if (!u?.esc.fly || (u.state !== 'home' && !u.leaving)) return false
+    u.leaving = false; u.state = 'away'; u.alarm = 0
+    let flock = null
+    for (const s of u.ms) {
+      const m = s.m
+      restoreWalker(s)
+      m.obj.updateMatrixWorld(true)
+      _box.setFromObject(m.obj)
+      _box.getCenter(s.home)
+      m.obj.getWorldDirection(_w); s.faceH = Math.atan2(_w.x, _w.z)
+      const a = Math.random() * Math.PI * 2
+      const out = outbound(s.home, V(Math.sin(a), 0, Math.cos(a)), flock)
+      flock ??= { F: out.v3 }
+      s.curve = inbound(out.v3, s.home, s.faceH); s.len = s.curve.getLength(); s.dist = 0; s.t = 0
+      s.curve.getTangentAt(0, _v); s.head = Math.atan2(_v.x, _v.z)
+      s.mode = 'back'; m.obj.visible = false; s.root.visible = true
+      s.root.position.copy(out.v3)
+    }
+    return true
+  }
+  // depart：照驚飛的方式飛走，但飛遠之後不回來；gone＝全部都飛走了
+  function depart(b) {
+    const u = unitOf(b)
+    if (!u?.esc.fly || u.state !== 'home') return false
+    u.leaving = true; flush(u, 0)
+    return true
+  }
+  const gone = (b) => { const u = unitOf(b); return !u || u.ms.every((s) => s.mode === 'away') }
+  const canFly = (b) => !!unitOf(b)?.esc.fly
   window.__flight = { units, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
   // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
   const snap = () => { last.copy(world.camera.position); speed = 0 }
-  return { tick, units, shotOf, snap, get speed() { return speed } }
+  return { tick, units, shotOf, snap, arrive, depart, gone, canFly, get speed() { return speed } }
 }

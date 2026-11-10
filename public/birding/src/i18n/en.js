@@ -1,5 +1,13 @@
 // English（自動產生：key 是程式裡的中文原文）
 export const UI = {
+ "出沒時間": "Active",
+ "清晨到白天": "Dawn to day",
+ "晨昏": "Dawn & dusk",
+ "夜間": "Night",
+ "黃昏到夜間": "Dusk to night",
+ "偶爾過境（上午）": "Passing visitor (mornings)",
+ "偶爾過境（白天）": "Passing visitor (daytime)",
+ "聽到翅膀聲，好像有鳥飛過來了": "You hear wingbeats — a bird is flying in",
  "100–400mm 望遠變焦": "100–400mm telephoto zoom",
  "150–600mm 超望遠": "150–600mm super-telephoto",
  "18–55mm 標準變焦": "18–55mm standard zoom",
