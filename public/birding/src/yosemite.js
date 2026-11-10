@@ -211,7 +211,7 @@ export function buildYosemite(scene, { lib } = {}) {
       fm.scale.set(sc, 1, sc * 0.6); fm.position.set(F.x, poolY + 0.02 + k * 0.01, fz - 3.2); fm.userData = { sc, k }; fm.renderOrder = 2; g.add(fm); foams.push(fm)
     }
     // 水霧：大片、慢慢飄、有的往步道那邊飄過來
-    const mistT = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c) })()
+    const mistT = mistTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c) })()
     for (let k = 0; k < 26; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.4 })); const p0 = V(F.x + (rnd() - 0.5) * 11, poolY + 0.6 + rnd() * 9, fz - 2.8 - rnd() * 4); sp.position.copy(p0); sp.scale.setScalar(4 + rnd() * 6); sp.userData = { ph: rnd() * TAU, p0 }; sp.renderOrder = 6; g.add(sp); mist.push(sp) }
     // 水花：落點往上往外噴的小水滴（加色、會飄散）
     const NS = 500, sp = new Float32Array(NS * 3), sv = []
@@ -236,10 +236,13 @@ export function buildYosemite(scene, { lib } = {}) {
     // 2026-11-10 ChatGPT QA：石階右半邊一條條閃的條紋＝這片石壁在兩層之間轉折的那條斜面（照坡道高度 Hk）從踏板中間穿出來（踏板是一階一階的，斜面忽上忽下）。
     // 轉折點壓低 0.25 公尺：斜面永遠藏在踏板底下
     const DROP = 0.25
+    // 第二輪（ChatGPT：上段岩壁頂一排直條紋仍在）：轉折以前是硬切（高度網格 0.12 公尺一排，斜的轉折線切成鋸齒）→ 改成 0.36 公尺內平滑過渡，鋸齒變成一道緩的岩階
+    const B = 0.18
     const faceZ = (x, y) => {
-      if (y <= Hk(0, x) - DROP) return YOSE.base(x) + M.D0 - M.W / 2
-      for (let k = 0; k < M.NL - 1; k++) if (y <= Hk(k + 1, x) - DROP) return dEdge(x, k)
-      return dEdge(x, M.NL - 1)
+      let z = YOSE.base(x) + M.D0 - M.W / 2
+      z += (dEdge(x, 0) - z) * ss(Hk(0, x) - DROP - B, Hk(0, x) - DROP + B, y)
+      for (let k = 0; k < M.NL - 1; k++) z += (dEdge(x, k + 1) - dEdge(x, k)) * ss(Hk(k + 1, x) - DROP - B, Hk(k + 1, x) - DROP + B, y)
+      return z
     }
     // 2026-11-11 使用者：平台兩端那條白白的直縫 → 不再用一片平的側面封口；平台在兩端外面 TAP 公尺內慢慢「收」回岩壁裡
     // （每個高度的前緣從平台的前緣，平滑地退回原本岩壁的表面），看起來是岩壁自己的一道突出的岩稜
@@ -258,14 +261,14 @@ export function buildYosemite(scene, { lib } = {}) {
         const y = yLo + (topYm + 0.05 - yLo) * j / NYF, z0 = faceAt(x, y)
         // 2026-11-10 ChatGPT QA：內側岩壁像一面平滑的水泥牆 → 大塊凹凸（每 1～3 公尺、深 10～35 公分）＋ 直的節理裂縫 ＋ 細碎起伏；一樣只往裡凹（不擋石階）
         const crack = 0.22 * Math.pow(Math.max(0, 1 - Math.abs(Math.sin(x * 1.9 + 1.3 * fbm2(x * 0.2, y * 0.15, 2)))), 6)
-        const bump = 0.55 * Math.max(0, fbm2(x * 0.45, y * 0.38, 3) - 0.18) + 0.1 * Math.abs(fbm2(x * 1.6, y * 1.3 + 4, 2)) + crack + 0.08 * Math.sin(x * 2.3 + y * 0.7)
+        const bump = 0.9 * Math.max(0, fbm2(x * 0.45, y * 0.38, 3) - 0.15) + 0.1 * Math.abs(fbm2(x * 1.6, y * 1.3 + 4, 2)) + crack + 0.08 * Math.sin(x * 2.3 + y * 0.7)
         const edge = x < XL || x > XR ? ss(0, 1, Math.min(Math.abs(x - XL), Math.abs(x - XR)) / TAP) : 0
         const z = z0 + Math.max(0, bump) * (1 - edge) + edge * 0.6 * (fbm2(x * 0.35, y * 0.3, 3) - 0.5)   // 收回岩壁那段：凹凸改成跟岩壁一樣的大塊起伏
         fp.push(x, y, z); fu.push(x * 0.22, y * 0.22)
         // 2026-11-10 ChatGPT QA：石壁一整片淺灰像水泥牆 → 底色壓暗、加往下流的水痕（垂直深色條）、每層踏面下緣一圈青苔、越低越髒
         let dTop = 9; for (let k = 0; k < M.NL; k++) { const hk = Hk(k, x); if (hk >= y) dTop = Math.min(dTop, hk - y) }
         const moss = 0.65 * ss(0.7, 0.05, dTop) * (0.6 + 0.4 * fbm2(x * 0.8, y * 0.8 + 3, 2))
-        const streak = Math.max(0, fbm2(x * 1.6 + 4, y * 0.05, 2) - 0.45) * 0.9, low = 0.12 * ss(st.h0 + 3, st.h0 - 1, y)
+        const streak = Math.max(0, fbm2(x * 1.6 + 4, y * 0.05, 2) - 0.35) * 1.1, low = 0.12 * ss(st.h0 + 3, st.h0 - 1, y)
         const kc = (0.66 + 0.24 * fbm2(x * 0.3, y * 0.3 + 9, 2)) * (1 - streak - low)
         fc.push(kc * (1 - 0.38 * moss), kc * (1 - 0.1 * moss), kc * (0.97 - 0.5 * moss))
       }
@@ -298,7 +301,11 @@ export function buildYosemite(scene, { lib } = {}) {
         .replace('#include <map_fragment>', `
           vec3 tpB = pow(abs(normalize(vTpN)), vec3(5.0)); tpB /= (tpB.x + tpB.y + tpB.z + 1e-4);
           vec4 tpC = texture2D(map, vTpW.zy * 0.45) * tpB.x + texture2D(map, vTpW.xz * 0.45) * tpB.y + texture2D(map, vTpW.xy * 0.45) * tpB.z;
-          diffuseColor *= mix(vec4(0.8), tpC, 0.7);`)
+          diffuseColor *= mix(vec4(0.8), tpC, 0.7);
+          // 越靠瀑布越濕（ChatGPT：濕的花崗岩暗 10～25%、粗糙度 0.35～0.55）
+          float wet = smoothstep(30.0, 8.0, distance(vTpW.xz, vec2(${F.x.toFixed(1)}, ${F.z.toFixed(1)})));
+          diffuseColor.rgb *= 1.0 - 0.24 * wet;`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor *= 1.0 - 0.5 * wet;')
     }
     stepM.customProgramCacheKey = () => 'stepTriplanar'
     const steps = []
@@ -342,7 +349,26 @@ export function buildYosemite(scene, { lib } = {}) {
         eg.computeVertexNormals(); slabGeo.push(eg)
       }
       const lists = Array.from({ length: NV }, () => [])
+      // 2026-11-10 ChatGPT QA 圖 4：轉彎處兩層的最後幾階和轉上去那段的台階疊在一起 → 轉彎處（路徑在 x 不變、往 +z 走的那段）兩端的整段寬度
+      // 拿掉沿著層走的台階，改鋪一塊獨立的石板平台（2～4 塊不規則大石板），高度＝轉彎起點／終點那一階
+      const turns = []
+      for (let i = 1; i < st.pts.length; i++) {
+        const [ax, az] = st.pts[i - 1], [bx, bz] = st.pts[i]
+        if (Math.abs(bx - ax) < 0.05 && Math.abs(bz - az) > 2) turns.push({ x: ax, za: Math.min(az, bz), zb: Math.max(az, bz), sa: st.S[i - 1], sb: st.S[i] })
+      }
+      const HALF = (M.W - 0.45) / 2, stepTop = (s) => Math.floor(st.h(s) / 0.2) * 0.2 + 0.2
+      const inTurn = (b) => Math.abs(Math.sin(b.yaw)) > 0.7 && turns.some((t) => Math.abs(b.p.x - t.x) < HALF + 0.15 && b.p.z > t.za - HALF - 0.6 && b.p.z < t.zb + HALF + 0.6)
+      for (const t of turns) {
+        for (const [z0, z1, top] of [[t.za - HALF - 0.4, t.za, stepTop(t.sa)], [t.zb, t.zb + HALF - 0.4 + 0.4, stepTop(t.sb)]]) {
+          const n = 2 + Math.floor(rnd() * 3), under = Math.max(0.7, Math.min(1.6, top - alpineHeight(t.x, (z0 + z1) / 2) + 0.5))   // 第二輪：至少 0.7 公尺厚，不會懸空
+          for (let j = 0; j < n; j++) {
+            const u0 = j / n, u1 = (j + 1) / n, xa = t.x - HALF - 0.1 + (u0 + (j ? rr(-0.05, 0.05) : 0)) * (2 * HALF + 0.2), xb = t.x - HALF - 0.1 + u1 * (2 * HALF + 0.2)
+            lists[Math.floor(rnd() * NV)].push({ p: V((xa + xb) / 2, top - Math.max(0.2, under) / 2 + rr(-0.01, 0.01), (z0 + z1) / 2), yaw: Math.PI / 2 + rr(-0.03, 0.03), s: V(z1 - z0 + 0.05, under, xb - xa + 0.01), c: rr(0.92, 1.05) })   // 石板之間不留縫（以前 3 公分縫看下去是黑的）
+          }
+        }
+      }
       for (const b of steps) {
+        if (inTurn(b)) continue
         const r = rnd(), n = r < 0.55 ? 1 : r < 0.9 ? 2 : 3
         // 寬度方向（盒子的 x）切幾塊，切點亂一點；往內側（+z，靠岩壁）多 0.1 公尺嵌進牆裡
         const W = b.s.x + 0.1, cuts = n === 1 ? [0, 1] : n === 2 ? [0, rr(0.35, 0.65), 1] : [0, rr(0.25, 0.4), rr(0.6, 0.75), 1]
@@ -387,10 +413,41 @@ export function buildYosemite(scene, { lib } = {}) {
     }
     // 最上一層平台前緣（站在岩壁頂上往下看石階）：石牆，轉上來那頭留開口
     wallLine(M.NL, XL + 0.3, XR - 0.3, (x) => YOSE.base(x) + M.D0 + M.W * (M.NL - 0.5) + 0.2, () => topYm, M.XB + 0.8 - OPEN, M.XB + 0.8 + OPEN)
+    // 2026-11-10 ChatGPT：高處外側（落差大的第 3 層以上）石牆上加深灰色鐵管欄杆：離踏面 1.05 公尺、柱距 1.8 公尺、上下兩根橫管；轉彎開口不裝
+    {
+      const parts = [], post = new THREE.CylinderGeometry(0.025, 0.025, 1, 6), bar = new THREE.CylinderGeometry(0.02, 0.02, 1, 6).rotateZ(Math.PI / 2)
+      for (let k = 2; k < M.NL; k++) {
+        const zOf = (x) => YOSE.base(x) + M.D0 + M.W * k - M.W / 2 + 0.2
+        const turnX = k % 2 === 1 ? M.XA - 0.8 : M.XB + 0.8
+        let prev = null
+        for (let x = M.XA - 0.6; x <= M.XB + 0.6; x += 1.8) {
+          if (Math.abs(x - turnX) < OPEN + 0.4) { prev = null; continue }
+          const y0 = Hk(k, x), z = zOf(x), top = y0 + 1.05, wallTop = y0 + 0.78
+          parts.push(post.clone().scale(1, top - wallTop + 0.05, 1).translate(x, (top + wallTop) / 2, z))
+          if (prev) for (const h of [0, -0.38]) {
+            const a = V(prev.x, prev.top + h, prev.z), b = V(x, top + h, z), len = a.distanceTo(b)
+            parts.push(bar.clone().scale(len, 1, 1).applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.atan2(b.y - a.y, b.x - a.x))).translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2))
+          }
+          prev = { x, top, z }
+        }
+      }
+      if (parts.length) { const m = new THREE.Mesh(mergeGeometries(parts.map((q) => q.index ? q.toNonIndexed() : q)), new THREE.MeshStandardMaterial({ color: 0x3b3d3f, roughness: 0.45, metalness: 0.65 })); m.castShadow = true; g.add(m) }
+    }
+    // 石階上的水霧（ChatGPT：照離瀑布的距離，越近越濃，不要整條一樣）：離瀑布 25 公尺內的台階上方飄幾團
+    {
+      const near = steps.filter((b) => Math.hypot(b.p.x - F.x, b.p.z - F.z) < 25)
+      for (let k = 0; k < Math.min(18, near.length); k++) {
+        const b = near[Math.floor(rnd() * near.length)], d = Math.hypot(b.p.x - F.x, b.p.z - F.z)
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistTex, transparent: true, depthWrite: false, opacity: 0.2 }))
+        const p0 = V(b.p.x + (rnd() - 0.5) * 2, b.p.y + b.s.y / 2 + 0.6 + rnd() * 2.2, b.p.z + (rnd() - 0.5) * 1.5)
+        sp.position.copy(p0); sp.scale.setScalar(3 + rnd() * 3); sp.userData = { ph: rnd() * TAU, p0, op: 0.35 + 0.5 * (1 - d / 25) }; sp.renderOrder = 6; g.add(sp); mist.push(sp)
+      }
+    }
     {
       // 2026-11-10 ChatGPT QA：牆心盒子貼整張花崗岩圖 → 圖上的白色晶斑被放大成一個個白色「鳥形」；牆心改素色、砌石壓暗一點
-      const wallM = new THREE.MeshStandardMaterial({ color: 0xaaa59b, roughness: 0.95 }), coreM = new THREE.MeshStandardMaterial({ color: 0x77736c, roughness: 0.98 })
-      const stoneG = new THREE.DodecahedronGeometry(0.5, 1); { const pp = stoneG.attributes.position; for (let i = 0; i < pp.count; i++) { const k = 0.9 + 0.2 * Math.sin(i * 12.9898) ; pp.setXYZ(i, pp.getX(i) * k, Math.sign(pp.getY(i)) * Math.min(Math.abs(pp.getY(i)), 0.32), pp.getZ(i) * k) } stoneG.computeVertexNormals() }
+      const wallM = new THREE.MeshStandardMaterial({ color: 0xaaa59b, roughness: 0.95 }), coreM = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.98 })
+      // 第二輪（ChatGPT：石牆像一堆碎紙片、白色尖破面）：壓扁的十二面體切出很多細長三角形 → 改成低面數的圓石（球面＋輕微凹凸），封閉、沒有尖片
+      const stoneG = new THREE.SphereGeometry(0.5, 9, 6); { const pp = stoneG.attributes.position; for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i), k = 0.92 + 0.1 * Math.sin(x * 9.1 + y * 5.3 + z * 7.7); pp.setXYZ(i, x * k, Math.sign(y) * Math.min(Math.abs(y) * k, 0.36), z * k) } stoneG.computeVertexNormals() }
       for (const [list, geo, mat] of [[stones, stoneG, wallM], [cores, new THREE.BoxGeometry(1, 1, 1), coreM]]) {
         const im = new THREE.InstancedMesh(geo, mat, list.length), cc = new THREE.Color()
         list.forEach((b, i) => { im.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), b.s)); im.setColorAt(i, cc.setScalar(b.c)) })
@@ -600,11 +657,12 @@ export function buildYosemite(scene, { lib } = {}) {
   function tick(t) {
     const dt = Math.min(0.1, Math.max(0, t - lastT)); lastT = t
     uT.value = t
-    for (const sp of mist) { const u = sp.userData; sp.material.opacity = 0.28 + 0.16 * Math.sin(t * 0.6 + u.ph); sp.position.set(u.p0.x + Math.sin(t * 0.13 + u.ph) * 1.5, u.p0.y + Math.sin(t * 0.21 + u.ph) * 0.8, u.p0.z - (0.5 + 0.5 * Math.sin(t * 0.09 + u.ph)) * 2.5) }
+    for (const sp of mist) { const u = sp.userData; sp.material.opacity = (u.op ?? 1) * (0.28 + 0.16 * Math.sin(t * 0.6 + u.ph)); sp.position.set(u.p0.x + Math.sin(t * 0.13 + u.ph) * 1.5, u.p0.y + Math.sin(t * 0.21 + u.ph) * 0.8, u.p0.z - (0.5 + 0.5 * Math.sin(t * 0.09 + u.ph)) * 2.5) }
     for (const f of foams) { const k = (t * (f.userData.k ? 0.35 : 0.22) + f.userData.k * 0.5) % 1; f.rotation.y = t * (f.userData.k ? -0.05 : 0.03); f.material.opacity = 0.85 * (1 - k * 0.6) }
     if (sprayU && dt > 0) sprayU(dt)
   }
   return { group: g, tick, pines: PINES }
 }
 const mist = [], foams = []
+let mistTex = null
 let sprayU = null
