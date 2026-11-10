@@ -554,7 +554,7 @@ export const BIRDS = {
  },
  "thrush": {
   "name": "Taiwan Whistling Thrush",
-  "where": "Forest Stream",
+  "where": "Stream Bank Above the Stone Bridge, Where the Waterfall Lake Flows Out",
   "intro": "Found only in Taiwan. Deep blue-black all over, flashing a purplish-blue metallic sheen in the light. It hops along stream rocks and forest trails looking for bugs, and when it stops it slowly fans its tail open and closed.",
   "facts": [
    "Its call is a long, shrill \"zeee\" like metal scraping, heard far down the valley.",
