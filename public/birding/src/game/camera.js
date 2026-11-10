@@ -311,6 +311,7 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     // 測光：update 每 0.25 秒量一次，按快門直接用最近那次（以前這裡再量一次：多畫一張圖＋讀回，約 20～50 毫秒）
     const s = now()
     sfx.shutter(s.t, { fast: body().fps >= 15 })
+    window.gtag?.('event', 'photo_taken')
     const sc = photoCam()
     const focusDist = st.locked ? st.focus : st.aimDist * (0.6 + Math.random() * 0.8)   // 還沒對到焦就按：焦點亂跑
     const found = measurePhoto(world, sc, { focusDist, dofTol: dofTol(s.N, st.aimDist) })

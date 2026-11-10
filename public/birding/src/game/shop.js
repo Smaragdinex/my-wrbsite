@@ -39,6 +39,7 @@ export function createShop({ state, photos, comm, judge, onChange, onClose, onVi
     p.sold = true; p.soldFor = r.price + bonus; p.judge = r.comment
     if (c) { p.comm = { cond: comm.condText(c), reward: bonus, kind: c.kind }; comm.complete(c) }
     state.money += r.price + bonus; state.sold++; state.earned += r.price + bonus
+    window.gtag?.('event', 'photo_sold', { bird: p.subject?.id, score: p.score, price: r.price + bonus, commission: !!c })
     return { price: r.price, bonus }
   }
   function render() {
@@ -69,6 +70,7 @@ export function createShop({ state, photos, comm, judge, onChange, onClose, onVi
       const [k, id] = t.dataset.buy.split(':'), it = (k === 'body' ? BODIES : LENSES).find((x) => x.id === id)
       if (state.money < it.price) return
       state.money -= it.price; state.owned.push(id)
+      window.gtag?.('event', 'gear_bought', { item: id })
       if (k === 'body') state.bodyId = id; else state.lensId = id
       onChange(); return render()
     }

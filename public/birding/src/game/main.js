@@ -206,6 +206,7 @@ world.render()
 setLoad(1, tr('好了！'))
 await new Promise((r) => setTimeout(r, 250))
 loadingEl.classList.add('done')
+window.gtag?.('event', 'world_loaded', { load_sec: Math.round((performance.now()) / 1000), phone: !!PHONE })
 
 // 老闆的 AI（本地 LLM）：背景下載，好了之前用寫好的評語
 // 老闆的 AI（WebLLM）：桌機瀏覽器有 WebGPU 就在背景載入；手機、沒有 WebGPU、或網址加 ?ai=0 就用寫好的評語
