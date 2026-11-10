@@ -12,6 +12,7 @@ import { fbm3, mulberry32 } from './noise.js'
 import { dayLight, duskLight, weatherU, wetify } from './structures.js'
 import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
+import { graniteMaterial } from './yosemite.js'
 import { lodRegister } from './lod.js'
 import * as T from './textures.js'
 
@@ -373,6 +374,52 @@ export function buildOutside(renderer = null) {
     const snowMtn = new THREE.Mesh(geo, snowMat)
     snowMtn.name = 'snowMountains'; snowMtn.frustumCulled = false; snowMtn.renderOrder = -1
     g.add(snowMtn)
+  }
+
+  /* ---------- 花崗岩圓頂（邊界外、不能走） ---------- */
+  // 2026-11-10 使用者：瀑布頂要像優勝美地高地（Tenaya Lake 那種冰河磨光的花崗岩圓頂）；ChatGPT P0：北邊邊界外兩座純遠景圓頂，
+  // 瀑布頂往後看不再是空的。A 在瀑布頂正北（155 m）；B ChatGPT 原本放東北，會擋住雪山 → 改到西北（120 m）。
+  // 形狀：非對稱橢圓圓頂（朝公園那面比較陡），大片光滑岩板＋幾道節理岩溝、黑色水痕；山腳一圈深綠針葉林色；顏色照 ChatGPT 的 linear 花崗岩
+  {
+    const ss = smoothstep
+    const domes = [{ x: 240, z: 222, rx: 82, rz: 58, H: 100, y0: 6, seed: 3 }, { x: 148, z: 212, rx: 60, rz: 44, H: 80, y0: 6, seed: 9 }]   // 第二版離瀑布頂太近（山腳離平台後緣 16 m，整面壓過來）→ 往北推 35～40 m   // 第一版 150／112 m、比較窄：像兩顆蛋 → 矮一點、寬一點
+    const P = [], C = [], I = [], c = new THREE.Color()
+    const NA = 72, NR = 28
+    for (const D of domes) {
+      const base = P.length / 3
+      for (let j = 0; j <= NR; j++) for (let i = 0; i <= NA; i++) {
+        const a = i / NA * TAU, r = j / NR * 1.3, ca = Math.cos(a), sa = Math.sin(a)
+        const rz = D.rz * (sa < 0 ? 0.72 : 1)   // 朝公園（-z、南）那面陡
+        const x = D.x + ca * r * D.rx, z = D.z + sa * r * rz
+        const n = fbm3(x * 0.03 + D.seed, 2.1, z * 0.03, 3) - 0.5, n2 = fbm3(x * 0.09, 5.5 + D.seed, z * 0.09, 2) - 0.5
+        let h = r <= 1 ? D.H * Math.sqrt(Math.max(0, 1 - Math.pow(r, 1.8))) : -10 * (r - 1) / 0.3   // 寬的圓頂：頂上圓、邊上陡（優勝美地的 dome）
+        // 剝落的岩片（同心的一階一階）、節理岩溝（放射狀幾道）
+        const sheet = 3.2 * Math.max(0, Math.sin(r * 16 + n * 4)) * (1 - r * 0.8)
+        const joint = -4.5 * Math.pow(Math.abs(Math.sin(a * 6 + D.seed + n * 1.5)), 10) * Math.min(1, r * 3) * (r <= 1 ? 1 : 0)
+        h += (r <= 1 ? 8 * n + 2.5 * n2 - sheet + joint : 0)
+        P.push(x, D.y0 + h, z)
+        // 顏色：亮的米灰花崗岩，大尺度 ±10%；陰面（北、-x）偏冷；黑色水痕順著坡往下；岩溝深；山腳針葉林
+        const warm = 0.5 + 0.5 * Math.sin(a + 0.6)
+        c.setRGB(0.48, 0.46, 0.42).lerp(new THREE.Color(0.35, 0.38, 0.39), 0.5 * (1 - warm)).lerp(new THREE.Color(0.52, 0.47, 0.39), 0.35 * warm).multiplyScalar(0.9 + 0.2 * (n + 0.5))
+        const streak = Math.max(0, fbm3(Math.cos(a) * 14 + D.seed, 1.3, Math.sin(a) * 14, 3) - 0.5) * 2.8 * (r > 0.25 ? 1 : 0)
+        c.lerp(new THREE.Color(0.1, 0.105, 0.1), Math.min(0.85, streak * 1.3 + (joint < -0.4 ? 0.55 : 0)))
+        const forest = Math.max(ss(0.84, 0.97, r) * ss(0.35, 0.6, n2 + 0.5), (joint < -1.5 ? 0.7 : 0) * ss(0.45, 0.7, r))   // 樹只在山腳和岩溝裡（第二版整片偏綠灰）   // 山腳一圈林子＋岩溝裡、零星岩縫的樹群
+        c.lerp(new THREE.Color(0.035, 0.06, 0.035), Math.max(forest, ss(0.95, 1.02, r)))
+        C.push(c.r, c.g, c.b)
+      }
+      for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) { const a = base + j * (NA + 1) + i, b = a + 1, cc = a + NA + 1, d = cc + 1; I.push(a, cc, b, b, cc, d) }
+    }
+    // 三角形朝外：拿圓頂頂點附近第一個三角形檢查，朝下就全部翻過來
+    { const v = (k) => new THREE.Vector3(P[k * 3], P[k * 3 + 1], P[k * 3 + 2]), t0 = (NA + 1) * 2 + 3, n = v(I[t0 * 3 + 1]).sub(v(I[t0 * 3])).cross(v(I[t0 * 3 + 2]).sub(v(I[t0 * 3]))); if (n.y < 0) for (let k = 0; k < I.length; k += 3) { const t = I[k + 1]; I[k + 1] = I[k + 2]; I[k + 2] = t } }
+    const dg = new THREE.BufferGeometry()
+    dg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); dg.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); dg.setIndex(I); dg.computeVertexNormals()
+    // 場景的霧在 100 多公尺外會把顏色洗掉一半（第三版整座山一片淡灰、看不到水痕和林子）→ 不吃場景霧，自己在頂點色裡混一點點天色
+    // 花崗岩貼圖本身會再壓暗一半（岩壁的頂點色都在 1 左右）→ 頂點色 ×2（第四版整座山變黑灰）；再混一點點天色當空氣透視
+    { const C2 = dg.attributes.color.array; for (let k = 0; k < C2.length; k += 3) { C2[k] = Math.min(1, C2[k] * 2.0) * 0.86 + 0.62 * 0.14; C2[k + 1] = Math.min(1, C2[k + 1] * 2.0) * 0.86 + 0.7 * 0.14; C2[k + 2] = Math.min(1, C2[k + 2] * 2.0) * 0.86 + 0.8 * 0.14 } }
+    dg.attributes.color.needsUpdate = true
+    const domeM = new THREE.Mesh(dg, graniteMaterial({ fog: false, scale: 0.08 }))   // 跟瀑布岩壁同一套花崗岩貼圖（第三版沒貼圖，像塑膠）
+    domeM.name = 'graniteDomes'; domeM.receiveShadow = false; domeM.castShadow = false
+    g.add(domeM)
   }
   return g
 }

@@ -30,6 +30,22 @@ function graniteTex() {
 }
 
 const SHELTER = { x: 222, z: 99.5 }   // 岩壁頂上的涼亭
+// 2026-11-10 同一套 triplanar 花崗岩（照世界座標三向投影）給邊界外的花崗岩圓頂用（outside.js）；scale：貼圖密度（遠的大一點）
+export function graniteMaterial({ fog = true, scale = 0.3 } = {}) {
+  const m = new THREE.MeshStandardMaterial({ map: graniteTex(), vertexColors: true, roughness: 0.86, fog })
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTpW; varying vec3 vTpN;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvTpW = (modelMatrix * vec4(transformed, 1.0)).xyz; vTpN = normalize(mat3(modelMatrix) * objectNormal);')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTpW; varying vec3 vTpN;')
+      .replace('#include <map_fragment>', `
+        vec3 tpB = pow(abs(normalize(vTpN)), vec3(5.0)); tpB /= (tpB.x + tpB.y + tpB.z + 1e-4);
+        vec4 tpC = texture2D(map, vTpW.zy * ${scale.toFixed(3)}) * tpB.x + texture2D(map, vTpW.xz * ${scale.toFixed(3)}) * tpB.y + texture2D(map, vTpW.xy * ${scale.toFixed(3)}) * tpB.z;
+        vec4 tpL = texture2D(map, vTpW.zy * 0.02 + 0.37) * tpB.x + texture2D(map, vTpW.xz * 0.02 + 0.61) * tpB.y + texture2D(map, vTpW.xy * 0.02 + 0.13) * tpB.z;
+        diffuseColor *= mix(tpC, tpC * (0.7 + 0.6 * tpL), 0.7);`)
+  }
+  m.customProgramCacheKey = () => 'graniteTp' + scale + fog
+  return m
+}
 export function buildYosemite(scene, { lib } = {}) {
   const M0 = YOSE.mist
   const g = new THREE.Group(); g.name = 'yosemite'; scene.add(g)
@@ -38,7 +54,7 @@ export function buildYosemite(scene, { lib } = {}) {
 
   // ---------- 岩壁 ----------
   // 每一欄（沿 x）一個斷面：牆腳在 YOSE.base(x)，往上幾乎垂直（微微往後仰），頂上往後收到玻璃邊
-  const X0 = YOSE.x0, X1 = YOSE.x1, NX = Math.round((X1 - X0) / 0.5), FACE = 44, TOP = 6
+  const X0 = YOSE.x0, X1 = YOSE.x1, NX = Math.round((X1 - X0) / 0.5), FACE = 44, TOP = 14   // 頂面 6→14 排：才畫得出岩縫、磨光面（2026-11-10）
   const pos = [], col = [], uv = [], idx = []
   const cols = []
   for (let i = 0; i <= NX; i++) {
@@ -72,8 +88,16 @@ export function buildYosemite(scene, { lib } = {}) {
       const streak = Math.max(0, fbm2(px * 0.35, 7.1, 3) - 0.52) * 3.2 * ss(g0, g0 + Ht, py) * (ri > FACE ? 0.1 : 1)   // 頂面不畫縱向水痕（會變一條條）
       const pale = Math.max(0, fbm2(px * 0.06, py * 0.06 + 4, 3) - 0.55) * 1.6
       const wet = Math.exp(-(((px - YOSE.fall.x) / 4.2) ** 2)) * (0.55 + 0.45 * ss(g0, g0 + 3, py))   // 瀑布後面濕掉的黑色岩壁
-      const k = Math.max(0.3, (1 - streak * 0.75 + pale * 0.25) * (1 - 0.55 * wet))
-      col.push(k * (1 - streak * 0.05), k, k * (1 + streak * 0.02))
+      let k = Math.max(0.3, (1 - streak * 0.75 + pale * 0.25) * (1 - 0.55 * wet))
+      if (ri > FACE) {
+        // 2026-11-10 頂面（使用者給 Tenaya Lake 的照片、ChatGPT：不要像水泥）：亮一點的暖米灰花崗岩；冰河磨光的亮面一大塊一塊；
+        // 節理裂縫（兩組方向、細、深色）；高度不動（走路、溪、欄杆都不受影響）
+        const polish = Math.max(0, fbm2(px * 0.12 + 9, pz * 0.12, 3) - 0.5) * 1.4
+        const cr1 = Math.pow(1 - Math.abs(Math.sin(px * 0.55 + pz * 0.21 + 2.5 * fbm2(px * 0.05, pz * 0.05, 2))), 22)
+        const cr2 = Math.pow(1 - Math.abs(Math.sin(pz * 0.62 - px * 0.13 + 2.0 * fbm2(px * 0.06 + 4, pz * 0.06, 2))), 26)
+        k = (1.12 + polish * 0.25) * (1 - 0.45 * Math.max(cr1, cr2))
+        col.push(k * 1.04, k, k * 0.92)
+      } else col.push(k * (1 - streak * 0.05), k, k * (1 + streak * 0.02))
     }
   }
   const W = FACE + TOP + 1
