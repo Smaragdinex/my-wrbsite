@@ -155,8 +155,9 @@ function nearBird(avoid, x, z, r, w) {
   return false
 }
 // 地上的鳥：身邊 r 公尺、和鳥到鏡頭那條線 0.9 公尺內不長草（2026-11-09 草鴞前面一叢箭竹把整隻鳥擋掉）
+// b.clear：那隻鳥自己要更大一片空地（2026-11-10 湖前草地的環頸雉、小雲雀、棕扇尾鶯：箭竹清掉 5 公尺，換成草原）
 function groundClear(avoid, x, z, r) {
-  return nearBird(avoid.filter((b) => b.ground), x, z, r, 0.9)
+  return nearBird(avoid.filter((b) => b.ground), x, z, r, 0.9) || avoid.some((b) => b.clear && Math.hypot(x - b.x, z - b.z) < b.clear)
 }
 // 到吊橋中線的距離（吊橋那段不算步道，alpineTrailDist 量不到）
 function bridgeDist(x, z) {

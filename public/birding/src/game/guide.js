@@ -260,7 +260,7 @@ function makeDiorama(def) {
   const [x, z] = def.spot
   // 地上：只接影子的透明地面；水鳥再加一片淡淡的水
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30).rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ opacity: 0.32 }))
-  ground.position.set(x, def.perch === 'ground' ? 0 : -50, z); ground.receiveShadow = true
+  ground.position.set(x, def.perch === 'ground' || def.perch === 'stem' ? 0 : -50, z); ground.receiveShadow = true
   sc.add(ground)
   let pond = null
   if (water != null && def.perch === 'ground') {

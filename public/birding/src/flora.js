@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
   TAU, MTN, PATHS, RAMP, DOME, POOL, DECK, clamp, lerp,
   domeY, terrainHeight, pathClearAt, poolQ, mtnR, rampSample, rampHeights, rampInner, insideGarden, distToMtn,
-  colliders, addCollider,
+  colliders, addCollider, inAlpine, alpineHeight, ALP_POND,
 } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { addWind, windUniforms } from './wind.js'
@@ -697,23 +697,27 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     scene.traverse((o) => { if (o.isDirectionalLight) sun.copy(o.position).normalize() })
     for (const st of stops) {
       const d = st.bird?.def
-      if (!d || d.perch !== 'ground' || d.water != null) continue
-      const cx = d.spot[0], cz = d.spot[1], R = 6.5
+      // 2026-11-10 山區湖前草地的鳥（d.lawn：環頸雉、小雲雀、棕扇尾鶯）也鋪一塊：地面用山區高度，草長一點（草原，不是草坪）
+      const alp = !!d?.lawn && inAlpine(...d.spot)
+      if (!d || (d.perch !== 'ground' && !alp) || d.water != null) continue
+      const cx = d.spot[0], cz = d.spot[1], R = alp ? 8 : 6.5
+      const hAt = alp ? alpineHeight : terrainHeight
       const A = [], B = [], base = new THREE.Color(), c = new THREE.Color()
       for (let k = 0; k < 150000 && A.length / 4 < 70000; k++) {
         const r = R * Math.sqrt(rnd()), a = rnd() * TAU
         const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r
         if (rnd() > 1.15 - r / R) continue                                   // 中間密、外圍漸漸稀
-        if (pathClearAt(x, z) < 0.05 || poolQ(x, z) < 1.15 || !insideGarden(x, z, 0.97)) continue
+        if (alp ? (!inAlpine(x, z) || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 1) : (pathClearAt(x, z) < 0.05 || poolQ(x, z) < 1.15 || !insideGarden(x, z, 0.97))) continue
         const n = fbm2(x * 0.9, z * 0.9)
-        base.setHSL(0.24 + n * 0.04 + (rnd() - 0.5) * 0.03, 0.5 + n * 0.1, 0.24 + rnd() * 0.06)
+        base.setHSL(0.24 + n * 0.04 + (rnd() - 0.5) * 0.03, 0.5 + n * 0.1, (alp ? 0.31 : 0.24) + rnd() * 0.06)
         c.copy(base)
         if (rnd() < 0.04) c.lerp(new THREE.Color(0.5, 0.46, 0.28), 0.4)   // 零星枯黃
-        A.push(x, terrainHeight(x, z) - 0.005, z, rnd() * TAU)
-        B.push(c.r, c.g, c.b, 0.03 + rnd() * 0.04 + Math.max(0, n) * 0.03)   // 3～10 公分：鳥腳陷進去一點，身體不會被蓋住
+        if (alp && rnd() < 0.18) c.lerp(new THREE.Color(0.55, 0.5, 0.3), 0.5)   // 草原多一點枯黃
+        A.push(x, hAt(x, z) - 0.005, z, rnd() * TAU)
+        B.push(c.r, c.g, c.b, alp ? 0.04 + rnd() * 0.06 + Math.max(0, n) * 0.04 : 0.03 + rnd() * 0.04 + Math.max(0, n) * 0.03)   // 3～10 公分：鳥腳陷進去一點，身體不會被蓋住
       }
       const m = bladeMesh(A, B, { width: [0.004, 0.004], sun, lawn: true })
-      m.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, terrainHeight(cx, cz), cz), R + 0.5)
+      m.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, hAt(cx, cz), cz), R + 0.5)
       m.frustumCulled = false
       scene.add(m)
       lodRegisterGrass(m, m.geometry.boundingSphere.center, R + 0.5)   // 草坪本來就是隨機順序，變稀也是均勻的

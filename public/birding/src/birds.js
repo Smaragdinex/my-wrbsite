@@ -3,7 +3,7 @@
 // 程式轉骨頭做走路、跳枝、覓食等動作。模型比真實尺寸放大（不放大在校園尺度下看不到）；+z 是前方、腳底在原點。
 // 這裡另外有停棲處（樹枝、樹幹、石頭），用 loft 放樣做。
 import * as THREE from 'three'
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
+import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
@@ -219,7 +219,8 @@ class Hopper {
   constructor(env, { hop = [0.15, 0.4], rest = [0.8, 3.5], dur = 0.26, span = [0.85, 1.35], blocked, fix, preT = 0.12, arc = [0.06, 0.3], apex = 0.5 } = {}) {   // span：身體往鏡頭（步道那側）轉多少（2026-11-09 使用者：要面對走道，以前 0.45～1.25 太多是側身）
     Object.assign(this, { env, hopR: hop, restR: rest, dur, span, blocked, fix, preT, arcP: arc, apex })   // preT 起跳前蹲多久、arc 跳多高（基本＋距離倍數）、apex 最高點在哪（0.5＝正中間）   // fix：永遠朝同一邊（啄木鳥在樹幹上一定頭朝上，往下是倒退）
     const { min, max } = env.branch
-    this.s = rnd(min + 0.2, max - 0.1); this.k = 1; this.y = 0; this.wait = rnd(...rest); this.landed = 9
+    // 很短的停點（草莖頂端）就站正中間
+    this.s = max - min >= 0.29 ? rnd(min + 0.2, max - 0.1) : (min + max) / 2; this.k = 1; this.y = 0; this.wait = rnd(...rest); this.landed = 9
     this.h = this.wantH = this.face(sgn())
   }
   face(dir) {
@@ -303,7 +304,7 @@ const BUILD = {
   goshawk, woodowl,
   mandarin, spotbill, partridge, nuthatch, finchbill, minivet, pitta, grassowl,
   liocichla, whitebrow, bullfinch, barwing, islandthrush, tit, rustylt, whitethroat, hwamei, styan, scimitar, fulvetta, bamboo, flowing, bushwarbler, cupwing, shortwing,
-  scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier, nutcracker, wbwood,
+  scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier, rnpheasant, skylark, cisticola, nutcracker, wbwood,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -325,7 +326,7 @@ export async function loadAnimalModels(extra = [], onProgress) {
   await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'nutcracker-rig', 'wbwood-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig'].map(load),
     // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
@@ -1473,7 +1474,9 @@ function harrier(env) {
 }
 function wbwood(env) {
   // 2026-11-10 大赤啄木：直立貼在神木樹幹上（sacredUpright），臉朝樹幹、偶爾左右挪一點；eat 動作＝往樹皮啄
-  return perchRigged(env, { name: 'wbwood-rig', k: 0.25, ...TRIPO, foot: 0.1, drop: 0.03, beat: 9, eat: true, cling: {},
+  // 2026-11-10 使用者：腳要平貼在樹上 → 換成 Tripo 直接生成「攀樹姿勢」的模型（wbwood2：身體直立、腳趾和尾羽末端抵在同一個垂直面），
+  // 不再用 clingPose 去掰站姿模型的腳。k 0.3（全長約 30 公分）；foot 0.44＝腳的高度（模型座標），腳趾在模型 x -0.19 → 離根 0.057，所以 sacredOff 0.057
+  return perchRigged(env, { name: 'wbwood2-rig', k: 0.3, ...TRIPO, foot: 0.44, drop: 0.01, beat: 9, eat: true,
     fly: null, hopper: { span: [Math.PI / 2, Math.PI / 2], hop: [0.04, 0.1], rest: [3, 7] }, acts: { idle: [3, 2, 4], call: [1, 1.5, 2.5], preen: [0.5, 1.5, 2.5], eat: [4, 2.5, 4] } })
 }
 function nutcracker(env) {
@@ -1481,8 +1484,105 @@ function nutcracker(env) {
   return perchRigged(outer(env, -1.0), { name: 'nutcracker-rig', k: 0.21, ...TRIPO, foot: 0.02, drop: 0.05, beat: 5, eat: true,
     hopper: { hop: [0.15, 0.4] } })
 }
+function rnpheasant(env) {
+  // 2026-11-10 環頸雉：湖前草地上慢慢走、低頭啄草籽；旁邊地上有一窩橄欖褐色的蛋（withNest：走路不會踩進巢）
+  return withNest(env, (avoid) => groundTripo(env, { name: 'rnpheasant-rig', H: 0.4, h0: 0.468, ...TRIPO, bob: 0.02,
+    walk: { radius: 1.1, speed: 0.15, avoid }, stride: 0.13, swingT: 0.3, lift: 0, knee: [0.8, 1.4], focusY: 0.25,
+    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.5, 3], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }), 'pheasant', 0.6)
+}
+function skylark(env) {
+  // 2026-11-10 小雲雀：在草地上走（雲雀用走的，不跳），頭冠偶爾豎起；巢是草根旁的小淺碗，三顆布滿褐斑的蛋
+  return withNest(env, (avoid) => groundTripo(env, { name: 'skylark-rig', H: 0.18, h0: 0.72, ...TRIPO, bob: 0.01,
+    walk: { radius: 0.8, speed: 0.13, avoid }, stride: 0.045, swingT: 0.11, lift: 0.012, knee: [0.3, 0.6], focusY: 0.1,
+    acts: { walk: [4, 99, 99], peck: [3, 0.7, 1.2], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } }), 'lark', 0.38)
+}
+const CISTI_K = 0.15 / 0.725, CISTI_FOOT = 0.01   // 站高 0.15（小鳥放大過，同山雀）；腳底在模型 y 0.01
+function cisticola(env) {
+  // 2026-11-10 棕扇尾鶯：抓在一根高草莖頂端（stem 停棲：草莖跟著風晃），不會沿枝跳；底下草叢裡有牠縫的囊狀巢
+  return perchRigged(env, { name: 'cisticola-rig', k: CISTI_K, ...TRIPO, foot: CISTI_FOOT, drop: 0.02, beat: 12,
+    hopper: { hop: [0.001, 0.003], rest: [3, 7] }, acts: { idle: [3, 2, 4], call: [2, 1, 2], preen: [1, 1.5, 2.5] } })
+}
 function fulvetta(env) { return endemicPerch('fulvetta-rig', 0.18 / 0.618, 9)(env) }
 function flowing(env) { return endemicPerch('flowing-rig', 0.17 / 0.572, 10)(env) }
+
+
+/* ---------- 鳥巢（2026-11-10 湖前草地：環頸雉、小雲雀的地面巢；棕扇尾鶯縫在草叢裡的囊狀巢） ---------- */
+const colorize = (geo, fn) => {
+  geo = geo.index ? geo.toNonIndexed() : geo
+  const p = geo.attributes.position, col = new Float32Array(p.count * 3), c = new THREE.Color()
+  for (let i = 0; i < p.count; i++) { fn(c, p.getX(i), p.getY(i), p.getZ(i), i); col.set([c.r, c.g, c.b], i * 3) }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.deleteAttribute('uv')
+  return geo
+}
+const STRAW = [0xb59a63, 0x9c814f, 0xc8b27c, 0x7d6a45]
+// 一叢草：n 片細長草葉（雙面），在 r 半徑內、高 h0～h1；skip(x,z)：那裡不長（讓出巢口、鏡頭方向）
+function grassTuft(n, r, h0, h1, skip) {
+  const blades = []
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, rr = r * Math.sqrt(Math.random()), h = h0 + Math.random() * (h1 - h0)
+    const x = Math.cos(a) * rr, z = Math.sin(a) * rr
+    if (skip?.(x, z)) continue
+    const b = new THREE.PlaneGeometry(0.012, h, 1, 5).translate(0, h / 2, 0), bp = b.attributes.position
+    const bend = (Math.random() * 0.5 + 0.15) * h
+    for (let k = 0; k < bp.count; k++) { const y = bp.getY(k) / h; bp.setX(k, bp.getX(k) * (1 - y * 0.85)); bp.setZ(k, bend * y * y) }
+    b.rotateY(-a + Math.PI / 2 + (Math.random() - 0.5)); b.translate(x, 0, z)
+    const hx = [0x7f8f45, 0x95a052, 0xa89f5e, 0x6f7d3c][i % 4]
+    blades.push(colorize(b, (c, _x, y) => c.setHex(hx).multiplyScalar(0.6 + 0.5 * Math.min(1, y / 0.4))))
+  }
+  const m = new THREE.Mesh(mergeGeometries(blades), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }))
+  m.castShadow = true; m.userData.noBake = true
+  return m
+}
+// 草編的碗：外圈一圈碗形＋幾十根沿著碗緣繞的乾草（看得出是一根一根編的），R＝碗口半徑
+function nestCup(R, depth) {
+  const prof = [[0.001, 0.004], [R * 0.45, 0.006], [R * 0.8, depth * 0.45], [R, depth], [R * 1.22, depth * 1.05], [R * 1.45, depth * 0.55], [R * 1.5, 0]].map(([x, y]) => new THREE.Vector2(x, y))
+  const parts = [colorize(new THREE.LatheGeometry(prof, 28), (c, x, y, z) => c.setHex(STRAW[(Math.abs(Math.floor(x * 913 + z * 571 + y * 377)) % 4)]))]
+  for (let i = 0; i < 90; i++) {
+    const a = Math.random() * Math.PI * 2, rr = R * (1.0 + Math.random() * 0.45), len = R * (0.7 + Math.random() * 0.9)
+    const g = new THREE.CylinderGeometry(R * 0.012, R * 0.012, len, 4, 1)
+    g.rotateZ(Math.PI / 2 + (Math.random() - 0.5) * 0.5); g.rotateY(-a + Math.PI / 2 + (Math.random() - 0.5) * 0.6)
+    g.translate(Math.cos(a) * rr, depth * (0.25 + Math.random() * 0.85) * (rr < R * 1.3 ? 1 : 0.6), Math.sin(a) * rr)
+    const hx = STRAW[i % 4]; parts.push(colorize(g, (c) => c.setHex(hx).multiplyScalar(0.85 + Math.random() * 0.3)))
+  }
+  const m = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }))
+  m.castShadow = m.receiveShadow = true
+  return m
+}
+// 一窩蛋：n 顆、長徑 L，speck：蛋殼上斑點的比例（小雲雀密密的褐斑；環頸雉素色橄欖褐）
+function eggClutch(n, L, base, spot, speck, R) {
+  const parts = []
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2 + Math.random() * 0.4, rr = n > 1 ? R * (n > 5 && i % 2 ? 0.28 : 0.55) : 0
+    const g = new THREE.SphereGeometry(1, 14, 10)
+    const pp = g.attributes.position
+    for (let k = 0; k < pp.count; k++) { const y = pp.getY(k); pp.setY(k, y * (y > 0 ? 1.12 : 0.92)) }   // 一頭尖一頭鈍
+    g.scale(L * 0.38, L * 0.5, L * 0.38); g.rotateZ(Math.PI / 2 - 0.15); g.rotateY(Math.random() * 6.3)
+    g.translate(Math.cos(a) * rr, L * 0.33, Math.sin(a) * rr)
+    parts.push(colorize(g, (c) => c.setHex(Math.random() < speck ? spot : base)))
+  }
+  const m = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45 }))
+  m.castShadow = true
+  return m
+}
+function groundNest(kind, tc) {
+  // tc：朝鏡頭的方向（巢座標）；草叢長在巢的後面（離鏡頭那側），蛋從前面看得到
+  // 大小跟著鳥：遊戲裡的小鳥放大過（小雲雀 ×1.5），巢也一起放大，不然從 4 公尺外只是一個小點
+  const g = new THREE.Group(), back = (x, z) => x * tc.x + z * tc.z > -0.02
+  if (kind === 'pheasant') { const R = 0.11; g.add(nestCup(R, 0.026), eggClutch(9, 0.048, 0xa29a6c, 0x8a8058, 0.12, R)); const t = grassTuft(26, 0.16, 0.18, 0.35, back); t.position.set(-tc.x * 0.2, 0, -tc.z * 0.2); g.add(t) }
+  else { const R = 0.075; g.add(nestCup(R, 0.018), eggClutch(3, 0.034, 0xe2dccb, 0x6e5236, 0.45, R)); const t = grassTuft(22, 0.1, 0.12, 0.26, back); t.position.set(-tc.x * 0.13, 0, -tc.z * 0.13); g.add(t) }
+  g.traverse((o) => { if (o.isMesh) o.userData.noBake = true })
+  return g
+}
+// 地上走的鳥＋旁邊一個巢：巢擺在鳥群座標 at（往鏡頭左前方），走路不會踩進巢裡
+function withNest(env, mk, kind, at = 0.55) {
+  const tc = env.toCam, sd = V(tc.z, 0, -tc.x), N = sd.multiplyScalar(at).addScaledVector(tc, at * 0.6)
+  const hit = (x, z) => Math.hypot(x - N.x, z - N.z) < 0.28
+  const b = mk((x, z, p) => { for (let k = 1; k <= 8; k++) if (hit(lerp(p.x, x, k / 8), lerp(p.y, z, k / 8))) return true; return false })
+  const nest = groundNest(kind, tc)
+  nest.position.set(N.x, env.groundAt ? env.groundAt(N.x, N.z) : 0, N.z)
+  b.extra = nest   // placeAnimal 另外掛上去（不能包進鳥的 obj：鳥被嚇飛時 obj 會藏起來，巢不能跟著消失）
+  return b
+}
 
 /* ---------- 停棲處 ---------- */
 const BARK = 0x6d5544
@@ -1668,7 +1768,8 @@ export function placeAnimal(def) {
       obj.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(tx, V(0, 1, 0), n0))
       obj.position.copy(n0).multiplyScalar(def.sacredOff ?? 0.05)
       env.toCam = V(0, 0, -1)
-      env.branch = { min: -0.15, max: 0.15, top: () => 0, z: () => 0, gap: (px, py) => py, side: () => 0 }
+      // gap 不給：腳是貼在垂直的樹皮上，不是踩在水平的枝上，不要用「腳底貼平」把整隻往上下推
+      env.branch = { min: -0.15, max: 0.15, top: () => 0, z: () => 0, side: () => 0 }
       target.set(x, 0, z); dist = 4.6; camH = -0.7
     } else {
     // 身體繞著樹幹方向側翻一點、側面朝鏡頭（茶腹鳾抓樹皮時常側著身子、頭往外抬），不然從步道只看得到藍灰色的背
@@ -1679,6 +1780,49 @@ export function placeAnimal(def) {
     target.set(x, 0, z)
     dist = 4.6; camH = -0.7
     }
+  } else if (def.perch === 'stem') {
+    // 2026-11-10 棕扇尾鶯：停在一根高草莖的頂端（草莖被牠壓彎，頂端一小段幾乎是平的，腳抓在那裡），整根草跟著風輕輕晃；
+    // 草莖底下是一叢草，草叢裡縫著牠的囊狀巢。st0：不動的草叢＋巢；st：會晃的草莖＋鳥（obj），以草莖底部為支點
+    const H = def.stemH ?? 0.9
+    const st0 = new THREE.Group(), st = new THREE.Group()
+    st0.rotation.y = Math.atan2(-side.z, side.x); g.add(st0); st0.add(st)
+    const lc = toCam.clone().applyAxisAngle(V(0, 1, 0), -st0.rotation.y)   // 草叢座標裡朝鏡頭的方向
+    const curve = new THREE.CatmullRomCurve3([V(0, 0, 0), V(0.02, H * 0.45, 0), V(0.05, H * 0.86, 0), V(0.08, H - 0.008, 0), V(0.12, H, 0), V(0.17, H - 0.012, 0), V(0.22, H - 0.05, 0), V(0.25, H - 0.11, 0)])
+    const SEG = 40, RAD = 6, tube = new THREE.TubeGeometry(curve, SEG, 0.0045, RAD, false), tp = tube.attributes.position, cp = V(), q = V()
+    for (let i = 0; i < tp.count; i++) {   // 底下粗、往上漸細
+      const ring = Math.floor(i / (RAD + 1)), u = ring / SEG
+      curve.getPointAt(u, cp); q.fromBufferAttribute(tp, i).sub(cp).multiplyScalar(lerp(1.5, 0.55, u)).add(cp); tp.setXYZ(i, q.x, q.y, q.z)
+    }
+    tube.computeVertexNormals()
+    const stalk = new THREE.Mesh(tube, mat(0xa89a62, 0.85)); stalk.castShadow = true
+    st.add(stalk)
+    // 草穗：草莖末端垂下的一串小穗
+    const ears = []
+    for (let i = 0; i < 14; i++) {
+      const u = 0.86 + i / 14 * 0.14, p = curve.getPointAt(u)
+      const e = new THREE.SphereGeometry(1, 5, 4); e.scale(0.004, 0.011, 0.004); e.rotateZ((Math.random() - 0.5) * 1.2); e.rotateX((Math.random() - 0.5) * 1.2)
+      e.translate(p.x + (Math.random() - 0.5) * 0.012, p.y - 0.008, p.z + (Math.random() - 0.5) * 0.012); ears.push(e)
+    }
+    const ear = new THREE.Mesh(mergeGeometries(ears), mat(0x9b875a, 0.9)); ear.castShadow = true; st.add(ear)
+    // 草叢：一圈細長的草葉（雙面），高 0.3～0.7 公尺
+    st0.add(grassTuft(120, 0.22, 0.35, 0.8, (x, z) => x * lc.x + z * lc.z > 0.05))   // 鏡頭那側留空，看得到巢
+    // 囊狀巢：梨形、用蛛絲把活的草葉縫在一起，入口在上面側邊（朝鏡頭）
+    const prof = []
+    for (let i = 0; i <= 12; i++) { const t = i / 12, y = t * 0.13; prof.push(new THREE.Vector2(0.004 + 0.042 * Math.sin(Math.PI * Math.pow(t, 0.8)) * (1 - 0.35 * t), y)) }
+    const pouch = new THREE.Mesh(colorize(new THREE.LatheGeometry(prof, 18), (c, x, y, z) => c.setHex(STRAW[Math.abs(Math.floor(y * 400 + Math.atan2(z, x) * 5)) % 4]).lerp(new THREE.Color(0xd8d8cc), Math.random() * 0.25)),
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }))
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.016, 14), mat(0x1a140c, 1))
+    hole.position.set(lc.x * 0.034, 0.1, lc.z * 0.034); hole.lookAt(lc.x, 0.1, lc.z); hole.rotateX(-0.35)
+    const nest = new THREE.Group(); nest.add(pouch, hole)
+    nest.position.set(lc.x * 0.1 - 0.03, 0.2, lc.z * 0.1); nest.rotation.z = 0.08
+    nest.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.userData.noBake = true } })
+    st0.add(nest)
+    obj.position.set(0.12, H + 0.004, 0); st.add(obj)
+    env.toCam = lc.clone()
+    env.branch = { min: -0.004, max: 0.004, lock: true, top: () => 0, z: () => 0, gap: (px, py) => py, side: () => 0 }
+    env.sway = (t) => { st.rotation.z = 0.035 * Math.sin(t * 1.3) + 0.015 * Math.sin(t * 3.1 + 1); st.rotation.x = 0.025 * Math.sin(t * 1.7 + 2) }
+    target.set(x, H * 0.8, z)
+    dist = 3.2; camH = 1.25
   } else if (def.perch === 'trunk') {
     const R = 0.42
     const trunk = stick(R * 0.95, R * 1.08, 8, BARK, [0, 8, 0], [0, 0, 0], 16)
@@ -1705,6 +1849,7 @@ export function placeAnimal(def) {
   target.y += gy
   const built = BUILD[def.id](env)
   obj.add(built.obj)
+  if (built.extra) obj.add(built.extra)
   // 動物本身不接收陰影（停在樹蔭下也要看得清楚），也不烘進地面
   built.obj.traverse((o) => { if (o.isMesh) { o.receiveShadow = !!o.userData.catcher; o.userData.noBake = true } })
 
@@ -1719,6 +1864,7 @@ export function placeAnimal(def) {
   g.updateMatrixWorld(true)
   obj.localToWorld(f0.set(0, built.focus.y, 0))
   const update = (t, dt, phone = false) => {
+    env.sway?.(t)
     built.update(t, dt)
     obj.updateMatrixWorld()
     obj.localToWorld(fw.copy(phone && built.lead ? built.lead : built.focus)).sub(f0)

@@ -435,7 +435,7 @@ const ALL = [
     ],
   },
   {
-    id: 'wbwood', spot: [231.5, -72.8], perch: 'sacred', sacredUpright: true, sacredOff: 0.05, sacredH: 4.2, sacredTurn: -1.0, dist: 6.5, lookY: 0.12,
+    id: 'wbwood', spot: [231.5, -72.8], perch: 'sacred', sacredUpright: true, sacredOff: 0.057, sacredH: 4.2, sacredTurn: -1.0, dist: 6.5, lookY: 0.12,
     name: "大赤啄木", sci: 'Dendrocopos leucotos insularis', where: "步道旁的神木樹幹上",
     intro: "台灣最大的啄木鳥之一，雄鳥頭頂紅色，臉頰白、一條黑色顎線；背黑、下背白，翅膀黑色帶一排排白色橫斑，肚子到尾下是漂亮的粉紅色。常在大樹幹上一邊往上跳、一邊用鑿子般的嘴敲樹皮找蟲。",
     facts: [
@@ -454,6 +454,39 @@ const ALL = [
       "最愛吃松子，秋天會把種子藏在地下，一隻可以藏上萬顆。",
       "記性超好，冬天能找回大部分藏起來的種子；沒找回的就長成新的松樹。",
       "嘴巴又粗又尖，可以敲開堅硬的松毬果。",
+    ],
+  },
+  {
+    id: 'rnpheasant', lawn: true, spot: [74, -46], perch: 'ground', view: 10, dist: 3.6, camH: 1.1, lookY: 0.25,
+    name: "環頸雉", sci: 'Phasianus colchicus formosanus', where: "湖前的草地",
+    intro: "雄鳥非常華麗：頭頸是帶金屬光澤的藍綠色，臉上一大塊鮮紅的裸皮，脖子一圈白環；身體紅銅色帶斑紋，尾羽又細又長。母鳥全身是低調的褐色斑紋，方便躲在草裡孵蛋。",
+    facts: [
+      "台灣的亞種只分布在西部和東部的平原草地，因為棲地變少、和外來放養的雉雞混種，數量很稀少。",
+      "巢只是地上一個淺淺的凹坑，墊些乾草，一窩可以生 8～12 顆蛋。",
+      "受驚時通常先在草裡快步跑開，真的被逼急了才「啪啦啪啦」爆衝起飛。",
+      "雄鳥春天會發出響亮的「咯—咯」叫聲，接著用力拍翅膀宣示地盤。",
+    ],
+  },
+  {
+    id: 'skylark', lawn: true, spot: [78, -62], perch: 'ground', view: -10, dist: 2.4, camH: 0.8, lookY: 0.1,
+    name: "小雲雀", sci: 'Alauda gulgula', where: "湖前的草地",
+    intro: "全身沙褐色帶深色縱紋，頭頂有一小撮短短的羽冠，緊張或唱歌時會豎起來。顏色和枯草幾乎一樣，蹲在地上時很難發現。",
+    facts: [
+      "最有名的是「空中唱歌」：一邊鼓翅直直往上升到很高的地方，一邊連續唱好幾分鐘。",
+      "在地上是用「走」的，不像麻雀用跳的；後腳趾的爪特別長、很直。",
+      "巢在地面草叢根部，一個小小的草碗，蛋上布滿細細的褐色斑點。",
+      "喜歡開闊、草不太高的地方，像機場草坪、河灘地和海邊的草地。",
+    ],
+  },
+  {
+    id: 'cisticola', lawn: true, spot: [68, -55], perch: 'stem', stemH: 0.9, view: 20, dist: 2.6, camH: 1.0, lookY: 0.95,
+    name: "棕扇尾鶯", sci: 'Cisticola juncidis', where: "湖前的草地",
+    intro: "很小、圓滾滾的鳥，頭頂和背是黃褐色帶粗黑縱紋，肚子乾淨的白色；短短的尾巴張開像一把扇子，末端有黑白斑點。常抓在高草的頂端東張西望。",
+    facts: [
+      "繁殖季的雄鳥會在草原上空一跳一跳地波浪飛行，每往上一下就「嘀、嘀、嘀」叫一聲，像在打拍子。",
+      "巢像一個梨形的小口袋，用蜘蛛絲把活的草葉一片片縫在一起，入口在上方側邊。",
+      "因為草葉是活的、還在長，巢外面一直被綠草包著，很難被發現。",
+      "台灣平地的草原、農田、河堤都很常見，是最容易遇到的草地小鳥之一。",
     ],
   },
   // 2026-11-10 山下湖再加四種：黃麻鴨（湖中游）、紫鷺（北岸淺水，避開蓮花叢）、高蹺鴴（西邊淺水，三隻）、西方澤鵟（南岸草地）
@@ -754,6 +787,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
-  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'wbwood', 'nutcracker']
+  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

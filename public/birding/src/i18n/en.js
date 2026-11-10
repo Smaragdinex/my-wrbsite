@@ -717,6 +717,39 @@ export const BIRDS = {
    "Some farmers now grow crops without rat poison to help it survive."
   ]
  },
+ "rnpheasant": {
+  "name": "Ring-necked Pheasant",
+  "where": "The Meadow by the Lake",
+  "intro": "The male is gorgeous: an iridescent blue-green head and neck, a big patch of bright red bare skin on the face, a white collar, a coppery spotted body and a long, slender tail. The female is plain mottled brown, perfect for hiding in grass while she incubates.",
+  "facts": [
+   "Taiwan's subspecies lives only in lowland grasslands in the west and east; habitat loss and hybridising with released pheasants have made it rare.",
+   "The nest is just a shallow scrape on the ground lined with dry grass, holding 8–12 eggs.",
+   "When alarmed it usually runs off through the grass first, bursting into noisy flight only when cornered.",
+   "In spring the male gives a loud two-note crow, then whirrs his wings to claim his territory."
+  ]
+ },
+ "skylark": {
+  "name": "Oriental Skylark",
+  "where": "The Meadow by the Lake",
+  "intro": "Sandy brown streaked with dark, with a short crest it raises when alarmed or singing. Its colours match dry grass so well that it is very hard to spot when it crouches.",
+  "facts": [
+   "It is famous for its song flight: it rises straight up on fluttering wings, singing nonstop for minutes from high in the sky.",
+   "On the ground it walks rather than hops like a sparrow; its hind claw is especially long and straight.",
+   "The nest is a small grass cup at the base of a tuft on the ground, and the eggs are densely freckled with brown.",
+   "It likes open places with short grass, such as airfields, riverbeds and coastal meadows."
+  ]
+ },
+ "cisticola": {
+  "name": "Zitting Cisticola",
+  "where": "The Meadow by the Lake",
+  "intro": "A tiny, round bird with a tawny crown and back boldly streaked with black and a clean white belly. Its short tail fans out, tipped with black and white spots. It often clings to the top of a tall grass stem, looking around.",
+  "facts": [
+   "In the breeding season the male flies in bouncing waves over the grassland, giving a sharp 'zit' at the top of every bounce like a metronome.",
+   "Its nest is a pear-shaped pouch: it sews living grass blades together with spider silk, leaving an entrance near the top.",
+   "Because the blades are alive and still growing, the nest stays wrapped in green grass and is very hard to find.",
+   "It is common in lowland grasslands, farmland and riverbanks across Taiwan, one of the easiest grassland birds to meet."
+  ]
+ },
  "nutcracker": {
   "name": "Spotted Nutcracker",
   "where": "A Branch by the Trail near the Sacred Giant Tree",

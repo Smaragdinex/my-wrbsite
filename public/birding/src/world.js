@@ -111,7 +111,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
   // 山區（溫室東半邊）：直接蓋、一直畫。附屬館只剩海岸館（目前關著）
   // 山區的樹、草、岩石避開鳥站的地方和鏡頭那一側
-  const alpAvoid = birds.filter((b) => inAlpine(...b.def.spot)).map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], cx: b.cam.x, cz: b.cam.z, ground: b.def.perch === 'ground' }))
+  const alpAvoid = birds.filter((b) => inAlpine(...b.def.spot)).map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], cx: b.cam.x, cz: b.cam.z, ground: b.def.perch === 'ground' || b.def.perch === 'stem', clear: b.def.lawn ? 5 : 0 }))
   // 草鴞的巢（2026-11-09）：在鳥後面 1 公尺、偏旁邊一點，巢口朝鏡頭；巢那一圈山區的箭竹不長（巢自己有一叢白茅）
   const owlB = birds.find((b) => b.def.id === 'grassowl')
   if (owlB && inAlpine(...owlB.def.spot)) {
