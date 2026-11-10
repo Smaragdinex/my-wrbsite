@@ -95,7 +95,7 @@ export function buildPondLife(scene, { lib } = {}) {
   // 水雉（birdinfo.js 的 jacana）站的地方：先鋪幾片大的浮葉，牠走來走去都踩在葉子上
   for (const [dx, dz, sz] of [[0, 0, 0.5], [0.55, 0.25, 0.42], [-0.5, 0.3, 0.45], [0.1, -0.55, 0.44], [-0.45, -0.4, 0.4], [0.6, -0.35, 0.38]]) pads.push({ x: 89.2 + dx, z: -46.9 + dz, size: sz, rot: rnd() * TAU })
   // 4 叢：西、南、東南、東北（鴨子在北邊靠步道那一側游，那裡留空給牠們）
-  for (const ang of [200, 268, 318, 30]) {
+  for (const ang of [200, 268, 318, 350]) {   // 2026-11-10 東北那叢（30°）剛好長在河口上 → 移到 350°
     const a = ang / 180 * Math.PI, cx = ALP_POND.x + Math.cos(a) * R * 0.8, cz = ALP_POND.z + Math.sin(a) * R * 0.8
     for (let k = 0; k < 900; k++) {
       const d = Math.sqrt(rnd()) * 6.5, b = rnd() * TAU, x = cx + Math.cos(b) * d, z = cz + Math.sin(b) * d * 0.75

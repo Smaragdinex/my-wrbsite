@@ -439,6 +439,8 @@ function buildInterior(lib, avoid = []) {
     let acc = 0, prev = null, prevRow = null
     for (let i = 0; i <= N; i++) {
       const p = curve.getPointAt(i / N), tg = curve.getTangentAt(i / N), side = V(-tg.z, 0, tg.x).normalize()
+      // 2026-11-10 河口：河面延伸進湖約 3.5 m 就停（ChatGPT 3～5 m）；再往裡是湖面自己（以前一路鋪進湖裡，湖中間一圈河面的邊）
+      if (st.wide && Math.hypot(p.x - ALP_POND.x, p.z - ALP_POND.z) < ALP_POND.r - 3.5) break
       if (prev) acc += p.distanceTo(prev); prev = p
       // 門檻是斜的、彎的（layout.js streamLatOff）：每一排頂點沿水流方向錯開 off，整排剛好落在同一條「等高線」上，
       // 一排的水面高度都一樣——網格不會被斜的門檻切成鋸齒（第一版每個頂點各查各的，跌水那面全是 V 字摺痕）
@@ -1398,6 +1400,7 @@ function buildInterior(lib, avoid = []) {
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.95 || eastZone(x, z)) continue
       const sd = alpineStreamDist(x, z), dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
       if (!((sd > 1.3 && sd < 4.5) || (dp > ALP_POND.r + 0.8 && dp < ALP_POND.r + 3.5)) || alpineTrailDist(x, z) < 1.6) continue
+      if (dp < ALP_POND.r + 0.5 && alpineHeight(x, z) < ALP_POND.water + 0.15) continue   // 2026-11-10 河口挖深之後：湖裡不長蕨
       ferns.push({ p: V(x, alpineHeight(x, z) - 0.05, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(0.7 + rnd() * 0.5), c: new THREE.Color().setHSL(0.25, 0.15, 0.9) })
     }
     const fl = {}
