@@ -136,7 +136,9 @@ export function buildEast({ avoid = [] } = {}) {
       const a = [], b = []
       for (const i of idx) { a.push(A[i * 4], A[i * 4 + 1], A[i * 4 + 2], A[i * 4 + 3]); b.push(B[i * 4], B[i * 4 + 1], B[i * 4 + 2], B[i * 4 + 3]) }
       const [cx, cz] = key.split(',').map((v) => (+v + 0.5) * CELL)
-      const m = bladeMesh(a, b, opts[name]); m.frustumCulled = false; g.add(m)
+      const m = bladeMesh(a, b, opts[name]); g.add(m)
+      // 每一塊自己的外框（bladeMesh 預設是原點、半徑 100 → 只好整個關掉剔除，每一塊不管在哪都畫一次）
+      m.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, alpineHeight(cx, cz) + 1, cz), CELL * 0.75 + 4)
       // 照距離變稀（cane 層沒打亂：畫前面幾叢＝整叢消失，不會只剩穗飄著）
       lodRegisterGrass(m, new THREE.Vector3(cx, alpineHeight(cx, cz) + 0.5, cz), CELL * 0.72 + 1)
       n += idx.length

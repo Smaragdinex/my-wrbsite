@@ -1463,7 +1463,8 @@ function buildInterior(lib, avoid = []) {
       const a = [], b = []
       for (const i of idx) { a.push(A[i * 4], A[i * 4 + 1], A[i * 4 + 2], A[i * 4 + 3]); b.push(B[i * 4], B[i * 4 + 1], B[i * 4 + 2], B[i * 4 + 3]) }
       const [cx, cz] = key.split(',').map((v) => (+v + 0.5) * CELL)
-      const m = bladeMesh(a, b, { width: [0.042, 0.028], cane: true }); m.frustumCulled = false; g.add(m)
+      const m = bladeMesh(a, b, { width: [0.042, 0.028], cane: true }); g.add(m)
+      m.geometry.boundingSphere = new THREE.Sphere(V(cx, alpineHeight(cx, cz) + 0.6, cz), CELL * 0.75 + 3)   // 2026-11-10 每一塊自己的外框、打開視野剔除（以前全部關掉，視野外的箭竹也一塊一次 draw call）
       lodRegisterGrass(m, V(cx, alpineHeight(cx, cz) + 0.5, cz), CELL * 0.72 + 1)
     }
   }

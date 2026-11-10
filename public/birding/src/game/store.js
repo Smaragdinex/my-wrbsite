@@ -946,6 +946,9 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   // cam：鏡頭；opt.play＝玩家在玩（不是首頁）；opt.look＝滑鼠鎖住、可以看東西
   function tick(t, dt, cam, opt = { play: true, look: false }) {
     const camPos = cam.position
+    // 2026-11-10 相機行在公園最西邊（-82, 0）：人在山區時整間店（400 多個 mesh）還是在視野裡（被地形擋住但照樣畫），
+    // 瀑布石階往西看一格 3,700 次 draw call → 離開 150 公尺就不畫（花園最東邊離店約 120 公尺，花園裡看得到門口）
+    g.visible = Math.hypot(camPos.x + 82, camPos.z) < 150
     keeper.tick(t, dt, opt.play ? camPos : null, opt.look ? focus(cam)?.item ?? null : null, opt.look ? cam.getWorldDirection(_f) : null)
     keeperCol.x = keeper.pos.x; keeperCol.z = keeper.pos.y
     // 玩家跟老闆疊在一起時（不管怎麼發生的）先關掉他的碰撞，不然玩家四個方向都會被擋住、WASD 完全不能動

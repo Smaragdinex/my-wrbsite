@@ -926,7 +926,8 @@ export function boardwalkAt(x, z) {
 
 /* ---------- 碰撞 ---------- */
 export const colliders = []   // { x, z, r, top }
-export function addCollider(x, z, r, top = 99) { colliders.push({ x, z, r, top }) }
+// bottom：碰撞只在這個高度以上才算（2026-11-10 瀑布頂上的鐵箱子連帶擋住了正下方 12 m 的石階）
+export function addCollider(x, z, r, top = 99, bottom = -99) { colliders.push({ x, z, r, top, bottom }) }
 
 const PLAYER_R = 0.38
 export function supportAt(x, z, feet) {
@@ -971,7 +972,7 @@ export function blocked(x, z, feet, ref = feet) {
     // 山區：太陡（一步高過 0.6 公尺）就走不上去；吊橋上不算
     if (bridgeAt(x, z) != null && Math.abs(bridgeAt(x, z) - feet) < 0.6) return false
     const rbq = riverBridgeAt(x, z)
-    if (rbq != null && Math.abs(rbq - feet) < 0.6) { for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true } return false }
+    if (rbq != null && Math.abs(rbq - feet) < 0.6) { for (const c of colliders) { if (feet > c.top || feet < c.bottom - 0.3) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true } return false }
     // 玩家一小步 0.15 公尺：往上超過 0.13（約 41 度）爬不上去；往下只有懸崖（掉超過 2.5 公尺）才擋，跳起來在空中不會被擋住
     // 2026-11-11 地面＝supportAt（石階、岩壁頂也算）；以前只看地形，石階上每一步都當成懸崖，走不上去
     const sup = supportAt(x, z, feet), h = sup.y
@@ -980,7 +981,7 @@ export function blocked(x, z, feet, ref = feet) {
     if (h < ALP_POND.water + 0.05 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 1) return true   // 水池不能走進去
     if (sup.owner !== 5 && sup.owner !== 3 && alpineStreamDist(x, z) < 3.5) for (const st of ALP_STREAMS) { const sq = st.sAt(x, z); if (st.dist(x, z) < (st.wide ? st.halfAt(sq) + 0.4 : 3.5) && st.water(sq) - h > 0.3) return true }   // 河只看水道裡（河靠步道很近，岸上不算）
     if (sup.owner !== 5 && YOSE.inLake(x, z, 0.3) && YOSE.lake.water - h > 0.05) return true   // 瀑布湖不能走進去   // 溪裡的潭（水深超過 0.3）不能走進去：潭壁陡，走進去爬不出來
-    for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
+    for (const c of colliders) { if (feet > c.top || feet < c.bottom - 0.3) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
     return false
   }
   if (COAST_ON && inCoast(x, z, 0.45)) {
@@ -990,7 +991,7 @@ export function blocked(x, z, feet, ref = feet) {
     const h = coastHeight(x, z)
     if (h < CST.SEA - 0.3) return true
     if (h > feet + 0.16 || h < ref - 2.5) return true
-    for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
+    for (const c of colliders) { if (feet > c.top || feet < c.bottom - 0.3) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
     return false
   }
   if (COAST_ON && z < -50 && z >= CST.Z0 - 0.5 && Math.abs(x) < CCORR.W - 0.45) {
@@ -1004,7 +1005,7 @@ export function blocked(x, z, feet, ref = feet) {
   const r = Math.hypot(dx, dz)
   if (r < 17 && r < mtnR(Math.atan2(dz, dx), feet + 0.9) + PLAYER_R) return true
   for (const c of colliders) {
-    if (feet > c.top) continue
+    if (feet > c.top || feet < c.bottom - 0.3) continue
     const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R
     if (ddx * ddx + ddz * ddz < rr * rr) return true
   }

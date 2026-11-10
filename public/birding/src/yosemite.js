@@ -483,7 +483,7 @@ export function buildYosemite(scene, { lib } = {}) {
     // 2026-11-10 平地東邊盡頭不再擋：接到往東南下降的岩脊（layout.js EAST.ridge），從這裡走到東部草原
     for (let z = YOSE.topFront(XL - 0.2) + 0.15; z < YOSE.base(XL) + M.D0 + M.W * (M.NL - 0.5); z += 0.9) posts.push(V(XL - 0.2, YOSE.topY(XL), z))
     for (let z = YOSE.topFront(201.4) + 0.15; z < YOSE.edge(201.4) - 2.2; z += 0.9) posts.push(V(201.3, YOSE.topY(201.3), z))   // 西邊（溪那側）
-    for (const p of posts) addCollider(p.x, p.z, 0.2, p.y + 1.1)
+    for (const p of posts) addCollider(p.x, p.z, 0.2, p.y + 1.1, p.y)
     for (let x = 201.2; x < 251; x += 1) addCollider(x, YOSE.edge(x) - 1.9, 0.35, topYm + 3)
     const pg = new THREE.CylinderGeometry(0.035, 0.035, 1.05, 6).translate(0, 0.52, 0), pm = new THREE.InstancedMesh(pg, ironM, posts.length)
     posts.forEach((p, i) => pm.setMatrixAt(i, m4.makeTranslation(p.x, p.y, p.z))); pm.castShadow = true; g.add(pm)
@@ -561,10 +561,12 @@ export function buildYosemite(scene, { lib } = {}) {
 
   // ---------- 西黃松 ----------
   const PINES = []
+  // 2026-11-10 使用者：瀑布步道往上有樹林擋住 → 石階（含從支線走過來那段）6 m 內不種松樹（樹冠會蓋在路上、樹幹擋路）
+  const SP = YOSE.stairs().pts.filter((_, i) => i % 2 === 0), nearStairs = (x, z, r) => SP.some(([sx, sz]) => Math.hypot(sx - x, sz - z) < r)
   for (let k = 0; k < 4000 && PINES.length < 30; k++) {
     const x = X0 - 6 + rnd() * (X1 - X0 + 10), z = YOSE.base(x) - 3 - rnd() * 30
     if (!YOSE.inside(x, z) || domeRho(x, z) > 0.9) continue
-    if (alpineTrailDist(x, z) < 3 || Math.hypot(x - F.x, z - F.z) < 14 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue
+    if (alpineTrailDist(x, z) < 3 || nearStairs(x, z, 6) || Math.hypot(x - F.x, z - F.z) < 14 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue
     if (Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4 || YOSE.behind(x, z) || YOSE.inLake(x, z, 4) || alpineStreamDist(x, z) < 4) continue   // 營地裡、石階、湖、河上不長
     const y = alpineHeight(x, z), H = 18 + rnd() * 10
     if (H < 10) continue
@@ -585,14 +587,14 @@ export function buildYosemite(scene, { lib } = {}) {
     // 涼亭（4.4 × 5 m）：四根粗木柱站在石墩上，人字形屋頂
     // 2026-11-10 ChatGPT：涼亭以前正對石階出口（6 公尺），還沒爬到頂就看到 → 移到平台中間偏西、出口側面 20 多公尺
     const sx = SHELTER.x, sz = SHELTER.z, sy = Y0(sx)
-    for (const dx of [-2.0, 2.0]) for (const dz of [-2.3, 2.3]) { box('stone', 0.5, 0.35, 0.5, sx + dx, sy + 0.17, sz + dz); box('wood', 0.26, 2.6, 0.26, sx + dx, sy + 1.6, sz + dz); addCollider(sx + dx, sz + dz, 0.25, sy + 3) }
+    for (const dx of [-2.0, 2.0]) for (const dz of [-2.3, 2.3]) { box('stone', 0.5, 0.35, 0.5, sx + dx, sy + 0.17, sz + dz); box('wood', 0.26, 2.6, 0.26, sx + dx, sy + 1.6, sz + dz); addCollider(sx + dx, sz + dz, 0.25, sy + 3, sy) }
     for (const dz of [-2.3, 2.3]) box('wood', 4.6, 0.22, 0.24, sx, sy + 2.95, sz + dz)
     for (const sgn of [-1, 1]) { const r = new THREE.BoxGeometry(2.9, 0.12, 5.8).applyMatrix4(new THREE.Matrix4().makeRotationZ(sgn * 0.42).setPosition(sx + sgn * 1.3, sy + 3.55, sz)); parts.dark.push(r) }
     box('wood', 0.2, 0.25, 5.8, sx, sy + 4.1, sz)
     // 涼亭裡：野餐桌＋兩條長椅
     box('wood', 1.0, 0.07, 2.2, sx, sy + 0.78, sz); for (const dz of [-0.85, 0.85]) box('wood', 0.9, 0.74, 0.1, sx, sy + 0.4, sz + dz)
     for (const dx of [-0.85, 0.85]) { box('wood', 0.32, 0.06, 2.2, sx + dx, sy + 0.46, sz); for (const dz of [-0.9, 0.9]) box('wood', 0.08, 0.44, 0.08, sx + dx, sy + 0.22, sz + dz) }
-    addCollider(sx, sz, 1.0, sy + 0.9)
+    addCollider(sx, sz, 1.0, sy + 0.9, sy)
     // 看出去的原木長椅（面向山谷）
     for (const bx of [214, 231, 247]) { const bz = YOSE.topFront(bx) + 1.6, by = Y0(bx); box('wood', 1.8, 0.1, 0.4, bx, by + 0.45, bz); box('wood', 1.8, 0.4, 0.08, bx, by + 0.7, bz + 0.2); for (const dx of [-0.7, 0.7]) box('wood', 0.12, 0.42, 0.36, bx + dx, by + 0.21, bz); addCollider(bx, bz, 0.5, by + 0.6) }
     // 步道指標（石階頂）
@@ -602,7 +604,7 @@ export function buildYosemite(scene, { lib } = {}) {
     { const x = 206.4, z = YOSE.topFront(206.4) + 0.9, y = Y0(x); box('metal', 0.12, 1.1, 0.12, x, y + 0.55, z); box('metal', 0.22, 0.2, 0.5, x, y + 1.2, z - 0.05); parts.metal.push(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 10).rotateX(Math.PI / 2).translate(x - 0.06, y + 1.22, z - 0.35), new THREE.CylinderGeometry(0.06, 0.06, 0.2, 10).rotateX(Math.PI / 2).translate(x + 0.06, y + 1.22, z - 0.35)); addCollider(x, z, 0.2, y + 1.3) }
     // 垃圾桶（防熊的那種鐵箱）
     // 防熊垃圾桶跟著涼亭（以前在石階出口旁邊）
-    { const x = SHELTER.x + 3.6, z = SHELTER.z - 2.6, y = Y0(x); box('metal', 0.9, 1.0, 0.6, x, y + 0.5, z); addCollider(x, z, 0.5, y + 1.1) }
+    { const x = SHELTER.x + 3.6, z = SHELTER.z - 2.6, y = Y0(x); box('metal', 0.9, 1.0, 0.6, x, y + 0.5, z); addCollider(x, z, 0.5, y + 1.1, y) }
     for (const [k, list] of Object.entries(parts)) if (list.length) { const m = new THREE.Mesh(mergeGeometries(list.map((q) => q.index ? q.toNonIndexed() : q)), { wood, dark, stone, metal }[k]); m.castShadow = true; m.receiveShadow = true; g.add(m) }
   }
   // 2026-11-11 岩壁頂上也長樹（以前光禿禿）：西黃松、矮一點，離邊 4 公尺以上；觀景台、走道、溪讓開
