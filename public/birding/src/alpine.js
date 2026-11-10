@@ -349,7 +349,7 @@ function buildInterior(lib, avoid = []) {
         vec3 white = vec3(0.8, 0.85, 0.86) * (0.82 + 0.18 * h0);
         col = mix(col, white, foam * 0.88);
         col *= mix(0.12, 1.0, uDay);
-        float a = mix(0.12, 0.86, d) + foam * 0.55 + fres * 0.35 + fall * 0.1 + lip * 0.2;
+        float a = mix(0.28, 0.86, d) + foam * 0.55 + fres * 0.35 + fall * 0.1 + lip * 0.2;
         a = mix(a, 0.35 + 0.6 * curtain, fall);   // 跌水那面：水絲不透明、水絲之間半透明   // 淺的地方看得到溪底
         a *= smoothstep(0.0, 0.05, vDepth);                                      // 岸邊淡掉，不會有一條硬邊
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
@@ -430,7 +430,7 @@ function buildInterior(lib, avoid = []) {
       prevRow = { w, la, lb }
       for (let k = 0; k <= K; k++) {
         const t = k / K, lat = la + (lb - la) * t, [x, z] = at2(lat)
-        sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(st.wide ? slope * 0.3 : slope); sf.push(f); sl.push(lp)   // 寬的河：淺灘是斜的，坡度白沫只留三成（ChatGPT：白沫主要在石頭邊、落水處）
+        sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(st.wide ? slope * 0.6 : slope); sf.push(f); sl.push(lp)   // 寬的河：淺灘是斜的，坡度白沫只留三成（ChatGPT：白沫主要在石頭邊、落水處）
       }
       if (i) for (let k = 0; k < K; k++) { const A = (i - 1) * (K + 1) + k, B = A + 1, C = A + K + 1, D = C + 1; si.push(A, C, B, B, C, D) }
     }
