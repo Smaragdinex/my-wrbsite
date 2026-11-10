@@ -19,6 +19,7 @@ export function ruleJudge(p) {
   if (s.area < 0.006) lines.push(tr('鳥太小了，換支長一點的鏡頭吧。'))
   if (s.act === 'dive') lines.push(tr('入水那一瞬間！很難抓到。'))
   else if (s.act === 'strike' || s.act === 'worm') lines.push(tr('捕食的瞬間，好。'))
+  else if (s.act === 'beat' || s.act === 'gulp') lines.push(tr('叼著魚！翠鳥最精彩的就是這一刻。'))
   else if (s.act === 'takeoff') lines.push(pick(['起飛那一下被你抓到了！', '翅膀剛張開，難得。']))
   else if (s.act === 'land') lines.push(tr('降落前翅膀張開的樣子，漂亮。'))
   else if (s.act === 'fly') lines.push(pick(['飛行中的鳥能拍清楚，不簡單。', '飛起來的樣子，客人喜歡。']))

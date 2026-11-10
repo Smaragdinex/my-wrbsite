@@ -8,6 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { ripple } from './structures.js'
+import { FishSchool, fishGeo, fishMat } from './fish.js'
 import { FIG_FORCED } from './layout.js'
 import { canopyGeometry, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'
 
@@ -960,6 +961,64 @@ function perchRigged(env, cfg) {
   const sole = cfg.plant ? soleSamples(r) : null, _sv = V()
   let plantY = 0
   const dv = { on: false, from: V(), to: V(), h: 0 }
+  // 2026-11-10 翠鳥抓魚（ChatGPT 給的數字）：每次俯衝約 6 成抓到；抓到 → 叼魚（橫叼、5 公分）飛回枝頭 → 往側下方甩頭摔魚 3 下（每下 0.25 秒）
+  // → 把魚轉成頭朝內、仰頭吞（約 1 秒）。抓到後 20–35 秒才再衝、沒抓到 6–12 秒；水裡有一群小魚，影子衝下來會散開
+  const fk = cfg.dive ? { school: null, held: null, caught: false, target: null, cool: rnd(2, 5), prev: '', tips: new Map(), tag: null } : null
+  // 嘴尖：每個模型量一次（靜止姿勢下，從身體骨頭往頭骨頭的方向最往前的頂點），之後每格取蒙皮後的位置
+  const billTip = (rig, out) => {
+    let e = fk.tips.get(rig)
+    if (!e) {
+      let skin = null; rig.model.traverse((o) => { if (o.isSkinnedMesh && (!skin || o.geometry.attributes.position.count > skin.geometry.attributes.position.count)) skin = o })
+      rig.model.updateWorldMatrix(true, true)
+      // 往前＝尾巴骨頭往頭骨頭的水平方向（身體→頭是往上，會找到頭頂）；只看身體骨頭以上的頂點
+      const hb = rig.bones.head.getWorldPosition(V()), bb = (rig.bones.body ?? rig.bones.neck).getWorldPosition(V())
+      const dir = hb.clone().sub((rig.bones.tail ?? rig.bones.body).getWorldPosition(V())).setY(0).normalize()
+      let best = -Infinity, idx = 0
+      const pp = skin.geometry.attributes.position, v = V()
+      for (let i = 0; i < pp.count; i++) { skin.getVertexPosition(i, v).applyMatrix4(skin.matrixWorld); if (v.y < bb.y) continue; const d = v.sub(hb).dot(dir); if (d > best) { best = d; idx = i } }
+      fk.tips.set(rig, (e = { skin, idx }))
+    }
+    return e.skin.getVertexPosition(e.idx, out).applyMatrix4(e.skin.matrixWorld)
+  }
+  const _ft = V(), _fh = V(), _fbill = V(), _fq = new THREE.Quaternion(), _fx = V(1, 0, 0)
+  function fishUpdate(t, dt, kk) {
+    const par = root.parent
+    if (!par) return
+    if (!fk.school) {
+      fk.school = new FishSchool(par, V(hp.s + 1.1, 0, 0), { n: 9, R: 0.9, waterY: env.waterLocal })
+      fk.held = new THREE.Mesh(fishGeo(), fishMat()); fk.held.visible = false; fk.held.castShadow = true; par.add(fk.held)
+    }
+    fk.school.setCenter(V(hp.s + 1.1, 0, 0))
+    fk.school.update(t, dt)
+    const n = acts.name
+    if (n === 'dive') {
+      if (!fk.target && kk > 0.05) { fk.target = fk.school.nearest(dv.to); fk.hit = Math.random() < 0.6 }
+      if (kk > 0.28 && !fk.scared) { fk.scared = true; fk.school.scare(dv.to, 1.0, fk.hit ? fk.target : null) }
+      if (fk.hit && fk.target && kk < 0.38) { fk.target.goal = dv.to.clone(); fk.target.flee = 0 }
+      if (kk >= 0.38 && fk.hit && fk.target && !fk.caught) { fk.caught = true; fk.school.take(fk.target) }
+    }
+    const show = fk.caught && (n === 'dive' ? kk >= 0.4 : n === 'beat' || n === 'gulp')
+    fk.held.visible = show
+    if (!show) return
+    // 魚夾在嘴尖往裡 1 公分；剛抓到是橫的（跟嘴垂直），吞之前轉成順著嘴、頭朝喉嚨
+    const rig = fr && fr.model.visible ? fr : r
+    rig.model.updateWorldMatrix(true, true)
+    const tip = billTip(rig, _ft), head = rig.bones.head.getWorldPosition(_fh)
+    const bill = _fbill.subVectors(tip, head).normalize()
+    const g = n === 'gulp' ? acts.k : 0
+    const turn = ss(g, 0.1, 0.3), swallow = ss(g, 0.35, 0.85)
+    const side = V().crossVectors(bill, V(0, 1, 0)).normalize()
+    const axis = side.clone().lerp(bill.clone().negate(), turn).normalize()
+    const pos = tip.clone().addScaledVector(bill, -0.012 - swallow * 0.04)
+    pos.addScaledVector(axis, -0.5 * 0.065 * turn)
+    fk.held.position.copy(par.worldToLocal(pos))
+    const wl = par.getWorldQuaternion(new THREE.Quaternion()).invert()
+    _fq.setFromUnitVectors(_fx, axis).premultiply(wl)
+    // 剛抓到的魚還在扭，慢慢沒力
+    const wig = (n === 'dive' ? 0.5 : n === 'beat' ? 0.25 * (1 - acts.k) : 0) * Math.sin(t * 30)
+    fk.held.quaternion.copy(_fq).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), wig))
+    fk.held.scale.setScalar(0.065 * (1 - 0.85 * swallow))
+  }
   const c = { yaw: 0, pitch: 0, call: 0 }, focus = V()
   // cfg.rich：長尾巴的鳥（台灣藍鵲）多一層細節：呼吸、重心左右換、歪頭、
   // 長尾巴慢慢擺、落地時尾巴往上翹再晃回來、叫的時候尾巴一下一下上揚、偶爾抖一下翅膀
@@ -1064,6 +1123,17 @@ function perchRigged(env, cfg) {
   }
   const update = (t, dt) => {
     acts.tick(dt)
+    if (fk) {
+      // 動作接續：俯衝抓到 → 摔魚 → 吞；俯衝的冷卻時間
+      const pn = fk.prev
+      fk.cool -= dt
+      if (pn === 'dive' && acts.name !== 'dive') { if (fk.caught) acts.next('beat'); else fk.cool = rnd(6, 12); fk.target = null; fk.scared = false }
+      else if (pn === 'beat' && acts.name !== 'beat') acts.next('gulp')
+      else if (pn === 'gulp' && acts.name !== 'gulp') { fk.caught = false; fk.cool = rnd(20, 35) }
+      if (acts.name === 'dive' && acts.t < 0.05 && fk.cool > 0) acts.next('idle')
+      fk.prev = acts.name
+      fk.tag = acts.name === 'dive' ? (fk.caught ? 'catch' : 'dive') : acts.name === 'beat' ? 'beat' : acts.name === 'gulp' ? 'gulp' : null
+    }
     if (acts.name !== 'idle') hp.wait = Math.max(hp.wait, 0.3)
     hp.update(dt); gl.update(dt)
     const k01 = hp.hopping ? hp.k : 1
@@ -1112,16 +1182,27 @@ function perchRigged(env, cfg) {
         fr.turn('head', LAT, 0.1 * sweep)
       }
     } else { dv.on = false; if (fr) { r.model.visible = true; fr.model.visible = false } }
-    c.yaw = damp(c.yaw, acts.name === 'preen' ? 1.2 * acts.sgn : dive ? 0 : gl.yaw, acts.name === 'preen' ? 6 : 18, dt)
+    // 摔魚：快速往側下方甩（約 0.08 秒打下去、再收回），3 下；身體跟著轉一點點、往下壓
+    let bw = 0
+    if (acts.name === 'beat') {
+      const u = Math.min(acts.k / 0.85, 0.999) * 3, ph = u % 1
+      bw = ph < 0.32 ? ss(ph, 0, 0.32) : 1 - ss(ph, 0.32, 1)
+    }
+    // 吞：停一下、仰頭（往上往後）再收回來
+    const gl2 = acts.name === 'gulp' ? acts.k : -1
+    const gulpUp = gl2 >= 0 ? Math.sin(Math.PI * ss(gl2, 0.25, 0.9)) : 0
+    if (fk) fishUpdate(t, dt, acts.k)
+    c.yaw = damp(c.yaw, acts.name === 'preen' ? 1.2 * acts.sgn : dive ? 0 : acts.name === 'beat' ? -0.85 * bw * acts.sgn : gl2 >= 0 ? 0 : gl.yaw, acts.name === 'preen' ? 6 : acts.name === 'beat' ? 45 : 18, dt)
     // 吃果實（cfg.eat）：低頭往枝上的榕果啄，一下一下，最後仰頭吞下去
     const eat = acts.name === 'eat' ? acts.k : -1, peck = eat >= 0 && eat < 0.8 ? 0.9 + 0.5 * Math.max(0, Math.sin(eat * 26)) : 0, gulp = eat >= 0.8 ? -0.6 * Math.sin((eat - 0.8) / 0.2 * Math.PI) : 0
     c.eat = damp(c.eat ?? 0, eat >= 0 && eat < 0.85 ? 1 : 0, 8, dt)   // 吃的時候身體往前傾
-    c.pitch = damp(c.pitch, acts.name === 'preen' ? -0.5 : dive ? 0 : eat >= 0 ? -(peck + gulp) * (cfg.eatSign ?? 1) : -gl.hp, eat >= 0 ? 24 : 18, dt)
+    c.pitch = damp(c.pitch, acts.name === 'preen' ? -0.5 : dive ? 0 : eat >= 0 ? -(peck + gulp) * (cfg.eatSign ?? 1) : acts.name === 'beat' ? -0.45 * bw : gl2 >= 0 ? 0.75 * gulpUp : -gl.hp, eat >= 0 || acts.name === 'beat' ? 40 : 18, dt)
     c.call = damp(c.call, acts.name === 'call' ? 1 : 0, 6, dt)
     const beat = c.call * Math.max(0, Math.sin(t * (cfg.beat ?? 9)))
     r.reset()
     // 身體蹲低時前傾、起跳時伸直；頭保持水平
-    r.turn('body', LAT, -0.3 * crouch + 0.1 * push - 0.06 * air + 0.03 * beat - 0.35 * (c.eat ?? 0) * (cfg.eatSign ?? 1))
+    r.turn('body', LAT, -0.3 * crouch + 0.1 * push - 0.06 * air + 0.03 * beat - 0.35 * (c.eat ?? 0) * (cfg.eatSign ?? 1) - 0.12 * bw)
+    if (bw) r.turn('body', AX.y, -0.1 * bw * acts.sgn)
     r.turn('neck', AX.y, c.yaw * 0.45); r.turn('neck', LAT, c.pitch * 0.4 - 0.12 * beat + 0.15 * crouch)
     r.turn('head', AX.y, c.yaw * 0.55); r.turn('head', LAT, c.pitch * 0.6 - 0.18 * beat + 0.15 * crouch)
     r.turn('tail', LAT, -0.45 * land + 0.3 * hp.pre - 0.2 * air)
@@ -1167,7 +1248,7 @@ function perchRigged(env, cfg) {
     if (dive) { root.position.copy(dive.p); root.rotation.y = dive.head; lift.rotation.x = dive.pitch }
     focus.set(hp.s, 0.3, 0)
   }
-  return { obj: root, focus, update, hopper: hp, acts }
+  return { obj: root, focus, update, hopper: hp, acts, get behavior() { return fk?.tag ?? null }, fishing: fk }
 }
 // 五色鳥：ChatGPT 參考圖 → Tripo，正側面頭朝 -x；腳是模型自己生成的，綁了 thigh → shin → foot
 function barbet(env) { return perchRigged(env, { name: 'barbet-rig', k: 0.6, rotY: Math.PI / 2, lat: V(0, 0, -1), foot: 0.01, drop: 0.05, beat: 9 }) }
@@ -1254,7 +1335,7 @@ function kingfisher(env) {
   // 身體中心 y≈0.1 對到停棲模型身體中心（腳上 0.13 公尺）
   return perchRigged(outer(env, -0.2), { name: 'kingfisher-rig', k: 0.38, ...TRIPO, foot: 0.004, drop: 0.04, beat: 8, dive: true,
     fly: { name: 'kingfisher-fly-rig', k: 0.82, y: 0.13 - 0.1 * 0.82 },
-    hopper: { hop: [0.1, 0.25], rest: [3, 8] }, acts: { idle: [4, 2, 5], call: [1.5, 1.5, 3], preen: [0.8, 1.5, 3], dive: [2.5, 2.6, 2.6] } })
+    hopper: { hop: [0.1, 0.25], rest: [3, 8] }, acts: { idle: [4, 2, 5], call: [1.5, 1.5, 3], preen: [0.8, 1.5, 3], dive: [3.5, 2.6, 2.6], beat: [0, 1.2, 1.5], gulp: [0, 1.1, 1.4] } })
 }
 // 小白鷺：在淺水裡慢慢走、盯著水面、很快啄下去
 function egret(env) {

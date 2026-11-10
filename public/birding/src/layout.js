@@ -486,7 +486,7 @@ function buildSteps(st, sProf, seed0 = 911, { want0 = 0.55, wantR = 1.1, len0 = 
   st.water = (s) => sampleS(st.W, s); st.bed = (s) => sampleS(st.B, s)
   st.sAt = (x, z) => { const [, i, t] = polyDist(x, z, st); return st.S[i] + t * (st.S[i + 1] - st.S[i]) }
   st.dist = (x, z) => polyDist(x, z, st)[0]
-  st.halfAt = st.wide ? (s) => clamp(2.5 + 1.5 * fbm2(s * 0.025, 3.3, 2) + 0.6 * fbm2(s * 0.12, 7.7, 2) + 1.2 * smoothstep(14, 0, s), 1.25, 4) : () => 1.25   // 半寬：低頻起伏、湖口最寬（fbm2 是 ±0.6 的有號雜訊，不是 0～1）
+  st.halfAt = st.wide ? (s) => clamp(2.5 + 1.5 * fbm2(s * 0.025, 3.3, 2) + 0.6 * fbm2(s * 0.12, 7.7, 2) - 0.9 * smoothstep(16, 2, s), 1.25, 4) : () => 1.25   // 半寬：低頻起伏；2026-11-10 出水口那段改窄（以前最寬，貼著營地步道，岸墊不起來、河面浮在步道旁）（fbm2 是 ±0.6 的有號雜訊，不是 0～1）
 }
 const sampleS = (arr, s) => { const f = clamp(s / STEP, 0, arr.length - 1), i = Math.min(arr.length - 2, Math.floor(f)), u = f - i; return arr[i] * (1 - u) + arr[i + 1] * u }
 // 沿溪距離：(x, z) 投影到溪的折線上
@@ -640,6 +640,27 @@ function buildAlpine() {
     const pe = tr[tr.length - 1], dpk = Math.hypot(x - pe[0], z - pe[1])
     h = lerp(prof[prof.length - 1] + 0.02, h, smoothstep(2.5, 5, dpk))
     h = lerp(Math.min(h, prof[prof.length - 1] + 0.3 + 0.12 * Math.max(0, dpk - 3)), h, smoothstep(6, 14, dpk))
+    // 2026-11-10 使用者截圖（營地旁看瀑布）：河面、湖面浮在半空、從坡上翹出來——營地和支線步道攤平時把河岸、湖岸削得比水面低（最多低 3.9 公尺）。
+    // 最後再保一次：水邊 0.8 公尺內的岸至少比水面高 0.12，往外最陡 1:1.1 接回地形（像一道亂石堤）；橋頭、步道路面本身不墊
+    {
+      let nearBridge = false
+      for (const b of RIVER_BRIDGES) { const ax = x - b.x, az = z - b.z; if (Math.abs(-ax * b.dir[1] + az * b.dir[0]) < b.hw + 0.8 && Math.abs(ax * b.dir[0] + az * b.dir[1]) < b.half + 1.5) nearBridge = true }   // 只有橋面那條（以前範圍太大，出水口兩岸整片被跳過）
+      const onPath = smoothstep(1.3, 2.4, dAll)
+      if (!nearBridge) {
+        const [dr, ri, rt] = polyDist(x, z, ALP_RIVER)
+        const sR = ALP_RIVER.S[ri] + rt * (ALP_RIVER.S[ri + 1] - ALP_RIVER.S[ri]), hw = ALP_RIVER.halfAt(sR) + 0.35
+        if (dr > hw && dr < hw + 9 && sR > 0.5) {
+          const wl = Math.max(ALP_RIVER.water(sR), ALP_RIVER.water(sR - 0.8), ALP_RIVER.water(sR - 1.6))
+          const need = wl + 0.12 - Math.max(0, dr - hw - 0.8) * 1.1
+          if (h < need) h = lerp(h, need, onPath)
+        }
+        const LK = YOSE.lake, e = Math.hypot((x - LK.x) / LK.rx, (z - LK.z) / LK.rz)
+        if (e > 1.0 && e < 1.9 && !(dr < hw + 0.2)) {
+          const need = LK.water + 0.15 - Math.max(0, (e - 1) * Math.min(LK.rx, LK.rz) - 0.8) * 1.1
+          if (h < need) h = lerp(h, need, onPath)
+        }
+      }
+    }
     aHeight[k] = h
   }
 }

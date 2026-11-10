@@ -14,6 +14,7 @@ const ACTS = {
   dive: { acts: ['dive'], label: '入水的瞬間' },
   strike: { acts: ['strike'], label: '出手捕食' },
   worm: { acts: ['worm'], label: '叼著蚯蚓' },
+  fish: { acts: ['beat', 'gulp'], label: '叼著魚' },
   run: { acts: ['run'], label: '跑起來的樣子' },
 }
 // 時段（跟右上角時鐘一樣的分法）

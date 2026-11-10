@@ -346,6 +346,10 @@ export const UI = {
   "紀錄": "SEEN",
   "頁": "PAGE",
   "觀察・辨識・記錄": "Observe · Identify · Record",
+  "叼著魚往樹枝上摔": "Beating its catch on the branch",
+  "正在吞魚": "Swallowing a fish",
+  "叼著魚！翠鳥最精彩的就是這一刻。": "Fish in the bill! That is the kingfisher moment everyone wants.",
+  "叼著魚": "Holding a fish",
 }
 export const BIRDS = {
  "dove": {

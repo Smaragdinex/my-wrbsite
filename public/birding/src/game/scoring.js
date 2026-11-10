@@ -27,6 +27,7 @@ export function priceFor(id, score, same = 1) {
 const ACTION = {
   dive: [2.2, tr('入水的瞬間')], strike: [1.8, tr('出手捕食')], worm: [1.6, tr('叼著蚯蚓')], peck: [1.15, tr('低頭覓食')],
   takeoff: [2.0, tr('起飛的瞬間')], land: [1.8, tr('降落的瞬間')], fly: [1.7, tr('飛行中')], run: [1.25, tr('逃跑中')],
+  beat: [2.0, tr('叼著魚往樹枝上摔')], gulp: [1.6, tr('正在吞魚')],
   call: [1.2, tr('正在鳴叫')], eat: [1.5, tr('正在吃果實')], preen: [1.15, tr('理毛')], hunt: [1.1, tr('盯著獵物')], walk: [1.0, ''], look: [1.05, tr('抬頭張望')],
 }
 
