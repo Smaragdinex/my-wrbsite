@@ -544,7 +544,8 @@ function buildAlpine() {
     for (let i = n - 2; i >= 0; i--) sProf[i] = Math.min(sProf[i], sProf[i + 1] + 0.5 * Math.hypot(st[i + 1][0] - st[i][0], st[i + 1][1] - st[i][1]))
   }
   ALP_STREAM.prof = sProf
-  buildSteps(st, sProf)
+  // 2026-11-10 使用者：一開始那條溪也檢查 → 162 m 落差 46 m（坡度 28%，比河還陡），以前一段段平潭像一條水溝；跟河一樣大多是一路斜下去的急流
+  buildSteps(st, sProf, 911, { riffle: 0.7, rapid: true })
   // 瀑布湖水面：湖岸一圈原地形最低的地方再低 0.5（不會溢出去）
   { const LK = YOSE.lake; let lo = 1e9; for (let a = 0; a < 48; a++) lo = Math.min(lo, alpBase(LK.x + Math.cos(a / 48 * TAU) * LK.rx * 1.05, LK.z + Math.sin(a / 48 * TAU) * LK.rz * 1.05)); LK.water = lo - 0.5 }
   {
@@ -651,7 +652,10 @@ function buildAlpine() {
         // 2026-11-07：原本挖 7 公尺、兩側 8 公尺內就收，橋下變成一條方方正正的溝；改成淺一點、兩側慢慢收（溪谷本身已經夠深）
         const deckY = lerp(prof[ALP_BRIDGE.a], prof[ALP_BRIDGE.a + 2], tb) - BRIDGE_DIM.sag * Math.sin(Math.PI * tb), m = Math.min(tb, 1 - tb)
         const under = deckY - 0.45 * smoothstep(0, 0.04, m) - 2.5 * smoothstep(0.03, 0.35, m)
+        const hPre = h
         h = Math.min(h, lerp(under, h, smoothstep(BRIDGE_DIM.hw + 0.8, BRIDGE_DIM.hw + 14, db)))
+        // 2026-11-10：溪邊原本比水面高的岸，不能被挖到比水面低（吊橋底下溪面兩邊浮起 1.5 公尺）
+        if (ds0 < 4) { const wS = ALP_STREAM.water(ALP_STREAM.sAt(x, z)); if (hPre > wS) h = Math.max(h, Math.min(hPre, wS + 0.12)) }
       }
     }
     // 山頂：步道終點一小塊平地（2026-11-08 拿掉觀景台，不再削一大片平台）；終點旁邊的山頭不能比終點高太多，步道才不會走在溝裡
