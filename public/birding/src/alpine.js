@@ -267,14 +267,14 @@ function buildInterior(lib, avoid = []) {
       for (let i = 0; i < 5000; i++) { const l = 150 + Math.random() * 105; x.fillStyle = `rgba(${l},${l},${l},0.5)`; x.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 1 + Math.random() * 3) }
     })
     detail.wrapS = detail.wrapT = THREE.RepeatWrapping
-    const ground = new THREE.Mesh(geo, wetify(new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.95 }), { dark: 0.32, rough: 0.45 }))
+    const ground = new THREE.Mesh(geo, dappled(wetify(new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.95 }), { dark: 0.32, rough: 0.45 })))
     ground.receiveShadow = true; ground.userData.terrain = true; g.add(ground)   // terrain：拍照算遮擋時用高度表，不逐個三角形打射線（scoring.js）
   }
   // 水池＋溪：自己寫的水 shader（溪和池共用）。
   // 水面是平的（不沿著岸往上爬），岸邊靠深度測試自然切掉；每個頂點帶「水深」（水面 - 地形）和「坡度」：
   // 深的地方偏墨綠、淺的地方透出溪底，邊緣淡掉並有一圈白沫；看斜的地方反射天空（菲涅耳）、太陽方向有閃光；
   // 坡度大的那幾段流得快、一片白（小瀑布、急流）。水紋是兩層往下游捲動的雜訊，算法線用。
-  const spray = []
+  const spray = [], fallFx = []
   const waterU = { uTime: { value: 0 }, uDay: dayLight, uSun: { value: V(-0.45, 0.8, 0.3).normalize() } }
   // 2026-11-07 第三版（跟 ChatGPT 討論過，依截圖的三個問題改）：
   // 1. 反射：低角度看水面反射的是兩岸的樹和石壁（暗綠），不是白色天空；太陽高光縮小——原本像灰白塑膠
@@ -374,6 +374,9 @@ function buildInterior(lib, avoid = []) {
         col *= mix(0.12, 1.0, uDay);
         float a = mix(0.28, 0.86, d) + foam * 0.55 + fres * 0.35 + fall * 0.1 + lip * 0.2;
         a = mix(a, mix(0.18, 0.4, strands) + 0.58 * curtain, fall);
+        // 水簾兩側邊緣碎成一絲絲（越往下越碎），不是一條切齊的直邊
+        float edgeD = min(vUv.x, 1.0 - vUv.x);
+        a *= mix(1.0, smoothstep(0.0, 0.06 + 0.14 * vnoise(vec2(vUv.x * 40.0, vUv.y * 1.5 - uTime * 4.0)), edgeD), fall);
         col = mix(col, col * 0.45, fall * (1.0 - strands) * (1.0 - foam));   // 跌水那面：水絲不透明、水絲之間半透明   // 淺的地方看得到溪底
         a *= smoothstep(0.0, 0.05, vDepth);                                      // 岸邊淡掉，不會有一條硬邊
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
@@ -478,7 +481,8 @@ function buildInterior(lib, avoid = []) {
       let la = best ? best.a - 0.15 : -0.45, lb = best ? best.b + 0.15 : 0.45
       // 2026-11-10 使用者：石頭瀑布落下來的水最後插出地形 → 跌水下面那排如果比門檻寬（例如落進水池、下面整片都比水面低），
       // 水簾兩側會斜斜地往外張開、下緣兩角穿出岸邊的岩石。跌水正下方那排不能比上面門檻那排寬：水簾兩側直直落下、留在岸裡面
-      if (prevRow && prevRow.w - w > 0.12) { la = Math.max(la, prevRow.la); lb = Math.min(lb, prevRow.lb); if (lb - la < 0.6) { const m = (la + lb) / 2; la = m - 0.3; lb = m + 0.3 } }
+      const inFall = st.lipS != null && S[i] > st.lipS - 0.1 && S[i] < st.lipS + 1.8   // 2026-11-11 河口真瀑布：水簾越往下越散、越寬（每排最多外擴 0.12 m）
+      if (prevRow && prevRow.w - w > 0.12) { la = Math.max(la, prevRow.la - (inFall ? 0.12 : 0)); lb = Math.min(lb, prevRow.lb + (inFall ? 0.12 : 0)); if (lb - la < 0.6) { const m = (la + lb) / 2; la = m - 0.3; lb = m + 0.3 } }
       prevRow = { w, la, lb }
       for (let k = 0; k <= K; k++) {
         const t = k / K, lat = la + (lb - la) * t, [x, z] = at2(lat)
@@ -525,6 +529,8 @@ function buildInterior(lib, avoid = []) {
         for (const sgn of [-1, 1]) {
           for (let y = d.up - 0.2; y > d.down - 0.3; y -= 0.9 + rr() * 0.5) { const b = at(d.s - 0.5 - rr() * 0.4), o = (hw + 0.25 + rr() * 0.5) * sgn, k = 0.7 + rr() * 0.6; put(rr() < 0.6 ? BIG : MOSS, b.x + b.sx * o, b.z + b.sz * o, y - 0.55 * k, k, 0.85) }   // 疊在水簾兩側的岩壁上（岩唇線往後、水寬外面），不擋在水前面
           for (let j = 0; j < 2 + (rr() < 0.5 ? 1 : 0); j++) { const b = at(d.s + 2 + rr() * 3), o = (hw + 0.6 + rr() * 1.4) * sgn, k = 0.7 + rr() * 0.6; put(rr() < 0.5 ? BIG : MOSS, b.x + b.sx * o, b.z + b.sz * o, d.down - 0.6 * k, k, 0.85) }
+          // 檢查員：瀑布兩側、後方是一大片光滑的灰土坡（像水泥牆）→ 用掃描的岩壁模型（rock_face）一塊塊貼上去，從潭邊疊到岩唇高度
+          for (let j = 0; j < 4; j++) { const A = rr() < 0.5, k = A ? 0.55 + rr() * 0.25 : 0.9 + rr() * 0.4, half = (A ? 2.2 : 1.25) * k, b = at(d.s - 1.4 + j * 1.7 + rr() * 0.5), o = (hw + 0.5 + half) * sgn; put(A ? ['rockface_a'] : ['rockface_b'], b.x + b.sx * o, b.z + b.sz * o, d.down - 0.9 + (j < 2 ? d.h * 0.5 : 0) * (0.4 + rr() * 0.6), k, 0.9) }   // rockface_a 原本 5×3.6×3.8 m、b 2.7×2.5×2.1 m：都縮成約 3 m 一塊，中心放在水寬外面（不蓋到水簾）
         }
         continue
       }
@@ -650,6 +656,28 @@ function buildInterior(lib, avoid = []) {
         sp_.position.set(c.x + c.sx * o, d.down + 0.15 + rr() * 0.25, c.z + c.sz * o)
         sp_.userData = { y0: sp_.position.y, ph: rr() * TAU, s0: z0 }; sp_.renderOrder = 6
         g.add(sp_); spray.push(sp_)
+      }
+      if (d.fall) {
+        // 2026-11-11 檢查員：5 m 瀑布落水處幾乎沒有白水（ChatGPT：落點白沫 45～70%、消能潭 20～40%、水霧往上翻 1～2 m）→
+        // ① 落點一大團往上翻的水霧（10 團，從水面往上飄 1～2.2 m 再散掉）② 兩層白沫圈（落點密、消能潭疏）③ 4 道往外擴散的漣漪
+        const P = at(d.s + 1.5), cx = P.x, cz = P.z, yW = d.down
+        for (let k = 0; k < 10; k++) {
+          const sp_ = new THREE.Sprite(new THREE.SpriteMaterial({ map: sprayT, transparent: true, depthWrite: false, fog: true, opacity: 0 }))
+          sp_.position.set(cx + (rr() - 0.5) * 3.4, yW, cz + (rr() - 0.5) * 1.6); sp_.renderOrder = 6
+          sp_.userData = { rise: true, y0: yW + 0.1, x0: sp_.position.x, z0: sp_.position.z, ph: rr(), s0: 1.2 + rr() * 1.2, h: 1.0 + rr() * 1.2, sp: 0.18 + rr() * 0.12 }
+          g.add(sp_); spray.push(sp_)
+        }
+        const foamT = canvasTex(256, 256, (x, w, h) => { const r9 = mulberry32(77); for (let i = 0; i < 1400; i++) { const a = r9() * TAU, dd = Math.pow(r9(), 0.75) * w * 0.48; x.fillStyle = `rgba(255,255,255,${(0.12 + r9() * 0.5) * (1 - dd / (w * 0.5))})`; x.beginPath(); x.arc(w / 2 + Math.cos(a) * dd, h / 2 + Math.sin(a) * dd, 1.5 + r9() * 7, 0, TAU); x.fill() } })
+        const ang = Math.atan2(P.sx, P.sz)
+        for (const [rad, op, sq] of [[2.6, 0.85, 0.7], [5.5, 0.4, 0.75]]) {
+          const fm = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: op, fog: true }))
+          fm.position.set(cx, yW + 0.015 + (rad > 3 ? 0 : 0.005), cz); fm.rotation.y = ang; fm.scale.set(rad, 1, rad * sq); fm.renderOrder = 3
+          fm.userData = { foam: true, op, rad, sq }; g.add(fm); fallFx.push(fm)
+        }
+        for (let k = 0; k < 4; k++) {
+          const rg = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe8f2f2, transparent: true, depthWrite: false, opacity: 0, fog: true }))
+          rg.position.set(cx, yW + 0.02, cz); rg.rotation.y = ang; rg.renderOrder = 3; rg.userData = { ring: true, ph: k / 4 }; g.add(rg); fallFx.push(rg)
+        }
       }
     }
       }
@@ -1632,7 +1660,39 @@ function buildInterior(lib, avoid = []) {
       }
     }
   }
-  return { g, mist, spray, waterU, updateMist }
+  return { g, mist, spray, fallFx, waterU, updateMist }
+}
+
+// 2026-11-11 使用者：太陽出來的光要很漂亮（ChatGPT 光照 V2「陽光斑駁比雲隙光更重要」：樹冠間隙讓 10～25% 的林地有光斑）
+// 做法：樹投下的影子裡（平行光的 shadow map）再透出一塊塊光斑——shadow 值取 max(影子, 光斑)；沒有樹影的地方（空地）完全不變。
+// 光斑＝世界座標的兩層雜訊（大塊 1.5～4 m、小塊 0.3～0.8 m），跟著風輕輕晃
+export const dapU = { uDapT: { value: 0 } }
+export function dappled(mat) {
+  const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey?.bind(mat)
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r)
+    sh.uniforms.uDapT = dapU.uDapT
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vDapW;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvDapW = (modelMatrix * vec4(transformed, 1.0)).xyz;')
+    const fn = `
+      varying vec3 vDapW; uniform float uDapT;
+      float dHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float dNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(dHash(i), dHash(i + vec2(1, 0)), f.x), mix(dHash(i + vec2(0, 1)), dHash(i + vec2(1, 1)), f.x), f.y); }
+      float dapFleck() {
+        vec2 q = vDapW.xz + vec2(sin(uDapT * 0.6), cos(uDapT * 0.45)) * 0.12;
+        float big = dNoise(q * 0.45) * 0.6 + dNoise(q * 0.9 + 3.1) * 0.4;
+        float sm = dNoise(q * 2.2 + 7.7) * 0.6 + dNoise(q * 4.1 + 1.3) * 0.4;
+        return smoothstep(0.54, 0.6, big * 0.55 + sm * 0.45) * 0.85;   // 門檻 0.6→0.54：樹影裡約兩成透出光斑
+      }`
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + fn)
+      .replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin.replace(
+        'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ],',
+        'directLight.color *= ( directLight.visible && receiveShadow ) ? max( dapFleck() * step( 0.0, dot( geometryNormal, directLight.direction ) ), getShadow( directionalShadowMap[ i ],').replace(
+        'directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;',
+        'directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) ) : 1.0;'))
+  }
+  mat.customProgramCacheKey = () => (prevKey ? prevKey() : '') + '|dap'
+  return mat
 }
 
 /* ---------- 對外 ---------- */
@@ -1645,7 +1705,13 @@ export function createAlpine({ scene, lib, avoid = [] }) {
     animate(t, dt, camera) {
       if (!interior) return
       interior.waterU.uTime.value = t
-      for (const sp of interior.spray) { const u = sp.userData; sp.position.y = u.y0 + Math.sin(t * 2.3 + u.ph) * 0.15; sp.material.opacity = 0.35 + 0.2 * Math.sin(t * 3.1 + u.ph * 2); const k = u.s0 * (1 + 0.12 * Math.sin(t * 1.7 + u.ph)); sp.scale.set(k * 1.6, k, 1); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value) }
+      dapU.uDapT.value = t
+      for (const o of interior.fallFx) {
+        const u = o.userData, dl = 0.12 + 0.88 * dayLight.value
+        if (u.foam) { o.material.map.offset.set(Math.sin(t * 0.3) * 0.02, t * 0.015 % 1); o.material.map.center.set(0.5, 0.5); o.material.map.rotation = t * (u.rad > 3 ? 0.03 : -0.06); o.material.opacity = u.op * (0.85 + 0.15 * Math.sin(t * 2.1)); o.material.color.setScalar(dl) }
+        else if (u.ring) { const f = (t * 0.33 + u.ph) % 1, r = 1.5 + f * 6; o.scale.set(r * (1 + 0.08 * Math.sin(t + u.ph * 7)), 1, r * 0.75); o.material.opacity = 0.13 * (1 - f) * Math.min(1, f * 6); o.material.color.setScalar(dl) }
+      }
+      for (const sp of interior.spray) { const u = sp.userData; if (u.rise) { const f = (t * u.sp + u.ph) % 1; sp.position.set(u.x0 + Math.sin(t * 0.7 + u.ph * 9) * 0.3, u.y0 + f * u.h, u.z0); const k = u.s0 * (0.7 + f * 0.9); sp.scale.set(k * 1.5, k, 1); sp.material.opacity = 0.42 * Math.sin(f * Math.PI); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value); continue } sp.position.y = u.y0 + Math.sin(t * 2.3 + u.ph) * 0.15; sp.material.opacity = 0.35 + 0.2 * Math.sin(t * 3.1 + u.ph * 2); const k = u.s0 * (1 + 0.12 * Math.sin(t * 1.7 + u.ph)); sp.scale.set(k * 1.6, k, 1); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value) }
       interior.updateMist(t, dt, camera)
     },
   }
