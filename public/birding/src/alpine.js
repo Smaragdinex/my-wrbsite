@@ -378,7 +378,7 @@ function buildInterior(lib, avoid = []) {
     const wm = st === ALP_STREAM ? waterM : (() => { const m = waterM.clone(); m.uniforms = { ...m.uniforms, uTime: waterU.uTime, uDay: dayLight, uSun: waterU.uSun }; return m })()
     const P = []
     for (let i = 0; i < st.length; i++) P.push(V(st[i][0], 0, st[i][1]))
-    const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.25), K = 16
+    const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.25), K = st.wide ? 26 : 16, WK = st.wide ? 2.1 : 1, LATR = st.wide ? 7.5 : 4   // 寬的河：斷面 26 個頂點、往兩邊找 7.5 公尺；石頭的位置照河寬放大 WK 倍
     const sp = [], su = [], sd = [], ss_ = [], sf = [], sl = [], si = []
     const S = []
     for (let i = 0; i <= N; i++) { const p = curve.getPointAt(i / N); S.push(st.sAt(p.x, p.z)) }
@@ -403,12 +403,12 @@ function buildInterior(lib, avoid = []) {
       // 2026-11-09：斷面以前從平滑曲線的中心往兩邊找岸，但溪谷是照折線挖的，轉彎處曲線會偏離溪谷快 1 公尺——
       // 中心落在岸上、只找到一小段，半條溪沒有水面（看起來是乾的溪床）。改成在 ±4 公尺內，從第一個比水面低的點到最後一個都鋪水面
       let a0 = null, b0 = null
-      for (let lat = -4; lat <= 4.001; lat += 0.1) { const [x, z] = at2(lat); if (alpineHeight(x, z) < w) { if (a0 === null) a0 = lat; b0 = lat } }
+      for (let lat = -LATR; lat <= LATR + 0.001; lat += 0.1) { const [x, z] = at2(lat); if (alpineHeight(x, z) < w) { if (a0 === null) a0 = lat; b0 = lat } }
       const best = a0 === null ? null : { a: a0, b: b0 }   // 中間凸出水面的石頭、沙洲：那幾格水深 < 0，shader 自己會透明
       const la = best ? best.a - 0.15 : -0.45, lb = best ? best.b + 0.15 : 0.45
       for (let k = 0; k <= K; k++) {
         const t = k / K, lat = la + (lb - la) * t, [x, z] = at2(lat)
-        sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(slope); sf.push(f); sl.push(lp)
+        sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(st.wide ? slope * 0.3 : slope); sf.push(f); sl.push(lp)   // 寬的河：淺灘是斜的，坡度白沫只留三成（ChatGPT：白沫主要在石頭邊、落水處）
       }
       if (i) for (let k = 0; k < K; k++) { const A = (i - 1) * (K + 1) + k, B = A + 1, C = A + K + 1, D = C + 1; si.push(A, C, B, B, C, D) }
     }
@@ -422,6 +422,7 @@ function buildInterior(lib, avoid = []) {
     const MOSS = ['mrock_8', 'mrock_10', 'mrock_2', 'mrock_5', 'mrock_11'], BIG = ['boulder', 'mrock_3', 'mrock_7', 'mrock_9', 'mrock_12']
     const at = (s) => { let i = 0; while (i < st.length - 2 && st.S[i + 1] < s) i++; const u = (s - st.S[i]) / (st.S[i + 1] - st.S[i]); const x = lerp(st[i][0], st[i + 1][0], u), z = lerp(st[i][1], st[i + 1][1], u), dx = st[i + 1][0] - st[i][0], dz = st[i + 1][1] - st[i][1], l = Math.hypot(dx, dz); return { x, z, sx: -dz / l, sz: dx / l } }
     const put = (names, x, z, y, k, flat = 0.75) => {
+      if (st.wide && alpineTrailDist(x, z) < 1.5 + k * 0.9) return   // 寬的河的石頭不能擋到步道（河岸的大石頭以前滾到路上）
       const n = names[Math.floor(rr() * names.length)]
       ;(stones[n] ||= []).push({ p: V(x, y, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler((rr() - 0.5) * 0.4, rr() * TAU, (rr() - 0.5) * 0.4)), s: V(k, k * (flat + rr() * 0.35), k), c: new THREE.Color().setHSL(0.2, 0.1, 0.62 + rr() * 0.18) })
     }
@@ -431,28 +432,39 @@ function buildInterior(lib, avoid = []) {
       for (const sgn of [-1, 1]) {
         const n = 1 + (rr() < 0.6 ? 1 : 0)
         for (let j = 0; j < n; j++) {
-          const r = 0.75 + rr() * 0.7 + j * 0.8, x = c.x + c.sx * r * sgn, z = c.z + c.sz * r * sgn, back = (rr() - 0.3) * 0.8
+          const r = (0.75 + rr() * 0.7 + j * 0.8) * WK, x = c.x + c.sx * r * sgn, z = c.z + c.sz * r * sgn, back = (rr() - 0.3) * 0.8
           const k = 0.45 + Math.min(0.5, d.h * 0.3) + rr() * 0.3
           put(BIG, x - c.sz * back, z + c.sx * back, d.up - 0.35 - rr() * 0.2, k)
         }
       }
       // 門檻上：兩三顆石頭冒出水面，把翻下去的水切成幾股（門檻看起來才不是一條直線）
-      for (let j = 0, n = 2 + (rr() < 0.5 ? 1 : 0); j < n; j++) { const o = (rr() - 0.5) * 2.2, b = at(d.s - 0.1 + (rr() - 0.5) * 0.5); put(MOSS, b.x + b.sx * o, b.z + b.sz * o, d.up - 0.3, 0.26 + rr() * 0.2, 0.6) }
+      for (let j = 0, n = 2 + (rr() < 0.5 ? 1 : 0); j < n; j++) { const o = (rr() - 0.5) * 2.2 * WK, b = at(d.s - 0.1 + (rr() - 0.5) * 0.5); put(MOSS, b.x + b.sx * o, b.z + b.sz * o, d.up - 0.3, 0.26 + rr() * 0.2, 0.6) }
       // 跌水正下方：幾顆被沖圓的石頭半沉在潭裡
       for (let j = 0; j < 2; j++) { const b = at(d.s + 1.2 + rr() * 1.8), o = (rr() - 0.5) * 1.6; put(MOSS, b.x + b.sx * o, b.z + b.sz * o, d.down - 0.3, 0.22 + rr() * 0.18, 0.55) }
     }
+    // 2026-11-11 寬的河（ChatGPT：落差要有「石門檻」——整排大石頭橫過河道、兩端埋進岸裡、比上游水面高，中間留 1～2 個缺口讓水從缺口落下）
+    if (st.wide) for (const d of st.drops) {
+      const c = at(d.s - 0.2), hw = st.halfAt(d.s), gaps = [(rr() - 0.5) * hw * 0.8]
+      if (hw > 2.2 && rr() < 0.6) gaps.push(-gaps[0] * 0.9 + (rr() - 0.5) * 0.6)
+      for (let o = -hw - 0.6; o <= hw + 0.6; o += 0.55 + rr() * 0.35) {
+        if (gaps.some((gp) => Math.abs(o - gp) < 0.55 + rr() * 0.2)) continue
+        const k = 0.55 + d.h * 0.9 + rr() * 0.45, back = (rr() - 0.5) * 0.5
+        put(rr() < 0.55 ? BIG : MOSS, c.x + c.sx * o - c.sz * back, c.z + c.sz * o + c.sx * back, d.down - 0.25, k, 0.85)
+      }
+    }
     // 潭尾淺的地方、岸邊：零星的石頭（岸上的一半埋在土裡）
-    for (let s = 1; s < st.len - 1; s += 1.6) {
+    // 寬的河：岸上的大石頭多一點、大一點（ChatGPT：每 20 公尺 3～7 顆巨石），三成埋進土裡
+    for (let s = 1; s < st.len - 1; s += st.wide ? 0.9 : 1.6) {
       const c = at(s), sgn = rr() < 0.5 ? -1 : 1
-      if (rr() < 0.55) { const r = 1.6 + rr() * 1.2, x = c.x + c.sx * r * sgn, z = c.z + c.sz * r * sgn; put(rr() < 0.4 ? BIG : MOSS, x, z, alpineHeight(x, z) - 0.25, 0.3 + rr() * 0.45) }
-      if (rr() < 0.3) { const o = (rr() - 0.5) * 1.8, x = c.x + c.sx * o, z = c.z + c.sz * o, w = st.water(s); if (w - alpineHeight(x, z) < 0.45) put(MOSS, x, z, w - 0.18, 0.18 + rr() * 0.16, 0.5) }
+      if (rr() < 0.55) { const r = st.wide ? st.halfAt(s) + 0.3 + rr() * 3 : 1.6 + rr() * 1.2, x = c.x + c.sx * r * sgn, z = c.z + c.sz * r * sgn, kk = st.wide ? (rr() < 0.25 ? 1.0 + rr() * 1.4 : 0.35 + rr() * 0.6) : 0.3 + rr() * 0.45; put(rr() < 0.4 ? BIG : MOSS, x, z, alpineHeight(x, z) - 0.3 * kk, kk) }
+      if (rr() < 0.3) { const o = (rr() - 0.5) * 1.8 * WK, x = c.x + c.sx * o, z = c.z + c.sz * o, w = st.water(s); if (w - alpineHeight(x, z) < 0.45) put(MOSS, x, z, w - 0.18, 0.18 + rr() * 0.16, 0.5) }
     }
     // 溪床裡一顆顆圓圓的石頭（參考影片：水在石頭之間流，不是一條空的水道）：淺的地方多、冒出水面
-    for (let s = 0.8; s < st.len - 0.8; s += 0.9) {
+    for (let s = 0.8; s < st.len - 0.8; s += st.wide ? 0.55 : 0.9) {
       const c = at(s)
       for (let j = 0; j < 2; j++) {
         if (rr() < 0.35) continue
-        const o = (rr() - 0.5) * 3.2, x = c.x + c.sx * o, z = c.z + c.sz * o, w = st.water(s), dep = w - alpineHeight(x, z)
+        const o = (rr() - 0.5) * 3.2 * WK, x = c.x + c.sx * o, z = c.z + c.sz * o, w = st.water(s), dep = w - alpineHeight(x, z)
         if (dep < 0.02 || dep > 0.8) continue
         const k = 0.16 + rr() * 0.3 + (rr() < 0.15 ? 0.3 : 0)
         put(rr() < 0.25 ? BIG : MOSS, x, z, w - k * 0.55 - rr() * 0.1, k, 0.55)
@@ -488,7 +500,7 @@ function buildInterior(lib, avoid = []) {
         const sz = sizeOf[n]; if (!sz) continue
         for (const it of list) {
           const s = st.sAt(it.p.x, it.p.z), w = st.water(s), top = it.p.y + sz.y * it.s.y
-          if (top < w + 0.04 || it.p.y > w - 0.02 || alpineStreamDist(it.p.x, it.p.z) > 3.2) continue
+          if (top < w + 0.04 || it.p.y > w - 0.02 || alpineStreamDist(it.p.x, it.p.z) > 3.2 * WK) continue
           rocks.push({ x: it.p.x, z: it.p.z, r: Math.max(0.12, 0.42 * Math.max(sz.x, sz.z) * it.s.x) })
         }
       }
@@ -545,46 +557,93 @@ function buildInterior(lib, avoid = []) {
     }
       }
   }
-  // 2026-11-11 河過步道的石拱橋（layout.js RIVER_BRIDGES；走的高度 riverBridgeAt）：花崗岩砌的橋身、一個圓拱讓河從底下流過，兩側矮石欄
+  // 2026-11-11 河過步道的石拱橋（layout.js RIVER_BRIDGES；走的高度 riverBridgeAt）
+  // 第二版（使用者：石欄像一顆顆大方塊、太假）：照山裡老石橋做——
+  // 橋身：不規則的亂石砌（灰褐、灰縫深），越靠水越暗、長青苔；拱圈一圈楔形拱石；
+  // 橋面：磨舊的不規則石板（縫裡有土和青苔），兩頭延伸到步道上、壓進土裡；石欄：低矮的乾砌石牆（牆心＋一顆顆疊的石頭＋長條壓頂石），兩端往外撇
   if (RIVER_BRIDGES.length) {
-    // 方整的花崗岩塊砌的（一排排錯縫、灰縫深一點）
-    const ashlar = canvasTex(256, 256, (x, w, h) => {
-      x.fillStyle = '#77736c'; x.fillRect(0, 0, w, h); const r = mulberry32(31)
-      for (let row = 0; row < 8; row++) { let cx = -(row % 2) * 24; while (cx < w) { const bw = 40 + r() * 34, l = 150 + r() * 50; x.fillStyle = `rgb(${l},${l - 4},${l - 12})`; x.fillRect(cx + 2, row * 32 + 2, bw - 4, 28); for (let k = 0; k < 40; k++) { x.fillStyle = `rgba(${r() < 0.5 ? 40 : 230},${r() < 0.5 ? 40 : 230},${r() < 0.5 ? 40 : 230},0.18)`; x.fillRect(cx + 2 + r() * (bw - 6), row * 32 + 2 + r() * 26, 2, 2) } cx += bw } }
+    const rubbleT = canvasTex(512, 512, (x, w, h) => {
+      x.fillStyle = '#3d3a35'; x.fillRect(0, 0, w, h); const r = mulberry32(31)
+      for (let row = 0; row < 14; row++) {
+        let cx = -r() * 30
+        const y0 = row * 37 + (r() - 0.5) * 6
+        while (cx < w) {
+          const bw = 28 + r() * 46, bh = 26 + r() * 12, l = 95 + r() * 60, wm = r() * 18
+          x.fillStyle = `rgb(${l + wm},${l + wm * 0.6},${l - 6})`
+          x.beginPath(); x.ellipse(cx + bw / 2, y0 + bh / 2, bw / 2 - 2, bh / 2 - 2, (r() - 0.5) * 0.2, 0, TAU); x.fill()
+          for (let k = 0; k < 18; k++) { const v = r() < 0.5 ? 40 : 220; x.fillStyle = `rgba(${v},${v},${v},0.14)`; x.fillRect(cx + 4 + r() * (bw - 8), y0 + 3 + r() * (bh - 6), 2, 2) }
+          cx += bw + 2
+        }
+      }
     })
-    ashlar.wrapS = ashlar.wrapT = THREE.RepeatWrapping; ashlar.repeat.set(0.45, 0.45)
-    const stoneM = new THREE.MeshStandardMaterial({ map: ashlar, roughness: 0.92 })
-    const capM = new THREE.MeshStandardMaterial({ color: 0xa9a399, roughness: 0.9 })
-    const rb = mulberry32(515), caps = []
+    rubbleT.wrapS = rubbleT.wrapT = THREE.RepeatWrapping; rubbleT.repeat.set(0.32, 0.32)
+    const flagT = canvasTex(512, 512, (x, w, h) => {
+      x.fillStyle = '#4a4538'; x.fillRect(0, 0, w, h); const r = mulberry32(57)
+      for (let row = 0; row < 8; row++) {
+        let cx = -r() * 40
+        while (cx < w) {
+          const bw = 50 + r() * 70, l = 108 + r() * 38, y0 = row * 64
+          x.fillStyle = `rgb(${l + 6},${l + 2},${l - 8})`
+          x.beginPath(); x.moveTo(cx + 3 + r() * 4, y0 + 3 + r() * 4); x.lineTo(cx + bw - 3 - r() * 4, y0 + 3 + r() * 4); x.lineTo(cx + bw - 3 - r() * 4, y0 + 61 - r() * 4); x.lineTo(cx + 3 + r() * 4, y0 + 61 - r() * 4); x.closePath(); x.fill()
+          for (let k = 0; k < 40; k++) { const v = r() < 0.5 ? 50 : 200; x.fillStyle = `rgba(${v},${v},${v - 10},0.1)`; x.fillRect(cx + r() * bw, y0 + r() * 60, 2 + r() * 3, 2) }
+          cx += bw
+        }
+      }
+      for (let k = 0; k < 260; k++) { x.fillStyle = `rgba(${60 + r() * 30},${80 + r() * 30},${40},0.35)`; x.fillRect(r() * w, (Math.floor(r() * 8) * 64 + 62) % h, 3 + r() * 8, 2) }   // 縫裡的青苔
+    })
+    flagT.wrapS = flagT.wrapT = THREE.RepeatWrapping
+    const bodyM = new THREE.MeshStandardMaterial({ map: rubbleT, vertexColors: true, roughness: 0.95 })
+    const deckM = new THREE.MeshStandardMaterial({ map: flagT, vertexColors: true, roughness: 0.92 })
+    const stoneM = new THREE.MeshStandardMaterial({ color: 0x8f897d, roughness: 0.95, vertexColors: false })
+    const rb = mulberry32(515), stones = [], cores = [], vous = []
+    const stoneG = new THREE.DodecahedronGeometry(0.5, 1); { const pp = stoneG.attributes.position; for (let i = 0; i < pp.count; i++) { const k = 0.88 + 0.24 * Math.abs(Math.sin(i * 7.31)); pp.setXYZ(i, pp.getX(i) * k, Math.sign(pp.getY(i)) * Math.min(Math.abs(pp.getY(i)), 0.3), pp.getZ(i) * k) } stoneG.computeVertexNormals() }
     for (const b of RIVER_BRIDGES) {
-      const st = ALP_STREAMS[1], w = st.water(st.sAt(b.x, b.z)), L = b.half + 0.4, top0 = b.y
-      const span = Math.min(2.9, b.half - 0.8), archTop = Math.min(top0 - Math.abs(b.k) * span - 0.5, w + 1.9), bot = w - 1.2 - Math.abs(b.k) * L
-      const sh = new THREE.Shape()
-      const N = 24
-      sh.moveTo(-L, bot)
-      sh.lineTo(-L, top0 - b.k * L)
-      for (let i = 0; i <= N; i++) { const u = -L + 2 * L * i / N; sh.lineTo(u, top0 + b.k * u + 0.25 * Math.cos(Math.min(1, Math.abs(u) / b.half) * Math.PI / 2) ** 2) }
-      sh.lineTo(L, bot)
-      sh.lineTo(span, bot)
-      for (let i = 0; i <= N; i++) { const a2 = Math.PI * i / N, u = span * Math.cos(a2), y = w - 0.4 + (archTop - (w - 0.4)) * Math.sin(a2); sh.lineTo(u, y) }
-      sh.lineTo(-span, bot)
-      sh.lineTo(-L, bot)
-      const D = (b.hw + 0.3) * 2, eg = new THREE.ExtrudeGeometry(sh, { depth: D, bevelEnabled: false })
-      eg.translate(0, 0, -D / 2)
-      const m = new THREE.Mesh(eg, stoneM)
-      // 形狀的 x＝沿著路（b.dir）、z＝橫過路
-      m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(V(b.dir[0], 0, b.dir[1]), V(0, 1, 0), V(-b.dir[1], 0, b.dir[0])))
-      m.position.set(b.x, 0, b.z); m.castShadow = true; m.receiveShadow = true; g.add(m)
-      // 兩側石欄：一顆顆蓋頂石；碰撞（橋面上不能從旁邊掉下去）
-      for (const sd of [-1, 1]) for (let u = -L + 0.3; u <= L - 0.3; u += 0.62) {
-        const y = top0 + b.k * u + 0.25 * Math.cos(u / b.half * Math.PI / 2) ** 2, ox = -b.dir[1] * sd * (b.hw + 0.1), oz = b.dir[0] * sd * (b.hw + 0.1)
-        caps.push({ p: V(b.x + b.dir[0] * u + ox, y + 0.32, b.z + b.dir[1] * u + oz), yaw: Math.atan2(b.dir[0], b.dir[1]), s: V(0.42, 0.62, 0.6), c: 0.85 + rb() * 0.25 })
-        addCollider(b.x + b.dir[0] * u + ox, b.z + b.dir[1] * u + oz, 0.28, y + 0.9)
+      const st = ALP_STREAMS[1], w = st.water(st.sAt(b.x, b.z)), L = b.half + 0.3, top0 = b.y
+      const span = Math.min((b.river ?? 2.3) + 0.6, b.half - 0.8), archTop = Math.min(top0 - Math.abs(b.k) * span - 0.6, w + 1.9), bot = w - 1.2 - Math.abs(b.k) * L
+      const deckY = (u) => top0 + b.k * u + 0.25 * Math.cos(Math.min(1, Math.abs(u) / b.half) * Math.PI / 2) ** 2
+      const sh = new THREE.Shape(), N = 28
+      sh.moveTo(-L, bot); sh.lineTo(-L, deckY(-L) - 0.12)
+      for (let i = 0; i <= N; i++) { const u = -L + 2 * L * i / N; sh.lineTo(u, deckY(u) - 0.12) }
+      sh.lineTo(L, bot); sh.lineTo(span, bot)
+      for (let i = 0; i <= N; i++) { const a2 = Math.PI * i / N; sh.lineTo(span * Math.cos(a2), w - 0.4 + (archTop - (w - 0.4)) * Math.sin(a2)) }
+      sh.lineTo(-span, bot); sh.lineTo(-L, bot)
+      const D = (b.hw + 0.3) * 2, eg = new THREE.ExtrudeGeometry(sh, { depth: D, bevelEnabled: false }); eg.translate(0, 0, -D / 2)
+      { const pp = eg.attributes.position, cc = new Float32Array(pp.count * 3)
+        for (let i = 0; i < pp.count; i++) { const y = pp.getY(i), wet = ss(w + 1.4, w - 0.2, y), n = fbm2(pp.getX(i) * 0.8, y * 0.8 + pp.getZ(i), 2)   // 靠水越暗、帶青苔
+          cc[i * 3] = (0.95 - 0.45 * wet) * (0.9 + 0.2 * n); cc[i * 3 + 1] = (0.93 - 0.32 * wet) * (0.9 + 0.2 * n); cc[i * 3 + 2] = (0.88 - 0.48 * wet) * (0.9 + 0.2 * n) }
+        eg.setAttribute('color', new THREE.BufferAttribute(cc, 3)) }
+      const basis = new THREE.Matrix4().makeBasis(V(b.dir[0], 0, b.dir[1]), V(0, 1, 0), V(-b.dir[1], 0, b.dir[0]))
+      const m = new THREE.Mesh(eg, bodyM); m.quaternion.setFromRotationMatrix(basis); m.position.set(b.x, 0, b.z); m.castShadow = true; m.receiveShadow = true; g.add(m)
+      const toW = (u, y, v) => V(b.x + b.dir[0] * u - b.dir[1] * v, y, b.z + b.dir[1] * u + b.dir[0] * v)
+      // 橋面石板：一條帶子，兩頭各多 1.4 公尺鋪到步道上、慢慢壓進土裡
+      { const E = 1.4, NU = 40, pos = [], uv = [], col = [], idx = []
+        for (let i = 0; i <= NU; i++) {
+          const u = -L - E + (2 * (L + E)) * i / NU, out = Math.max(0, Math.abs(u) - L), y = deckY(Math.max(-L, Math.min(L, u))) + b.k * Math.sign(u) * out + 0.005 - 0.07 * ss(0, E, out)
+          for (const v of [-b.hw - 0.05, b.hw + 0.05]) { const p = toW(u, y, v); pos.push(p.x, p.y, p.z); uv.push(u * 0.42, v * 0.42); const f = 1 - 0.35 * ss(0.2, E, out); col.push(f, f, f) }
+          if (i) { const a = (i - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) }
+        }
+        const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); dg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); dg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); dg.setIndex(idx); dg.computeVertexNormals()
+        const dm = new THREE.Mesh(dg, deckM); dm.receiveShadow = true; g.add(dm) }
+      // 拱圈：兩面各一圈楔形拱石（比牆面凸一點、顏色淡一點）
+      for (const sd of [-1, 1]) for (let i = 0; i <= 13; i++) {
+        const a2 = Math.PI * i / 13, rx = span + 0.22, ry = archTop - (w - 0.4) + 0.22, u = rx * Math.cos(a2), y = w - 0.4 + ry * Math.sin(a2)
+        const nrm = Math.atan2(Math.sin(a2) / ry, Math.cos(a2) / rx)
+        vous.push({ p: toW(u, y, sd * (b.hw + 0.32)), q: new THREE.Quaternion().setFromRotationMatrix(basis).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, nrm - Math.PI / 2))), s: V(0.32, 0.5, 0.12) })
+      }
+      // 石欄：低矮的乾砌石牆，兩端往外撇（接到路邊）
+      for (const sd of [-1, 1]) for (let u = -L - 0.6; u <= L + 0.6; u += 0.42) {
+        const flare = Math.max(0, Math.abs(u) - L) * 0.7, v = sd * (b.hw + 0.12 + flare), y = deckY(Math.max(-L, Math.min(L, u))) + b.k * Math.sign(u) * Math.max(0, Math.abs(u) - L)
+        { const q0 = toW(u, 0, v); if (alpineTrailDist(q0.x, q0.z) < 1.35) continue }   // 橋頭外面那段石欄：路在橋頭轉彎時不能伸到路上
+        cores.push({ p: toW(u, y + 0.26, v), q: new THREE.Quaternion().setFromRotationMatrix(basis), s: V(0.46, 0.55, 0.32) })
+        for (let c = 0; c < 2; c++) for (let k = 0; k < 2; k++) stones.push({ p: toW(u + k * 0.21 + (c % 2) * 0.1 - 0.1, y + 0.1 + c * 0.2, v + (rb() - 0.5) * 0.04), q: new THREE.Quaternion().setFromRotationMatrix(basis).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), (rb() - 0.5) * 0.3)), s: V(0.3 + rb() * 0.16, 0.2 + rb() * 0.06, 0.38), c: 0.75 + rb() * 0.3 })
+        stones.push({ p: toW(u, y + 0.58, v), q: new THREE.Quaternion().setFromRotationMatrix(basis).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), (rb() - 0.5) * 0.08)), s: V(0.52, 0.1, 0.44), c: 0.85 + rb() * 0.2 })
+        const cp = toW(u, 0, v); addCollider(cp.x, cp.z, 0.24, y + 0.8)
       }
     }
-    const cm = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), capM, caps.length), m4b = new THREE.Matrix4(), qb = new THREE.Quaternion(), cc = new THREE.Color()
-    caps.forEach((c, i) => { cm.setMatrixAt(i, m4b.compose(c.p, qb.setFromAxisAngle(V(0, 1, 0), c.yaw), c.s)); cm.setColorAt(i, cc.setScalar(c.c)) })
-    cm.castShadow = true; cm.receiveShadow = true; cm.computeBoundingSphere(); g.add(cm)
+    const im = (list, geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, list.length), m4b = new THREE.Matrix4(), cc = new THREE.Color(); list.forEach((c, i) => { m.setMatrixAt(i, m4b.compose(c.p, c.q, c.s)); if (c.c) m.setColorAt(i, cc.setScalar(c.c)) }); m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m) }
+    im(cores, new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ map: rubbleT, color: 0x77726a, roughness: 0.98 }))
+    im(stones, stoneG, stoneM)
+    im(vous, new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ map: rubbleT, color: 0xb0aa9e, roughness: 0.95 }))
   }
   // 吊橋：照台灣山區的人行吊橋做——兩端鋼構橋塔（H 形、漆成深綠，站在混凝土基座上），
   // 兩條主鋼纜從塔頂垂成拋物線、往後拉到地上的錨碇；每 0.6 公尺一根吊索拉著橋面的橫樑；

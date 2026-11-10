@@ -280,8 +280,9 @@ buildHeights()
 // 溪：從山頂東南側的山泉（離觀景台不遠）往下，沿著山谷一路流到入口旁的水池；陡的那幾段是小瀑布
 export const ALP_STREAM = [[151, -2], [150, -8], [147, -13], [142, -16.5], [135, -15.5], [130.5, -14.2], [125.5, -13.4], [120.5, -14.2], [114, -16.5], [109, -18], [100, -19], [94, -18]].map(([x, z]) => AM(x, z))
 // 2026-11-11 瀑布湖流出來的河（世界座標）：從湖的西岸出水口往西南，繞過營地南邊、穿過營地支線和主步道（各一座石橋），一路下坡流進山下湖（溪口旁邊，兩股水在湖口會合）。
-// 路線是照地形找的最省力下坡（湖 31 m → 山下湖 0 m），中間不會往上爬
-export const ALP_RIVER = [[185, 76], [183.4, 73.8], [180, 66], [176, 58], [168, 49], [160, 41], [151, 36], [142, 31], [135, 25], [129, 18], [124, 10], [122, 0], [121, -10], [120, -20], [119, -28]]   // 中段往東南讓開栗背林鴝（134, 33）和黃嘴角鴞那棵樹；過營地支線的地方離岔路口 7 公尺（橋不能蓋在岔路口上）
+// 路線是照地形找的最省力下坡（湖 31 m → 山下湖 0 m），中間不會往上爬。2026-11-11 加寬（ChatGPT 建議：基準 5 m、2.5～8 m、湖口 7～8 m），上段往東讓開營地的帳篷
+export const ALP_RIVER = [[185, 76], [183.4, 73.8], [184, 66], [180, 57], [171, 50], [160, 41], [151, 36], [142, 31], [135, 25], [129, 18], [124, 10], [122, 0], [121, -10], [120, -20], [119, -28]]   // 中段往東南讓開栗背林鴝（134, 33）和黃嘴角鴞那棵樹；過營地支線的地方離岔路口 7 公尺（橋不能蓋在岔路口上）
+ALP_RIVER.wide = true
 export const ALP_STREAMS = [ALP_STREAM, ALP_RIVER]
 // 河過步道的地方：石拱橋（橋面＝步道高度；橋下照河挖，不鋪路）。buildAlpine 算出 x, z, y, dir
 export const RIVER_BRIDGES = []
@@ -429,7 +430,7 @@ function alpBase(X, Z) {
 // 潭的水面＝那段下游端的溪床再高一點（潭尾的石頭門檻），潭底往上游挖深（瀑布底下的沖刷潭最深）。
 // 陡的地方潭短、落差大；平的地方潭長、落差小（像淺灘）。
 const STEP = 0.25
-function buildSteps(st, sProf, seed0 = 911, { want0 = 0.55, wantR = 1.1, len0 = 2.6, pin0 = false } = {}) {
+function buildSteps(st, sProf, seed0 = 911, { want0 = 0.55, wantR = 1.1, len0 = 2.6, pin0 = false, riffle = 0 } = {}) {
   const S = [0]
   for (let i = 1; i < st.length; i++) S.push(S[i - 1] + Math.hypot(st[i][0] - st[i - 1][0], st[i][1] - st[i - 1][1]))
   const L = S[S.length - 1]
@@ -446,20 +447,24 @@ function buildSteps(st, sProf, seed0 = 911, { want0 = 0.55, wantR = 1.1, len0 = 
     let len = clamp(want / g, len0, 11) * (0.85 + rnd() * 0.3)
     if (L - (s0 + len) < 2.5) len = L - s0                                  // 最後一小段併進來
     const s1 = Math.min(L, s0 + len)
-    pools.push({ s0, s1, level: lin(s1) + 0.28 })
+    pools.push({ s0, s1, level: lin(s1) + 0.28, riffle: rnd() < riffle })   // riffle：這一段不是一道落差，是一段往下斜的淺灘急流
     s0 = s1
   }
   // 每一道落差（第 k 個潭的上游端）：上一個潭的水面掉到這個潭的水面
   const drops = []
   for (let k = 1; k < pools.length; k++) {
     const h = pools[k - 1].level - pools[k].level
-    if (h > 0.12) drops.push({ s: pools[k].s0, h, up: pools[k - 1].level, down: pools[k].level })
+    if (h > 0.12 && !pools[k].riffle) drops.push({ s: pools[k].s0, h, up: pools[k - 1].level, down: pools[k].level })
   }
   const FALL = 0.7   // 水從門檻翻下去的水平距離（越高的落差拋得越遠一點）
   const poolAt = (s) => { let k = 0; while (k < pools.length - 1 && pools[k].s1 < s) k++; return k }
   // 水面：潭裡是平的；過門檻往下彎成拋物線（水翻過石頭）
   const water = (s) => {
     const k = poolAt(s), P = pools[k]
+    if (k > 0 && P.riffle) {   // 淺灘：水面從上一段一路斜斜降下來（最多 5 公尺長），不是一道白色的水簾
+      const up = pools[k - 1].level, R = Math.min(5, 0.8 * (P.s1 - P.s0)), t = clamp((s - P.s0) / R, 0, 1)
+      return up - (up - P.level) * t
+    }
     if (k > 0) {
       const up = pools[k - 1].level, h = up - P.level, f = FALL * (0.6 + 0.25 * Math.min(h, 2))
       if (s < P.s0 + f) { const t = clamp((s - P.s0 + 0.12) / (f + 0.12), 0, 1); return up - h * t * t }
@@ -481,6 +486,7 @@ function buildSteps(st, sProf, seed0 = 911, { want0 = 0.55, wantR = 1.1, len0 = 
   st.water = (s) => sampleS(st.W, s); st.bed = (s) => sampleS(st.B, s)
   st.sAt = (x, z) => { const [, i, t] = polyDist(x, z, st); return st.S[i] + t * (st.S[i + 1] - st.S[i]) }
   st.dist = (x, z) => polyDist(x, z, st)[0]
+  st.halfAt = st.wide ? (s) => clamp(2.5 + 1.5 * fbm2(s * 0.025, 3.3, 2) + 0.6 * fbm2(s * 0.12, 7.7, 2) + 1.2 * smoothstep(14, 0, s), 1.25, 4) : () => 1.25   // 半寬：低頻起伏、湖口最寬（fbm2 是 ±0.6 的有號雜訊，不是 0～1）
 }
 const sampleS = (arr, s) => { const f = clamp(s / STEP, 0, arr.length - 1), i = Math.min(arr.length - 2, Math.floor(f)), u = f - i; return arr[i] * (1 - u) + arr[i + 1] * u }
 // 沿溪距離：(x, z) 投影到溪的折線上
@@ -546,21 +552,25 @@ function buildAlpine() {
     for (let i = 2; i < rp.length; i++) rp[i] = Math.min(rp[i], rp[i - 1] - 0.3)
     rp[rp.length - 1] = Math.min(rp[rp.length - 1], ALP_POND.water - 0.3)
     rv.prof = rp
-    buildSteps(rv, rp, 4242, { want0: 0.3, wantR: 0.45, len0: 1.3, pin0: true })   // 河比溪陡（湖口往下一路跌）：落差小、次數多，才不會一道道白色的牆
-    for (const c of XS) RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(rv.sAt(c.x, c.z)) + 1.2), half: 4.2, hw: 1.3 })
+    buildSteps(rv, rp, 4242, { want0: 0.25, wantR: 0.5, len0: 2.0, pin0: true, riffle: 0.62 })   // 河比溪陡（湖口往下一路跌）：落差小、次數多，才不會一道道白色的牆
+    for (const c of XS) { const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 1.2), half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
   }
   // 斷面（參考台灣山溪的影片）：水邊不是直的——寬度用 2D 雜訊，兩岸不對稱、一凹一凸；
   // 水裡是 U 形的潭底；岸是緩緩爬上去的坡，坡上有一塊塊凸起的石頭（不是一面平滑的牆）
   function carve(st, x, z, h, gk) {
     const [ds, si, stt] = polyDist(x, z, st)
-    if (ds > 14) return [h, ds]
+    if (ds > (st.wide ? 20 : 14)) return [h, ds]
     const sx = st[si + 1][0] - st[si][0], sz = st[si + 1][1] - st[si][1], lat = ds * (sx * (z - st[si][1]) - sz * (x - st[si][0]) >= 0 ? 1 : -1)
     const ss_ = st.S[si] + stt * (st.S[si + 1] - st.S[si]), sAdj = ss_ + streamLatOff(ss_, lat)
-    const bed = st.bed(sAdj), wl = st.water(sAdj)
-    const half = Math.max(0.9, 1.25 + 1.5 * (fbm2(x * 0.2 + 5.1, z * 0.2 - 2.7, 3) - 0.5) + 0.35 * gk)
-    const inWater = bed + (wl - bed) * smoothstep(0, half, ds) ** 2
-    const lump = 1.1 * Math.max(0, fbm2(x * 0.42 - 3.3, z * 0.42 + 8.1, 3) - 0.35) * smoothstep(half, half + 1.2, ds) * smoothstep(10, 4, ds)
-    const bank = lerp(wl + 0.1, h, smoothstep(half + 0.4, Math.max(6.5, 10 - 3 * gk), ds)) + lump
+    const bed = st.bed(sAdj), wl0 = st.water(sAdj)
+    // 落差旁邊的岸要比「上游那個潭」高（以前岸只比這一點的水面高，落差處水簾兩側沒東西擋，像懸空的白帶）
+    const wl = st.wide ? Math.max(wl0, st.water(sAdj - 0.8), st.water(sAdj - 1.6)) : wl0
+    const half = st.wide ? st.halfAt(ss_) + 0.5 * fbm2(x * 0.3 + 5.1, z * 0.3 - 2.7, 3) : Math.max(0.9, 1.25 + 1.5 * (fbm2(x * 0.2 + 5.1, z * 0.2 - 2.7, 3) - 0.5) + 0.35 * gk)
+    // 寬的河：河床凹凸不平（ChatGPT：0.16／0.07 兩層雜訊）；水邊 1.5 公尺礫石灘，再一段亂石坡，半寬＋7 公尺接回森林
+    const bedN = st.wide ? 0.16 * fbm2(ss_ * 0.18, lat * 0.25, 2) * 1.6 + 0.07 * fbm2(ss_ * 0.65, lat * 0.8, 2) * 1.6 : 0
+    const inWater = bed + bedN + (wl0 - bed - bedN) * smoothstep(0, half, ds) ** 2
+    const lump = (st.wide ? 1.4 : 1.1) * Math.max(0, fbm2(x * 0.42 - 3.3, z * 0.42 + 8.1, 3) - 0.35) * smoothstep(half + (st.wide ? 1.5 : 0), half + (st.wide ? 2.7 : 1.2), ds) * smoothstep(st.wide ? 14 : 10, st.wide ? 7 : 4, ds)
+    const bank = (st.wide ? lerp(wl + 0.12 + 0.25 * smoothstep(half, half + 1.5, ds), h, smoothstep(half + 1.5, half + 7, ds)) : lerp(wl + 0.1, h, smoothstep(half + 0.4, Math.max(6.5, 10 - 3 * gk), ds))) + lump
     h = ds < half ? inWater : Math.min(h + lump, lerp(inWater, bank, smoothstep(half, half + 0.9, ds)))
     if (ds > half) h = Math.max(h, Math.min(bank, wl + 0.1 + (ds - half) * 0.6))   // 岸一定比水面高（水才不會溢出去）
     return [h, ds]
@@ -582,7 +592,7 @@ function buildAlpine() {
     }
     let ds1
     ;[h, ds1] = carve(ALP_RIVER, x, z, h, 0)
-    aStream[k] = Math.min(ds0, ds1)
+    aStream[k] = Math.min(ds0, ds1 - (ALP_RIVER.halfAt(ALP_RIVER.sAt(x, z)) - 1.25))   // 河寬的部分扣掉：「離溪多遠」照水邊算（樹、草讓開用）
     // 水池
     const dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
     h = lerp(ALP_POND.water - 1.1, h, smoothstep(ALP_POND.r * 0.6, ALP_POND.r + 2.5, dp))
@@ -610,7 +620,7 @@ function buildAlpine() {
       if (lat < b.hw + 3 && Math.abs(along) < b.half + 3) {
         const k2 = smoothstep(b.half - 1.6, b.half + 0.2, Math.abs(along))
         h = lerp(Math.min(h, hRiver), h, k2)
-        if (lat < b.hw + 0.6 && Math.abs(along) < b.half + 3) h = lerp(h, b.y + b.k * along - 0.02, smoothstep(b.half + 3, b.half, Math.abs(along)) * k2)
+        if (lat < b.hw + 0.6 && Math.abs(along) < b.half + 3) h = lerp(h, b.y + b.k * along - 0.02, smoothstep(b.half + 3.6, b.half + 1.0, Math.abs(along)) * k2)   // 橋頭外 1 公尺內路面＝橋面（石板鋪出去、不露一片懸空的板子）
       }
     }
     // 小木屋底下和四周攤平（門口那塊空地也是）
@@ -767,7 +777,7 @@ export function blocked(x, z, feet, ref = feet) {
     // 步道上（本來就平緩）一步可以高到 0.35：吊橋兩端的橋面跟地面差 20～30 公分，不然會卡在橋頭；石階一階 0.2
     if (h > feet + (sup.owner === 5 ? 0.3 : alpineTrailDist(x, z) < 1.5 ? 0.35 : 0.13) || h < ref - 0.9) return true   // 往下一步掉超過 0.9 公尺＝懸崖邊，不能走下去（原本 2.5，會走下爬不回來的地方）
     if (h < ALP_POND.water + 0.05 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 1) return true   // 水池不能走進去
-    if (sup.owner !== 5 && sup.owner !== 3 && alpineStreamDist(x, z) < 3.5) for (const st of ALP_STREAMS) if (st.dist(x, z) < (st === ALP_STREAM ? 3.5 : 2.4) && st.water(st.sAt(x, z)) - h > 0.3) return true   // 河只看水道裡（河靠步道很近，岸上不算）
+    if (sup.owner !== 5 && sup.owner !== 3 && alpineStreamDist(x, z) < 3.5) for (const st of ALP_STREAMS) { const sq = st.sAt(x, z); if (st.dist(x, z) < (st.wide ? st.halfAt(sq) + 0.4 : 3.5) && st.water(sq) - h > 0.3) return true }   // 河只看水道裡（河靠步道很近，岸上不算）
     if (sup.owner !== 5 && YOSE.inLake(x, z, 0.3) && YOSE.lake.water - h > 0.05) return true   // 瀑布湖不能走進去   // 溪裡的潭（水深超過 0.3）不能走進去：潭壁陡，走進去爬不出來
     for (const c of colliders) { if (feet > c.top) continue; const ddx = x - c.x, ddz = z - c.z, rr = c.r + PLAYER_R; if (ddx * ddx + ddz * ddz < rr * rr) return true }
     return false
