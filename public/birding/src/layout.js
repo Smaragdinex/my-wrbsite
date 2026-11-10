@@ -325,6 +325,8 @@ export const ALP_SPURS = [
   { name: 'lakeGorge', world: true, k: 0.22, noClear: true, endOn: 'gorge', pts: [[123, -63], [129, -74], [142, -85], [145, -89], [157, -67], [164.3, -54.4]] },
   // 2026-11-10 使用者：入口的湖再接回一開始的公園（那邊有兩條路）→ 從主步道起點（花園東出口外 76,0）往南，繞湖西岸（離水 ≥6 m）、
   // 湖南岸（離水雉、彩鷸 ≥12 m），接到湖東南岸 lakeGorge 的起點（往上就是南坡溪谷）。幾乎平的（0～5 m），約 125 m（A* 找的）
+  // 2026-11-10 岩簷步道（松龍岩那種）：湖西岸的步道往北，沿著湖跟岩壁之間走進岩簷底下，盡頭是瀑布側後方的觀景平台（離水簾 4～5 m）
+  { name: 'cave', world: true, k: 0.12, pts: [[177, 70.5], [179.5, 77], [182.5, 84], [186, 90.3], [190, 94.4], [195, 95.4], [199.5, 94.9]] },
   { name: 'lakeLoop', world: true, y0: 0, k: 0.15, noClear: true, endOn: 'lakeGorge', pts: [[76.5, 0], [78.2, -6], [78, -12], [76.5, -35], [77, -57], [84, -73], [98, -78], [123, -63]] },
   { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, landings: true, endOn: 'grass', pts: null },   // pts：ridgeTrailPts()（EAST.ridge 定義之後）
 ].map((sp) => sp.world ? sp : ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
@@ -347,9 +349,15 @@ export const YOSE = (() => {
   // 2026-11-10 使用者：瀑布落下來的水最後插進地形 → 量了：瀑布在 x 200，湖心在 x 194，落水那排湖只到 x 200.3，水簾東半邊、後層整片落在高出水面 1～3 公尺的岸上。
   // 湖心移到瀑布正下方偏南、往東放大，北岸伸到岩壁腳下（落水點全在水面上）
   Y.lake = { x: 198, z: 80.5, rx: 13, rz: 10, water: 0 }
+  const ssY = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
+  // 2026-11-10 使用者（松龍岩瀑布照片）：瀑布後面是一個往岩壁裡凹進去的岩簷／岩窟（ChatGPT：寬 24～32 m、最深 8～11 m、開口 12～20 m），
+  // 步道從湖西岸走進岩簷底下、到瀑布側後方看水簾。caveA(x)：0～1 這一欄凹進去多少；caveD：最深（離牆腳往裡）；caveH：開口高
+  Y.cave = { x0: 182.5, x1: 207, xc: 197, D: 10, H: 21 }
+  Y.caveA = (x) => { const c = Y.cave; return ssY(c.x0, c.x0 + 8, x) * ssY(c.x1, c.x1 - 6, x) * (0.9 + 0.1 * Math.cos((x - c.xc) * 0.35)) }
+  Y.caveD = (x) => Y.cave.D * Math.pow(Y.caveA(x), 0.7)
+  Y.caveH = (x) => Y.cave.H * Math.pow(Y.caveA(x), 0.6)
   Y.inLake = (x, z, pad = 0) => ((x - Y.lake.x) / (Y.lake.rx + pad)) ** 2 + ((z - Y.lake.z) / (Y.lake.rz + pad)) ** 2 < 1
   // 岩壁高：yosemite.js 畫、步道算高度都用這個
-  const ssY = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
   Y.g0 = (x) => alpineHeight(x, Y.base(x))
   // 2026-11-10 使用者：玻璃早就拆了 → 岩壁中段 40～58 公尺（瀑布那一帶最高），兩端收矮
   const HtRaw = (x) => { const end = Math.min(ssY(Y.x0, Y.x0 + 9, x), ssY(Y.x1, Y.x1 - 9, x)), peak = Math.exp(-(((x - 200) / 38) ** 2)); return Math.max(3, (30 + 16 * peak + 12 * fbm2(x * 0.05, 3.7, 3)) * (0.3 + 0.7 * end)) }

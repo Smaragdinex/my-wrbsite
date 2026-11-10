@@ -54,11 +54,57 @@ export function buildYosemite(scene, { lib } = {}) {
 
   // ---------- 岩壁 ----------
   // 每一欄（沿 x）一個斷面：牆腳在 YOSE.base(x)，往上幾乎垂直（微微往後仰），頂上往後收到玻璃邊
-  const X0 = YOSE.x0, X1 = YOSE.x1, NX = Math.round((X1 - X0) / 0.5), FACE = 44, TOP = 14   // 頂面 6→14 排：才畫得出岩縫、磨光面（2026-11-10）
-  const pos = [], col = [], uv = [], idx = []
+  // 2026-11-10 使用者：「你現在根本低模」→ 岩壁一欄 44 排 → 100 排；瀑布那一帶（176～214）一欄 0.25 m（其他 0.5 m）
+  const X0 = YOSE.x0, X1 = YOSE.x1, FACE = 100, TOP = 14   // 頂面 6→14 排：才畫得出岩縫、磨光面（2026-11-10）
+  const XS = []; for (let x = X0; x < X1 - 1e-6;) { XS.push(x); x += x >= 176 && x < 214 ? 0.25 : 0.5 } XS.push(X1)
+  const NX = XS.length - 1
+  const pos = [], col = [], uv = [], idx = [], caveQ = [], ledgeSpots = []
   const cols = []
+  // 岩簷＋層理：這一欄的岩面斷面（d＝離牆腳往裡幾公尺、y），照弧長重新取 FACE+1 個點
+  const hsh = (n) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v) }
+  const SED = (x) => ss(172, 184, x) * ss(216, 207, x)   // 層狀、深褐、潮濕的岩壁範圍（松龍岩那種），兩側慢慢回到花崗岩
+  const bedAt = (x, y) => {
+    // 層理：每層 0.8～2.4 m、往東微微下傾（約 6°）；每層前緣凸出或凹進 ±0.45 m，層的上緣是一道小岩棚（長青苔）
+    const yy = y + 0.1 * (x - 195) + 1.2 * fbm2(x * 0.03, 2.2, 2)
+    let id = Math.floor(yy / 1.55), f = yy / 1.55 - id
+    // 第二版：層跟層之間是一道明顯的台階（前緣硬一點）＋直的節理把每層切成一塊一塊（每 2～6 m 前後錯開）
+    const jid = Math.floor((x + 3 * hsh(id)) / (2.5 + 3 * hsh(id + 7)))
+    const off = (hsh(id) - 0.5) * 1.3 + (hsh(id * 31 + jid) - 0.5) * 0.7 + 0.25 * Math.sin(f * Math.PI) - 0.35 * ss(0.88, 1, f)
+    return { off, ledge: ss(0.7, 0.97, f) * (hsh(id) > 0.35 ? 1 : 0.3), f }
+  }
+  const faceProfile = (x, zb, g0, Ht, push, fallK) => {
+    const A = YOSE.caveA(x), Dp = YOSE.caveD(x), Ho = YOSE.caveH(x), sed = SED(x)
+    const normalD = (y) => {
+      const v = (y - (g0 - 1.5)) / (Ht + 1.5)
+      const flute = 0.45 * Math.sin(x * 1.7 + Math.sin(y * 0.11) * 2.2) + 0.25 * Math.sin(x * 4.3 + y * 0.05)
+      const lump = 1.6 * (fbm2(x * 0.09, y * 0.07, 4) - 0.5)
+      return v * 1.8 * (1 - 0.85 * fallK) + (flute + lump) * ss(0, 0.08, v) * (1 - 0.6 * fallK) * (1 - 0.5 * sed) + ss(0.9, 1, v) * 1.2 * (1 - fallK)
+    }
+    const P = []   // [d, y, inCave(0..1)]
+    const yTop = g0 + Ht
+    if (A > 0.02) {
+      const lip = -1.2 * A * (1 - 0.8 * fallK), yL = g0 + Ho
+      P.push([0, g0 - 1.5, 0], [Dp * 0.5, g0 - 1.5, 1], [Dp, g0 - 1.5, 1])
+      for (let j = 0; j <= 10; j++) P.push([Dp + 0.6 * A * Math.sin(j / 10 * Math.PI), g0 - 1.5 + (Ho * 0.5 + 1.5) * j / 10, 1])
+      for (let j = 1; j <= 16; j++) { const th = j / 16 * Math.PI / 2; P.push([lip + (Dp - lip) * Math.cos(th), g0 + Ho * 0.5 + Ho * 0.5 * Math.sin(th), 1 - 0.7 * j / 16]) }
+      P.push([lip - 0.35 * A, yL + 0.5, 0], [lip * 0.6, yL + 1.6, 0])
+      for (let y = yL + 2.5; y < yTop; y += 0.5) P.push([Math.min(lip * 0.6 * ss(yL + 8, yL + 2, y), 0) + normalD(y) * ss(yL + 2, yL + 9, y), y, 0])
+    } else for (let y = g0 - 1.5; y < yTop; y += 0.5) P.push([normalD(y), y, 0])
+    P.push([normalD(yTop), yTop, 0])
+    // 弧長重取樣
+    const Ls = [0]; for (let i = 1; i < P.length; i++) Ls.push(Ls[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]))
+    const out = []
+    for (let k = 0, i = 1; k <= FACE; k++) {
+      const s0 = Ls.at(-1) * k / FACE; while (i < P.length - 1 && Ls[i] < s0) i++
+      const u = (s0 - Ls[i - 1]) / Math.max(1e-6, Ls[i] - Ls[i - 1]), d = lerpN(P[i - 1][0], P[i][0], u), y = lerpN(P[i - 1][1], P[i][1], u), q = lerpN(P[i - 1][2], P[i][2], u)
+      // 層理只往裡凹（瀑布水簾那幾公尺）或前後都有（其他地方）；岩窟裡也有
+      const b = bedAt(x, y), bo = sed * (fallK > 0.3 ? Math.max(0, b.off) + 0.2 : b.off) * ss(g0 - 0.5, g0 + 1.5, y)
+      out.push([y, Math.max(push, zb + d + bo), q, b.ledge * sed])
+    }
+    return out
+  }
   for (let i = 0; i <= NX; i++) {
-    const x = X0 + (X1 - X0) * i / NX, zb = YOSE.base(x), ze = YOSE.edge(x) - 0.8
+    const x = XS[i], zb = YOSE.base(x), ze = YOSE.edge(x) - 0.8
     const g0 = alpineHeight(x, zb)
     const Ht = YOSE.Ht(x)   // layout.js：兩端收矮；瀑布口到石階頂那段頂上是平的
     // 2026-11-11 石階平台那一段（XA～XB）：岩壁本體往後退到最上一層平台的後面，前面是一階一階的平台（下面另外畫）
@@ -66,15 +112,11 @@ export function buildYosemite(scene, { lib } = {}) {
     const fallK = Math.exp(-(((x - YOSE.fall.x) / 8) ** 2))   // 瀑布口那幾公尺：岩壁不往後仰、頂上不凸，水簾貼著岩壁落下（以前瀑布口浮在岩壁前面）
     cols.push({ x, zb, g0, Ht, terr })
     const row = []
+    const prof = faceProfile(x, zb, g0, Ht, push, fallK), sed = SED(x)
     for (let k = 0; k <= FACE + TOP; k++) {
       let y, z
       if (k <= FACE) {
-        const v = k / FACE
-        y = g0 - 1.5 + (Ht + 1.5) * v
-        // 往後仰一點；縱向的稜溝（x 方向變化快、y 方向變化慢）＋大塊的凹凸；頂端圓圓地收
-        const flute = 0.45 * Math.sin(x * 1.7 + Math.sin(y * 0.11) * 2.2) + 0.25 * Math.sin(x * 4.3 + y * 0.05)
-        const lump = 1.6 * (fbm2(x * 0.09, y * 0.07, 4) - 0.5)
-        z = Math.max(push, zb + v * 1.8 * (1 - 0.85 * fallK) + (flute + lump) * ss(0, 0.08, v) * (1 - 0.6 * fallK) + ss(0.9, 1, v) * 1.2 * (1 - fallK))
+        y = prof[k][0]; z = prof[k][1]
       } else {
         const t = (k - FACE) / TOP, z0 = Math.max(zb + 3.0 - 2.4 * fallK, push)
         y = g0 + Ht + lerpN(Math.sin(t * Math.PI * 0.5) * 0.8 - t * t * 0.6, -0.04 * t, fk)   // 平的那段：頂上平平的、往後微微低一點
@@ -83,6 +125,9 @@ export function buildYosemite(scene, { lib } = {}) {
       row.push([x, y, z])
     }
     for (const [ri, [px, py, pz]] of row.entries()) {
+      const pr = ri <= FACE ? prof[ri] : null, inCave = pr ? pr[2] : 0, ledge = pr ? pr[3] : 0
+      caveQ.push(inCave)
+      if (ledge > 0.45 && inCave < 0.25 && py > YOSE.g0(px) + 1.2 && py < YOSE.g0(px) + 40 && rnd() < 0.3) ledgeSpots.push([px, py, pz, inCave])
       pos.push(px, py, pz); uv.push(px * 0.22, ri > FACE ? pz * 0.22 + 40 : py * 0.22)   // 頂上那幾排用 z 當貼圖座標（以前用 y，頂面被拉成一條條）
       // 黑色水痕：一條條縱向（只看 x），從上往下淡；淡色剝落面：大塊
       const streak = Math.max(0, fbm2(px * 0.35, 7.1, 3) - 0.52) * 3.2 * ss(g0, g0 + Ht, py) * (ri > FACE ? 0.1 : 1)   // 頂面不畫縱向水痕（會變一條條）
@@ -97,6 +142,15 @@ export function buildYosemite(scene, { lib } = {}) {
         const cr2 = Math.pow(1 - Math.abs(Math.sin(pz * 0.62 - px * 0.13 + 2.0 * fbm2(px * 0.06 + 4, pz * 0.06, 2))), 26)
         k = (1.12 + polish * 0.25) * (1 - 0.45 * Math.max(cr1, cr2))
         col.push(k * 1.04, k, k * 0.92)
+      } else if (sed > 0.01) {
+        // 2026-11-10 松龍岩：深褐灰、潮濕的層狀岩（ChatGPT linear：乾 0.26/0.25/0.23、濕 0.10、岩窟深處 0.055、苔 0.055/0.115/0.045；貼圖本身約 0.5 → 頂點色約 ×2）
+        const wetF = Math.exp(-(((px - YOSE.fall.x) / 8) ** 2)) * 0.6 + 0.35 * inCave + 0.25 * Math.max(0, fbm2(px * 0.4 + 3, py * 0.05, 2) - 0.45) * 3
+        const dark = (1 - 0.55 * Math.min(1, wetF)) * (1 - 0.45 * inCave) * (1 - streak * 0.5)
+        const moss = Math.min(1, ledge * (0.55 + 0.6 * wetF) + 0.35 * Math.max(0, fbm2(px * 0.5, py * 0.4 + 7, 3) - 0.5) * 2 * (0.4 + wetF)) * (1 - 0.6 * inCave)
+        const r0 = 0.66 * dark, g0c = 0.52 * dark, b0 = 0.39 * dark
+        const cr = lerpN(r0, 0.16, moss), cg2 = lerpN(g0c, 0.34, moss), cb = lerpN(b0, 0.12, moss)
+        const gr = k * (1 - streak * 0.05)
+        col.push(lerpN(gr, cr, sed), lerpN(k, cg2, sed), lerpN(gr * (1 + streak * 0.02), cb, sed))
       } else col.push(k * (1 - streak * 0.05), k, k * (1 + streak * 0.02))
     }
   }
@@ -113,12 +167,23 @@ export function buildYosemite(scene, { lib } = {}) {
   cliffM.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTpW; varying vec3 vTpN;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvTpW = (modelMatrix * vec4(transformed, 1.0)).xyz; vTpN = normalize(mat3(modelMatrix) * objectNormal);')
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTpW; varying vec3 vTpN;')
+    // 2026-11-10 使用者「低模」：加凹凸（用貼圖亮度當高度，螢幕空間導數擾動法線；不靠 UV）
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      varying vec3 vTpW; varying vec3 vTpN; float tpH;
+      vec3 tpPerturb(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) {
+        vec3 vSigmaX = normalize(dFdx(surf_pos)), vSigmaY = normalize(dFdy(surf_pos)), vN = surf_norm;
+        vec3 R1 = cross(vSigmaY, vN), R2 = cross(vN, vSigmaX); float fDet = dot(vSigmaX, R1) * faceDirection;
+        vec3 vGrad = sign(fDet) * (dHdxy.x * R1 + dHdxy.y * R2); return normalize(abs(fDet) * surf_norm - vGrad);
+      }`)
       .replace('#include <map_fragment>', `
         vec3 tpB = pow(abs(normalize(vTpN)), vec3(5.0)); tpB /= (tpB.x + tpB.y + tpB.z + 1e-4);
         vec4 tpC = texture2D(map, vTpW.zy * 0.3) * tpB.x + texture2D(map, vTpW.xz * 0.3) * tpB.y + texture2D(map, vTpW.xy * 0.3) * tpB.z;
         vec4 tpL = texture2D(map, vTpW.zy * 0.045 + 0.37) * tpB.x + texture2D(map, vTpW.xz * 0.045 + 0.61) * tpB.y + texture2D(map, vTpW.xy * 0.045 + 0.13) * tpB.z;
+        vec4 tpM = texture2D(map, vTpW.zy * 0.11 + 0.21) * tpB.x + texture2D(map, vTpW.xz * 0.11 + 0.47) * tpB.y + texture2D(map, vTpW.xy * 0.11 + 0.71) * tpB.z;
+        tpH = dot(tpC.rgb, vec3(0.33)) * 0.35 + dot(tpM.rgb, vec3(0.33)) * 0.9 + dot(tpL.rgb, vec3(0.33)) * 1.6;
         diffuseColor *= mix(tpC, tpC * (0.75 + 0.5 * tpL), 0.6);`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        { float dist = length(vViewPosition); vec2 dH = vec2(dFdx(tpH), dFdy(tpH)) * 2.2 * smoothstep(90.0, 15.0, dist); normal = tpPerturb(-vViewPosition, normal, dH, faceDirection); }`)
   }
   cliffM.customProgramCacheKey = () => 'cliffTriplanar'
   const cliff = new THREE.Mesh(cg, cliffM); cliff.castShadow = true; cliff.receiveShadow = true; g.add(cliff)
@@ -144,7 +209,9 @@ export function buildYosemite(scene, { lib } = {}) {
     sg.setIndex(si); sg.computeVertexNormals()
     const sm = new THREE.Mesh(sg, cliffM); sm.castShadow = true; sm.receiveShadow = true; g.add(sm)
   }
-  for (const c of cols) if (!(c.x > YOSE.mist.XA - 3.4 && c.x < YOSE.mist.XB + 3.4) && Math.round(c.x * 2) % 3 === 0) addCollider(c.x, c.zb + 0.9, 1.3, c.g0 + c.Ht)   // 石階平台兩端外面也不放（半徑 1.3 會伸進轉彎的平台）
+  for (const c of cols) if (!(c.x > YOSE.mist.XA - 3.4 && c.x < YOSE.mist.XB + 3.4) && YOSE.caveA(c.x) < 0.08 && Math.abs(c.x * 2 - Math.round(c.x * 2)) < 1e-6 && Math.round(c.x * 2) % 3 === 0) addCollider(c.x, c.zb + 0.9, 1.3, c.g0 + c.Ht)
+  // 岩窟：碰撞放在後壁（往裡 caveD 的地方）
+  for (let x = YOSE.cave.x0; x <= YOSE.cave.x1; x += 0.6) { const A = YOSE.caveA(x); if (A < 0.08) continue; addCollider(x, YOSE.base(x) + Math.max(0.9, YOSE.caveD(x) - 0.6), 0.75, YOSE.g0(x) + YOSE.caveH(x)) }   // 石階平台兩端外面也不放（半徑 1.3 會伸進轉彎的平台）
 
   // 岩壁腳下的落石堆：掃描的岩石、大石頭，沿牆腳 1～4 公尺
   if (lib) {
@@ -762,6 +829,51 @@ export function buildYosemite(scene, { lib } = {}) {
         else if (nr < 34 && rocks.length) { const k2 = 0.35 + rnd() * 0.75; (rl[rocks[Math.floor(rnd() * rocks.length)]] ||= []).push({ p: V(x, y - 0.25 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * (0.6 + rnd() * 0.4), k2) }); nr++ }
       }
       for (const [n, list] of [...Object.entries(fl), ...Object.entries(rl)]) scatter(g, lib[n], list, { cast: true })
+    }
+  }
+
+  // 2026-11-10 岩簷步道：湖那側一排木欄杆（ChatGPT：高 1.05～1.15、柱距 1.2～1.6）；盡頭觀景平台前緣一圈；岩棚上長蕨類、岩窟口地上一些蕨類和濕石頭
+  {
+    const sp = ALP_SPURS.find((s) => s.name === 'cave')
+    if (sp) {
+      const woodM = new THREE.MeshStandardMaterial({ color: 0x4a3426, roughness: 0.9 }), parts2 = []
+      const post = new THREE.CylinderGeometry(0.06, 0.07, 1, 7), bar = new THREE.CylinderGeometry(0.045, 0.045, 1, 6).rotateZ(Math.PI / 2)
+      const LK = YOSE.lake, rail = []
+      const P = sp.pts
+      for (let i = 2; i < P.length - 1; i++) {
+        const [ax, az] = P[i], [bx, bz] = P[i + 1], L = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / L, nz = (bx - ax) / L
+        const sgn = (LK.x - (ax + bx) / 2) * nx + (LK.z - (az + bz) / 2) * nz > 0 ? 1 : -1
+        for (let d = 0; d < L - 0.01; d += 1.4) { const x = ax + (bx - ax) * d / L + nx * sgn * 1.2, z = az + (bz - az) * d / L + nz * sgn * 1.2; rail.push([x, z]) }
+      }
+      // 平台：盡頭往前（水簾那側）半圈
+      const [ex, ez] = P.at(-1)
+      for (let a = -2.45; a <= 0.95; a += 0.42) rail.push([ex + 0.4 + Math.cos(a) * 2.2, ez + Math.sin(a) * 2.0])   // 西邊（步道進來那側）不圍
+      let prev = null
+      for (const [x, z] of rail) {
+        const y = alpineHeight(x, z), top = y + 1.1
+        parts2.push(post.clone().scale(1, 1.15, 1).translate(x, y + 0.52, z))
+        if (prev && Math.hypot(prev[0] - x, prev[2] - z) < 2.2) for (const h of [0, -0.45]) {
+          const a = V(prev[0], prev[1] + h, prev[2]), b = V(x, top + h, z), len = a.distanceTo(b)
+          const m = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(V(1, 0, 0), b.clone().sub(a).normalize()))
+          parts2.push(bar.clone().scale(len, 1, 1).applyMatrix4(m).translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2))
+        }
+        prev = [x, top, z]
+        addCollider(x, z, 0.12, y + 1.2)
+      }
+      const rm = new THREE.Mesh(mergeGeometries(parts2.map((q2) => q2.index ? q2.toNonIndexed() : q2)), woodM); rm.castShadow = true; rm.receiveShadow = true; g.add(rm)
+    }
+    if (lib) {
+      const ferns = ['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a'].filter((n) => lib[n]), fl = {}
+      // 岩棚上的蕨類（層理上緣、潮濕的地方）
+      for (const [x, y, z] of ledgeSpots) { if (!ferns.length) break; (fl[ferns[Math.floor(rnd() * ferns.length)]] ||= []).push({ p: V(x, y - 0.1, z - 0.15), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.35 - rnd() * 0.4, rnd() * TAU, 0, 'YXZ')), s: V(1, 1, 1).multiplyScalar(0.9 + rnd() * 1.0) }) }
+      // 岩窟口兩側、牆腳：大蕨類
+      for (let k = 0, n = 0; k < 600 && n < 60; k++) {
+        const x = YOSE.cave.x0 - 4 + rnd() * (YOSE.cave.x1 - YOSE.cave.x0 + 6), zb = YOSE.base(x), z = zb - 1.5 + rnd() * (YOSE.caveD(x) + 1.5)
+        if (alpineTrailDist(x, z) < 1.4 || YOSE.inLake(x, z, 0.6) || YOSE.caveA(x) > 0.5 && z > zb + YOSE.caveD(x) * 0.6 || z > zb + Math.max(0.3, YOSE.caveD(x) - 0.8)) continue
+        if (!ferns.length) break
+        ;(fl[ferns[Math.floor(rnd() * ferns.length)]] ||= []).push({ p: V(x, alpineHeight(x, z) - 0.05, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(0.9 + rnd() * 0.8) }); n++
+      }
+      for (const [n, list] of Object.entries(fl)) scatter(g, lib[n], list, { cast: false })
     }
   }
 
