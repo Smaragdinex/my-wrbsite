@@ -445,6 +445,7 @@ export const EAST = {
   grass: [[272, 66], [299, 63], [320, 72], [336, 88], [339, 108], [319, 119], [292, 114], [273, 95]],
   lark: { x: 318, z: 97, rx: 11, rz: 8 },     // 小雲雀：低草、裸土的核心（20×15 m）
   hides: [[300, 78.5], [318.5, -32]],
+  spring: [254.5, 121.2],                      // 瀑布頂上游的湧泉（小岩丘頂）
   owlNest: [292, 114],                         // 草鴞的巢（2026-11-10 使用者：巢要放在隱密的地方）：草原南緣高草最深處，離步道 40 m，四周一圈密密的芒草          // 觀察屋 O7、O8（east.js 蓋）：四周 6 m 不長樹、箭竹
 }
 EAST.wetBox = [306, 362, -82, -22]; EAST.grassBox = [258, 352, 52, 132]
@@ -500,6 +501,9 @@ function eastShape(X, Z, h) {
   // 岩脊最後才疊上去（第一版放在最前面，被草原的整形壓平了一半）：只往上加；西邊（x < 246）是瀑布頂平台、石階，不碰
   const rh = ridgeH(X, Z)
   if (rh > r) r = lerp(r, rh, smoothstep(246.5, 250.5, X))   // 平台（mesh）到 x 250 為止：地形在平台底下才升上來，接縫在 x 250，不會跟平台面疊在一起閃
+  // 湧泉的小岩丘（2026-11-10 ChatGPT Emerald Pool／Silver Apron）：瀑布頂是全區最高點，水要有更高的地方來 → 平台東北角後面一顆 79 m 的圓頂花崗岩，
+  // 泉水從頂上冒出、沿西側光滑的岩板（Silver Apron）滑到平台上（yosemite.js 畫水）
+  { const [sx, sz] = EAST.spring, d = Math.hypot(X - sx, Z - sz); if (d < 8) { const k = 79.2 - 4.6 * (d / 6) ** 2; if (k > r) r = lerp(r, k, smoothstep(246.5, 250.5, X)) } }
   return r
 }
 function eastShape1(X, Z, h) {

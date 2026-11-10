@@ -4,7 +4,7 @@
 // 樹：西黃松（Ponderosa）——高、直、橘紅色的鱗片樹皮，樹冠只在上半段、一簇簇的長針葉；這一區原本的冷杉、鐵杉讓開（alpine.js 用 inYose）
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { ALP_SPURS, alpineHeight, alpineTrailDist, alpineStreamDist, domeRho, domeY, addCollider, YOSE, CAMP } from './layout.js'
+import { ALP_SPURS, alpineHeight, alpineTrailDist, alpineStreamDist, domeRho, domeY, addCollider, YOSE, CAMP, EAST } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { barkMaterial } from './bark.js'
@@ -491,7 +491,7 @@ export function buildYosemite(scene, { lib } = {}) {
 
     // 岩壁頂上的溪：從後面（玻璃前）流到瀑布口，越靠瀑布口越寬、越快；兩岸一顆顆花崗岩
     {
-      const F2 = YOSE.fall, zLip = YOSE.base(F2.x) + 0.45, zSrc = YOSE.edge(F2.x) - 2.5, NS = 40, P = [], U = [], I = []
+      const F2 = YOSE.fall, zLip = YOSE.base(F2.x) + 0.45, zSrc = 101.6, NS = 40, P = [], U = [], I = []   // 2026-11-10 起點改在上游小溪接進來的地方（以前從公園邊界憑空冒出來）
       const cx = (t) => F2.x + 1.6 * Math.sin(t * 2.6 + 0.5) * (1 - t) - 0.8 * (1 - t)
       for (let i = 0; i <= NS; i++) {
         const t = i / NS, z = lerpN(zSrc, zLip, t), x = cx(t), w = lerpN(1.6, 3.0, t * t), y = YOSE.topY(x) + 0.07 - 0.02 * t
@@ -500,6 +500,50 @@ export function buildYosemite(scene, { lib } = {}) {
       }
       const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); sg.setIndex(I)
       const creek = new THREE.Mesh(sg, fallMat({ spd: 0.55, a: 0.85, dark: 0.15 })); creek.renderOrder = 3; g.add(creek)
+      // 2026-11-10 上游（ChatGPT「瀑布頂 → 上游溪谷」的縮小版，使用者 OK）：以前這條溪從公園邊界憑空冒出來 →
+      // 東北角小岩丘頂上的湧泉 → Silver Apron（水從光滑的花崗岩板整片滑下來）→ Emerald Pool（平台後方一個翡翠綠的潭，四周大石頭）
+      // → 沿平台後緣往西的小溪 → 在瀑布口前接進原本那條溪。平台是平的 mesh：水面貼在平台上 7 公分；岩丘上照地形
+      {
+        const [spx, spz] = EAST.spring, back = (x) => YOSE.edge(x) - 6.5   // 平台後緣那一條（edge-4.5 以後）種了一排松樹：溪走在樹前面
+        const groundY = (x, z) => x <= 249.5 ? YOSE.topY(x) : alpineHeight(x, z)
+        const POOL = { x: 241, z: 118.6, rx: 3.6, rz: 2.6 }
+        // 上游：泉→岩板→潭（寬的一片水）；下游：潭→往西的小溪→接到原本的溪中段
+        const runs = [
+          { pts: [[spx, spz], [252.5, 120.7], [250.6, 120.2], [248.5, 119.8], [POOL.x + POOL.rx - 0.3, POOL.z + 0.3]], w: [0.5, 1.5], spd: 0.9, a: 0.8 },
+          { pts: [[POOL.x - POOL.rx + 0.3, POOL.z - 0.2], [233, back(233)], [228, back(228)], [222, back(222)], [216, back(216)], [210, back(210)], [205, back(205) - 0.5], [201.2, 101]], w: [0.9, 1.1], spd: 0.45, a: 0.82 },
+        ]
+        for (const R of runs) {
+          const pts = R.pts.map(([x, z]) => V(x, 0, z)), curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), Lr = curve.getLength(), NSr = Math.ceil(Lr / 0.4), P2 = [], U2 = [], I2 = []
+          for (let i = 0; i <= NSr; i++) {
+            const t = i / NSr, p = curve.getPointAt(t), tg = curve.getTangentAt(t), w = lerpN(R.w[0], R.w[1], t) * (0.85 + 0.15 * Math.sin(t * 17)), nx = -tg.z, nz = tg.x
+            for (const sd of [-1, 1]) { const x = p.x + nx * w * sd, z = p.z + nz * w * sd; P2.push(x, groundY(x, z) + 0.07, z) }
+            U2.push(0, t * Lr / 3, 1, t * Lr / 3)
+            if (i) { const a2 = (i - 1) * 2; I2.push(a2, a2 + 2, a2 + 1, a2 + 1, a2 + 2, a2 + 3) }
+          }
+          // 三角形要朝上：往西流的那段左右順序反過來，第一版整條溪朝下被剔掉看不到（雙面的話看到的是背面，一條黑帶）
+          { const v = (k) => V(P2[k * 3], P2[k * 3 + 1], P2[k * 3 + 2]), nrm = v(2).sub(v(0)).cross(v(1).sub(v(0))); if (nrm.y < 0) for (let k = 0; k < I2.length; k += 3) { const t3 = I2[k + 1]; I2[k + 1] = I2[k + 2]; I2[k + 2] = t3 } }
+          const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(P2, 3)); rg.setAttribute('uv', new THREE.Float32BufferAttribute(U2, 2)); rg.setIndex(I2)
+          const run = new THREE.Mesh(rg, fallMat({ spd: R.spd, a: R.a, dark: 0.12 })); run.renderOrder = 3; g.add(run)
+          const rbed = new THREE.Mesh(rg.clone(), new THREE.MeshStandardMaterial({ color: 0x3d4f4c, roughness: 0.3, metalness: 0.1 })); rbed.position.y = -0.03; g.add(rbed)
+        }
+        // Emerald Pool：翡翠綠、很清的深潭（平台是平的挖不下去 → 深色潭面＋亮一點的淺綠邊，四周一圈大石頭）
+        const pg = new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2)
+        const deep = new THREE.Mesh(pg, new THREE.MeshStandardMaterial({ color: 0x0f4d44, roughness: 0.06, metalness: 0.05, transparent: true, opacity: 0.93 }))
+        deep.scale.set(POOL.rx - 0.5, 1, POOL.rz - 0.4); deep.position.set(POOL.x, YOSE.topY(POOL.x) + 0.09, POOL.z); deep.renderOrder = 3; g.add(deep)
+        const shal = new THREE.Mesh(pg, new THREE.MeshStandardMaterial({ color: 0x3f8a74, roughness: 0.1, transparent: true, opacity: 0.85 }))
+        shal.scale.set(POOL.rx, 1, POOL.rz); shal.position.set(POOL.x, YOSE.topY(POOL.x) + 0.075, POOL.z); shal.renderOrder = 3; g.add(shal)
+        if (lib) {
+          const names = ['boulder', 'mrock_3', 'mrock_5', 'mrock_8'].filter((n) => lib[n]), list = Object.fromEntries(names.map((n) => [n, []]))
+          for (let i = 0; i < 22; i++) {
+            const a3 = i / 22 * TAU + rnd() * 0.2, inflow = Math.abs(Math.atan2(Math.sin(a3), Math.cos(a3))) < 0.35, outflow = Math.abs(Math.atan2(Math.sin(a3 - Math.PI), Math.cos(a3 - Math.PI))) < 0.35
+            if (inflow || outflow) continue   // 進水口、出水口留開
+            const rr = 1.08 + rnd() * 0.15, x = POOL.x + Math.cos(a3) * POOL.rx * rr, z = POOL.z + Math.sin(a3) * POOL.rz * rr
+            const n = names[Math.floor(rnd() * names.length)], k2 = n === 'boulder' ? 0.3 + rnd() * 0.3 : 0.6 + rnd() * 0.8
+            list[n].push({ p: V(x, YOSE.topY(x) - 0.12 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * 0.75, k2) })
+          }
+          for (const n of names) if (list[n].length) scatter(g, lib[n], list[n], { cast: true })
+        }
+      }
       const bed = new THREE.Mesh(sg.clone(), new THREE.MeshStandardMaterial({ color: 0x3d4f4c, roughness: 0.3, metalness: 0.1 })); bed.position.y = -0.03; g.add(bed)
       if (lib) {
         const names = ['boulder', 'mrock_3', 'mrock_5', 'mrock_8'].filter((n) => lib[n])
@@ -565,7 +609,7 @@ export function buildYosemite(scene, { lib } = {}) {
   for (let k = 0, n = 0; k < 3000 && n < 16; k++) {
     const x = X0 + 8 + rnd() * (X1 - X0 - 16), zb = YOSE.base(x), ze = YOSE.edge(x) - 2, zf = (x > YOSE.mist.XA - 2 && x < YOSE.mist.XB + 2) ? YOSE.topFront(x) : zb + 3
     const z = zf + 4 + rnd() * (ze - zf - 4)
-    if (ze - zf < 6 || Math.abs(x - YOSE.fall.x) < 6 || (x > 199 && x < 252 && z < YOSE.edge(x) - 4.5) || Math.hypot(x - SHELTER.x, z - SHELTER.z) < 6 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 6)) continue
+    if (ze - zf < 6 || Math.abs(x - YOSE.fall.x) < 6 || (x > 199 && x < 252 && z < YOSE.edge(x) - 4.5) || Math.hypot(x - SHELTER.x, z - SHELTER.z) < 6 || Math.hypot(x - 241, z - 118.6) < 5.5 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 6)) continue
     PINES.push({ x, z, y: YOSE.topY(x) - 0.2, H: 9 + rnd() * 6, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.08 }); n++
   }
   // 2026-11-10 ChatGPT QA：山頂平台一大片灰色像水泥 → 樹下一圈松針落葉土、平台上零星幾片砂土／碎石、散幾顆小石頭
