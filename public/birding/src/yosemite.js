@@ -334,6 +334,14 @@ export function buildYosemite(scene, { lib } = {}) {
     }
     stepM.customProgramCacheKey = () => 'stepTriplanar'
     const steps = []
+    // 轉彎（水平半圓）：圓心＝這段終點（段尾縮進 1.5 m 的那點），side：西端 -1、東端 +1；rO＝外緣半徑
+    const turns = []
+    for (let i = 1; i < st.pts.length; i++) if (st.legOf[i] === -2 && st.legOf[i - 1] >= 0) {
+      const k = st.legOf[i - 1], [ex, ez] = st.pts[i - 1], side = k % 2 === 0 ? -1 : 1
+      turns.push({ k, cx: ex, cz: ez + M.W / 2, side, s: st.S[i - 1], rO: M.W / 2 + (M.W - 0.45) / 2 })
+    }
+    const stepTop = (s) => Math.floor(st.h(s) / 0.2) * 0.2 + 0.2
+    const inTurn = (b) => turns.some((t) => (b.p.x - t.cx) * t.side > -0.35 && Math.hypot(b.p.x - t.cx, b.p.z - t.cz) < t.rO + 0.6)
     let lastY = -1e9
     for (let s0 = 0.2; s0 < st.L; s0 += 0.1) {
       const y = Math.floor(st.h(s0) / 0.2) * 0.2 + 0.2
@@ -376,20 +384,14 @@ export function buildYosemite(scene, { lib } = {}) {
       const lists = Array.from({ length: NV }, () => [])
       // 2026-11-10 ChatGPT QA 圖 4：轉彎處兩層的最後幾階和轉上去那段的台階疊在一起 → 轉彎處（路徑在 x 不變、往 +z 走的那段）兩端的整段寬度
       // 拿掉沿著層走的台階，改鋪一塊獨立的石板平台（2～4 塊不規則大石板），高度＝轉彎起點／終點那一階
-      const turns = []
-      for (let i = 1; i < st.pts.length; i++) {
-        const [ax, az] = st.pts[i - 1], [bx, bz] = st.pts[i]
-        if (Math.abs(bx - ax) < 0.05 && Math.abs(bz - az) > 2) turns.push({ x: ax, za: Math.min(az, bz), zb: Math.max(az, bz), sa: st.S[i - 1], sb: st.S[i] })
-      }
-      const HALF = (M.W - 0.45) / 2, stepTop = (s) => Math.floor(st.h(s) / 0.2) * 0.2 + 0.2
-      const inTurn = (b) => Math.abs(Math.sin(b.yaw)) > 0.7 && turns.some((t) => Math.abs(b.p.x - t.x) < HALF + 0.15 && b.p.z > t.za - HALF - 0.6 && b.p.z < t.zb + HALF + 0.6)
+      // 2026-11-10 V→U：轉彎是水平的半圓（YOSE.stairs 的 legOf -2），整片鋪成一個半圓形石板平台（約 1 公尺見方的不規則石板，邊緣被外側弧牆蓋住）
       for (const t of turns) {
-        for (const [z0, z1, top] of [[t.za - HALF - 0.4, t.za, stepTop(t.sa)], [t.zb, t.zb + HALF - 0.4 + 0.4, stepTop(t.sb)]]) {
-          const n = 2 + Math.floor(rnd() * 3), under = Math.max(0.7, Math.min(1.6, top - alpineHeight(t.x, (z0 + z1) / 2) + 0.5))   // 第二輪：至少 0.7 公尺厚，不會懸空
-          for (let j = 0; j < n; j++) {
-            const u0 = j / n, u1 = (j + 1) / n, xa = t.x - HALF - 0.1 + (u0 + (j ? rr(-0.05, 0.05) : 0)) * (2 * HALF + 0.2), xb = t.x - HALF - 0.1 + u1 * (2 * HALF + 0.2)
-            lists[Math.floor(rnd() * NV)].push({ p: V((xa + xb) / 2, top - Math.max(0.2, under) / 2 + rr(-0.01, 0.01), (z0 + z1) / 2), yaw: Math.PI / 2 + rr(-0.03, 0.03), s: V(z1 - z0 + 0.05, under, xb - xa + 0.01), c: rr(0.92, 1.05) })   // 石板之間不留縫（以前 3 公分縫看下去是黑的）
-          }
+        const top = stepTop(t.s)
+        for (let gx = -0.2; gx < t.rO + 0.5; gx += 1.0) for (let gz = -t.rO - 0.5; gz < t.rO + 0.5; gz += 1.0) {
+          if (Math.hypot(gx, gz) > t.rO + 0.25) continue
+          const x = t.cx + t.side * (gx + rr(-0.06, 0.06)), z = t.cz + gz + rr(-0.06, 0.06)
+          const under = Math.max(0.7, Math.min(1.8, top - alpineHeight(x, z) + 0.5))
+          lists[Math.floor(rnd() * NV)].push({ p: V(x, top - under / 2 + rr(-0.01, 0.01), z), yaw: rr(-0.08, 0.08), s: V(1.1, under, 1.1), c: rr(0.9, 1.05) })
         }
       }
       for (const b of steps) {
@@ -430,12 +432,29 @@ export function buildYosemite(scene, { lib } = {}) {
       }
     }
     const OPEN = 3.4
+    // 2026-11-10 V→U：每段石階外側的牆只到兩端轉彎的圓心（xcW～xcE）；轉彎外緣另砌一道半圓弧牆
+    const xcW = M.XA + 1.5, xcE = M.XB - 1.5
+    const legX1 = (k) => k === 0 ? M.XB + 0.8 - OPEN : k === M.NL - 1 ? M.XB + 0.8 : xcE
     for (let k = 0; k < M.NL; k++) {
       // 第 k 段外側那條線：第 0 段在最前面；k ≥ 1 在第 k-1 段的內側（同一條線，牆的高度以第 k 段為準）
       const zOf = (x) => YOSE.base(x) + M.D0 + M.W * k - M.W / 2 + 0.2
-      const turnX = k === 0 ? M.XB + 0.8 : (k % 2 === 1 ? M.XA - 0.8 : M.XB + 0.8)   // 這段的起點（從上一段轉上來的那頭）留開口
-      wallLine(k, M.XA - 1.0, M.XB + 0.8, zOf, (x) => Hk(k, x), turnX - OPEN, turnX + OPEN)   // 只沿著有踏面的那段（以前到平台端外面，石牆懸在半空）
+      wallLine(k, xcW - 0.25, legX1(k), zOf, (x) => Hk(k, x), 1e9, -1e9)
     }
+    const wallArc = (t) => {
+      const r = t.rO + 0.05, top = stepTop(t.s) - 0.2, n = Math.ceil(Math.PI * r / 0.5)
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI / 2 + Math.PI * (i + 0.5) / n, x = t.cx + t.side * r * Math.cos(a), z = t.cz + r * Math.sin(a)
+        const yaw = Math.atan2(-t.side * Math.sin(a), Math.cos(a)) + Math.PI / 2
+        cores.push({ p: V(x, top + 0.3, z), yaw, s: V(0.56, 0.62, 0.26), c: 0.88 })
+        for (let c = 0; c < 3; c++) for (let j = 0; j < 2; j++) {
+          const w = 0.34 + rnd() * 0.22, h = 0.2 + rnd() * 0.08, off = (j - 0.5) * 0.27 + (c % 2) * 0.06
+          stones.push({ p: V(x + Math.cos(yaw) * off, top + 0.12 + c * 0.22, z - Math.sin(yaw) * off), yaw: yaw + (rnd() - 0.5) * 0.2, s: V(w, h, 0.5), c: 0.72 + rnd() * 0.3 })
+        }
+        stones.push({ p: V(x, top + 0.74, z), yaw, s: V(0.62, 0.09, 0.5), c: 0.95 + rnd() * 0.1 })
+        addCollider(x, z, 0.3, top + 0.95)
+      }
+    }
+    for (const t of turns) wallArc(t)
     // 最上一層平台前緣（站在岩壁頂上往下看石階）：石牆，轉上來那頭留開口
     wallLine(M.NL, XL + 0.3, XR - 0.3, (x) => YOSE.base(x) + M.D0 + M.W * (M.NL - 0.5) + 0.2, () => topYm, M.XB + 0.8 - OPEN, M.XB + 0.8 + OPEN)
     // 2026-11-10 ChatGPT：高處外側（落差大的第 3 層以上）石牆上加深灰色鐵管欄杆：離踏面 1.05 公尺、柱距 1.8 公尺、上下兩根橫管；轉彎開口不裝
@@ -443,10 +462,8 @@ export function buildYosemite(scene, { lib } = {}) {
       const parts = [], post = new THREE.CylinderGeometry(0.025, 0.025, 1, 6), bar = new THREE.CylinderGeometry(0.02, 0.02, 1, 6).rotateZ(Math.PI / 2)
       for (let k = 2; k < M.NL; k++) {
         const zOf = (x) => YOSE.base(x) + M.D0 + M.W * k - M.W / 2 + 0.2
-        const turnX = k % 2 === 1 ? M.XA - 0.8 : M.XB + 0.8
         let prev = null
-        for (let x = M.XA - 0.6; x <= M.XB + 0.6; x += 1.8) {
-          if (Math.abs(x - turnX) < OPEN + 0.4) { prev = null; continue }
+        for (let x = xcW; x <= legX1(k) - 0.2; x += 1.8) {
           const y0 = Hk(k, x), z = zOf(x), top = y0 + 1.05, wallTop = y0 + 0.78
           parts.push(post.clone().scale(1, top - wallTop + 0.05, 1).translate(x, (top + wallTop) / 2, z))
           if (prev) for (const h of [0, -0.38]) {
@@ -493,8 +510,8 @@ export function buildYosemite(scene, { lib } = {}) {
     // 每一層內側的石壁：碰撞（站在第 k 段，往裡是第 k+1 段的石壁，高到第 k+1 段的踏面）
     for (let k = 0; k < M.NL; k++) for (let x = XL + 0.3; x < XR - 0.3; x += 0.5) {
       const top = k + 1 < M.NL ? Hk(k + 1, x) : topYm
-      const turnEnd = k % 2 === 0 ? M.XA - 0.8 : M.XB + 0.8   // 第 k 段的終點＝轉上第 k+1 段的地方：那裡不擋
-      if (top - Hk(k, x) > 0.45 && Math.abs(x - turnEnd) > 1.7) addCollider(x, YOSE.base(x) + M.D0 + M.W * k + M.W / 2 + 0.35, 0.3, top - 0.1)
+      const past = k % 2 === 0 ? x < xcW + 0.3 : x > xcE - 0.3   // 第 k 段的終點＝轉上第 k+1 段的半圓：那裡不擋
+      if (top - Hk(k, x) > 0.45 && !past) addCollider(x, YOSE.base(x) + M.D0 + M.W * k + M.W / 2 + 0.35, 0.3, top - 0.1)
     }
     // 兩端：不能從平台側面走出去（掉下去）
     for (const xe of [XL - 0.6, XR + 0.6]) for (let k = 0; k <= M.NL; k++) for (const o of [-0.8, 0, 0.8]) if (!(xe > XR && (k === 0 || k >= M.NL - 1)) && k < M.NL) addCollider(xe, YOSE.base(xe) + M.D0 + M.W * k - M.W / 2 + M.W / 2 + o, 0.42, topYm + 1)   // 轉彎平台在 XA-0.8／XB+0.8，柱子放在外面 0.6 才不會擋到轉彎

@@ -323,6 +323,9 @@ export const ALP_SPURS = [
   // 2026-11-10 使用者：南坡溪谷（吊橋下那條溪谷小路的盡頭）接到山下入口的湖，湖邊有路可以走上來。走溪的南岸（不用過溪），
   // 坡度 ≤20% 的 A*：直接走太陡（29%），往南繞一個之字形，約 80 m；起點在湖的東南岸（離水 5 m）
   { name: 'lakeGorge', world: true, k: 0.22, noClear: true, endOn: 'gorge', pts: [[123, -63], [129, -74], [142, -85], [145, -89], [157, -67], [164.3, -54.4]] },
+  // 2026-11-10 使用者：入口的湖再接回一開始的公園（那邊有兩條路）→ 從主步道起點（花園東出口外 76,0）往南，繞湖西岸（離水 ≥6 m）、
+  // 湖南岸（離水雉、彩鷸 ≥12 m），接到湖東南岸 lakeGorge 的起點（往上就是南坡溪谷）。幾乎平的（0～5 m），約 125 m（A* 找的）
+  { name: 'lakeLoop', world: true, y0: 0, k: 0.15, noClear: true, endOn: 'lakeGorge', pts: [[76.5, 0], [78.2, -6], [78, -12], [76.5, -35], [77, -57], [84, -73], [98, -78], [123, -63]] },
   { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, landings: true, endOn: 'grass', pts: null },   // pts：ridgeTrailPts()（EAST.ridge 定義之後）
 ].map((sp) => sp.world ? sp : ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
 // 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
@@ -369,13 +372,28 @@ export const YOSE = (() => {
       // 進場：從支線往北走到第 0 段的起點（東端）
       const [sx, sz] = M.start, ex = M.XB + 0.8, ez = zAt(ex, 0)
       for (let i = 0; i <= 12; i++) { pts.push([lerp(sx, ex, i / 12), lerp(sz, ez, i / 12)]); legOf.push(-1) }
+      // 2026-11-10 使用者：轉彎太 V → ChatGPT「V3：圓弧 U 型轉彎」：每段兩端縮進 1.5 m，段與段之間用水平的半圓（中心線半徑 1.7 m＝兩層間距的一半）接起來；
+      // 每段平均爬 8 m（總爬升固定），轉彎本身是平的（以前轉彎處跟著坡往上，又是 180° 直接掉頭，加上石板平台像一個尖 V）
+      const R = M.W / 2, xcE = M.XB - 1.5, xcW = M.XA + 1.5
       for (let k = 0; k < M.NL; k++) {
-        const west = k % 2 === 0, xa = west ? M.XB + 0.8 : M.XA - 0.8, xb = west ? M.XA - 0.8 : M.XB + 0.8
+        const west = k % 2 === 0
+        const xa = k === 0 ? M.XB + 0.8 : west ? xcE : xcW, xb = k === M.NL - 1 ? (west ? M.XA - 0.8 : M.XB + 0.8) : west ? xcW : xcE
         for (let i = k === 0 ? 1 : 0; i <= 40; i++) { const x = lerp(xa, xb, i / 40); pts.push([x, zAt(x, k)]); legOf.push(k) }
+        if (k === M.NL - 1) break
+        // 半圓：圓心在這段終點和下一段起點中間（z 往岩壁裡 1.7 m），往外（西端往 -x、東端往 +x）凸出去
+        const zc = (zAt(xb, k) + zAt(xb, k + 1)) / 2, side = west ? -1 : 1
+        for (let j = 1; j < 14; j++) { const a2 = -Math.PI / 2 + Math.PI * j / 14; pts.push([xb + side * R * Math.cos(a2), zc + R * Math.sin(a2)]); legOf.push(-2) }
       }
       let L = 0; const S = [0]; for (let i = 1; i < pts.length; i++) { L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); S.push(L) }
       const h0 = alpineHeight(sx, sz), top = Y.topY(M.XB)
-      const h = (s) => h0 + (top - h0) * s / L
+      // 每一點的高度：進場那段緩緩爬（約 6%），之後每段石階照距離平均爬、轉彎（legOf -2）不爬
+      const Y_ = new Float64Array(pts.length)
+      { let climbL = 0, approachL = 0
+        for (let i = 1; i < pts.length; i++) { const d = S[i] - S[i - 1]; if (legOf[i] >= 0) climbL += d; else if (legOf[i] === -1) approachL += d }
+        const aRise = Math.min(2, approachL * 0.06), perM = (top - h0 - aRise) / climbL
+        for (let i = 1; i < pts.length; i++) { const d = S[i] - S[i - 1]; Y_[i] = Y_[i - 1] + (legOf[i] === -1 ? aRise * d / Math.max(1e-6, approachL) : legOf[i] >= 0 ? perM * d : 0) }
+        for (let i = 0; i < pts.length; i++) Y_[i] += h0 }
+      const h = (s) => { if (s <= 0) return Y_[0]; if (s >= L) return Y_[Y_.length - 1]; let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] < s) lo = m; else hi = m } return lerp(Y_[lo], Y_[hi], (s - S[lo]) / Math.max(1e-6, S[hi] - S[lo])) }
       // 第 k 段在 x 那裡的踏面高（地形、碰撞、石壁都用）：沿這段找最近的點
       const legH = (k, x) => {
         if (k < 0) return h0
