@@ -151,7 +151,7 @@ export function leafCardMaterial(color = 0xffffff) {
   if (_cardMats[color]) return _cardMats[color]
   const m = new THREE.MeshStandardMaterial({
     color, map: leafTexture(), vertexColors: true, roughness: 0.8,
-    alphaTest: 0.45, alphaToCoverage: true, side: THREE.DoubleSide,
+    alphaTest: 0.45, side: THREE.DoubleSide,   // 2026-11-11 拿掉 alphaToCoverage（葉緣一圈白霧、夜裡閃）
   })
   m.onBeforeCompile = (sh) => {
     WORLD_VARY(sh)
@@ -167,7 +167,7 @@ export function leafCardMaterial(color = 0xffffff) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
       'float faceDirection = 1.0;\nvec3 normal = normalize( vNormal );\nvec3 nonPerturbedNormal = normal;')
       // 葉子薄，背光面也透一點光，樹冠底下才不會一片黑
-      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(0.06, 0.08, 0.03);')
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n#if NUM_HEMI_LIGHTS > 0\nfloat leafDay = clamp(dot(hemisphereLights[0].skyColor, vec3(0.33)) * 2.5, 0.0, 1.0);\n#else\nfloat leafDay = 1.0;\n#endif\nreflectedLight.indirectDiffuse += leafDay * diffuseColor.rgb * vec3(0.06, 0.08, 0.03);')
   }
   m.customProgramCacheKey = () => 'leafcard'
   return (_cardMats[color] = m)

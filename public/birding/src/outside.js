@@ -27,7 +27,29 @@ function edgePoint(a, rho = 1) {
   return [dx * lo, dz * lo, lo]
 }
 
-export function buildOutside() {
+// 2026-11-11 遠處的樹（ChatGPT：不要三層圓錐、圓球，用近處那棵寫實樹烘成的貼圖 impostor）：
+// 開場把近處用的樹（樹冠＋葉片卡＋樹幹，一棵、高 1）用正交相機拍成一張透明底的貼圖，遠處的樹換成兩片十字交叉的貼圖板
+function bakeImpostor(renderer, parts, W, H = 1, px = 256) {
+  const sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-W / 2, W / 2, H, 0, -5, 5)
+  cam.position.set(0, 0, 2); cam.lookAt(0, 0, 0)
+  sc.add(new THREE.AmbientLight(0xffffff, Math.PI * 2.6)); const dl = new THREE.DirectionalLight(0xffffff, 2.4);   // 烘出來的是「本色」：第一版光太弱，貼圖平均只有 5/255，遠處的樹一片黑
+   dl.position.set(0.4, 1, 0.8); sc.add(dl)
+  for (const [geo, mat, c] of parts) { const m = new THREE.InstancedMesh(geo, mat, 1); m.setMatrixAt(0, new THREE.Matrix4()); if (c) m.setColorAt(0, c); m.frustumCulled = false; sc.add(m) }
+  const rt = new THREE.WebGLRenderTarget(px, Math.round(px * H / W), { samples: 4 })
+  const prev = renderer.getRenderTarget(), pc = new THREE.Color(), pa = renderer.getClearAlpha(); renderer.getClearColor(pc)
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(sc, cam)
+  renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa)
+  rt.texture.generateMipmaps = true; rt.texture.minFilter = THREE.LinearMipmapLinearFilter
+  return rt.texture
+}
+// 十字交叉的兩片板（寬 W、高 H，底在 y=0），法線朝上（跟樹冠一樣吃天光，不會因為板子的方向一片亮一片暗）
+function crossBoards(W, H = 1) {
+  const a = new THREE.PlaneGeometry(W, H).translate(0, H / 2, 0), b = a.clone().rotateY(Math.PI / 2)
+  const g = mergeGeometries([a, b]), n = g.attributes.normal
+  for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0)
+  return g
+}
+export function buildOutside(renderer = null) {
   const g = new THREE.Group()
   g.name = 'ground'   // halls.js：永遠畫
 
@@ -153,7 +175,13 @@ export function buildOutside() {
       const sc = (it) => new THREE.Vector3(it.H * it.w, it.H, it.H * it.w)
       const col = (it, c) => c.setHSL(0.25 + (it.c - 0.5) * 0.08, 0.35 + it.c * 0.2, 0.75 + it.c * 0.35)
       const ms = [fill(crown(3), leafM, broadL, sc, col), fill(cards, leafCardMaterial(0x5a8a42), broadL, sc, col), fill(trunk, barkM, broadL, sc)]
-      const lows = [fill(crown(1), leafM, broadL, sc, col), null, null]
+      let lows = [fill(crown(1), leafM, broadL, sc, col), null, null]
+      if (renderer) {
+        const midC = new THREE.Color().setHSL(0.25, 0.45, 0.92)
+        const tex = bakeImpostor(renderer, [[crown(3), leafM, midC], [cards, leafCardMaterial(0x5a8a42), midC], [trunk, barkM, null]], 0.9)
+        const impM = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.9 })
+        lows = [fill(crossBoards(0.9), impM, broadL, sc, (it, c) => c.setScalar(0.82 + it.c * 0.3)), null, null]
+      }
       for (const m of [...ms, ...lows]) if (m) g.add(m)
       lows.forEach((m) => { if (m) m.count = 0 })
       lodRegister(ms, 8, lows)
@@ -174,7 +202,13 @@ export function buildOutside() {
         const farCore = mergeGeometries([[0.3, 0.42, 1], [0.52, 0.34, 0.75], [0.72, 0.28, 0.5]].map(([y, h, r]) => new THREE.ConeGeometry(R0 * r * 1.1, h, 7, 1).translate(0, y, 0).toNonIndexed()))
         const col = (it, c) => c.setHSL(0.27 + (it.c - 0.5) * 0.06, 0.2 + it.c * 0.15, 0.7 + it.c * 0.25)
         const ms = [fill(crown, needleM, list, sc, col), fill(trunk, barkM, list, sc), fill(core, coreM, list, sc)]
-        const lows = [fill(farCore, farM, list, sc, col), null, null]
+        let lows = [fill(farCore, farM, list, sc, col), null, null]
+        if (renderer) {
+          const W = R0 * 2.3, midC = new THREE.Color().setHSL(0.27, 0.27, 0.82)
+          const tex = bakeImpostor(renderer, [[crown, needleM, midC], [trunk, barkM, null], [core, coreM, null]], W)
+          const impM = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.95 })
+          lows = [fill(crossBoards(W), impM, list, sc, (it, c) => c.setScalar(0.8 + it.c * 0.3)), null, null]
+        }
         for (const m of [...ms, ...lows]) if (m) g.add(m)
         lows.forEach((m) => { if (m) m.count = 0 })
         lodRegister(ms, 10, lows)
@@ -183,37 +217,63 @@ export function buildOutside() {
   }
 
   /* ---------- 遠山 ---------- */
+  // 2026-11-11 使用者：夜晚、下雨遠景只有一片灰（ChatGPT：每層山自己的空氣透視，夜裡近山深、遠山淡、地平線天空最亮；下雨對比變低但不能全部消失）
+  // aLayer：0 近山（640）、1 中山（760）、2 遠山（880）、3 山腳的森林帶（420 公尺，蓋住地平線那一圈平平的深色地面）
+  // aV：0 山腳、1 稜線（稜線上一點點月光／天光的亮邊）
   {
     const mtnMat = new THREE.ShaderMaterial({
       fog: false,
       uniforms: { uDay: dayLight, uDusk: duskLight, uHaze: weatherU.haze, uFlash: weatherU.flash },
-      vertexShader: `attribute float aHaze; varying float vHaze;
-        void main(){ vHaze = aHaze; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `varying float vHaze; uniform float uDay; uniform float uDusk; uniform float uHaze; uniform float uFlash;
+      vertexShader: `attribute float aLayer; attribute float aV; varying float vL; varying float vV;
+        void main(){ vL = aLayer; vV = aV; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `varying float vL; varying float vV; uniform float uDay; uniform float uDusk; uniform float uHaze; uniform float uFlash;
+        vec3 pick4(float l, vec3 a, vec3 b, vec3 c, vec3 d){ return l < 0.5 ? a : l < 1.5 ? b : l < 2.5 ? c : d; }
+        float pickf(float l, float a, float b, float c, float d){ return l < 0.5 ? a : l < 1.5 ? b : l < 2.5 ? c : d; }
         void main(){
-          vec3 hor = mix(vec3(0.035, 0.05, 0.09), vec3(0.86, 0.91, 0.93), uDay);
-          hor = mix(hor, vec3(0.9, 0.6, 0.42), uDusk * 0.6);
-          vec3 base = mix(vec3(0.02, 0.03, 0.04), vec3(0.22, 0.32, 0.28), uDay);
-          hor = mix(hor, vec3(dot(hor, vec3(0.3, 0.5, 0.2))) * 0.8, uHaze);   // 下雨：地平線灰掉
-          gl_FragColor = vec4(mix(base, hor, clamp(vHaze + 0.5 * uHaze, 0.0, 1.0)) + vec3(0.5, 0.55, 0.7) * uFlash * 0.4, 1.0);
+          // 白天：原本的做法（山的本色往地平線的天色混，遠的混多一點）
+          vec3 dHor = mix(vec3(0.86, 0.91, 0.93), vec3(0.9, 0.6, 0.42), uDusk * 0.6);
+          vec3 dBase = pick4(vL, vec3(0.22, 0.32, 0.28), vec3(0.22, 0.32, 0.28), vec3(0.22, 0.32, 0.28), vec3(0.11, 0.2, 0.12));
+          float dW = pickf(vL, 0.42, 0.58, 0.72, 0.22) + 0.22 * (1.0 - vV);
+          dHor = mix(dHor, vec3(dot(dHor, vec3(0.3, 0.5, 0.2))) * 0.8, uHaze);
+          vec3 day = mix(dBase, dHor, clamp(dW + 0.45 * uHaze, 0.0, 1.0));
+          // 夜晚：近山 #202D42、中山 #343F56、遠山 #51596E、森林帶更深；霧色冷藍灰 #343D55（線性色）
+          vec3 nBase = pick4(vL, vec3(0.006, 0.011, 0.024), vec3(0.013, 0.02, 0.038), vec3(0.024, 0.032, 0.056), vec3(0.003, 0.006, 0.01));   // 2026-11-11 第一版照 ChatGPT 的色太亮：遠山比夜空還亮像在發光 → 整體壓一半，一層比一層淡、但都比天暗
+          vec3 nFog = vec3(0.016, 0.022, 0.044);
+          float nW = mix(pickf(vL, 0.25, 0.42, 0.58, 0.12), pickf(vL, 0.5, 0.65, 0.78, 0.35), uHaze) + 0.15 * (1.0 - vV);
+          vec3 night = mix(nBase, nFog, clamp(nW, 0.0, 1.0));
+          night += vec3(0.018, 0.024, 0.04) * smoothstep(0.82, 1.0, vV) * (1.0 - 0.7 * uHaze) * step(vL, 2.5);   // 稜線的冷光邊
+          vec3 c = mix(night, day, uDay);
+          gl_FragColor = vec4(c + vec3(0.5, 0.55, 0.7) * uFlash * 0.4, 1.0);
           #include <colorspace_fragment>
         }`,
     })
-    for (const [R, haze, H, seed] of [[640, 0.42, 120, 11], [760, 0.58, 170, 23], [880, 0.72, 230, 37]]) {
-      const N = 512, P = [], HZ = [], I = []
+    for (const [R, layer, H, seed] of [[640, 0, 120, 11], [760, 1, 170, 23], [880, 2, 230, 37], [420, 3, 0, 53]]) {
+      const N = layer === 3 ? 2400 : 768, P = [], AL = [], AV = [], I = []
       for (let i = 0; i <= N; i++) {
         const a = (i / N) * TAU, cx = Math.cos(a), sz = Math.sin(a)
-        const n = fbm3(cx * 2.2 + seed, seed * 0.3, sz * 2.2, 5)
-        // 日出、日落的方向（world.js 的太陽在地平線時往 (∓0.8, 0, 0.35)）壓成山谷：太陽從谷口升起、落下，在山上拍得到
-        const valley = 1 - 0.8 * smoothstep(0.82, 0.97, Math.max(...[[-0.8, 0.35], [0.8, 0.35]].map(([sx, szz]) => (cx * sx + sz * szz) / Math.hypot(sx, szz))))
-        const ridge = H * valley * (0.25 + 0.75 * Math.max(0, n * 0.9 + 0.45)) * (0.55 + 0.45 * Math.abs(fbm3(cx * 0.7, seed, sz * 0.7, 2) * 2))
-        P.push(cx * R, -20, sz * R, cx * R, ridge, sz * R)
-        HZ.push(haze + 0.22, haze)   // 山腳在地面的霧氣裡更淡
+        let ridge
+        if (layer === 3) {
+          // 森林帶：起伏的山腳＋一棵棵針葉樹尖（每 1～3 公尺一個尖，高低不一）
+          const n = fbm3(cx * 3 + seed, 1.7, sz * 3, 3)
+          // 樹尖：兩組不同間距的尖、高低用雜訊調（第一版只有一組，像一排一樣的鋸齒）
+          const u = a * 330, m1 = fbm3(cx * 17, 2.2, sz * 17, 2), m2 = fbm3(cx * 31, 5.1, sz * 31, 2)
+          const tip = Math.pow(Math.max(0, Math.sin(u / 2.1 + 6 * m1)), 4) * (0.6 + 0.8 * Math.abs(m2) * 2) + 0.6 * Math.pow(Math.max(0, Math.sin(u / 1.33 + 3 + 9 * m2)), 6) * (0.4 + Math.abs(m1) * 2)
+          ridge = 16 + 12 * n + 3.2 * tip
+        } else {
+          const n = fbm3(cx * 2.2 + seed, seed * 0.3, sz * 2.2, 5)
+          // 日出、日落的方向壓成山谷：太陽從谷口升起、落下
+          const valley = 1 - 0.8 * smoothstep(0.82, 0.97, Math.max(...[[-0.8, 0.35], [0.8, 0.35]].map(([sx, szz]) => (cx * sx + sz * szz) / Math.hypot(sx, szz))))
+          ridge = H * valley * (0.25 + 0.75 * Math.max(0, n * 0.9 + 0.45)) * (0.55 + 0.45 * Math.abs(fbm3(cx * 0.7, seed, sz * 0.7, 2) * 2))
+          ridge += H * 0.06 * fbm3(cx * 14 + seed, 4.4, sz * 14, 3)   // 次級山脊、岩稜（ChatGPT：不要只有幾個圓圓的波峰）
+        }
+        const RR = layer === 3 ? edgePoint(a)[2] + 310 : R   // 森林帶貼著公園邊界外 310 公尺（樹林帶外面），東邊山區比較寬也不會穿過樹林
+        P.push(cx * RR, -20, sz * RR, cx * RR, ridge, sz * RR)
+        AL.push(layer, layer); AV.push(0, 1)
       }
       for (let i = 0; i < N; i++) { const a = i * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3) }
       const geo = new THREE.BufferGeometry()
       geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3))
-      geo.setAttribute('aHaze', new THREE.Float32BufferAttribute(HZ, 1))
+      geo.setAttribute('aLayer', new THREE.Float32BufferAttribute(AL, 1)); geo.setAttribute('aV', new THREE.Float32BufferAttribute(AV, 1))
       geo.setIndex(I)
       const m = new THREE.Mesh(geo, mtnMat)
       m.frustumCulled = false

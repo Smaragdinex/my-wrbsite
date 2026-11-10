@@ -71,7 +71,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
 
   /* 場景 */
   buildDome(scene)
-  scene.add(buildOutside())   // 公園外面：圍籬、草地、樹林帶、遠山（2026-11-08 拿掉溫室）
+  scene.add(buildOutside(renderer))   // 公園外面：圍籬、草地、樹林帶、遠山（2026-11-08 拿掉溫室）
   buildGround(scene)
   const mountain = buildMountain(scene)
   const water = buildWater(scene)

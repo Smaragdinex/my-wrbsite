@@ -89,8 +89,8 @@ export function createCloudSea(scene, { sun }) {
     common.uTime.value = t
     tmp.copy(sun.position).sub(sun.target.position).normalize(); common.uSunDir.value.copy(tmp)
     // 雲的顏色：白天白、黃昏帶一點暖色（照太陽光色）、晚上暗藍灰
-    common.uSunCol.value.copy(sun.color).multiplyScalar(0.3 + 0.95 * day).lerp(new THREE.Color(0.16, 0.19, 0.26), 1 - Math.min(1, day * 1.5))
-    common.uShade.value.setRGB(0.5, 0.56, 0.66).multiplyScalar(0.2 + 0.8 * day)
+    common.uSunCol.value.copy(sun.color).multiplyScalar(0.3 + 0.95 * day).lerp(new THREE.Color(0.07, 0.085, 0.13), 1 - Math.min(1, day * 1.5))   // 2026-11-11 夜裡的雲海原本一大片平平的亮灰（使用者：遠景只有一片灰）→ 暗一點、偏藍，山的剪影才出得來
+    common.uShade.value.setRGB(0.5, 0.56, 0.66).multiplyScalar(0.1 + 0.9 * day)
     common.uCamFade.value = THREE.MathUtils.smoothstep(camera.position.y, SEA.y - 6, SEA.y + 4)
     group.visible = common.uCamFade.value > 0.001
   }
