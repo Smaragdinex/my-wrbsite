@@ -29,9 +29,10 @@ export function createWeather({ scene, camera, sun, hemi, renderer, time }) {
     sun.intensity = base.sun * (1 - 0.82 * cl) + f * 2.5
     hemi.intensity = base.hemi * (1 - 0.3 * cl) + f * 6
     scene.environmentIntensity = base.env * (1 - 0.45 * cl)
-    scene.fog.density = base.fog * (1 + 0.6 * cl + 1.6 * r)
-    const lum = base.fogC.r * 0.3 + base.fogC.g * 0.5 + base.fogC.b * 0.2
-    scene.fog.color.copy(base.fogC).lerp(grey.setRGB(lum * 0.86, lum * 0.9, lum * 0.94), cl * 0.75)
+    // 2026-11-10 使用者：下雨後整片白 → 霧不要那麼濃（雨天 ×2.75 → ×1.85），顏色壓成雨天的暗灰（以前還是晴天那個亮灰綠，一濃就是一片白牆）
+    scene.fog.density = base.fog * (1 + 0.5 * cl + 0.75 * r)
+    const lum = base.fogC.r * 0.3 + base.fogC.g * 0.5 + base.fogC.b * 0.2, dk = 0.86 - 0.36 * Math.min(1, r / 0.72)
+    scene.fog.color.copy(base.fogC).lerp(grey.setRGB(lum * dk, lum * (dk + 0.03), lum * (dk + 0.06)), Math.min(1, cl * 0.75 + r * 0.3))
     weatherU.cloud.value = cl
     weatherU.gloom.value = Math.min(1, cl * 0.75 + st.storm * 0.25)
     weatherU.flash.value = f

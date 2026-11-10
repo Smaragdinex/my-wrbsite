@@ -135,8 +135,8 @@ addEventListener('keydown', (e) => {
   }
   // F：手電筒（2026-11-10）——晚上照路、照鳥（白天也能開，只是看不太出來）
   if (e.code === 'KeyF' && player.controls.isLocked) {
-    torch.visible = !torch.visible
-    hud.toast(tr(torch.visible ? '手電筒：開' : '手電筒：關'), 1.2)
+    torch.on = !torch.on; torch.intensity = torch.on ? TORCH_I : 0
+    hud.toast(tr(torch.on ? '手電筒：開' : '手電筒：關'), 1.2)
   }
   if (e.code === 'KeyQ' && player.controls.isLocked) {
     // 換下一支有的鏡頭
@@ -149,7 +149,10 @@ addEventListener('keydown', (e) => {
 // 2026-11-10 使用者：從左邊出來（以前在右下，光被手上的相機擋住）、不要那麼亮、柔和 → 亮度 90→32、邊緣全柔（penumbra 0.95）、角度放寬、偏暖
 const torch = new THREE.SpotLight(0xffe6c4, 32, 30, 0.55, 0.95, 1.5)
 torch.position.set(-0.32, -0.08, -0.3); torch.target.position.set(0.4, -0.7, -10)
-camera.add(torch, torch.target); torch.visible = false
+// 2026-11-10 使用者：第一次按手電筒都會卡 → 以前開關是 visible，燈的數量一變，所有材質的 shader 都要重新編譯（卡 1～2 秒）。
+// 改成燈一直在場景裡、關的時候亮度 0（shader 一開始就編好含這盞燈的版本）
+const TORCH_I = torch.intensity
+camera.add(torch, torch.target); torch.on = false; torch.intensity = 0
 // 日夜：一天 24 分鐘（遊戲裡 1 小時 = 現實 1 分鐘）；網址 ?t=19.5 可以直接從某個時間開始
 const DAY_SEC = 24 * 60
 const qs = new URLSearchParams(location.search)

@@ -149,7 +149,7 @@ export function buildPondLife(scene, { lib } = {}) {
     for (let i = 0; i < N; i++) {
       let x, z
       for (let k = 0; k < 200; k++) { const a = rnd() * TAU, d = Math.sqrt(rnd()) * R * 0.85; x = ALP_POND.x + Math.cos(a) * d; z = ALP_POND.z + Math.sin(a) * d; if (depthAt(x, z) > 0.7) break }
-      fish.push({ x, z, y: W - 0.16 - rnd() * 0.18, h: rnd() * TAU, v: 0.25 + rnd() * 0.2, turn: 0, len: 0.4 + rnd() * 0.3, ph: rnd() * TAU, t: rnd() * 5, tint: TINT[i % TINT.length] })
+      fish.push({ x, z, y: W - 0.3 - rnd() * 0.35,   /* 2026-11-10 使用者：魚像浮在水面上 → 0.16～0.34 改 0.3～0.65 m 深 */ h: rnd() * TAU, v: 0.25 + rnd() * 0.2, turn: 0, len: 0.4 + rnd() * 0.3, ph: rnd() * TAU, t: rnd() * 5, tint: TINT[i % TINT.length] })
     }
     const phase = new THREE.InstancedBufferAttribute(new Float32Array(fish.map((f) => f.ph)), 1)
     for (const { geo, mat } of parts(lib.koi)) {
@@ -157,14 +157,20 @@ export function buildPondLife(scene, { lib } = {}) {
       // 擺尾：身體沿 x（頭在 -x），越往尾巴擺越大，波從頭往尾傳
       m2.onBeforeCompile = (sh) => {
         sh.uniforms.uTime = uTime
-        sh.vertexShader = 'uniform float uTime;\nattribute float aPhase;\nvarying float vWY;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        sh.vertexShader = 'uniform float uTime;\nattribute float aPhase;\nvarying float vWY;\nvarying vec3 vWP;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
           float tx = clamp(transformed.x + 0.25, 0.0, 1.0);
           transformed.z += sin(uTime * 7.0 + aPhase - transformed.x * 7.0) * 0.07 * tx * tx;`).replace('#include <project_vertex>', `#include <project_vertex>
-          vWY = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).y;`)
+          vWP = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz; vWY = vWP.y;`)
         // 魚畫在水面之後（水不寫深度）：自己照離水面多深混一點湖水色，看起來在水裡，又不會被整片不透明的深水蓋掉
-        sh.fragmentShader = 'varying float vWY;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
-          float wk = clamp((${W.toFixed(3)} - vWY) * 1.4 + 0.26, 0.26, 0.62);
-          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.06, 0.14, 0.12), wk);`)
+        sh.fragmentShader = 'varying float vWY;\nvarying vec3 vWP;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
+          // 2026-11-10 使用者：魚應該被水蓋在下面、顏色比較深 → 混湖水色 55～85%（越深越多）、先去飽和、整體壓暗；背上一點點亮（上方來的光）
+          float dW = max(0.0, ${W.toFixed(3)} - vWY);
+          float wk = clamp(0.5 + dW * 0.6, 0.55, 0.85);
+          vec3 fc = mix(gl_FragColor.rgb, vec3(dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11))), 0.3) * 0.75;
+          gl_FragColor.rgb = mix(fc, vec3(0.03, 0.085, 0.075), wk);
+          // 水面在低角度、遠處是反光的：看不到水下的魚（以前遠處、下雨時一顆顆黑點浮在水面上）
+          vec3 tc = cameraPosition - vWP; float dl = length(tc);
+          gl_FragColor.a *= smoothstep(0.1, 0.4, tc.y / dl) * (1.0 - smoothstep(12.0, 26.0, dl));`)
       }
       m2.customProgramCacheKey = () => 'koiSwim'
       m2.transparent = true; m2.depthWrite = true   // 放進透明物件那一批，才排得到水面（renderOrder 2）後面畫
