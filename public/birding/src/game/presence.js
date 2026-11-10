@@ -36,6 +36,9 @@ const ACT = {
 }
 export const activityLabel = (id) => KIND[ACT[id] ?? 'D'].label
 
+// 有巢的鳥（2026-11-10 使用者：23:00 去看草鴞，巢裡沒有鳥）：巢是場景、一直都在；鳥照「非常稀有」每天抽 16%，大部分日子巢是空的。
+// 在繁殖的鳥是留鳥，不抽今天來不來；活動時段在巢的機會 75%（有時候出去獵食），白天偶爾在巢裡休息
+const NESTING = { grassowl: { stay: 0.75, off: 0.25 } }
 const DAILY = { '很常見': 1, '普通': 0.97, '不常見': 0.8, '稀有': 0.38, '非常稀有': 0.16 }
 const CAP = { '稀有': 8, '非常稀有': 3 }
 const STAY = { '很常見': 1, '普通': 0.95, '不常見': 0.85, '稀有': 0.85, '非常稀有': 0.8 }   // 今天有來、又在活動時段：這個小時在的機會
@@ -55,6 +58,7 @@ export function createPresence({ world, camera, flight, hud, state, save, rec })
     const yesterday = cool && d > 0 ? todaySet(d - 1, false) : null
     const ids = world.birds.map((b) => b.def.id).sort((a, b) => hash(a + '#' + d) - hash(b + '#' + d))   // 每天順序不同，上限不會老是卡掉同幾種
     for (const id of ids) {
+      if (NESTING[id]) { on.add(id); continue }
       const r = RARITY[id] ?? '普通'
       if (hash(id + '@' + d) >= (DAILY[r] ?? 0.97)) continue
       if (r === '非常稀有' && yesterday?.has(id)) continue
@@ -69,7 +73,8 @@ export function createPresence({ world, camera, flight, hud, state, save, rec })
     if (!todaySet(day).has(id)) return false
     const k = KIND[ACT[id] ?? 'D'], r = RARITY[id] ?? '普通'
     // 時段外：白天還有 off 的機會（夜行的白天偶爾看得到在睡覺）；晚上不在時段內的一律不在
-    const p = inWin(h, k.win) ? STAY[r] ?? 0.95 : isNight(h) ? 0 : k.off
+    const N = NESTING[id]
+    const p = inWin(h, k.win) ? N?.stay ?? STAY[r] ?? 0.95 : isNight(h) ? 0 : N?.off ?? k.off
     return hash(id + ':' + day + ':' + Math.floor(h)) < p
   }
   const members = (b) => b.built.birds ?? [b.built]
