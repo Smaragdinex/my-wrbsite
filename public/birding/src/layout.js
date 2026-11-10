@@ -329,7 +329,7 @@ export const ALP_SPURS = [
   // 2026-11-10 濕地 V2（ChatGPT C 節）：步道靠近水邊那段改低矮木棧道（寬 1.7），從主步道沿著觀察屋東側下到水邊一個小平台；east.js 鋪木板
   { name: 'wetBoard', world: true, k: 0.15, pts: [[321.5, -27.3], [322.6, -31], [326, -34], [330.5, -35.3], [334.2, -34.8]] },
   { name: 'cave', world: true, k: 0.12, pts: [[177, 70.5], [179.5, 77], [182.5, 84], [186, 90.3], [190, 94.4], [195, 95.4], [199.5, 94.9]] },
-  { name: 'lakeLoop', world: true, y0: 0, k: 0.15, noClear: true, endOn: 'lakeGorge', pts: [[76.5, 0], [78.2, -6], [78, -12], [76.5, -35], [77, -57], [84, -73], [98, -78], [123, -63]] },
+  { name: 'lakeLoop', world: true, y0: 0, flat: 3, k: 0.15,   /* 2026-11-10 使用者：花園出口左邊那條路有一道凸起的破圖（前 12 m 貼著花園邊，路面被墊到 0.5 m，花園地面是 0） */ noClear: true, endOn: 'lakeGorge', pts: [[76.5, 0], [78.2, -6], [78, -12], [76.5, -35], [77, -57], [84, -73], [98, -78], [123, -63]] },
   { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, landings: true, endOn: 'grass', pts: null },   // pts：ridgeTrailPts()（EAST.ridge 定義之後）
 ].map((sp) => sp.world ? sp : ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
 // 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
@@ -699,7 +699,7 @@ function buildAlpine() {
   for (const sp of ALP_SPURS) {   // 支線：從主步道那一點的高度開始，一樣坡度最多 22%
     const pp = sp.pts.map(([x, z]) => alpBase(x, z)); pp[0] = sp.y0 ?? (sp.world ? alpBase(...sp.pts[0]) : prof[sp.from])
     const k = sp.k ?? (sp.join ? 0.26 : 0.22), seg = (i) => Math.hypot(sp.pts[i][0] - sp.pts[i - 1][0], sp.pts[i][1] - sp.pts[i - 1][1])
-    for (let i = 1; i < pp.length; i++) pp[i] = clamp(pp[i], pp[i - 1] - seg(i) * k, pp[i - 1] + seg(i) * k)
+    for (let i = 1; i < pp.length; i++) pp[i] = i < (sp.flat ?? 0) ? pp[0] : clamp(pp[i], pp[i - 1] - seg(i) * k, pp[i - 1] + seg(i) * k)   // flat：前幾點跟起點一樣高（貼著花園邊走的那段，不能比花園地面高）
     if (sp.join) {   // 終點要剛好接上那條支線的終點：從終點往回再夾一次坡度
       pp[pp.length - 1] = ALP_SPURS.find((q) => q.name === sp.join).prof.at(-1)
       for (let i = pp.length - 2; i > 0; i--) pp[i] = clamp(pp[i], pp[i + 1] - seg(i + 1) * k, pp[i + 1] + seg(i + 1) * k)
