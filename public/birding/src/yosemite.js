@@ -480,7 +480,7 @@ export function buildYosemite(scene, { lib } = {}) {
     for (let x = 201.4; x < XL; x += 0.9) posts.push(V(x, YOSE.topY(x), YOSE.topFront(x) + 0.15))
     for (let x = XR + 0.4; x < 250; x += 0.9) posts.push(V(x, YOSE.topY(x), YOSE.topFront(x) + 0.15))   // 石階頂東邊的平地前緣
     for (let z = YOSE.topFront(XR + 0.4) + 0.15; z < YOSE.base(XR) + M.D0 + M.W * (M.NL - 1.5) - 0.2; z += 0.9) posts.push(V(XR + 0.2, YOSE.topY(XR), z))   // 只到最後一段的前緣：最後一段東端直接走上平地
-    for (let z = YOSE.topFront(250) + 0.5; z < YOSE.edge(250) - 2.2; z += 1) addCollider(250.2, z, 0.4, topYm + 3)   // 平地東邊盡頭
+    // 2026-11-10 平地東邊盡頭不再擋：接到往東南下降的岩脊（layout.js EAST.ridge），從這裡走到東部草原
     for (let z = YOSE.topFront(XL - 0.2) + 0.15; z < YOSE.base(XL) + M.D0 + M.W * (M.NL - 0.5); z += 0.9) posts.push(V(XL - 0.2, YOSE.topY(XL), z))
     for (let z = YOSE.topFront(201.4) + 0.15; z < YOSE.edge(201.4) - 2.2; z += 0.9) posts.push(V(201.3, YOSE.topY(201.3), z))   // 西邊（溪那側）
     for (const p of posts) addCollider(p.x, p.z, 0.2, p.y + 1.1)

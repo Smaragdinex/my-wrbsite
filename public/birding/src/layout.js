@@ -318,7 +318,10 @@ export const ALP_SPURS = [
   { name: 'wet', from: 9, noClear: true, pts: [[255, -58], [266, -63], [282, -62], [300, -71], [300, -55], [312, -33], [316, -29], [327, -26], [339, -26], [345, -29]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
   // grass：主步道第 12 點（282,19）往東、之字形下到草原西北角，經過草原觀察棚 O7，沿北緣走到東邊看小雲雀那塊（草鴞的高草核心離路 25 m）
   { name: 'grass', from: 12, noClear: true, pts: [[293, 20], [291, 42], [303, 45], [290, 57], [276, 67], [282, 75], [298, 74], [316, 77], [330, 86]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
-].map((sp) => ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
+  // 2026-11-10 ridge：瀑布頂東端（平台 75.8 m）沿新的岩脊之字形下到草原西北角，接上 grass 支線（坡度 ≤25%、轉彎有懲罰的 A*（tools/plan3.js），約 226 m，離草鴞巢 ≥26 m）。
+  // world：點已經是世界座標、從 y0 這個高度開始（不是從主步道岔出去）；endOn：終點高度＝那條支線在同一點的高度（兩條路接起來沒有落差）
+  { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, endOn: 'grass', pts: [[249.5, 112], [254, 112], [257, 108], [264, 114], [268, 108], [267, 104], [257, 95], [263, 96], [268, 100], [271, 96], [263, 93], [261, 90], [268, 90], [259, 86], [271, 87], [262, 82], [279, 86], [262, 77], [281, 83], [286, 85], [271, 74], [267, 72], [277, 72], [276, 67]] },
+].map((sp) => sp.world ? sp : ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
 // 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
 export const CABIN = (() => {
   const sp = ALP_SPURS.find((q) => q.name === 'cabin'), e = sp.pts[sp.pts.length - 1], p = sp.pts[sp.pts.length - 2]
@@ -332,7 +335,7 @@ export const CABIN = (() => {
 export const YOSE = (() => {
   const edgeCache = new Map()
   const edge = (x) => { const k = Math.round(x * 4); if (!edgeCache.has(k)) { let z = 40; while (domeRho(x, z) < 0.93 && z < 140) z += 0.25; edgeCache.set(k, z) } return edgeCache.get(k) }
-  const Y = { x0: 168, x1: 262, edge, base: (x) => edge(x) - 20 }   // 2026-11-10 溫室加大後：牆腳往裡 20 公尺（那裡玻璃高，岩壁才能 30 公尺以上）
+  const Y = { x0: 168, x1: 251, edge, base: (x) => edge(x) - 20 }   // 2026-11-10 x1 262→251：瀑布頂平台東邊接上新的岩脊（EAST.ridge），岩壁到平台東端為止（岩壁底的高度照地形算，地形墊高後原本 251～262 那段岩壁被抬到 85～98 m，從岩脊冒出來）   // 2026-11-10 溫室加大後：牆腳往裡 20 公尺（那裡玻璃高，岩壁才能 30 公尺以上）
   Y.fall = { x: 200, z: Y.base(200) - 3, r: 3.2, rx: 6.5, rz: 3.2 }   // 落點（水花、白沫在這）
   // 2026-11-11 使用者：瀑布下來要有一座湖、湖再接一條河往下流（跟優勝美地一樣）→ 落點外面一座橢圓湖（24×20 公尺），水面 water 在 buildAlpine 照湖岸地形算
   // 2026-11-10 使用者：瀑布落下來的水最後插進地形 → 量了：瀑布在 x 200，湖心在 x 194，落水那排湖只到 x 200.3，水簾東半邊、後層整片落在高出水面 1～3 公尺的岸上。
@@ -458,7 +461,30 @@ export function eastZone(x, z) {
 }
 // 觀察屋底下攤平（半徑 3 m 平的、4.8 m 接回去）：屋子才不會一邊懸空，人站在地上眼睛剛好對到觀察窗
 const hideY = []
+// 2026-11-10 使用者：瀑布頂後面都是空的 → 從瀑布頂東端接一道往東南下降的岩脊到東部草原西北角（ChatGPT「瀑布頂 → 上游溪谷 → 東部草原」縮小版）。
+// 脊線 EAST.ridge：瀑布頂（75.3 m，跟平台一樣高）→ 草原西北角（32 m）；脊頂寬約 24 m（橫坡 6%），兩側 1.4 倍陡坡落回原地形（不會把草原蓋掉）。
+// 之字形步道走在脊頂上（ALP_SPURS 'ridge'，A* 找的）
+EAST.ridge = [[249, 112, 75.3], [260, 103, 70], [267, 94, 60], [272, 84, 47], [276, 72, 33]]
+function ridgeH(X, Z) {
+  const R = EAST.ridge
+  if (X < 238 || X > 300 || Z < 52 || Z > 132) return -1e9
+  let best = 1e9, y = 0
+  for (let i = 0; i < R.length - 1; i++) {
+    const [d, t] = segDist(X, Z, R[i][0], R[i][1], R[i + 1][0], R[i + 1][1])
+    if (d < best) { best = d; y = lerp(R[i][2], R[i + 1][2], t) }
+  }
+  const n = 0.5 * (fbm2(X * 0.11 + 31, Z * 0.11 - 6, 3) - 0.5)
+  // 脊頂寬 24 m（橫坡 6%）：脊線本身很陡（中段約 90%），之字形的每一段要橫著走過脊頂才降得下去
+  return y + n - (best < 12 ? 0.06 * best : 0.72 + 1.4 * (best - 12))
+}
 function eastShape(X, Z, h) {
+  let r = eastShape1(X, Z, h)
+  // 岩脊最後才疊上去（第一版放在最前面，被草原的整形壓平了一半）：只往上加；西邊（x < 246）是瀑布頂平台、石階，不碰
+  const rh = ridgeH(X, Z)
+  if (rh > r) r = lerp(r, rh, smoothstep(246.5, 250.5, X))   // 平台（mesh）到 x 250 為止：地形在平台底下才升上來，接縫在 x 250，不會跟平台面疊在一起閃
+  return r
+}
+function eastShape1(X, Z, h) {
   for (let i = 0; i < EAST.hides.length; i++) {
     const [hx, hz] = EAST.hides[i], dd = Math.hypot(X - hx, Z - hz)
     if (dd < 4.8) { hideY[i] ??= eastShape0(hx, hz, h); return lerp(hideY[i], eastShape0(X, Z, h), smoothstep(3, 4.8, dd)) }
@@ -605,11 +631,17 @@ function buildAlpine() {
   prof[ALP_BRIDGE.a + 1] = (prof[ALP_BRIDGE.a] + prof[ALP_BRIDGE.a + 2]) / 2
   ALP_TRAIL.prof = prof
   for (const sp of ALP_SPURS) {   // 支線：從主步道那一點的高度開始，一樣坡度最多 22%
-    const pp = sp.pts.map(([x, z]) => alpBase(x, z)); pp[0] = prof[sp.from]
-    const k = sp.join ? 0.26 : 0.22, seg = (i) => Math.hypot(sp.pts[i][0] - sp.pts[i - 1][0], sp.pts[i][1] - sp.pts[i - 1][1])
+    const pp = sp.pts.map(([x, z]) => alpBase(x, z)); pp[0] = sp.y0 ?? prof[sp.from]
+    const k = sp.k ?? (sp.join ? 0.26 : 0.22), seg = (i) => Math.hypot(sp.pts[i][0] - sp.pts[i - 1][0], sp.pts[i][1] - sp.pts[i - 1][1])
     for (let i = 1; i < pp.length; i++) pp[i] = clamp(pp[i], pp[i - 1] - seg(i) * k, pp[i - 1] + seg(i) * k)
     if (sp.join) {   // 終點要剛好接上那條支線的終點：從終點往回再夾一次坡度
       pp[pp.length - 1] = ALP_SPURS.find((q) => q.name === sp.join).prof.at(-1)
+      for (let i = pp.length - 2; i > 0; i--) pp[i] = clamp(pp[i], pp[i + 1] - seg(i + 1) * k, pp[i + 1] + seg(i + 1) * k)
+    }
+    if (sp.endOn) {   // 終點接在另一條支線上：高度用那條支線在最近一點的高度，再從終點往回夾坡度
+      const o = ALP_SPURS.find((q) => q.name === sp.endOn), e = sp.pts.at(-1)
+      let bi = 0; o.pts.forEach((q, i) => { if (Math.hypot(q[0] - e[0], q[1] - e[1]) < Math.hypot(o.pts[bi][0] - e[0], o.pts[bi][1] - e[1])) bi = i })
+      pp[pp.length - 1] = o.prof[bi]
       for (let i = pp.length - 2; i > 0; i--) pp[i] = clamp(pp[i], pp[i + 1] - seg(i + 1) * k, pp[i + 1] + seg(i + 1) * k)
     }
     sp.prof = pp
