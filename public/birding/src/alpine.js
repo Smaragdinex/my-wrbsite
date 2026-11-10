@@ -549,7 +549,7 @@ function buildInterior(lib, avoid = []) {
         // 水簾兩側沿著岩壁一顆顆往下疊（擋住 15～30% 的水、蓋住岸的直邊），消能潭兩側各兩三顆半沉的大石，正前方留空看得到瀑布
         const hw = st.halfAt(d.s - 0.3)
         for (const sgn of [-1, 1]) {
-          for (let y = d.up - 0.2; y > d.down - 0.3; y -= 0.9 + rr() * 0.5) { const b = at(d.s - 0.5 - rr() * 0.4), o = (hw + 0.25 + rr() * 0.5) * sgn, k = 0.7 + rr() * 0.6; put(rr() < 0.6 ? BIG : MOSS, b.x + b.sx * o, b.z + b.sz * o, y - 0.55 * k, k, 0.85) }   // 疊在水簾兩側的岩壁上（岩唇線往後、水寬外面），不擋在水前面
+          for (let y = d.up - 0.2; y > d.down - 0.3; y -= 0.9 + rr() * 0.5) { const b = at(d.s - 0.5 - rr() * 0.4), o = (hw + 0.25 + rr() * 0.5) * sgn, k = 0.7 + rr() * 0.6, sx = b.x + b.sx * o, sz = b.z + b.sz * o, th = alpineHeight(sx, sz); if (y - 0.55 * k > th + 0.15 || Math.hypot(alpineHeight(sx + 0.6, sz) - th, alpineHeight(sx, sz + 0.6) - th) / 0.6 > 1.7) continue; put(rr() < 0.6 ? BIG : MOSS, b.x + b.sx * o, b.z + b.sz * o, y - 0.55 * k, k, 0.85) }   // 疊在水簾兩側的岩壁上（岩唇線往後、水寬外面），不擋在水前面
           for (let j = 0; j < 2 + (rr() < 0.5 ? 1 : 0); j++) { const b = at(d.s + 2 + rr() * 3), o = (hw + 0.6 + rr() * 1.4) * sgn, k = 0.7 + rr() * 0.6; put(rr() < 0.5 ? BIG : MOSS, b.x + b.sx * o, b.z + b.sz * o, d.down - 0.6 * k, k, 0.85) }
           // 檢查員：瀑布兩側、後方是一大片光滑的灰土坡（像水泥牆）；第二輪：rockface 像一片片扁平卡片 → 改成有厚度的大石頭（mrock 3/7/9/12、boulder）
           // 從潭邊一層層疊上去到岩唇高度，一半埋進坡裡；沿著潭岸往下游也排兩排（蓋住左邊那片大灰坡）
@@ -689,10 +689,12 @@ function buildInterior(lib, avoid = []) {
         // 2026-11-11 檢查員：5 m 瀑布落水處幾乎沒有白水（ChatGPT：落點白沫 45～70%、消能潭 20～40%、水霧往上翻 1～2 m）→
         // ① 落點一大團往上翻的水霧（10 團，從水面往上飄 1～2.2 m 再散掉）② 兩層白沫圈（落點密、消能潭疏）③ 4 道往外擴散的漣漪
         const P = at(d.s + 1.5), cx = P.x, cz = P.z, yW = d.down
-        for (let k = 0; k < 10; k++) {
+        for (let k = 0; k < 20; k++) {
+          // 前 10 團：往上翻的大團水霧；後 10 團：落點貼著水面翻滾的白水（小、密、亮，側面看也是一團白——平貼水面的白沫從低角度看只剩一條線）
+          const low = k >= 10
           const sp_ = new THREE.Sprite(new THREE.SpriteMaterial({ map: sprayT, transparent: true, depthWrite: false, fog: true, opacity: 0 }))
-          sp_.position.set(cx + (rr() - 0.5) * 3.4, yW, cz + (rr() - 0.5) * 1.6); sp_.renderOrder = 6
-          sp_.userData = { rise: true, y0: yW + 0.1, x0: sp_.position.x, z0: sp_.position.z, ph: rr(), s0: 1.2 + rr() * 1.2, h: 1.0 + rr() * 1.2, sp: 0.18 + rr() * 0.12 }
+          sp_.position.set(cx + (rr() - 0.5) * (low ? 3.6 : 3.4), yW, cz + (rr() - 0.5) * (low ? 1.0 : 1.6)); sp_.renderOrder = 6
+          sp_.userData = low ? { rise: true, y0: yW + 0.05, x0: sp_.position.x, z0: sp_.position.z, ph: rr(), s0: 0.6 + rr() * 0.6, h: 0.3 + rr() * 0.5, sp: 0.5 + rr() * 0.4, op: 0.85 } : { rise: true, y0: yW + 0.1, x0: sp_.position.x, z0: sp_.position.z, ph: rr(), s0: 1.2 + rr() * 1.2, h: 1.0 + rr() * 1.2, sp: 0.18 + rr() * 0.12, op: 0.42 }
           g.add(sp_); spray.push(sp_)
         }
         // 檢查員第二輪：白沫是一片硬邊的正圓盤 → 逐像素畫：中心最白；往外用兩層雜訊打碎成一塊塊、加上往外放射的一條條泡沫紋，外緣在正方形裡面就淡到 0（沒有圓的邊界）
@@ -703,7 +705,7 @@ function buildInterior(lib, avoid = []) {
             const u = px / w - 0.5, v = py / h - 0.5, rr2 = Math.hypot(u, v) * 2, ang = Math.atan2(v, u)
             const n1 = vn(px / 16 + 3, py / 16 + 7), n2 = vn(px / 5, py / 5), streak = vn((ang + Math.PI) * 6, rr2 * 3)
             const fall = Math.max(0, 1 - Math.pow(rr2 + 0.25 * (n1 - 0.5), 1.4))
-            const blot = Math.min(1, Math.max(0, (n1 * 0.6 + n2 * 0.4 - 0.62 + 0.55 * fall) * 3.2)) * (0.75 + 0.25 * streak)
+            const blot = Math.min(1, Math.max(0, (n1 * 0.6 + n2 * 0.4 - 0.5 + 0.6 * fall) * 3.2)) * (0.75 + 0.25 * streak)   // 檢查員：落點白水還是偏少 → 門檻放低
             const a = Math.min(1, Math.pow(fall, 1.6) * 1.15) * blot
             const k = (py * w + px) * 4; img.data[k] = img.data[k + 1] = img.data[k + 2] = 255; img.data[k + 3] = Math.round(a * 255)
           }
@@ -712,7 +714,7 @@ function buildInterior(lib, avoid = []) {
         const ang = Math.atan2(P.sx, P.sz)
         for (const [rad, op, sq] of [[2.6, 1.0, 0.7], [1.5, 0.95, 0.8], [5.5, 0.45, 0.75]]) {   // 落點再加一層小而密的白水（檢查員：白水偏淡、看不出力道）
           const fm = new THREE.Mesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: op, fog: true }))   // 正方形：邊界由貼圖自己淡掉
-          fm.position.set(cx, yW + 0.015 + (rad > 3 ? 0 : 0.005), cz); fm.rotation.y = ang; fm.scale.set(rad, 1, rad * sq); fm.renderOrder = 3
+          fm.position.set(cx, yW + 0.03 + (rad > 3 ? 0 : 0.01), cz); fm.rotation.y = ang; fm.scale.set(rad, 1, rad * sq); fm.renderOrder = 3
           fm.userData = { foam: true, op, rad, sq }; g.add(fm); fallFx.push(fm)
         }
         for (let k = 0; k < 4; k++) {
@@ -1752,7 +1754,7 @@ export function createAlpine({ scene, lib, avoid = [] }) {
         if (u.foam) { o.material.map.offset.set(Math.sin(t * 0.3) * 0.02, t * 0.015 % 1); o.material.map.center.set(0.5, 0.5); o.material.map.rotation = t * (u.rad > 3 ? 0.03 : -0.06); o.material.opacity = u.op * (0.85 + 0.15 * Math.sin(t * 2.1)); o.material.color.setScalar(dl) }
         else if (u.ring) { const f = (t * 0.33 + u.ph) % 1, r = 1.5 + f * 6; o.scale.set(r * (1 + 0.08 * Math.sin(t + u.ph * 7)), 1, r * 0.75); o.material.opacity = 0.06 * (1 - f) * Math.min(1, f * 6); o.material.color.setScalar(dl) }
       }
-      for (const sp of interior.spray) { const u = sp.userData; if (u.rise) { const f = (t * u.sp + u.ph) % 1; sp.position.set(u.x0 + Math.sin(t * 0.7 + u.ph * 9) * 0.3, u.y0 + f * u.h, u.z0); const k = u.s0 * (0.7 + f * 0.9); sp.scale.set(k * 1.5, k, 1); sp.material.opacity = 0.42 * Math.sin(f * Math.PI); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value); continue } sp.position.y = u.y0 + Math.sin(t * 2.3 + u.ph) * 0.15; sp.material.opacity = 0.35 + 0.2 * Math.sin(t * 3.1 + u.ph * 2); const k = u.s0 * (1 + 0.12 * Math.sin(t * 1.7 + u.ph)); sp.scale.set(k * 1.6, k, 1); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value) }
+      for (const sp of interior.spray) { const u = sp.userData; if (u.rise) { const f = (t * u.sp + u.ph) % 1; sp.position.set(u.x0 + Math.sin(t * 0.7 + u.ph * 9) * 0.3, u.y0 + f * u.h, u.z0); const k = u.s0 * (0.7 + f * 0.9); sp.scale.set(k * 1.5, k, 1); sp.material.opacity = (u.op ?? 0.42) * Math.sin(f * Math.PI); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value); continue } sp.position.y = u.y0 + Math.sin(t * 2.3 + u.ph) * 0.15; sp.material.opacity = 0.35 + 0.2 * Math.sin(t * 3.1 + u.ph * 2); const k = u.s0 * (1 + 0.12 * Math.sin(t * 1.7 + u.ph)); sp.scale.set(k * 1.6, k, 1); sp.material.color.setScalar(0.12 + 0.88 * dayLight.value) }
       interior.updateMist(t, dt, camera)
     },
   }
