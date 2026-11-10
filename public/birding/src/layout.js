@@ -320,7 +320,7 @@ export const ALP_SPURS = [
   { name: 'grass', from: 12, noClear: true, pts: [[293, 20], [291, 42], [303, 45], [290, 57], [276, 67], [282, 75], [298, 74], [316, 77], [330, 86]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
   // 2026-11-10 ridge：瀑布頂東端（平台 75.8 m）沿新的岩脊之字形下到草原西北角，接上 grass 支線（坡度 ≤25%、轉彎有懲罰的 A*（tools/plan3.js），約 226 m，離草鴞巢 ≥26 m）。
   // world：點已經是世界座標、從 y0 這個高度開始（不是從主步道岔出去）；endOn：終點高度＝那條支線在同一點的高度（兩條路接起來沒有落差）
-  { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, endOn: 'grass', pts: [[249.5, 112], [254, 112], [257, 108], [264, 114], [268, 108], [267, 104], [257, 95], [263, 96], [268, 100], [271, 96], [263, 93], [261, 90], [268, 90], [259, 86], [271, 87], [262, 82], [279, 86], [262, 77], [281, 83], [286, 85], [271, 74], [267, 72], [277, 72], [276, 67]] },
+  { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, landings: true, endOn: 'grass', pts: null },   // pts：ridgeTrailPts()（EAST.ridge 定義之後）
 ].map((sp) => sp.world ? sp : ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
 // 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
 export const CABIN = (() => {
@@ -464,7 +464,25 @@ const hideY = []
 // 2026-11-10 使用者：瀑布頂後面都是空的 → 從瀑布頂東端接一道往東南下降的岩脊到東部草原西北角（ChatGPT「瀑布頂 → 上游溪谷 → 東部草原」縮小版）。
 // 脊線 EAST.ridge：瀑布頂（75.3 m，跟平台一樣高）→ 草原西北角（32 m）；脊頂寬約 24 m（橫坡 6%），兩側 1.4 倍陡坡落回原地形（不會把草原蓋掉）。
 // 之字形步道走在脊頂上（ALP_SPURS 'ridge'，A* 找的）
-EAST.ridge = [[249, 112, 75.3], [260, 103, 70], [267, 94, 60], [272, 84, 47], [276, 72, 33]]
+EAST.ridge = [[249, 112, 75.3], [260, 103, 70], [267, 94, 60], [272, 84, 47], [276, 73, 35], [278, 65, 29.5]]
+// 之字形步道直接從脊線算（第一版用 A* 找，轉彎太密、每段只有 5～8 m，加了轉彎平台以後中間沒有坡可以走，變成一階一階）：
+// 每一段從脊頂一側斜著走到另一側（離脊線 ±8 m），下降 3.4 m、長約 16 m（約 21%），兩端是轉彎平台
+function ridgeTrailPts() {
+  const R = EAST.ridge, S = [0]
+  for (let i = 1; i < R.length; i++) S.push(S[i - 1] + Math.hypot(R[i][0] - R[i - 1][0], R[i][1] - R[i - 1][1]))
+  const L = S.at(-1)
+  const at = (s) => { let i = 0; while (i < R.length - 2 && S[i + 1] < s) i++; const t = clamp((s - S[i]) / (S[i + 1] - S[i]), 0, 1), dx = R[i + 1][0] - R[i][0], dz = R[i + 1][1] - R[i][1], l = Math.hypot(dx, dz); return { x: R[i][0] + dx * t, z: R[i][1] + dz * t, y: lerp(R[i][2], R[i + 1][2], t), nx: -dz / l, nz: dx / l } }
+  const W = 8, DH = 3.4, pts = [[249.5, 112]]
+  let s = 0, y = R[0][2], side = 1   // 第一段往東北（往西南會貼著瀑布頂平台的邊走、被欄杆擋住）
+  for (;;) {
+    let s2 = s; while (s2 < L && at(s2).y > y - DH) s2 += 0.25
+    if (s2 > L - 4) break
+    const a = at(s2); pts.push([+(a.x + a.nx * W * side).toFixed(2), +(a.z + a.nz * W * side).toFixed(2)]); side = -side; s = s2; y = a.y
+  }
+  pts.push([276, 67])
+  return pts
+}
+ALP_SPURS.find((q) => q.name === 'ridge').pts = ridgeTrailPts()   // EAST 在 ALP_SPURS 後面才定義，這裡補上
 function ridgeH(X, Z) {
   const R = EAST.ridge
   if (X < 238 || X > 300 || Z < 52 || Z > 132) return -1e9
@@ -747,9 +765,16 @@ function buildAlpine() {
     }
     let dAll = dt
     for (const sp of ALP_SPURS) {   // 支線：窄一點；走到底那一小塊空地攤平
-      const [d2, i2, t2] = polyDist(x, z, sp.pts), y2 = lerp(sp.prof[i2], sp.prof[i2 + 1], t2)
+      const [d2, i2, t2] = polyDist(x, z, sp.pts)
+      // landings：每段兩端各 1.7 m 是平的（轉彎平台），坡只在中間（第一版平台跟坡的過渡擠在 1.7 m 裡，每個平台邊都鼓起 50～70%）
+      let tt = t2
+      if (sp.landings) { const Ls = Math.hypot(sp.pts[i2 + 1][0] - sp.pts[i2][0], sp.pts[i2 + 1][1] - sp.pts[i2][1]); tt = clamp((t2 * Ls - (i2 > 0 ? 1.7 : 0)) / Math.max(1, Ls - (i2 > 0 ? 1.7 : 0) - (i2 + 1 < sp.pts.length - 1 ? 1.7 : 0)), 0, 1) }
+      const y2 = lerp(sp.prof[i2], sp.prof[i2 + 1], tt)
       const e = sp.pts[sp.pts.length - 1], de = Math.hypot(x - e[0], z - e[1]), C0 = sp.clear ?? 3.5, C1 = C0 + 4.5   // clear：盡頭空地多大（營地比較大）
       if (d2 < 6) h = lerp(y2, h, smoothstep(1.0, 4, d2))
+      // 2026-11-10 ChatGPT：髮夾彎要有平台（至少 2.5×3 m、坡度 <5%），平台跟步道之間 1～2 m 的過渡 → 每個轉彎點半徑 1.7 m 攤平成轉彎點的高度，1.7～3.4 m 接回步道。
+      // 地形本身就是碰撞面（supportAt 查高度表），改地形＝視覺和走路一起改
+      if (sp.landings && d2 < 6) for (let i = 1; i < sp.pts.length - 1; i++) { const dv = Math.hypot(x - sp.pts[i][0], z - sp.pts[i][1]); if (dv < 3.4) h = lerp(sp.prof[i], h, smoothstep(1.7, 3.4, dv)) }
       if (!sp.join && !sp.noClear && de < C1 + 1) h = lerp(sp.prof[sp.prof.length - 1], h, smoothstep(C0, C1, de))
       dAll = Math.min(dAll, d2 + 0.35)   // 小路畫得窄一點（alpineTrailDist 用來畫路面、樹讓開）
     }

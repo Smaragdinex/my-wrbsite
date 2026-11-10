@@ -280,5 +280,99 @@ export function buildOutside(renderer = null) {
       g.add(m)
     }
   }
+
+  /* ---------- 雪山（第四層） ---------- */
+  // 2026-11-10 使用者：瀑布頂上面看出去加背景雪山（ChatGPT「台灣高山雪景遠景設計規格」）：
+  // 東北方 1,200～1,500 m 三座主峰（雪山式圈谷主峰 440 m、玉山式尖岩脊 370 m、南湖式寬稜 410 m），比 230 m 的遠山高，從高處才看得到。
+  // 台灣的雪薄、只在冬春 → 少量殘雪（主峰 8～18%）：只在高處、緩一點的坡、背陽面、岩溝圈谷；陡岩壁露岩。不是一整排白三角形。
+  // 一個 mesh（極座標網格 ~3,500 點）、一個材質；空氣透視自己算（不吃場景霧）
+  {
+    const PEAKS = [[35, 1350, 440, 260, 1], [58, 1250, 370, 170, 2], [78, 1450, 410, 300, 3]].map(([b, d, h, r, k]) => {
+      const a = b * Math.PI / 180
+      return { x: Math.sin(a) * d, z: Math.cos(a) * d, h, r, k }
+    })
+    const heightAt = (x, z) => {
+      let y = -40
+      for (const p of PEAKS) {
+        const d = Math.hypot(x - p.x, z - p.z) / p.r
+        if (d > 2.2) continue
+        // 山體：中間尖、往外凹的錐；玉山型（k 2）更尖，南湖型（k 3）頂上寬
+        const core = p.k === 2 ? Math.pow(Math.max(0, 1 - d / 1.9), 1.9) : p.k === 3 ? Math.pow(Math.max(0, 1 - Math.pow(d / 2.1, 1.6)), 1.4) : Math.pow(Math.max(0, 1 - d / 2.0), 1.6)
+        y = Math.max(y, p.h * core)
+      }
+      // 稜線、岩溝：ridged 雜訊（1-|n|）往上疊，越高越多
+      // 2026-11-10 第一版太平滑（像三個乾淨的三角形）→ ridged 加大、加一層細的岩溝
+      const n1 = fbm3(x * 0.005, 7.3, z * 0.005, 4), n2 = fbm3(x * 0.014 + 3, 1.1, z * 0.014, 3), n3 = fbm3(x * 0.035 - 5, 2.7, z * 0.035, 2)
+      const ridged = (1 - Math.abs(n1 * 2)) * 0.5 + (1 - Math.abs(n2 * 2)) * 0.35 + (1 - Math.abs(n3 * 2)) * 0.15
+      y += (y + 40) * 0.42 * (ridged - 0.6)
+      // 主峰朝公園那側（西南）一個冰河圈谷：碗狀凹地（積雪最多的地方）
+      const A = PEAKS[0], cx = A.x - 0.35 * A.r * Math.sin(35 * Math.PI / 180), cz = A.z - 0.35 * A.r * Math.cos(35 * Math.PI / 180)
+      y -= 70 * Math.exp(-((Math.hypot(x - cx, z - cz) / 85) ** 2))
+      return y
+    }
+    const NB = 110, NR = 32, B0 = 18, B1 = 100, R0 = 1000, R1 = 1750
+    const P = [], N = [], I = [], TR = [], NZ = []
+    const hs = []
+    for (let j = 0; j <= NR; j++) for (let i = 0; i <= NB; i++) {
+      const a = (B0 + (B1 - B0) * i / NB) * Math.PI / 180, r = R0 + (R1 - R0) * j / NR
+      const x = Math.sin(a) * r, z = Math.cos(a) * r
+      const y = heightAt(x, z); hs.push(y); P.push(x, y, z)
+    }
+    const W = NB + 1
+    for (let j = 0; j <= NR; j++) for (let i = 0; i <= NB; i++) {
+      const k = j * W + i, x = P[k * 3], z = P[k * 3 + 2], y = hs[k], e = 6
+      // 法線（直接用高度函數差分）、岩溝圈谷（周圍比中間高＝凹）
+      const dx = heightAt(x + e, z) - heightAt(x - e, z), dz = heightAt(x, z + e) - heightAt(x, z - e)
+      const n = new THREE.Vector3(-dx, 2 * e, -dz).normalize(); N.push(n.x, n.y, n.z)
+      const ring = (heightAt(x + 30, z) + heightAt(x - 30, z) + heightAt(x, z + 30) + heightAt(x, z - 30)) / 4
+      TR.push(THREE.MathUtils.clamp((ring - y) / 12, 0, 1))
+      NZ.push(fbm3(x * 0.018, 3.3, z * 0.018, 3) + 0.5)
+    }
+    for (let j = 0; j < NR; j++) for (let i = 0; i < NB; i++) { const a = j * W + i, b = a + 1, c = a + W, d = c + 1; I.push(a, c, b, b, c, d) }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3))
+    geo.setAttribute('aTrap', new THREE.Float32BufferAttribute(TR, 1)); geo.setAttribute('aNoise', new THREE.Float32BufferAttribute(NZ, 1))
+    geo.setIndex(I)
+    const snowMat = new THREE.ShaderMaterial({
+      fog: false,
+      uniforms: { uDay: dayLight, uDusk: duskLight, uHaze: weatherU.haze, uFlash: weatherU.flash, uSun: { value: new THREE.Vector3(-0.45, 0.8, 0.3).normalize() } },
+      vertexShader: `attribute float aTrap; attribute float aNoise; varying vec3 vN; varying float vY; varying float vTrap; varying float vNoise; varying float vDist;
+        void main(){ vN = normal; vY = position.y; vTrap = aTrap; vNoise = aNoise; vec4 wp = modelMatrix * vec4(position, 1.0); vDist = distance(wp.xyz, cameraPosition);
+          gl_Position = projectionMatrix * viewMatrix * wp; }`,
+      fragmentShader: `uniform float uDay; uniform float uDusk; uniform float uHaze; uniform float uFlash; uniform vec3 uSun;
+        varying vec3 vN; varying float vY; varying float vTrap; varying float vNoise; varying float vDist;
+        void main(){
+          vec3 n = normalize(vN);
+          // 雪遮罩（ChatGPT 公式，春天殘雪）：高度比例 H、坡度、背陽、岩溝，加雜訊讓邊緣破碎；山體 70% 以下沒有雪
+          float H = clamp(vY / 440.0, 0.0, 1.0);
+          float altitude = smoothstep(0.58, 0.86, H);
+          float slopeMask = smoothstep(0.35, 0.75, n.y);
+          float sun = max(dot(n, uSun), 0.0);
+          float snow = clamp(altitude * slopeMask * (0.55 + 0.25 * (1.0 - sun) + 0.45 * vTrap) + (vNoise - 0.5) * 0.3, 0.0, 1.0);
+          snow *= smoothstep(0.55, 0.7, H);
+          snow = smoothstep(0.35, 0.6, snow);
+          // 岩石：深灰褐、冷灰；陽面亮一點
+          vec3 rockD = mix(vec3(0.07, 0.066, 0.062), vec3(0.1, 0.105, 0.12), vNoise) * (0.4 + 1.0 * sun);
+          vec3 snowD = mix(vec3(0.42, 0.48, 0.58), vec3(0.72, 0.79, 0.86), sun);                  // 正午：冷白偏藍；陰面藍灰
+          vec3 snowDusk = mix(vec3(0.25, 0.32, 0.46), vec3(0.80, 0.47, 0.30), sun);              // 黃昏：受光面暖橘粉、陰面藍紫灰
+          vec3 snowC = mix(snowD, snowDusk, uDusk);
+          vec3 day = mix(rockD, snowC, snow);
+          // 空氣透視：遠的往地平線天色混（55～75%），比 230 m 的遠山還淡
+          vec3 dHor = mix(vec3(0.86, 0.91, 0.93), vec3(0.9, 0.6, 0.42), uDusk * 0.6);
+          dHor = mix(dHor, vec3(dot(dHor, vec3(0.3, 0.5, 0.2))) * 0.8, uHaze);
+          float fogA = clamp(0.36 + 0.2 * smoothstep(1100.0, 1700.0, vDist) - 0.1 * snow + 0.35 * uHaze, 0.0, 0.97);   // 第一版 0.5：整座山淡到看不出岩石和雪
+          day = mix(day, dHor, fogA);
+          // 夜晚：暗藍灰，雪只比岩石亮一點點
+          vec3 night = mix(vec3(0.012, 0.016, 0.028), vec3(0.025, 0.035, 0.055), snow);
+          night = mix(night, vec3(0.016, 0.022, 0.044), 0.55 + 0.3 * uHaze);
+          vec3 c = mix(night, day, uDay);
+          gl_FragColor = vec4(c + vec3(0.5, 0.55, 0.7) * uFlash * 0.3, 1.0);
+          #include <colorspace_fragment>
+        }`,
+    })
+    const snowMtn = new THREE.Mesh(geo, snowMat)
+    snowMtn.name = 'snowMountains'; snowMtn.frustumCulled = false; snowMtn.renderOrder = -1
+    g.add(snowMtn)
+  }
   return g
 }
