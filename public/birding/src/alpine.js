@@ -426,13 +426,18 @@ function buildInterior(lib, avoid = []) {
     const sp = [], su = [], sd = [], ss_ = [], sf = [], sl = [], si = []
     const S = []
     for (let i = 0; i <= N; i++) { const p = curve.getPointAt(i / N); S.push(st.sAt(p.x, p.z)) }
+    const slopeAt = (s) => Math.max(0, (st.water(s - 0.25) - st.water(s + 0.25)) / 0.5)
     const foamAt = (s) => {
       let f = 0
       for (const d of st.drops) {
         const x = s - d.s
         if (x >= 0) f += Math.min(1.1, 0.25 + d.h * 0.55) * Math.exp(-x / (0.35 + d.h * 0.35))   // 跌水底下一片白沫，往下游很快散掉
       }
-      return Math.min(1.5, f)
+      // 2026-11-10 檢查員（ChatGPT「河流景觀優化規格」：落點白沫 45～70%、往下游拖 1.5～3 m）：
+      // 陡的急流（riffle，不算 drop）以前底下完全沒有白水——河口那段 8 m 掉 6 m 像一片水泥溢洪道。陡坡本身和坡底往下游都加白沫
+      let im = 0
+      for (let x = 0; x <= 3.5; x += 0.25) im = Math.max(im, ss(0.18, 0.55, slopeAt(s - x)) * Math.exp(-x / 1.6))
+      return Math.min(1.5, f + im * 0.95)
     }
     // 門檻上那一小段：水加速、變薄，表面平滑發亮（真的跌水邊緣是一道亮亮的「玻璃」，翻下去才碎成白色）
     const lipAt = (s) => { let l = 0; for (const d of st.drops) { const x = s - d.s; if (x > -0.9 && x < 0.15) l = Math.max(l, Math.min(1, d.h * 1.2) * Math.min(1, (x + 0.9) / 0.6) * (x > 0 ? 1 - x / 0.15 : 1)) } return l }
@@ -473,7 +478,7 @@ function buildInterior(lib, avoid = []) {
       prevRow = { w, la, lb }
       for (let k = 0; k <= K; k++) {
         const t = k / K, lat = la + (lb - la) * t, [x, z] = at2(lat)
-        sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(st.wide ? slope * 0.6 : slope); sf.push(f); sl.push(lp)   // 寬的河：淺灘是斜的，坡度白沫只留三成（ChatGPT：白沫主要在石頭邊、落水處）
+        sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(st.wide ? slope * lerp(0.6, 1.05, ss(0.25, 0.55, slope)) : slope); sf.push(f); sl.push(lp)   // 寬的河：淺灘是斜的，坡度白沫只留三成（ChatGPT：白沫主要在石頭邊、落水處）
       }
       if (i) for (let k = 0; k < K; k++) { const A = (i - 1) * (K + 1) + k, B = A + 1, C = A + K + 1, D = C + 1; si.push(A, C, B, B, C, D) }
     }
@@ -515,6 +520,18 @@ function buildInterior(lib, avoid = []) {
         if (gaps.some((gp) => Math.abs(o - gp) < 0.55 + rr() * 0.2)) continue
         const k = 0.55 + d.h * 0.9 + rr() * 0.45, back = (rr() - 0.5) * 0.5
         put(rr() < 0.55 ? BIG : MOSS, c.x + c.sx * o - c.sz * back, c.z + c.sz * o + c.sx * back, d.down - 0.25, k, 0.85)
+      }
+    }
+    // 2026-11-10 檢查員：陡的急流段（坡度 > 40%，不算 drop）兩岸是一條直直的土牆、水面一整片光滑 → 像水泥溢洪道。
+    // 找出每一段陡坡；兩岸每 1 m 左右一顆大石頭（埋進岸裡、蓋住那條直邊），河道中間幾顆冒出水面把水切成幾股（ChatGPT：15～30% 的水被石頭擋住）
+    const steep = []
+    { let a = null; for (let x = 0; x <= st.len; x += 0.25) { const on = slopeAt(x) > 0.4; if (on && a === null) a = x; if (!on && a !== null) { const h = st.water(a) - st.water(x); if (h > 0.8) steep.push({ s0: a, s1: x, h, down: st.water(x) }); a = null } } }
+    const putS = (n, x, z, y, k, f) => { if (alpineTrailDist(x, z) < 1.5 + k * 0.9) return; put(n, x, z, y, k, f) }   // 有碰撞，小溪也不能擋到步道
+    for (const r of steep) {
+      for (let x = r.s0; x <= r.s1 + 0.6; x += 0.6 + rr() * 0.4) {
+        const c = at(x), hw = st.wide ? st.halfAt(x) : 1.25, w = st.water(x)
+        for (const sgn of [-1, 1]) { const o = (hw + 0.15 + rr() * 0.6) * sgn, k = (st.wide ? 0.75 : 0.5) + rr() * 0.6; putS(rr() < 0.6 ? BIG : MOSS, c.x + c.sx * o, c.z + c.sz * o, w - 0.45 * k, k, 0.8) }
+        if (rr() < (st.wide ? 0.5 : 0.3)) { const o = (rr() - 0.5) * 1.5 * hw, k = (st.wide ? 0.5 : 0.35) + rr() * 0.4; putS(rr() < 0.5 ? BIG : MOSS, c.x + c.sx * o, c.z + c.sz * o, w - 0.25 * k, k, 0.7) }
       }
     }
     // 潭尾淺的地方、岸邊：零星的石頭（岸上的一半埋在土裡）
@@ -608,7 +625,7 @@ function buildInterior(lib, avoid = []) {
     for (const [n, list] of Object.entries(stones)) if (lib[n]) { scatter(g, lib[n], list, { cast: true }); rockColliders(lib[n], list) }
     // 跌水底下的水花：一團團白霧貼著水面翻動（高的跌水比較多、比較大）
     const sprayT = canvasTex(64, 64, (x, w, h) => { const gr = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.5, 'rgba(240,246,248,0.35)'); gr.addColorStop(1, 'rgba(240,246,248,0)'); x.fillStyle = gr; x.fillRect(0, 0, w, h) })
-    for (const d of st.drops) {
+    for (const d of [...st.drops, ...steep.filter((r) => st.wide || r.h > 2.5).map((r) => ({ s: r.s1 - 0.6, h: Math.min(2, r.h * 0.6), down: r.down }))]) {   // 陡的急流底下也有水花（河口那段以前沒有）；每團水花是一個 sprite＝一個 draw call，小溪 18 段陡坡只挑落差大的
       if (d.h < 0.5) continue
       const n = d.h > 1.2 ? 3 : 2
       for (let k = 0; k < n; k++) {
