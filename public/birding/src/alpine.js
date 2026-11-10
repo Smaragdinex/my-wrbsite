@@ -1219,7 +1219,7 @@ function buildInterior(lib, avoid = []) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2, td = alpineTrailDist(x, z)
       if (td > 14) continue
       const hgt = alpineHeight(x, z)
-      if (nearFig(x, z, 1.5)) continue
+      if (nearFig(x, z, 1.5) || YOSE.behind(x, z)) continue   // 2026-11-10 岩簷裡（瀑布後面）不長花
       if (SCH.length < 60 && hgt < 30 && td > 2.6 && td < 7 && okHere(x, z, td, 2.6)) {
         SCH.push({ p: V(x, hgt - 0.05, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(1.1 + rnd() * 0.7) })
       } else if (td > 1.25 && td < 3.6 && okHere(x, z, td, 1.25)) {   // 2026-11-09 靠步道一點：以前 1.6～4.5 公尺常被箭竹整叢蓋住

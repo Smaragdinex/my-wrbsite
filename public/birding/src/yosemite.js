@@ -63,14 +63,31 @@ export function buildYosemite(scene, { lib } = {}) {
   // 岩簷＋層理：這一欄的岩面斷面（d＝離牆腳往裡幾公尺、y），照弧長重新取 FACE+1 個點
   const hsh = (n) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v) }
   const SED = (x) => ss(172, 184, x) * ss(216, 207, x)   // 層狀、深褐、潮濕的岩壁範圍（松龍岩那種），兩側慢慢回到花崗岩
+  // 2026-11-10 ChatGPT QA 第二輪：層厚不要固定（0.5～3.2 m 亂數）；每 6～12 m 一條主節理（直的深縫）；每 8～15 m 一片 2～5 m 寬的平整岩面；
+  // 岩棚凸出 0.3～1.8 m；中尺度凹凸 0.03～0.12 m（波長 0.3～1.5 m）；每 15～25 m² 一塊凸出或缺掉的岩塊（0.4～1.5 m）
+  const BED = [-30]; while (BED.at(-1) < 140) BED.push(BED.at(-1) + 0.5 + 2.7 * Math.pow(hsh(BED.length * 1.37), 1.4))
+  const JX = [160]; while (JX.at(-1) < 230) JX.push(JX.at(-1) + 6 + 6 * hsh(JX.length * 2.11 + 5))
+  const PAN = []; for (let x = 165; x < 225;) { x += 8 + 7 * hsh(x * 0.31); PAN.push([x, 2 + 3 * hsh(x * 0.77)]) }
   const bedAt = (x, y) => {
-    // 層理：每層 0.8～2.4 m、往東微微下傾（約 6°）；每層前緣凸出或凹進 ±0.45 m，層的上緣是一道小岩棚（長青苔）
     const yy = y + 0.1 * (x - 195) + 1.2 * fbm2(x * 0.03, 2.2, 2)
-    let id = Math.floor(yy / 1.55), f = yy / 1.55 - id
-    // 第二版：層跟層之間是一道明顯的台階（前緣硬一點）＋直的節理把每層切成一塊一塊（每 2～6 m 前後錯開）
+    let lo = 0, hi = BED.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (BED[m] <= yy) lo = m; else hi = m }
+    const id = lo, th = BED[hi] - BED[lo], f = (yy - BED[lo]) / th
     const jid = Math.floor((x + 3 * hsh(id)) / (2.5 + 3 * hsh(id + 7)))
-    const off = (hsh(id) - 0.5) * 1.3 + (hsh(id * 31 + jid) - 0.5) * 0.7 + 0.25 * Math.sin(f * Math.PI) - 0.35 * ss(0.88, 1, f)
-    return { off, ledge: ss(0.7, 0.97, f) * (hsh(id) > 0.35 ? 1 : 0.3), f }
+    // 這層凸出多少：一半的層是凸出的岩棚（0.3～1.8 m），其他微凹
+    const prot = hsh(id) > 0.5 ? -(0.3 + 1.5 * Math.pow(hsh(id * 5 + 2), 2)) : 0.15 + 0.35 * hsh(id * 3 + 9)
+    let off = prot + (hsh(id * 31 + jid) - 0.5) * 0.5 + 0.25 * Math.sin(f * Math.PI) * Math.min(1, th / 1.5) - 0.4 * ss(1 - Math.min(0.3, 0.35 / th), 1, f)
+    // 平整岩面：這一段層理幾乎不見
+    let pan = 0; for (const [px, pw] of PAN) pan = Math.max(pan, ss(pw / 2 + 0.8, pw / 2, Math.abs(x - px)))
+    off *= 1 - 0.75 * pan
+    // 主節理：直的深縫（深 0.2～0.7、寬約 0.15 m）
+    let joint = 0; for (let i = 0; i < JX.length; i++) { const jx = JX[i] + 0.6 * Math.sin(y * 0.15 + i); joint = Math.max(joint, (0.2 + 0.5 * hsh(i * 3.3)) * Math.exp(-(((x - jx) / 0.14) ** 2))) }
+    // 岩塊：4.5 m 一格，每格一塊凸出或缺損
+    const ci = Math.floor(x / 4.5), cj = Math.floor(y / 4.5), bx = (ci + 0.2 + 0.6 * hsh(ci * 7 + cj * 13)) * 4.5, by = (cj + 0.2 + 0.6 * hsh(ci * 11 + cj * 3)) * 4.5, bs = 0.2 + 0.55 * hsh(ci * 5 + cj * 17)
+    const inB = ss(bs + 0.12, bs, Math.max(Math.abs(x - bx), Math.abs(y - by) * 1.3))
+    off += inB * (hsh(ci * 19 + cj) > 0.5 ? -0.45 : 0.4)
+    off += 0.16 * (fbm2(x * 1.4, y * 1.3, 3) - 0.5) + 0.06 * (fbm2(x * 4.1 + 3, y * 3.7, 2) - 0.5)
+    const tone = (0.78 + 0.4 * hsh(id * 3 + 1)) * (0.92 + 0.16 * hsh(id * 17 + jid * 5)) * (1 - 0.12 * inB)
+    return { off: off + joint, ledge: ss(0.72, 0.97, f) * (prot < 0 ? 1 : 0.25) * (1 - pan), f, tone, joint }
   }
   const faceProfile = (x, zb, g0, Ht, push, fallK) => {
     const A = YOSE.caveA(x), Dp = YOSE.caveD(x), Ho = YOSE.caveH(x), sed = SED(x)
@@ -82,8 +99,8 @@ export function buildYosemite(scene, { lib } = {}) {
     }
     const P = []   // [d, y, inCave(0..1)]
     const yTop = g0 + Ht
+    const lip = -1.2 * A * (1 - 0.8 * fallK), yL = g0 + Ho
     if (A > 0.02) {
-      const lip = -1.2 * A * (1 - 0.8 * fallK), yL = g0 + Ho
       P.push([0, g0 - 1.5, 0], [Dp * 0.5, g0 - 1.5, 1], [Dp, g0 - 1.5, 1])
       for (let j = 0; j <= 10; j++) P.push([Dp + 0.6 * A * Math.sin(j / 10 * Math.PI), g0 - 1.5 + (Ho * 0.5 + 1.5) * j / 10, 1])
       for (let j = 1; j <= 16; j++) { const th = j / 16 * Math.PI / 2; P.push([lip + (Dp - lip) * Math.cos(th), g0 + Ho * 0.5 + Ho * 0.5 * Math.sin(th), 1 - 0.7 * j / 16]) }
@@ -99,8 +116,9 @@ export function buildYosemite(scene, { lib } = {}) {
       const u = (s0 - Ls[i - 1]) / Math.max(1e-6, Ls[i] - Ls[i - 1]), d = lerpN(P[i - 1][0], P[i][0], u), y = lerpN(P[i - 1][1], P[i][1], u), q = lerpN(P[i - 1][2], P[i][2], u)
       // 層理只往裡凹（瀑布水簾那幾公尺）或前後都有（其他地方）；岩窟裡也有
       const b = bedAt(x, y), bo = sed * (fallK > 0.3 ? Math.max(0, b.off) + 0.2 : b.off) * ss(g0 - 0.5, g0 + 1.5, y)
-      out.push([y, Math.max(push, zb + d + bo), q, b.ledge * sed])
+      out.push([y, Math.max(push, zb + d + bo), q, b.ledge * sed, b.tone, b.joint * sed])
     }
+    if (A > 0.25) out.lip = { y: g0 + Ho + 0.3, z: zb + lip - 0.35 * A, A }
     return out
   }
   for (let i = 0; i <= NX; i++) {
@@ -110,9 +128,9 @@ export function buildYosemite(scene, { lib } = {}) {
     // 2026-11-11 石階平台那一段（XA～XB）：岩壁本體往後退到最上一層平台的後面，前面是一階一階的平台（下面另外畫）
     const M = YOSE.mist, terr = x > M.XA - 1.6 && x < M.XB + 1.6, push = terr ? zb + M.D0 + M.W * (M.NL - 0.5) + 0.15 : -1e9, fk = YOSE.flatK(x)
     const fallK = Math.exp(-(((x - YOSE.fall.x) / 8) ** 2))   // 瀑布口那幾公尺：岩壁不往後仰、頂上不凸，水簾貼著岩壁落下（以前瀑布口浮在岩壁前面）
-    cols.push({ x, zb, g0, Ht, terr })
     const row = []
     const prof = faceProfile(x, zb, g0, Ht, push, fallK), sed = SED(x)
+    cols.push({ x, zb, g0, Ht, terr, lip: prof.lip })
     for (let k = 0; k <= FACE + TOP; k++) {
       let y, z
       if (k <= FACE) {
@@ -125,7 +143,7 @@ export function buildYosemite(scene, { lib } = {}) {
       row.push([x, y, z])
     }
     for (const [ri, [px, py, pz]] of row.entries()) {
-      const pr = ri <= FACE ? prof[ri] : null, inCave = pr ? pr[2] : 0, ledge = pr ? pr[3] : 0
+      const pr = ri <= FACE ? prof[ri] : null, inCave = pr ? pr[2] : 0, ledge = pr ? pr[3] : 0, tone = pr ? pr[4] : 1, jnt = pr ? pr[5] : 0
       caveQ.push(inCave)
       if (ledge > 0.45 && inCave < 0.25 && py > YOSE.g0(px) + 1.2 && py < YOSE.g0(px) + 40 && rnd() < 0.3) ledgeSpots.push([px, py, pz, inCave])
       pos.push(px, py, pz); uv.push(px * 0.22, ri > FACE ? pz * 0.22 + 40 : py * 0.22)   // 頂上那幾排用 z 當貼圖座標（以前用 y，頂面被拉成一條條）
@@ -143,12 +161,17 @@ export function buildYosemite(scene, { lib } = {}) {
         k = (1.12 + polish * 0.25) * (1 - 0.45 * Math.max(cr1, cr2))
         col.push(k * 1.04, k, k * 0.92)
       } else if (sed > 0.01) {
-        // 2026-11-10 松龍岩：深褐灰、潮濕的層狀岩（ChatGPT linear：乾 0.26/0.25/0.23、濕 0.10、岩窟深處 0.055、苔 0.055/0.115/0.045；貼圖本身約 0.5 → 頂點色約 ×2）
-        const wetF = Math.exp(-(((px - YOSE.fall.x) / 8) ** 2)) * 0.6 + 0.35 * inCave + 0.25 * Math.max(0, fbm2(px * 0.4 + 3, py * 0.05, 2) - 0.45) * 3
-        const dark = (1 - 0.55 * Math.min(1, wetF)) * (1 - 0.45 * inCave) * (1 - streak * 0.5)
-        const moss = Math.min(1, ledge * (0.55 + 0.6 * wetF) + 0.35 * Math.max(0, fbm2(px * 0.5, py * 0.4 + 7, 3) - 0.5) * 2 * (0.4 + wetF)) * (1 - 0.6 * inCave)
-        const r0 = 0.66 * dark, g0c = 0.52 * dark, b0 = 0.39 * dark
-        const cr = lerpN(r0, 0.16, moss), cg2 = lerpN(g0c, 0.34, moss), cb = lerpN(b0, 0.12, moss)
+        // 2026-11-10 松龍岩（ChatGPT QA 第二輪 linear）：乾岩 0.22/0.20/0.18、濕岩 0.075/0.08/0.07、岩簷深處 0.045；苔 0.045/0.085/0.035
+        // 貼圖平均約 0.5，所以頂點色 ×2。瀑布兩側 3～8 m 不規則滲水帶；苔集中在岩棚下緣、裂縫、滲水帶（20～40%）
+        const seep = Math.max(0, fbm2(px * 0.28 + 3, py * 0.03, 3) - 0.42) * 2.6 * (0.4 + 0.6 * Math.exp(-(((px - YOSE.fall.x) / 9) ** 2)))
+        const wetF = Math.min(1, Math.exp(-(((px - YOSE.fall.x) / 6.5) ** 2)) * 0.9 + 0.5 * inCave + seep)
+        const deep = inCave * inCave
+        let r0 = lerpN(0.38, 0.14, wetF), g0c = lerpN(0.32, 0.145, wetF), b0 = lerpN(0.26, 0.12, wetF)
+        r0 = lerpN(r0, 0.11, deep * 0.7); g0c = lerpN(g0c, 0.115, deep * 0.7); b0 = lerpN(b0, 0.1, deep * 0.7)
+        const crackD = 1 - 0.6 * Math.min(1, jnt * 2.2)
+        r0 *= tone * crackD * (1 - streak * 0.35); g0c *= tone * crackD * (1 - streak * 0.35); b0 *= tone * crackD * (1 - streak * 0.35)
+        const moss = Math.min(1, ledge * (0.4 + 0.7 * wetF) + Math.min(1, jnt * 2) * 0.5 * wetF + 0.6 * Math.max(0, fbm2(px * 0.6, py * 0.5 + 7, 3) - 0.55) * 2 * wetF) * (1 - 0.7 * deep)
+        const cr = lerpN(r0, 0.09, moss), cg2 = lerpN(g0c, 0.17, moss), cb = lerpN(b0, 0.07, moss)
         const gr = k * (1 - streak * 0.05)
         col.push(lerpN(gr, cr, sed), lerpN(k, cg2, sed), lerpN(gr * (1 + streak * 0.02), cb, sed))
       } else col.push(k * (1 - streak * 0.05), k, k * (1 + streak * 0.02))
@@ -862,10 +885,66 @@ export function buildYosemite(scene, { lib } = {}) {
       }
       const rm = new THREE.Mesh(mergeGeometries(parts2.map((q2) => q2.index ? q2.toNonIndexed() : q2)), woodM); rm.castShadow = true; rm.receiveShadow = true; g.add(rm)
     }
+    // 2026-11-10 使用者：垂掛植物（ChatGPT：只長在有裂縫、土的地方——岩簷上緣、岩棚，不要整片天花板都是）：
+    // 一張畫好的藤蔓圖（細莖＋小葉、透明底）貼在往下垂的長條上，InstancedMesh 一次畫完；下端隨風輕輕擺
+    {
+      const cv = document.createElement('canvas'); cv.width = 128; cv.height = 512
+      const cx = cv.getContext('2d'), r2 = mulberry32(77)
+      for (let st = 0; st < 3; st++) {
+        let x = 22 + st * 40 + (r2() - 0.5) * 16, y = 0
+        const len = 280 + r2() * 232, root = r2() < 0.25
+        cx.strokeStyle = root ? 'rgb(70,52,36)' : 'rgb(46,74,30)'; cx.lineWidth = root ? 1.6 : 2.2; cx.beginPath(); cx.moveTo(x, 0)
+        const pts2 = []
+        while (y < len) { y += 6; x += (r2() - 0.5) * 3.2; x = Math.min(124, Math.max(4, x)); cx.lineTo(x, y); pts2.push([x, y]) }
+        cx.stroke()
+        if (root) continue
+        for (const [px, py] of pts2) {
+          if (r2() < 0.45) continue
+          const side = r2() < 0.5 ? -1 : 1, sz = (1 - py / 560) * (6 + r2() * 7)
+          cx.fillStyle = `rgb(${40 + r2() * 40 | 0},${85 + r2() * 60 | 0},${30 + r2() * 30 | 0})`
+          cx.beginPath(); cx.ellipse(px + side * sz * 0.8, py + sz * 0.3, sz, sz * 0.55, side * 0.6 + (r2() - 0.5) * 0.6, 0, Math.PI * 2); cx.fill()
+        }
+      }
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4
+      const vg = new THREE.PlaneGeometry(1, 1, 1, 8).translate(0, -0.5, 0)
+      const vm = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 })
+      vm.onBeforeCompile = (sh) => {
+        sh.uniforms.uT = uT
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uT;').replace('#include <begin_vertex>', `#include <begin_vertex>
+          { float k = pow(max(0.0, -position.y), 1.6); vec4 ip = instanceMatrix[3]; transformed.x += sin(uT * 1.1 + ip.x * 0.7 + ip.z * 0.5) * 0.08 * k; transformed.z += sin(uT * 0.8 + ip.x * 1.3) * 0.05 * k; }`)
+      }
+      vm.customProgramCacheKey = () => 'hangVine'
+      // ChatGPT QA 第二輪：不要一整排綠窗簾 → 5～7 個群落（寬 1.5～4 m），中間留裸岩；每群 8～25 條；長度 60% 0.4～1.5、30% 1.5～3、10% 3～5 m；另外 2～6 條短根
+      const list = [], CL = []
+      for (let k = 0; k < 7; k++) CL.push({ x: YOSE.cave.x0 + 1 + rnd() * (YOSE.cave.x1 - YOSE.cave.x0 - 2) + (k > 4 ? (rnd() - 0.5) * 30 : 0), w: 1.5 + rnd() * 2.5 })
+      const inCl = (x) => CL.find((c) => Math.abs(x - c.x) < c.w / 2 && Math.abs(x - YOSE.fall.x) > 4.5)
+      const lenPick = () => { const r = rnd(); return 1.6 * (r < 0.6 ? 0.4 + rnd() * 1.1 : r < 0.9 ? 1.5 + rnd() * 1.5 : 3 + rnd() * 2) }   // 遠看才看得到：整體 ×1.6
+      const lipAt = (x) => { let best = null; for (const c of cols) if (c.lip && (!best || Math.abs(c.x - x) < Math.abs(best.x - x))) best = c; return best && Math.abs(best.x - x) < 0.5 ? best : null }
+      for (const cl of CL) {
+        const n = 16 + Math.floor(rnd() * 22)
+        for (let i = 0; i < n; i++) {
+          const x = cl.x + (rnd() - 0.5) * cl.w, c = lipAt(x)
+          if (c && Math.abs(x - YOSE.fall.x) > 4.5) list.push({ p: V(x, c.lip.y + (rnd() - 0.5) * 0.4, c.lip.z - 0.05 - rnd() * 0.15), yaw: (rnd() - 0.5) * 0.5, w: 0.3 + rnd() * 0.35, L: lenPick(), c: 0.75 + rnd() * 0.45 })
+        }
+        for (let i = 0; i < 2 + rnd() * 4; i++) { const x = cl.x + (rnd() - 0.5) * cl.w, c = lipAt(x); if (c) list.push({ p: V(x, c.lip.y - 0.1, c.lip.z), yaw: rnd() * 3, w: 0.12 + rnd() * 0.1, L: 0.2 + rnd() * 0.6, c: 0.45 }) }   // 短根（深色）
+      }
+      // 岩棚上：也照群落長（群落外很少）
+      for (const [x, y, z] of ledgeSpots) {
+        if (Math.abs(x - YOSE.fall.x) < 4 || rnd() > (inCl(x) ? 0.5 : 0.05)) continue
+        list.push({ p: V(x, y + 0.05, z - 0.25), yaw: (rnd() - 0.5) * 0.6, w: 0.22 + rnd() * 0.3, L: lenPick() * 0.8, c: 0.7 + rnd() * 0.5 })
+      }
+      if (list.length) {
+        const im = new THREE.InstancedMesh(vg, vm, list.length), cc = new THREE.Color()
+        list.forEach((b, i) => { im.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), V(b.w, b.L, 1))); im.setColorAt(i, cc.setRGB(b.c * 0.95, b.c, b.c * 0.85)) })
+        im.castShadow = false;   // 透明貼圖的影子會變成長方形
+        im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
+      }
+    }
     if (lib) {
       const ferns = ['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a'].filter((n) => lib[n]), fl = {}
       // 岩棚上的蕨類（層理上緣、潮濕的地方）
-      for (const [x, y, z] of ledgeSpots) { if (!ferns.length) break; (fl[ferns[Math.floor(rnd() * ferns.length)]] ||= []).push({ p: V(x, y - 0.1, z - 0.15), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.35 - rnd() * 0.4, rnd() * TAU, 0, 'YXZ')), s: V(1, 1, 1).multiplyScalar(0.9 + rnd() * 1.0) }) }
+      // 岩棚上的蕨類往外（-z，離開岩壁）伸出去（ChatGPT：葉長 0.3～0.9 m、不要只貼著岩面）；每 10 m² 3～8 叢小的
+      for (const [x, y, z] of ledgeSpots) { if (!ferns.length) break; const qq = new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), -(0.35 + rnd() * 0.45)).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU)); (fl[ferns[Math.floor(rnd() * ferns.length)]] ||= []).push({ p: V(x, y - 0.12, z - 0.1), q: qq, s: V(1, 1, 1).multiplyScalar(0.55 + rnd() * 0.75) }) }
       // 岩窟口兩側、牆腳：大蕨類
       for (let k = 0, n = 0; k < 600 && n < 60; k++) {
         const x = YOSE.cave.x0 - 4 + rnd() * (YOSE.cave.x1 - YOSE.cave.x0 + 6), zb = YOSE.base(x), z = zb - 1.5 + rnd() * (YOSE.caveD(x) + 1.5)
