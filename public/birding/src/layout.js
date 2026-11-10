@@ -47,10 +47,17 @@ export function angDiff(a, b) {
 }
 
 /* ---------- 溫室 ---------- */
-export const domeRho = (x, z) => Math.hypot(x / (x > 0 ? DOME.AE : DOME.A), z / domeB(x))
+// 2026-11-10 東部擴建（PARK_PLAN.md／ChatGPT「東部擴建 V2」）：東邊原本是橢圓的尖角（z=±60 只到 x 319），東南的低窪地、東北的緩坡都在外面。
+// x 210 以東慢慢從橢圓（n=2）換成超橢圓（n=4.5）：尖角變鈍，濕地和草原包進來；西半邊（花園、入口）完全不變
+const domeN = (x) => 2 + 2.5 * smoothstep(210, 262, x)
+export const domeRho = (x, z) => {
+  if (x <= 210) return Math.hypot(x / (x > 0 ? DOME.AE : DOME.A), z / domeB(x))
+  const n = domeN(x)
+  return ((x / DOME.AE) ** n + Math.abs(z / domeB(x)) ** n) ** (1 / n)
+}
 export const gardenRho = (x, z) => Math.hypot(x / GARDEN.A, z / GARDEN.B)
 export function domeY(x, z) {
-  const r2 = (x / (x > 0 ? DOME.AE : DOME.A)) ** 2 + (z / domeB(x)) ** 2
+  const r2 = domeRho(x, z) ** 2
   return r2 >= 1 ? 0 : DOME.H * Math.sqrt(1 - r2)
 }
 
@@ -306,6 +313,11 @@ export const ALP_SPURS = [
   // join：終點接到別條支線的終點（營地），高度兩頭都要對上、盡頭不另外攤平
   // 2026-11-11 使用者：瀑布底下要有一座湖、湖再流出一條河 → 原本貼著岩壁走過瀑布前面的那段，改從湖的南岸繞過去、在湖的出水口過一座石橋（世界座標寫的，換回設計座標）
   { name: 'yose', from: 13, join: 'camp', pts: [[152.92, 22.75], [147.96, 26.47], ...[[236, 65.5], [222, 64.5], [210, 63.5], [197, 63.5], [186, 66], [178, 71]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]), [114.25, 28.95]] },
+  // 2026-11-10 東部擴建（ChatGPT V2；路線用坡度 ≤20% 的 A* 在高度圖上找、再簡化）：
+  // wet：主步道第 9 點（248,-51）往東南下坡，一個之字形下到濕地南岸（316,-30），再沿南岸高處走到東邊的遠距觀察點（濕地核心不能進）
+  { name: 'wet', from: 9, noClear: true, pts: [[255, -58], [266, -63], [282, -62], [300, -71], [300, -55], [312, -33], [316, -29], [327, -26], [339, -26], [345, -29]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
+  // grass：主步道第 12 點（282,19）往東、之字形下到草原西北角，經過草原觀察棚 O7，沿北緣走到東邊看小雲雀那塊（草鴞的高草核心離路 25 m）
+  { name: 'grass', from: 12, noClear: true, pts: [[293, 20], [291, 42], [303, 45], [290, 57], [276, 67], [282, 75], [298, 74], [316, 77], [330, 86]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
 ].map((sp) => ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
 // 攝影小木屋：cabin 支線走到底就是門口（在門廊上）；屋子中心再往裡半個屋深＋0.45 公尺，門朝來的方向（buildAlpine 算好高度）
 export const CABIN = (() => {
@@ -416,6 +428,80 @@ function polyDist(px, pz, P, skip) {
   }
   return [best, bi, bt]
 }
+// 2026-11-10 東部擴建：東南「人工鹹淡水濕地展示區」、東北高草原（ChatGPT V2 的多邊形；座標是世界座標）
+// 濕地：水面 W；水裡越往中間越深（0.05→0.45 m）、東邊一個深潭（1.1 m）；西半邊是剛好露出水面的泥灘，一條彎彎的潮溝穿過去；
+// 外面一圈岸往上接回原地形，而且一定比水面高（東邊原地形只有 1～2 m，要堆一道自然的土堤，水才不會漫出去）
+const pip = (P, x, z) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i][1] > z) !== (P[j][1] > z) && x < (P[j][0] - P[i][0]) * (z - P[i][1]) / (P[j][1] - P[i][1]) + P[i][0]) c = !c; return c }
+const ringDist = (P, x, z) => { let d = 1e9; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; d = Math.min(d, segDist(x, z, a[0], a[1], b[0], b[1])[0]) } return d }
+const sdPoly = (P, x, z) => (pip(P, x, z) ? -1 : 1) * ringDist(P, x, z)   // 負＝在裡面
+export const EAST = {
+  W: 2.5,   // 水面高
+  water: [[318, -59], [329, -69], [344, -66], [350, -54], [348, -40], [336, -35], [322, -42]],
+  pool: { x: 342, z: -53, r: 5 },
+  creek: [[316, -53], [320, -53], [328, -55], [335, -51], [341, -47], [349, -46]],
+  grass: [[272, 66], [299, 63], [320, 72], [336, 88], [339, 108], [319, 119], [292, 114], [273, 95]],
+  lark: { x: 318, z: 97, rx: 11, rz: 8 },     // 小雲雀：低草、裸土的核心（20×15 m）
+  hides: [[300, 78.5], [318.5, -32]],          // 觀察屋 O7、O8（east.js 蓋）：四周 6 m 不長樹、箭竹
+}
+EAST.wetBox = [306, 362, -82, -22]; EAST.grassBox = [258, 352, 52, 132]
+// 邊界加雜訊：多邊形的直邊在遊戲裡一看就是六角形（2026-11-10 第一版從空中看是一塊褐色六角形）→ 岸線、草原邊緣彎彎曲曲
+export const wetSD = (x, z) => sdPoly(EAST.water, x, z) + 5 * (fbm2(x * 0.05 + 13, z * 0.05 - 2, 3) - 0.5) + 1.2 * (fbm2(x * 0.2, z * 0.2 + 5, 2) - 0.5)
+export const grassSD = (x, z) => sdPoly(EAST.grass, x, z) + 9 * (fbm2(x * 0.03 - 4, z * 0.03 + 9, 3) - 0.5)
+// 東部的分區（植被用）：'wet'＝濕地（水、泥灘、岸邊 6 m 內）、'grass'＝草原；其他 null
+export function eastZone(x, z) {
+  const [a, b, c, d] = EAST.wetBox, [e, f, g, h] = EAST.grassBox
+  if (EAST.hides.some(([hx, hz]) => Math.hypot(x - hx, z - hz) < 6)) return 'hide'
+  if (x > a - 8 && x < b + 8 && z > c - 8 && z < d + 8 && wetSD(x, z) < 14) return 'wet'   // 濕地＋整片壓低的岸坡（第一版只到 6 m，觀察屋裡長出兩棵冷杉）
+  if (x > e && x < f && z > g && z < h && grassSD(x, z) < 2) return 'grass'
+  return null
+}
+// 觀察屋底下攤平（半徑 3 m 平的、4.8 m 接回去）：屋子才不會一邊懸空，人站在地上眼睛剛好對到觀察窗
+const hideY = []
+function eastShape(X, Z, h) {
+  for (let i = 0; i < EAST.hides.length; i++) {
+    const [hx, hz] = EAST.hides[i], dd = Math.hypot(X - hx, Z - hz)
+    if (dd < 4.8) { hideY[i] ??= eastShape0(hx, hz, h); return lerp(hideY[i], eastShape0(X, Z, h), smoothstep(3, 4.8, dd)) }
+  }
+  return eastShape0(X, Z, h)
+}
+function eastShape0(X, Z, h) {
+  const [a, b, c, d] = EAST.wetBox
+  if (X > a - 14 && X < b + 14 && Z > c - 14 && Z < d + 14) {
+    const W = EAST.W, sd = wetSD(X, Z), n = fbm2(X * 0.09 + 5, Z * 0.09 - 3, 3) - 0.5
+    if (sd < 0) {
+      // 水裡：邊上 5 公分、往裡 8 公尺到 45 公分；深潭 1.1 m；西半邊（x < 331）慢慢墊高成剛好露出水面的泥灘，泥灘上有積水窪
+      let dep = 0.05 + 0.4 * smoothstep(0, 8, -sd) + 0.06 * n
+      const pd = Math.hypot(X - EAST.pool.x, Z - EAST.pool.z)
+      dep = Math.max(dep, 1.1 * (1 - smoothstep(EAST.pool.r * 0.4, EAST.pool.r, pd)))
+      let y = W - dep
+      const mud = smoothstep(333, 324, X) * smoothstep(0, 2.5, -sd)
+      y = lerp(y, W + 0.06 + 0.22 * n, mud)
+      // 潮溝：溪底比泥灘低 0.35、寬 1.5 m，彎彎地穿過泥灘接到開闊水面
+      const cd = polyDist(X, Z, EAST.creek)[0]
+      y = Math.min(y, lerp(W - 0.3, y, smoothstep(0.5, 1.3, cd)))
+      return y
+    }
+    // 岸：西邊原本是 45% 的坡，直接接會在水邊變成一道 10 m 的土崖 → 坡頂壓低成一個往外慢慢變陡的凹坡（山腳堆積坡的樣子）：
+    // 離水 5 m 高 0.6、10 m 高 3、20 m 高 11；東邊原地形只有 1～2 m → 14 m 內墊成高於水面 0.3 的土堤（水才不會漫出去）；
+    // 水邊 0～3 m 是濕泥岸；40 m 以外回到原地形
+    let y = Math.min(h, W + 0.1 + 0.08 * sd + 0.02 * sd * sd)
+    if (sd < 14) y = Math.max(y, W + 0.3 + 0.03 * sd + 0.12 * n)
+    if (sd < 3) y = lerp(W + 0.06 + 0.1 * sd + 0.08 * n, y, smoothstep(1.5, 3, sd))
+    return lerp(y, h, smoothstep(30, 45, sd))
+  }
+  const [e, f, g, k] = EAST.grassBox
+  if (X > e - 12 && X < f + 12 && Z > g - 12 && Z < k + 12) {
+    // 草原：原本是 34% 的碎石坡（x 278 的 30 m 到 x 336 的 13 m）→ 壓成一路往東南緩下來的草坡（平均 19%），上面起伏 ±1.5 m 的草丘；
+    // 小雲雀那塊再壓平一點。多邊形外 12 m 內接回原地形（西邊接山頂岩坡）
+    const sd = grassSD(X, Z)
+    const base = 14 + 12 * clamp((338 - X) / 62, 0, 1) + 2 * clamp((Z - 90) / 30, -1, 1) * -0.5
+    const hum = 1.5 * (fbm2(X * 0.045 + 21, Z * 0.045 + 4, 3) - 0.5) * 2 + 0.4 * (fbm2(X * 0.16, Z * 0.16, 2) - 0.5)
+    const L = EAST.lark, lk = 1 - smoothstep(0.8, 1.3, Math.hypot((X - L.x) / L.rx, (Z - L.z) / L.rz))
+    const t = base + hum * (1 - 0.7 * lk)
+    return lerp(t, h, smoothstep(-2, 12, sd))
+  }
+  return h
+}
 // 底層地形：入口平，往東爬升到山頂（偏北），南北兩道稜線，山頂後面往東牆降一點；不能頂到玻璃（離玻璃至少 9 公尺，樹才放得下）
 function alpBase(X, Z) {
   // 用放大前的設計座標算形狀，高度再乘 AHS（山區整個放大）
@@ -426,6 +512,7 @@ function alpBase(X, Z) {
   h -= 5 * smoothstep(160, 186, x)                                                                // 山頂後面往東牆降
   h += 2.6 * fbm2(X * 0.04 + 11, Z * 0.04 - 7, 4) * smoothstep(84, 100, x)
   h += 1.4 * Math.max(0, fbm2(X * 0.13, Z * 0.13, 3)) * smoothstep(86, 105, x)                   // 小岩塊
+  h = eastShape(X, Z, h * AHS); h /= AHS   // 2026-11-10 東部擴建：濕地盆地、草原（世界座標、公尺）
   h = h * AHS   // 2026-11-08：以前 min(…, domeY - 9)（不能頂到玻璃）——圓頂拿掉之後，這個上限在邊界附近把地形壓成一面懸崖；邊界外的草地（outside.js）會從邊界的高度慢慢降下去
   return lerp(gardenEdgeH(X, Z), Math.max(0, h), smoothstep(1.0, 1.25, gardenRho(X, Z)))          // 花園那側從種植坡的高度接起，往裡面慢慢變成山的形狀
 }
@@ -630,7 +717,7 @@ function buildAlpine() {
       const [d2, i2, t2] = polyDist(x, z, sp.pts), y2 = lerp(sp.prof[i2], sp.prof[i2 + 1], t2)
       const e = sp.pts[sp.pts.length - 1], de = Math.hypot(x - e[0], z - e[1]), C0 = sp.clear ?? 3.5, C1 = C0 + 4.5   // clear：盡頭空地多大（營地比較大）
       if (d2 < 6) h = lerp(y2, h, smoothstep(1.0, 4, d2))
-      if (!sp.join && de < C1 + 1) h = lerp(sp.prof[sp.prof.length - 1], h, smoothstep(C0, C1, de))
+      if (!sp.join && !sp.noClear && de < C1 + 1) h = lerp(sp.prof[sp.prof.length - 1], h, smoothstep(C0, C1, de))
       dAll = Math.min(dAll, d2 + 0.35)   // 小路畫得窄一點（alpineTrailDist 用來畫路面、樹讓開）
     }
     aTrail[k] = dAll

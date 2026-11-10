@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED } from './layout.js'
+import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { nearGiant, forestK } from './giants.js'
 import { barkMaterial } from './bark.js'
@@ -245,6 +245,20 @@ function buildInterior(lib, avoid = []) {
           c.lerp(new THREE.Color().setHSL(0.1 + stone * 0.03, 0.2, 0.11 + stone * 0.05), ss(1.22, 1.0, e) * 0.9)
         }
       }
+      // 2026-11-10 東部：草原是乾一點的黃綠草地（陡的西緣照舊是岩坡）；濕地水裡、泥灘是濕的灰褐泥，岸上一圈深色濕泥，再往外是鹽地的黃綠矮草
+      {
+        let ez = eastZone(x, z)
+        if (ez === 'hide') ez = grassSD(x, z) < 2 ? 'grass' : wetSD(x, z) < 14 ? 'wet' : null   // 觀察屋旁照所在的區上色（不然一圈圓形的色塊）
+        if (ez === 'grass') {
+          const dry = fbm2(x * 0.05 + 7, z * 0.05, 3)
+          c.lerp(new THREE.Color().setHSL(0.15 + dry * 0.05, 0.36, 0.2 + n * 0.06 + dry * 0.05), (1 - rock * 0.7) * (1 - tr) * ss(-1, 3, -grassSD(x, z) + 2))
+        } else if (ez === 'wet') {
+          const wd = wetSD(x, z), y = pos[k * 3 + 1]
+          const mud = new THREE.Color().setHSL(0.08 + stone * 0.02, 0.22, 0.13 + stone * 0.05)
+          c.lerp(new THREE.Color().setHSL(0.17 + n * 0.04, 0.34, 0.2 + n * 0.05), ss(6, 2.5, wd) * (1 - tr))   // 岸上的矮草
+          c.lerp(mud, Math.max(ss(2.6, 0.5, wd), ss(EAST.W + 0.5, EAST.W + 0.1, y)) * (1 - tr))
+        }
+      }
       col.set([c.r, c.g, c.b], k * 3)
     }
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
@@ -378,6 +392,27 @@ function buildInterior(lib, avoid = []) {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
     geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); geo.setAttribute('aSlope', new THREE.Float32BufferAttribute(slo, 1)); geo.setAttribute('aFoam', new THREE.Float32BufferAttribute(new Float32Array(slo.length), 1)); geo.setAttribute('aLip', new THREE.Float32BufferAttribute(new Float32Array(slo.length), 1)); geo.setIndex(idx)
     const pond = new THREE.Mesh(geo, waterM); pond.renderOrder = 2; g.add(pond)
+    // 2026-11-10 東部人工濕地：方格水面蓋住整個盆地，每點水深照地形算（岸上深度 < 0 → 透明），岸線自然由深度測試切出來
+    {
+      const [x0, x1, z0, z1] = EAST.wetBox, cs = 0.75, nxw = Math.ceil((x1 - x0) / cs), nzw = Math.ceil((z1 - z0) / cs)
+      const P = [], U = [], D = [], S0 = [], I = []
+      for (let j = 0; j <= nzw; j++) for (let i = 0; i <= nxw; i++) {
+        const x = x0 + i * cs, z = z0 + j * cs
+        const dd = EAST.W - alpineHeight(x, z)
+        P.push(x, EAST.W, z); U.push(x * 0.35, z * 0.35); D.push(dd > 0 ? dd * 1.8 + 0.08 : dd); S0.push(0)   // 濕地的水是混濁的（不像山溪清澈見底）：深度給 shader 加倍，比較不透、比較反光
+      }
+      for (let j = 0; j < nzw; j++) for (let i = 0; i < nxw; i++) {
+        const a = j * (nxw + 1) + i, b = a + 1, c2 = a + nxw + 1, d = c2 + 1
+        if (Math.max(D[a], D[b], D[c2], D[d]) > -0.05) I.push(a, c2, b, b, c2, d)   // 全部在岸上的格子不畫
+      }
+      const wg = new THREE.BufferGeometry()
+      wg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); wg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2))
+      wg.setAttribute('aDepth', new THREE.Float32BufferAttribute(D, 1)); wg.setAttribute('aSlope', new THREE.Float32BufferAttribute(S0, 1))
+      wg.setAttribute('aFoam', new THREE.Float32BufferAttribute(new Float32Array(S0.length), 1))
+      for (const nm of Object.keys(geo.attributes)) if (!wg.attributes[nm]) wg.setAttribute(nm, new THREE.Float32BufferAttribute(new Float32Array(S0.length * geo.attributes[nm].itemSize), geo.attributes[nm].itemSize))
+      wg.setIndex(I)
+      const wet = new THREE.Mesh(wg, waterM); wet.renderOrder = 2; wet.name = 'eastWetland'; g.add(wet)
+    }
     // 溪（2026-11-07 改成階梯式：一個個水潭、潭和潭之間一道跌水，layout.js buildSteps）
     // 沿著溪中線每 0.25 公尺一個斷面；水面高度照沿溪距離查（潭裡平的、跌水往下彎）。
     // 斷面寬度不是固定的：往兩邊找到岸比水面高的地方為止（再多 0.15 公尺讓岸自然切掉），水才不會凸出岸外。
@@ -889,6 +924,7 @@ function buildInterior(lib, avoid = []) {
         if ((!inAlpine(x, z, 3) && !inB) || domeRho(x, z) > 0.94 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4.4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4.4)) continue
         if (alpineTrailDist(x, z) < 3.2 || alpineStreamDist(x, z) < 2.5 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2.5) continue
         if (YOSE.inside(x, z)) continue   // 2026-11-10 優勝美地區：這裡種西黃松（yosemite.js），不種冷杉、鐵杉
+        if (eastZone(x, z)) continue   // 2026-11-10 東部濕地、草原：不長針葉林（east.js 種草、蘆葦）
         const hgt = GY(x, z)
         // 冷杉在高處、鐵杉在中坡；山頂附近稀疏（箭竹草原）
         let want = kind === 'fir' ? ss(7, 16, hgt) * (1 - 0.85 * ss(17, 22, hgt)) : ss(2.5, 7, hgt) * (1 - ss(14, 20, hgt))
@@ -1171,7 +1207,7 @@ function buildInterior(lib, avoid = []) {
     const figM = leafMat(figLeafT, { roughness: 0.4, color: 0xdfe8d8 }), coreM = new THREE.MeshStandardMaterial({ color: 0x3d6234, roughness: 1, vertexColors: true })
     const fruitM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.38, vertexColors: true })
     const FIG = [], SCH = [], FLW = { lily: [], hyper: [], gent: [] }
-    const okHere = (x, z, trail, r) => inAlpine(x, z, 2) && domeRho(x, z) < 0.93 && trail >= r && alpineStreamDist(x, z) > 2.5 && bridgeDist(x, z) > 3 && Math.hypot(x - CABIN.x, z - CABIN.z) > CABIN.R + 3 && Math.hypot(x - CAMP.x, z - CAMP.z) > CAMP.R + 4 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) > ALP_POND.r + 2 && !nearBird(avoid, x, z, 4, 2)
+    const okHere = (x, z, trail, r) => inAlpine(x, z, 2) && !eastZone(x, z) && domeRho(x, z) < 0.93 && trail >= r && alpineStreamDist(x, z) > 2.5 && bridgeDist(x, z) > 3 && Math.hypot(x - CABIN.x, z - CABIN.z) > CABIN.R + 3 && Math.hypot(x - CAMP.x, z - CAMP.z) > CAMP.R + 4 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) > ALP_POND.r + 2 && !nearBird(avoid, x, z, 4, 2)
     for (const f of FIGPOS) {
       const y = alpineHeight(f.x, f.z), H = f.H
       FIG.push({ p: V(f.x, y - 0.15, f.z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(H * (1 + rnd() * 0.2), H, H * (1 + rnd() * 0.2)), H })
@@ -1342,6 +1378,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 8000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (YOSE.behind(x, z)) continue
+      { const ez0 = eastZone(x, z); if (ez0 === 'wet' || ez0 === 'hide') continue }   // 濕地、觀察屋旁不放山區的石頭（草原留著零星的）
       if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 2.4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 2.4) || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
       const sd = alpineStreamDist(x, z)
@@ -1358,7 +1395,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 12000 * AK && ferns.length < 420 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (YOSE.behind(x, z)) continue
-      if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.95) continue
+      if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.95 || eastZone(x, z)) continue
       const sd = alpineStreamDist(x, z), dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
       if (!((sd > 1.3 && sd < 4.5) || (dp > ALP_POND.r + 0.8 && dp < ALP_POND.r + 3.5)) || alpineTrailDist(x, z) < 1.6) continue
       ferns.push({ p: V(x, alpineHeight(x, z) - 0.05, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(0.7 + rnd() * 0.5), c: new THREE.Color().setHSL(0.25, 0.15, 0.9) })
@@ -1391,7 +1428,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 140000 * AK && A.length / 4 < MAXI; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (YOSE.behind(x, z)) continue
-      if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955) continue
+      if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955 || eastZone(x, z)) continue
             if (groundClear(avoid, x, z, 1.6)) continue   // 地上的鳥走動的地方、到鏡頭那條線：不長
             if (bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8 || nearGiant(x, z, 0.1)) continue   // 吊橋兩端橋面貼近地面：箭竹會從木板縫長出來（2026-11-09）；巨木樹幹裡不長
       if ((Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R)) continue   // 小木屋裡面不長
@@ -1474,7 +1511,7 @@ function buildInterior(lib, avoid = []) {
     for (let k = 0; k < 160000 * AK && list.length < 90000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (YOSE.behind(x, z)) continue
-      if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955) continue
+      if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955 || eastZone(x, z)) continue
       if (groundClear(avoid, x, z, 1.8) || bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8 || nearGiant(x, z, 0.2)) continue
       if ((Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 0.2 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 0.2)) continue
       if (alpineTrailDist(x, z) < 1.7 || alpineStreamDist(x, z) < 1.6 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.8) continue

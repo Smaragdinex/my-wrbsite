@@ -18,11 +18,12 @@ import { loadAnimalModels, placeAnimal, REAL_CM, gameLen } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt, FIG_FORCED } from './layout.js'
+import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt, FIG_FORCED, EAST, wetSD } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
 import { buildOwlNest } from './owlnest.js'
+import { buildEast } from './east.js'
 import { buildCamp } from './camp.js'
 import { buildPondLife } from './pondlife.js'
 import { buildYosemite } from './yosemite.js'
@@ -90,6 +91,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     const d = { ...def, y: def.y ?? groundH(...def.spot), groundAt: def.water == null ? groundH : null }
     // 游泳的鳥只在開闊水面：離池邊（石頭）和山腳都要留距離
     if (def.swim === 'alpPond') d.swimOK = (x, z) => Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r * 0.78   // 山區入口的湖（鴛鴦、花嘴鴨）
+    else if (def.swim === 'eastWet') d.swimOK = (x, z) => wetSD(x, z) < -2.5 && alpineHeight(x, z) < EAST.W - 0.3   // 東部人工濕地（黃麻鴨）：開闊、夠深的水面
     else if (def.swim) d.swimOK = (x, z) => poolQ(x, z) < 0.7 && Math.hypot(x - MTN.x, z - MTN.z) > mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 4
     // 沒指定方位就讓鏡頭站在「鳥背對山」那一側，背景是雲霧山
     if (d.view == null) d.view = THREE.MathUtils.radToDeg(Math.atan2(def.spot[0] - MTN.x, def.spot[1] - MTN.z))
@@ -135,6 +137,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   giantSpots(alpAvoid)   // 巨木的位置先算好：山區的其他樹、草要避開
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
+  scene.add(buildEast({ avoid: alpAvoid }))   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
   alpine.build()
   const camp = buildCamp(scene)
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉

@@ -1,7 +1,7 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL, AM, ALP_POND } from './layout.js'
+import { POOL, AM, ALP_POND, EAST } from './layout.js'
 import { birdText } from './i18n.js'
 
 const ALL = [
@@ -190,8 +190,9 @@ const ALL = [
     ],
   },
   {
-    id: 'spoonbill', spot: [-5.5, 11.5], perch: 'ground', y: POOL.water - 0.18, water: POOL.water, dist: 4.6, camH: 1.9, lookY: 0.9,
-    name: '黑面琵鷺', sci: 'Platalea minor', where: '水池淺灘',
+    // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [-5.5, 11.5]）
+    id: 'spoonbill', spot: [348, -53], view: 350, perch: 'ground', y: 2.2, water: EAST.W, dist: 4.6, camH: 1.9, lookY: 0.9,
+    name: '黑面琵鷺', sci: 'Platalea minor', where: '東部人工濕地的淺水',
     intro: '全身雪白，臉和嘴是黑色的，最特別的是一支前端又扁又寬、像飯匙一樣的長嘴。牠在淺水裡低著頭、嘴巴微微張開，左右來回掃動，碰到小魚小蝦就立刻夾起來。',
     facts: [
       '全世界的數量只有幾千隻，是瀕危的鳥；每年冬天超過一半會到台灣過冬，台南曾文溪口是最重要的度冬地。',
@@ -433,8 +434,9 @@ const ALL = [
     ],
   },
   {
-    id: 'grassowl', spot: [80, 12.5], view: 180, perch: 'ground', dist: 3.2, camH: 0.9, lookY: 0.3,
-    name: '草鴞', sci: 'Tyto longimembris', where: '山林入口旁的白茅草地',
+    // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [80, 12.5]）
+    id: 'grassowl', spot: [303, 102], view: 171, perch: 'ground', dist: 3.2, camH: 0.9, lookY: 0.3,
+    name: '草鴞', sci: 'Tyto longimembris', where: '東部草原的高草深處',
     intro: '台灣瀕臨絕種的保育類貓頭鷹。心形的臉盤是淡粉米白色，外圈一道深褐色的邊，眼睛小小黑黑的；背和翅膀深巧克力褐色帶金黃色斑紋，腿很長。牠不住森林，而是住在低海拔開闊的白茅草原。',
     facts: [
       '白天躲在白茅草叢裡休息，晚上在草地上空低飛抓老鼠。',
@@ -466,8 +468,9 @@ const ALL = [
     ],
   },
   {
-    id: 'rnpheasant', lawn: true, spot: [77, -40], perch: 'ground', view: 10, dist: 3.6, camH: 1.1, lookY: 0.25,
-    name: "環頸雉", sci: 'Phasianus colchicus formosanus', where: "湖前的草地",
+    // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [77, -40]）
+    id: 'rnpheasant', lawn: true, spot: [290, 94], perch: 'ground', view: 180, dist: 3.6, camH: 1.1, lookY: 0.25,
+    name: "環頸雉", sci: 'Phasianus colchicus formosanus', where: "東部草原的高草邊",
     intro: "雄鳥非常華麗：頭頸是帶金屬光澤的藍綠色，臉上一大塊鮮紅的裸皮，脖子一圈白環；身體紅銅色帶斑紋，尾羽又細又長。母鳥全身是低調的褐色斑紋，方便躲在草裡孵蛋。",
     facts: [
       "台灣的亞種只分布在西部和東部的平原草地，因為棲地變少、和外來放養的雉雞混種，數量很稀少。",
@@ -477,8 +480,9 @@ const ALL = [
     ],
   },
   {
-    id: 'skylark', lawn: true, spot: [86, 27], perch: 'ground', view: 180, dist: 2.4, camH: 0.8, lookY: 0.1,
-    name: "小雲雀", sci: 'Alauda gulgula', where: "山林入口草鴞後面的草原",
+    // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [86, 27]）
+    id: 'skylark', lawn: true, spot: [319, 98], perch: 'ground', view: 147, dist: 2.4, camH: 0.8, lookY: 0.1,
+    name: "小雲雀", sci: 'Alauda gulgula', where: "東部草原的短草地",
     intro: "全身沙褐色帶深色縱紋，頭頂有一小撮短短的羽冠，緊張或唱歌時會豎起來。顏色和枯草幾乎一樣，蹲在地上時很難發現。",
     facts: [
       "最有名的是「空中唱歌」：一邊鼓翅直直往上升到很高的地方，一邊連續唱好幾分鐘。",
@@ -488,8 +492,9 @@ const ALL = [
     ],
   },
   {
-    id: 'cisticola', lawn: true, spot: [64, -61], perch: 'stem', stemH: 0.9, view: 20, dist: 2.6, camH: 1.0, lookY: 0.95,
-    name: "棕扇尾鶯", sci: 'Cisticola juncidis', where: "湖前的草地",
+    // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [64, -61]）
+    id: 'cisticola', lawn: true, spot: [293.5, 86.1], perch: 'stem', stemH: 0.9, view: 197, dist: 2.6, camH: 1.0, lookY: 0.95,
+    name: "棕扇尾鶯", sci: 'Cisticola juncidis', where: "東部草原的草叢",
     intro: "很小、圓滾滾的鳥，頭頂和背是黃褐色帶粗黑縱紋，肚子乾淨的白色；短短的尾巴張開像一把扇子，末端有黑白斑點。常抓在高草的頂端東張西望。",
     facts: [
       "繁殖季的雄鳥會在草原上空一跳一跳地波浪飛行，每往上一下就「嘀、嘀、嘀」叫一聲，像在打拍子。",
@@ -500,8 +505,9 @@ const ALL = [
   },
   // 2026-11-10 山下湖再加四種：黃麻鴨（湖中游）、紫鷺（北岸淺水，避開蓮花叢）、高蹺鴴（西邊淺水，三隻）、西方澤鵟（南岸草地）
   {
-    id: 'shelduck', spot: [112, -47], perch: 'ground', swim: 'alpPond', view: 128, y: ALP_POND.water - 0.17, water: ALP_POND.water, dist: 10, camH: 1.6, lookY: 0.3,
-    name: "黃麻鴨", sci: 'Tadorna ferruginea', where: "山下的湖",
+    // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [112, -47]）
+    id: 'shelduck', spot: [339.1, -47.8], perch: 'ground', swim: 'eastWet', view: 17, y: EAST.W - 0.17, water: EAST.W, dist: 10, camH: 1.6, lookY: 0.3,
+    name: "黃麻鴨", sci: 'Tadorna ferruginea', where: "東部人工濕地的開闊水面",
     intro: "全身橙黃褐色的大型鴨子，頭頸淡棕黃、臉偏白，雄鳥繁殖期頸上一圈黑色細環。飛起來翅膀前半全白、飛羽黑色、還有綠色翼鏡，對比非常強烈。",
     facts: [
       "在台灣是稀有的冬候鳥，偶爾一兩隻出現在湖泊、河口或農田。",
@@ -511,8 +517,9 @@ const ALL = [
     ],
   },
   {
-    id: 'pheron', spot: [95.8, -25.6], perch: 'ground', view: 330, y: ALP_POND.water - 0.2, water: ALP_POND.water, dist: 4.2, camH: 1.6, lookY: 0.75,
-    name: "紫鷺", sci: 'Ardea purpurea', where: "山下湖北岸的淺水",
+    // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [95.8, -25.6]）
+    id: 'pheron', spot: [328.3, -62.9], perch: 'ground', view: 270, y: 2.29, water: EAST.W, dist: 4.2, camH: 1.6, lookY: 0.75,
+    name: "紫鷺", sci: 'Ardea purpurea', where: "東部濕地北邊的蘆葦叢",
     intro: "細長的脖子是栗紅色、兩側各有一條黑線，頭頂藍黑色，後頭有細長飾羽；背和翅膀藍灰色，肩上掛著一縷縷栗紅色的蓑羽。喜歡躲在蘆葦、水草邊，一動也不動地等魚。",
     facts: [
       "比蒼鷺瘦長，脖子更細、更彎，常彎成 S 形。",
@@ -522,8 +529,9 @@ const ALL = [
     ],
   },
   {
-    id: 'stilt', spot: [85.6, -37.7], perch: 'ground', view: 280, y: ALP_POND.water - 0.24, water: ALP_POND.water, dist: 3.4, camH: 1.0, lookY: 0.4,
-    name: "高蹺鴴", sci: 'Himantopus himantopus', where: "山下湖西邊的淺水",
+    // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [85.6, -37.7]）
+    id: 'stilt', spot: [327.5, -52.3], perch: 'ground', view: 299, y: 2.35, water: EAST.W, dist: 3.4, camH: 1.0, lookY: 0.4,
+    name: "高蹺鴴", sci: 'Himantopus himantopus', where: "東部濕地的泥灘淺水",
     intro: "黑白分明的身體配上一雙比身體還長的粉紅色長腳，像踩著高蹺，所以叫高蹺鴴。嘴黑色細長、眼睛紅色。常一小群在淺水裡優雅地走來走去，低頭啄水面的小蟲。",
     facts: [
       "腳長佔了身高的六成，是腿長比例最誇張的鳥之一。",
@@ -533,8 +541,9 @@ const ALL = [
     ],
   },
   {
-    id: 'harrier', spot: [95.5, -67.2], perch: 'ground', view: 200, dist: 3.4, camH: 1.0, lookY: 0.35,
-    name: "西方澤鵟", sci: 'Circus aeruginosus', where: "山下湖南岸的草地",
+    // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [95.5, -67.2]）
+    id: 'harrier', spot: [339.6, -71.3], perch: 'ground', view: 271, dist: 3.4, camH: 1.0, lookY: 0.35,
+    name: "西方澤鵟", sci: 'Circus aeruginosus', where: "東部濕地的岸邊、上空",
     intro: "中大型猛禽，雄鳥飛起來是黑、褐、白三色：翅膀前緣白、覆羽紅褐、飛羽灰白、翼尖黑。常貼著沼澤、草地低空盤旋，雙翼上揚成淺 V 字，低頭找獵物。",
     facts: [
       "在台灣是「迷鳥」，偶爾才有一隻迷路過來，賞鳥人會專程去看。",

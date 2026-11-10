@@ -543,7 +543,7 @@ export const BIRDS = {
  },
  "spoonbill": {
   "name": "Black-faced Spoonbill",
-  "where": "Pond Shallows",
+  "where": "Shallows of the East Constructed Wetland",
   "intro": "Snow white with a black face and bill, and most special of all, a long bill with a flat, wide tip like a rice paddle. It walks through shallow water head down, bill slightly open, sweeping side to side and snapping up any fish or shrimp it touches.",
   "facts": [
    "Only a few thousand exist worldwide, making it endangered; each winter over half come to Taiwan, and the Zengwen River mouth in Tainan is their most important wintering site.",
@@ -730,7 +730,7 @@ export const BIRDS = {
  },
  "grassowl": {
   "name": "Eastern Grass Owl",
-  "where": "Cogon Meadow by the Forest Entrance",
+  "where": "Deep in the Tall Grass of the East Grassland",
   "intro": "An endangered owl in Taiwan. Its heart-shaped face is pale pinkish-white with a dark-brown rim and small dark eyes; the back and wings are chocolate brown with golden markings, and it has long legs. It lives not in forest but in open lowland cogon grassland.",
   "facts": [
    "By day it rests hidden in tall grass; at night it flies low over the grass hunting rodents.",
@@ -741,7 +741,7 @@ export const BIRDS = {
  },
  "rnpheasant": {
   "name": "Ring-necked Pheasant",
-  "where": "The Meadow by the Lake",
+  "where": "Tall-Grass Edge of the East Grassland",
   "intro": "The male is gorgeous: an iridescent blue-green head and neck, a big patch of bright red bare skin on the face, a white collar, a coppery spotted body and a long, slender tail. The female is plain mottled brown, perfect for hiding in grass while she incubates.",
   "facts": [
    "Taiwan's subspecies lives only in lowland grasslands in the west and east; habitat loss and hybridising with released pheasants have made it rare.",
@@ -752,7 +752,7 @@ export const BIRDS = {
  },
  "skylark": {
   "name": "Oriental Skylark",
-  "where": "Grassland Behind the Grass Owl, by the Forest Entrance",
+  "where": "Short-Grass Patch of the East Grassland",
   "intro": "Sandy brown streaked with dark, with a short crest it raises when alarmed or singing. Its colours match dry grass so well that it is very hard to spot when it crouches.",
   "facts": [
    "It is famous for its song flight: it rises straight up on fluttering wings, singing nonstop for minutes from high in the sky.",
@@ -763,7 +763,7 @@ export const BIRDS = {
  },
  "cisticola": {
   "name": "Zitting Cisticola",
-  "where": "The Meadow by the Lake",
+  "where": "Grass Clumps in the East Grassland",
   "intro": "A tiny, round bird with a tawny crown and back boldly streaked with black and a clean white belly. Its short tail fans out, tipped with black and white spots. It often clings to the top of a tall grass stem, looking around.",
   "facts": [
    "In the breeding season the male flies in bouncing waves over the grassland, giving a sharp 'zit' at the top of every bounce like a metronome.",
@@ -796,7 +796,7 @@ export const BIRDS = {
  },
  "shelduck": {
   "name": "Ruddy Shelduck",
-  "where": "Mountain Lake",
+  "where": "Open Water of the East Constructed Wetland",
   "intro": "A large, orange-brown duck with a pale buff head and whitish face; breeding males wear a thin black collar. In flight the white forewing, black flight feathers and green speculum make a striking contrast.",
   "facts": [
    "A rare winter visitor to Taiwan, with one or two occasionally turning up on lakes, estuaries or farmland.",
@@ -807,7 +807,7 @@ export const BIRDS = {
  },
  "pheron": {
   "name": "Purple Heron",
-  "where": "Shallows on the North Shore of the Mountain Lake",
+  "where": "Reedbed on the North Side of the East Wetland",
   "intro": "Its slender chestnut neck has a black stripe down each side, the crown is bluish-black with long thin plumes, and the blue-grey back carries trailing chestnut shoulder plumes. It hides at the edge of reeds and waterweed, standing motionless to wait for fish.",
   "facts": [
    "It is slimmer than the Grey Heron, with a thinner neck often held in an S-curve.",
@@ -818,7 +818,7 @@ export const BIRDS = {
  },
  "stilt": {
   "name": "Black-winged Stilt",
-  "where": "Shallows on the West Side of the Mountain Lake",
+  "where": "Mudflat Shallows in the East Wetland",
   "intro": "Crisp black-and-white plumage set on pink legs longer than its body, as if walking on stilts. The bill is thin and black and the eye red. Small groups wade gracefully through shallows, picking insects from the surface.",
   "facts": [
    "Legs make up about 60% of its height, one of the most extreme leg ratios of any bird.",
@@ -829,7 +829,7 @@ export const BIRDS = {
  },
  "harrier": {
   "name": "Western Marsh Harrier",
-  "where": "Grass on the South Shore of the Mountain Lake",
+  "where": "Shores of and Skies over the East Wetland",
   "intro": "A medium-large raptor; in flight the male is a three-toned black, brown and white: white leading edge, rufous coverts, pale grey flight feathers and black wingtips. It quarters low over marsh and grassland with wings raised in a shallow V, head down hunting.",
   "facts": [
    "In Taiwan it is a vagrant: a lost bird turns up only occasionally, and birders travel specially to see it.",
