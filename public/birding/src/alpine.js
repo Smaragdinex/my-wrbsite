@@ -1383,6 +1383,7 @@ function buildInterior(lib, avoid = []) {
       { const ez0 = eastZone(x, z); if (ez0 === 'wet' || ez0 === 'hide') continue }   // 濕地、觀察屋旁不放山區的石頭（草原留著零星的）
       if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 2.4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 2.4) || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
+      if (h < ALP_POND.water - 0.2 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.5) continue   // 2026-11-10 檢查員：河口挖深後一顆苔石留在湖底、像一團褐色珊瑚 → 湖裡（水深 > 0.2）不放
       const sd = alpineStreamDist(x, z)
       if (sd > 1.4 && sd < 4 && rnd() < 0.25) put(pick(moss), { p: V(x, h - 0.15, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 1.2), c: new THREE.Color().setHSL(0.25, 0.12, 0.85 + rnd() * 0.1) })
       else if (slope > 0.55 && rnd() < 0.06) {
