@@ -323,7 +323,9 @@ export const YOSE = (() => {
   const Y = { x0: 168, x1: 262, edge, base: (x) => edge(x) - 20 }   // 2026-11-10 溫室加大後：牆腳往裡 20 公尺（那裡玻璃高，岩壁才能 30 公尺以上）
   Y.fall = { x: 200, z: Y.base(200) - 3, r: 3.2, rx: 6.5, rz: 3.2 }   // 落點（水花、白沫在這）
   // 2026-11-11 使用者：瀑布下來要有一座湖、湖再接一條河往下流（跟優勝美地一樣）→ 落點外面一座橢圓湖（24×20 公尺），水面 water 在 buildAlpine 照湖岸地形算
-  Y.lake = { x: 194, z: 79, rx: 12, rz: 10, water: 0 }
+  // 2026-11-10 使用者：瀑布落下來的水最後插進地形 → 量了：瀑布在 x 200，湖心在 x 194，落水那排湖只到 x 200.3，水簾東半邊、後層整片落在高出水面 1～3 公尺的岸上。
+  // 湖心移到瀑布正下方偏南、往東放大，北岸伸到岩壁腳下（落水點全在水面上）
+  Y.lake = { x: 198, z: 80.5, rx: 13, rz: 10, water: 0 }
   Y.inLake = (x, z, pad = 0) => ((x - Y.lake.x) / (Y.lake.rx + pad)) ** 2 + ((z - Y.lake.z) / (Y.lake.rz + pad)) ** 2 < 1
   // 岩壁高：yosemite.js 畫、步道算高度都用這個
   const ssY = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
@@ -528,6 +530,17 @@ function buildAlpine() {
   const st = ALP_STREAM, sProf = st.map(([x, z], i) => alpBase(x, z) - 1.3 - ALP_GORGE.depth * gorgeK(x, z))
   for (let i = 1; i < sProf.length; i++) sProf[i] = Math.min(sProf[i], sProf[i - 1] - 0.3)     // 溪床一路往下
   sProf[sProf.length - 1] = Math.min(sProf[sProf.length - 1], ALP_POND.water - 0.3)
+  // 2026-11-10 使用者：石頭瀑布落下來的水最後插出地形 → 量了：溪最後兩點一個在湖岸外 6.4 公尺（高 8.8）、一個在湖裡，中間直線內插，
+  // 走到湖岸時溪面還有 4.6 公尺高，可是湖的盆地（半徑＋2.5 公尺內）已經把地面挖低到 0 左右：最後幾個潭浮在地面上 1～2 公尺。
+  // 在湖岸外 0.5 公尺插一個點、高度＝湖面；再往上游把坡度夾在 0.5 以內（落差在進湖前分好幾段跌完，到湖岸剛好是湖面）
+  {
+    const P = ALP_POND, n = st.length, a = st[n - 2], b = st[n - 1], R = P.r + 0.5
+    let lo = 0, hi = 1
+    for (let it = 0; it < 30; it++) { const m = (lo + hi) / 2, d = Math.hypot(a[0] + (b[0] - a[0]) * m - P.x, a[1] + (b[1] - a[1]) * m - P.z); if (d > R) lo = m; else hi = m }
+    st.splice(n - 1, 0, [a[0] + (b[0] - a[0]) * lo, a[1] + (b[1] - a[1]) * lo])
+    sProf.splice(n - 1, 0, P.water - 0.3)
+    for (let i = n - 2; i >= 0; i--) sProf[i] = Math.min(sProf[i], sProf[i + 1] + 0.5 * Math.hypot(st[i + 1][0] - st[i][0], st[i + 1][1] - st[i][1]))
+  }
   ALP_STREAM.prof = sProf
   buildSteps(st, sProf)
   // 瀑布湖水面：湖岸一圈原地形最低的地方再低 0.5（不會溢出去）
@@ -655,6 +668,15 @@ function buildAlpine() {
           const wl = Math.max(ALP_RIVER.water(sR), ALP_RIVER.water(sR - 0.8), ALP_RIVER.water(sR - 1.6))
           const need = wl + 0.12 - Math.max(0, dr - hw - 0.8) * 1.1
           if (h < need) h = lerp(h, need, onPath)
+        }
+        // 2026-11-10 山上那條溪也一樣（吊橋底下整段挖低、步道攤平都會把岸削到比水面低，溪面兩邊浮起來）；湖的盆地裡不管
+        {
+          const SA = ALP_STREAM, [d2, i2, t2] = polyDist(x, z, SA), s2 = SA.S[i2] + t2 * (SA.S[i2 + 1] - SA.S[i2]), h2 = 2.0
+          if (d2 > h2 && d2 < h2 + 7 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) > ALP_POND.r + 0.5) {
+            const wl = Math.max(SA.water(s2), SA.water(s2 - 0.8))
+            const need = wl + 0.12 - Math.max(0, d2 - h2 - 0.6) * 1.1
+            if (h < need) h = lerp(h, need, onPath)
+          }
         }
         const LK = YOSE.lake, e = Math.hypot((x - LK.x) / LK.rx, (z - LK.z) / LK.rz)
         if (e > 1.0 && e < 1.9 && !(dr < hw + 0.2)) {

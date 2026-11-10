@@ -395,7 +395,7 @@ function buildInterior(lib, avoid = []) {
     }
     // 門檻上那一小段：水加速、變薄，表面平滑發亮（真的跌水邊緣是一道亮亮的「玻璃」，翻下去才碎成白色）
     const lipAt = (s) => { let l = 0; for (const d of st.drops) { const x = s - d.s; if (x > -0.9 && x < 0.15) l = Math.max(l, Math.min(1, d.h * 1.2) * Math.min(1, (x + 0.9) / 0.6) * (x > 0 ? 1 - x / 0.15 : 1)) } return l }
-    let acc = 0, prev = null
+    let acc = 0, prev = null, prevRow = null
     for (let i = 0; i <= N; i++) {
       const p = curve.getPointAt(i / N), tg = curve.getTangentAt(i / N), side = V(-tg.z, 0, tg.x).normalize()
       if (prev) acc += p.distanceTo(prev); prev = p
@@ -405,10 +405,29 @@ function buildInterior(lib, avoid = []) {
       const at2 = (lat) => { const o = streamLatOff(S[i], lat); return [p.x + side.x * lat - tg.x * o, p.z + side.z * lat - tg.z * o] }
       // 2026-11-09：斷面以前從平滑曲線的中心往兩邊找岸，但溪谷是照折線挖的，轉彎處曲線會偏離溪谷快 1 公尺——
       // 中心落在岸上、只找到一小段，半條溪沒有水面（看起來是乾的溪床）。改成在 ±4 公尺內，從第一個比水面低的點到最後一個都鋪水面
+      // 2026-11-10 使用者截圖（營地往瀑布看）：一大片河面浮在坡上 → 以前取「±7.5 公尺內第一個到最後一個比水面低的點」，
+      // 岸外面（營地那側、比水面低的坡）也算進去，水面跨過河岸鋪到坡上。改成：先找離中心最近的水下點，再往兩邊延伸、碰到第一個比水面高的岸就停
       let a0 = null, b0 = null
-      for (let lat = -LATR; lat <= LATR + 0.001; lat += 0.1) { const [x, z] = at2(lat); if (alpineHeight(x, z) < w) { if (a0 === null) a0 = lat; b0 = lat } }
+      {
+        const under = (lat) => { const [x, z] = at2(lat); return alpineHeight(x, z) < w }
+        let c = null
+        for (let d = 0; d <= LATR && c === null; d += 0.1) { if (under(d)) c = d; else if (under(-d)) c = -d }
+        if (c !== null) {
+          a0 = c; b0 = c
+          // 河中間露出水面的石頭、沙洲（0.8 公尺以內）跳過去，不要把半條河切掉
+          const grow = (x0, dir) => { let x = x0; for (;;) { let nx = null; for (let g = 0.1; g <= 0.8 + 1e-6; g += 0.1) { const t = x + dir * g; if (Math.abs(t) > LATR) break; if (under(t)) { nx = t; break } } if (nx === null) return x; x = nx } }
+          a0 = grow(a0, -1); b0 = grow(b0, 1)
+          // 出水口那幾排沒有岸（還在湖口）：最多鋪到河寬外 1.5 公尺（小溪 2.6 公尺），不會一路鋪到營地那邊的低地
+          const cap = st.wide ? st.halfAt(S[i]) + 1.5 : 2.6
+          a0 = Math.max(a0, -cap); b0 = Math.min(b0, cap)
+        }
+      }
       const best = a0 === null ? null : { a: a0, b: b0 }   // 中間凸出水面的石頭、沙洲：那幾格水深 < 0，shader 自己會透明
-      const la = best ? best.a - 0.15 : -0.45, lb = best ? best.b + 0.15 : 0.45
+      let la = best ? best.a - 0.15 : -0.45, lb = best ? best.b + 0.15 : 0.45
+      // 2026-11-10 使用者：石頭瀑布落下來的水最後插出地形 → 跌水下面那排如果比門檻寬（例如落進水池、下面整片都比水面低），
+      // 水簾兩側會斜斜地往外張開、下緣兩角穿出岸邊的岩石。跌水正下方那排不能比上面門檻那排寬：水簾兩側直直落下、留在岸裡面
+      if (prevRow && prevRow.w - w > 0.12) { la = Math.max(la, prevRow.la); lb = Math.min(lb, prevRow.lb); if (lb - la < 0.6) { const m = (la + lb) / 2; la = m - 0.3; lb = m + 0.3 } }
+      prevRow = { w, la, lb }
       for (let k = 0; k <= K; k++) {
         const t = k / K, lat = la + (lb - la) * t, [x, z] = at2(lat)
         sp.push(x, w, z); su.push(t, acc - w * 1.2); sd.push(w - alpineHeight(x, z)); ss_.push(st.wide ? slope * 0.3 : slope); sf.push(f); sl.push(lp)   // 寬的河：淺灘是斜的，坡度白沫只留三成（ChatGPT：白沫主要在石頭邊、落水處）

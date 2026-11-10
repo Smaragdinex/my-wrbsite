@@ -198,9 +198,9 @@ export function buildYosemite(scene, { lib } = {}) {
       const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); fg.setIndex(I)
       const m = new THREE.Mesh(fg, mat); m.renderOrder = ro; g.add(m)
     }
-    sheet(2.6, 5.4, 0.25, 2.2, fallMat({ spd: 0.7, a: 0.55, dark: 0.35 }), 3)          // 後層
-    sheet(3.0, 6.2, 0.5, 3.6, fallMat({ spd: 1.0, a: 1.0 }), 4)                         // 主水簾（岩壁變高了，下面往外拋多一點）
-    sheet(3.6, 7.8, 0.9, 4.6, fallMat({ spd: 1.35, a: 0.45, low: 1 }), 5, 0.3)          // 前面的水霧簾
+    sheet(2.6, 4.4, 0.25, 2.2, fallMat({ spd: 0.7, a: 0.55, dark: 0.35 }), 3)          // 後層（2026-11-10 底部收窄，整片落在湖面上）
+    sheet(3.0, 5.4, 0.5, 3.6, fallMat({ spd: 1.0, a: 1.0 }), 4)                         // 主水簾（岩壁變高了，下面往外拋多一點）
+    sheet(3.6, 6.4, 0.9, 4.6, fallMat({ spd: 1.35, a: 0.45, low: 1 }), 5, 0.3)          // 前面的水霧簾
     // 水潭：橢圓、深綠帶一點藍
     const poolM = new THREE.MeshStandardMaterial({ color: 0x2c5a55, roughness: 0.06, metalness: 0.15, transparent: true, opacity: 0.9 })
     // 湖：剛好到湖岸那一圈（湖裡往下挖、岸往上一階，邊緣接在那一階上；以前放大 12%，出水口那邊水面浮在河道上面）
