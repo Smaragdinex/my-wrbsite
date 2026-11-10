@@ -675,7 +675,7 @@ export const BIRDS = {
  },
  "partridge": {
   "name": "Taiwan Partridge",
-  "where": "Forest Floor by the South Slope Trail",
+  "where": "Deep in the Woods below the South Slope Trail",
   "intro": "Endemic to Taiwan. A round body, almost no tail and bright red legs. A white throat is ringed by a black collar with an orange spot in the middle; the breast and flanks are blue-grey with white streaks.",
   "facts": [
    "It lives on the floor of old broadleaf forest and is so shy that it is usually only heard.",
@@ -972,7 +972,7 @@ export const BIRDS = {
  },
  "whitethroat": {
   "name": "Taiwan White-throated Laughingthrush",
-  "where": "Forest Floor north of the Garden",
+  "where": "Dense Mountain Thickets",
   "intro": "An uncommon Taiwan endemic. Chestnut crown, a big pure white throat and upper breast, dark brown cheeks, orange-buff underparts and flanks, and olive-brown back and wings.",
   "facts": [
    "It lives in low- to mid-elevation broadleaf forest, often in noisy flocks of a dozen or more.",
@@ -983,7 +983,7 @@ export const BIRDS = {
  },
  "hwamei": {
   "name": "Taiwan Hwamei",
-  "where": "Thickets beside the Garden's East Path",
+  "where": "Thickets at the Lowland Forest Edge",
   "intro": "A Taiwan endemic. Olive-buff all over with fine dark streaks on the head, throat and breast, and—unlike the Chinese Hwamei—no white eyebrow. A superb singer.",
   "facts": [
    "It lives in lowland scrub, grass and forest edges, usually hidden in dense vegetation.",
@@ -1071,7 +1071,7 @@ export const BIRDS = {
  },
  "shortwing": {
   "name": "Taiwan Shortwing",
-  "where": "Forest Floor beside the South Slope Trail",
+  "where": "Deep, Damp Forest Floor on the South Slope",
   "intro": "A very elusive Taiwan endemic. The male is deep slate-blue with a short white eyebrow above the eye (often hidden), very short wings and tail, and long legs.",
   "facts": [
    "It lives on the dense, damp floor of mid- to high-elevation forest, almost always on the ground and very secretive.",

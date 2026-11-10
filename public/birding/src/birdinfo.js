@@ -154,7 +154,8 @@ const ALL = [
     ],
   },
   {
-    id: 'mikado', spot: AM(116.7, -4.5), perch: 'ground', view: 62, dist: 2.5,   // 2026-11-08 搬到山區：中海拔針葉林邊，步道旁 6 公尺
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 AM(116.7, -4.5)，現在離步道 26 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'mikado', spot: [153.2, -8], perch: 'ground', view: 67, dist: 2.5,   // 2026-11-08 搬到山區：中海拔針葉林邊，步道旁 6 公尺
     camH: 0.9, lookY: 0.32,
     name: '帝雉', sci: 'Syrmaticus mikado', where: '森林邊緣',
     intro: '台灣特有種，被稱為「迷霧森林中的王者」，也曾印在千元鈔票上。雄鳥全身深藍帶紫，有金屬般的光澤，臉上是一塊紅色的皮膚，長長的尾巴上有一條條白色橫紋。牠住在中高海拔的森林裡，常在清晨或起霧的時候出來覓食。',
@@ -166,7 +167,8 @@ const ALL = [
     ],
   },
   {
-    id: 'bluemagpie', spot: [22, -40], perch: 'branch', dist: 3.8, camH: 3.6, lookY: 3.3,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [22, -40]，現在離步道 14 公尺、面向最近的步道
+    id: 'bluemagpie', spot: [111.6, 29.6], view: 151, perch: 'branch', dist: 3.8, camH: 3.6, lookY: 3.3,
     name: '台灣藍鵲', nick: '長尾山娘', sci: 'Urocissa caerulea', where: '樹冠層',
     intro: '台灣特有種。寶藍色的身體、黑色的頭、紅色的嘴和腳，還有一條比身體還長、末端是白色的尾巴。牠們常成群排成一列，一隻接著一隻飛過山谷，所以被叫做「長尾山娘」。',
     facts: [
@@ -211,7 +213,8 @@ const ALL = [
     ],
   },
   {
-    id: 'pheasant', spot: AM(89.9, 0.75), perch: 'ground', view: 330, dist: 3.0,   // 2026-11-08 搬到山區：一進山的低海拔林緣
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 AM(89.9, 0.75)，現在離步道 14 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'pheasant', spot: [109.1, -3.9], perch: 'ground', view: 331, dist: 3.0,   // 2026-11-08 搬到山區：一進山的低海拔林緣
     camH: 1.0, lookY: 0.35,
     name: '藍腹鷴', sci: 'Lophura swinhoii', where: '森林邊緣',
     intro: '台灣特有種。雄鳥全身深藍帶紫，臉上是鮮紅色的肉垂，頭頂一撮白色的冠羽，背上一塊栗紅色，尾巴中央是兩根長長的白羽，紅色的腳走在林下特別顯眼。',
@@ -223,7 +226,8 @@ const ALL = [
     ],
   },
   {
-    id: 'oriole', spot: [-33.5, -7.3], perch: 'branch', dist: 3.0, camH: 3.6, lookY: 3.4,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [-33.5, -7.3]，現在離步道 18 公尺、面向最近的步道
+    id: 'oriole', spot: [81, 20.6], view: 163, perch: 'branch', dist: 3.0, camH: 3.6, lookY: 3.4,
     name: '黃鸝', sci: 'Oriolus chinensis', where: '樹冠',
     intro: '全身金黃色，一條粗粗的黑色過眼線從嘴邊經過眼睛、一直繞到後頸，像綁了一條黑頭巾；嘴是粉紅色的。牠常躲在濃密的樹冠裡，叫聲是悅耳的笛音。',
     facts: [
@@ -257,7 +261,8 @@ const ALL = [
     ],
   },
   {
-    id: 'yellowtit', spot: AM(99, 30.5), perch: 'branch', view: 135,   // 北坡支線走到底 dist: 2.6, camH: 3.6, lookY: 3.4,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 AM(99, 30.5)，現在離步道 21 公尺、面向最近的步道
+    id: 'yellowtit', spot: [130, 88.7], perch: 'branch', view: 160,   // 北坡支線走到底 dist: 2.6, camH: 3.6, lookY: 3.4,
     name: '黃山雀', sci: 'Machlolophus holsti', where: '北坡小路盡頭的闊葉林',
     intro: '台灣特有種，也是保育類。全身鮮黃，頭頂有一撮直立的黑色羽冠，背和翅膀是藍灰色，翅上點綴白斑。數量不多，就算在山上也不容易遇到，遇到的人都很幸運。',
     facts: [
@@ -279,7 +284,8 @@ const ALL = [
     ],
   },
   {
-    id: 'flamecrest', spot: AM(161, -25), perch: 'branch', view: 292,   // 南坡冷杉林支線走到底 dist: 2.2, camH: 3.6, lookY: 3.4,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 AM(161, -25)，現在離步道 17 公尺、面向最近的步道
+    id: 'flamecrest', spot: [292, -59.2], perch: 'branch', view: 269,   // 南坡冷杉林支線走到底 dist: 2.2, camH: 3.6, lookY: 3.4,
     name: '火冠戴菊鳥', sci: 'Regulus goodfellowi', where: '南坡小路盡頭的冷杉林',
     intro: '台灣特有種，也是台灣最小的鳥之一，只有約 9 公分。頭頂中央一道橘紅色的「火冠」，兩側鑲黑邊。牠住在台灣最高的地方，常在冷杉、鐵杉的枝葉間快速跳動。',
     facts: [
@@ -312,7 +318,8 @@ const ALL = [
     ],
   },
   {
-    id: 'woodowl', spot: AM(135.31, -20.84), perch: 'branch', view: 204, dist: 3.4, camH: 3.6, lookY: 3.5,   // 2026-11-08 南坡溪谷旁的森林
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 AM(135.31, -20.84)，現在離步道 31 公尺、面向最近的步道
+    id: 'woodowl', spot: [225.4, -27.1], perch: 'branch', view: 153, dist: 3.4, camH: 3.6, lookY: 3.5,   // 2026-11-08 南坡溪谷旁的森林
     name: '褐林鴞', sci: 'Strix leptogrammica', where: '溪谷旁的森林',
     intro: '台灣中高海拔原始森林裡稀有的大型貓頭鷹。圓圓的頭沒有耳羽，栗紅色的臉盤上有兩道白色的眉斑，深褐色的大眼睛；胸腹是淡黃褐色，密布細細的橫紋。白天大多躲在濃密的樹冠裡休息，傍晚以後才出來活動。',
     facts: [
@@ -368,8 +375,9 @@ const ALL = [
     ],
   },
   {
-    id: 'partridge', spot: AM(123.06, -26.43), perch: 'ground', view: 0, dist: 3.0, camH: 1.0, lookY: 0.15,
-    name: '臺灣山鷓鴣', sci: 'Arborophila crudigularis', where: '南坡步道旁的林下',
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 AM(123.06, -26.43)，現在離步道 16 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'partridge', spot: [183.9, -85.7], perch: 'ground', view: 7, dist: 3.0, camH: 1.0, lookY: 0.15,
+    name: '臺灣山鷓鴣', sci: 'Arborophila crudigularis', where: '南坡步道下方的林子深處',
     intro: '台灣特有種，又叫「深山竹雞」。圓滾滾的身體、短到幾乎看不見的尾巴、鮮紅色的腳。白色的喉嚨外面一圈黑色頸環，頸環中間一點橘紅；胸和身體兩側是藍灰色，有一道道白色的條紋。',
     facts: [
       '住在中低海拔原始闊葉林的底層，非常隱密，常常只聽得到叫聲。',
@@ -413,7 +421,8 @@ const ALL = [
     ],
   },
   {
-    id: 'pitta', spot: [-44.3, -25.3], perch: 'ground', view: 20, dist: 2.0, camH: 0.6, lookY: 0.1,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [-44.3, -25.3]，現在離步道 31 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'pitta', spot: [93, 39], perch: 'ground', view: 151, dist: 2.0, camH: 0.6, lookY: 0.1,
     name: '八色鳥', sci: 'Pitta nympha', where: '林下落葉堆',
     intro: '每年四月底從東南亞飛來台灣繁殖的夏候鳥，身上真的有很多種顏色：栗褐色的頭頂、黑色過眼線、白喉、米黃色的胸、鮮紅的下腹、深綠色的背，肩膀還有一塊閃亮的天藍色。',
     facts: [
@@ -605,7 +614,8 @@ const ALL = [
     ],
   },
   {
-    id: 'whitebrow', spot: [238, -61.7], perch: 'ground', view: -27, dist: 2.2, camH: 1.0, lookY: 0.18,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [238, -61.7]，現在離步道 15 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'whitebrow', spot: [278.3, -73.7], view: 337, perch: 'ground', view: -27, dist: 2.2, camH: 1.0, lookY: 0.18,
     name: "臺灣白眉林鴝", sci: 'Tarsiger formosanus', where: "南坡高處的林下",
     intro: "台灣特有種（2023 年起獨立成種）。雄鳥全身深藍灰色，一條長長的白色眉線從嘴基延伸到腦後，喉和胸是橙棕色、腹部白色，腳很長。",
     facts: [
@@ -616,7 +626,8 @@ const ALL = [
     ],
   },
   {
-    id: 'bullfinch', spot: [170.7, 2.7], perch: 'branch', dist: 2.6, camH: 3.6, lookY: 3.4,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [170.7, 2.7]，現在離步道 18 公尺、面向最近的步道
+    id: 'bullfinch', spot: [172.7, -19.7], view: 19, perch: 'branch', dist: 2.6, camH: 3.6, lookY: 3.4,
     name: "灰鷽", sci: 'Pyrrhula owstoni', where: "山腰步道旁的樹上",
     intro: "台灣特有種。圓胖的身材、短粗的黑嘴，嘴基和眼睛一圈黑色，身體灰色，翅膀和尾巴黑色帶藍紫光澤，腰是白的。雄鳥下腹帶一點淡橙紅。",
     facts: [
@@ -638,7 +649,8 @@ const ALL = [
     ],
   },
   {
-    id: 'islandthrush', spot: [199.6, -74.5], perch: 'ground', view: -35, dist: 2.6, camH: 1.0, lookY: 0.22,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [199.6, -74.5]，現在離步道 33 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'islandthrush', spot: [178.7, -103], view: 3, perch: 'ground', view: -35, dist: 2.6, camH: 1.0, lookY: 0.22,
     name: "白頭鶇", sci: 'Turdus niveiceps', where: "溪谷支線的林下",
     intro: "台灣特有種，非常稀有。雄鳥整個頭和喉純白，嘴和眼圈黃色，背、翅膀、尾巴是黑色，胸和兩脇橙棕色。",
     facts: [
@@ -660,7 +672,8 @@ const ALL = [
     ],
   },
   {
-    id: 'rustylt', spot: [137.7, 60.5], perch: 'ground', view: 41, dist: 2.6, camH: 1.1, lookY: 0.22,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [137.7, 60.5]，現在離步道 14 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'rustylt', spot: [131.1, 55.2], perch: 'ground', view: 42, dist: 2.6, camH: 1.1, lookY: 0.22,
     name: "棕噪眉", sci: 'Pterorhinus poecilorhynchus', where: "北坡小路旁的林下",
     intro: "台灣特有種。全身暖棕褐色，眼睛周圍一圈裸露的藍色皮膚非常醒目，腹部轉為灰色，尾巴長。",
     facts: [
@@ -671,8 +684,9 @@ const ALL = [
     ],
   },
   {
-    id: 'whitethroat', spot: [26, 40], perch: 'ground', view: 195, dist: 2.6, camH: 1.1, lookY: 0.22,
-    name: "臺灣白喉噪眉", sci: 'Pterorhinus ruficeps', where: "花園北邊的林下",
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [26, 40]，現在離步道 17 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'whitethroat', spot: [166.3, -81.3], perch: 'ground', view: 35, dist: 2.6, camH: 1.1, lookY: 0.22,
+    name: "臺灣白喉噪眉", sci: 'Pterorhinus ruficeps', where: "山區森林的密灌叢",
     intro: "台灣特有種，數量稀少。頭頂栗紅色，喉到上胸是一大片純白，臉頰暗褐，胸腹和兩脇是橙棕色，背和翅膀橄欖褐色。",
     facts: [
       "住在中低海拔闊葉林，常十幾隻成群、一邊走一邊大聲叫。",
@@ -682,8 +696,9 @@ const ALL = [
     ],
   },
   {
-    id: 'hwamei', spot: [44, 25], perch: 'ground', view: 195, dist: 2.6, camH: 1.1, lookY: 0.22,
-    name: "臺灣畫眉", sci: 'Garrulax taewanus', where: "花園東邊步道旁的草叢",
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [44, 25]，現在離步道 25 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'hwamei', spot: [112, 71], perch: 'ground', view: 96, dist: 2.6, camH: 1.1, lookY: 0.22,
+    name: "臺灣畫眉", sci: 'Garrulax taewanus', where: "低海拔林緣的草叢",
     intro: "台灣特有種。全身橄欖黃褐色，頭、喉、胸有暗褐色細縱紋，和大陸畫眉不同的是「沒有」白色眉線。很會唱歌。",
     facts: [
       "住在低海拔灌叢、草叢和林緣，常躲在濃密的植物裡。",
@@ -748,7 +763,8 @@ const ALL = [
     ],
   },
   {
-    id: 'bushwarbler', spot: [271.3, 39.4], perch: 'ground', view: -131, dist: 2.0, camH: 0.9, lookY: 0.15,
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [271.3, 39.4]，現在離步道 16 公尺、面向最近的步道
+    id: 'bushwarbler', spot: [277.8, 56.2], view: 264, perch: 'ground', view: -131, dist: 2.0, camH: 0.9, lookY: 0.15,
     name: "臺灣叢樹鶯", sci: 'Locustella alishanensis', where: "高山步道旁的草坡",
     intro: "台灣特有種。全身暖褐色，一條細細的淡色眉線，白色的喉上有小小的暗色點斑，尾下覆羽有淡色鱗紋，尾巴長而圓。",
     facts: [
@@ -770,8 +786,9 @@ const ALL = [
     ],
   },
   {
-    id: 'shortwing', spot: [218.5, -66.6], perch: 'ground', view: 25, dist: 2.0, camH: 0.9, lookY: 0.15,
-    name: "小翼鶇", sci: 'Brachypteryx goodfellowi', where: "南坡步道旁的林下",
+    // 2026-11-10 稀有鳥搬離步道（PARK_PLAN.md；使用者：稀有鳥不要在容易發現的地方）：原本 [218.5, -66.6]，現在離步道 25 公尺、周圍 4～14 公尺有 20 棵樹以上的林子、面向最近的步道
+    id: 'shortwing', spot: [220.8, -87.9], perch: 'ground', view: 6, dist: 2.0, camH: 0.9, lookY: 0.15,
+    name: "小翼鶇", sci: 'Brachypteryx goodfellowi', where: "南坡陰濕的林下深處",
     intro: "台灣特有種，非常難見到。雄鳥全身深藍灰色，眼睛上方有一條短短的白眉（常被蓋住），翅膀和尾巴都很短，腳很長。",
     facts: [
       "住在中高海拔濃密潮濕的林下，幾乎都在地面活動，非常隱密。",
