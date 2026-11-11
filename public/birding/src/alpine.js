@@ -16,7 +16,7 @@ import { bladeMesh } from './flora.js'
 import { addWind } from './wind.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
 import { mulberry32, fbm2 } from './noise.js'
-import { dayLight, duskLight, mistLevel, wetify, sunDirU } from './structures.js'
+import { dayLight, duskLight, mistLevel, wetify, sunDirU, weatherU } from './structures.js'
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
@@ -307,7 +307,7 @@ function buildInterior(lib, avoid = []) {
         #include <fog_vertex>
       }`,
     fragmentShader: `
-      uniform float uTime; uniform float uDay; uniform float uDusk; uniform vec3 uSun; uniform sampler2D uFlow; uniform vec4 uFlowBox;
+      uniform float uTime; uniform float uDay; uniform float uDusk; uniform float uRain; uniform vec3 uSun; uniform sampler2D uFlow; uniform vec4 uFlowBox;
       #ifdef MIRROR
         uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
       #endif
@@ -318,6 +318,23 @@ function buildInterior(lib, avoid = []) {
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
       float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }
       float fbm2(vec2 p) { return vnoise(p) * 0.65 + vnoise(p * 2.1 + 3.7) * 0.35; }
+      // 2026-11-11 使用者：下雨時濕地的水面看不到漣漪（花園水池有，山區／濕地這支水面 shader 沒做）
+      // 雨滴漣漪：水面切成一格格，每格一顆雨滴（位置、時間錯開），落下後一圈往外擴、越擴越淡。回傳 xy＝法線的偏移、z＝圈的亮邊
+      vec3 rainRings(vec2 p, float cell, float seed) {
+        vec3 acc = vec3(0.0);
+        vec2 g = floor(p / cell);
+        for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+          vec2 id = g + vec2(float(i), float(j));
+          float h1 = hash(id + seed), h2 = hash(id * 1.7 + seed + 13.1), h3 = hash(id * 2.3 + seed + 41.7);
+          float ph = fract(uTime * (0.75 + 0.5 * h3) + h1 * 7.0);                        // 這顆雨滴落下後過了多久（0～1）
+          vec2 c = (id + 0.2 + 0.6 * vec2(h1, h2)) * cell, d = p - c;
+          float dist = length(d), r = ph * cell * 0.85, w = cell * 0.07;
+          float x = (dist - r) / w, env = exp(-x * x) * (1.0 - ph) * (1.0 - ph) * step(h3, uRain * 1.2);   // 雨越大，有雨滴的格子越多
+          acc.xy += (d / max(dist, 1e-4)) * sin(x * 2.4) * env;
+          acc.z += env * max(0.0, cos(x * 1.6));
+        }
+        return acc;
+      }
       float ripple(vec2 p) { return fbm(p * 1.3) * 0.6 + fbm2(p * 3.4 + 11.0) * 0.4; }
       // 跌水面：沿著水流方向（uv）往下拉
       float fallWaves(vec2 p, float sp) {
@@ -350,6 +367,14 @@ function buildInterior(lib, avoid = []) {
         float g0 = fallWaves(p, sp), gx = fallWaves(p + vec2(0.06, 0.0), sp), gy = fallWaves(p + vec2(0.0, 0.06), sp);
         vec3 Nf = normalize(vec3((g0 - gx) * 4.0, 1.0, (g0 - gy) * 4.0));
         vec3 N = normalize(mix(Np, Nf, fall));
+        float rainK = 0.0;
+        if (uRain > 0.01) {
+          // 兩層大小不同的圈（0.55、0.9 m 一格）；遠處的圈比像素小，淡掉（不然又是一片閃）
+          float rf = (1.0 - fall) / (1.0 + 0.00035 * dot(cameraPosition - vW, cameraPosition - vW));
+          vec3 rr = rainRings(q, 0.55, 3.0) + rainRings(q + 5.3, 0.9, 71.0) * 0.8;
+          N = normalize(N + vec3(rr.x, 0.0, rr.y) * 0.42 * rf * min(1.0, uRain * 1.6));
+          rainK = rr.z * rf * min(1.0, uRain * 1.6);
+        }
         vec3 Vd = normalize(cameraPosition - vW);
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, Vd), 0.0), 5.0);
         float d = clamp(vDepth / 0.9, 0.0, 1.0);
@@ -399,6 +424,7 @@ function buildInterior(lib, avoid = []) {
         float sd = max(dot(reflect(-uSun, N), Vd), 0.0);
         float spec = pow(sd, 260.0);
         col += vec3(1.0, 0.97, 0.9) * spec * (1.6 + lip * 1.5) * sunUp;
+        col += vec3(0.75, 0.8, 0.85) * rainK * 0.17 * (0.35 + 0.65 * uDay);   // 漣漪圈的亮邊（天光）
         // 2026-11-11 夕陽金光路徑（ChatGPT：顏色 (1,.7,.31)、HDR 2～3；遠處 2～4°、近處 10～16° 寬）：
         // 寬的一層暖光＋把水紋放大 3.5 倍算的碎金點（一閃一閃），只在黃昏／清晨太陽低的時候
         vec3 Ng = normalize(vec3(N.x * 3.5, 1.0, N.z * 3.5));
@@ -441,7 +467,7 @@ function buildInterior(lib, avoid = []) {
       }`,
   })
   waterM.uniforms.uFlow = { value: flowTexDummy }
-  waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uDusk = duskLight; waterM.uniforms.uSun = waterU.uSun
+  waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uDusk = duskLight; waterM.uniforms.uSun = waterU.uSun; waterM.uniforms.uRain = weatherU.rain
   {
     // 水池：一片比池子大一點的平面，每點的水深照地形算（沒水的地方深度 < 0 → 透明）
     const R = ALP_POND.r + 3, NR = 28, NA = 64, pos = [], uv = [], dep = [], slo = [], idx = []
@@ -487,7 +513,7 @@ function buildInterior(lib, avoid = []) {
     // 每個頂點帶：水深、坡度（跌水那幾格很陡）、白沫量（跌水底下最多，往下游漂散）。
     // 2026-11-11 兩條：原本的溪、瀑布湖流出來的河（同一套水面、石頭、流向圖；河另外一份材質，流向圖各自一張）
     for (const st of ALP_STREAMS) {
-    const wm = st === ALP_STREAM ? waterM : (() => { const m = waterM.clone(); m.uniforms = { ...m.uniforms, uTime: waterU.uTime, uDay: dayLight, uDusk: duskLight, uSun: waterU.uSun }; return m })()
+    const wm = st === ALP_STREAM ? waterM : (() => { const m = waterM.clone(); m.uniforms = { ...m.uniforms, uTime: waterU.uTime, uDay: dayLight, uDusk: duskLight, uSun: waterU.uSun, uRain: weatherU.rain }; return m })()
     const P = []
     for (let i = 0; i < st.length; i++) P.push(V(st[i][0], 0, st[i][1]))
     const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.25), K = st.wide ? 26 : 16, WK = st.wide ? 2.1 : 1, LATR = st.wide ? 7.5 : 4   // 寬的河：斷面 26 個頂點、往兩邊找 7.5 公尺；石頭的位置照河寬放大 WK 倍
