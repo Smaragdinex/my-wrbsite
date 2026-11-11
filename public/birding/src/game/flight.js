@@ -45,6 +45,7 @@ export const ESCAPE = {
   niltava: { r: 7, fly: { speed: 8, hz: 11, style: 'flap', k: 0.8 } },
   sibia: { r: 7, fly: { speed: 8, hz: 9, style: 'bound', k: 1.0 } },
   goshawk: { r: 12, fly: { speed: 11, hz: 5, style: 'glide', k: 0.85 } },   // 2026-11-08 猛禽：翼展約 85 公分、拍幾下就滑翔
+  serpenteagle: { r: 9, fly: { speed: 12, hz: 3.2, style: 'glide', k: 2.3 } },   // 2026-11-12 大冠鷲：翼展約 1.6 公尺，拍幾下就張著翅膀滑翔
   woodowl: { r: 8, fly: { speed: 7, hz: 3.5, style: 'glide', k: 0.95 } },   // 褐林鴞翼展約 1 公尺，飛得慢、很安靜
   bushrobin: { r: 4, fly: { speed: 7, hz: 13, style: 'flap', k: 0.47 } },   // 不太怕人
   rosefinch: { r: 6, fly: { speed: 8, hz: 12, style: 'bound', k: 0.49 } },

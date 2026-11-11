@@ -26,7 +26,7 @@ const ACT = {
   sparrow: 'D', dove: 'D', heron: 'CREP', whiteeye: 'D', oriole: 'DD', babbler: 'DD', barbet: 'D', kingfisher: 'DD',
   waterhen: 'CREP', moorhen: 'D', nightheron: 'DN', egret: 'D', spoonbill: 'AM', mikado: 'CREP', blackbulbul: 'D',
   thrush: 'CREP', treepie: 'D', bulbul: 'D', pheasant: 'CREP', bluemagpie: 'D', yuhina: 'D', bushrobin: 'DAWN',
-  yellowtit: 'D', niltava: 'DD', flamecrest: 'D', laughingthrush: 'D', rosefinch: 'D', goshawk: 'D', woodowl: 'NIGHT',
+  yellowtit: 'D', niltava: 'DD', flamecrest: 'D', laughingthrush: 'D', rosefinch: 'D', goshawk: 'D', serpenteagle: 'D', woodowl: 'NIGHT',
   mandarin: 'CREP', spotbill: 'D', partridge: 'DAWN', minivet: 'D', pitta: 'DAWN', grassowl: 'DN', liocichla: 'D',
   whitebrow: 'CREP', bullfinch: 'D', barwing: 'D', islandthrush: 'CREP', tit: 'D', rustylt: 'D', whitethroat: 'D',
   hwamei: 'DAWN', styan: 'D', scimitar: 'CREP', fulvetta: 'D', bamboo: 'CREP', flowing: 'D', bushwarbler: 'DAWN',

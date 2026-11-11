@@ -350,7 +350,7 @@ function makeDiorama(def, P = PLATE, zoom = 1) {
   const d = { ...def, y: 0, water: water ?? undefined, groundAt: null, view: def.view ?? 200 }
   if (def.guideStand) { d.guide = true; d.perch = 'ground' }
   if (def.swim) d.swimOK = (x, z) => Math.hypot(x - def.spot[0], z - def.spot[1]) < 1.4
-  if (def.perch === 'sacred' || def.perch === 'fig') d.perch = 'branch'   // 神木、雀榕上的鳥：圖鑑插圖沒有那棵樹，畫成停在樹枝上
+  if (def.perch === 'sacred' || def.perch === 'fig' || def.perch === 'snag') d.perch = 'branch'   // 神木、雀榕上的鳥：圖鑑插圖沒有那棵樹，畫成停在樹枝上
   const a = placeAnimal(d, { strict: true })   // 模型還沒載到會丟 MissingModel（diorama() 接住，載完再畫）
   sc.add(a.group)
   const [x, z] = def.spot

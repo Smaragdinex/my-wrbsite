@@ -1,7 +1,7 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL, AM, ALP_POND, EAST } from './layout.js'
+import { POOL, AM, ALP_POND, EAST, YOSE } from './layout.js'
 import { birdText } from './i18n.js'
 
 const ALL = [
@@ -317,6 +317,19 @@ const ALL = [
       '飛行時尾下覆羽是蓬鬆的白色，從下面看像穿了一件白色短褲。',
       '春天繁殖期會在空中盤旋、鼓翅炫耀，邊飛邊發出「嘿－嘿－」的叫聲。',
       '主要吃鳥、松鼠、蜥蜴和大型昆蟲，從樹枝上衝下去突襲。',
+      '受保護的猛禽，看到牠時請保持距離、不要驚擾。',
+    ],
+  },
+  {
+    // 2026-11-12 鷹之窗：瀑布秘境步道最高那段廊道外，岩壁上的大枯樹（layout YOSE.snag；模型 tools/make-gorge-kit.py）頂端的橫枝
+    id: 'serpenteagle', spot: [YOSE.snag.x + YOSE.snag.perch[0], YOSE.snag.z + YOSE.snag.perch[2]], y: YOSE.snag.y + YOSE.snag.perch[1] - YOSE.snag.r, perch: 'snag', limb: { dir: YOSE.snag.dir, r: YOSE.snag.r },
+    view: 25, dist: 6, camH: 0.6, lookY: 0.4,
+    name: '大冠鷲', sci: 'Spilornis cheela', where: '瀑布岩壁上的枯樹',
+    intro: '台灣山區最容易看到的大型猛禽，又叫蛇鵰。全身深褐色，胸腹和翅膀上灑滿白色的小圓點，後腦有一撮黑白相間的短冠羽，眼睛前面到嘴基是鮮黃色的裸皮。晴天的上午常乘著上升氣流在山谷上空盤旋，一邊發出嘹亮的「忽、忽、忽悠－」。',
+    facts: [
+      '最愛吃蛇，也吃蜥蜴、青蛙；腳上有厚厚的鱗片，不怕被蛇咬。',
+      '飛行時翅膀和尾巴下面各有一道寬寬的白色橫帶，從地面抬頭看很好認。',
+      '喜歡停在視野開闊的枯樹或突出的樹枝上，一停就是很久。',
       '受保護的猛禽，看到牠時請保持距離、不要驚擾。',
     ],
   },
@@ -931,7 +944,7 @@ const ALL = [
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
 const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'barbet', 'kingfisher', 'waterhen', 'moorhen', 'nightheron', 'egret', 'spoonbill',
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
-  'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
+  'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
   'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe']

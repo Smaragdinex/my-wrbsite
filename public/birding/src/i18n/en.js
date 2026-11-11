@@ -641,6 +641,17 @@ export const BIRDS = {
    "Excited males raise their fiery crest feathers."
   ]
  },
+ "serpenteagle": {
+ "name": "Crested Serpent Eagle",
+ "where": "Dead Tree on the Waterfall Cliff",
+ "intro": "The large raptor you are most likely to see in Taiwan's mountains. Dark brown all over with small white spots sprinkled across the belly and wings, a short black-and-white crest on the nape, and bright yellow bare skin between the eyes and the bill. On sunny mornings it rides the thermals above the valleys, calling a ringing \"hu, hu, hu-yoo\".",
+ "facts": [
+  "Snakes are its favourite food, along with lizards and frogs; thick scales on its legs protect it from bites.",
+  "In flight a broad white band runs along the underside of each wing and across the tail — easy to recognise from the ground.",
+  "It likes to perch on a dead tree or a jutting branch with a wide view, and can sit there for a long time.",
+  "It is a protected raptor — keep your distance and don't disturb it."
+ ]
+},
  "goshawk": {
  "name": "Crested Goshawk",
  "where": "Big Tree at the North Slope Forest Edge",

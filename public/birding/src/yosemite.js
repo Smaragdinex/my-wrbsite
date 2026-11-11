@@ -4,6 +4,7 @@
 // 樹：西黃松（Ponderosa）——高、直、橘紅色的鱗片樹皮，樹冠只在上半段、一簇簇的長針葉；這一區原本的冷杉、鐵杉讓開（alpine.js 用 inYose）
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { ALP_SPURS, alpineHeight, alpineTrailDist, alpineStreamDist, domeRho, domeY, addCollider, YOSE, CAMP, EAST } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
@@ -31,6 +32,7 @@ function graniteTex() {
 }
 
 // 2026-11-11 使用者：山路上要有青苔、草 → 岩壁朝上的面（岩棚、平台、山頂）、石階踏板用的值雜訊（世界座標，不靠 UV）
+const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 const GLSL_VNOISE = `
   float vnH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(vnH(i), vnH(i + vec2(1, 0)), f.x), mix(vnH(i + vec2(0, 1)), vnH(i + vec2(1, 1)), f.x), f.y); }
@@ -1134,6 +1136,37 @@ export function buildYosemite(scene, { lib } = {}) {
     for (const sp of mist) { const u = sp.userData; sp.material.opacity = (u.op ?? 1) * (0.28 + 0.16 * Math.sin(t * 0.6 + u.ph)); sp.position.set(u.p0.x + Math.sin(t * 0.13 + u.ph) * 1.5, u.p0.y + Math.sin(t * 0.21 + u.ph) * 0.8, u.p0.z - (0.5 + 0.5 * Math.sin(t * 0.09 + u.ph)) * 2.5) }
     for (const f of foams) { const k = (t * (f.userData.k ? 0.35 : 0.22) + f.userData.k * 0.5) % 1; f.rotation.y = t * (f.userData.k ? -0.05 : 0.03); f.material.opacity = 0.85 * (1 - k * 0.6) }
     if (sprayU && dt > 0) sprayU(dt)
+  }
+  // ---------- 2026-11-12 鷹之窗：最高那段岩壁廊道外的岩壁上一棵大枯樹，頂端橫枝停一隻大冠鷲 ----------
+  // 模型 tools/make-gorge-kit.py（Blender；ChatGPT 概念圖 models/raw/ref/gorge-eagle-window.png）；木紋跟濕地枯木同一份掃描，褪成銀灰
+  // 頂點色（snag）：r＝烘好的明暗、g＝地衣量（根部、朝上的面）
+  {
+    const S = YOSE.snag
+    new GLTFLoader().loadAsync(`models/props/gorge_kit.glb?v=${VER}`).then((gl) => {
+      const TL = new THREE.TextureLoader()
+      const tex = (n, srgb) => { const t = TL.load(`models/props/drift_${n}.jpg?v=${VER}`); t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.flipY = false; t.anisotropy = 8; return t }
+      const m = new THREE.MeshStandardMaterial({ map: tex('col', true), normalMap: tex('nor', false), normalScale: new THREE.Vector2(1.3, -1.3), roughnessMap: tex('rough', false), roughness: 1 })
+      m.onBeforeCompile = (sh) => {
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 snag;\nvarying vec2 vSnag;\nvarying vec3 vSnagP;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSnag = snag.rg; vSnagP = position;')
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vSnag;\nvarying vec3 vSnagP;\n' + GLSL_VNOISE)
+          .replace('#include <map_fragment>', `#include <map_fragment>
+            float sl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+            vec3 wood = mix(vec3(0.16, 0.15, 0.135), vec3(0.66, 0.645, 0.59), smoothstep(0.03, 0.42, sl));
+            wood *= mix(0.5, 1.15, vSnag.x);
+            float ln = vfbm(vSnagP.xy * 3.1 + vSnagP.z * 1.7);
+            float li = smoothstep(0.42, 0.62, vSnag.y * 0.75 + ln * 0.5);
+            vec3 lich = mix(vec3(0.098, 0.128, 0.072), vec3(0.365, 0.402, 0.235), smoothstep(0.35, 0.7, vfbm(vSnagP.xz * 9.0 + vSnagP.y * 4.0)));
+            diffuseColor.rgb = mix(wood, lich, li * 0.8);`)
+      }
+      gl.scene.traverse((o) => {
+        if (!o.isMesh || o.name !== 'eagle_snag') return
+        const geo = o.geometry.clone(); o.updateWorldMatrix(true, false); geo.applyMatrix4(o.matrixWorld)
+        const c = geo.attributes.color_1 || geo.attributes.color
+        geo.setAttribute('snag', c); geo.deleteAttribute('color'); geo.deleteAttribute('color_1')
+        const t = new THREE.Mesh(geo, m); t.name = 'eagleSnag'; t.position.set(S.x, S.y, S.z); t.castShadow = true; t.receiveShadow = true; g.add(t)
+      })
+    })
   }
   return { group: g, tick, pines: PINES }
 }

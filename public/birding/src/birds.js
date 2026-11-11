@@ -302,7 +302,7 @@ const BUILD = {
   kingfisher, egret, moorhen, sparrow, waterhen, bluemagpie, blackbulbul, babbler, mikado,
   spoonbill, thrush, pheasant, oriole,
   flamecrest, bushrobin, rosefinch, yellowtit, laughingthrush, niltava, yuhina, sibia,
-  goshawk, woodowl,
+  goshawk, woodowl, serpenteagle,
   mandarin, spotbill, partridge, nuthatch, finchbill, minivet, pitta, grassowl,
   liocichla, whitebrow, bullfinch, barwing, islandthrush, tit, rustylt, whitethroat, hwamei, styan, scimitar, fulvetta, bamboo, flowing, bushwarbler, cupwing, shortwing,
   scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier, rnpheasant, skylark, cisticola, nutcracker, wbwood,
@@ -318,7 +318,7 @@ const TINT = { 'thrush-rig': 0.5 }
 const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
     'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig']
@@ -1659,6 +1659,10 @@ function yuhina(env) {
     hopper: { blocked } }))
 }
 // 2026-11-08 山區猛禽：鳳頭蒼鷹（中海拔林緣的大樹上）、褐林鴞（溪谷旁的森林裡）。ChatGPT 參考圖 → Tripo → rig-distance（點位在 bird-points.json）
+// 2026-11-12 大冠鷲（Tripo）：瀑布秘境步道最高那段廊道外，岩壁枯樹的橫枝上（perch 'snag'）
+function serpenteagle(env) {
+  return perchRigged(outer(env, -1.1), { name: 'serpenteagle-rig', k: 0.62, ...TRIPO, foot: 0.01, drop: 0.05, beat: 4, grip: 1.2 })
+}
 function goshawk(env) {
   return perchRigged(outer(env, -1.1), { name: 'goshawk-rig', k: 0.42, ...TRIPO, foot: 0.045, drop: 0.05, beat: 5, grip: 1.2 })
 }
@@ -2122,7 +2126,7 @@ function rock(r, seed) {
 export const REAL_CM = {
   sparrow: 14, dove: 30, heron: 49, whiteeye: 11, oriole: 26, babbler: 21, barbet: 20, kingfisher: 16, waterhen: 32, moorhen: 33,
   nightheron: 58, egret: 60, spoonbill: 76, mikado: 70, blackbulbul: 25, thrush: 30, treepie: 36, bulbul: 19, pheasant: 72, bluemagpie: 65,
-  yuhina: 13, bushrobin: 13, yellowtit: 13, niltava: 18, flamecrest: 9, laughingthrush: 26, rosefinch: 16, goshawk: 42, woodowl: 50,
+  yuhina: 13, bushrobin: 13, yellowtit: 13, niltava: 18, flamecrest: 9, laughingthrush: 26, rosefinch: 16, goshawk: 42, woodowl: 50, serpenteagle: 70,
   mandarin: 45, spotbill: 60, partridge: 25, minivet: 18, pitta: 19, grassowl: 35, liocichla: 18, whitebrow: 15, bullfinch: 16, barwing: 19,
   islandthrush: 22, tit: 12, rustylt: 26, whitethroat: 28, hwamei: 23, styan: 18, scimitar: 25, fulvetta: 11, bamboo: 30, flowing: 14,
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
@@ -2203,6 +2207,15 @@ export function placeAnimal(def, { strict = false } = {}) {
     env.waterLocal = waterY - gy - y   // 水面在 obj 座標的高度（翠鳥俯衝用）
     target.set(x, 3.6, z)
     dist = 5; camH = 3.4
+  } else if (def.perch === 'snag') {
+    // 2026-11-12 現成的枯枝（模型在別處，這裡不另外長樹）：def.limb = { dir: [dx, dz], r }；原點在枝條的軸上、obj 的 +x 沿著枝條
+    const { dir, r } = def.limb
+    obj.rotation.y = Math.atan2(-dir[1], dir[0])
+    env.toCam = toCam.clone().applyAxisAngle(V(0, 1, 0), -obj.rotation.y)
+    env.branch = { lock: true, min: -0.3, max: 0.3, top: () => r, z: () => 0, gap: (px, py, pz) => Math.hypot(py, pz) - r, side: (px, pz) => Math.abs(pz) / r }
+    env.waterLocal = waterY - gy
+    target.set(x, 0.4, z)
+    dist = 6; camH = 0.6
   } else if (def.perch === 'fig') {
     // 2026-11-10 使用者：果樹上不要另外加一根枝，鳥直接站在雀榕真正的枝條上（world.js findFigPerch 用射線在掃描樹上量到的一段直枝：
     // 中點＝def.spot/def.y、方向 def.figDir、可走的半長 def.figLen、坡度 def.figSlope）
