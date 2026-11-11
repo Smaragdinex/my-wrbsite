@@ -6,7 +6,7 @@
 // 還沒拍到的鳥：右頁是剪影，左頁只寫名字和在哪裡，介紹要拍到才解鎖。第一個跨頁是扉頁＋前言（收集進度），第二個跨頁是目錄（左右兩頁）。
 import * as THREE from 'three'
 import { BIRDS } from '../birdinfo.js'
-import { placeAnimal } from '../birds.js'
+import { placeAnimal, MissingModel, ensureModel, modelsFor, modelFailed } from '../birds.js'
 import { VALUE } from './scoring.js'
 import { RARITY } from './judge.js'
 import { activityLabel } from './presence.js'
@@ -350,7 +350,7 @@ function makeDiorama(def, P = PLATE, zoom = 1) {
   const d = { ...def, y: 0, water: water ?? undefined, groundAt: null, view: def.view ?? 200 }
   if (def.swim) d.swimOK = (x, z) => Math.hypot(x - def.spot[0], z - def.spot[1]) < 1.4
   if (def.perch === 'sacred' || def.perch === 'fig') d.perch = 'branch'   // 神木、雀榕上的鳥：圖鑑插圖沒有那棵樹，畫成停在樹枝上
-  const a = placeAnimal(d)
+  const a = placeAnimal(d, { strict: true })   // 模型還沒載到會丟 MissingModel（diorama() 接住，載完再畫）
   sc.add(a.group)
   const [x, z] = def.spot
   // 地上：只接影子的透明地面；水鳥再加一片淡淡的水
@@ -528,11 +528,21 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     }
     return m
   }
+  const dioWait = new Set(), BLANK_D = { rt: { texture: new THREE.Texture() }, ready: false, update() {}, render() {}, setSilhouette() {} }
   function diorama(s) {
     const b = BIRDS[s - FRONT]
     let d = dioramas.get(b.id)
     if (!d) {
-      d = makeDiorama(b); dioramas.set(b.id, d)
+      // 2026-11-11 串流載入：這隻鳥的模型可能還沒載到 → 先回一張空白（hasPlate 0，頁面照常畫文字），背景載完把這一頁的材質丟掉重做
+      if (dioWait.has(b.id)) return BLANK_D
+      try { d = makeDiorama(b) } catch (e) {
+        if (!(e instanceof MissingModel)) throw e
+        dioWait.add(b.id)
+        if (modelFailed(e.model)) return BLANK_D   // 檔案真的沒有：這一頁就不畫插圖，不要一直重試
+        Promise.all([...modelsFor(b.id).map(ensureModel), ensureModel(e.model)]).then(() => { dioWait.delete(b.id); const m = mats.get('R' + s); if (m) { m.uniforms.map.value.dispose(); mats.delete('R' + s) } })
+        return BLANK_D
+      }
+      dioramas.set(b.id, d)
       d.setSilhouette(!recs[s - FRONT])
       d.update(0, 0.016)
       // 先在背景編好著色器（鳥的材質在這個小場景裡的燈光組合不一樣），好了才開始畫

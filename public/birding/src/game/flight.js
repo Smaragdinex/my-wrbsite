@@ -126,9 +126,10 @@ function membersOf(b) { return b.built.birds ?? [b.built] }
 export function createFlight(world, player) {
   const { scene } = world
   const units = []   // 一個站點一組
-  for (const b of world.birds) {
+  // 2026-11-11 串流載入：模型還沒載到的鳥（b.pending）先跳過，載到後 main.js 再呼叫 flight.add(b)
+  function addUnit(b) {
     const esc = ESCAPE[b.def.id]
-    if (!esc) continue
+    if (!esc || b.pending || units.some((u) => u.b === b)) return
     const ms = membersOf(b).map((m) => {
       const s = { m, mode: 'perch', home: V(), from: V(), curve: null, len: 0, dist: 0, t: 0, wait: 0, delay: 0, head: 0, roll: 0, pitch: 0, phase: Math.random() * 6, act: '' }
       if (esc.fly) {
@@ -146,6 +147,7 @@ export function createFlight(world, player) {
     })
     units.push({ b, esc, ms, alarm: 0, calm: 0, state: 'home', home: b.target.clone(), base: { ...b.def } })
   }
+  for (const b of world.birds) addUnit(b)
 
   // 玩家速度（用鏡頭位置差算）、蹲低
   const last = V().copy(world.camera.position)
@@ -402,5 +404,5 @@ export function createFlight(world, player) {
   window.__flight = { units, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
   // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
   const snap = () => { last.copy(world.camera.position); speed = 0 }
-  return { tick, units, shotOf, snap, arrive, depart, gone, canFly, get speed() { return speed } }
+  return { tick, units, shotOf, snap, arrive, depart, gone, canFly, add: addUnit, get speed() { return speed } }
 }

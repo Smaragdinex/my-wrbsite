@@ -216,7 +216,7 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
   function trackBirds(dt) {
     if (dt <= 0) return
     for (const b of world.birds) {
-      if (b.target.distanceTo(camera.position) > 120) continue
+      if (b.pending || b.target.distanceTo(camera.position) > 120) continue
       for (const m of b.built.birds ?? [b.built]) {
         const o = world.shotOf?.(m)?.obj ?? m.obj
         o.getWorldPosition(_p)

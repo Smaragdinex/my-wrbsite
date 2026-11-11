@@ -49,6 +49,7 @@ function setLoad(f, msg) {
 const world = await buildWorld(document.getElementById('scene'), {
   onProgress: (f, stage) => stage === 'build' ? setLoad(0.7, tr('蓋公園、種樹…')) : setLoad(f * 0.7, tr('下載植物和鳥…')),
   extraModels: flyModels(),
+  stream: !new URLSearchParams(location.search).has('nostream'),   // 2026-11-11 鳥的模型串流載入（?nostream 照舊全部載完再進場，測試比對用）
   night: true,
 })
 const { renderer, scene, camera } = world
@@ -250,6 +251,8 @@ function frame() {
 }
 // 鳥什麼時候在：每日排程＋活動時段＋飛來飛走（presence.js；PARK_PLAN.md）
 const presence = createPresence({ world, camera, flight, hud, state, save, rec: REC })
+// 串流載入：還沒有模型的鳥在背景由近到遠補上；補上一隻就接上驚飛和出沒時段
+world.streamBirds({ onReady: (b) => { flight.add(b); presence.sync(b) } })
 function tick(dt, t) {
   presence.update(hour, dt)
   if (!panelOpen() && !menuCam) player.update(dt)

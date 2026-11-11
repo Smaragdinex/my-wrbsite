@@ -126,5 +126,7 @@ export function createPresence({ world, camera, flight, hud, state, save, rec })
   }
   // 測試用：__presence.today() 今天來的鳥；force(id, on) 直接改
   window.__presence = { today: () => [...todaySet(day)], get day() { return day }, set day(v) { day = v; slot = null; memo.clear() }, wanted, want }
-  return { update, activityLabel }
+  // 2026-11-11 串流載入：鳥的模型晚到，換上真的之後照現在這個時段該不該在重設一次（替身上的顯示狀態不會帶過去）
+  const sync = (b) => { if (rec) return; const w = want.get(b); if (w !== undefined) show(b, w) }
+  return { update, activityLabel, sync }
 }

@@ -312,35 +312,59 @@ const BUILD = {
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
 const GLB = {}
 const TINT = { 'thrush-rig': 0.5 }
-export async function loadAnimalModels(extra = [], onProgress) {
-  const L = new GLTFLoader(), D = new DRACOLoader()
-  D.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
-  L.setDRACOLoader(D)
-  let done = 0, total = 0
-  const tick = () => onProgress?.(++done / Math.max(1, total))
-  const load = (n) => (total++, L.loadAsync(`models/birds/${n}.glb?v=${VER}`).finally(tick)).then((g) => {
-    GLB[n] = g.scene
-    g.scene.traverse((o) => { if (o.isMesh) fixWinding(o.geometry) })
-    // Tripo 生成的羽色太鮮豔的，載入時壓暗（紫嘯鶇真實是深藍黑、只有光澤是亮藍）
-    const k = TINT[n.replace('-fly', '')]
-    if (k) g.scene.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(k) } })
-  })
-  await Promise.all([...['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
+// 2026-11-11 串流載入（使用者：先做，之後再加鳥進場時間才不會變長）：以前 150 個鳥模型（48 MB）進場前全部載完。
+// 現在進場前只載入口附近那幾種（world.js 挑），其餘的鳥先放一個空的替身，進場後在背景由近到遠一隻隻載、載到就換上真的（world.streamBirds）。
+// 不用替每隻鳥登記牠用哪些模型：rigged() 找不到模型會丟 MissingModel，placeAnimal 接住、記下缺哪個，載完再重蓋一次
+const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
     'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
-    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig'].map(load),
-    // 遊戲另外要的模型（飛行版）：缺檔就略過，呼叫的人自己用替代模型
-    ...extra.map((n) => load(n).catch(() => console.warn('[birds] 沒有模型', n)))])
+    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig']
+export class MissingModel extends Error { constructor(n) { super('model not loaded: ' + n); this.model = n } }
+let _loader = null, _extra = []
+const _loading = new Map(), FAILED = new Set()
+const loader = () => {
+  if (!_loader) { _loader = new GLTFLoader(); const D = new DRACOLoader(); D.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/'); _loader.setDRACOLoader(D) }
+  return _loader
+}
+// 載一個模型（同一個只載一次）；回傳有沒有載到。缺檔不丟錯：呼叫的人自己用替代模型或先不蓋
+export function ensureModel(n) {
+  if (GLB[n]) return Promise.resolve(true)
+  if (FAILED.has(n)) return Promise.resolve(false)
+  let pr = _loading.get(n)
+  if (!pr) {
+    pr = loader().loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => {
+      g.scene.traverse((o) => { if (o.isMesh) fixWinding(o.geometry) })
+      // Tripo 生成的羽色太鮮豔的，載入時壓暗（紫嘯鶇真實是深藍黑、只有光澤是亮藍）
+      const k = TINT[n.replace('-fly', '')]
+      if (k) g.scene.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(k) } })
+      GLB[n] = g.scene
+      return true
+    }).catch(() => { FAILED.add(n); console.warn('[birds] 沒有模型', n); return false }).finally(() => _loading.delete(n))
+    _loading.set(n, pr)
+  }
+  return pr
+}
+export const modelFailed = (n) => FAILED.has(n)
+// 猜這種鳥會用到的模型（檔名開頭是牠的 id：本尊、雌鳥 f、第二版 2、飛行版）——只是讓下載可以並行；猜漏的由 MissingModel 補
+export const modelsFor = (id) => [...MODEL_NAMES, ..._extra].filter((n) => { const b = n.replace(/-fly-rig$|-rig$/, ''); return b === id || b === id + 'f' || b === id + '2' })
+// extra：遊戲另外要的模型（飛行版）；nearIds：進場前就要載好的鳥（不給＝全部，圖鑑頁、工具用）
+export async function loadAnimalModels(extra = [], onProgress, nearIds = null) {
+  _extra = extra
+  const names = nearIds ? [...new Set(['kingfisher-fly-rig', ...nearIds.flatMap(modelsFor)])] : [...MODEL_NAMES, ...extra]
+  let done = 0
+  await Promise.all(names.map((n) => ensureModel(n).finally(() => onProgress?.(++done / names.length))))
 }
 export const hasModel = (n) => !!GLB[n]
+export const loadedModels = () => Object.keys(GLB)
 /* ---------- 有骨架的現成模型：用「模型座標的軸」轉骨頭 ---------- */
 // 每根骨頭的本地軸方向都不一樣（Blender 的 roll），直接轉 x/y/z 左右腳會不對稱。
 // 這裡先算出每根骨頭靜止時在模型座標裡的朝向，turn(骨頭, 模型座標的軸, 角度) 再換算成本地軸，
 // 所以「繞身體的上下軸轉」對每根骨頭意思都一樣。straight：一開始就把這些骨頭（例如捲起來的尾巴）拉直到某個比例。
 export function rigged(name, { straight = {} } = {}) {
+  if (!GLB[name]) throw new MissingModel(name)
   const model = cloneSkinned(GLB[name])
   const bones = {}
   model.traverse((o) => {
@@ -2110,7 +2134,7 @@ function fixSize(id, built) {
   for (const m of ms) m.obj.scale.multiplyScalar(k)
   built.sizeFix = k
 }
-export function placeAnimal(def) {
+export function placeAnimal(def, { strict = false } = {}) {
   const [x, z] = def.spot, gy = def.y ?? 0, waterY = def.water ?? -99
   const v = THREE.MathUtils.degToRad(def.view)
   const toCam = V(Math.sin(v), 0, Math.cos(v))     // 從動物指向鏡頭
@@ -2259,31 +2283,42 @@ export function placeAnimal(def) {
   if (def.camH) camH = def.camH
   if (def.lookY != null) target.y = def.lookY
   target.y += gy
-  const built = BUILD[def.id](env)
-  obj.add(built.obj)
-  if (built.extra) obj.add(built.extra)
-  // 動物本身不接收陰影（停在樹蔭下也要看得清楚），也不烘進地面
-  built.obj.traverse((o) => { if (o.isMesh) { o.receiveShadow = !!o.userData.catcher; o.userData.noBake = true } })
-
   // 跟拍：鏡頭和目標一起跟著鳥平移（量的是鳥現在在哪、相對於站點中心），鳥在畫面上的位置和大小都不變。
   // 一群鳥：寬螢幕跟整群的中心；手機（lead）跟其中一隻，整群放不下
   const base = target.clone(), f0 = V(), fw = V()
   const cam = base.clone().addScaledVector(toCam, dist)
   cam.y = gy + camH
   const baseCam = cam.clone()
-  g.updateMatrixWorld(true)
-  built.update(0, 0.016)
-  g.updateMatrixWorld(true)
-  fixSize(def.id, built)
-  obj.localToWorld(f0.set(0, built.focus.y, 0))
-  const update = (t, dt, phone = false) => {
-    env.sway?.(t)
-    built.update(t, dt)
-    obj.updateMatrixWorld()
-    obj.localToWorld(fw.copy(phone && built.lead ? built.lead : built.focus)).sub(f0)
-    fw.y *= 0.3
-    target.copy(base).add(fw)
-    cam.copy(baseCam).add(fw)
+  // 2026-11-11 串流載入：站點、樹、鏡頭位置上面都算好了；鳥的模型還沒載到就先放一個空的替身（pending），載到再呼叫 rec.finish() 換上真的
+  const stub = { obj: new THREE.Group(), update() {}, focus: V(0, 0.1, 0) }
+  const rec = { group: g, update: () => {}, target, cam, built: stub, pending: true, need: null }
+  rec.finish = () => {
+    // 有的鳥先開「展示導演」才複製模型：模型沒載到中途丟出去的話，把剛登記的導演收回來（不然每重蓋一次多一個空的）
+    const nShow = SHOWS.length
+    let built
+    try { built = BUILD[def.id](env) } catch (e) { SHOWS.length = nShow; throw e }   // 模型還沒載到會丟 MissingModel（下面接）
+    obj.remove(stub.obj)
+    obj.add(built.obj)
+    if (built.extra) obj.add(built.extra)
+    // 動物本身不接收陰影（停在樹蔭下也要看得清楚），也不烘進地面
+    built.obj.traverse((o) => { if (o.isMesh) { o.receiveShadow = !!o.userData.catcher; o.userData.noBake = true } })
+    g.updateMatrixWorld(true)
+    built.update(0, 0.016)
+    g.updateMatrixWorld(true)
+    fixSize(def.id, built)
+    obj.localToWorld(f0.set(0, built.focus.y, 0))
+    rec.built = built; rec.pending = false; rec.need = null
+    rec.update = (t, dt, phone = false) => {
+      env.sway?.(t)
+      built.update(t, dt)
+      obj.updateMatrixWorld()
+      obj.localToWorld(fw.copy(phone && built.lead ? built.lead : built.focus)).sub(f0)
+      fw.y *= 0.3
+      target.copy(base).add(fw)
+      cam.copy(baseCam).add(fw)
+    }
   }
-  return { group: g, update, target, cam, built }
+  obj.add(stub.obj)
+  try { rec.finish() } catch (e) { if (strict || !(e instanceof MissingModel)) throw e; rec.need = e.model }
+  return rec
 }

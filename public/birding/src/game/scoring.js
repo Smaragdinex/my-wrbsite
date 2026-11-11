@@ -81,7 +81,7 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
   }
   const found = []
   for (const b of world.birds) {
-    if (b.absent) continue
+    if (b.absent || b.pending) continue   // pending：模型還在串流載入，畫面上沒有牠
     const d0 = b.target.distanceTo(cam.position)
     if (d0 > 160) continue
     for (const m of members(b)) {

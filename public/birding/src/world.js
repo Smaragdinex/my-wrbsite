@@ -14,11 +14,11 @@ import { buildFlora } from './flora.js'
 import { loadPlants, parts } from './plants.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildStops } from './stops.js'
-import { loadAnimalModels, placeAnimal, REAL_CM, gameLen } from './birds.js'
+import { loadAnimalModels, placeAnimal, REAL_CM, gameLen, ensureModel, modelsFor, modelFailed, MissingModel } from './birds.js'
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt, FIG_FORCED, EAST, wetSD } from './layout.js'
+import { SPAWN, MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt, FIG_FORCED, EAST, wetSD } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
@@ -38,7 +38,7 @@ export const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.
 
 // extraReserve：額外不種東西的圓（遊戲的攤位等），{ x, z, r }；extraModels：遊戲另外要載的鳥模型（飛行版）；
 // night：要日夜（遊戲用；會多幾盞真的點光源，導覽頁不開就一直是白天）
-export async function buildWorld(canvas, { onProgress, extraReserve = [], extraModels = [], night = false } = {}) {
+export async function buildWorld(canvas, { onProgress, extraReserve = [], extraModels = [], night = false, stream = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false })
   renderer.setPixelRatio(Math.min(devicePixelRatio, PHONE ? 1.5 : 2))
   renderer.shadowMap.enabled = true
@@ -83,10 +83,13 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const mountain = buildMountain(scene)
   const water = buildWater(scene)
   buildRamp(scene)
+  // 2026-11-11 串流載入（stream：遊戲用；導覽頁照舊全部載完）：進場前只載入口 NEAR 公尺內的鳥，其餘進場後由近到遠在背景載（下面 streamBirds）
+  const NEAR = 70
+  const nearIds = stream ? BIRDS.filter((d) => Math.hypot(d.spot[0] - SPAWN.x, d.spot[1] - SPAWN.z) < NEAR).map((d) => d.id).concat('mikado') : null   // 帝雉：圖鑑扉頁的插圖一打開就要
   // 下載進度：植物（檔案大）佔 75%、鳥 25%
   let pF = 0, bF = 0
   const prog = () => onProgress?.(pF * 0.75 + bF * 0.25, 'load')
-  const [plantLib, , walkKit, wetKit, sumKit, caveKit, hideKit] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() }), loadWalkwayKit(), loadWetlandKit(), loadSummitKit(), loadCaveKit(), loadHideKit()])
+  const [plantLib, , walkKit, wetKit, sumKit, caveKit, hideKit] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() }, nearIds), loadWalkwayKit(), loadWetlandKit(), loadSummitKit(), loadCaveKit(), loadHideKit()])
   onProgress?.(1, 'build')
   // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
   const placeDef = (def) => {
@@ -109,7 +112,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     d.trunkBad = (x, z) => inAlpine(x, z) ? alpineTrailDist(x, z) < 2 : pathClearAt(x, z) < 1.2
     const a = placeAnimal(d)
     scene.add(a.group)
-    return { def, ...a, size: REAL_CM[def.id] ? gameLen(REAL_CM[def.id]) : 0.3 }   // size：遊戲裡的身長（公尺），畫面像素剔除用
+    return Object.assign(a, { def, size: REAL_CM[def.id] ? gameLen(REAL_CM[def.id]) : 0.3 })   // 同一個物件（串流載入：模型晚點載到時 a.finish() 直接改它的 built／update）   // size：遊戲裡的身長（公尺），畫面像素剔除用
   }
   // 停在神木上的鳥（茶腹鳾）要等神木蓋好、量到樹皮表面才能擺，先跳過（也不能進 alpAvoid，不然神木會躲開牠、換位置）
   const birds = BIRDS.filter((d) => d.perch !== 'sacred' && !d.onFig).map(placeDef)
@@ -242,6 +245,29 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
         birds.push(b)
       }
     }
+  }
+  // 串流載入：還沒有模型的鳥（pending）一隻隻補上——每次挑離鏡頭最近的，三個下載並行；載到就蓋、通知遊戲（驚飛、出沒時段要接上）
+  const streamState = { total: 0, left: 0, done: null }
+  function streamBirds({ onReady } = {}) {
+    const pend = birds.filter((b) => b.pending), busy = new Set()
+    streamState.total = streamState.left = pend.length
+    const next = () => { let best = null, bd = 1e9; for (const b of pend) { if (busy.has(b)) continue; const d = b.target.distanceTo(camera.position); if (d < bd) { bd = d; best = b } } return best }
+    const finishOne = async (b) => {
+      for (let k = 0; k < 6 && b.pending; k++) {
+        await Promise.all(modelsFor(b.def.id).map(ensureModel))
+        if (b.need) await ensureModel(b.need)
+        if (b.need && modelFailed(b.need)) { console.warn('[stream] 缺模型，這隻鳥不會出現', b.def.id, b.need); return false }
+        await new Promise((r) => setTimeout(r, 0))   // 讓出一格再蓋（複製骨架、算大小要幾十毫秒）
+        try { b.finish() } catch (e) { if (!(e instanceof MissingModel)) { console.error('[stream]', b.def.id, e); return false } b.need = e.model }
+      }
+      if (b.pending) return false
+      b.shown = undefined
+      renderer.compileAsync?.(b.group, camera, scene).catch(() => {})   // 著色器先在背景編好，第一次看到牠才不會頓一下
+      return true
+    }
+    const work = async () => { for (let b; (b = next());) { busy.add(b); const ok = await finishOne(b); pend.splice(pend.indexOf(b), 1); busy.delete(b); streamState.left = pend.length; if (ok) onReady?.(b) } }
+    streamState.done = Promise.all([work(), work(), work()]).then(() => { streamState.left = 0 })
+    return streamState.done
   }
   const _forestFog = new THREE.Color()   // 阿里山／紅杉林那種巨木林帶（步道中段）   // 右邊岔路上去的營地（三頂帳篷＋營火）
   const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
@@ -396,7 +422,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     renderer.render(scene, cam)
   }
-  return { renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  return { streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */
