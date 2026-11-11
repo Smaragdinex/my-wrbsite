@@ -148,7 +148,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉
   const yose = buildYosemite(scene, { lib: plantLib })   // 2026-11-10 帳篷區後面的花崗岩壁、瀑布、西黃松
   const giants = buildGiants(scene, { sun, avoid: alpAvoid, lib: plantLib })
-  buildWetlandProps(scene, wetKit)   // 2026-11-11 濕地 V3：枯樹、舊木樁、睡蓮（Blender）
+  buildWetlandProps(scene, wetKit, walkKit)   // 2026-11-11 濕地 V3：枯樹、舊木樁、睡蓮（Blender）
   buildCave(scene, caveKit, sumKit, plantLib)   // 2026-11-11 瀑布後面的岩窟步道（岩拱、石板路、青苔）
   buildYoseTop(scene, sumKit, plantLib)   // 2026-11-11 瀑布頂後面的整座山、平台和石階的青苔草叢
   outsideG.userData.buildFence?.(walkKit)   // 2026-11-11 園區圍籬用木棧道同一套零件和木頭材質

@@ -56,7 +56,7 @@ export async function loadWetlandKit() {
   return { geo, deckM, leafM: backlit(1.4, 0.25, 1.15), plumeM: backlit(4.5, 0.8, 1.25), headM: backlit(0.6, 0.1, 1), snagM: drift(1.65, [1, 0.98, 0.95]), postM: drift(1.05, [1, 0.92, 0.82]), lilyM: new THREE.MeshStandardMaterial({ vertexColors: true, color: new THREE.Color().setScalar(1.8), roughness: 0.42, side: THREE.DoubleSide }) }
 }
 
-export function buildWetlandProps(scene, kit) {
+export function buildWetlandProps(scene, kit, wk) {
   const g = new THREE.Group(); g.name = 'wetlandProps'
   const W = EAST.W, bed = (x, z) => Math.min(W, alpineHeight(x, z))
   const add = (name, mat, x, z, y, rot, s = 1, lean = [0, 0]) => {
@@ -79,7 +79,7 @@ export function buildWetlandProps(scene, kit) {
   // 荷葉盆地（觀察屋 O8 正前方，水雉、紫水雞走在上面）：一整片睡蓮
   { const LB = EAST.marsh.lily, r = mulberry(909)
     for (let i = 0; i < 26; i++) { const a = r() * 6.283, d = Math.sqrt(r()) * 0.92, x = LB.x + Math.cos(a) * LB.rx * d, z = LB.z + Math.sin(a) * LB.rz * d; if (alpineHeight(x, z) > W - 0.08) continue; add(i % 3 ? 'lily_1' : 'lily_0', kit.lilyM, x, z, W + 0.004, r() * 6.283, 0.9 + r() * 0.5) } }
-  buildDecks(g, kit)
+  buildDecks(g, kit, wk)
   buildReeds(g, kit)
   buildMist(g)
   scene.add(g)
@@ -100,7 +100,7 @@ function buildReeds(g, kit) {
   let nr = 0, nc = 0
   for (let k = 0; k < 140000 && (nr < 420 || nc < 210); k++) {
     const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0), y = alpineHeight(x, z), dep = W - y
-    if (dep > 0.25 || dep < -0.3 || alpineTrailDist(x, z) < 2.2 || fan(x, z) || [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([a, b]) => walkAt(x + a, z + b) != null)) continue
+    if (dep > 0.25 || dep < -0.3 || alpineTrailDist(x, z) < 2.2 || fan(x, z) || [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([a, b]) => walkAt(x + a, z + b) != null || deckAt(x + a * 0.5, z + b * 0.5) != null)) continue   // 2026-11-11 觀景台底下也不種（蘆葦從台面穿出來）
     const lag = inLagoon(x, z)
     if (!lag && (inE(M.lily, x, z, 1.1) || inE(M.papyrus, x, z, 1.15) || M.meadows.some((o) => inE(o, x, z, 1.1)))) continue
     if (lag && (z < -112 || rnd() < 0.7)) continue   // 潟湖：只有北岸、東北岸零星幾叢（夕陽從後面照的那一排）
@@ -118,27 +118,45 @@ function buildReeds(g, kit) {
   }
 }
 // 觀景台（EAST.decks）：木板台面、底下的托梁和木樁、前面跟兩側 1.05 m 的欄杆（後面接步道，開著）
-function buildDecks(g, kit) {
-  const geos = []
-  const box = (w, h, d, lx, y, lz, F) => { const b = new THREE.BoxGeometry(w, h, d); b.translate(lx, y, lz); b.applyMatrix4(new THREE.Matrix4().makeRotationY(F.a)); b.translate(F.x, 0, F.z); geos.push(b.toNonIndexed()) }
+// 2026-11-11 使用者：觀景台的木頭跟木棧道不一樣（灰的方木條 vs. 棧道的暖色木紋），要一樣 → 整座改用木棧道那套 Blender 零件和同一個木頭材質
+// （wk＝walkway.js 的 kit：bw_plank_0～3 木板、bw_stringer 托梁、bw_pile 木樁、bw_post 欄杆柱、bw_rail_top／bw_rail_mid 橫桿）
+function buildDecks(g, kit, wk) {
+  const M = {}, m4 = new THREE.Matrix4(), mf = new THREE.Matrix4(), ml = new THREE.Matrix4(), q = new THREE.Quaternion(), E = new THREE.Euler()
+  const V = (x, y, z) => new THREE.Vector3(x, y, z)
+  // 零件放在觀景台自己的座標（lx 橫向、lz 朝景觀方向）：世界＝平移(F) × 轉 F.a × 平移(lx,y,lz) × 自轉 × 縮放
+  const put = (part, F, lx, y, lz, sc = [1, 1, 1], rot = [0, 0, 0]) => { ml.compose(V(lx, y, lz), q.setFromEuler(E.set(rot[0], rot[1], rot[2], 'YXZ')), V(sc[0], sc[1], sc[2])); (M[part] ||= []).push(m4.copy(mf).multiply(ml).clone()) }
   for (const D of EAST.decks) {
     const F = { ...deckFrame(D), x: D.x, z: D.z }, Y = deckAt(D.x, D.z), r = mulberry(D.x * 13)
-    for (let lz = -D.d / 2 + 0.08; lz < D.d / 2; lz += 0.165) box(D.w, 0.045, 0.15, (r() - 0.5) * 0.03, Y - 0.023, lz, F)   // 台面木板（橫的）
-    for (const lx of [-D.w / 2 + 0.1, -D.w / 6, D.w / 6, D.w / 2 - 0.1]) box(0.08, 0.2, D.d, lx, Y - 0.15, 0, F)            // 托梁
-    for (const lx of [-D.w / 2 + 0.1, 0, D.w / 2 - 0.1]) for (const lz of [-D.d / 2 + 0.1, 0, D.d / 2 - 0.1]) { const wx = D.x + lx * F.c + lz * F.s, wz = D.z - lx * F.s + lz * F.c, gy = Math.min(alpineHeight(wx, wz), EAST.W) - 0.4; box(0.16, Y - gy, 0.16, lx, (Y + gy) / 2 - 0.2, lz, F) }
-    // 欄杆：前面＋左右兩側
-    const rail = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 1.4)); for (let i = 0; i <= n; i++) box(0.09, 1.05, 0.09, x0 + (x1 - x0) * i / n, Y + 0.52, z0 + (z1 - z0) * i / n, F); const ang = Math.atan2(x1 - x0, z1 - z0); for (const [hh, th] of [[1.05, 0.07], [0.55, 0.05]]) { const b = new THREE.BoxGeometry(0.06, th, L); b.rotateY(ang); b.translate((x0 + x1) / 2, Y + hh, (z0 + z1) / 2); b.applyMatrix4(new THREE.Matrix4().makeRotationY(F.a)); b.translate(F.x, 0, F.z); geos.push(b.toNonIndexed()) } }
+    mf.makeTranslation(F.x, 0, F.z).multiply(m4.makeRotationY(F.a))
+    // 台面木板（橫的）：零件一片 3.1 m，台面寬的話接兩三片（接縫每排錯開）
+    const np = Math.ceil(D.w / 3.3), pl = D.w / np
+    let row = 0
+    for (let lz = -D.d / 2 + 0.08; lz < D.d / 2; lz += 0.165, row++) for (let k = 0; k < np; k++) put('bw_plank_' + Math.floor(r() * 4), F, -D.w / 2 + pl * (k + 0.5) + (r() - 0.5) * 0.02, Y, lz, [pl / 3.1 * 0.995, 1, 1], [0, row % 2 ? Math.PI : 0, 0])
+    for (const lx of [-D.w / 2 + 0.1, -D.w / 6, D.w / 6, D.w / 2 - 0.1]) put('bw_stringer', F, lx, Y, 0, [1, 1, D.d / 2.4])            // 托梁
+    for (const lx of [-D.w / 2 + 0.1, 0, D.w / 2 - 0.1]) for (const lz of [-D.d / 2 + 0.1, 0, D.d / 2 - 0.1]) { const wx = D.x + lx * F.c + lz * F.s, wz = D.z - lx * F.s + lz * F.c, gy = Math.min(alpineHeight(wx, wz), EAST.W) - 0.4; put('bw_pile', F, lx, Y - 0.24, lz, [1.1, Math.max(0.3, Y - 0.24 - gy), 1.1]) }
+    // 欄杆：前面＋左右兩側（柱子、上橫桿 1.04、中間兩道，跟棧道一樣）
+    const posts = new Set()
+    const rail = (x0, z0, x1, z1) => {
+      const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 1.4)), yaw = Math.atan2(x1 - x0, z1 - z0) - Math.PI / 2
+      for (let i = 0; i <= n; i++) { const lx = x0 + (x1 - x0) * i / n, lz = z0 + (z1 - z0) * i / n, key = lx.toFixed(2) + ',' + lz.toFixed(2); if (!posts.has(key)) { posts.add(key); put('bw_post', F, lx, Y, lz, [1, 1, 1], [0, yaw, 0]) } }
+      for (let i = 0; i < n; i++) { const t = (i + 0.5) / n; for (const [part, hh] of [['bw_rail_top', 1.04], ['bw_rail_mid', 0.64], ['bw_rail_mid', 0.27]]) put(part, F, x0 + (x1 - x0) * t, Y + hh, z0 + (z1 - z0) * t, [L / n, 1, 1], [0, yaw, 0]) }
+    }
     const hw = D.w / 2 - 0.05, hd = D.d / 2 - 0.05, back = D.bay ? 0 : 0.6   // 觀景灣：兩側欄杆一路接回棧道
     rail(-hw, hd, hw, hd); rail(-hw, -hd + back, -hw, hd); rail(hw, -hd + back, hw, hd)
-    if (D.bench) {   // 面向夕陽的長椅（1.8 m）：椅面、椅背、兩隻腳
-      box(1.8, 0.06, 0.42, 0, Y + 0.45, -0.5, F); box(1.8, 0.4, 0.06, 0, Y + 0.72, -0.72, F); for (const lx of [-0.75, 0.75]) box(0.08, 0.45, 0.4, lx, Y + 0.22, -0.5, F)
+    if (D.bench) {   // 面向夕陽的長椅（1.8 m）：椅面三片木板、椅背兩片（往後仰一點）、兩隻腳
+      for (const [k, lz] of [-0.655, -0.5, -0.345].entries()) put('bw_plank_' + k, F, 0, Y + 0.47, lz, [1.8 / 3.1, 1.2, 0.95])
+      for (const [k, yy] of [0.66, 0.83].entries()) put('bw_plank_' + (k + 2), F, 0, Y + yy, -0.74 - k * 0.03, [1.8 / 3.1, 1.2, 0.95], [Math.PI / 2 - 0.17, 0, 0])
+      for (const lx of [-0.72, 0.72]) { put('bw_pile', F, lx, Y + 0.425, -0.5, [0.6, 0.43, 2.6]); put('bw_pile', F, lx, Y + 0.92, -0.8, [0.5, 0.5, 0.45], [-0.17, 0, 0]) }
       addCollider(D.x - 0.5 * F.s, D.z - 0.5 * F.c, 0.45, Y + 0.6, Y - 0.2)
     }
     // 欄杆擋人：前緣、兩側一排碰撞圓
     for (const [x0, z0, x1, z1] of [[-hw, hd, hw, hd], [-hw, -hd + back, -hw, hd], [hw, -hd + back, hw, hd]]) for (let t = 0; t <= 1.001; t += 0.12) { const lx = x0 + (x1 - x0) * t, lz = z0 + (z1 - z0) * t; addCollider(D.x + lx * F.c + lz * F.s, D.z - lx * F.s + lz * F.c, 0.12, Y + 1.1, Y - 0.5) }
   }
-  if (!geos.length) return
-  const m = new THREE.Mesh(mergeGeometries(geos), kit.deckM); m.castShadow = true; m.receiveShadow = true; g.add(m)
+  for (const [part, list] of Object.entries(M)) {
+    if (!wk?.geo?.[part] || !list.length) continue
+    const im = new THREE.InstancedMesh(wk.geo[part], wk.wood, list.length)
+    list.forEach((m, k) => im.setMatrixAt(k, m)); im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'deck_' + part; g.add(im)
+  }
 }
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
 
