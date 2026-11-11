@@ -235,8 +235,8 @@ export function buildOutside(renderer = null) {
         void main(){
           // 白天：原本的做法（山的本色往地平線的天色混，遠的混多一點）
           vec3 dHor = mix(vec3(0.86, 0.91, 0.93), vec3(0.9, 0.6, 0.42), uDusk * 0.6);
-          vec3 dBase = pick4(vL, vec3(0.22, 0.32, 0.28), vec3(0.22, 0.32, 0.28), vec3(0.22, 0.32, 0.28), vec3(0.11, 0.2, 0.12));
-          float dW = pickf(vL, 0.42, 0.58, 0.72, 0.22) + 0.22 * (1.0 - vV);
+          vec3 dBase = pick4(vL, vec3(0.085, 0.15, 0.11), vec3(0.16, 0.22, 0.22), vec3(0.3, 0.36, 0.42), vec3(0.11, 0.2, 0.12));   // 2026-11-11 近層偏森林綠、中層藍綠灰、遠層藍灰（ChatGPT #718780／#91A5A8／#B5C4CF 的方向）
+          float dW = pickf(vL, 0.4, 0.55, 0.7, 0.22) + 0.08 * (1.0 - vV);   // 山腳不要淡成天色（以前 0.22：下緣跟天空一樣亮，整座山像浮在雲上）
           dHor = mix(dHor, vec3(dot(dHor, vec3(0.3, 0.5, 0.2))) * 0.8, uHaze);
           vec3 day = mix(dBase, dHor, clamp(dW + 0.45 * uHaze, 0.0, 1.0));
           // 夜晚：近山 #202D42、中山 #343F56、遠山 #51596E、森林帶更深；霧色冷藍灰 #343D55（線性色）
@@ -250,7 +250,8 @@ export function buildOutside(renderer = null) {
           #include <colorspace_fragment>
         }`,
     })
-    for (const [R, layer, H, seed] of [[640, 0, 120, 11], [760, 1, 170, 23], [880, 2, 230, 37], [420, 3, 0, 53]]) {
+    // 2026-11-11 ChatGPT 遠山 V2：近層 450～650 m 森林圓稜（峰 110～145）、中層 750～1000 m 破碎岩稜（155～200）、遠層 1200～1700 m（230～310）
+    for (const [R, layer, H, seed] of [[560, 0, 130, 11], [880, 1, 185, 23], [1350, 2, 270, 37], [420, 3, 0, 53]]) {
       const N = layer === 3 ? 2400 : 768, P = [], AL = [], AV = [], I = []
       for (let i = 0; i <= N; i++) {
         const a = (i / N) * TAU, cx = Math.cos(a), sz = Math.sin(a)
@@ -270,7 +271,7 @@ export function buildOutside(renderer = null) {
           ridge += H * 0.06 * fbm3(cx * 14 + seed, 4.4, sz * 14, 3)   // 次級山脊、岩稜（ChatGPT：不要只有幾個圓圓的波峰）
         }
         const RR = layer === 3 ? edgePoint(a)[2] + 310 : R   // 森林帶貼著公園邊界外 310 公尺（樹林帶外面），東邊山區比較寬也不會穿過樹林
-        P.push(cx * RR, -20, sz * RR, cx * RR, ridge, sz * RR)
+        P.push(cx * RR, -80, sz * RR, cx * RR, ridge, sz * RR)   // 山腳拉到 -80（ChatGPT：往下接進雲層 40～80 m）
         AL.push(layer, layer); AV.push(0, 1)
       }
       for (let i = 0; i < N; i++) { const a = i * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3) }
@@ -290,7 +291,7 @@ export function buildOutside(renderer = null) {
   // 台灣的雪薄、只在冬春 → 少量殘雪（主峰 8～18%）：只在高處、緩一點的坡、背陽面、岩溝圈谷；陡岩壁露岩。不是一整排白三角形。
   // 一個 mesh（極座標網格 ~3,500 點）、一個材質；空氣透視自己算（不吃場景霧）
   {
-    const PEAKS = [[35, 1350, 440, 260, 1], [58, 1250, 370, 170, 2], [78, 1450, 410, 300, 3]].map(([b, d, h, r, k]) => {
+    const PEAKS = [[35, 1350, 330, 260, 1], [58, 1250, 285, 170, 2], [78, 1450, 310, 300, 3]].map(([b, d, h, r, k]) => {   // 2026-11-11 高度 440/370/410 → ChatGPT 遠層 230～310（太高像浮在半空中的灰色三角形）.map(([b, d, h, r, k]) => {
       const a = b * Math.PI / 180
       return { x: Math.sin(a) * d, z: Math.cos(a) * d, h, r, k }
     })
@@ -384,33 +385,34 @@ export function buildOutside(renderer = null) {
   // 形狀：非對稱橢圓圓頂（朝公園那面比較陡），大片光滑岩板＋幾道節理岩溝、黑色水痕；山腳一圈深綠針葉林色；顏色照 ChatGPT 的 linear 花崗岩
   {
     const ss = smoothstep
-    const domes = [{ x: 240, z: 222, rx: 82, rz: 58, H: 100, y0: 6, seed: 3 }, { x: 148, z: 212, rx: 60, rz: 44, H: 80, y0: 6, seed: 9 }]   // 第二版離瀑布頂太近（山腳離平台後緣 16 m，整面壓過來）→ 往北推 35～40 m   // 第一版 150／112 m、比較窄：像兩顆蛋 → 矮一點、寬一點
+    // 2026-11-11 使用者：「那個山長得非常怪」——兩顆圓頂一條條放射狀的岩片，看起來像南瓜／大蒜 → ChatGPT：刪掉圓頂，
+    // 換成一道連續、不規則的山稜（2～4 個不對稱的山頭＋寬鞍部，比山腳高 35～65 m）；下半是森林、上半露出幾塊花崗岩，山腳往下接進林子
     const P = [], C = [], I = [], c = new THREE.Color()
-    const NA = 72, NR = 28
-    for (const D of domes) {
-      const base = P.length / 3
-      for (let j = 0; j <= NR; j++) for (let i = 0; i <= NA; i++) {
-        const a = i / NA * TAU, r = j / NR * 1.3, ca = Math.cos(a), sa = Math.sin(a)
-        const rz = D.rz * (sa < 0 ? 0.72 : 1)   // 朝公園（-z、南）那面陡
-        const x = D.x + ca * r * D.rx, z = D.z + sa * r * rz
-        const n = fbm3(x * 0.03 + D.seed, 2.1, z * 0.03, 3) - 0.5, n2 = fbm3(x * 0.09, 5.5 + D.seed, z * 0.09, 2) - 0.5
-        let h = r <= 1 ? D.H * Math.sqrt(Math.max(0, 1 - Math.pow(r, 1.8))) : -10 * (r - 1) / 0.3   // 寬的圓頂：頂上圓、邊上陡（優勝美地的 dome）
-        // 剝落的岩片（同心的一階一階）、節理岩溝（放射狀幾道）
-        const sheet = 3.2 * Math.max(0, Math.sin(r * 16 + n * 4)) * (1 - r * 0.8)
-        const joint = -4.5 * Math.pow(Math.abs(Math.sin(a * 6 + D.seed + n * 1.5)), 10) * Math.min(1, r * 3) * (r <= 1 ? 1 : 0)
-        h += (r <= 1 ? 8 * n + 2.5 * n2 - sheet + joint : 0)
-        P.push(x, D.y0 + h, z)
-        // 顏色：亮的米灰花崗岩，大尺度 ±10%；陰面（北、-x）偏冷；黑色水痕順著坡往下；岩溝深；山腳針葉林
-        const warm = 0.5 + 0.5 * Math.sin(a + 0.6)
-        c.setRGB(0.48, 0.46, 0.42).lerp(new THREE.Color(0.35, 0.38, 0.39), 0.5 * (1 - warm)).lerp(new THREE.Color(0.52, 0.47, 0.39), 0.35 * warm).multiplyScalar(0.9 + 0.2 * (n + 0.5))
-        const streak = Math.max(0, fbm3(Math.cos(a) * 14 + D.seed, 1.3, Math.sin(a) * 14, 3) - 0.5) * 2.8 * (r > 0.25 ? 1 : 0)
-        c.lerp(new THREE.Color(0.1, 0.105, 0.1), Math.min(0.85, streak * 1.3 + (joint < -0.4 ? 0.55 : 0)))
-        const forest = Math.max(ss(0.84, 0.97, r) * ss(0.35, 0.6, n2 + 0.5), (joint < -1.5 ? 0.7 : 0) * ss(0.45, 0.7, r))   // 樹只在山腳和岩溝裡（第二版整片偏綠灰）   // 山腳一圈林子＋岩溝裡、零星岩縫的樹群
-        c.lerp(new THREE.Color(0.035, 0.06, 0.035), Math.max(forest, ss(0.95, 1.02, r)))
-        C.push(c.r, c.g, c.b)
-      }
-      for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) { const a = base + j * (NA + 1) + i, b = a + 1, cc = a + NA + 1, d = cc + 1; I.push(a, cc, b, b, cc, d) }
+    const X0 = 70, X1 = 345, Z0 = 168, Z1 = 300, CS = 3, NA = Math.round((X1 - X0) / CS), NR = Math.round((Z1 - Z0) / CS)
+    const crestZ = (x) => 228 + 16 * Math.sin(x * 0.019 + 0.8) + 7 * Math.sin(x * 0.051 + 2.1)          // 稜線不是一條直線
+    const relief = (x) => {                                                                             // 沿稜線的高度：三個山頭、中間寬鞍部
+      const peaks = [[112, 74, 55], [208, 92, 70], [300, 70, 50]]   // 第一版 52～66 m、寬 30 m：雲海（32 m）只露出兩個尖尖的綠山頭 → 加高加寬，鞍部也在雲海上面
+      let h = 52 + 10 * (fbm3(x * 0.02, 3.3, 1.1, 3) - 0.5)
+      for (const [px, ph, pw] of peaks) h = Math.max(h, ph * Math.exp(-(((x - px) / pw) ** 2)) + 10 * (fbm3(x * 0.05, 7.7, 2.2, 2) - 0.5))
+      return h
     }
+    for (let j = 0; j <= NR; j++) for (let i = 0; i <= NA; i++) {
+      const x = X0 + i * CS, z = Z0 + j * CS, zc = crestZ(x), H = relief(x)
+      const dz = z - zc, w = dz < 0 ? 58 : 75                                                           // 朝公園（南）那面陡一點
+      const n = fbm3(x * 0.025, 1.7, z * 0.025, 4) - 0.5, n2 = fbm3(x * 0.08, 4.4, z * 0.08, 3) - 0.5
+      const spur = 0.18 * Math.sin(x * 0.11 + n * 3) * Math.exp(-((dz / w) ** 2) * 0.6)               // 山腹的支稜和山溝（從稜線往下，不是同心圓）
+      let h = H * Math.exp(-((dz / w) ** 2) * 1.6) * (1 + spur) + 9 * n + 2.2 * n2
+      const ex = Math.min(1, (x - X0) / 30, (X1 - x) / 30), ez = Math.min(1, (z - Z0) / 22)               // 邊上收到地面下（不會看到一片懸空的邊）
+      h = h * Math.max(0, ex) * Math.max(0, ez) - 12 * (1 - Math.min(ex, ez))
+      P.push(x, 4 + h, z)
+      // 顏色：大部分是林子（深綠、遠一點偏藍灰），稜線附近、陡的地方露出米灰花崗岩和黑色水痕
+      const rock = smoothstep(0.55, 0.85, h / Math.max(20, H)) * smoothstep(-0.05, 0.25, n2 + 0.2 * Math.abs(spur) * 5)
+      c.setRGB(0.05, 0.085, 0.05).lerp(new THREE.Color(0.07, 0.1, 0.075), 0.5 + n)
+      c.lerp(new THREE.Color(0.46, 0.44, 0.4).multiplyScalar(0.9 + 0.3 * n2), rock)
+      if (rock > 0.3 && n2 < -0.15) c.lerp(new THREE.Color(0.12, 0.12, 0.11), 0.5)
+      C.push(c.r, c.g, c.b)
+    }
+    for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) { const a = j * (NA + 1) + i, b = a + 1, cc = a + NA + 1, d = cc + 1; I.push(a, cc, b, b, cc, d) }
     // 三角形朝外：拿圓頂頂點附近第一個三角形檢查，朝下就全部翻過來
     { const v = (k) => new THREE.Vector3(P[k * 3], P[k * 3 + 1], P[k * 3 + 2]), t0 = (NA + 1) * 2 + 3, n = v(I[t0 * 3 + 1]).sub(v(I[t0 * 3])).cross(v(I[t0 * 3 + 2]).sub(v(I[t0 * 3]))); if (n.y < 0) for (let k = 0; k < I.length; k += 3) { const t = I[k + 1]; I[k + 1] = I[k + 2]; I[k + 2] = t } }
     const dg = new THREE.BufferGeometry()
