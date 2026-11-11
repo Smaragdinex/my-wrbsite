@@ -379,7 +379,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     cloudSea.tick(t, camera, { day: dayLight.value })
     camp.tick(t, dt, { day: dayLight.value })
     pondLife.tick(t, dt)
-    yose.tick(t)
+    yose.tick(t, camera, time?.lights)
     giants.tick(t, camera, { day: dayLight.value })
     weather.tick(t, dt)
     {
