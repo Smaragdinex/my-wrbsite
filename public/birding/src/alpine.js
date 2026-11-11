@@ -5,6 +5,7 @@
 // 效能：外殼（通道、館的鋼構和霧玻璃）一開始就蓋，很便宜；館裡面等玩家走到東邊才蓋。
 // 兩館不同時畫：玩家在館裡（或 B 門開著）才畫館內；在圓頂這邊（或 A 門開著）才畫圓頂裡面，緩衝室兩道門都關著的時候切換。
 import * as THREE from 'three'
+import { createMirror } from './mirror.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
 import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, grassSD } from './layout.js'
@@ -306,6 +307,9 @@ function buildInterior(lib, avoid = []) {
       }`,
     fragmentShader: `
       uniform float uTime; uniform float uDay; uniform vec3 uSun; uniform sampler2D uFlow; uniform vec4 uFlowBox;
+      #ifdef MIRROR
+        uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
+      #endif
       varying vec2 vUv; varying float vDepth; varying float vSlope; varying float vFoam; varying float vLip; varying vec3 vW;
       #include <fog_pars_fragment>
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -365,8 +369,17 @@ function buildInterior(lib, avoid = []) {
         float trees = fbm2(vW.xz * 0.3 + R.xz * 0.5);   // 倒影的明暗跟著位置慢慢變（太跟著反射角走，跌水那面會變成豹紋）
         vec3 bank = mix(vec3(0.008, 0.018, 0.011), vec3(0.03, 0.05, 0.032), trees);
         vec3 env = mix(bank, sky * 0.75, smoothstep(0.82, 0.99, R.y));
+        #ifdef MIRROR
+          // 2026-11-11 濕地 V3：真的倒影（mirror.js 鏡射鏡頭畫的）——天空、雲、枯樹、木樁、鳥都倒映在淺水上；水紋把倒影扭一點點
+          vec4 rc = uReflMat * vec4(vW, 1.0);
+          vec3 refl = texture2D(uRefl, rc.xy / rc.w + N.xz * 0.018).rgb;
+          env = mix(env, refl, uReflOn);
+        #endif
         #ifdef LAKE
           col = mix(col, env, 0.08 + 0.77 * fres);   // 菲涅耳只管倒影多少（俯視看水色、斜看越來越多天空和樹的倒影）
+          #ifdef MIRROR
+            col = mix(col, env, uReflOn * (0.3 + 0.55 * fres));   // 濕地的淺水像鏡子（概念圖）：俯視也有三成倒影，斜看幾乎全是
+          #endif
         #else
         col = mix(col, env, clamp(fres * (1.0 + lip * 0.6) * (1.0 - fall * 0.75), 0.0, 0.92));
         #endif   // 跌水那面是碎水，幾乎不倒影
@@ -440,7 +453,12 @@ function buildInterior(lib, avoid = []) {
       wg.setAttribute('aFoam', new THREE.Float32BufferAttribute(new Float32Array(S0.length), 1))
       for (const nm of Object.keys(geo.attributes)) if (!wg.attributes[nm]) wg.setAttribute(nm, new THREE.Float32BufferAttribute(new Float32Array(S0.length * geo.attributes[nm].itemSize), geo.attributes[nm].itemSize))
       wg.setIndex(I)
-      const wet = new THREE.Mesh(wg, waterM); wet.renderOrder = 2; wet.name = 'eastWetland'; g.add(wet)
+      // 2026-11-11 濕地 V3：湖水的顏色／透明度曲線＋真的倒影（MIRROR）
+      const wetMirror = createMirror({ Y: EAST.W, center: [(x0 + x1) / 2, (z0 + z1) / 2], maxDist: 120 })
+      const wetM = waterM.clone(); wetM.uniforms = { ...waterM.uniforms, uRefl: wetMirror.uRefl, uReflMat: wetMirror.uReflMat, uReflOn: wetMirror.uReflOn }
+      wetM.defines = { ...(waterM.defines || {}), LAKE: 1, MIRROR: 1 }
+      const wet = new THREE.Mesh(wg, wetM); wet.renderOrder = 2; wet.name = 'eastWetland'; g.add(wet)
+      wetMirror.hide.push(wet); g.userData.wetMirror = wetMirror
     }
     // 溪（2026-11-07 改成階梯式：一個個水潭、潭和潭之間一道跌水，layout.js buildSteps）
     // 沿著溪中線每 0.25 公尺一個斷面；水面高度照沿溪距離查（潭裡平的、跌水往下彎）。
@@ -1682,7 +1700,7 @@ function buildInterior(lib, avoid = []) {
       }
     }
   }
-  return { g, mist, spray, fallFx, waterU, updateMist }
+  return { g, mist, spray, fallFx, waterU, updateMist, wetMirror: g.userData.wetMirror }
 }
 
 // 2026-11-11 使用者：太陽出來的光要很漂亮（ChatGPT 光照 V2「陽光斑駁比雲隙光更重要」：樹冠間隙讓 10～25% 的林地有光斑）
@@ -1724,6 +1742,7 @@ export function createAlpine({ scene, lib, avoid = [] }) {
   return {
     build() { if (!interior) { interior = buildInterior(lib, avoid); scene.add(interior.g) } return interior.g },
     get group() { return interior?.g },
+    get wetMirror() { return interior?.wetMirror },   // 濕地鏡面倒影（world.js 跟花園水池一起更新）
     animate(t, dt, camera) {
       if (!interior) return
       interior.waterU.uTime.value = t
