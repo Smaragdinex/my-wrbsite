@@ -96,10 +96,10 @@ export function buildOutside(renderer = null) {
     g.add(ground)
   }
 
-  /* ---------- 圍籬：邊界內側（玩家在 0.955 被擋），每 2.4 公尺一根柱子、兩條橫木，跟著地形 ---------- */
-  {
-    const wood = barkify(new THREE.MeshStandardMaterial({ color: 0x7a5c42, roughness: 0.9 }))
-    const parts = []
+  /* ---------- 圍籬：邊界內側（玩家在 0.955 被擋），每 2.4 公尺一根柱子、兩條橫木，跟著地形 ----------
+     2026-11-11 使用者：邊邊的木頭要跟木道一樣高材質 → 改用木棧道那套 Blender 零件（bw_post、bw_rail_top、bw_rail_mid：倒角、木紋、法線貼圖），
+     材質也是同一個。零件要等 boardwalk_kit.glb 載完，所以 world.js 載完後才呼叫 g.userData.buildFence(kit) */
+  g.userData.buildFence = (kit) => {
     const N = 1600, pts = []
     for (let i = 0; i <= N; i++) { const e = edgePoint((i / N) * TAU, 0.963); pts.push(e) }
     // 照弧長每 2.4 公尺放一根
@@ -111,27 +111,27 @@ export function buildOutside(renderer = null) {
       acc -= L
     }
     const gap = (x, z) => x < 0 && Math.abs(z) < ENTRY_W
-    const post = new THREE.BoxGeometry(0.12, 1.25, 0.12).translate(0, 0.5, 0)
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion()
     const yAt = (x, z) => { const h = groundH(x, z); return Math.abs(h) < 100 ? h : 0 }
+    const M = { bw_post: [], bw_rail_top: [], bw_rail_mid: [] }
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), X = new THREE.Vector3(), Yv = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(), bm = new THREE.Matrix4()
     for (let k = 0; k < posts.length; k++) {
       const [x, z] = posts[k], [x2, z2] = posts[(k + 1) % posts.length]
       if (gap(x, z)) continue
       const y = yAt(x, z), y2 = yAt(x2, z2)
-      parts.push(post.clone().applyMatrix4(m4.makeTranslation(x, y, z)))
+      M.bw_post.push(m4.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(Yv, Math.atan2(x2 - x, z2 - z)), new THREE.Vector3(1, 1, 1)).clone())
       if (gap(x2, z2)) continue
-      // 兩條橫木（0.45、0.95 公尺高）
+      // 橫木：零件長 1 公尺（沿 x），拉長到柱距、順著地形斜
       const a = new THREE.Vector3(x, y, z), b = new THREE.Vector3(x2, y2, z2), L = a.distanceTo(b)
-      q.setFromUnitVectors(new THREE.Vector3(1, 0, 0), b.clone().sub(a).normalize())
-      for (const hy of [0.45, 0.95]) {
-        const rail = new THREE.BoxGeometry(L, 0.09, 0.05)
-        m4.compose(a.clone().add(b).multiplyScalar(0.5).add(new THREE.Vector3(0, hy, 0)), q, new THREE.Vector3(1, 1, 1))
-        parts.push(rail.applyMatrix4(m4))
-      }
+      X.copy(b).sub(a).normalize(); Z.crossVectors(X, Yv).normalize(); const Y2 = new THREE.Vector3().crossVectors(Z, X)
+      q.setFromRotationMatrix(bm.makeBasis(X, Y2, Z))
+      for (const [part, hy] of [['bw_rail_top', 1.04], ['bw_rail_mid', 0.58]]) M[part].push(m4.compose(a.clone().add(b).multiplyScalar(0.5).add(new THREE.Vector3(0, hy, 0)), q, new THREE.Vector3(L, 1, 1)).clone())
     }
-    const fence = new THREE.Mesh(mergeGeometries(parts), wood)
-    fence.castShadow = true; fence.receiveShadow = true
-    g.add(fence)
+    for (const [part, list] of Object.entries(M)) {
+      if (!kit?.geo?.[part] || !list.length) continue
+      const im = new THREE.InstancedMesh(kit.geo[part], kit.wood, list.length)
+      list.forEach((m, k) => im.setMatrixAt(k, m)); im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; im.name = 'fence_' + part
+      g.add(im)
+    }
   }
 
   /* ---------- 樹林帶 ---------- */

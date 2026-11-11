@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 
 export function createMirror({ Y, center, maxDist = 110, hide = [] }) {
-  const rt = new THREE.WebGLRenderTarget(512, 512, { type: THREE.HalfFloatType })
+  const rt = new THREE.WebGLRenderTarget(512, 512, { type: THREE.HalfFloatType, samples: 4 })   // 2026-11-11 使用者：倒影太 pixel、看了暈 → 抗鋸齒（原本沒有，半解析度的鋸齒放大成一格一格）
   const uRefl = { value: rt.texture }, uReflMat = { value: new THREE.Matrix4() }, uReflOn = { value: 0 }
   const vCam = new THREE.PerspectiveCamera(), clip = new THREE.Plane(), cp = new THREE.Vector4(), qv = new THREE.Vector4()
   const C = new THREE.Vector3(center[0], Y, center[1]), dir = new THREE.Vector3(), N = new THREE.Vector3(0, 1, 0), P0 = new THREE.Vector3(0, Y, 0)

@@ -13,18 +13,18 @@ const DPR = window.devicePixelRatio || 1
 const OPTS = {
   res: { label: tr('解析度'), hint: tr('畫面清晰度，最吃顯卡'), items: { high: [tr('高'), Math.min(DPR, 2)], mid: [tr('中'), Math.min(DPR, 1.25)], low: [tr('低'), Math.min(DPR, 1) * 0.8] } },
   shadow: { label: tr('陰影'), hint: tr('樹影、人影的細緻度'), items: { high: [tr('高'), 4096], mid: [tr('中'), 2048], low: [tr('低'), 1024] } },
-  reflect: { label: tr('水面倒影'), hint: tr('水池倒影的清晰度'), items: { high: [tr('高'), [0.5, 2]], mid: [tr('中'), [0.35, 3]], low: [tr('低'), [0.2, 4]] } },
+  reflect: { label: tr('水面倒影'), hint: tr('水池倒影的清晰度'), items: { high: [tr('高'), [1, 2]], mid: [tr('中'), [0.7, 3]], low: [tr('低'), [0.4, 4]] } },
   lights: { label: tr('夜晚路燈光源'), hint: tr('晚上同時照亮四周的路燈數'), items: { high: [tr('高'), 8], mid: [tr('中'), 6], low: [tr('低'), 4] } },
 }
 const PRESETS = { auto: tr('自動'), high: tr('高'), mid: tr('中'), low: tr('低') }
 // 自動畫質的 6 級：先降解析度（效果最大、最不明顯），再降陰影、LOD 距離，最後才是倒影
 const LADDER = [
-  { res: Math.min(DPR, 2), shadow: 4096, reflect: [0.5, 2], lights: 8, lod: 1, name: tr('高') },
-  { res: Math.min(DPR, 1.6), shadow: 4096, reflect: [0.5, 2], lights: 8, lod: 1, name: tr('高') },
-  { res: Math.min(DPR, 1.25), shadow: 2048, reflect: [0.35, 3], lights: 6, lod: 0.8, name: tr('中') },
-  { res: Math.min(DPR, 1), shadow: 2048, reflect: [0.35, 3], lights: 6, lod: 0.65, name: tr('中') },
-  { res: Math.min(DPR, 1) * 0.8, shadow: 1024, reflect: [0.2, 4], lights: 4, lod: 0.5, name: tr('低') },
-  { res: Math.min(DPR, 1) * 0.65, shadow: 1024, reflect: [0.2, 4], lights: 4, lod: 0.4, name: tr('低') },
+  { res: Math.min(DPR, 2), shadow: 4096, reflect: [1, 2], lights: 8, lod: 1, name: tr('高') },
+  { res: Math.min(DPR, 1.6), shadow: 4096, reflect: [1, 2], lights: 8, lod: 1, name: tr('高') },
+  { res: Math.min(DPR, 1.25), shadow: 2048, reflect: [0.7, 3], lights: 6, lod: 0.8, name: tr('中') },
+  { res: Math.min(DPR, 1), shadow: 2048, reflect: [0.7, 3], lights: 6, lod: 0.65, name: tr('中') },
+  { res: Math.min(DPR, 1) * 0.8, shadow: 1024, reflect: [0.4, 4], lights: 4, lod: 0.5, name: tr('低') },
+  { res: Math.min(DPR, 1) * 0.65, shadow: 1024, reflect: [0.4, 4], lights: 4, lod: 0.4, name: tr('低') },
 ]
 // GPU 偵測：只看顯卡名稱猜一個起始等級（Safari 一律回「Apple GPU」、Firefox 會簡化，猜不到就從中間開始，交給效能測試修正）
 function guessLevel(renderer) {

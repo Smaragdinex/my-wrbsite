@@ -380,7 +380,10 @@ function buildInterior(lib, avoid = []) {
         #ifdef MIRROR
           // 2026-11-11 濕地 V3：真的倒影（mirror.js 鏡射鏡頭畫的）——天空、雲、枯樹、木樁、鳥都倒映在淺水上；水紋把倒影扭一點點
           vec4 rc = uReflMat * vec4(vW, 1.0);
-          vec3 refl = texture2D(uRefl, rc.xy / rc.w + N.xz * 0.018).rgb;
+          // 2026-11-11 使用者：倒影太 pixel、看了暈。水紋扭倒影的量原本固定 0.018（螢幕的 1.8%），遠處的水紋比一個像素還小，每個像素扭的方向都不一樣，
+          // 倒影碎成一點一點、走動時整片閃 → 近處才扭、越遠越平（遠處的水面本來就像鏡子）
+          float rd = 0.011 / (1.0 + 0.09 * distance(cameraPosition, vW));
+          vec3 refl = texture2D(uRefl, rc.xy / rc.w + N.xz * rd).rgb;
           env = mix(env, refl, uReflOn);
         #endif
         #ifdef LAKE
