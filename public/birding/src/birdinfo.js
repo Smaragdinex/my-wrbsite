@@ -520,7 +520,7 @@ const ALL = [
   },
   {
     // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [95.8, -25.6]）
-    id: 'pheron', spot: [43, -124], perch: 'ground', view: 281, y: EAST.W - 0.15,   /* 2026-11-11 翡翠沼澤西南角的蘆葦邊（木棧道看過去） */ water: EAST.W, dist: 4.2, camH: 1.6, lookY: 0.75,
+    id: 'pheron', spot: [50, -137.5], perch: 'ground', view: 281, y: EAST.W - 0.15,   /* 2026-11-11 翡翠沼澤西南角的蘆葦邊（木棧道看過去） */ water: EAST.W, dist: 4.2, camH: 1.6, lookY: 0.75,
     name: "紫鷺", sci: 'Ardea purpurea', where: "翡翠沼澤西南角的蘆葦邊",
     intro: "細長的脖子是栗紅色、兩側各有一條黑線，頭頂藍黑色，後頭有細長飾羽；背和翅膀藍灰色，肩上掛著一縷縷栗紅色的蓑羽。喜歡躲在蘆葦、水草邊，一動也不動地等魚。",
     facts: [
@@ -810,7 +810,7 @@ const ALL = [
   },
   // ---------- 2026-11-11 世界濕地鳥（夕陽潟湖、翡翠沼澤） ----------
   {
-    id: 'shoebill', spot: [46.5, -123.2], perch: 'ground', view: 300, y: EAST.W - 0.16, water: EAST.W, dist: 5, camH: 1.6, lookY: 0.85,
+    id: 'shoebill', spot: [53, -127], perch: 'ground', view: 300, y: EAST.W - 0.16, water: EAST.W, dist: 5, camH: 1.6, lookY: 0.85,
     name: "鯨頭鸛", sci: 'Balaeniceps rex', where: "翡翠沼澤的紙莎草角落",
     intro: "來自東非沼澤的大鳥，站起來有一百二十公分高。最顯眼的是那張像木鞋一樣的巨大嘴巴，嘴尖還有一個彎鉤。牠可以像雕像一樣站著一動也不動很久，等魚游到腳邊，再整個身體猛然往前撲下去。",
     facts: [
