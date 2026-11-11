@@ -149,7 +149,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const giants = buildGiants(scene, { sun, avoid: alpAvoid, lib: plantLib })
   buildWetlandProps(scene, wetKit)   // 2026-11-11 濕地 V3：枯樹、舊木樁、睡蓮（Blender）
   buildYoseTop(scene, sumKit, plantLib)   // 2026-11-11 瀑布頂後面的整座山、平台和石階的青苔草叢
-  buildWalkways(scene, walkKit)   // 2026-11-11 吊橋橋面、橋頭平台、巨木林木棧道（Blender 零件）
+  const walkRoot = buildWalkways(scene, walkKit)   // 2026-11-11 吊橋橋面、橋頭平台、巨木林木棧道（Blender 零件）
   // 2026-11-10 果樹上的鳥：在掃描的雀榕（不含葉子）上，從上往下打射線找「上面有空間、左右各一段差不多水平的直枝」，
   // 要在朝步道那一側、離地 2.2～3.4 公尺（鏡頭退到 6 公尺外，看起來比較平視）；枝的方向盡量跟鏡頭方向垂直（看得到鳥的側面）
   if (plantLib.figtree) {
@@ -280,6 +280,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
 
   const cloudSea = createCloudSea(scene, { sun })   // 山區下面的雲海（爬到雲層上面才看得到）
+  if (walkRoot.userData.lamps && flora.lamps) flora.lamps.push(...walkRoot.userData.lamps)   // 2026-11-11 濕地木棧道的矮燈：夜裡鏡頭附近幾盞有真的光
   const time = night ? buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera }) : null
   const weather = createWeather({ scene, camera, sun, hemi, renderer, time })   // 天氣：預設晴天、不自己變；遊戲（game/main.js）打開自動換
 

@@ -5,8 +5,9 @@
 //   橋頭平台：凸多邊形，木板垂直於「橋軸＋出口方向」的角平分線、多邊形邊上收邊樑＋欄杆（避開橋塔）
 //   棧道：沿 ALP_WALKS 的中線（轉角是圓弧，木板扇形排開）、兩側縱樑、每 1.4 m 欄杆柱、上中下三道扶手、離地高的地方下面有樁
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, alpineHeight, addCollider } from './layout.js'
+import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, alpineHeight, addCollider, deckAt } from './layout.js'
 import { dappled } from './alpine.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
@@ -188,6 +189,7 @@ export function buildWalkways(scene, kit) {
   }
 
   // ---------------- 木棧道 ----------------
+  const lampAt = []; let lampK = 0
   for (const w of ALP_WALKS) {
     const bw = batch('boardwalk' + w.head.t)
     const at = (s) => { const f = Math.min(w.N - 1.001, Math.max(0, s / w.ds)), i = Math.floor(f), u = f - i
@@ -216,6 +218,8 @@ export function buildWalkways(scene, kit) {
       for (let s0 = 1.2; s0 < S - 0.2; s0 += 1.4) {
         const p = at(s0), lat = sd * 1.61, nx = -p.tz * sd, nz = p.tx * sd
         const x = p.x + nx * 1.61, z = p.z + nz * 1.61
+        if (deckAt(p.x + nx * 2.3, p.z + nz * 2.3) != null) continue   // 2026-11-11 觀景灣的入口：這一側不立柱、不拉欄杆（railRun 超過 3 m 的間隔不接）
+        if (w.head.t === 'wet' && (lampK++ % 4) === 1) lampAt.push([x - nx * 0.09, p.y + 0.55, z - nz * 0.09, nx, nz])   // 每 5.6 m 一盞矮燈（柱子內側、離台面 0.55 m）
         posts.push({ x, z, y: p.y, nx, nz })
         bw.add('bw_post', place(V(x, p.y, z), V(nx, 0, nz), V(p.tx, 0, p.tz)))
         bw.add('bw_bracket', place(V(x, p.y, z), V(p.tx, 0, p.tz), V(nx, 0, nz)))
@@ -228,6 +232,21 @@ export function buildWalkways(scene, kit) {
       railRun(bw, posts)
     }
     bw.done()
+  }
+  // 2026-11-11 濕地木棧道的矮燈（ChatGPT：柱子內側、有遮罩的琥珀色 LED，2200～2400 K，(1, .45, .16)；黃昏 17:45 起慢慢亮）：
+  // 燈殼＋發光面各一個合併的 mesh；發光強度交給日夜系統（userData.lamp＝[白天, 晚上]），真的點光源由 world.js 挑鏡頭附近幾盞
+  if (lampAt.length) {
+    const hs = [], gs = []
+    for (const [x, y, z, nx, nz] of lampAt) {
+      const a = Math.atan2(nx, nz), M = new THREE.Matrix4().makeRotationY(a).setPosition(x, y, z)
+      hs.push(new THREE.BoxGeometry(0.1, 0.035, 0.09).translate(0, 0.07, -0.03).applyMatrix4(M), new THREE.BoxGeometry(0.1, 0.13, 0.02).translate(0, 0, 0).applyMatrix4(M))
+      gs.push(new THREE.BoxGeometry(0.07, 0.07, 0.012).translate(0, 0.0, -0.016).applyMatrix4(M))
+    }
+    const hm = new THREE.Mesh(mergeGeometries(hs), new THREE.MeshStandardMaterial({ color: 0x23201c, roughness: 0.6, metalness: 0.4 }))
+    const gm = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: new THREE.Color().setRGB(1, 0.45, 0.16), emissiveIntensity: 0, roughness: 0.5 })
+    gm.userData.lamp = [0, 3.2]
+    root.add(hm, new THREE.Mesh(mergeGeometries(gs), gm))
+    root.userData.lamps = lampAt.map(([x, y, z, nx, nz]) => new THREE.Vector3(x - nx * 0.35, y + 0.1, z - nz * 0.35))
   }
   scene.add(root)
   return root

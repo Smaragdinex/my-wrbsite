@@ -1148,16 +1148,18 @@ export const ALP_WALKS = (() => {
 })()
 // 2026-11-11 兩湖中間的木棧道（使用者：中間的走道改木頭道）：北岸 → 南岸，跨過水面；棧道面＝max(水面 + 0.45, 地面 + 0.06)，兩端順著接回地面
 {
-  const P = [[34.2, -86.3], [33.2, -95], [32, -103], [31.4, -111], [31, -118], [32.3, -125], [35.6, -130.2]], R = 9
+  // 2026-11-11 ChatGPT「S-Curve Sunset Boardwalk」：直的 45 m 像一座橋 → 緩緩的 S 形（左右各擺 3 m、長約 50 m，Catmull-Rom）：
+  // 往南走，先往西（潟湖）彎出去——轉過第一個彎，金色的潟湖整個打開；再往東（沼澤）彎回來
+  const P = [[34.2, -86.3], [32.9, -93.3], [31.6, -100.3], [32.9, -108.3], [37, -116.3], [38.4, -123.3], [35.6, -130.2]]
+  const cv = new THREE.CatmullRomCurve3(P.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal'), LEN = cv.getLength(), NS = Math.round(LEN / 0.05)
   const xs = [], zs = [], tx = [], tz = []
-  for (let k = 0; k < P.length - 1; k++) {
-    const [ax, az] = P[k], [bx, bz] = P[k + 1], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 0.05))
-    for (let q = k ? 1 : 0; q <= n; q++) { const f = q / n; xs.push(ax + (bx - ax) * f); zs.push(az + (bz - az) * f); tx.push((bx - ax) / L); tz.push((bz - az) / L) }
-  }
-  // 折線轉角的切線平滑一下（木板才不會在轉角突然轉向）
+  for (let i = 0; i <= NS; i++) { const q = cv.getPointAt(i / NS), t = cv.getTangentAt(i / NS); xs.push(q.x); zs.push(q.z); tx.push(t.x); tz.push(t.z) }
   const N = xs.length, stx = Float32Array.from(tx), stz = Float32Array.from(tz)
-  for (let i = 0; i < N; i++) { let a = 0, b = 0; for (let q = Math.max(0, i - 40); q <= Math.min(N - 1, i + 40); q++) { a += tx[q]; b += tz[q] } const l = Math.hypot(a, b); stx[i] = a / l; stz[i] = b / l }
-  void R
+  // 兩個觀景灣（EAST.decks，跟棧道同高）：夕陽灣（西側、17～22 m，5×4 m、一張面向夕陽的長椅）、翡翠灣（東側、34～39 m，4×3 m，看荷葉和鸊鷉）
+  for (const [nm, s0, side, w, d, bench] of [['sunsetBay', 19.5, -1, 5, 4, true], ['emeraldBay', 37, 1, 4, 3, false]]) {
+    const i = Math.min(N - 1, Math.round(s0 / 0.05)), nx = -stz[i] * side, nz = stx[i] * side, off = WALK_HW + d / 2 + 0.02
+    EAST.decks.push({ name: nm, x: xs[i] + nx * off, z: zs[i] + nz * off, w, d, look: [xs[i] + nx * 30, zs[i] + nz * 30], y: EAST.W + 0.45, bench, bay: true })
+  }
   const base = new Float32Array(N), y = new Float32Array(N)
   for (let i = 0; i < N; i++) { let m = -1e9; for (const l of [-WALK_HW, 0, WALK_HW]) m = Math.max(m, alpineHeight(xs[i] - stz[i] * l, zs[i] + stx[i] * l)); base[i] = m + 0.06; y[i] = Math.max(base[i], EAST.W + 0.45) }
   const sm = Float32Array.from(y)

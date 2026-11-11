@@ -126,10 +126,14 @@ function buildDecks(g, kit) {
     for (const lx of [-D.w / 2 + 0.1, 0, D.w / 2 - 0.1]) for (const lz of [-D.d / 2 + 0.1, 0, D.d / 2 - 0.1]) { const wx = D.x + lx * F.c + lz * F.s, wz = D.z - lx * F.s + lz * F.c, gy = Math.min(alpineHeight(wx, wz), EAST.W) - 0.4; box(0.16, Y - gy, 0.16, lx, (Y + gy) / 2 - 0.2, lz, F) }
     // 欄杆：前面＋左右兩側
     const rail = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 1.4)); for (let i = 0; i <= n; i++) box(0.09, 1.05, 0.09, x0 + (x1 - x0) * i / n, Y + 0.52, z0 + (z1 - z0) * i / n, F); const ang = Math.atan2(x1 - x0, z1 - z0); for (const [hh, th] of [[1.05, 0.07], [0.55, 0.05]]) { const b = new THREE.BoxGeometry(0.06, th, L); b.rotateY(ang); b.translate((x0 + x1) / 2, Y + hh, (z0 + z1) / 2); b.applyMatrix4(new THREE.Matrix4().makeRotationY(F.a)); b.translate(F.x, 0, F.z); geos.push(b.toNonIndexed()) } }
-    const hw = D.w / 2 - 0.05, hd = D.d / 2 - 0.05
-    rail(-hw, hd, hw, hd); rail(-hw, -hd + 0.6, -hw, hd); rail(hw, -hd + 0.6, hw, hd)
+    const hw = D.w / 2 - 0.05, hd = D.d / 2 - 0.05, back = D.bay ? 0 : 0.6   // 觀景灣：兩側欄杆一路接回棧道
+    rail(-hw, hd, hw, hd); rail(-hw, -hd + back, -hw, hd); rail(hw, -hd + back, hw, hd)
+    if (D.bench) {   // 面向夕陽的長椅（1.8 m）：椅面、椅背、兩隻腳
+      box(1.8, 0.06, 0.42, 0, Y + 0.45, -0.5, F); box(1.8, 0.4, 0.06, 0, Y + 0.72, -0.72, F); for (const lx of [-0.75, 0.75]) box(0.08, 0.45, 0.4, lx, Y + 0.22, -0.5, F)
+      addCollider(D.x - 0.5 * F.s, D.z - 0.5 * F.c, 0.45, Y + 0.6, Y - 0.2)
+    }
     // 欄杆擋人：前緣、兩側一排碰撞圓
-    for (const [x0, z0, x1, z1] of [[-hw, hd, hw, hd], [-hw, -hd + 0.6, -hw, hd], [hw, -hd + 0.6, hw, hd]]) for (let t = 0; t <= 1.001; t += 0.12) { const lx = x0 + (x1 - x0) * t, lz = z0 + (z1 - z0) * t; addCollider(D.x + lx * F.c + lz * F.s, D.z - lx * F.s + lz * F.c, 0.12, Y + 1.1, Y - 0.5) }
+    for (const [x0, z0, x1, z1] of [[-hw, hd, hw, hd], [-hw, -hd + back, -hw, hd], [hw, -hd + back, hw, hd]]) for (let t = 0; t <= 1.001; t += 0.12) { const lx = x0 + (x1 - x0) * t, lz = z0 + (z1 - z0) * t; addCollider(D.x + lx * F.c + lz * F.s, D.z - lx * F.s + lz * F.c, 0.12, Y + 1.1, Y - 0.5) }
   }
   if (!geos.length) return
   const m = new THREE.Mesh(mergeGeometries(geos), kit.postM); m.castShadow = true; m.receiveShadow = true; g.add(m)
