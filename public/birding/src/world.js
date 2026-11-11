@@ -9,7 +9,7 @@ import { createCoast } from './coast.js'
 import { buildOutside } from './outside.js'
 import { createWeather } from './weather.js'
 import { wetify } from './structures.js'
-import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel } from './structures.js'
+import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel, sunDirU } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants, parts } from './plants.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -404,6 +404,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
 const C = (h) => new THREE.Color(h)
 const SKY_D = C(0xdcecf5), SKY_N = C(0x24304c), GND_D = C(0x5d6e44), GND_N = C(0x0b0e0a)
 const FOG_D = C(0xc9d8d6), FOG_K = C(0xd8b39a), FOG_N = C(0x0b111b)
+// 2026-11-11 夕陽（ChatGPT 濕地黃金時刻，linear RGB）：天光偏藍紫、地面反光暖褐、霧偏灰粉（不要整個場景都橘）
+const DUSK_SKY = new THREE.Color().setRGB(0.52, 0.56, 0.72), DUSK_GND = new THREE.Color().setRGB(0.2, 0.14, 0.1), DUSK_FOG = new THREE.Color().setRGB(0.43, 0.36, 0.36)
 const SUN_D = C(0xfff1dc), SUN_K = C(0xff9a55), MOON = C(0x9fb6ff)
 const MOON_DIR = new THREE.Vector3(0.45, 0.6, -0.5).normalize()
 function buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera }) {
@@ -465,31 +467,31 @@ function buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera 
   function setTime(h) {
     st.hour = ((h % 24) + 24) % 24
     const a = (st.hour - 6) / 12 * Math.PI                                    // 6 點地平線、12 點最高、18 點落下
-    sunDir.set(-Math.cos(a) * 0.8, Math.sin(a) * 0.85, 0.35).normalize()
+    sunDir.set(Math.cos(a) * 0.8, Math.sin(a) * 0.85, -0.3).normalize()   // 2026-11-11 太陽改成東邊（中央山脈那側）升起、西南邊落下：台灣的夕陽在西邊；以前落在東邊高山後面，濕地看不到夕陽
     const day = ss(sunDir.y, -0.14, 0.28), dusk = ss(sunDir.y, -0.2, 0.0) * (1 - ss(sunDir.y, 0.05, 0.32))
     st.day = day; dayLight.value = day; duskLight.value = dusk
-    skyMat.uniforms.sunDir.value.copy(sunDir)
+    skyMat.uniforms.sunDir.value.copy(sunDir); sunDirU.value.copy(sunDir)
     skyMat.uniforms.moonDir.value.copy(MOON_DIR)
     // 太陽／月光：同一盞平行光，太陽下山後轉向月亮
     // 2026-11-11 使用者：太陽出來的光要很漂亮（ChatGPT 光照 V2，linear RGB）：正午 3.0、上午／下午 2.6～2.8；
     // 顏色照太陽高度：黃金時刻 (1, .43, .20) → 上午 (1, .88, .72) → 正午 (1, .96, .88)；天光 1.65、環境 0.75（樹幹背光面不要黑）
-    const sunI = 3.0 * ss(sunDir.y, -0.02, 0.3) * (0.82 + 0.18 * ss(sunDir.y, 0.3, 0.8)), moonI = 0.32 * (1 - day)
+    const sunI = 3.0 * ss(sunDir.y, -0.03, 0.12) * (0.67 + 0.33 * ss(sunDir.y, 0.12, 0.6))   /* 2026-11-11 夕陽（太陽高 5～7°）還有 2.0：低角度的暖光、長影子才出得來（以前 0.8，一片灰） */, moonI = 0.32 * (1 - day)
     sun.position.copy(sun.target.position).addScaledVector(sunI > moonI ? sunDir : MOON_DIR, 100)
     sun.intensity = sunI + moonI
     if (sunI > moonI) { const e1 = ss(sunDir.y, 0.0, 0.35), e2 = ss(sunDir.y, 0.35, 0.8); sun.color.setRGB(1, lerp(lerp(0.43, 0.88, e1), 0.96, e2), lerp(lerp(0.2, 0.72, e1), 0.88, e2)) }
     else sun.color.copy(MOON)
-    hemi.intensity = lerp(0.22, 1.65, day)
-    hemi.color.copy(SKY_N).lerp(SKY_D, day).lerp(FOG_K, dusk * 0.35)
-    hemi.groundColor.copy(GND_N).lerp(GND_D, day)
+    hemi.intensity = lerp(0.22, 1.65, day) * (1 - 0.3 * dusk)   // 黃昏：逆光的樹要暗成剪影（天光太亮整片樹都是亮綠）
+    hemi.color.copy(SKY_N).lerp(SKY_D, day).lerp(DUSK_SKY, dusk * 0.7)
+    hemi.groundColor.copy(GND_N).lerp(GND_D, day).lerp(DUSK_GND, dusk * 0.6)
     scene.environmentIntensity = lerp(0.05, 0.75, day)
-    scene.fog.color.copy(FOG_N).lerp(FOG_D, day).lerp(FOG_K, dusk * 0.6)
+    scene.fog.color.copy(FOG_N).lerp(FOG_D, day).lerp(DUSK_FOG, dusk * 0.75)
     // 晚上、清晨起霧（2026-11-07）：清晨 6 點最濃，9 點前散掉；晚上 9 點後到天亮一直有霧
     const hh = st.hour, morning = Math.exp(-(((hh - 6.2) / 1.5) ** 2)), night = Math.max(ss(hh, 19, 21.5), 1 - ss(hh, 3.5, 6)) * 0.75   // three 的 smoothstep 是 (x, min, max)
     const mk = Math.min(1, Math.max(morning, night)); mistLevel.value = mk
     scene.fog.density = FOG_D0 * (1 + 0.75 * mk)
     for (const c of clouds) c.material.opacity = c.userData.op0 * (1 + 1.4 * mk)
     // 晚上眼睛會適應：曝光拉高一點，不然整片黑什麼都看不到
-    renderer.toneMappingExposure = lerp(1.7, 1.05, day)
+    renderer.toneMappingExposure = lerp(1.7, 1.05, day) - 0.28 * dusk
     st.lamp = 1 - ss(day, 0.3, 0.65)
     for (const m of lampMats) m.emissiveIntensity = lerp(m.userData.lamp[0], m.userData.lamp[1], st.lamp)
     for (const m of glowMats) m.emissiveIntensity = m.userData.glow0 * lerp(0.08, 1, day)

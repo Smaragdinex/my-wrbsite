@@ -16,7 +16,7 @@ import { bladeMesh } from './flora.js'
 import { addWind } from './wind.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
 import { mulberry32, fbm2 } from './noise.js'
-import { dayLight, mistLevel, wetify } from './structures.js'
+import { dayLight, duskLight, mistLevel, wetify, sunDirU } from './structures.js'
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
@@ -284,7 +284,7 @@ function buildInterior(lib, avoid = []) {
   // 深的地方偏墨綠、淺的地方透出溪底，邊緣淡掉並有一圈白沫；看斜的地方反射天空（菲涅耳）、太陽方向有閃光；
   // 坡度大的那幾段流得快、一片白（小瀑布、急流）。水紋是兩層往下游捲動的雜訊，算法線用。
   const spray = [], fallFx = []
-  const waterU = { uTime: { value: 0 }, uDay: dayLight, uSun: { value: V(-0.45, 0.8, 0.3).normalize() } }
+  const waterU = { uTime: { value: 0 }, uDay: dayLight, uSun: sunDirU }   // 2026-11-11 太陽方向照時間走（以前固定）
   // 2026-11-07 第三版（跟 ChatGPT 討論過，依截圖的三個問題改）：
   // 1. 反射：低角度看水面反射的是兩岸的樹和石壁（暗綠），不是白色天空；太陽高光縮小——原本像灰白塑膠
   // 2. 流向圖（uFlow，溪建好時預先算的一張貼圖）：水紋、白沫順著水流方向漂，碰到石頭會分開繞過去；
@@ -293,7 +293,7 @@ function buildInterior(lib, avoid = []) {
   const flowTexDummy = new THREE.DataTexture(new Uint8Array([128, 128, 0, 0]), 1, 1); flowTexDummy.needsUpdate = true
   const waterM = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide,   // 三角形的方向不管（從上面看才不會被背面剔除）
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uDay: { value: 1 }, uSun: { value: V() }, uFlowBox: { value: new THREE.Vector4(0, 0, 1, 1) } }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uDay: { value: 1 }, uDusk: { value: 0 }, uSun: { value: V() }, uFlowBox: { value: new THREE.Vector4(0, 0, 1, 1) } }]),
     vertexShader: `
       attribute float aDepth; attribute float aSlope; attribute float aFoam; attribute float aLip;
       varying vec2 vUv; varying float vDepth; varying float vSlope; varying float vFoam; varying float vLip; varying vec3 vW;
@@ -306,7 +306,7 @@ function buildInterior(lib, avoid = []) {
         #include <fog_vertex>
       }`,
     fragmentShader: `
-      uniform float uTime; uniform float uDay; uniform vec3 uSun; uniform sampler2D uFlow; uniform vec4 uFlowBox;
+      uniform float uTime; uniform float uDay; uniform float uDusk; uniform vec3 uSun; uniform sampler2D uFlow; uniform vec4 uFlowBox;
       #ifdef MIRROR
         uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
       #endif
@@ -384,8 +384,18 @@ function buildInterior(lib, avoid = []) {
         col = mix(col, env, clamp(fres * (1.0 + lip * 0.6) * (1.0 - fall * 0.75), 0.0, 0.92));
         #endif   // 跌水那面是碎水，幾乎不倒影
         // 太陽高光：小而亮（原本太大一片，看起來像塑膠）
-        float spec = pow(max(dot(reflect(-uSun, N), Vd), 0.0), 260.0);
-        col += vec3(1.0, 0.97, 0.9) * spec * (1.6 + lip * 1.5);
+        float sunUp = smoothstep(-0.03, 0.04, uSun.y);
+        float sd = max(dot(reflect(-uSun, N), Vd), 0.0);
+        float spec = pow(sd, 260.0);
+        col += vec3(1.0, 0.97, 0.9) * spec * (1.6 + lip * 1.5) * sunUp;
+        // 2026-11-11 夕陽金光路徑（ChatGPT：顏色 (1,.7,.31)、HDR 2～3；遠處 2～4°、近處 10～16° 寬）：
+        // 寬的一層暖光＋把水紋放大 3.5 倍算的碎金點（一閃一閃），只在黃昏／清晨太陽低的時候
+        vec3 Ng = normalize(vec3(N.x * 3.5, 1.0, N.z * 3.5));
+        float sg = max(dot(reflect(-uSun, Ng), Vd), 0.0);
+        float spark = smoothstep(0.5, 0.9, vnoise(vW.xz * 7.0 + uTime * vec2(0.9, -0.5)) * 0.6 + vnoise(vW.xz * 17.0 - uTime * vec2(0.4, 0.8)) * 0.4);
+        float glit = (pow(sd, 18.0) * 0.55 + pow(sg, 70.0) * (0.3 + 3.2 * spark)) * uDusk * sunUp;
+        col += vec3(1.0, 0.58, 0.2) * glit * 3.6;
+        col = mix(col, col * vec3(1.15, 0.92, 0.7), uDusk * sunUp * 0.35 * smoothstep(0.6, 0.98, sd));   // 太陽那個方向的水面整片偏金
         // 跌水：一股股白色水絲，中間夾著深色透明的水
         // 三層：粗的水股、細的水絲、最細的拉絲（長焦拉近看才不會是一片糊糊的白）
         float streak = fbm(vec2(vUv.x * 22.0, vUv.y * 0.35 - uTime * sp * 0.9)) * 0.5 + fbm(vec2(vUv.x * 38.0, vUv.y * 1.8 - uTime * sp * 1.25)) * 0.3 + vnoise(vec2(vUv.x * 110.0, vUv.y * 5.0 - uTime * sp * 1.6)) * 0.2;
@@ -420,7 +430,7 @@ function buildInterior(lib, avoid = []) {
       }`,
   })
   waterM.uniforms.uFlow = { value: flowTexDummy }
-  waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uSun = waterU.uSun
+  waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uDusk = duskLight; waterM.uniforms.uSun = waterU.uSun
   {
     // 水池：一片比池子大一點的平面，每點的水深照地形算（沒水的地方深度 < 0 → 透明）
     const R = ALP_POND.r + 3, NR = 28, NA = 64, pos = [], uv = [], dep = [], slo = [], idx = []
@@ -466,7 +476,7 @@ function buildInterior(lib, avoid = []) {
     // 每個頂點帶：水深、坡度（跌水那幾格很陡）、白沫量（跌水底下最多，往下游漂散）。
     // 2026-11-11 兩條：原本的溪、瀑布湖流出來的河（同一套水面、石頭、流向圖；河另外一份材質，流向圖各自一張）
     for (const st of ALP_STREAMS) {
-    const wm = st === ALP_STREAM ? waterM : (() => { const m = waterM.clone(); m.uniforms = { ...m.uniforms, uTime: waterU.uTime, uDay: dayLight, uSun: waterU.uSun }; return m })()
+    const wm = st === ALP_STREAM ? waterM : (() => { const m = waterM.clone(); m.uniforms = { ...m.uniforms, uTime: waterU.uTime, uDay: dayLight, uDusk: duskLight, uSun: waterU.uSun }; return m })()
     const P = []
     for (let i = 0; i < st.length; i++) P.push(V(st[i][0], 0, st[i][1]))
     const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.25), K = st.wide ? 26 : 16, WK = st.wide ? 2.1 : 1, LATR = st.wide ? 7.5 : 4   // 寬的河：斷面 26 個頂點、往兩邊找 7.5 公尺；石頭的位置照河寬放大 WK 倍

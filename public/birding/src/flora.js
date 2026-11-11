@@ -7,6 +7,7 @@ import {
   colliders, addCollider, inAlpine, alpineHeight, ALP_POND,
 } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
+import { sunDirU, duskLight } from './structures.js'
 import { addWind, windUniforms } from './wind.js'
 import { scatter, nodeHeight, parts } from './plants.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
@@ -110,7 +111,8 @@ export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, law
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide })
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = windUniforms.uTime
-    sh.uniforms.uSun = { value: sun.clone() }
+    sh.uniforms.uSun = sun === _sunDefault ? sunDirU : { value: sun.clone() }   // 2026-11-11 照真的太陽方向（夕陽逆光才在對的那一邊）
+    sh.uniforms.uDusk = duskLight
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
         uniform float uTime;
@@ -139,13 +141,15 @@ export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, law
         vGcol = mix(vGcol, vec3(0.7, 0.66, 0.4) * dot(gB.rgb, vec3(0.5)) * 1.5, smoothstep(0.7, 1.0, y) * step(0.82, fract(a * 13.7)) * 0.4);`)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGw = (modelMatrix * vec4(transformed, 1.0)).xyz;')
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uSun; varying vec3 vGcol; varying float vY; varying vec3 vGw;')
+      .replace('#include <common>', '#include <common>\nuniform vec3 uSun; uniform float uDusk; varying vec3 vGcol; varying float vY; varying vec3 vGw;')
       .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= vGcol;')
       .replace('#include <opaque_fragment>', `
         // 背光透光：太陽在葉子後面時，葉子邊緣和上半部透出黃綠色的光
         vec3 vd = normalize(cameraPosition - vGw);
-        float back = pow(max(dot(-vd, uSun), 0.0), 3.0);
+        float bdot = max(dot(-vd, uSun), 0.0), back = pow(bdot, 3.0) * smoothstep(-0.03, 0.05, uSun.y);
         outgoingLight += vGcol * vec3(1.0, 1.15, 0.5) * back * smoothstep(0.3, 0.95, vY) * 0.35;
+        // 2026-11-11 夕陽逆光（ChatGPT：邊光 (1,.61,.23)、強度 0.5～1.2）：太陽在草／蘆葦後面時，上半段整片透出金橘色
+        outgoingLight += vec3(1.0, 0.61, 0.23) * pow(bdot, 5.0) * smoothstep(0.35, 1.0, vY) * uDusk * smoothstep(-0.03, 0.04, uSun.y) * (0.25 + 2.2 * dot(vGcol, vec3(0.33)));
         #include <opaque_fragment>`)
   }
   mat.customProgramCacheKey = () => 'grassBlade2' + (lawn ? 'L' : '') + (cane ? 'C' : '')

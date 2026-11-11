@@ -15,6 +15,8 @@ const tmpM = new THREE.Matrix4()
 /* ---------- 天空與外面的城市 ---------- */
 // 日夜共用的亮度：dayLight 白天 1 → 晚上 0；duskLight 黃昏、清晨的那一段（0～1）。world.setTime 改值，各個著色器直接讀
 export const dayLight = { value: 1 }, duskLight = { value: 0 }
+// 2026-11-11 太陽方向（world.setTime 每次更新）：水面的太陽高光、夕陽金光路徑照真的太陽走（以前水面用固定的方向，夕陽時金光在錯的地方）
+export const sunDirU = { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }
 // 霧氣量：白天 0；晚上 0.75、清晨（6 點前後）最濃 1，9 點前散掉。world.setTime 改值，霧、山頂雲、山區的霧團照它加濃
 export const mistLevel = { value: 0 }
 // 天氣（weather.js 改值）：雲量 0～1、陰暗 0～1、閃電亮光 0～1、遠處的雨霧 0～1
@@ -53,18 +55,23 @@ export function buildSky(scene) {
         vec3 hor = mix(vec3(0.035, 0.05, 0.09), vec3(0.86,0.91,0.93), uDay);
         // 黃昏：太陽那一側的地平線橘紅、天頂偏紫
         float sunSide = 0.5 + 0.5 * dot(normalize(d.xz + 1e-4), normalize(sunDir.xz + 1e-4));
-        hor = mix(hor, vec3(0.98, 0.58, 0.34) * (0.35 + 0.65 * sunSide), uDusk);
-        top = mix(top, vec3(0.28, 0.32, 0.55), uDusk * 0.55);
+        // 2026-11-11 濕地夕陽（ChatGPT，linear）：太陽兩側 ±35° 的地平線橘 (1,.43,.2)、其他方向偏粉紫；上層一帶 (.76,.38,.36)、天頂 (.27,.32,.49)
+        float warm = pow(sunSide, 2.5);
+        hor = mix(hor, mix(vec3(0.42, 0.38, 0.46), vec3(1.0, 0.43, 0.2) * 1.15, warm), uDusk);
+        top = mix(top, vec3(0.2, 0.25, 0.45), uDusk * 0.85);
         vec3 gnd = hor * 0.6;
         vec3 c = h > 0.0 ? mix(hor, top, pow(h, 0.55)) : mix(hor, gnd, -h*5.0);
+        c = mix(c, vec3(0.76, 0.38, 0.36), uDusk * (0.1 + 0.9 * warm) * smoothstep(0.02, 0.1, h) * (1.0 - smoothstep(0.1, 0.3, h)) * 0.5);
         float s = max(dot(d, sunDir), 0.0);
         // 太陽（2026-11-08 加大）：看得到的日輪（半徑約 0.6 度、邊緣暗一點），日出日落時變橘紅、光暈變大；
         // 在地平線下就看不到日輪（光暈留一點，天邊還有餘暉）。雲（下面）會蓋住它
         float sunUp = smoothstep(-0.02, 0.012, d.y);
-        vec3 sunCol = mix(vec3(1.0, 0.42, 0.12), vec3(1.0, 0.96, 0.88), smoothstep(0.02, 0.3, sunDir.y));
+        vec3 sunCol = mix(vec3(1.0, 0.42, 0.12), vec3(1.0, 0.96, 0.88), smoothstep(0.06, 0.45, sunDir.y));
+        vec3 haloCol = mix(sunCol, vec3(1.0, 0.45, 0.16), uDusk);   // 大圈光暈在黃昏一定是橘的（白色會被 ACES 壓成一片白霧）
         float disk = smoothstep(0.99989, 0.999945, s) * (0.75 + 0.25 * smoothstep(0.99989, 1.0, s));
-        float glow = pow(s, 900.0) * 2.5 + pow(s, 60.0) * (0.25 + 0.6 * uDusk) + pow(s, 8.0) * (0.08 + 0.25 * uDusk);
-        c += sunCol * (disk * 26.0 * sunUp + glow) * smoothstep(-0.12, 0.0, sunDir.y) * (1.0 - 0.95 * uGloom);
+        float glow = pow(s, 900.0) * 2.5 + pow(s, 60.0) * (0.25 + 0.9 * uDusk);
+        float halo = pow(s, 8.0) * (0.08 + 0.45 * uDusk) + pow(s, 2.5) * 0.22 * uDusk;   // 2026-11-11 夕陽：太陽四周一大圈橘金光暈
+        c += (sunCol * (disk * 26.0 * sunUp + glow) + haloCol * halo) * smoothstep(-0.12, 0.0, sunDir.y) * (1.0 - 0.95 * uGloom);
         // 陰天：整片天空變灰（亮度照原本的天色），太陽被雲遮住
         c = mix(c, vec3(dot(c, vec3(0.3, 0.5, 0.2))) * vec3(0.92, 0.95, 1.0) * (1.0 - 0.35 * uGloom), uGloom * 0.85);
         // 雲（2026-11-08 拿掉溫室後加）：天空投影到一片高空的平面上，fbm 雜訊當雲量，慢慢往東飄；
@@ -77,7 +84,7 @@ export function buildSky(scene) {
           cloudA = cov * smoothstep(0.0, 0.18, d.y);
           float lit = 0.72 + 0.28 * smoothstep(0.35, 0.85, n2) + 0.35 * pow(max(dot(d, sunDir), 0.0), 6.0);
           vec3 cc = mix(vec3(0.05, 0.06, 0.09), vec3(0.97, 0.98, 1.0), uDay) * lit;
-          cc = mix(cc, vec3(1.0, 0.68, 0.48) * lit, uDusk * 0.7);
+          cc = mix(cc, mix(vec3(0.34, 0.33, 0.44), vec3(0.95, 0.42, 0.27) * 1.35, warm) * lit, uDusk * 0.85);   // 雲底：對著太陽那邊橘紅、背面粉紫
           cc *= 1.0 - 0.55 * uGloom * (0.6 + 0.4 * n);   // 雨雲：灰黑、厚的地方更暗
           c = mix(c, cc, cloudA * 0.92);
         }
