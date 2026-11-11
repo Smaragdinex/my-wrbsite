@@ -23,7 +23,7 @@ const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0
 import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
 import { buildOwlNest } from './owlnest.js'
-import { buildEast } from './east.js'
+import { buildEast, loadHideKit } from './east.js'
 import { buildCamp } from './camp.js'
 import { buildPondLife } from './pondlife.js'
 import { buildYosemite } from './yosemite.js'
@@ -86,7 +86,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 下載進度：植物（檔案大）佔 75%、鳥 25%
   let pF = 0, bF = 0
   const prog = () => onProgress?.(pF * 0.75 + bF * 0.25, 'load')
-  const [plantLib, , walkKit, wetKit, sumKit, caveKit] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() }), loadWalkwayKit(), loadWetlandKit(), loadSummitKit(), loadCaveKit()])
+  const [plantLib, , walkKit, wetKit, sumKit, caveKit, hideKit] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() }), loadWalkwayKit(), loadWetlandKit(), loadSummitKit(), loadCaveKit(), loadHideKit()])
   onProgress?.(1, 'build')
   // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
   const placeDef = (def) => {
@@ -142,7 +142,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   giantSpots(alpAvoid)   // 巨木的位置先算好：山區的其他樹、草要避開
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
-  scene.add(buildEast({ avoid: alpAvoid, lib: plantLib }))   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
+  scene.add(buildEast({ avoid: alpAvoid, lib: plantLib, hideKit, walkKit }))   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
   alpine.build()
   const camp = buildCamp(scene)
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉
