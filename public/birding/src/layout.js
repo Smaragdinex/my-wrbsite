@@ -71,7 +71,10 @@ function domeRho0(x, z) {
   const n = domeN(x)
   return ((x / DOME.AE) ** n + Math.abs(z / domeB(x)) ** n) ** (1 / n)
 }
-export const domeRho = (x, z) => smin(smin(smin(domeRho0(x, z), lobeSweep(LOBES.grass, x, z), 0.3), lobeSweep(LOBES.wet, x, z), 0.3), lobeSweep(LOBES.lagoon, x, z), 0.3)
+// 2026-11-11 使用者：濕地走不過去。潟湖那塊是從東邊 (40,-110) 拉出去的，它的西半邊跟花園北緣之間留了一個凹口：地面有畫、圍籬也在更外面，
+// 但 domeRho 在那裡 > 0.955，被當成園區的牆擋住。再從花園裡面往北拉兩條到潟湖，把凹口整個包進園區
+const LAG_FILL = [[-22, -34], [8, -40]].map((from) => ({ ...LOBES.lagoon, from, r0: 24 }))
+export const domeRho = (x, z) => smin(smin(smin(smin(smin(domeRho0(x, z), lobeSweep(LOBES.grass, x, z), 0.3), lobeSweep(LOBES.wet, x, z), 0.3), lobeSweep(LOBES.lagoon, x, z), 0.3), lobeSweep(LAG_FILL[0], x, z), 0.3), lobeSweep(LAG_FILL[1], x, z), 0.3)
 // 同一個方位上「最外面」的邊界半徑（outside.js 的草地從這裡往外鋪）：比它近、但在邊界外的凹口，山區地形網格要自己畫（不然是一個洞）
 const OUTER_N = 1440, outerTab = new Float32Array(OUTER_N).fill(-1)
 export function outerR(x, z) {
@@ -275,7 +278,9 @@ function buildHeights() {
     const z = G.z0 + j * G.cell
     for (let i = 0; i < G.nx; i++) {
       const x = G.x0 + i * G.cell, rho = gardenRho(x, z)
-      if (x <= 20 || rho <= 0.97) continue
+      // 2026-11-11 原本只做東邊（x > 20）：山區地形後來繞到花園的北、西、南三面，那幾面花園邊緣外的坡還在自己起伏，
+      // 跟從 0.97 接出去的山區地形差 20～40 公分，山區那片的邊翹在上面、底下看穿（使用者：地形縫偏高有破圖）→ 整圈都做
+      if (rho <= 0.97) continue
       const se = smoothstep(62, 68, x) * smoothstep(5.5, 3.6, Math.abs(z))   // 往山區的步道出口照樣攤平
       height[j * G.nx + i] = lerp(at(x * 0.97 / rho, z * 0.97 / rho), 0, se)
     }
