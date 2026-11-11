@@ -225,8 +225,8 @@ export function buildSummit(scene, kit, lib) {
     for (const [nm, list] of Object.entries(fl)) scatter(g, lib[nm], list, { cast: true })
   }
 
-  // ---------- 3) 石階：牆腳的青苔、草、蕨類 ----------
-  {
+  // ---------- 3) 石階：牆腳的青苔、草、蕨類 ----------（2026-11-12 之字形石階拆掉了，這段不跑；新步道的植栽在 yosemite.js）
+  if (false) {
     const M = YOSE.mist, stepTop = (k, x) => Math.floor(st.legH(k, x) / 0.2) * 0.2 + 0.2
     const fernN = lib ? ['fern_sa', 'fern_sb', 'fern2_b'].filter((nm) => lib[nm]) : [], fl = {}
     for (let k = 0; k < M.NL; k++) {

@@ -403,79 +403,78 @@ export const YOSE = (() => {
   Y.flatK = (x) => Math.min(ssY(184, 192, x), ssY(256, 249, x))   // 2026-11-11 平的岩壁頂加寬（瀑布口到石階頂再往東，頂上一大片平地）
   Y.topY = (x) => { if (P0 == null) P0 = Y.g0(200) + HtRaw(200); const k = Y.flatK(x); return lerp(Y.g0(x) + HtRaw(x), P0, k) }
   Y.Ht = (x) => Y.topY(x) - Y.g0(x)
-  // 瀑布步道（像優勝美地的 Mist Trail／Upper Yosemite Fall Trail）：瀑布東邊，花崗岩壁被鑿成一層層的平台，
-  // 8 段之字形石階一路爬到岩壁頂（2026-11-11 使用者：以前只到半山腰、兩邊破圖、後面空的 → 真的爬上去）。
-  // 第 k 段的踏面在「離牆腳 d_k」那一條（d_k＝-7.5＋2.5k，負的是在牆腳前面），寬 2.5 公尺（外側 0.35 是矮石牆）；
-  // 每段的內側就是上一層平台的石壁（高度＝上一段踏面）——整面岩壁看起來是一階一階的。最下面從 yose 支線（228, 70.4）接上來
-  Y.mist = { XA: 209, XB: 238, NL: 6, W: 3.4, D0: -9, start: [242, 65.0] }   // 2026-11-11 第二版（使用者：步道再寬一點；ChatGPT：可走 2.8 m、每段 25～30 m、坡度約 20%）：6 段、每段 29 m、帶寬 3.4（外側 0.4 是石牆）
+  // 2026-11-12 兩段式瀑布（使用者給的 Watkins Glen／龍岩瀑布照片；ChatGPT 規格在 docs/GORGE_SPEC.txt）：瀑布口那一段（x 193～207）岩壁上半往後退 rec 公尺，
+  // 退出來的地方是一片平的岩棚（高 shelfY，剛好是岩簷的頂）：上段細瀑落在岩棚上，水攤開後從岩簷口成一片寬水簾落進湖裡。
+  // rec2：岩棚後壁在上段瀑布正後方再凹一個洞（步道從水簾後面穿過去）
+  Y.rec = (x) => 6.5 * Math.exp(-Math.pow((x - Y.fall.x) / 7.5, 4))
+  Y.rec2 = (x) => Y.rec(x) + 3.4 * Math.exp(-Math.pow((x - Y.fall.x) / 3.7, 4))
+  Y.shelfY = () => Y.g0(Y.fall.x) + Y.caveH(Y.fall.x) + 2.3
+  // 2026-11-12 秘境瀑布步道（使用者：後面上山的兩條步道都拆掉，改成從瀑布湖旁邊進去往上；全程走上去不停 3 分鐘。路線設計 docs/GORGE_ROUTE.txt）：
+  // 一條連續的路，從瀑布後面岩窟的東口開始 → 東側岩壁迴廊（鑿進岩壁、頭上有岩簷）→ 轉進岩體的隧道 → 螺旋隧道兩圈 → 岩棚、從上段瀑布後面穿過
+  // → 西側通道、折返 → 隱藏的上層通道 → 轉回岩壁面 → 最後一段迴廊爬到岩壁頂。pts＝中線 [x, z]、yy＝高度、kind＝這一點是哪一種：
+  // 'open' 露天、'gal' 岩壁迴廊（岩壁網格上切橫槽）、'alc' 凹室（槽切得深，隧道口在裡面）、'tun' 隧道（岩體裡的管狀網格）、'shelf' 岩棚、'top' 岩壁頂
+  Y.TRAIL_HW = 1.2   // 可以走的半寬
   Y.stairs = (() => {
     let built = null
     return () => {
       if (built) return built
-      const M = Y.mist, pts = [], legOf = []
-      const zAt = (x, k) => Y.base(x) + M.D0 + M.W * k + 0.2
-      // 進場：從支線往北走到第 0 段的起點（東端）
-      const [sx, sz] = M.start, ex = M.XB + 0.8, ez = zAt(ex, 0)
-      for (let i = 0; i <= 12; i++) { pts.push([lerp(sx, ex, i / 12), lerp(sz, ez, i / 12)]); legOf.push(-1) }
-      // 2026-11-10 使用者：轉彎太 V → ChatGPT「V3：圓弧 U 型轉彎」：每段兩端縮進 1.5 m，段與段之間用水平的半圓（中心線半徑 1.7 m＝兩層間距的一半）接起來；
-      // 每段平均爬 8 m（總爬升固定），轉彎本身是平的（以前轉彎處跟著坡往上，又是 180° 直接掉頭，加上石板平台像一個尖 V）
-      const R = M.W / 2, xcE = M.XB - 1.5, xcW = M.XA + 1.5
-      for (let k = 0; k < M.NL; k++) {
-        const west = k % 2 === 0
-        const xa = k === 0 ? M.XB + 0.8 : west ? xcE : xcW, xb = k === M.NL - 1 ? (west ? M.XA - 0.8 : M.XB + 0.8) : west ? xcW : xcE
-        for (let i = k === 0 ? 1 : 0; i <= 40; i++) { const x = lerp(xa, xb, i / 40); pts.push([x, zAt(x, k)]); legOf.push(k) }
-        if (k === M.NL - 1) break
-        // 半圓：圓心在這段終點和下一段起點中間（z 往岩壁裡 1.7 m），往外（西端往 -x、東端往 +x）凸出去
-        const zc = (zAt(xb, k) + zAt(xb, k + 1)) / 2, side = west ? -1 : 1
-        for (let j = 1; j < 14; j++) { const a2 = -Math.PI / 2 + Math.PI * j / 14; pts.push([xb + side * R * Math.cos(a2), zc + R * Math.sin(a2)]); legOf.push(-2) }
-      }
+      const pts = [], yy = [], kind = []
+      const add = (x, z, y, k) => { pts.push([x, z]); yy.push(y); kind.push(k) }
+      let cur = null
+      const to = (b, k, n) => { const a = cur; for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(a[0], b[0], t); add(x, Y.base(x) + lerp(a[1], b[1], t), lerp(a[2], b[2], t), k) } cur = b }
+      // 圓弧：f＝0 在圓的南端（離岩壁面最近）、π 在北端；sx＝+1 往東凸、-1 往西凸
+      const arc = (xc, dc, r, f0, f1, sx, y0, y1, k, n) => { const zc = Y.base(xc) + dc; for (let i = 1; i <= n; i++) { const t = i / n, f = lerp(f0, f1, t); add(xc + sx * r * Math.sin(f), zc - r * Math.cos(f), lerp(y0, y1, t), typeof k === 'function' ? k(t) : k) } }
+      const sY = Y.shelfY(), top = Y.topY(214) + 0.05, PI = Math.PI
+      // 起點＝cave 支線的終點（瀑布正後方），高度跟那裡的地面一樣
+      { const x0 = 199.5, z0 = 94.9, y0 = alpineHeight(x0, z0) + 0.02; add(x0, z0, y0, 'open'); cur = [x0, z0 - Y.base(x0), y0] }
+      // 從岩窟出來：岩窟東端是收成拱的岩壁，走不出去 → 在 x 203 從岩簷口底下出來，沿湖邊踩著石板（水面上 0.8 m）往東到迴廊口
+      to([202.8, 1.8, 28.4], 'open', 4); to([204.8, -1.5, 28.35], 'open', 4); to([208.6, -1.5, 28.6], 'open', 4); to([210.5, 1.6, 29.6], 'open', 4)
+      to([221, 1.6, 33.6], 'gal', 12); to([240, 1.6, 37.0], 'gal', 21)                                   // 東側岩壁迴廊
+      arc(240, 3.85, 2.25, 0, PI, 1, 37.0, 37.6, 'alc', 9); cur = [240, 6.1, 37.6]                        // 轉進岩體
+      to([216.5, 6.1, 40.0], 'tun', 25)
+      arc(216.5, 10.5, 4.4, 0, 4 * PI, -1, 40.0, 49.2, 'tun', 60); cur = [216.5, 6.1, 49.2]                // 螺旋隧道兩圈（每圈升 4.6 m）
+      to([210, 5.2, 50.3], 'tun', 7); to([205.6, 4.4, sY], 'tun', 5)
+      to([203.6, 5.2, sY], 'shelf', 2); to([202.4, 8.4, sY], 'shelf', 4); to([197.6, 8.4, sY], 'shelf', 5); to([196.4, 5.2, sY], 'shelf', 4); to([193.8, 3.4, sY], 'shelf', 3)   // 岩棚：從上段瀑布後面穿過
+      to([191, 5.5, sY + 0.5], 'tun', 3); to([172, 8.5, 57.0], 'tun', 20)                                // 西側通道
+      arc(172, 11.25, 2.75, 0, PI, -1, 57.0, 57.6, 'tun', 10); cur = [172, 14, 57.6]
+      to([238, 14, 68.5], 'tun', 68)                                                                     // 隱藏的上層通道
+      // 大半圓轉回岩壁面（整段都還在岩體裡）：岩壁越高越往後仰（y 70 那裡岩壁面離牆腳約 1.6 m），最後一段迴廊的中線放在離牆腳 3.4 m。
+      // 隧道往西直直穿出來，出口正對迴廊的盡頭（斜著穿出來的話，洞口會被岩壁擋掉一半）
+      arc(238, 8.7, 5.3, PI, 0, 1, 68.5, 70.3, 'tun', 20); cur = [238, 3.4, 70.3]
+      to([236.2, 3.4, 70.6], 'tun', 2)
+      to([214, 3.4, top], 'gal', 23)                                                                     // 最後一段迴廊
+      to([212.5, 4.4, top], 'top', 2); to([211.5, 6.6, top], 'top', 3)
       let L = 0; const S = [0]; for (let i = 1; i < pts.length; i++) { L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); S.push(L) }
-      const h0 = alpineHeight(sx, sz), top = Y.topY(M.XB)
-      // 每一點的高度：進場那段緩緩爬（約 6%），之後每段石階照距離平均爬、轉彎（legOf -2）不爬
-      const Y_ = new Float64Array(pts.length)
-      { let climbL = 0, approachL = 0
-        for (let i = 1; i < pts.length; i++) { const d = S[i] - S[i - 1]; if (legOf[i] >= 0) climbL += d; else if (legOf[i] === -1) approachL += d }
-        const aRise = Math.min(2, approachL * 0.06), perM = (top - h0 - aRise) / climbL
-        for (let i = 1; i < pts.length; i++) { const d = S[i] - S[i - 1]; Y_[i] = Y_[i - 1] + (legOf[i] === -1 ? aRise * d / Math.max(1e-6, approachL) : legOf[i] >= 0 ? perM * d : 0) }
-        for (let i = 0; i < pts.length; i++) Y_[i] += h0 }
-      const h = (s) => { if (s <= 0) return Y_[0]; if (s >= L) return Y_[Y_.length - 1]; let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] < s) lo = m; else hi = m } return lerp(Y_[lo], Y_[hi], (s - S[lo]) / Math.max(1e-6, S[hi] - S[lo])) }
-      // 第 k 段在 x 那裡的踏面高（地形、碰撞、石壁都用）：沿這段找最近的點
-      const legH = (k, x) => {
-        if (k < 0) return h0
-        if (k >= M.NL) return top
-        let best = 1e9, sv = 0
-        for (let i = 1; i < pts.length; i++) {
-          if (legOf[i] !== k) continue
-          const d = Math.abs(pts[i][0] - x); if (d < best) { best = d; sv = S[i] }
-        }
-        return h(sv)
-      }
-      built = { pts, S, L, h0, top, h, legOf, legH, zAt }
+      const h = (s) => { if (s <= 0) return yy[0]; if (s >= L) return yy[yy.length - 1]; let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] < s) lo = m; else hi = m } return lerp(yy[lo], yy[hi], (s - S[lo]) / Math.max(1e-6, S[hi] - S[lo])) }
+      // 全程（湖西岸 cave 支線起點到岩壁頂）不停走 3 分鐘：湖邊那 40 m 照平常的速度，步道上的速度 v 照長度反推（濕的石階，小心走）
+      const v = Math.min(3.2, L / (180 - 40 / 3.2))
+      built = { pts, yy, kind, S, L, h, h0: yy[0], top, v }
       return built
     }
   })()
-  // 站在石階上的高度（一階 0.2 公尺）；不在上面回傳 null
-  Y.stairAt = (x, z) => {
-    if (x < Y.mist.XA - 2.2 || x > Math.max(Y.mist.XB + 2.2, Y.mist.start[0] + 1.6) || z < Y.mist.start[1] - 1.5) return null   // 進場那段在 XB 外面，要算進來
-    const st = Y.stairs()
-    let best = 1e9, sAt = 0
+  // 站在步道上的高度；不在上面回傳 null。步道有好幾層上下重疊（螺旋、上下層通道）：給 feet（腳底高度）就挑「不高過腳底 0.6 m」裡最接近腳底的那一層
+  Y.stairAt = (x, z, feet) => {
+    if (x < 168 || x > 244.5 || z < 86 || z > 122) return null
+    const st = Y.stairs(), HW = Y.TRAIL_HW
+    // 找中線上最近的那一點；上下重疊的幾層（螺旋每圈差 4.6 m、上下層通道）用高度分：只看腳底往上 0.6、往下 2 m 以內的
+    let bestH = null, bestD = 1e9
     for (let i = 1; i < st.pts.length; i++) {
-      const [ax, az] = st.pts[i - 1], [bx, bz] = st.pts[i], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz
+      const [ax, az] = st.pts[i - 1], [bx, bz] = st.pts[i]
+      if (Math.abs(x - ax) > 4 || Math.abs(z - az) > 4) continue
+      const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz
       const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(x - ax - dx * t, z - az - dz * t)
-      if (d < best) { best = d; sAt = st.S[i - 1] + Math.sqrt(l2) * t }
+      if (d > HW || d >= bestD) continue
+      const hh = lerp(st.yy[i - 1], st.yy[i], t) + 0.05
+      if (feet != null && (hh > feet + 0.6 || hh < feet - 2)) continue
+      bestD = d; bestH = hh
     }
-    if (best > 1.45) return null
-    // 2026-11-10 ChatGPT：走樓梯＝看得到的石階＋看不到的斜坡碰撞。以前回傳一階一階的高度（每 1.2 公尺跳 0.2），走起來一頓一頓；
-    // 改回傳連續的坡道高度（在每階踏面的上下 0.1 公尺內，第一人稱看不出腳陷進去）
-    return st.h(sAt) + 0.1
+    return bestH
   }
-  // 岩壁頂上走得到的地方（平的，高 topY）：石階頂（東端）往西到瀑布口旁邊的觀景台；前緣＝平台的石壁／岩壁的邊，後面到玻璃前
-  // 2026-11-12 兩段式瀑布（使用者給的 Watkins Glen／龍岩瀑布照片；ChatGPT 規格在 docs/GORGE_SPEC.txt）：瀑布口那一段（x 193～207）岩壁上半往後退 rec 公尺，
-  // 退出來的地方是一片岩棚（剛好是岩簷的頂）：上段細瀑落在岩棚上，水攤開後從岩簷口成一片寬水簾落進湖裡
-  Y.rec = (x) => 6.5 * Math.exp(-Math.pow((x - Y.fall.x) / 7.5, 4))
-  Y.topFront = (x) => x >= Y.mist.XA - 1.3 && x <= Y.mist.XB + 1.3 ? Y.base(x) + Y.mist.D0 + Y.mist.W * (Y.mist.NL - 0.5) : Y.base(x) + 3.2 + Y.rec(x)
+  // 岩壁頂上走得到的地方（平的，高 topY）：瀑布口東邊到 x 250；前緣＝岩壁的邊（瀑布口那段跟著岩棚往後退），後面到山腳前
+  // x 213～237：最後一段迴廊在岩壁頂的邊緣底下往上爬（最後幾公尺頂上是開的），那一條不算岩壁頂（不然快到頂時腳下突然變成平台的高度，被當成一階太高擋住）
+  Y.topFront = (x) => Y.base(x) + 3.2 + Y.rec(x) + (x > 213 && x < 237 ? 2.4 : 0)
   Y.topAt = (x, z) => (x > 201.2 && x < 250 && z > Y.topFront(x) - 0.05 && z < Y.edge(x) - 2.2) ? Y.topY(x) + 0.05 : null   // 岩壁頂上的平地：瀑布口東邊到 x 250
-  Y.behind = (x, z) => (x > Y.x0 - 3 && x < Y.x1 + 3 && z > Y.base(x) - 1.5) || (x > Y.mist.XA - 4 && x < Y.mist.XB + 4 && z > Y.base(x) + Y.mist.D0 - 3)   // 岩壁、石階平台上（石頭、草不要長在這裡）
+  Y.behind = (x, z) => x > Y.x0 - 3 && x < Y.x1 + 3 && z > Y.base(x) - 1.5   // 岩壁上（石頭、草不要長在這裡）
   Y.inside = (x, z) => x > Y.x0 - 12 && x < Y.x1 + 10 && z > Y.base(Math.min(Y.x1, Math.max(Y.x0, x))) - 30
   return Y
 })()
@@ -637,6 +636,8 @@ function ridgeTrailPts() {
   return pts
 }
 ALP_SPURS.find((q) => q.name === 'ridge').pts = ridgeTrailPts()   // EAST 在 ALP_SPURS 後面才定義，這裡補上
+// 2026-11-12 使用者：岩脊這條下山的步道拆掉（岩脊的山留著當背景），上山只剩瀑布旁的秘境步道
+ALP_SPURS.splice(ALP_SPURS.findIndex((q) => q.name === 'ridge'), 1)
 function ridgeH(X, Z) {
   const R = EAST.ridge
   if (X < 238 || X > 300 || Z < 52 || Z > 132) return -1e9
@@ -1262,7 +1263,7 @@ export function supportAt(x, z, feet) {
     if (dy != null && dy <= feet + 0.5 && dy > y - 1.5) { y = dy; owner = 3 }
     const wy = walkAt(x, z)        // 巨木林木棧道
     if (wy != null && wy <= feet + 0.5 && wy > y - 1) { y = wy; owner = 3 }
-    const sy = YOSE.stairAt(x, z)   // 瀑布步道的石階
+    const sy = YOSE.stairAt(x, z, feet)   // 瀑布步道（多層重疊：挑腳下那一層）
     if (sy != null && sy <= feet + 0.5 && sy > y) { y = sy; owner = 5 }
     const ty = YOSE.topAt(x, z)     // 岩壁頂上
     if (ty != null && ty <= feet + 0.5 && ty > y) { y = ty; owner = 5 }

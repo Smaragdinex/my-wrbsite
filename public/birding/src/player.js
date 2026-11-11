@@ -64,7 +64,7 @@ export function createPlayer(camera, dom) {
       if (keys.has('KeyA') || keys.has('ArrowLeft')) want.sub(right)
     }
     st.sneak = controls.isLocked && keys.has('KeyC')
-    if (want.lengthSq() > 0) want.normalize().multiplyScalar((st.sneak ? SNEAK : keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK) * (st.owner === 5 && st.grounded && YOSE.stairAt(st.x, st.z) != null ? 0.8 : 1))   // 石階上走慢一點（ChatGPT：上樓約平地的 7 成；2026-11-10 使用者：石頭路很卡 → 0.65 → 0.8）
+    if (want.lengthSq() > 0) want.normalize().multiplyScalar((st.sneak ? SNEAK : keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK) * (st.owner === 5 && st.grounded && YOSE.stairAt(st.x, st.z, st.feet) != null ? YOSE.stairs().v / WALK : 1))   // 石階上走慢一點（ChatGPT：上樓約平地的 7 成；2026-11-10 使用者：石頭路很卡 → 0.65 → 0.8）
     // 起步、停下都慢慢來（原本 12 幾乎是瞬間），停下比起步快一點，才不會覺得滑
     const k = !st.grounded ? 3 : want.lengthSq() > 0 ? 6 : 8
     vel.x += (want.x - vel.x) * Math.min(1, k * dt)
