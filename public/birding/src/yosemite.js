@@ -550,13 +550,13 @@ export function buildYosemite(scene, { lib } = {}) {
     // 2026-11-10 ChatGPT：高處外側（落差大的第 3 層以上）石牆上加深灰色鐵管欄杆：離踏面 1.05 公尺、柱距 1.8 公尺、上下兩根橫管；轉彎開口不裝
     {
       const parts = [], post = new THREE.CylinderGeometry(0.025, 0.025, 1, 6), bar = new THREE.CylinderGeometry(0.02, 0.02, 1, 6).rotateZ(Math.PI / 2)
-      for (let k = 2; k < M.NL; k++) {
+      for (let k = 0; k < M.NL; k++) {   // 2026-11-11 ChatGPT 石階 V3：每一段都要欄杆（以前只有第 3 層以上），柱距 1.4 m
         const zOf = (x) => YOSE.base(x) + M.D0 + M.W * k - M.W / 2 + 0.2
         let prev = null
-        for (let x = xcW; x <= legX1(k) - 0.2; x += 1.8) {
+        for (let x = xcW; x <= legX1(k) - 0.2; x += 1.4) {
           const y0 = Hk(k, x), z = zOf(x), top = y0 + 1.05, wallTop = y0 + 0.78
           parts.push(post.clone().scale(1, top - wallTop + 0.05, 1).translate(x, (top + wallTop) / 2, z))
-          if (prev) for (const h of [0, -0.38]) {
+          if (prev) for (const h of [0, -0.3]) {
             const a = V(prev.x, prev.top + h, prev.z), b = V(x, top + h, z), len = a.distanceTo(b)
             parts.push(bar.clone().scale(len, 1, 1).applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.atan2(b.y - a.y, b.x - a.x))).translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2))
           }
@@ -580,7 +580,17 @@ export function buildYosemite(scene, { lib } = {}) {
       const wallM = new THREE.MeshStandardMaterial({ color: 0xaaa59b, roughness: 0.95 }), coreM = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.98 })
       // 第二輪（ChatGPT：石牆像一堆碎紙片、白色尖破面）：壓扁的十二面體切出很多細長三角形 → 改成低面數的圓石（球面＋輕微凹凸），封閉、沒有尖片
       const stoneG = new THREE.SphereGeometry(0.5, 9, 6); { const pp = stoneG.attributes.position; for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i), k = 0.92 + 0.1 * Math.sin(x * 9.1 + y * 5.3 + z * 7.7); pp.setXYZ(i, x * k, Math.sign(y) * Math.min(Math.abs(y) * k, 0.36), z * k) } stoneG.computeVertexNormals() }
-      for (const [list, geo, mat] of [[stones, stoneG, wallM], [cores, new THREE.BoxGeometry(1, 1, 1), coreM]]) {
+      // 2026-11-11 使用者：石階旁的石頭像一包包沙包 → 砌石改用掃描的岩石（Poly Haven，跟山上的石頭同一批），縮成單位大小再照原本的尺寸擺；牆心壓暗退到後面
+      let rockG = stoneG, rockM = wallM
+      const rn = lib && ['mrock_3', 'mrock_5', 'mrock_1'].find((n) => lib[n])
+      if (rn) {
+        const pr = parts(lib[rn])[0], gg = pr.geo.clone(); gg.computeBoundingBox()
+        const bb = gg.boundingBox, c0 = bb.getCenter(V()), sz = bb.getSize(V())
+        gg.translate(-c0.x, -c0.y, -c0.z).scale(1 / sz.x, 1 / sz.y, 1 / sz.z); gg.computeVertexNormals()
+        rockG = gg; rockM = pr.mat.clone(); rockM.color = new THREE.Color(0.78, 0.8, 0.82)   // 壓成灰一點（跟花崗岩台階同色系，掃描的石頭偏褐）
+        coreM.color.set(0x55524c)
+      }
+      for (const [list, geo, mat] of [[stones, rockG, rockM], [cores, new THREE.BoxGeometry(1, 1, 1), coreM]]) {
         const im = new THREE.InstancedMesh(geo, mat, list.length), cc = new THREE.Color()
         list.forEach((b, i) => { im.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), b.s)); im.setColorAt(i, cc.setScalar(b.c)) })
         im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
