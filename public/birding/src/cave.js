@@ -1,26 +1,17 @@
 // 2026-11-11 瀑布後面的岩窟步道（使用者：從山上走到瀑布，走進洞穴、在旁邊看瀑布；要有草、青苔，高模、更有臨場感。
 // 參考：貴州黃果樹水簾洞、冰島 Seljalandsfoss 走到瀑布後面、ChatGPT 概念圖——岩拱門、濕石板路、長滿青苔和蕨類的岩壁、鐵欄杆）
-// 模型：tools/make-cave-kit.py → models/props/cave_kit.glb（頂點色：綠多於紅＝青苔，其餘配花崗岩 triplanar）
+// 岩石全部是 Poly Haven（CC0）攝影測量掃描的真岩石（plants.js 的 lib：rockface_a/b、mrock_*、boulder）
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { ALP_SPURS, YOSE, alpineHeight, addCollider } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { windUniforms } from './wind.js'
-import { scatter } from './plants.js'
+import { scatter, parts, lowGeo } from './plants.js'
 import { mossRockMaterial } from './yosemite-top.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 
-export async function loadCaveKit() {
-  const gl = await new GLTFLoader().loadAsync(`models/props/cave_kit.glb?v=${VER}`)
-  const geo = {}
-  gl.scene.updateMatrixWorld(true)
-  gl.scene.traverse((o) => { if (o.isMesh) { const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); if (g.attributes.color_1) { g.setAttribute('color', g.attributes.color_1); g.deleteAttribute('color_1') } geo[o.name] = g } })
-  const rockM = mossRockMaterial(); rockM.roughness = 0.62          // 水霧裡的岩石是濕的
-  const slabM = mossRockMaterial(); slabM.roughness = 0.42; slabM.color.setScalar(0.72)          // 石板路：濕得發亮
-  return { geo, rockM, slabM }
-}
+export async function loadCaveKit() { return {} }   // 2026-11-11 改用掃描的真岩石（plants.js 的 lib），不再載自己做的 cave_kit.glb
 
 export function buildCave(scene, kit, sum, lib) {
   const sp = ALP_SPURS.find((s) => s.name === 'cave')
@@ -35,38 +26,39 @@ export function buildCave(scene, kit, sum, lib) {
   const lists = {}
   const put = (name, x, y, z, yaw, s, tilt = 0) => (lists[name] ||= []).push(m4.compose(V(x, y, z), Q(yaw, tilt), s instanceof THREE.Vector3 ? s : V(s, s, s)).clone())
 
-  // 1) 濕石板路：沿步道兩到三塊並排、錯縫；盡頭的平台鋪滿
+  // 2026-11-11 使用者：岩石不夠真實，可以用真的岩石嗎 → 全部換成 Poly Haven 攝影測量掃描的真岩石（專案裡本來就有：
+  // rockface_a／rockface_b 岩壁掃描、mrock_1～13 長青苔的石頭、boulder），用拼的（kitbash）
+  const SC = {}
+  const rock = (name, x, y, z, s, yaw = rnd() * 6.28, rx = 0, rz = 0) => { if (!lib?.[name]) return; (SC[name] ||= []).push({ p: V(x, y, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, yaw, rz)), s: s instanceof THREE.Vector3 ? s : V(s, s, s) }) }
+  // 1) 踏腳石：扁的青苔石頭埋進地裡，只露出頂上幾公分（真的石頭面），沿步道兩顆並排
+  const FLAT = ['mrock_10', 'mrock_12', 'mrock_7', 'mrock_9', 'mrock_8'], FH = { mrock_10: 0.77, mrock_12: 0.74, mrock_7: 0.74, mrock_9: 0.61, mrock_8: 0.53 }
   for (let i = 0; i < line.length; i += 3) {
     const [x, z, tx, tz] = line[i]
-    for (const lat of [-0.62, 0.02, 0.66]) {
-      if (rnd() < 0.08) continue
-      const px = x - tz * (lat + (rnd() - 0.5) * 0.14) + tx * (rnd() - 0.5) * 0.2, pz = z + tx * (lat + (rnd() - 0.5) * 0.14) + tz * (rnd() - 0.5) * 0.2
-      const sc = 0.7 + rnd() * 0.75; put('slab_' + Math.floor(rnd() * 4), px, alpineHeight(px, pz) - 0.075 - rnd() * 0.02, pz, rnd() * 6.28, V(sc * (0.8 + rnd() * 0.5), 1, sc * (0.8 + rnd() * 0.5)), 0.05)
+    for (const lat of [-0.6, 0.55]) {
+      const px = x - tz * (lat + (rnd() - 0.5) * 0.3) + tx * (rnd() - 0.5) * 0.3, pz = z + tx * (lat + (rnd() - 0.5) * 0.3) + tz * (rnd() - 0.5) * 0.3
+      const n = FLAT[Math.floor(rnd() * FLAT.length)], sc = 0.5 + rnd() * 0.25
+      rock(n, px, alpineHeight(px, pz) - FH[n] * sc * 0.55 + 0.06, pz, V(sc, sc * 0.55, sc))
     }
   }
-  for (let k = 0; k < 26; k++) { const a = rnd() * 6.28, d = Math.sqrt(rnd()) * 2.1, px = ex + 0.4 + Math.cos(a) * d, pz = ez + Math.sin(a) * d * 0.9; put('slab_' + Math.floor(rnd() * 4), px, alpineHeight(px, pz) - 0.075, pz, rnd() * 6.28, 0.9 + rnd() * 0.4, 0.03) }
-
-  // 2) 岩拱門：步道進岩簷的地方，從拱門底下走進去（拱的兩隻腳各一個碰撞）
-  const gate = (name, t, s) => {
+  for (let k = 0; k < 12; k++) { const a = rnd() * 6.28, d = Math.sqrt(rnd()) * 2.0, px = ex + 0.4 + Math.cos(a) * d, pz = ez + Math.sin(a) * d * 0.9, n = FLAT[k % FLAT.length], sc = 0.6 + rnd() * 0.3; rock(n, px, alpineHeight(px, pz) - FH[n] * sc * 0.55 + 0.06, pz, V(sc, sc * 0.55, sc)) }
+  // 2) 巨石門：兩塊岩壁掃描當門柱、上面橫一塊大石頭當楣，從底下走過去（開口約 2.7 m 寬、2.9 m 高）
+  const gate = (t, s) => {
     const [x, z, tx, tz] = line[Math.floor(line.length * t)], y = alpineHeight(x, z), yaw = Math.atan2(tx, tz)
-    put(name, x, y - 0.25, z, yaw, s)
-    const half = (name === 'arch_0' ? 3.4 / 2 + 1.5 * 0.55 : 2.9 / 2 + 1.2 * 0.55) * s
-    for (const sd of [-1, 1]) for (const k of [0.85, 1.25]) addCollider(x - tz * sd * half * k, z + tx * sd * half * k, 0.75 * s, y + 3)
+    for (const sd of [-1, 1]) {
+      const lx = x - tz * sd * 2.7 * s, lz = z + tx * sd * 2.7 * s
+      rock(sd > 0 ? 'mrock_4' : 'mrock_5', lx, alpineHeight(lx, lz) - 0.45, lz, sd > 0 ? V(1.5 * s, 1.95 * s, 1.5 * s) : V(1.6 * s, 2.8 * s, 1.2 * s), yaw + (rnd() - 0.5) * 0.8, 0, sd * 0.05)   // 門柱用封閉的整顆石頭（岩壁掃描是一片單面的殼，立起來背面是空的）
+      addCollider(lx, lz, 1.35 * s, y + 3.2)
+    }
+    rock('mrock_1', x, y + 2.2 * s, z, V(1.9 * s, 1.5 * s, 2.25 * s), yaw + Math.PI / 2 + (rnd() - 0.5) * 0.2, 0.05, 0.04)   // mrock_1 長邊 3.37 m × 2.25 ＝ 7.6 m，橫跨兩根門柱
   }
-  gate('arch_0', 0.5, 1.12)
-  gate('arch_1', 0.8, 1.05)
-  // 岩柱：平台和水簾中間偏西，跟拱門、岩壁圍出一個看水簾的「窗」
-  { const x = ex - 4.4, z = ez - 3.6, y = alpineHeight(x, z); put('pillar_0', x, y - 0.5, z, 2.7, V(1.15, 0.9, 1.3), 0.25); addCollider(x, z, 1.0, y + 4) }
-  // 後壁的大岩塊：平的那面貼岩壁（北邊），一塊接一塊
-  for (const [name, t, off, s, yaw] of [['wall_2', 0.56, 2.7, 1.0, 0.25], ['wall_0', 0.68, 2.9, 1.05, -0.1], ['wall_1', 0.86, 2.6, 1.0, 0.15], ['wall_0', 0.98, 3.0, 0.9, -0.3], ['wall_2', 0.4, 2.8, 0.8, 0.5]]) {
+  gate(0.5, 1.0)
+  gate(0.8, 0.92)
+  // 平台和水簾中間的大石頭（看水簾的「窗」的窗框）、後壁腳下一排岩壁掃描和大石頭
+  { const x = ex - 4.4, z = ez - 3.6, y = alpineHeight(x, z); rock('mrock_5', x, y - 0.5, z, V(1.5, 2.4, 1.3), 0.9); addCollider(x, z, 1.4, y + 3) }
+  for (const [name, t, off, sc] of [['mrock_2', 0.6, 3.4, 1.4], ['boulder', 0.7, 2.9, 1.5], ['mrock_6', 0.9, 3.4, 1.5], ['mrock_4', 0.98, 3.0, 1.3], ['mrock_6', 0.42, 3.0, 1.2], ['boulder', 0.86, 2.7, 1.1]]) {
     const [x0, z0, tx, tz] = line[Math.min(line.length - 1, Math.floor(line.length * t))], x = x0 - tz * off, z = z0 + tx * off
-    const yw = Math.atan2(tx, tz) + Math.PI / 2 + yaw
-    put(name, x, alpineHeight(x, z) - 0.3 * s, z, yw + Math.PI, s)
-    addCollider(x, z, 1.2 * s, alpineHeight(x, z) + 2)
-  }
-  for (const [name, list] of Object.entries(lists)) {
-    const im = new THREE.InstancedMesh(kit.geo[name], name.startsWith('slab') ? kit.slabM : kit.rockM, list.length)
-    list.forEach((m, i) => im.setMatrixAt(i, m)); im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
+    rock(name, x, alpineHeight(x, z) - 0.45 * sc, z, sc)
+    addCollider(x, z, 1.1 * sc, alpineHeight(x, z) + 2)
   }
 
   // 3) 青苔墊、草叢（山頂那套 Blender 模型）、蕨類：沿石板路兩側、岩塊腳下，越往裡越密
@@ -147,7 +139,8 @@ export function buildCave(scene, kit, sum, lib) {
     // 面要朝洞口（-z／往下）：檢查一個後壁中間的法線，反了就整個翻面
     { const nrm = cg.attributes.normal, mid = Math.round(NXc / 2) * (NS + 1) + 10; if (nrm.getZ(mid) > 0) { for (let t = 0; t < idx.length; t += 3) { const q = idx[t + 1]; idx[t + 1] = idx[t + 2]; idx[t + 2] = q } cg.setIndex(idx); cg.computeVertexNormals() } }
     const nrm = cg.attributes.normal, col = new Float32Array(meta.length * 3), c = new THREE.Color()
-    const dry = new THREE.Color(0.27, 0.23, 0.18), dark = new THREE.Color(0.06, 0.057, 0.052), mossD = new THREE.Color(0.08, 0.2, 0.035), mossL = new THREE.Color(0.26, 0.42, 0.08)
+    // 這層現在只是掃描岩片縫隙裡的底：壓暗，看起來是岩縫的陰影
+    const dry = new THREE.Color(0.13, 0.115, 0.095), dark = new THREE.Color(0.035, 0.033, 0.03), mossD = new THREE.Color(0.08, 0.2, 0.035), mossL = new THREE.Color(0.26, 0.42, 0.08)
     meta.forEach((m, v) => {
       const ny = nrm.getY(v), n1 = fbm2(m.x * 0.5, m.y * 0.5, 3), n2 = fbm2(m.x * 2.1 + 7, m.y * 2.1, 2)
       c.copy(dry).multiplyScalar(m.tone * (0.8 + 0.35 * n1))
@@ -164,6 +157,28 @@ export function buildCave(scene, kit, sum, lib) {
     cg.setAttribute('color', new THREE.BufferAttribute(col, 3))
     const wallM = mossRockMaterial(); wallM.roughness = 0.5; wallM.side = THREE.DoubleSide
     const shell = new THREE.Mesh(cg, wallM); shell.name = 'caveShell'; shell.receiveShadow = true; shell.castShadow = false; g.add(shell)
+    // 後壁和天花板貼滿岩壁掃描（Poly Haven rock_face：一片單面的岩壁浮雕，面朝斜上方 (0, .7, .7)）：
+    // 每片轉到面朝洞裡（後壁朝洞口、天花板朝下，中間彎的地方照斷面的角度），像貼磁磚一樣互相疊一點；每片中心貼在程式算的那層岩面前面 0.25 m。
+    // 後壁用完整的掃描（每片 8000 個三角形）、天花板離得遠用四分之一面數的版本
+    if (lib?.rockface_a) {
+      const DEF = { rockface_a: [V(-0.35, 1.8, -1.45), 5.0], rockface_b: [V(-0.4, 1.25, -0.95), 3.0] }, L3 = { rockface_a: [[], []], rockface_b: [[], []] }
+      const E = new THREE.Euler(), qq = new THREE.Quaternion(), m5 = new THREE.Matrix4()
+      for (let i = 4; i < NXc - 2; i += 13) for (let j = 2; j < NS - 4; j += j < NW ? 11 : 12) {
+        const ii = Math.min(NXc, Math.max(0, i + Math.floor(rnd() * 5 - 2))), jj = j + Math.floor(rnd() * 4 - 2), vi = ii * (NS + 1) + jj, m = meta[vi]
+        if (YOSE.caveA(m.x) < 0.3) continue
+        const nm = rnd() < 0.7 ? 'rockface_a' : 'rockface_b', [ctr, size] = DEF[nm], sc = (nm === 'rockface_a' ? 1.2 : 1.8) * (0.9 + rnd() * 0.35)
+        const al = m.ceil * Math.PI / 2
+        if (m.ceil > 0.9) qq.setFromEuler(E.set(Math.PI * 0.75 + (rnd() - 0.5) * 0.2, rnd() * 6.28, 0, 'YXZ'))
+        else qq.setFromEuler(E.set(-Math.PI / 4 - al + (rnd() - 0.5) * 0.2, Math.PI + (rnd() - 0.5) * 0.4, (rnd() - 0.5) * 0.3, 'XYZ'))
+        const P0 = V(pos[vi * 3], pos[vi * 3 + 1], pos[vi * 3 + 2]).add(V(0, -0.25 * Math.sin(al), -0.25 * Math.cos(al)))
+        const p = P0.sub(ctr.clone().multiplyScalar(sc).applyQuaternion(qq))
+        L3[nm][m.ceil > 0.5 ? 1 : 0].push(m5.compose(p, qq, V(sc, sc, sc)).clone())
+      }
+      for (const [nm, [near, far]] of Object.entries(L3)) for (const { geo, mat } of parts(lib[nm])) for (const [list, gg] of [[near, geo], [far, lowGeo(geo) ?? geo]]) {
+        if (!list.length) continue
+        const im = new THREE.InstancedMesh(gg, mat, list.length); list.forEach((mm, k) => im.setMatrixAt(k, mm)); im.receiveShadow = true; im.castShadow = false; im.computeBoundingSphere(); g.add(im)
+      }
+    }
     // 滴水：從天花板的縫一滴滴落下來（沿洞口那一帶多），落到地上重來
     {
       const N = 140, P0 = new Float32Array(N * 3), S0 = new Float32Array(N * 3)
@@ -182,6 +197,7 @@ export function buildCave(scene, kit, sum, lib) {
       const drops = new THREE.Points(dg, dm); drops.frustumCulled = false; g.add(drops)
     }
   }
+  for (const [name, list] of Object.entries(SC)) scatter(g, lib[name], list, { cast: true })
   // 4) 岩簷底下的補光：水簾把天光漫射進來（以前整個岩窟是黑的，看不到岩壁）。不投影
   { const [x, z] = [ex - 3.5, ez + 1.2], lt = new THREE.PointLight(0xb4cbd8, 20, 19, 1.7); lt.position.set(x, alpineHeight(x, z) + 3.2, z); g.add(lt)
     const l3 = new THREE.PointLight(0xb4cbd8, 26, 30, 1.6); l3.position.set(ex - 4, alpineHeight(ex - 4, ez) + 9, ez + 0.5); g.add(l3)   // 高一點的一盞：照到後壁上半和天花板
