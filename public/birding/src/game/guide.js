@@ -346,8 +346,9 @@ function makeDiorama(def, P = PLATE, zoom = 1) {
   const S = sun.shadow.camera; S.left = S.bottom = -2.5; S.right = S.top = 2.5; S.near = 0.1; S.far = 20
   sc.add(sun, sun.target)
   // 鳥放在原本的站點（樹、水面跟著站點），高度改成 0；水鳥的水面高度換成相對的
-  const water = def.water != null ? def.water - (def.y ?? 0) : null
+  const water = def.guideStand ? null : def.water != null ? def.water - (def.y ?? 0) : null   // guideStand：圖鑑裡畫站在地上的（黑剪嘴鷗）
   const d = { ...def, y: 0, water: water ?? undefined, groundAt: null, view: def.view ?? 200 }
+  if (def.guideStand) { d.guide = true; d.perch = 'ground' }
   if (def.swim) d.swimOK = (x, z) => Math.hypot(x - def.spot[0], z - def.spot[1]) < 1.4
   if (def.perch === 'sacred' || def.perch === 'fig') d.perch = 'branch'   // 神木、雀榕上的鳥：圖鑑插圖沒有那棵樹，畫成停在樹枝上
   const a = placeAnimal(d, { strict: true })   // 模型還沒載到會丟 MissingModel（diorama() 接住，載完再畫）

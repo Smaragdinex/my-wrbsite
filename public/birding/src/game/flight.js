@@ -58,8 +58,17 @@ export const ESCAPE = {
   pheron: { r: 12, fly: { speed: 7, hz: 3, style: 'glide', k: 2.2 } },
   stilt: { r: 9, fly: { speed: 9, hz: 6, style: 'flap', k: 0.95 } },
   harrier: { r: 14, fly: { speed: 9, hz: 3.5, style: 'glide', k: 1.35 } },
-  // 2026-11-11 世界濕地鳥：還沒有飛行模型 → 不飛，只走開（有 fly 沒模型的會借翠鳥的模型，大鳥變小鳥）
-  shoebill: { r: 5, run: 2 }, flamingo: { r: 9, run: 2.2 }, ajacana: { r: 4, run: 3 }, gallinule: { r: 4, run: 3 }, rspoonbill: { r: 7, run: 2.5 }, sarus: { r: 9, run: 2 }, redcrowned: { r: 9, run: 2 }, ruff: { r: 5, run: 3 }, grebe: { r: 9, swim: 4 },
+  // 2026-11-11 世界濕地鳥：飛行模型補上了（使用者：只有一隻會飛）。都是先走開／游開，被逼近才起飛（跟雉類同一套）；
+  // k＝翼展（公尺）× 遊戲放大 ÷ 模型翼展。飛行姿勢照各自的習性畫：鶴、紅鶴、琵鷺脖子和腳都伸直；鯨頭鸛像鷺一樣縮脖子；水雉、紫水雞、鸊鷉腳拖在後面
+  shoebill: { r: 5, run: 2, fly: { speed: 7, hz: 2.4, style: 'glide', k: 2.8 } },
+  flamingo: { r: 9, run: 2.2, fly: { speed: 10, hz: 4.2, style: 'flap', k: 2.0 } },
+  ajacana: { r: 4, run: 3, fly: { speed: 7, hz: 7, style: 'flap', k: 0.8 } },
+  gallinule: { r: 4, run: 3, fly: { speed: 7, hz: 7, style: 'flap', k: 0.82 } },
+  rspoonbill: { r: 7, run: 2.5, fly: { speed: 8, hz: 3.4, style: 'glide', k: 2.0 } },
+  sarus: { r: 9, run: 2, fly: { speed: 9, hz: 2.4, style: 'flap', k: 3.0 } },
+  redcrowned: { r: 9, run: 2, fly: { speed: 9, hz: 2.5, style: 'flap', k: 2.9 } },
+  ruff: { r: 5, run: 3, fly: { speed: 12, hz: 8, style: 'flap', k: 0.87 } },
+  grebe: { r: 9, swim: 4, fly: { speed: 11, hz: 9, style: 'flap', k: 1.25 } },
   wbwood: { r: 8, fly: { speed: 8, hz: 9, style: 'bound', k: 0.42 } },
   nutcracker: { r: 10, fly: { speed: 9, hz: 5, style: 'glide', k: 0.55 } },
   rnpheasant: { r: 7, run: 3, fly: { speed: 9, hz: 10, style: 'flap', k: 1.2 } },

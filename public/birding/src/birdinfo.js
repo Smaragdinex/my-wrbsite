@@ -879,7 +879,7 @@ const ALL = [
     ],
   },
   {
-    id: 'skimmer', spot: [-11.9, -123.4], perch: 'ground', view: 11.9, y: EAST.W - 0.02, water: EAST.W, dist: 14, camH: 1.6, lookY: 0.3,
+    id: 'skimmer', guideStand: true, spot: [-11.9, -123.4], perch: 'ground', view: 11.9, y: EAST.W - 0.02, water: EAST.W, dist: 14, camH: 1.6, lookY: 0.3,
     name: "黑剪嘴鷗", sci: 'Rynchops niger', where: "夕陽潟湖中間的深水道上空",
     intro: "美洲的水鳥，上面黑、下面白，配上一張紅黑兩色的大嘴。牠的下嘴比上嘴長很多，像一把薄刀。覓食的方式獨一無二：貼著水面飛，把下嘴插進水裡一路「剪」過去，碰到小魚上嘴就馬上夾下來。",
     facts: [

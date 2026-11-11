@@ -321,7 +321,7 @@ const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-ri
     'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
-    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig']
+    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig']
 export class MissingModel extends Error { constructor(n) { super('model not loaded: ' + n); this.model = n } }
 let _loader = null, _extra = []
 const _loading = new Map(), FAILED = new Set()
@@ -846,7 +846,9 @@ function groundTripo(env, cfg) {
       else { lean = 0.05; neck = -0.35; head = -0.6 + 0.08 * Math.sin(t * 9); reach = 0.9; rate = 7 }
     }
     // 2026-11-11 求偶／群體展示（cfg.show，見 showDirector）：回傳這一格的目標姿勢，蓋掉上面照動作名字給的
-    const ex = cfg.show ? cfg.show({ c, n, t, dt, w, acts, root, r, cfg }) : null
+    // 2026-11-11 cfg.feed：長脖子的鳥低頭覓食的姿勢（跟 show 同一種回傳值；沒有展示在演才用）。使用者：琵鷺、紅鶴低頭時身體往下彎、脖子動得很怪
+    // ——原本只有「身體前傾＋整條脖子一起轉」，S 形的長脖子根本伸不到水面
+    const ex = (cfg.show ? cfg.show({ c, n, t, dt, w, acts, root, r, cfg }) : null) ?? (cfg.feed ? cfg.feed({ c, n, kk, t }) : null)
     if (ex) { lean = ex.lean ?? lean; neck = ex.neck ?? neck; head = ex.head ?? head; reach = ex.reach ?? reach; rate = ex.rate ?? rate }
     // 跑（被人嚇到逃跑，速度是走路的好幾倍）：身體前傾、脖子往前伸；腳改用跑步循環（下面）
     const baseV = cfg.walk?.speed ?? 0.16
@@ -857,7 +859,7 @@ function groundTripo(env, cfg) {
     if (n === 'look' || n === 'stand') glance.update(dt)
     c.yaw = damp(c.yaw, n === 'look' || n === 'stand' ? glance.yaw * (n === 'look' ? 1 : 0.4) : 0, 10, dt)
     // 盯地面時脖子左右慢慢晃（頭保持對著同一點，用視差判斷獵物位置），晃一陣停一陣
-    c.sway = damp(c.sway, n === 'stare' && cfg.sway ? 0.35 * ss(Math.sin(t * 0.45), -0.3, 0.3) * Math.sin(t * 3.4)
+    c.sway = damp(c.sway, ex?.sway != null ? ex.sway : n === 'stare' && cfg.sway ? 0.35 * ss(Math.sin(t * 0.45), -0.3, 0.3) * Math.sin(t * 3.4)
       : n === 'worm' && kk > 0.55 && kk < 0.75 ? 0.3 * Math.sin(t * 13) : 0, n === 'worm' ? 20 : 8, dt)   // 叼著蚯蚓時頭左右甩
     const ph = c.phase * Math.PI * 2
     r.reset()
@@ -896,7 +898,7 @@ function groundTripo(env, cfg) {
       rockNeck = 0.035 * A * rk - 0.024 * A * (rockCurve(rp - 0.13, HEAD_KEYS) - 0.5)   // 頭往前探到底時嘴尖微微往下點（±0.7°，比位移慢 0.05 週期）                                               // 頭的角度補回來，保持水平
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
-    if (cfg.show) {
+    if (cfg.show || cfg.feed) {
       // 展示用的額外動作：翅膀張開（sw）、整隻升降（jy：跳、蹲、潛水）、頭左右甩（sy）、身體仰起（sp）、個別骨頭多轉（sb）
       c.sw = damp(c.sw ?? 0, ex?.wing ?? 0, 14, dt); c.jy = damp(c.jy ?? 0, ex?.jump ?? 0, ex ? 28 : 8, dt)
       c.sy = damp(c.sy ?? 0, ex?.yaw ?? 0, 22, dt); c.sp = damp(c.sp ?? 0, ex?.pitch ?? 0, ex?.prate ?? 6, dt); c.st = damp(c.st ?? 0, ex?.tail ?? 0, 8, dt)
@@ -1779,9 +1781,21 @@ function shoebill(env) {
     acts: { stand: [9, 15, 45], hunt: [4, 10, 25], strike: [1.2, 1.6, 1.6], look: [1.5, 2, 4], walk: [0.5, 99, 99], turn: [0.4, 99, 99] } })   // 2026-11-11 照核對過的行為：像雕像一樣站很久（遊戲裡 15～45 秒一段），獵食的撲擊很少
 }
 // 大紅鸛：潟湖淺水一群 6 隻，慢慢走、低頭濾食
+// 覓食姿勢（每根骨頭多轉幾弧度，照側面實拍調的）。down：頭下到水面那一段的姿勢；sweep：嘴在水裡左右掃的幅度、頻率
+export const FEED = {
+  // 紅鶴濾食：身體只微微前傾，脖子從胸口直直垂下去，頭整個倒過來、上嘴朝下貼著水面，慢慢左右擺
+  flamingo: { acts: ['peck'], lean: 0.3, neck: 0, head: 0, reach: 0, bones: { neck: -1.6, neck2: -1.3, neck3: 0.2, head: 1.2 }, sweep: 0.22, hz: 0.5, inT: 0.18, outT: 0.85 },
+  // 玫瑰琵鷺：身體前傾，脖子往前下伸直，匙狀的嘴尖泡在水裡、張著一點左右快速掃
+  rspoonbill: { acts: ['hunt', 'strike'], lean: 0.9, neck: 0, head: 0, reach: 0.4, bones: { neck: -1.5, neck2: -0.4, neck3: -0.1, head: 1.7 }, sweep: 0.5, hz: 1.1, inT: 0.12, outT: 0.9 },
+}
+const feeder = (F) => ({ n, kk, t }) => {
+  if (!F.acts.includes(n) || kk < 0.02 || kk > F.outT) return null   // 動作尾段回到站姿（骨頭的額外轉動會自己慢慢退回 0）
+  const k = Math.min(1, kk / F.inT)
+  return { lean: F.lean, neck: F.neck, head: F.head, reach: F.reach, rate: 5, bones: F.bones, sway: k >= 1 ? F.sweep * Math.sin(t * Math.PI * 2 * F.hz) : 0 }
+}
 function flamingo(env) {
   const show = flamingoShow({ neck: 1.2, neck2: -1.5, neck3: 0, head: 0.5 })
-  return groundGroup(6, 1.3, (avoid) => groundTripo(env, { name: 'flamingo-rig', H: 1.3, h0: 0.981, ...TRIPO, reach: 0.9, wade: true, bill: 0.16, show,
+  return groundGroup(6, 1.3, (avoid) => groundTripo(env, { name: 'flamingo-rig', H: 1.3, h0: 0.981, ...TRIPO, reach: 0.9, wade: true, bill: 0.16, show, feed: feeder(FEED.flamingo),
     walk: { radius: 3.2, speed: 0.13, avoid }, swingT: 0.6, lift: 0, knee: [1.0, 1.8], focusY: 0.75,
     acts: { walk: [4, 99, 99], peck: [4, 1.6, 3.2], stand: [2, 2, 4], look: [1.5, 1.2, 2.5], turn: [1, 99, 99], show: [0, 999, 999] } }))
 }
@@ -1790,7 +1804,7 @@ function ajacana(env) { return endemicGround('ajacana-rig', 0.29, 0.979, { hop: 
 function gallinule(env) { return endemicGround('gallinule-rig', 0.3, 0.979, { hop: 0, flick: 0.5, radius: 1.0, speed: 0.1, stride: 0.09 })(env) }
 // 玫瑰琵鷺：潟湖南岸的淺灘，兩隻，嘴泡在水裡左右掃
 function rspoonbill(env) {
-  return groundGroup(2, 1.0, (avoid) => groundTripo(env, { name: 'rspoonbill-rig', H: 0.8, h0: 0.981, ...TRIPO, reach: 0.6, wade: true, bill: 0.24,
+  return groundGroup(2, 1.0, (avoid) => groundTripo(env, { name: 'rspoonbill-rig', H: 0.8, h0: 0.981, ...TRIPO, reach: 0.6, wade: true, bill: 0.24, feed: feeder(FEED.rspoonbill),
     walk: { radius: 1.6, speed: 0.12, avoid }, swingT: 0.55, lift: 0, knee: [1.0, 1.7], focusY: 0.7,
     acts: { stand: [2, 3, 6], hunt: [5, 3, 6], walk: [3, 99, 99], turn: [1, 99, 99], strike: [1, 1.4, 1.4], look: [1.5, 1.5, 3] } }))
 }
@@ -1804,6 +1818,11 @@ function sarus(env) {
 // 黑剪嘴鷗：一直在飛——沿著潟湖那條筆直的深水道貼著水面剪過去（下嘴泡在水裡），到頭拉高轉彎、從旁邊高一點飛回來，再下去剪一趟。
 // 只有飛行模型（skimmer-fly-rig，翅膀舉在最高點）；路線是鳥群座標裡的一圈跑道形：長軸沿 env.toCam 的垂直方向（side）
 function skimmer(env) {
+  // 2026-11-11 使用者：圖鑑上一直看不到牠（園區裡牠只在飛，圖鑑的小場景拍不到）→ 另外做了站姿模型（skimmer-rig），圖鑑插圖用站著的：
+  // 站在沙洲上休息、張望，短腳、長翅膀交叉蓋過尾巴
+  if (env.guide) return groundTripo(env, { name: 'skimmer-rig', H: 0.28, h0: 0.395, ...TRIPO, reach: 0.2, bill: 0.2,
+    walk: { radius: 0.25, speed: 0.05 }, swingT: 0.4, lift: 0.01, knee: [0.4, 0.8], focusY: 0.6,
+    acts: { stand: [4, 2, 5], look: [3, 1.5, 3], turn: [0.6, 99, 99] } })
   const r = rigged('skimmer-fly-rig'), root = new THREE.Group(), inner = new THREE.Group(), focus = V()
   const K = 0.74   // 全長約 0.68 m（真實 45 cm × 1.5）
   r.model.scale.setScalar(K); r.model.position.set(0.03 * K, -0.02 * K, 0)   // 下嘴尖放在原點下面一點點
@@ -2145,7 +2164,7 @@ export function placeAnimal(def, { strict = false } = {}) {
   g.position.set(x, gy, z); g.add(obj)
   // 朝向：沿著 side 方向，再往鏡頭轉 turn 弧度，看起來是四分之三側面
   const face = (s, turn) => { const d = side.clone().multiplyScalar(s * Math.cos(turn)).addScaledVector(toCam, Math.sin(turn)); return Math.atan2(d.x, d.z) }
-  const env = { toCam, face, waterY }
+  const env = { toCam, face, waterY, guide: !!def.guide }   // guide：圖鑑插圖（黑剪嘴鷗在圖鑑裡用站姿）
   // 游泳的鳥：目的地和游過去的路線都要在開闊水面（不撞山、不撞池邊的石頭）；def.swimOK 吃溫室座標
   if (def.swimOK) env.swimOK = (lx, lz, p) => { for (let k = 1; k <= 8; k++) if (!def.swimOK(x + lerp(p.x, lx, k / 8), z + lerp(p.y, lz, k / 8))) return true; return false }
   // 地上走的鳥：鳥群座標 (lx, lz) 的地面高度，相對鳥群原點（ground 鳥的 obj 沒有旋轉）
