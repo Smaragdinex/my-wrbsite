@@ -418,8 +418,9 @@ export const YOSE = (() => {
     let built = null
     return () => {
       if (built) return built
-      const pts = [], yy = [], kind = []
-      const add = (x, z, y, k) => { pts.push([x, z]); yy.push(y); kind.push(k) }
+      const pts = [], yy = [], kind = [], tag = []
+      let TAG = ''   // 這一點屬於哪一段隧道（T1 入口隧道、SP 螺旋岩室、T3 往岩棚、T4 西側窄縫、T5 上層長廊、T6 轉回岩壁面）：yosemite.js 照這個給每段不同的斷面和水
+      const add = (x, z, y, k) => { pts.push([x, z]); yy.push(y); kind.push(k); tag.push(k === 'tun' ? TAG : '') }
       let cur = null
       const to = (b, k, n) => { const a = cur; for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(a[0], b[0], t); add(x, Y.base(x) + lerp(a[1], b[1], t), lerp(a[2], b[2], t), k) } cur = b }
       // 圓弧：f＝0 在圓的南端（離岩壁面最近）、π 在北端；sx＝+1 往東凸、-1 往西凸
@@ -431,16 +432,16 @@ export const YOSE = (() => {
       to([202.8, 1.8, 28.4], 'open', 4); to([204.8, -1.5, 28.35], 'open', 4); to([208.6, -1.5, 28.6], 'open', 4); to([210.5, 1.6, 29.6], 'open', 4)
       to([221, 1.6, 33.6], 'gal', 12); to([240, 1.6, 37.0], 'gal', 21)                                   // 東側岩壁迴廊
       arc(240, 3.85, 2.25, 0, PI, 1, 37.0, 37.6, 'alc', 9); cur = [240, 6.1, 37.6]                        // 轉進岩體
-      to([216.5, 6.1, 40.0], 'tun', 25)
-      arc(216.5, 10.5, 4.4, 0, 4 * PI, -1, 40.0, 49.2, 'tun', 60); cur = [216.5, 6.1, 49.2]                // 螺旋隧道兩圈（每圈升 4.6 m）
-      to([210, 5.2, 50.3], 'tun', 7); to([205.6, 4.4, sY], 'tun', 5)
+      TAG = 'T1'; to([216.5, 6.1, 40.0], 'tun', 25)
+      TAG = 'SP'; arc(216.5, 10.5, 4.4, 0, 4 * PI, -1, 40.0, 49.2, 'tun', 60); cur = [216.5, 6.1, 49.2]                // 螺旋隧道兩圈（每圈升 4.6 m）
+      TAG = 'T3'; to([210, 5.2, 50.3], 'tun', 7); to([205.6, 4.4, sY], 'tun', 5)
       to([203.6, 5.2, sY], 'shelf', 2); to([202.4, 8.4, sY], 'shelf', 4); to([197.6, 8.4, sY], 'shelf', 5); to([196.4, 5.2, sY], 'shelf', 4); to([193.8, 3.4, sY], 'shelf', 3)   // 岩棚：從上段瀑布後面穿過
-      to([191, 5.5, sY + 0.5], 'tun', 3); to([172, 8.5, 57.0], 'tun', 20)                                // 西側通道
+      TAG = 'T4'; to([191, 5.5, sY + 0.5], 'tun', 3); to([172, 8.5, 57.0], 'tun', 20)                                // 西側通道
       arc(172, 11.25, 2.75, 0, PI, -1, 57.0, 57.6, 'tun', 10); cur = [172, 14, 57.6]
-      to([238, 14, 68.5], 'tun', 68)                                                                     // 隱藏的上層通道
+      TAG = 'T5'; to([238, 14, 68.5], 'tun', 68)                                                                     // 隱藏的上層通道
       // 大半圓轉回岩壁面（整段都還在岩體裡）：岩壁越高越往後仰（y 70 那裡岩壁面離牆腳約 1.6 m），最後一段迴廊的中線放在離牆腳 3.4 m。
       // 隧道往西直直穿出來，出口正對迴廊的盡頭（斜著穿出來的話，洞口會被岩壁擋掉一半）
-      arc(238, 8.7, 5.3, PI, 0, 1, 68.5, 70.3, 'tun', 20); cur = [238, 3.4, 70.3]
+      TAG = 'T6'; arc(238, 8.7, 5.3, PI, 0, 1, 68.5, 70.3, 'tun', 20); cur = [238, 3.4, 70.3]
       to([236.2, 3.4, 70.6], 'tun', 2)
       to([214, 3.4, top], 'gal', 23)                                                                     // 最後一段迴廊
       to([212.5, 4.4, top], 'top', 2); to([211.5, 6.6, top], 'top', 3)
@@ -448,7 +449,7 @@ export const YOSE = (() => {
       const h = (s) => { if (s <= 0) return yy[0]; if (s >= L) return yy[yy.length - 1]; let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] < s) lo = m; else hi = m } return lerp(yy[lo], yy[hi], (s - S[lo]) / Math.max(1e-6, S[hi] - S[lo])) }
       // 全程（湖西岸 cave 支線起點到岩壁頂）不停走 3 分鐘：湖邊那 40 m 照平常的速度，步道上的速度 v 照長度反推（濕的石階，小心走）
       const v = Math.min(3.2, L / (180 - 40 / 3.2))
-      built = { pts, yy, kind, S, L, h, h0: yy[0], top, v }
+      built = { pts, yy, kind, tag, S, L, h, h0: yy[0], top, v, spiral: { x: 216.5, z: Y.base(216.5) + 10.5, r: 4.4, y0: 40.0, y1: 49.2 } }
       return built
     }
   })()

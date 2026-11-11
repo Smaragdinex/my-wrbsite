@@ -280,7 +280,7 @@ export function buildYosemite(scene, { lib } = {}) {
           float seam = max(smoothstep(0.12, 0.0, b2) * step(0.35, h2) * 0.45 * thin, smoothstep(0.05, 0.0, b1) * 0.9);
           vec3 tint = mix(vec3(0.86, 0.9, 0.93), vec3(1.16, 1.0, 0.8), h1) * mix(1.0, 0.8 + 0.4 * h2, thin);   // 冷灰的頁岩層／暖褐的砂岩層
           diffuseColor.rgb *= mix(vec3(1.0), tint * (1.0 - 0.42 * seam), wallK);
-          tpH += wallK * (b2 * 0.25 * thin + b1 * 0.6); }`)
+          tpH += wallK * ((1.0 - abs(b2 * 2.0 - 1.0)) * 0.22 * thin + (1.0 - abs(b1 * 2.0 - 1.0)) * 0.55); }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         { float dist = length(vViewPosition); vec2 dH = clamp(vec2(dFdx(tpH), dFdy(tpH)) * 2.2, -0.9, 0.9) * smoothstep(90.0, 15.0, dist); normal = tpPerturb(-vViewPosition, normal, dH, faceDirection); }   // clamp：層面那條線高度是跳的，導數會爆掉、變成一截一截的亮線`)
   }
@@ -548,47 +548,89 @@ export function buildYosemite(scene, { lib } = {}) {
     for (let i = 0; i < NP; i++) C3.push(V(st.pts[i][0], st.yy[i], st.pts[i][1]))
     for (let i = 0; i < NP; i++) { const t = C3[Math.min(NP - 1, i + 1)].clone().sub(C3[Math.max(0, i - 1)]).normalize(); TAN.push(t); SIDE.push(V().crossVectors(t, UP).normalize()) }
     const isTun = (i) => st.kind[i] === 'tun'
-    // 壁燈：隧道裡沿路每 8.5 m 一盞（左右交錯、離地 2.2 m）
-    const lamps = []
-    { let acc = 4; for (let i = 1; i < NP; i++) { if (!isTun(i)) { acc = 4; continue } acc += st.S[i] - st.S[i - 1]; if (acc >= 8.5) { acc = 0; const sd = lamps.length % 2 ? 1 : -1; lamps.push(C3[i].clone().addScaledVector(SIDE[i], sd * 1.12).add(V(0, 2.2, 0))) } } }
-    // 這一點被燈照亮多少（只算同一層的燈：高度差 2.6 m 內）
-    const lampAt = (p) => { let k = 0; for (const l of lamps) { if (Math.abs(l.y - 1.2 - p.y) > 2.6) continue; const d2 = (l.x - p.x) ** 2 + (l.z - p.z) ** 2 + (l.y - p.y) ** 2 * 0.5; if (d2 < 60) k += Math.exp(-d2 / 9) } return Math.min(1.6, k) }
-    // 1) 隧道：馬蹄形斷面（寬 2.7、高 3.1）沿中線掃出來，表面加一點凹凸；跟岩壁同一個材質（層理照世界高度畫，自然接得上）
-    { const RING = [[-1.3, -0.12], [-1.42, 0.9], [-1.3, 1.9], [-0.85, 2.7], [0, 3.1], [0.85, 2.7], [1.3, 1.9], [1.42, 0.9], [1.3, -0.12]], NR = RING.length
-      const pos = [], col = [], uv = [], idx = []
-      let run = []
-      const flush = () => {
-        if (run.length < 2) { run = []; return }
-        const base = pos.length / 3
-        // 兩端各往外多伸 0.9 m：伸過岩壁上挖的那個洞，隧道口跟洞之間才不會留一圈縫
-        const rings = [{ i: run[0], off: -0.3, sc: 1.04 }, ...run.map((i) => ({ i, off: 0, sc: 1 })), { i: run.at(-1), off: 0.3, sc: 1.04 }]
-        rings.forEach(({ i, off, sc }, ri) => {
-          for (let k = 0; k < NR; k++) {
-            const [lx, ly] = RING[k], n = 0.22 * (fbm2(st.S[i] * 0.45 + k * 2.3, k * 1.7 + 5, 3) - 0.5) * (k === 0 || k === NR - 1 ? 0.3 : 1)
-            const p = C3[i].clone().addScaledVector(TAN[i], off).addScaledVector(SIDE[i], lx * sc * (1 + n * 0.4)).add(V(0, (ly - 1.4) * sc + 1.4 + n * (ly > 1 ? 1 : 0), 0))
-            pos.push(p.x, p.y, p.z); uv.push(st.S[i] * 0.3, k / NR)
-            const L = lampAt(p), b = 0.2 + 0.08 * fbm2(p.x * 0.7, p.y * 0.9 + p.z * 0.7, 2)
-            col.push(b * (1 + 4.6 * L), b * 0.94 * (1 + 3.4 * L), b * 0.84 * (1 + 1.9 * L))
-          }
-          if (ri) for (let k = 0; k < NR - 1; k++) { const a = base + (ri - 1) * NR + k, c = a + NR; idx.push(a, c, a + 1, a + 1, c, c + 1) }
-        })
-        run = []
+    // 螺旋那一段不是管子，是一個中空的圓形岩室（下面 4）；岩室的牆半徑 RW
+    const SP = st.spiral, RW = 6.1, SPB = SP.y0 - 0.1, SPT = SP.y1 + 5.6
+    const inChamber = (i) => st.tag[i] !== 'SP' && Math.hypot(st.pts[i][0] - SP.x, st.pts[i][1] - SP.z) < RW - 0.1 && st.yy[i] > SP.y0 - 2 && st.yy[i] < SP.y1 + 2
+    const tubePt = (i) => isTun(i) && st.tag[i] !== 'SP' && !inChamber(i)
+    const tagS0 = {}
+    for (let i = 0; i < NP; i++) if (st.tag[i] && tagS0[st.tag[i]] == null) tagS0[st.tag[i]] = st.S[i]
+    const U = (i) => st.S[i] - (tagS0[st.tag[i]] ?? 0)
+    // 每段隧道的斷面怎麼變（ChatGPT 內部規格 docs/GORGE_INTERIOR.txt）：[沿路幾公尺, 寬的倍數, 高的倍數]；基本斷面寬 2.7、高 3.1
+    const KEYS = {
+      T1: [[0, 1, 1], [7, 0.82, 0.86], [14, 1.2, 1.3], [20, 1.15, 1.25], [25, 1.0, 1.05], [40, 1, 1]],
+      T3: [[0, 1, 1], [7, 1.05, 1.1], [12, 1.5, 1.3]],
+      T4: [[0, 0.8, 1.22], [8, 1.25, 1.65], [13, 1.25, 1.7], [22, 0.9, 1.0], [40, 0.88, 0.95]],
+      T5: [[0, 1, 1.05], [10, 1.1, 1.2], [20, 1.15, 1.2], [26, 1.9, 1.6], [43, 1.9, 1.6], [49, 0.95, 1.0], [80, 0.9, 0.95]],
+      T6: [[0, 0.88, 0.92], [10, 1.1, 1.1], [19, 1.5, 1.45], [30, 1.5, 1.45]],
+    }
+    const shape = (i) => {
+      const K = KEYS[st.tag[i]]; if (!K) return [1, 1]
+      const u = U(i); let a = K[0], b = K[K.length - 1]
+      for (let k = 0; k + 1 < K.length; k++) if (u >= K[k][0] && u <= K[k + 1][0]) { a = K[k]; b = K[k + 1]; break }
+      const t = b[0] > a[0] ? ss(a[0], b[0], u) : 0
+      return [lerpN(a[1], b[1], t), lerpN(a[2], b[2], t)]
+    }
+    // 牆在哪：斷面放寬的部分大多往「岩體裡面那一側」長（IN：朝北；水溝、滲水牆也在這一側）。
+    // 往岩壁面那一側放寬的話，隧道會從岩壁穿出去（第一版 T1 的岩室就破在岩壁外面）
+    const IN = (i) => (SIDE[i].z >= 0 ? 1 : -1)
+    const wallLat = (i, sd) => { const [w] = shape(i); return sd === IN(i) ? sd * (1.36 * w + (w - 1) * 0.9) : sd * (1.36 * w - (w - 1) * 0.3) }
+    const idxAt = (tag, u) => { let best = -1, bd = 1e9; for (let i = 0; i < NP; i++) if (st.tag[i] === tag) { const d = Math.abs(U(i) - u); if (d < bd) { bd = d; best = i } } return best }
+    // 光：壁燈（暖）沿隧道每 8.5 m 一盞；天光縫（冷白）在天花板。都直接算進牆和踏板的頂點色
+    const LIGHTS = [], lamps = [], skys = []
+    { let acc = 4
+      for (let i = 1; i < NP; i++) {
+        if (!isTun(i)) { acc = 4; continue }
+        acc += st.S[i] - st.S[i - 1]; if (acc < 8.5) continue
+        acc = 0
+        let p
+        if (st.tag[i] === 'SP') { const dx = C3[i].x - SP.x, dz = C3[i].z - SP.z, l = Math.hypot(dx, dz); p = V(SP.x + dx / l * (RW - 0.25), C3[i].y + 2.2, SP.z + dz / l * (RW - 0.25)) }
+        else if (inChamber(i)) continue
+        else { const sd = lamps.length % 2 ? 1 : -1; p = C3[i].clone().addScaledVector(SIDE[i], wallLat(i, sd) - sd * 0.24).add(V(0, 2.2, 0)) }
+        lamps.push(p); LIGHTS.push({ p, c: [4.6, 3.3, 1.75], r2: 9, feet: C3[i].y })
       }
-      for (let i = 0; i < NP; i++) { if (isTun(i)) run.push(i); else flush() }   // 只做隧道那幾點：多伸一點出去的話，隧道口外面看得到一截管子
-      flush()
+      for (const [tag, u] of [['T1', 17], ['T4', 10.5], ['T5', 18], ['T5', 34], ['T5', 51], ['T6', 13], ['T6', 16.5]]) {
+        const i = idxAt(tag, u); if (i < 0) continue
+        const [, hk] = shape(i), p = C3[i].clone().add(V(0, 3.1 * hk - 0.06, 0)).addScaledVector(SIDE[i], 0.5 * IN(i))
+        skys.push({ p, i }); LIGHTS.push({ p, c: [2.4, 3.6, 4.2], r2: 16, feet: C3[i].y })
+      }
+    }
+    const lightAt = (p) => { let r = 0, g2 = 0, b = 0; for (const l of LIGHTS) { if (Math.abs(l.feet + 1.4 - p.y) > 3.6) continue; const d2 = (l.p.x - p.x) ** 2 + (l.p.z - p.z) ** 2 + (l.p.y - p.y) ** 2 * 0.5; if (d2 > l.r2 * 6) continue; const k = Math.exp(-d2 / l.r2); r += l.c[0] * k; g2 += l.c[1] * k; b += l.c[2] * k } return [Math.min(7, r), Math.min(6, g2), Math.min(5, b)] }
+    const litCol = (p, base, out) => { const L = lightAt(p); out.push(base * (1 + L[0]), base * 0.94 * (1 + L[1]), base * 0.84 * (1 + L[2])) }
+    // 1) 隧道：馬蹄形斷面沿中線掃出來（寬高照 KEYS 變、天花板左右歪一點、表面加凹凸）；跟岩壁同一個材質
+    const RUNS = []
+    { let run = []; for (let i = 0; i < NP; i++) { if (tubePt(i)) run.push(i); else if (run.length) { RUNS.push(run); run = [] } } if (run.length) RUNS.push(run) }
+    { const RING = [[-1, -0.12], [-1.09, 0.9], [-1, 1.9], [-0.65, 2.7], [0, 3.1], [0.65, 2.7], [1, 1.9], [1.09, 0.9], [1, -0.12], [0.4, -0.16], [-0.4, -0.16]], NR = RING.length   /* 最後兩點是地板：斷面是封閉的一圈（放寬的岩室踏板蓋不滿，沒地板會看穿到外面） */
+      const pos = [], col = [], uv = [], idx = []
+      for (const run of RUNS) {
+        if (run.length < 2) continue
+        const base = pos.length / 3
+        const rings = [{ i: run[0], off: -0.3 }, ...run.map((i) => ({ i, off: 0 })), { i: run[run.length - 1], off: 0.3 }]
+        rings.forEach(({ i, off }, ri) => {
+          const [wk, hk] = shape(i), asym = 0.5 * Math.sin(U(i) * 0.21 + st.tag[i].charCodeAt(1) * 1.7)
+          for (let k = 0; k < NR; k++) {
+            const [rx, ry] = RING[k], lat0 = wallLat(i, rx > 0 ? 1 : -1) * Math.abs(rx) * 0.956
+            const n = 0.24 * (fbm2(st.S[i] * 0.45 + k * 2.3, k * 1.7 + 5, 3) - 0.5) * (ry < 0 ? 0.15 : 1)
+            const ly = ry * (ry > 0 ? hk : 1), lx = lat0 * (1 + n * 0.4) + asym * Math.pow(Math.max(0, ry) / 3.1, 2)
+            const p = C3[i].clone().addScaledVector(TAN[i], off).addScaledVector(SIDE[i], lx).add(V(0, ly + n * (ry > 1 ? 1 : 0), 0))
+            pos.push(p.x, p.y, p.z); uv.push(st.S[i] * 0.3, k / NR)
+            litCol(p, 0.2 + 0.08 * fbm2(p.x * 0.7, p.y * 0.9 + p.z * 0.7, 2), col)
+          }
+          if (ri) for (let k = 0; k < NR; k++) { const k2 = (k + 1) % NR, a = base + (ri - 1) * NR + k, a2 = base + (ri - 1) * NR + k2; idx.push(a, a + NR, a2, a2, a + NR, a2 + NR) }
+        })
+      }
       const tg = new THREE.BufferGeometry()
       tg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); tg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); tg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
       tg.setIndex(idx); tg.computeVertexNormals()
       const tube = new THREE.Mesh(tg, cliffM); tube.receiveShadow = true; tube.name = 'gorgeTunnel'; g.add(tube)
-      // 壁燈本體：小小的暖色燈（發光）＋鐵托架
-      if (lamps.length) {
-        const lg = new THREE.SphereGeometry(0.06, 10, 8), lm = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.78, 0.45) }), li = new THREE.InstancedMesh(lg, lm, lamps.length)
-        const bg = new THREE.BoxGeometry(0.05, 0.22, 0.05), bm = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.6, metalness: 0.6 }), bi = new THREE.InstancedMesh(bg, bm, lamps.length)
-        lamps.forEach((l, k) => { li.setMatrixAt(k, m4.makeTranslation(l.x, l.y, l.z)); bi.setMatrixAt(k, m4.makeTranslation(l.x, l.y + 0.18, l.z)) })
-        g.add(li, bi)
-      }
     }
-    // 2) 石階踏板：整條路每 0.42 m 一塊（平的地方是鋪石、有坡的地方自然變成一階一階），踏面照坡道高度取到 0.16 m 一階
+    // 壁燈本體：小小的暖色燈（發光）＋鐵托架
+    if (lamps.length) {
+      const li = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.78, 0.45) }), lamps.length)
+      const bi = new THREE.InstancedMesh(new THREE.BoxGeometry(0.05, 0.22, 0.05), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.6, metalness: 0.6 }), lamps.length)
+      lamps.forEach((l, k) => { li.setMatrixAt(k, m4.makeTranslation(l.x, l.y, l.z)); bi.setMatrixAt(k, m4.makeTranslation(l.x, l.y + 0.18, l.z)) })
+      li.name = 'gorgeLamps'; g.add(li, bi)
+    }
+    // 2) 石階踏板：整條路每 0.42 m 一塊；隧道裡窄一點、靠乾的那一側，濕的那一側留一條水溝
     { const N = Math.floor(st.L / 0.42), tm = new THREE.InstancedMesh(new THREE.BoxGeometry(2.5, 0.6, 0.47), stepM, N), q = new THREE.Quaternion(), c = new THREE.Color()
       let ii = 1
       for (let n = 0; n < N; n++) {
@@ -597,10 +639,11 @@ export function buildYosemite(scene, { lib } = {}) {
         const slope = (st.yy[ii] - st.yy[ii - 1]) / Math.max(1e-6, st.S[ii] - st.S[ii - 1])
         const yTop = slope > 0.05 ? Math.floor(p.y / 0.16) * 0.16 + 0.1 : p.y + 0.02
         q.setFromAxisAngle(UP, Math.atan2(tn.x, tn.z))
-        const w = st.kind[ii] === 'tun' ? 1.02 : 1.0
+        const tun = st.kind[ii] === 'tun', sp = st.tag[ii] === 'SP', w = sp ? 0.98 : tun ? 0.84 : 1.0
+        if (tun && !sp) p.addScaledVector(SIDE[ii], -0.2 * IN(ii))
         tm.setMatrixAt(n, m4.compose(V(p.x, yTop - 0.3, p.z), q, V(w, 1, 1)))
-        const L = st.kind[ii] === 'tun' ? lampAt(p) : -1, b = L < 0 ? 1 : 0.3
-        tm.setColorAt(n, L < 0 ? c.setRGB(1.0, 0.9, 0.74) : c.setRGB(b * (1 + 4.6 * L), b * 0.86 * (1 + 3.4 * L), b * 0.68 * (1 + 1.9 * L)))   // 石階帶砂岩的暖色（底圖是灰的花崗岩）
+        if (!tun) tm.setColorAt(n, c.setRGB(1.0, 0.9, 0.74))
+        else { const L = lightAt(V(p.x, yTop, p.z)), b = 0.3; tm.setColorAt(n, c.setRGB(b * (1 + L[0]), b * 0.86 * (1 + L[1]), b * 0.68 * (1 + L[2]))) }
       }
       tm.castShadow = true; tm.receiveShadow = true; tm.computeBoundingSphere(); tm.name = 'gorgeSteps'; g.add(tm)
     }
@@ -612,7 +655,7 @@ export function buildYosemite(scene, { lib } = {}) {
         if (!open) { prev = null; acc = 9; continue }
         acc += st.S[i] - st.S[i - 1]; if (acc < 1.35) continue
         acc = 0
-        const sd = SIDE[i].z < 0 ? 1 : -1   // 外側＝朝南（往湖）
+        const sd = SIDE[i].z < 0 ? 1 : -1
         const p = C3[i].clone().addScaledVector(SIDE[i], sd * 1.15)
         pp.push(p); if (prev && prev.distanceTo(p) < 2.6) segs.push([prev, p]); prev = p
       }
@@ -623,6 +666,119 @@ export function buildYosemite(scene, { lib } = {}) {
         segs.forEach(([a, b], k) => { const d = b.clone().sub(a), L = d.length(); q.setFromUnitVectors(V(1, 0, 0), d.clone().normalize()); for (const [j, hh] of [[0, 1.05], [1, 0.55]]) rm.setMatrixAt(k * 2 + j, m4.compose(a.clone().add(b).multiplyScalar(0.5).add(V(0, hh, 0)), q, V(L, 1, 1))) })
         g.add(rm)
       }
+    }
+    // ---- 水 ----
+    // 流水的材質（水溝、水盆）：深色的水上有往下游漂的亮紋
+    const runM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uT },
+      vertexShader: `attribute vec3 color; varying vec2 vUv; varying vec3 vC; void main() { vUv = uv; vC = color; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `varying vec2 vUv; varying vec3 vC; uniform float uT;
+        float h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+        float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+        void main() { float a = n(vec2(vUv.x * 5.0, vUv.y * 2.4 + uT * 1.1)) * 0.6 + n(vec2(vUv.x * 11.0 + 3.0, vUv.y * 5.0 + uT * 1.9)) * 0.4;
+          float hi = smoothstep(0.55, 0.85, a);
+          vec3 c = mix(vec3(0.05, 0.1, 0.095), vec3(0.6, 0.72, 0.74), hi) * (0.35 + vC);
+          gl_FragColor = vec4(c, 0.8); }` })
+    // 5) 石階旁的水溝：沿每段隧道濕的那一側一條 0.34 m 寬的水（往下游流）
+    { const pos = [], col = [], uv = [], idx = []
+      for (const run of RUNS) {
+        const base = pos.length / 3
+        run.forEach((i, ri) => {
+          for (const lat of [0.86, 1.2]) { const p = C3[i].clone().addScaledVector(SIDE[i], lat * IN(i)).add(V(0, 0.03, 0)); pos.push(p.x, p.y, p.z); uv.push(lat > 1 ? 1 : 0, st.S[i]); const L = lightAt(p); col.push(0.25 * L[0], 0.25 * L[1], 0.25 * L[2]) }
+          if (ri && IN(i) === IN(run[ri - 1])) { const a = base + (ri - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3) }
+        })
+      }
+      const rg2 = new THREE.BufferGeometry(); rg2.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); rg2.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); rg2.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); rg2.setIndex(idx)
+      const rn = new THREE.Mesh(rg2, runM); rn.renderOrder = 2; rn.name = 'gorgeRunnel'; g.add(rn)
+    }
+    // 6) 滲水的岩壁：濕的那一側牆上一片片往下流的薄水（跟瀑布同一種水簾材質、慢）；7) 滴水：從天花板、滲水帶一顆顆落下來
+    const SEEP = [['T1', 9.5, 0.6, 2.2], ['T1', 11.2, 0.4, 1.9], ['T1', 16.5, 0.7, 2.5], ['T4', 10, 0.35, 3.6], ['T4', 11.6, 0.25, 3.2], ['T6', 6, 0.3, 2.4], ['T6', 10.5, 0.25, 2.6]]
+    for (let u = 23.5, k = 0; u < 38; u += 1.5, k++) SEEP.push(['T5', u, 0.35 + 0.5 * hsh(k * 3.1), 2.8 + 1.2 * hsh(k * 7.7)])
+    const dripP = [], dripA = []
+    const addDrips = (c, rx, rz, yTop, H, n) => { for (let k = 0; k < n; k++) { dripP.push(c.x + (rnd() - 0.5) * rx, yTop - rnd() * 0.2, c.z + (rnd() - 0.5) * rz); dripA.push(H * (0.7 + 0.3 * rnd()), rnd(), 0.45 + 0.5 * rnd()) } }
+    { const pos = [], uv = [], idx = []
+      for (const [tag, u, w, hh] of SEEP) {
+        const i = idxAt(tag, u); if (i < 0) continue
+        const lat = wallLat(i, IN(i)) - IN(i) * 0.06, c = C3[i].clone().addScaledVector(SIDE[i], lat), b = pos.length / 3
+        const y0 = c.y + 0.1, y1 = y0 + hh
+        for (const [sx, vy] of [[-1, 0], [1, 0], [-1, 1], [1, 1]]) { const p = c.clone().addScaledVector(TAN[i], sx * w * 0.5); pos.push(p.x, vy ? y0 : y1, p.z); uv.push(sx > 0 ? 1 : 0, vy) }
+        idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3)
+        addDrips(c.clone().addScaledVector(SIDE[i], -0.25 * IN(i)), 0.5, 0.5, y1, hh, 6)
+      }
+      const sg2 = new THREE.BufferGeometry(); sg2.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); sg2.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); sg2.setIndex(idx)
+      const sm2 = new THREE.Mesh(sg2, fallMat({ spd: 0.2, a: 0.4, dark: 0.45 })); sm2.renderOrder = 3; sm2.name = 'gorgeSeep'; g.add(sm2)
+    }
+    // 滴水簾：T1 第 9～12 m 整排從天花板滴；T4 小溪上面；T5 岩室
+    { const a = idxAt('T1', 10.5); if (a >= 0) addDrips(C3[a].clone(), 2.6, 2.6, C3[a].y + 2.6, 2.6, 50)
+      const b = idxAt('T4', 10.8); if (b >= 0) addDrips(C3[b].clone().addScaledVector(SIDE[b], 0.6 * IN(b)), 1.6, 1.6, C3[b].y + 4.6, 4.6, 40)
+      for (const u of [27, 31, 35, 40]) { const c = idxAt('T5', u); if (c >= 0) addDrips(C3[c].clone().addScaledVector(SIDE[c], 1.6 * IN(c)), 3, 3, C3[c].y + 4.6, 4.6, 26) } }
+    // 8) 天光縫：天花板一條亮縫＋往下一道淡淡的光柱
+    { const skyM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 0.95, 1.0).multiplyScalar(1.6), side: THREE.DoubleSide })
+      const shaftM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.7, 0.9, 1.0), transparent: true, opacity: 0.07, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
+      for (const { p, i } of skys) {
+        const yaw = Math.atan2(TAN[i].x, TAN[i].z), [, hk] = shape(i), hh = 3.1 * hk
+        const crack = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 2.2).rotateX(Math.PI / 2), skyM); crack.position.copy(p); crack.rotation.y = yaw; g.add(crack)
+        for (const ry of [0, Math.PI / 2]) { const sh = new THREE.Mesh(new THREE.PlaneGeometry(ry ? 0.5 : 2.0, hh), shaftM); sh.position.set(p.x, p.y - hh / 2, p.z); sh.rotation.y = yaw + ry + Math.PI / 2; sh.renderOrder = 4; g.add(sh) }
+        addDrips(p.clone(), 0.4, 1.8, p.y, hh, 8)
+      }
+    }
+    // 4) 螺旋岩室：中空的圓形岩室（半徑 RW、高約 15 m），石階貼著外牆繞兩圈；中間是空的，頂上一個天窗，一道細瀑布從天窗落進底下的水盆
+    { const pos = [], col = [], uv = [], idx = []
+      const skyK = (p) => { const r = Math.hypot(p.x - SP.x, p.z - SP.z); return 1.9 * Math.exp(-r * r / 34) * (0.3 + 0.7 * Math.min(1, Math.max(0, (p.y - SPB) / (SPT - SPB)))) }
+      const vtx = (p, base, u2, v2) => { const L = lightAt(p), k = skyK(p); pos.push(p.x, p.y, p.z); uv.push(u2, v2); col.push(base * (1 + L[0] + 0.55 * k), base * 0.94 * (1 + L[1] + 0.8 * k), base * 0.84 * (1 + L[2] + 0.95 * k)); return pos.length / 3 - 1 }
+      const fAt = (x, z) => Math.atan2(-(x - SP.x), -(z - SP.z))   // 跟 layout 的圓弧同一個角度（0＝南、往西為正）
+      // 外牆：兩個開口（T1 從東南進來、最下面；T3 往西南出去、最上面）不畫
+      const NA = 56, NY = 34, fOpen = Math.atan2(Math.sqrt(RW * RW - SP.r * SP.r), SP.r), hw = 0.38
+      const open = (f, y) => (Math.abs(f + fOpen) < hw && y > SP.y0 - 0.3 && y < SP.y0 + 3.2) || (Math.abs(f - fOpen) < hw && y > SP.y1 - 0.3 && y < SP.y1 + 3.3)
+      const wb = pos.length / 3
+      for (let j = 0; j <= NY; j++) for (let a = 0; a <= NA; a++) {
+        const f = -Math.PI + a / NA * Math.PI * 2, y = SPB - 0.2 + (SPT - SPB + 0.2) * j / NY
+        const r = RW + 0.32 * (fbm2(f * 2.2 + 3, y * 0.5, 3) - 0.5) + 0.25 * (fbm2(f * 7 + 1, y * 0.25 + 9, 2) - 0.5)
+        vtx(V(SP.x - r * Math.sin(f), y, SP.z - r * Math.cos(f)), 0.2 + 0.08 * fbm2(f * 3, y * 0.9, 2), f * 2, y * 0.3)
+      }
+      for (let j = 0; j < NY; j++) for (let a = 0; a < NA; a++) {
+        const f = -Math.PI + (a + 0.5) / NA * Math.PI * 2, y = SPB - 0.2 + (SPT - SPB + 0.2) * (j + 0.5) / NY
+        if (open(f, y)) continue
+        const p0 = wb + j * (NA + 1) + a, p1 = p0 + NA + 1; idx.push(p0, p0 + 1, p1, p0 + 1, p1 + 1, p1)
+      }
+      // 地板、屋頂（圓盤）
+      for (const [y, flip, base] of [[SPB, 0, 0.24], [SPT, 1, 0.16]]) {
+        const c0 = vtx(V(SP.x, y, SP.z), base, 0, 0), r0 = pos.length / 3
+        for (let a = 0; a <= NA; a++) { const f = a / NA * Math.PI * 2; vtx(V(SP.x - (RW + 0.3) * Math.sin(f), y, SP.z - (RW + 0.3) * Math.cos(f)), base, Math.sin(f), Math.cos(f)) }
+        for (let a = 0; a < NA; a++) flip ? idx.push(c0, r0 + a + 1, r0 + a) : idx.push(c0, r0 + a, r0 + a + 1)
+      }
+      // 螺旋石階底下的岩板（內緣半徑 3.15、外緣貼牆）＋內緣的矮石牆（0.95 m）
+      const sp = []; for (let i = 0; i < NP; i++) if (st.tag[i] === 'SP' || (i + 1 < NP && st.tag[i + 1] === 'SP' && st.tag[i] !== 'SP' && isTun(i))) sp.push(i)
+      const sb = pos.length / 3
+      sp.forEach((i, ri) => {
+        const dx = C3[i].x - SP.x, dz = C3[i].z - SP.z, l = Math.hypot(dx, dz), ux = dx / l, uz = dz / l, y = C3[i].y
+        const P = (r, yy2) => V(SP.x + ux * r, yy2, SP.z + uz * r)
+        for (const [r, yy2, b] of [[3.15, y - 0.06, 0.26], [RW + 0.2, y - 0.06, 0.26], [RW + 0.2, y - 0.55, 0.18], [3.15, y - 0.55, 0.18], [3.15, y + 0.95, 0.3], [2.88, y + 0.95, 0.3], [2.88, y - 0.55, 0.22]]) vtx(P(r, yy2), b, st.S[i] * 0.3, r)
+        if (ri) { const a = sb + (ri - 1) * 7, c = a + 7
+          for (const [k0, k1] of [[0, 1], [1, 2], [2, 3], [3, 6], [0, 4], [4, 5], [5, 6]]) idx.push(a + k0, c + k0, a + k1, a + k1, c + k0, c + k1) }
+      })
+      // 水盆的石緣（一圈矮牆，半徑 2.6）
+      const bb = pos.length / 3, NB = 36
+      for (let a = 0; a <= NB; a++) { const f = a / NB * Math.PI * 2, sx = Math.sin(f), cz = Math.cos(f); for (const [r, y] of [[2.85, SPB], [2.8, SPB + 0.42], [2.5, SPB + 0.42], [2.45, SPB + 0.1]]) vtx(V(SP.x + sx * r, y, SP.z + cz * r), 0.3, f, r) }
+      for (let a = 0; a < NB; a++) for (let k = 0; k < 3; k++) { const p0 = bb + a * 4 + k, p1 = p0 + 4; idx.push(p0, p1, p0 + 1, p0 + 1, p1, p1 + 1) }
+      const cg2 = new THREE.BufferGeometry(); cg2.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); cg2.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); cg2.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); cg2.setIndex(idx); cg2.computeVertexNormals()
+      const ch = new THREE.Mesh(cg2, cliffM); ch.receiveShadow = true; ch.name = 'gorgeSpiral'; g.add(ch)
+      // 水盆的水、天窗（亮）、光柱、細瀑布（三片交叉的水簾）、落水點的滴水
+      const pool2 = new THREE.Mesh(new THREE.CircleGeometry(2.5, 40).rotateX(-Math.PI / 2), runM); { const n = pool2.geometry.attributes.position.count, cc = new Float32Array(n * 3).fill(0.9); pool2.geometry.setAttribute('color', new THREE.BufferAttribute(cc, 3)) }
+      pool2.position.set(SP.x, SPB + 0.34, SP.z); pool2.renderOrder = 2; g.add(pool2)
+      const skyL = new THREE.Mesh(new THREE.CircleGeometry(1, 28).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.82, 0.95, 1.0).multiplyScalar(1.7), side: THREE.DoubleSide })); skyL.scale.set(1.5, 1, 1.0); skyL.position.set(SP.x, SPT - 0.05, SP.z); g.add(skyL)
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 2.3, SPT - SPB, 24, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.7, 0.9, 1.0), transparent: true, opacity: 0.055, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })); shaft.position.set(SP.x, (SPT + SPB) / 2, SP.z); shaft.renderOrder = 4; g.add(shaft)
+      const fm2 = fallMat({ spd: 0.9, a: 0.85 })
+      for (let k = 0; k < 3; k++) { const fq = new THREE.Mesh(new THREE.PlaneGeometry(0.75, SPT - SPB - 0.4, 1, 12), fm2); fq.position.set(SP.x, (SPT + SPB) / 2 + 0.2, SP.z); fq.rotation.y = k * Math.PI / 3; fq.renderOrder = 5; g.add(fq) }
+      addDrips(V(SP.x, 0, SP.z), 1.6, 1.6, SPT - 0.5, SPT - SPB - 0.6, 90)
+      for (let k = 0; k < 5; k++) { const f = k * 1.3 + 0.4; addDrips(V(SP.x - (RW - 0.5) * Math.sin(f), 0, SP.z - (RW - 0.5) * Math.cos(f)), 0.6, 0.6, SPT - 2 - k, 6, 8) }
+    }
+    // 滴水（全部一起畫）：每一顆從 yTop 落 H 公尺、落到底重來
+    if (dripP.length) {
+      const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.Float32BufferAttribute(dripP, 3)); dg.setAttribute('aD', new THREE.Float32BufferAttribute(dripA, 3))
+      const dm = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uT },
+        vertexShader: `attribute vec3 aD; uniform float uT; varying float vA; void main() { float k = fract(uT * aD.z + aD.y); vec3 p = position; p.y -= k * k * aD.x; vA = 1.0 - k * 0.5; vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_PointSize = clamp(42.0 / -mv.z, 1.0, 7.0); gl_Position = projectionMatrix * mv; }`,
+        fragmentShader: `varying float vA; void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(d * vec2(2.4, 1.0))); gl_FragColor = vec4(0.8, 0.9, 0.95, a * 0.75 * vA); }` })
+      const dp = new THREE.Points(dg, dm); dp.frustumCulled = false; dp.renderOrder = 6; dp.name = 'gorgeDrips'; g.add(dp)
     }
 
     // 岩壁頂上：觀景台（瀑布口東邊）欄杆＋後面不能走出去
