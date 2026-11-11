@@ -14,6 +14,7 @@ export function createCloudSea(scene, { sun }) {
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const h = ALP_HEIGHTS[(j * K) * AG.nx + i * K]
     hd[j * nx + i] = Math.max(0, Math.min(255, Math.round((Number.isFinite(h) && h < 1e5 ? h : 0) / 80 * 255)))
+    if (AG.x0 + i * K * AG.cell > 250) hd[j * nx + i] = 255   // 2026-11-11 東邊（原本的濕地、草原）改成紅杉林：林子在雲海的高度裡，一片平的白霧把樹幹攔腰切斷 → 那裡不放雲海
   }
   const hTex = new THREE.DataTexture(hd, nx, nz, THREE.RedFormat)
   hTex.magFilter = hTex.minFilter = THREE.LinearFilter; hTex.needsUpdate = true

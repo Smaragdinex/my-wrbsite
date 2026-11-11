@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { bladeMesh } from './flora.js'
 import { lodRegisterGrass } from './lod.js'
-import { EAST, wetSD, grassSD, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss, ALP_SPURS } from './layout.js'
+import { EAST, EAST_DW, EAST_DG, wetSD, grassSD, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss, ALP_SPURS } from './layout.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { fbm2, mulberry32 } from './noise.js'
 import { scatter } from './plants.js'
@@ -168,11 +168,11 @@ export function buildEast({ avoid = [], lib = null } = {}) {
   g.userData.blades = n
   // V2：水中枯木與樹樁（ChatGPT：倒木 2～4 根 1.5～4 m、自然樹樁 2～5 個 0.3～1.2 m；集中在岸邊、水道彎；開闊泥灘中間不放）
   if (lib?.deadlog) {
-    const L = [[346.5, -44.5, 0.5, 3.4, 0.3], [321.5, -61, 2.1, 2.6, 0.22], [349, -59.5, 1.2, 2.0, 0.18], [334, -64.5, -0.4, 3.8, 0.34]]
+    const L = [[346.5, -44.5, 0.5, 3.4, 0.3], [321.5, -61, 2.1, 2.6, 0.22], [349, -59.5, 1.2, 2.0, 0.18], [334, -64.5, -0.4, 3.8, 0.34]].map(([x, z, ...r]) => [x + EAST_DW[0], z + EAST_DW[1], ...r])
     scatter(g, lib.deadlog, L.map(([x, z, yaw, len, D]) => ({ p: new THREE.Vector3(x, Math.min(EAST.W, alpineHeight(x, z)) - D * 0.35, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.06, yaw, 0.04, 'YXZ')), s: new THREE.Vector3(len / 3.05, D / 0.28, D / 0.28) })))
   }
   if (lib?.stump) {
-    const S = [[336.5, -62.8, 0.9, 0.9], [344.5, -47.5, 0.6, 0.5], [325.5, -43.5, 0.7, 0.7], [348, -52, 0.5, 1.1]]
+    const S = [[336.5, -62.8, 0.9, 0.9], [344.5, -47.5, 0.6, 0.5], [325.5, -43.5, 0.7, 0.7], [348, -52, 0.5, 1.1]].map(([x, z, ...r]) => [x + EAST_DW[0], z + EAST_DW[1], ...r])
     scatter(g, lib.stump, S.map(([x, z, D, H]) => ({ p: new THREE.Vector3(x, alpineHeight(x, z) - 0.15, z), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), x), s: new THREE.Vector3(D / 1.5 * 1.35, Math.min(H / 0.57, D / 1.5 * 1.35 * 1.25), D / 1.5 * 1.35) })))
   }
   g.add(buildHides())
@@ -186,8 +186,8 @@ export function buildEast({ avoid = [], lib = null } = {}) {
 // 牆是一片片橫向木板（寬 0.12～0.19、厚 0.025、縫 0.006～0.012，每片色差 ±8～15%，65% 灰褐／25% 深褐／10% 深色結構）；
 // 正面三個觀察窗（各寬 1.4、下緣 1.05、高 0.5、中間 0.15 木柱）、窗台深 0.24、窗上掀開 55° 的木遮板；後面步道側一個 0.95 m 的門；屋裡長椅 0.42 m
 export const HIDES = [
-  { name: 'O7', x: EAST.hides[0][0], z: EAST.hides[0][1], look: [318, 101], w: 6, d: 3.2 },
-  { name: 'O8', x: EAST.hides[1][0], z: EAST.hides[1][1], look: [336, -51], w: 6, d: 3.2 },
+  { name: 'O7', x: EAST.hides[0][0], z: EAST.hides[0][1], look: [318 + EAST_DG[0], 101 + EAST_DG[1]], w: 6, d: 3.2 },
+  { name: 'O8', x: EAST.hides[1][0], z: EAST.hides[1][1], look: [336 + EAST_DW[0], -51 + EAST_DW[1]], w: 6, d: 3.2 },
 ]
 function woodTex() {
   const c = document.createElement('canvas'); c.width = 256; c.height = 64

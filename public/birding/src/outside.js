@@ -23,8 +23,10 @@ const ENTRY_W = 4.3   // 相機行門口（入口石材地板寬 ±4）圍籬留
 // 方位 a 往外走到 domeRho = rho 的那一點
 function edgePoint(a, rho = 1) {
   const dx = Math.cos(a), dz = Math.sin(a)
-  let lo = 0, hi = 400
-  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (domeRho(dx * m, dz * m) < rho) lo = m; else hi = m }
+  // 2026-11-11 西北、西南多了兩塊（LOBES）：同一方向可能出邊界又進邊界 → 從外面往裡找「最外面」那個交點，再二分
+  let hi = 420, lo = 0
+  for (let m = 420; m > 0; m -= 0.5) if (domeRho(dx * m, dz * m) < rho) { lo = m; hi = m + 0.5; break }
+  for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (domeRho(dx * m, dz * m) < rho) lo = m; else hi = m }
   return [dx * lo, dz * lo, lo]
 }
 

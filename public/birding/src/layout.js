@@ -24,7 +24,7 @@ export const DECK = { r: 7, x: 0, z: 0, y: 0 }   // 頂端圓形觀景台（2026
 export const STORE = { X0: -75.6, X1: -88.6, HZ: 7.5, H: 5.0, DOOR_W: 3.4 }
 // 高山區（alpine.js）：溫室東半邊、原本花園橢圓外面那一塊。花園的 alpine 步道走到 x≈74 接上山的步道；
 // 入口一小片平地、水池，往東爬升到約 26 公尺的山頂，一條溪從東南高處沿山谷流到水池，步道之字形上山、吊橋過溪谷
-export const ALP = { X0: 25, X1: 378, HZ: 150 }   // X0 45→25：inAlpine 從 x 30 就開始，以前 30～45 那一小段沒有地形資料（高度 1e9）   // 山區地形格子的範圍（實際能走的是 inAlpine）
+export const ALP = { X0: -62, X1: 378, HZ: 150 }   // 2026-11-11 X0 25→-62：西北的草原那塊在花園北邊（x 到 -56）   // X0 45→25：inAlpine 從 x 30 就開始，以前 30～45 那一小段沒有地形資料（高度 1e9）   // 山區地形格子的範圍（實際能走的是 inAlpine）
 // 第三館：海岸（coast.js，美術用 NatureManufacture「Coast Dunes Environment」，跟《淨灘大作戰》同一套）。圓頂南門（z≈-55）→ 通道（z -53～-74，A 門 -61、B 門 -67）
 // → 玻璃館（z -74～-154、x ±40）：北半邊沙丘、木棧道，中間沙灘，海岸線約 z -128，往南是館裡的淺水潟湖；館外整片都是海（到地平線）
 // 海岸館暫時拿掉（2026-11-07 使用者要求）：關掉就沒有南門、通道、館和海；程式和模型都還在，改回 true 就回來
@@ -50,10 +50,35 @@ export function angDiff(a, b) {
 // 2026-11-10 東部擴建（PARK_PLAN.md／ChatGPT「東部擴建 V2」）：東邊原本是橢圓的尖角（z=±60 只到 x 319），東南的低窪地、東北的緩坡都在外面。
 // x 210 以東慢慢從橢圓（n=2）換成超橢圓（n=4.5）：尖角變鈍，濕地和草原包進來；西半邊（花園、入口）完全不變
 const domeN = (x) => 2 + 2.5 * smoothstep(210, 262, x)
-export const domeRho = (x, z) => {
+// 2026-11-11 使用者：濕地搬到公園西南、草原搬到西北，「讓地圖更大」→ 兩塊橢圓（LOBES）跟原本的邊界平滑接起來（smooth min）
+export const LOBES = { grass: { x: 2, z: 100, rx: 58, rz: 46 }, wet: { x: 58, z: -112, rx: 46, rz: 38 } }
+export const lobeRho = (L, x, z) => Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz)
+// 新地塊跟原本的園區之間不能留凹口（第一版：凹口在邊界外，地面沒畫、看得到走不到）→ 每塊從園區裡面的一點（L.from）拉出來，
+// 沿路的橢圓從小（半徑 L.r0）慢慢變成那塊的橢圓：整塊像一顆水滴長出去
+LOBES.grass.from = [8, 36]; LOBES.wet.from = [42, -52]
+for (const L of Object.values(LOBES)) L.r0 = 24
+export function lobeSweep(L, x, z) {
+  let m = 1e9
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10, cx = L.from[0] + (L.x - L.from[0]) * t, cz = L.from[1] + (L.z - L.from[1]) * t, rx = L.r0 + (L.rx - L.r0) * t, rz = L.r0 + (L.rz - L.r0) * t
+    m = Math.min(m, Math.hypot((x - cx) / rx, (z - cz) / rz))
+  }
+  return m
+}
+const smin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25 }
+function domeRho0(x, z) {
   if (x <= 210) return Math.hypot(x / (x > 0 ? DOME.AE : DOME.A), z / domeB(x))
   const n = domeN(x)
   return ((x / DOME.AE) ** n + Math.abs(z / domeB(x)) ** n) ** (1 / n)
+}
+export const domeRho = (x, z) => smin(smin(domeRho0(x, z), lobeSweep(LOBES.grass, x, z), 0.3), lobeSweep(LOBES.wet, x, z), 0.3)
+// 同一個方位上「最外面」的邊界半徑（outside.js 的草地從這裡往外鋪）：比它近、但在邊界外的凹口，山區地形網格要自己畫（不然是一個洞）
+const OUTER_N = 1440, outerTab = new Float32Array(OUTER_N).fill(-1)
+export function outerR(x, z) {
+  let a = Math.atan2(z, x); if (a < 0) a += TAU
+  const i = Math.round(a / TAU * OUTER_N) % OUTER_N
+  if (outerTab[i] < 0) { const dx = Math.cos(i / OUTER_N * TAU), dz = Math.sin(i / OUTER_N * TAU); let r = 0; for (let m = 420; m > 0; m -= 0.5) if (domeRho(dx * m, dz * m) < 1) { r = m; break } outerTab[i] = r }
+  return outerTab[i]
 }
 export const gardenRho = (x, z) => Math.hypot(x / GARDEN.A, z / GARDEN.B)
 export function domeY(x, z) {
@@ -158,7 +183,8 @@ export const PATHS = [
   { name: 'nw', w: 2.4, curve: curve([onLoop(-2.4), [-30, -24], ringPt(-2.5)]) },
   { name: 'spur', w: 2.6, curve: curve([ringPt(1.0), [19.5, 11.6], [14.6, 10.45]]) },
   { name: 'alpine', w: 3.0, curve: curve([loopPt(0), [62, 0.5], [76.6, 0]]) },   // 往高山館的東門（2026-11-09 73.5→76.6：跟山區泥土步道接上，中間不再空一段草地）
-  { name: 'coast', w: 3.0, curve: curve([loopPt(-Math.PI / 2), [0.5, -46], [0, -53.6]]) },   // 往海岸館的南門
+  { name: 'coast', w: 3.0, curve: curve([loopPt(-Math.PI / 2), [0.5, -46], [0, -53.6]]) },
+  { name: 'meadow', w: 2.6, curve: curve([ringPt(Math.PI / 2), [2, 50], [2, 58.5]]) },   // 2026-11-11 往西北的新草原（接山區步道 meadow）   // 往海岸館的南門
   ].filter((p) => COAST_ON || p.name !== 'coast'),
 ]
 
@@ -327,6 +353,9 @@ export const ALP_SPURS = [
   // 湖南岸（離水雉、彩鷸 ≥12 m），接到湖東南岸 lakeGorge 的起點（往上就是南坡溪谷）。幾乎平的（0～5 m），約 125 m（A* 找的）
   // 2026-11-10 岩簷步道（松龍岩那種）：湖西岸的步道往北，沿著湖跟岩壁之間走進岩簷底下，盡頭是瀑布側後方的觀景平台（離水簾 4～5 m）
   // 2026-11-10 濕地 V2（ChatGPT C 節）：步道靠近水邊那段改低矮木棧道（寬 1.7），從主步道沿著觀察屋東側下到水邊一個小平台；east.js 鋪木板
+  { name: 'wetIn', world: true, k: 0.15, noClear: true, pts: [[84, -73], [74, -79], [62, -83], [50, -85.5], [45.5, -87.3]] },   // 2026-11-11 湖邊步道 → 西南的新濕地（接 wetBoard）
+  { name: 'wetRing', world: true, k: 0.15, noClear: true, endOn: 'wetIn', pts: [[45.5, -87.3], [34.2, -85.8], [32.9, -95.9], [31.8, -103.7], [31.3, -110.9], [30.2, -118.4], [32.2, -125.9], [37.8, -131.2], [43.2, -136.3], [49.6, -140.7], [57.4, -140.7], [64.6, -138.8], [72, -137.7], [78.4, -133.5], [82.6, -127.2], [85.7, -120.4], [87, -113.1], [85.8, -105.8], [83.3, -99], [80.7, -91.5], [77, -84], [74, -79]] },   // 2026-11-11 使用者：濕地要可以走一圈 → 從 wetIn 盡頭（觀察屋木棧道口）往西、南、東繞水邊外 10 m，回到 wetIn（北邊那段就是 wetIn）
+  { name: 'meadow', world: true, y0: 0, k: 0.15, noClear: true, pts: [[2, 58], [5, 68], [9, 80], [10, 92], [16, 104]] },   // 2026-11-11 花園北邊 → 西北的新草原
   { name: 'wetBoard', world: true, k: 0.15, pts: [[321.5, -27.3], [322.6, -31], [326, -34], [330.5, -35.3], [334.2, -34.8]] },
   { name: 'cave', world: true, k: 0.12, pts: [[177, 70.5], [179.5, 77], [182.5, 84], [186, 90.3], [190, 94.4], [195, 95.4], [199.5, 94.9]] },
   { name: 'lakeLoop', world: true, y0: 0, flat: 3, k: 0.15,   /* 2026-11-10 使用者：花園出口左邊那條路有一道凸起的破圖（前 12 m 貼著花園邊，路面被墊到 0.5 m，花園地面是 0） */ noClear: true, endOn: 'lakeGorge', pts: [[76.5, 0], [78.2, -6], [78, -12], [76.5, -35], [77, -57], [84, -73], [98, -78], [123, -63]] },
@@ -503,6 +532,21 @@ EAST.mainPool = { x: 341, z: -53, rx: 8.5, rz: 10 }
 EAST.channel = [[318.5, -40.5], [323, -45.5], [328.5, -48], [333, -51.5], [338, -53], [343, -57.5], [347, -63]]
 EAST.islands = [{ x: 330.5, z: -58.5, rx: 3.6, rz: 2.1, rot: 0.5, h: 0.2 }, { x: 337.5, z: -42.5, rx: 2.1, rz: 1.6, rot: -0.3, h: 0.14 }]
 EAST.wetBox = [306, 362, -82, -22]; EAST.grassBox = [258, 352, 52, 132]
+// 2026-11-11 使用者：濕地搬到公園西南（山區入口湖的西南邊）、草原搬到西北（花園北邊）→ 整套平移（水域、泥灘、島、潮溝、觀察屋、草鴞巢、木棧道）；
+// 東邊原本那兩塊回到山的地形，種紅杉。濕地的水面 2.5 → -0.25（新位置的地面約 0）
+export const EAST_DW = [-276, -60], EAST_DG = [-303, 8]
+{
+  const mv = (p, d) => { p[0] += d[0]; p[1] += d[1] }, mo = (o, d) => { o.x += d[0]; o.z += d[1] }
+  for (const p of [...EAST.water, ...EAST.creek, ...EAST.channel]) mv(p, EAST_DW)
+  for (const o of [EAST.pool, EAST.mainPool, ...EAST.islands]) mo(o, EAST_DW)
+  EAST.wetBox = [EAST.wetBox[0] + EAST_DW[0], EAST.wetBox[1] + EAST_DW[0], EAST.wetBox[2] + EAST_DW[1], EAST.wetBox[3] + EAST_DW[1]]
+  mv(EAST.hides[1], EAST_DW)
+  for (const p of EAST.grass) mv(p, EAST_DG)
+  mo(EAST.lark, EAST_DG); mv(EAST.owlNest, EAST_DG); mv(EAST.hides[0], EAST_DG)
+  EAST.grassBox = [EAST.grassBox[0] + EAST_DG[0], EAST.grassBox[1] + EAST_DG[0], EAST.grassBox[2] + EAST_DG[1], EAST.grassBox[3] + EAST_DG[1]]
+  for (const p of ALP_SPURS.find((q) => q.name === 'wetBoard').pts) mv(p, EAST_DW)
+  EAST.W = -0.25
+}
 // 邊界加雜訊：多邊形的直邊在遊戲裡一看就是六角形（2026-11-10 第一版從空中看是一塊褐色六角形）→ 岸線、草原邊緣彎彎曲曲
 export const wetSD = (x, z) => sdPoly(EAST.water, x, z) + 5 * (fbm2(x * 0.05 + 13, z * 0.05 - 2, 3) - 0.5) + 1.2 * (fbm2(x * 0.2, z * 0.2 + 5, 2) - 0.5)
 export const grassSD = (x, z) => sdPoly(EAST.grass, x, z) + 9 * (fbm2(x * 0.03 - 4, z * 0.03 + 9, 3) - 0.5)
@@ -606,7 +650,7 @@ function eastShape0(X, Z, h) {
     // 草原：原本是 34% 的碎石坡（x 278 的 30 m 到 x 336 的 13 m）→ 壓成一路往東南緩下來的草坡（平均 19%），上面起伏 ±1.5 m 的草丘；
     // 小雲雀那塊再壓平一點。多邊形外 12 m 內接回原地形（西邊接山頂岩坡）
     const sd = grassSD(X, Z)
-    const base = 14 + 12 * clamp((338 - X) / 62, 0, 1) + 2 * clamp((Z - 90) / 30, -1, 1) * -0.5
+    const base = 1.6 + 2.2 * smoothstep(0.45, 1.05, lobeRho(LOBES.grass, X, Z)) + 0.8 * clamp((X - EAST.grassBox[0]) / 90, 0, 1)   // 2026-11-11 新位置：平緩的草坡（草丘 ±1.5 疊上去不會低於 0），往邊緣微微升起
     const hum = 1.5 * (fbm2(X * 0.045 + 21, Z * 0.045 + 4, 3) - 0.5) * 2 + 0.4 * (fbm2(X * 0.16, Z * 0.16, 2) - 0.5)
     const L = EAST.lark, lk = 1 - smoothstep(0.8, 1.3, Math.hypot((X - L.x) / L.rx, (Z - L.z) / L.rz))
     const t = base + hum * (1 - 0.7 * lk)
@@ -626,7 +670,7 @@ function alpBase(X, Z) {
   h += 1.4 * Math.max(0, fbm2(X * 0.13, Z * 0.13, 3)) * smoothstep(86, 105, x)                   // 小岩塊
   h = eastShape(X, Z, h * AHS); h /= AHS   // 2026-11-10 東部擴建：濕地盆地、草原（世界座標、公尺）
   h = h * AHS   // 2026-11-08：以前 min(…, domeY - 9)（不能頂到玻璃）——圓頂拿掉之後，這個上限在邊界附近把地形壓成一面懸崖；邊界外的草地（outside.js）會從邊界的高度慢慢降下去
-  return lerp(gardenEdgeH(X, Z), Math.max(0, h), smoothstep(1.0, 1.25, gardenRho(X, Z)))          // 花園那側從種植坡的高度接起，往裡面慢慢變成山的形狀
+  return lerp(gardenEdgeH(X, Z), Math.max(lobeRho(LOBES.wet, X, Z) < 1.4 ? -3 : 0, h), smoothstep(1.0, 1.25, gardenRho(X, Z)))   // 濕地那塊可以低於 0（水面 -0.25）          // 花園那側從種植坡的高度接起，往裡面慢慢變成山的形狀
 }
 // 階梯式溪床（step-pool，台灣山溪常見）：水面一段一段是平的（水潭），潭與潭之間是一道落差（小瀑布、跌水）。
 // 沿著溪的距離 s：原本的溪床是一條一路往下的折線（sProf）；把它切成很多段，每段一個水潭，
@@ -969,7 +1013,7 @@ function buildAlpine() {
         }
       }
     }
-    aHeight[k] = h
+    aHeight[k] = Number.isFinite(h) ? h : 0   // 2026-11-11 格子往西擴到 x -62 以後包到花園中心 (0,0)：gardenEdgeH 在原點是 NaN（地形網格的外框變 NaN，整片地形被剔除）
   }
 }
 buildAlpine()
@@ -979,7 +1023,7 @@ const agrid = (arr, x, z) => {
   const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * AG.nx + i
   return (arr[k] * (1 - u) + arr[k + 1] * u) * (1 - v) + (arr[k + AG.nx] * (1 - u) + arr[k + AG.nx + 1] * u) * v
 }
-export const inAlpine = (x, z, m = 0) => x > 30 && gardenRho(x, z) > 1.03 + m / 60 && x < ALP.X1 && Math.abs(z) < ALP.HZ
+export const inAlpine = (x, z, m = 0) => (x > 30 || lobeSweep(LOBES.grass, x, z) < 1.3 || lobeSweep(LOBES.wet, x, z) < 1.3) && x > ALP.X0 + 1 && gardenRho(x, z) > 1.03 + m / 60 && x < ALP.X1 && Math.abs(z) < ALP.HZ
 export const alpineHeight = (x, z) => inAlpine(x, z) ? agrid(aHeight, x, z) : 0
 export const alpineTrailDist = (x, z) => agrid(aTrail, x, z)
 export const alpineStreamDist = (x, z) => agrid(aStream, x, z)

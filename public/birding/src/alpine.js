@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, grassSD } from './layout.js'
+import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { nearGiant, forestK } from './giants.js'
 import { barkMaterial } from './bark.js'
@@ -205,7 +205,7 @@ function buildInterior(lib, avoid = []) {
     }
     // 只留山區（花園橢圓外、溫室裡）的格子；花園那邊有自己的地面
     const keep = new Uint8Array(nx * nz)
-    for (let k = 0; k < nx * nz; k++) keep[k] = inAlpine(pos[k * 3], pos[k * 3 + 2], -1) && domeRho(pos[k * 3], pos[k * 3 + 2]) < 1.0 ? 1 : 0
+    for (let k = 0; k < nx * nz; k++) { const x = pos[k * 3], z = pos[k * 3 + 2]; keep[k] = inAlpine(x, z, -1) && (domeRho(x, z) < 1.0 || Math.hypot(x, z) < outerR(x, z) + 1) ? 1 : 0 }   // 2026-11-11 新地塊旁邊的凹口也畫
     for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; if (keep[a] | keep[b] | keep[c] | keep[d]) idx.push(a, c, b, b, c, d) }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx)
@@ -989,7 +989,7 @@ function buildInterior(lib, avoid = []) {
     for (const f of FIG_FORCED) FIGPOS.push({ x: f.x, z: f.z, H: 9.5, forced: true, ref: f })   // 吃果實的鳥停的那幾棵（birds.js dressFig）
     for (let k = 0; k < 20000 && FIGPOS.length < 18; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2, td = alpineTrailDist(x, z)
-      if (td < 5 || td > 12 || x > 230 || !inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineHeight(x, z) > 18) continue
+      if (td < 5 || td > 12 || x > 230 || !inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineHeight(x, z) > 18 || eastZone(x, z)) continue   // 2026-11-11 濕地、草原搬到西邊之後雀榕會長進濕地的水裡
       if (alpineStreamDist(x, z) < 3 || bridgeDist(x, z) < 10 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4) || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 3 || nearBird(avoid, x, z, 5, 2.5)) continue
       if (FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < 16) || nearGiant(x, z, 8)) continue
       FIGPOS.push({ x, z, H: 7 + rnd() * 3.5 })

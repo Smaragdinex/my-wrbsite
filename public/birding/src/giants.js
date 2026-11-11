@@ -14,10 +14,14 @@ import { scatter } from './plants.js'
 const TAU = Math.PI * 2
 // 巨木林的範圍：步道第 3～9 點附近（入口上坡之後、過吊橋、到南坡）
 const SEG = [3, 9]
+// 2026-11-11 使用者：濕地、草原搬到西邊之後，東邊空出來的地 → 紅杉林繼續長過去：沿原本往東部濕地、東部草原的兩條步道也是林帶
+const BAND_LINES = () => [ALP_TRAIL.slice(SEG[0], SEG[1] + 1), ...['wet', 'grass'].map((n) => ALP_SPURS.find((q) => q.name === n)?.pts).filter(Boolean)]
+let BL = null
+const bandSegs = () => (BL ??= BAND_LINES().flatMap((pl) => pl.slice(0, -1).map((a, i) => [a, pl[i + 1]])))
 const bandDist = (x, z) => {
   let best = 1e9
-  for (let i = SEG[0]; i < SEG[1]; i++) {
-    const [ax, az] = ALP_TRAIL[i], [bx, bz] = ALP_TRAIL[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz
+  for (const [[ax, az], [bx, bz]] of bandSegs()) {
+    const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-6
     const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2))
     best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t))
   }
@@ -59,9 +63,11 @@ export function giantSpots(avoid = []) {
     }
     if (best) list.push({ x: best.x, z: best.z, y: best.y - 0.3, D: 5.6, H: best.H, rot: 0.6, lean: 0, sacred: true, fenceR: 6.6 })
   }
-  for (let k = 0; k < 24000 && list.length < 170; k++) {
-    const i = SEG[0] + Math.floor(rnd() * (SEG[1] - SEG[0])), t = rnd()
-    const [ax, az] = ALP_TRAIL[i], [bx, bz] = ALP_TRAIL[i + 1], L = Math.hypot(bx - ax, bz - az)
+  const segs = bandSegs(), segL = segs.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1])), totL = segL.reduce((p, q) => p + q, 0)
+  for (let k = 0; k < 48000 && list.length < 290; k++) {
+    let u = rnd() * totL, i = 0; while (i < segs.length - 1 && u > segL[i]) { u -= segL[i]; i++ }   // 照長度挑一段（長的林帶種多一點）
+    const t = rnd()
+    const [[ax, az], [bx, bz]] = segs[i], L = Math.max(1e-3, segL[i])
     const side = rnd() < 0.5 ? -1 : 1, off = 4 + Math.pow(rnd(), 1.1) * 28
     const x = ax + (bx - ax) * t - (bz - az) / L * side * off, z = az + (bz - az) * t + (bx - ax) / L * side * off
     if (!inAlpine(x, z, 4) || domeRho(x, z) > 0.9) continue
