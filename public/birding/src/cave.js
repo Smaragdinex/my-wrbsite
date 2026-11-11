@@ -29,6 +29,20 @@ export function buildCave(scene, kit, sum, lib) {
   // 2026-11-11 使用者：岩石不夠真實，可以用真的岩石嗎 → 全部換成 Poly Haven 攝影測量掃描的真岩石（專案裡本來就有：
   // rockface_a／rockface_b 岩壁掃描、mrock_1～13 長青苔的石頭、boulder），用拼的（kitbash）
   const SC = {}
+  // 顏色對到外面的花崗岩壁：掃描的岩片偏褐、帶藍綠 → 去掉一半多的彩度、偏冷灰（青苔還留一點綠）
+  const matched = new Map()
+  const matchMat = (mat) => {
+    if (matched.has(mat)) return matched.get(mat)
+    const m2 = mat.clone(), prev = mat.onBeforeCompile
+    m2.onBeforeCompile = (sh, r2) => {
+      prev?.call(m2, sh, r2)
+      sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+        { float cl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); float gk = smoothstep(0.02, 0.1, diffuseColor.g - max(diffuseColor.r, diffuseColor.b));
+          diffuseColor.rgb = mix(vec3(cl), diffuseColor.rgb, mix(0.32, 0.85, gk)) * vec3(0.97, 0.99, 1.03) * 1.08; }`)
+    }
+    m2.customProgramCacheKey = () => (mat.customProgramCacheKey?.() ?? '') + 'caveMatch'
+    matched.set(mat, m2); return m2
+  }
   const rock = (name, x, y, z, s, yaw = rnd() * 6.28, rx = 0, rz = 0) => { if (!lib?.[name]) return; (SC[name] ||= []).push({ p: V(x, y, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, yaw, rz)), s: s instanceof THREE.Vector3 ? s : V(s, s, s) }) }
   // 1) 踏腳石：扁的青苔石頭埋進地裡，只露出頂上幾公分（真的石頭面），沿步道兩顆並排
   const FLAT = ['mrock_10', 'mrock_12', 'mrock_7', 'mrock_9', 'mrock_8'], FH = { mrock_10: 0.77, mrock_12: 0.74, mrock_7: 0.74, mrock_9: 0.61, mrock_8: 0.53 }
@@ -41,15 +55,34 @@ export function buildCave(scene, kit, sum, lib) {
     }
   }
   for (let k = 0; k < 12; k++) { const a = rnd() * 6.28, d = Math.sqrt(rnd()) * 2.0, px = ex + 0.4 + Math.cos(a) * d, pz = ez + Math.sin(a) * d * 0.9, n = FLAT[k % FLAT.length], sc = 0.6 + rnd() * 0.3; rock(n, px, alpineHeight(px, pz) - FH[n] * sc * 0.55 + 0.06, pz, V(sc, sc * 0.55, sc)) }
-  // 2) 巨石門：兩塊岩壁掃描當門柱、上面橫一塊大石頭當楣，從底下走過去（開口約 2.7 m 寬、2.9 m 高）
+  // 2) 天然岩拱（2026-11-11 使用者：要做到最好——上一版是兩顆石頭頂一塊石板，不像概念圖的拱）：
+  // 十幾顆整顆的掃描石頭沿一條半橢圓的拱互相咬在一起（每顆 2 m 上下、中心間隔不到 1 m，疊成一整條連續的岩體），前後兩圈錯開讓拱有厚度；
+  // 拱下淨空約 2.7 m 寬、2.4 m 高。兩隻腳各一個碰撞
+  const ARCH = ['mrock_4', 'mrock_3', 'mrock_6', 'mrock_5', 'mrock_2', 'mrock_1'], AH = { mrock_4: 1.77, mrock_3: 1.1, mrock_6: 1.26, mrock_5: 1.21, mrock_2: 1.26, mrock_1: 1.47 }
+  // 第三版：上一版每顆石頭亂轉，2～3 m 長的石頭像爆開的石片。這版照真的拱石排：石頭的長邊順著拱的弧線、一顆壓一顆，
+  // 內圈石頭的頂面（掃描的那一面）朝拱裡面、外圈朝外，兩圈底對底，人從下面走過看到的都是真的石頭面
+  const AD = { mrock_1: [2.24, 3.37, 0.19, -0.305], mrock_2: [2.65, 3.26, 0.585, 0.32], mrock_3: [2.11, 2.08, -0.195, -0.15], mrock_4: [2.13, 1.96, 0.285, 0.39], mrock_5: [1.82, 3.0, -0.18, 0.03], mrock_6: [2.12, 2.76, -0.1, 0.14] }
   const gate = (t, s) => {
-    const [x, z, tx, tz] = line[Math.floor(line.length * t)], y = alpineHeight(x, z), yaw = Math.atan2(tx, tz)
-    for (const sd of [-1, 1]) {
-      const lx = x - tz * sd * 2.7 * s, lz = z + tx * sd * 2.7 * s
-      rock(sd > 0 ? 'mrock_4' : 'mrock_5', lx, alpineHeight(lx, lz) - 0.45, lz, sd > 0 ? V(1.5 * s, 1.95 * s, 1.5 * s) : V(1.6 * s, 2.8 * s, 1.2 * s), yaw + (rnd() - 0.5) * 0.8, 0, sd * 0.05)   // 門柱用封閉的整顆石頭（岩壁掃描是一片單面的殼，立起來背面是空的）
-      addCollider(lx, lz, 1.35 * s, y + 3.2)
+    const [x, z, tx, tz] = line[Math.floor(line.length * t)], y = alpineHeight(x, z)
+    const RA = 2.7 * s, RB = 3.55 * s, bx = new THREE.Vector3(), by = new THREE.Vector3(), bz = new THREE.Vector3(), mb = new THREE.Matrix4()
+    for (const [ring, N] of [[0, 7], [1, 6]]) for (let i = 0; i < N; i++) {
+      const a = Math.PI * (0.04 + 0.92 * (i + (ring ? 0.5 : 0)) / (N - (ring ? 0 : 1))), ca = Math.cos(a), sa = Math.sin(a)
+      const n = ARCH[(i * 5 + ring * 2 + (s < 1 ? 3 : 0)) % ARCH.length], [wx, lz, cx, cz] = AD[n]
+      const len = (ring ? 2.7 : 2.3) * s * (0.92 + rnd() * 0.2), sc = len / lz
+      // 拱的平面：橫向 L=(-tz,0,tx)、往上 U；切線 T、朝外的法線 Nn
+      const L = V(-tz, 0, tx), T = V(0, 0, 0).addScaledVector(L, -RA * sa).add(V(0, RB * ca, 0)).normalize(), Nn = V(0, 0, 0).addScaledVector(L, RB * ca).add(V(0, RA * sa, 0)).normalize()
+      by.copy(Nn).multiplyScalar(ring ? 1 : -1); bz.copy(T).multiplyScalar(i % 2 ? 1 : -1); bx.crossVectors(by, bz)
+      const q = new THREE.Quaternion().setFromRotationMatrix(mb.makeBasis(bx, by, bz)).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.5, (rnd() - 0.5) * 0.3)))
+      const dz = (ring ? 0.25 : -0.2) + (rnd() - 0.5) * 0.3
+      const c = V(x, y - 0.35, z).addScaledVector(L, RA * ca).add(V(0, RB * sa, 0)).add(V(tx * dz, 0, tz * dz)).addScaledVector(by, ring ? -0.3 * sc : -0.12 * sc)
+      c.sub(V(cx * sc, 0, cz * sc).applyQuaternion(q));
+      (SC[n] ||= []).push({ p: c, q, s: V(sc, sc * (ring ? 1.0 : 0.85), sc) })
     }
-    rock('mrock_1', x, y + 2.2 * s, z, V(1.9 * s, 1.5 * s, 2.25 * s), yaw + Math.PI / 2 + (rnd() - 0.5) * 0.2, 0.05, 0.04)   // mrock_1 長邊 3.37 m × 2.25 ＝ 7.6 m，橫跨兩根門柱
+    // 兩隻腳外側各堆兩顆扶壁石，拱才像是從地上長出來的
+    for (const sd of [-1, 1]) {
+      for (const [o, f, sc] of [[3.9, 0.5, 0.95], [3.5, -1.0, 0.7]]) { const px = x - tz * sd * o * s + tx * f, pz = z + tx * sd * o * s + tz * f; rock(ARCH[Math.floor(rnd() * 6)], px, alpineHeight(px, pz) - 0.35, pz, sc * s, rnd() * 6.28, (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3) }
+      addCollider(x - tz * sd * 2.9 * s, z + tx * sd * 2.9 * s, 1.0 * s, y + 3.2)
+    }
   }
   gate(0.5, 1.0)
   gate(0.8, 0.92)
@@ -161,22 +194,25 @@ export function buildCave(scene, kit, sum, lib) {
     // 每片轉到面朝洞裡（後壁朝洞口、天花板朝下，中間彎的地方照斷面的角度），像貼磁磚一樣互相疊一點；每片中心貼在程式算的那層岩面前面 0.25 m。
     // 後壁用完整的掃描（每片 8000 個三角形）、天花板離得遠用四分之一面數的版本
     if (lib?.rockface_a) {
-      const DEF = { rockface_a: [V(-0.35, 1.8, -1.45), 5.0], rockface_b: [V(-0.4, 1.25, -0.95), 3.0] }, L3 = { rockface_a: [[], []], rockface_b: [[], []] }
+      // 手機、平板（觸控為主）：岩片全部用四分之一面數的版本、鋪得稀一點
+      const LITE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+      const DEF = { rockface_a: V(-0.35, 1.8, -1.45), rockface_b: V(-0.4, 1.25, -0.95) }, L3 = { rockface_a: [[], []], rockface_b: [[], []] }
       const E = new THREE.Euler(), qq = new THREE.Quaternion(), m5 = new THREE.Matrix4()
-      for (let i = 4; i < NXc - 2; i += 13) for (let j = 2; j < NS - 4; j += j < NW ? 11 : 12) {
-        const ii = Math.min(NXc, Math.max(0, i + Math.floor(rnd() * 5 - 2))), jj = j + Math.floor(rnd() * 4 - 2), vi = ii * (NS + 1) + jj, m = meta[vi]
-        if (YOSE.caveA(m.x) < 0.3) continue
-        const nm = rnd() < 0.7 ? 'rockface_a' : 'rockface_b', [ctr, size] = DEF[nm], sc = (nm === 'rockface_a' ? 1.2 : 1.8) * (0.9 + rnd() * 0.35)
+      const SI = LITE ? 12 : 9, SJW = LITE ? 10 : 8, SJC = LITE ? 12 : 10
+      for (let i = 3; i < NXc - 1; i += SI) for (let j = 1; j < NS - 3; j += j < NW ? SJW : SJC) {
+        const ii = Math.min(NXc, Math.max(0, i + Math.floor(rnd() * 5 - 2))), jj = Math.max(0, j + Math.floor(rnd() * 4 - 2)), vi = ii * (NS + 1) + jj, m = meta[vi]
+        if (YOSE.caveA(m.x) < 0.22) continue
+        const nm = rnd() < 0.7 ? 'rockface_a' : 'rockface_b', ctr = DEF[nm], sc = (nm === 'rockface_a' ? 1.2 : 1.8) * (0.95 + rnd() * 0.35)
         const al = m.ceil * Math.PI / 2
         if (m.ceil > 0.9) qq.setFromEuler(E.set(Math.PI * 0.75 + (rnd() - 0.5) * 0.2, rnd() * 6.28, 0, 'YXZ'))
         else qq.setFromEuler(E.set(-Math.PI / 4 - al + (rnd() - 0.5) * 0.2, Math.PI + (rnd() - 0.5) * 0.4, (rnd() - 0.5) * 0.3, 'XYZ'))
         const P0 = V(pos[vi * 3], pos[vi * 3 + 1], pos[vi * 3 + 2]).add(V(0, -0.25 * Math.sin(al), -0.25 * Math.cos(al)))
         const p = P0.sub(ctr.clone().multiplyScalar(sc).applyQuaternion(qq))
-        L3[nm][m.ceil > 0.5 ? 1 : 0].push(m5.compose(p, qq, V(sc, sc, sc)).clone())
+        L3[nm][!LITE && jj < 22 ? 0 : 1].push(m5.compose(p, qq, V(sc, sc, sc)).clone())   // 眼睛高度附近（牆的下半）用完整的掃描，其他用低面數
       }
       for (const [nm, [near, far]] of Object.entries(L3)) for (const { geo, mat } of parts(lib[nm])) for (const [list, gg] of [[near, geo], [far, lowGeo(geo) ?? geo]]) {
         if (!list.length) continue
-        const im = new THREE.InstancedMesh(gg, mat, list.length); list.forEach((mm, k) => im.setMatrixAt(k, mm)); im.receiveShadow = true; im.castShadow = false; im.computeBoundingSphere(); g.add(im)
+        const im = new THREE.InstancedMesh(gg, matchMat(mat), list.length); list.forEach((mm, k) => im.setMatrixAt(k, mm)); im.receiveShadow = true; im.castShadow = false; im.computeBoundingSphere(); g.add(im)
       }
     }
     // 滴水：從天花板的縫一滴滴落下來（沿洞口那一帶多），落到地上重來
@@ -197,7 +233,11 @@ export function buildCave(scene, kit, sum, lib) {
       const drops = new THREE.Points(dg, dm); drops.frustumCulled = false; g.add(drops)
     }
   }
-  for (const [name, list] of Object.entries(SC)) scatter(g, lib[name], list, { cast: true })
+  // 踏腳石照原本的顏色（長青苔的石頭）；岩拱、大石頭跟岩壁一樣對到花崗岩的灰
+  for (const [name, list] of Object.entries(SC)) {
+    if (FLAT.includes(name) && !ARCH.includes(name)) { scatter(g, lib[name], list, { cast: true }); continue }
+    for (const { geo, mat } of parts(lib[name])) { const im = new THREE.InstancedMesh(geo, matchMat(mat), list.length); list.forEach((it, k) => im.setMatrixAt(k, m4.compose(it.p, it.q, it.s))); im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im) }
+  }
   // 4) 岩簷底下的補光：水簾把天光漫射進來（以前整個岩窟是黑的，看不到岩壁）。不投影
   { const [x, z] = [ex - 3.5, ez + 1.2], lt = new THREE.PointLight(0xb4cbd8, 20, 19, 1.7); lt.position.set(x, alpineHeight(x, z) + 3.2, z); g.add(lt)
     const l3 = new THREE.PointLight(0xb4cbd8, 26, 30, 1.6); l3.position.set(ex - 4, alpineHeight(ex - 4, ez) + 9, ez + 0.5); g.add(l3)   // 高一點的一盞：照到後壁上半和天花板

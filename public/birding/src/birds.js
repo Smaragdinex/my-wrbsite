@@ -1756,7 +1756,7 @@ function shoebill(env) {
 }
 // 大紅鸛：潟湖淺水一群 6 隻，慢慢走、低頭濾食
 function flamingo(env) {
-  const show = flamingoShow({ neck: 0, neck2: 0, neck3: 0 })
+  const show = flamingoShow({ neck: 1.2, neck2: -1.5, neck3: 0, head: 0.5 })
   return groundGroup(6, 1.3, (avoid) => groundTripo(env, { name: 'flamingo-rig', H: 1.3, h0: 0.981, ...TRIPO, reach: 0.9, wade: true, bill: 0.16, show,
     walk: { radius: 3.2, speed: 0.13, avoid }, swingT: 0.6, lift: 0, knee: [1.0, 1.8], focusY: 0.75,
     acts: { walk: [4, 99, 99], peck: [4, 1.6, 3.2], stand: [2, 2, 4], look: [1.5, 1.2, 2.5], turn: [1, 99, 99], show: [0, 999, 999] } }))
