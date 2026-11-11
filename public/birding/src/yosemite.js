@@ -29,6 +29,11 @@ function graniteTex() {
   return t
 }
 
+// 2026-11-11 使用者：山路上要有青苔、草 → 岩壁朝上的面（岩棚、平台、山頂）、石階踏板用的值雜訊（世界座標，不靠 UV）
+const GLSL_VNOISE = `
+  float vnH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(vnH(i), vnH(i + vec2(1, 0)), f.x), mix(vnH(i + vec2(0, 1)), vnH(i + vec2(1, 1)), f.x), f.y); }
+  float vfbm(vec2 p) { return vn(p) * 0.55 + vn(p * 2.3 + 7.1) * 0.3 + vn(p * 5.1 + 3.7) * 0.15; }`
 const SHELTER = { x: 212, z: 102 }   // 岩壁頂上的涼亭（2026-11-11 使用者：涼亭懸空 → 以前 222, 99.5 在平台前緣外 3 m、底下是石階走廊；這裡平台前緣 98.2～後緣 105.8，四邊各留 1 m）
 // 2026-11-10 同一套 triplanar 花崗岩（照世界座標三向投影）給邊界外的花崗岩圓頂用（outside.js）；scale：貼圖密度（遠的大一點）
 export function graniteMaterial({ fog = true, scale = 0.3 } = {}) {
@@ -192,7 +197,7 @@ export function buildYosemite(scene, { lib } = {}) {
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvTpW = (modelMatrix * vec4(transformed, 1.0)).xyz; vTpN = normalize(mat3(modelMatrix) * objectNormal);')
     // 2026-11-10 使用者「低模」：加凹凸（用貼圖亮度當高度，螢幕空間導數擾動法線；不靠 UV）
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      varying vec3 vTpW; varying vec3 vTpN; float tpH;
+      varying vec3 vTpW; varying vec3 vTpN; float tpH;${GLSL_VNOISE}
       vec3 tpPerturb(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) {
         vec3 vSigmaX = normalize(dFdx(surf_pos)), vSigmaY = normalize(dFdy(surf_pos)), vN = surf_norm;
         vec3 R1 = cross(vSigmaY, vN), R2 = cross(vN, vSigmaX); float fDet = dot(vSigmaX, R1) * faceDirection;
@@ -207,6 +212,21 @@ export function buildYosemite(scene, { lib } = {}) {
         diffuseColor *= mix(tpC, tpC * (0.75 + 0.5 * tpL), 0.6);`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         { float dist = length(vViewPosition); vec2 dH = vec2(dFdx(tpH), dFdy(tpH)) * 2.2 * smoothstep(90.0, 15.0, dist); normal = tpPerturb(-vViewPosition, normal, dH, faceDirection); }`)
+  }
+  { const ob = cliffM.onBeforeCompile
+    // 朝上的面長青苔／草：岩棚一塊塊苔、山頂平台（y > 70）大片草地（中間留些露岩）；越靠瀑布越濕、苔越綠
+    cliffM.onBeforeCompile = (sh) => { ob(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      { float up = smoothstep(0.62, 0.9, normalize(vTpN).y);
+        float nn = vfbm(vTpW.xz * 0.35), nf = vfbm(vTpW.xz * 2.2 + 4.0);
+        float top = smoothstep(68.0, 73.0, vTpW.y);
+        float cov = up * smoothstep(0.62 - 0.3 * top, 0.72 - 0.25 * top, nn + 0.1 * nf);
+        vec3 mossC = mix(vec3(0.05, 0.1, 0.022), vec3(0.15, 0.22, 0.05), nf);
+        vec3 grassC = mix(vec3(0.1, 0.14, 0.04), vec3(0.26, 0.26, 0.11), smoothstep(0.4, 0.75, nn));
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(mossC, grassC, top) * (0.8 + 0.4 * nf), cov * 0.92);
+        // 牆面（垂直）偶爾一條條青苔／水痕：低處、背陽面多
+        float vert = 1.0 - smoothstep(0.3, 0.6, abs(normalize(vTpN).y));
+        float streak = smoothstep(0.66, 0.8, vfbm(vec2(vTpW.x * 0.9 + vTpW.z * 0.9, vTpW.y * 0.08)));
+        diffuseColor.rgb = mix(diffuseColor.rgb, mossC * 1.1, vert * streak * 0.55); }`) }
   }
   cliffM.customProgramCacheKey = () => 'cliffTriplanar'
   const cliff = new THREE.Mesh(cg, cliffM); cliff.castShadow = true; cliff.receiveShadow = true; g.add(cliff)
@@ -399,6 +419,8 @@ export function buildYosemite(scene, { lib } = {}) {
     const tg = new THREE.BufferGeometry()
     tg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3)); tg.setAttribute('uv', new THREE.Float32BufferAttribute(fu, 2)); tg.setAttribute('color', new THREE.Float32BufferAttribute(fc, 3))
     tg.setIndex(fi); tg.computeVertexNormals()
+    // 2026-11-11 石階最上層跟山頂平台之間那片石壁整片全黑：網格有幾排疊在同一點（面積 0 的三角形）→ 法線長度 0 → shader 正規化出 NaN。補成朝外（-z）
+    { const nn = tg.attributes.normal; let bad = 0; for (let i = 0; i < nn.count; i++) { const l = Math.hypot(nn.getX(i), nn.getY(i), nn.getZ(i)); if (!(l > 0.5)) { nn.setXYZ(i, 0, 0, -1); bad++ } } if (bad) console.log('[yose] face normals fixed', bad) }
     const terr = new THREE.Mesh(tg, cliffM); terr.castShadow = true; terr.receiveShadow = true; g.add(terr)
 
     // 石階：每一階一塊花崗岩踏板，下面墊到平台（看不到懸空）
@@ -421,6 +443,17 @@ export function buildYosemite(scene, { lib } = {}) {
           float wet = smoothstep(30.0, 8.0, distance(vTpW.xz, vec2(${F.x.toFixed(1)}, ${F.z.toFixed(1)})));
           diffuseColor.rgb *= 1.0 - 0.24 * wet;`)
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor *= 1.0 - 0.5 * wet;')
+    }
+    { const ob = stepM.onBeforeCompile
+      // 踏板：邊角、縫裡長青苔（踏面中間被踩的地方少），越靠瀑布越多
+      stepM.onBeforeCompile = (sh) => { ob(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + GLSL_VNOISE).replace('#include <color_fragment>', `#include <color_fragment>
+        { float nn = vfbm(vTpW.xz * 1.6 + vTpW.y * 0.7), nf = vfbm(vTpW.xz * 6.0 + 2.0);
+          float upF = normalize(vTpN).y;
+          float nz = vfbm(vTpW.xz * 14.0 + vTpW.y * 3.0);
+          float cov = smoothstep(0.64 - 0.1 * wet, 0.8 - 0.1 * wet, nn + 0.18 * nf + 0.22 * (nz - 0.5)) * mix(1.0, 0.6, smoothstep(0.5, 0.9, upF));
+          cov = max(cov, (1.0 - abs(upF)) * smoothstep(0.55, 0.7, nn) * 0.8);
+          vec3 mossC = mix(vec3(0.05, 0.1, 0.022), vec3(0.16, 0.23, 0.05), nf);
+          diffuseColor.rgb = mix(diffuseColor.rgb, mossC * (0.7 + 0.6 * nz), cov * 0.7); }`) }
     }
     stepM.customProgramCacheKey = () => 'stepTriplanar'
     const steps = []
@@ -580,17 +613,13 @@ export function buildYosemite(scene, { lib } = {}) {
       const wallM = new THREE.MeshStandardMaterial({ color: 0xaaa59b, roughness: 0.95 }), coreM = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.98 })
       // 第二輪（ChatGPT：石牆像一堆碎紙片、白色尖破面）：壓扁的十二面體切出很多細長三角形 → 改成低面數的圓石（球面＋輕微凹凸），封閉、沒有尖片
       const stoneG = new THREE.SphereGeometry(0.5, 9, 6); { const pp = stoneG.attributes.position; for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i), k = 0.92 + 0.1 * Math.sin(x * 9.1 + y * 5.3 + z * 7.7); pp.setXYZ(i, x * k, Math.sign(y) * Math.min(Math.abs(y) * k, 0.36), z * k) } stoneG.computeVertexNormals() }
-      // 2026-11-11 使用者：石階旁的石頭像一包包沙包 → 砌石改用掃描的岩石（Poly Haven，跟山上的石頭同一批），縮成單位大小再照原本的尺寸擺；牆心壓暗退到後面
-      let rockG = stoneG, rockM = wallM
-      const rn = lib && ['mrock_3', 'mrock_5', 'mrock_1'].find((n) => lib[n])
-      if (rn) {
-        const pr = parts(lib[rn])[0], gg = pr.geo.clone(); gg.computeBoundingBox()
-        const bb = gg.boundingBox, c0 = bb.getCenter(V()), sz = bb.getSize(V())
-        gg.translate(-c0.x, -c0.y, -c0.z).scale(1 / sz.x, 1 / sz.y, 1 / sz.z); gg.computeVertexNormals()
-        rockG = gg; rockM = pr.mat.clone(); rockM.color = new THREE.Color(0.78, 0.8, 0.82)   // 壓成灰一點（跟花崗岩台階同色系，掃描的石頭偏褐）
-        coreM.color.set(0x55524c)
-      }
-      for (const [list, geo, mat] of [[stones, rockG, rockM], [cores, new THREE.BoxGeometry(1, 1, 1), coreM]]) {
+      // 2026-11-11 使用者：石階旁的石頭像一包包沙包 → 第一版改掃描岩石，壓扁後變成一疊疊褐色香菇 → 改成方圓的砌石塊（超橢球：面平、角圓、每顆稍微歪），
+      // 跟踏板同一套 triplanar 花崗岩＋青苔（stepM）；牆心也用 stepM（以前深色盒子從石縫露出一塊塊黑）
+      const blockG = new THREE.SphereGeometry(0.5, 12, 8)
+      { const pp = blockG.attributes.position; for (let i = 0; i < pp.count; i++) { const x = pp.getX(i) * 2, y = pp.getY(i) * 2, z = pp.getZ(i) * 2, f = (v) => Math.sign(v) * Math.pow(Math.abs(v), 0.3), k = 0.5 * (0.95 + 0.06 * Math.sin(x * 5.1 + y * 3.3 + z * 4.7)); pp.setXYZ(i, f(x) * k, f(y) * k, f(z) * k) } blockG.computeVertexNormals() }
+      const rockG = blockG, rockM = stepM
+      coreM.color.set(0x77736b)
+      for (const [list, geo, mat] of [[stones, rockG, rockM], [cores, new THREE.BoxGeometry(1, 1, 1), stepM]]) {
         const im = new THREE.InstancedMesh(geo, mat, list.length), cc = new THREE.Color()
         list.forEach((b, i) => { im.setMatrixAt(i, m4.compose(b.p, q.setFromAxisAngle(V(0, 1, 0), b.yaw), b.s)); im.setColorAt(i, cc.setScalar(b.c)) })
         im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
@@ -639,7 +668,7 @@ export function buildYosemite(scene, { lib } = {}) {
         P.push(x - w, y, z, x + w, y, z); U.push(0, t * 5, 1, t * 5)
         if (i) { const a = (i - 1) * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3) }
       }
-      const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); sg.setIndex(I)
+      const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); sg.setIndex(I); sg.computeVertexNormals()
       const creek = new THREE.Mesh(sg, fallMat({ spd: 0.55, a: 0.85, dark: 0.15 })); creek.renderOrder = 3; g.add(creek)
       // 2026-11-10 上游（ChatGPT「瀑布頂 → 上游溪谷」的縮小版，使用者 OK）：以前這條溪從公園邊界憑空冒出來 →
       // 東北角小岩丘頂上的湧泉 → Silver Apron（水從光滑的花崗岩板整片滑下來）→ Emerald Pool（平台後方一個翡翠綠的潭，四周大石頭）
@@ -663,7 +692,7 @@ export function buildYosemite(scene, { lib } = {}) {
           }
           // 三角形要朝上：往西流的那段左右順序反過來，第一版整條溪朝下被剔掉看不到（雙面的話看到的是背面，一條黑帶）
           { const v = (k) => V(P2[k * 3], P2[k * 3 + 1], P2[k * 3 + 2]), nrm = v(2).sub(v(0)).cross(v(1).sub(v(0))); if (nrm.y < 0) for (let k = 0; k < I2.length; k += 3) { const t3 = I2[k + 1]; I2[k + 1] = I2[k + 2]; I2[k + 2] = t3 } }
-          const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(P2, 3)); rg.setAttribute('uv', new THREE.Float32BufferAttribute(U2, 2)); rg.setIndex(I2)
+          const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(P2, 3)); rg.setAttribute('uv', new THREE.Float32BufferAttribute(U2, 2)); rg.setIndex(I2); rg.computeVertexNormals()   /* 2026-11-11 沒有法線 → 溪床整條全黑 */
           const run = new THREE.Mesh(rg, fallMat({ spd: R.spd, a: R.a, dark: 0.12 })); run.renderOrder = 3; g.add(run)
           const rbed = new THREE.Mesh(rg.clone(), new THREE.MeshStandardMaterial({ color: 0x3d4f4c, roughness: 0.3, metalness: 0.1 })); rbed.position.y = -0.03; g.add(rbed)
         }
@@ -716,7 +745,7 @@ export function buildYosemite(scene, { lib } = {}) {
   // 2026-11-11 岩壁頂上的休息站（使用者：山頂要有大平地、加休息站；ChatGPT：國家公園那種簡樸的——木造涼亭、長椅、步道指標、解說牌、望遠鏡，不要商業化）
   {
     const wood = new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 0.85 }), dark = new THREE.MeshStandardMaterial({ color: 0x4b3a2a, roughness: 0.9 })
-    const stone = new THREE.MeshStandardMaterial({ color: 0x9a968e, roughness: 0.95 }), metal = new THREE.MeshStandardMaterial({ color: 0x3a3d3f, roughness: 0.45, metalness: 0.6 })
+    const stone = new THREE.MeshStandardMaterial({ color: 0x9a968e, roughness: 0.95 }), metal = new THREE.MeshStandardMaterial({ color: 0x55604f, roughness: 0.6, metalness: 0.25 })
     const panelT = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 320; const x = c.getContext('2d'); x.fillStyle = '#5b3f26'; x.fillRect(0, 0, 512, 320); x.fillStyle = '#efe6cf'; x.fillRect(14, 14, 484, 292)
       x.fillStyle = '#2f4a2e'; x.font = 'bold 34px Georgia, serif'; x.fillText('Upper Fall Overlook', 34, 62); x.fillStyle = '#4a4a40'; x.font = '20px Georgia, serif'
       ;['Granite walls carved by glaciers', 'Watch for swifts and ravens', 'riding the updraft along the cliff.'].forEach((t, i) => x.fillText(t, 34, 112 + i * 30))

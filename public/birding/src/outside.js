@@ -391,7 +391,7 @@ export function buildOutside(renderer = null) {
     const X0 = 70, X1 = 345, Z0 = 168, Z1 = 300, CS = 3, NA = Math.round((X1 - X0) / CS), NR = Math.round((Z1 - Z0) / CS)
     const crestZ = (x) => 228 + 16 * Math.sin(x * 0.019 + 0.8) + 7 * Math.sin(x * 0.051 + 2.1)          // 稜線不是一條直線
     const relief = (x) => {                                                                             // 沿稜線的高度：三個山頭、中間寬鞍部
-      const peaks = [[112, 74, 55], [208, 92, 70], [300, 70, 50]]   // 第一版 52～66 m、寬 30 m：雲海（32 m）只露出兩個尖尖的綠山頭 → 加高加寬，鞍部也在雲海上面
+      const peaks = [[112, 74, 55], [208, 66, 60], [300, 70, 50]]   /* 2026-11-11 中間那座綠山頭被瀑布頂後面的新山（summit.js）取代，壓低 */   // 第一版 52～66 m、寬 30 m：雲海（32 m）只露出兩個尖尖的綠山頭 → 加高加寬，鞍部也在雲海上面
       let h = 52 + 10 * (fbm3(x * 0.02, 3.3, 1.1, 3) - 0.5)
       for (const [px, ph, pw] of peaks) h = Math.max(h, ph * Math.exp(-(((x - px) / pw) ** 2)) + 10 * (fbm3(x * 0.05, 7.7, 2.2, 2) - 0.5))
       return h
