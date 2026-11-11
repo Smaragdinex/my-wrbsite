@@ -808,6 +808,124 @@ const ALL = [
       "能好好拍到牠，是很多鳥友多年的目標。",
     ],
   },
+  // ---------- 2026-11-11 世界濕地鳥（夕陽潟湖、翡翠沼澤） ----------
+  {
+    id: 'shoebill', spot: [46.5, -123.2], perch: 'ground', view: 300, y: EAST.W - 0.16, water: EAST.W, dist: 5, camH: 1.6, lookY: 0.85,
+    name: "鯨頭鸛", sci: 'Balaeniceps rex', where: "翡翠沼澤的紙莎草角落",
+    intro: "來自東非沼澤的大鳥，站起來有一百二十公分高。最顯眼的是那張像木鞋一樣的巨大嘴巴，嘴尖還有一個彎鉤。牠可以像雕像一樣站著一動也不動很久，等魚游到腳邊，再整個身體猛然往前撲下去。",
+    facts: [
+      "主食是肺魚，也吃鯰魚、水蛇，甚至小鱷魚。",
+      "撲下去抓魚的時候整隻鳥往前倒進水裡。",
+      "會把嘴巴上下敲得「喀喀喀」響，像機關槍，是牠打招呼的方式。",
+      "一動也不動可以站上好幾十分鐘，所以常被說像一尊雕像。",
+      "全世界只剩幾千隻，是受威脅的鳥類。",
+    ],
+  },
+  {
+    id: 'flamingo', spot: [-12, -110], perch: 'ground', view: 60, y: EAST.W - 0.3, water: EAST.W, dist: 9, camH: 1.7, lookY: 0.8,
+    name: "大紅鸛", sci: 'Phoenicopterus roseus', where: "夕陽潟湖的淺水",
+    intro: "最大的一種紅鶴，站起來超過一公尺，脖子和腿都細長得不可思議。體羽是很淡的粉紅色，翅膀上才有鮮紅和黑色。總是一群在鹹水淺灘慢慢走，把彎彎的嘴倒過來泡在水裡濾食。",
+    facts: [
+      "粉紅色是吃出來的：食物裡的藻類和小蝦含有類胡蘿蔔素。",
+      "嘴是倒著用的，舌頭像幫浦一樣把水抽進抽出，濾出食物。",
+      "求偶時一整群會一起伸長脖子、左右擺頭，像在跳整齊的舞。",
+      "常常單腳站著睡覺。",
+      "雛鳥是灰白色的，要兩三年才會變粉紅。",
+    ],
+  },
+  {
+    id: 'ajacana', spot: [52, -107], perch: 'ground', water: EAST.W, y: EAST.W + 0.03, view: 20, dist: 3.2, camH: 1.0, lookY: 0.15,
+    name: "非洲水雉", sci: 'Actophilornis africanus', where: "翡翠沼澤的荷葉盆地",
+    intro: "非洲的水雉，身體栗紅色、脖子前面雪白、胸口一抹金黃，額頭上有一塊淡藍色的額盾。腳趾和爪子長得誇張，把體重分散開來，可以踩著睡蓮葉在水面上走。",
+    facts: [
+      "英文俗名叫 lily-trotter，意思是在睡蓮上小跑的鳥。",
+      "由雄鳥負責孵蛋和照顧小鳥，雌鳥會跟好幾隻雄鳥配對。",
+      "遇到危險時，雄鳥會把小鳥夾在翅膀下面帶著走，只露出一排小腳。",
+      "跟台灣的水雉是親戚，但沒有長長的尾羽。",
+    ],
+  },
+  {
+    id: 'gallinule', spot: [46.5, -104.5], perch: 'ground', water: EAST.W, y: EAST.W + 0.03, view: 350, dist: 3.0, camH: 1.0, lookY: 0.15,
+    name: "紫水雞", sci: 'Porphyrio martinica', where: "翡翠沼澤荷葉盆地的西邊",
+    intro: "美洲沼澤裡最鮮豔的鳥之一：頭和胸是發亮的紫藍色，背是銅綠色，嘴紅色帶黃尖，額頭一塊天藍色，再配上一雙鮮黃色的大腳。走在浮葉上時尾巴一翹一翹，露出底下雪白的羽毛。",
+    facts: [
+      "長腳趾讓牠可以走在睡蓮葉上，也會爬到蘆葦和灌木上。",
+      "會用腳把葉子翻過來，找底下的蟲和螺。",
+      "走路時尾巴不停往上彈，白色的尾下覆羽一閃一閃。",
+      "常常迷路飛到很遠的地方，連歐洲和南非都有紀錄。",
+    ],
+  },
+  {
+    id: 'rspoonbill', spot: [16, -140], perch: 'ground', view: 70, y: EAST.W - 0.07, water: EAST.W, dist: 5.5, camH: 1.5, lookY: 0.6,
+    name: "玫瑰琵鷺", sci: 'Platalea ajaja', where: "夕陽潟湖東南岸的淺灘",
+    intro: "美洲的琵鷺，也是唯一一種粉紅色的琵鷺。身體和翅膀是玫瑰粉紅色，肩膀一塊深桃紅，尾巴橘色，頭卻是光禿的灰綠色。跟黑面琵鷺一樣，把湯匙一樣的嘴泡在水裡左右掃，碰到小魚小蝦就夾住。",
+    facts: [
+      "粉紅色跟紅鶴一樣，來自食物裡的類胡蘿蔔素。",
+      "年紀越大頭越禿，成鳥的頭上沒有羽毛。",
+      "十九世紀時因為羽毛被拿去做扇子，差點被獵光。",
+      "嘴巴裡有很多觸覺受器，在混濁的水裡不用看也抓得到魚。",
+    ],
+  },
+  {
+    id: 'sarus', spot: [72, -127], perch: 'ground', view: 80, dist: 9, camH: 1.7, lookY: 0.9,
+    name: "赤頸鶴", sci: 'Antigone antigone', where: "翡翠沼澤南邊的濕草甸",
+    intro: "世界上最高的會飛的鳥，站直了可以到一百八十公分，比很多人還高。全身淡灰色，只有頭和上半截脖子是光禿的鮮紅色皮膚。一對鶴長年在一起，常常並肩走在濕草地上。",
+    facts: [
+      "世界上最高的飛鳥，翼展可以到兩公尺半。",
+      "一對鶴會一起跳舞：鞠躬、跳躍、張開翅膀，還會一起仰頭大聲鳴叫。",
+      "在印度被當成忠貞的象徵。",
+      "頭上紅色的皮膚在繁殖季會變得更鮮豔。",
+      "住在南亞、東南亞和澳洲北部的濕地和稻田。",
+    ],
+  },
+  {
+    id: 'skimmer', spot: [-11.9, -123.4], perch: 'ground', view: 11.9, y: EAST.W - 0.02, water: EAST.W, dist: 14, camH: 1.6, lookY: 0.3,
+    name: "黑剪嘴鷗", sci: 'Rynchops niger', where: "夕陽潟湖中間的深水道上空",
+    intro: "美洲的水鳥，上面黑、下面白，配上一張紅黑兩色的大嘴。牠的下嘴比上嘴長很多，像一把薄刀。覓食的方式獨一無二：貼著水面飛，把下嘴插進水裡一路「剪」過去，碰到小魚上嘴就馬上夾下來。",
+    facts: [
+      "全世界只有三種剪嘴鷗，是唯一下嘴比上嘴長的鳥。",
+      "下嘴側面扁得像刀片，劃過水面幾乎沒有阻力。",
+      "靠觸覺抓魚，所以黃昏、夜裡也能覓食。",
+      "瞳孔是直的一條縫，像貓一樣，可以擋掉水面和沙灘的強光。",
+      "剪水時翅膀只在身體上方淺淺地拍，不會打到水。",
+    ],
+  },
+  {
+    id: 'redcrowned', spot: [73, -103], perch: 'ground', view: 200, dist: 9, camH: 1.7, lookY: 0.9,
+    name: "丹頂鶴", sci: 'Grus japonensis', where: "翡翠沼澤北邊的濕草甸",
+    intro: "東亞的大型鶴，全身雪白，只有脖子和翅膀後緣是黑色，頭頂一塊鮮紅的裸皮，所以叫「丹頂」。在日本北海道的釧路濕原和中國東北繁殖，是東方文化裡長壽和吉祥的象徵。",
+    facts: [
+      "頭頂的紅色不是羽毛，是裸露的皮膚，興奮時會變得更大更紅。",
+      "看起來像黑色尾巴的，其實是收起來的翅膀上的飛羽；真正的尾巴是白的。",
+      "一對鶴會一起跳舞：鞠躬、跳起、展翅、把草拋到空中。",
+      "叫聲非常響亮，幾公里外都聽得到。",
+      "野外只剩三千多隻，是瀕危的鳥類。",
+    ],
+  },
+  {
+    id: 'ruff', spot: [68, -151], perch: 'ground', view: 150, dist: 4, camH: 1.0, lookY: 0.3,
+    name: "流蘇鷸", sci: 'Calidris pugnax', where: "翡翠沼澤最南邊的濕草甸",
+    intro: "一種中型的鷸，平常灰褐色很不起眼。但繁殖季的雄鳥會長出一大圈蓬鬆的頸羽和一對耳羽簇，像戴了文藝復興時代的皺褶領，每一隻的顏色花紋都不一樣。雄鳥會聚在一塊空地上互相炫耀、對峙，讓雌鳥挑選。",
+    facts: [
+      "英文名 Ruff 就是十六世紀歐洲貴族戴的皺褶領。",
+      "雄鳥聚在一起比武的地方叫做求偶場（lek）。",
+      "雄鳥有三種：深色領的佔地盤、白色領的當跟班、還有一種長得像雌鳥的偷偷混進去。",
+      "每隻雄鳥的頸羽顏色都不同，從黑、栗紅到白都有。",
+      "在台灣是稀有的過境鳥，看到的幾乎都是沒有頸羽的非繁殖羽。",
+    ],
+  },
+  {
+    id: 'grebe', spot: [60, -116], perch: 'ground', swim: 'eastWet', view: 110, y: EAST.W - 0.22, water: EAST.W, dist: 10, camH: 1.6, lookY: 0.3,
+    name: "鳳頭鸊鷉", sci: 'Podiceps cristatus', where: "翡翠沼澤的深水池",
+    intro: "體型最大的鸊鷉，脖子細長雪白，嘴像一把粉紅色的匕首。繁殖季頭頂會長出黑色的冠羽，臉頰兩側一圈栗紅色鑲黑邊的飾羽。很會潛水抓魚，最有名的是牠們優雅又複雜的求偶舞。",
+    facts: [
+      "求偶時兩隻一起潛下去叼水草，再胸貼胸在水面上直立起來、左右甩頭，叫做「水草舞」。",
+      "小鳥會爬到爸媽背上，藏在羽毛裡搭便車。",
+      "會吃自己的羽毛，可能是用來保護胃不被魚刺刺傷。",
+      "腳長在身體很後面，潛水很厲害，但在陸地上幾乎不會走路。",
+      "十九世紀在英國因為頭上的飾羽差點被獵光，還因此催生了鳥類保護運動。",
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -815,6 +933,7 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'mikado', 'blackbulbul', 'thrush', 'treepie', 'bulbul', 'pheasant', 'bluemagpie',
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
-  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker']
+  'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

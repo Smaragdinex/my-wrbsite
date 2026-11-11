@@ -8,6 +8,7 @@ import { terrainHeight, inAlpine, alpineHeight } from '../layout.js'
 export const VALUE = {
   sparrow: 40, dove: 50, bulbul: 60, whiteeye: 80, babbler: 140, barbet: 120, treepie: 90, heron: 110,
   nightheron: 100, egret: 90, moorhen: 90, waterhen: 110, kingfisher: 220, mikado: 300, bluemagpie: 240, blackbulbul: 100,
+  shoebill: 420, flamingo: 240, ajacana: 300, gallinule: 300, rspoonbill: 320, sarus: 360, skimmer: 380, redcrowned: 420, ruff: 300, grebe: 280,
   spoonbill: 320, thrush: 150, pheasant: 280, oriole: 220,
   flamecrest: 260, yellowtit: 300, niltava: 200, rosefinch: 180, bushrobin: 140, laughingthrush: 120, yuhina: 90, sibia: 100, goshawk: 260, woodowl: 340,
   mandarin: 280, spotbill: 70, partridge: 300, nuthatch: 180, finchbill: 90, minivet: 160, pitta: 380, grassowl: 400, scopsowl: 220, mtscops: 320, jacana: 360, psnipe: 300, woodcock: 340, rnpheasant: 300, skylark: 160, cisticola: 200, nutcracker: 300, wbwood: 320, shelduck: 380, pheron: 340, stilt: 180, harrier: 420,

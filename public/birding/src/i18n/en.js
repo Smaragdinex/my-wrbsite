@@ -1123,5 +1123,122 @@ export const BIRDS = {
    "It was only recently confirmed as a Taiwan endemic, hence the new name Taiwan Rosefinch.",
    "The female's brown streaks are great camouflage, making her hard to spot in the grass."
   ]
+ },
+ "shoebill": {
+  "name": "Shoebill",
+  "where": "Papyrus Corner of the Emerald Marsh",
+  "intro": "A huge bird of East African swamps, standing about 1.2 m tall. Its enormous shoe-shaped bill ends in a hooked tip. It can stand motionless like a statue for a long time, waiting for a fish to come close, then lunges forward with its whole body.",
+  "facts": [
+   "Its main prey is lungfish, but it also takes catfish, water snakes and even baby crocodiles.",
+   "When it strikes, the whole bird collapses forward into the water.",
+   "It clatters its bill with a machine-gun-like sound as a greeting.",
+   "It can stand motionless for tens of minutes at a time.",
+   "Only a few thousand remain; it is a threatened species."
+  ]
+ },
+ "flamingo": {
+  "name": "Greater Flamingo",
+  "where": "Shallows of the Sunset Lagoon",
+  "intro": "The largest flamingo, over a metre tall with an impossibly long neck and legs. Its plumage is very pale pink, with vivid red and black on the wings. Flocks walk slowly through salty shallows, filter-feeding with the bent bill held upside down.",
+  "facts": [
+   "The pink colour comes from carotenoids in the algae and small shrimp it eats.",
+   "The bill works upside down; the tongue pumps water in and out to filter food.",
+   "In courtship a whole flock stretches its necks and turns its heads together.",
+   "It often sleeps standing on one leg.",
+   "Chicks are grey-white and take two to three years to turn pink."
+  ]
+ },
+ "ajacana": {
+  "name": "African Jacana",
+  "where": "Lily Basin of the Emerald Marsh",
+  "intro": "Africa's jacana: chestnut body, white foreneck, a golden wash on the breast and a pale blue shield on the forehead. Its extremely long toes and claws spread its weight so it can walk across lily pads on the water.",
+  "facts": [
+   "Its nickname is lily-trotter.",
+   "Males incubate the eggs and raise the chicks; a female mates with several males.",
+   "When danger comes, the male tucks the chicks under his wings and carries them off, with only their legs dangling.",
+   "It is related to Taiwan's Pheasant-tailed Jacana but lacks the long tail."
+  ]
+ },
+ "gallinule": {
+  "name": "Purple Gallinule",
+  "where": "West Side of the Lily Basin, Emerald Marsh",
+  "intro": "One of the most colourful birds of American marshes: glossy purple-blue head and breast, bronze-green back, red bill with a yellow tip, a sky-blue forehead shield and big bright yellow feet. It flicks its tail as it walks on floating leaves, flashing the white feathers beneath.",
+  "facts": [
+   "Long toes let it walk on lily pads and climb reeds and bushes.",
+   "It flips leaves over with its feet to find insects and snails underneath.",
+   "Its tail flicks up constantly as it walks.",
+   "It wanders astonishingly far; strays have reached Europe and South Africa."
+  ]
+ },
+ "rspoonbill": {
+  "name": "Roseate Spoonbill",
+  "where": "Shallows on the Southeast Shore of the Sunset Lagoon",
+  "intro": "The spoonbill of the Americas and the only pink one. Its body and wings are rose pink with a deep carmine shoulder patch and an orange tail, while the head is bare and grey-green. Like the Black-faced Spoonbill, it sweeps its spoon-shaped bill from side to side in the water and snaps it shut on small fish and shrimp.",
+  "facts": [
+   "As in flamingos, the pink comes from carotenoids in its food.",
+   "Adults have a bald head; the older the bird, the balder it gets.",
+   "In the 1800s it was nearly wiped out because its feathers were used for fans.",
+   "Touch receptors in the bill let it catch fish in muddy water without seeing them."
+  ]
+ },
+ "sarus": {
+  "name": "Sarus Crane",
+  "where": "Wet Meadow in the South of the Emerald Marsh",
+  "intro": "The tallest flying bird in the world, up to 1.8 m when standing upright. It is pale grey all over except for the bare red skin of the head and upper neck. Pairs stay together for years and often walk side by side across wet grassland.",
+  "facts": [
+   "It is the tallest flying bird, with a wingspan of up to 2.5 m.",
+   "Pairs dance together: bowing, leaping and spreading their wings, then calling in unison.",
+   "In India it is a symbol of faithfulness.",
+   "The red skin on the head becomes brighter in the breeding season.",
+   "It lives in wetlands and rice fields of South Asia, Southeast Asia and northern Australia."
+  ]
+ },
+ "skimmer": {
+  "name": "Black Skimmer",
+  "where": "Over the Deep Channel of the Sunset Lagoon",
+  "intro": "A waterbird of the Americas, black above and white below, with a big red-and-black bill. The lower mandible is much longer than the upper, like a thin blade. It feeds like no other bird: flying just above the water with the lower mandible slicing the surface, snapping shut the instant it touches a fish.",
+  "facts": [
+   "There are only three skimmer species, the only birds whose lower mandible is longer than the upper.",
+   "The lower mandible is flattened like a knife blade and cuts through water with almost no drag.",
+   "It hunts by touch, so it can feed at dusk and at night.",
+   "Its pupil closes to a vertical slit, like a cat's, against the glare of water and sand.",
+   "While skimming it beats its wings only above the body so they never hit the water."
+  ]
+ },
+ "redcrowned": {
+  "name": "Red-crowned Crane",
+  "where": "Wet Meadow in the North of the Emerald Marsh",
+  "intro": "A large East Asian crane, snow white with a black neck and black rear wing feathers, and a patch of bare red skin on the crown. It breeds in the Kushiro marshes of Hokkaido and in northeast China, and is a symbol of long life and good fortune in East Asian culture.",
+  "facts": [
+   "The red crown is bare skin, not feathers, and grows larger and brighter when the bird is excited.",
+   "What looks like a black tail is the folded wing feathers; the real tail is white.",
+   "Pairs dance together: bowing, leaping, spreading their wings and tossing grass in the air.",
+   "Its call is very loud and carries for several kilometres.",
+   "Only a little over three thousand remain in the wild; it is endangered."
+  ]
+ },
+ "ruff": {
+  "name": "Ruff",
+  "where": "Southernmost Wet Meadow of the Emerald Marsh",
+  "intro": "A medium-sized sandpiper that is plain grey-brown for most of the year. In the breeding season the male grows a huge puffed collar of feathers and a pair of ear tufts, like a Renaissance ruff, and no two males look alike. Males gather on an open patch to show off and face each other down while females choose.",
+  "facts": [
+   "It is named after the pleated collar worn by European nobles in the 1500s.",
+   "The display ground where males gather is called a lek.",
+   "There are three kinds of male: dark-collared territory holders, white-collared satellites, and female-lookalikes that sneak in.",
+   "Each male's collar has its own colour, from black and chestnut to white.",
+   "In Taiwan it is a scarce passage migrant, almost always seen without the collar."
+  ]
+ },
+ "grebe": {
+  "name": "Great Crested Grebe",
+  "where": "Deep Pool of the Emerald Marsh",
+  "intro": "A large, elegant grebe with a long white neck, a dagger-like pink bill, and in the breeding season a black crest and a chestnut-and-black frill around the face. It dives for fish and is famous for its elaborate courtship dance.",
+  "facts": [
+   "In the weed dance, both birds dive for water plants, then rise breast to breast upright on the water, shaking their heads.",
+   "Chicks ride on their parents' backs, tucked among the feathers.",
+   "It eats its own feathers, which seem to protect the stomach from fish bones.",
+   "Its legs are set so far back that it can hardly walk on land.",
+   "It was nearly wiped out in Britain in the 1800s for its head plumes, which helped start the bird protection movement."
+  ]
  }
 }
