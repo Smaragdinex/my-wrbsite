@@ -20,7 +20,7 @@ const ss = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a)));
 const lerp = (a, b, t) => a + (b - a) * t
 
 // 花崗岩 triplanar（跟岩壁同一張圖）；頂點色綠多於紅＝青苔（不吃花崗岩斑點，只留一點明暗）
-function mossRockMaterial() {
+export function mossRockMaterial() {
   const m = graniteMaterial({ scale: 0.6 })
   const ob = m.onBeforeCompile
   m.onBeforeCompile = (sh) => {

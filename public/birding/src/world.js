@@ -31,6 +31,7 @@ import { buildGiants, giantSpots } from './giants.js'
 import { loadWalkwayKit, buildWalkways } from './walkway.js'
 import { loadWetlandKit, buildWetlandProps } from './wetland.js'
 import { loadSummitKit, buildSummit as buildYoseTop } from './yosemite-top.js'
+import { loadCaveKit, buildCave } from './cave.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
 export const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
@@ -85,7 +86,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 下載進度：植物（檔案大）佔 75%、鳥 25%
   let pF = 0, bF = 0
   const prog = () => onProgress?.(pF * 0.75 + bF * 0.25, 'load')
-  const [plantLib, , walkKit, wetKit, sumKit] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() }), loadWalkwayKit(), loadWetlandKit(), loadSummitKit()])
+  const [plantLib, , walkKit, wetKit, sumKit, caveKit] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() }), loadWalkwayKit(), loadWetlandKit(), loadSummitKit(), loadCaveKit()])
   onProgress?.(1, 'build')
   // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
   const placeDef = (def) => {
@@ -148,6 +149,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const yose = buildYosemite(scene, { lib: plantLib })   // 2026-11-10 帳篷區後面的花崗岩壁、瀑布、西黃松
   const giants = buildGiants(scene, { sun, avoid: alpAvoid, lib: plantLib })
   buildWetlandProps(scene, wetKit)   // 2026-11-11 濕地 V3：枯樹、舊木樁、睡蓮（Blender）
+  buildCave(scene, caveKit, sumKit, plantLib)   // 2026-11-11 瀑布後面的岩窟步道（岩拱、石板路、青苔）
   buildYoseTop(scene, sumKit, plantLib)   // 2026-11-11 瀑布頂後面的整座山、平台和石階的青苔草叢
   const walkRoot = buildWalkways(scene, walkKit)   // 2026-11-11 吊橋橋面、橋頭平台、巨木林木棧道（Blender 零件）
   // 2026-11-10 果樹上的鳥：在掃描的雀榕（不含葉子）上，從上往下打射線找「上面有空間、左右各一段差不多水平的直枝」，

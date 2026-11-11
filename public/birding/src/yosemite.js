@@ -898,8 +898,8 @@ export function buildYosemite(scene, { lib } = {}) {
   {
     const sp = ALP_SPURS.find((s) => s.name === 'cave')
     if (sp) {
-      const woodM = new THREE.MeshStandardMaterial({ color: 0x4a3426, roughness: 0.9 }), parts2 = []
-      const post = new THREE.CylinderGeometry(0.06, 0.07, 1, 7), bar = new THREE.CylinderGeometry(0.045, 0.045, 1, 6).rotateZ(Math.PI / 2)
+      const woodM = new THREE.MeshStandardMaterial({ color: 0x2b3033, roughness: 0.42, metalness: 0.65 }), parts2 = []   // 2026-11-11 改成跟石階一樣的深色鐵欄杆（濕的）
+      const post = new THREE.CylinderGeometry(0.035, 0.035, 1, 8), bar = new THREE.CylinderGeometry(0.028, 0.028, 1, 8).rotateZ(Math.PI / 2)
       const LK = YOSE.lake, rail = []
       const P = sp.pts
       for (let i = 2; i < P.length - 1; i++) {
