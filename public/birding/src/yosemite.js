@@ -10,7 +10,7 @@ import { coniferGeo, needleMaterial } from './alpine.js'
 import { barkMaterial } from './bark.js'
 import { parts, scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
-import { weatherU } from './structures.js'
+import { weatherU, sunDirU, dayLight } from './structures.js'
 
 const TAU = Math.PI * 2, V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const lerpN = (a, b, t) => a + (b - a) * t
@@ -68,7 +68,8 @@ export function buildYosemite(scene, { lib } = {}) {
   const cols = []
   // 岩簷＋層理：這一欄的岩面斷面（d＝離牆腳往裡幾公尺、y），照弧長重新取 FACE+1 個點
   const hsh = (n) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v) }
-  const SED = (x) => ss(172, 184, x) * ss(216, 207, x)   // 層狀、深褐、潮濕的岩壁範圍（松龍岩那種），兩側慢慢回到花崗岩
+  // 2026-11-12 使用者要整段都是 Watkins Glen 那種層狀岩壁秘境 → 整面都是層狀岩（原本只有瀑布旁 x 172～216，兩側是光滑的灰色花崗岩）
+  const SED = (x) => 1
   // 2026-11-10 ChatGPT QA 第二輪：層厚不要固定（0.5～3.2 m 亂數）；每 6～12 m 一條主節理（直的深縫）；每 8～15 m 一片 2～5 m 寬的平整岩面；
   // 岩棚凸出 0.3～1.8 m；中尺度凹凸 0.03～0.12 m（波長 0.3～1.5 m）；每 15～25 m² 一塊凸出或缺掉的岩塊（0.4～1.5 m）
   const BED = [-30]; while (BED.at(-1) < 140) BED.push(BED.at(-1) + 0.5 + 2.7 * Math.pow(hsh(BED.length * 1.37), 1.4))
@@ -111,9 +112,12 @@ export function buildYosemite(scene, { lib } = {}) {
       for (let j = 0; j <= 10; j++) P.push([Dp + 0.6 * A * Math.sin(j / 10 * Math.PI), g0 - 1.5 + (Ho * 0.5 + 1.5) * j / 10, 1])
       for (let j = 1; j <= 16; j++) { const th = j / 16 * Math.PI / 2; P.push([lip + (Dp - lip) * Math.cos(th), g0 + Ho * 0.5 + Ho * 0.5 * Math.sin(th), 1 - 0.7 * j / 16]) }
       P.push([lip - 0.35 * A, yL + 0.5, 0], [lip * 0.6, yL + 1.6, 0])
-      for (let y = yL + 2.5; y < yTop; y += 0.5) P.push([Math.min(lip * 0.6 * ss(yL + 8, yL + 2, y), 0) + normalD(y) * ss(yL + 2, yL + 9, y), y, 0])
+      // 兩段式瀑布的岩棚：岩簷頂往裡退 R 公尺（微微往外斜、中間淺淺凹一個水盆），再往上才是上段瀑布的岩壁
+      const R = YOSE.rec(x)
+      if (R > 0.3) P.push([lip * 0.6 + 0.5, yL + 2.25, 0], [R * 0.45, yL + 2.3 - 0.25 * (R / 6.5), 0], [R * 0.8, yL + 2.35 - 0.3 * (R / 6.5), 0], [R, yL + 2.7, 0])
+      for (let y = yL + (R > 0.3 ? 3.2 : 2.5); y < yTop; y += 0.5) P.push([Math.min(lip * 0.6 * ss(yL + 8, yL + 2, y), 0) * (R > 0.3 ? 0 : 1) + normalD(y) * ss(yL + 2, yL + 9, y) + R, y, 0])
     } else for (let y = g0 - 1.5; y < yTop; y += 0.5) P.push([normalD(y), y, 0])
-    P.push([normalD(yTop), yTop, 0])
+    P.push([normalD(yTop) + (A > 0.02 ? YOSE.rec(x) : 0), yTop, 0])
     // 弧長重取樣
     const Ls = [0]; for (let i = 1; i < P.length; i++) Ls.push(Ls[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]))
     const out = []
@@ -142,7 +146,7 @@ export function buildYosemite(scene, { lib } = {}) {
       if (k <= FACE) {
         y = prof[k][0]; z = prof[k][1]
       } else {
-        const t = (k - FACE) / TOP, z0 = Math.max(zb + 3.0 - 2.4 * fallK, push)
+        const t = (k - FACE) / TOP, z0 = Math.max(zb + 3.0 - 2.4 * fallK + YOSE.rec(x), push)
         y = g0 + Ht + lerpN(Math.sin(t * Math.PI * 0.5) * 0.8 - t * t * 0.6, -0.04 * t, fk)   // 平的那段：頂上平平的、往後微微低一點
         z = z0 + (ze - z0) * t
       }
@@ -172,12 +176,16 @@ export function buildYosemite(scene, { lib } = {}) {
         const seep = Math.max(0, fbm2(px * 0.28 + 3, py * 0.03, 3) - 0.42) * 2.6 * (0.4 + 0.6 * Math.exp(-(((px - YOSE.fall.x) / 9) ** 2)))
         const wetF = Math.min(1, Math.exp(-(((px - YOSE.fall.x) / 6.5) ** 2)) * 0.9 + 0.5 * inCave + seep)
         const deep = inCave * inCave
-        let r0 = lerpN(0.38, 0.14, wetF), g0c = lerpN(0.32, 0.145, wetF), b0 = lerpN(0.26, 0.12, wetF)
+        // 2026-11-12 ChatGPT 峽谷規格（docs/GORGE_SPEC.txt，linear；頂點色 ×2）：乾砂岩 .30/.27/.22、乾頁岩 .18/.19/.18、濕砂岩 .105/.095/.078、濕頁岩 .065/.075/.07、
+        // 苔 .035/.115/.025、鐵鏽 .25/.095/.035。這一層是砂岩還是頁岩看它的明暗（tone 暗的當頁岩）
+        const shl = Math.min(1, Math.max(0, (1.0 - tone) * 3.2))
+        let r0 = lerpN(lerpN(0.74, 0.42, shl), lerpN(0.25, 0.14, shl), wetF), g0c = lerpN(lerpN(0.58, 0.40, shl), lerpN(0.2, 0.15, shl), wetF), b0 = lerpN(lerpN(0.38, 0.35, shl), lerpN(0.14, 0.135, shl), wetF)   // 乾砂岩再暖一點（底圖是灰的花崗岩貼圖，照規格的數字出來偏灰）
+        { const iron = Math.max(0, fbm2(px * 0.21 + 11, py * 0.35 + 5, 3) - 0.6) * 2.4 * (1 - 0.6 * wetF); r0 = lerpN(r0, 0.5, iron * 0.5); g0c = lerpN(g0c, 0.19, iron * 0.5); b0 = lerpN(b0, 0.07, iron * 0.5) }
         r0 = lerpN(r0, 0.11, deep * 0.7); g0c = lerpN(g0c, 0.115, deep * 0.7); b0 = lerpN(b0, 0.1, deep * 0.7)
         const crackD = 1 - 0.6 * Math.min(1, jnt * 2.2)
         r0 *= tone * crackD * (1 - streak * 0.35); g0c *= tone * crackD * (1 - streak * 0.35); b0 *= tone * crackD * (1 - streak * 0.35)
-        const moss = Math.min(1, ledge * (0.4 + 0.7 * wetF) + Math.min(1, jnt * 2) * 0.5 * wetF + 0.6 * Math.max(0, fbm2(px * 0.6, py * 0.5 + 7, 3) - 0.55) * 2 * wetF) * (1 - 0.7 * deep)
-        const cr = lerpN(r0, 0.09, moss), cg2 = lerpN(g0c, 0.17, moss), cb = lerpN(b0, 0.07, moss)
+        const moss = Math.min(1, ledge * (0.6 + 0.6 * wetF) + Math.min(1, jnt * 2) * 0.5 * wetF + 0.6 * Math.max(0, fbm2(px * 0.6, py * 0.5 + 7, 3) - 0.55) * 2 * wetF) * (1 - 0.7 * deep)
+        const cr = lerpN(r0, 0.08, moss), cg2 = lerpN(g0c, 0.235, moss), cb = lerpN(b0, 0.05, moss)
         const gr = k * (1 - streak * 0.05)
         col.push(lerpN(gr, cr, sed), lerpN(k, cg2, sed), lerpN(gr * (1 + streak * 0.02), cb, sed))
       } else col.push(k * (1 - streak * 0.05), k, k * (1 + streak * 0.02))
@@ -210,7 +218,25 @@ export function buildYosemite(scene, { lib } = {}) {
         vec4 tpL = texture2D(map, vTpW.zy * 0.045 + 0.37) * tpB.x + texture2D(map, vTpW.xz * 0.045 + 0.61) * tpB.y + texture2D(map, vTpW.xy * 0.045 + 0.13) * tpB.z;
         vec4 tpM = texture2D(map, vTpW.zy * 0.11 + 0.21) * tpB.x + texture2D(map, vTpW.xz * 0.11 + 0.47) * tpB.y + texture2D(map, vTpW.xy * 0.11 + 0.71) * tpB.z;
         tpH = dot(tpC.rgb, vec3(0.33)) * 0.35 + dot(tpM.rgb, vec3(0.33)) * 0.9 + dot(tpL.rgb, vec3(0.33)) * 1.6;
-        diffuseColor *= mix(tpC, tpC * (0.75 + 0.5 * tpL), 0.6);`)
+        diffuseColor *= mix(tpC, tpC * (0.75 + 0.5 * tpL), 0.6);
+        // 2026-11-12 薄層理（Watkins Glen 的頁岩：一層 8～24 公分，夾 25～65 公分的砂岩）：網格一排 45 公分畫不出來，在材質裡照世界高度切層——
+        // 每層深淺不同、層面是一條深色的縫；高度也照層疊一階一階加上去，縫那裡法線會轉、看起來有立體的陰影
+        { float wallK = 1.0 - smoothstep(0.35, 0.75, abs(normalize(vTpN).y));
+          float sdist = length(vViewPosition);
+          // 直的節理把岩壁切成 2～3 m 寬的一塊塊，每塊的層面上下錯開一點（不然整面像掃描線）；層的密度隨高度變（薄頁岩帶、厚砂岩帶交替）
+          float cell = floor(vTpW.x / 3.3 + 0.37);   // 只看 x：混進 z 的話岩棚凹凸會讓格子來回跳，層線斷成一截一截的虛線
+          // 層面只跟高度有關（加一點點沿 x 的起伏和每塊的錯位）：混進二維雜訊的話，層線會繞成一圈圈像木紋
+          float vy = vTpW.y + 0.07 * sin(vTpW.x * 0.21) + 0.012 * (vTpW.x - 195.0) + 0.1 * fract(sin(cell * 17.3) * 4375.5);
+          float u1 = vy * 1.1 + 0.6 * vn(vec2(vy * 0.7, 3.0));
+          float b1 = fract(u1), h1 = fract(sin(floor(u1) * 78.233) * 43758.5453);
+          // 每個厚層裡再分 1～6 片薄層（頁岩帶片數多、砂岩帶是整塊）
+          float nThin = floor(1.0 + 5.99 * fract(h1 * 7.31)), u2 = b1 * nThin;
+          float b2 = fract(u2), h2 = fract(sin((floor(u1) * 7.0 + floor(u2)) * 12.9898) * 43758.5453);
+          float thin = smoothstep(75.0, 22.0, sdist);                         // 遠處薄層糊掉（比像素細，會閃）
+          float seam = max(smoothstep(0.12, 0.0, b2) * step(0.35, h2) * 0.45 * thin, smoothstep(0.05, 0.0, b1) * 0.9);
+          vec3 tint = mix(vec3(0.86, 0.9, 0.93), vec3(1.16, 1.0, 0.8), h1) * mix(1.0, 0.8 + 0.4 * h2, thin);   // 冷灰的頁岩層／暖褐的砂岩層
+          diffuseColor.rgb *= mix(vec3(1.0), tint * (1.0 - 0.42 * seam), wallK);
+          tpH += wallK * (b2 * 0.7 * thin + b1 * 1.6); }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         { float dist = length(vViewPosition); vec2 dH = vec2(dFdx(tpH), dFdy(tpH)) * 2.2 * smoothstep(90.0, 15.0, dist); normal = tpPerturb(-vViewPosition, normal, dH, faceDirection); }`)
   }
@@ -334,11 +360,56 @@ export function buildYosemite(scene, { lib } = {}) {
       const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); fg.setIndex(I)
       const m = new THREE.Mesh(fg, mat); m.renderOrder = ro; g.add(m)
     }
-    sheet(2.6, 4.4, 0.25, 2.2, fallMat({ spd: 0.7, a: 0.55, dark: 0.35 }), 3)          // 後層（2026-11-10 底部收窄，整片落在湖面上）
-    sheet(3.0, 5.4, 0.5, 3.6, fallMat({ spd: 1.0, a: 1.0 }), 4)                         // 主水簾（岩壁變高了，下面往外拋多一點）
-    sheet(3.6, 6.4, 0.9, 4.6, fallMat({ spd: 1.35, a: 0.45, low: 1 }), 5, 0.3)          // 前面的水霧簾
+    // 2026-11-12 兩段式：上段細瀑（寬 3～4.5 m、約 22 m）落在岩棚上；岩棚上一片薄薄的水流到岩簷口；下段寬水簾（頂 5～6 m、底 11～13 m）落進湖裡
+    const REC = YOSE.rec(F.x), shelfY = fc.lip ? fc.lip.y + 2.0 : poolY + (topY - poolY) * 0.5, zUp = fz + REC, zLipW = fc.lip ? fc.lip.z - 0.35 : fz
+    const tier = (yA, yB, zA, wTop, wBot, back, outK, mat, ro, v0 = 0) => {
+      const N = 30, P = [], U = [], I = []
+      for (let k = 0; k <= N; k++) {
+        const v = v0 + (1 - v0) * k / N, y = yA - (yA - yB) * v, w = wTop + (wBot - wTop) * v, out = back + outK * v * v
+        P.push(F.x - w, y, zA - out, F.x + w, y, zA - out); U.push(0, v, 1, v)
+        if (k) { const a = (k - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) }
+      }
+      const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); fg.setIndex(I)
+      const m = new THREE.Mesh(fg, mat); m.renderOrder = ro; g.add(m)
+    }
+    // 上段
+    tier(topY + 0.05, shelfY - 0.1, zUp, 1.4, 2.0, 0.2, 1.3, fallMat({ spd: 0.7, a: 0.55, dark: 0.35 }), 3)
+    tier(topY + 0.05, shelfY - 0.1, zUp, 1.6, 2.4, 0.4, 2.0, fallMat({ spd: 1.0, a: 1.0 }), 4)
+    // 岩棚上的水：從上段落點往外攤開、流到岩簷口（一片斜斜的薄水，用同一種水簾材質、流速慢）
+    { const P = [], U = [], I = [], N = 10, z0 = zUp - 2.2, z1 = zLipW + 0.1
+      for (let k = 0; k <= N; k++) { const t = k / N, z = z0 + (z1 - z0) * t, w = 2.6 + 3.2 * t, y = shelfY + 0.12 - 0.5 * t * t; P.push(F.x - w, y, z, F.x + w, y, z); U.push(0, t, 1, t); if (k) { const a = (k - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) } }
+      const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); fg.setIndex(I)
+      const m = new THREE.Mesh(fg, fallMat({ spd: 0.35, a: 0.7, dark: 0.25 })); m.renderOrder = 3; g.add(m) }
+    // 下段
+    const yLipW = shelfY - 0.4
+    tier(yLipW, poolY, zLipW, 2.6, 5.4, 0.1, 2.0, fallMat({ spd: 0.7, a: 0.5, dark: 0.35 }), 3)
+    tier(yLipW, poolY, zLipW, 2.9, 6.2, 0.25, 3.0, fallMat({ spd: 1.0, a: 0.95 }), 4)
+    tier(yLipW, poolY, zLipW, 3.3, 6.8, 0.6, 3.8, fallMat({ spd: 1.35, a: 0.42, low: 1 }), 5, 0.3)
+    // 2026-11-12 水霧裡的彩虹（使用者：有水下來加上太陽，產生彩虹更好）。照物理來：主虹在「背對太陽的方向」外 42°——
+    // 把落水點周圍的水霧當成一顆半徑 10 m 的球，球面上每一點看「鏡頭→這一點」跟反日方向的夾角，40～43° 那一圈上色（裡紫外紅）。
+    // 所以要太陽在背後、站對位置才看得到，太陽移動彩虹也跟著移動；陰天、晚上沒有
+    { const rbM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
+        uniforms: { uSun: sunDirU, uDay: dayLight, uCloud: weatherU.cloud, uC: { value: V(F.x, poolY + 6.5, fz - 3.5) } },
+        vertexShader: `varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+        fragmentShader: `uniform vec3 uSun; uniform float uDay; uniform float uCloud; uniform vec3 uC; varying vec3 vW;
+          vec3 hue(float h) { vec3 k = abs(fract(vec3(h) + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0; return clamp(k, 0.0, 1.0); }
+          void main() {
+            vec3 vd = normalize(vW - cameraPosition);
+            float ang = degrees(acos(clamp(dot(vd, -normalize(uSun)), -1.0, 1.0)));
+            float t = (ang - 39.8) / 3.4;                              // 0 紫（內）→ 1 紅（外）
+            float band = smoothstep(0.0, 0.18, t) * smoothstep(1.0, 0.82, t);
+            vec3 col = hue(mix(0.78, 0.0, t));
+            // 水霧濃的地方才有：落水點上方 0～15 m、左右 9 m 內
+            vec3 d = vW - uC;
+            float mist = smoothstep(10.5, 4.0, abs(d.x)) * smoothstep(-7.5, -5.0, d.y) * smoothstep(10.5, 3.0, d.y);
+            float sunK = smoothstep(0.04, 0.16, uSun.y) * uDay * (1.0 - smoothstep(0.25, 0.6, uCloud));
+            float a = band * mist * sunK * 0.34;
+            gl_FragColor = vec4(col * a, a);
+          }` })
+      // 球的背面會被岩壁擋住 → 改成落水點前面 1 m 的一片直立的面（寬 22、高 18），夾角照樣逐點算
+      const rb = new THREE.Mesh(new THREE.PlaneGeometry(22, 18, 1, 1), rbM); rb.position.copy(rbM.uniforms.uC.value).add(V(0, 1.5, -1.0)); rb.renderOrder = 6; rb.frustumCulled = false; rb.name = 'rainbow'; g.add(rb) }
     // 水潭：橢圓、深綠帶一點藍
-    const poolM = new THREE.MeshStandardMaterial({ color: 0x2c5a55, roughness: 0.06, metalness: 0.15, transparent: true, opacity: 0.9 })
+    const poolM = new THREE.MeshStandardMaterial({ color: 0x1f7f63, roughness: 0.05, metalness: 0.12, transparent: true, opacity: 0.88 })   // 2026-11-12 翡翠綠（參考照的水色）
     // 2026-11-11 使用者：下雨時這座湖也要有漣漪（濕地那支水面 shader 已經有，這裡是一片平的標準材質）→ 同一套雨滴圈：改法線＋圈的亮邊
     poolM.onBeforeCompile = (sh) => {
       sh.uniforms.uRT = uT; sh.uniforms.uRain = weatherU.rain
@@ -695,7 +766,7 @@ export function buildYosemite(scene, { lib } = {}) {
 
     // 岩壁頂上的溪：從後面（玻璃前）流到瀑布口，越靠瀑布口越寬、越快；兩岸一顆顆花崗岩
     {
-      const F2 = YOSE.fall, zLip = YOSE.base(F2.x) + 0.45, zSrc = 101.6, NS = 40, P = [], U = [], I = []   // 2026-11-10 起點改在上游小溪接進來的地方（以前從公園邊界憑空冒出來）
+      const F2 = YOSE.fall, zLip = YOSE.base(F2.x) + 0.45 + YOSE.rec(F2.x), zSrc = 101.6, NS = 40, P = [], U = [], I = []   // 2026-11-10 起點改在上游小溪接進來的地方（以前從公園邊界憑空冒出來）
       const cx = (t) => F2.x + 1.6 * Math.sin(t * 2.6 + 0.5) * (1 - t) - 0.8 * (1 - t)
       for (let i = 0; i <= NS; i++) {
         const t = i / NS, z = lerpN(zSrc, zLip, t), x = cx(t), w = lerpN(1.6, 3.0, t * t), y = YOSE.topY(x) + 0.07 - 0.02 * t

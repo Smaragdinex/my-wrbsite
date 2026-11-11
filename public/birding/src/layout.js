@@ -470,7 +470,10 @@ export const YOSE = (() => {
     return st.h(sAt) + 0.1
   }
   // 岩壁頂上走得到的地方（平的，高 topY）：石階頂（東端）往西到瀑布口旁邊的觀景台；前緣＝平台的石壁／岩壁的邊，後面到玻璃前
-  Y.topFront = (x) => x >= Y.mist.XA - 1.3 && x <= Y.mist.XB + 1.3 ? Y.base(x) + Y.mist.D0 + Y.mist.W * (Y.mist.NL - 0.5) : Y.base(x) + 3.2
+  // 2026-11-12 兩段式瀑布（使用者給的 Watkins Glen／龍岩瀑布照片；ChatGPT 規格在 docs/GORGE_SPEC.txt）：瀑布口那一段（x 193～207）岩壁上半往後退 rec 公尺，
+  // 退出來的地方是一片岩棚（剛好是岩簷的頂）：上段細瀑落在岩棚上，水攤開後從岩簷口成一片寬水簾落進湖裡
+  Y.rec = (x) => 6.5 * Math.exp(-Math.pow((x - Y.fall.x) / 7.5, 4))
+  Y.topFront = (x) => x >= Y.mist.XA - 1.3 && x <= Y.mist.XB + 1.3 ? Y.base(x) + Y.mist.D0 + Y.mist.W * (Y.mist.NL - 0.5) : Y.base(x) + 3.2 + Y.rec(x)
   Y.topAt = (x, z) => (x > 201.2 && x < 250 && z > Y.topFront(x) - 0.05 && z < Y.edge(x) - 2.2) ? Y.topY(x) + 0.05 : null   // 岩壁頂上的平地：瀑布口東邊到 x 250
   Y.behind = (x, z) => (x > Y.x0 - 3 && x < Y.x1 + 3 && z > Y.base(x) - 1.5) || (x > Y.mist.XA - 4 && x < Y.mist.XB + 4 && z > Y.base(x) + Y.mist.D0 - 3)   // 岩壁、石階平台上（石頭、草不要長在這裡）
   Y.inside = (x, z) => x > Y.x0 - 12 && x < Y.x1 + 10 && z > Y.base(Math.min(Y.x1, Math.max(Y.x0, x))) - 30
