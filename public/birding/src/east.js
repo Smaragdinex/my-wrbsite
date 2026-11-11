@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { bladeMesh } from './flora.js'
 import { lodRegisterGrass } from './lod.js'
-import { EAST, EAST_DW, EAST_DG, wetSD, grassSD, inLagoon, walkAt, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss, ALP_SPURS } from './layout.js'
+import { EAST, EAST_DW, EAST_DG, wetSD, grassSD, inLagoon, walkAt, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss, ALP_SPURS, wetBoardY, wetBoardEnd } from './layout.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { fbm2, mulberry32 } from './noise.js'
 import { scatter } from './plants.js'
@@ -259,9 +259,9 @@ function buildBoardwalk(wk) {
   const at = (s) => { let i = 1; while (i < P.length - 1 && S[i] < s) i++; const t = (s - S[i - 1]) / (S[i] - S[i - 1]), dx = P[i][0] - P[i - 1][0], dz = P[i][1] - P[i - 1][1], l = Math.hypot(dx, dz); return { x: P[i - 1][0] + dx * t, z: P[i - 1][1] + dz * t, dx: dx / l, dz: dz / l, seg: i } }
   const Ltot = S.at(-1)
   // 木板：橫在路上（零件長 3.1 → 縮成 1.7）
-  for (let s = 1.2; s < Ltot; s += 0.158) { const a = at(s), y = alpineHeight(a.x, a.z) + 0.12; put('bw_plank_' + Math.floor(r() * 4), a.x, y, a.z, Math.atan2(a.dx, a.dz) + (r() < 0.5 ? Math.PI : 0), [W / 3.1, 1, 1]) }
+  for (let s = 1.2; s < Ltot; s += 0.158) { const a = at(s), y = wetBoardY(a.x, a.z); put('bw_plank_' + Math.floor(r() * 4), a.x, y, a.z, Math.atan2(a.dx, a.dz) + (r() < 0.5 ? Math.PI : 0), [W / 3.1, 1, 1]) }
   // 平台 3 × 3 m
-  const E = at(Ltot), ey = alpineHeight(E.x, E.z) + 0.12
+  const E = at(Ltot), ey = wetBoardEnd().y, onPlat = (x, z) => { const u = (x - E.x) * E.dx + (z - E.z) * E.dz, v = -(x - E.x) * E.dz + (z - E.z) * E.dx; return u >= -0.2 && u <= 3.1 && Math.abs(v) <= 1.7 }
   for (let u = -1.4; u <= 1.4; u += 0.158) put('bw_plank_' + Math.floor(r() * 4), E.x + E.dx * (1.4 + u), ey, E.z + E.dz * (1.4 + u), Math.atan2(E.dx, E.dz), [3.0 / 3.1, 1, 1])
   // 欄杆：棧道後半段兩側、平台三邊；柱子＋上橫桿＋兩道中橫桿
   const rails = []
@@ -269,8 +269,12 @@ function buildBoardwalk(wk) {
   const nx = -E.dz, nz = E.dx
   for (let u = 0; u <= 2.8; u += 1.4) for (const sd of [-1, 1]) rails.push([E.x + E.dx * u + nx * sd * 1.55, E.z + E.dz * u + nz * sd * 1.55, sd])
   for (let v = -1.4; v <= 1.4; v += 1.4) rails.push([E.x + E.dx * 2.9 + nx * v, E.z + E.dz * 2.9 + nz * v, 2])
-  const deckY = (x, z) => alpineHeight(x, z) + 0.12
-  for (const [x, z] of rails) { put('bw_post', x, deckY(x, z), z, Math.atan2(E.dx, E.dz)); addCollider(x, z, 0.12, alpineHeight(x, z) + 1.2) }
+  const deckY = (x, z) => onPlat(x, z) ? ey : wetBoardY(x, z)
+  for (const [x, z] of rails) { put('bw_post', x, deckY(x, z), z, Math.atan2(E.dx, E.dz)); addCollider(x, z, 0.12, deckY(x, z) + 1.2) }
+  // 2026-11-12 木道架高到水面上以後：離地（水底）高的地方底下補木樁
+  { const pile = (x, z) => { const Y = deckY(x, z), gy = Math.min(alpineHeight(x, z), EAST.W) - 0.4; if (Y - alpineHeight(x, z) > 0.2) put('bw_pile', x, Y - 0.05, z, 0, [1.1, Math.max(0.3, Y - 0.05 - gy), 1.1]) }
+    for (let s = 1.6; s < Ltot; s += 1.6) for (const sd of [-1, 1]) { const a = at(s); pile(a.x - a.dz * sd * 0.7, a.z + a.dx * sd * 0.7) }
+    for (const u of [0.15, 1.45, 2.75]) for (const v of [-1.35, 1.35]) pile(E.x + E.dx * u - E.dz * v, E.z + E.dz * u + E.dx * v) }
   for (const sd of [-1, 1, 2]) {
     const L = rails.filter((p) => p[2] === sd)
     for (let i = 1; i < L.length; i++) {

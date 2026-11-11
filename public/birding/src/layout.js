@@ -595,12 +595,12 @@ EAST.decks = [
   { name: 'crane', x: 92.5, z: -122, w: 6, d: 4, look: [74, -125] },      // 鶴的觀察台：沼澤東岸、蘆葦擋著
 ]
 export const inLagoon = (x, z) => x < 31
-// 觀景台：矩形（w 沿面向的左右、d 前後）、台面高＝四個角地形最高點＋0.35；wetland.js 照這個蓋
+// 觀景台：矩形（w 沿面向的左右、d 前後）；wetland.js 照這個蓋
 export function deckFrame(D) { const a = Math.atan2(D.look[0] - D.x, D.look[1] - D.z); return { a, c: Math.cos(a), s: Math.sin(a) } }
 export function deckAt(x, z) {
   for (const D of EAST.decks) {
     const { c, s } = deckFrame(D), dx = x - D.x, dz = z - D.z, lz = dx * s + dz * c, lx = dx * c - dz * s
-    if (Math.abs(lx) <= D.w / 2 && Math.abs(lz) <= D.d / 2) return D.y ??= Math.max(EAST.W + 0.25, ...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([u, v]) => alpineHeight(D.x + (u * D.w / 2) * c + (v * D.d / 2) * s, D.z - (u * D.w / 2) * s + (v * D.d / 2) * c))) + 0.35
+    if (Math.abs(lx) <= D.w / 2 && Math.abs(lz) <= D.d / 2) return D.y ??= Math.max(EAST.W + 0.3, alpineHeight(D.x - (D.d / 2 + 0.3) * s, D.z - (D.d / 2 + 0.3) * c) + 0.12, 0.08 + Math.max(...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([u, v]) => alpineHeight(D.x + (u * D.w / 2) * c + (v * D.d / 2) * s, D.z - (u * D.w / 2) * s + (v * D.d / 2) * c))))   /* 2026-11-12 使用者：獨立的觀賞台太高、要跳才上得去（以前＝四角最高點＋0.35，後面入口那一側落差 0.34～0.7）→ 比後面入口的地面高 0.12、不低於四角的地面 */
   }
   return null
 }
@@ -1183,6 +1183,23 @@ export const ALP_WALKS = (() => {
   for (let i = 0; i < N; i++) { x0 = Math.min(x0, xs[i]); x1 = Math.max(x1, xs[i]); z0 = Math.min(z0, zs[i]); z1 = Math.max(z1, zs[i]) }
   ALP_WALKS.push({ head: { t: 'wet' }, xs, zs, tx: Array.from(stx), tz: Array.from(stz), y: sm, ground: base, N, ds: 0.05, box: [x0 - 2, x1 + 2, z0 - 2, z1 + 2] })
 }
+// 2026-11-12 沼澤觀察屋旁的矮木道（wetBoard 支線，east.js buildBoardwalk 蓋）：以前木板貼著地形走，沼澤加大以後後半段的地形在水面下、整條沉在水裡只剩欄杆。
+// 木板面＝max(地面 + 0.12, 水面 + 0.4)；盡頭 3×3 m 平台是平的。人走在上面（supportAt）
+export const wetBoardY = (x, z) => Math.max(alpineHeight(x, z) + 0.12, EAST.W + 0.4)
+export const wetBoardEnd = () => { const P = ALP_SPURS.find((q) => q.name === 'wetBoard').pts, E = P[P.length - 1], A = P[P.length - 2], l = Math.hypot(E[0] - A[0], E[1] - A[1]); return { x: E[0], z: E[1], dx: (E[0] - A[0]) / l, dz: (E[1] - A[1]) / l, y: wetBoardY(E[0], E[1]) } }
+export function wetBoardAt(x, z) {
+  const P = ALP_SPURS.find((q) => q.name === 'wetBoard').pts
+  if (x < P[0][0] - 3 || x > P[P.length - 1][0] + 5 || z > P[0][1] + 3 || z < P[0][1] - 14) return null
+  const E = wetBoardEnd(), u = (x - E.x) * E.dx + (z - E.z) * E.dz, v = -(x - E.x) * E.dz + (z - E.z) * E.dx
+  if (u >= -0.1 && u <= 2.95 && Math.abs(v) <= 1.5) return E.y
+  let S = 0
+  for (let i = 1; i < P.length; i++) {
+    const ax = P[i - 1][0], az = P[i - 1][1], dx = P[i][0] - ax, dz = P[i][1] - az, l = Math.hypot(dx, dz), t = clamp(((x - ax) * dx + (z - az) * dz) / (l * l), 0, 1)
+    if (Math.hypot(x - ax - dx * t, z - az - dz * t) <= 0.9 && S + t * l >= 1.1) return wetBoardY(ax + dx * t, az + dz * t)
+    S += l
+  }
+  return null
+}
 // 站在棧道上：離中線 WALK_HW 以內、不在路的兩端外面 → 棧道面高；不在上面回傳 null
 export function walkAt(x, z) {
   for (const w of ALP_WALKS) {
@@ -1266,6 +1283,8 @@ export function supportAt(x, z, feet) {
     if (dy != null && dy <= feet + 0.5 && dy > y - 1.5) { y = dy; owner = 3 }
     const wy = walkAt(x, z)        // 巨木林木棧道
     if (wy != null && wy <= feet + 0.5 && wy > y - 1) { y = wy; owner = 3 }
+    const wb = wetBoardAt(x, z)    // 沼澤觀察屋旁的矮木道
+    if (wb != null && wb <= feet + 0.5 && wb > y) { y = wb; owner = 3 }
     const sy = YOSE.stairAt(x, z, feet)   // 瀑布步道（多層重疊：挑腳下那一層）
     if (sy != null && sy <= feet + 0.5 && sy > y) { y = sy; owner = 5 }
     const ty = YOSE.topAt(x, z)     // 岩壁頂上

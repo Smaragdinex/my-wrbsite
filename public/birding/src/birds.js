@@ -644,7 +644,7 @@ function flamingoShow(STRAIGHT) {
     if (b.rev && b.rev !== D.n) b.rev = 0
     const o = { lean: 0, neck: 0, head: 0, reach: 0.25, rate: 7, bones: STRAIGHT, yaw: 0.95 * Math.sin(T * Math.PI * 2 * b.hz + b.ph), wing: 0, tail: 0 }
     const [e, u] = elAt(b.sal, D.t)
-    if (e) { o.wing = 1.5 * ss(u, 0, 0.14) * (1 - ss(u, 0.72, 1)); o.yaw = 0; o.tail = 0.3 * o.wing / 1.5 }
+    if (e) { o.wing = 0.34 * ss(u, 0, 0.14) * (1 - ss(u, 0.72, 1)); o.yaw = 0; o.tail = 0.3 * o.wing / 0.34 }   /* 2026-11-12 使用者：翅膀變形——站姿模型的翅膀是收著的一整片，張到 1.5 會整片掀起來、露出裡面破掉的白底；只微微抬起抖一下 */
     return o
   }
 }
@@ -1788,7 +1788,7 @@ function shoebill(env) {
 // 覓食姿勢（每根骨頭多轉幾弧度，照側面實拍調的）。down：頭下到水面那一段的姿勢；sweep：嘴在水裡左右掃的幅度、頻率
 export const FEED = {
   // 紅鶴濾食：身體只微微前傾，脖子從胸口直直垂下去，頭整個倒過來、上嘴朝下貼著水面，慢慢左右擺
-  flamingo: { acts: ['peck'], lean: 0.3, neck: 0, head: 0, reach: 0, bones: { neck: -1.6, neck2: -1.3, neck3: 0.2, head: 1.2 }, sweep: 0.22, hz: 0.5, inT: 0.18, outT: 0.85 },
+  flamingo: { acts: ['peck'], lean: 0.5, neck: 0, head: 0, reach: 0.5, bones: { neck: -2.9, neck2: -0.3, neck3: 0.2, head: 0.6 }, sweep: 0.22, hz: 0.5, inT: 0.18, outT: 0.85 },
   // 玫瑰琵鷺：身體前傾，脖子往前下伸直，匙狀的嘴尖泡在水裡、張著一點左右快速掃
   rspoonbill: { acts: ['hunt', 'strike'], lean: 0.9, neck: 0, head: 0, reach: 0.4, bones: { neck: -1.5, neck2: -0.4, neck3: -0.1, head: 1.7 }, sweep: 0.5, hz: 1.1, inT: 0.12, outT: 0.9 },
 }
@@ -1798,7 +1798,7 @@ const feeder = (F) => ({ n, kk, t }) => {
   return { lean: F.lean, neck: F.neck, head: F.head, reach: F.reach, rate: 5, bones: F.bones, sway: k >= 1 ? F.sweep * Math.sin(t * Math.PI * 2 * F.hz) : 0 }
 }
 function flamingo(env) {
-  const show = flamingoShow({ neck: 1.2, neck2: -1.5, neck3: 0, head: 0.5 })
+  const show = flamingoShow({ neck: 0.1, neck2: -0.6, neck3: 0, head: 0.6 })
   return groundGroup(6, 1.3, (avoid) => groundTripo(env, { name: 'flamingo-rig', H: 1.3, h0: 0.981, ...TRIPO, reach: 0.9, wade: true, bill: 0.16, show, feed: feeder(FEED.flamingo),
     walk: { radius: 3.2, speed: 0.13, avoid }, swingT: 0.6, lift: 0, knee: [1.0, 1.8], focusY: 0.75,
     acts: { walk: [4, 99, 99], peck: [4, 1.6, 3.2], stand: [2, 2, 4], look: [1.5, 1.2, 2.5], turn: [1, 99, 99], show: [0, 999, 999] } }))
