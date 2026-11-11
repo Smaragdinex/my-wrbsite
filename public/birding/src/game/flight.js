@@ -3,6 +3,10 @@
 // 飛的時候換成另一個翅膀張開的模型（ChatGPT 畫飛行姿勢 → Tripo → tools/rig-distance.py 的 fly 骨架：body、head、tail、wingL/R、wingtipL/R）。
 import * as THREE from 'three'
 import { rigged, AX, hasModel } from '../birds.js'
+import { HIDES } from '../east.js'
+// 2026-11-11 使用者：躲在觀察屋裡，鳥不會飛走（Threads 回饋：宣傳文寫了「躲在賞鳥屋裡鳥不會跑」，以前觀察屋只是一棟房子）。
+// 觀察屋 6×3.2 m、正面朝 look；玩家在屋裡（各邊多 0.4 m，含門口）＝鳥看不到人，不會警戒
+const inHide = (P) => HIDES.some((h) => { const a = Math.atan2(h.look[0] - h.x, h.look[1] - h.z), dx = P.x - h.x, dz = P.z - h.z, lz = dx * Math.sin(a) + dz * Math.cos(a), lx = dx * Math.cos(a) - dz * Math.sin(a); return Math.abs(lx) < h.w / 2 + 0.4 && Math.abs(lz) < h.d / 2 + 0.4 })
 import { terrainHeight as gardenH, domeRho, domeY, mtnBase, MTN, inAlpine, alpineHeight } from '../layout.js'
 // 地面高度：山區查山區的地形（不然鳥會飛進山坡裡）
 const terrainHeight = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : gardenH(x, z)
@@ -303,7 +307,8 @@ export function createFlight(world, player) {
     speed = damp(speed, P.distanceTo(last) / Math.max(dt, 1e-3), 8, dt)
     last.copy(P)
     // 玩家越快越容易驚動；蹲低慢慢走只有一半距離；站著不動也會被注意到，但比較近才會
-    const mult = sneak ? 0.5 : speed > 6 ? 1.5 : speed > 0.6 ? 1 : 0.7
+    const hidden = inHide(P)
+    const mult = hidden ? 0 : sneak ? 0.5 : speed > 6 ? 1.5 : speed > 0.6 ? 1 : 0.7
     for (const u of units) {
       if (u.b.absent) continue   // 這個時段不在（main.js presence）
       if (u.state === 'home') {
@@ -324,7 +329,7 @@ export function createFlight(world, player) {
         let d = Infinity
         for (const s of u.ms) { s.m.obj.getWorldPosition(_v); d = Math.min(d, _v.distanceTo(P)) }
         // 慢慢走過去：牠一直往後退、保持距離（跑回家附近的範圍內，退到底被追上才飛）；用跑的衝過來（> 4 m/s），還有 0.7 倍距離就起飛
-        const near = speed > 4 ? u.esc.r * 0.7 : (u.esc.near ?? u.esc.r * 0.45) * mult
+        const near = hidden ? 0 : speed > 4 ? u.esc.r * 0.7 : (u.esc.near ?? u.esc.r * 0.45) * mult
         if (d < near) { flush(u, t, true); continue }
         u.calm = d > u.esc.r * mult * 1.3 ? u.calm + dt : 0
         for (const s of u.ms) { if (s.m.walker && !s.m.walker.goal && u.calm < 1.5) fleeOnGround(u, s); s.act = 'run' }
