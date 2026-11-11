@@ -47,6 +47,7 @@ export const UI = {
  "光圈": "Aperture",
  "免費": "Free",
  "入水的瞬間": "Diving in",
+ "求偶展示": "Courtship display",
  "入水那一瞬間！很難抓到。": "Caught it right as it hit the water! Tough shot.",
  "入門機身 Lark 100": "Entry body Lark 100",
  "全部自己來，看下面的測光表調到 0。": "All up to you. Adjust until the meter below reads 0.",

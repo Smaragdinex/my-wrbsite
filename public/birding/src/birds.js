@@ -482,6 +482,181 @@ function curlToes(r, toes, c) { if (c) for (const t of toes) { r.turn(t.a, t.axi
 //      walk Walker 參數、acts 動作表、step 步幅（公尺）、bob 走路點頭、sway 盯地面時脖子左右晃、
 //      hop 兩腳併攏用跳的（跳多高，麻雀、小彎嘴）、flick 尾巴一下一下往上翹（秧雞、水雞）、
 //      swim 浮在水面上游：腳收在肚子下面划水（不踩地），每划一下一圈小水波
+// ---------- 求偶／群體展示（2026-11-11 使用者：招牌行為要做、而且要正確；動作和數字照 ChatGPT 核對過的鳥類行為） ----------
+// 一對／一群鳥共用一個「導演」：每隔 gap 秒開一場（dur 秒），開場時每隻都切到 'show' 動作（動作表裡權重 0，不會自己抽到）、停下腳步；
+// 每隻自己的 cfg.show 每格問導演現在演到哪。x.c.si：這隻在群裡的編號（0 當雄鳥／帶頭的）
+export const SHOWS = []
+function showDirector({ gap, dur, first = [12, 30], onStart, onEnd }) {
+  const D = { birds: [], on: false, t: 0, len: 0, wait: rnd(...first), n: 0 }
+  SHOWS.push(D)
+  D.tick = (x) => {
+    if (x.c.si == null) { x.c.si = D.birds.length; D.birds.push({ w: x.w, acts: x.acts, c: x.c }) }
+    if (x.c.si === 0) {
+      if (D.on) {
+        D.t += x.dt
+        if (D.t >= D.len || D.birds.every((b) => b.acts.name !== 'show')) { D.on = false; D.wait = rnd(...gap); onEnd?.(D); for (const b of D.birds) if (b.acts.name === 'show') b.acts.next('stand') }
+      } else if ((D.wait -= x.dt) <= 0) {
+        D.on = true; D.t = 0; D.len = rnd(...dur); D.n++
+        for (const b of D.birds) { b.w.goal = null; b.w.want = null; b.acts.next('show') }
+        onStart?.(D)
+      }
+    }
+    return D.on && x.acts.name === 'show'
+  }
+  return D
+}
+const elAt = (P, t) => { for (const e of P) if (t >= e.t0 && t < e.t0 + e.dur) return [e, (t - e.t0) / e.dur]; return [null, 0] }
+// 鶴的舞（丹頂鶴、赤頸鶴）：兩隻面對面，各跳各的、互相回應（錯開 0.2～1.5 秒，不是鏡射）——
+//   鞠躬 0.8～1.6 s（頭低到水平以下 20～50°）、仰頭 0.5～1.0 s（嘴朝上 45～80°）、跳躍 0.9～1.8 s（0.3～0.9 m，翅膀張開、腳往下垂）、張翅拍動；
+//   六成的場次最後接「齊鳴」4～10 s：並肩站、脖子伸直、嘴朝天 50～85°，雄鳥把翅膀舉到背上、雌鳥翅膀收著；雄鳥一長聲 1～2 s，雌鳥兩短聲
+function craneShow(leapMax) {
+  const D = showDirector({ gap: [45, 100], dur: [16, 32], onStart: (D) => {
+    D.call = Math.random() < 0.6 ? rnd(4.5, 9) : 0
+    const end = D.len - D.call - 0.6
+    D.plans = D.birds.map((b, i) => {
+      const P = []; let t = 0.9 + (i ? rnd(0.3, 1.3) : 0)
+      while (t < end - 1.6) {
+        const k = Math.random(), e = k < 0.3 ? ['bow', rnd(0.9, 1.6)] : k < 0.5 ? ['toss', rnd(0.6, 1.0)] : k < 0.8 ? ['leap', rnd(1.1, 1.7), rnd(0.3, leapMax)] : ['flap', rnd(1.6, 2.6)]
+        P.push({ type: e[0], t0: t, dur: e[1], h: e[2] }); t += e[1] + rnd(0.3, 1.5)
+      }
+      return P
+    })
+    const [a, b] = D.birds
+    if (b) { a.w.want = Math.atan2(b.w.p.x - a.w.p.x, b.w.p.y - a.w.p.y); b.w.want = a.w.want + Math.PI }
+  } })
+  return (x) => {
+    if (!D.tick(x)) return null
+    const i = x.c.si, H = x.cfg.H, o = { lean: 0, neck: -0.1, head: 0, reach: 0.5, rate: 9, wing: 0, jump: 0 }
+    if (D.call && D.t > D.len - D.call) {
+      if (x.c.callN !== D.n) { x.c.callN = D.n; x.w.want = D.birds[0].w.h + (i ? rnd(-0.25, 0.25) : 0) }   // 並肩、朝同一邊
+      const u = (D.t - (D.len - D.call)) % 2.6
+      const sing = i === 0 ? (u < 1.6 ? 1 : 0) : ((u > 0.25 && u < 0.8) || (u > 1.0 && u < 1.55) ? 1 : 0)
+      o.neck = -0.3; o.reach = 1.0; o.head = -1.05 - 0.14 * sing; o.rate = 12
+      if (i === 0) o.wing = 0.75 + 0.05 * Math.sin(x.t * 17) * sing
+      return o
+    }
+    const [e, u] = elAt(D.plans[i] ?? [], D.t)
+    if (!e) return o
+    const sn = Math.sin(Math.PI * u)
+    if (e.type === 'bow') { o.lean = 0.5 * sn; o.neck = 2.0 * sn; o.head = 0.15 * sn; o.reach = 0.35; o.wing = 0.25 * sn }
+    else if (e.type === 'toss') { o.neck = -0.3 * sn; o.head = -1.1 * sn; o.reach = 1.0; o.rate = 14 }
+    else if (e.type === 'leap') {
+      if (u < 0.2) { o.lean = 0.3; o.neck = 0.4; o.jump = -0.07 * H * ss(u, 0, 0.2); o.wing = 0.3 }
+      else { const v = Math.min(1, (u - 0.2) / 0.66); o.jump = e.h * 4 * v * (1 - v); o.wing = 1.45 * Math.sin(Math.PI * Math.min(1, v * 1.15)) + 0.2; o.neck = -0.2; o.head = -0.3; o.reach = 0.9; o.lean = u > 0.86 ? 0.2 : -0.1 }
+    } else if (e.type === 'flap') {
+      if (e.turned !== D.n) { e.turned = D.n; x.w.want = x.w.h + sgn() * rnd(0.5, 2.0) }
+      o.wing = (1.6 + 0.35 * Math.sin(x.t * Math.PI * 2 * 2.4)) * Math.min(1, sn * 2); o.neck = -0.15; o.head = -0.25; o.reach = 0.85
+    }
+    return o
+  }
+}
+// 鳳頭鸊鷉：兩隻游到面對面（0.4～1 m）→ 甩頭儀式 5～12 s（脖子挺直，頭左右甩 ±25～45°、1.5～2.5 Hz，一陣 3～6 下）＋回頭理羽（嘴轉到肩後 90～130°）；
+//   四成五的場次接「水草舞」：各自潛水 3～8 s 叼水草上來 → 胸貼胸幾乎直立（靠腳在水下快速划水撐著）2～5 s、頭和水草左右擺 ±15～30°、1～2 Hz → 0.3～0.7 s 內坐回水面
+function grebeShow() {
+  const weedGeo = (() => { const gs = []; for (let i = 0; i < 6; i++) { const L = rnd(0.12, 0.26), g = new THREE.PlaneGeometry(0.012, L, 1, 4).translate(0, -L / 2, 0).rotateY(rnd(0, 3)).rotateZ(rnd(-0.5, 0.5)); gs.push(g) } return mergeGeometries(gs) })()
+  const weedMat = new THREE.MeshStandardMaterial({ color: 0x2c4a1c, roughness: 0.6, side: THREE.DoubleSide })
+  const D = showDirector({ gap: [40, 90], dur: [13, 13], onStart: (D) => {
+    D.full = Math.random() < 0.45; D.len = D.full ? 29.5 : 13; D.off = rnd(0.15, 0.4); D.sh = rnd(1.6, 2.4)
+    const [a, b] = D.birds
+    if (!b) return
+    const dx = b.w.p.x - a.w.p.x, dz = b.w.p.y - a.w.p.y, d = Math.hypot(dx, dz) || 1, mx = (a.w.p.x + b.w.p.x) / 2, mz = (a.w.p.y + b.w.p.y) / 2
+    a.w.goal = new THREE.Vector2(mx - dx / d * 0.45, mz - dz / d * 0.45); b.w.goal = new THREE.Vector2(mx + dx / d * 0.45, mz + dz / d * 0.45)
+  } })
+  return (x) => {
+    const on = D.tick(x), i = x.c.si
+    if (x.c.weed) x.c.weed.visible = false
+    if (!on) return null
+    const o = { lean: 0, neck: -0.25, head: 0, reach: 1.0, rate: 8, jump: 0, yaw: 0, pitch: 0 }, me = D.birds[i], ot = D.birds[1 - i], T = D.t - (i ? D.off : 0)
+    if (ot && !x.w.goal) { const hd = Math.atan2(ot.w.p.x - x.w.p.x, ot.w.p.y - x.w.p.y); if (Math.abs(wrap(hd - x.w.h)) > 0.06) x.w.want = hd }
+    if (T < 3.5) return o
+    const shake = (hz, A, burst = 2.6, onT = 1.7) => (T % burst < onT ? A * Math.sin(T * Math.PI * 2 * hz) : 0)
+    let weed = false
+    if (T < 11.5) {
+      // 甩頭儀式；中間各理一次羽
+      const pt = T - (i ? 8.6 : 6.9)
+      if (pt > 0 && pt < 1.0) { o.yaw = (i ? -1 : 1) * 1.95 * Math.sin(Math.PI * pt); o.head = 0.35 * Math.sin(Math.PI * pt); o.neck = 0.1 }
+      else o.yaw = shake(D.sh, 0.62)
+    } else if (D.full && T < 18.5) {
+      // 潛水叼水草：頭先栽下去、整隻沉到水下，幾秒後浮上來
+      const dn = ss(T, 12, 12.5), upk = ss(T, 17.4 + i * 0.5, 17.9 + i * 0.5)
+      o.pitch = -0.7 * dn * (1 - upk); o.prate = 10; o.jump = -0.75 * dn * (1 - upk); o.neck = 0.5 * dn * (1 - upk); weed = upk > 0.5
+    } else if (D.full && T < 27.3) {
+      weed = true
+      const up = ss(T, 21.2, 21.6) * (1 - ss(T, 26.2, 26.7))
+      // 直立：身體仰起約 65°，一半以上的身體露出水面；脖子往前補回來保持直立；頭帶著水草左右擺
+      o.pitch = 1.05 * up; o.prate = 12; o.jump = -0.1 * up + 0.012 * up * Math.sin(x.t * 34); o.neck = 0.35 * up - 0.25; o.head = 0.5 * up
+      o.yaw = up > 0.5 ? 0.42 * Math.sin((T - 21.6) * Math.PI * 2 * 1.5) : 0
+    } else if (D.full) weed = T < 28.3
+    if (weed) {
+      if (!x.c.weed) { x.c.weed = new THREE.Mesh(weedGeo, weedMat); x.c.weed.castShadow = true; x.root.add(x.c.weed) }
+      const hb = x.r.bones.head; hb.updateWorldMatrix(true, false)
+      x.c.weed.position.copy(x.root.worldToLocal(hb.localToWorld(V(0, x.cfg.bill * 0.85, 0)))); x.c.weed.visible = true
+      x.c.weed.rotation.z = 0.25 * Math.sin(x.t * 6 + i)
+    }
+    return o
+  }
+}
+// 大紅鸛的群體展示（20～40 s）：一群擠在一起、脖子伸得筆直「行軍」（0.5～1 m/s、每秒 1.5～2.5 步），邊走邊「搖頭旗」——頭左右轉 ±45～80°、0.5～1.2 Hz（嘴大致水平，不是朝天）；
+//   走一段各自慢 0.3～2 秒陸續掉頭往回走；停下來後輪流「翅膀敬禮」1.5～3 s（翅膀啪地張開露出紅色和黑色飛羽、停 0.5～1.5 s 再收）。同一時間大約四到七成的鳥在做同一件事
+function flamingoShow(STRAIGHT) {
+  const D = showDirector({ gap: [50, 110], dur: [24, 38], onStart: (D) => {
+    D.dir = rnd(0, Math.PI * 2); D.turnT = rnd(5, 7.5); D.stopT = D.turnT * 2
+    for (const b of D.birds) { b.lag = rnd(0.3, 2); b.join = Math.random() < 0.85; b.hz = rnd(0.6, 1.1); b.ph = rnd(0, 6); b.sp0 = b.w.speed; b.sal = []
+      for (let t = D.stopT + rnd(1, 4); t < D.len - 3; t += rnd(4, 8)) b.sal.push({ t0: t, dur: rnd(1.6, 2.8) }) }
+  }, onEnd: (D) => { for (const b of D.birds) if (b.sp0) b.w.speed = b.sp0 } })
+  D.bones = STRAIGHT
+  return (x) => {
+    if (!D.tick(x)) return null
+    const b = D.birds[x.c.si]
+    if (!b.join) return { rate: 4 }
+    const T = D.t - b.lag
+    if (T < 0) return { rate: 4 }
+    if (T < D.stopT - 0.2) {
+      x.w.speed = 0.62
+      const dir = D.dir + (T > D.turnT ? Math.PI : 0)
+      if (!x.w.goal) { x.w.goal = new THREE.Vector2(x.w.p.x + Math.sin(dir) * 1.2, x.w.p.y + Math.cos(dir) * 1.2); x.w.want = null }
+      else if (T > D.turnT && !b.rev) { b.rev = D.n; x.w.goal = new THREE.Vector2(x.w.p.x + Math.sin(dir) * 1.2, x.w.p.y + Math.cos(dir) * 1.2) }
+    } else { x.w.speed = b.sp0; x.w.goal = null }
+    if (b.rev && b.rev !== D.n) b.rev = 0
+    const o = { lean: 0, neck: 0, head: 0, reach: 0.25, rate: 7, bones: STRAIGHT, yaw: 0.95 * Math.sin(T * Math.PI * 2 * b.hz + b.ph), wing: 0, tail: 0 }
+    const [e, u] = elAt(b.sal, D.t)
+    if (e) { o.wing = 1.5 * ss(u, 0, 0.14) * (1 - ss(u, 0.72, 1)); o.yaw = 0; o.tail = 0.3 * o.wing / 1.5 }
+    return o
+  }
+}
+// 流蘇鷸的求偶場：雄鳥各顧各的小地盤、互相較勁（不同步；一隻動了，旁邊的 0.2～1 秒內跟著回應）。10～30 秒一陣、歇 5～20 秒——
+//   挺立 2～6 s（身體拉高一兩成、脖子伸長、飾羽全開）、抖翅 0.4～1.2 s（每秒 5～9 下、張開 20～50°）有時小跳 5～25 cm、
+//   前傾威嚇 1～3 s（身體前傾 15～35°、嘴水平，朝對手走 2～5 小步）、蹲伏不動 3～12 s（身體壓低兩到四成、嘴朝下 30～70°）
+function ruffShow() {
+  const D = showDirector({ gap: [5, 20], dur: [10, 30], first: [6, 14], onStart: (D) => {
+    D.plans = D.birds.map(() => {
+      const P = []; let t = rnd(0, 1.2)
+      while (t < D.len - 1) {
+        const k = Math.random(), e = k < 0.28 ? ['up', rnd(2, 5)] : k < 0.55 ? ['flut', rnd(0.5, 1.1), Math.random() < 0.6 ? rnd(0.05, 0.22) : 0] : k < 0.8 ? ['threat', rnd(1.2, 2.8)] : ['squat', rnd(3, 9)]
+        P.push({ type: e[0], t0: t, dur: e[1], h: e[2] }); t += e[1] + rnd(0.2, 1.0)
+      }
+      return P
+    })
+  } })
+  return (x) => {
+    if (!D.tick(x)) return null
+    const i = x.c.si, H = x.cfg.H, o = { lean: 0.05, neck: 0, head: 0, reach: 0.5, rate: 10, wing: 0, jump: 0 }
+    const [e, u] = elAt(D.plans[i] ?? [], D.t)
+    if (!e) return o
+    if (e.type === 'up') { o.neck = -0.35; o.reach = 1.0; o.lean = -0.12; o.jump = 0.03 * H }
+    else if (e.type === 'flut') { o.wing = 0.45 + 0.3 * Math.sin(x.t * Math.PI * 2 * 7); o.neck = -0.3; o.reach = 0.9; if (e.h) { const v = ss(u, 0.15, 0.85); o.jump = e.h * 4 * v * (1 - v) } }
+    else if (e.type === 'threat') {
+      o.lean = 0.42; o.neck = 0.35; o.head = -0.25; o.reach = 0.8
+      if (e.went !== D.n) {
+        e.went = D.n
+        let best = null, bd = 1e9
+        for (const b of D.birds) if (b.w !== x.w) { const d = x.w.p.distanceTo(b.w.p); if (d < bd) { bd = d; best = b } }
+        if (best && bd > 0.5) { const k = Math.min(0.3, bd - 0.45) / bd; x.w.goal = new THREE.Vector2(lerp(x.w.p.x, best.w.p.x, k), lerp(x.w.p.y, best.w.p.y, k)); x.w.want = null }
+      }
+    } else if (e.type === 'squat') { const dn = ss(u, 0, 0.08) * (1 - ss(u, 0.94, 1)); o.jump = -0.055 * dn; o.lean = 0.55 * dn; o.neck = 0.7 * dn; o.head = 0.35 * dn; o.reach = 0.3; o.rate = 14 }
+    return o
+  }
+}
 function groundTripo(env, cfg) {
   const r = rigged(cfg.name)
   const k = cfg.H / cfg.h0, LAT = cfg.lat, FWD = cfg.fwd ?? V(1, 0, 0)   // FWD：身體前後軸（側傾用）
@@ -646,6 +821,9 @@ function groundTripo(env, cfg) {
       } else if (kk < 0.75) { lean = 0.2; neck = 0.05; head = -0.05; reach = 0.85; rate = 8 }
       else { lean = 0.05; neck = -0.35; head = -0.6 + 0.08 * Math.sin(t * 9); reach = 0.9; rate = 7 }
     }
+    // 2026-11-11 求偶／群體展示（cfg.show，見 showDirector）：回傳這一格的目標姿勢，蓋掉上面照動作名字給的
+    const ex = cfg.show ? cfg.show({ c, n, t, dt, w, acts, root, r, cfg }) : null
+    if (ex) { lean = ex.lean ?? lean; neck = ex.neck ?? neck; head = ex.head ?? head; reach = ex.reach ?? reach; rate = ex.rate ?? rate }
     // 跑（被人嚇到逃跑，速度是走路的好幾倍）：身體前傾、脖子往前伸；腳改用跑步循環（下面）
     const baseV = cfg.walk?.speed ?? 0.16
     c.run = damp(c.run, w.v > baseV * 2.5 ? 1 : 0, 8, dt)
@@ -694,6 +872,17 @@ function groundTripo(env, cfg) {
       rockNeck = 0.035 * A * rk - 0.024 * A * (rockCurve(rp - 0.13, HEAD_KEYS) - 0.5)   // 頭往前探到底時嘴尖微微往下點（±0.7°，比位移慢 0.05 週期）                                               // 頭的角度補回來，保持水平
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
+    if (cfg.show) {
+      // 展示用的額外動作：翅膀張開（sw）、整隻升降（jy：跳、蹲、潛水）、頭左右甩（sy）、身體仰起（sp）、個別骨頭多轉（sb）
+      c.sw = damp(c.sw ?? 0, ex?.wing ?? 0, 14, dt); c.jy = damp(c.jy ?? 0, ex?.jump ?? 0, ex ? 28 : 8, dt)
+      c.sy = damp(c.sy ?? 0, ex?.yaw ?? 0, 22, dt); c.sp = damp(c.sp ?? 0, ex?.pitch ?? 0, ex?.prate ?? 6, dt); c.st = damp(c.st ?? 0, ex?.tail ?? 0, 8, dt)
+      if (Math.abs(c.sw) > 0.005) for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) { r.turn(wg, FWD, sg * c.sw * (cfg.wingSign ?? 1)); r.turn(wg, AX.y, sg * c.sw * (cfg.wingOut ?? 0.3)) }
+      if (c.sy) r.turn('head', AX.y, c.sy)
+      if (c.sp) r.turn('body', LAT, c.sp)
+      if (c.st) r.turn('tail', LAT, c.st)
+      c.sb ??= {}
+      for (const b of new Set([...Object.keys(c.sb), ...Object.keys(ex?.bones ?? {})])) { c.sb[b] = damp(c.sb[b] ?? 0, ex?.bones?.[b] ?? 0, 7, dt); if (Math.abs(c.sb[b]) > 0.002) r.turn(b, LAT, c.sb[b]) }
+    }
     // 尾巴：前傾時翹起、走路時跟著步伐上下左右擺
     const flick = cfg.flick ? cfg.flick * Math.pow(Math.max(0, Math.sin(t * (cfg.flickF ?? 2.4))), 6) : 0
     r.turn('tail', LAT, 0.1 * c.lean + 0.06 * Math.sin(ph * 2 + 1) * c.amp + flick + (cfg.swim ? 0.3 : 0)); r.turn('tail', AX.y, 0.08 * Math.sin(ph) * c.amp)
@@ -723,7 +912,7 @@ function groundTripo(env, cfg) {
     const runBob = c.run * 0.02 * cfg.H * Math.abs(Math.sin(c.runPh * Math.PI * 2))   // 每一步身體上下一下
     const liftY = (cfg.hop ? 0 : 0.012 * cfg.H * up * (1 - c.run)) + runBob, gyHere = env.groundAt ? env.groundAt(P.x, P.y) : 0
     c.gy = c.gy == null ? gyHere : damp(c.gy, gyHere, 12, dt)
-    root.position.set(P.x, c.gy + liftY + hopY + hopDip, P.y); root.rotation.y = w.h
+    root.position.set(P.x, c.gy + liftY + hopY + hopDip + (c.jy ?? 0), P.y); root.rotation.y = w.h
     root.updateWorldMatrix(true, true)
     // 山鷸的頭：要等整隻鳥這一格的位置擺好之後才能釘（以前在擺位置前釘，頭永遠慢一格，每抬一次腳就上下抖 4～5 mm）。
     // 目標 = 沒搖時頭的位置，扣掉抬腳那一下的身體升起，再低通平滑一下（速度變化不會一頓一頓）
@@ -767,6 +956,8 @@ function groundTripo(env, cfg) {
     if (!cfg.swim) legs.forEach((L, li) => {
       const home = r.model.localToWorld(L.rest.clone()); home.y -= liftY
       if (!L.plant) { L.plant = home.clone(); L.pos.copy(home) }
+      // 展示的跳躍（鶴、流蘇鷸）：離地時兩隻腳照站姿往下垂、微微伸直，不踩在原地（以前腳釘在地上，跳高時一隻腳被拉成往前踢）
+      if ((c.jy ?? 0) > 0.03) { L.plant.copy(home); L.plant.y -= Math.min(c.jy, 0.05 * cfg.H); L.pos.copy(L.plant); L.t = 1; ik(L, L.pos); return }
       // 跑：不用「踩住、落後太多才跨」（7 倍速時腳跟不上，會縮在肚子下被拖著走），
       // 改成兩腳半個循環錯開，前後擺動、往前擺的那一半抬離地面（2026-11-08 帝雉）
       if (c.run > 0.5 && !cfg.hop) {
@@ -825,7 +1016,7 @@ function groundTripo(env, cfg) {
     for (const b of Object.values(r.bones)) if (!Number.isFinite(b.quaternion.x + b.quaternion.w + b.position.x + b.position.y)) { b.quaternion.copy(b.userData.rest); b.position.copy(b.userData.restP) }
     if (!Number.isFinite(w.p.x + w.p.y + w.h)) { w.p.set(0, 0); w.h = 0; w.goal = null; w.want = null }
   }
-  return { obj: root, focus, update, acts, walker: w, legs }
+  return { obj: root, focus, update, acts, walker: w, legs, get behavior() { return acts.name === 'show' ? 'display' : null } }
 }
 // 夜鷺（ChatGPT 參考圖 → Tripo，跟黑冠麻鷺一樣綁法：脖子三節、頭剛性、腳趾）：站著等、慢慢走、很快啄下去
 function nightHeron(env) {
@@ -1561,13 +1752,14 @@ function harrier(env) {
 function shoebill(env) {
   return groundTripo(env, { name: 'shoebill-rig', H: 1.2, h0: 0.98, ...TRIPO, reach: 0.7, wade: true, bill: 0.24,
     walk: { radius: 0.5, speed: 0.07 }, swingT: 0.7, lift: 0, knee: [1.0, 1.7], focusY: 0.75,
-    acts: { stand: [9, 5, 11], hunt: [3, 4, 8], strike: [1.2, 1.6, 1.6], look: [2, 2, 4], walk: [0.7, 99, 99], turn: [0.6, 99, 99] } })
+    acts: { stand: [9, 15, 45], hunt: [4, 10, 25], strike: [1.2, 1.6, 1.6], look: [1.5, 2, 4], walk: [0.5, 99, 99], turn: [0.4, 99, 99] } })   // 2026-11-11 照核對過的行為：像雕像一樣站很久（遊戲裡 15～45 秒一段），獵食的撲擊很少
 }
 // 大紅鸛：潟湖淺水一群 6 隻，慢慢走、低頭濾食
 function flamingo(env) {
-  return groundGroup(6, 1.3, (avoid) => groundTripo(env, { name: 'flamingo-rig', H: 1.3, h0: 0.981, ...TRIPO, reach: 0.9, wade: true, bill: 0.16,
+  const show = flamingoShow({ neck: 0, neck2: 0, neck3: 0 })
+  return groundGroup(6, 1.3, (avoid) => groundTripo(env, { name: 'flamingo-rig', H: 1.3, h0: 0.981, ...TRIPO, reach: 0.9, wade: true, bill: 0.16, show,
     walk: { radius: 3.2, speed: 0.13, avoid }, swingT: 0.6, lift: 0, knee: [1.0, 1.8], focusY: 0.75,
-    acts: { walk: [4, 99, 99], peck: [4, 1.6, 3.2], stand: [2, 2, 4], look: [1.5, 1.2, 2.5], turn: [1, 99, 99] } }))
+    acts: { walk: [4, 99, 99], peck: [4, 1.6, 3.2], stand: [2, 2, 4], look: [1.5, 1.2, 2.5], turn: [1, 99, 99], show: [0, 999, 999] } }))
 }
 // 非洲水雉、紫水雞：荷葉盆地，踩著浮葉走（跟水雉同一套）
 function ajacana(env) { return endemicGround('ajacana-rig', 0.29, 0.979, { hop: 0, flick: 0.05, radius: 1.1, speed: 0.09, stride: 0.1 })(env) }
@@ -1580,9 +1772,10 @@ function rspoonbill(env) {
 }
 // 赤頸鶴：南邊的濕草甸，一對，慢慢踱步、低頭啄食、抬頭張望
 function sarus(env) {
-  return groundGroup(2, 1.6, (avoid) => groundTripo(env, { name: 'sarus-rig', H: 1.6, h0: 0.979, ...TRIPO, reach: 0.9, bill: 0.18,
+  const show = craneShow(0.8)
+  return groundGroup(2, 1.6, (avoid) => groundTripo(env, { name: 'sarus-rig', H: 1.6, h0: 0.979, ...TRIPO, reach: 0.25, bill: 0.18, show,
     walk: { radius: 2.6, speed: 0.14, avoid }, swingT: 0.65, lift: 0.03, knee: [1.0, 1.8], focusY: 0.8,
-    acts: { walk: [4, 99, 99], peck: [2.5, 1.4, 2.6], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99] } }))
+    acts: { walk: [4, 99, 99], peck: [2.5, 1.4, 2.6], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99], show: [0, 999, 999] } }))
 }
 // 黑剪嘴鷗：一直在飛——沿著潟湖那條筆直的深水道貼著水面剪過去（下嘴泡在水裡），到頭拉高轉彎、從旁邊高一點飛回來，再下去剪一趟。
 // 只有飛行模型（skimmer-fly-rig，翅膀舉在最高點）；路線是鳥群座標裡的一圈跑道形：長軸沿 env.toCam 的垂直方向（side）
@@ -1593,7 +1786,7 @@ function skimmer(env) {
   inner.rotation.y = Math.PI / 2; inner.add(r.model); root.add(inner); root.rotation.order = 'YXZ'
   const side = V(env.toCam.z, 0, -env.toCam.x), HL = 24, HW = 4.5, SPD = 7.5
   const PER = 4 * HL + 2 * Math.PI * HW
-  let dist = 0, ph = 0
+  let dist = 0, ph = 0, snapT = rnd(2, 5)
   const at = (d) => {   // 跑道：近鏡頭那條直線是剪水段（u：沿 side、v：朝鏡頭）
     d = ((d % PER) + PER) % PER
     if (d < 2 * HL) return [-HL + d, HW, 0]
@@ -1623,7 +1816,11 @@ function skimmer(env) {
     r.reset()
     const A = lerp(0.6, 0.32, low), a = A * Math.sin(ph) + lerp(0.25, 0.02, low), a2 = A * Math.sin(ph - 0.9) + lerp(0.2, 0.0, low)
     for (const [n, sg] of [['L', 1], ['R', -1]]) { r.turn('wing' + n, AX.x, -sg * a); r.turn('wingtip' + n, AX.x, -sg * a2 * 0.7) }
-    r.turn('head', AX.z, 0.18 * low)   // 剪水時頭壓低
+    // 剪水時下嘴往下斜 10～25°；下嘴碰到魚：嘴瞬間合上、頭往下往後一甩（0.25 秒）再抬回來——是觸覺反射，不是看準了啄
+    snapT -= dt
+    if (low > 0.9 && snapT < -0.7) snapT = rnd(3.5, 8)
+    const sn2 = snapT < 0 && snapT > -0.7 ? Math.sin(Math.PI * Math.min(1, -snapT / 0.25) * 0.5) * (1 - ss(-snapT, 0.25, 0.7)) : 0
+    r.turn('head', AX.z, (0.3 + 0.75 * sn2) * low)
     focus.copy(p0); focus.y += 0.1
   }
   update(0, 0)
@@ -1631,20 +1828,23 @@ function skimmer(env) {
 }
 // 丹頂鶴：北邊的濕草甸，一對；ruff 流蘇鷸：南邊草甸三隻雄鳥；鳳頭鸊鷉：深水池一對游
 function redcrowned(env) {
-  return groundGroup(2, 1.6, (avoid) => groundTripo(env, { name: 'redcrowned-rig', H: 1.5, h0: 0.98, ...TRIPO, reach: 0.9, bill: 0.18,
+  const show = craneShow(0.9)
+  return groundGroup(2, 1.6, (avoid) => groundTripo(env, { name: 'redcrowned-rig', H: 1.5, h0: 0.98, ...TRIPO, reach: 0.25, bill: 0.18, show,
     walk: { radius: 2.4, speed: 0.14, avoid }, swingT: 0.65, lift: 0.03, knee: [1.0, 1.8], focusY: 0.8,
-    acts: { walk: [4, 99, 99], peck: [2.5, 1.4, 2.6], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99] } }))
+    acts: { walk: [4, 99, 99], peck: [2.5, 1.4, 2.6], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99], show: [0, 999, 999] } }))
 }
 function ruff(env) {
-  return groundGroup(3, 0.7, (avoid) => groundTripo(env, { name: 'ruff-rig', H: 0.3, h0: 0.977, ...TRIPO, reach: 0.5, bill: 0.1,
+  const show = ruffShow()
+  return groundGroup(3, 0.7, (avoid) => groundTripo(env, { name: 'ruff-rig', H: 0.3, h0: 0.977, ...TRIPO, reach: 0.35, bill: 0.1, show,
     walk: { radius: 1.6, speed: 0.2, avoid }, swingT: 0.3, lift: 0.01, knee: [0.8, 1.4], focusY: 0.4,
-    acts: { stand: [4, 1.5, 3.5], look: [3, 1, 2], walk: [3, 99, 99], peck: [1.5, 0.8, 1.4], turn: [1.5, 99, 99] } }))
+    acts: { stand: [4, 1.5, 3.5], look: [3, 1, 2], walk: [3, 99, 99], peck: [1.5, 0.8, 1.4], turn: [1.5, 99, 99], show: [0, 999, 999] } }))
 }
 // 鳳頭鸊鷉：深水池一對，浮在水面慢慢游、偶爾低頭
 function grebe(env) {
-  return groundGroup(2, 1.2, (avoid) => groundTripo(env, { name: 'grebe-rig', H: 0.65, h0: 0.871, ...TRIPO, swim: true, bill: 0.12, bob: 0.02,
+  const show = grebeShow()
+  return groundGroup(2, 1.2, (avoid) => groundTripo(env, { name: 'grebe-rig', H: 0.65, h0: 0.871, ...TRIPO, swim: true, bill: 0.27, reach: 0.12, show,
     walk: { radius: 3.4, speed: 0.14, avoid: swimAvoid(env, avoid) }, stride: 0.12, swingT: 0.35, lift: 0, knee: [0.7, 1.3], focusY: 0.3,
-    acts: { walk: [4, 99, 99], look: [2.5, 1.2, 2.5], stand: [2, 1.5, 3], peck: [1, 0.9, 1.4], turn: [1, 99, 99] } }))
+    acts: { walk: [4, 99, 99], look: [2.5, 1.2, 2.5], stand: [2, 1.5, 3], turn: [1, 99, 99], show: [0, 999, 999] } }))
 }
 function wbwood(env) {
   // 2026-11-10 大赤啄木：直立貼在神木樹幹上（sacredUpright），臉朝樹幹、偶爾左右挪一點；eat 動作＝往樹皮啄
