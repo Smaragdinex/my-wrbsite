@@ -10,6 +10,7 @@ import { coniferGeo, needleMaterial } from './alpine.js'
 import { barkMaterial } from './bark.js'
 import { parts, scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
+import { weatherU } from './structures.js'
 
 const TAU = Math.PI * 2, V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const lerpN = (a, b, t) => a + (b - a) * t
@@ -338,6 +339,39 @@ export function buildYosemite(scene, { lib } = {}) {
     sheet(3.6, 6.4, 0.9, 4.6, fallMat({ spd: 1.35, a: 0.45, low: 1 }), 5, 0.3)          // 前面的水霧簾
     // 水潭：橢圓、深綠帶一點藍
     const poolM = new THREE.MeshStandardMaterial({ color: 0x2c5a55, roughness: 0.06, metalness: 0.15, transparent: true, opacity: 0.9 })
+    // 2026-11-11 使用者：下雨時這座湖也要有漣漪（濕地那支水面 shader 已經有，這裡是一片平的標準材質）→ 同一套雨滴圈：改法線＋圈的亮邊
+    poolM.onBeforeCompile = (sh) => {
+      sh.uniforms.uRT = uT; sh.uniforms.uRain = weatherU.rain
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vRW;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvRW = (modelMatrix * vec4(position, 1.0)).xyz;')
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+        varying vec3 vRW; uniform float uRT; uniform float uRain;
+        float rhash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        vec3 rainRings(vec2 p, float cell, float seed) {
+          vec3 acc = vec3(0.0);
+          vec2 g = floor(p / cell);
+          for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+            vec2 id = g + vec2(float(i), float(j));
+            float h1 = rhash(id + seed), h2 = rhash(id * 1.7 + seed + 13.1), h3 = rhash(id * 2.3 + seed + 41.7);
+            float ph = fract(uRT * (0.75 + 0.5 * h3) + h1 * 7.0);
+            vec2 c = (id + 0.2 + 0.6 * vec2(h1, h2)) * cell, d = p - c;
+            float dist = length(d), r = ph * cell * 0.85, w = cell * 0.07;
+            float x = (dist - r) / w, env = exp(-x * x) * (1.0 - ph) * (1.0 - ph) * step(h3, uRain * 1.2);
+            acc.xy += (d / max(dist, 1e-4)) * sin(x * 2.4) * env;
+            acc.z += env * max(0.0, cos(x * 1.6));
+          }
+          return acc;
+        }`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        float rainK = 0.0;
+        if (uRain > 0.01) {
+          float rf = 1.0 / (1.0 + 0.00035 * dot(cameraPosition - vRW, cameraPosition - vRW));
+          vec3 rr = rainRings(vRW.xz, 0.55, 3.0) + rainRings(vRW.xz + 5.3, 0.9, 71.0) * 0.8;
+          float rk = rf * min(1.0, uRain * 1.6);
+          normal = normalize(normal + (viewMatrix * vec4(rr.x, 0.0, rr.y, 0.0)).xyz * 0.3 * rk);
+          rainK = rr.z * rk;
+        }`)
+        .replace('#include <opaque_fragment>', 'outgoingLight += vec3(0.75, 0.8, 0.85) * rainK * 0.07;\n#include <opaque_fragment>')
+    }
     // 湖：剛好到湖岸那一圈（湖裡往下挖、岸往上一階，邊緣接在那一階上；以前放大 12%，出水口那邊水面浮在河道上面）
     const LK = YOSE.lake, pool = new THREE.Mesh(new THREE.CircleGeometry(1, 72).rotateX(-Math.PI / 2), poolM); pool.scale.set(LK.rx * 1.015, 1, LK.rz * 1.015); pool.position.set(LK.x, poolY, LK.z); pool.receiveShadow = true; g.add(pool)
     const foamT = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'), r = mulberry32(9); for (let i = 0; i < 1600; i++) { const a = r() * TAU, d = Math.pow(r(), 0.7) * 120; x.fillStyle = `rgba(255,255,255,${(0.1 + r() * 0.45) * (1 - d / 130)})`; x.beginPath(); x.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 1 + r() * 5, 0, TAU); x.fill() } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t })()
