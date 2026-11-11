@@ -543,7 +543,7 @@ export const BIRDS = {
  },
  "spoonbill": {
   "name": "Black-faced Spoonbill",
-  "where": "Shallows of the East Constructed Wetland",
+  "where": "Mudflat on the northeast shore of the Sunset Lagoon",
   "intro": "Snow white with a black face and bill, and most special of all, a long bill with a flat, wide tip like a rice paddle. It walks through shallow water head down, bill slightly open, sweeping side to side and snapping up any fish or shrimp it touches.",
   "facts": [
    "Only a few thousand exist worldwide, making it endangered; each winter over half come to Taiwan, and the Zengwen River mouth in Tainan is their most important wintering site.",
@@ -796,7 +796,7 @@ export const BIRDS = {
  },
  "shelduck": {
   "name": "Ruddy Shelduck",
-  "where": "Open Water of the East Constructed Wetland",
+  "where": "Open Water of the Emerald Marsh",
   "intro": "A large, orange-brown duck with a pale buff head and whitish face; breeding males wear a thin black collar. In flight the white forewing, black flight feathers and green speculum make a striking contrast.",
   "facts": [
    "A rare winter visitor to Taiwan, with one or two occasionally turning up on lakes, estuaries or farmland.",
@@ -807,7 +807,7 @@ export const BIRDS = {
  },
  "pheron": {
   "name": "Purple Heron",
-  "where": "Reedbed on the North Side of the East Wetland",
+  "where": "Reed Edge in the Southwest Corner of the Emerald Marsh",
   "intro": "Its slender chestnut neck has a black stripe down each side, the crown is bluish-black with long thin plumes, and the blue-grey back carries trailing chestnut shoulder plumes. It hides at the edge of reeds and waterweed, standing motionless to wait for fish.",
   "facts": [
    "It is slimmer than the Grey Heron, with a thinner neck often held in an S-curve.",
@@ -818,7 +818,7 @@ export const BIRDS = {
  },
  "stilt": {
   "name": "Black-winged Stilt",
-  "where": "Mudflat Shallows in the East Wetland",
+  "where": "Shallows beside the Sandbars of the Sunset Lagoon",
   "intro": "Crisp black-and-white plumage set on pink legs longer than its body, as if walking on stilts. The bill is thin and black and the eye red. Small groups wade gracefully through shallows, picking insects from the surface.",
   "facts": [
    "Legs make up about 60% of its height, one of the most extreme leg ratios of any bird.",
@@ -829,7 +829,7 @@ export const BIRDS = {
  },
  "harrier": {
   "name": "Western Marsh Harrier",
-  "where": "Shores of and Skies over the East Wetland",
+  "where": "Grassy Islets and Reedbeds of the Emerald Marsh",
   "intro": "A medium-large raptor; in flight the male is a three-toned black, brown and white: white leading edge, rufous coverts, pale grey flight feathers and black wingtips. It quarters low over marsh and grassland with wings raised in a shallow V, head down hunting.",
   "facts": [
    "In Taiwan it is a vagrant: a lost bird turns up only occasionally, and birders travel specially to see it.",

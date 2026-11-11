@@ -8,7 +8,7 @@ import * as THREE from 'three'
 import { createMirror } from './mirror.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { buildSummit } from './summit.js'
-import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, grassSD } from './layout.js'
+import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { nearGiant, forestK } from './giants.js'
 import { barkMaterial } from './bark.js'
@@ -266,6 +266,7 @@ function buildInterior(lib, avoid = []) {
           const mud = new THREE.Color().setHSL(0.08 + stone * 0.02, 0.22, 0.13 + stone * 0.05)
           c.lerp(new THREE.Color().setHSL(0.17 + n * 0.04, 0.34, 0.2 + n * 0.05), ss(6, 2.5, wd) * (1 - tr))   // 岸上的矮草
           c.lerp(mud, Math.max(ss(2.6, 0.5, wd), ss(EAST.W + 0.5, EAST.W + 0.1, y)) * (1 - tr))
+          if (inLagoon(x, z)) c.lerp(new THREE.Color().setHSL(0.09 + stone * 0.02, 0.22, 0.27 + stone * 0.06 + n * 0.04), ss(4, 0.5, wd) * 0.75 * (1 - tr))   // 2026-11-11 潟湖：岸邊、沙洲是淺色的鹽灘沙（不是沼澤的深色泥）
         }
       }
       col.set([c.r, c.g, c.b], k * 3)
@@ -361,6 +362,13 @@ function buildInterior(lib, avoid = []) {
           col = mix(vec3(0.075, 0.115, 0.085), vec3(0.030, 0.080, 0.070), smoothstep(0.02, 0.35, vDepth));
           col = mix(col, vec3(0.010, 0.040, 0.045), smoothstep(0.30, 0.95, vDepth));
           col += vec3(0.006, 0.014, 0.01) * (h0 - 0.5);
+          #ifdef MIRROR
+            // 2026-11-11 夕陽潟湖（x < 30）：鹹水的顏色——很淺的地方透出粉橘（鹽水裡的藻、像七股鹽田），往深一點是乳白帶綠的青綠色，深處藍綠
+            float lagK = smoothstep(31.5, 28.5, vW.x);
+            vec3 lagCol = mix(vec3(0.30, 0.14, 0.12), vec3(0.11, 0.15, 0.14), smoothstep(0.3, 1.3, vDepth));
+            lagCol = mix(lagCol, vec3(0.03, 0.08, 0.085), smoothstep(1.4, 2.4, vDepth));
+            col = mix(col, lagCol, lagK);
+          #endif
         #endif
         col += vec3(0.01, 0.026, 0.02) * (h0 - 0.5) * (1.0 - d * 0.5);
         // 反射：低角度看過去倒映的是兩岸的樹和石壁（暗綠、一塊深一塊淺），只有幾乎正上方的反射才是天空

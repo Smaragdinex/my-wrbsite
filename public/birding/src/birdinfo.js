@@ -191,8 +191,8 @@ const ALL = [
   },
   {
     // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [-5.5, 11.5]）
-    id: 'spoonbill', spot: [72.0, -113.0], view: 350, perch: 'ground', y: EAST.W - 0.3, water: EAST.W, dist: 4.6, camH: 1.9, lookY: 0.9,
-    name: '黑面琵鷺', sci: 'Platalea minor', where: '東部人工濕地的淺水',
+    id: 'spoonbill', spot: [11, -103], view: 57, perch: 'ground', y: EAST.W - 0.08,   /* 2026-11-11 搬到夕陽潟湖東北岸的泥灘（夕陽觀景台前面） */ water: EAST.W, dist: 4.6, camH: 1.9, lookY: 0.9,
+    name: '黑面琵鷺', sci: 'Platalea minor', where: '西南夕陽潟湖東北岸的泥灘',
     intro: '全身雪白，臉和嘴是黑色的，最特別的是一支前端又扁又寬、像飯匙一樣的長嘴。牠在淺水裡低著頭、嘴巴微微張開，左右來回掃動，碰到小魚小蝦就立刻夾起來。',
     facts: [
       '全世界的數量只有幾千隻，是瀕危的鳥；每年冬天超過一半會到台灣過冬，台南曾文溪口是最重要的度冬地。',
@@ -508,8 +508,8 @@ const ALL = [
   // 2026-11-10 山下湖再加四種：黃麻鴨（湖中游）、紫鷺（北岸淺水，避開蓮花叢）、高蹺鴴（西邊淺水，三隻）、西方澤鵟（南岸草地）
   {
     // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [112, -47]）
-    id: 'shelduck', spot: [63.1, -107.8], perch: 'ground', swim: 'eastWet', view: 17, y: EAST.W - 0.17, water: EAST.W, dist: 10, camH: 1.6, lookY: 0.3,
-    name: "黃麻鴨", sci: 'Tadorna ferruginea', where: "東部人工濕地的開闊水面",
+    id: 'shelduck', spot: [64, -112], perch: 'ground', swim: 'eastWet', view: 96, y: EAST.W - 0.17, water: EAST.W, dist: 10, camH: 1.6, lookY: 0.3,
+    name: "黃麻鴨", sci: 'Tadorna ferruginea', where: "翡翠沼澤的開闊水面",
     intro: "全身橙黃褐色的大型鴨子，頭頸淡棕黃、臉偏白，雄鳥繁殖期頸上一圈黑色細環。飛起來翅膀前半全白、飛羽黑色、還有綠色翼鏡，對比非常強烈。",
     facts: [
       "在台灣是稀有的冬候鳥，偶爾一兩隻出現在湖泊、河口或農田。",
@@ -520,8 +520,8 @@ const ALL = [
   },
   {
     // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [95.8, -25.6]）
-    id: 'pheron', spot: [52.3, -122.9], perch: 'ground', view: 270, y: EAST.W - 0.21, water: EAST.W, dist: 4.2, camH: 1.6, lookY: 0.75,
-    name: "紫鷺", sci: 'Ardea purpurea', where: "東部濕地北邊的蘆葦叢",
+    id: 'pheron', spot: [43, -124], perch: 'ground', view: 281, y: EAST.W - 0.15,   /* 2026-11-11 翡翠沼澤西南角的蘆葦邊（木棧道看過去） */ water: EAST.W, dist: 4.2, camH: 1.6, lookY: 0.75,
+    name: "紫鷺", sci: 'Ardea purpurea', where: "翡翠沼澤西南角的蘆葦邊",
     intro: "細長的脖子是栗紅色、兩側各有一條黑線，頭頂藍黑色，後頭有細長飾羽；背和翅膀藍灰色，肩上掛著一縷縷栗紅色的蓑羽。喜歡躲在蘆葦、水草邊，一動也不動地等魚。",
     facts: [
       "比蒼鷺瘦長，脖子更細、更彎，常彎成 S 形。",
@@ -532,8 +532,8 @@ const ALL = [
   },
   {
     // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [85.6, -37.7]）
-    id: 'stilt', spot: [51.5, -112.3], perch: 'ground', view: 299, y: EAST.W - 0.15, water: EAST.W, dist: 3.4, camH: 1.0, lookY: 0.4,
-    name: "高蹺鴴", sci: 'Himantopus himantopus', where: "東部濕地的泥灘淺水",
+    id: 'stilt', spot: [-7.5, -100.2], perch: 'ground', view: 326, y: EAST.W - 0.1,   /* 2026-11-11 夕陽潟湖沙洲邊的淺水（觀察屋 O9 前面） */ water: EAST.W, dist: 3.4, camH: 1.0, lookY: 0.4,
+    name: "高蹺鴴", sci: 'Himantopus himantopus', where: "夕陽潟湖沙洲邊的淺水",
     intro: "黑白分明的身體配上一雙比身體還長的粉紅色長腳，像踩著高蹺，所以叫高蹺鴴。嘴黑色細長、眼睛紅色。常一小群在淺水裡優雅地走來走去，低頭啄水面的小蟲。",
     facts: [
       "腳長佔了身高的六成，是腿長比例最誇張的鳥之一。",
@@ -544,8 +544,8 @@ const ALL = [
   },
   {
     // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [95.5, -67.2]）
-    id: 'harrier', spot: [63.6, -131.3], perch: 'ground', view: 271, dist: 3.4, camH: 1.0, lookY: 0.35,
-    name: "西方澤鵟", sci: 'Circus aeruginosus', where: "東部濕地的岸邊、上空",
+    id: 'harrier', spot: [69, -121], perch: 'ground', view: 66, y: EAST.W + 0.22,   /* 2026-11-11 沼澤的草島上（鶴的觀察台看過去） */ dist: 3.4, camH: 1.0, lookY: 0.35,
+    name: "西方澤鵟", sci: 'Circus aeruginosus', where: "翡翠沼澤的草島、蘆葦上空",
     intro: "中大型猛禽，雄鳥飛起來是黑、褐、白三色：翅膀前緣白、覆羽紅褐、飛羽灰白、翼尖黑。常貼著沼澤、草地低空盤旋，雙翼上揚成淺 V 字，低頭找獵物。",
     facts: [
       "在台灣是「迷鳥」，偶爾才有一隻迷路過來，賞鳥人會專程去看。",

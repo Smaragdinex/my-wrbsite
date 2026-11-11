@@ -3,7 +3,8 @@
 // 模型：tools/make-wetland-kit.py → models/props/wetland_kit.glb；木紋是 Poly Haven 風化木板掃描（drift_*.jpg），這裡褪成漂流木的銀灰色
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { EAST, alpineHeight, addCollider, alpineTrailDist } from './layout.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { EAST, alpineHeight, addCollider, alpineTrailDist, inLagoon, deckAt, deckFrame, walkAt } from './layout.js'
 import { sunDirU, duskLight, mistLevel, dayLight } from './structures.js'
 import { HIDES } from './east.js'
 
@@ -62,17 +63,21 @@ export function buildWetlandProps(scene, kit) {
     m.castShadow = true; m.receiveShadow = true; g.add(m); return m
   }
   // 枯樹：一棵站在主水域中間（從觀察屋、環湖步道都看得到它和倒影），兩棵在水邊（模型從水面下 0.6 m 開始，插進泥底）
-  for (const [name, x, z, rot, s] of [['snag_2', 57.5, -110.5, 0.7, 1], ['snag_0', 69.5, -121, 2.4, 0.95], ['snag_1', 46.5, -107.5, 4.1, 1.05]]) {
+  // 2026-11-11 兩座濕地：沼澤兩棵（水道旁、兩片鶴草甸中間），潟湖兩棵（夕陽從後面落下，剪影＋倒影）
+  for (const [name, x, z, rot, s] of [['snag_2', 51.5, -113, 0.7, 1], ['snag_0', 76, -115, 2.4, 0.95], ['snag_1', -21, -109.5, 4.1, 1.1], ['snag_2', -1, -121, 2.0, 0.85]]) {
     add(name, kit.snagM, x, z, bed(x, z) + 0.5, rot, s, [0.03, -0.04])
     addCollider(x, z, 0.4, bed(x, z) + 6)
   }
   // 舊木樁：一排從岸邊斜斜走進水裡（以前圍魚塭或棧道留下來的），高低不一、有的歪了
   for (let i = 0; i < 7; i++) {
-    const t = i / 6, x = 49 + t * 11.5 + Math.sin(i * 2.1) * 0.35, z = -125.5 + t * 7.5 + Math.cos(i * 1.7) * 0.3
+    const t = i / 6, x = 6 - t * 13 + Math.sin(i * 2.1) * 0.35, z = -99 - t * 9 + Math.cos(i * 1.7) * 0.3   // 2026-11-11 搬到潟湖：從東北泥灘斜斜走進水裡（夕陽觀景台看過去在逆光裡）
     add('post_' + (i % 4), kit.postM, x, z, bed(x, z) + 0.7, i * 1.3, 0.9 + 0.25 * Math.abs(Math.sin(i * 3.1)), [Math.sin(i * 1.9) * 0.08, Math.cos(i * 2.3) * 0.07])
   }
   // 睡蓮：主水域東北角、水道旁比較靜的水面（貼在水面上 4 mm）
-  for (const [name, x, z, rot] of [['lily_0', 66.5, -104.5, 0.4], ['lily_1', 70.2, -108.8, 2.2], ['lily_1', 64, -101.5, 4.4]]) add(name, kit.lilyM, x, z, W + 0.004, rot)
+  // 荷葉盆地（觀察屋 O8 正前方，水雉、紫水雞走在上面）：一整片睡蓮
+  { const LB = EAST.marsh.lily, r = mulberry(909)
+    for (let i = 0; i < 26; i++) { const a = r() * 6.283, d = Math.sqrt(r()) * 0.92, x = LB.x + Math.cos(a) * LB.rx * d, z = LB.z + Math.sin(a) * LB.rz * d; if (alpineHeight(x, z) > W - 0.08) continue; add(i % 3 ? 'lily_1' : 'lily_0', kit.lilyM, x, z, W + 0.004, r() * 6.283, 0.9 + r() * 0.5) } }
+  buildDecks(g, kit)
   buildReeds(g, kit)
   buildMist(g)
   scene.add(g)
@@ -87,15 +92,21 @@ function buildReeds(g, kit) {
   const ss = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
   const patch = (x, z) => 0.5 + 0.35 * Math.sin(x * 0.21 + Math.sin(z * 0.13) * 2) * Math.cos(z * 0.17 + 1.3) + 0.15 * Math.sin(x * 0.7 + z * 0.5)
   const push = (n, x, y, z, s, yaw, lean) => (L[n] ||= []).push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(lean[0], yaw, lean[1], 'YXZ')), new THREE.Vector3(s, s * (0.85 + rnd() * 0.3), s)))
+  const M = EAST.marsh, inE = (o, x, z, k = 1) => Math.hypot((x - o.x) / o.rx, (z - o.z) / o.rz) < k
+  // 紙莎草角落：一大叢一大叢（鯨頭鸛藏在裡面）
+  { const P = M.papyrus; for (let i = 0; i < 28; i++) { const a = rnd() * 6.283, d = Math.sqrt(rnd()), x = P.x + Math.cos(a) * P.rx * d, z = P.z + Math.sin(a) * P.rz * d; if (alpineTrailDist(x, z) < 2.2) continue; const v = rnd() < 0.5 ? 0 : 1, s = 0.85 + rnd() * 0.35; push('pap_' + v, x, Math.min(alpineHeight(x, z), W) - 0.02, z, s, rnd() * 6.28, [(rnd() - 0.5) * 0.1, (rnd() - 0.5) * 0.1]); (L['pap_' + v + '_plume'] ||= []).push(L['pap_' + v].at(-1)) } }
   let nr = 0, nc = 0
-  for (let k = 0; k < 60000 && (nr < 210 || nc < 110); k++) {
+  for (let k = 0; k < 90000 && (nr < 300 || nc < 150); k++) {
     const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0), y = alpineHeight(x, z), dep = W - y
-    if (dep > 0.25 || dep < -0.3 || alpineTrailDist(x, z) < 2.2 || fan(x, z)) continue
-    const p = patch(x, z) + 0.25 * ss(62, 44, x)
+    if (dep > 0.25 || dep < -0.3 || alpineTrailDist(x, z) < 2.2 || fan(x, z) || [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([a, b]) => walkAt(x + a, z + b) != null)) continue
+    const lag = inLagoon(x, z)
+    if (!lag && (inE(M.lily, x, z, 1.1) || inE(M.papyrus, x, z, 1.15) || M.meadows.some((o) => inE(o, x, z, 1.1)))) continue
+    if (lag && (z < -112 || rnd() < 0.7)) continue   // 潟湖：只有北岸、東北岸零星幾叢（夕陽從後面照的那一排）
+    const p = patch(x, z) + 0.15
     if (p < 0.62 || rnd() > p) continue
     const base = Math.min(y, W) - 0.02, lean = [(rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.08]
-    if (dep > 0.03 && dep < 0.22 && nc < 110 && rnd() < 0.4) { const v = rnd() < 0.5 ? 0 : 1, s = 0.85 + rnd() * 0.35; push('cat_' + v, x, base, z, s, rnd() * 6.28, lean); push('cat_' + v + '_head', x, base, z, s, 0, lean); L['cat_' + v + '_head'].pop(); L['cat_' + v + '_head'].push(L['cat_' + v].at(-1)); nc++ }
-    else if (nr < 210) { const v = Math.floor(rnd() * 3), s = 0.85 + rnd() * 0.3; push('reed_' + v, x, base, z, s, rnd() * 6.28, lean); (L['reed_' + v + '_plume'] ||= []).push(L['reed_' + v].at(-1)); nr++ }
+    if (!lag && dep > 0.03 && dep < 0.22 && nc < 150 && rnd() < 0.4) { const v = rnd() < 0.5 ? 0 : 1, s = 0.85 + rnd() * 0.35; push('cat_' + v, x, base, z, s, rnd() * 6.28, lean); push('cat_' + v + '_head', x, base, z, s, 0, lean); L['cat_' + v + '_head'].pop(); L['cat_' + v + '_head'].push(L['cat_' + v].at(-1)); nc++ }
+    else if (nr < 300) { const v = Math.floor(rnd() * 3), s = 0.85 + rnd() * 0.3; push('reed_' + v, x, base, z, s, rnd() * 6.28, lean); (L['reed_' + v + '_plume'] ||= []).push(L['reed_' + v].at(-1)); nr++ }
   }
   for (const [n, list] of Object.entries(L)) {
     if (!kit.geo[n] || !list.length) continue
@@ -103,6 +114,25 @@ function buildReeds(g, kit) {
     const im = new THREE.InstancedMesh(kit.geo[n], mat, list.length)
     list.forEach((m, i) => im.setMatrixAt(i, m)); im.castShadow = !n.endsWith('_plume'); im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
   }
+}
+// 觀景台（EAST.decks）：木板台面、底下的托梁和木樁、前面跟兩側 1.05 m 的欄杆（後面接步道，開著）
+function buildDecks(g, kit) {
+  const geos = []
+  const box = (w, h, d, lx, y, lz, F) => { const b = new THREE.BoxGeometry(w, h, d); b.translate(lx, y, lz); b.applyMatrix4(new THREE.Matrix4().makeRotationY(F.a)); b.translate(F.x, 0, F.z); geos.push(b.toNonIndexed()) }
+  for (const D of EAST.decks) {
+    const F = { ...deckFrame(D), x: D.x, z: D.z }, Y = deckAt(D.x, D.z), r = mulberry(D.x * 13)
+    for (let lz = -D.d / 2 + 0.08; lz < D.d / 2; lz += 0.165) box(D.w, 0.045, 0.15, (r() - 0.5) * 0.03, Y - 0.023, lz, F)   // 台面木板（橫的）
+    for (const lx of [-D.w / 2 + 0.1, -D.w / 6, D.w / 6, D.w / 2 - 0.1]) box(0.08, 0.2, D.d, lx, Y - 0.15, 0, F)            // 托梁
+    for (const lx of [-D.w / 2 + 0.1, 0, D.w / 2 - 0.1]) for (const lz of [-D.d / 2 + 0.1, 0, D.d / 2 - 0.1]) { const wx = D.x + lx * F.c + lz * F.s, wz = D.z - lx * F.s + lz * F.c, gy = Math.min(alpineHeight(wx, wz), EAST.W) - 0.4; box(0.16, Y - gy, 0.16, lx, (Y + gy) / 2 - 0.2, lz, F) }
+    // 欄杆：前面＋左右兩側
+    const rail = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 1.4)); for (let i = 0; i <= n; i++) box(0.09, 1.05, 0.09, x0 + (x1 - x0) * i / n, Y + 0.52, z0 + (z1 - z0) * i / n, F); const ang = Math.atan2(x1 - x0, z1 - z0); for (const [hh, th] of [[1.05, 0.07], [0.55, 0.05]]) { const b = new THREE.BoxGeometry(0.06, th, L); b.rotateY(ang); b.translate((x0 + x1) / 2, Y + hh, (z0 + z1) / 2); b.applyMatrix4(new THREE.Matrix4().makeRotationY(F.a)); b.translate(F.x, 0, F.z); geos.push(b.toNonIndexed()) } }
+    const hw = D.w / 2 - 0.05, hd = D.d / 2 - 0.05
+    rail(-hw, hd, hw, hd); rail(-hw, -hd + 0.6, -hw, hd); rail(hw, -hd + 0.6, hw, hd)
+    // 欄杆擋人：前緣、兩側一排碰撞圓
+    for (const [x0, z0, x1, z1] of [[-hw, hd, hw, hd], [-hw, -hd + 0.6, -hw, hd], [hw, -hd + 0.6, hw, hd]]) for (let t = 0; t <= 1.001; t += 0.12) { const lx = x0 + (x1 - x0) * t, lz = z0 + (z1 - z0) * t; addCollider(D.x + lx * F.c + lz * F.s, D.z - lx * F.s + lz * F.c, 0.12, Y + 1.1, Y - 0.5) }
+  }
+  if (!geos.length) return
+  const m = new THREE.Mesh(mergeGeometries(geos), kit.postM); m.castShadow = true; m.receiveShadow = true; g.add(m)
 }
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
 
@@ -121,7 +151,7 @@ function buildMist(g) {
   x.putImageData(img, 0, 0)
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace
   const W = EAST.W, warm = new THREE.Color().setRGB(0.75, 0.47, 0.35), cool = new THREE.Color().setRGB(0.4, 0.43, 0.48), tmp = new THREE.Vector3()
-  for (const [px, pz, w] of [[52, -110, 11], [63, -118, 9], [47, -122, 7], [70, -106, 8], [58, -100, 6], [41, -112, 8], [66, -127, 10]]) {
+  for (const [px, pz, w] of [[52, -110, 11], [63, -118, 9], [72, -103, 9], [72, -127, 9], [-18, -112, 12], [-4, -126, 10], [8, -108, 9], [-26, -124, 8]]) {   // 2026-11-11 兩座濕地都有（鶴草甸的晨霧、潟湖的夕陽薄霧）
     const m = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0, color: cool.clone() })
     const sp = new THREE.Sprite(m); sp.scale.set(w, w * 0.2, 1); sp.position.set(px, W + 0.55, pz); sp.renderOrder = 4
     sp.onBeforeRender = (renderer, scene, camera) => {
