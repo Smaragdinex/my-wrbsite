@@ -365,8 +365,8 @@ function buildInterior(lib, avoid = []) {
           #ifdef MIRROR
             // 2026-11-11 夕陽潟湖（x < 30）：鹹水的顏色——很淺的地方透出粉橘（鹽水裡的藻、像七股鹽田），往深一點是乳白帶綠的青綠色，深處藍綠
             float lagK = smoothstep(31.5, 28.5, vW.x);
-            vec3 lagCol = mix(vec3(0.30, 0.14, 0.12), vec3(0.11, 0.15, 0.14), smoothstep(0.3, 1.3, vDepth));
-            lagCol = mix(lagCol, vec3(0.03, 0.08, 0.085), smoothstep(1.4, 2.4, vDepth));
+            vec3 lagCol = mix(vec3(0.30, 0.14, 0.12), vec3(0.2, 0.15, 0.14), smoothstep(0.4, 1.6, vDepth));   // 深水道只比淺灘暗一點、偏灰玫瑰（以前一條硬邊的藍綠帶）
+            lagCol = mix(lagCol, vec3(0.08, 0.1, 0.105), smoothstep(1.7, 2.6, vDepth));
             col = mix(col, lagCol, lagK);
           #endif
         #endif

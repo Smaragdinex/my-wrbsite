@@ -100,7 +100,7 @@ export function buildEast({ avoid = [], lib = null } = {}) {
     const M = EAST.marsh, inE = (o, x, z, k = 1) => Math.hypot((x - o.x) / o.rx, (z - o.z) / o.rz) < k
     const islAt = (x, z) => EAST.islands.find((I) => { const cr = Math.cos(I.rot), sr = Math.sin(I.rot), dx = x - I.x, dz = z - I.z; return Math.hypot((dx * cr + dz * sr) / I.rx, (-dx * sr + dz * cr) / I.rz) < 1.15 })
     let nReed = 0, nSedge = 0, nSalt = 0, nCat = 0, nMead = 0, nSam = 0
-    for (let k = 0; k < 260000 && (nReed < 2600 || nSedge < 2600 || nSalt < 4000 || nMead < 2600 || nSam < 2400); k++) {
+    for (let k = 0; k < 420000 && (nReed < 3800 || nSedge < 3600 || nSalt < 5200 || nMead < 3400 || nSam < 3600); k++) {
       const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0)
       const sd = wetSD(x, z)
       if (sd > 14 || !ok(x, z)) continue
@@ -110,12 +110,12 @@ export function buildEast({ avoid = [], lib = null } = {}) {
         if (inE(M.lily, x, z, 1.05) || inE(M.papyrus, x, z, 1.1)) continue
         const md = M.meadows.find((o) => inE(o, x, z, 1.08))
         if (md) {   // 濕草甸：翠綠的矮濕草（0.15～0.4 m），一窪窪積水的地方稀一點
-          if (nMead < 2600 && rnd() < (dep > 0.02 ? 0.25 : 0.9)) { nMead++; c.setHSL(0.24 + rnd() * 0.05, 0.5, 0.2 + rnd() * 0.06); for (let j = 0; j < 9; j++) push('blade', x + (rnd() - 0.5) * 0.4, Math.min(y, W) - 0.02, z + (rnd() - 0.5) * 0.4, rnd() * TAU, c.clone().multiplyScalar(0.85 + rnd() * 0.3), 0.15 + rnd() * 0.25) }
+          if (nMead < 3400 && rnd() < (dep > 0.02 ? 0.25 : 0.9)) { nMead++; c.setHSL(0.24 + rnd() * 0.05, 0.5, 0.2 + rnd() * 0.06); for (let j = 0; j < 9; j++) push('blade', x + (rnd() - 0.5) * 0.4, Math.min(y, W) - 0.02, z + (rnd() - 0.5) * 0.4, rnd() * TAU, c.clone().multiplyScalar(0.85 + rnd() * 0.3), 0.15 + rnd() * 0.25) }
           continue
         }
       }
       // 香蒲：沼澤的淺水灣（水深 0.04～0.22），一叢叢；穗是深褐色的長條
-      if (!lag && !view && dep > 0.04 && dep < 0.22 && ss(0.55, 0.68, fbm2(x * 0.18 - 3, z * 0.18 + 11, 2)) > rnd() * 1.3 && nCat < 700) {
+      if (!lag && !view && dep > 0.04 && dep < 0.22 && ss(0.55, 0.68, fbm2(x * 0.18 - 3, z * 0.18 + 11, 2)) > rnd() * 1.3 && nCat < 950) {
         nCat++
         c.setHSL(0.19 + rnd() * 0.03, 0.42, 0.22 + rnd() * 0.05)
         const H = 1.2 + rnd() * 0.9, base = W - dep - 0.03
@@ -127,7 +127,7 @@ export function buildEast({ avoid = [], lib = null } = {}) {
       // 蘆葦：沼澤的水邊（水深 0.25 到岸上 1.5 m）一塊塊群落、草島上整片；潟湖只有北岸東岸零星幾叢
       const reedOK = dep < 0.25 && sd > -6 && sd < 1.5 && !view && (!I || I.veg)
       const pReed = !reedOK ? 0 : lag ? 0.35 * ss(0.62, 0.72, patch) * ss(-112, -98, z) : I ? 0.9 : Math.min(1, 0.3 + 0.75 * ss(0.5, 0.64, patch))
-      if (rnd() < pReed && nReed < 2600) {
+      if (rnd() < pReed && nReed < 3800) {
         nReed++
         const ns = 3 + Math.floor(rnd() * 4), H = 1.8 + rnd() * 0.8
         c.setHSL(0.2 + rnd() * 0.04, 0.4, 0.26 + rnd() * 0.06)
@@ -141,14 +141,14 @@ export function buildEast({ avoid = [], lib = null } = {}) {
         continue
       }
       // 潟湖：海蓬子（紅橘、肉質短莖 8～20 cm）——水線上下一圈、沙洲邊緣
-      if (lag && dep < 0.06 && (sd > -1 && sd < 3.5 || (I && !I.veg)) && nSam < 2400 && rnd() < 0.8 * (0.4 + ss(0.35, 0.6, patch))) {
+      if (lag && dep < 0.06 && (sd > -1 && sd < 3.5 || (I && !I.veg)) && nSam < 3600 && rnd() < 0.8 * (0.4 + ss(0.35, 0.6, patch))) {
         nSam++
         c.setHSL(0.0 + rnd() * 0.05, 0.55, 0.24 + rnd() * 0.08); if (rnd() < 0.3) c.setHSL(0.12, 0.5, 0.3)
         for (let j = 0; j < 8; j++) push('low', x + (rnd() - 0.5) * 0.45, y - 0.01, z + (rnd() - 0.5) * 0.45, rnd() * TAU, c.clone().multiplyScalar(0.85 + rnd() * 0.3), 0.08 + rnd() * 0.12)
         continue
       }
       // 莎草：沼澤水邊（水深 0.15 到岸上 2.5 m）
-      if (!lag && dep < 0.15 && sd > -1.5 && sd < 2.5 && rnd() < (view ? 0.2 : 0.75) * (0.3 + ss(0.4, 0.6, patch)) && nSedge < 2600) {
+      if (!lag && dep < 0.15 && sd > -1.5 && sd < 2.5 && rnd() < (view ? 0.2 : 0.75) * (0.3 + ss(0.4, 0.6, patch)) && nSedge < 3600) {
         nSedge++
         c.setHSL(0.24 + rnd() * 0.04, 0.42, 0.18 + rnd() * 0.06)
         const H = 0.4 + rnd() * 0.35
@@ -156,7 +156,7 @@ export function buildEast({ avoid = [], lib = null } = {}) {
         continue
       }
       // 岸上：沼澤是青綠矮草、潟湖是金黃的鹽地矮草
-      if (sd > 1.5 && nSalt < 4000 && rnd() < 0.55) {
+      if (sd > 1.5 && nSalt < 5200 && rnd() < 0.55) {
         nSalt++
         if (lag) c.setHSL(0.11 + rnd() * 0.04, 0.45, 0.3 + rnd() * 0.08); else c.setHSL(0.17 + rnd() * 0.05, 0.4, 0.24 + rnd() * 0.08)
         for (let j = 0; j < 6; j++) push('low', x + (rnd() - 0.5) * 0.4, y - 0.01, z + (rnd() - 0.5) * 0.4, rnd() * TAU, c, 0.12 + rnd() * 0.2)

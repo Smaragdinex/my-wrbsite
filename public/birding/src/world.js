@@ -280,7 +280,6 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
 
   const cloudSea = createCloudSea(scene, { sun })   // 山區下面的雲海（爬到雲層上面才看得到）
-  if (walkRoot.userData.lamps && flora.lamps) flora.lamps.push(...walkRoot.userData.lamps)   // 2026-11-11 濕地木棧道的矮燈：夜裡鏡頭附近幾盞有真的光
   const time = night ? buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera }) : null
   const weather = createWeather({ scene, camera, sun, hemi, renderer, time })   // 天氣：預設晴天、不自己變；遊戲（game/main.js）打開自動換
 

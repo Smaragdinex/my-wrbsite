@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { EAST, alpineHeight, addCollider, alpineTrailDist, inLagoon, deckAt, deckFrame, walkAt } from './layout.js'
 import { sunDirU, duskLight, mistLevel, dayLight } from './structures.js'
 import { HIDES } from './east.js'
+import { lampLit } from './walkway.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 
@@ -51,7 +52,8 @@ export async function loadWetlandKit() {
     m.customProgramCacheKey = () => 'backlit' + k1 + k2
     return m
   }
-  return { geo, leafM: backlit(1.4, 0.25, 1.15), plumeM: backlit(4.5, 0.8, 1.25), headM: backlit(0.6, 0.1, 1), snagM: drift(1.65, [1, 0.98, 0.95]), postM: drift(1.05, [1, 0.92, 0.82]), lilyM: new THREE.MeshStandardMaterial({ vertexColors: true, color: new THREE.Color().setScalar(1.8), roughness: 0.42, side: THREE.DoubleSide }) }
+  const deckM = lampLit(drift(1.05, [1, 0.92, 0.82]))   // 觀景台的木頭：吃得到棧道矮燈的光
+  return { geo, deckM, leafM: backlit(1.4, 0.25, 1.15), plumeM: backlit(4.5, 0.8, 1.25), headM: backlit(0.6, 0.1, 1), snagM: drift(1.65, [1, 0.98, 0.95]), postM: drift(1.05, [1, 0.92, 0.82]), lilyM: new THREE.MeshStandardMaterial({ vertexColors: true, color: new THREE.Color().setScalar(1.8), roughness: 0.42, side: THREE.DoubleSide }) }
 }
 
 export function buildWetlandProps(scene, kit) {
@@ -64,7 +66,7 @@ export function buildWetlandProps(scene, kit) {
   }
   // 枯樹：一棵站在主水域中間（從觀察屋、環湖步道都看得到它和倒影），兩棵在水邊（模型從水面下 0.6 m 開始，插進泥底）
   // 2026-11-11 兩座濕地：沼澤兩棵（水道旁、兩片鶴草甸中間），潟湖兩棵（夕陽從後面落下，剪影＋倒影）
-  for (const [name, x, z, rot, s] of [['snag_2', 51.5, -113, 0.7, 1], ['snag_0', 76, -115, 2.4, 0.95], ['snag_1', -21, -109.5, 4.1, 1.1], ['snag_2', -1, -121, 2.0, 0.85]]) {
+  for (const [name, x, z, rot, s] of [['snag_2', 51.5, -113, 0.7, 1], ['snag_0', 76, -115, 2.4, 0.95], ['snag_1', -21, -109.5, 4.1, 1.1], ['snag_2', -1, -121, 2.0, 0.85], ['snag_0', -40, -138, 1.1, 1.05], ['snag_1', 58, -149, 3.0, 1]]) {
     add(name, kit.snagM, x, z, bed(x, z) + 0.5, rot, s, [0.03, -0.04])
     addCollider(x, z, 0.4, bed(x, z) + 6)
   }
@@ -96,7 +98,7 @@ function buildReeds(g, kit) {
   // 紙莎草角落：一大叢一大叢（鯨頭鸛藏在裡面）
   { const P = M.papyrus; for (let i = 0; i < 28; i++) { const a = rnd() * 6.283, d = Math.sqrt(rnd()), x = P.x + Math.cos(a) * P.rx * d, z = P.z + Math.sin(a) * P.rz * d; if (alpineTrailDist(x, z) < 2.2) continue; const v = rnd() < 0.5 ? 0 : 1, s = 0.85 + rnd() * 0.35; push('pap_' + v, x, Math.min(alpineHeight(x, z), W) - 0.02, z, s, rnd() * 6.28, [(rnd() - 0.5) * 0.1, (rnd() - 0.5) * 0.1]); (L['pap_' + v + '_plume'] ||= []).push(L['pap_' + v].at(-1)) } }
   let nr = 0, nc = 0
-  for (let k = 0; k < 90000 && (nr < 300 || nc < 150); k++) {
+  for (let k = 0; k < 140000 && (nr < 420 || nc < 210); k++) {
     const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0), y = alpineHeight(x, z), dep = W - y
     if (dep > 0.25 || dep < -0.3 || alpineTrailDist(x, z) < 2.2 || fan(x, z) || [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([a, b]) => walkAt(x + a, z + b) != null)) continue
     const lag = inLagoon(x, z)
@@ -105,8 +107,8 @@ function buildReeds(g, kit) {
     const p = patch(x, z) + 0.15
     if (p < 0.62 || rnd() > p) continue
     const base = Math.min(y, W) - 0.02, lean = [(rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.08]
-    if (!lag && dep > 0.03 && dep < 0.22 && nc < 150 && rnd() < 0.4) { const v = rnd() < 0.5 ? 0 : 1, s = 0.85 + rnd() * 0.35; push('cat_' + v, x, base, z, s, rnd() * 6.28, lean); push('cat_' + v + '_head', x, base, z, s, 0, lean); L['cat_' + v + '_head'].pop(); L['cat_' + v + '_head'].push(L['cat_' + v].at(-1)); nc++ }
-    else if (nr < 300) { const v = Math.floor(rnd() * 3), s = 0.85 + rnd() * 0.3; push('reed_' + v, x, base, z, s, rnd() * 6.28, lean); (L['reed_' + v + '_plume'] ||= []).push(L['reed_' + v].at(-1)); nr++ }
+    if (!lag && dep > 0.03 && dep < 0.22 && nc < 210 && rnd() < 0.4) { const v = rnd() < 0.5 ? 0 : 1, s = 0.85 + rnd() * 0.35; push('cat_' + v, x, base, z, s, rnd() * 6.28, lean); push('cat_' + v + '_head', x, base, z, s, 0, lean); L['cat_' + v + '_head'].pop(); L['cat_' + v + '_head'].push(L['cat_' + v].at(-1)); nc++ }
+    else if (nr < 420) { const v = Math.floor(rnd() * 3), s = 0.85 + rnd() * 0.3; push('reed_' + v, x, base, z, s, rnd() * 6.28, lean); (L['reed_' + v + '_plume'] ||= []).push(L['reed_' + v].at(-1)); nr++ }
   }
   for (const [n, list] of Object.entries(L)) {
     if (!kit.geo[n] || !list.length) continue
@@ -136,7 +138,7 @@ function buildDecks(g, kit) {
     for (const [x0, z0, x1, z1] of [[-hw, hd, hw, hd], [-hw, -hd + back, -hw, hd], [hw, -hd + back, hw, hd]]) for (let t = 0; t <= 1.001; t += 0.12) { const lx = x0 + (x1 - x0) * t, lz = z0 + (z1 - z0) * t; addCollider(D.x + lx * F.c + lz * F.s, D.z - lx * F.s + lz * F.c, 0.12, Y + 1.1, Y - 0.5) }
   }
   if (!geos.length) return
-  const m = new THREE.Mesh(mergeGeometries(geos), kit.postM); m.castShadow = true; m.receiveShadow = true; g.add(m)
+  const m = new THREE.Mesh(mergeGeometries(geos), kit.deckM); m.castShadow = true; m.receiveShadow = true; g.add(m)
 }
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
 
@@ -155,7 +157,7 @@ function buildMist(g) {
   x.putImageData(img, 0, 0)
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace
   const W = EAST.W, warm = new THREE.Color().setRGB(0.75, 0.47, 0.35), cool = new THREE.Color().setRGB(0.4, 0.43, 0.48), tmp = new THREE.Vector3()
-  for (const [px, pz, w] of [[52, -110, 11], [63, -118, 9], [72, -103, 9], [72, -127, 9], [-18, -112, 12], [-4, -126, 10], [8, -108, 9], [-26, -124, 8]]) {   // 2026-11-11 兩座濕地都有（鶴草甸的晨霧、潟湖的夕陽薄霧）
+  for (const [px, pz, w] of [[52, -110, 11], [63, -118, 9], [72, -103, 9], [72, -127, 9], [-18, -112, 12], [-4, -126, 10], [8, -108, 9], [-26, -124, 8], [-40, -140, 12], [-10, -150, 10], [66, -148, 10], [50, -140, 8]]) {   // 2026-11-11 兩座濕地都有（鶴草甸的晨霧、潟湖的夕陽薄霧）
     const m = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0, color: cool.clone() })
     const sp = new THREE.Sprite(m); sp.scale.set(w, w * 0.2, 1); sp.position.set(px, W + 0.55, pz); sp.renderOrder = 4
     sp.onBeforeRender = (renderer, scene, camera) => {

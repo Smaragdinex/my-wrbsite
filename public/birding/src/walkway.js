@@ -12,6 +12,43 @@ import { dappled } from './alpine.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 
+// 2026-11-11 使用者：木棧道的燈光要更好、更寫實。以前借公園夜燈的白色點光源：木板上一圈圈過曝的白光、邊緣硬。
+// 改成在木頭材質裡自己算每盞矮燈的光：琥珀色（2200 K）、照度照距離平方衰減（近的亮、慢慢淡到 4 m 外）、燈上面有遮罩所以只往下往外照、
+// 木板的法線貼圖吃得到光（木紋、板縫有明暗），欄杆柱朝燈的那面亮、背面暗。不加真的光源，全公園其他材質不受影響
+const LAMP_MAX = 40
+export const LAMP_U = { uLampP: { value: Array.from({ length: LAMP_MAX }, () => new THREE.Vector3(0, -999, 0)) }, uLampOn: { value: 0 } }
+export function lampLit(mat) {
+  const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey?.bind(mat)
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r)
+    sh.uniforms.uLampP = LAMP_U.uLampP; sh.uniforms.uLampOn = LAMP_U.uLampOn
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLampW;').replace('#include <project_vertex>', `#include <project_vertex>
+      { vec4 lw = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          lw = instanceMatrix * lw;
+        #endif
+        vLampW = (modelMatrix * lw).xyz; }`)
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      varying vec3 vLampW; uniform vec3 uLampP[${LAMP_MAX}]; uniform float uLampOn;`).replace('#include <opaque_fragment>', `
+      if (uLampOn > 0.003) {
+        float lampE = 0.0;
+        for (int i = 0; i < ${LAMP_MAX}; i++) {
+          vec3 d = uLampP[i] - vLampW; float r2 = dot(d, d);
+          if (r2 > 25.0) continue;
+          float r = sqrt(r2); vec3 l = (viewMatrix * vec4(d / r, 0.0)).xyz;
+          float nl = max(dot(normal, l), 0.0) * 0.85 + 0.15;
+          float att = 0.16 / (0.05 + r2) * smoothstep(5.0, 1.2, r);
+          float shield = smoothstep(-0.12, 0.2, d.y);                       // 燈罩：燈的高度以上照不到
+          lampE += nl * att * shield;
+        }
+        lampE = lampE / (1.0 + 0.35 * lampE);                               // 燈正下方不要過曝成一片白
+        outgoingLight += diffuseColor.rgb * vec3(1.0, 0.5, 0.2) * lampE * uLampOn * 5.5;
+      }
+      #include <opaque_fragment>`)
+  }
+  mat.customProgramCacheKey = () => (prevKey?.() ?? '') + 'lampLit'
+  return mat
+}
 export async function loadWalkwayKit() {
   const gl = await new GLTFLoader().loadAsync(`models/props/boardwalk_kit.glb?v=${VER}`)
   const geo = {}
@@ -22,7 +59,7 @@ export async function loadWalkwayKit() {
   const orm = tex('orm', false)
   const wood = new THREE.MeshStandardMaterial({ map: tex('col', true), normalMap: tex('nor', false), normalScale: new THREE.Vector2(1, -1), aoMap: orm, aoMapIntensity: 0.65, roughnessMap: orm, roughness: 1, metalness: 0 })
   wood.color.setScalar(1.3)   // 參考圖（ChatGPT 生的）木頭是偏淺的灰褐色；烤出來的底色在林下太暗
-  dappled(wood)   // 樹冠縫隙的光斑也落在木板上
+  dappled(wood); lampLit(wood)   // 樹冠縫隙的光斑也落在木板上
   const steel = new THREE.MeshStandardMaterial({ color: 0x2f4a3c, roughness: 0.55, metalness: 0.5 })   // 跟橋塔同一個深綠
   const galv = new THREE.MeshStandardMaterial({ color: 0xa3a8a5, roughness: 0.55, metalness: 0.55 })
   return { geo, wood, steel, galv }
@@ -243,10 +280,20 @@ export function buildWalkways(scene, kit) {
       gs.push(new THREE.BoxGeometry(0.07, 0.07, 0.012).translate(0, 0.0, -0.016).applyMatrix4(M))
     }
     const hm = new THREE.Mesh(mergeGeometries(hs), new THREE.MeshStandardMaterial({ color: 0x23201c, roughness: 0.6, metalness: 0.4 }))
-    const gm = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: new THREE.Color().setRGB(1, 0.45, 0.16), emissiveIntensity: 0, roughness: 0.5 })
-    gm.userData.lamp = [0, 3.2]
-    root.add(hm, new THREE.Mesh(mergeGeometries(gs), gm))
-    root.userData.lamps = lampAt.map(([x, y, z, nx, nz]) => new THREE.Vector3(x - nx * 0.35, y + 0.1, z - nz * 0.35))
+    const gm = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: new THREE.Color().setRGB(1, 0.42, 0.13), emissiveIntensity: 0, roughness: 0.5 })
+    gm.userData.lamp = [0, 2.4]
+    const glow = new THREE.Mesh(mergeGeometries(gs), gm)
+    // 每盞燈一小團柔和的光暈（加色、不寫深度；水面的倒影裡也看得到一點一點的燈）
+    const c = document.createElement('canvas'); c.width = c.height = 64
+    { const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,190,110,1)'); gr.addColorStop(0.25, 'rgba(255,140,60,0.45)'); gr.addColorStop(1, 'rgba(255,110,40,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64) }
+    const ht = new THREE.CanvasTexture(c); ht.colorSpace = THREE.SRGBColorSpace
+    const hp = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lampAt.flatMap(([x, y, z, nx, nz]) => [x - nx * 0.05, y, z - nz * 0.05]), 3)),
+      new THREE.PointsMaterial({ map: ht, size: 0.55, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }))
+    hp.frustumCulled = false
+    lampAt.slice(0, LAMP_MAX).forEach(([x, y, z, nx, nz], i) => LAMP_U.uLampP.value[i].set(x - nx * 0.06, y - 0.02, z - nz * 0.06))
+    glow.onBeforeRender = () => { const k = gm.emissiveIntensity / 2.4; LAMP_U.uLampOn.value = k; hp.material.opacity = 0.75 * k; hp.visible = k > 0.01 }
+    glow.frustumCulled = false
+    root.add(hm, glow, hp)
   }
   scene.add(root)
   return root
