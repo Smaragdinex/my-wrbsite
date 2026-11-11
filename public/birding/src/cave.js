@@ -4,7 +4,8 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { ALP_SPURS, YOSE, alpineHeight, addCollider } from './layout.js'
-import { mulberry32 } from './noise.js'
+import { mulberry32, fbm2 } from './noise.js'
+import { windUniforms } from './wind.js'
 import { scatter } from './plants.js'
 import { mossRockMaterial } from './yosemite-top.js'
 
@@ -101,8 +102,89 @@ export function buildCave(scene, kit, sum, lib) {
     for (const [n, list] of Object.entries(fl)) if (ferns.length) scatter(g, lib[n], list, { cast: true })
   }
 
+  // 5) 岩窟的後壁和天花板（2026-11-11 使用者：先重做岩窟的天花板和後壁）：以前是岩壁網格凹進去的一片平滑深色面。
+  // 這裡照同一個斷面（layout 的 caveA／caveD／caveH）另外鋪一層細的岩面（x 每 0.2 m、沿斷面 100 排，約 2.4 萬個三角形），只往洞裡凸（0.05～1.6 m）蓋在舊的前面：
+  //   後壁：一層層水平的岩層（厚 0.4～2 m，一半凸出成岩棚 0.2～0.9 m）、每 3～5 m 一道直的節理縫、一塊塊凸出或崩掉的岩塊；
+  //   天花板：一片片剝落的凹窩和垂下來的岩塊；滲水的黑色水痕從天花板的縫往下流；岩棚上、牆腳、靠洞口有光的地方長青苔
+  {
+    const C = YOSE.cave, hsh = (n) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v) }
+    const sst = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
+    const NXc = Math.round((C.x1 - C.x0) / 0.2), NW = 44, NC = 56, NS = NW + NC, pos = new Float32Array((NXc + 1) * (NS + 1) * 3), meta = []
+    const BED = [-10]; while (BED.at(-1) < 80) BED.push(BED.at(-1) + 0.4 + 1.6 * Math.pow(hsh(BED.length * 1.91), 1.3))
+    const JX = [C.x0]; while (JX.at(-1) < C.x1) JX.push(JX.at(-1) + 3 + 2.2 * hsh(JX.length * 2.7 + 1))
+    // 牆腳線（base）是 0.25 m 一階、地面高度每一欄都不同：直接用會讓整面牆變成一條條直的稜（第一版）→ 先沿 x 平滑 ±2 m
+    const ZB = [], G0 = []
+    for (let i = 0; i <= NXc; i++) { const x = C.x0 + (C.x1 - C.x0) * i / NXc; let a = 0, b = 0, n = 0; for (let k = -10; k <= 10; k++) { const xx = x + k * 0.2, z = YOSE.base(xx); a += z; b += alpineHeight(xx, z); n++ } ZB.push(a / n); G0.push(b / n) }
+    for (let i = 0; i <= NXc; i++) {
+      const x = C.x0 + (C.x1 - C.x0) * i / NXc, A = YOSE.caveA(x), Dp = YOSE.caveD(x), Ho = YOSE.caveH(x), zb = ZB[i], g0 = G0[i]
+      const fallK = Math.exp(-(((x - YOSE.fall.x) / 8) ** 2)), lip = -1.2 * A * (1 - 0.8 * fallK), edge = sst(0.12, 0.45, A)
+      for (let j = 0; j <= NS; j++) {
+        let d, y, td, ty, ceil = 0, u
+        if (j <= NW) { const f = j / NW; d = Dp + 0.6 * A * Math.sin(f * Math.PI); y = g0 - 1.5 + (Ho * 0.5 + 1.5) * f; td = 0.6 * A * Math.PI * Math.cos(f * Math.PI); ty = Ho * 0.5 + 1.5; u = y }
+        else { const th = (j - NW) / NC * Math.PI / 2 * 0.93; d = lip + (Dp - lip) * Math.cos(th); y = g0 + Ho * 0.5 + Ho * 0.5 * Math.sin(th); td = -(Dp - lip) * Math.sin(th); ty = Ho * 0.5 * Math.cos(th); ceil = sst(0, 0.5, th); u = g0 + Ho * 0.5 + th * Ho * 0.6 }
+        const tl = Math.hypot(td, ty) || 1, nd = -ty / tl, ny = td / tl      // 朝洞裡的法線（斷面平面裡）
+        // 岩層
+        const yy = y + 0.9 * (fbm2(x * 0.05, 3.1, 2) - 0.5) * 2 + 0.06 * (x - 195)
+        let lo = 0, hi = BED.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (BED[m] <= yy) lo = m; else hi = m }
+        const th2 = BED[hi] - BED[lo], f2 = (yy - BED[lo]) / th2, shelf = hsh(lo * 3.7) > 0.5 ? 0.2 + 0.7 * hsh(lo * 5.3 + 2) : 0.05 * hsh(lo)
+        let off = shelf * sst(0, 0.12, f2) * (1 - 0.5 * sst(0.8, 1, f2)) * (1 - ceil)
+        // 岩塊：2.4 m 一格
+        const ci = Math.floor(x / 2.4), cj = Math.floor(u / 2.4), bx = (ci + 0.25 + 0.5 * hsh(ci * 7 + cj * 13)) * 2.4, bu = (cj + 0.25 + 0.5 * hsh(ci * 11 + cj * 3)) * 2.4, bs = 0.35 + 0.6 * hsh(ci * 5 + cj * 17)
+        const inB = sst(bs + 0.18, bs, Math.max(Math.abs(x - bx), Math.abs(u - bu)))
+        off += inB * (hsh(ci * 19 + cj * 2.3) > 0.45 ? 0.38 + 0.3 * ceil : -0.1)
+        off += 0.6 * fbm2(x * 0.3, u * 0.3, 3) + 0.34 * fbm2(x * 0.9 + 9, u * 0.9, 3) + 0.12 * fbm2(x * 2.2, u * 2.2 + 4, 2) + 0.5 * ceil * Math.max(0, fbm2(x * 0.22 + 5, d * 0.3, 3) - 0.4)
+        let joint = 0; for (let k = 0; k < JX.length; k++) { const jx = JX[k] + 0.5 * Math.sin(u * 0.2 + k * 1.7); joint = Math.max(joint, Math.exp(-(((x - jx) / 0.3) ** 2))) }
+        off -= 0.32 * joint * (1 - 0.5 * ceil)
+        off = (1.25 + Math.max(0, off)) * edge * (1 - 0.6 * sst(NS - 8, NS, j))   // 舊岩面的岩層有的往洞裡凸出一公尺多：整層往前墊 1.25 m 才蓋得住
+        const k3 = (i * (NS + 1) + j) * 3
+        pos[k3] = x; pos[k3 + 1] = y + ny * off; pos[k3 + 2] = zb + d + nd * off
+        meta.push({ x, y, f2, shelf, ceil, joint, hy: (y - g0) / Math.max(1, Ho), tone: 0.8 + 0.35 * hsh(lo * 3 + 1), open: 1 - Math.min(1, Math.max(0, (d - lip) / Math.max(1, Dp - lip))), fallK })
+      }
+    }
+    const idx = []
+    for (let i = 0; i < NXc; i++) for (let j = 0; j < NS; j++) { const a = i * (NS + 1) + j, b = a + NS + 1; idx.push(a, a + 1, b, a + 1, b + 1, b) }
+    const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); cg.setIndex(idx); cg.computeVertexNormals()
+    // 面要朝洞口（-z／往下）：檢查一個後壁中間的法線，反了就整個翻面
+    { const nrm = cg.attributes.normal, mid = Math.round(NXc / 2) * (NS + 1) + 10; if (nrm.getZ(mid) > 0) { for (let t = 0; t < idx.length; t += 3) { const q = idx[t + 1]; idx[t + 1] = idx[t + 2]; idx[t + 2] = q } cg.setIndex(idx); cg.computeVertexNormals() } }
+    const nrm = cg.attributes.normal, col = new Float32Array(meta.length * 3), c = new THREE.Color()
+    const dry = new THREE.Color(0.27, 0.23, 0.18), dark = new THREE.Color(0.06, 0.057, 0.052), mossD = new THREE.Color(0.08, 0.2, 0.035), mossL = new THREE.Color(0.26, 0.42, 0.08)
+    meta.forEach((m, v) => {
+      const ny = nrm.getY(v), n1 = fbm2(m.x * 0.5, m.y * 0.5, 3), n2 = fbm2(m.x * 2.1 + 7, m.y * 2.1, 2)
+      c.copy(dry).multiplyScalar(m.tone * (0.8 + 0.35 * n1))
+      // 滲水的黑水痕：沿直線往下，天花板的縫和節理底下最多；越靠瀑布越濕
+      const streak = sst(0.5, 0.68, fbm2(m.x * 0.6 + 3, m.y * 0.05, 3)) * (0.6 + 0.4 * m.fallK) + 0.6 * m.joint + 0.45 * m.ceil
+      c.lerp(dark, Math.min(0.85, streak * 0.8 + 0.25 * m.fallK))
+      // 青苔：岩棚頂面、朝上的面、牆腳 3 m、洞口有光的那一帶；天花板深處不長
+      const up = sst(0.25, 0.7, ny), low = sst(0.22, 0.02, m.hy), lit = sst(0.35, 0.9, m.open)
+      const patch = sst(0.46, 0.62, fbm2(m.x * 0.22 + 11, m.y * 0.22, 3)) * (1 - 0.75 * m.ceil)   // 牆面上一大片一大片的苔（潮濕的岩壁）
+      const mo = Math.min(1, (up * 1.0 + low * 0.9 + lit * 0.5 * (1 - m.ceil * 0.6) + patch * 0.8) * sst(0.25, 0.55, n1 + 0.25 * n2 + 0.2 * up))
+      c.lerp(mossD.clone().lerp(mossL, n2), mo * 0.9)
+      col.set([c.r, c.g, c.b], v * 3)
+    })
+    cg.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    const wallM = mossRockMaterial(); wallM.roughness = 0.5; wallM.side = THREE.DoubleSide
+    const shell = new THREE.Mesh(cg, wallM); shell.name = 'caveShell'; shell.receiveShadow = true; shell.castShadow = false; g.add(shell)
+    // 滴水：從天花板的縫一滴滴落下來（沿洞口那一帶多），落到地上重來
+    {
+      const N = 140, P0 = new Float32Array(N * 3), S0 = new Float32Array(N * 3)
+      for (let k = 0; k < N; k++) {
+        const x = C.x0 + 4 + rnd() * (C.x1 - C.x0 - 8), zb = YOSE.base(x), d = -1 + rnd() * (YOSE.caveD(x) * 0.8), g0 = alpineHeight(x, zb + d)
+        const th = Math.acos(Math.min(1, Math.max(0, (d + 1.2) / (YOSE.caveD(x) + 1.2)))), top = alpineHeight(x, zb) + YOSE.caveH(x) * (0.5 + 0.5 * Math.sin(th)) - 0.4
+        P0.set([x, top, zb + d], k * 3); S0.set([top - g0, rnd() * 10, 0.6 + rnd() * 0.5], k * 3)
+      }
+      const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(P0, 3)); dg.setAttribute('aS', new THREE.BufferAttribute(S0, 3))
+      const dm = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uTime: windUniforms.uTime },
+        vertexShader: `attribute vec3 aS; uniform float uTime; varying float vA;
+          void main() { float T = 1.2 + sqrt(2.0 * aS.x / 9.8); float t = mod(uTime * aS.z + aS.y, T + 2.5); float fall = min(aS.x, 4.9 * max(0.0, t - 1.2) * max(0.0, t - 1.2));
+            vA = t < 1.2 ? t / 1.2 * 0.5 : (fall < aS.x ? 1.0 : 0.0); vec3 p = position; p.y -= fall;
+            vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = clamp(34.0 / -mv.z, 1.0, 5.0); }`,
+        fragmentShader: `varying float vA; void main() { vec2 q = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.1, length(q * vec2(1.6, 0.9))); gl_FragColor = vec4(0.82, 0.9, 0.95, a * vA * 0.75); }` })
+      const drops = new THREE.Points(dg, dm); drops.frustumCulled = false; g.add(drops)
+    }
+  }
   // 4) 岩簷底下的補光：水簾把天光漫射進來（以前整個岩窟是黑的，看不到岩壁）。不投影
-  { const [x, z] = [ex - 3.5, ez + 1.2], lt = new THREE.PointLight(0xb4cbd8, 34, 19, 1.7); lt.position.set(x, alpineHeight(x, z) + 3.2, z); g.add(lt)
-    const l2 = new THREE.PointLight(0xb4cbd8, 20, 15, 1.7), [x2, z2, ] = line[Math.floor(line.length * 0.55)]; l2.position.set(x2, alpineHeight(x2, z2) + 2.6, z2 + 1); g.add(l2) }
+  { const [x, z] = [ex - 3.5, ez + 1.2], lt = new THREE.PointLight(0xb4cbd8, 20, 19, 1.7); lt.position.set(x, alpineHeight(x, z) + 3.2, z); g.add(lt)
+    const l3 = new THREE.PointLight(0xb4cbd8, 26, 30, 1.6); l3.position.set(ex - 4, alpineHeight(ex - 4, ez) + 9, ez + 0.5); g.add(l3)   // 高一點的一盞：照到後壁上半和天花板
+    const l2 = new THREE.PointLight(0xb4cbd8, 12, 15, 1.7), [x2, z2, ] = line[Math.floor(line.length * 0.55)]; l2.position.set(x2, alpineHeight(x2, z2) + 2.6, z2 + 1); g.add(l2) }
   return g
 }
