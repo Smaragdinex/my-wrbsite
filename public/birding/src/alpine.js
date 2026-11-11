@@ -875,28 +875,7 @@ function buildInterior(lib, avoid = []) {
     const woods = [], steels = [], cables = [], concs = [], col = new THREE.Color(), rnd2 = mulberry32(42)
     const box = (list, w, h, d, p, ry = yaw, rx = 0) => list.push(new THREE.BoxGeometry(w, h, d).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, ry, 0, 'YXZ')).setPosition(p)))
     const tube = (list, pts, r, seg = 64) => list.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), seg, r, 6))
-    // 橫樑（鋼）每 0.6 公尺一根；縱向木板一段一段鋪在橫樑上
-    const NB = Math.round(len / 0.6)
-    for (let i = 0; i <= NB; i++) {
-      const t = i / NB, p = deck(t).add(V(0, -0.09, 0))
-      box(steels, HW * 2 + 0.12, 0.08, 0.1, p)
-    }
-    const NPL = 13, plW = (HW * 2 - 0.08) / NPL
-    for (let i = 0; i < NB; i++) {
-      const t0 = i / NB, t1 = (i + 1) / NB, p0 = deck(t0), p1 = deck(t1), mid = p0.clone().lerp(p1, 0.5), pitch = Math.atan2(p1.y - p0.y, Math.hypot(p1.x - p0.x, p1.z - p0.z))
-      for (let k = 0; k < NPL; k++) {
-        const off = (k - (NPL - 1) / 2) * plW, q = mid.clone().addScaledVector(side, off).add(V(0, -0.025 + (rnd2() - 0.5) * 0.008, 0))
-        const geo = new THREE.BoxGeometry(plW - 0.025, 0.04, len / NB + 0.01)
-        geo.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(-pitch, yaw, 0, 'YXZ')).setPosition(q))
-        // 每塊板顏色不一樣（舊一點的偏灰）
-        col.setHSL(0.07 + rnd2() * 0.03, 0.3 + rnd2() * 0.15, 0.55 + rnd2() * 0.3); if (rnd2() < 0.2) col.lerp(new THREE.Color(0.5, 0.5, 0.48), 0.5)
-        const c = []; for (let v = 0; v < geo.attributes.position.count; v++) c.push(col.r, col.g, col.b)
-        geo.setAttribute('color', new THREE.Float32BufferAttribute(c, 3))
-        woods.push(geo)
-      }
-    }
-    // 兩邊的邊樑（鋼，沿著橋面）
-    for (const s of [-1, 1]) { const pts = []; for (let i = 0; i <= 24; i++) pts.push(deck(i / 24).addScaledVector(side, s * (HW + 0.04)).add(V(0, -0.06, 0))); tube(steels, pts, 0.035) }
+    // 2026-11-11 橋面（木板、鋼橫樑、邊樑、踢腳板）改用 Blender 做的零件，在 walkway.js 擺
     // 橋塔與橋台（2026-11-09 使用者：支撐和水泥不夠精準、要寫實、左右對稱）
     // 每一端：一整座混凝土橋台（橋面寬＋兩邊各 0.7 公尺、順著橋 2.6 公尺，往下一直埋到最低的地面下 0.6 公尺，頂面跟橋面齊），
     // 橋面最後一段木板鋪到橋台上；兩根鋼柱（下粗上細）用鋼底板鎖在橋台頂上，塔頂有鞍座讓主鋼纜跨過去；
@@ -915,8 +894,7 @@ function buildInterior(lib, avoid = []) {
       box(concs, AW * 2, topY - botY, AL * 2, V(ac.x, (topY + botY) / 2, ac.z))                                 // 橋台
       box(concs, AW * 2 + 0.3, 0.12, AL * 2 + 0.3, V(ac.x, topY - 0.55, ac.z))                                  // 頂下一圈收邊（施工縫的線腳）
       abut[t] = { topY, ac }
-      for (let k = 0; k < 4; k++) { const q = ac.clone().addScaledVector(dir, out * (-0.9 + k * 0.6)), pl = new THREE.BoxGeometry(HW * 2 - 0.08, 0.04, 0.58)   // 橋台上的木板
-        pl.applyMatrix4(new THREE.Matrix4().makeRotationY(yaw).setPosition(V(q.x, topY + 0.02, q.z))); const c = []; col.setHSL(0.075, 0.35, 0.6 + rnd2() * 0.15); for (let v = 0; v < pl.attributes.position.count; v++) c.push(col.r, col.g, col.b); pl.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); woods.push(pl) }
+      // 橋台上的木板 → walkway.js 的橋頭平台
       for (const sd of [-1, 1]) {
         const q = p.clone().addScaledVector(side, sd * (HW + 0.3)); q.y = topY
         box(steels, 0.62, 0.05, 0.62, q.clone().add(V(0, 0.025, 0)))                                            // 底板
@@ -995,6 +973,7 @@ function buildInterior(lib, avoid = []) {
       const net = new THREE.Mesh(ng, netM); g.add(net)
     }
     for (const [list, m] of [[woods, wood], [steels, steel], [cables, cable], [concs, conc]]) {
+      if (!list.length) continue
       const mesh = new THREE.Mesh(mergeGeometries(list.map((q) => q.index ? q.toNonIndexed() : q).map((q) => { if (!q.attributes.color) { const c = new Float32Array(q.attributes.position.count * 3).fill(1); q.setAttribute('color', new THREE.BufferAttribute(c, 3)) } return q })), m)
       mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh)
     }

@@ -445,6 +445,25 @@ export const YOSE = (() => {
 export const FIG_FORCED = []
 export const CAMP = (() => { const e = ALP_SPURS.find((q) => q.name === 'camp').pts.at(-1); return { x: e[0], z: e[1], R: 10, y: 0 } })()
 export const ALP_BRIDGE = { a: 5, b: 6 }   // 步道第 5～7 點（120,-4 → 124,-12 → 128,-20）跨過溪谷：吊橋，橋下不鋪路
+// 2026-11-11 橋頭平台（使用者：橋頭跟木棧道疊在一起、高低角度都不對）：ChatGPT 的做法——吊橋兩端各一塊木平台吸收步道轉彎，
+// 平台跟橋面最後一塊木板一樣高（Y0）；凸多邊形＝沿橋軸 1.7 m 的矩形 ∪ 從橋軸 1.4 m 處往下一個步道點方向 1.8 m 的矩形。
+// walkway.js 照這個畫木板、欄杆，supportAt 照這個走，地形在平台底下壓低。下面算完步道高度（prof）才填
+export const BRIDGE_HEADS = []
+function hull2(P) {
+  const p = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+  const lo = [], up = []
+  for (const q of p) { while (lo.length > 1 && cr(lo.at(-2), lo.at(-1), q) <= 0) lo.pop(); lo.push(q) }
+  for (const q of p.slice().reverse()) { while (up.length > 1 && cr(up.at(-2), up.at(-1), q) <= 0) up.pop(); up.push(q) }
+  return lo.slice(0, -1).concat(up.slice(0, -1))   // 逆時針（x→右、z→下 的平面上）
+}
+export function inHull(x, z, H, pad = 0) {
+  for (let i = 0; i < H.length; i++) {
+    const [ax, az] = H[i], [bx, bz] = H[(i + 1) % H.length], ex = bx - ax, ez = bz - az, L = Math.hypot(ex, ez)
+    if ((ex * (z - az) - ez * (x - ax)) / L < -pad) return false
+  }
+  return true
+}
+export function landingAt(x, z) { for (const h of BRIDGE_HEADS) if (inHull(x, z, h.hull)) return h.Y0; return null }
 export const ALP_PEAK = { x: AM(145, 0)[0], z: 8 * AS, h: 27, rx: 33, rz: 26 }   // 2026-11-08 山放大：高 21→27、範圍 27×21→33×26（設計座標）   // 跟步道終點差不多高：步道才不會在山頂挖出一條溝
 const AG = { x0: ALP.X0, z0: -ALP.HZ, cell: 0.5, nx: Math.round((ALP.X1 - ALP.X0) / 0.5) + 1, nz: Math.round(ALP.HZ * 2 / 0.5) + 1 }
 const aHeight = new Float32Array(AG.nx * AG.nz), aTrail = new Float32Array(AG.nx * AG.nz).fill(1e9), aStream = new Float32Array(AG.nx * AG.nz).fill(1e9)
@@ -696,6 +715,19 @@ function buildAlpine() {
   // 吊橋：兩端等高直線
   prof[ALP_BRIDGE.a + 1] = (prof[ALP_BRIDGE.a] + prof[ALP_BRIDGE.a + 2]) / 2
   ALP_TRAIL.prof = prof
+  {
+    const A = tr[ALP_BRIDGE.a], B = tr[ALP_BRIDGE.a + 2], L = Math.hypot(B[0] - A[0], B[1] - A[1]), ux = (B[0] - A[0]) / L, uz = (B[1] - A[1]) / L
+    for (const [t, out, P, py, nxt] of [[0, -1, A, prof[ALP_BRIDGE.a], tr[ALP_BRIDGE.a - 1]], [1, 1, B, prof[ALP_BRIDGE.a + 2], tr[ALP_BRIDGE.a + 3]]]) {
+      const ox = ux * out, oz = uz * out, sx = -oz, sz = ox, HWL = 1.6
+      const X = [P[0] + ox * 1.4, P[1] + oz * 1.4]
+      let ex = nxt[0] - X[0], ez = nxt[1] - X[1]; const el = Math.hypot(ex, ez); ex /= el; ez /= el
+      const pts = []
+      // 橋軸那塊只到 1.7 m（再長會在出口外側凸出一角）；出口那塊往回多 0.4 m，接成一塊
+      for (const s of [0, 1.7]) for (const l of [-HWL, HWL]) pts.push([P[0] + ox * s + sx * l, P[1] + oz * s + sz * l])
+      for (const s of [-0.4, 1.8]) for (const l of [-HWL, HWL]) pts.push([X[0] + ex * s - ez * l, X[1] + ez * s + ex * l])
+      BRIDGE_HEADS.push({ t, P, Y0: py + 0.06, o: [ox, oz], side: [sx, sz], X, e: [ex, ez], exit: [X[0] + ex * 1.8, X[1] + ez * 1.8], next: nxt, hull: hull2(pts) })
+    }
+  }
   for (const sp of ALP_SPURS) {   // 支線：從主步道那一點的高度開始，一樣坡度最多 22%
     const pp = sp.pts.map(([x, z]) => alpBase(x, z)); pp[0] = sp.y0 ?? (sp.world ? alpBase(...sp.pts[0]) : prof[sp.from])
     const k = sp.k ?? (sp.join ? 0.26 : 0.22), seg = (i) => Math.hypot(sp.pts[i][0] - sp.pts[i - 1][0], sp.pts[i][1] - sp.pts[i - 1][1])
@@ -897,6 +929,12 @@ function buildAlpine() {
         if (ds0 < 4) { const wS = ALP_STREAM.water(ALP_STREAM.sAt(x, z)); if (hPre > wS) h = Math.max(h, Math.min(hPre, wS + 0.12)) }
       }
     }
+    // 2026-11-11 橋頭平台底下：地面壓到平台木板底下 8 公分（平台外 1.5 公尺慢慢接回來）
+    for (const hd of BRIDGE_HEADS) if (inHull(x, z, hd.hull, 1.6)) {
+      let dmin = 0
+      for (let q = 0; q < hd.hull.length; q++) { const [ax, az] = hd.hull[q], [bx, bz] = hd.hull[(q + 1) % hd.hull.length], ex = bx - ax, ez = bz - az, L = Math.hypot(ex, ez); dmin = Math.min(dmin === 0 ? 1e9 : dmin, (ex * (z - az) - ez * (x - ax)) / L) }
+      h = Math.min(h, lerp(hd.Y0 - 0.08, h, smoothstep(0, -1.5, dmin)))
+    }
     // 山頂：步道終點一小塊平地（2026-11-08 拿掉觀景台，不再削一大片平台）；終點旁邊的山頭不能比終點高太多，步道才不會走在溝裡
     const pe = tr[tr.length - 1], dpk = Math.hypot(x - pe[0], z - pe[1])
     h = lerp(prof[prof.length - 1] + 0.02, h, smoothstep(2.5, 5, dpk))
@@ -963,6 +1001,71 @@ export function bridgeAt(x, z) {
   return lerp(pa, pb, t) - BRIDGE_DIM.sag * Math.sin(Math.PI * t) + 0.06
 }
 
+// 2026-11-11 巨木林木棧道（walkway.js 畫）：從橋頭平台的出口沿步道點走，轉角用半徑 10 m 的圓弧（木板呈扇形排開，不會互相重疊）；
+// 高度：腳印範圍裡最高的地面 + 6 cm（不會被地形穿出）；從平台出口往下最多 35% 坡（離地高的那段下面有樁），整段 ±0.5 m 平滑
+// 玩家走在棧道上（supportAt 用 walkAt）
+export const WALK_HW = 1.5
+export const ALP_WALKS = (() => {
+  const T = ALP_TRAIL, out = []
+  for (const [hd, rest] of [[BRIDGE_HEADS[0], [T[ALP_BRIDGE.a - 1], T[ALP_BRIDGE.a - 2]]], [BRIDGE_HEADS[1], [T[ALP_BRIDGE.a + 3], T[ALP_BRIDGE.a + 4]]]]) {
+    const P = [hd.exit, ...rest], R = 10
+    // 圓角折線 → 每 0.05 m 一個取樣點
+    const segs = []   // {type:'L', a, b} | {type:'A', c, r, a0, da}
+    let cur = P[0]
+    for (let k = 1; k < P.length; k++) {
+      const b = P[k]
+      if (k < P.length - 1) {
+        const c = P[k + 1], d1 = [b[0] - cur[0], b[1] - cur[1]], d2 = [c[0] - b[0], c[1] - b[1]], l1 = Math.hypot(...d1), l2 = Math.hypot(...d2)
+        const u1 = [d1[0] / l1, d1[1] / l1], u2 = [d2[0] / l2, d2[1] / l2], th = Math.acos(clamp(u1[0] * u2[0] + u1[1] * u2[1], -1, 1))
+        const tl = Math.min(R * Math.tan(th / 2), l1 * 0.45, l2 * 0.45), r = tl / Math.tan(Math.max(th, 1e-4) / 2)
+        const p1 = [b[0] - u1[0] * tl, b[1] - u1[1] * tl], turn = Math.sign(u1[0] * u2[1] - u1[1] * u2[0]) || 1
+        const nrm = [-u1[1] * turn, u1[0] * turn], c0 = [p1[0] + nrm[0] * r, p1[1] + nrm[1] * r]
+        segs.push({ type: 'L', a: cur, b: p1 })
+        segs.push({ type: 'A', c: c0, r, a0: Math.atan2(p1[1] - c0[1], p1[0] - c0[0]), da: th * turn })
+        cur = [b[0] + u2[0] * tl, b[1] + u2[1] * tl]
+      } else segs.push({ type: 'L', a: cur, b })
+    }
+    const xs = [], zs = [], tx = [], tz = []
+    for (const g of segs) {
+      const len = g.type === 'L' ? Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]) : Math.abs(g.da) * g.r, n = Math.max(1, Math.round(len / 0.05))
+      for (let q = xs.length ? 1 : 0; q <= n; q++) {
+        const f = q / n
+        if (g.type === 'L') { xs.push(lerp(g.a[0], g.b[0], f)); zs.push(lerp(g.a[1], g.b[1], f)); tx.push((g.b[0] - g.a[0]) / len); tz.push((g.b[1] - g.a[1]) / len) }
+        else { const an = g.a0 + g.da * f, sg = Math.sign(g.da); xs.push(g.c[0] + Math.cos(an) * g.r); zs.push(g.c[1] + Math.sin(an) * g.r); tx.push(-Math.sin(an) * sg); tz.push(Math.cos(an) * sg) }
+      }
+    }
+    const N = xs.length, base = new Float32Array(N), y = new Float32Array(N)
+    for (let i = 0; i < N; i++) {
+      let m = -1e9
+      for (const l of [-WALK_HW, -0.75, 0, 0.75, WALK_HW]) for (const a of [-0.3, 0, 0.3]) m = Math.max(m, alpineHeight(xs[i] + tz[i] * l * -1 + tx[i] * a, zs[i] + tx[i] * l + tz[i] * a))
+      base[i] = m + 0.06
+    }
+    y[0] = Math.max(hd.Y0, base[0])
+    for (let i = 1; i < N; i++) y[i] = Math.max(base[i], y[i - 1] - 0.35 * 0.05)
+    const sm = Float32Array.from(y)
+    for (let i = 0; i < N; i++) { let a = 0, c = 0; for (let q = Math.max(0, i - 10); q <= Math.min(N - 1, i + 10); q++) { a += y[q]; c++ } sm[i] = Math.max(base[i], a / c) }
+    sm[0] = y[0]; for (let i = 1; i < 6 && i < N; i++) sm[i] = Math.max(base[i], lerp(y[0], sm[i], i / 6))
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9
+    for (let i = 0; i < N; i++) { x0 = Math.min(x0, xs[i]); x1 = Math.max(x1, xs[i]); z0 = Math.min(z0, zs[i]); z1 = Math.max(z1, zs[i]) }
+    out.push({ head: hd, xs, zs, tx, tz, y: sm, ground: base, N, ds: 0.05, box: [x0 - 2, x1 + 2, z0 - 2, z1 + 2] })
+  }
+  return out
+})()
+// 站在棧道上：離中線 WALK_HW 以內、不在路的兩端外面 → 棧道面高；不在上面回傳 null
+export function walkAt(x, z) {
+  for (const w of ALP_WALKS) {
+    if (x < w.box[0] || x > w.box[1] || z < w.box[2] || z > w.box[3]) continue
+    let bi = -1, bd = 1e9
+    for (let i = 0; i < w.N; i += 8) { const d = (x - w.xs[i]) ** 2 + (z - w.zs[i]) ** 2; if (d < bd) { bd = d; bi = i } }
+    for (let i = Math.max(0, bi - 8); i <= Math.min(w.N - 1, bi + 8); i++) { const d = (x - w.xs[i]) ** 2 + (z - w.zs[i]) ** 2; if (d < bd) { bd = d; bi = i } }
+    const along = (x - w.xs[bi]) * w.tx[bi] + (z - w.zs[bi]) * w.tz[bi], lat = Math.abs(-(x - w.xs[bi]) * w.tz[bi] + (z - w.zs[bi]) * w.tx[bi])
+    if (lat > WALK_HW + 0.05) continue
+    if ((bi === 0 && along < 0) || (bi === w.N - 1 && along > 0)) continue
+    return w.y[bi]
+  }
+  return null
+}
+
 /* ---------- 海岸館地形（館內 x ±40、z -74～-154，0.5 公尺格子） ---------- */
 const CG = { x0: -CST.HX, z0: CST.Z1, cell: 0.5, nx: 161, nz: 161 }
 const cHeight = new Float32Array(CG.nx * CG.nz)
@@ -1025,6 +1128,10 @@ export function supportAt(x, z, feet) {
     let y = alpineHeight(x, z), owner = 0
     const by = bridgeAt(x, z)
     if (by != null && by <= feet + 0.5 && by > y - 3) { y = by; owner = 3 }
+    const ly = landingAt(x, z)     // 橋頭平台
+    if (ly != null && ly <= feet + 0.5 && ly > y - 1) { y = ly; owner = 3 }
+    const wy = walkAt(x, z)        // 巨木林木棧道
+    if (wy != null && wy <= feet + 0.5 && wy > y - 1) { y = wy; owner = 3 }
     const sy = YOSE.stairAt(x, z)   // 瀑布步道的石階
     if (sy != null && sy <= feet + 0.5 && sy > y) { y = sy; owner = 5 }
     const ty = YOSE.topAt(x, z)     // 岩壁頂上

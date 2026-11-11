@@ -310,52 +310,7 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
     endM.material = ringM
     for (const m of [logM, endM]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m) }
   }
-  // 木棧道：巨木林這幾段步道（吊橋前、吊橋後）鋪上橫向木板，兩側每 2.4 公尺一根欄杆柱、上下兩道扶手
-  {
-    const planks = [], posts = []
-    // 2026-11-10 使用者：橋頭跟木棧道重疊（步道在橋頭轉彎，第一段棧道直接從橋面末端長出去，斜斜壓在橋面和混凝土基座上）
-    // → 換到吊橋的座標量：在橋面範圍（含兩端各 1.8 公尺的塔座、基座）、離中線 BRIDGE_DIM.hw + 1.6 以內的不鋪，棧道往後退到橋頭外面才開始
-    const bA = ALP_TRAIL[ALP_BRIDGE.a], bB = ALP_TRAIL[ALP_BRIDGE.a + 2], bL = Math.hypot(bB[0] - bA[0], bB[1] - bA[1]), bdx = (bB[0] - bA[0]) / bL, bdz = (bB[1] - bA[1]) / bL
-    const onBridgeHead = (x, z, pad) => { const rx = x - bA[0], rz = z - bA[1], al = rx * bdx + rz * bdz, lat = Math.abs(rx * bdz - rz * bdx); return al > -1.8 - pad && al < bL + 1.8 + pad && lat < BRIDGE_DIM.hw + 1.6 + pad }
-    for (const i of [3, 4, 7, 8]) {
-      const [ax, az] = ALP_TRAIL[i], [bx, bz] = ALP_TRAIL[i + 1], L = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / L, dz = (bz - az) / L
-      for (let u = 0.2; u < L; u += 0.3) {
-        const x = ax + dx * u, z = az + dz * u
-        if (bridgeDist(x, z) < 1.5 || onBridgeHead(x, z, 0)) continue
-        const h = alpineHeight(x, z), slope = Math.atan2(alpineHeight(x + dx * 0.2, z + dz * 0.2) - alpineHeight(x - dx * 0.2, z - dz * 0.2), 0.4)
-        planks.push({ x, z, y: h + 0.05 + (Math.sin(u * 7.1) * 0.006), yaw: Math.atan2(dx, dz), slope, k: 0.9 + Math.sin(u * 3.7 + i) * 0.1 })
-      }
-      for (let u = 1.2; u < L - 0.5; u += 2.4) for (const sd of [-1, 1]) {
-        const x = ax + dx * u - dz * sd * 1.45, z = az + dz * u + dx * sd * 1.45
-        if (bridgeDist(x, z) < 2 || onBridgeHead(x, z, 0.3)) continue
-        posts.push({ x, z, y: alpineHeight(x, z), seg: i, sd, u })
-      }
-    }
-    const plankG = new THREE.BoxGeometry(2.7, 0.07, 0.27)
-    const plankM = new THREE.MeshStandardMaterial({ color: 0x8a6440, roughness: 0.85 })
-    const pm = new THREE.InstancedMesh(plankG, plankM, planks.length)
-    planks.forEach((p, i) => { m4.compose(v.set(p.x, p.y, p.z), q.setFromEuler(e.set(-p.slope, p.yaw, 0, 'YXZ')), s.set(1, 1, 1)); pm.setMatrixAt(i, m4); pm.setColorAt(i, col.setHSL(0.07, 0.3, 0.75 * p.k)) })
-    pm.receiveShadow = true; pm.castShadow = false; pm.computeBoundingSphere(); g.add(pm)
-    const postG = new THREE.BoxGeometry(0.12, 1.0, 0.12).translate(0, 0.5, 0)
-    const ptm = new THREE.InstancedMesh(postG, woodM, posts.length)
-    posts.forEach((p, i) => { m4.compose(v.set(p.x, p.y, p.z), q.identity(), s.set(1, 1, 1)); ptm.setMatrixAt(i, m4); addCollider(p.x, p.z, 0.1, p.y + 1) })
-    ptm.castShadow = true; ptm.computeBoundingSphere(); g.add(ptm)
-    // 扶手：同一段、同一側相鄰的兩根柱子之間
-    const rails = []
-    for (let k = 1; k < posts.length; k++) {
-      const a = posts.find((p, j) => j < k && p.seg === posts[k].seg && p.sd === posts[k].sd && Math.abs(p.u - (posts[k].u - 2.4)) < 0.01)
-      if (a) rails.push([a, posts[k]])
-    }
-    const railG = new THREE.BoxGeometry(1, 0.07, 0.09)
-    const rm = new THREE.InstancedMesh(railG, woodM, rails.length * 2)
-    rails.forEach(([a, b], i) => {
-      for (const [j, h] of [[0, 0.95], [1, 0.5]]) {
-        const A = v.set(a.x, a.y + h, a.z).clone(), B = new THREE.Vector3(b.x, b.y + h, b.z), d = B.clone().sub(A)
-        m4.compose(A.add(B).multiplyScalar(0.5), q.setFromEuler(e.set(0, -Math.atan2(d.z, d.x), Math.atan2(d.y, Math.hypot(d.x, d.z)), 'YXZ')), s.set(d.length() + 0.08, 1, 1)); rm.setMatrixAt(i * 2 + j, m4)
-      }
-    })
-    rm.castShadow = true; rm.computeBoundingSphere(); g.add(rm)
-  }
+  // 2026-11-11 木棧道改到 walkway.js（Blender 零件、橋頭平台、轉角圓弧）
 
   // 光束：樹冠縫隙斜射下來的陽光。細長的面，順著太陽方向放，繞自己的軸轉向鏡頭（圓柱型看板），加色、兩端淡出
   const N = 46, beams = []
