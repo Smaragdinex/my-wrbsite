@@ -331,3 +331,21 @@ svg.controls image { mix-blend-mode: multiply; }
 .tier button:hover { background: rgba(255, 255, 255, 0.2); }
 .tier button.on { background: #fff; color: #1f2a24; font-weight: 700; }
 .tier small { display: block; margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: rgba(255, 255, 255, 0.7); }
+
+/* 2026-11-12 使用者：「一開始網頁先進主畫面，再載入」——還沒下載任何模型之前的第一個畫面：選載入等級、按了才開始載 */
+#pre { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 24px; background: radial-gradient(120% 90% at 30% 20%, #2f5a45 0%, #17301f 55%, #0c1a12 100%); color: #fff; }
+#pre[hidden] { display: none !important; }
+#pre .box { width: min(560px, 100%); }
+#pre h1 { margin: 0; font-size: clamp(40px, 7vw, 68px); letter-spacing: 0.06em; }
+#pre p { margin: 10px 0 30px; font-size: 17px; color: rgba(255, 255, 255, 0.82); }
+#pre b { display: block; font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, 0.8); margin-bottom: 10px; }
+#pre .opts { display: grid; gap: 8px; }
+#pre .opts button { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 12px 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.08); border: 1.5px solid rgba(255, 255, 255, 0.16); }
+#pre .opts button:hover { background: rgba(255, 255, 255, 0.14); }
+#pre .opts button.on { background: rgba(255, 255, 255, 0.18); border-color: #fff; }
+#pre .opts button strong { font-size: 16px; }
+#pre .opts button em { font-style: normal; font-size: 12px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #3fa46a; }
+#pre .opts button span { display: block; margin-top: 3px; font-size: 13px; line-height: 1.45; color: rgba(255, 255, 255, 0.72); }
+#pre .go { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; margin-top: 22px; padding: 15px 18px; text-align: center; border-radius: 12px; font-size: 18px; font-weight: 700; background: #2f8f58; }
+#pre .go:hover { background: #37a465; }
+#pre .go:focus-visible, #pre .opts button:focus-visible { outline: 3px solid #9fe0b8; outline-offset: 2px; }

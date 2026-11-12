@@ -46,6 +46,27 @@ function setLoad(f, msg) {
   ldNum.textContent = p; ldFill.style.width = p + '%'; ldBird.style.left = p + '%'
   if (msg) ldMsg.textContent = msg
 }
+// 2026-11-12 使用者：「一開始網頁先進主畫面，再載入，是不是比較好」——以前一打開就開始下載、蓋場景，等級是載完才能改（改了還要整個重載一次）。
+// 現在第一個畫面只有標題和「載入等級」，什麼都還沒下載；選好按「載入公園」才開始。上次選的會記住（預設幫你選好），所以回來的玩家按一下就進去。
+// 錄影、自動測試（網址有 rec 或 tier）不顯示
+{ const qs0 = new URLSearchParams(location.search), pre = document.getElementById('pre')
+  if (pre && !qs0.has('rec') && !qs0.has('tier')) {
+    let saved = null; try { saved = localStorage.getItem('birdpark.tier') } catch {}
+    let pick = saved === 'full' || saved === 'mid' || saved === 'lite' ? saved : 'auto'
+    // 自動會選哪一級（跟 world.js 的判斷一樣，只是先講給玩家聽；顯示卡名稱要等建了畫面才知道，這裡只看記憶體和是不是手機）
+    const mem = navigator.deviceMemory ?? 8, phone = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
+    const O = [['auto', tr('自動'), tr('照這台電腦的規格決定，不確定就選這個。')], ['full', tr('完整'), tr('貼圖原尺寸、所有鳥都載入。最漂亮，需要較好的電腦，載入最久。')], ['mid', tr('均衡'), tr('貼圖減半、只載入 170 公尺內的鳥。')], ['lite', tr('輕量'), tr('貼圖再減半、只載入 110 公尺內的鳥。電腦跑不動或打不開時選這個。')]]
+    const draw = () => { pre.innerHTML = `<div class="box"><h1>${tr('鳥類生態園')}</h1><p>${tr('帶著相機走進公園，找鳥、拍照。')}</p><b>${tr('載入等級')}</b><div class="opts">${O.map(([k, n, h]) => `<button data-tier="${k}" class="${k === pick ? 'on' : ''}" aria-pressed="${k === pick}"><strong>${n}</strong>${k === 'auto' && (phone || mem <= 4) ? `<em>${tr('這台裝置建議')}</em>` : ''}<span>${h}</span></button>`).join('')}</div><button class="go">${tr('載入公園')}</button></div>` }
+    draw(); pre.hidden = false; loadingEl.hidden = true
+    await new Promise((res) => pre.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return
+      if (b.dataset.tier) { pick = b.dataset.tier; draw(); return }
+      if (b.classList.contains('go')) res()
+    }))
+    try { if (pick === 'auto') localStorage.removeItem('birdpark.tier'); else localStorage.setItem('birdpark.tier', pick) } catch {}
+    pre.hidden = true; loadingEl.hidden = false
+  }
+}
 const world = await buildWorld(document.getElementById('scene'), {
   onProgress: (f, stage) => stage === 'build' ? setLoad(0.7, tr('蓋公園、種樹…')) : setLoad(f * 0.7, tr('下載植物和鳥…')),
   extraModels: flyModels(),
