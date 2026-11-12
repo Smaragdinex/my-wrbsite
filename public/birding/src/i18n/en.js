@@ -854,6 +854,39 @@ export const BIRDS = {
    "In flight the long legs trail far behind the tail, making it easy to identify."
   ]
  },
+ "peregrine": {
+  "name": "Peregrine Falcon",
+  "where": "A rock ledge high on the cliff west of the waterfall",
+  "intro": "A medium-sized falcon with a black 'helmet' over the crown and cheeks, a thick black moustache stripe, blue-grey back and white underparts finely barred with black. It likes to stand on ledges high on sheer cliffs overlooking the valley, then folds its wings and stoops at tremendous speed.",
+  "facts": [
+   "In a hunting stoop it can exceed 300 km/h — the fastest animal on Earth.",
+   "It nests on ledges of tall cliffs, and also on top of skyscrapers.",
+   "This park's waterfall area mixes birds from Taiwan and around the world; the Peregrine is a guest here.",
+   "Its numbers crashed in the 20th century because of DDT and slowly recovered after the pesticide was banned."
+  ]
+ },
+ "blackswift": {
+  "name": "Black Swift",
+  "where": "On the wet rock wall in the hollow behind the waterfall",
+  "intro": "A large, sooty-black swift with long, narrow, sickle-shaped wings and a slightly forked tail. It spends almost its whole life in the air, feeding and even drinking on the wing, and only clings to a cliff while raising young.",
+  "facts": [
+   "It prefers to nest on damp, shaded ledges behind or beside waterfalls, often flying through the curtain of water to get home.",
+   "Its feet are tiny: it cannot stand on the ground or a branch, only cling to vertical rock.",
+   "It lays a single egg, and the chick stays in the nest for more than six weeks.",
+   "This park's waterfall area mixes birds from Taiwan and around the world; the Black Swift is a guest here."
+  ]
+ },
+ "greatgreyowl": {
+  "name": "Great Grey Owl",
+  "where": "On a branch at the forest edge southwest of the waterfall lake",
+  "intro": "A very large owl with a big round head and no ear tufts, a grey facial disc ringed with concentric circles, small yellow eyes and a black-and-white 'bow tie' under the chin. It often perches at the forest edge watching a meadow, hunting voles by ear.",
+  "facts": [
+   "It looks like one of the largest owls, but its feathers are so fluffy that it weighs much less than it appears.",
+   "Its huge facial disc works like a satellite dish, funnelling sound to its ears; it can hear a vole under the snow.",
+   "It is most active at dawn and dusk, and sometimes hunts in daylight.",
+   "This park's waterfall area mixes birds from Taiwan and around the world; the Great Grey Owl is a guest here."
+  ]
+ },
  "harrier": {
   "name": "Western Marsh Harrier",
   "where": "Atop the dead snag in the Emerald Marsh, and over the reedbeds",

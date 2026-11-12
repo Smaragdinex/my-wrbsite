@@ -97,7 +97,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const placeDef = (def) => {
     // 山區的鳥站在山區的地形上（地面高度查 alpineHeight）
     const groundH = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)
-    const d = { ...def, y: def.y ?? groundH(...def.spot), groundAt: def.water == null ? groundH : null }
+    const d = { ...def, y: def.y ?? groundH(...def.spot), groundAt: def.water == null && !def.cliffRay ? groundH : null }   // 岩壁上的鳥不照地形（不然會掉到岩壁腳下）
     // 游泳的鳥只在開闊水面：離池邊（石頭）和山腳都要留距離
     const nearBoard = (x, z) => { for (const [dx, dz] of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5], [1.1, 1.1], [-1.1, 1.1], [1.1, -1.1], [-1.1, -1.1]]) if (walkAt(x + dx, z + dz) != null || deckAt(x + dx, z + dz) != null) return true; return false }
     if (def.swim === 'alpPond') d.swimOK = (x, z) => Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r * 0.78   // 山區入口的湖（鴛鴦、花嘴鴨）
@@ -118,7 +118,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     return Object.assign(a, { def, size: REAL_CM[def.id] ? gameLen(REAL_CM[def.id]) : 0.3 })   // 同一個物件（串流載入：模型晚點載到時 a.finish() 直接改它的 built／update）   // size：遊戲裡的身長（公尺），畫面像素剔除用
   }
   // 停在神木上的鳥（茶腹鳾）要等神木蓋好、量到樹皮表面才能擺，先跳過（也不能進 alpAvoid，不然神木會躲開牠、換位置）
-  const birds = BIRDS.filter((d) => d.perch !== 'sacred' && !d.onFig).map(placeDef)
+  const birds = BIRDS.filter((d) => d.perch !== 'sacred' && !d.onFig && !d.cliffRay).map(placeDef)   // cliffRay：岩壁上的鳥，等岩壁蓋好再量（下面）
   // 2026-11-10 吃果實的鳥：雀榕直接種在鳥的站點（FIG_FORCED），樹種好之後再到這棵樹真正的枝條上找位置站（下面 findFigPerch）
   const figDefs = BIRDS.filter((d) => d.onFig)
   for (const d of figDefs) FIG_FORCED.push({ x: d.spot[0], z: d.spot[1], y: alpineHeight(...d.spot), def: d })
@@ -287,7 +287,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       scene.updateMatrixWorld(true)
       let best = null
       for (let k = 0; k < 72; k++) { const a = k / 72 * Math.PI * 2, td = alpineTrailDist(S.x + Math.sin(a) * 9, S.z + Math.cos(a) * 9); if (!best || td < best.td) best = { a, td } }
-      for (const def of BIRDS.filter((d) => d.perch === 'sacred')) {
+      for (const def of BIRDS.filter((d) => d.perch === 'sacred' && !d.cliffRay)) {
         const a = best.a + (def.sacredTurn ?? 0), hy = S.y + 0.3 + (def.sacredH ?? 2.4)
         const ray = new THREE.Raycaster(new THREE.Vector3(S.x + Math.sin(a) * 12, hy, S.z + Math.cos(a) * 12), new THREE.Vector3(-Math.sin(a), 0, -Math.cos(a)), 0, 12)
         const hit = ray.intersectObject(giants.group ?? scene, true).find((h) => Math.hypot(h.point.x - S.x, h.point.z - S.z) < S.D)
@@ -297,6 +297,47 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
         def.spot = [hit.point.x, hit.point.z]; def.normal = [n.x, n.z]; def.view = THREE.MathUtils.radToDeg(best.a)   // 鏡頭還是在步道那一側；鳥繞到樹幹側邊（sacredTurn），看得到側面而不是只看到背
         const b = placeDef({ ...def, y: hit.point.y }); b.def = def
         birds.push(b)
+      }
+    }
+  }
+  // 2026-11-13 Pass 1D：岩壁上的鳥（def.cliffRay＝[x, y, z0]：從 z0 往 +z 打一條水平射線，打到岩壁網格 cliffFace 的那一點）
+  // 黑雨燕（perch 'sacred' 直立）：直接貼在岩面上；遊隼（perch 'ground'）：岩面前長出一塊 1.6 m 寬、0.9 m 深的天然岩架讓牠站
+  {
+    const face = scene.getObjectByName('cliffFace')
+    if (face) {
+      scene.updateMatrixWorld(true)
+      for (const def of BIRDS.filter((d) => d.cliffRay)) {
+        const [rx, ry, rz] = def.cliffRay
+        // 岩面不是平的（頁岩凹槽、上面懸出的岩簷、凹洞裡的掃描岩片）：鳥身那 1.2 m 高度範圍內每 0.2 m 打一條，取最前面那一點，鳥才不會躲在岩簷底下
+        const solids = [face, scene.getObjectByName('cave')].filter(Boolean)
+        const cast = (y) => new THREE.Raycaster(new THREE.Vector3(rx, y, rz), new THREE.Vector3(0, 0, 1), 0, 40).intersectObjects(solids, true).find((h) => h.object.isMesh && !h.object.material.transparent)
+        const hit = cast(ry)
+        if (!hit) continue
+        let zFront = hit.point.z
+        for (let dy = 0.2; dy <= 1.21; dy += 0.2) { const h2 = cast(ry + dy); if (h2 && Math.abs(h2.point.z - hit.point.z) < 3) zFront = Math.min(zFront, h2.point.z) }
+        const back = hit.point.z - zFront   // 鳥站的地方比上面的岩面凹進去多少
+        const n = hit.face ? hit.face.normal.clone().transformDirection(face.matrixWorld) : new THREE.Vector3(0, 0, -1)
+        n.y = 0; if (n.lengthSq() < 1e-4) n.set(0, 0, -1); n.normalize(); if (n.z > 0) n.negate()   // 朝外（往 -z）
+        if (def.perch === 'sacred') {
+          if (back > 0.15) continue   // 貼壁的鳥：那一點上面還有東西擋著，就不擺（設定的點要選平的岩面）
+          def.spot = [hit.point.x, hit.point.z]; def.normal = [n.x, n.z]
+          const b = placeDef({ ...def, y: hit.point.y }); b.def = def; birds.push(b)
+        } else {
+          const ledge = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 3), face.material)
+          { const P = ledge.geometry.attributes.position, v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); const k = 1 + 0.1 * Math.sin(v.x * 7.1 + v.z * 5.3) * Math.cos(v.y * 6.2) + 0.05 * Math.sin(v.x * 17.0 - v.y * 13.0); if (v.y > 0) v.y *= 0.25 + 0.05 * Math.sin(v.x * 9.0); P.setXYZ(i, v.x * k, v.y * k, v.z * k) } ledge.geometry.computeVertexNormals() }
+          { const P = ledge.geometry.attributes.position, c = new Float32Array(P.count * 3); for (let i = 0; i < P.count; i++) { const k = 0.36 + 0.05 * Math.sin(i * 12.9898); c[i * 3] = k * 1.1; c[i * 3 + 1] = k; c[i * 3 + 2] = k * 0.85 } ledge.geometry.setAttribute('color', new THREE.BufferAttribute(c, 3)) }   // 岩壁材質吃頂點色：沒給會全黑
+          const ls = def.nest ? 0.32 : 1   // 雨燕只要一個小小的岩縫平台
+          const dz = (0.55 + back / 2) * (def.nest ? 0.6 : 1)   // 岩架從岩壁裡一直伸到上面岩簷的前緣外面
+          ledge.scale.set(0.85 * ls, 0.6 * ls, dz); ledge.rotation.y = Math.atan2(n.x, n.z)
+          ledge.position.set(hit.point.x, hit.point.y - 0.02 + (def.nest ? 0.13 - 0.15 * ls : 0), hit.point.z - dz + 0.35); ledge.castShadow = ledge.receiveShadow = true; ledge.name = 'falconLedge'; scene.add(ledge)
+          def.spot = [hit.point.x, zFront - (def.nest ? 0.2 : 0.4)]
+          if (def.nest) {   // 黑雨燕的巢：岩架上一個苔蘚、細根做的淺杯（直徑約 15 cm），鳥伏坐在裡面
+            const moss = new THREE.MeshStandardMaterial({ color: 0x2e3320, roughness: 1 }), rim = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.025, 8, 22).rotateX(Math.PI / 2), moss)
+            const bed = new THREE.Mesh(new THREE.CircleGeometry(0.08, 16).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x2c3319, roughness: 1 }))
+            rim.position.set(def.spot[0], hit.point.y + 0.125, def.spot[1]); bed.position.set(def.spot[0], hit.point.y + 0.11, def.spot[1]); rim.castShadow = true; scene.add(rim, bed)
+          }
+          const b = placeDef({ ...def, y: hit.point.y + 0.13 }); b.def = def; birds.push(b)
+        }
       }
     }
   }

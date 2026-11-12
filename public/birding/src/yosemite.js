@@ -390,6 +390,7 @@ export function buildYosemite(scene, { lib } = {}) {
   if (GRANITE) cliffM.defines = { GRANITE: 1 }
   cliffM.customProgramCacheKey = () => 'cliffTriplanar' + (GRANITE ? 'G' : '')
   const cliff = new THREE.Mesh(cg, cliffM); cliff.castShadow = true; cliff.receiveShadow = true; g.add(cliff)
+  cliff.name = 'cliffFace'   // world.js 用射線在岩面上擺鳥（Pass 1D）
   // 岩壁封起來（ChatGPT：要是有厚度的封閉岩體）：兩端各一片側面（從岩壁斷面一路接到後下角）、後面一道牆往下埋進地裡——
   // 以前從岩壁尾端下面往上看，頂面是一片懸空的薄板
   {

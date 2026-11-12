@@ -70,6 +70,10 @@ export const ESCAPE = {
   redcrowned: { r: 9, run: 2, fly: { speed: 9, hz: 2.5, style: 'flap', k: 2.9 } },
   ruff: { r: 5, run: 3, fly: { speed: 12, hz: 8, style: 'flap', k: 0.87 } },
   grebe: { r: 9, swim: 4, fly: { speed: 11, hz: 9, style: 'flap', k: 1.25 } },
+  // 2026-11-13 Pass 1D：遊隼巡航快、拍幾下就滑；黑雨燕又快又急（離步道 4～5 m 高，靠很近才飛）；烏林鴞慢、低、安靜
+  peregrine: { r: 16, fly: { speed: 15, hz: 4.5, style: 'glide', k: 1.05 } },
+  blackswift: { r: 5, fly: { speed: 14, hz: 8, style: 'glide', k: 0.48 } },
+  greatgreyowl: { r: 10, fly: { speed: 6, hz: 2.8, style: 'glide', k: 1.45 } },
   wbwood: { r: 8, fly: { speed: 8, hz: 9, style: 'bound', k: 0.42 } },
   nutcracker: { r: 10, fly: { speed: 9, hz: 5, style: 'glide', k: 0.55 } },
   rnpheasant: { r: 7, run: 3, fly: { speed: 9, hz: 10, style: 'flap', k: 1.2 } },
@@ -213,7 +217,8 @@ export function createFlight(world, player) {
         _box.setFromObject(m.obj)
         _box.getCenter(s.home)
         m.obj.getWorldDirection(_w); s.faceH = Math.atan2(_w.x, _w.z)
-        const away = s.home.clone().sub(P).setY(0)
+        // 2026-11-13 Pass 1D：岩壁上的鳥（def.flyAway）照岩面朝外的方向飛出去——不然背離玩家的方向可能是往岩壁裡飛（黑雨燕從凹洞橫著穿進岩體）
+        const away = u.b.def.flyAway ? V(u.b.def.flyAway[0], 0, u.b.def.flyAway[1]) : s.home.clone().sub(P).setY(0)
         if (away.lengthSq() < 1e-4) away.set(1, 0, 0)
         s.curve = outbound(s.home, away.normalize(), flock, short)
         flock ??= { F: s.curve.v3 }

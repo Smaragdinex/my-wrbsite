@@ -307,6 +307,7 @@ const BUILD = {
   liocichla, whitebrow, bullfinch, barwing, islandthrush, tit, rustylt, whitethroat, hwamei, styan, scimitar, fulvetta, bamboo, flowing, bushwarbler, cupwing, shortwing,
   scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier, rnpheasant, skylark, cisticola, nutcracker, wbwood,
   shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe,
+  peregrine, blackswift, greatgreyowl,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -318,7 +319,7 @@ const TINT = { 'thrush-rig': 0.5 }
 const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
     'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig']
@@ -1830,6 +1831,24 @@ function stilt(env) {
     walk: { radius: 1.6, speed: 0.16, avoid }, swingT: 0.42, lift: 0, knee: [0.9, 1.6], focusY: 0.7,
     acts: { walk: [4, 99, 99], peck: [3, 0.8, 1.4], stand: [1.5, 1.5, 3], look: [1.5, 1, 2], turn: [1, 99, 99] } }))
 }
+// 2026-11-13 Pass 1D（ChatGPT 規格、使用者指定）：瀑布區的三種鳥。北美的鳥種——這座公園是台灣＋世界的鳥混在一起的設計，圖鑑不寫成同一個真實的優勝美地群落
+// 遊隼：瀑布西側岩壁上一塊天然岩架（world.js 用射線量岩面、放岩架），站著不走動、轉頭看山谷；被驚動就起飛滑翔
+function peregrine(env) {
+  return groundTripo(env, { name: 'peregrine-rig', H: 0.4, h0: 0.979, ...TRIPO, bill: 0.05,
+    walk: { radius: 0.01, speed: 0.01 }, swingT: 0.4, lift: 0.02, knee: [0.5, 1.0], focusY: 0.3,
+    acts: { stand: [4, 3, 6], look: [4, 1.0, 2.2], walk: [0.01, 99, 99], turn: [0.01, 99, 99] } })
+}
+// 黑雨燕：抓在瀑布後面凹洞的潮濕後壁上（跟大赤啄木一樣直立貼著岩面；world.js 用射線量到後壁）
+function blackswift(env) {
+  // 2026-11-13 使用者：雨燕在巢裡 → 伏坐的模型（看不到腳），坐在 world.js 做的苔蘚巢裡，不走動，只轉頭
+  return groundTripo(env, { name: 'blackswift-rig', H: 0.045, h0: 0.233, ...TRIPO, bill: 0.02,
+    walk: { radius: 0.01, speed: 0.01 }, swingT: 0.4, lift: 0, knee: [0.2, 0.4], focusY: 0.03,
+    acts: { stand: [5, 3, 6], look: [3, 1.0, 2.0], walk: [0.01, 99, 99], turn: [0.01, 99, 99] } })
+}
+// 烏林鴞：湖西南的林緣枝頭，看著草地
+function greatgreyowl(env) {
+  return perchRigged(outer(env, -1.0), { name: 'greatgreyowl-rig', k: 0.62, ...TRIPO, foot: 0.137, drop: 0.04, beat: 3.5 })
+}
 function harrier(env) {
   const b = groundTripo(env, { name: 'harrier-rig', H: 0.56, h0: 0.95, ...TRIPO, bill: 0.07,
     walk: { radius: 0.01, speed: 0.01 }, swingT: 0.4, lift: 0.02, knee: [0.6, 1.2], focusY: 0.45,   // 2026-11-12 站在枯木頂端：不走動（以前在草島上踱步）
@@ -2196,7 +2215,8 @@ export const REAL_CM = {
   islandthrush: 22, tit: 12, rustylt: 26, whitethroat: 28, hwamei: 23, styan: 18, scimitar: 25, fulvetta: 11, bamboo: 30, flowing: 14,
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
-  shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, grebe: 50,   // 2026-11-11 世界濕地鳥（直立的看站高）
+  shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, grebe: 50,
+  peregrine: 42, blackswift: 18, greatgreyowl: 68,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
 const _fsInv = new THREE.Matrix4(), _fsV = V()

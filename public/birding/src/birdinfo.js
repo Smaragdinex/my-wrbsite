@@ -939,6 +939,40 @@ const ALL = [
       "十九世紀在英國因為頭上的飾羽差點被獵光，還因此催生了鳥類保護運動。",
     ],
   },
+  // 2026-11-13 Pass 1D（ChatGPT 規格、使用者指定）：瀑布區的三種北美鳥。cliffRay：world.js 從這點往 +z 打射線量岩面再擺
+  {
+    id: 'peregrine', spot: [186, 88], cliffRay: [186, 58, 70], flyAway: [0.15, -1], perch: 'ground', view: 180, dist: 9, camH: 0.4, lookY: 0.2,
+    name: "遊隼", sci: 'Falco peregrinus', where: "瀑布西側岩壁高處的岩架",
+    intro: "中型的隼，頭頂和臉頰像戴著黑色頭盔、眼下一道粗粗的黑鬍紋，背是藍灰色，胸腹白底帶細黑橫紋。喜歡站在高聳岩壁的岩架上俯瞰山谷，看到獵物就收起翅膀高速俯衝。",
+    facts: [
+      "俯衝抓鳥時速度可以超過每小時 300 公里，是世界上最快的動物。",
+      "在高聳的峭壁岩架上築巢，也會利用大樓頂端。",
+      "這座公園的瀑布區混合了台灣和世界各地的鳥，遊隼在這裡是「來作客」的。",
+      "二十世紀因為農藥 DDT 一度大量減少，禁用後才慢慢恢復。",
+    ],
+  },
+  {
+    id: 'blackswift', spot: [193, 100], cliffRay: [193, 37, 95], flyAway: [0.25, -1], nest: true, perch: 'ground', view: 180, dist: 6, camH: -0.6, lookY: 0.05,   /* 2026-11-13 使用者：雨燕要在巢裡（瀑布後方潮濕岩壁的小平台、苔蘚淺杯巢）；後壁這一點量過是平的 */
+    name: "黑雨燕", sci: 'Cypseloides niger', where: "瀑布後面凹洞岩壁上的苔蘚巢",
+    intro: "全身炭黑的大型雨燕，翅膀又長又窄像鐮刀，尾巴微微分叉。幾乎一輩子都在空中：在空中吃蟲、喝水，只有育雛時才抓在岩壁上休息。",
+    facts: [
+      "牠們偏愛在瀑布後面或旁邊潮濕、陰暗的岩架上築巢，常常要穿過水簾才能回家。",
+      "腳很短小，不能站在地上或樹枝上，只能用爪子抓住垂直的岩面。",
+      "一窩只生一顆蛋，雛鳥要在巢裡待上一個半月以上。",
+      "這座公園的瀑布區混合了台灣和世界各地的鳥，黑雨燕在這裡是「來作客」的。",
+    ],
+  },
+  {
+    id: 'greatgreyowl', spot: [178.5, 63.5], perch: 'branch', dist: 3.6, camH: 3.6, lookY: 3.5,
+    name: "烏林鴞", sci: 'Strix nebulosa', where: "瀑布湖西南邊的林緣枝頭",
+    intro: "體型很大的貓頭鷹，圓圓的大頭沒有耳羽，灰色的大面盤上一圈圈同心圓，眼睛黃色而小，下巴有黑白兩色的「領結」。常停在林緣看著草地，靠聽覺找雪下或草裡的鼠類。",
+    facts: [
+      "看起來是體型最大的貓頭鷹之一，其實羽毛很蓬鬆，體重比外表輕很多。",
+      "大面盤像碟形天線，能把聲音集中到耳朵，隔著雪也聽得到老鼠。",
+      "清晨和黃昏最活躍，有時白天也會出來。",
+      "這座公園的瀑布區混合了台灣和世界各地的鳥，烏林鴞在這裡是「來作客」的。",
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -947,6 +981,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))
