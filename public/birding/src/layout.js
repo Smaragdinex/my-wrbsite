@@ -410,22 +410,18 @@ export const YOSE = (() => {
   Y.rec2 = (x) => Y.rec(x) + 3.4 * Math.exp(-Math.pow((x - Y.fall.x) / 3.7, 4))
   Y.shelfY = () => Y.g0(Y.fall.x) + Y.caveH(Y.fall.x) + 2.3
   // 2026-11-12 秘境瀑布步道（使用者：後面上山的兩條步道都拆掉，改成從瀑布湖旁邊進去往上；全程走上去不停 3 分鐘。路線設計 docs/GORGE_ROUTE.txt）：
-  // 一條連續的路，從瀑布後面岩窟的東口開始 → 東側岩壁迴廊（鑿進岩壁、頭上有岩簷）→ 轉進岩體的隧道 → 螺旋隧道兩圈 → 岩棚、從上段瀑布後面穿過
-  // → 西側通道、折返 → 隱藏的上層通道 → 轉回岩壁面 → 最後一段迴廊爬到岩壁頂。pts＝中線 [x, z]、yy＝高度、kind＝這一點是哪一種：
-  // 'open' 露天、'gal' 岩壁迴廊（岩壁網格上切橫槽）、'alc' 凹室（槽切得深，隧道口在裡面）、'tun' 隧道（岩體裡的管狀網格）、'shelf' 岩棚、'top' 岩壁頂
+  // 一條連續的路，從瀑布後面岩窟的東口開始，沿湖邊踩石板到岩壁腳，再沿岩壁外側之字形往上到岩壁頂（隧道、螺旋岩室 2026-11-12 拆掉了）。pts＝中線 [x, z]、yy＝高度、kind＝這一點是哪一種：
+  // 'open' 露天、'gal' 岩壁上鑿出來的步道（岩壁網格上切橫槽）、'alc' 折返平台（槽切得深）、'top' 岩壁頂
   Y.TRAIL_HW = 1.2   // 可以走的半寬
   Y.stairs = (() => {
     let built = null
     return () => {
       if (built) return built
-      const pts = [], yy = [], kind = [], tag = []
-      let TAG = ''   // 這一點屬於哪一段隧道（T1 入口隧道、SP 螺旋岩室、T3 往岩棚、T4 西側窄縫、T5 上層長廊、T6 轉回岩壁面）：yosemite.js 照這個給每段不同的斷面和水
-      const add = (x, z, y, k) => { pts.push([x, z]); yy.push(y); kind.push(k); tag.push(k === 'tun' ? TAG : '') }
+      const pts = [], yy = [], kind = []
+      const add = (x, z, y, k) => { pts.push([x, z]); yy.push(y); kind.push(k) }
       let cur = null
       const to = (b, k, n) => { const a = cur; for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(a[0], b[0], t); add(x, Y.base(x) + lerp(a[1], b[1], t), lerp(a[2], b[2], t), k) } cur = b }
-      // 圓弧：f＝0 在圓的南端（離岩壁面最近）、π 在北端；sx＝+1 往東凸、-1 往西凸
-      const arc = (xc, dc, r, f0, f1, sx, y0, y1, k, n) => { const zc = Y.base(xc) + dc; for (let i = 1; i <= n; i++) { const t = i / n, f = lerp(f0, f1, t); add(xc + sx * r * Math.sin(f), zc - r * Math.cos(f), lerp(y0, y1, t), typeof k === 'function' ? k(t) : k) } }
-      const sY = Y.shelfY(), PI = Math.PI
+      const PI = Math.PI
       // 起點＝cave 支線的終點（瀑布正後方），高度跟那裡的地面一樣
       { const x0 = 199.5, z0 = 94.9, y0 = alpineHeight(x0, z0) + 0.02; add(x0, z0, y0, 'open'); cur = [x0, z0 - Y.base(x0), y0] }
       // 從岩窟出來：岩窟東端是收成拱的岩壁，走不出去 → 在 x 203 從岩簷口底下出來，沿湖邊踩著石板（水面上 0.8 m）往東到迴廊口
@@ -467,7 +463,7 @@ export const YOSE = (() => {
       const h = (s) => { if (s <= 0) return yy[0]; if (s >= L) return yy[yy.length - 1]; let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] < s) lo = m; else hi = m } return lerp(yy[lo], yy[hi], (s - S[lo]) / Math.max(1e-6, S[hi] - S[lo])) }
       // 全程（湖西岸 cave 支線起點到岩壁頂）不停走 3 分鐘：湖邊那 40 m 照平常的速度，步道上的速度 v 照長度反推（濕的石階，小心走）
       const v = Math.min(3.2, L / (180 - 40 / 3.2))
-      built = { pts, yy, kind, tag, S, L, h, h0: yy[0], top, v, bays, spiral: { x: -900, z: -900, r: 4.4, y0: -900, y1: -890.8 } }   // 螺旋岩室拆了；yosemite.js 還照這個蓋（蓋在看不到的地方），等確定不要再整段刪
+      built = { pts, yy, kind, S, L, h, h0: yy[0], top, v, bays }
       return built
     }
   })()
