@@ -45,7 +45,7 @@ export function lodRegister(meshes, h, lows = [], { solid = false } = {}) {
   if (!solid) for (const m of [...meshes, ...lows]) if (m?.castShadow) m.userData.lodManaged = true   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
   // 換成低面數的距離：一公尺的蕨類 10 公尺外、越高的越遠才換（長焦時照變焦倍率拉遠）
   // 2026-11-12 使用者：遠景的樹看起來是板狀的低模——「應該像人眼一樣：圓的、看不清楚，但不是低模」→ 4 m 以上的樹換低面數版本的距離拉遠一倍多（20 m 的樹 200 m → 440 m）
-  const dL = h >= 4 ? h * 22 : Math.max(10, h * 10)
+  const dL = h >= 4 ? h * 12 : Math.max(10, h * 10)   // 4 m 以上：120～150 m 外換輕量版（冷杉的輕量版也是立體樹冠，不是板）
   const S0 = { meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), scl: new Float32Array(n), proxies: null }
   sets.push(S0)
   // 2026-11-12 遠景替身（ChatGPT：3A 遊戲的遠景不是整片烘成一張圖，是遠處的樹換成「多角度替身貼片」）：

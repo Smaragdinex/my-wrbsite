@@ -7,6 +7,7 @@
 import * as THREE from 'three'
 import { createMirror } from './mirror.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { buildSummit } from './summit.js'
 import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
@@ -109,7 +110,35 @@ export function needleMaterial() {
 // 每根側枝兩片交叉的卡片（從側面、從上面看都有厚度）；每層枝數、長度、角度都有亂數，偶爾缺一枝（看得到樹幹，比較自然）
 // 頂點顏色：樹冠裡面、下面比較暗（自己遮自己），外面、上面比較亮——卡片樹最缺的就是這個
 // tiers：層數（2026-11-10 巨木的枝葉團用少層數的輕量版，一棵巨木掛幾十團）
+// 2026-11-12 立體樹冠（tools/make-conifer-kit.py，使用者：山上那片冷杉是片狀樹冠、遠看像一層層平板 → 每根枝條一串朝各方向的針葉簇，從哪裡看都是圓蓬蓬的）。
+// world.js 進場前先載（loadConiferKit）；載到之後 coniferGeo 一律用這套（同樣高 1、底在原點、同一張針葉貼圖），載不到才用下面原本的卡片版。
+// 層數少的呼叫（巨木上的枝葉團、松樹上的小簇，tiersN ≤ 10）用輕量版 _lo
+let CONIFER_KIT = null
+const CVER = new URL(import.meta.url).searchParams.get('v') ?? ''
+export async function loadConiferKit() {
+  try {
+    const gl = await new GLTFLoader().loadAsync(`models/props/conifer_kit.glb?v=${CVER}`); gl.scene.updateMatrixWorld(true)
+    const K = {}; gl.scene.traverse((o) => { if (o.isMesh) { const ge = o.geometry.clone(); ge.applyMatrix4(o.matrixWorld); K[o.name] = ge } })
+    if (K.fir && K.hemlock) CONIFER_KIT = K
+  } catch (e) { console.warn('[conifer kit]', e) }
+}
+// 法線往上往外偏、頂點色裡面下面暗（跟卡片版同一套：樹冠自己遮自己）
+function shadeConifer(g, fir) {
+  const R = fir ? 0.19 : 0.29
+  const p = g.attributes.position, n = g.attributes.normal ?? new THREE.BufferAttribute(new Float32Array(p.count * 3), 3), col = new Float32Array(p.count * 3)
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), l = Math.hypot(x, z) || 1
+    n.setXYZ(i, x / l * 0.55, 0.8, z / l * 0.55)
+    const rMax = R * Math.pow(Math.max(0, 1 - (y - 0.08) / 0.9), fir ? 0.9 : 0.72) + 0.03
+    const out = Math.min(1, l / rMax), k = (0.45 + 0.55 * out) * (0.7 + 0.3 * y)
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k
+  }
+  g.setAttribute('normal', n); g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+  return g
+}
+export function coniferLoGeo(kind) { const K = CONIFER_KIT?.[kind + '_lo']; return K ? shadeConifer(K.clone().toNonIndexed(), kind === 'fir') : null }
 export function coniferGeo(kind, tiersN) {
+  if (CONIFER_KIT) { const K = CONIFER_KIT[(tiersN != null && tiersN <= 10) ? kind + '_lo' : kind]; if (K) return shadeConifer(K.clone().toNonIndexed(), kind === 'fir') }
   const fir = kind === 'fir', R = fir ? 0.19 : 0.29, tiers = tiersN ?? (fir ? 22 : 17), rnd = mulberry32(fir ? 3 : 5)
   const cards = []
   for (let i = 0; i < tiers; i++) {
@@ -1130,7 +1159,10 @@ function buildInterior(lib, avoid = []) {
         list.forEach((it, i) => { m.setMatrixAt(i, mm.compose(it.p, it.q, it.s)); if (mat === needleM) m.setColorAt(i, c.setHSL(0.27 + (rnd() - 0.5) * 0.06, 0.2 + rnd() * 0.15, 0.7 + rnd() * 0.25)) })   // 每棵深淺、黃綠藍綠都差一點
         m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m); ms.push(m)
       }
-      lodRegister(ms, 12)   // 視野外的樹不畫（山區變大，樹多了一倍）
+      // 遠處換輕量版的立體樹冠（同樣的擺放、顏色）
+      const lo = coniferLoGeo(kind); let lows = []
+      if (lo) { const lm = new THREE.InstancedMesh(lo, needleM, list.length); lm.instanceMatrix.array.set(ms[0].instanceMatrix.array); if (ms[0].instanceColor) lm.instanceColor = ms[0].instanceColor.clone(); lm.castShadow = true; lm.receiveShadow = true; lm.count = 0; g.add(lm); lows = [lm, null, null] }
+      lodRegister(ms, 12, lows)   // 視野外的樹不畫（山區變大，樹多了一倍）
     }
     // 山頂一圈：玉山圓柏（矮、往旁邊爬的針葉灌叢，跟鐵杉同一套卡片壓扁）、玉山杜鵑（革質葉＋粉紅花，葉片卡片）
     {

@@ -76,7 +76,7 @@ const VER_Q = new URL(import.meta.url).searchParams.get('v') ?? ''   // 主頁�
     drawOpts(); pre.hidden = false; loadingEl.hidden = true
     // 即時 3D 的背景（title3d.js）：載好就蓋在影片上面；載不起來（沒有 WebGL、模型抓不到）就照舊播影片
     let t3 = null, gone = false
-    import(`./title3d.js?v=${VER_Q}`).then((m) => m.startTitle3D(pre.querySelector('.sky'), { ver: VER_Q })).then((h) => { if (gone) h.stop(); else { t3 = h; const v = pre.querySelector('.bgv'); if (v) { v.pause(); setTimeout(() => { v.hidden = true }, 900) } pre.querySelector('.sky').classList.add('live') } }).catch((e) => console.warn('[title3d]', e))
+    import('./title3d.js').then((m) => m.startTitle3D(pre.querySelector('.sky'), { ver: VER_Q })).then((h) => { if (gone) h.stop(); else { t3 = h; const v = pre.querySelector('.bgv'); if (v) { v.pause(); setTimeout(() => { v.hidden = true }, 900) } pre.querySelector('.sky').classList.add('live') } }).catch((e) => console.warn('[title3d]', e))
     const onKey = (e) => { if (e.key === 'Escape') show(null) }; addEventListener('keydown', onKey)
     await new Promise((res) => pre.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return

@@ -2,7 +2,7 @@
 import './fogzone.js'   // 一定要在任何材質編譯前（改霧的 shader）
 import * as THREE from 'three'
 import { lodUpdate, lodRegister, lodInit } from './lod.js'
-import { createAlpine } from './alpine.js'
+import { createAlpine , loadConiferKit } from './alpine.js'
 import { createHalls } from './halls.js'
 import { createShadowCache } from './shadowcache.js'
 import { createCoast } from './coast.js'
@@ -79,6 +79,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
 
   /* 場景 */
   buildDome(scene)
+  await loadConiferKit()   // 2026-11-12 立體樹冠的冷杉、鐵杉（180 KB）：公園外的樹林帶也要用，所以最先載
   const outsideG = buildOutside(renderer); scene.add(outsideG)   // 公園外面：圍籬、草地、樹林帶、遠山（2026-11-08 拿掉溫室）
   buildGround(scene)
   const mountain = buildMountain(scene)
@@ -464,14 +465,59 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     }
   }
   // 畫質設定（遊戲的設定畫面會改）：水面倒影的解析度、幾格更新一次
-  const quality = { reflScale: PHONE ? 0.3 : 1, reflEvery: PHONE ? 3 : 2 }
+  const quality = { reflScale: PHONE ? 0.3 : 1, reflEvery: PHONE ? 3 : 2, dof: !PHONE }   // dof：遠景柔焦（settings.js 照畫質等級開關）
   { const r0 = water.reflect; water.reflect = (...args) => { r0(...args); alpine.wetMirror?.reflect(...args) } }   // 2026-11-11 濕地的鏡面倒影跟花園水池一起更新（拍照、預熱那兩處也是呼叫 water.reflect）
   const shadows = createShadowCache({ renderer, scene, sun, camera })
   let lastR = performance.now()
+  // 2026-11-12 遠景柔焦（使用者：遠處應該像人眼一樣圓的、看不清楚，但不是低模）：場景先畫到一張 HDR 暫存圖（含深度），
+  // 再用一次全螢幕處理——110 m 以內清楚、到 320 m 越來越糊（最多約 1.6 像素，照畫面高度換算），天空也一起柔化。
+  // 只拿「本身也在遠處」的取樣點來平均：近處的樹幹、鳥不會被抹進背景，背景也不會滲進近物的邊緣（沒有光暈）。
+  // 長鏡頭拉近時門檻照放大倍率往遠推（600 mm 約 20 倍＝1.8 km 才開始糊），拍遠處的鳥不受影響。畫質低的等級關掉（多一張全解析度暫存圖、一次全螢幕處理）
+  const post = { rt: null, scene: new THREE.Scene(), cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), mat: null, size: new THREE.Vector2() }
+  post.mat = new THREE.ShaderMaterial({
+    uniforms: { tColor: { value: null }, tDepth: { value: null }, cn: { value: 0.1 }, cf: { value: 1000 }, f0: { value: 90 }, f1: { value: 260 }, maxR: { value: 2 }, res: { value: new THREE.Vector2(1, 1) } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `#include <packing>
+      uniform sampler2D tColor, tDepth; uniform float cn, cf, f0, f1, maxR; uniform vec2 res; varying vec2 vUv;
+      float coc(vec2 uv) { float d = texture2D(tDepth, uv).x; float z = d >= 0.99999 ? 1e5 : -perspectiveDepthToViewZ(d, cn, cf); return smoothstep(f0, f1, z); }
+      void main() {
+        vec4 c0 = texture2D(tColor, vUv); float k = coc(vUv);
+        if (k > 0.01) {
+          vec3 acc = c0.rgb; float w = 1.0; float r = k * maxR;   // 暫存圖已經是 sRGB 編碼（接近眼睛感受的亮度），直接平均
+          for (int i = 0; i < 12; i++) {
+            float a = float(i) * 2.39996, rr = sqrt((float(i) + 0.5) / 12.0) * r;
+            vec2 uv = vUv + vec2(cos(a), sin(a)) * rr / res;
+            float ws = coc(uv);
+            acc += texture2D(tColor, uv).rgb * ws; w += ws;
+          }
+          c0.rgb = acc / w;
+        }
+        gl_FragColor = vec4(c0.rgb, 1.0);   // 暫存圖裡已經是螢幕上的顏色（色調映射、sRGB 都做過了，見下面 isXRRenderTarget），原樣輸出
+      }`,
+    depthTest: false, depthWrite: false, toneMapped: false,
+  })
+  { const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post.mat); q.frustumCulled = false; post.scene.add(q) }
   function render(cam = camera) {
     const now = performance.now(); shadows.update(Math.min(0.1, (now - lastR) / 1000)); lastR = now
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
-    renderer.render(scene, cam)
+    if (!quality.dof || renderer.getRenderTarget() || !cam.isPerspectiveCamera) { renderer.render(scene, cam); return }
+    renderer.getDrawingBufferSize(post.size)
+    if (!post.rt || post.rt.width !== post.size.x || post.rt.height !== post.size.y) {
+      post.rt?.dispose(); post.rt?.depthTexture?.dispose()
+      post.rt = new THREE.WebGLRenderTarget(post.size.x, post.size.y, { type: THREE.HalfFloatType, samples: 4, depthTexture: new THREE.DepthTexture(post.size.x, post.size.y) })
+      // 暫存圖存 sRGB 編碼過的顏色（跟畫到螢幕一樣）：半透明的霧、雲是在 sRGB 上疊的。存線性的話霧疊起來比較濃，遠山整片變淡變灰。
+      // 一定要明確設：XR 那條路的輸出色彩空間就是這個，空的會讓著色器編不起來（整個遊戲黑掉）。半浮點的格式不會被硬體再轉一次
+      post.rt.texture.colorSpace = THREE.SRGBColorSpace
+    }
+    // 畫的那一刻把暫存圖標成「XR」：three 就照畫到螢幕時一樣，每個材質自己決定做不做色調映射（輸出色彩空間跟著暫存圖＝線性，sRGB 留到最後一步）。
+    // 第一版畫成 HDR 再統一做色調映射：天空這種沒有色調映射的著色器被多做一次，天空變灰變淡。標記不能一直開著（建立時開著會被當成外部的 XR 畫面，整張黑）
+    renderer.setRenderTarget(post.rt); post.rt.isXRRenderTarget = true
+    try { renderer.render(scene, cam) } finally { post.rt.isXRRenderTarget = false }
+    renderer.setRenderTarget(null)
+    const U = post.mat.uniforms, zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(31)) / Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)))
+    U.tColor.value = post.rt.texture; U.tDepth.value = post.rt.depthTexture; U.cn.value = cam.near; U.cf.value = cam.far
+    U.f0.value = 110 * zoom; U.f1.value = 320 * zoom; U.maxR.value = 1.6 * post.size.y / 1080; U.res.value.copy(post.size)
+    renderer.render(post.scene, post.cam)
   }
   const groundAt = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)   // 相機對焦用（camera.js aim）
   return { groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物

@@ -64,6 +64,7 @@ export function createSettings({ world, player }) {
       sun.shadow.map?.dispose(); sun.shadow.map = null   // 下一格用新的大小重建
     }
     ;[world.quality.reflScale, world.quality.reflEvery] = val('reflect')
+    world.quality.dof = !PHONE && (st.preset === 'auto' ? auto.level <= 2 : st.res !== 'low')   // 遠景柔焦：自動畫質前三級、手動解析度不是「低」才開
     world.time.lights.forEach((l, i) => { l.userData.off = i >= val('lights') })   // 最近的燈排在前面，關後面的。只把亮度歸零、不設 visible：燈數一變全部材質要重新編譯（約 600 個著色器），自動畫質一調整畫面就整個卡住
     player.controls.userSens = st.sens   // camera.js 每格用它乘上焦段的比例（直接設 pointerSpeed 會被蓋掉）
     fpsEl.hidden = !st.fps

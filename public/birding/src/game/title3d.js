@@ -11,7 +11,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { Reflector } from 'three/addons/objects/Reflector.js'
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
-const LAT = V(0, 0, 1)   // 模型頭朝 -x、左右對稱：身體的左右軸是 z（繞它轉＝低頭／抬頭）
+const LAT = V(0, 0, -1)   // 模型頭朝 -x、左右對稱：身體的左右軸是 -z（跟遊戲 birds.js 的 TRIPO.lat 一樣；第一版寫成 +z，每節脖子都往反方向彎，低頭時頭翻上去）
 const UPAX = V(0, 1, 0)
 // 低頭濾食時每節脖子繞左右軸轉多少（跟遊戲裡 FEED.flamingo 同一組數字）
 const FEED = { neck: 0.35, neck2: -0.17, neck3: -0.52, neck4: -0.66, neck5: -0.66, neck6: -0.63, neck7: -0.52, neck8: -0.35, neck9: -0.09, neck10: 0.26, head: 1.75 }

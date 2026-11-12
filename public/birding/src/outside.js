@@ -11,7 +11,7 @@ import { TAU, domeRho, inAlpine, alpineHeight, terrainHeight, smoothstep, lerp }
 import { fbm3, mulberry32 } from './noise.js'
 import { dayLight, duskLight, weatherU, wetify } from './structures.js'
 import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'
-import { coniferGeo, needleMaterial } from './alpine.js'
+import { coniferGeo, needleMaterial , coniferLoGeo } from './alpine.js'
 import { graniteMaterial } from './yosemite.js'
 import { lodRegister } from './lod.js'
 import * as T from './textures.js'
@@ -178,8 +178,9 @@ export function buildOutside(renderer = null) {
       const sc = (it) => new THREE.Vector3(it.H * it.w, it.H, it.H * it.w)
       const col = (it, c) => c.setHSL(0.25 + (it.c - 0.5) * 0.08, 0.35 + it.c * 0.2, 0.75 + it.c * 0.35)
       const ms = [fill(crown(3), leafM, broadL, sc, col), fill(cards, leafCardMaterial(0x5a8a42), broadL, sc, col), fill(trunk, barkM, broadL, sc)]
-      let lows = [fill(crown(1), leafM, broadL, sc, col), null, null]
-      if (renderer) {
+      // 2026-11-12 使用者「遠景是板樹，應該像人眼一樣圓的、看不清楚，但不是低模」：遠處不再換成交叉看板，用同形狀的圓形實心樹冠（320 面，有凹凸和上亮下暗）
+      let lows = [fill(crown(2), leafM, broadL, sc, col), null, null]
+      if (false && renderer) {
         const midC = new THREE.Color().setHSL(0.25, 0.45, 0.92)
         const tex = bakeImpostor(renderer, [[crown(3), leafM, midC], [cards, leafCardMaterial(0x5a8a42), midC], [trunk, barkM, null]], 0.9)
         const impM = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.9 })
@@ -206,7 +207,9 @@ export function buildOutside(renderer = null) {
         const col = (it, c) => c.setHSL(0.27 + (it.c - 0.5) * 0.06, 0.2 + it.c * 0.15, 0.7 + it.c * 0.25)
         const ms = [fill(crown, needleM, list, sc, col), fill(trunk, barkM, list, sc), fill(core, coreM, list, sc)]
         let lows = [fill(farCore, farM, list, sc, col), null, null]
-        if (renderer) {
+        const loG = coniferLoGeo(kind)   // 2026-11-12 使用者「遠景是板樹」：遠處不再用交叉看板（烘好的替身），改用立體樹冠的輕量版
+        if (loG) lows = [fill(loG, needleM, list, sc, col), null, null]
+        else if (renderer) {
           const W = R0 * 2.3, midC = new THREE.Color().setHSL(0.27, 0.27, 0.82)
           const tex = bakeImpostor(renderer, [[crown, needleM, midC], [trunk, barkM, null], [core, coreM, null]], W)
           const impM = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.95 })
