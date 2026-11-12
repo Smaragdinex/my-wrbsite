@@ -38,9 +38,9 @@ export function buildCave(scene, kit, sum, lib) {
       prev?.call(m2, sh, r2)
       sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
         { float cl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); float gk = smoothstep(0.02, 0.1, diffuseColor.g - max(diffuseColor.r, diffuseColor.b));
-          diffuseColor.rgb = mix(vec3(cl), diffuseColor.rgb, mix(0.32, 0.85, gk)) * vec3(0.97, 0.99, 1.03) * 1.08; }`)
+          diffuseColor.rgb = mix(vec3(cl), diffuseColor.rgb, mix(0.32, 0.85, gk)) * mix(vec3(1.32, 1.03, 0.68), vec3(1.0), gk); }`)   // 2026-11-12 使用者「瀑布山上下顏色不同」：洞裡的岩石原本對的是灰花崗岩 → 改成跟上面岩壁一樣的暖砂岩色（青苔的綠不動）
     }
-    m2.customProgramCacheKey = () => (mat.customProgramCacheKey?.() ?? '') + 'caveMatch'
+    m2.customProgramCacheKey = () => (mat.customProgramCacheKey?.() ?? '') + 'caveMatchSand'
     matched.set(mat, m2); return m2
   }
   const rock = (name, x, y, z, s, yaw = rnd() * 6.28, rx = 0, rz = 0) => { if (!lib?.[name]) return; (SC[name] ||= []).push({ p: V(x, y, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, yaw, rz)), s: s instanceof THREE.Vector3 ? s : V(s, s, s) }) }

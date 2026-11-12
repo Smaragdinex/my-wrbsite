@@ -59,14 +59,28 @@ function ridged(x, z) {
   const a = 1 - Math.abs(fbm2(x * 0.018, z * 0.018, 4) * 2 - 1), b = 1 - Math.abs(fbm2(x * 0.06 + 7, z * 0.06 + 3, 3) * 2 - 1)
   return a * 0.7 + b * 0.3
 }
-function mountain(x, z) {
-  let h = 12
-  for (const [px, pz, ph, wx, wz] of PEAKS) {
-    const r = Math.sqrt(((x - px) / wx) ** 2 + ((z - pz) / wz) ** 2)
-    h = Math.max(h, 12 + (ph - 12) * Math.exp(-Math.pow(r, 1.75) * 0.8))
-  }
+// 2026-11-12 ChatGPT（瀑布後山 V5）：四個高斯鐘形疊起來像光滑的圓錐 → 每座峰有 3～5 道放射狀的主稜（稜線之間是往下切的侵蝕溝）、
+// 一階一階的岩肩（硬岩層形成的陡壁＋緩台）、南北兩側坡度不一樣、整座山再用低頻雜訊扭一下（輪廓不對稱）
+const PK_RIDGE = [[4, 0.4, 2.3], [3, 2.1, 2.0], [5, 1.2, 2.6], [4, 3.3, 1.9]]   // 每座峰：[幾道主稜, 轉幾度, 坡形指數（小＝尖、大＝平頂陡壁）]
+function mountain(x0, z0) {
+  const wx0 = 9 * (fbm2(x0 * 0.012 + 3, z0 * 0.012, 3) - 0.5), wz0 = 9 * (fbm2(x0 * 0.012, z0 * 0.012 + 8, 3) - 0.5)
+  const x = x0 + wx0, z = z0 + wz0
+  let h = 12, gul = 0
+  PEAKS.forEach(([px, pz, ph, wx, wz], pi) => {
+    const [nr, ph0, ex] = PK_RIDGE[pi], dx = (x - px) / wx, dz = (z - pz) / (wz * (z < pz ? 0.82 : 1.3))   // 朝瀑布那面陡、背面緩
+    const r0 = Math.sqrt(dx * dx + dz * dz), th = Math.atan2(dz, dx) + 0.5 * (fbm2(x * 0.02 + pi * 7, z * 0.02, 2) - 0.5)
+    const rid = 0.5 + 0.5 * Math.cos(th * nr + ph0), rid2 = 0.5 + 0.5 * Math.cos(th * (nr * 2 + 1) + ph0 * 1.7)
+    const r = r0 * (1.18 - 0.36 * Math.pow(rid, 1.6) - 0.1 * rid2 * ss(0.3, 1.0, r0))    // 稜線上伸得遠、溝裡縮回來
+    const hp = 12 + (ph - 12) * Math.exp(-Math.pow(r, ex) * 0.8)
+    if (hp > h) { h = hp; gul = (1 - rid) * ss(0.25, 0.9, r0) * ss(2.2, 1.2, r0) }
+  })
   const k = (h - 12) / 150
-  h += k * 44 * (ridged(x, z) - 0.55) + 2.5 * (fbm2(x * 0.15, z * 0.15, 2) - 0.5)
+  // 岩肩：每 17～26 m 一階，硬岩層的地方變陡、上面一段緩
+  { const stp = 21 + 6 * (fbm2(x * 0.01 + 5, z * 0.01, 2) - 0.5), u = h / stp, f = u - Math.floor(u), bench = Math.floor(u) + ss(0.25, 0.75, f)
+    h = lerp(h, bench * stp, 0.6 * ss(0.12, 0.4, k) * ss(0.35, 0.6, fbm2(x * 0.02 + 9, z * 0.02 + 4, 2) + 0.12)) }
+  h -= gul * (5 + 9 * k)                                                             // 侵蝕溝
+  h += k * 30 * (ridged(x, z) - 0.55) + 2.5 * (fbm2(x * 0.15, z * 0.15, 2) - 0.5)
+  h += k * 7 * (1 - Math.abs(fbm2(x0 * 0.1 + 2, z0 * 0.1 + 6, 3) * 2 - 1) - 0.5)       // 2～4 m 的岩稜、凹槽
   return h
 }
 export function summitHeight(x, z) {
@@ -130,8 +144,18 @@ export function buildSummit(scene, kit, lib) {
         float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(vnH(i), vnH(i + vec2(1, 0)), f.x), mix(vnH(i + vec2(0, 1)), vnH(i + vec2(1, 1)), f.x), f.y); }
         float vfbm(vec2 p) { return vn(p) * 0.55 + vn(p * 2.3 + 7.1) * 0.3 + vn(p * 5.1 + 3.7) * 0.15; }`).replace('#include <color_fragment>', `
         { /* 2026-11-12 使用者「前後山都改一樣材質，不然後面是灰色的山」：灰花崗岩 → 跟瀑布岩壁一樣的砂岩（暖米褐、一層層水平的岩層） */
-          vec3 rockC = diffuseColor.rgb * vec3(0.47, 0.37, 0.24) * (0.75 + 0.5 * dot(tpL.rgb, vec3(0.33)));
-          { float yb = vTpW.y + 0.1 * (vTpW.x - 195.0) + 1.5 * vfbm(vTpW.xz * 0.04); rockC *= 0.74 + 0.42 * vfbm(vec2(yb * 0.75, floor(yb / 7.0) * 3.1 + 2.2)); }
+          vec3 rockC = diffuseColor.rgb * vec3(0.58, 0.43, 0.255) * (0.75 + 0.5 * dot(tpL.rgb, vec3(0.33)));
+          { /* 岩層：厚薄差很多（0.6～3 m）；一塊塊斷層把橫紋錯開 1～4 m；約四分之一的面積是塊狀、看不出層理；直的裂隙和侵蝕溝把橫帶切斷 */
+            vec2 fb = floor(vec2(vTpW.x + vTpW.z * 0.35 + 6.0 * vfbm(vTpW.xz * 0.03), vTpW.z - vTpW.x * 0.2) / vec2(19.0, 31.0));
+            float flt = (vnH(fb) - 0.5) * 7.0;
+            float yb = vTpW.y + 0.1 * (vTpW.x - 195.0) + flt + 3.0 * vfbm(vTpW.xz * 0.035) + 0.6 * vfbm(vTpW.xz * 0.3);
+            float thick = 0.45 + 1.1 * vn(vec2(yb * 0.11, 3.7));
+            float band = vfbm(vec2(yb * thick, floor(yb / 9.0) * 3.1 + 2.2));
+            float massive = smoothstep(0.52, 0.68, vfbm(vTpW.xz * 0.028 + vec2(4.0, vTpW.y * 0.01)));
+            rockC *= mix(0.5 + 0.85 * smoothstep(0.25, 0.75, band), 0.92 + 0.12 * vfbm(vTpW.xz * 0.5 + vTpW.y * 0.4), massive);
+            float crack = vfbm(vec2((vTpW.x + vTpW.z * 0.6) * 0.75, vTpW.y * 0.06 + 2.0)), crack2 = vfbm(vec2((vTpW.x - vTpW.z) * 0.22, vTpW.y * 0.03 + 9.0));
+            rockC *= 1.0 - 0.42 * smoothstep(0.66, 0.74, crack) - 0.3 * smoothstep(0.6, 0.72, crack2);
+            rockC *= 0.82 + 0.36 * vfbm(vec2(vTpW.x + vTpW.z, vTpW.y * 1.3) * 0.3); }
           // 花崗岩面：一條條往下流的黑色水痕、橫的節理（深一點的帶）、偶爾鐵鏽色
           float streak = vfbm(vec2((vTpW.x + vTpW.z) * 0.22, vTpW.y * 0.015));
           rockC *= 1.0 - 0.3 * smoothstep(0.55, 0.75, streak);
@@ -141,18 +165,21 @@ export function buildSummit(scene, kit, lib) {
           float rk = smoothstep(0.35, 0.65, vRock + (dot(tpL.rgb, vec3(0.33)) - 0.45) * 0.5);
           diffuseColor.rgb = mix(gnd, rockC, rk); }`)
     }
-    mm.customProgramCacheKey = () => 'summitMassifSand' }
+    mm.customProgramCacheKey = () => 'summitMassifSand3' }
   const massif = new THREE.Mesh(mg, mm); massif.name = 'summitMassif'; massif.receiveShadow = true; massif.castShadow = true; g.add(massif)
 
   // 山上的針葉林：冷杉卡片樹冠（輕量版）＋深色芯＋樹幹；林線 130 m，露岩、太陡的地方不長；有一塊塊林間空地
   {
     const trees = []
-    for (let k = 0; k < 40000 && trees.length < 1100; k++) {
+    for (let k = 0; k < 60000 && trees.length < 1350; k++) {
       const v = info[Math.floor(rnd() * info.length)], x = v.x + (rnd() - 0.5) * 1.3, z = v.z + (rnd() - 0.5) * 1.1
-      if (v.y < 26 || v.y > 130 + 8 * fbm2(v.x * 0.05, v.z * 0.05, 2) || v.rock > 0.35 || v.slope > 0.68 || v.d < 9) continue
-      if (fbm2(x * 0.035 + 11, z * 0.035, 3) < 0.38 && rnd() < 0.85) continue   // 林間空地
+      if (v.y < 26 || v.y > 130 + 8 * fbm2(v.x * 0.05, v.z * 0.05, 2) || v.d < 9) continue
+      // 2026-11-12 ChatGPT：樹林到裸岩一條線切斷 → 露岩邊上 10～20 m 零星長幾棵小的（岩縫裡的矮樹），真正的陡壁還是光的
+      const edge = v.rock > 0.35 || v.slope > 0.68
+      if (edge && (v.rock > 0.8 || v.slope > 0.84 || rnd() > 0.1)) continue
+      if (!edge && fbm2(x * 0.035 + 11, z * 0.035, 3) < 0.38 && rnd() < 0.85) continue   // 林間空地
       if (trees.some((t) => Math.abs(t.x - x) < 2.6 && Math.abs(t.z - z) < 2.6)) continue
-      const H = (v.y > 118 ? 7 : 11) + rnd() * 9
+      const H = edge ? 3.5 + rnd() * 4.5 : (v.y > 118 ? 7 : 11) + rnd() * 9
       trees.push({ x, z, y: summitHeight(x, z) - 0.3, H, w: 0.75 + rnd() * 0.35, c: rnd() })
     }
     const crown = noBud(coniferGeo('fir', 14)), trunk = new THREE.CylinderGeometry(0.006, 0.026, 0.86, 6).translate(0, 0.43, 0)
