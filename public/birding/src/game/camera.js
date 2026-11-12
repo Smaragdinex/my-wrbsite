@@ -199,16 +199,44 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
 
   // 對焦：觀景窗中心打一條射線，量到的距離變了就重新對焦（要 body.af 秒）
   const ray = new THREE.Raycaster(), center = new THREE.Vector2(0, 0)
-  let targets = [], tgtT = 0
+  // 2026-11-12 使用者「相機右鍵都會卡」：量到每一格這條射線要 144 ms——對全場 5,330 個網格逐一測（光是 88 萬個三角形的地形就 47 ms）。改成：
+  //   1. 地形不測網格：沿射線每 0.5 m 取一次地面高度（supportAt 之類的查表），幾百次查表不到 0.1 ms
+  //   2. 其他東西先記下每個的包圍球（世界座標，每 2 秒重抓一次；鳥會動，每次現算），射線沒碰到球的直接跳過，剩幾十個才真的測三角形
+  //   3. 一秒量 8 次就夠（對焦本來就要 0.2 秒以上），中間用上一次的距離
+  let targets = [], tgtT = 0, aimT = 0, aimLast = 300
+  const _sp = new THREE.Sphere(), _hit = []
   function aim() {
-    if ((tgtT -= 1) <= 0) {   // 可以擋住視線的東西（不透明的網格＋鳥），每 30 格重抓一次
-      tgtT = 30; targets = []
-      world.scene.traverse((o) => { if ((o.isMesh || o.isInstancedMesh) && o.visible && !o.material?.transparent) targets.push(o) })
+    const nowT = performance.now()
+    if (nowT - aimT < 120) return aimLast
+    aimT = nowT
+    if (nowT - tgtT > 2000) {
+      tgtT = nowT; targets = []
+      world.scene.traverse((o) => {
+        if (!(o.isMesh || o.isInstancedMesh) || !o.visible || o.material?.transparent || o.name === 'lod:impostor') return
+        for (let q = o.parent; q; q = q.parent) if (q === camera || !q.visible) return   // 手上那台相機（掛在鏡頭底下）、整組被藏起來的不算
+        const ge = o.geometry; if (!ge) return
+        const nTri = (ge.index ? ge.index.count : ge.attributes.position?.count ?? 0) / 3
+        if (!o.isInstancedMesh && !o.isSkinnedMesh && nTri > 150000) return   // 地形那種大網格：用高度查表代替
+        let sp
+        if (o.isSkinnedMesh) sp = null
+        else if (o.isInstancedMesh) { if (!o.boundingSphere) o.computeBoundingSphere(); sp = (o.userData.fullSphere ?? o.boundingSphere).clone().applyMatrix4(o.matrixWorld) }
+        else { if (!ge.boundingSphere) ge.computeBoundingSphere(); sp = ge.boundingSphere.clone().applyMatrix4(o.matrixWorld) }
+        targets.push({ o, sp })
+      })
     }
-    ray.setFromCamera(center, camera)
-    ray.far = 300
-    const hit = ray.intersectObjects(targets, false)[0]
-    return hit ? hit.distance : 300
+    ray.setFromCamera(center, camera); ray.far = 300
+    let best = 300
+    // 地形
+    { const o = ray.ray.origin, d = ray.ray.direction; for (let t = 1; t < 300; t += t < 60 ? 0.5 : 1.5) { const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t; if (y < world.groundAt(x, z)) { best = t; break } } }
+    ray.far = best
+    for (const T of targets) {
+      const o = T.o; if (!o.visible) continue
+      if (T.sp) { if (!ray.ray.intersectsSphere(T.sp)) continue }
+      else { o.getWorldPosition(_sp.center); _sp.radius = 2.5; if (!ray.ray.intersectsSphere(_sp)) continue }
+      _hit.length = 0; o.raycast(ray, _hit)
+      for (const h of _hit) if (h.distance < best) { best = h.distance; ray.far = best }
+    }
+    return (aimLast = best)
   }
 
   // 鳥的速度（算動態模糊用）：每格記下畫面上那個物件（停著的模型或飛行模型）的位置
@@ -255,7 +283,7 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     trackBirds(dt)
     idleScreen()
     if (!st.raised) return
-    if ((st.meterT -= dt) <= 0) { st.meterT = 0.25; meterNow() }
+    if ((st.meterT -= dt) <= 0) { st.meterT = 0.5; meterNow() }   // 測光＝把整個場景再畫一次到小貼圖：一秒 4 次 → 2 次
     const d = aim()
     if (Math.abs(d - st.aimDist) > Math.max(0.15, st.aimDist * 0.06)) { st.aimDist = d; st.af = 0; st.locked = false }
     st.af += dt

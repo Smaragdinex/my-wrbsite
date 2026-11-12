@@ -253,7 +253,13 @@ function frame() {
 // 鳥什麼時候在：每日排程＋活動時段＋飛來飛走（presence.js；PARK_PLAN.md）
 const presence = createPresence({ world, camera, flight, hud, state, save, rec: REC })
 // 串流載入：還沒有模型的鳥在背景由近到遠補上；補上一隻就接上驚飛和出沒時段
-world.streamBirds({ onReady: (b) => { flight.add(b); presence.sync(b) } })
+// 2026-11-12 使用者：稀有的鳥讀完再讓牠飛入——稀有、非常稀有的排到最後才載（進場時先把常見的載完，畫面比較快齊）；
+// 載好的時候玩家在附近（6～130 m）就從遠處飛進來降落，不是憑空出現
+const isRare = (b) => { const r = RARITY[b.def.id]; return r === '稀有' || r === '非常稀有' }
+world.streamBirds({ late: isRare, onReady: (b) => {
+  flight.add(b); presence.sync(b)
+  if (!REC && isRare(b) && !b.absent) { const d = b.target.distanceTo(camera.position); if (d > 6 && d < 130 && flight.canFly(b)) { try { flight.arrive(b) } catch (e) { console.warn('[arrive]', b.def.id, e) } } }
+} })
 function tick(dt, t) {
   presence.update(hour, dt)
   if (!panelOpen() && !menuCam) player.update(dt)

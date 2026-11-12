@@ -295,10 +295,11 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   // 串流載入：還沒有模型的鳥（pending）一隻隻補上——每次挑離鏡頭最近的，三個下載並行；載到就蓋、通知遊戲（驚飛、出沒時段要接上）
   const streamState = { total: 0, left: 0, done: null }
-  function streamBirds({ onReady } = {}) {
+  function streamBirds({ onReady, late } = {}) {
     const pend = birds.filter((b) => b.pending), busy = new Set()
     streamState.total = streamState.left = pend.length
-    const next = () => { let best = null, bd = BIRD_RANGE; for (const b of pend) { if (busy.has(b)) continue; const d = b.target.distanceTo(camera.position); if (d < bd) { bd = d; best = b } } return best }   // mid／lite：只載 BIRD_RANGE 內的，走近才載
+    // 2026-11-12 使用者：稀有的鳥讀完再飛進來——late(b) 的鳥排在最後（附近 40 m 內的普通鳥都載完才輪到），載好由遊戲那邊讓牠飛進場
+    const next = () => { let best = null, bd = BIRD_RANGE; for (const b of pend) { if (busy.has(b)) continue; const d0 = b.target.distanceTo(camera.position); if (d0 >= BIRD_RANGE) continue; const d = d0 + (late?.(b) ? 400 : 0); if (!best || d < bd) { bd = d; best = b } } return best }   // mid／lite：只載 BIRD_RANGE 內的，走近才載
     const finishOne = async (b) => {
       for (let k = 0; k < 6 && b.pending; k++) {
         await Promise.all(modelsFor(b.def.id).map(ensureModel))
@@ -471,7 +472,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     renderer.render(scene, cam)
   }
-  return { memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  const groundAt = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)   // 相機對焦用（camera.js aim）
+  return { groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */
