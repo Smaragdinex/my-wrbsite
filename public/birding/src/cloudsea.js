@@ -15,7 +15,7 @@ export function createCloudSea(scene, { sun }) {
     const h = ALP_HEIGHTS[(j * K) * AG.nx + i * K]
     hd[j * nx + i] = Math.max(0, Math.min(255, Math.round((Number.isFinite(h) && h < 1e5 ? h : 0) / 80 * 255)))
     { const x = AG.x0 + i * K * AG.cell, z = AG.z0 + j * K * AG.cell, sx = Math.max(198, Math.min(247, x)), d = Math.hypot((x - sx) / 1.15, z - (86 + (sx - 198) * 0.18))   /* 2026-11-13 驗收第 9 條之後：湖往東延伸到 x 247，雲海讓開的範圍沿著湖拉長 */   // 2026-11-13 Pass 1B（ChatGPT：水霧把湖和森林洗白）：
-      if (d < 44) hd[j * nx + i] = Math.max(hd[j * nx + i], Math.round(255 * Math.min(1, (44 - d) / 14))) }        // 瀑布盆地（湖面 27.5 m、雲海 32 m）往下看是一整片白 → 盆地 30 m 內不放雲海、30～44 m 慢慢接回
+      if (d < 95) hd[j * nx + i] = Math.max(hd[j * nx + i], Math.round(255 * Math.min(1, (95 - d) / 25))) }   // 驗收第 24 條：從瀑布步道往下看整個河谷（湖西邊的營地、溪谷）也是一片白 → 範圍 44 → 70 m 全清、70～95 m 接回        // 瀑布盆地（湖面 27.5 m、雲海 32 m）往下看是一整片白 → 盆地 30 m 內不放雲海、30～44 m 慢慢接回
     if (AG.x0 + i * K * AG.cell > 250) hd[j * nx + i] = 255   // 2026-11-11 東邊（原本的濕地、草原）改成紅杉林：林子在雲海的高度裡，一片平的白霧把樹幹攔腰切斷 → 那裡不放雲海
   }
   const hTex = new THREE.DataTexture(hd, nx, nz, THREE.RedFormat)
