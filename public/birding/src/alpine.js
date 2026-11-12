@@ -379,7 +379,7 @@ function buildInterior(lib, avoid = []) {
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, Vd), 0.0), 5.0);
         float d = clamp(vDepth / 0.9, 0.0, 1.0);
         // 顏色是線性空間：山溪清澈，淺處透出黃褐石頭、深處青綠
-        vec3 bed = vec3(0.11, 0.09, 0.055), mid = vec3(0.025, 0.06, 0.05), deep = vec3(0.005, 0.03, 0.03);
+        vec3 bed = vec3(0.10, 0.115, 0.08), mid = vec3(0.03, 0.13, 0.10), deep = vec3(0.006, 0.05, 0.045);   // 2026-11-12 參考圖：清澈、深處翡翠綠
         vec3 col = mix(bed, mid, smoothstep(0.0, 0.45, d));
         col = mix(col, deep, smoothstep(0.45, 1.0, d));
         #ifdef LAKE
@@ -396,6 +396,17 @@ function buildInterior(lib, avoid = []) {
           #endif
         #endif
         col += vec3(0.01, 0.026, 0.02) * (h0 - 0.5) * (1.0 - d * 0.5);
+        #ifndef MIRROR
+        {
+          // 2026-11-12 焦散光（使用者參考圖：陽光透過水紋在溪底織出一張晃動的亮網）：兩層雜訊相減取細線，淺水最明顯、1 m 以下看不到；陰天、晚上沒有
+          vec2 cp = vW.xz * 3.6 + N.xz * 0.6;
+          float c1 = vnoise(cp + uTime * vec2(0.32, 0.21)), c2 = vnoise(cp * 1.37 + vec2(5.2, 1.3) - uTime * vec2(0.26, 0.34));
+          float c3 = vnoise(cp * 2.9 + vec2(2.1, 7.7) + uTime * vec2(0.41, -0.3));
+          float ca = pow(clamp(1.0 - abs(c1 - c2) * 2.6, 0.0, 1.0), 7.0) + 0.5 * pow(clamp(1.0 - abs(c2 - c3) * 2.6, 0.0, 1.0), 9.0);
+          float shallow = smoothstep(0.0, 0.06, vDepth) * (1.0 - smoothstep(0.15, 1.0, vDepth));
+          col += vec3(0.30, 0.46, 0.33) * ca * shallow * uDay * (1.0 - uRain) * 0.3 * smoothstep(0.25, 0.7, vnoise(vW.xz * 0.45 + 3.7));   // 一片一片（樹蔭下沒有、空曠處才有），不是整條溪都一樣
+        }
+        #endif
         // 反射：低角度看過去倒映的是兩岸的樹和石壁（暗綠、一塊深一塊淺），只有幾乎正上方的反射才是天空
         vec3 R = reflect(-Vd, N);
         vec3 sky = mix(fogColor, vec3(0.78, 0.85, 0.9), 0.5);
@@ -432,6 +443,7 @@ function buildInterior(lib, avoid = []) {
         float spark = smoothstep(0.5, 0.9, vnoise(vW.xz * 7.0 + uTime * vec2(0.9, -0.5)) * 0.6 + vnoise(vW.xz * 17.0 - uTime * vec2(0.4, 0.8)) * 0.4);
         float glit = (pow(sd, 18.0) * 0.55 + pow(sg, 70.0) * (0.3 + 3.2 * spark)) * uDusk * sunUp;
         col += vec3(1.0, 0.58, 0.2) * glit * 3.6;
+        col += vec3(1.0, 0.98, 0.93) * pow(sg, 110.0) * spark * 2.2 * uDay * sunUp * (1.0 - uDusk);   // 白天：水面上一點一點跳動的亮點
         col = mix(col, col * vec3(1.15, 0.92, 0.7), uDusk * sunUp * 0.35 * smoothstep(0.6, 0.98, sd));   // 太陽那個方向的水面整片偏金
         // 跌水：一股股白色水絲，中間夾著深色透明的水
         // 三層：粗的水股、細的水絲、最細的拉絲（長焦拉近看才不會是一片糊糊的白）
@@ -450,7 +462,7 @@ function buildInterior(lib, avoid = []) {
         vec3 white = vec3(0.8, 0.85, 0.86) * (0.82 + 0.18 * h0);
         col = mix(col, white, foam * 0.88);
         col *= mix(0.12, 1.0, uDay);
-        float a = mix(0.28, 0.86, d) + foam * 0.55 + fres * 0.35 + fall * 0.1 + lip * 0.2;
+        float a = mix(0.13, 0.82, d) + foam * 0.55 + fres * 0.35 + fall * 0.1 + lip * 0.2;   // 淺的地方更透（看得到溪底的卵石）
         a = mix(a, mix(0.18, 0.4, strands) + 0.58 * curtain, fall);
         // 水簾兩側邊緣碎成一絲絲（越往下越碎），不是一條切齊的直邊
         float edgeD = min(vUv.x, 1.0 - vUv.x);
@@ -458,7 +470,11 @@ function buildInterior(lib, avoid = []) {
         col = mix(col, col * 0.45, fall * (1.0 - strands) * (1.0 - foam));   // 跌水那面：水絲不透明、水絲之間半透明   // 淺的地方看得到溪底
         a *= smoothstep(0.0, 0.05, vDepth);
         #ifdef LAKE
-          a = clamp((0.55 + 0.42 * (1.0 - exp(-vDepth / 0.22)) + foam * 0.3) * smoothstep(0.0, 0.015, vDepth), 0.0, 0.97);   // 1 cm 就 55%，水線只淡 1.5 cm（以前 5 cm 才 31%）
+          #ifdef MIRROR
+          a = clamp((0.55 + 0.42 * (1.0 - exp(-vDepth / 0.22)) + foam * 0.3) * smoothstep(0.0, 0.015, vDepth), 0.0, 0.97);
+          #else
+          a = clamp((0.26 + 0.70 * (1.0 - exp(-vDepth / 0.34)) + foam * 0.3 + fres * 0.3) * smoothstep(0.0, 0.015, vDepth), 0.0, 0.97);   // 2026-11-12 山上的湖：岸邊半公尺清澈見底，往裡才是湖水色
+          #endif   // 1 cm 就 55%，水線只淡 1.5 cm（以前 5 cm 才 31%）
         #endif                                      // 岸邊淡掉，不會有一條硬邊
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>

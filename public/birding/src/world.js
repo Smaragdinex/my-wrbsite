@@ -29,6 +29,7 @@ import { buildPondLife } from './pondlife.js'
 import { buildYosemite } from './yosemite.js'
 import { buildGiants, giantSpots } from './giants.js'
 import { loadWalkwayKit, buildWalkways } from './walkway.js'
+import { buildStreambed, streambedTick } from './streambed.js'
 import { loadWetlandKit, buildWetlandProps } from './wetland.js'
 import { loadSummitKit, buildSummit as buildYoseTop } from './yosemite-top.js'
 import { loadCaveKit, buildCave } from './cave.js'
@@ -145,7 +146,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   giantSpots(alpAvoid)   // 巨木的位置先算好：山區的其他樹、草要避開
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
-  scene.add(buildEast({ avoid: alpAvoid, lib: plantLib, hideKit, walkKit }))   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
+  scene.add(buildEast({ avoid: alpAvoid, lib: plantLib, hideKit, walkKit }))
+  buildStreambed(scene).then((r) => console.log('streambed', JSON.stringify(r))).catch((e) => console.error('streambed', e))   // 2026-11-12 溪床卵石、苔石、水草（不擋進場，載好就出現）   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
   alpine.build()
   const camp = buildCamp(scene)
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉
@@ -380,6 +382,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     camp.tick(t, dt, { day: dayLight.value })
     pondLife.tick(t, dt)
     yose.tick(t, camera, time?.lights)
+    streambedTick(t)
     giants.tick(t, camera, { day: dayLight.value })
     weather.tick(t, dt)
     {

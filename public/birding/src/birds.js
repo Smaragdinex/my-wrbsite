@@ -1803,7 +1803,7 @@ function shoebill(env) {
 // 覓食姿勢（每根骨頭多轉幾弧度，照側面實拍調的）。down：頭下到水面那一段的姿勢；sweep：嘴在水裡左右掃的幅度、頻率
 export const FEED = {
   // 紅鶴濾食：身體只微微前傾，脖子從胸口直直垂下去，頭整個倒過來、上嘴朝下貼著水面，慢慢左右擺
-  flamingo: { acts: ['peck'], lean: 0.26, neck: 0, head: 0, reach: 0.25, rate: 2.2, bones: { neck: 0.44, neck2: -0.19, neck3: -0.56, neck4: -1.29, neck5: -1.15, neck6: -0.52, neck7: 0, neck8: 0.49, neck9: 0.59, neck10: 0.63, head: 0.47 }, sweep: 0.12, hz: 0.25, inT: 0.2, outT: 0.8 },   // 2026-11-12 脖子手術後 10 節（從肩膀裡開始）：往下垂、底部往前彎回來（J 形），頭幾乎不用另外轉就是倒過來的——頭轉太多會把上脖子扯成一片
+  flamingo: { acts: ['peck'], lean: 0.16, neck: 0, head: 0, reach: 0.2, rate: 2.2, bones: { neck: 0.35, neck2: -0.17, neck3: -0.52, neck4: -0.66, neck5: -0.66, neck6: -0.63, neck7: -0.52, neck8: -0.35, neck9: -0.09, neck10: 0.26, head: 1.75 }, sweep: 0.12, hz: 0.25, inT: 0.2, outT: 0.8 },   // 2026-11-12 第五版：脖子 10 節平均分攤往下彎成一條弧（每節最多 38°）、喝水時脖子伸長 4 成；頭在頭頸交界轉 100° 倒過來（頭的權重只到交界往前 3 cm，脖子整條一樣細）
   // 玫瑰琵鷺：身體前傾，脖子往前下伸直，匙狀的嘴尖泡在水裡、張著一點左右快速掃
   rspoonbill: { acts: ['hunt', 'strike'], lean: 0.6, neck: 0, head: 0, reach: 0.65, bones: { neck: -1.25, neck2: -0.4, neck3: -0.1, head: 1.9 }, sweep: 0.3,   /* 2026-11-12 使用者：頭歪著喝水——頭往後折了 97°，嘴尖朝著腳；改成脖子往前下斜、嘴朝前下插進水裡 */ hz: 1.1, inT: 0.12, outT: 0.9 },
 }

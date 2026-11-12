@@ -455,7 +455,7 @@ export function buildYosemite(scene, { lib } = {}) {
       // 球的背面會被岩壁擋住 → 改成落水點前面 1 m 的一片直立的面（寬 22、高 18），夾角照樣逐點算
       const rb = new THREE.Mesh(new THREE.PlaneGeometry(22, 18, 1, 1), rbM); rb.position.copy(rbM.uniforms.uC.value).add(V(0, 1.5, -1.0)); rb.renderOrder = 6; rb.frustumCulled = false; rb.name = 'rainbow'; g.add(rb) }
     // 水潭：橢圓、深綠帶一點藍
-    const poolM = new THREE.MeshStandardMaterial({ color: 0x1f7f63, roughness: 0.05, metalness: 0.12, transparent: true, opacity: 0.88 })   // 2026-11-12 翡翠綠（參考照的水色）
+    const poolM = new THREE.MeshStandardMaterial({ color: 0x16604e, roughness: 0.06, metalness: 0.12, transparent: true, opacity: 0.74 })   /* 2026-11-12 ChatGPT：不透明的土耳其藍像油漆 → 深一點的翡翠綠、透一點（看得到岸邊水下的石頭） */   // 2026-11-12 翡翠綠（參考照的水色）
     // 2026-11-11 使用者：下雨時這座湖也要有漣漪（濕地那支水面 shader 已經有，這裡是一片平的標準材質）→ 同一套雨滴圈：改法線＋圈的亮邊
     poolM.onBeforeCompile = (sh) => {
       sh.uniforms.uRT = uT; sh.uniforms.uRain = weatherU.rain
