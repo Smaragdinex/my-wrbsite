@@ -151,7 +151,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   scene.add(buildEast({ avoid: alpAvoid, lib: plantLib, hideKit, walkKit }))
   buildStreambed(scene).then((r) => console.log('streambed', JSON.stringify(r))).catch((e) => console.error('streambed', e))   // 2026-11-12 溪床卵石、苔石、水草（不擋進場，載好就出現）   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
   alpine.build()
-  const camp = buildCamp(scene)
+  // 2026-11-13 使用者「把這裡的營區暫時都移除，讓進入瀑布步道更順暢」：帳篷、柴堆、營火、冰桶都不擺（buildCamp 留著，要放回來把這行換回去）
+  const camp = { tick() {} }   // buildCamp(scene)
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉
   const yose = buildYosemite(scene, { lib: plantLib })   // 2026-11-10 帳篷區後面的花崗岩壁、瀑布、西黃松
   const giants = buildGiants(scene, { sun, avoid: alpAvoid, lib: plantLib })

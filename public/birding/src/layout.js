@@ -985,7 +985,7 @@ function buildAlpine() {
       rv.halfAt = (sv) => sv < sLip + 0.5 ? lerp(h0(sv), 2.7, smoothstep(sA, sLip - 2.5, sv)) : lerp(2.7, 4.2, smoothstep(sLip + 0.5, sEnd + 1.5, sv))
       rv.mouthS = sEnd; rv.lipS = sLip
     }
-    for (const c of XS) { const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 1.2), half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
+    for (const c of XS) { const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 2.1),   /* 2026-11-13 使用者：橋再高一點（離水 1.2 → 2.1 m） */ half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
   }
   // 斷面（參考台灣山溪的影片）：水邊不是直的——寬度用 2D 雜訊，兩岸不對稱、一凹一凸；
   // 水裡是 U 形的潭底；岸是緩緩爬上去的坡，坡上有一塊塊凸起的石頭（不是一面平滑的牆）
@@ -1061,10 +1061,13 @@ function buildAlpine() {
     aTrail[k] = dAll
     for (const b of RIVER_BRIDGES) {   // 橋下：河道照挖（路面攤平會把河填掉），兩端 4 公尺外接回路面；橋頭的路面接到橋面高
       const ax = x - b.x, az = z - b.z, along = ax * b.dir[0] + az * b.dir[1], lat = Math.abs(-ax * b.dir[1] + az * b.dir[0])
-      if (lat < b.hw + 3 && Math.abs(along) < b.half + 3) {
+      if (lat < b.hw + 6 && Math.abs(along) < b.half + 9) {   /* 2026-11-13 使用者「斜坡再順一點」：橋頭的引道拉長到 8 m、兩側 4 m 慢慢接回地面（以前 3.6 m、路兩邊直直掉下去像一道土堤） */
         const k2 = smoothstep(b.half - 1.6, b.half + 0.2, Math.abs(along))
-        h = lerp(Math.min(h, hRiver), h, k2)
-        if (lat < b.hw + 0.6 && Math.abs(along) < b.half + 3) h = lerp(h, b.y + b.k * along - 0.02, smoothstep(b.half + 3.6, b.half + 1.0, Math.abs(along)) * k2)   // 橋頭外 1 公尺內路面＝橋面（石板鋪出去、不露一片懸空的板子）
+        // 2026-11-13 使用者「橋旁邊的石頭都懸空」：以前橋下整條 4 m 寬都挖回原本的河谷，水面只有河那麼寬，兩邊空出一道乾的溝、石頭懸在溝上 →
+        // 只挖河本身（水面外 0.3 m），往外照 1.3:1 的坡接回路面
+        const RVb = ALP_RIVER, sb = RVb.sAt(x, z), over = Math.max(0, RVb.dist(x, z) - RVb.halfAt(sb) - 0.3), hDig = Math.max(hRiver, Math.min(h, RVb.water(sb) + 0.1 + over * 1.3))
+        h = lerp(Math.min(h, hDig), h, k2)
+        { const wl = smoothstep(b.hw + 4.5, b.hw + 0.6, lat), wa = smoothstep(b.half + 8.5, b.half + 1.0, Math.abs(along)); if (wl > 0 && wa > 0) h = lerp(h, b.y + b.k * along - 0.02, wa * wl * k2) }   // 橋頭外 1 公尺內路面＝橋面（石板鋪出去、不露一片懸空的板子）
       }
     }
     // 小木屋底下和四周攤平（門口那塊空地也是）
