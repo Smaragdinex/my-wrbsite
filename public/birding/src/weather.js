@@ -11,11 +11,12 @@ import { POOL, poolQ, STORE, CABIN } from './layout.js'
 
 const { clamp, lerp, smoothstep, randFloat: rnd } = THREE.MathUtils
 const ss = (a, b, v) => smoothstep(v, a, b)
-export const WEATHER = { clear: 0, cloudy: 0.45, rain: 0.72, storm: 1 }
-const NEXT = [['clear', 0.5], ['cloudy', 0.25], ['rain', 0.15], ['storm', 0.1]]
+// 2026-11-12 使用者：「加入天氣 有大太陽，中午都是陰天」→ sunny（-0.5）：比平常的晴天更強的直射陽光、更深的陰影、藍天少雲、遠景的霧淡一半
+export const WEATHER = { sunny: -0.5, clear: 0, cloudy: 0.45, rain: 0.72, storm: 1 }
+const NEXT = [['sunny', 0.34], ['clear', 0.26], ['cloudy', 0.2], ['rain', 0.13], ['storm', 0.07]]
 
 export function createWeather({ scene, camera, sun, hemi, renderer, time }) {
-  const st = { w: 0, target: 0, name: 'clear', auto: false, seg: rnd(120, 240), flash: 0, rain: 0, storm: 0, cloud: 0, nextBolt: 8 }
+  const st = { w: 0, target: 0, name: 'clear', auto: false, seg: rnd(120, 240), flash: 0, rain: 0, storm: 0, cloud: 0, sunny: 0, nextBolt: 8 }
   const thunderCbs = []
 
   /* ---------- 包住日夜：setTime 之後記下「晴天」的燈光，再套天氣 ---------- */
@@ -26,18 +27,20 @@ export function createWeather({ scene, camera, sun, hemi, renderer, time }) {
   const grey = new THREE.Color()
   function apply() {
     const cl = st.cloud, r = st.rain, f = st.flash
+    const sn = st.sunny = 1 - ss(-0.45, -0.05, st.w)
     // 2026-11-11 使用者：有時候特別暗（ChatGPT 光照 V2）：多雲只把直射陽光壓下去，天空漫射光幾乎不變、曝光補一點——陰影變柔和，不是森林變成晚上
     // 乘數（cloud 0 / 0.45 / 0.72 / 1）：太陽 1 / .48 / .12 / .04、天光 1 / 1.05 / .88 / .72、環境 1 / .95 / .82 / .72、曝光 ×(1＋0.15·cloud)
-    const w = st.w, pw = (a, b, c, d2) => w < 0.45 ? lerp(a, b, w / 0.45) : w < 0.72 ? lerp(b, c, (w - 0.45) / 0.27) : lerp(c, d2, clamp((w - 0.72) / 0.28, 0, 1))   // 照天氣值 w（晴 0／多雲 .45／雨 .72／雷雨 1），不是 cloud（cloud 在多雲就已經 0.86）
-    sun.intensity = base.sun * pw(1, 0.48, 0.12, 0.04) + f * 2.5
-    hemi.intensity = base.hemi * pw(1, 1.05, 0.88, 0.72) + f * 6
+    const w = Math.max(0, st.w), pw = (a, b, c, d2) => w < 0.45 ? lerp(a, b, w / 0.45) : w < 0.72 ? lerp(b, c, (w - 0.45) / 0.27) : lerp(c, d2, clamp((w - 0.72) / 0.28, 0, 1))   // 照天氣值 w（晴 0／多雲 .45／雨 .72／雷雨 1），不是 cloud（cloud 在多雲就已經 0.86）
+    sun.intensity = base.sun * pw(1, 0.48, 0.12, 0.04) * (1 + 0.6 * sn) + f * 2.5
+    hemi.intensity = base.hemi * pw(1, 1.05, 0.88, 0.72) * (1 - 0.08 * sn) + f * 6   // 大太陽：直射光 ×1.6、天光略降 → 明暗對比變大（影子更清楚）
     scene.environmentIntensity = base.env * pw(1, 0.95, 0.82, 0.72)
     renderer.toneMappingExposure = base.exp * pw(1, 1.05, 1.12, 1.15)
     // 2026-11-10 使用者：下雨後整片白 → 霧不要那麼濃（雨天 ×2.75 → ×1.85），顏色壓成雨天的暗灰（以前還是晴天那個亮灰綠，一濃就是一片白牆）
-    scene.fog.density = base.fog * (1 + 0.5 * cl + 0.75 * r)
+    scene.fog.density = base.fog * (1 + 0.5 * cl + 0.75 * r) * (1 - 0.5 * sn)
     const lum = base.fogC.r * 0.3 + base.fogC.g * 0.5 + base.fogC.b * 0.2, dk = 0.86 - 0.36 * Math.min(1, r / 0.72)
     scene.fog.color.copy(base.fogC).lerp(grey.setRGB(lum * dk, lum * (dk + 0.03), lum * (dk + 0.06)), Math.min(1, cl * 0.75 + r * 0.3))
-    weatherU.cloud.value = cl
+    scene.fog.color.lerp(grey.setRGB(lum * 0.86, lum * 1.0, lum * 1.16), 0.45 * sn)   // 遠景的霧帶一點藍
+    weatherU.cloud.value = cl; weatherU.sunny.value = sn
     weatherU.gloom.value = Math.min(1, cl * 0.75 + st.storm * 0.25)
     weatherU.flash.value = f
     weatherU.haze.value = cl * 0.5 + r * 0.4

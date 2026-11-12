@@ -161,6 +161,7 @@ const DAY_SEC = 24 * 60
 const qs = new URLSearchParams(location.search)
 let hour = qs.has('t') ? +qs.get('t') : 9
 // 天氣：遊戲裡自己隨機變（晴／多雲／下雨／雷雨）；?weather=rain 之類可以固定一開始的天氣
+world.weather.set('sunny', true)   // 2026-11-12 進場先是大太陽（之後照機率自動換）
 world.weather.auto(true)
 if (qs.has('weather')) world.weather.set(qs.get('weather'), true)
 world.weather.onThunder((delay, strength) => amb.thunder?.(delay, strength))

@@ -20,7 +20,7 @@ export const sunDirU = { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() 
 // 霧氣量：白天 0；晚上 0.75、清晨（6 點前後）最濃 1，9 點前散掉。world.setTime 改值，霧、山頂雲、山區的霧團照它加濃
 export const mistLevel = { value: 0 }
 // 天氣（weather.js 改值）：雲量 0～1、陰暗 0～1、閃電亮光 0～1、遠處的雨霧 0～1
-export const weatherU = { cloud: { value: 0 }, gloom: { value: 0 }, flash: { value: 0 }, haze: { value: 0 }, rain: { value: 0 }, wet: { value: 0 } }   // rain 正在下多大、wet 地面濕到什麼程度（雨停後慢慢乾）
+export const weatherU = { cloud: { value: 0 }, gloom: { value: 0 }, flash: { value: 0 }, haze: { value: 0 }, rain: { value: 0 }, wet: { value: 0 }, sunny: { value: 0 } }   // rain 正在下多大、wet 地面濕到什麼程度（雨停後慢慢乾）
 // 下雨地面變濕（2026-11-08）：顏色變深、表面變亮滑（粗糙度降低，會反天光）。地面、山區地形、圍牆外草地、雲霧山的岩壁都套
 export function wetify(mat, { dark = 0.36, rough = 0.32 } = {}) {
   const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey?.bind(mat)
@@ -40,9 +40,9 @@ export function buildSky(scene) {
   // 日夜：uDay 白天 1、晚上 0；uDusk 黃昏／清晨那一段地平線變橘；晚上有星星和月亮（world.setTime 在改）
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime, uCloud: weatherU.cloud, uGloom: weatherU.gloom, uFlash: weatherU.flash },
+    uniforms: { sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime, uCloud: weatherU.cloud, uSunny: weatherU.sunny, uGloom: weatherU.gloom, uFlash: weatherU.flash },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `varying vec3 vDir; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCloud; uniform float uGloom; uniform float uFlash;
+    fragmentShader: `varying vec3 vDir; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCloud; uniform float uSunny; uniform float uGloom; uniform float uFlash;
       float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -53,6 +53,8 @@ export function buildSky(scene) {
         float h = clamp(d.y, -0.2, 1.0);
         vec3 top = mix(vec3(0.012, 0.02, 0.05), vec3(0.30,0.55,0.85), uDay);
         vec3 hor = mix(vec3(0.035, 0.05, 0.09), vec3(0.86,0.91,0.93), uDay);
+        // 2026-11-12 大太陽（weather 'sunny'）：天頂更深的藍、地平線從灰白變成淡藍（平常的晴天偏白、像薄雲天）
+        top = mix(top, vec3(0.13, 0.38, 0.86), uSunny * uDay * 0.85); hor = mix(hor, vec3(0.6, 0.79, 0.97), uSunny * uDay * 0.75);
         // 黃昏：太陽那一側的地平線橘紅、天頂偏紫
         float sunSide = 0.5 + 0.5 * dot(normalize(d.xz + 1e-4), normalize(sunDir.xz + 1e-4));
         // 2026-11-11 濕地夕陽（ChatGPT，linear）：太陽兩側 ±35° 的地平線橘 (1,.43,.2)、其他方向偏粉紫；上層一帶 (.76,.38,.36)、天頂 (.27,.32,.49)
@@ -80,7 +82,7 @@ export function buildSky(scene) {
         if (d.y > 0.0) {
           vec2 cp = d.xz / (d.y + 0.12) * 1.6 + vec2(uTime * 0.006, uTime * 0.002);
           float n = fbm(cp), n2 = fbm(cp * 2.1 + 5.0);
-          float cov = smoothstep(0.48 - 0.42 * uCloud, 0.75 - 0.3 * uCloud, n + 0.12 * n2);   // 雲量：陰天、下雨整片蓋滿
+          float cov = smoothstep(0.48 - 0.42 * uCloud + 0.13 * uSunny, 0.75 - 0.3 * uCloud + 0.1 * uSunny, n + 0.12 * n2);   // 雲量：陰天、下雨整片蓋滿
           cloudA = cov * smoothstep(0.0, 0.18, d.y);
           float lit = 0.72 + 0.28 * smoothstep(0.35, 0.85, n2) + 0.35 * pow(max(dot(d, sunDir), 0.0), 6.0);
           vec3 cc = mix(vec3(0.05, 0.06, 0.09), vec3(0.97, 0.98, 1.0), uDay) * lit;

@@ -1,7 +1,7 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL, AM, ALP_POND, EAST, YOSE } from './layout.js'
+import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight } from './layout.js'
 import { birdText } from './i18n.js'
 
 const ALL = [
@@ -557,8 +557,8 @@ const ALL = [
   },
   {
     // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [95.5, -67.2]）
-    id: 'harrier', spot: [69, -121], perch: 'ground', view: 66, y: EAST.W + 0.22,   /* 2026-11-11 沼澤的草島上（鶴的觀察台看過去） */ dist: 3.4, camH: 1.0, lookY: 0.35,
-    name: "西方澤鵟", sci: 'Circus aeruginosus', where: "翡翠沼澤的草島、蘆葦上空",
+    id: 'harrier', spot: [53.1, -113.77], perch: 'ground', view: 250, water: EAST.W,   /* water：有給就不會被貼回地面（world.js groundAt） */ y: Math.min(EAST.W, alpineHeight(51.5, -113)) + 6.92,   /* 2026-11-12 使用者：站在沼澤環線旁那棵枯木（wetland.js snag_2 @51.5,-113）的頂端；頂端在模型座標 (1.456, 6.495, 0.251)，轉過之後 +1.60, +6.42, -0.77，樹根在泥底 +0.5 */   /* 2026-11-11 沼澤的草島上（鶴的觀察台看過去） */ dist: 9, camH: -4.5, lookY: 0.3,
+    name: "西方澤鵟", sci: 'Circus aeruginosus', where: "翡翠沼澤枯木的頂端、蘆葦上空",
     intro: "中大型猛禽，雄鳥飛起來是黑、褐、白三色：翅膀前緣白、覆羽紅褐、飛羽灰白、翼尖黑。常貼著沼澤、草地低空盤旋，雙翼上揚成淺 V 字，低頭找獵物。",
     facts: [
       "在台灣是「迷鳥」，偶爾才有一隻迷路過來，賞鳥人會專程去看。",

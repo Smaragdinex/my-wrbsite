@@ -256,7 +256,7 @@ export function buildWalkways(scene, kit) {
         const p = at(s0), lat = sd * 1.61, nx = -p.tz * sd, nz = p.tx * sd
         const x = p.x + nx * 1.61, z = p.z + nz * 1.61
         if (deckAt(p.x + nx * 2.3, p.z + nz * 2.3) != null) continue   // 2026-11-11 觀景灣的入口：這一側不立柱、不拉欄杆（railRun 超過 3 m 的間隔不接）
-        if (w.head.t === 'wet' && (lampK++ % 4) === 1) lampAt.push([x - nx * 0.09, p.y + 0.55, z - nz * 0.09, nx, nz])   // 每 5.6 m 一盞矮燈（柱子內側、離台面 0.55 m）
+        if (String(w.head.t).startsWith('wet') && (lampK++ % 4) === 1) lampAt.push([x - nx * 0.09, p.y + 0.55, z - nz * 0.09, nx, nz])   // 每 5.6 m 一盞矮燈（柱子內側、離台面 0.55 m）
         posts.push({ x, z, y: p.y, nx, nz, s: s0 })
         bw.add('bw_post', place(V(x, p.y, z), V(nx, 0, nz), V(p.tx, 0, p.tz)))
         bw.add('bw_bracket', place(V(x, p.y, z), V(p.tx, 0, p.tz), V(nx, 0, nz)))
@@ -278,6 +278,13 @@ export function buildWalkways(scene, kit) {
           const a = at(bs)
           posts.push({ x, z, y: a.y, nx: -a.tz * sd, nz: a.tx * sd, s: bs })
         }
+      }
+      // 沼澤環線的終點：欄杆接到翡翠灣前緣開口兩邊的柱子
+      if (w.head.t === 'wet2') for (const D of EAST.decks) {
+        if (!D.join) continue
+        const F = deckFrame(D), hd = D.d / 2 - 0.05, e = at(S), lx = (e.x - D.x) * F.c - (e.z - D.z) * F.s > 0 ? 1 : -1
+        const side = Math.sign((-e.tz * sd) * F.c - (e.tx * sd) * F.s) || 1
+        posts.push({ x: D.x + side * 1.55 * F.c + hd * F.s, z: D.z - side * 1.55 * F.s + hd * F.c, y: e.y, nx: -e.tz * sd, nz: e.tx * sd, s: S + 1 })
       }
       posts.forEach((q, k) => { q.s ??= -1 + k * 1e-3 })
       posts.sort((a, b) => a.s - b.s)

@@ -248,7 +248,7 @@ function buildHides(kit) {
 function buildBoardwalk(wk) {
   // 2026-11-11 也改用木棧道那套 Blender 零件（bw_plank、bw_stringer、bw_post、bw_rail_top／mid）和同一個木頭材質；原本是 JS 疊的方木條
   const G = new THREE.Group(), sp = ALP_SPURS.find((q) => q.name === 'wetBoard')
-  if (!sp || !wk?.geo) return G
+  if (!sp || !wk?.geo || sp.pts.length < 4) return G   // 2026-11-12 折線木道拆了（改成 walkway.js 蓋的 'wet2' 曲線棧道）
   const r = mulberry32(919), W = 1.7, P = sp.pts, M = {}
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), bm = new THREE.Matrix4()
   const put = (part, x, y, z, yaw, sc = [1, 1, 1]) => (M[part] ||= []).push(m4.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(UP, yaw), new THREE.Vector3(sc[0], sc[1], sc[2])).clone())

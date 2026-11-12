@@ -841,7 +841,7 @@ export const BIRDS = {
  },
  "harrier": {
   "name": "Western Marsh Harrier",
-  "where": "Grassy Islets and Reedbeds of the Emerald Marsh",
+  "where": "Atop the dead snag in the Emerald Marsh, and over the reedbeds",
   "intro": "A medium-large raptor; in flight the male is a three-toned black, brown and white: white leading edge, rufous coverts, pale grey flight feathers and black wingtips. It quarters low over marsh and grassland with wings raised in a shallow V, head down hunting.",
   "facts": [
    "In Taiwan it is a vagrant: a lost bird turns up only occasionally, and birders travel specially to see it.",

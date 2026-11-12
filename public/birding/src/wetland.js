@@ -100,7 +100,7 @@ function buildReeds(g, kit) {
   let nr = 0, nc = 0
   for (let k = 0; k < 140000 && (nr < 420 || nc < 210); k++) {
     const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0), y = alpineHeight(x, z), dep = W - y
-    if (dep > 0.25 || dep < -0.3 || alpineTrailDist(x, z) < 2.2 || fan(x, z) || [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([a, b]) => walkAt(x + a, z + b) != null || deckAt(x + a * 0.5, z + b * 0.5) != null || wetBoardAt(x + a * 0.6, z + b * 0.6) != null)) continue   // 2026-11-11 觀景台底下也不種（蘆葦從台面穿出來）
+    if (dep > 0.25 || dep < -0.3 || alpineTrailDist(x, z) < 2.2 || fan(x, z) || [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([a, b]) => walkAt(x + a, z + b) != null || deckAt(x + a * 0.95, z + b * 0.95) != null || wetBoardAt(x + a * 0.6, z + b * 0.6) != null)) continue   // 2026-11-11 觀景台底下也不種（蘆葦從台面穿出來）
     const lag = inLagoon(x, z)
     if (!lag && (inE(M.lily, x, z, 1.1) || inE(M.papyrus, x, z, 1.15) || M.meadows.some((o) => inE(o, x, z, 1.1)))) continue
     if (lag && (z < -112 || rnd() < 0.7)) continue   // 潟湖：只有北岸、東北岸零星幾叢（夕陽從後面照的那一排）

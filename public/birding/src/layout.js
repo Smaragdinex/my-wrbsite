@@ -558,7 +558,8 @@ export const EAST_DW = [-276, -60], EAST_DG = [-303, 8]
   for (const p of ALP_SPURS.find((q) => q.name === 'wetBoard').pts) mv(p, EAST_DW)
   // 2026-11-12 使用者：「右邊木道可以跟中間的連結嗎」→ 原本走到沼澤裡一個平台就是死路；現在從那裡繼續往南、繞過荷葉區（水雉 52,-107 的東邊），
   // 再往西接到中間 S 形棧道東側的翡翠灣（灣前緣中點 42.84,-121.30、朝東；最後 3 m 是接灣的平台），變成一圈環線
-  ALP_SPURS.find((q) => q.name === 'wetBoard').pts.push([60.5, -99.5], [60.5, -106], [57.5, -113], [53.5, -118], [50.3, -120.58], [45.83, -121.01])
+  // （第二版，同一天）折線木道＋平台接灣的地方木板角度對不起來 → 整條改成跟中間棧道同一套的平滑曲線棧道（下面 mkWetWalk 的 'wet2'）；這條支線只剩岸上接過去的一小段土路
+  { const sp = ALP_SPURS.find((q) => q.name === 'wetBoard'); sp.pts.length = 0; sp.pts.push([45.5, -87.3], [47.4, -87.9]) }
   EAST.W = -0.25
 }
 // 2026-11-11 濕地加大一倍、分成兩座（使用者：10 種鳥都要住得進去、兩個不同特色的濕地；ChatGPT「Wetland expansion」）：
@@ -571,18 +572,17 @@ EAST.mid = [[20, -101], [42, -100], [44, -152], [14, -152]]   // 2026-11-11 使�
 EAST.wetBox = [-76, 108, -180, -78]
 // 翡翠沼澤裡的分區（深度、植物、鳥都照這個）
 EAST.marsh = {
-  grebe: { x: 60, z: -116, rx: 9, rz: 7, dep: 1.4 },          // 深水池：鳳頭鸊鷉求偶、花嘴鴨
+  grebe: { x: 62, z: -115, rx: 17, rz: 12.5, dep: 1.4 },   /* 2026-11-12 使用者：右邊的湖加大 → 開闊深水從 18×14 m 放大到 34×25 m（原本大部分是 0.2 m 深、長滿蘆葦的淺灘） */          // 深水池：鳳頭鸊鷉求偶、花嘴鴨
   lily: { x: 50, z: -106, rx: 7.5, rz: 6, dep: 0.5 },         // 荷葉盆地：觀察屋 O8 正前方
   meadows: [{ x: 73, z: -103, rx: 8, rz: 6, who: 'redcrowned' }, { x: 72, z: -127, rx: 8, rz: 6, who: 'sarus' }, { x: 68, z: -151, rx: 7, rz: 4.5, who: 'ruff' }],   // 濕草甸：剛好露出水面、一窪窪積水
-  papyrus: { x: 45, z: -127, rx: 6, rz: 5 },                   // 紙莎草角落：鯨頭鸛埋伏
+  papyrus: { x: 47, z: -131, rx: 6, rz: 4.5 },                   // 紙莎草角落：鯨頭鸛埋伏
 }
-EAST.mainPool = { x: 60, z: -116, rx: 9, rz: 7 }
+EAST.mainPool = { x: 62, z: -115, rx: 17, rz: 12.5 }
 EAST.channel = [[42, -112], [50, -114.5], [60, -116], [70, -114], [79, -111]]
 EAST.channel2 = [[60, -116], [62.5, -125], [57, -134], [59, -144], [66, -150]]
 EAST.creek = [[-50, -110], [-30, -115], [-6, -120], [8, -123], [20, -126]]   // 潟湖的筆直深水道（黑剪嘴鷗貼著水面剪過去）：35～50 m、寬 5 m
 EAST.islands = [
-  { x: 66, z: -109, rx: 3, rz: 2.2, rot: 0.4, h: 0.2, veg: true }, { x: 54, z: -123, rx: 2.6, rz: 1.8, rot: -0.3, h: 0.18, veg: true },
-  { x: 69, z: -121, rx: 2.8, rz: 2, rot: 0.9, h: 0.2, veg: true }, { x: 58, z: -101, rx: 2.2, rz: 1.6, rot: 0.2, h: 0.16, veg: true },
+  { x: 54, z: -126, rx: 2.6, rz: 1.8, rot: -0.3, h: 0.18, veg: true },   // 2026-11-12 湖加大：湖中間的三座草島拿掉（澤鵟改站枯木）
   // 潟湖：泥灘、沙洲（光禿、高出水面 0.1～0.15）
   { x: -12, z: -103, rx: 5, rz: 3, rot: 0.3, h: 0.12 }, { x: -22, z: -127, rx: 4, rz: 2.5, rot: -0.5, h: 0.1 }, { x: 6, z: -134, rx: 4.5, rz: 2.2, rot: 0.2, h: 0.12 },
   { x: 14, z: -110, rx: 3, rz: 2, rot: 0.8, h: 0.15 }, { x: -5, z: -127, rx: 3.5, rz: 2, rot: -0.2, h: 0.1 },
@@ -1179,16 +1179,16 @@ export const ALP_WALKS = (() => {
   return out
 })()
 // 2026-11-11 兩湖中間的木棧道（使用者：中間的走道改木頭道）：北岸 → 南岸，跨過水面；棧道面＝max(水面 + 0.45, 地面 + 0.06)，兩端順著接回地面
-{
+const mkWetWalk = (P, tag, bays) => {
   // 2026-11-11 ChatGPT「S-Curve Sunset Boardwalk」：直的 45 m 像一座橋 → 緩緩的 S 形（左右各擺 3 m、長約 50 m，Catmull-Rom）：
   // 往南走，先往西（潟湖）彎出去——轉過第一個彎，金色的潟湖整個打開；再往東（沼澤）彎回來
-  const P = [[34.2, -86.3], [32.9, -93.3], [31.6, -100.3], [32.9, -108.3], [37, -116.3], [38.4, -123.3], [36.5, -131], [33.2, -139], [32.6, -147], [34.6, -153.5], [36, -158.6]]   // 加大後多一個彎，走到新的南岸（約 78 m）
+  // 主棧道的控制點在下面呼叫的地方   // 加大後多一個彎，走到新的南岸（約 78 m）
   const cv = new THREE.CatmullRomCurve3(P.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal'), LEN = cv.getLength(), NS = Math.round(LEN / 0.05)
   const xs = [], zs = [], tx = [], tz = []
   for (let i = 0; i <= NS; i++) { const q = cv.getPointAt(i / NS), t = cv.getTangentAt(i / NS); xs.push(q.x); zs.push(q.z); tx.push(t.x); tz.push(t.z) }
   const N = xs.length, stx = Float32Array.from(tx), stz = Float32Array.from(tz)
   // 兩個觀景灣（EAST.decks，跟棧道同高）：夕陽灣（西側、17～22 m，5×4 m、一張面向夕陽的長椅）、翡翠灣（東側、34～39 m，4×3 m，看荷葉和鸊鷉）
-  for (const [nm, s0, side, w, d, bench] of [['sunsetBay', 19.5, -1, 5, 4, true], ['emeraldBay', 37, 1, 4, 3, false], ['southBay', 58, -1, 5, 4, true]]) {
+  for (const [nm, s0, side, w, d, bench] of bays) {
     const i = Math.min(N - 1, Math.round(s0 / 0.05)), nx = -stz[i] * side, nz = stx[i] * side, off = WALK_HW + d / 2 + 0.02
     EAST.decks.push({ join: nm === 'emeraldBay', name: nm, x: xs[i] + nx * off, z: zs[i] + nz * off, w, d, look: [xs[i] + nx * 30, zs[i] + nz * 30], y: EAST.W + 0.45, bench, bay: true, s: s0, side })   // s、side：在棧道的哪裡、哪一側（walkway.js 把棧道欄杆接到灣的角柱）
   }
@@ -1198,13 +1198,18 @@ export const ALP_WALKS = (() => {
   for (let i = 0; i < N; i++) { let a = 0, c = 0; for (let q = Math.max(0, i - 30); q <= Math.min(N - 1, i + 30); q++) { a += y[q]; c++ } sm[i] = Math.max(base[i], a / c) }
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9
   for (let i = 0; i < N; i++) { x0 = Math.min(x0, xs[i]); x1 = Math.max(x1, xs[i]); z0 = Math.min(z0, zs[i]); z1 = Math.max(z1, zs[i]) }
-  ALP_WALKS.push({ head: { t: 'wet' }, xs, zs, tx: Array.from(stx), tz: Array.from(stz), y: sm, ground: base, N, ds: 0.05, box: [x0 - 2, x1 + 2, z0 - 2, z1 + 2] })
+  ALP_WALKS.push({ head: { t: tag }, xs, zs, tx: Array.from(stx), tz: Array.from(stz), y: sm, ground: base, N, ds: 0.05, box: [x0 - 2, x1 + 2, z0 - 2, z1 + 2] })
 }
+mkWetWalk([[34.2, -86.3], [32.9, -93.3], [31.6, -100.3], [32.9, -108.3], [37, -116.3], [38.4, -123.3], [36.5, -131], [33.2, -139], [32.6, -147], [34.6, -153.5], [36, -158.6]], 'wet', [['sunsetBay', 19.5, -1, 5, 4, true], ['emeraldBay', 37, 1, 4, 3, false], ['southBay', 58, -1, 5, 4, true]])
+// 2026-11-12 沼澤環線（使用者：右邊木道接到中間、「道路用順、中間沒接好、要有燈」）：從觀察屋 O8 旁的岸邊下水，往東南繞過荷葉盆地、深水池的東緣，
+// 再往西直直接進翡翠灣前緣的開口（最後 6.7 m 跟灣垂直）；跟主棧道同寬、同高（水面 +0.45）、同一套欄杆和矮燈
+mkWetWalk([[47.2, -87.8], [49.5, -91.5], [54, -94.5], [58.5, -96.5], [61, -101], [61, -107], [58.5, -113.5], [54, -118.5], [49.5, -120.66], [46.89, -120.91], [42.84, -121.3]], 'wet2', [])
 // 2026-11-12 沼澤觀察屋旁的矮木道（wetBoard 支線，east.js buildBoardwalk 蓋）：以前木板貼著地形走，沼澤加大以後後半段的地形在水面下、整條沉在水裡只剩欄杆。
 // 木板面＝max(地面 + 0.12, 水面 + 0.4)；盡頭 3×3 m 平台是平的。人走在上面（supportAt）
 export const wetBoardY = (x, z) => Math.max(alpineHeight(x, z) + 0.12, EAST.W + 0.4)
 export const wetBoardEnd = () => { const P = ALP_SPURS.find((q) => q.name === 'wetBoard').pts, E = P[P.length - 1], A = P[P.length - 2], l = Math.hypot(E[0] - A[0], E[1] - A[1]); const dx = (E[0] - A[0]) / l, dz = (E[1] - A[1]) / l; return { x: E[0], z: E[1], dx, dz, y: Math.max(wetBoardY(E[0], E[1]), deckAt(E[0] + dx * 3.6, E[1] + dz * 3.6) ?? -1e9) } }   // 盡頭的平台接翡翠灣：跟灣同高
 export function wetBoardAt(x, z) {
+  return null   // 2026-11-12 舊的折線木道拆了（改成 ALP_WALKS 的 'wet2'，walkAt 管）
   const P = ALP_SPURS.find((q) => q.name === 'wetBoard').pts
   if (x < 40 || x > 64 || z > P[0][1] + 3 || z < -125) return null
   const E = wetBoardEnd(), u = (x - E.x) * E.dx + (z - E.z) * E.dz, v = -(x - E.x) * E.dz + (z - E.z) * E.dx

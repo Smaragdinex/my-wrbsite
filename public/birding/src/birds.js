@@ -871,9 +871,17 @@ function groundTripo(env, cfg) {
       r.turn('body', LAT, -c.lean * 0.6 + pitch + 0.015 * Math.sin(t * 1.3)); r.turn('body', FWD, roll)
       r.turn('chest', LAT, -c.lean * 0.4 + breath - pitch * 0.5); r.turn('chest', FWD, -roll * 0.4)
       const nb = -c.neck * 0.8 - pitch * 0.5, ny = c.yaw * 0.5 + c.sway
+      if (r.bones.neck4) {
+        // 2026-11-12 紅鶴：脖子 8 節（neck…neck8）。前後彎平均分給每一節；左右轉只給上半段（下半段貼著胸口，轉了胸前會擠出一塊）
+        const NK = r.neckChain ??= Object.keys(r.bones).filter((k) => /^neck\d*$/.test(k)).sort((p, q) => (+p.slice(4) || 1) - (+q.slice(4) || 1))
+        NK.forEach((b, i) => { const u = i / (NK.length - 1); r.turn(b, LAT, nb / NK.length); r.turn(b, AX.y, ny * 2 * u * u / NK.length * 1.5) })
+        r.turn(NK.at(-1), FWD, -roll * 0.6)
+        for (const b of [...NK.slice(1), 'head']) r.stretch(b, c.reach)
+      } else {
       for (const [b, f] of [['neck', 0.45], ['neck2', 0.35], ['neck3', 0.2]]) { r.turn(b, LAT, nb * f); r.turn(b, AX.y, ny * f) }
       r.turn('neck3', FWD, -roll * 0.6)
       for (const b of ['neck2', 'neck3', 'head']) r.stretch(b, c.reach)
+      }
     } else {
       r.turn('body', LAT, -c.lean - (cfg.swim ? 0.08 : 0) + 0.02 * Math.sin(t * 1.3)); r.turn('body', FWD, roll)
       r.turn('neck', LAT, -c.neck * 0.8); r.turn('neck', AX.y, c.yaw * 0.5 + c.sway)
@@ -1774,8 +1782,8 @@ function stilt(env) {
 }
 function harrier(env) {
   return groundTripo(env, { name: 'harrier-rig', H: 0.56, h0: 0.95, ...TRIPO, bill: 0.07,
-    walk: { radius: 0.6, speed: 0.1 }, swingT: 0.4, lift: 0.02, knee: [0.6, 1.2], focusY: 0.45,
-    acts: { stand: [4, 3, 6], look: [3, 1.2, 2.5], walk: [0.6, 99, 99], turn: [1, 99, 99] } })
+    walk: { radius: 0.01, speed: 0.01 }, swingT: 0.4, lift: 0.02, knee: [0.6, 1.2], focusY: 0.45,   // 2026-11-12 站在枯木頂端：不走動（以前在草島上踱步）
+    acts: { stand: [4, 3, 6], look: [3, 1.2, 2.5], walk: [0.1, 99, 99], turn: [1, 99, 99] } })   // walk／turn 不能拿掉（行為系統會直接叫）；半徑 1 cm＝原地
 }
 // 2026-11-11 世界濕地鳥（使用者：10 種獨特的濕地鳥住進加大的濕地；ChatGPT→Tripo→rig-distance，跟其他鳥同一套流程）
 // 鯨頭鸛：紙莎草角落，幾乎不動地站著，偶爾猛然往水裡一啄（strike）
@@ -1788,7 +1796,7 @@ function shoebill(env) {
 // 覓食姿勢（每根骨頭多轉幾弧度，照側面實拍調的）。down：頭下到水面那一段的姿勢；sweep：嘴在水裡左右掃的幅度、頻率
 export const FEED = {
   // 紅鶴濾食：身體只微微前傾，脖子從胸口直直垂下去，頭整個倒過來、上嘴朝下貼著水面，慢慢左右擺
-  flamingo: { acts: ['peck'], lean: 0.42, neck: 0, head: 0, reach: 0.75, rate: 2.2, bones: { neck: -2.6, neck2: -1.0, neck3: -0.6, head: 1.0 }, sweep: 0.22, hz: 0.25, inT: 0.2, outT: 0.8 },
+  flamingo: { acts: ['peck'], lean: 0.26, neck: 0, head: 0, reach: 0.0, rate: 2.2, bones: { neck: 0.1, neck2: -0.79, neck3: -2.45, neck4: -1.75, neck5: -1.32, neck6: -0.53, neck7: 0.07, neck8: 0.72, head: 3.0 }, sweep: 0.22, hz: 0.25, inT: 0.2, outT: 0.8 },   // 2026-11-12 脖子 8 節：從胸前往前下垂成一條弧線（每節的世界方向 110°→185°），頭倒過來
   // 玫瑰琵鷺：身體前傾，脖子往前下伸直，匙狀的嘴尖泡在水裡、張著一點左右快速掃
   rspoonbill: { acts: ['hunt', 'strike'], lean: 0.9, neck: 0, head: 0, reach: 0.4, bones: { neck: -1.5, neck2: -0.4, neck3: -0.1, head: 1.7 }, sweep: 0.5, hz: 1.1, inT: 0.12, outT: 0.9 },
 }
@@ -1798,7 +1806,7 @@ const feeder = (F) => ({ n, kk, t }) => {
   return { lean: F.lean, neck: F.neck, head: F.head, reach: F.reach, rate: F.rate ?? 5, bones: F.bones, sway: k >= 1 ? F.sweep * Math.sin(t * Math.PI * 2 * F.hz) : 0 }
 }
 function flamingo(env) {
-  const show = flamingoShow({ neck: 0.1, neck2: -0.6, neck3: 0, head: 0.6 })
+  const show = flamingoShow({ neck: 2.3, neck2: -0.4, neck3: -1.4, neck4: -0.75, neck5: -0.5, neck6: -0.06, neck7: 0.24, neck8: 0.57, head: 0.4 })   // 量過：這些額外角度實際只套用約 0.53 倍
   return groundGroup(6, 1.3, (avoid) => groundTripo(env, { name: 'flamingo-rig', H: 1.3, h0: 0.981, ...TRIPO, reach: 0.9, wade: true, bill: 0.16, show, feed: feeder(FEED.flamingo),
     walk: { radius: 3.2, speed: 0.13, avoid }, swingT: 0.6, lift: 0, knee: [1.0, 1.8], focusY: 0.75,
     acts: { walk: [4, 99, 99], peck: [4, 7, 11], stand: [2, 2, 4], look: [1.5, 1.2, 2.5], turn: [1, 99, 99], show: [0, 999, 999] } }))
