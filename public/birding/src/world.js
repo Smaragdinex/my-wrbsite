@@ -470,7 +470,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const shadows = createShadowCache({ renderer, scene, sun, camera })
   let lastR = performance.now()
   // 2026-11-12 遠景柔焦（使用者：遠處應該像人眼一樣圓的、看不清楚，但不是低模）：場景先畫到一張 HDR 暫存圖（含深度），
-  // 再用一次全螢幕處理——110 m 以內清楚、到 320 m 越來越糊（最多約 1.6 像素，照畫面高度換算），天空也一起柔化。
+  // 再用一次全螢幕處理——110 m 以內清楚、到 320 m 越來越糊（最多約 1.3 像素，照畫面高度換算），天空也一起柔化。
   // 只拿「本身也在遠處」的取樣點來平均：近處的樹幹、鳥不會被抹進背景，背景也不會滲進近物的邊緣（沒有光暈）。
   // 長鏡頭拉近時門檻照放大倍率往遠推（600 mm 約 20 倍＝1.8 km 才開始糊），拍遠處的鳥不受影響。畫質低的等級關掉（多一張全解析度暫存圖、一次全螢幕處理）
   const post = { rt: null, scene: new THREE.Scene(), cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), mat: null, size: new THREE.Vector2() }
@@ -516,7 +516,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     renderer.setRenderTarget(null)
     const U = post.mat.uniforms, zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(31)) / Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)))
     U.tColor.value = post.rt.texture; U.tDepth.value = post.rt.depthTexture; U.cn.value = cam.near; U.cf.value = cam.far
-    U.f0.value = 110 * zoom; U.f1.value = 320 * zoom; U.maxR.value = 1.6 * post.size.y / 1080; U.res.value.copy(post.size)
+    U.f0.value = 110 * zoom; U.f1.value = 320 * zoom; U.maxR.value = 1.3 * post.size.y / 1080;   /* ChatGPT：1080p 下最多 1.0～1.5 像素 */ U.res.value.copy(post.size)
     renderer.render(post.scene, post.cam)
   }
   const groundAt = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)   // 相機對焦用（camera.js aim）
