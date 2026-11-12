@@ -233,7 +233,7 @@ export function buildSummit(scene, kit, lib) {
     if (nr < 34 && r < 0.12) {
       const S = 0.45 + Math.pow(rnd(), 1.6) * 1.5; if (pathDist(x, z) < 1.3 + S) continue
       push('mrockm_' + Math.floor(rnd() * 4), { p: V(x, y - 0.06 * S, z), q: Q(rnd() * TAU, 0.2), s: V(S, S * (0.8 + rnd() * 0.4), S) })
-      if (S > 0.7) addCollider(x, z, 0.75 * S, y + 0.6 * S)
+      if (S > 0.7) addCollider(x, z, 0.75 * S, y + 0.6 * S, y - 1.5)   // 2026-11-12 加底：沒有底的碰撞體把正下方的崖壁步道也擋住
       // 岩塊腳邊：一圈青苔墊、草
       for (let j = 0; j < 3; j++) { const a = rnd() * TAU, rr = S * (0.9 + rnd() * 0.4); push('grass_' + Math.floor(rnd() * 3), { p: V(x + Math.cos(a) * rr, y - 0.02, z + Math.sin(a) * rr), q: Q(rnd() * TAU), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 0.6) }) }
       nr++

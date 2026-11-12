@@ -84,8 +84,8 @@ export function buildCave(scene, kit, sum, lib) {
       addCollider(x - tz * sd * 2.9 * s, z + tx * sd * 2.9 * s, 1.0 * s, y + 3.2)
     }
   }
-  gate(0.5, 1.0)
-  gate(0.8, 0.92)
+  gate(0.5, 1.45)   // 2026-11-12 使用者：一開始進入的拱門岩石大一點（淨空 2.7×2.4 m → 3.9×3.5 m）
+  gate(0.8, 1.25)
   // 平台和水簾中間的大石頭（看水簾的「窗」的窗框）、後壁腳下一排岩壁掃描和大石頭
   { const x = ex - 4.4, z = ez - 3.6, y = alpineHeight(x, z); rock('mrock_5', x, y - 0.5, z, V(1.5, 2.4, 1.3), 0.9); addCollider(x, z, 1.4, y + 3) }
   for (const [name, t, off, sc] of [['mrock_2', 0.6, 3.4, 1.4], ['boulder', 0.7, 2.9, 1.5], ['mrock_6', 0.9, 3.4, 1.5], ['mrock_4', 0.98, 3.0, 1.3], ['mrock_6', 0.42, 3.0, 1.2], ['boulder', 0.86, 2.7, 1.1]]) {
