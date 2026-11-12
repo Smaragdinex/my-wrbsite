@@ -461,7 +461,7 @@ const ALL = [
     ],
   },
   {
-    id: 'wbwood', spot: [231.5, -72.8], perch: 'sacred', sacredUpright: true, sacredOff: 0.057, sacredH: 4.2, sacredTurn: -1.0, dist: 6.5, lookY: 0.12,
+    id: 'wbwood', spot: [231.5, -72.8], perch: 'sacred', sacredUpright: true, sacredOff: 0.057, sacredH: 9.5,   /* 2026-11-13 使用者：啄木鳥往上一點，就不用怕人飛走（4.2 → 9.5 m，超過驚飛的高度） */ sacredTurn: -1.0, dist: 6.5, lookY: 0.12,
     name: "大赤啄木", sci: 'Dendrocopos leucotos insularis', where: "步道旁的神木樹幹上",
     intro: "台灣最大的啄木鳥之一，雄鳥頭頂紅色，臉頰白、一條黑色顎線；背黑、下背白，翅膀黑色帶一排排白色橫斑，肚子到尾下是漂亮的粉紅色。常在大樹幹上一邊往上跳、一邊用鑿子般的嘴敲樹皮找蟲。",
     facts: [
@@ -472,7 +472,7 @@ const ALL = [
     ],
   },
   {
-    id: 'nutcracker', spot: [231.5, -52.8], perch: 'branch', dist: 4.6, camH: 3.0, lookY: 3.45,   // 2026-11-10 神木北邊 20 公尺、步道旁
+    id: 'nutcracker', spot: [233, -46.5], perch: 'branch', dist: 4.6, camH: 3.0, lookY: 3.45,   // 2026-11-10 神木北邊 20 公尺、步道旁；2026-11-13 使用者「這顆樹可以往裡面嗎」→ 樹往林子裡退，離步道 5.4 → 10 m
     name: "星鴉", sci: 'Nucifraga caryocatactes owstoni', where: "神木附近步道旁的枝頭",
     intro: "高山針葉林的代表鳥，體型像小烏鴉。全身巧克力褐色、布滿白色水滴狀斑點，像滿天星星，所以叫星鴉；翅膀和尾巴黑色帶藍綠光澤，尾端白色。叫聲沙啞響亮，常站在樹梢最高處。",
     facts: [
