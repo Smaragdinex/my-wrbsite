@@ -1855,10 +1855,10 @@ function rspoonbill(env) {
 }
 // 赤頸鶴：南邊的濕草甸，一對，慢慢踱步、低頭啄食、抬頭張望
 function sarus(env) {
-  const show = craneShow(0.8)
+  const show = undefined   // 2026-11-13 使用者：跳舞（跳起來、拍翅膀）時模型整個變形 → 拿掉（craneShow 留著）
   return groundGroup(2, 1.6, (avoid) => groundTripo(env, { name: 'sarus-rig', H: 1.6, h0: 0.979, ...TRIPO, reach: 0.25, bill: 0.18, show,
     walk: { radius: 2.6, speed: 0.14, avoid }, swingT: 0.65, lift: 0.03, knee: [1.0, 1.8], focusY: 0.8,
-    acts: { walk: [4, 99, 99], peck: [2.5, 1.4, 2.6], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99], show: [0, 999, 999] } }))
+    acts: { walk: [4, 99, 99], peck: [2.5, 1.4, 2.6], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99] } }))
 }
 // 黑剪嘴鷗：一直在飛——沿著潟湖那條筆直的深水道貼著水面剪過去（下嘴泡在水裡），到頭拉高轉彎、從旁邊高一點飛回來，再下去剪一趟。
 // 只有飛行模型（skimmer-fly-rig，翅膀舉在最高點）；路線是鳥群座標裡的一圈跑道形：長軸沿 env.toCam 的垂直方向（side）
@@ -1916,10 +1916,10 @@ function skimmer(env) {
 }
 // 丹頂鶴：北邊的濕草甸，一對；ruff 流蘇鷸：南邊草甸三隻雄鳥；鳳頭鸊鷉：深水池一對游
 function redcrowned(env) {
-  const show = craneShow(0.9)
+  const show = undefined   // 2026-11-13 使用者：跳舞（跳起來、拍翅膀）時模型整個變形 → 拿掉（craneShow 留著）
   return groundGroup(2, 1.6, (avoid) => groundTripo(env, { name: 'redcrowned-rig', H: 1.5, h0: 0.98, ...TRIPO, reach: 0.25, bill: 0.18, show,
     walk: { radius: 2.4, speed: 0.14, avoid }, swingT: 0.65, lift: 0.03, knee: [1.0, 1.8], focusY: 0.8,
-    acts: { walk: [4, 99, 99], peck: [2.5, 1.4, 2.6], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99], show: [0, 999, 999] } }))
+    acts: { walk: [4, 99, 99], peck: [2.5, 1.4, 2.6], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99] } }))
 }
 function ruff(env) {
   const show = ruffShow()
