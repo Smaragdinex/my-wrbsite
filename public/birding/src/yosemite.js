@@ -72,19 +72,48 @@ export function buildYosemite(scene, { lib } = {}) {
   const hsh = (n) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v) }
   // 2026-11-12 使用者要整段都是 Watkins Glen 那種層狀岩壁秘境 → 整面都是層狀岩（原本只有瀑布旁 x 172～216，兩側是光滑的灰色花崗岩）
   const SED = (x) => 1
+  // 2026-11-13 Pass 1C（ChatGPT：改成優勝美地花崗岩）：使用者 11/12 指定過「整段 Watkins Glen 層狀岩壁」，兩種都做、讓使用者選——
+  // 網址 ?rock=granite 或 localStorage birdpark.rock=granite 用花崗岩；預設維持層狀岩
+  const GRANITE = (() => { try { return new URLSearchParams(location.search).get('rock') === 'granite' || localStorage.getItem('birdpark.rock') === 'granite' } catch { return false } })()
   // 2026-11-10 ChatGPT QA 第二輪：層厚不要固定（0.5～3.2 m 亂數）；每 6～12 m 一條主節理（直的深縫）；每 8～15 m 一片 2～5 m 寬的平整岩面；
   // 岩棚凸出 0.3～1.8 m；中尺度凹凸 0.03～0.12 m（波長 0.3～1.5 m）；每 15～25 m² 一塊凸出或缺掉的岩塊（0.4～1.5 m）
   const BED = [-30]; while (BED.at(-1) < 140) BED.push(BED.at(-1) + 0.5 + 2.7 * Math.pow(hsh(BED.length * 1.37), 1.4))
   const JX = [160]; while (JX.at(-1) < 230) JX.push(JX.at(-1) + 6 + 6 * hsh(JX.length * 2.11 + 5))
   const PAN = []; for (let x = 165; x < 225;) { x += 8 + 7 * hsh(x * 0.31); PAN.push([x, 2 + 3 * hsh(x * 0.77)]) }
+  // 花崗岩：4～12 m 的大岩塊（兩組節理切出來：近垂直一組、斜的一組，方向各自偏一點）；每塊整片前後錯開、微微傾斜；
+  // 塊裡有 1～4 m 的弧形剝落面（洋蔥狀一片片，邊緣一道淺階）；節理是深縫；水平岩棚很少
+  const graniteAt = (x, y) => {
+    const u = x + 0.18 * y + 3.2 * fbm2(x * 0.03, y * 0.025 + 3, 3), v = y * 0.82 - (0.25 + 0.35 * fbm2(x * 0.01 + 2, y * 0.01, 2)) * x + 5.0 * fbm2(x * 0.03 + 7, y * 0.025, 3)   // 節理不要是一條條等距的直線
+    const su = 4.5 + 5.5 * hsh(Math.floor(v / 10) * 3.7 + 1), sv = 6 + 6 * hsh(Math.floor(u / su) * 2.3 + 5)
+    const iu = Math.floor(u / su), iv = Math.floor(v / sv), fu = u / su - iu, fv = v / sv - iv, id = iu * 31 + iv * 7
+    const lean = (hsh(id * 1.7) - 0.5) * 0.06
+    let off = (hsh(id) - 0.62) * 1.25 + lean * (y - iv * sv) * 0.3
+    const eu = Math.min(fu, 1 - fu) * su, ev = Math.min(fv, 1 - fv) * sv
+    const joint = (0.32 + 0.3 * hsh(id * 3.1)) * Math.exp(-((eu / 0.2) ** 2)) + (0.18 + 0.2 * hsh(id * 5.3)) * Math.exp(-((ev / 0.16) ** 2))
+    off += 0.18 * (1 - Math.exp(-eu * 0.9)) * (1 - Math.exp(-ev * 0.9))   // 塊的邊緣圓一點往裡收（風化）
+    // 弧形剝落面：沿著塊的斜向一片片，每片 1～4 m，邊上一道 4～12 cm 的淺階
+    const ex = (fu * su * 0.55 + fv * sv * 0.35) / (1.0 + 3.0 * hsh(id * 9.1)), ef = ex - Math.floor(ex)
+    off += 0.22 * (1 - (ef * 2 - 1) ** 2) * hsh(id * 4.4) - 0.08 * ss(0.93, 1.0, ef)
+    off += 0.12 * (fbm2(x * 1.1, y * 1.0, 3) - 0.5) + 0.04 * (fbm2(x * 3.7 + 3, y * 3.3, 2) - 0.5)
+    const tone = 0.9 + 0.2 * hsh(id * 2.9)
+    return { off: off + joint, ledge: ss(0.85, 0.98, fv) * ss(0.5, 0.0, Math.abs(fu - 0.5)) * 0.4 * (hsh(id * 6.6) > 0.7 ? 1 : 0), f: fv, tone, joint }
+  }
   const bedAt = (x, y) => {
-    const yy = y + 0.1 * (x - 195) + 1.2 * fbm2(x * 0.03, 2.2, 2)
+    if (GRANITE) return graniteAt(x, y)
+    // 2026-11-13 Pass 1C（Watkins Glen 精修）：層界上下漂 ±1 m（20～40 m 一個起伏）→ 相鄰的層會互相收攏、變薄、像透鏡一樣在橫向消失，不再一條條橫跨整面岩壁
+    const yy = y + 0.1 * (x - 195) + 1.2 * fbm2(x * 0.03, 2.2, 2) + 1.2 * (fbm2(x * 0.035 + 5, y * 0.018 + 9, 3) - 0.5)   /* ChatGPT：6～7 成的厚層要還認得出是連續的（2.2 → 1.2） */
     let lo = 0, hi = BED.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (BED[m] <= yy) lo = m; else hi = m }
     const id = lo, th = BED[hi] - BED[lo], f = (yy - BED[lo]) / th
     const jid = Math.floor((x + 3 * hsh(id)) / (2.5 + 3 * hsh(id + 7)))
     // 這層凸出多少：一半的層是凸出的岩棚（0.3～1.8 m），其他微凹
-    const prot = hsh(id) > 0.5 ? -(0.3 + 1.5 * Math.pow(hsh(id * 5 + 2), 2)) : 0.15 + 0.35 * hsh(id * 3 + 9)
-    let off = prot + (hsh(id * 31 + jid) - 0.5) * 0.5 + 0.25 * Math.sin(f * Math.PI) * Math.min(1, th / 1.5) - 0.4 * ss(1 - Math.min(0.3, 0.35 / th), 1, f)
+    // 差別侵蝕：頁岩（暗的層，tone 低）軟、被水和風化往裡吃 0.3～0.9 m；砂岩硬、懸出來，下緣變成岩簷（底下就是凹進去的頁岩）
+    const shaleL = hsh(id * 3 + 1) < 0.42
+    // 1C-Final：岩壁分區有疏有密（ChatGPT：約 5 成層理完整的安靜區、3 成差別侵蝕強、2 成節理破碎）
+    const reg = fbm2(x * 0.022 + 31, y * 0.03 + 17, 2), calmR = ss(0.52, 0.42, reg), erodR = ss(0.5, 0.6, reg) * ss(0.72, 0.64, reg), fracR = ss(0.64, 0.72, reg)
+    const prot = (shaleL ? 0.15 + 0.35 * hsh(id * 3 + 9) + (hsh(id * 13 + 4) > 0.85 ? 0.4 : 0) : -(0.2 + 1.2 * Math.pow(hsh(id * 5 + 2), 1.6))) * (1 - 0.45 * calmR + 0.6 * erodR)   // 頁岩一般內凹 0.15～0.5 m，少數重度侵蝕的到 0.9 m
+    let off = prot + (hsh(id * 31 + jid) - 0.5) * 0.35 + 0.25 * Math.sin(f * Math.PI) * Math.min(1, th / 1.5) - 0.4 * ss(1 - Math.min(0.3, 0.35 / th), 1, f)
+    if (!shaleL) off -= 0.22 * ss(0.3, 0.0, f)   // 砂岩層的下緣再往外一點：岩簷的滴水邊
+    off *= 0.75 + 0.5 * fbm2(x * 0.06 + id, id * 0.7, 2)   // 同一層沿路凸出多少也不一樣
     // 平整岩面：這一段層理幾乎不見
     let pan = 0; for (const [px, pw] of PAN) pan = Math.max(pan, ss(pw / 2 + 0.8, pw / 2, Math.abs(x - px)))
     off *= 1 - 0.75 * pan
@@ -93,9 +122,14 @@ export function buildYosemite(scene, { lib } = {}) {
     // 岩塊：4.5 m 一格，每格一塊凸出或缺損
     const ci = Math.floor(x / 4.5), cj = Math.floor(y / 4.5), bx = (ci + 0.2 + 0.6 * hsh(ci * 7 + cj * 13)) * 4.5, by = (cj + 0.2 + 0.6 * hsh(ci * 11 + cj * 3)) * 4.5, bs = 0.2 + 0.55 * hsh(ci * 5 + cj * 17)
     const inB = ss(bs + 0.12, bs, Math.max(Math.abs(x - bx), Math.abs(y - by) * 1.3))
-    off += inB * (hsh(ci * 19 + cj) > 0.5 ? -0.45 : 0.4)
+    off += inB * (hsh(ci * 19 + cj) > 0.5 ? -0.45 : 0.4) * (0.5 + 1.3 * fracR)   // 破碎區：崩落的岩塊、缺口更多更深
+    joint *= 0.7 + 1.1 * fracR
     off += 0.16 * (fbm2(x * 1.4, y * 1.3, 3) - 0.5) + 0.06 * (fbm2(x * 4.1 + 3, y * 3.7, 2) - 0.5)
-    const tone = (0.78 + 0.4 * hsh(id * 3 + 1)) * (0.92 + 0.16 * hsh(id * 17 + jid * 5)) * (1 - 0.12 * inB)
+    // 瀑布兩側 ±8 m：水長年切出來的直溝（寬 1～3 m、深 0.3～0.8 m）和幾個壺穴狀的圓凹
+    { const dxF = x - YOSE.fall.x, fk2 = ss(8.5, 5.5, Math.abs(dxF)) * ss(1.5, 3.0, Math.abs(dxF))
+      off += fk2 * 0.55 * Math.pow(0.5 + 0.5 * Math.sin(dxF * 2.6 + 0.8 * Math.sin(y * 0.13)), 2)
+    }   // （壺穴：ChatGPT 說要在岩棚、潭底、舊水道上，不挖在乾的垂直岩壁 → 拿掉）
+    const tone = (0.78 + 0.4 * hsh(id * 3 + 1)) * (0.92 + 0.16 * hsh(id * 17 + jid * 5)) * (1 - 0.12 * inB) * (0.9 + 0.2 * fbm2(x * 0.25 + id, y * 0.4, 2))   // 層內 2～5 m 的深淺變化
     return { off: off + joint, ledge: ss(0.72, 0.97, f) * (prot < 0 ? 1 : 0.25) * (1 - pan), f, tone, joint }
   }
   // 秘境步道（layout.js YOSE.stairs）在岩壁上的橫槽：這一欄 x 有哪些槽（地板高 y0、頂 y1、深到離牆腳 depth）
@@ -179,7 +213,14 @@ export function buildYosemite(scene, { lib } = {}) {
       let tk = 1; for (const [tx, ty] of CTREES) if (Math.abs(y - ty) < 3) tk = Math.min(tk, ss(1.6, 3.2, Math.abs(x - tx)))
       const m = ss(0.35, 0.9, a) * ss(0.3, 0.8, b) * tk, m2 = ss(2.6, 3.3, a) * ss(0.3, 0.9, b) * tk
       const chan = ss(0.52, 0.7, fbm2(x * 0.3, y * 0.035 + 7, 3)), blk = ss(0.5, 0.68, fbm2(x * 0.22 + 3, y * 0.32, 2))
-      return m * (0.75 * chan + 0.8 * Math.max(0, Math.min(0.6, bo0))) - m2 * blk * (1 - chan) * (0.25 + Math.max(0, Math.min(0.5, -bo0)))
+      // 2026-11-13 Pass 1C：階地外牆再多一點天然岩層的起伏（ChatGPT：大片平滑立面像擋土牆）；踏面上下 0.35 m 內照舊不動
+      const band = 0.35 * (0.5 + 0.5 * Math.sin(y * 2.1 + 1.3 * fbm2(x * 0.15, y * 0.3, 2) * 6.0))
+      // 1C-Final（ChatGPT：外牆斷面太一致）：一段一段（3～8 m）不一樣——有的地方侵蝕掉一個 0.3～1.2 m 深的缺口（往裡，安全）；
+      // 頭頂 2.6 m 以上有的地方是往外懸的大岩塊（0.4～1.2 m），踏面上方不往外凸，不會擋路
+      const segN = fbm2(x * 0.17 + 3, Math.floor(y / 4) * 1.7, 2)
+      const notch = ss(0.56, 0.7, segN) * (0.3 + 0.9 * fbm2(x * 0.45 + 11, y * 0.35, 2))
+      const hang = ss(0.5, 0.66, fbm2(x * 0.13 + 7, y * 0.12 + 2, 2)) * (0.4 + 0.8 * fbm2(x * 0.3, y * 0.3 + 5, 2))
+      return m * notch - m2 * hang * tk + m * (1.1 * chan + 0.8 * Math.max(0, Math.min(0.6, bo0)) + band * (0.4 + 0.6 * fbm2(x * 0.4 + 9, y * 0.2, 2))) - m2 * blk * (1 - chan) * (0.25 + Math.max(0, Math.min(0.5, -bo0)))
     }
     for (let k = 0, i = 1; k <= FACE; k++) {
       const s0 = Ls.at(-1) * k / FACE; while (i < P.length - 1 && Ls[i] < s0) i++
@@ -219,7 +260,7 @@ export function buildYosemite(scene, { lib } = {}) {
       if (ledge > 0.45 && inCave < 0.25 && py > YOSE.g0(px) + 1.2 && py < YOSE.g0(px) + 40 && rnd() < 0.3 && !nearTrail3(px, py, pz)) ledgeSpots.push([px, py, pz, inCave])   // 步道旁邊、頭的高度以內不長（蕨葉整片擋在臉前面）
       pos.push(px, py, pz); uv.push(px * 0.22, ri > FACE ? pz * 0.22 + 40 : py * 0.22)   // 頂上那幾排用 z 當貼圖座標（以前用 y，頂面被拉成一條條）
       // 黑色水痕：一條條縱向（只看 x），從上往下淡；淡色剝落面：大塊
-      const streak = Math.max(0, fbm2(px * 0.35, 7.1, 3) - 0.52) * 3.2 * ss(g0, g0 + Ht, py) * (ri > FACE ? 0.1 : 1)   // 頂面不畫縱向水痕（會變一條條）
+      const streak = Math.max(0, fbm2(px * 0.35, 7.1, 3) - (GRANITE ? 0.46 : 0.52)) * 3.2 * ss(g0, g0 + Ht, py) * (ri > FACE ? 0.1 : 1)   // 頂面不畫縱向水痕（會變一條條）
       const pale = Math.max(0, fbm2(px * 0.06, py * 0.06 + 4, 3) - 0.55) * 1.6
       const wet = Math.exp(-(((px - YOSE.fall.x) / 4.2) ** 2)) * (0.55 + 0.45 * ss(g0, g0 + 3, py))   // 瀑布後面濕掉的黑色岩壁
       let k = Math.max(0.3, (1 - streak * 0.75 + pale * 0.25) * (1 - 0.55 * wet))
@@ -240,12 +281,13 @@ export function buildYosemite(scene, { lib } = {}) {
         const shelfWet = ss(11, 5.5, Math.abs(px - YOSE.fall.x) + 1.5 * (fbm2(px * 0.5, py * 0.5 + 3, 2) - 0.5)) * ss(3.2, 0.4, Math.abs(py - SHELF_Y - 0.4))   // 2026-11-12 中段水潭周圍 4～7 m：被水霧打濕、深 20～35%
         // 2026-11-12 ChatGPT 峽谷規格（docs/GORGE_SPEC.txt，linear；頂點色 ×2）：乾砂岩 .30/.27/.22、乾頁岩 .18/.19/.18、濕砂岩 .105/.095/.078、濕頁岩 .065/.075/.07、
         // 苔 .035/.115/.025、鐵鏽 .25/.095/.035。這一層是砂岩還是頁岩看它的明暗（tone 暗的當頁岩）
-        const shl = Math.min(1, Math.max(0, (1.0 - tone) * 3.2))
-        let r0 = lerpN(lerpN(0.74, 0.42, shl), lerpN(0.25, 0.14, shl), wetF), g0c = lerpN(lerpN(0.58, 0.40, shl), lerpN(0.2, 0.15, shl), wetF), b0 = lerpN(lerpN(0.38, 0.35, shl), lerpN(0.14, 0.135, shl), wetF)   // 乾砂岩再暖一點（底圖是灰的花崗岩貼圖，照規格的數字出來偏灰）
-        { const iron = Math.max(0, fbm2(px * 0.21 + 11, py * 0.35 + 5, 3) - 0.6) * 2.4 * (1 - 0.6 * wetF); r0 = lerpN(r0, 0.5, iron * 0.5); g0c = lerpN(g0c, 0.19, iron * 0.5); b0 = lerpN(b0, 0.07, iron * 0.5) }
-        r0 = lerpN(r0, 0.11, deep * 0.7); g0c = lerpN(g0c, 0.115, deep * 0.7); b0 = lerpN(b0, 0.1, deep * 0.7)
+        const shl = GRANITE ? 0 : Math.min(1, Math.max(0, (1.0 - tone) * 3.2))
+        let r0 = lerpN(lerpN(0.74, 0.42, shl), lerpN(0.25, 0.14, shl), wetF), g0c = lerpN(lerpN(0.58, 0.40, shl), lerpN(0.2, 0.15, shl), wetF), b0 = lerpN(lerpN(0.38, 0.35, shl), lerpN(0.14, 0.135, shl), wetF)
+        if (GRANITE) { r0 = lerpN(0.66, 0.2, wetF); g0c = lerpN(0.64, 0.2, wetF); b0 = lerpN(0.6, 0.19, wetF) }   // 花崗岩：淺灰白（帶一點暖）、濕了深灰   // 乾砂岩再暖一點（底圖是灰的花崗岩貼圖，照規格的數字出來偏灰）
+        { const iron = Math.max(0, fbm2(px * 0.21 + 11, py * 0.35 + 5, 3) - 0.6) * 2.4 * (1 - 0.6 * wetF) * (GRANITE ? 0.35 : 1); r0 = lerpN(r0, 0.5, iron * 0.5); g0c = lerpN(g0c, 0.19, iron * 0.5); b0 = lerpN(b0, 0.07, iron * 0.5) }
+        r0 = lerpN(r0, 0.17, deep * 0.6); g0c = lerpN(g0c, 0.17, deep * 0.6); b0 = lerpN(b0, 0.155, deep * 0.6)   // 2026-11-13 Pass 1C：凹洞深處 0.11→0.17（ChatGPT：凹洞頂不能整片全黑）
         const crackD = 1 - 0.6 * Math.min(1, jnt * 2.2)
-        r0 *= tone * crackD * (1 - streak * 0.35); g0c *= tone * crackD * (1 - streak * 0.35); b0 *= tone * crackD * (1 - streak * 0.35)
+        { const sk = GRANITE ? 0.6 : 0.35; r0 *= tone * crackD * (1 - streak * sk); g0c *= tone * crackD * (1 - streak * sk); b0 *= tone * crackD * (1 - streak * sk) }   // 花崗岩的黑色水痕（water streak）更明顯
         r0 *= 1 - 0.52 * shelfWet; g0c *= 1 - 0.47 * shelfWet; b0 *= 1 - 0.42 * shelfWet
         const moss = Math.min(1, ledge * (0.6 + 0.6 * wetF) + Math.min(1, jnt * 2) * 0.5 * wetF + 0.6 * Math.max(0, fbm2(px * 0.6, py * 0.5 + 7, 3) - 0.55) * 2 * wetF) * (1 - 0.7 * deep)
         const cr = lerpN(r0, 0.08, moss), cg2 = lerpN(g0c, 0.235, moss), cb = lerpN(b0, 0.05, moss)
@@ -288,6 +330,18 @@ export function buildYosemite(scene, { lib } = {}) {
         diffuseColor *= mix(tpC, tpC * (0.75 + 0.5 * tpL), 0.6);
         // 2026-11-12 薄層理（Watkins Glen 的頁岩：一層 8～24 公分，夾 25～65 公分的砂岩）：網格一排 45 公分畫不出來，在材質裡照世界高度切層——
         // 每層深淺不同、層面是一條深色的縫；高度也照層疊一階一階加上去，縫那裡法線會轉、看起來有立體的陰影
+        #ifdef GRANITE
+        { float sdist = length(vViewPosition), near = smoothstep(45.0, 6.0, sdist);
+          // 花崗岩的礦物顆粒（1～8 cm）：黑雲母小黑點、長石的白點；高度也加一點，近看有顆粒感
+          vec3 gp = vTpW * 22.0;
+          float g1 = vn(gp.xy + gp.z * 0.71), g2 = vn(gp.zy * 1.9 + 5.0 + gp.x * 0.3), g3 = vn(vTpW.xz * 9.0 + vTpW.y * 3.1);
+          float bio = smoothstep(0.78, 0.9, g1) * near, fel = smoothstep(0.8, 0.93, g2) * near;
+          diffuseColor.rgb *= (1.0 - 0.45 * bio) * (1.0 + 0.18 * fel) * (0.94 + 0.12 * g3);
+          // 大尺度的色斑（幾公尺一塊）：有的偏暖米色、有的偏冷灰，風化面亮、新鮮的崩落面暗一點
+          float m1 = vn(vTpW.xy * 0.11 + vTpW.z * 0.07 + 13.0), m2 = vn(vTpW.zy * 0.23 + vTpW.x * 0.05 + 3.0);
+          diffuseColor.rgb *= mix(vec3(0.86, 0.87, 0.9), vec3(1.12, 1.06, 0.96), m1) * (0.88 + 0.24 * m2);
+          tpH += (g1 * 0.06 + g2 * 0.04 + g3 * 0.12) * near; }
+        #else
         { float wallK = 1.0 - smoothstep(0.35, 0.75, abs(normalize(vTpN).y));
           float sdist = length(vViewPosition);
           // 直的節理把岩壁切成 2～3 m 寬的一塊塊，每塊的層面上下錯開一點（不然整面像掃描線）；層的密度隨高度變（薄頁岩帶、厚砂岩帶交替）
@@ -300,10 +354,12 @@ export function buildYosemite(scene, { lib } = {}) {
           float nThin = floor(1.0 + 5.99 * fract(h1 * 7.31)), u2 = b1 * nThin;
           float b2 = fract(u2), h2 = fract(sin((floor(u1) * 7.0 + floor(u2)) * 12.9898) * 43758.5453);
           float thin = smoothstep(75.0, 22.0, sdist);                         // 遠處薄層糊掉（比像素細，會閃）
-          float seam = max(smoothstep(0.12, 0.0, b2) * step(0.35, h2) * 0.45 * thin, smoothstep(0.05, 0.0, b1) * 0.9);
+          float cont = step(0.28, vn(vec2(vTpW.x * (0.25 + 0.3 * h1) + floor(u2) * 7.0, floor(u1) * 3.0)));   // 薄層的縫約 7 成連續、偶爾斷開
+          float seam = max(smoothstep(0.12, 0.0, b2) * step(0.35, h2) * 0.45 * thin * cont, smoothstep(0.05, 0.0, b1) * 0.9 * (0.6 + 0.4 * cont));
           vec3 tint = mix(vec3(0.86, 0.9, 0.93), vec3(1.16, 1.0, 0.8), h1) * mix(1.0, 0.8 + 0.4 * h2, thin);   // 冷灰的頁岩層／暖褐的砂岩層
           diffuseColor.rgb *= mix(vec3(1.0), tint * (1.0 - 0.42 * seam), wallK);
-          tpH += wallK * ((1.0 - abs(b2 * 2.0 - 1.0)) * 0.22 * thin + (1.0 - abs(b1 * 2.0 - 1.0)) * 0.55); }`)
+          tpH += wallK * ((1.0 - abs(b2 * 2.0 - 1.0)) * 0.22 * thin + (1.0 - abs(b1 * 2.0 - 1.0)) * 0.55); }
+        #endif`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         { float dist = length(vViewPosition); vec2 dH = clamp(vec2(dFdx(tpH), dFdy(tpH)) * 2.2, -0.9, 0.9) * smoothstep(90.0, 15.0, dist); normal = tpPerturb(-vViewPosition, normal, dH, faceDirection); }   // clamp：層面那條線高度是跳的，導數會爆掉、變成一截一截的亮線`)
   }
@@ -331,7 +387,8 @@ export function buildYosemite(scene, { lib } = {}) {
         roughnessFactor = mix(roughnessFactor, 0.36, wetR);
         diffuseColor.rgb *= 1.0 - 0.12 * wetR; }`) }
   }
-  cliffM.customProgramCacheKey = () => 'cliffTriplanar'
+  if (GRANITE) cliffM.defines = { GRANITE: 1 }
+  cliffM.customProgramCacheKey = () => 'cliffTriplanar' + (GRANITE ? 'G' : '')
   const cliff = new THREE.Mesh(cg, cliffM); cliff.castShadow = true; cliff.receiveShadow = true; g.add(cliff)
   // 岩壁封起來（ChatGPT：要是有厚度的封閉岩體）：兩端各一片側面（從岩壁斷面一路接到後下角）、後面一道牆往下埋進地裡——
   // 以前從岩壁尾端下面往上看，頂面是一片懸空的薄板
