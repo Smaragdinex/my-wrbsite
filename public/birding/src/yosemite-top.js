@@ -129,17 +129,19 @@ export function buildSummit(scene, kit, lib) {
         float vnH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(vnH(i), vnH(i + vec2(1, 0)), f.x), mix(vnH(i + vec2(0, 1)), vnH(i + vec2(1, 1)), f.x), f.y); }
         float vfbm(vec2 p) { return vn(p) * 0.55 + vn(p * 2.3 + 7.1) * 0.3 + vn(p * 5.1 + 3.7) * 0.15; }`).replace('#include <color_fragment>', `
-        { vec3 rockC = diffuseColor.rgb * vec3(0.32, 0.32, 0.31) * (0.75 + 0.5 * dot(tpL.rgb, vec3(0.33)));
+        { /* 2026-11-12 使用者「前後山都改一樣材質，不然後面是灰色的山」：灰花崗岩 → 跟瀑布岩壁一樣的砂岩（暖米褐、一層層水平的岩層） */
+          vec3 rockC = diffuseColor.rgb * vec3(0.47, 0.37, 0.24) * (0.75 + 0.5 * dot(tpL.rgb, vec3(0.33)));
+          { float yb = vTpW.y + 0.1 * (vTpW.x - 195.0) + 1.5 * vfbm(vTpW.xz * 0.04); rockC *= 0.74 + 0.42 * vfbm(vec2(yb * 0.75, floor(yb / 7.0) * 3.1 + 2.2)); }
           // 花崗岩面：一條條往下流的黑色水痕、橫的節理（深一點的帶）、偶爾鐵鏽色
           float streak = vfbm(vec2((vTpW.x + vTpW.z) * 0.22, vTpW.y * 0.015));
-          rockC *= 1.0 - 0.45 * smoothstep(0.55, 0.75, streak);
+          rockC *= 1.0 - 0.3 * smoothstep(0.55, 0.75, streak);
           rockC *= 0.85 + 0.3 * vfbm(vec2((vTpW.x - vTpW.z) * 0.05, vTpW.y * 0.35));
           rockC = mix(rockC, rockC * vec3(1.15, 0.95, 0.75), smoothstep(0.7, 0.85, vfbm(vTpW.xz * 0.08 + 9.0)) * 0.6);
           vec3 gnd = vColor.rgb * (0.8 + 0.45 * dot(tpL.rgb, vec3(0.33)));
           float rk = smoothstep(0.35, 0.65, vRock + (dot(tpL.rgb, vec3(0.33)) - 0.45) * 0.5);
           diffuseColor.rgb = mix(gnd, rockC, rk); }`)
     }
-    mm.customProgramCacheKey = () => 'summitMassif' }
+    mm.customProgramCacheKey = () => 'summitMassifSand' }
   const massif = new THREE.Mesh(mg, mm); massif.name = 'summitMassif'; massif.receiveShadow = true; massif.castShadow = true; g.add(massif)
 
   // 山上的針葉林：冷杉卡片樹冠（輕量版）＋深色芯＋樹幹；林線 130 m，露岩、太陡的地方不長；有一塊塊林間空地

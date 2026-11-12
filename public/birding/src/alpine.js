@@ -223,7 +223,13 @@ function buildInterior(lib, avoid = []) {
       const rock = ss(0.86, 0.7, ny), fk = forestK(x, z)
       // 巨木林帶（giants.js）：地上是厚厚的落葉、針葉堆（暗紅褐）；陡坡不是灰石頭，是長滿青苔的土坡
       if (fk > 0) c.lerp(new THREE.Color().setHSL(0.07 + n * 0.03, 0.32, 0.15 + n * 0.05), 0.55 * fk)
-      c.lerp(new THREE.Color().setHSL(0.1, 0.06, 0.36 + n * 0.08).lerp(new THREE.Color().setHSL(0.2 + n * 0.04, 0.35, 0.16 + n * 0.06), fk), rock)                     // 岩石（林裡是青苔）
+      // 2026-11-12 使用者：瀑布岩壁是砂岩色、後面和旁邊的山是灰的 →「前後山都改一樣材質」。山區的陡坡全部改成同一種砂岩：
+      // 暖的米褐色、一層層深淺不同的岩層（照高度分層，跟岩壁一樣往東微微傾斜），偶爾一片鐵鏽色
+      const rockC = new THREE.Color().setHSL(0.1, 0.06, 0.36 + n * 0.08)
+      { const sw = 1   /* 整個山區的陡坡都一樣（一開始只改瀑布周圍 150 m，後面那座山還是灰的） */
+        if (sw > 0 && rock > 0) { const yy = pos[k * 3 + 1] + 0.1 * (x - 195), band = 0.8 + 0.34 * fbm2(yy * 0.85, 2.2 + Math.floor(yy / 7) * 3.1, 2), iron = Math.max(0, fbm2(x * 0.21 + 11, yy * 0.35 + 5, 3) - 0.6) * 1.2
+          rockC.lerp(new THREE.Color().setRGB(lerp(0.52, 0.42, iron) * band, lerp(0.41, 0.2, iron) * band, lerp(0.27, 0.1, iron) * band), sw) } }
+      c.lerp(rockC.lerp(new THREE.Color().setHSL(0.2 + n * 0.04, 0.35, 0.16 + n * 0.06), fk), rock)                     // 岩石（林裡是青苔）
       const tdd = alpineTrailDist(x, z), tr = ss(1.6, 0.9, tdd)
       // 2026-11-10 ChatGPT：路面不要一整片同樣的棕色 → 中間踩實的深色泥土、兩側碎石較淺、一塊塊沖刷的痕跡
       { const g1 = fbm2(x * 2.1, z * 2.1, 2), er = Math.max(0, fbm2(x * 0.6 + 3, z * 0.6, 2) - 0.6) * 2

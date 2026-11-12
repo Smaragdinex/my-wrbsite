@@ -164,11 +164,21 @@ export function buildYosemite(scene, { lib } = {}) {
     // 2026-11-12 階地的轉角（地板的內外緣）要剛好落在取樣點上，不然等距取樣會把直角削成斜面、石壁歪到步道上面
     const snap = new Map(); for (let i = 0; i < P.length; i++) if (P[i][3]) snap.set(Math.max(1, Math.min(FACE - 1, Math.round(Ls[i] / Ls.at(-1) * FACE))), P[i])
     const yTerr = slots.length ? Math.min(...slots.map((sl) => sl.y0)) - 0.4 : 1e9
+    // 2026-11-12 ChatGPT V4（遠看五條橫帶太整齊）：兩層步道之間的石壁上加直的侵蝕溝、往裡凹的岩層（0.3～0.8 m），頭上 2.6 m 以上才有往外凸的岩塊；
+    // 離地板、岩簷 0.35 m 以內不動（步道的寬度、能走的範圍都不變）
+    const lvl = []; for (const sl of slots) { lvl.push(sl.y0); if (sl.y1 < sl.y0 + 20) lvl.push(sl.y1) }
+    const rough = (y, bo0) => {
+      let a = 99, b = 99; for (const e of lvl) { if (e <= y) a = Math.min(a, y - e); else b = Math.min(b, e - y) }
+      if (a > 90) return 0
+      const m = ss(0.35, 0.9, a) * ss(0.3, 0.8, b), m2 = ss(2.6, 3.3, a) * ss(0.3, 0.9, b)
+      const chan = ss(0.52, 0.7, fbm2(x * 0.3, y * 0.035 + 7, 3)), blk = ss(0.5, 0.68, fbm2(x * 0.22 + 3, y * 0.32, 2))
+      return m * (0.75 * chan + 0.8 * Math.max(0, Math.min(0.6, bo0))) - m2 * blk * (1 - chan) * (0.25 + Math.max(0, Math.min(0.5, -bo0)))
+    }
     for (let k = 0, i = 1; k <= FACE; k++) {
       const s0 = Ls.at(-1) * k / FACE; while (i < P.length - 1 && Ls[i] < s0) i++
       const u = (s0 - Ls[i - 1]) / Math.max(1e-6, Ls[i] - Ls[i - 1]), sp = snap.get(k), d = sp ? sp[0] : lerpN(P[i - 1][0], P[i][0], u), y = sp ? sp[1] : lerpN(P[i - 1][1], P[i][1], u), q = lerpN(P[i - 1][2], P[i][2], u)
       // 層理只往裡凹（瀑布水簾那幾公尺）或前後都有（其他地方）；岩窟裡也有
-      const b = bedAt(x, y), bo0 = sed * (fallK > 0.3 ? Math.max(0, b.off) + 0.2 : b.off) * ss(g0 - 0.5, g0 + 1.5, y), bo = y > yTerr ? Math.max(-0.1, Math.min(0.3, bo0 * 0.4)) : bo0   // 階地以上：層理不能凸到步道上
+      const b = bedAt(x, y), bo0 = sed * (fallK > 0.3 ? Math.max(0, b.off) + 0.2 : b.off) * ss(g0 - 0.5, g0 + 1.5, y), bo = y > yTerr ? (sp ? 0 : Math.max(-0.1, Math.min(0.3, bo0 * 0.4)) * 0.5 + rough(y, bo0)) : bo0   // 階地以上：層理不能凸到步道上
       out.push([y, Math.max(push, zb + d + bo), q, b.ledge * sed, b.tone, b.joint * sed])
     }
     if (A > 0.25) out.lip = { y: g0 + Ho + 0.3, z: zb + lip - 0.35 * A, A }
