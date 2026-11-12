@@ -62,6 +62,7 @@ export async function startTitle3D(host, { ver = '' } = {}) {
   src.updateMatrixWorld(true)
   const bb = new THREE.Box3().setFromObject(src), K = 1.3 / (bb.max.y - bb.min.y)   // 站高 130 cm
   const birds = []
+  const FLOCK = V(3.3, 0, -0.9)   // 紅鶴群的中間（SPOTS 的平均）：鏡頭繞著它轉、一直看著它
   // [x, z, 面向（弧度，0＝頭朝 -x）, 個性：phase, 大小]
   const SPOTS = [[1.2, -0.6, 0.2, 0.0, 1.0], [2.6, 0.5, 2.9, 1.7, 0.94], [3.6, -1.4, 0.5, 3.1, 1.04], [5.6, -0.2, 3.4, 4.4, 0.97], [6.9, -1.6, -0.3, 5.3, 1.0], [0.1, -2.6, 2.4, 2.4, 0.92]]
   for (const [x, z, yaw, ph, sz] of SPOTS) {
@@ -73,7 +74,7 @@ export async function startTitle3D(host, { ver = '' } = {}) {
     m.traverse((o) => { if (o.isBone) bones[o.name] = o })
     const mq = m.getWorldQuaternion(new THREE.Quaternion()).invert(), wq = new THREE.Quaternion()
     for (const b of Object.values(bones)) { b.userData.rest = b.quaternion.clone(); b.userData.inv = mq.clone().multiply(b.getWorldQuaternion(wq)).invert() }
-    birds.push({ g, bones, ph, sz, x0: x, z0: z, yaw0: yaw, feedT: -ph * 2.2, walk: ph > 2 && ph < 4.5, w: { mode: 'walk', t: ph, h: yaw, gone: 0, leg: 0, x, z } })
+    birds.push({ g, bones, ph, sz, x0: x, z0: z, yaw0: yaw, feedT: -ph * 2.2, walk: false, w: { mode: 'walk', t: ph, h: yaw, gone: 0, leg: 0, x, z } })
   }
   // 骨頭繞「模型座標的軸」轉 a：local = rest × inv × R × inv⁻¹
   const _q = new THREE.Quaternion(), _r = new THREE.Quaternion(), _i = new THREE.Quaternion()
@@ -149,8 +150,11 @@ export async function startTitle3D(host, { ver = '' } = {}) {
     }
     // 鏡頭：很慢地左右漂、跟著滑鼠偏一點（有前後景的視差）
     cx += (mx - cx) * Math.min(1, dt * 1.5); cy += (my - cy) * Math.min(1, dt * 1.5)
-    camera.position.set(1.2 + Math.sin(t * 0.07) * 1.1 + cx * 0.7, 0.9 + Math.sin(t * 0.05) * 0.1 - cy * 0.12, 10.5 + Math.cos(t * 0.06) * 0.6)
-    camera.lookAt(0.6 + cx * 0.25, 1.05, -2)   // 紅鶴在畫面右半邊（左邊是選單）
+    // 2026-11-13 使用者：「應該移動的只是相機，紅鶴不動」——紅鶴站在原地（只有低頭濾食、轉頭），鏡頭繞著紅鶴群慢慢左右來回（±11°、約 90 秒一個來回），
+    // 一直對準紅鶴群的中間；看的點往右偏一點，紅鶴才在畫面右半邊（左邊是選單）。滑鼠只讓鏡頭再偏一點點
+    { const C0 = FLOCK, R = 11.5, a = Math.sin(t * 0.07) * 0.19 + cx * 0.06
+      camera.position.set(C0.x + Math.sin(a) * R, 0.92 + Math.sin(t * 0.05) * 0.08 - cy * 0.08, C0.z + Math.cos(a) * R)
+      camera.lookAt(C0.x - 2.9, 1.05, C0.z) }
     if (window.__t3cam) { const c = window.__t3cam(birds); camera.position.copy(c.p); camera.lookAt(c.t) }   // 測試用：自動測試腳本指定鏡頭
     renderer.render(scene, camera)
   }
