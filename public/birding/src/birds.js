@@ -318,7 +318,7 @@ const TINT = { 'thrush-rig': 0.5 }
 const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
     'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig']
@@ -1788,20 +1788,20 @@ function shoebill(env) {
 // 覓食姿勢（每根骨頭多轉幾弧度，照側面實拍調的）。down：頭下到水面那一段的姿勢；sweep：嘴在水裡左右掃的幅度、頻率
 export const FEED = {
   // 紅鶴濾食：身體只微微前傾，脖子從胸口直直垂下去，頭整個倒過來、上嘴朝下貼著水面，慢慢左右擺
-  flamingo: { acts: ['peck'], lean: 0.5, neck: 0, head: 0, reach: 0.5, bones: { neck: -2.9, neck2: -0.3, neck3: 0.2, head: 0.6 }, sweep: 0.22, hz: 0.5, inT: 0.18, outT: 0.85 },
+  flamingo: { acts: ['peck'], lean: 0.42, neck: 0, head: 0, reach: 0.75, rate: 2.2, bones: { neck: -2.6, neck2: -1.0, neck3: -0.6, head: 1.0 }, sweep: 0.22, hz: 0.25, inT: 0.2, outT: 0.8 },
   // 玫瑰琵鷺：身體前傾，脖子往前下伸直，匙狀的嘴尖泡在水裡、張著一點左右快速掃
   rspoonbill: { acts: ['hunt', 'strike'], lean: 0.9, neck: 0, head: 0, reach: 0.4, bones: { neck: -1.5, neck2: -0.4, neck3: -0.1, head: 1.7 }, sweep: 0.5, hz: 1.1, inT: 0.12, outT: 0.9 },
 }
 const feeder = (F) => ({ n, kk, t }) => {
   if (!F.acts.includes(n) || kk < 0.02 || kk > F.outT) return null   // 動作尾段回到站姿（骨頭的額外轉動會自己慢慢退回 0）
   const k = Math.min(1, kk / F.inT)
-  return { lean: F.lean, neck: F.neck, head: F.head, reach: F.reach, rate: 5, bones: F.bones, sway: k >= 1 ? F.sweep * Math.sin(t * Math.PI * 2 * F.hz) : 0 }
+  return { lean: F.lean, neck: F.neck, head: F.head, reach: F.reach, rate: F.rate ?? 5, bones: F.bones, sway: k >= 1 ? F.sweep * Math.sin(t * Math.PI * 2 * F.hz) : 0 }
 }
 function flamingo(env) {
   const show = flamingoShow({ neck: 0.1, neck2: -0.6, neck3: 0, head: 0.6 })
   return groundGroup(6, 1.3, (avoid) => groundTripo(env, { name: 'flamingo-rig', H: 1.3, h0: 0.981, ...TRIPO, reach: 0.9, wade: true, bill: 0.16, show, feed: feeder(FEED.flamingo),
     walk: { radius: 3.2, speed: 0.13, avoid }, swingT: 0.6, lift: 0, knee: [1.0, 1.8], focusY: 0.75,
-    acts: { walk: [4, 99, 99], peck: [4, 1.6, 3.2], stand: [2, 2, 4], look: [1.5, 1.2, 2.5], turn: [1, 99, 99], show: [0, 999, 999] } }))
+    acts: { walk: [4, 99, 99], peck: [4, 7, 11], stand: [2, 2, 4], look: [1.5, 1.2, 2.5], turn: [1, 99, 99], show: [0, 999, 999] } }))
 }
 // 非洲水雉、紫水雞：荷葉盆地，踩著浮葉走（跟水雉同一套）
 function ajacana(env) { return endemicGround('ajacana-rig', 0.29, 0.979, { hop: 0, flick: 0.05, radius: 1.1, speed: 0.09, stride: 0.1 })(env) }
@@ -1897,6 +1897,8 @@ function wbwood(env) {
   // 2026-11-10 大赤啄木：直立貼在神木樹幹上（sacredUpright），臉朝樹幹、偶爾左右挪一點；eat 動作＝往樹皮啄
   // 2026-11-10 使用者：腳要平貼在樹上 → 換成 Tripo 直接生成「攀樹姿勢」的模型（wbwood2：身體直立、腳趾和尾羽末端抵在同一個垂直面），
   // 不再用 clingPose 去掰站姿模型的腳。k 0.3（全長約 30 公分）；foot 0.44＝腳的高度（模型座標），腳趾在模型 x -0.19 → 離根 0.057，所以 sacredOff 0.057
+  // 2026-11-12 使用者：圖鑑裡攀樹模型破圖、腳也歪（圖鑑沒有樹幹，攀樹姿勢被橫放在樹枝上）→ 圖鑑插圖改用原本的站姿模型（wbwood-rig），站在樹枝上
+  if (env.guide) return perchRigged(env, { name: 'wbwood-rig', k: 0.3, ...TRIPO, foot: 0.09, drop: 0.02, beat: 9, eat: true, hopper: { hop: [0.05, 0.12] } })
   return perchRigged(env, { name: 'wbwood2-rig', k: 0.3, ...TRIPO, foot: 0.44, drop: 0.01, beat: 9, eat: true,
     fly: null, hopper: { span: [Math.PI / 2, Math.PI / 2], hop: [0.04, 0.1], rest: [3, 7] }, acts: { idle: [3, 2, 4], call: [1, 1.5, 2.5], preen: [0.5, 1.5, 2.5], eat: [4, 2.5, 4] } })
 }

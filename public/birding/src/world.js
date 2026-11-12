@@ -277,7 +277,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }))
   // 地上的鳥：空地要大到鏡頭那邊也沒有花草擋在最前面
   const reserve = [...birds.map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], r: b.def.perch === 'branch' ? 4 : Math.max(2.6, (b.def.dist ?? 0) + 0.8) })), ...extraReserve]
-  const flora = buildFlora(scene, plantLib, { stopsFor: (h) => [...buildStops(h), ...birdStops], reserve })
+  const flora = buildFlora(scene, plantLib, { stopsFor: (h) => [...buildStops(h), ...birdStops], reserve, woodKit: hideKit })
   // 山體換成真實岩石貼圖（借 rock_face_02 的顏色＋法線），頂點色負責苔蘚／暗部
   {
     let src = null

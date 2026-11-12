@@ -7,7 +7,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { CABIN, ALP_TRAIL, alpineHeight, addCollider } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
-import { softDotTex } from './textures.js'
+import { softDotTex, plankTextures } from './textures.js'
+const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
@@ -69,13 +70,22 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   const at = (u, y, v) => V(C.x, Y, C.z).addScaledVector(right, u).addScaledVector(fwd, v).add(V(0, y, 0))   // 屋子的座標：u 左右、v 前後（+v 是門那面）
   const rot = new THREE.Euler(0, C.yaw, 0)
   const lists = {}
+  const SCAN = new Set(['log', 'wall', 'trim', 'floor']), TILE = 2.05, SEAMS = [75, 233, 393, 552, 708, 866, 1022, 1179, 1337, 1495, 1653, 1810, 1966]
+  const STRIPS = SEAMS.slice(0, -1).map((q, i) => [(q + 16) / 2048, (SEAMS[i + 1] - 16) / 2048])
+  let cylN = 0
   const put = (mat, geo) => (lists[mat] ??= []).push(geo.index ? geo.toNonIndexed() : geo)
   const boxAt = (mat, w, h, d, u, y, v, ry = 0, rx = 0) => put(mat, boxUV(new THREE.BoxGeometry(w, h, d), w, h, d).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, C.yaw + ry, 0, 'YXZ')).setPosition(at(u, y, v))))
   const cylAt = (mat, r0, r1, h, u, y, v, seg = 10) => put(mat, new THREE.CylinderGeometry(r0, r1, h, seg).translate(0, 0, 0).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(rot).setPosition(at(u, y, v))))
   const cylW = (mat, a, b, r0, r1 = r0, seg = 12) => {
     const d = new THREE.Vector3().subVectors(b, a), len = d.length()
     const geo = new THREE.CylinderGeometry(r1, r0, len, seg).translate(0, len / 2, 0)
-    const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (TAU * r0) / S * 2, uv.getY(i) * len / S)
+    const uv = geo.attributes.uv
+    if (SCAN.has(mat)) {
+      // 掃描木紋（沿貼圖 u）：木頭的長度方向 → u；繞一圈 → 在同一條板子裡來回（鏡射，接縫看不出來、也不會露出板縫）
+      const [v0, v1] = STRIPS[cylN++ % STRIPS.length], n = Math.max(1, Math.round(TAU * r0 / 0.36)), uo = (cylN * 0.37) % 1
+      for (let i = 0; i < uv.count; i++) { const q = uv.getX(i) * n % 1, tri = 1 - Math.abs(2 * q - 1); uv.setXY(i, uo + uv.getY(i) * len / TILE, v0 + tri * (v1 - v0)) }
+      mat += 'C'
+    } else for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (TAU * r0) / S * 2, uv.getY(i) * len / S)
     geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), d.normalize())).translate(a.x, a.y, a.z)
     put(mat, geo)
   }
@@ -83,12 +93,15 @@ export function buildSummit({ g, avoid = [], printsUrl }) {
   const rbox = (mat, w, h, d, u, y, v, rad, ry = 0, rx = 0) => put(mat, new RoundedBoxGeometry(w, h, d, 3, rad).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, C.yaw + ry, 0, 'YXZ')).setPosition(at(u, y, v))))
   const tubeW = (mat, a, b, r) => put(mat, new THREE.TubeGeometry(new THREE.LineCurve3(a, b), 1, r, 6))
 
-  const woodMat = (o, rough) => { const t = woodTex(o); return new THREE.MeshStandardMaterial({ map: t.map, bumpMap: t.bump, bumpScale: 1.5, roughness: rough }) }
+  // 2026-11-12 木頭全部換成掃描的真木板（Poly Haven，跟木棧道、賞鳥屋同一份）；以前是 canvas 畫的木紋。
+  // 方盒子的 UV 木紋沿 v → 貼圖轉 90°；圓木另外一份不轉的（cylW 自己排 UV，材質名字後面加 C）
+  const PT = plankTextures(VER)
+  const turned = (t) => { const c = t.clone(); c.rotation = Math.PI / 2; c.repeat.set(S / TILE, S / TILE); c.needsUpdate = true; return c }
+  const PR = { col: turned(PT.col), nor: turned(PT.nor), orm: turned(PT.orm) }
+  const woodMat = (rgb, rough, T = PR) => { const m = new THREE.MeshStandardMaterial({ map: T.col, normalMap: T.nor, normalScale: new THREE.Vector2(1, -1), roughnessMap: T.orm, roughness: rough, metalness: 0 }); m.color.setRGB(...rgb); return m }
+  const TONE = { log: [[2.25, 1.72, 1.16], 0.95], wall: [[1.7, 1.36, 1.02], 1], trim: [[1.15, 0.86, 0.62], 0.9], floor: [[2.1, 1.7, 1.25], 0.85] }   // 圓木（護木油的蜂蜜色）、山牆直板（舊一點）、門窗框（深）、地板（磨亮）
   const mats = {
-    log: woodMat({ seed: 3, light: [178, 134, 88], dark: [104, 70, 42], knots: 7, ring: 0.05, weather: 0.12 }, 0.85),   // 圓木：剝了皮、上過護木油的雲杉
-    wall: woodMat({ seed: 5, light: [150, 108, 72], dark: [86, 58, 36], planks: 6, gap: 3, knots: 4, ring: 0.08, weather: 0.25 }, 0.9),   // 山牆的直條木板（比較舊）
-    trim: woodMat({ seed: 9, light: [118, 82, 54], dark: [62, 40, 24], knots: 3, ring: 0.09 }, 0.8),
-    floor: woodMat({ seed: 13, light: [184, 140, 96], dark: [112, 78, 48], planks: 5, gap: 2, knots: 6, ring: 0.07 }, 0.7),
+    ...Object.fromEntries(Object.entries(TONE).flatMap(([k, [rgb, r]]) => [[k, woodMat(rgb, r)], [k + 'C', woodMat(rgb, r, PT)]])),
     chink: new THREE.MeshStandardMaterial({ color: 0xc9c0ad, roughness: 1 }),
     endgrain: new THREE.MeshStandardMaterial({ roughness: 0.95, map: canvasTex(256, 256, (x, w, h) => {   // 鋸開的木頭端面：同心年輪、放射狀乾裂、外圈一點樹皮色
       const r = mulberry32(17), cx = w / 2 + 6, cy = h / 2 - 4

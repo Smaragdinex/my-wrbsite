@@ -319,7 +319,7 @@ buildHeights()
 export const ALP_STREAM = [[151, -2], [150, -8], [147, -13], [142, -16.5], [135, -15.5], [130.5, -14.2], [125.5, -13.4], [120.5, -14.2], [114, -16.5], [109, -18], [100, -19], [94, -18]].map(([x, z]) => AM(x, z))
 // 2026-11-11 瀑布湖流出來的河（世界座標）：從湖的西岸出水口往西南，繞過營地南邊、穿過營地支線和主步道（各一座石橋），一路下坡流進山下湖（溪口旁邊，兩股水在湖口會合）。
 // 路線是照地形找的最省力下坡（湖 31 m → 山下湖 0 m），中間不會往上爬。2026-11-11 加寬（ChatGPT 建議：基準 5 m、2.5～8 m、湖口 7～8 m），上段往東讓開營地的帳篷
-export const ALP_RIVER = [[185, 76], [183.4, 73.8], [184, 66], [180, 57], [171, 50], [160, 41], [151, 36], [142, 31], [135, 25], [129, 18], [124, 10], [122, 0], [121, -10], [120, -20], [119, -28], [116.1, -30.7], [113.2, -33.4]]   // 2026-11-10 檢查員（山下湖河口）：河道延伸進湖 8 m（以前停在湖邊、外面被「岸比水面高」墊成一道土堤，像水流到地上）   // 中段往東南讓開栗背林鴝（134, 33）和黃嘴角鴞那棵樹；過營地支線的地方離岔路口 7 公尺（橋不能蓋在岔路口上）
+export const ALP_RIVER = [[185, 76], [183.4, 73.8], [184, 66], [180, 57], [171, 50], [160, 41], [151, 38.5], [142, 35.5], [135.5, 30], [129, 18], [124, 10], [122, 0], [121, -10], [120, -20], [119, -28], [116.1, -30.7], [113.2, -33.4]]   // 2026-11-10 檢查員（山下湖河口）：河道延伸進湖 8 m（以前停在湖邊、外面被「岸比水面高」墊成一道土堤，像水流到地上）   // 中段往東南讓開栗背林鴝（134, 33）和黃嘴角鴞那棵樹；過營地支線的地方離岔路口 7 公尺（橋不能蓋在岔路口上）
 ALP_RIVER.wide = true
 export const ALP_STREAMS = [ALP_STREAM, ALP_RIVER]
 // 河過步道的地方：石拱橋（橋面＝步道高度；橋下照河挖，不鋪路）。buildAlpine 算出 x, z, y, dir
@@ -337,7 +337,7 @@ export const ALP_SPURS = [
   // 2026-11-09 使用者：過橋後馬上往左折回去很彆扭 → 改成過橋先往前直走一段，再往左繞一個大彎（繞過鷓鴣北邊）到同一塊空地
   { name: 'gorge', from: 7, pts: [[129.35, -26.5], [125.2, -29.4], [119, -29], [114, -25.6], [112.5, -22.5]] },  // 吊橋下去，沿溪谷：黃腹琉璃
   // 2026-11-11 使用者：走到山頂才有小木屋 → 小木屋搬到步道終點（山頂）再往前一點，門朝步道來的方向
-  { name: 'cabin', from: 15, pts: [[145, 6.2]] },
+  { name: 'cabin', from: 15, k: 0.09, pts: [[145, 6.2]] },   // k：2026-11-12 小木屋只比步道終點高 0.6 m（原本 1.5 m，門前變成陡坡）
   // 2026-11-09 使用者：右邊岔路加大、上面做一個休息的營地（三頂帳篷圍著營火）。跟黃山雀那條共用第一段，到岔口往上坡走到一塊平台
   { name: 'camp', from: 3, pts: [[110, 19], [112.8, 24], [114.25, 28.95]], clear: 11 },   // 2026-11-10 營地再加大 7.5→11
   // 2026-11-10 使用者：帳篷區那邊路線拉長、換一種風景（優勝美地）→ 從主線第 13 點（山頂步道東段）往西下坡，沿北邊的花崗岩壁、瀑布走到營地，跟 camp 支線連成一圈。
@@ -556,6 +556,9 @@ export const EAST_DW = [-276, -60], EAST_DG = [-303, 8]
   mo(EAST.lark, EAST_DG); mv(EAST.owlNest, EAST_DG); mv(EAST.hides[0], EAST_DG)
   EAST.grassBox = [EAST.grassBox[0] + EAST_DG[0], EAST.grassBox[1] + EAST_DG[0], EAST.grassBox[2] + EAST_DG[1], EAST.grassBox[3] + EAST_DG[1]]
   for (const p of ALP_SPURS.find((q) => q.name === 'wetBoard').pts) mv(p, EAST_DW)
+  // 2026-11-12 使用者：「右邊木道可以跟中間的連結嗎」→ 原本走到沼澤裡一個平台就是死路；現在從那裡繼續往南、繞過荷葉區（水雉 52,-107 的東邊），
+  // 再往西接到中間 S 形棧道東側的翡翠灣（灣前緣中點 42.84,-121.30、朝東；最後 3 m 是接灣的平台），變成一圈環線
+  ALP_SPURS.find((q) => q.name === 'wetBoard').pts.push([60.5, -99.5], [60.5, -106], [57.5, -113], [53.5, -118], [50.3, -120.58], [45.83, -121.01])
   EAST.W = -0.25
 }
 // 2026-11-11 濕地加大一倍、分成兩座（使用者：10 種鳥都要住得進去、兩個不同特色的濕地；ChatGPT「Wetland expansion」）：
@@ -591,8 +594,7 @@ EAST.lagoonDeep = { x: -15, z: -116, rx: 5.5, rz: 4.5, dep: 1.2 }
 EAST.hides[1] = [42.5, -92]   // O8（淡水）：不動
 EAST.hides[2] = [-15, -89.2]  // O9（潟湖）：北岸，往南看泥灘和沙洲
 EAST.decks = [
-  { name: 'sunset', x: 19.5, z: -97.5, w: 7, d: 5, look: [-10, -124] },   // 夕陽觀景台：潟湖東北岸、面向西南
-  { name: 'crane', x: 92.5, z: -122, w: 6, d: 4, look: [74, -125] },      // 鶴的觀察台：沼澤東岸、蘆葦擋著
+  // 2026-11-12 使用者：兩座單獨的觀賞台（潟湖東北岸的夕陽台、沼澤東岸長滿蘆葦的鶴台）移除；剩下的都是接在棧道上的觀景灣（下面 push 的）
 ]
 export const inLagoon = (x, z) => x < 31
 // 觀景台：矩形（w 沿面向的左右、d 前後）；wetland.js 照這個蓋
@@ -1048,7 +1050,13 @@ function buildAlpine() {
     // 山頂：步道終點一小塊平地（2026-11-08 拿掉觀景台，不再削一大片平台）；終點旁邊的山頭不能比終點高太多，步道才不會走在溝裡
     const pe = tr[tr.length - 1], dpk = Math.hypot(x - pe[0], z - pe[1])
     h = lerp(prof[prof.length - 1] + 0.02, h, smoothstep(2.5, 5, dpk))
-    h = lerp(Math.min(h, prof[prof.length - 1] + 0.3 + 0.12 * Math.max(0, dpk - 3)), h, smoothstep(6, 14, dpk))
+    {
+      // 2026-11-12 使用者：小木屋比地形高。原因：這一步把終點 14 公尺內的地面壓低，連小木屋的地基和上去的那段支線一起削掉（門口低 0.7 公尺）→ 小木屋四周、支線路面不壓
+      const hKeep = h, cs = ALP_SPURS.find((q) => q.name === 'cabin')
+      h = lerp(Math.min(h, prof[prof.length - 1] + 0.3 + 0.12 * Math.max(0, dpk - 3)), h, smoothstep(6, 14, dpk))
+      const keep = Math.max(smoothstep(CABIN.R + 4.4, CABIN.R, Math.hypot(x - CABIN.x, z - CABIN.z)), smoothstep(4, 1.0, polyDist(x, z, cs.pts)[0]))
+      h = lerp(h, hKeep, keep)
+    }
     // 2026-11-10 使用者截圖（營地旁看瀑布）：河面、湖面浮在半空、從坡上翹出來——營地和支線步道攤平時把河岸、湖岸削得比水面低（最多低 3.9 公尺）。
     // 最後再保一次：水邊 0.8 公尺內的岸至少比水面高 0.12，往外最陡 1:1.1 接回地形（像一道亂石堤）；橋頭、步道路面本身不墊
     {
@@ -1077,6 +1085,15 @@ function buildAlpine() {
           const need = LK.water + 0.15 - Math.max(0, (e - 1) * Math.min(LK.rx, LK.rz) - 0.8) * 1.1
           if (h < need) h = lerp(h, need, onPath)
         }
+      }
+    }
+    {
+      // 2026-11-12 使用者：瀑布湖往下的溪「有些地方水位偏低」＝河道貼著步道的地方被步道的填土蓋住（水面在地面底下最多 1.1 m）。
+      // 最後再挖一次河槽：水面寬度裡地面一定在水面下（中間深 0.38、往兩邊收），岸邊 1.2 m 內最陡 1.3:1 接回原地形（橋是另外的模型，橋下照挖）
+      const RV = ALP_RIVER, [dr, ri, rt] = polyDist(x, z, RV), sR = RV.S[ri] + rt * (RV.S[ri + 1] - RV.S[ri]), hw = RV.halfAt(sR)
+      if (dr < hw + 1.2 && sR > 2 && sR < RV.lipS - 8) {
+        const wl = RV.water(sR)
+        h = Math.min(h, dr < hw ? wl - 0.06 - 0.32 * (1 - (dr / hw) ** 2) : wl + 0.1 + (dr - hw) * 1.3)
       }
     }
     aHeight[k] = Number.isFinite(h) ? h : 0   // 2026-11-11 格子往西擴到 x -62 以後包到花園中心 (0,0)：gardenEdgeH 在原點是 NaN（地形網格的外框變 NaN，整片地形被剔除）
@@ -1173,7 +1190,7 @@ export const ALP_WALKS = (() => {
   // 兩個觀景灣（EAST.decks，跟棧道同高）：夕陽灣（西側、17～22 m，5×4 m、一張面向夕陽的長椅）、翡翠灣（東側、34～39 m，4×3 m，看荷葉和鸊鷉）
   for (const [nm, s0, side, w, d, bench] of [['sunsetBay', 19.5, -1, 5, 4, true], ['emeraldBay', 37, 1, 4, 3, false], ['southBay', 58, -1, 5, 4, true]]) {
     const i = Math.min(N - 1, Math.round(s0 / 0.05)), nx = -stz[i] * side, nz = stx[i] * side, off = WALK_HW + d / 2 + 0.02
-    EAST.decks.push({ name: nm, x: xs[i] + nx * off, z: zs[i] + nz * off, w, d, look: [xs[i] + nx * 30, zs[i] + nz * 30], y: EAST.W + 0.45, bench, bay: true })
+    EAST.decks.push({ join: nm === 'emeraldBay', name: nm, x: xs[i] + nx * off, z: zs[i] + nz * off, w, d, look: [xs[i] + nx * 30, zs[i] + nz * 30], y: EAST.W + 0.45, bench, bay: true, s: s0, side })   // s、side：在棧道的哪裡、哪一側（walkway.js 把棧道欄杆接到灣的角柱）
   }
   const base = new Float32Array(N), y = new Float32Array(N)
   for (let i = 0; i < N; i++) { let m = -1e9; for (const l of [-WALK_HW, 0, WALK_HW]) m = Math.max(m, alpineHeight(xs[i] - stz[i] * l, zs[i] + stx[i] * l)); base[i] = m + 0.06; y[i] = Math.max(base[i], EAST.W + 0.45) }
@@ -1186,10 +1203,10 @@ export const ALP_WALKS = (() => {
 // 2026-11-12 沼澤觀察屋旁的矮木道（wetBoard 支線，east.js buildBoardwalk 蓋）：以前木板貼著地形走，沼澤加大以後後半段的地形在水面下、整條沉在水裡只剩欄杆。
 // 木板面＝max(地面 + 0.12, 水面 + 0.4)；盡頭 3×3 m 平台是平的。人走在上面（supportAt）
 export const wetBoardY = (x, z) => Math.max(alpineHeight(x, z) + 0.12, EAST.W + 0.4)
-export const wetBoardEnd = () => { const P = ALP_SPURS.find((q) => q.name === 'wetBoard').pts, E = P[P.length - 1], A = P[P.length - 2], l = Math.hypot(E[0] - A[0], E[1] - A[1]); return { x: E[0], z: E[1], dx: (E[0] - A[0]) / l, dz: (E[1] - A[1]) / l, y: wetBoardY(E[0], E[1]) } }
+export const wetBoardEnd = () => { const P = ALP_SPURS.find((q) => q.name === 'wetBoard').pts, E = P[P.length - 1], A = P[P.length - 2], l = Math.hypot(E[0] - A[0], E[1] - A[1]); const dx = (E[0] - A[0]) / l, dz = (E[1] - A[1]) / l; return { x: E[0], z: E[1], dx, dz, y: Math.max(wetBoardY(E[0], E[1]), deckAt(E[0] + dx * 3.6, E[1] + dz * 3.6) ?? -1e9) } }   // 盡頭的平台接翡翠灣：跟灣同高
 export function wetBoardAt(x, z) {
   const P = ALP_SPURS.find((q) => q.name === 'wetBoard').pts
-  if (x < P[0][0] - 3 || x > P[P.length - 1][0] + 5 || z > P[0][1] + 3 || z < P[0][1] - 14) return null
+  if (x < 40 || x > 64 || z > P[0][1] + 3 || z < -125) return null
   const E = wetBoardEnd(), u = (x - E.x) * E.dx + (z - E.z) * E.dz, v = -(x - E.x) * E.dz + (z - E.z) * E.dx
   if (u >= -0.1 && u <= 2.95 && Math.abs(v) <= 1.5) return E.y
   let S = 0

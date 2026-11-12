@@ -142,7 +142,8 @@ function buildDecks(g, kit, wk) {
       for (let i = 0; i < n; i++) { const t = (i + 0.5) / n; for (const [part, hh] of [['bw_rail_top', 1.04], ['bw_rail_mid', 0.64], ['bw_rail_mid', 0.27]]) put(part, F, x0 + (x1 - x0) * t, Y + hh, z0 + (z1 - z0) * t, [L / n, 1, 1], [0, yaw, 0]) }
     }
     const hw = D.w / 2 - 0.05, hd = D.d / 2 - 0.05, back = D.bay ? 0 : 0.6   // 觀景灣：兩側欄杆一路接回棧道
-    rail(-hw, hd, hw, hd); rail(-hw, -hd + back, -hw, hd); rail(hw, -hd + back, hw, hd)
+    if (D.join) { rail(-hw, hd, -1.55, hd); rail(1.55, hd, hw, hd) } else rail(-hw, hd, hw, hd)   // join：前緣中間 3.1 m 開著，接沼澤木道的平台
+    rail(-hw, -hd + back, -hw, hd); rail(hw, -hd + back, hw, hd)
     if (D.bench) {   // 面向夕陽的長椅（1.8 m）：椅面三片木板、椅背兩片（往後仰一點）、兩隻腳
       for (const [k, lz] of [-0.655, -0.5, -0.345].entries()) put('bw_plank_' + k, F, 0, Y + 0.47, lz, [1.8 / 3.1, 1.2, 0.95])
       for (const [k, yy] of [0.66, 0.83].entries()) put('bw_plank_' + (k + 2), F, 0, Y + yy, -0.74 - k * 0.03, [1.8 / 3.1, 1.2, 0.95], [Math.PI / 2 - 0.17, 0, 0])
@@ -150,7 +151,7 @@ function buildDecks(g, kit, wk) {
       addCollider(D.x - 0.5 * F.s, D.z - 0.5 * F.c, 0.45, Y + 0.6, Y - 0.2)
     }
     // 欄杆擋人：前緣、兩側一排碰撞圓
-    for (const [x0, z0, x1, z1] of [[-hw, hd, hw, hd], [-hw, -hd + back, -hw, hd], [hw, -hd + back, hw, hd]]) for (let t = 0; t <= 1.001; t += 0.12) { const lx = x0 + (x1 - x0) * t, lz = z0 + (z1 - z0) * t; addCollider(D.x + lx * F.c + lz * F.s, D.z - lx * F.s + lz * F.c, 0.12, Y + 1.1, Y - 0.5) }
+    for (const [x0, z0, x1, z1] of [[-hw, hd, hw, hd], [-hw, -hd + back, -hw, hd], [hw, -hd + back, hw, hd]]) for (let t = 0; t <= 1.001; t += 0.12) { const lx = x0 + (x1 - x0) * t, lz = z0 + (z1 - z0) * t; if (D.join && lz > hd - 0.01 && Math.abs(lx) < 1.45) continue; addCollider(D.x + lx * F.c + lz * F.s, D.z - lx * F.s + lz * F.c, 0.12, Y + 1.1, Y - 0.5) }
   }
   for (const [part, list] of Object.entries(M)) {
     if (!wk?.geo?.[part] || !list.length) continue

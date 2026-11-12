@@ -366,3 +366,13 @@ export function mistNoiseTex() {
   return t
 }
 
+
+// 2026-11-12 掃描的風化木板（Poly Haven weathered_brown_planks，tools/make-hide-kit.py 輸出 planks_{col,nor,orm}.jpg）：賞鳥屋、長椅、小木屋共用同一份（只上傳一次）
+// 一張 2.05 公尺、13 條板；木紋沿 u、板縫沿 v。flipY=false（照 glTF 的 UV）
+let _planks = null
+export function plankTextures(ver = '') {
+  if (_planks) return _planks
+  const TL = new THREE.TextureLoader()
+  const tex = (n, srgb) => { const t = TL.load(`models/props/planks_${n}.jpg?v=${ver}`); t.flipY = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 8; return t }
+  return (_planks = { col: tex('col', true), nor: tex('nor', false), orm: tex('orm', false) })
+}

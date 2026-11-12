@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, alpineHeight, addCollider, deckAt } from './layout.js'
+import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, alpineHeight, addCollider, deckAt, EAST, deckFrame } from './layout.js'
 import { dappled } from './alpine.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
@@ -257,7 +257,7 @@ export function buildWalkways(scene, kit) {
         const x = p.x + nx * 1.61, z = p.z + nz * 1.61
         if (deckAt(p.x + nx * 2.3, p.z + nz * 2.3) != null) continue   // 2026-11-11 觀景灣的入口：這一側不立柱、不拉欄杆（railRun 超過 3 m 的間隔不接）
         if (w.head.t === 'wet' && (lampK++ % 4) === 1) lampAt.push([x - nx * 0.09, p.y + 0.55, z - nz * 0.09, nx, nz])   // 每 5.6 m 一盞矮燈（柱子內側、離台面 0.55 m）
-        posts.push({ x, z, y: p.y, nx, nz })
+        posts.push({ x, z, y: p.y, nx, nz, s: s0 })
         bw.add('bw_post', place(V(x, p.y, z), V(nx, 0, nz), V(p.tx, 0, p.tz)))
         bw.add('bw_bracket', place(V(x, p.y, z), V(p.tx, 0, p.tz), V(nx, 0, nz)))
         addCollider(x, z, 0.08, p.y + 1.1)
@@ -266,6 +266,21 @@ export function buildWalkways(scene, kit) {
           bw.add('bw_pile', place(V(px, p.y - 0.26, pz), V(nx, 0, nz), V(p.tx, 0, p.tz), 1, Math.max(0.1, p.y - 0.26 - (g - 0.3)), 1))
         }
       }
+      // 2026-11-12 使用者：觀景灣左右兩邊的扶手有缺口（棧道的柱子每 1.4 m 一根，遇到灣就跳過 → 最後一根柱子到灣的角柱之間最多空 1.4 m）。
+      // 棧道的欄杆直接接到灣後緣的兩根角柱（wetland.js 立的，這裡只當欄杆的端點、不再多立一根）
+      if (w.head.t === 'wet') for (const D of EAST.decks) {
+        if (!D.bay || D.side !== sd) continue
+        const F = deckFrame(D), hw = D.w / 2 - 0.05, hd = D.d / 2 - 0.05
+        for (const lx of [-hw, hw]) {
+          const x = D.x + lx * F.c - hd * F.s, z = D.z - lx * F.s - hd * F.c
+          let bs = 0, bd = 1e9
+          for (let q = Math.max(0, D.s - D.w); q <= Math.min(S, D.s + D.w); q += 0.1) { const a = at(q), dd = (a.x - x) ** 2 + (a.z - z) ** 2; if (dd < bd) { bd = dd; bs = q } }
+          const a = at(bs)
+          posts.push({ x, z, y: a.y, nx: -a.tz * sd, nz: a.tx * sd, s: bs })
+        }
+      }
+      posts.forEach((q, k) => { q.s ??= -1 + k * 1e-3 })
+      posts.sort((a, b) => a.s - b.s)
       railRun(bw, posts)
     }
     bw.done()

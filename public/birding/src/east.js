@@ -10,6 +10,7 @@ import { EAST, EAST_DW, EAST_DG, wetSD, grassSD, inLagoon, walkAt, alpineHeight,
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { fbm2, mulberry32 } from './noise.js'
 import { scatter } from './plants.js'
+import { plankTextures } from './textures.js'
 
 const TAU = Math.PI * 2
 
@@ -217,10 +218,8 @@ export async function loadHideKit() {
   const geo = {}
   gl.scene.updateMatrixWorld(true)
   gl.scene.traverse((o) => { if (o.isMesh) { const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); if (g.attributes.color_1 && !g.attributes.color) g.setAttribute('color', g.attributes.color_1); geo[o.name] = g } })
-  const TL = new THREE.TextureLoader()
-  const tex = (n, srgb) => { const t = TL.load(`models/props/planks_${n}.jpg?v=${VER}`); t.flipY = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 8; return t }
-  const orm = tex('orm', false)
-  const wood = new THREE.MeshStandardMaterial({ map: tex('col', true), normalMap: tex('nor', false), normalScale: new THREE.Vector2(1, -1), aoMap: orm, aoMapIntensity: 0.65, roughnessMap: orm, roughness: 1, metalness: 0, vertexColors: true })
+  const PT = plankTextures(VER), orm = PT.orm
+  const wood = new THREE.MeshStandardMaterial({ map: PT.col, normalMap: PT.nor, normalScale: new THREE.Vector2(1, -1), aoMap: orm, aoMapIntensity: 0.65, roughnessMap: orm, roughness: 1, metalness: 0, vertexColors: true })
   wood.color.setScalar(1.75)   // 牆是直的、大多背光，同一個亮度（1.3）看起來比棧道暗很多 → 調亮到並排看是同一種木頭
   const roof = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.09, 0.11, 0.10), roughness: 0.62, metalness: 0.45 })
   return { geo, wood, roof }
@@ -265,10 +264,10 @@ function buildBoardwalk(wk) {
   for (let u = -1.4; u <= 1.4; u += 0.158) put('bw_plank_' + Math.floor(r() * 4), E.x + E.dx * (1.4 + u), ey, E.z + E.dz * (1.4 + u), Math.atan2(E.dx, E.dz), [3.0 / 3.1, 1, 1])
   // 欄杆：棧道後半段兩側、平台三邊；柱子＋上橫桿＋兩道中橫桿
   const rails = []
-  for (let s = Ltot * 0.45; s <= Ltot; s += 1.6) for (const sd of [-1, 1]) { const a = at(s); rails.push([a.x - a.dz * sd * (W / 2 + 0.05), a.z + a.dx * sd * (W / 2 + 0.05), sd]) }
+  for (let s = 5.6; s <= Ltot; s += 1.6) for (const sd of [-1, 1]) { const a = at(s); rails.push([a.x - a.dz * sd * (W / 2 + 0.05), a.z + a.dx * sd * (W / 2 + 0.05), sd]) }
   const nx = -E.dz, nz = E.dx
   for (let u = 0; u <= 2.8; u += 1.4) for (const sd of [-1, 1]) rails.push([E.x + E.dx * u + nx * sd * 1.55, E.z + E.dz * u + nz * sd * 1.55, sd])
-  for (let v = -1.4; v <= 1.4; v += 1.4) rails.push([E.x + E.dx * 2.9 + nx * v, E.z + E.dz * 2.9 + nz * v, 2])
+  // 2026-11-12 平台的盡頭接翡翠灣（開著，不再封欄杆）
   const deckY = (x, z) => onPlat(x, z) ? ey : wetBoardY(x, z)
   for (const [x, z] of rails) { put('bw_post', x, deckY(x, z), z, Math.atan2(E.dx, E.dz)); addCollider(x, z, 0.12, deckY(x, z) + 1.2) }
   // 2026-11-12 木道架高到水面上以後：離地（水底）高的地方底下補木樁
@@ -278,7 +277,7 @@ function buildBoardwalk(wk) {
   for (const sd of [-1, 1, 2]) {
     const L = rails.filter((p) => p[2] === sd)
     for (let i = 1; i < L.length; i++) {
-      const [ax, az] = L[i - 1], [bx, bz] = L[i], d = Math.hypot(bx - ax, bz - az); if (d > 2) continue
+      const [ax, az] = L[i - 1], [bx, bz] = L[i], d = Math.hypot(bx - ax, bz - az); if (d > 2.6) continue
       for (const [part, hh] of [['bw_rail_top', 1.04], ['bw_rail_mid', 0.64], ['bw_rail_mid', 0.27]]) span(part, new THREE.Vector3(ax, deckY(ax, az) + hh, az), new THREE.Vector3(bx, deckY(bx, bz) + hh, bz))
     }
   }

@@ -1,6 +1,7 @@
 // 植物與園藝小物：全部用 InstancedMesh，一種東西一次畫完
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import {
   TAU, MTN, PATHS, RAMP, DOME, POOL, DECK, clamp, lerp,
   domeY, terrainHeight, pathClearAt, poolQ, mtnR, rampSample, rampHeights, rampInner, insideGarden, distToMtn,
@@ -160,7 +161,7 @@ export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, law
 }
 
 let reserved = []
-export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
+export function buildFlora(scene, lib, { stopsFor, reserve = [], woodKit = null } = {}) {
   reserved = reserve
   const rnd = mulberry32(2024)
   const tex = {
@@ -223,13 +224,16 @@ export function buildFlora(scene, lib, { stopsFor, reserve = [] } = {}) {
     }
   }
   {
-    const seat = []
-    for (let i = 0; i < 4; i++) seat.push(new THREE.BoxGeometry(1.8, 0.05, 0.11).translate(0, 0.45, -0.2 + i * 0.13))
-    for (let i = 0; i < 3; i++) seat.push(new THREE.BoxGeometry(1.8, 0.1, 0.04).rotateX(-0.2).translate(0, 0.62 + i * 0.13, -0.28 - i * 0.03))
-    const legs = []
-    for (const x of [-0.8, 0.8]) legs.push(new THREE.BoxGeometry(0.06, 0.45, 0.5).translate(x, 0.22, -0.05), new THREE.BoxGeometry(0.06, 0.5, 0.06).translate(x, 0.7, -0.32))
-    const g = mergeGeometries([mergeGeometries(seat), mergeGeometries(legs)], true)
-    scene.add(makeInst(g, [mats.wood, mats.metal], benches))
+    // 2026-11-12 長椅換成 Blender 做的（tools/make-bench-kit.py）：鑄鐵側架＋倒角實木條，木紋是掃描的風化木板（跟賞鳥屋同一份貼圖、同一個材質設定）
+    const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
+    new GLTFLoader().loadAsync(`models/props/bench_kit.glb?v=${VER}`).then((gl) => {
+      const geo = {}
+      gl.scene.updateMatrixWorld(true)
+      gl.scene.traverse((o) => { if (o.isMesh) { const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); if (g.attributes.color_1) { g.setAttribute('color', g.attributes.color_1); g.deleteAttribute('color_1') } geo[o.name] = g } })
+      const wood = woodKit.wood.clone(); wood.color.setRGB(1.5, 1.32, 1.12)   // 上過護木油的暖棕色（賞鳥屋是褪色的灰）
+      const iron = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.035, 0.05, 0.04), roughness: 0.5, metalness: 0.7 })   // 墨綠烤漆的鑄鐵（跟路燈同色系）
+      for (const [nm, m] of [['bench_wood', wood], ['bench_iron', iron]]) { const im = makeInst(geo[nm], m, benches); im.name = nm; scene.add(im) }
+    }).catch((e) => console.error('bench kit', e))
   }
   {
     // 公園路燈（鑄鐵、墨綠烤漆）：八角底座 → 有凹槽線條的錐形燈桿 → 裝飾環 → 六角燈籠（玻璃燈罩＋框條）→ 斗笠燈帽＋頂飾
