@@ -44,6 +44,7 @@ export async function buildStreambed(scene) {
         const o = (rnd() * 2 - 1) * (hw + 1.3), x = c.x - c.dz * o + (rnd() - 0.5) * 0.2, z = c.z + c.dx * o + (rnd() - 0.5) * 0.2
         if (Math.abs(o) > hw && rnd() < (Math.abs(o) - hw) / 1.3 * 0.8) continue
         if (alpineTrailDist(x, z) < 1.25) continue
+        if (YOSE.inOutlet?.(x, z, 0.6)) continue   // 驗收第 11 條：湖接溪的水道裡（挖下去之後泡在水裡）不放卵石、溪岸植物
         if (fbm2(x * 0.55, z * 0.55, 2) < 0.26 + (steep ? 0.15 : 0) && rnd() < 0.45) continue
         pebble(x, z, w)
       }
@@ -67,16 +68,19 @@ export async function buildStreambed(scene) {
     for (let i = 0, got = 0; i < nP * 30 && got < nP; i++) {
       const a = rnd() * 6.283, k = 0.72 + rnd() * 0.5, x = cx + Math.cos(a) * rx * k, z = cz + Math.sin(a) * rz * k, dep = water - alpineHeight(x, z)
       if (dep < -0.14 || dep > 0.5 || alpineTrailDist(x, z) < 1.25) continue
+      if (YOSE.inOutlet?.(x, z, 0.6)) continue   // 驗收第 11 條：湖接溪的水道裡（挖下去之後泡在水裡）不放卵石、溪岸植物
       pebble(x, z, water, 1.1); got++
     }
     for (let i = 0, got = 0; i < nW * 40 && got < nW; i++) {
       const a = rnd() * 6.283, k = 0.6 + rnd() * 0.5, x = cx + Math.cos(a) * rx * k, z = cz + Math.sin(a) * rz * k, h = alpineHeight(x, z), dep = water - h
       if (dep < 0.15 || dep > 0.8) continue
+      if (YOSE.inOutlet?.(x, z, 0.6)) continue   // 驗收第 11 條：湖接溪的水道裡（挖下去之後泡在水裡）不放卵石、溪岸植物
       const sc = 0.8 + rnd() * 0.8; put('weed_' + Math.floor(rnd() * 3), x, h + 0.01, z, sc, sc * Math.min(1.2, dep / 0.35), sc, rnd() * 6.283, new THREE.Color().setScalar(0.8 + 0.4 * rnd())); got++
     }
     for (let i = 0, got = 0; i < nB * 60 && got < nB; i++) {
       const a = rnd() * 6.283, k = 0.7 + rnd() * 0.35, x = cx + Math.cos(a) * rx * k, z = cz + Math.sin(a) * rz * k, dep = water - alpineHeight(x, z)
       if (dep < 0.08 || dep > 0.5 || alpineTrailDist(x, z) < 2.5 || boulders.some((b) => Math.hypot(b.x - x, b.z - z) < 2.5)) continue
+      if (YOSE.inOutlet?.(x, z, 0.6)) continue   // 驗收第 11 條：湖接溪的水道裡（挖下去之後泡在水裡）不放卵石、溪岸植物
       boulders.push({ x, z, y: water, s: 0.8 + rnd() * 0.8, yaw: rnd() * 6.283, v: Math.floor(rnd() * 3) }); got++
     }
   }
