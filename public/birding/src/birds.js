@@ -398,6 +398,22 @@ export function rigged(name, { straight = {} } = {}) {
       if (o.material.isMeshBasicMaterial) o.material = new THREE.MeshStandardMaterial({ map: o.material.map, roughness: 0.75 })
     }
   })
+  // 2026-11-13 使用者：天空一條黑色破圖線（一閃一閃）。山鷸、鏽臉鉤嘴鶥、灰頭鷽的飛行模型 wingtip 骨頭 scale 是 (1, 0, 1)（綁骨工具輸出的），
+  // 縮放 0 的矩陣拆不出旋轉 → 翼尖變 NaN，那幾片面被畫成一條射向天空的線。載入時把縮放 0 的骨頭改回 1
+  // 反綁定矩陣也是用縮放 0 算的（數值上百萬）→ 用父骨頭的反矩陣重算：inv(tip) = inv(本地 tip) × inv(父)
+  const zs = Object.values(bones).filter((b) => Math.min(Math.abs(b.scale.x), Math.abs(b.scale.y), Math.abs(b.scale.z)) < 1e-4)
+  if (zs.length) {
+    for (const b of zs) b.scale.set(1, 1, 1)
+    model.traverse((o) => {
+      if (!o.isSkinnedMesh) return
+      const sk = o.skeleton, inv = sk.boneInverses.map((m) => m.clone())
+      for (const b of zs) {
+        const i = sk.bones.indexOf(b), pi = sk.bones.indexOf(b.parent); if (i < 0 || pi < 0) continue
+        b.updateMatrix(); inv[i] = b.matrix.clone().invert().multiply(inv[pi])
+      }
+      sk.boneInverses = inv; sk.boneMatrices = new Float32Array(sk.bones.length * 16)
+    })
+  }
   for (const [n, k] of Object.entries(straight)) bones[n]?.quaternion.slerp(new THREE.Quaternion(), k)
   // 2026-11-12 使用者「這嘴巴整個歪」：有的模型生成出來頭就是轉向一邊的（粉紅琵鷺：嘴尖偏左 12 cm＝頭往左轉 35°），低頭覓食時嘴斜斜的插下去。
   // 一開始就把頭繞身體的上下軸轉正（量法：頭部頂點裡離頭關節最遠的那一撮＝嘴尖，看它偏離中線多少）

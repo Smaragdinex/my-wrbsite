@@ -13,6 +13,7 @@ const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 
 export async function loadCaveKit() { return {} }   // 2026-11-11 改用掃描的真岩石（plants.js 的 lib），不再載自己做的 cave_kit.glb
 
+export const CAVE_FILL = []   // 岩簷底下的天光補光（白天才亮）
 export function buildCave(scene, kit, sum, lib) {
   const sp = ALP_SPURS.find((s) => s.name === 'cave')
   if (!sp) return null
@@ -245,8 +246,10 @@ export function buildCave(scene, kit, sum, lib) {
     for (const { geo, mat } of parts(lib[name])) { const im = new THREE.InstancedMesh(geo, matchMat(mat), list.length); list.forEach((it, k) => im.setMatrixAt(k, m4.compose(it.p, it.q, it.s))); im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im) }
   }
   // 4) 岩簷底下的補光：水簾把天光漫射進來（以前整個岩窟是黑的，看不到岩壁）。不投影
+  // 2026-11-13 使用者（夜景照片）：「瀑布這夜晚不會有燈吧」——這三盞是模擬白天天光的補光，晚上也亮著，把岩壁照得像打了探照燈 → 強度跟著天光（world.js setTime 乘 dayLight）
   { const [x, z] = [ex - 3.5, ez + 1.2], lt = new THREE.PointLight(0xb4cbd8, 20, 19, 1.7); lt.position.set(x, alpineHeight(x, z) + 3.2, z); g.add(lt)
     const l3 = new THREE.PointLight(0xb4cbd8, 26, 30, 1.6); l3.position.set(ex - 4, alpineHeight(ex - 4, ez) + 9, ez + 0.5); g.add(l3)   // 高一點的一盞：照到後壁上半和天花板
-    const l2 = new THREE.PointLight(0xb4cbd8, 12, 15, 1.7), [x2, z2, ] = line[Math.floor(line.length * 0.55)]; l2.position.set(x2, alpineHeight(x2, z2) + 2.6, z2 + 1); g.add(l2) }
+    const l2 = new THREE.PointLight(0xb4cbd8, 12, 15, 1.7), [x2, z2, ] = line[Math.floor(line.length * 0.55)]; l2.position.set(x2, alpineHeight(x2, z2) + 2.6, z2 + 1); g.add(l2)
+    for (const l of [lt, l3, l2]) { l.userData.base = l.intensity; CAVE_FILL.push(l) } }
   return g
 }

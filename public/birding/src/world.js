@@ -32,7 +32,7 @@ import { loadWalkwayKit, buildWalkways } from './walkway.js'
 import { buildStreambed, streambedTick } from './streambed.js'
 import { loadWetlandKit, buildWetlandProps } from './wetland.js'
 import { loadSummitKit, buildSummit as buildYoseTop } from './yosemite-top.js'
-import { loadCaveKit, buildCave } from './cave.js'
+import { loadCaveKit, buildCave, CAVE_FILL } from './cave.js'
 
 // 手機（觸控、窄螢幕）記憶體少：解析度和陰影貼圖都降一級，不然 iOS Safari 分頁會被系統關掉
 export const PHONE = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
@@ -643,6 +643,7 @@ function buildNight(scene, flora, { sun, hemi, renderer, skyMat, clouds, camera 
     sunDir.set(Math.cos(a) * 0.8, Math.sin(a) * 0.85, -0.3).normalize()   // 2026-11-11 太陽改成東邊（中央山脈那側）升起、西南邊落下：台灣的夕陽在西邊；以前落在東邊高山後面，濕地看不到夕陽
     const day = ss(sunDir.y, -0.14, 0.28), dusk = ss(sunDir.y, -0.2, 0.0) * (1 - ss(sunDir.y, 0.05, 0.32))
     st.day = day; dayLight.value = day; duskLight.value = dusk
+    for (const l of CAVE_FILL) l.intensity = l.userData.base * day   // 岩簷補光＝漫射的天光：晚上關掉
     skyMat.uniforms.sunDir.value.copy(sunDir); sunDirU.value.copy(sunDir)
     skyMat.uniforms.moonDir.value.copy(MOON_DIR)
     // 太陽／月光：同一盞平行光，太陽下山後轉向月亮

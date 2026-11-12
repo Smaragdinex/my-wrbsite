@@ -343,7 +343,8 @@ export const ALP_SPURS = [
   // 2026-11-10 使用者：帳篷區那邊路線拉長、換一種風景（優勝美地）→ 從主線第 13 點（山頂步道東段）往西下坡，沿北邊的花崗岩壁、瀑布走到營地，跟 camp 支線連成一圈。
   // join：終點接到別條支線的終點（營地），高度兩頭都要對上、盡頭不另外攤平
   // 2026-11-11 使用者：瀑布底下要有一座湖、湖再流出一條河 → 原本貼著岩壁走過瀑布前面的那段，改從湖的南岸繞過去、在湖的出水口過一座石橋（世界座標寫的，換回設計座標）
-  { name: 'yose', from: 13, join: 'camp', pts: [[152.92, 22.75], [147.96, 26.47], ...[[236, 65.5], [222, 64.5], [210, 63.5], [197, 63.5], [186, 66], [178, 71]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]), [114.25, 28.95]] },
+  // 2026-11-13 使用者照片「這邊橋沒做好」：路在石拱橋東頭 2 m 就轉彎（舊點 186, 66），橋身伸過轉角 → 石欄被「不能擋到路」那條規則拆到只剩一顆。轉角沿同一條線往東移 5 m，路直直過河
+  { name: 'yose', from: 13, join: 'camp', pts: [[152.92, 22.75], [147.96, 26.47], ...[[236, 65.5], [222, 64.5], [210, 63.5], [197, 63.5], [190.3, 63.3], [178, 71]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]), [114.25, 28.95]] },
   // 2026-11-10 東部擴建（ChatGPT V2；路線用坡度 ≤20% 的 A* 在高度圖上找、再簡化）：
   // wet：主步道第 9 點（248,-51）往東南下坡，一個之字形下到濕地南岸（316,-30），再沿南岸高處走到東邊的遠距觀察點（濕地核心不能進）
   // 2026-11-13 使用者「這是舊的道路，可以移除了」：以前往東邊舊濕地的支線（濕地 11/11 已經搬到西南），拿掉
@@ -1267,6 +1268,68 @@ mkWetWalk([[34.2, -86.3], [32.9, -93.3], [31.6, -100.3], [32.9, -108.3], [37, -1
 // 2026-11-12 沼澤環線（使用者：右邊木道接到中間、「道路用順、中間沒接好、要有燈」）：從觀察屋 O8 旁的岸邊下水，往東南繞過荷葉盆地、深水池的東緣，
 // 再往西直直接進翡翠灣前緣的開口（最後 6.7 m 跟灣垂直）；跟主棧道同寬、同高（水面 +0.45）、同一套欄杆和矮燈
 mkWetWalk([[47.2, -87.8], [49.5, -91.5], [54, -94.5], [58.5, -96.5], [61, -101], [61, -107], [58.5, -113.5], [54, -118.5], [49.5, -120.66], [46.89, -120.91], [42.84, -121.3]], 'wet2', [])
+// 2026-11-13 驗收第 6 條（使用者照片：吊橋南岸橋頭平台）：「過橋的木道要打開往左的木道，神木也要有圓形木道圍著」
+// 1. gorgeW：從橋頭平台往左（西南）沿峽谷支線開出去，下坡接回泥土路；平台欄杆在它寬度內的柱子拆掉（walkway.js cutBy）
+// 2. sacredRing：神木外圍一圈環形木道（中線半徑 SACRED.R），取代原本的木柵欄
+// 3. sacredLink：從往東那條木道（ALP_WALKS[1]）往南接到環形木道的短支線
+// branch：起點／終點接在別的木道或平台上（那一頭不墊坡、欄杆跟對方的柱子接起來）；closed：環形
+export const SACRED = { x: 214.9, z: -71, R: 5.4 }
+function mkLandWalk(xs, zs, tag, { closed = false, y0, y1, joinA = false, joinB = false } = {}) {
+  const N = xs.length, tx = [], tz = []
+  for (let i = 0; i < N; i++) {
+    const a = closed ? (i - 1 + N) % N : Math.max(0, i - 1), b = closed ? (i + 1) % N : Math.min(N - 1, i + 1), dx = xs[b] - xs[a], dz = zs[b] - zs[a], l = Math.hypot(dx, dz) || 1
+    tx.push(dx / l); tz.push(dz / l)
+  }
+  const base = new Float32Array(N)
+  for (let i = 0; i < N; i++) { let m = -1e9; for (const l of [-WALK_HW, -0.75, 0, 0.75, WALK_HW]) m = Math.max(m, alpineHeight(xs[i] - tz[i] * l, zs[i] + tx[i] * l)); base[i] = m + 0.06 }
+  // 高度：地面最高點 +6 cm 的「坡度上限包絡」（任兩點之間坡度不超過 SL），再平滑一次、再包一次——不會穿地、也不會一段一段陡坡
+  const SL = (closed ? 0.16 : 0.24) * 0.05, env = (v) => {
+    const y = Float32Array.from(v)
+    for (let r = 0; r < (closed ? 2 : 1); r++) {
+      for (let i = closed ? 0 : 1; i < N; i++) y[i] = Math.max(y[i], y[(i - 1 + N) % N] - SL)
+      for (let i = closed ? N - 1 : N - 2; i >= 0; i--) y[i] = Math.max(y[i], y[(i + 1) % N] - SL)
+    }
+    return y
+  }
+  const v0 = Float32Array.from(base)
+  if (y0 != null && y1 != null) for (let i = 0; i < N; i++) v0[i] = Math.max(base[i], lerp(y0, y1, i / (N - 1)))
+  else if (y0 != null) v0[0] = Math.max(base[0], y0)
+  const onDeck = xs.map((x, i) => landingAt(x, zs[i]))   // 起點在橋頭平台上：平台那一段跟平台一樣高（平的），出了平台才開始下坡
+  for (let i = 0; i < N; i++) if (onDeck[i] != null) v0[i] = onDeck[i]
+  const y = env(v0)
+  const K = closed ? 40 : 14, sm0 = new Float32Array(N)
+  for (let i = 0; i < N; i++) { let a = 0, c = 0; for (let q = i - K; q <= i + K; q++) { const k = closed ? (q + N) % N : q; if (k < 0 || k >= N) continue; a += y[k]; c++ } sm0[i] = Math.max(base[i], a / c) }
+  for (let i = 0; i < N; i++) if (onDeck[i] != null) sm0[i] = onDeck[i]
+  const sm = env(sm0)
+  // 接在別的木道／平台上的那一頭：最後 1.5 m 慢慢接到對方的高度（一樣高才不會有台階）
+  if (y0 != null && onDeck[0] == null) for (let i = 0; i < Math.min(N, 30); i++) sm[i] = lerp(y0, sm[i], ss01(i / 30))
+  if (y1 != null) for (let i = 0; i < Math.min(N, 30); i++) sm[N - 1 - i] = lerp(y1, sm[N - 1 - i], ss01(i / 30))
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9
+  for (let i = 0; i < N; i++) { x0 = Math.min(x0, xs[i]); x1 = Math.max(x1, xs[i]); z0 = Math.min(z0, zs[i]); z1 = Math.max(z1, zs[i]) }
+  const w = { head: { t: tag }, xs, zs, tx, tz, y: sm, ground: base, N, ds: 0.05, closed, joinA, joinB, branch: joinA || joinB, box: [x0 - 2, x1 + 2, z0 - 2, z1 + 2] }
+  ALP_WALKS.push(w); return w
+}
+const ss01 = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t) }
+const sampleCurve = (P) => {
+  const cv = new THREE.CatmullRomCurve3(P.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal'), n = Math.round(cv.getLength() / 0.05), xs = [], zs = []
+  for (let i = 0; i <= n; i++) { const q = cv.getPointAt(i / n); xs.push(q.x); zs.push(q.z) }
+  return [xs, zs]
+}
+const nearestOn = (w, x, z) => { let bi = 0, bd = 1e9; for (let i = 0; i < w.N; i++) { const d = (x - w.xs[i]) ** 2 + (z - w.zs[i]) ** 2; if (d < bd) { bd = d; bi = i } } return bi }
+{
+  const hd = BRIDGE_HEADS[1], Sd = [hd.P[0] + hd.o[0] * 0.85, hd.P[1] + hd.o[1] * 0.85]
+  // 往左：先順著平台往西南直直出去 3 m（平台欄杆在這裡開口），再沿峽谷支線的泥土路下坡，在泥土路上落地
+  mkLandWalk(...sampleCurve([Sd, [Sd[0] - 0.25, Sd[1] - 3], [205, -62.5], [203.4, -65.6], [200.4, -67.6]]), 'gorgeW', { y0: hd.Y0, joinA: true })
+  const N = Math.round(TAU * SACRED.R / 0.05), xs = [], zs = []
+  for (let i = 0; i < N; i++) { const a = i / N * TAU; xs.push(SACRED.x + Math.cos(a) * SACRED.R); zs.push(SACRED.z + Math.sin(a) * SACRED.R) }
+  const ring = mkLandWalk(xs, zs, 'sacredRing', { closed: true })
+  // 支線：東邊木道上離神木最近的那一點 → 直直往神木走，接到環形木道的中線
+  const w1 = ALP_WALKS[1], i1 = nearestOn(w1, SACRED.x, SACRED.z), A = [w1.xs[i1], w1.zs[i1]]
+  const dx = SACRED.x - A[0], dz = SACRED.z - A[1], L = Math.hypot(dx, dz), B = [SACRED.x - dx / L * SACRED.R, SACRED.z - dz / L * SACRED.R]
+  const n = Math.round((L - SACRED.R) / 0.05), lx = [], lz = []
+  for (let i = 0; i <= n; i++) { lx.push(lerp(A[0], B[0], i / n)); lz.push(lerp(A[1], B[1], i / n)) }
+  mkLandWalk(lx, lz, 'sacredLink', { y0: w1.y[i1], y1: ring.y[nearestOn(ring, B[0], B[1])], joinA: true, joinB: true })
+}
 // 2026-11-12 沼澤觀察屋旁的矮木道（wetBoard 支線，east.js buildBoardwalk 蓋）：以前木板貼著地形走，沼澤加大以後後半段的地形在水面下、整條沉在水裡只剩欄杆。
 // 木板面＝max(地面 + 0.12, 水面 + 0.4)；盡頭 3×3 m 平台是平的。人走在上面（supportAt）
 export const wetBoardY = (x, z) => Math.max(alpineHeight(x, z) + 0.12, EAST.W + 0.4)
@@ -1294,7 +1357,7 @@ export function walkAt(x, z) {
     for (let i = Math.max(0, bi - 8); i <= Math.min(w.N - 1, bi + 8); i++) { const d = (x - w.xs[i]) ** 2 + (z - w.zs[i]) ** 2; if (d < bd) { bd = d; bi = i } }
     const along = (x - w.xs[bi]) * w.tx[bi] + (z - w.zs[bi]) * w.tz[bi], lat = Math.abs(-(x - w.xs[bi]) * w.tz[bi] + (z - w.zs[bi]) * w.tx[bi])
     if (lat > WALK_HW + 0.05) continue
-    if ((bi === 0 && along < 0) || (bi === w.N - 1 && along > 0)) continue
+    if (!w.closed && ((bi === 0 && along < 0) || (bi === w.N - 1 && along > 0))) continue
     return w.y[bi]
   }
   return null
@@ -1503,7 +1566,7 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
     const i0 = Math.floor((Math.min(P[0], Q[0]) - 6 - AG.x0) / AG.cell), i1 = Math.ceil((Math.max(P[0], Q[0]) + 6 - AG.x0) / AG.cell), j0 = Math.floor((Math.min(P[1], Q[1]) - 6 - AG.z0) / AG.cell), j1 = Math.ceil((Math.max(P[1], Q[1]) + 6 - AG.z0) / AG.cell)
     for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
       const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, t = clamp(((x - P[0]) * dx + (z - P[1]) * dz) / l2, 0, 1), d = Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t), q = j * AG.nx + i
-      if (d > 5.6 || YOSE.inLake(x, z, 0.5)) continue
+      if (d > 5.6 || YOSE.inLake(x, z, 0.5) || aStream[q] < 3.2) continue   // 2026-11-13 使用者照片：坡道把石拱橋底下的河道填平了（河面浮在土上、橋像放在地上）→ 河道和河岸不動
       const tgt = lerp(ya, yb, t), w = 1 - clamp((d - 2.6) / 3.0, 0, 1), ww = w * w * (3 - 2 * w)
       aHeight[q] = lerp(aHeight[q], tgt, ww)
       if (d < 2.6) aTrail[q] = Math.min(aTrail[q], Math.max(0, d - 1.2))
@@ -1515,7 +1578,9 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
 // 每條木道的兩端，木道比地面高 0.2 m 以上的，把那一頭的地墊起來接一段緩坡——木道底下墊到踏板下 8 cm，往外 4.5 m 慢慢接回原本的地（溪流不墊）
 for (const w of ALP_WALKS) {
   const n = w.xs.length
+  if (w.closed) continue   // 環形木道沒有頭尾
   for (const e of [0, n - 1]) {
+    if ((e === 0 && w.joinA) || (e === n - 1 && w.joinB)) continue   // 接在別的木道／平台上的那一頭不墊坡
     const ex = w.xs[e], ez = w.zs[e], dy = w.y[e] - alpineHeight(ex, ez)
     if (dy < 0.2) continue
     // 這一頭往木道裡面的方向（踏板底下整段都墊到 deck−0.08，直到木道本身已經貼地）
@@ -1533,6 +1598,20 @@ for (const w of ALP_WALKS) {
       const tgt = Math.min(by - 0.08, cap), t = smoothstep(1.0, 5.5, best)
       const h = Math.min(cap, lerp(tgt, aHeight[q], t))
       if (h > aHeight[q]) aHeight[q] = h
+    }
+  }
+}
+
+// 2026-11-13 新木道（往左支線、神木環形）：上面墊坡那一步可能把旁邊另一條木道底下的地墊高 → 每條木道底下（含兩側 0.3 m）的地一律壓到踏板下 8 cm
+for (const w of ALP_WALKS) {
+  if (!w.branch && !w.closed) continue
+  for (let k = 0; k < w.N; k += 4) {
+    const x = w.xs[k], z = w.zs[k], cap = w.y[k] - 0.08, R = WALK_HW + 0.3
+    const i0 = Math.floor((x - R - AG.x0) / AG.cell), i1 = Math.ceil((x + R - AG.x0) / AG.cell), j0 = Math.floor((z - R - AG.z0) / AG.cell), j1 = Math.ceil((z + R - AG.z0) / AG.cell)
+    for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+      const gx = AG.x0 + i * AG.cell, gz = AG.z0 + j * AG.cell, q = j * AG.nx + i
+      if (Math.abs(-(gx - x) * w.tz[k] + (gz - z) * w.tx[k]) > R || Math.abs((gx - x) * w.tx[k] + (gz - z) * w.tz[k]) > 0.3) continue
+      if (aHeight[q] > cap) aHeight[q] = cap
     }
   }
 }

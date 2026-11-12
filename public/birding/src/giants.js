@@ -4,7 +4,7 @@
 // 樹冠縫隙有一束束斜射的陽光（跟著太陽方向和時間變，晚上沒有）。
 // 全部用 InstancedMesh：一份樹幹、一份樹冠、一份光束，記憶體只多一點（學校電腦）。
 import * as THREE from 'three'
-import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, ALP_POND, ALP_SPURS, CABIN, CAMP, inAlpine, alpineHeight, alpineTrailDist, alpineStreamDist, domeY, domeRho, addCollider } from './layout.js'
+import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, ALP_POND, ALP_SPURS, CABIN, CAMP, inAlpine, alpineHeight, alpineTrailDist, alpineStreamDist, domeY, domeRho, addCollider, SACRED } from './layout.js'
 import { mulberry32 } from './noise.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { lodRegister } from './lod.js'
@@ -61,6 +61,8 @@ export function giantSpots(avoid = []) {
         if (!best || sl < best.sl) best = { x, z, y, sl, H }
       }
     }
+    // 2026-11-13 神木外圍改成環形木道（layout.js SACRED，圓心要跟木道一樣）
+    if (best) { best.x = SACRED.x; best.z = SACRED.z; best.y = alpineHeight(SACRED.x, SACRED.z) }
     if (best) list.push({ x: best.x, z: best.z, y: best.y - 0.3, D: 5.6, H: best.H, rot: 0.6, lean: 0, sacred: true, fenceR: 6.6 })
   }
   const segs = bandSegs(), segL = segs.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1])), totL = segL.reduce((p, q) => p + q, 0)
@@ -237,7 +239,7 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
   const { stumps, logs } = spots.decor
   const between = (a, b, r, mat) => { const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 6), mat); m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); m.castShadow = true; return m }
   // 神木的柵欄：一圈 18 根木樁＋上下兩道橫桿（照地形高低）
-  for (const t of spots.filter((q) => q.sacred)) {
+  for (const t of spots.filter((q) => q.sacred && false)) {   // 2026-11-13 柵欄拆掉：改成環形木道（walkway.js），木道內圈有欄杆
     const N = 18, posts = []
     for (let k = 0; k < N; k++) {
       const a = k / N * TAU, px = t.x + Math.cos(a) * t.fenceR, pz = t.z + Math.sin(a) * t.fenceR, py = alpineHeight(px, pz)

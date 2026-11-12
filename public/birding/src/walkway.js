@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, alpineHeight, addCollider, deckAt, EAST, deckFrame } from './layout.js'
+import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, landingAt, alpineHeight, addCollider, deckAt, EAST, deckFrame } from './layout.js'
 import { dappled } from './alpine.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
@@ -128,6 +128,33 @@ export function buildWalkways(scene, kit) {
     br.done()
   }
 
+  // 2026-11-13 支線木道（layout.js mkLandWalk 的 branch：往左的 gorgeW、接神木環形的 sacredLink）：
+  // 支線接上去的地方，對方（橋頭平台、主木道、環形木道）在支線寬度內的欄杆柱拆掉＝開口；支線自己疊在對方上面的木板、柱子不放
+  const BR = ALP_WALKS.filter((w) => w.branch)
+  const locOn = (w, x, z, i0, i1) => {
+    let bi = i0, bd = 1e9
+    for (let i = i0; i <= i1; i++) { const d = (x - w.xs[i]) ** 2 + (z - w.zs[i]) ** 2; if (d < bd) { bd = d; bi = i } }
+    return { bi, along: (x - w.xs[bi]) * w.tx[bi] + (z - w.zs[bi]) * w.tz[bi], lat: Math.abs(-(x - w.xs[bi]) * w.tz[bi] + (z - w.zs[bi]) * w.tx[bi]) }
+  }
+  const cutBy = (x, z, tag) => BR.some((w) => {
+    if (w.head.t === tag) return false
+    const J = Math.min(w.N - 1, 120)
+    for (const [on, i0, i1, endI] of [[w.joinA, 0, J, 0], [w.joinB, w.N - 1 - J, w.N - 1, w.N - 1]]) {
+      if (!on) continue
+      const r = locOn(w, x, z, i0, i1)
+      if (r.lat > WALK_HW + 0.15) continue
+      if (r.bi === endI && (endI === 0 ? r.along < 0 : r.along > 0)) continue
+      return true
+    }
+    return false
+  })
+  const onOther = (x, z, tag) => landingAt(x, z) != null || ALP_WALKS.some((w) => {
+    if (w.head.t === tag || x < w.box[0] || x > w.box[1] || z < w.box[2] || z > w.box[3]) return false
+    const r = locOn(w, x, z, 0, w.N - 1)
+    return r.lat <= WALK_HW + 0.05 && (w.closed || !((r.bi === 0 && r.along < 0) || (r.bi === w.N - 1 && r.along > 0)))
+  })
+  const allPosts = []   // 每根留下來的欄杆柱（支線的扶手從最近的那根接過去）
+
   // ---------------- 橋頭平台 ----------------
   const ends = {}   // 每個橋頭出口兩側最後一根欄杆柱的位置（棧道的扶手從這裡接過去）
   for (const hd of BRIDGE_HEADS) {
@@ -189,6 +216,7 @@ export function buildWalkways(scene, kit) {
           if (j === 0 && posts.length) continue
           const x = ax + ex * j / nseg + nx * 0.11, z = az + ez * j / nseg + nz * 0.11
           if (towers.some(([tx, tz]) => Math.hypot(x - tx, z - tz) < 0.55)) continue
+          if (cutBy(x, z, 'deck')) continue   // 支線木道的開口
           posts.push([x, z, nx, nz])
         }
       }
@@ -200,6 +228,7 @@ export function buildWalkways(scene, kit) {
         if (Y0 - g > 0.15) bt.add('bw_pile', place(V(x, Y0 - 0.26, z), V(nx, 0, nz), V(-nz, 0, nx), 1, Y0 - 0.26 - (g - 0.3), 1))
       }
       railRun(bt, posts.map(([x, z, nx, nz]) => ({ x, z, y: Y0, nx, nz })))
+      for (const [x, z, nx, nz] of posts) allPosts.push({ x, z, y: Y0, nx, nz, tag: 'deck' + hd.t })
       // 出口那一頭的柱子（棧道接過來）
       const last = posts.at(-1), first = posts[0]
       for (const p of [first, last]) {
@@ -237,7 +266,14 @@ export function buildWalkways(scene, kit) {
     while (s < S - 0.08) {
       const p = at(s), q = at(s + 0.3), dy = (q.y - p.y) / 0.3
       const kap = Math.abs(Math.atan2(q.tx * p.tz - q.tz * p.tx, q.tx * p.tx + q.tz * p.tz)) / 0.3
-      const m = place(V(p.x, p.y + (rnd() - 0.5) * 0.003, p.z), V(-p.tz, 0, p.tx), V(p.tx, dy, p.tz)); if (rnd() < 0.5) rotY(m)
+      // 疊在平台／另一條木道上的那段：整片都在對方上面就不鋪；只疊到一部分的鋪低 6 mm（對方的木板蓋住重疊的地方，不會閃）
+      let lo = 0
+      if (w.branch) {
+        const k = [0, -1.45, 1.45].filter((l) => onOther(p.x - p.tz * l, p.z + p.tx * l, w.head.t)).length
+        if (k === 3) { s += 0.159; continue }
+        if (k) lo = 0.006
+      }
+      const m = place(V(p.x, p.y - lo + (rnd() - 0.5) * 0.003, p.z), V(-p.tz, 0, p.tx), V(p.tx, dy, p.tz)); if (rnd() < 0.5) rotY(m)
       bw.add('bw_plank_' + Math.floor(rnd() * 4), m)
       s += 0.159 / Math.max(0.5, 1 - 1.55 * kap)
     }
@@ -255,6 +291,7 @@ export function buildWalkways(scene, kit) {
       for (let s0 = 1.2; s0 < S - 0.2; s0 += 1.4) {
         const p = at(s0), lat = sd * 1.61, nx = -p.tz * sd, nz = p.tx * sd
         const x = p.x + nx * 1.61, z = p.z + nz * 1.61
+        if (cutBy(x, z, w.head.t) || (w.branch && onOther(x, z, w.head.t))) continue   // 支線開口／支線疊在對方上面的那段
         if (deckAt(p.x + nx * 2.3, p.z + nz * 2.3) != null) continue   // 2026-11-11 觀景灣的入口：這一側不立柱、不拉欄杆（railRun 超過 3 m 的間隔不接）
         if ((lampK++ % 4) === 1) lampAt.push(   /* 2026-11-13 驗收第 7 條：所有木道都有燈（以前只有濕地那兩條） */[x - nx * 0.09, p.y + 0.55, z - nz * 0.09, nx, nz])   // 每 5.6 m 一盞矮燈（柱子內側、離台面 0.55 m）
         posts.push({ x, z, y: p.y, nx, nz, s: s0 })
@@ -288,7 +325,21 @@ export function buildWalkways(scene, kit) {
       }
       posts.forEach((q, k) => { q.s ??= -1 + k * 1e-3 })
       posts.sort((a, b) => a.s - b.s)
+      if (w.closed && posts.length > 2) posts.push(posts[0])   // 環形：頭尾接起來
+      // 支線：頭／尾那根柱子接到對方開口旁最近、同一側的那根柱子
+      if (w.branch) for (const [on, k, sgnI] of [[w.joinA, 0, 0], [w.joinB, posts.length - 1, w.N - 1]]) {
+        const p0 = posts[k]; if (!on || !p0) continue
+        let best = null, bd = 2.8
+        for (const q of allPosts) {
+          if (q.tag === w.head.t) continue
+          const lat = -(q.x - w.xs[sgnI]) * w.tz[sgnI] + (q.z - w.zs[sgnI]) * w.tx[sgnI]
+          if (Math.sign(lat) !== sd) continue
+          const d = Math.hypot(q.x - p0.x, q.z - p0.z); if (d < bd) { bd = d; best = q }
+        }
+        if (best) { if (k === 0) posts.unshift(best); else posts.push(best) }
+      }
       railRun(bw, posts)
+      for (const q of posts) if (q.tag == null) allPosts.push({ ...q, tag: w.head.t })
     }
     bw.done()
   }

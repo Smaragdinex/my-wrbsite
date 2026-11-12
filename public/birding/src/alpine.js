@@ -9,7 +9,7 @@ import { createMirror } from './mirror.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { buildSummit } from './summit.js'
-import { AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
+import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { nearGiant, forestK } from './giants.js'
 import { barkMaterial } from './bark.js'
@@ -202,7 +202,23 @@ function groundClear(avoid, x, z, r) {
 function bridgeDist(x, z) {
   const a = ALP_TRAIL[ALP_BRIDGE.a], b = ALP_TRAIL[ALP_BRIDGE.a + 2], dx = b[0] - a[0], dz = b[1] - a[1]
   const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz)))
-  return Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t)
+  return Math.min(Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t), newWalkDist(x, z))
+}
+// 2026-11-13 新木道（往左支線、神木環形、接環形的支線）不在步道上（alpineTrailDist 量不到）：草、灌木、石頭一樣要避開
+const NEW_WALKS = ALP_WALKS.filter((w) => w.branch || w.closed)
+function newWalkDist(x, z) {
+  let m = 1e9
+  for (const w of NEW_WALKS) {
+    if (x < w.box[0] - 10 || x > w.box[1] + 10 || z < w.box[2] - 10 || z > w.box[3] + 10) continue
+    for (let i = 0; i < w.N; i += 4) { const d = (x - w.xs[i]) ** 2 + (z - w.zs[i]) ** 2; if (d < m) m = d }
+  }
+  // 石拱橋（橋身＋兩頭鋪到路上的石板）：2026-11-13 使用者照片「那邊的草要移除」——草從橋腳、橋面邊長出來
+  for (const b of RIVER_BRIDGES) {
+    const ax = x - b.x, az = z - b.z, along = ax * b.dir[0] + az * b.dir[1], lat = -ax * b.dir[1] + az * b.dir[0], L = b.half + 1.7
+    const d = Math.hypot(Math.max(0, Math.abs(along) - L), Math.max(0, Math.abs(lat) - 0.3))
+    if (d * d < m) m = d * d
+  }
+  return Math.sqrt(m)
 }
 const GB_OUT = 22, GB_K = [1, 1, 1]   // 山區接花園那一圈的寬度（公尺）、顏色微調
 // 2026-11-09 石頭要擋人：照模型的包圍盒算每顆石頭的腳印（XZ 半徑）和高度，加一個圓形碰撞；比腳印小一點（石頭是不規則的，邊緣斜下去），
@@ -942,7 +958,7 @@ function buildInterior(lib, avoid = []) {
       // 石欄：低矮的乾砌石牆，兩端往外撇（接到路邊）
       for (const sd of [-1, 1]) for (let u = -L - 0.6; u <= L + 0.6; u += 0.42) {
         const flare = Math.max(0, Math.abs(u) - L) * 0.7, v = sd * (b.hw + 0.12 + flare), y = deckY(Math.max(-L, Math.min(L, u))) + b.k * Math.sign(u) * Math.max(0, Math.abs(u) - L)
-        { const q0 = toW(u, 0, v); if (alpineTrailDist(q0.x, q0.z) < 1.35) continue }   // 橋頭外面那段石欄：路在橋頭轉彎時不能伸到路上
+        { const q0 = toW(u, 0, v); if (Math.abs(u) > L && alpineTrailDist(q0.x, q0.z) < 1.35) continue }   // 橋頭外面那段石欄：路在橋頭轉彎時不能伸到路上（2026-11-13 橋身上的石欄一律保留：營地坡道把路畫寬了，以前連橋上的石欄都被拆光）
         cores.push({ p: toW(u, y + 0.26, v), q: new THREE.Quaternion().setFromRotationMatrix(basis), s: V(0.46, 0.55, 0.32) })
         for (let c = 0; c < 3; c++) for (let k = 0; k < 2; k++) stones.push({ p: toW(u + k * 0.21 + (c % 2) * 0.1 - 0.1, y + 0.09 + c * 0.17, v + (rb() - 0.5) * 0.03), q: new THREE.Quaternion().setFromRotationMatrix(basis).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), (rb() - 0.5) * 0.3)), s: V(0.3 + rb() * 0.16, 0.17 + rb() * 0.05, 0.36), c: 0.62 + rb() * 0.3 })
         const cp = toW(u, 0, v); addCollider(cp.x, cp.z, 0.24, y + 0.8)
@@ -954,7 +970,7 @@ function buildInterior(lib, avoid = []) {
           const len = 0.45 + rb() * 0.45, um = u + len / 2
           const fl = (uu) => Math.max(0, Math.abs(uu) - L) * 0.7, yAt = (uu) => deckY(Math.max(-L, Math.min(L, uu))) + b.k * Math.sign(uu) * Math.max(0, Math.abs(uu) - L)
           const q0 = toW(um, 0, sd * (b.hw + 0.12 + fl(um)))
-          if (alpineTrailDist(q0.x, q0.z) >= 1.35) {
+          if (Math.abs(um) <= L || alpineTrailDist(q0.x, q0.z) >= 1.35) {
             const ya = yAt(u), yb = yAt(u + len), va = sd * (b.hw + 0.12 + fl(u)), vb = sd * (b.hw + 0.12 + fl(u + len))
             const pa = toW(u, ya, va), pb = toW(u + len, yb, vb), d = pb.clone().sub(pa)
             const yaw = Math.atan2(-d.z, d.x), pitch = Math.atan2(d.y, Math.hypot(d.x, d.z))
