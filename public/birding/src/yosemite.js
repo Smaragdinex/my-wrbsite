@@ -118,6 +118,10 @@ export function buildYosemite(scene, { lib } = {}) {
         out.push({ y0: T.yy[i] - 0.3, y1: T.yy[i] + 3.05, depth: bz - YOSE.base(bx) + 1.75 })
       }
     }
+    // 2026-11-12 ChatGPT（崖壁步道 V1）：3.9 m 高的槽像有屋頂的走廊，要看得到天空 → 每一層的槽頂挑高到「上面那一層的地板往下 1.6 m」（最多 9 m）；
+    // 上下兩層靠得近的地方（折返平台附近）自然變矮。這樣大部分路段頭上是一整面往後退的岩壁和天空，只剩薄薄一層岩簷托著上面那段步道
+    out.sort((p, q) => p.y0 - q.y0)
+    for (let k = 0; k < out.length; k++) { const up = out.slice(k + 1).find((o) => o.y0 > out[k].y0 + 3.4); out[k].y1 = Math.max(out[k].y1 - 0.7, Math.min(out[k].y0 + 9.3, up ? up.y0 - 1.6 : out[k].y0 + 9.3)) }
     return out
   }
   // 隧道口：岩壁網格在這幾顆球的範圍內不畫（材質裡 discard），隧道的管子才接得出來
