@@ -194,13 +194,13 @@ export function buildSummit(scene, kit, lib) {
   // （山腰的大塊掃描岩石拿掉：陡坡上一半懸空；露岩改在山體 shader 裡畫）
 
   // ---------- 2) 平台＋山腳那一圈：草地、青苔岩塊、青苔墊、草叢、蕨類 ----------
-  const st = YOSE.stairs(), exitP = st.pts.at(-1), SH = { x: 212, z: 102 }
+  const st = YOSE.stairs(), exitP = st.pts.at(-1), SH = { x: 209, z: 102 }
   // 踩出來的小徑：石階出口 → 涼亭 → 瀑布口觀景台（不長草）
   const PATH = [st.pts.at(-10), st.pts.at(-6), [exitP[0], exitP[1]], [exitP[0] - 2, YOSE.topFront(exitP[0] - 2) + 2.5], [226, YOSE.topFront(226) + 2.6], [SH.x + 3, SH.z - 1.2], [SH.x - 3, SH.z - 1.8], [205, YOSE.topFront(205) + 1.5]]
   const pathDist = (x, z) => { let b = 1e9; for (let i = 1; i < PATH.length; i++) { const [ax, az] = PATH[i - 1], [bx, bz] = PATH[i], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); b = Math.min(b, Math.hypot(x - ax - dx * t, z - az - dz * t)) } return b }
   const onTop = (x, z) => x > 201.5 && x < 250 && z > YOSE.topFront(x) + 0.4 && z < YOSE.edge(x) - 0.3
   // 平台上的溪（yosemite.js：沿 edge-6.5 往西流到瀑布口、上游一個潭）不長草
-  const inCreek = (x, z) => (x > 200 && x < 243 && Math.abs(z - (YOSE.edge(x) - 6.5)) < 1.7) || Math.hypot((x - 241) / 4.6, (z - 118.6) / 3.6) < 1 || (x > 196 && x < 205 && z < 102.5 && z > YOSE.base(200))
+  const inCreek = (x, z) => (x > 200 && x < 243 && Math.abs(z - (YOSE.edge(x) - 6.5 + 1.2 * Math.min(1, Math.max(0, (x - 211) / 3)))) < 1.7) || Math.hypot((x - 241) / 4.4, (z - 120.1) / 3.0) < 1 || (x > 196 && x < 205 && z < 102.5 && z > YOSE.base(200))
   const free = (x, z) => !(Math.abs(x - SH.x) < 2.7 && Math.abs(z - SH.z) < 3.0) && pathDist(x, z) > 0.75 && alpineStreamDist(x, z) > 1.2 && !inCreek(x, z)
   const groundY = (x, z) => onTop(x, z) && z < YOSE.edge(x) - 1.2 ? YOSE.topY(x) + 0.05 : summitHeight(x, z)
   // 平台以外、山腳那圈也鋪（rim 後面 0～14 m）

@@ -430,11 +430,11 @@ export const YOSE = (() => {
       // 隧道、螺旋岩室全部拆掉，整條都在岩壁外側——瀑布東邊那面岩壁上鑿出來的之字形步道（Walter's Wiggles 那種），五段、四個折返平台，
       // 每段橫越 33 m、升 9 m 多（坡度 28%）；外側是鐵鍊欄杆，往外看得到瀑布、湖和停在岩壁橫生樹上的鳥。
       // 岩壁越高越往後仰：步道中線離牆腳的距離從 1.6 m（底）慢慢加到 3.4 m（頂）
-      const Y0 = 29.6, YT = Y.topY(240) + 0.05, lean = (y) => 1.8 * clamp((y - 33) / (YT - 33), 0, 1)   // 岩壁面越高越往後仰（頂上比牆腳退 1.8 m）
+      const Y0 = 29.6, YT = Y.topY(240) + 0.05, lean = (y) => 0.6 * clamp((y - 33) / (YT - 33), 0, 1)   // 岩壁面越高越往後仰（頂上比牆腳退 1.8 m）
       // 第三版（ChatGPT 崖壁步道 V3：「把屋頂挑高沒有用，要把連續的屋頂拿掉」）：五段不再上下疊在同一面牆上，改成一層層往後退的階地——
       // 每往上一段，整條往岩壁裡退 TS 公尺；每一層從地板到天空全部鑿開，頭上沒有岩石。步道外緣 1.2 m、內側只留 0.55 m 就是上一層的石壁（總寬 1.75 m）。
       // 折返平台＝兩層之間繞半圈（半徑 TS/2）。三個平的賞鳥台另外往石壁裡鑿 1.9 m，頭上留一段天然的岩簷（＝上一層步道的地板）
-      const TS = 2.0, RT = TS / 2, dK = (k, y) => lean(y) + 1.25 + TS * k   // 2026-11-12 使用者「路再寬一點」：每層 1.7 → 2.0 m（外側 1.35、內側 0.65）
+      const TS = 2.6, RT = TS / 2, dK = (k, y) => lean(y) + 1.25 + TS * k   // 2026-11-13 使用者「步道可以穿牆、要變寬」：內側石壁從中線 0.7 m 退到 1.25 m、可走的內側 0.75 m（鏡頭離牆 0.5 m 才不會穿進去）；外側 1.35 m。上下兩層要錯開 2.8 m 才不重疊   // 2026-11-12 使用者「路再寬一點」：每層 1.7 → 2.0 m（外側 1.35、內側 0.65）
       // 2026-11-12 使用者「中間一段設計穿過瀑布後面走過去」：第二段往西多走 8 m 到瀑布中段的岩棚（x 210、高度剛好＝岩棚），
       // 在岩棚上繞水潭一圈——從後面的凹洞穿過上段瀑布的水簾後面到西側，再沿水潭前緣踩著石頭跨過出水口回來——然後才折返往上
       const legs = [[210.5, 244], [244, 210], [210, 241], [241, 216], [216, 240]], SH = Y.shelfY()
@@ -475,7 +475,7 @@ export const YOSE = (() => {
     if (x < 168 || x > 247.5 || z < 86 || z > 122) return null
     const st = Y.stairs(), HW = Y.TRAIL_HW
     // 賞鳥台：中線往岩壁裡 1.9 m、前後各 2 m 的那一塊平地
-    for (const b of st.bays ?? []) { const dz = z - (Y.base(x) + b.d);   /* 岩壁是斜的（每往東 1 m、往北 0.55 m）：照這一欄的牆腳量 */ if (Math.abs(x - b.x) <= b.half + 0.1 && dz > -1.35 && dz < b.depth + 0.55 && (feet == null || (b.y + 0.05 <= feet + 0.6 && b.y + 0.05 >= feet - 2))) return b.y + 0.05 }
+    for (const b of st.bays ?? []) { const dz = z - (Y.base(x) + b.d);   /* 岩壁是斜的（每往東 1 m、往北 0.55 m）：照這一欄的牆腳量 */ if (Math.abs(x - b.x) <= b.half + 0.1 && dz > -1.35 && dz < b.depth + 0.7 && (feet == null || (b.y + 0.05 <= feet + 0.6 && b.y + 0.05 >= feet - 2))) return b.y + 0.05 }
     // 找中線上最近的那一點；上下重疊的幾層（螺旋每圈差 4.6 m、上下層通道）用高度分：只看腳底往上 0.6、往下 2 m 以內的
     let bestH = null, bestD = 1e9
     for (let i = 1; i < st.pts.length; i++) {
@@ -485,7 +485,7 @@ export const YOSE = (() => {
       const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(x - ax - dx * t, z - az - dz * t)
       if (d > HW || d >= bestD) continue
       if (st.kind[i] === 'shelf' && d > 1.0) continue   // 岩棚上那一圈：兩邊是水潭和岩棚的邊，只能走中間 2 m
-      if (st.kind[i] === 'gal' && d > 0.65 && (z - (az + dz * t)) * Math.abs(dx) - (x - (ax + dx * t)) * dz * Math.sign(dx) > 0) continue   // 階地內側（朝岩壁那邊）只有 0.55 m，再過去是上一層的石壁
+      if (st.kind[i] === 'gal' && d > 0.75 && (z - (az + dz * t)) * Math.abs(dx) - (x - (ax + dx * t)) * dz * Math.sign(dx) > 0) continue   // 階地內側（朝岩壁那邊）只有 0.55 m，再過去是上一層的石壁
       const hh = lerp(st.yy[i - 1], st.yy[i], t) + 0.05
       if (feet != null && (hh > feet + 0.6 || hh < feet - 2)) continue
       bestD = d; bestH = hh
@@ -509,7 +509,7 @@ export const YOSE = (() => {
     for (let i = 0; i < T.pts.length; i++) { if (T.kind[i] === 'gal') legs.at(-1).push(i); else if (legs.at(-1).length) legs.push([]) }
     const at = (k, x) => { const Lg = legs[k]; let b = Lg[0]; for (const i of Lg) if (Math.abs(T.pts[i][0] - x) < Math.abs(T.pts[b][0] - x)) b = i; return b }
     _ct = CT_LIST.map(([x, k, model, s, yaw0]) => { let yaw = yaw0
-      const i = at(k, x), fy = T.yy[i], y = fy - 1.3, z = T.pts[at(k - 1, x)][1] + 0.7 + 0.04   // 這一層階地外緣底下的石壁＝下一層步道內側的石壁（中線往裡 0.6 m）
+      const i = at(k, x), fy = T.yy[i], y = fy - 1.3, z = T.pts[at(k - 1, x)][1] + 1.25 + 0.04   /* 下一層步道內側的石壁（2026-11-13 牆從中線 0.7 退到 1.25） */   // 這一層階地外緣底下的石壁＝下一層步道內側的石壁（中線往裡 0.6 m）
       yaw -= Math.atan((Y.base(x + 0.5) - Y.base(x - 0.5)));   /* 岩壁是斜的：樹照岩壁面的法線往外長 */ const c = Math.cos(yaw), sn = Math.sin(yaw)
       const perch = CT_PERCH[model].map(([px, py, pz]) => [x + (px * c + pz * sn) * s, y + py * s, z + (-px * sn + pz * c) * s])
       return { x, y, z, model, s, yaw, leg: k, floor: fy, perch }
@@ -1435,7 +1435,7 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
   // 2026-11-12 使用者「懸空樹木」：枯木的根原本在舊的岩壁廊道外面，步道改成階地之後那裡是空的 → 改種在最上面那層步道外緣底下的石壁上
   { const T = YOSE.stairs(), near = (lo, hi) => { let b = -1; for (let i = 0; i < T.pts.length; i++) if (T.kind[i] === 'gal' && T.yy[i] > lo && T.yy[i] < hi && (b < 0 || Math.abs(T.pts[i][0] - 226.5) < Math.abs(T.pts[b][0] - 226.5))) b = i; return b }
     const top = T.top, i4 = near(top - 9.5, top + 1), i3 = near(T.yy[i4] - 16, T.yy[i4] - 3)
-    if (i4 >= 0 && i3 >= 0) { YOSE.snag.y = T.yy[i4] - 1.2; YOSE.snag.z = T.pts[i3][1] + 0.7 + 0.15 } }
+    if (i4 >= 0 && i3 >= 0) { YOSE.snag.y = T.yy[i4] - 1.2; YOSE.snag.z = T.pts[i3][1] + 1.25 + 0.15 } }
   const st = YOSE.stairs()
   for (let i = 1; i < st.pts.length; i++) {
     const k = st.kind[i]; if (k !== 'open' && !(k === 'gal' && st.yy[i] < 36)) continue

@@ -37,7 +37,7 @@ const GLSL_VNOISE = `
   float vnH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(vnH(i), vnH(i + vec2(1, 0)), f.x), mix(vnH(i + vec2(0, 1)), vnH(i + vec2(1, 1)), f.x), f.y); }
   float vfbm(vec2 p) { return vn(p) * 0.55 + vn(p * 2.3 + 7.1) * 0.3 + vn(p * 5.1 + 3.7) * 0.15; }`
-const SHELTER = { x: 212, z: 102 }   // 岩壁頂上的涼亭（2026-11-11 使用者：涼亭懸空 → 以前 222, 99.5 在平台前緣外 3 m、底下是石階走廊；這裡平台前緣 98.2～後緣 105.8，四邊各留 1 m）
+const SHELTER = { x: 209, z: 102 }   // 2026-11-13 往西 3 m：步道加寬後 x 212 以東岩壁頂的前緣退到這裡   // 岩壁頂上的涼亭（2026-11-11 使用者：涼亭懸空 → 以前 222, 99.5 在平台前緣外 3 m、底下是石階走廊；這裡平台前緣 98.2～後緣 105.8，四邊各留 1 m）
 // 2026-11-10 同一套 triplanar 花崗岩（照世界座標三向投影）給邊界外的花崗岩圓頂用（outside.js）；scale：貼圖密度（遠的大一點）
 export function graniteMaterial({ fog = true, scale = 0.3 } = {}) {
   const m = new THREE.MeshStandardMaterial({ map: graniteTex(), vertexColors: true, roughness: 0.86, fog })
@@ -113,11 +113,11 @@ export function buildYosemite(scene, { lib } = {}) {
       if (k === 'gal' && T.kind[i - 1] !== 'alc') {
         if ((x - ax) * (x - bx) > 0.04) continue
         const t = Math.abs(bx - ax) < 1e-6 ? 0 : Math.max(0, Math.min(1, (x - ax) / (bx - ax))), y = lerpN(T.yy[i - 1], T.yy[i], t), d = lerpN(T.pts[i - 1][1] - YOSE.base(ax), bz - YOSE.base(bx), t)
-        out.push({ y0: y - 0.3, y1: y + 90, depth: d + 0.7 })
-        for (const b of T.bays ?? []) if (Math.abs(x - b.x) < b.half + 0.25 && Math.abs(y - b.y) < 0.8) out.push({ y0: y - 0.3, y1: y + 3.2, depth: d + 0.7 + b.depth })   // 賞鳥台的凹龕
+        out.push({ y0: y - 0.3, y1: y + 90, depth: d + 1.25 })
+        for (const b of T.bays ?? []) if (Math.abs(x - b.x) < b.half + 0.25 && Math.abs(y - b.y) < 0.8) out.push({ y0: y - 0.3, y1: y + 3.2, depth: d + 1.25 + b.depth })   // 賞鳥台的凹龕
       } else if (k === 'alc' || (k === 'open' && bz - YOSE.base(bx) > 0.2 && bx > 207.5)) {
         if (Math.abs(x - bx) > 1.5) continue
-        out.push({ y0: T.yy[i] - 0.3, y1: T.yy[i] + 90, depth: bz - YOSE.base(bx) + (k === 'alc' ? 0.9 : 1.75) })
+        out.push({ y0: T.yy[i] - 0.3, y1: T.yy[i] + 90, depth: bz - YOSE.base(bx) + (k === 'alc' ? 1.9 : 1.75) })
       } else if (k === 'shelf') {
         // 岩棚上那一圈：大部分走在原本的岩棚上、不用切；只有進岩棚那幾公尺（岩棚還很窄）要把石壁切開
         if (Math.abs(x - bx) > 1.0) continue
@@ -693,8 +693,8 @@ export function buildYosemite(scene, { lib } = {}) {
         // 2026-11-12 ChatGPT V3（石階太新太整齊）：每一階轉一點、前後深淺差一點、左右錯開幾公分，顏色深淺差 ±13%、偏黃偏灰都有
         const h1 = hsh(n * 3.1 + 1), h2 = hsh(n * 5.7 + 2), h3 = hsh(n * 7.3 + 3), h4 = hsh(n * 11.9 + 4), h5 = hsh(n * 2.3 + 5)
         q.setFromAxisAngle(UP, Math.atan2(tn.x, tn.z) + (h1 - 0.5) * 0.09)
-        const gal = st.kind[ii] === 'gal', alc = st.kind[ii] === 'alc', shf = st.kind[ii] === 'shelf', wet = shf && p.x > 198.3 && p.x < 201.9 && p.z < YOSE.base(p.x) + 3, so = (h3 - 0.5) * (gal || alc ? 0.04 : 0.1) + (gal ? (SIDE[ii].z < 0 ? 1 : -1) * 0.33 : 0)   // 階地：踏板只鋪到內側的石壁（寬 1.8 m，往外移 0.27）
-        tm.setMatrixAt(n, m4.compose(V(p.x + SIDE[ii].x * so, yTop - 0.3 - h5 * 0.012, p.z + SIDE[ii].z * so), q, V(wet ? 0.0001 : gal ? 0.8 : alc ? 0.68 : shf ? 0.62 : 1, 1, 0.93 + 0.12 * h2)))   /* 折返平台：踏板窄一點（2.5 m 寬的踏板在半徑 0.85 m 的彎上互相戳出來，像貼在岩壁上的大石塊） */
+        const gal = st.kind[ii] === 'gal', alc = st.kind[ii] === 'alc', shf = st.kind[ii] === 'shelf', wet = shf && p.x > 198.3 && p.x < 201.9 && p.z < YOSE.base(p.x) + 3, so = (h3 - 0.5) * (gal || alc ? 0.04 : 0.1) + (gal ? (SIDE[ii].z < 0 ? 1 : -1) * 0.3 : 0)   // 階地：踏板只鋪到內側的石壁（寬 1.8 m，往外移 0.27）
+        tm.setMatrixAt(n, m4.compose(V(p.x + SIDE[ii].x * so, yTop - 0.3 - h5 * 0.012, p.z + SIDE[ii].z * so), q, V(wet ? 0.0001 : gal ? 0.86 : alc ? 0.75 : shf ? 0.62 : 1, 1, 0.93 + 0.12 * h2)))   /* 折返平台：踏板窄一點（2.5 m 寬的踏板在半徑 0.85 m 的彎上互相戳出來，像貼在岩壁上的大石塊） */
         const kk = 0.87 + 0.26 * h4, wm = (h5 - 0.5) * 0.08
         tm.setColorAt(n, c.setRGB(1.0 * kk + wm, 0.9 * kk, 0.74 * kk - wm))
         STEPS.push({ m: m4.clone(), c: c.clone() })
@@ -764,9 +764,9 @@ export function buildYosemite(scene, { lib } = {}) {
       // 東北角小岩丘頂上的湧泉 → Silver Apron（水從光滑的花崗岩板整片滑下來）→ Emerald Pool（平台後方一個翡翠綠的潭，四周大石頭）
       // → 沿平台後緣往西的小溪 → 在瀑布口前接進原本那條溪。平台是平的 mesh：水面貼在平台上 7 公分；岩丘上照地形
       {
-        const [spx, spz] = EAST.spring, back = (x) => YOSE.edge(x) - 6.5   // 平台後緣那一條（edge-4.5 以後）種了一排松樹：溪走在樹前面
+        const [spx, spz] = EAST.spring, back = (x) => YOSE.edge(x) - 6.5 + 1.2 * Math.min(1, Math.max(0, (x - 211) / 3))   /* 2026-11-13 步道加寬、最上層退得更深：x 214 以東的溪往後移 1.2 m，不然溪在岩壁頂的邊緣外面 */   // 平台後緣那一條（edge-4.5 以後）種了一排松樹：溪走在樹前面
         const groundY = (x, z) => x <= 249.5 ? YOSE.topY(x) : alpineHeight(x, z)
-        const POOL = { x: 241, z: 118.6, rx: 3.6, rz: 2.6 }
+        const POOL = { x: 241, z: 120.1, rx: 3.4, rz: 2.0 }   // 2026-11-13 往後 1.5 m、縮小一點（前緣退進來了）
         // 上游：泉→岩板→潭（寬的一片水）；下游：潭→往西的小溪→接到原本的溪中段
         const runs = [
           { pts: [[spx, spz], [252.5, 120.7], [250.6, 120.2], [248.5, 119.8], [POOL.x + POOL.rx - 0.3, POOL.z + 0.3]], w: [0.5, 1.5], spd: 0.9, a: 0.8 },
