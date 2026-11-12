@@ -363,6 +363,7 @@ export const loadedModels = () => Object.keys(GLB)
 // 每根骨頭的本地軸方向都不一樣（Blender 的 roll），直接轉 x/y/z 左右腳會不對稱。
 // 這裡先算出每根骨頭靜止時在模型座標裡的朝向，turn(骨頭, 模型座標的軸, 角度) 再換算成本地軸，
 // 所以「繞身體的上下軸轉」對每根骨頭意思都一樣。straight：一開始就把這些骨頭（例如捲起來的尾巴）拉直到某個比例。
+const HEAD_YAW_FIX = { 'rspoonbill-rig': -0.79 }   // 扁嘴的寬度方向量出來跟身體左右軸差 45°（主軸分析），整個頭繞上下軸轉回來
 export function rigged(name, { straight = {} } = {}) {
   if (!GLB[name]) throw new MissingModel(name)
   const model = cloneSkinned(GLB[name])
@@ -375,6 +376,9 @@ export function rigged(name, { straight = {} } = {}) {
     }
   })
   for (const [n, k] of Object.entries(straight)) bones[n]?.quaternion.slerp(new THREE.Quaternion(), k)
+  // 2026-11-12 使用者「這嘴巴整個歪」：有的模型生成出來頭就是轉向一邊的（粉紅琵鷺：嘴尖偏左 12 cm＝頭往左轉 35°），低頭覓食時嘴斜斜的插下去。
+  // 一開始就把頭繞身體的上下軸轉正（量法：頭部頂點裡離頭關節最遠的那一撮＝嘴尖，看它偏離中線多少）
+  if (HEAD_YAW_FIX[name] && bones.head) { model.updateMatrixWorld(true); const pq = bones.head.parent.getWorldQuaternion(new THREE.Quaternion()), mq0 = model.getWorldQuaternion(new THREE.Quaternion()), qw = mq0.clone().multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), HEAD_YAW_FIX[name])).multiply(mq0.clone().invert()); bones.head.quaternion.premultiply(pq.clone().invert().multiply(qw).multiply(pq)) }
   model.updateMatrixWorld(true)
   const mq = model.getWorldQuaternion(new THREE.Quaternion()).invert(), wq = new THREE.Quaternion()
   for (const b of Object.values(bones)) {
@@ -1805,7 +1809,7 @@ export const FEED = {
   // 紅鶴濾食：身體只微微前傾，脖子從胸口直直垂下去，頭整個倒過來、上嘴朝下貼著水面，慢慢左右擺
   flamingo: { acts: ['peck'], lean: 0.16, neck: 0, head: 0, reach: 0.2, rate: 2.2, bones: { neck: 0.35, neck2: -0.17, neck3: -0.52, neck4: -0.66, neck5: -0.66, neck6: -0.63, neck7: -0.52, neck8: -0.35, neck9: -0.09, neck10: 0.26, head: 1.75 }, sweep: 0.12, hz: 0.25, inT: 0.2, outT: 0.8 },   // 2026-11-12 第五版：脖子 10 節平均分攤往下彎成一條弧（每節最多 38°）、喝水時脖子伸長 4 成；頭在頭頸交界轉 100° 倒過來（頭的權重只到交界往前 3 cm，脖子整條一樣細）
   // 玫瑰琵鷺：身體前傾，脖子往前下伸直，匙狀的嘴尖泡在水裡、張著一點左右快速掃
-  rspoonbill: { acts: ['hunt', 'strike'], lean: 0.6, neck: 0, head: 0, reach: 0.65, bones: { neck: -1.25, neck2: -0.4, neck3: -0.1, head: 1.9 }, sweep: 0.3,   /* 2026-11-12 使用者：頭歪著喝水——頭往後折了 97°，嘴尖朝著腳；改成脖子往前下斜、嘴朝前下插進水裡 */ hz: 1.1, inT: 0.12, outT: 0.9 },
+  rspoonbill: { acts: ['hunt', 'strike'], lean: 0.6, neck: 0, head: 0, reach: 0.65, bones: { neck: -1.25, neck2: -0.4, neck3: -0.1, head: 2.3 }, sweep: 0.3,   /* 2026-11-12 使用者：頭歪著喝水——頭往後折了 97°，嘴尖朝著腳；改成脖子往前下斜、嘴朝前下插進水裡 */ hz: 1.1, inT: 0.12, outT: 0.9 },
 }
 const feeder = (F) => ({ n, kk, t }) => {
   if (!F.acts.includes(n) || kk < 0.02 || kk > F.outT) return null   // 動作尾段回到站姿（骨頭的額外轉動會自己慢慢退回 0）

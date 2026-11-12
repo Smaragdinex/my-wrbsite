@@ -293,6 +293,12 @@ export function buildWalkways(scene, kit) {
     bw.done()
   }
   // 2026-11-11 濕地木棧道的矮燈（ChatGPT：柱子內側、有遮罩的琥珀色 LED，2200～2400 K，(1, .45, .16)；黃昏 17:45 起慢慢亮）：
+  // 2026-11-12 使用者「這木道燈，在椅子那也加上」：有長椅的觀景台原本沒有燈（晚上整個黑的）→ 兩側欄杆各一盞同樣的矮燈，照在椅子和台面上
+  for (const D of EAST.decks) {
+    if (!D.bench) continue
+    const { c, s: sn } = deckFrame(D), Y = deckAt(D.x, D.z), hw = D.w / 2
+    for (const sd of [-1, 1]) for (const lz of D.d > 3.2 ? [-D.d * 0.22, D.d * 0.3] : [0]) { const lx = sd * (hw - 0.02), nx = sd * c, nz = -sd * sn; lampAt.push([D.x + lx * c + lz * sn - nx * 0.09, Y + 0.55, D.z - lx * sn + lz * c - nz * 0.09, nx, nz]) }
+  }
   // 燈殼＋發光面各一個合併的 mesh；發光強度交給日夜系統（userData.lamp＝[白天, 晚上]），真的點光源由 world.js 挑鏡頭附近幾盞
   if (lampAt.length) {
     const hs = [], gs = []
