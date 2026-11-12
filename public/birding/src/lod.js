@@ -41,7 +41,8 @@ export function lodRegister(meshes, h, lows = [], { solid = false } = {}) {
   }
   const cols = meshes.map((m) => m.instanceColor ? m.instanceColor.array.slice(0, n * 3) : null)
   // 矮的（蕨類、地被）14～40 公尺開始變稀、更遠就不畫；4 公尺以上的樹只做視野外不畫
-  const d0 = Math.max(14, h * 14), d1 = h >= 4 || solid ? Infinity : Math.max(32, h * 40)
+  // 2026-11-13 使用者「草可以遠一點都先畫嗎，不然靠近才出現很怪」：矮植物 14 m 開始變稀、32 m 不畫 → 30 m 開始變稀、80 m 才全部不畫
+  const d0 = Math.max(30, h * 30), d1 = h >= 4 || solid ? Infinity : Math.max(80, h * 90)
   if (!solid) for (const m of [...meshes, ...lows]) if (m?.castShadow) m.userData.lodManaged = true   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
   // 換成低面數的距離：一公尺的蕨類 10 公尺外、越高的越遠才換（長焦時照變焦倍率拉遠）
   // 2026-11-12 使用者：遠景的樹看起來是板狀的低模——「應該像人眼一樣：圓的、看不清楚，但不是低模」→ 4 m 以上的樹換低面數版本的距離拉遠一倍多（20 m 的樹 200 m → 440 m）
@@ -118,7 +119,7 @@ export function lodShadowCull(cx, cz, r) {
 }
 
 const IMP_ON = false
-const TF0 = 230, TF1 = 330, PXK = 750, MINPX = 5, IMP_PX = 150, IMP_N = 8, IMP_W = 128, IMP_H = 256
+const TF0 = 230, TF1 = 330, PXK = 750, MINPX = 2.5,   /* 太小不畫：半徑 5 → 2.5 像素（0.4 m 的蕨原本 60 m 就不見，現在 120 m） */ IMP_PX = 150, IMP_N = 8, IMP_W = 128, IMP_H = 256
 // ---------- 遠景替身 ----------
 let impCtx = null   // { renderer, sun, hemi }（world.js 建好之後給）
 export const lodInit = (ctx) => { impCtx = ctx; last.fov = 0 }
@@ -253,7 +254,8 @@ export function lodUpdate(camera, force = false) {
   for (const G of grass) {
     sph.set(G.c, G.r)
     const d = Math.max(0, G.c.distanceTo(p) - G.r * 0.5) / zoom
-    let f = d < 15 ? 1 : d < 60 ? 1 - 0.8 * (d - 15) / 45 : d < 90 ? 0.2 : 0
+    // 草葉：35 m 內全密、到 110 m 慢慢剩三成五、160 m 外不畫（原本 15 m 就開始變稀、90 m 不畫，走過去才看到草長出來）
+    let f = d < 35 ? 1 : d < 110 ? 1 - 0.65 * (d - 35) / 75 : d < 160 ? 0.35 * (1 - (d - 110) / 50) : 0
     if (!_fr.intersectsSphere(sph)) f = 0
     G.mesh.geometry.instanceCount = Math.round(G.n * f)
     gd += G.mesh.geometry.instanceCount
