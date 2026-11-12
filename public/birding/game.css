@@ -342,6 +342,13 @@ svg.controls image { mix-blend-mode: multiply; }
 #pre .sky::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14, 14, 22, 0.7) 0%, rgba(14, 14, 22, 0.32) 36%, rgba(14, 14, 22, 0) 62%), linear-gradient(180deg, rgba(255, 150, 90, 0.34) 0%, rgba(255, 170, 120, 0.16) 45%, rgba(90, 50, 90, 0.3) 100%); mix-blend-mode: normal; }
 #pre .sun, #pre .hill { display: none; }
 /* 背景影片：遊戲裡錄的 10 秒循環（紅鶴走動、低頭，水面倒影跟著動）。還沒載到、或瀏覽器不給自動播放時，底下那張圖頂著 */
+#pre .bg3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; transition: opacity 0.9s; z-index: 0; }
+#pre .bg3d.on { opacity: 1; z-index: 1; }
+#pre .sky.live::before { display: none; }
+#pre .sky.live .bgv { opacity: 0; transition: opacity 0.9s; }
+#pre .sky::after { z-index: 2; }
+#pre .cl { z-index: 2; }
+#pre .menu, #pre .menu-sheet { z-index: 4; }
 #pre .bgv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 62% 50%; }
 @media (prefers-reduced-motion: reduce) { #pre .bgv { display: none; } }
 #pre .cl { position: absolute; left: -40%; height: 60px; border-radius: 999px; background: rgba(255, 225, 205, 0.5); filter: blur(22px); animation: preDrift linear infinite; z-index: 1; }
