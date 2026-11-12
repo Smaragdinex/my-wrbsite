@@ -87,11 +87,14 @@ export function buildCave(scene, kit, sum, lib) {
   gate(0.5, 1.45)   // 2026-11-12 使用者：一開始進入的拱門岩石大一點（淨空 2.7×2.4 m → 3.9×3.5 m）
   gate(0.8, 1.25)
   // 平台和水簾中間的大石頭（看水簾的「窗」的窗框）、後壁腳下一排岩壁掃描和大石頭
+  // 2026-11-13 凹槽改成湖、步道改走後壁的岩架：以前「平台和水簾中間的大石頭」和「後壁腳下一排大石頭」擺在舊步道旁，現在會擋在新路上、泡在湖裡 → 拿掉
+  if (false) {
   { const x = ex - 4.4, z = ez - 3.6, y = alpineHeight(x, z); rock('mrock_5', x, y - 0.5, z, V(1.5, 2.4, 1.3), 0.9); addCollider(x, z, 1.4, y + 3) }
   for (const [name, t, off, sc] of [['mrock_2', 0.6, 3.4, 1.4], ['boulder', 0.7, 2.9, 1.5], ['mrock_6', 0.9, 3.4, 1.5], ['mrock_4', 0.98, 3.0, 1.3], ['mrock_6', 0.42, 3.0, 1.2], ['boulder', 0.86, 2.7, 1.1]]) {
     const [x0, z0, tx, tz] = line[Math.min(line.length - 1, Math.floor(line.length * t))], x = x0 - tz * off, z = z0 + tx * off
     rock(name, x, alpineHeight(x, z) - 0.45 * sc, z, sc)
     addCollider(x, z, 1.1 * sc, alpineHeight(x, z) + 2)
+  }
   }
 
   // 3) 青苔墊、草叢（山頂那套 Blender 模型）、蕨類：沿石板路兩側、岩塊腳下，越往裡越密
@@ -194,6 +197,7 @@ export function buildCave(scene, kit, sum, lib) {
     // 每片轉到面朝洞裡（後壁朝洞口、天花板朝下，中間彎的地方照斷面的角度），像貼磁磚一樣互相疊一點；每片中心貼在程式算的那層岩面前面 0.25 m。
     // 後壁用完整的掃描（每片 8000 個三角形）、天花板離得遠用四分之一面數的版本
     if (lib?.rockface_a) {
+      const STP = YOSE.stairs(), nearPath = (x, y, z) => { for (let i = 0; i < STP.pts.length; i++) { if (STP.pts[i][0] > 208) break; if (Math.abs(STP.pts[i][0] - x) < 4.5 && Math.abs(STP.pts[i][1] - z) < 4.2 && y < STP.yy[i] + 5) return true } return false }
       // 手機、平板（觸控為主）：岩片全部用四分之一面數的版本、鋪得稀一點
       const LITE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
       const DEF = { rockface_a: V(-0.35, 1.8, -1.45), rockface_b: V(-0.4, 1.25, -0.95) }, L3 = { rockface_a: [[], []], rockface_b: [[], []] }
@@ -202,7 +206,8 @@ export function buildCave(scene, kit, sum, lib) {
       for (let i = 3; i < NXc - 1; i += SI) for (let j = 1; j < NS - 3; j += j < NW ? SJW : SJC) {
         const ii = Math.min(NXc, Math.max(0, i + Math.floor(rnd() * 5 - 2))), jj = Math.max(0, j + Math.floor(rnd() * 4 - 2)), vi = ii * (NS + 1) + jj, m = meta[vi]
         if (YOSE.caveA(m.x) < 0.55) continue   // 洞的兩端（淺、牆彎得急）不貼：從步道看過去是岩片的薄邊
-        if (m.ceil > 0.25) continue   // 2026-11-13 使用者「瀑布這裡破圖」：岩壁掃描只有正面，貼在天花板、彎角的那些從底下斜看時看到背面和薄邊，像一片片紙 → 只貼後牆（正對步道的那面）
+        if (m.ceil > 0.25) continue
+        if (nearPath(m.x, pos[vi * 3 + 1], pos[vi * 3 + 2])) continue   // 2026-11-13 步道改走後壁的岩架：會凸到路上的岩片不貼   // 2026-11-13 使用者「瀑布這裡破圖」：岩壁掃描只有正面，貼在天花板、彎角的那些從底下斜看時看到背面和薄邊，像一片片紙 → 只貼後牆（正對步道的那面）
         const nm = rnd() < 0.7 ? 'rockface_a' : 'rockface_b', ctr = DEF[nm], sc = (nm === 'rockface_a' ? 1.2 : 1.8) * (0.95 + rnd() * 0.35)
         const al = m.ceil * Math.PI / 2
         if (m.ceil > 0.9) qq.setFromEuler(E.set(Math.PI * 0.75 + (rnd() - 0.5) * 0.2, rnd() * 6.28, 0, 'YXZ'))

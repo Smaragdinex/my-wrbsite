@@ -336,7 +336,7 @@ export function ensureModel(n) {
   let pr = _loading.get(n)
   if (!pr) {
     pr = loader().loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => {
-      g.scene.traverse((o) => { if (o.isMesh) fixWinding(o.geometry) })
+      g.scene.traverse((o) => { if (o.isMesh) { cutBridges(o); fixWinding(o.geometry) } })
       // Tripo 生成的羽色太鮮豔的，載入時壓暗（紫嘯鶇真實是深藍黑、只有光澤是亮藍）
       const k = TINT[n.replace('-fly', '')]
       if (k) g.scene.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(k) } })
@@ -421,6 +421,28 @@ export function rigged(name, { straight = {} } = {}) {
 }
 // 減面時翻掉的三角形（頂點順序跟法線相反）：只畫正面時會變成破洞，看到後面深色的翅膀、樹枝——身上一片片碎片。
 // 樹鵲、綠繡眼、白頭翁約 9% 的面是反的（2026-11-08 使用者回報 17 號樹鵲破圖）。載入時照頂點法線把順序轉回來。
+// 2026-11-13 使用者：環頸雉走路時腳破圖（一根棍子從腳伸出去）。模型裡兩隻腳的腳趾黏在一起（左腳中趾和右腳腳趾共用幾片面），
+// 走路兩腳一分開，那幾片面被拉成長棍。載入時把「一頭綁在左腳／左翅、另一頭綁在右腳／右翅」的面切掉（共 60 幾片，看不出少了）
+const SIDE = /^(thigh|shin|foot|toe|wing)([LR])/
+function cutBridges(o) {
+  const g = o.geometry, ix = g.index, si = g.attributes.skinIndex, sw = g.attributes.skinWeight
+  if (!o.isSkinnedMesh || !ix || !si || !sw || !o.skeleton) return
+  const side = o.skeleton.bones.map((b) => SIDE.exec(b.name)?.[2] ?? '')
+  if (!side.some(Boolean)) return
+  const n = si.count, vs = new Array(n)
+  for (let i = 0; i < n; i++) {
+    let best = 0, bi = 0
+    for (let k = 0; k < 4; k++) { const w = sw.getComponent(i, k); if (w > best) { best = w; bi = si.getComponent(i, k) } }
+    vs[i] = side[bi] ?? ''
+  }
+  const a = ix.array, keep = []
+  for (let t = 0; t < a.length; t += 3) {
+    const s0 = vs[a[t]], s1 = vs[a[t + 1]], s2 = vs[a[t + 2]]
+    const L = s0 === 'L' || s1 === 'L' || s2 === 'L', R = s0 === 'R' || s1 === 'R' || s2 === 'R'
+    if (!(L && R)) keep.push(a[t], a[t + 1], a[t + 2])
+  }
+  if (keep.length !== a.length) { g.setIndex(keep); g.userData.bridges = (a.length - keep.length) / 3 }
+}
 function fixWinding(g) {
   const p = g.attributes.position, n = g.attributes.normal, ix = g.index
   if (!p || !n || !ix) return

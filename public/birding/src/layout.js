@@ -364,7 +364,7 @@ export const ALP_SPURS = [
   { name: 'lagoonRing', world: true, k: 0.15, noClear: true, endOn: 'wetRing', pts: [[45.5, -87.3], [34.2, -85.8], [22, -87.5], [8, -86], [-6, -84.5], [-22, -86.5], [-38, -89], [-52, -96], [-62, -108], [-66, -124], [-62, -142], [-52, -156], [-38, -165], [-20, -170], [-2, -167], [12, -161], [24, -159], [36, -159]] },   // 2026-11-11 加大後：繞潟湖一圈接到木棧道南端
   { name: 'meadow', world: true, y0: 0, k: 0.15, noClear: true, pts: [[2, 58], [5, 68], [9, 80], [10, 92], [16, 104]] },   // 2026-11-11 花園北邊 → 西北的新草原
   { name: 'wetBoard', world: true, k: 0.15, pts: [[321.5, -27.3], [322.6, -31], [326, -34], [330.5, -35.3], [334.2, -34.8]] },
-  { name: 'cave', world: true, k: 0.12, pts: [[177, 70.5], [179.5, 77], [182.5, 84], [186, 90.3], [190, 94.4], [195, 95.4], [199.5, 94.9]] },
+  { name: 'cave', world: true, k: 0.12, pts: [[177, 70.5], [179.5, 77], [182.5, 84], [185.6, 90.2], [187.6, 93.2]] },   // 2026-11-13 使用者：瀑布後面的凹槽改成湖、從瀑布身後直接往上 → 支線走到凹槽西口就接崖壁步道
   { name: 'lakeLoop', world: true, y0: 0, flat: 3, k: 0.15,   /* 2026-11-10 使用者：花園出口左邊那條路有一道凸起的破圖（前 12 m 貼著花園邊，路面被墊到 0.5 m，花園地面是 0） */ noClear: true, endOn: 'lakeGorge', pts: [[76.5, 0], [78.2, -6], [78, -12], [76.5, -35], [77, -57], [84, -73], [98, -78], [123, -63]] },
   { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, landings: true, endOn: 'grass', pts: null },   // pts：ridgeTrailPts()（EAST.ridge 定義之後）
 ].map((sp) => sp.world ? sp : ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
@@ -394,7 +394,11 @@ export const YOSE = (() => {
   Y.caveA = (x) => { const c = Y.cave; return ssY(c.x0, c.x0 + 8, x) * ssY(c.x1, c.x1 - 6, x) * (0.9 + 0.1 * Math.cos((x - c.xc) * 0.35)) }
   Y.caveD = (x) => Y.cave.D * Math.pow(Y.caveA(x), 0.7)
   Y.caveH = (x) => Y.cave.H * Math.pow(Y.caveA(x), 0.6)
-  Y.inLake = (x, z, pad = 0) => ((x - Y.lake.x) / (Y.lake.rx + pad)) ** 2 + ((z - Y.lake.z) / (Y.lake.rz + pad)) ** 2 < 1
+  // 2026-11-13 瀑布後面的凹槽（岩窟）整片變成湖：只留貼著後壁的一條岩架（步道走在上面，從瀑布身後一路往上爬）
+  // Y.recPath(x)：岩架上步道的中線離牆腳多遠；Y.inRecessWater：凹槽裡岩架前面那一片水
+  Y.recPath = (x) => Math.max(1.2, Y.caveD(x) - 2.1)   // 後壁的碰撞（yosemite.js：牆腳往裡 caveD − 0.6、半徑 0.75）外面再留 0.4 m
+  Y.inRecessWater = (x, z, pad = 0) => x > Y.cave.x0 + 1.5 - pad && x < Y.cave.x1 - 1 + pad && Y.caveD(x) > 2.4 && z > Y.base(x) - 3 && z < Y.base(x) + Y.recPath(x) - 1.6 + pad
+  Y.inLake = (x, z, pad = 0) => ((x - Y.lake.x) / (Y.lake.rx + pad)) ** 2 + ((z - Y.lake.z) / (Y.lake.rz + pad)) ** 2 < 1 || Y.inRecessWater(x, z, pad)
   // 岩壁高：yosemite.js 畫、步道算高度都用這個
   Y.g0 = (x) => alpineHeight(x, Y.base(x))
   // 2026-11-10 使用者：玻璃早就拆了 → 岩壁中段 40～58 公尺（瀑布那一帶最高），兩端收矮
@@ -424,14 +428,17 @@ export const YOSE = (() => {
       const to = (b, k, n) => { const a = cur; for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(a[0], b[0], t); add(x, Y.base(x) + lerp(a[1], b[1], t), lerp(a[2], b[2], t), k) } cur = b }
       const PI = Math.PI
       // 起點＝cave 支線的終點（瀑布正後方），高度跟那裡的地面一樣
-      { const x0 = 199.5, z0 = 94.9, y0 = alpineHeight(x0, z0) + 0.02; add(x0, z0, y0, 'open'); cur = [x0, z0 - Y.base(x0), y0] }
+      // 2026-11-13 改：起點在凹槽西口（cave 支線的終點），沿著後壁的岩架走到瀑布正後方、一路往上爬，出凹槽東口直接接第一段階地（中間不再下到湖邊走平路）
+      { const x0 = 187.6, z0 = 93.2, y0 = alpineHeight(x0, z0) + 0.02; add(x0, z0, y0, 'open'); cur = [x0, z0 - Y.base(x0), y0]
+        const YR = 32.2, X1 = 206.5, pts2 = []; for (let x = 189.5; x <= X1 + 1e-6; x += 1.5) pts2.push(x)
+        for (const x of pts2) { const t = (x - 189.5) / (X1 - 189.5); to([x, Y.recPath(x), lerp(y0 + 0.15, YR, Math.pow(t, 1.1))], 'open', 2) }
+        to([210.5, 1.25 + 0.6 * clamp((YR - 33) / 40, 0, 1), YR + 0.6], 'gal', 4) }
       // 從岩窟出來：岩窟東端是收成拱的岩壁，走不出去 → 在 x 203 從岩簷口底下出來，沿湖邊踩著石板（水面上 0.8 m）往東到迴廊口
-      to([202.8, 1.8, 28.4], 'open', 4); to([204.8, -1.5, 28.35], 'open', 4); to([208.6, -1.5, 28.6], 'open', 4); to([210.5, 1.6, 29.6], 'open', 4)
       // 2026-11-12 重新設計（使用者實際走過：「不需要進洞，我們是看鳥的遊戲；沿著山壁往上走，參考 Zion Angels Landing」）：
       // 隧道、螺旋岩室全部拆掉，整條都在岩壁外側——瀑布東邊那面岩壁上鑿出來的之字形步道（Walter's Wiggles 那種），五段、四個折返平台，
       // 每段橫越 33 m、升 9 m 多（坡度 28%）；外側是鐵鍊欄杆，往外看得到瀑布、湖和停在岩壁橫生樹上的鳥。
       // 岩壁越高越往後仰：步道中線離牆腳的距離從 1.6 m（底）慢慢加到 3.4 m（頂）
-      const Y0 = 29.6, YT = Y.topY(240) + 0.05, lean = (y) => 0.6 * clamp((y - 33) / (YT - 33), 0, 1)   // 岩壁面越高越往後仰（頂上比牆腳退 1.8 m）
+      const Y0 = 32.8, YT = Y.topY(240) + 0.05, lean = (y) => 0.6 * clamp((y - 33) / (YT - 33), 0, 1)   // 岩壁面越高越往後仰（頂上比牆腳退 1.8 m）
       // 第三版（ChatGPT 崖壁步道 V3：「把屋頂挑高沒有用，要把連續的屋頂拿掉」）：五段不再上下疊在同一面牆上，改成一層層往後退的階地——
       // 每往上一段，整條往岩壁裡退 TS 公尺；每一層從地板到天空全部鑿開，頭上沒有岩石。步道外緣 1.2 m、內側只留 0.55 m 就是上一層的石壁（總寬 1.75 m）。
       // 折返平台＝兩層之間繞半圈（半徑 TS/2）。三個平的賞鳥台另外往石壁裡鑿 1.9 m，頭上留一段天然的岩簷（＝上一層步道的地板）
@@ -1456,4 +1463,23 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
       if (d < aTrail[q]) aTrail[q] = d
     }
   }
+}
+
+// 2026-11-13 凹槽變湖：岩架（步道底下、往後到牆）＝步道高度往下 0.3；岩架前緣 1.2 m 內斜下去，再往前是湖底（水面下 0.9）
+{
+  const st = YOSE.stairs(), W = YOSE.lake.water
+  const pathY = (x) => { let b = null, bd = 1e9; for (let i = 0; i < st.pts.length; i++) { if (st.pts[i][0] > 207.5 || st.yy[i] > 34) continue; const d = Math.abs(st.pts[i][0] - x); if (d < bd) { bd = d; b = st.yy[i] } } return b }
+  const C = YOSE.cave
+  for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 82 || z > 108) continue
+    for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < C.x0 || x > C.x1) continue
+      const D = YOSE.caveD(x); if (D < 2.4) continue
+      const b = YOSE.base(x), zr = z - b; if (zr < -3 || zr > D + 0.5) continue
+      const k = j * AG.nx + i, py = pathY(x); if (py == null) continue
+      const edge = YOSE.recPath(x) - 1.6   // 岩架前緣（離牆腳）
+      const ledge = py - 0.3, bed = W - 0.9
+      const t = smoothstep(edge - 1.2, edge, zr)
+      let h = lerp(bed, ledge, t)
+      if (zr < 0) h = Math.min(aHeight[k], lerp(h, aHeight[k], smoothstep(0, -3, zr)))   // 凹槽口外面慢慢接回湖底
+      aHeight[k] = zr < 0 ? h : (t > 0.01 ? h : Math.min(aHeight[k], h))
+    } }
 }

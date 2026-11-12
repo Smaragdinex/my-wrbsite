@@ -346,7 +346,7 @@ export function buildYosemite(scene, { lib } = {}) {
   }
   for (const c of cols) if (!(c.x > 205 && c.x < 248.5) && YOSE.caveA(c.x) < 0.08 && Math.abs(c.x * 2 - Math.round(c.x * 2)) < 1e-6 && Math.round(c.x * 2) % 3 === 0) addCollider(c.x, c.zb + 0.9, 1.3, c.g0 + c.Ht)
   // 岩窟：碰撞放在後壁（往裡 caveD 的地方）
-  for (let x = YOSE.cave.x0; x <= YOSE.cave.x1; x += 0.6) { const A = YOSE.caveA(x); if (A < 0.08) continue; addCollider(x, YOSE.base(x) + Math.max(0.9, YOSE.caveD(x) - 0.6), 0.75, YOSE.g0(x) + YOSE.caveH(x)) }   // 石階平台兩端外面也不放（半徑 1.3 會伸進轉彎的平台）
+  for (let x = YOSE.cave.x0; x <= YOSE.cave.x1; x += 0.6) { const A = YOSE.caveA(x); if (A < 0.08) continue; { const cz = YOSE.base(x) + Math.max(0.9, YOSE.caveD(x) - 0.35); if (TR.pts.some(([px, pz], i) => i < 40 && Math.hypot(px - x, pz - cz) < 1.5)) continue }   /* 凹槽東口步道往外轉的地方：牆的碰撞會擋到路 */ addCollider(x, YOSE.base(x) + Math.max(0.9, YOSE.caveD(x) - 0.35), 0.5, YOSE.g0(x) + YOSE.caveH(x)) }   /* 2026-11-13 凹槽變湖、步道貼著後壁的岩架走：碰撞貼近牆面一點、半徑小一點，不擋路 */   // 石階平台兩端外面也不放（半徑 1.3 會伸進轉彎的平台）
 
   // 岩壁腳下的落石堆：掃描的岩石、大石頭，沿牆腳 1～4 公尺
   if (lib) {
@@ -610,6 +610,12 @@ export function buildYosemite(scene, { lib } = {}) {
     }
     // 湖：剛好到湖岸那一圈（湖裡往下挖、岸往上一階，邊緣接在那一階上；以前放大 12%，出水口那邊水面浮在河道上面）
     const LK = YOSE.lake, pool = new THREE.Mesh(new THREE.CircleGeometry(1, 72).rotateX(-Math.PI / 2), poolM); pool.scale.set(LK.rx * 1.015, 1, LK.rz * 1.015); pool.position.set(LK.x, poolY, LK.z); pool.receiveShadow = true; g.add(pool)
+    // 2026-11-13 凹槽也是湖：一條沿著岩壁的水面（從牆腳前 3 m 到凹槽最裡面），跟湖同一個材質、同一個高度；岩架比水面高，自然蓋住後面那一截
+    { const P = [], I = [], C0 = YOSE.cave; let n = 0
+      for (let x = C0.x0; x <= C0.x1 + 1e-6; x += 0.5) { const b = YOSE.base(x), D = YOSE.caveD(x); P.push(x, LK.water + 0.004, b - 3.2, x, LK.water + 0.004, b + D + 0.3); if (n) { const a = (n - 1) * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3) } n++ }
+      const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); rg.setIndex(I); rg.computeVertexNormals()
+      { const nn = rg.attributes.normal; for (let k = 0; k < nn.count; k++) nn.setXYZ(k, 0, 1, 0) }
+      const rw = new THREE.Mesh(rg, poolM); rw.renderOrder = pool.renderOrder; rw.name = 'recessWater'; g.add(rw) }
     const foamT = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'), r = mulberry32(9); for (let i = 0; i < 1600; i++) { const a = r() * TAU, d = Math.pow(r(), 0.7) * 120; x.fillStyle = `rgba(255,255,255,${(0.1 + r() * 0.45) * (1 - d / 130)})`; x.beginPath(); x.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 1 + r() * 5, 0, TAU); x.fill() } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t })()
     for (const [k, sc] of [[0, 6.5], [1, 4.2]]) {
       const fm = new THREE.Mesh(new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: 0.8 }))
@@ -705,7 +711,7 @@ export function buildYosemite(scene, { lib } = {}) {
     { const ironR = new THREE.MeshStandardMaterial({ color: 0x33363a, roughness: 0.5, metalness: 0.6 }), pp = [], segs = []
       let acc = 9, prev = null
       for (let i = 1; i < NP; i++) {
-        const k = st.kind[i], open = k === 'gal' || k === 'alc' || (k === 'open' && st.pts[i][0] > 207)
+        const k = st.kind[i], open = k === 'gal' || k === 'alc' || (k === 'open' && st.pts[i][0] > 189.5)   /* 2026-11-13 凹槽裡的岩架步道（湖那一側）也要欄杆 */
         if (!open) { prev = null; acc = 9; continue }
         acc += st.S[i] - st.S[i - 1]; if (acc < 1.35) continue
         acc = 0
@@ -823,7 +829,7 @@ export function buildYosemite(scene, { lib } = {}) {
   const PINES = []
   // 2026-11-10 使用者：瀑布步道往上有樹林擋住 → 石階（含從支線走過來那段）6 m 內不種松樹（樹冠會蓋在路上、樹幹擋路）
   const SP = YOSE.stairs().pts.filter((_, i) => i % 2 === 0), nearStairs = (x, z, r) => SP.some(([sx, sz]) => Math.hypot(sx - x, sz - z) < r)
-  for (let k = 0; k < 4000 && PINES.length < 30; k++) {
+  for (let k = 0; k < 4000 && PINES.length < 30; k++) {   /* 2026-11-13 凹槽變湖：下面另外擋湖裡 */
     const x = X0 - 6 + rnd() * (X1 - X0 + 10), z = YOSE.base(x) - 3 - rnd() * 30
     if (!YOSE.inside(x, z) || domeRho(x, z) > 0.9) continue
     if (alpineTrailDist(x, z) < 3 || nearStairs(x, z, 6) || Math.hypot(x - F.x, z - F.z) < 14 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue

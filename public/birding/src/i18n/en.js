@@ -364,6 +364,7 @@ export const UI = {
   "觀察進度": "PROGRESS",
   "使用方法": "HOW TO USE",
   "尚未發現": "Not yet found",
+  "觀察筆記": "Field Notes",
   "新紀錄": "new record",
   "鳥種": "SPECIES",
   "紀錄": "SEEN",
