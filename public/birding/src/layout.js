@@ -1136,6 +1136,11 @@ function buildAlpine() {
         const wl = RV.water(sR)
         h = Math.min(h, dr < hw ? wl - 0.06 - 0.32 * (1 - (dr / hw) ** 2) : wl + 0.1 + (dr - hw) * 1.3)
       }
+      // 2026-11-13 使用者「水跑出來了」（瀑布湖出水口西岸）：岸比水面低，水面那片多邊形攤在草地上 → 水面外 0.1～1.6 m 的岸墊到水面上 8 cm，再往外 1.4 m 慢慢接回原地形
+      if (dr > hw + 0.1 && dr < hw + 3 && sR > 0.5 && sR < RV.lipS - 8) {
+        const wl = RV.water(sR)
+        if (h < wl + 0.08) h = lerp(wl + 0.08, h, smoothstep(hw + 1.6, hw + 3, dr))
+      }
     }
     aHeight[k] = Number.isFinite(h) ? h : 0   // 2026-11-11 格子往西擴到 x -62 以後包到花園中心 (0,0)：gardenEdgeH 在原點是 NaN（地形網格的外框變 NaN，整片地形被剔除）
   }

@@ -1139,13 +1139,13 @@ function buildInterior(lib, avoid = []) {
         const H = Math.min(((kind === 'fir' ? 9 : 8) + rnd() * 7) * (1 - 0.5 * ss(12, 22, hgt)), domeY(x, z) - hgt - 1.5)
         if (H < 4) continue
         // 樹冠（底下最寬）不能伸到步道、吊橋、溪上：離中線至少樹冠半徑 + 1.3 公尺
-        const crownR = H * (kind === 'fir' ? 0.19 : 0.29)
+        const crownR = H * (kind === 'fir' ? 0.19 : 0.29) * 1.6   // 2026-11-13 立體樹冠（conifer_kit）的枝梢針葉簇伸得比卡片版遠、加上橫向縮放最多 1.15：實際半徑約 1.6 倍（使用者：山區入口被樹擋住）
         if (alpineTrailDist(x, z) < crownR + 1.3 || bridgeDist(x, z) < crownR + 1.5 || alpineStreamDist(x, z) < crownR * 0.6 + 1.2) continue
         if (nearBird(avoid, x, z, 5.5, 2.5)) continue
         if (inB && (pathClearAt(x, z) < crownR + 1.2 || OPEN(x, z))) continue   // 花園步道上也不能有樹冠
         if (FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < 9)) continue   // 雀榕四周留空
         if (nearGiant(x, z, 4.5)) continue   // 巨木（giants.js）四周留空
-        if (Math.hypot(x - ALP_TRAIL[0][0], z - ALP_TRAIL[0][1]) < 7) continue   // 步道一進來的地方留一小塊空地，看得到山
+        if (Math.hypot(x - ALP_TRAIL[0][0], z - ALP_TRAIL[0][1]) < 7 + crownR) continue   // 步道一進來的地方留一小塊空地，看得到山
         const dTop = Math.hypot(x - ALP_TRAIL.at(-1)[0], z - ALP_TRAIL.at(-1)[1])
         if (dTop < 9 || (dTop < 16 && (kind !== 'fir' || rnd() < 0.45))) continue   // 山頂步道終點、小木屋門口那一小塊空著；外圈零星幾棵矮冷杉
         const lean = kind === 'fir' && hgt > 17 ? 0.08 : 0   // 高處的冷杉被風吹得往一邊歪一點

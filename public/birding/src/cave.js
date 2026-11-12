@@ -201,7 +201,8 @@ export function buildCave(scene, kit, sum, lib) {
       const SI = LITE ? 12 : 9, SJW = LITE ? 10 : 8, SJC = LITE ? 12 : 10
       for (let i = 3; i < NXc - 1; i += SI) for (let j = 1; j < NS - 3; j += j < NW ? SJW : SJC) {
         const ii = Math.min(NXc, Math.max(0, i + Math.floor(rnd() * 5 - 2))), jj = Math.max(0, j + Math.floor(rnd() * 4 - 2)), vi = ii * (NS + 1) + jj, m = meta[vi]
-        if (YOSE.caveA(m.x) < 0.22) continue
+        if (YOSE.caveA(m.x) < 0.55) continue   // 洞的兩端（淺、牆彎得急）不貼：從步道看過去是岩片的薄邊
+        if (m.ceil > 0.25) continue   // 2026-11-13 使用者「瀑布這裡破圖」：岩壁掃描只有正面，貼在天花板、彎角的那些從底下斜看時看到背面和薄邊，像一片片紙 → 只貼後牆（正對步道的那面）
         const nm = rnd() < 0.7 ? 'rockface_a' : 'rockface_b', ctr = DEF[nm], sc = (nm === 'rockface_a' ? 1.2 : 1.8) * (0.95 + rnd() * 0.35)
         const al = m.ceil * Math.PI / 2
         if (m.ceil > 0.9) qq.setFromEuler(E.set(Math.PI * 0.75 + (rnd() - 0.5) * 0.2, rnd() * 6.28, 0, 'YXZ'))
