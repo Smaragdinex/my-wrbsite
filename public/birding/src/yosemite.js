@@ -908,7 +908,7 @@ export function buildYosemite(scene, { lib } = {}) {
         const st = YOSE.stairs(), e = st.pts.at(-1), b4 = st.pts.at(-4), dx = e[0] - b4[0], dz = e[1] - b4[1], dl = Math.hypot(dx, dz), ux = dx / dl, uz = dz / dl, nx = -uz, nz = ux
         const big = names.includes('mrock_5') ? 'mrock_5' : names[0], gate = { [big]: [] }
         // 擺在最後一段石階內側（平台前緣石牆後面 1 公尺），擋住從石階往平台看的視線；不擋出口（出口在石階盡頭往北轉上平台）
-        for (const [dxe, k2] of [[-6.2, 2.3], [-3.9, 1.9]]) {
+        for (const [dxe, k2] of []) {   // 2026-11-12 出口改往西北之後這兩顆大石頭壓在最上面那段石階的頭上（影片裡鏡頭直接穿進石頭）→ 拿掉；出口旁邊溪潭的石頭就夠了
           const x = Math.min(249.2, e[0] + dxe * -Math.sign(ux)), z = YOSE.topFront(x) + 1.1   // 2026-11-12 擺在出口再過去那一側（新步道是往東上來的，舊的往西）
           gate[big].push({ p: V(x, YOSE.topY(x) - 0.35 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.2, rnd() * TAU, rnd() * 0.2)), s: V(k2, k2 * 1.25, k2 * 0.8) })
           addCollider(x, z, 0.42 * k2, YOSE.topY(x) + k2, YOSE.topY(x) - 1.5)

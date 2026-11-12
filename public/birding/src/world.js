@@ -1,7 +1,7 @@
 // 整個園區（溫室、山、水、植物、鳥、雲）：導覽頁（main.js）和遊戲（game/main.js）共用同一份，兩邊看到的世界一模一樣
 import './fogzone.js'   // 一定要在任何材質編譯前（改霧的 shader）
 import * as THREE from 'three'
-import { lodUpdate } from './lod.js'
+import { lodUpdate, lodRegister, lodInit } from './lod.js'
 import { createAlpine } from './alpine.js'
 import { createHalls } from './halls.js'
 import { createShadowCache } from './shadowcache.js'
@@ -157,6 +157,51 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   buildCave(scene, caveKit, sumKit, plantLib)   // 2026-11-11 瀑布後面的岩窟步道（岩拱、石板路、青苔）
   buildYoseTop(scene, sumKit, plantLib)   // 2026-11-11 瀑布頂後面的整座山、平台和石階的青苔草叢
   outsideG.userData.buildFence?.(walkKit)   // 2026-11-11 園區圍籬用木棧道同一套零件和木頭材質
+  // 2026-11-12 場景太重：瀑布、岩窟、岩壁頂、濕地、棧道這幾區自己建的 InstancedMesh（石階、鐵鍊、崖松、蘆葦、木樁、山上的冷杉）
+  // 以前不管在哪都整批畫。建好之後（有的零件是非同步載的，所以隔幾秒再掃幾次）一個個登記到 LOD：視野外、太遠太小的那幾個不畫
+  const lodSweep = () => {
+    for (const top of scene.children) {
+      if (!['yosemite', 'cave', 'summit', 'streambed', 'wetlandProps', 'walkways'].includes(top.name)) continue
+      top.traverse((m) => {
+        if (!m.isInstancedMesh || m.count < 8 || m.userData.fullSphere || m.userData.noLod || m.isSkinnedMesh || m.instanceMatrix.usage === THREE.DynamicDrawUsage) return
+        if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
+        const bb = m.geometry.boundingBox; lodRegister([m], Math.max(0.3, bb.max.y - bb.min.y), [], { solid: true })
+      })
+    }
+  }
+  // 2026-11-12 記憶體分級（使用者：學校的電腦打不開）：照這台電腦的記憶體和顯示卡分三級——
+  //   full（獨立顯卡、Apple M 系列，記憶體 8 GB 以上）：貼圖原尺寸、鳥全部在背景載完（原本的行為）
+  //   mid（記憶體 8 GB 或一般顯卡）：貼圖最大 1024、只載 170 m 內的鳥（走近才載）
+  //   lite（內顯、記憶體 4 GB 以下、手機）：貼圖最大 512、只載 110 m 內的鳥
+  // 貼圖縮小＝畫到小的 canvas 換掉原圖（2048² 一張連 mipmap 佔 22 MB 顯示記憶體，縮到 1024 剩四分之一、512 剩十六分之一）。網址加 ?tier=full|mid|lite 可以強制
+  const TIER = (() => {
+    const q = new URLSearchParams(location.search).get('tier'); if (q === 'full' || q === 'mid' || q === 'lite') return q
+    let name = ''; try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) } catch {}
+    const mem = navigator.deviceMemory ?? 8
+    if (PHONE || mem <= 4 || /swiftshader|llvmpipe|software|basic render|intel|uhd|iris|hd graphics|mali|adreno|powervr|vega \d/i.test(name)) return 'lite'
+    if (/apple m\d|rtx|gtx 1[06-9]|gtx 16|radeon rx|radeon pro|arc a/i.test(name) && mem >= 8) return 'full'
+    return 'mid'
+  })()
+  const TEXCAP = { full: 4096, mid: 1024, lite: 512 }[TIER], BIRD_RANGE = { full: 1e9, mid: 170, lite: 110 }[TIER]
+  const capped = new WeakSet(), memStat = { tier: TIER, shrunk: 0, savedMB: 0 }
+  const capTextures = (root = scene) => {
+    if (TEXCAP >= 4096) return
+    root.traverse((o) => {
+      const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []
+      for (const m of ms) for (const k in m) {
+        const t = m[k]; if (!t || !t.isTexture || capped.has(t) || t.isCompressedTexture || t.isDataTexture || t.isRenderTargetTexture || t.isCubeTexture) continue
+        const im = t.image; if (!im || !(im instanceof ImageBitmap || im instanceof HTMLImageElement || im instanceof HTMLCanvasElement)) continue
+        const w = im.width, h = im.height; if (!w || !h) continue   // 還沒載完：下次掃到再處理
+        capped.add(t); if (Math.max(w, h) <= TEXCAP) continue
+        const k2 = TEXCAP / Math.max(w, h), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k2)); c.height = Math.max(1, Math.round(h * k2))
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height)
+        t.image = c; t.needsUpdate = true; im.close?.()
+        memStat.shrunk++; memStat.savedMB += (w * h - c.width * c.height) * 4 * 1.33 / 1e6
+      }
+    })
+  }
+  for (const ms of [2500, 8000, 20000, 45000]) setTimeout(() => { lodSweep(); capTextures() }, ms)
+  setTimeout(() => lodInit({ renderer, sun, hemi }), 1500)   // 遠景替身：等場景建好、進場後才開始烘
   const walkRoot = buildWalkways(scene, walkKit)   // 2026-11-11 吊橋橋面、橋頭平台、巨木林木棧道（Blender 零件）
   // 2026-11-10 果樹上的鳥：在掃描的雀榕（不含葉子）上，從上往下打射線找「上面有空間、左右各一段差不多水平的直枝」，
   // 要在朝步道那一側、離地 2.2～3.4 公尺（鏡頭退到 6 公尺外，看起來比較平視）；枝的方向盡量跟鏡頭方向垂直（看得到鳥的側面）
@@ -253,7 +298,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   function streamBirds({ onReady } = {}) {
     const pend = birds.filter((b) => b.pending), busy = new Set()
     streamState.total = streamState.left = pend.length
-    const next = () => { let best = null, bd = 1e9; for (const b of pend) { if (busy.has(b)) continue; const d = b.target.distanceTo(camera.position); if (d < bd) { bd = d; best = b } } return best }
+    const next = () => { let best = null, bd = BIRD_RANGE; for (const b of pend) { if (busy.has(b)) continue; const d = b.target.distanceTo(camera.position); if (d < bd) { bd = d; best = b } } return best }   // mid／lite：只載 BIRD_RANGE 內的，走近才載
     const finishOne = async (b) => {
       for (let k = 0; k < 6 && b.pending; k++) {
         await Promise.all(modelsFor(b.def.id).map(ensureModel))
@@ -267,7 +312,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       renderer.compileAsync?.(b.group, camera, scene).catch(() => {})   // 著色器先在背景編好，第一次看到牠才不會頓一下
       return true
     }
-    const work = async () => { for (let b; (b = next());) { busy.add(b); const ok = await finishOne(b); pend.splice(pend.indexOf(b), 1); busy.delete(b); streamState.left = pend.length; if (ok) onReady?.(b) } }
+    const inRange = () => pend.filter((b) => b.target.distanceTo(camera.position) < BIRD_RANGE).length
+    const work = async () => { while (pend.length) { const b = next(); if (!b) { streamState.left = inRange(); await new Promise((r) => setTimeout(r, 1200)); continue } busy.add(b); const ok = await finishOne(b); pend.splice(pend.indexOf(b), 1); busy.delete(b); streamState.left = inRange(); if (ok) { capTextures(b.group); onReady?.(b) } } }
     streamState.done = Promise.all([work(), work(), work()]).then(() => { streamState.left = 0 })
     return streamState.done
   }
@@ -425,7 +471,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     renderer.render(scene, cam)
   }
-  return { streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  return { memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */
