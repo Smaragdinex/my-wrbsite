@@ -861,7 +861,7 @@ export const BIRDS = {
   "facts": [
    "In a hunting stoop it can exceed 300 km/h — the fastest animal on Earth.",
    "It nests on ledges of tall cliffs, and also on top of skyscrapers.",
-   "This park's waterfall area mixes birds from Taiwan and around the world; the Peregrine is a guest here.",
+   "This park's waterfall area is home to birds from around the world; the Peregrine is a guest here.",
    "Its numbers crashed in the 20th century because of DDT and slowly recovered after the pesticide was banned."
   ]
  },
@@ -873,7 +873,7 @@ export const BIRDS = {
    "It prefers to nest on damp, shaded ledges behind or beside waterfalls, often flying through the curtain of water to get home.",
    "Its feet are tiny: it cannot stand on the ground or a branch, only cling to vertical rock.",
    "It lays a single egg, and the chick stays in the nest for more than six weeks.",
-   "This park's waterfall area mixes birds from Taiwan and around the world; the Black Swift is a guest here."
+   "This park's waterfall area is home to birds from around the world; the Black Swift is a guest here."
   ]
  },
  "greatgreyowl": {
@@ -884,7 +884,7 @@ export const BIRDS = {
    "It looks like one of the largest owls, but its feathers are so fluffy that it weighs much less than it appears.",
    "Its huge facial disc works like a satellite dish, funnelling sound to its ears; it can hear a vole under the snow.",
    "It is most active at dawn and dusk, and sometimes hunts in daylight.",
-   "This park's waterfall area mixes birds from Taiwan and around the world; the Great Grey Owl is a guest here."
+   "This park's waterfall area is home to birds from around the world; the Great Grey Owl is a guest here."
   ]
  },
  "harrier": {

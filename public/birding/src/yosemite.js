@@ -219,8 +219,7 @@ export function buildYosemite(scene, { lib } = {}) {
       // 頭頂 2.6 m 以上有的地方是往外懸的大岩塊（0.4～1.2 m），踏面上方不往外凸，不會擋路
       const segN = fbm2(x * 0.17 + 3, Math.floor(y / 4) * 1.7, 2)
       const notch = ss(0.56, 0.7, segN) * (0.3 + 0.9 * fbm2(x * 0.45 + 11, y * 0.35, 2))
-      const hang = ss(0.5, 0.66, fbm2(x * 0.13 + 7, y * 0.12 + 2, 2)) * (0.4 + 0.8 * fbm2(x * 0.3, y * 0.3 + 5, 2))
-      return m * notch - m2 * hang * tk + m * (1.1 * chan + 0.8 * Math.max(0, Math.min(0.6, bo0)) + band * (0.4 + 0.6 * fbm2(x * 0.4 + 9, y * 0.2, 2))) - m2 * blk * (1 - chan) * (0.25 + Math.max(0, Math.min(0.5, -bo0)))
+      return m * notch + m * (1.1 * chan   /* 驗收第 14 條：往外懸的岩塊（hang）在往上爬的階梯段會壓到路上、擋住半條路 → 拿掉，只留往裡凹的 */ + 0.8 * Math.max(0, Math.min(0.6, bo0)) + band * (0.4 + 0.6 * fbm2(x * 0.4 + 9, y * 0.2, 2))) - m2 * blk * (1 - chan) * (0.25 + Math.max(0, Math.min(0.5, -bo0)))
     }
     for (let k = 0, i = 1; k <= FACE; k++) {
       const s0 = Ls.at(-1) * k / FACE; while (i < P.length - 1 && Ls[i] < s0) i++
@@ -736,7 +735,7 @@ export function buildYosemite(scene, { lib } = {}) {
     // 下段瀑布落水的地方是一條橫的衝擊帶（0～2.5 m 翻騰白水、2.5～5 m 破碎泡沫往外散、5～9 m 慢慢減弱），
     // 波紋：平靜處很細（0.5～2.5 cm）、落水附近大（4～12 cm），好幾個方向、波長 0.3～2.5 m 混在一起；岸邊零星的細白沫
     const zLipL = fc.lip ? fc.lip.z - 0.35 : fz, zImp = zLipL - 3.25   // 下段主水簾落到湖面的地方（水簾底部往外 3.25 m）
-    const DB = { x0: 181, z0: 64, w: 34, h: 40, n: 0.5 }   // 水深貼圖範圍（湖＋凹槽）
+    const DB = { x0: 181, z0: 60, w: 70, h: 50, n: 0.5 }   // 水深貼圖範圍（湖＋凹槽＋東邊的湖）
     const depthTex = (() => { const nx = DB.w / DB.n, nz = DB.h / DB.n, d = new Uint8Array(nx * nz)
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const x = DB.x0 + (i + 0.5) * DB.n, z = DB.z0 + (j + 0.5) * DB.n; d[j * nx + i] = Math.round(255 * Math.min(1, Math.max(0, (poolY - alpineHeight(x, z)) / 4))) }
       const t = new THREE.DataTexture(d, nx, nz, THREE.RedFormat, THREE.UnsignedByteType); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t })()
@@ -832,6 +831,12 @@ export function buildYosemite(scene, { lib } = {}) {
       const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); rg.setIndex(I); rg.computeVertexNormals()
       { const nn = rg.attributes.normal; for (let k = 0; k < nn.count; k++) nn.setXYZ(k, 0, 1, 0) }
       const rw = new THREE.Mesh(rg, poolM); rw.renderOrder = pool.renderOrder; rw.name = 'recessWater'; g.add(rw) }
+    // 2026-11-13 驗收第 9 條：東邊那片湖的水面（從南岸到岩壁腳後面一點，岩壁網格蓋住後面那截），跟瀑布湖同一個材質、同一個高度
+    { const P = [], I = [], E = YOSE.lakeE; let n = 0
+      for (let x = E.x0 - 6; x <= E.x1 + 6 + 1e-6; x += 0.5) { const ex = THREE.MathUtils.smoothstep(x, E.x0 - 6, E.x0) * THREE.MathUtils.smoothstep(-x, -(E.x1 + 6), -E.x1), zs = E.zS(x) - 1.5 + (1 - ex) * 6; P.push(x, LK.water + 0.003, Math.min(zs, YOSE.base(x)), x, LK.water + 0.003, YOSE.base(x) + 0.6); if (n) { const a = (n - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) } n++ }   // 三角形朝上（反過來的話從上面看會被剔掉）
+      const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); eg.setIndex(I); eg.computeVertexNormals()
+      { const nn = eg.attributes.normal; for (let k = 0; k < nn.count; k++) nn.setXYZ(k, 0, 1, 0) }
+      const ew = new THREE.Mesh(eg, poolM); ew.renderOrder = pool.renderOrder; ew.name = 'eastLakeWater'; g.add(ew) }
     const foamT = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'), r = mulberry32(9); for (let i = 0; i < 1600; i++) { const a = r() * TAU, d = Math.pow(r(), 0.7) * 120; x.fillStyle = `rgba(255,255,255,${(0.1 + r() * 0.45) * (1 - d / 130)})`; x.beginPath(); x.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 1 + r() * 5, 0, TAU); x.fill() } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t })()
     for (const [k, sc] of []) {   // 2026-11-13 Pass 1B：落水白沫改在湖面 shader 裡（照落水帶的形狀），這兩片圓形貼圖拿掉
       const fm = new THREE.Mesh(new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: 0.8 }))

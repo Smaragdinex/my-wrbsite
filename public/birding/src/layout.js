@@ -398,7 +398,13 @@ export const YOSE = (() => {
   // Y.recPath(x)：岩架上步道的中線離牆腳多遠；Y.inRecessWater：凹槽裡岩架前面那一片水
   Y.recPath = (x) => Math.max(1.2, Y.caveD(x) - 2.1)   // 後壁的碰撞（yosemite.js：牆腳往裡 caveD − 0.6、半徑 0.75）外面再留 0.4 m
   Y.inRecessWater = (x, z, pad = 0) => x > Y.cave.x0 + 1.5 - pad && x < Y.cave.x1 - 1 + pad && Y.caveD(x) > 2.4 && z > Y.base(x) - 3 && z < Y.base(x) + Y.recPath(x) - 1.6 + pad
-  Y.inLake = (x, z, pad = 0) => ((x - Y.lake.x) / (Y.lake.rx + pad)) ** 2 + ((z - Y.lake.z) / (Y.lake.rz + pad)) ** 2 < 1 || Y.inRecessWater(x, z, pad)
+  // 2026-11-13 驗收第 9 條（使用者：「從這裡往下一直到瀑布，整片改成湖，樹全部移除」）：瀑布湖往東接一片湖，沿著東側岩壁腳（x 205～247），
+  // 南岸在步道下面的坡（zS），北邊到岩壁腳；岩壁腳 1 m 內不挖（岩壁網格的底照那裡的地形）
+  Y.lakeE = { x0: 205, x1: 247, zS: (x) => 73 + 0.2 * (x - 205) }
+  // 驗收第 11 條：湖西岸接到溪的水道（layout.js 檔尾挖的）
+  Y.inOutlet = (x, z, pad = 0) => { const P = [190.5, 79.3], Q = [184.6, 75.4], dx = Q[0] - P[0], dz = Q[1] - P[1], t = Math.max(0, Math.min(1, ((x - P[0]) * dx + (z - P[1]) * dz) / (dx * dx + dz * dz))); return Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t) < 2.5 + pad }
+  Y.inEastLake = (x, z, pad = 0) => x > Y.lakeE.x0 - pad && x < Y.lakeE.x1 + pad && z > Y.lakeE.zS(x) - pad && z < Y.base(x) - 0.2 + pad
+  Y.inLake = (x, z, pad = 0) => ((x - Y.lake.x) / (Y.lake.rx + pad)) ** 2 + ((z - Y.lake.z) / (Y.lake.rz + pad)) ** 2 < 1 || Y.inEastLake(x, z, pad) || Y.inOutlet(x, z, pad) || Y.inRecessWater(x, z, pad)
   // 岩壁高：yosemite.js 畫、步道算高度都用這個
   Y.g0 = (x) => alpineHeight(x, Y.base(x))
   // 2026-11-10 使用者：玻璃早就拆了 → 岩壁中段 40～58 公尺（瀑布那一帶最高），兩端收矮
@@ -1482,4 +1488,104 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
       if (zr < 0) h = Math.min(aHeight[k], lerp(h, aHeight[k], smoothstep(0, -3, zr)))   // 凹槽口外面慢慢接回湖底
       aHeight[k] = zr < 0 ? h : (t > 0.01 ? h : Math.min(aHeight[k], h))
     } }
+}
+
+// 2026-11-13 驗收第 4 條（使用者）：營地往瀑布那段土坡太陡（9.5 m 爬 3.5 m）、路太窄 → 營地到湖邊 (186, 66) 削成一條平順的坡道（約 15%），
+// 路面半寬 2.6 m（原本 1.4）、外面 3 m 慢慢接回原本的坡；同時登記成步道（草、石頭讓開，地面畫成泥土路）
+{
+  const sp = ALP_SPURS.find((q) => q.name === 'yose'), n = sp.pts.length
+  const A = [CAMP.x, CAMP.z], M = sp.pts[n - 2], B = sp.pts[n - 3]
+  const yA = alpineHeight(A[0], A[1]), yB = alpineHeight(B[0], B[1])
+  const L1 = Math.hypot(M[0] - A[0], M[1] - A[1]), L2 = Math.hypot(B[0] - M[0], B[1] - M[1]), yM = lerp(yA, yB, L1 / (L1 + L2))
+  sp.prof[n - 2] = yM
+  for (const [P, Q, ya, yb] of [[A, M, yA, yM], [M, B, yM, yB]]) {
+    const dx = Q[0] - P[0], dz = Q[1] - P[1], l2 = dx * dx + dz * dz
+    const i0 = Math.floor((Math.min(P[0], Q[0]) - 6 - AG.x0) / AG.cell), i1 = Math.ceil((Math.max(P[0], Q[0]) + 6 - AG.x0) / AG.cell), j0 = Math.floor((Math.min(P[1], Q[1]) - 6 - AG.z0) / AG.cell), j1 = Math.ceil((Math.max(P[1], Q[1]) + 6 - AG.z0) / AG.cell)
+    for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+      const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, t = clamp(((x - P[0]) * dx + (z - P[1]) * dz) / l2, 0, 1), d = Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t), q = j * AG.nx + i
+      if (d > 5.6 || YOSE.inLake(x, z, 0.5)) continue
+      const tgt = lerp(ya, yb, t), w = 1 - clamp((d - 2.6) / 3.0, 0, 1), ww = w * w * (3 - 2 * w)
+      aHeight[q] = lerp(aHeight[q], tgt, ww)
+      if (d < 2.6) aTrail[q] = Math.min(aTrail[q], Math.max(0, d - 1.2))
+    }
+  }
+}
+
+// 2026-11-13 驗收第 1 條（使用者照片：沙土路走到木道起點，整片木道比地面高、看得到底下的橫樑）：
+// 每條木道的兩端，木道比地面高 0.2 m 以上的，把那一頭的地墊起來接一段緩坡——木道底下墊到踏板下 8 cm，往外 4.5 m 慢慢接回原本的地（溪流不墊）
+for (const w of ALP_WALKS) {
+  const n = w.xs.length
+  for (const e of [0, n - 1]) {
+    const ex = w.xs[e], ez = w.zs[e], dy = w.y[e] - alpineHeight(ex, ez)
+    if (dy < 0.2) continue
+    // 這一頭往木道裡面的方向（踏板底下整段都墊到 deck−0.08，直到木道本身已經貼地）
+    let inner = 0; for (let k = 0; k < 160; k++) { const i = e === 0 ? k : n - 1 - k; if (w.y[i] - alpineHeight(w.xs[i], w.zs[i]) < 0.15) break; inner = k }
+    const i0 = Math.floor((ex - 9 - AG.x0) / AG.cell), i1 = Math.ceil((ex + 9 - AG.x0) / AG.cell), j0 = Math.floor((ez - 9 - AG.z0) / AG.cell), j1 = Math.ceil((ez + 9 - AG.z0) / AG.cell)
+    for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+      const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, q = j * AG.nx + i
+      if (aStream[q] < 1.5) continue
+      // 離木道這一頭（含往裡那段還架高的踏板）最近的點
+      let best = 1e9, by = 0
+      for (let k = 0; k <= inner; k += 2) { const ii = e === 0 ? k : n - 1 - k, d = Math.hypot(x - w.xs[ii], z - w.zs[ii]); if (d < best) { best = d; by = w.y[ii] } }
+      if (best > 5.5) continue
+      // 不能高過附近任何一段踏板（木道往裡走會變低：那一段底下的地不能冒出踏板）
+      let cap = 1e9, cd = 2.2; for (let k = 0; k < Math.min(n, inner + 260); k += 2) { const ii = e === 0 ? k : n - 1 - k, d = Math.hypot(x - w.xs[ii], z - w.zs[ii]); if (d < cd) { cd = d; cap = w.y[ii] - 0.08 } }   // 最近那一片踏板底下 8 cm
+      const tgt = Math.min(by - 0.08, cap), t = smoothstep(1.0, 5.5, best)
+      const h = Math.min(cap, lerp(tgt, aHeight[q], t))
+      if (h > aHeight[q]) aHeight[q] = h
+    }
+  }
+}
+
+// 2026-11-13 驗收第 9 條：東邊那片湖挖下去——湖底（水面下 0.4～1.8 m，離南岸越遠越深）；南岸往步道那邊 9 m 內削成往下的岸坡；岩壁腳 1 m、崖壁步道 3 m 內不動
+{
+  const W = YOSE.lake.water, E = YOSE.lakeE, st = YOSE.stairs()
+  const nearStairs = (x, z) => { for (let i = 0; i < st.pts.length; i++) if (st.yy[i] < 36 && Math.abs(st.pts[i][0] - x) < 3 && Math.abs(st.pts[i][1] - z) < 3) return true; return false }
+  for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 60 || z > 110) continue
+    for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < E.x0 - 6 || x > E.x1 + 6) continue
+      const q = j * AG.nx + i, b = YOSE.base(x), zs = E.zS(x)
+      if (z > b - 1.0 || aTrail[q] < 3.5 || nearStairs(x, z)) continue
+      const ex = smoothstep(E.x0 - 6, E.x0, x) * smoothstep(E.x1 + 6, E.x1, x)   // 東西兩端慢慢收
+      if (ex <= 0) continue
+      if (z >= zs) {
+        const bed = lerp(W + 0.25, W - 1.8, smoothstep(zs, zs + 6, z)) , t = lerp(aHeight[q], bed, ex)
+        if (t < aHeight[q]) aHeight[q] = t
+      } else if (z > zs - 9) {
+        const bank = lerp(W + 0.25, aHeight[q], smoothstep(zs, zs - 9, z)), t = lerp(aHeight[q], bank, ex)
+        if (t < aHeight[q]) aHeight[q] = t
+      }
+    }
+  }
+}
+
+// 2026-11-13 驗收第 12 條：秘境步道起點（凹槽口那一階）架在地面上方 0.85 m——凹槽變湖時把步道起點底下也挖成湖底了。
+// 從岩窟步道（cave 支線）最後兩段到石階前 3 點，路面底下 1.8 m 內墊回路面高度、往外 1.5 m 接回（凹槽的湖還在路的外側）
+{
+  const sp = ALP_SPURS.find((q) => q.name === 'cave'), st = YOSE.stairs()
+  const segs = []
+  if (sp) { const n = sp.pts.length; for (let k = Math.max(1, n - 2); k < n; k++) segs.push([sp.pts[k - 1], sp.pts[k], +sp.prof[k - 1], +sp.prof[k]]) }
+  if (sp) segs.push([sp.pts.at(-1), st.pts[0], +sp.prof.at(-1), st.yy[0] - 0.15])
+  for (let k = 1; k <= 3; k++) segs.push([st.pts[k - 1], st.pts[k], st.yy[k - 1] - 0.15, st.yy[k] - 0.15])
+  for (const [P, Q, ya, yb] of segs) {
+    const dx = Q[0] - P[0], dz = Q[1] - P[1], l2 = Math.max(1e-6, dx * dx + dz * dz)
+    const i0 = Math.floor((Math.min(P[0], Q[0]) - 4 - AG.x0) / AG.cell), i1 = Math.ceil((Math.max(P[0], Q[0]) + 4 - AG.x0) / AG.cell), j0 = Math.floor((Math.min(P[1], Q[1]) - 4 - AG.z0) / AG.cell), j1 = Math.ceil((Math.max(P[1], Q[1]) + 4 - AG.z0) / AG.cell)
+    for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+      const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, t = clamp(((x - P[0]) * dx + (z - P[1]) * dz) / l2, 0, 1), d = Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t), q = j * AG.nx + i
+      if (d > 3.3) continue
+      const tgt = lerp(ya, yb, t) - 0.06, w = 1 - clamp((d - 1.8) / 1.5, 0, 1), h = lerp(aHeight[q], tgt, w * w * (3 - 2 * w))
+      if (h > aHeight[q]) aHeight[q] = h
+    }
+  }
+}
+
+// 2026-11-13 驗收第 11 條：瀑布湖和往下流的溪之間隔著一道比水面高的土堤（湖西岸 186～188 一帶高 27.6～27.9，水面 27.5）→ 挖一條水道接起來（水面下 0.6、半寬 2.5 m、外面 2 m 接回）
+{
+  const W = YOSE.lake.water, P = [190.5, 79.3], Q = [184.6, 75.4], dx = Q[0] - P[0], dz = Q[1] - P[1], l2 = dx * dx + dz * dz
+  const i0 = Math.floor((Math.min(P[0], Q[0]) - 5 - AG.x0) / AG.cell), i1 = Math.ceil((Math.max(P[0], Q[0]) + 5 - AG.x0) / AG.cell), j0 = Math.floor((Math.min(P[1], Q[1]) - 5 - AG.z0) / AG.cell), j1 = Math.ceil((Math.max(P[1], Q[1]) + 5 - AG.z0) / AG.cell)
+  for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+    const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, t = clamp(((x - P[0]) * dx + (z - P[1]) * dz) / l2, 0, 1), d = Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t), q = j * AG.nx + i
+    if (d > 4.5 || aTrail[q] < 1.6) continue
+    const w = 1 - clamp((d - 2.5) / 2.0, 0, 1), h = lerp(aHeight[q], W - 0.6, w * w * (3 - 2 * w))
+    if (h < aHeight[q]) aHeight[q] = h
+  }
 }

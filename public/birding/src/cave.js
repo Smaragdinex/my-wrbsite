@@ -197,7 +197,7 @@ export function buildCave(scene, kit, sum, lib) {
     // 每片轉到面朝洞裡（後壁朝洞口、天花板朝下，中間彎的地方照斷面的角度），像貼磁磚一樣互相疊一點；每片中心貼在程式算的那層岩面前面 0.25 m。
     // 後壁用完整的掃描（每片 8000 個三角形）、天花板離得遠用四分之一面數的版本
     if (lib?.rockface_a) {
-      const STP = YOSE.stairs(), nearPath = (x, y, z) => { for (let i = 0; i < STP.pts.length; i++) { if (STP.pts[i][0] > 208) break; if (Math.abs(STP.pts[i][0] - x) < 4.5 && Math.abs(STP.pts[i][1] - z) < 4.2 && y < STP.yy[i] + 5) return true } return false }
+      const STP = YOSE.stairs(), nearPath = (x, y, z) => { for (let i = 0; i < STP.pts.length; i++) { if (STP.pts[i][0] > 208) break; if (Math.abs(STP.pts[i][0] - x) < 5.5 && Math.abs(STP.pts[i][1] - z) < 5.0 && y < STP.yy[i] + 10) return true   /* 驗收第 13 條：步道頭上 5～10 m 懸著的單面岩片，從底下看得到背後是空的 → 範圍加大 */ } return false }
       // 手機、平板（觸控為主）：岩片全部用四分之一面數的版本、鋪得稀一點
       const LITE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
       const DEF = { rockface_a: V(-0.35, 1.8, -1.45), rockface_b: V(-0.4, 1.25, -0.95) }, L3 = { rockface_a: [[], []], rockface_b: [[], []] }

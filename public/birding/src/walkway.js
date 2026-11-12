@@ -256,7 +256,7 @@ export function buildWalkways(scene, kit) {
         const p = at(s0), lat = sd * 1.61, nx = -p.tz * sd, nz = p.tx * sd
         const x = p.x + nx * 1.61, z = p.z + nz * 1.61
         if (deckAt(p.x + nx * 2.3, p.z + nz * 2.3) != null) continue   // 2026-11-11 觀景灣的入口：這一側不立柱、不拉欄杆（railRun 超過 3 m 的間隔不接）
-        if (String(w.head.t).startsWith('wet') && (lampK++ % 4) === 1) lampAt.push([x - nx * 0.09, p.y + 0.55, z - nz * 0.09, nx, nz])   // 每 5.6 m 一盞矮燈（柱子內側、離台面 0.55 m）
+        if ((lampK++ % 4) === 1) lampAt.push(   /* 2026-11-13 驗收第 7 條：所有木道都有燈（以前只有濕地那兩條） */[x - nx * 0.09, p.y + 0.55, z - nz * 0.09, nx, nz])   // 每 5.6 m 一盞矮燈（柱子內側、離台面 0.55 m）
         posts.push({ x, z, y: p.y, nx, nz, s: s0 })
         bw.add('bw_post', place(V(x, p.y, z), V(nx, 0, nz), V(p.tx, 0, p.tz)))
         bw.add('bw_bracket', place(V(x, p.y, z), V(p.tx, 0, p.tz), V(nx, 0, nz)))
@@ -318,8 +318,12 @@ export function buildWalkways(scene, kit) {
     const hp = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lampAt.flatMap(([x, y, z, nx, nz]) => [x - nx * 0.05, y, z - nz * 0.05]), 3)),
       new THREE.PointsMaterial({ map: ht, size: 0.55, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }))
     hp.frustumCulled = false
-    lampAt.slice(0, LAMP_MAX).forEach(([x, y, z, nx, nz], i) => LAMP_U.uLampP.value[i].set(x - nx * 0.06, y - 0.02, z - nz * 0.06))
-    glow.onBeforeRender = () => { const k = gm.emissiveIntensity / 2.4; LAMP_U.uLampOn.value = k; hp.material.opacity = 0.75 * k; hp.visible = k > 0.01 }
+    // 燈打在木頭上的光只能算 LAMP_MAX 盞：取離鏡頭最近的那幾盞（鏡頭走 3 m 以上才重排）
+    const lampLast = new THREE.Vector3(1e9, 0, 0)
+    const pickLamps = (cp) => { const order = lampAt.map((l, i) => [(l[0] - cp.x) ** 2 + (l[2] - cp.z) ** 2, i]).sort((a, b) => a[0] - b[0]).slice(0, LAMP_MAX)
+      for (let i = 0; i < LAMP_MAX; i++) { const o = order[i]; if (!o) { LAMP_U.uLampP.value[i].set(0, -999, 0); continue } const [x, y, z, nx, nz] = lampAt[o[1]]; LAMP_U.uLampP.value[i].set(x - nx * 0.06, y - 0.02, z - nz * 0.06) } }
+    pickLamps(new THREE.Vector3())
+    glow.onBeforeRender = (r, sc, cam) => { if (cam && cam.position.distanceToSquared(lampLast) > 9) { lampLast.copy(cam.position); pickLamps(cam.position) } const k = gm.emissiveIntensity / 2.4; LAMP_U.uLampOn.value = k; hp.material.opacity = 0.75 * k; hp.visible = k > 0.01 }
     glow.frustumCulled = false
     root.add(hm, glow, hp)
   }
