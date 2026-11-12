@@ -434,20 +434,29 @@ export const YOSE = (() => {
       // 隧道、螺旋岩室全部拆掉，整條都在岩壁外側——瀑布東邊那面岩壁上鑿出來的之字形步道（Walter's Wiggles 那種），五段、四個折返平台，
       // 每段橫越 33 m、升 9 m 多（坡度 28%）；外側是鐵鍊欄杆，往外看得到瀑布、湖和停在岩壁橫生樹上的鳥。
       // 岩壁越高越往後仰：步道中線離牆腳的距離從 1.6 m（底）慢慢加到 3.4 m（頂）
-      const XE = 244, XW = 213, Y0 = 29.6, YT = Y.topY(240) + 0.05, dOf = (y) => lerp(1.6, 3.4, clamp((y - 33) / (YT - 33), 0, 1))
-      const legs = [[210.5, XE], [XE, XW], [XW, XE], [XE, XW], [XW, 240]]
-      const span = legs.reduce((a, [p, q]) => a + Math.abs(q - p), 0) + 4 * 3, rise = (YT - Y0) / span
-      let y = Y0
+      const Y0 = 29.6, YT = Y.topY(240) + 0.05, dOf = (y) => lerp(1.6, 3.4, clamp((y - 33) / (YT - 33), 0, 1))
+      // 第二版（ChatGPT 崖壁步道 V1 的修正）：折返點左右錯開 2～4 m、每段長度不一樣（33／29／26／28／27 m），不要像五層疊起來的樓梯；
+      // 折返平台半徑 1.3 → 1.6 m（鑿出來約 3.2 × 3.5 m）；三個平的賞鳥台（bay）：這 4 m 不爬升、往岩壁裡多鑿 1.9 m
+      const legs = [[210.5, 244], [244, 215], [215, 241], [241, 213], [213, 240]], RT = 1.6
+      const BAYS = [{ leg: 1, x: 219.5, name: 'waterfall' }, { leg: 2, x: 234.5, name: 'canopy' }, { leg: 4, x: 233.5, name: 'raptor' }], BH = 2.0   // 半長
+      const flatIn = (li, xa, xb) => BAYS.filter((b) => b.leg === li).reduce((a, b) => a + 2 * BH, 0)
+      const span = legs.reduce((a, [p, q], li) => a + Math.abs(q - p) - flatIn(li), 0) + 4 * 3, rise = (YT - Y0 - 0) / (span - 3)   // 最後 3 m 走平
+      let y = Y0; const bays = []
       legs.forEach(([xa, xb], li) => {
-        const len = Math.abs(xb - xa), y1 = y + rise * len, n = Math.round(len / 1.05), dir = Math.sign(xb - xa)
-        const last = li === legs.length - 1   // 最後一段：提早 3 m 到頂、剩下的走平（岩壁頂的平台已經蓋在頭上，差半公尺會被當成台階卡住）
-        // 折返後的頭 6 m：從平台（比下面那段深 2.6 m）慢慢回到這個高度該在的位置
-        for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(xa, xb, t), yy2 = last ? lerp(y, y1, Math.min(1, t * len / (len - 3))) : lerp(y, y1, t), ease = li ? smoothstep(6, 0, t * len) : 0; add(x, Y.base(x) + dOf(yy2) + 2.6 * ease, yy2, 'gal') }
-        y = y1
-        if (li < legs.length - 1) {
-          // 折返平台：往岩壁裡繞半圈（半徑 1.3 m），升 0.85 m；整塊鑿成一個凹進去的平台（'alc'）
+        const len = Math.abs(xb - xa), n = Math.round(len / 1.05), dir = Math.sign(xb - xa), last = li === legs.length - 1
+        const myB = BAYS.filter((b) => b.leg === li)
+        // 這一段的高度：沿路累加，賞鳥台裡不升；最後一段提早 3 m 到頂
+        const climbTo = (s) => { let c = Math.min(s, last ? len - 3 : len); for (const b of myB) { const sb = Math.abs(b.x - xa); c -= clamp(s - (sb - BH), 0, 2 * BH) } return Math.max(0, c) }
+        for (let i = 1; i <= n; i++) {
+          const t = i / n, x = lerp(xa, xb, t), yy2 = last && t === 1 ? YT : y + rise * climbTo(t * len), ease = li ? smoothstep(6, 0, t * len) : 0
+          add(x, Y.base(x) + dOf(yy2) + 2 * RT * ease, yy2, 'gal')
+        }
+        for (const b of myB) { const yb = y + rise * climbTo(Math.abs(b.x - xa)); bays.push({ ...b, y: yb, d: dOf(yb), half: BH, depth: 1.9 }) }
+        y = last ? YT : y + rise * climbTo(len)
+        if (!last) {
+          // 折返平台：往岩壁裡繞半圈，升 0.85 m；整塊鑿成一個凹進去的平台（'alc'）
           const d0 = dOf(y), sx = dir
-          for (let i = 1; i <= 7; i++) { const f = i / 7 * PI; add(xb + sx * 1.3 * Math.sin(f), Y.base(xb) + d0 + 1.3 - 1.3 * Math.cos(f), y + rise * 3 * i / 7, 'alc') }
+          for (let i = 1; i <= 8; i++) { const f = i / 8 * PI; add(xb + sx * RT * Math.sin(f), Y.base(xb) + d0 + RT - RT * Math.cos(f), y + rise * 3 * i / 8, 'alc') }
           y += rise * 3
         }
       })
@@ -458,7 +467,7 @@ export const YOSE = (() => {
       const h = (s) => { if (s <= 0) return yy[0]; if (s >= L) return yy[yy.length - 1]; let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] < s) lo = m; else hi = m } return lerp(yy[lo], yy[hi], (s - S[lo]) / Math.max(1e-6, S[hi] - S[lo])) }
       // 全程（湖西岸 cave 支線起點到岩壁頂）不停走 3 分鐘：湖邊那 40 m 照平常的速度，步道上的速度 v 照長度反推（濕的石階，小心走）
       const v = Math.min(3.2, L / (180 - 40 / 3.2))
-      built = { pts, yy, kind, tag, S, L, h, h0: yy[0], top, v, spiral: { x: -900, z: -900, r: 4.4, y0: -900, y1: -890.8 } }   // 螺旋岩室拆了；yosemite.js 還照這個蓋（蓋在看不到的地方），等確定不要再整段刪
+      built = { pts, yy, kind, tag, S, L, h, h0: yy[0], top, v, bays, spiral: { x: -900, z: -900, r: 4.4, y0: -900, y1: -890.8 } }   // 螺旋岩室拆了；yosemite.js 還照這個蓋（蓋在看不到的地方），等確定不要再整段刪
       return built
     }
   })()
@@ -466,6 +475,8 @@ export const YOSE = (() => {
   Y.stairAt = (x, z, feet) => {
     if (x < 168 || x > 247.5 || z < 86 || z > 122) return null
     const st = Y.stairs(), HW = Y.TRAIL_HW
+    // 賞鳥台：中線往岩壁裡 1.9 m、前後各 2 m 的那一塊平地
+    for (const b of st.bays ?? []) { const dz = z - (Y.base(x) + b.d);   /* 岩壁是斜的（每往東 1 m、往北 0.55 m）：照這一欄的牆腳量 */ if (Math.abs(x - b.x) <= b.half + 0.1 && dz > -1.2 && dz < b.depth + 1.0 && (feet == null || (b.y + 0.05 <= feet + 0.6 && b.y + 0.05 >= feet - 2))) return b.y + 0.05 }
     // 找中線上最近的那一點；上下重疊的幾層（螺旋每圈差 4.6 m、上下層通道）用高度分：只看腳底往上 0.6、往下 2 m 以內的
     let bestH = null, bestD = 1e9
     for (let i = 1; i < st.pts.length; i++) {
@@ -484,6 +495,25 @@ export const YOSE = (() => {
   // x 213～237：最後一段迴廊在岩壁頂的邊緣底下往上爬（最後幾公尺頂上是開的），那一條不算岩壁頂（不然快到頂時腳下突然變成平台的高度，被當成一階太高擋住）
   // 2026-11-12 鷹之窗：最高那段岩壁廊道（x 236→214、+71～76 m）外的岩壁上長一棵大枯樹（原本放第一個回頭彎外：被松樹和旁邊岩壁擋住不顯眼）；perch＝頂端橫枝（模型座標，tools/gorge-kit.json）
   Y.snag = { x: 226.5, y: 70.5, z: Y.base(226.5) + 1.5, perch: [-0.992, 5.946, -5.35], dir: [-0.986, -0.151], r: 0.082 }
+  // 2026-11-12 崖壁上橫生的樹（tools/make-cliff-kit.py → cliff_kit.glb；每棵的枝梢＝鳥站的點，數字抄自 tools/cliff-kit.json，模型座標）
+  // 根紮在「上面那段步道的地板底下 1 m」那層岩簷的外緣（再往下是下面那段步道挑高的槽，沒有岩壁可以紮根）；樹往外 2～3.5 m、往上長到步道上的人眼睛上方 0～2.5 m。
+  // [x, 從哪一段步道看（0 起算）, 模型, 縮放, 轉向]：一群一群擺，賞鳥台兩側多
+  const CT_PERCH = { pine_a: [[0.6, 5.589, -4.612], [-0.428, 5.6, -3.852], [-1.391, 4.81, -4.514]], pine_b: [[0.428, 4.345, -2.951], [-0.556, 4.0, -2.782], [-1.261, 3.367, -3.067]], pine_c: [[1.126, 6.813, -6.008], [0.037, 6.8, -4.708], [-1.845, 5.49, -5.417]], pine_d: [[1.337, 3.076, -2.76], [0.809, 3.2, -2.354], [-0.41, 2.536, -2.214]], snag_a: [[1.383, 5.207, -3.794], [0.461, 5.2, -3.638], [-0.479, 4.977, -3.678]] }
+  const CT_LIST = [[221.8, 1, 'pine_c', 0.55, 0.25], [225.2, 1, 'snag_a', 0.7, -0.3], [216.6, 1, 'pine_d', 1.0, 0.5], [231.2, 2, 'pine_a', 0.68, -0.2], [237.4, 2, 'pine_d', 1.05, 0.35], [239.3, 2, 'pine_b', 0.8, -0.45], [219.0, 3, 'pine_a', 0.62, 0.3], [223.6, 3, 'pine_b', 0.85, -0.25], [237.0, 4, 'pine_d', 1.0, 0.2], [230.4, 4, 'pine_c', 0.5, -0.3]]
+  let _ct = null
+  Y.cliffTrees = () => {
+    if (_ct) return _ct
+    const T = Y.stairs(), legs = [[]]
+    for (let i = 0; i < T.pts.length; i++) { if (T.kind[i] === 'gal') legs.at(-1).push(i); else if (legs.at(-1).length) legs.push([]) }
+    const at = (k, x) => { const Lg = legs[k]; let b = Lg[0]; for (const i of Lg) if (Math.abs(T.pts[i][0] - x) < Math.abs(T.pts[b][0] - x)) b = i; return b }
+    _ct = CT_LIST.map(([x, k, model, s, yaw]) => {
+      const i = at(k, x), fy = T.yy[i], y = fy - 1.0, z = T.pts[i][1] - 1.5   // 步道中線往外 1.5 m＝岩簷的外緣
+      const c = Math.cos(yaw), sn = Math.sin(yaw)
+      const perch = CT_PERCH[model].map(([px, py, pz]) => [x + (px * c + pz * sn) * s, y + py * s, z + (-px * sn + pz * c) * s])
+      return { x, y, z, model, s, yaw, leg: k, floor: fy, perch }
+    })
+    return _ct
+  }
   Y.topFront = (x) => Y.base(x) + 3.2 + Y.rec(x) + (x > 213 && x < 237 ? 2.4 : 0)
   Y.topAt = (x, z) => (x > 201.2 && x < 250 && z > Y.topFront(x) - 0.05 && z < Y.edge(x) - 2.2) ? Y.topY(x) + 0.05 : null   // 岩壁頂上的平地：瀑布口東邊到 x 250
   Y.behind = (x, z) => x > Y.x0 - 3 && x < Y.x1 + 3 && z > Y.base(x) - 1.5   // 岩壁上（石頭、草不要長在這裡）

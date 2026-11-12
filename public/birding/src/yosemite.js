@@ -100,6 +100,7 @@ export function buildYosemite(scene, { lib } = {}) {
   }
   // 秘境步道（layout.js YOSE.stairs）在岩壁上的橫槽：這一欄 x 有哪些槽（地板高 y0、頂 y1、深到離牆腳 depth）
   const TR = YOSE.stairs(), SHELF_Y = YOSE.shelfY()
+  const CHAIN = { posts: [], segs: [] }   // 鐵鍊路段的鐵樁和每一跨（下面蓋欄杆時記下來，cliff_kit 載好再蓋）
   const slotsAt = (x) => {
     const out = [], T = TR
     for (let i = 1; i < T.pts.length; i++) {
@@ -108,6 +109,7 @@ export function buildYosemite(scene, { lib } = {}) {
         if ((x - ax) * (x - bx) > 0.04) continue
         const t = Math.abs(bx - ax) < 1e-6 ? 0 : Math.max(0, Math.min(1, (x - ax) / (bx - ax))), y = lerpN(T.yy[i - 1], T.yy[i], t)
         out.push({ y0: y - 0.3, y1: y + 3.9, depth: bz - YOSE.base(bx) + 1.75 })   // 2026-11-12 槽口挑高到 3.9 m（原本 2.95，像走在屋簷下、看不到天）
+        for (const b of T.bays ?? []) if (Math.abs(x - b.x) < b.half + 0.25 && Math.abs(y - b.y) < 0.8) out.at(-1).depth += b.depth   // 賞鳥台
       } else if (k === 'alc' || (k === 'open' && bz - YOSE.base(bx) > 0.2 && bx > 207.5)) {
         // 凹室、進迴廊前那一小段：中線左右 1.5 m 內的欄都切到這一點的深度
         if (Math.abs(x - bx) > 1.5) continue
@@ -688,7 +690,12 @@ export function buildYosemite(scene, { lib } = {}) {
         acc = 0
         const sd = SIDE[i].z < 0 ? 1 : -1
         const p = C3[i].clone().addScaledVector(SIDE[i], sd * 1.15)
-        pp.push(p); if (prev && prev.distanceTo(p) < 2.6) segs.push([prev, p]); prev = p
+        // 2026-11-12 ChatGPT：整條黑鐵管欄杆像都市樓梯 → 折返平台前後才用鐵管欄杆，一般路段是鑿進岩石的鐵樁＋垂鍊（Angels Landing），賞鳥台外緣是矮石牆
+        if ((st.bays ?? []).some((b) => Math.abs(C3[i].x - b.x) < b.half + 0.2 && Math.abs(C3[i].y - b.y) < 0.8)) { prev = null; continue }
+        let sturdy = false; for (let q = Math.max(0, i - 3); q <= Math.min(NP - 1, i + 3); q++) if (st.kind[q] === 'alc' || st.kind[q] === 'top') sturdy = true
+        p.sturdy = sturdy
+        if (prev && prev.distanceTo(p) < 3.8) (sturdy || prev.sturdy ? segs : CHAIN.segs).push([prev, p])
+        ;(sturdy ? pp : CHAIN.posts).push(p); prev = p
       }
       if (pp.length) {
         const pm2 = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 6).translate(0, 0.55, 0), ironR, pp.length)
@@ -1186,6 +1193,8 @@ export function buildYosemite(scene, { lib } = {}) {
       const onStairs = (x, z) => { for (let i = 1; i < stP.length; i++) { const [ax, az] = stP[i - 1], [bx, bz] = stP[i], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); if (Math.hypot(x - ax - dx * t, z - az - dz * t) < 1.5) return true } return false }
       for (const [x, z] of rail) {
         if (onStairs(x, z)) { prev = null; continue }
+        // 轉彎處相鄰兩段的柱子會擠進走道（量到離中線只有 0.5 m）：離岩窟步道中線不到 0.95 m 的柱子不立
+        if (P.some((q, i) => { if (!i) return false; const [ax, az] = P[i - 1], [bx, bz] = q, dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); return Math.hypot(x - ax - dx * t, z - az - dz * t) < 0.95 })) continue
         const y = alpineHeight(x, z), top = y + 1.1
         parts2.push(post.clone().scale(1, 1.15, 1).translate(x, y + 0.52, z))
         if (prev && Math.hypot(prev[0] - x, prev[2] - z) < 2.2) for (const h of [0, -0.45]) {
@@ -1312,34 +1321,40 @@ export function buildYosemite(scene, { lib } = {}) {
         const c = geo.attributes.color_1 || geo.attributes.color
         geo.setAttribute('snag', c); geo.deleteAttribute('color'); geo.deleteAttribute('color_1')
         const t = new THREE.Mesh(geo, m); t.name = 'eagleSnag'; t.position.set(S.x, S.y, S.z); t.castShadow = true; t.receiveShadow = true; g.add(t)
-        // 2026-11-12 崖壁上橫生的樹（使用者：「岩壁上可以設計出長出去的樹」，鳥停在上面、從步道平視看得到）：同一棵枯樹模型，根紮在兩段步道之間的岩壁上，
-        // 樹往外、往上長 5～6 m，樹冠剛好在上面那段步道的眼睛高度、離欄杆幾公尺。一半是活的（枝梢一團團松針），一半是枯木
-        {
-          const T = YOSE.stairs(), legs = [[]]
-          for (let i = 0; i < T.pts.length; i++) { if (T.kind[i] === 'gal') legs.at(-1).push(i); else if (legs.at(-1).length) legs.push([]) }
-          const yAt = (k, x) => { const L = legs[k]; if (!L || L.length < 2) return null; let b = L[0]; for (const i of L) if (Math.abs(T.pts[i][0] - x) < Math.abs(T.pts[b][0] - x)) b = i; return T.yy[b] }
-          // 枝梢：模型上離根最遠、最高的幾個點（彼此隔 1 m 以上）
-          const P = geo.attributes.position, tips = []
-          const order = Array.from({ length: P.count }, (_, i) => i).sort((p, q) => (P.getY(q) - P.getZ(q) * 0.6) - (P.getY(p) - P.getZ(p) * 0.6))
-          for (const i of order) { const v = V(P.getX(i), P.getY(i), P.getZ(i)); if (v.y > 2.2 && tips.every((u) => u.distanceTo(v) > 1.05)) tips.push(v); if (tips.length >= 9) break }
-          const tuft = new THREE.IcosahedronGeometry(1, 1), tp = tuft.attributes.position
-          for (let i = 0; i < tp.count; i++) { const k = 0.8 + 0.4 * hsh(i * 3.7); tp.setXYZ(i, tp.getX(i) * k, tp.getY(i) * k * 0.55, tp.getZ(i) * k) }
-          tuft.computeVertexNormals()
-          const needle = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.075, 0.16, 0.06), roughness: 0.9, flatShading: true })
-          const tl = []
-          ;[[220, 1, 1.0, 0.2, 1], [225.5, 1, 0.8, -0.25, 0], [238, 2, 1.0, -0.2, 1], [232, 2, 0.8, 0.25, 1], [219, 3, 1.0, 0.2, 0], [226, 3, 0.75, -0.2, 1], [236.5, 4, 0.9, 0.15, 1]].forEach(([x, k, sc, yaw, live], n) => {   // x 都挑在離折返平台遠的那一端：上下兩段步道在那裡相隔 10 m 以上，樹塞得進去
-            const yv = yAt(k, x); if (yv == null) return
-            const y = yv - 7.0 * sc, lo = yAt(k - 1, x); if (lo != null && y < lo + 4.3) return   // 整棵樹（高約 6.4 m）都在上面那段步道的地板底下；離下面那段的槽頂也要有空間
-            const z = YOSE.base(x) + 0.3 + Math.max(0, (y - 30) / 45) * 1.5
-            const tr = new THREE.Mesh(geo, m); tr.name = 'cliffTree' + n; tr.position.set(x, y, z); tr.rotation.y = yaw; tr.scale.setScalar(sc); tr.castShadow = true; tr.receiveShadow = true; g.add(tr)
-            tr.updateMatrixWorld(true)
-            if (live) for (const [j, u] of tips.entries()) { const w = u.clone().applyMatrix4(tr.matrixWorld), r = (0.55 + 0.5 * hsh(n * 7 + j)) * sc; tl.push(new THREE.Matrix4().compose(w.add(V(0, 0.15 * r, 0)), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, hsh(j + n) * 6.28, 0.2 * (hsh(j * 3 + n) - 0.5))), V(r, r, r))) }
-          })
-          if (tl.length) { const im = new THREE.InstancedMesh(tuft, needle, tl.length); tl.forEach((mm, i) => im.setMatrixAt(i, mm)); im.castShadow = true; im.receiveShadow = true; im.name = 'cliffTreeNeedles'; im.frustumCulled = false; g.add(im) }
-        }
       })
     })
   }
+  // 2026-11-12 崖壁步道套件（tools/make-cliff-kit.py，ChatGPT 崖壁步道 V1 的修正）：鐵樁＋垂鍊、賞鳥台的矮石牆和平台、長在岩簷上的扭曲松樹
+  new GLTFLoader().loadAsync(`models/props/cliff_kit.glb?v=${VER}`).then((gl) => {
+    const K = {}; gl.scene.updateMatrixWorld(true)
+    gl.scene.traverse((o) => { if (o.isMesh) { const ge = o.geometry.clone(); ge.applyMatrix4(o.matrixWorld); if (ge.attributes.color_1) { ge.setAttribute('color', ge.attributes.color_1); ge.deleteAttribute('color_1') } K[o.name] = ge } })
+    const iron = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.75 })
+    const stone = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93 })
+    const bark = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 })
+    const needle = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 })
+    needle.color.setScalar(2.6); stone.color.setRGB(1.55, 1.5, 1.4); bark.color.setScalar(1.5)   // 頂點色是照 Blender 的亮度給的，遊戲裡的光比較暗：調到跟旁邊的松樹、砂岩一樣亮
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), bm = new THREE.Matrix4(), UP = V(0, 1, 0)
+    const inst = (geo, mat, list, name, cast = true) => { if (!geo || !list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((m, i) => im.setMatrixAt(i, m)); im.castShadow = cast; im.receiveShadow = true; im.frustumCulled = false; im.name = name; g.add(im) }
+    // 鐵樁、鐵鍊（鍊子兩端掛在樁頂的環上，高 0.92；零件長 1、垂 7 cm → 拉到柱距、垂度放大到約 12 cm）
+    inst(K.chain_post, iron, CHAIN.posts.map((p) => new THREE.Matrix4().makeTranslation(p.x, p.y, p.z)), 'cliffChainPosts')
+    inst(K.chain_span, iron, CHAIN.segs.map(([a, b]) => { const X = b.clone().sub(a), L = X.length(); X.normalize(); const Z = V().crossVectors(X, UP).normalize(), Y = V().crossVectors(Z, X); return new THREE.Matrix4().compose(V(a.x, a.y + 0.92, a.z), q.setFromRotationMatrix(bm.makeBasis(X, Y, Z)), V(L, 1.7, 1)) }), 'cliffChains')
+    for (const p of CHAIN.posts) addCollider(p.x, p.z, 0.1, p.y + 1.1, p.y - 0.4)
+    // 賞鳥台：平的石板地（往岩壁裡 1.9 m）＋外緣三段矮石牆（留縫，鏡頭可以從牆頭上拍）
+    const T = YOSE.stairs(), par = { parapet_a: [], parapet_b: [] }
+    const slabM = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.46, 0.40, 0.31), roughness: 0.92 })
+    for (const b of T.bays ?? []) {
+      // 岩壁是斜的（每往東 1 m 往北約 0.55 m）：平台、矮牆都照岩壁的方向擺
+      const zAt = (x) => YOSE.base(x) + b.d, ang = Math.atan2(zAt(b.x + 1) - zAt(b.x - 1), 2), ca = Math.cos(ang), len = (b.half * 2 + 0.3) / ca
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(len, 0.3, b.depth + 2.3), slabM); slab.position.set(b.x - Math.sin(ang) * ((b.depth + 2.3) / 2 - 1.25), b.y - 0.1, zAt(b.x) + ca * ((b.depth + 2.3) / 2 - 1.25)); slab.rotation.y = -ang; slab.receiveShadow = true; slab.name = 'bay_' + b.name; g.add(slab)
+      ;[-1.32, 0, 1.32].forEach((dx, k) => { const x = b.x + dx * ca; par[k % 2 ? 'parapet_b' : 'parapet_a'].push(new THREE.Matrix4().compose(V(x + Math.sin(ang) * 1.2, b.y + 0.02, zAt(x) - ca * 1.2), q.setFromAxisAngle(UP, -ang + (k === 1 ? Math.PI : 0)), V(1.06, 1, 1))) })
+      for (let dx = -b.half; dx <= b.half; dx += 0.5) { const x = b.x + dx; addCollider(x + Math.sin(ang) * 1.2, zAt(x) - ca * 1.2, 0.24, b.y + 0.9, b.y - 0.5) }
+    }
+    inst(K.parapet_a, stone, par.parapet_a, 'bayParapetA'); inst(K.parapet_b, stone, par.parapet_b, 'bayParapetB')
+    // 崖壁上的樹（位置、枝梢在 layout.js YOSE.cliffTrees()；鳥的站點也用同一份）
+    const byModel = {}
+    for (const t of YOSE.cliffTrees()) (byModel[t.model] ||= []).push(new THREE.Matrix4().compose(V(t.x, t.y, t.z), q.setFromAxisAngle(UP, t.yaw), V(t.s, t.s, t.s)))
+    for (const [n, list] of Object.entries(byModel)) { inst(K[n], bark, list, 'cliff_' + n); inst(K[n + '_needles'], needle, list, 'cliff_' + n + '_needles') }
+  }).catch((e) => console.error('cliff kit', String(e?.stack ?? e)))
   return { group: g, tick, pines: PINES }
 }
 const mist = [], foams = [], lampGlow = []
