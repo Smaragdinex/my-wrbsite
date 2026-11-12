@@ -34,7 +34,7 @@ function sightBlock(x, z) {
   return false
 }
 // 2026-11-11 兩湖中間的木棧道上、旁邊 0.6 m 不長草
-const nearWalk = (x, z) => [[0, 0], [0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7]].some(([a, b]) => walkAt(x + a, z + b) != null)
+const nearWalk = (x, z) => [[0, 0], [0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([a, b]) => walkAt(x + a, z + b) != null)
 export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = null } = {}) {
   const g = new THREE.Group(); g.name = 'east'
   const rnd = mulberry32(1110)

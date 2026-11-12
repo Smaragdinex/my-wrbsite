@@ -93,14 +93,17 @@ function buildReeds(g, kit) {
   const fan = (x, z) => { if (!H8) return false; const dx = x - H8.x, dz = z - H8.z, d = Math.hypot(dx, dz); if (d > 20) return false; const lx = H8.look[0] - H8.x, lz = H8.look[1] - H8.z; return (dx * lx + dz * lz) / (d * Math.hypot(lx, lz)) > Math.cos(0.75) }
   const ss = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
   const patch = (x, z) => 0.5 + 0.35 * Math.sin(x * 0.21 + Math.sin(z * 0.13) * 2) * Math.cos(z * 0.17 + 1.3) + 0.15 * Math.sin(x * 0.7 + z * 0.5)
+  // 2026-11-12 使用者：木道上長草、要移開 → 所有蘆葦／香蒲／紙莎草一律離棧道、觀景灣邊緣 2 m 以上（葉子會往外倒 1 m 多；以前只擋 1.5 m，新蓋的環線上長了一排）
+  const OFF = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [1.4, 1.4], [-1.4, 1.4], [1.4, -1.4], [-1.4, -1.4]]
+  const onWood = (x, z) => OFF.some(([a, b]) => walkAt(x + a, z + b) != null || deckAt(x + a, z + b) != null)
   const push = (n, x, y, z, s, yaw, lean) => (L[n] ||= []).push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(lean[0], yaw, lean[1], 'YXZ')), new THREE.Vector3(s, s * (0.85 + rnd() * 0.3), s)))
   const M = EAST.marsh, inE = (o, x, z, k = 1) => Math.hypot((x - o.x) / o.rx, (z - o.z) / o.rz) < k
   // 紙莎草角落：一大叢一大叢（鯨頭鸛藏在裡面）
-  { const P = M.papyrus; for (let i = 0; i < 28; i++) { const a = rnd() * 6.283, d = Math.sqrt(rnd()), x = P.x + Math.cos(a) * P.rx * d, z = P.z + Math.sin(a) * P.rz * d; if (alpineTrailDist(x, z) < 2.2) continue; const v = rnd() < 0.5 ? 0 : 1, s = 0.85 + rnd() * 0.35; push('pap_' + v, x, Math.min(alpineHeight(x, z), W) - 0.02, z, s, rnd() * 6.28, [(rnd() - 0.5) * 0.1, (rnd() - 0.5) * 0.1]); (L['pap_' + v + '_plume'] ||= []).push(L['pap_' + v].at(-1)) } }
+  { const P = M.papyrus; for (let i = 0; i < 28; i++) { const a = rnd() * 6.283, d = Math.sqrt(rnd()), x = P.x + Math.cos(a) * P.rx * d, z = P.z + Math.sin(a) * P.rz * d; if (alpineTrailDist(x, z) < 2.2 || onWood(x, z)) continue; const v = rnd() < 0.5 ? 0 : 1, s = 0.85 + rnd() * 0.35; push('pap_' + v, x, Math.min(alpineHeight(x, z), W) - 0.02, z, s, rnd() * 6.28, [(rnd() - 0.5) * 0.1, (rnd() - 0.5) * 0.1]); (L['pap_' + v + '_plume'] ||= []).push(L['pap_' + v].at(-1)) } }
   let nr = 0, nc = 0
   for (let k = 0; k < 140000 && (nr < 420 || nc < 210); k++) {
     const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0), y = alpineHeight(x, z), dep = W - y
-    if (dep > 0.25 || dep < -0.3 || alpineTrailDist(x, z) < 2.2 || fan(x, z) || [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([a, b]) => walkAt(x + a, z + b) != null || deckAt(x + a * 0.95, z + b * 0.95) != null || wetBoardAt(x + a * 0.6, z + b * 0.6) != null)) continue   // 2026-11-11 觀景台底下也不種（蘆葦從台面穿出來）
+    if (dep > 0.25 || dep < -0.3 || alpineTrailDist(x, z) < 2.2 || fan(x, z) || onWood(x, z) || [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([a, b]) => walkAt(x + a, z + b) != null || deckAt(x + a * 0.95, z + b * 0.95) != null || wetBoardAt(x + a * 0.6, z + b * 0.6) != null)) continue   // 2026-11-11 觀景台底下也不種（蘆葦從台面穿出來）
     const lag = inLagoon(x, z)
     if (!lag && (inE(M.lily, x, z, 1.1) || inE(M.papyrus, x, z, 1.15) || M.meadows.some((o) => inE(o, x, z, 1.1)))) continue
     if (lag && (z < -112 || rnd() < 0.7)) continue   // 潟湖：只有北岸、東北岸零星幾叢（夕陽從後面照的那一排）
@@ -131,7 +134,8 @@ function buildDecks(g, kit, wk) {
     // 台面木板（橫的）：零件一片 3.1 m，台面寬的話接兩三片（接縫每排錯開）
     const np = Math.ceil(D.w / 3.3), pl = D.w / np
     let row = 0
-    for (let lz = -D.d / 2 + 0.08; lz < D.d / 2; lz += 0.165, row++) for (let k = 0; k < np; k++) put('bw_plank_' + Math.floor(r() * 4), F, -D.w / 2 + pl * (k + 0.5) + (r() - 0.5) * 0.02, Y, lz, [pl / 3.1 * 0.995, 1, 1], [0, row % 2 ? Math.PI : 0, 0])
+    // join（接沼澤環線的灣）：前緣多鋪一排、低 4 mm（最後一排到棧道第一片木板之間原本有 5～15 cm 的縫，看得到水）
+    for (let lz = -D.d / 2 + 0.08; lz < D.d / 2 + (D.join ? 0.16 : 0); lz += 0.165, row++) for (let k = 0; k < np; k++) put('bw_plank_' + Math.floor(r() * 4), F, -D.w / 2 + pl * (k + 0.5) + (r() - 0.5) * 0.02, lz > D.d / 2 ? Y - 0.004 : Y, lz, [pl / 3.1 * 0.995, 1, 1], [0, row % 2 ? Math.PI : 0, 0])
     for (const lx of [-D.w / 2 + 0.1, -D.w / 6, D.w / 6, D.w / 2 - 0.1]) put('bw_stringer', F, lx, Y, 0, [1, 1, D.d / 2.4])            // 托梁
     for (const lx of [-D.w / 2 + 0.1, 0, D.w / 2 - 0.1]) for (const lz of [-D.d / 2 + 0.1, 0, D.d / 2 - 0.1]) { const wx = D.x + lx * F.c + lz * F.s, wz = D.z - lx * F.s + lz * F.c, gy = Math.min(alpineHeight(wx, wz), EAST.W) - 0.4; put('bw_pile', F, lx, Y - 0.24, lz, [1.1, Math.max(0.3, Y - 0.24 - gy), 1.1]) }
     // 欄杆：前面＋左右兩側（柱子、上橫桿 1.04、中間兩道，跟棧道一樣）
