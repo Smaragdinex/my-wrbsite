@@ -335,21 +335,18 @@ svg.controls image { mix-blend-mode: multiply; }
 /* 2026-11-12 標題畫面：網頁一打開的第一個畫面（還沒下載模型）。背景是 CSS／SVG 動畫：清晨的天空、飄的雲、三層山、飛過去的鳥 */
 #pre { position: fixed; inset: 0; z-index: 30; overflow: hidden; color: #fff; display: grid; place-items: center; }
 #pre[hidden], #pre [hidden] { display: none !important; }
-#pre .sky { position: absolute; inset: 0; background: linear-gradient(180deg, #5f9fd0 0%, #9cc8e2 38%, #f3d9b0 70%, #f6c98f 100%); }
-#pre .sky::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10, 22, 16, 0.62) 0%, rgba(10, 22, 16, 0.28) 42%, rgba(10, 22, 16, 0) 75%); }
-#pre .sun { position: absolute; left: 68%; top: 46%; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, #fff7df 0%, #ffe3a1 45%, rgba(255, 215, 140, 0) 70%); animation: preSun 9s ease-in-out infinite alternate; }
-#pre .cl { position: absolute; left: -30%; height: 46px; border-radius: 999px; background: rgba(255, 255, 255, 0.78); filter: blur(7px); animation: preDrift linear infinite; }
-#pre .cl::before, #pre .cl::after { content: ''; position: absolute; border-radius: 50%; background: inherit; }
-#pre .cl::before { left: 18%; top: -55%; width: 38%; height: 150%; }
-#pre .cl::after { left: 48%; top: -30%; width: 30%; height: 120%; }
-#pre .c1 { top: 12%; width: 300px; animation-duration: 95s; animation-delay: -30s; }
-#pre .c2 { top: 26%; width: 210px; opacity: 0.75; animation-duration: 130s; animation-delay: -85s; }
-#pre .c3 { top: 6%; width: 380px; opacity: 0.6; animation-duration: 160s; animation-delay: -120s; }
-#pre .hill { position: absolute; left: -5%; width: 110%; bottom: 0; }
-#pre .h1 { height: 46%; fill: #7fa48f; animation: preSway 26s ease-in-out infinite alternate; }
-#pre .h2 { height: 38%; fill: #4d7a61; animation: preSway 19s ease-in-out infinite alternate-reverse; }
-#pre .h3 { height: 27%; fill: #24432f; }
-#pre .tb { position: absolute; left: -8%; width: 92px; fill: #1d2b24; animation: preFly linear infinite; }
+/* 2026-11-12 使用者：主頁放濕地、黃昏、紅鶴，一個吸引眼球的畫面 → 背景是遊戲裡實拍的一張圖（傍晚的夕陽潟湖、六隻紅鶴和倒影；title-bg.jpg，約 300 KB，不用載模型），
+   慢慢推近＋一層黃昏的暖色＋水面上飄的薄霧＋飛過去的鳥 */
+#pre .sky { position: absolute; inset: 0; background: #2a2430; overflow: hidden; }
+#pre .sky::before { content: ''; position: absolute; inset: -4%; background: url(title-bg.jpg) center 58% / cover no-repeat; animation: preKen 50s ease-in-out infinite alternate; }
+#pre .sky::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14, 14, 22, 0.7) 0%, rgba(14, 14, 22, 0.32) 36%, rgba(14, 14, 22, 0) 62%), linear-gradient(180deg, rgba(255, 150, 90, 0.34) 0%, rgba(255, 170, 120, 0.16) 45%, rgba(90, 50, 90, 0.3) 100%); mix-blend-mode: normal; }
+#pre .sun, #pre .hill { display: none; }
+#pre .cl { position: absolute; left: -40%; height: 60px; border-radius: 999px; background: rgba(255, 225, 205, 0.5); filter: blur(22px); animation: preDrift linear infinite; z-index: 1; }
+#pre .c1 { top: 46%; width: 520px; animation-duration: 110s; animation-delay: -30s; }
+#pre .c2 { top: 50%; width: 380px; opacity: 0.7; animation-duration: 150s; animation-delay: -95s; }
+#pre .c3 { top: 42%; width: 640px; opacity: 0.5; animation-duration: 190s; animation-delay: -140s; }
+@keyframes preKen { from { transform: scale(1) translateX(0); } to { transform: scale(1.09) translateX(-1.5%); } }
+#pre .tb { position: absolute; left: -8%; width: 92px; fill: #2a1c22; z-index: 1; animation: preFly linear infinite; }
 #pre .tb .w { transform-origin: 30px 13px; animation: preFlap 0.55s ease-in-out infinite alternate; }
 #pre .tb .w2 { animation-name: preFlap2; }
 #pre .b1 { top: 30%; animation-duration: 24s; }
@@ -361,7 +358,7 @@ svg.controls image { mix-blend-mode: multiply; }
 @keyframes preFlap2 { from { transform: scaleY(1); } to { transform: scaleY(-0.55); } }
 @keyframes preSway { from { transform: translateX(-1.5%); } to { transform: translateX(1.5%); } }
 @keyframes preSun { from { transform: scale(1); opacity: 0.9; } to { transform: scale(1.12); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { #pre .cl, #pre .tb, #pre .tb .w, #pre .hill, #pre .sun { animation: none; } #pre .tb { left: 60%; } }
+@media (prefers-reduced-motion: reduce) { #pre .cl, #pre .tb, #pre .tb .w, #pre .sky::before { animation: none; } #pre .tb { left: 60%; } }
 #pre .menu-sheet { position: relative; z-index: 2; width: min(620px, calc(100vw - 32px)); color: #1f2a24; }
 #pre .lbl { display: block; margin: 16px 0 8px; font-size: 14px; color: #55645b; }
 #pre .opts { display: grid; gap: 8px; }
@@ -374,6 +371,5 @@ svg.controls image { mix-blend-mode: multiply; }
 #pre .lg button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font-size: 14px; color: #1f2a24; background: rgba(0, 0, 0, 0.06); }
 #pre .lg button.on { background: #2f8f58; color: #fff; font-weight: 700; }
 #pre small { display: block; margin-top: 16px; font-size: 13px; color: #6a776f; }
-#pre button:focus-visible, #enter:focus-visible { outline: 3px solid #9fe0b8; outline-offset: 2px; }
-#enter { all: unset; position: fixed; left: 50%; bottom: 14vh; transform: translateX(-50%); z-index: 9; cursor: pointer; padding: 16px 44px; border-radius: 14px; font-size: 20px; font-weight: 700; color: #fff; background: var(--accent, #2f8f58); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
-#enter:hover { background: #3f8a5c; }
+#pre button:focus-visible { outline: 3px solid #9fe0b8; outline-offset: 2px; }
+#clicktip { position: fixed; left: 50%; bottom: 12vh; transform: translateX(-50%); z-index: 9; pointer-events: none; padding: 10px 22px; border-radius: 999px; font-size: 16px; font-weight: 600; color: #fff; background: rgba(15, 25, 20, 0.62); }

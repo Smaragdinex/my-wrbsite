@@ -132,6 +132,7 @@ export const UI = {
  "載入公園": "Load the park",
  "解析度、陰影、音量這些，進遊戲後按 Esc 在「設定」裡調。": "Resolution, shadows and volume are under Settings in the game (press Esc).",
  "進入公園": "Enter the park",
+ "點一下畫面開始操作": "Click to look around",
  "操作說明": "조작 방법",
  "收購底價": "최저 매입가",
  "整體畫質": "전체 화질",

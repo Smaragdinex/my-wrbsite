@@ -294,11 +294,16 @@ startEl.hidden = false
 document.body.classList.add('in-menu')   // 首頁選單上不顯示右上的錢、時間（HUD）
 const goEl = document.getElementById('go')
 goEl.onclick = () => player.controls.lock()
-// 從標題畫面按「開始遊戲」進來的：載完不再出一次選單，只剩一顆「進入公園」（鎖滑鼠一定要玩家再點一下，瀏覽器的規定）；之後按 Esc 才是暫停選單
+// 2026-11-12 使用者：「不用 Enter park，載完直接進入」——從標題畫面按「開始遊戲」進來的，載完直接就在公園裡（不出選單、不用再按鈕）。
+// 鎖滑鼠瀏覽器規定要玩家「剛剛點過」才給：載入通常超過幾秒，自動鎖多半會被拒絕 → 那就先進場，玩家第一次點畫面（或按任何鍵）時再鎖，下面有一行小字提示
 if (fromTitle) {
-  startEl.hidden = true
-  const en = document.createElement('button'); en.id = 'enter'; en.textContent = tr('進入公園'); document.body.append(en); en.focus()
-  en.onclick = () => { en.remove(); player.controls.lock(); setTimeout(() => { if (!player.controls.isLocked) startEl.hidden = false }, 1200) }
+  startEl.hidden = true; document.body.classList.remove('in-menu'); setMenuCam(false); goEl.textContent = tr('繼續')
+  const tip = document.createElement('div'); tip.id = 'clicktip'; tip.textContent = tr('點一下畫面開始操作'); document.body.append(tip)
+  const grab = () => { if (!player.controls.isLocked && !panelOpen() && startEl.hidden) player.controls.lock() }
+  const done = () => { tip.remove(); removeEventListener('pointerdown', grab); removeEventListener('keydown', grab) }
+  addEventListener('pointerdown', grab); addEventListener('keydown', grab)
+  player.controls.addEventListener('lock', done, { once: true })
+  try { player.controls.lock() } catch {}
 }
 player.controls.addEventListener('lock', () => { setMenuCam(false); startEl.hidden = true; document.body.classList.remove('in-menu'); goEl.textContent = tr('繼續') })
 player.controls.addEventListener('unlock', () => { if (!panelOpen()) { setMenuCam(true); showSheet(null); startEl.hidden = false; document.body.classList.add('in-menu') } })
