@@ -133,9 +133,11 @@ export async function buildStreambed(scene) {
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }` })
-    const fm = new THREE.InstancedMesh(ring, foamM, boulders.length)
+    // 2026-11-13 使用者「石頭旁邊的波紋沒動，這是放在溪流吧」：湖裡的石頭那一圈不會動的白環拿掉——白沫只給有水流的溪
+    const fb = boulders.filter((b) => b.flow != null)
+    const fm = new THREE.InstancedMesh(ring, foamM, Math.max(1, fb.length)); fm.count = fb.length
     // 石頭在水線的截面半徑約 0.5 × 尺寸；有水流的照下游方向擺（高度的縮放當旗標：1＝有水流、2＝湖裡）
-    boulders.forEach((b, k) => fm.setMatrixAt(k, m4.compose(new THREE.Vector3(b.x, b.y + 0.012, b.z), q.setFromEuler(e.set(0, b.flow ?? b.yaw, 0)), new THREE.Vector3(b.s * 1.15, b.flow != null ? 1 : 2, b.s * 1.15))))
+    fb.forEach((b, k) => fm.setMatrixAt(k, m4.compose(new THREE.Vector3(b.x, b.y + 0.012, b.z), q.setFromEuler(e.set(0, b.flow ?? b.yaw, 0)), new THREE.Vector3(b.s * 1.15, b.flow != null ? 1 : 2, b.s * 1.15))))
     fm.renderOrder = 6; fm.frustumCulled = false; fm.name = 'bed_foam'; G.add(fm)
   }
   scene.add(G)

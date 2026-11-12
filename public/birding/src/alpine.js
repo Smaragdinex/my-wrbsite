@@ -136,6 +136,12 @@ function shadeConifer(g, fir) {
   g.setAttribute('normal', n); g.setAttribute('color', new THREE.BufferAttribute(col, 3))
   return g
 }
+// 立體樹冠實際有多寬（高 1 的樹，水平半徑）：近的和遠的版本取大的。擺樹時照這個讓出步道（以前照卡片版的 0.19／0.29 估，鐵杉實際寬將近一倍）
+export function coniferR(kind) {
+  if (!CONIFER_KIT) return kind === 'fir' ? 0.19 : 0.29
+  let r = 0; for (const n of [kind, kind + '_lo']) { const g = CONIFER_KIT[n]; if (!g) continue; if (!g.boundingBox) g.computeBoundingBox(); const b = g.boundingBox; r = Math.max(r, -b.min.x, b.max.x, -b.min.z, b.max.z) }
+  return r || (kind === 'fir' ? 0.19 : 0.29)
+}
 export function coniferLoGeo(kind) { const K = CONIFER_KIT?.[kind + '_lo']; return K ? shadeConifer(K.clone().toNonIndexed(), kind === 'fir') : null }
 export function coniferGeo(kind, tiersN) {
   if (CONIFER_KIT) { const K = CONIFER_KIT[(tiersN != null && tiersN <= 10) ? kind + '_lo' : kind]; if (K) return shadeConifer(K.clone().toNonIndexed(), kind === 'fir') }
@@ -1139,7 +1145,7 @@ function buildInterior(lib, avoid = []) {
         const H = Math.min(((kind === 'fir' ? 9 : 8) + rnd() * 7) * (1 - 0.5 * ss(12, 22, hgt)), domeY(x, z) - hgt - 1.5)
         if (H < 4) continue
         // 樹冠（底下最寬）不能伸到步道、吊橋、溪上：離中線至少樹冠半徑 + 1.3 公尺
-        const crownR = H * (kind === 'fir' ? 0.19 : 0.29) * 1.6   // 2026-11-13 立體樹冠（conifer_kit）的枝梢針葉簇伸得比卡片版遠、加上橫向縮放最多 1.15：實際半徑約 1.6 倍（使用者：山區入口被樹擋住）
+        const crownR = H * coniferR(kind) * 1.15   // 2026-11-13 照立體樹冠實際的寬度（含橫向縮放 1.15）； 2026-11-13 立體樹冠（conifer_kit）的枝梢針葉簇伸得比卡片版遠、加上橫向縮放最多 1.15：實際半徑約 1.6 倍（使用者：山區入口被樹擋住）
         if (alpineTrailDist(x, z) < crownR + 1.3 || bridgeDist(x, z) < crownR + 1.5 || alpineStreamDist(x, z) < crownR * 0.6 + 1.2) continue
         if (nearBird(avoid, x, z, 5.5, 2.5)) continue
         if (inB && (pathClearAt(x, z) < crownR + 1.2 || OPEN(x, z))) continue   // 花園步道上也不能有樹冠
