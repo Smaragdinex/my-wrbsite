@@ -44,8 +44,9 @@ export function lodRegister(meshes, h, lows = [], { solid = false } = {}) {
   const d0 = Math.max(14, h * 14), d1 = h >= 4 || solid ? Infinity : Math.max(32, h * 40)
   if (!solid) for (const m of [...meshes, ...lows]) if (m?.castShadow) m.userData.lodManaged = true   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
   // 換成低面數的距離：一公尺的蕨類 10 公尺外、越高的越遠才換（長焦時照變焦倍率拉遠）
-  const dL = Math.max(10, h * 10)
-  const S0 = { meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), proxies: null }
+  // 2026-11-12 使用者：遠景的樹看起來是板狀的低模——「應該像人眼一樣：圓的、看不清楚，但不是低模」→ 4 m 以上的樹換低面數版本的距離拉遠一倍多（20 m 的樹 200 m → 440 m）
+  const dL = h >= 4 ? h * 22 : Math.max(10, h * 10)
+  const S0 = { meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), scl: new Float32Array(n), proxies: null }
   sets.push(S0)
   // 2026-11-12 遠景替身（ChatGPT：3A 遊戲的遠景不是整片烘成一張圖，是遠處的樹換成「多角度替身貼片」）：
   // 4 m 以上的樹，遠到在畫面上不到 IMP_PX 像素高的那幾棵不畫模型，改畫一片面向鏡頭的貼片（2 個三角形），貼圖是這種樹從 8 個方向拍下來的（第一次用到時烘）。
@@ -198,13 +199,16 @@ export function lodUpdate(camera, force = false) {
       const x = S.pos[i * 3] - p.x, y = S.pos[i * 3 + 1] - p.y, z = S.pos[i * 3 + 2] - p.z
       const dd = x * x + y * y + z * z
       if (dd > d1s && S.hash[i] >= 0) continue
+      let sc0 = 1
       // 2026-11-12 使用者「場景太重，學校打不開、家裡開始卡」：站在入口一格畫 2,790 萬個三角形——山上的小東西（蕨、石頭、石階）以前多遠都畫。
       // 在畫面上半徑不到 MINPX 像素的不畫（照鏡頭焦距和畫質等級算：長鏡頭拉近、畫質高就畫得遠）。半徑 0.4 m 的蕨約 60 m、1.5 m 的石頭 225 m、6 m 的樹 900 m
-      { const rr = S.rad[i] * PXK * zoom; if (rr * rr < MINPX * MINPX * dd) continue }
+      { const rr = S.rad[i] * PXK * zoom, q2 = rr * rr / (MINPX * MINPX * dd); if (q2 < 1) continue; if (q2 < 2.2) sc0 = 0.2 + 0.8 * (Math.sqrt(q2) - 1) / 0.483 }
       // 2026-11-10 玩家回饋「好卡」：高的樹以前多遠都畫（站在花園水池邊，山區、巨木林幾千棵樹全畫，一格 1000 多萬個三角形）。
       // 230～330 公尺之間慢慢變稀（150～210 試過：山頂往下看整片森林不見）（每株照自己的雜湊值，不會一條線整排消失），再遠不畫；霧已經把那麼遠的樹蓋得很淡。長鏡頭拉近時照倍率拉遠
-      if (!S.imp && dd > TF0 * TF0 * zoom * zoom) { const d = Math.sqrt(dd) / zoom; if (d > TF1 || ((i * 0.6180339887) % 1) < (d - TF0) / (TF1 - TF0)) continue }
-      if (d1 !== Infinity) { const d = Math.sqrt(dd); if (d > d0 && S.hash[i] > 1 - (d - d0) / (d1 - d0)) continue }
+      // 2026-11-12 使用者：「邊走有些樹才跑出來」——以前過了門檻整棵突然出現。現在快要出現的那一段從很小慢慢長到原本大小（sc 0.15→1），看起來是從遠處淡進來，不是蹦出來
+      let sc = 1
+      if (!S.imp && dd > TF0 * TF0 * zoom * zoom) { const d = Math.sqrt(dd) / zoom; if (d > TF1) continue; const m = 1 - (d - TF0) / (TF1 - TF0) - ((i * 0.6180339887) % 1); if (m < 0) continue; sc = Math.min(sc, 0.15 + 0.85 * Math.min(1, m / 0.22)) }
+      if (d1 !== Infinity) { const d = Math.sqrt(dd); if (d > d0) { const m = 1 - (d - d0) / (d1 - d0) - S.hash[i]; if (m < 0) continue; sc = Math.min(sc, 0.15 + 0.85 * Math.min(1, m / 0.2)) } }
       // 視野外不畫；邊界多留 6 公尺（畫面外的植物影子會投進畫面）＋距離的 8%（約 4.6 度）：
       // 鏡頭轉不到 2.8 度不重算，遠處的樹以前只留 6 公尺（200 公尺外不到 2 度），慢慢轉頭時畫面邊緣的樹會突然冒出來、消失（2026-11-08 山上）
       const r = S.rad[i] + 6 + Math.sqrt(dd) * 0.08, cx = S.pos[i * 3], cy = S.pos[i * 3 + 1], cz = S.pos[i * 3 + 2]
@@ -213,6 +217,7 @@ export function lodUpdate(camera, force = false) {
       if (out) continue
       if (S.imp) { const hpx = (S.imp.sz[i * 4 + 2] - S.imp.sz[i * 4 + 1]) * PXK * zoom; if (hpx * hpx < IMP_PX * IMP_PX * dd) { S.imp.idx[ki++] = i; continue } }
       S.far[k] = dd > dLs ? 1 : 0
+      S.scl[k] = Math.min(sc, sc0)
       S.vis[k++] = i
     }
     // 把選到的株的矩陣擠到最前面；pick(j)：這一株要不要放進這個 mesh
@@ -223,6 +228,7 @@ export function lodUpdate(camera, force = false) {
         if (!pick(j)) continue
         const i = S.vis[j]
         a.set(S.base.subarray(i * 16, i * 16 + 16), c * 16)
+        const sk = S.scl[j]; if (sk < 0.999) { const o = c * 16; for (let e = 0; e < 11; e++) if (e !== 3 && e !== 7) a[o + e] *= sk }   // 快要出現／消失的：縮小（只縮 3×3 的部分，位置不動）
         if (ca && co) { ca[c * 3] = co[i * 3]; ca[c * 3 + 1] = co[i * 3 + 1]; ca[c * 3 + 2] = co[i * 3 + 2] }
         c++
       }
