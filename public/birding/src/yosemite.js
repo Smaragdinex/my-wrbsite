@@ -107,7 +107,7 @@ export function buildYosemite(scene, { lib } = {}) {
       if (k === 'gal' && T.kind[i - 1] !== 'alc') {
         if ((x - ax) * (x - bx) > 0.04) continue
         const t = Math.abs(bx - ax) < 1e-6 ? 0 : Math.max(0, Math.min(1, (x - ax) / (bx - ax))), y = lerpN(T.yy[i - 1], T.yy[i], t)
-        out.push({ y0: y - 0.3, y1: y + 2.95, depth: bz - YOSE.base(bx) + 1.75 })
+        out.push({ y0: y - 0.3, y1: y + 3.9, depth: bz - YOSE.base(bx) + 1.75 })   // 2026-11-12 槽口挑高到 3.9 m（原本 2.95，像走在屋簷下、看不到天）
       } else if (k === 'alc' || (k === 'open' && bz - YOSE.base(bx) > 0.2 && bx > 207.5)) {
         // 凹室、進迴廊前那一小段：中線左右 1.5 m 內的欄都切到這一點的深度
         if (Math.abs(x - bx) > 1.5) continue
@@ -325,7 +325,7 @@ export function buildYosemite(scene, { lib } = {}) {
     sg.setIndex(si); sg.computeVertexNormals()
     const sm = new THREE.Mesh(sg, cliffM); sm.castShadow = true; sm.receiveShadow = true; g.add(sm)
   }
-  for (const c of cols) if (!(c.x > 205 && c.x < 244) && YOSE.caveA(c.x) < 0.08 && Math.abs(c.x * 2 - Math.round(c.x * 2)) < 1e-6 && Math.round(c.x * 2) % 3 === 0) addCollider(c.x, c.zb + 0.9, 1.3, c.g0 + c.Ht)
+  for (const c of cols) if (!(c.x > 205 && c.x < 248.5) && YOSE.caveA(c.x) < 0.08 && Math.abs(c.x * 2 - Math.round(c.x * 2)) < 1e-6 && Math.round(c.x * 2) % 3 === 0) addCollider(c.x, c.zb + 0.9, 1.3, c.g0 + c.Ht)
   // 岩窟：碰撞放在後壁（往裡 caveD 的地方）
   for (let x = YOSE.cave.x0; x <= YOSE.cave.x1; x += 0.6) { const A = YOSE.caveA(x); if (A < 0.08) continue; addCollider(x, YOSE.base(x) + Math.max(0.9, YOSE.caveD(x) - 0.6), 0.75, YOSE.g0(x) + YOSE.caveH(x)) }   // 石階平台兩端外面也不放（半徑 1.3 會伸進轉彎的平台）
 
@@ -335,17 +335,20 @@ export function buildYosemite(scene, { lib } = {}) {
     // 2026-11-10 使用者：石頭再大、再寫實 → 落石堆的石頭放大 1.6 倍；水潭四周一圈 1.5～4 公尺的大石頭（濕的、顏色深）；石頭不能壓到步道（照石頭大小算）
     const FL = YOSE.fall, inPool = (x, z, pad) => ((x - FL.x) / (FL.rx + pad)) ** 2 + ((z - FL.z) / (FL.rz + pad)) ** 2 < 1
     const wetC = (x) => { const w = Math.exp(-(((x - FL.x) / 9) ** 2)); return new THREE.Color().setScalar(1.35 - 0.3 * w) }
+    // 2026-11-12 上山步道（YOSE.stairs）露天的頭一段不在 alpineTrailDist 裡，石頭會擺到路上把路堵死 → 另外量離它多遠
+    const stOpen = YOSE.stairs().pts.slice(0, 26)
+    const stairD = (x, z) => { let m = 1e9; for (let i = 1; i < stOpen.length; i++) { const [ax, az] = stOpen[i - 1], [bx, bz] = stOpen[i], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); m = Math.min(m, Math.hypot(x - ax - dx * t, z - az - dz * t)) } return m }
     const putRock = (n, x, z, k2, sink = 0.25) => lists[n].push({ p: V(x, alpineHeight(x, z) - sink * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * (0.7 + rnd() * 0.5), k2), c: wetC(x) })
     for (let k = 0; k < 260; k++) {
       const x = X0 + 4 + rnd() * (X1 - X0 - 8), z = YOSE.base(x) - 0.5 - rnd() * 4
       const n = names[Math.floor(rnd() * names.length)], k2 = (n === 'boulder' ? 0.25 + rnd() * 0.35 : 0.6 + rnd() * 0.9) * 1.6
-      if (alpineTrailDist(x, z) < 3.2 + k2 * (n === 'boulder' ? 2.2 : 0.7) || inPool(x, z, 0.6) || YOSE.inLake(x, z, 1.5) || alpineStreamDist(x, z) < 2.5 || (x > 204 && x < 244)) continue
+      if (alpineTrailDist(x, z) < 3.2 + k2 * (n === 'boulder' ? 2.2 : 0.7) || inPool(x, z, 0.6) || YOSE.inLake(x, z, 1.5) || alpineStreamDist(x, z) < 2.5 || (x > 204 && x < 244) || stairD(x, z) < 1.8 + k2 * 0.7) continue
       putRock(n, x, z, k2)
     }
     for (let k = 0, made = 0; k < 400 && made < 16; k++) {   // 水潭邊的大石頭（不擋住看瀑布的那一面：步道那側少放）
       const a = rnd() * TAU, x = FL.x + Math.cos(a) * (FL.rx + 0.6 + rnd() * 1.6), z = FL.z + Math.sin(a) * (FL.rz + 0.5 + rnd() * 1.4)
       const n = rnd() < 0.5 && lib.boulder ? 'boulder' : names[1 + Math.floor(rnd() * (names.length - 1))], k2 = n === 'boulder' ? 0.45 + rnd() * 0.5 : 1.6 + rnd() * 1.6
-      if (!lists[n] || alpineTrailDist(x, z) < 3.4 + k2 * (n === 'boulder' ? 2.2 : 0.7) || (Math.sin(a) < -0.3 && rnd() < 0.7) || YOSE.inLake(x, z, -0.5)) continue
+      if (!lists[n] || alpineTrailDist(x, z) < 3.4 + k2 * (n === 'boulder' ? 2.2 : 0.7) || (Math.sin(a) < -0.3 && rnd() < 0.7) || YOSE.inLake(x, z, -0.5) || stairD(x, z) < 1.7 + k2 * (n === 'boulder' ? 1.6 : 0.6)) continue
       putRock(n, x, z, k2, 0.3); addCollider(x, z, k2 * (n === 'boulder' ? 1.6 : 0.6), alpineHeight(x, z) + k2 * 0.8); made++
     }
     // 岩石改成灰白（花崗岩）：材質複製一份、顏色去飽和再提亮（原本掃描的是褐色、長青苔的石頭），跟岩壁一致
@@ -913,10 +916,10 @@ export function buildYosemite(scene, { lib } = {}) {
 
     // 岩壁頂上：觀景台（瀑布口東邊）欄杆＋後面不能走出去
     const ironM = new THREE.MeshStandardMaterial({ color: 0x3b3d3f, roughness: 0.5, metalness: 0.6 }), posts = []
-    for (let x = 201.4; x < 250; x += 0.9) if (x < 210.3 || x > 214.3) posts.push(V(x, YOSE.topY(x), YOSE.topFront(x) + 0.15))   // 2026-11-12 前緣整排欄杆，步道上來的地方（x 210～214）留開口
+    for (let x = 201.4; x < 250; x += 0.9) if (x < 236.4 || x > 243.2) posts.push(V(x, YOSE.topY(x), YOSE.topFront(x) + 0.15))   /* 2026-11-12 新的崖壁步道從 x 237～243 上來 */   // 2026-11-12 前緣整排欄杆，步道上來的地方（x 210～214）留開口
     for (let z = YOSE.topFront(201.4) + 0.15; z < YOSE.edge(201.4) - 2.2; z += 0.9) posts.push(V(201.3, YOSE.topY(201.3), z))   // 西邊（溪那側）
     for (const p of posts) addCollider(p.x, p.z, 0.2, p.y + 1.1, p.y)
-    for (let x = 201.2; x < 251; x += 1) addCollider(x, YOSE.edge(x) - 1.9, 0.35, topYm + 3)
+    for (let x = 201.2; x < 251; x += 1) addCollider(x, YOSE.edge(x) - 1.9, 0.35, topYm + 3, topYm - 1.5)   // 2026-11-12 加底：沒有底的碰撞體會連岩體裡的隧道步道一起擋住
     const pg = new THREE.CylinderGeometry(0.035, 0.035, 1.05, 6).translate(0, 0.52, 0), pm = new THREE.InstancedMesh(pg, ironM, posts.length)
     posts.forEach((p, i) => pm.setMatrixAt(i, m4.makeTranslation(p.x, p.y, p.z))); pm.castShadow = true; g.add(pm)
     for (let i = 1; i < posts.length; i++) { const a = posts[i - 1], b = posts[i]; if (a.distanceTo(b) > 1.4) continue; const d = b.clone().sub(a), r = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, d.length(), 5), ironM); r.position.copy(a).add(b).multiplyScalar(0.5).setY((a.y + b.y) / 2 + 1.0); r.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); g.add(r) }
@@ -1081,9 +1084,9 @@ export function buildYosemite(scene, { lib } = {}) {
         const big = names.includes('mrock_5') ? 'mrock_5' : names[0], gate = { [big]: [] }
         // 擺在最後一段石階內側（平台前緣石牆後面 1 公尺），擋住從石階往平台看的視線；不擋出口（出口在石階盡頭往北轉上平台）
         for (const [dxe, k2] of [[-6.2, 2.3], [-3.9, 1.9]]) {
-          const x = e[0] + dxe, z = YOSE.topFront(x) + 1.1
+          const x = Math.min(249.2, e[0] + dxe * -Math.sign(ux)), z = YOSE.topFront(x) + 1.1   // 2026-11-12 擺在出口再過去那一側（新步道是往東上來的，舊的往西）
           gate[big].push({ p: V(x, YOSE.topY(x) - 0.35 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.2, rnd() * TAU, rnd() * 0.2)), s: V(k2, k2 * 1.25, k2 * 0.8) })
-          addCollider(x, z, 0.42 * k2, YOSE.topY(x) + k2)
+          addCollider(x, z, 0.42 * k2, YOSE.topY(x) + k2, YOSE.topY(x) - 1.5)
         }
         scatter(g, lib[big], gate[big], { cast: true })
         const out = Object.fromEntries(names.map((n) => [n, []]))
@@ -1092,7 +1095,7 @@ export function buildYosemite(scene, { lib } = {}) {
           if (ze < zf + 1 || Math.hypot(x - SHELTER.x, z - SHELTER.z) < 6 || Math.hypot(x - e[0], z - e[1]) < 9 || alpineTrailDist(x, z) < 2) continue
           const k2 = 1.0 + rnd() * 0.8, nm = names[Math.floor(rnd() * names.length)]
           out[nm].push({ p: V(x, YOSE.topY(x) - 0.45 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.25, rnd() * TAU, rnd() * 0.25)), s: V(k2 * 1.3, k2 * 0.7, k2) }); n++
-          addCollider(x, z, 0.55 * k2, YOSE.topY(x) + 0.4 * k2)
+          addCollider(x, z, 0.55 * k2, YOSE.topY(x) + 0.4 * k2, YOSE.topY(x) - 1.5)
         }
         for (const n of names) if (out[n].length) scatter(g, lib[n], out[n], { cast: true })
       }
@@ -1107,7 +1110,7 @@ export function buildYosemite(scene, { lib } = {}) {
     PINES.forEach((p, i) => {
       const R = 0.32 + p.H * 0.012
       m4.compose(V(p.x, p.y - 0.3, p.z), q.setFromEuler(e.set(p.lean, p.rot, 0)), s.set(R, p.H * 0.93, R)); trunk.setMatrixAt(i, m4)
-      addCollider(p.x, p.z, R * 1.1, p.y + p.H)
+      addCollider(p.x, p.z, R * 1.1, p.y + p.H, p.y - 1.5)
       // 樹冠：上半段 10～14 根往上翹的枝，枝梢一簇簇長針葉（樹冠開闊、看得到天空）
       const nL = 10 + Math.floor(rnd() * 5)
       for (let k = 0; k < nL; k++) {
@@ -1173,7 +1176,12 @@ export function buildYosemite(scene, { lib } = {}) {
       const [ex, ez] = P.at(-1)
       for (let a = -2.45; a <= 0.95; a += 0.42) rail.push([ex + 0.4 + Math.cos(a) * 2.2, ez + Math.sin(a) * 2.0])   // 西邊（步道進來那側）不圍
       let prev = null
+      // 2026-11-12 使用者：走到瀑布後面就是死路，往上的步道接不過去——平台那半圈欄杆剛好橫在上山步道（YOSE.stairs）的起點上，欄杆柱擋在路中間。
+      // 上山步道頭 14 個點兩側 1.5 m 內不立欄杆（開一個口，從平台直接走上去）
+      const stP = YOSE.stairs().pts.slice(0, 15)
+      const onStairs = (x, z) => { for (let i = 1; i < stP.length; i++) { const [ax, az] = stP[i - 1], [bx, bz] = stP[i], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); if (Math.hypot(x - ax - dx * t, z - az - dz * t) < 1.5) return true } return false }
       for (const [x, z] of rail) {
+        if (onStairs(x, z)) { prev = null; continue }
         const y = alpineHeight(x, z), top = y + 1.1
         parts2.push(post.clone().scale(1, 1.15, 1).translate(x, y + 0.52, z))
         if (prev && Math.hypot(prev[0] - x, prev[2] - z) < 2.2) for (const h of [0, -0.45]) {
@@ -1300,6 +1308,31 @@ export function buildYosemite(scene, { lib } = {}) {
         const c = geo.attributes.color_1 || geo.attributes.color
         geo.setAttribute('snag', c); geo.deleteAttribute('color'); geo.deleteAttribute('color_1')
         const t = new THREE.Mesh(geo, m); t.name = 'eagleSnag'; t.position.set(S.x, S.y, S.z); t.castShadow = true; t.receiveShadow = true; g.add(t)
+        // 2026-11-12 崖壁上橫生的樹（使用者：「岩壁上可以設計出長出去的樹」，鳥停在上面、從步道平視看得到）：同一棵枯樹模型，根紮在兩段步道之間的岩壁上，
+        // 樹往外、往上長 5～6 m，樹冠剛好在上面那段步道的眼睛高度、離欄杆幾公尺。一半是活的（枝梢一團團松針），一半是枯木
+        {
+          const T = YOSE.stairs(), legs = [[]]
+          for (let i = 0; i < T.pts.length; i++) { if (T.kind[i] === 'gal') legs.at(-1).push(i); else if (legs.at(-1).length) legs.push([]) }
+          const yAt = (k, x) => { const L = legs[k]; if (!L || L.length < 2) return null; let b = L[0]; for (const i of L) if (Math.abs(T.pts[i][0] - x) < Math.abs(T.pts[b][0] - x)) b = i; return T.yy[b] }
+          // 枝梢：模型上離根最遠、最高的幾個點（彼此隔 1 m 以上）
+          const P = geo.attributes.position, tips = []
+          const order = Array.from({ length: P.count }, (_, i) => i).sort((p, q) => (P.getY(q) - P.getZ(q) * 0.6) - (P.getY(p) - P.getZ(p) * 0.6))
+          for (const i of order) { const v = V(P.getX(i), P.getY(i), P.getZ(i)); if (v.y > 2.2 && tips.every((u) => u.distanceTo(v) > 1.05)) tips.push(v); if (tips.length >= 9) break }
+          const tuft = new THREE.IcosahedronGeometry(1, 1), tp = tuft.attributes.position
+          for (let i = 0; i < tp.count; i++) { const k = 0.8 + 0.4 * hsh(i * 3.7); tp.setXYZ(i, tp.getX(i) * k, tp.getY(i) * k * 0.55, tp.getZ(i) * k) }
+          tuft.computeVertexNormals()
+          const needle = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.075, 0.16, 0.06), roughness: 0.9, flatShading: true })
+          const tl = []
+          ;[[220, 1, 1.0, 0.2, 1], [225.5, 1, 0.8, -0.25, 0], [238, 2, 1.0, -0.2, 1], [232, 2, 0.8, 0.25, 1], [219, 3, 1.0, 0.2, 0], [226, 3, 0.75, -0.2, 1], [236.5, 4, 0.9, 0.15, 1]].forEach(([x, k, sc, yaw, live], n) => {   // x 都挑在離折返平台遠的那一端：上下兩段步道在那裡相隔 10 m 以上，樹塞得進去
+            const yv = yAt(k, x); if (yv == null) return
+            const y = yv - 7.0 * sc, lo = yAt(k - 1, x); if (lo != null && y < lo + 4.3) return   // 整棵樹（高約 6.4 m）都在上面那段步道的地板底下；離下面那段的槽頂也要有空間
+            const z = YOSE.base(x) + 0.3 + Math.max(0, (y - 30) / 45) * 1.5
+            const tr = new THREE.Mesh(geo, m); tr.name = 'cliffTree' + n; tr.position.set(x, y, z); tr.rotation.y = yaw; tr.scale.setScalar(sc); tr.castShadow = true; tr.receiveShadow = true; g.add(tr)
+            tr.updateMatrixWorld(true)
+            if (live) for (const [j, u] of tips.entries()) { const w = u.clone().applyMatrix4(tr.matrixWorld), r = (0.55 + 0.5 * hsh(n * 7 + j)) * sc; tl.push(new THREE.Matrix4().compose(w.add(V(0, 0.15 * r, 0)), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, hsh(j + n) * 6.28, 0.2 * (hsh(j * 3 + n) - 0.5))), V(r, r, r))) }
+          })
+          if (tl.length) { const im = new THREE.InstancedMesh(tuft, needle, tl.length); tl.forEach((mm, i) => im.setMatrixAt(i, mm)); im.castShadow = true; im.receiveShadow = true; im.name = 'cliffTreeNeedles'; im.frustumCulled = false; g.add(im) }
+        }
       })
     })
   }

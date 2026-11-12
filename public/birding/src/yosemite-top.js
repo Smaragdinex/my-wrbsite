@@ -167,7 +167,7 @@ export function buildSummit(scene, kit, lib) {
   // ---------- 2) 平台＋山腳那一圈：草地、青苔岩塊、青苔墊、草叢、蕨類 ----------
   const st = YOSE.stairs(), exitP = st.pts.at(-1), SH = { x: 212, z: 102 }
   // 踩出來的小徑：石階出口 → 涼亭 → 瀑布口觀景台（不長草）
-  const PATH = [[exitP[0], exitP[1]], [exitP[0] - 2, YOSE.topFront(exitP[0] - 2) + 2.5], [226, YOSE.topFront(226) + 2.6], [SH.x + 3, SH.z - 1.2], [SH.x - 3, SH.z - 1.8], [205, YOSE.topFront(205) + 1.5]]
+  const PATH = [st.pts.at(-10), st.pts.at(-6), [exitP[0], exitP[1]], [exitP[0] - 2, YOSE.topFront(exitP[0] - 2) + 2.5], [226, YOSE.topFront(226) + 2.6], [SH.x + 3, SH.z - 1.2], [SH.x - 3, SH.z - 1.8], [205, YOSE.topFront(205) + 1.5]]
   const pathDist = (x, z) => { let b = 1e9; for (let i = 1; i < PATH.length; i++) { const [ax, az] = PATH[i - 1], [bx, bz] = PATH[i], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); b = Math.min(b, Math.hypot(x - ax - dx * t, z - az - dz * t)) } return b }
   const onTop = (x, z) => x > 201.5 && x < 250 && z > YOSE.topFront(x) + 0.4 && z < YOSE.edge(x) - 0.3
   // 平台上的溪（yosemite.js：沿 edge-6.5 往西流到瀑布口、上游一個潭）不長草
@@ -202,7 +202,7 @@ export function buildSummit(scene, kit, lib) {
     if (!ok(x, z)) continue
     const y = groundY(x, z), r = rnd()
     if (nr < 34 && r < 0.12) {
-      const S = 0.45 + Math.pow(rnd(), 1.6) * 1.5; if (pathDist(x, z) < 0.8 + S) continue
+      const S = 0.45 + Math.pow(rnd(), 1.6) * 1.5; if (pathDist(x, z) < 1.3 + S) continue
       push('mrockm_' + Math.floor(rnd() * 4), { p: V(x, y - 0.06 * S, z), q: Q(rnd() * TAU, 0.2), s: V(S, S * (0.8 + rnd() * 0.4), S) })
       if (S > 0.7) addCollider(x, z, 0.75 * S, y + 0.6 * S)
       // 岩塊腳邊：一圈青苔墊、草

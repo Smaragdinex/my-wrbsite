@@ -425,37 +425,46 @@ export const YOSE = (() => {
       const to = (b, k, n) => { const a = cur; for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(a[0], b[0], t); add(x, Y.base(x) + lerp(a[1], b[1], t), lerp(a[2], b[2], t), k) } cur = b }
       // 圓弧：f＝0 在圓的南端（離岩壁面最近）、π 在北端；sx＝+1 往東凸、-1 往西凸
       const arc = (xc, dc, r, f0, f1, sx, y0, y1, k, n) => { const zc = Y.base(xc) + dc; for (let i = 1; i <= n; i++) { const t = i / n, f = lerp(f0, f1, t); add(xc + sx * r * Math.sin(f), zc - r * Math.cos(f), lerp(y0, y1, t), typeof k === 'function' ? k(t) : k) } }
-      const sY = Y.shelfY(), top = Y.topY(214) + 0.05, PI = Math.PI
+      const sY = Y.shelfY(), PI = Math.PI
       // 起點＝cave 支線的終點（瀑布正後方），高度跟那裡的地面一樣
       { const x0 = 199.5, z0 = 94.9, y0 = alpineHeight(x0, z0) + 0.02; add(x0, z0, y0, 'open'); cur = [x0, z0 - Y.base(x0), y0] }
       // 從岩窟出來：岩窟東端是收成拱的岩壁，走不出去 → 在 x 203 從岩簷口底下出來，沿湖邊踩著石板（水面上 0.8 m）往東到迴廊口
       to([202.8, 1.8, 28.4], 'open', 4); to([204.8, -1.5, 28.35], 'open', 4); to([208.6, -1.5, 28.6], 'open', 4); to([210.5, 1.6, 29.6], 'open', 4)
-      to([221, 1.6, 33.6], 'gal', 12); to([240, 1.6, 37.0], 'gal', 21)                                   // 東側岩壁迴廊
-      arc(240, 3.85, 2.25, 0, PI, 1, 37.0, 37.6, 'alc', 9); cur = [240, 6.1, 37.6]                        // 轉進岩體
-      TAG = 'T1'; to([216.5, 6.1, 40.0], 'tun', 25)
-      TAG = 'SP'; arc(216.5, 10.5, 4.4, 0, 4 * PI, -1, 40.0, 49.2, 'tun', 60); cur = [216.5, 6.1, 49.2]                // 螺旋隧道兩圈（每圈升 4.6 m）
-      TAG = 'T3'; to([210, 5.2, 50.3], 'tun', 7); to([205.6, 4.4, sY], 'tun', 5)
-      to([203.6, 5.2, sY], 'shelf', 2); to([202.4, 8.4, sY], 'shelf', 4); to([197.6, 8.4, sY], 'shelf', 5); to([196.4, 5.2, sY], 'shelf', 4); to([193.8, 3.4, sY], 'shelf', 3)   // 岩棚：從上段瀑布後面穿過
-      TAG = 'T4'; to([191, 5.5, sY + 0.5], 'tun', 3); to([172, 8.5, 57.0], 'tun', 20)                                // 西側通道
-      arc(172, 11.25, 2.75, 0, PI, -1, 57.0, 57.6, 'tun', 10); cur = [172, 14, 57.6]
-      TAG = 'T5'; to([238, 14, 68.5], 'tun', 68)                                                                     // 隱藏的上層通道
-      // 大半圓轉回岩壁面（整段都還在岩體裡）：岩壁越高越往後仰（y 70 那裡岩壁面離牆腳約 1.6 m），最後一段迴廊的中線放在離牆腳 3.4 m。
-      // 隧道往西直直穿出來，出口正對迴廊的盡頭（斜著穿出來的話，洞口會被岩壁擋掉一半）
-      TAG = 'T6'; arc(238, 8.7, 5.3, PI, 0, 1, 68.5, 70.3, 'tun', 20); cur = [238, 3.4, 70.3]
-      to([236.2, 3.4, 70.6], 'tun', 2)
-      to([214, 3.4, top], 'gal', 23)                                                                     // 最後一段迴廊
-      to([212.5, 4.4, top], 'top', 2); to([211.5, 6.6, top], 'top', 3)
+      // 2026-11-12 重新設計（使用者實際走過：「不需要進洞，我們是看鳥的遊戲；沿著山壁往上走，參考 Zion Angels Landing」）：
+      // 隧道、螺旋岩室全部拆掉，整條都在岩壁外側——瀑布東邊那面岩壁上鑿出來的之字形步道（Walter's Wiggles 那種），五段、四個折返平台，
+      // 每段橫越 33 m、升 9 m 多（坡度 28%）；外側是鐵鍊欄杆，往外看得到瀑布、湖和停在岩壁橫生樹上的鳥。
+      // 岩壁越高越往後仰：步道中線離牆腳的距離從 1.6 m（底）慢慢加到 3.4 m（頂）
+      const XE = 244, XW = 213, Y0 = 29.6, YT = Y.topY(240) + 0.05, dOf = (y) => lerp(1.6, 3.4, clamp((y - 33) / (YT - 33), 0, 1))
+      const legs = [[210.5, XE], [XE, XW], [XW, XE], [XE, XW], [XW, 240]]
+      const span = legs.reduce((a, [p, q]) => a + Math.abs(q - p), 0) + 4 * 3, rise = (YT - Y0) / span
+      let y = Y0
+      legs.forEach(([xa, xb], li) => {
+        const len = Math.abs(xb - xa), y1 = y + rise * len, n = Math.round(len / 1.05), dir = Math.sign(xb - xa)
+        const last = li === legs.length - 1   // 最後一段：提早 3 m 到頂、剩下的走平（岩壁頂的平台已經蓋在頭上，差半公尺會被當成台階卡住）
+        // 折返後的頭 6 m：從平台（比下面那段深 2.6 m）慢慢回到這個高度該在的位置
+        for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(xa, xb, t), yy2 = last ? lerp(y, y1, Math.min(1, t * len / (len - 3))) : lerp(y, y1, t), ease = li ? smoothstep(6, 0, t * len) : 0; add(x, Y.base(x) + dOf(yy2) + 2.6 * ease, yy2, 'gal') }
+        y = y1
+        if (li < legs.length - 1) {
+          // 折返平台：往岩壁裡繞半圈（半徑 1.3 m），升 0.85 m；整塊鑿成一個凹進去的平台（'alc'）
+          const d0 = dOf(y), sx = dir
+          for (let i = 1; i <= 7; i++) { const f = i / 7 * PI; add(xb + sx * 1.3 * Math.sin(f), Y.base(xb) + d0 + 1.3 - 1.3 * Math.cos(f), y + rise * 3 * i / 7, 'alc') }
+          y += rise * 3
+        }
+      })
+      const top = YT
+      cur = [240, dOf(YT), YT]
+      to([241.4, 4.6, top], 'top', 2); to([242.4, 6.8, top], 'top', 3)
       let L = 0; const S = [0]; for (let i = 1; i < pts.length; i++) { L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); S.push(L) }
       const h = (s) => { if (s <= 0) return yy[0]; if (s >= L) return yy[yy.length - 1]; let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] < s) lo = m; else hi = m } return lerp(yy[lo], yy[hi], (s - S[lo]) / Math.max(1e-6, S[hi] - S[lo])) }
       // 全程（湖西岸 cave 支線起點到岩壁頂）不停走 3 分鐘：湖邊那 40 m 照平常的速度，步道上的速度 v 照長度反推（濕的石階，小心走）
       const v = Math.min(3.2, L / (180 - 40 / 3.2))
-      built = { pts, yy, kind, tag, S, L, h, h0: yy[0], top, v, spiral: { x: 216.5, z: Y.base(216.5) + 10.5, r: 4.4, y0: 40.0, y1: 49.2 } }
+      built = { pts, yy, kind, tag, S, L, h, h0: yy[0], top, v, spiral: { x: -900, z: -900, r: 4.4, y0: -900, y1: -890.8 } }   // 螺旋岩室拆了；yosemite.js 還照這個蓋（蓋在看不到的地方），等確定不要再整段刪
       return built
     }
   })()
   // 站在步道上的高度；不在上面回傳 null。步道有好幾層上下重疊（螺旋、上下層通道）：給 feet（腳底高度）就挑「不高過腳底 0.6 m」裡最接近腳底的那一層
   Y.stairAt = (x, z, feet) => {
-    if (x < 168 || x > 244.5 || z < 86 || z > 122) return null
+    if (x < 168 || x > 247.5 || z < 86 || z > 122) return null
     const st = Y.stairs(), HW = Y.TRAIL_HW
     // 找中線上最近的那一點；上下重疊的幾層（螺旋每圈差 4.6 m、上下層通道）用高度分：只看腳底往上 0.6、往下 2 m 以內的
     let bestH = null, bestD = 1e9
