@@ -18,13 +18,16 @@ const OPTS = {
 }
 const PRESETS = { auto: tr('自動'), high: tr('高'), mid: tr('中'), low: tr('低') }
 // 自動畫質的 6 級：先降解析度（效果最大、最不明顯），再降陰影、LOD 距離，最後才是倒影
+// 2026-11-13 使用者：「這畫質可以再升級嗎，感覺很不夠細」——以前第一個降的就是解析度（第 5 級只剩螢幕的 0.65 倍，Retina 上等於四成），葉子邊緣全是鋸齒。
+// 現在先降陰影、倒影、植物距離，解析度最後才動；電腦上最低就是螢幕的 CSS 解析度（1 倍），只有手機才再往下
+const RMIN = PHONE ? Math.min(DPR, 1) * 0.8 : Math.min(DPR, 1)
 const LADDER = [
   { res: Math.min(DPR, 2), shadow: 4096, reflect: [1, 2], lights: 8, lod: 1, name: tr('高') },
-  { res: Math.min(DPR, 1.6), shadow: 4096, reflect: [1, 2], lights: 8, lod: 1, name: tr('高') },
-  { res: Math.min(DPR, 1.25), shadow: 2048, reflect: [0.7, 3], lights: 6, lod: 0.8, name: tr('中') },
-  { res: Math.min(DPR, 1), shadow: 2048, reflect: [0.7, 3], lights: 6, lod: 0.65, name: tr('中') },
-  { res: Math.min(DPR, 1) * 0.8, shadow: 1024, reflect: [0.4, 4], lights: 4, lod: 0.5, name: tr('低') },
-  { res: Math.min(DPR, 1) * 0.65, shadow: 1024, reflect: [0.4, 4], lights: 4, lod: 0.4, name: tr('低') },
+  { res: Math.min(DPR, 2), shadow: 2048, reflect: [0.7, 3], lights: 6, lod: 0.85, name: tr('高') },
+  { res: Math.max(RMIN, Math.min(DPR, 1.6)), shadow: 2048, reflect: [0.7, 3], lights: 6, lod: 0.7, name: tr('中') },
+  { res: Math.max(RMIN, Math.min(DPR, 1.4)), shadow: 1024, reflect: [0.4, 4], lights: 4, lod: 0.6, name: tr('中') },
+  { res: Math.max(RMIN, Math.min(DPR, 1.2)), shadow: 1024, reflect: [0.4, 4], lights: 4, lod: 0.5, name: tr('低') },
+  { res: RMIN, shadow: 1024, reflect: [0.4, 4], lights: 4, lod: 0.42, name: tr('低') },
 ]
 // GPU 偵測：只看顯卡名稱猜一個起始等級（Safari 一律回「Apple GPU」、Firefox 會簡化，猜不到就從中間開始，交給效能測試修正）
 function guessLevel(renderer) {
@@ -50,6 +53,7 @@ export function createSettings({ world, player }) {
   if (!PRESETS[st.preset] && st.preset !== 'custom') st.preset = 'auto'
   // 2026-11-06 以前的預設是「高」（手機「低」），不是玩家自己選的：改成自動一次（自己選過「中」或自訂的不動）
   if (!st.q2) { if (st.preset === 'high' || st.preset === 'low') st.preset = 'auto'; st.q2 = true }
+  if (!st.q3) { delete st.autoLevel; st.q3 = true }   // 2026-11-13 等級表換了：以前存下來的等級（多半是降到最低的）不算數，重新判斷
   for (const k of Object.keys(OPTS)) if (!OPTS[k].items[st[k]]) st[k] = st.preset === 'custom' || st.preset === 'auto' ? 'high' : st.preset
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)) } catch {} }
 
@@ -121,7 +125,7 @@ export function createSettings({ world, player }) {
       a.win += dt; a.frames++
       const span = a.t < 8 ? 1.5 : 4
       if (a.win < span) return
-      const fps = a.frames / a.win, target = 55
+      const fps = a.frames / a.win, target = 48   // 2026-11-13 55 → 48：拍鳥、散步的遊戲 48 格已經很順，換到的是更細的畫面
       a.win = 0; a.frames = 0
       if (fps < target * 0.85) {
         if (a.tried && clock - a.tried.at < 15) a.lock[a.tried.from - 1] = clock + 60   // 剛升上來就撐不住：這一級 60 秒內不再試

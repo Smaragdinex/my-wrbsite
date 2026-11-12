@@ -202,7 +202,10 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       }
     })
   }
-  for (const ms of [2500, 8000, 20000, 45000]) setTimeout(() => { lodSweep(); capTextures() }, ms)
+  // 2026-11-13 貼圖斜著看（石板路、地面、樹皮）不要糊：所有貼圖開到這張顯示卡能給的最大各向異性過濾（輕量等級 4 倍）。代價很小
+  const ANI = TIER === 'lite' ? 4 : renderer.capabilities.getMaxAnisotropy(), aniDone = new WeakSet()
+  const sharpen = (root = scene) => root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) for (const k in m) { const t = m[k]; if (t && t.isTexture && !aniDone.has(t) && !t.isRenderTargetTexture && !t.isDataTexture && t.anisotropy < ANI && t.minFilter !== THREE.NearestFilter) { aniDone.add(t); t.anisotropy = ANI; t.needsUpdate = true } } })
+  for (const ms of [2500, 8000, 20000, 45000]) setTimeout(() => { lodSweep(); capTextures(); sharpen() }, ms)
   setTimeout(() => lodInit({ renderer, sun, hemi }), 1500)   // 遠景替身：等場景建好、進場後才開始烘
   const walkRoot = buildWalkways(scene, walkKit)   // 2026-11-11 吊橋橋面、橋頭平台、巨木林木棧道（Blender 零件）
   // 2026-11-10 果樹上的鳥：在掃描的雀榕（不含葉子）上，從上往下打射線找「上面有空間、左右各一段差不多水平的直枝」，

@@ -194,7 +194,7 @@ export function lodUpdate(camera, force = false) {
   const P = _fr.planes
   let drawn = 0, lowTris = 0, nearN = 0; lodStats.impDrawn = 0
   for (const S of sets) {
-    const d0 = S.d0 * zoom, d1 = S.d1 * zoom, d1s = d1 * d1, dLs = (S.dL * zoom) ** 2
+    const zS = S.d1 !== Infinity ? zoom / lodQuality.scale * Math.max(0.8, lodQuality.scale) : zoom, d0 = S.d0 * zS, d1 = S.d1 * zS,   /* 矮植物也一樣：畫質降級最多縮到八成 */ d1s = d1 * d1, dLs = (S.dL * zoom) ** 2
     let k = 0, ki = 0
     for (let i = 0; i < S.n; i++) {
       const x = S.pos[i * 3] - p.x, y = S.pos[i * 3 + 1] - p.y, z = S.pos[i * 3 + 2] - p.z
@@ -253,9 +253,10 @@ export function lodUpdate(camera, force = false) {
   const sph = new THREE.Sphere()
   for (const G of grass) {
     sph.set(G.c, G.r)
-    const d = Math.max(0, G.c.distanceTo(p) - G.r * 0.5) / zoom
+    // 2026-11-13 使用者：草要在更遠的地方就出來——畫質降級時以前草的距離跟著乘 0.4～0.65（35 m 變 15 m），現在最多只縮到八成
+    const zG = zoom / lodQuality.scale * Math.max(0.8, lodQuality.scale), d = Math.max(0, G.c.distanceTo(p) - G.r * 0.5) / zG
     // 草葉：35 m 內全密、到 110 m 慢慢剩三成五、160 m 外不畫（原本 15 m 就開始變稀、90 m 不畫，走過去才看到草長出來）
-    let f = d < 35 ? 1 : d < 110 ? 1 - 0.65 * (d - 35) / 75 : d < 160 ? 0.35 * (1 - (d - 110) / 50) : 0
+    let f = d < 55 ? 1 : d < 150 ? 1 - 0.6 * (d - 55) / 95 : d < 220 ? 0.4 * (1 - (d - 150) / 70) : 0   // 55 m 內全密、150 m 剩四成、220 m 外不畫
     if (!_fr.intersectsSphere(sph)) f = 0
     G.mesh.geometry.instanceCount = Math.round(G.n * f)
     gd += G.mesh.geometry.instanceCount
