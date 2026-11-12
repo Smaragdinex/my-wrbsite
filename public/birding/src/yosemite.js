@@ -927,7 +927,7 @@ export function buildYosemite(scene, { lib } = {}) {
         // 2026-11-12 ChatGPT V3（石階太新太整齊）：每一階轉一點、前後深淺差一點、左右錯開幾公分，顏色深淺差 ±13%、偏黃偏灰都有
         const h1 = hsh(n * 3.1 + 1), h2 = hsh(n * 5.7 + 2), h3 = hsh(n * 7.3 + 3), h4 = hsh(n * 11.9 + 4), h5 = hsh(n * 2.3 + 5)
         q.setFromAxisAngle(UP, Math.atan2(tn.x, tn.z) + (h1 - 0.5) * 0.09)
-        const gal = st.kind[ii] === 'gal', alc = st.kind[ii] === 'alc', shf = st.kind[ii] === 'shelf', wet = shf && p.x > 198.3 && p.x < 201.9 && p.z < YOSE.base(p.x) + 3, so = (h3 - 0.5) * (gal || alc ? 0.04 : 0.1) + (gal ? (SIDE[ii].z < 0 ? 1 : -1) * 0.3 : 0)   // 階地：踏板只鋪到內側的石壁（寬 1.8 m，往外移 0.27）
+        const gal = st.kind[ii] === 'gal', alc = st.kind[ii] === 'alc', shf = st.kind[ii] === 'shelf', wet = shf && p.x > 197.55 && p.x < 202.65 && p.z < YOSE.base(p.x) + 3   /* 驗收第 23 條：出水口 1A 加寬成 4.4 m（F.x−2.3～+2.3），跨水那段的石板也要跟著讓出來（踏腳石接手） */, so = (h3 - 0.5) * (gal || alc ? 0.04 : 0.1) + (gal ? (SIDE[ii].z < 0 ? 1 : -1) * 0.3 : 0)   // 階地：踏板只鋪到內側的石壁（寬 1.8 m，往外移 0.27）
         tm.setMatrixAt(n, m4.compose(V(p.x + SIDE[ii].x * so, yTop - 0.3 - h5 * 0.012, p.z + SIDE[ii].z * so), q, V(wet ? 0.0001 : gal ? 0.86 : alc ? 0.75 : shf ? 0.62 : 1, 1, 0.93 + 0.12 * h2)))   /* 折返平台：踏板窄一點（2.5 m 寬的踏板在半徑 0.85 m 的彎上互相戳出來，像貼在岩壁上的大石塊） */
         const kk = 0.87 + 0.26 * h4, wm = (h5 - 0.5) * 0.08
         tm.setColorAt(n, c.setRGB(1.0 * kk + wm, 0.9 * kk, 0.74 * kk - wm))
