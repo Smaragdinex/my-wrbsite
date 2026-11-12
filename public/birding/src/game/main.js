@@ -60,7 +60,7 @@ const VER_Q = new URL(import.meta.url).searchParams.get('v') ?? ''   // 主頁�
     const X = `<button class="x" aria-label="${tr('關閉')}" title="${tr('關閉')}"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>`
     const bird = (cls) => `<svg class="tb ${cls}" viewBox="0 0 60 24" aria-hidden="true"><path class="w" d="M30 13 Q20 2 4 6 Q16 8 24 15 Z"/><path class="w w2" d="M30 13 Q40 2 56 6 Q44 8 36 15 Z"/><path d="M22 14 Q30 10 40 14 Q32 18 22 14 Z"/></svg>`
     const hill = (cls, d) => `<svg class="hill ${cls}" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><path d="${d}"/></svg>`
-    pre.innerHTML = `<div class="sky" aria-hidden="true"><video class="bgv" src="title-bg.mp4?v=${VER_Q}" poster="title-bg.jpg" autoplay muted loop playsinline></video><i class="sun"></i><i class="cl c1"></i><i class="cl c2"></i><i class="cl c3"></i>
+    pre.innerHTML = `<div class="sky" aria-hidden="true"><i class="sun"></i><i class="cl c1"></i><i class="cl c2"></i><i class="cl c3"></i>
         ${hill('h1', 'M0 300 L0 170 Q150 90 300 150 Q420 60 560 130 Q700 40 860 120 Q1000 70 1200 150 L1200 300 Z')}${hill('h2', 'M0 300 L0 210 Q120 150 260 200 Q400 120 540 190 Q700 140 820 200 Q1000 130 1200 210 L1200 300 Z')}${hill('h3', 'M0 300 L0 250 Q200 200 380 245 Q560 190 760 240 Q960 200 1200 250 L1200 300 Z')}</div>
       <div class="menu" id="preMenu"><div class="brand"><h1>${tr('鳥類生態園')}</h1><p>${tr('帶著相機走進公園，找鳥、拍照。')}</p></div>
         <nav><button class="go">${tr('開始遊戲')}</button><button class="ghost" data-open="set">${tr('設定')}</button><button class="ghost" data-open="help">${tr('操作說明')}</button></nav></div>
@@ -76,7 +76,7 @@ const VER_Q = new URL(import.meta.url).searchParams.get('v') ?? ''   // 主頁�
     drawOpts(); pre.hidden = false; loadingEl.hidden = true
     // 即時 3D 的背景（title3d.js）：載好就蓋在影片上面；載不起來（沒有 WebGL、模型抓不到）就照舊播影片
     let t3 = null, gone = false
-    import('./title3d.js').then((m) => m.startTitle3D(pre.querySelector('.sky'), { ver: VER_Q })).then((h) => { if (gone) h.stop(); else { t3 = h; const v = pre.querySelector('.bgv'); if (v) { v.pause(); setTimeout(() => { v.hidden = true }, 900) } pre.querySelector('.sky').classList.add('live') } }).catch((e) => console.warn('[title3d]', e))
+    import('./title3d.js').then((m) => m.startTitle3D(pre.querySelector('.sky'), { ver: VER_Q })).then((h) => { if (gone) h.stop(); else { t3 = h; pre.querySelector('.sky').classList.add('live') } }).catch((e) => console.warn('[title3d]', e))
     const onKey = (e) => { if (e.key === 'Escape') show(null) }; addEventListener('keydown', onKey)
     await new Promise((res) => pre.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return

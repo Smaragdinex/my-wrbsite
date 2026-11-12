@@ -22,18 +22,20 @@ export async function startTitle3D(host, { ver = '' } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5))
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x9aa3c4)
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x9bacd0)   // 跟底圖的天空同色（第一版是紫的，寬螢幕看到邊會露出一條紫色）
   const camera = new THREE.PerspectiveCamera(27, 16 / 9, 0.3, 300)
 
   const [gl, plate] = await Promise.all([
     (() => { const L = new GLTFLoader(), D = new DRACOLoader(); D.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/'); L.setDRACOLoader(D); return L.loadAsync(`models/birds/flamingo-rig.glb?v=${ver}`) })(),
     new THREE.TextureLoader().loadAsync(`title-plate.jpg?v=${ver}`),
   ])
-  plate.colorSpace = THREE.SRGBColorSpace; plate.anisotropy = 8
+  plate.colorSpace = THREE.SRGBColorSpace; plate.anisotropy = 8; plate.wrapS = THREE.MirroredRepeatWrapping
 
   // 背景看板：寬 78 m、高 29 m，立在紅鶴後面 50 m；底邊埋進水面下一點（接縫被倒影蓋住）
-  const BW = 78, BH = BW * 735 / 1968
-  const board = new THREE.Mesh(new THREE.PlaneGeometry(BW, BH), new THREE.MeshBasicMaterial({ map: plate, toneMapped: false }))
+  // 看板往左右各多延伸一倍寬（邊緣鏡像接續）：寬螢幕、滑鼠往旁邊移時不會看到圖的邊
+  const BW = 78, BH = BW * 735 / 1968, EXT = 3
+  const bg = new THREE.PlaneGeometry(BW * EXT, BH); { const u = bg.attributes.uv; for (let i = 0; i < u.count; i++) u.setX(i, (u.getX(i) - 0.5) * EXT + 0.5) }
+  const board = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ map: plate, toneMapped: false }))
   board.position.set(-6, BH / 2 - 0.25, -50); scene.add(board)
 
   // 光：傍晚——低角度的暖色太陽從鏡頭這一側照過去，天光偏紫
@@ -71,7 +73,7 @@ export async function startTitle3D(host, { ver = '' } = {}) {
     m.traverse((o) => { if (o.isBone) bones[o.name] = o })
     const mq = m.getWorldQuaternion(new THREE.Quaternion()).invert(), wq = new THREE.Quaternion()
     for (const b of Object.values(bones)) { b.userData.rest = b.quaternion.clone(); b.userData.inv = mq.clone().multiply(b.getWorldQuaternion(wq)).invert() }
-    birds.push({ g, bones, ph, x0: x, z0: z, yaw0: yaw, feedT: -ph * 2.2, walk: ph > 2 && ph < 4.5 })
+    birds.push({ g, bones, ph, sz, x0: x, z0: z, yaw0: yaw, feedT: -ph * 2.2, walk: ph > 2 && ph < 4.5, w: { mode: 'walk', t: ph, h: yaw, gone: 0, leg: 0, x, z } })
   }
   // 骨頭繞「模型座標的軸」轉 a：local = rest × inv × R × inv⁻¹
   const _q = new THREE.Quaternion(), _r = new THREE.Quaternion(), _i = new THREE.Quaternion()
@@ -116,19 +118,40 @@ export async function startTitle3D(host, { ver = '' } = {}) {
       }
       turn(B.tail, LAT, 0.05 * Math.sin(t * 1.3 + p))
       // 慢慢走的那幾隻：來回走 1.2 m，兩腳輪流往前
+      // 走路（使用者：「他們移動會漂浮」——以前身體照正弦滑來滑去、腳只是前後擺，腳底在水裡滑；到頭還瞬間轉向）。
+      // 現在：腳步跟走過的距離綁在一起——撐地的那隻腳在世界上不動（腳相對髖關節往後退的速度＝身體往前的速度），另一隻抬起往前跨；
+      // 走 1.6 m 停下來站一下，再一小步一小步原地轉身，走回去
       if (b.walk) {
-        const s = Math.sin(t * 0.22 + p), v = Math.cos(t * 0.22 + p), dir = v >= 0 ? 0 : Math.PI
-        b.g.position.x = b.x0 - Math.cos(b.yaw0) * s * 1.2; b.g.position.z = b.z0 + Math.sin(b.yaw0) * s * 1.2
-        b.g.rotation.y = b.yaw0 + dir * ss(0.0, 0.35, Math.abs(v)) + (dir ? 0 : 0)
-        const st = Math.sin(t * 2.2 + p) * 0.22 * Math.min(1, Math.abs(v) * 3) * idle
-        turn(B.thighL, LAT, st); turn(B.thighR, LAT, -st); turn(B.shinL, LAT, Math.max(0, -st) * 1.2); turn(B.shinR, LAT, Math.max(0, st) * 1.2)
-        b.g.position.y = 0.012 * Math.abs(Math.sin(t * 2.2 + p)) * idle
+        const w = b.w, Lg = 0.62 * b.sz, C = 0.7 * b.sz, S = C / 2, V0 = 0.2 * b.sz   // 腿長、一個步態週期走的距離、撐地時腳的位移、走路速度
+        w.t += dt
+        let v = 0, turnV = 0
+        if (w.mode === 'walk') { v = V0 * Math.min(1, w.t / 0.8); if ((w.gone += v * dt) >= 1.6 * b.sz) { w.mode = 'stop'; w.t = 0 } }
+        else if (w.mode === 'stop') { if (w.t > 2.6) { w.mode = 'turn'; w.t = 0; w.h0 = w.h } }
+        else if (w.mode === 'turn') { const k = ss(0, 3.2, w.t); const nh = w.h0 + Math.PI * k; turnV = Math.abs(nh - w.h) / Math.max(dt, 1e-4); w.h = nh; if (w.t >= 3.2) { w.mode = 'walk'; w.t = 0; w.gone = 0 } }
+        // 往前（模型頭朝 -x，繞 y 轉 h 之後的方向）
+        const fx = -Math.cos(w.h), fz = Math.sin(w.h)
+        w.x += fx * v * dt; w.z += fz * v * dt
+        // 步態相位：走路照走過的距離前進；原地轉身時照轉的速度踏小步
+        w.leg += (v / C + Math.min(0.8, turnV * 0.25)) * dt
+        const moving = Math.min(1, v / (V0 * 0.5) + Math.min(1, turnV * 2)), amp = v > 0.01 ? 1 : 0.35
+        const legAng = (q) => {
+          let off, lift = 0
+          if (q < 0.5) off = S / 2 - S * (q / 0.5)                                  // 撐地：腳從前面往後退（身體往前）
+          else { const u = (q - 0.5) / 0.5; off = -S / 2 + S * ss(0, 1, u); lift = Math.sin(Math.PI * u) }   // 抬腳往前跨
+          return [Math.atan2(off * amp, Lg) * moving, lift * moving]
+        }
+        const pl = (w.leg % 1 + 1) % 1, [aL, lL] = legAng(pl), [aR, lR] = legAng((pl + 0.5) % 1)
+        turn(B.thighL, LAT, -aL); turn(B.thighR, LAT, -aR)
+        turn(B.shinL, LAT, lL * 0.55); turn(B.shinR, LAT, lR * 0.55)   // 往前跨時「膝」（其實是腳踝）往後折、腳抬離水面
+        turn(B.footL, LAT, -lL * 0.4); turn(B.footR, LAT, -lR * 0.4)
+        b.g.position.set(w.x, 0.012 * Math.abs(Math.sin(pl * Math.PI * 2)) * moving, w.z); b.g.rotation.y = w.h
       }
     }
     // 鏡頭：很慢地左右漂、跟著滑鼠偏一點（有前後景的視差）
     cx += (mx - cx) * Math.min(1, dt * 1.5); cy += (my - cy) * Math.min(1, dt * 1.5)
     camera.position.set(1.2 + Math.sin(t * 0.07) * 1.1 + cx * 0.7, 0.9 + Math.sin(t * 0.05) * 0.1 - cy * 0.12, 10.5 + Math.cos(t * 0.06) * 0.6)
     camera.lookAt(0.6 + cx * 0.25, 1.05, -2)   // 紅鶴在畫面右半邊（左邊是選單）
+    if (window.__t3cam) { const c = window.__t3cam(birds); camera.position.copy(c.p); camera.lookAt(c.t) }   // 測試用：自動測試腳本指定鏡頭
     renderer.render(scene, camera)
   }
   fit(); frame()
