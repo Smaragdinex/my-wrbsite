@@ -340,6 +340,7 @@ export function ensureModel(n) {
       // Tripo 生成的羽色太鮮豔的，載入時壓暗（紫嘯鶇真實是深藍黑、只有光澤是亮藍）
       const k = TINT[n.replace('-fly', '')]
       if (k) g.scene.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(k) } })
+      if (BILL_FIX[n]) straightenBill(g.scene, BILL_FIX[n])
       GLB[n] = g.scene
       return true
     }).catch(() => { FAILED.add(n); console.warn('[birds] 沒有模型', n); return false }).finally(() => _loading.delete(n))
@@ -363,7 +364,28 @@ export const loadedModels = () => Object.keys(GLB)
 // 每根骨頭的本地軸方向都不一樣（Blender 的 roll），直接轉 x/y/z 左右腳會不對稱。
 // 這裡先算出每根骨頭靜止時在模型座標裡的朝向，turn(骨頭, 模型座標的軸, 角度) 再換算成本地軸，
 // 所以「繞身體的上下軸轉」對每根骨頭意思都一樣。straight：一開始就把這些骨頭（例如捲起來的尾巴）拉直到某個比例。
-const HEAD_YAW_FIX = { 'rspoonbill-rig': -0.79 }   // 扁嘴的寬度方向量出來跟身體左右軸差 45°（主軸分析），整個頭繞上下軸轉回來
+const HEAD_YAW_FIX = {}
+// 2026-11-12 使用者「嘴巴整個歪」（粉紅琵鷺）：頭本身是正的，是那張扁嘴從嘴基往左彎了 45°（生成的模型就長這樣）。真的琵鷺嘴是直直往前的。
+// 第一版把整顆頭轉 45°：嘴正了、頭卻歪到另一邊。這版只動嘴：頭部頂點裡沿著嘴的方向超過嘴基的那一段，繞嘴基的上下軸轉回來（嘴基 4 cm 內漸變，不折出稜角）。
+// hc＝頭的中心、d＝現在嘴的方向（歪的）、t0～t1＝嘴基漸變的範圍（沿 d 量）、yaw＝要轉回來的角度；數字是對模型量出來的（頭部頂點的主軸分析）
+const BILL_FIX = {}   // 粉紅琵鷺試過 { hc: [-0.155, 0.92, -0.008], d: [-0.424, -0.798, 0.429], t0: 0.03, t1: 0.075, yaw: -0.79 }：使用者看了說還是歪，先還原成原本的模型
+function straightenBill(root, { hc, d, t0, t1, yaw }) {
+  root.traverse((o) => {
+    if (!o.isSkinnedMesh) return
+    const hi = o.skeleton.bones.findIndex((b) => b.name === 'head'), ge = o.geometry, P = ge.attributes.position, N = ge.attributes.normal, SI = ge.attributes.skinIndex, SW = ge.attributes.skinWeight
+    const px = hc[0] + d[0] * t0, pz = hc[2] + d[2] * t0
+    for (let i = 0; i < P.count; i++) {
+      let w = 0; for (let k = 0; k < 4; k++) if (SI.getComponent(i, k) === hi) w += SW.getComponent(i, k)
+      if (w < 0.5) continue
+      const x = P.getX(i), y = P.getY(i), z = P.getZ(i), t = (x - hc[0]) * d[0] + (y - hc[1]) * d[1] + (z - hc[2]) * d[2]
+      const u = Math.min(1, Math.max(0, (t - t0) / (t1 - t0))), a = yaw * u * u * (3 - 2 * u) * Math.min(1, (w - 0.5) / 0.3); if (!a) continue
+      const c = Math.cos(a), sn = Math.sin(a), dx = x - px, dz = z - pz
+      P.setXYZ(i, px + dx * c + dz * sn, y, pz - dx * sn + dz * c)
+      if (N) { const nx = N.getX(i), nz = N.getZ(i); N.setXYZ(i, nx * c + nz * sn, N.getY(i), -nx * sn + nz * c) }
+    }
+    P.needsUpdate = true; if (N) N.needsUpdate = true; ge.computeBoundingBox(); ge.computeBoundingSphere()
+  })
+}
 export function rigged(name, { straight = {} } = {}) {
   if (!GLB[name]) throw new MissingModel(name)
   const model = cloneSkinned(GLB[name])
@@ -1809,7 +1831,7 @@ export const FEED = {
   // 紅鶴濾食：身體只微微前傾，脖子從胸口直直垂下去，頭整個倒過來、上嘴朝下貼著水面，慢慢左右擺
   flamingo: { acts: ['peck'], lean: 0.16, neck: 0, head: 0, reach: 0.2, rate: 2.2, bones: { neck: 0.35, neck2: -0.17, neck3: -0.52, neck4: -0.66, neck5: -0.66, neck6: -0.63, neck7: -0.52, neck8: -0.35, neck9: -0.09, neck10: 0.26, head: 1.75 }, sweep: 0.12, hz: 0.25, inT: 0.2, outT: 0.8 },   // 2026-11-12 第五版：脖子 10 節平均分攤往下彎成一條弧（每節最多 38°）、喝水時脖子伸長 4 成；頭在頭頸交界轉 100° 倒過來（頭的權重只到交界往前 3 cm，脖子整條一樣細）
   // 玫瑰琵鷺：身體前傾，脖子往前下伸直，匙狀的嘴尖泡在水裡、張著一點左右快速掃
-  rspoonbill: { acts: ['hunt', 'strike'], lean: 0.6, neck: 0, head: 0, reach: 0.65, bones: { neck: -1.25, neck2: -0.4, neck3: -0.1, head: 2.3 }, sweep: 0.3,   /* 2026-11-12 使用者：頭歪著喝水——頭往後折了 97°，嘴尖朝著腳；改成脖子往前下斜、嘴朝前下插進水裡 */ hz: 1.1, inT: 0.12, outT: 0.9 },
+  rspoonbill: { acts: ['hunt', 'strike'], lean: 0.6, neck: 0, head: 0, reach: 0.65, bones: { neck: -1.25, neck2: -0.4, neck3: -0.1, head: 1.9 }, sweep: 0.3,   /* 2026-11-12 使用者：頭歪著喝水——頭往後折了 97°，嘴尖朝著腳；改成脖子往前下斜、嘴朝前下插進水裡 */ hz: 1.1, inT: 0.12, outT: 0.9 },
 }
 const feeder = (F) => ({ n, kk, t }) => {
   if (!F.acts.includes(n) || kk < 0.02 || kk > F.outT) return null   // 動作尾段回到站姿（骨頭的額外轉動會自己慢慢退回 0）
