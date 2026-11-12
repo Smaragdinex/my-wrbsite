@@ -263,7 +263,9 @@ export function buildYosemite(scene, { lib } = {}) {
   if (rockN) { rockN.wrapS = rockN.wrapT = THREE.RepeatWrapping }
   // 2026-11-11 ChatGPT：垂直岩面用 triplanar（照世界座標從三個方向投影，依法線混合），不靠 UV——以前平台的石壁、岩壁頂面貼圖被拉成一條條
   // 法線貼圖拿掉（它也是照 UV 貼的，一樣會拉長）；粗糙度 0.86；大尺度的深淺另外用頂點色
+  const F0 = { x: YOSE.fall.x, zi: YOSE.base(YOSE.fall.x) - 3.5, py: YOSE.lake.water }, F0top = YOSE.topY(YOSE.fall.x)   // 濕岩範圍（落水帶、水簾）
   const cliffM = new THREE.MeshStandardMaterial({ map: graniteTex(), vertexColors: true, roughness: 0.86, side: THREE.DoubleSide })
+  cliffM.userData.wetHook = true
   cliffM.onBeforeCompile = (sh) => {
     sh.uniforms.uPortal = { value: PORTALS }
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTpW; varying vec3 vTpN;')
@@ -319,6 +321,15 @@ export function buildYosemite(scene, { lib } = {}) {
         float vert = 1.0 - smoothstep(0.3, 0.6, abs(normalize(vTpN).y));
         float streak = smoothstep(0.66, 0.8, vfbm(vec2(vTpW.x * 0.9 + vTpW.z * 0.9, vTpW.y * 0.08)));
         diffuseColor.rgb = mix(diffuseColor.rgb, mossC * 1.1, vert * streak * 0.55); }`) }
+  }
+  { const ob = cliffM.onBeforeCompile
+    // 2026-11-13 Pass 1B：水流直接打到、水霧噴得到的岩面才濕（粗糙度 0.3～0.45、有一點反光）；其他乾的維持 0.65～0.9，不讓整面岩壁變亮面
+    cliffM.onBeforeCompile = (sh) => { ob(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      { float cur = exp(-pow((vTpW.x - ${F0.x.toFixed(1)}) / 5.2, 2.0)) * step(vTpW.y, ${(F0top + 0.5).toFixed(1)});
+        float spr = smoothstep(14.0, 4.0, distance(vTpW.xz, vec2(${F0.x.toFixed(1)}, ${F0.zi.toFixed(1)}))) * smoothstep(${(F0.py + 12).toFixed(1)}, ${(F0.py + 1).toFixed(1)}, vTpW.y);
+        float wetR = clamp(max(cur, spr * 0.85), 0.0, 1.0);
+        roughnessFactor = mix(roughnessFactor, 0.36, wetR);
+        diffuseColor.rgb *= 1.0 - 0.12 * wetR; }`) }
   }
   cliffM.customProgramCacheKey = () => 'cliffTriplanar'
   const cliff = new THREE.Mesh(cg, cliffM); cliff.castShadow = true; cliff.receiveShadow = true; g.add(cliff)
@@ -392,31 +403,72 @@ export function buildYosemite(scene, { lib } = {}) {
   const poolY = YOSE.lake.water   // 2026-11-11 落到湖裡（layout.js YOSE.lake）
   const topY = fc.g0 + fc.Ht, fz = fc.zb + 0.6
   const uT = { value: 0 }
-  const fallMat = (o) => new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    uniforms: { uT, uSpd: { value: o.spd }, uA: { value: o.a }, uDark: { value: o.dark ?? 0 }, uLow: { value: o.low ?? 0 } },
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  // 2026-11-13 Pass 1A（ChatGPT 規格）：水簾 shader 接上場景霧（FogExp2）、日夜亮度、雲量（共用 uniform，不多開 program）；
+  // o.strand：分股水簾用的版本（頂點橫向紊流＝寬度 2～6%、每股自己的亂數 aSeed、白沫集中在岩唇和落水段）
+  const fallMat = (o) => {
+    const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSpd: { value: o.spd }, uA: { value: o.a }, uDark: { value: o.dark ?? 0 }, uLow: { value: o.low ?? 0 } }])
+    u.uT = uT; u.uDay = dayLight; u.uCloud = weatherU.cloud
+    return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true, defines: o.strand ? { STRAND: 1 } : {},
+    uniforms: u,
+    vertexShader: `varying vec2 vUv; varying float vSeed; uniform float uT;
+      #ifdef STRAND
+      attribute float aSeed; attribute float aSway; attribute float aAlpha; varying float vA;
+      #endif
+      #include <fog_pars_vertex>
+      void main(){ vUv = uv; vec3 p = position; vSeed = 0.0;
+        #ifdef STRAND
+        vSeed = aSeed; vA = aAlpha; p.x += aSway * (sin(uv.y * 7.0 - uT * 1.1 + aSeed * 6.3) * 0.7 + sin(uv.y * 17.0 - uT * 2.3 + aSeed * 11.0) * 0.3);
+        #endif
+        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
     fragmentShader: `
-      varying vec2 vUv; uniform float uT, uSpd, uA, uDark, uLow;
+      varying vec2 vUv; varying float vSeed; uniform float uT, uSpd, uA, uDark, uLow, uDay, uCloud;
+      #ifdef STRAND
+      varying float vA;
+      #endif
+      #include <fog_pars_fragment>
       float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
       float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
       float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++){ s += a * n(p); p *= 2.03; a *= 0.5; } return s; }
       void main(){
-        float x = vUv.x, y = vUv.y;
+        float x = vUv.x, y = vUv.y, sx = x + vSeed * 13.7;
         float fall = y * y * 1.6 + y * 0.6;                         // 越往下流越快（重力加速）
         float t = uT * uSpd;
-        float s1 = n(vec2(x * 26.0, fall * 4.0 - t * 2.4)), s2 = n(vec2(x * 61.0 + 3.0, fall * 7.0 - t * 3.6));
+        #ifdef STRAND
+        // 2026-11-13 Pass 1A-R（ChatGPT：白線太直、太平行、等速）：每股自己的流速和相位；
+        // 流速擾動兩個尺度（大 0.4～1.2 m、小 0.03～0.15 m）把「下落座標」扭曲，水絲不再是一條條等寬等亮的直線
+        t *= 0.78 + 0.44 * fract(vSeed * 7.31);
+        fall += 0.22 * (n(vec2(sx * 2.3, y * 2.6 - t * 0.45)) - 0.5) + 0.05 * (n(vec2(sx * 31.0, y * 40.0 - t * 3.1)) - 0.5);
+        float s1 = n(vec2(sx * 19.0, fall * 7.5 - t * 2.4)), s2 = n(vec2(sx * 43.0 + 3.0, fall * 13.0 - t * 3.6));
+        #else
+        float s1 = n(vec2(sx * 26.0, fall * 4.0 - t * 2.4)), s2 = n(vec2(sx * 61.0 + 3.0, fall * 7.0 - t * 3.6));
+        #endif
         float str = smoothstep(0.32, 0.86, s1 * 0.55 + s2 * 0.5);
-        float plume = smoothstep(0.48, 0.8, fbm(vec2(x * 7.0, fall * 2.2 - t * 1.7)));   // 白色的水團（馬尾瀑）
+        float plume = smoothstep(0.48, 0.8, fbm(vec2(sx * 7.0, fall * 2.2 - t * 1.7)));   // 白色的水團（馬尾瀑）
+        #ifdef STRAND
+        str *= 0.55 + 0.45 * n(vec2(sx * 6.0, fall * 1.3 - t * 0.7));                        // 同一條水絲沿路忽亮忽暗、忽粗忽細
+        plume *= 0.5 + 0.45 * smoothstep(0.15, 0.0, y) + 0.35 * smoothstep(0.7, 1.0, y);    // 白沫集中在岩唇（剛翻出去）和落水段
+        float brk = smoothstep(0.3, 0.5, fbm(vec2(sx * 4.2 + 7.0, fall * 2.6 - t * 1.9)));  // 局部破碎：約 7 成連續，其他是一團團斷開的水
+        float spray = smoothstep(0.7, 1.0, y) * smoothstep(0.55, 0.85, n(vec2(sx * 38.0, fall * 22.0 - t * 5.0)));   // 落水前 25～30%：碎水、飛沫
+        #endif
         float spread = mix(0.16, 0.06, y);
         float edge = smoothstep(0.0, spread, x) * smoothstep(1.0, 1.0 - spread, x);
-        edge *= 0.75 + 0.25 * n(vec2(x * 9.0, fall * 3.0 - t * 1.5));                     // 邊緣破碎
+        edge *= 0.75 + 0.25 * n(vec2(sx * 9.0, fall * 3.0 - t * 1.5));                     // 邊緣破碎
         float low = mix(1.0, smoothstep(0.35, 0.75, y), uLow);                               // 水霧簾只在下半段
         float a = (0.22 + 0.55 * str + 0.45 * plume) * edge * low * uA * mix(0.85, 1.0, y);
+        #ifdef STRAND
+        a = (a * mix(0.4, 1.0, brk) + spray * 0.35 * edge * low) * vA;
+        plume = max(plume, spray * 0.7);
+        #endif
         vec3 c = mix(vec3(0.72, 0.8, 0.84), vec3(1.0), clamp(str * 0.6 + plume, 0.0, 1.0));
-        gl_FragColor = vec4(mix(c, c * 0.6, uDark), clamp(a, 0.0, 1.0));
+        c = mix(c, c * 0.6, uDark);
+        c *= (0.2 + 0.8 * uDay) * (1.0 - 0.25 * uCloud);                                   // 晚上、陰天跟著變暗（以前整晚發白）
+        gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
+        #include <fog_fragment>
       }`,
-  })
+  }) }
   {
     const sheet = (wTop, wBot, back, outK, mat, ro, v0 = 0) => {
       const N = 40, P = [], U = [], I = []
@@ -440,14 +492,51 @@ export function buildYosemite(scene, { lib } = {}) {
       const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); fg.setIndex(I)
       const m = new THREE.Mesh(fg, mat); m.renderOrder = ro; g.add(m)
     }
-    // 上段
+    // 2026-11-13 Pass 1A：分股水簾。好幾股合成一個 BufferGeometry（一層一個 draw call）；每股是往前鼓的曲面（厚 0.15～0.45 m，側面不是一張卡片），
+    // 寬度沿高度有 5～12% 的不規則變化，往下慢慢展開（spread：股的中心往外移、grow：股變寬）
+    // 每股：a/b＝頂／底的中心（相對瀑布中線），w0/w1＝頂／底寬，th＝往前鼓的厚度，k＝橫移的曲線（>1 先直後散），
+    // hit＝[v, 橫移, 外推]：在高度 v 撞到岩面凸出，水被往旁邊、往外撥開一點再落下；al＝這股的水量比例（不透明度）
+    const strands = (yA, yB, zA, list, { back, outK, mat, ro, v0 = 0, N = 34, M = 6, sc = 1 }) => {
+      const P = [], U = [], S = [], W = [], AL = [], I = []
+      list.forEach((q, si) => {
+        const seed = q.seed ?? (si * 0.618 + q.a * 0.37) % 1, base = P.length / 3, ya = yA - (q.yOff ?? 0)
+        for (let k = 0; k <= N; k++) {
+          const v = v0 + (1 - v0) * k / N, y = ya - (ya - yB) * v
+          const wob = 1 + 0.07 * Math.sin(v * 9.0 + seed * 7) + 0.04 * Math.sin(v * 23.0 + seed * 3)
+          let cx = F.x + (q.a + (q.b - q.a) * Math.pow(v, q.k ?? 1.3)) * sc, out = back + outK * v * v + 0.12 * Math.sin(seed * 5 + v * 4) * v
+          if (q.hit) { const hk = THREE.MathUtils.smoothstep(v, q.hit[0], q.hit[0] + 0.1); cx += q.hit[1] * hk; out += q.hit[2] * hk }
+          const w = (q.w0 + (q.w1 - q.w0) * v) * sc * wob * (q.hit ? 1 + 0.25 * Math.exp(-(((v - q.hit[0] - 0.06) / 0.06) ** 2)) : 1)
+          for (let m = 0; m <= M; m++) { const u = m / M; P.push(cx + (u - 0.5) * w, y, zA - out - q.th * Math.sin(Math.PI * u) * (0.75 + 0.25 * Math.sin(v * 11 + seed * 9))); U.push(u, v); S.push(seed); W.push(w * 0.04 * Math.min(1, v * 3)); AL.push(q.al ?? 1) }
+          if (k) for (let m = 0; m < M; m++) { const a2 = base + (k - 1) * (M + 1) + m, c = a2 + M + 1; I.push(a2, a2 + 1, c, a2 + 1, c + 1, c) }
+        }
+      })
+      const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2))
+      fg.setAttribute('aSeed', new THREE.Float32BufferAttribute(S, 1)); fg.setAttribute('aSway', new THREE.Float32BufferAttribute(W, 1)); fg.setAttribute('aAlpha', new THREE.Float32BufferAttribute(AL, 1)); fg.setIndex(I)
+      const m = new THREE.Mesh(fg, mat); m.renderOrder = ro; m.frustumCulled = false; g.add(m); return m
+    }
+    // 上段：6 股，頂寬約 7.6 m（ChatGPT 7.5～8.5）、落到岩棚展到約 8.2 m——岩棚上的步道繞水潭一圈，兩側的路在 x≈195.7 / 203.7，
+    // 再寬會落在步道上（規格 9～11 m 要先把岩棚凹槽加寬，留到 Pass 1C）
+    // 2026-11-13 Pass 1A-R：不再是等比例展開的扇形——左右不對稱、中間兩股往內收、三股在半路撞到岩面凸出被撥開
+    const UP6 = [
+      { a: -3.0, b: -3.4, w0: 1.1, w1: 1.15, th: 0.22, k: 1.6, hit: [0.42, -0.28, 0.18] },
+      { a: -1.75, b: -2.2, w0: 1.3, w1: 1.5, th: 0.32, k: 1.1 },
+      { a: -0.45, b: -0.35, w0: 1.45, w1: 1.7, th: 0.42, k: 1.0 },
+      { a: 0.85, b: 0.7, w0: 1.4, w1: 1.55, th: 0.38, k: 1.2, hit: [0.63, 0.22, 0.15] },
+      { a: 2.05, b: 2.35, w0: 1.2, w1: 1.3, th: 0.28, k: 1.4 },
+      { a: 3.05, b: 3.3, w0: 0.95, w1: 1.0, th: 0.2, k: 2.0, hit: [0.3, 0.2, 0.12], al: 0.8 },
+    ]
+    strands(topY + 0.05, shelfY - 0.1, zUp, UP6, { back: 0.25, outK: 1.3, mat: fallMat({ spd: 0.7, a: 0.5, dark: 0.35, strand: 1 }), ro: 3 })
+    strands(topY + 0.05, shelfY - 0.1, zUp, UP6.map((q) => ({ ...q, w0: q.w0 * 1.06, w1: q.w1 * 1.06 })), { back: 0.45, outK: 2.0, mat: fallMat({ spd: 1.0, a: 0.82, strand: 1 }), ro: 4 })
+    // 上段（舊：兩片寬 3～5 m 的平面水簾）
+    if (false) {
     tier(topY + 0.05, shelfY - 0.1, zUp, 1.4, 2.0, 0.2, 1.3, fallMat({ spd: 0.7, a: 0.55, dark: 0.35 }), 3)
     tier(topY + 0.05, shelfY - 0.1, zUp, 1.6, 2.4, 0.4, 2.0, fallMat({ spd: 1.0, a: 1.0 }), 4)
+    }
     // 2026-11-12 使用者「中間瀑布下來那邊是不是要有水像湖」→ ChatGPT：不是整片湖，是上段瀑布沖出來的一個不規則水潭（7×5 m、腎形、靠後面的岩壁），
     // 水從前面的缺口（寬約 3 m）經過一小段水道流到岩簷口，接下段瀑布——水潭、水道、下段瀑布頂要連成一條。水潭邊一圈高出水面 0.2～0.6 m 的岩石，
     // 岩棚兩側各留 1～2 m 沒淹到的岩面。落點 3 m 內一團白色的氣泡水、外面一圈打轉的碎白沫、出口一條條順著流的白沫；中間深綠、邊上看得到底。
     // （岩棚是岩壁網格的一部分、沒辦法往下挖 → 水面比岩棚高 0.32 m，靠那圈岩石圍住；深淺用顏色和透明度做）
-    const MP = { x: F.x + 0.2, z: zUp - 2.5, rx: 3.7, rz: 2.7, y: shelfY + 0.16, ix: F.x, iz: zUp - 1.9 }
+    const MP = { x: F.x + 0.2, z: zUp - 2.5, rx: 4.25, rz: 2.75,   /* 2026-11-13 Pass 1A：3.7 → 4.25（上段落水展到 8.2 m 要整片落進潭裡；兩側步道在 x≈195.7／203.7，不能再大） */ y: shelfY + 0.16, ix: F.x, iz: zUp - 1.9 }
     const mpRim = (a) => { const k = 1 + 0.15 * Math.sin(a * 2 + 0.7) + 0.09 * Math.sin(a * 3 + 2.1) - 0.22 * Math.max(0, Math.cos(a - 4.25)) ** 3; return [MP.x + Math.cos(a) * MP.rx * k, MP.z + Math.sin(a) * MP.rz * k] }
     { const NA = 56, NR = 7, P = [], E = [], I = []
       for (let r = 0; r <= NR; r++) for (let a = 0; a < NA; a++) { const [ex, ez] = mpRim(a / NA * TAU), t = r / NR; P.push(lerpN(MP.x, ex, t), MP.y, lerpN(MP.z, ez, t)); E.push(1 - t) }
@@ -464,7 +553,7 @@ export function buildYosemite(scene, { lib } = {}) {
           float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
           float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++){ s += a * n(p); p *= 2.03; a *= 0.5; } return s; }
           void main(){
-            vec2 d = vW.xz - uImp; float dI = length(d);
+            vec2 d = vW.xz - uImp; float dI = length(vec2(d.x * 0.5, d.y));   /* 2026-11-13 Pass 1A：落水帶跟著上段水簾拉成 8 m 寬（x 方向壓扁） */
             float lit = 0.12 + 0.95 * uDay;
             if (vE < 0.0) {   /* 外圈：濕的深色泥砂、碎石，往外淡掉 */
               float g = n(vW.xz * 9.0) * 0.5 + n(vW.xz * 23.0) * 0.5;
@@ -504,13 +593,13 @@ export function buildYosemite(scene, { lib } = {}) {
       // 水道：水潭前面的缺口 → 岩簷口（接下段瀑布）。一片斜斜的薄水，流得比瀑布慢
       { const P2 = [], E2 = [], I2 = [], N = 6, M = 6, z0 = MP.z - MP.rz * 0.9, zE = fz - 1.25   // zE＝岩棚的前緣
         pm.uniforms.uOut.value.z = z0; pm.uniforms.uLip.value = zE
-        for (let k = 0; k <= N; k++) for (let m = 0; m <= M; m++) { const t = k / N, u = m / M, z = z0 + (zE - z0) * t, w = 1.5 + 0.15 * t; P2.push(F.x + (u * 2 - 1) * w, MP.y - 0.03 * t, z); E2.push(Math.sin(u * Math.PI) * 0.6) }
+        for (let k = 0; k <= N; k++) for (let m = 0; m <= M; m++) { const t = k / N, u = m / M, z = z0 + (zE - z0) * t, w = 2.05 + 0.15 * t; P2.push(F.x + (u * 2 - 1) * w, MP.y - 0.03 * t, z); E2.push(Math.sin(u * Math.PI) * 0.6) }
         for (let k = 0; k < N; k++) for (let m = 0; m < M; m++) { const a = k * (M + 1) + m, b = a + 1, c2 = a + M + 1, d2 = c2 + 1; I2.push(a, c2, b, b, c2, d2) }
         const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P2, 3)); fg.setAttribute('aEdge', new THREE.Float32BufferAttribute(E2, 1)); fg.setIndex(I2)
         const m = new THREE.Mesh(fg, pm); m.renderOrder = 4; m.name = 'midChannel'; g.add(m)
         // 過了岩棚前緣：水往下彎、變成一片白白的水簾，接到下段瀑布的頂（用瀑布的材質；第一版整段用水潭的材質，懸在空中像一塊玻璃板）
         const P3 = [], U3 = [], I3 = [], N3 = 8
-        for (let k = 0; k <= N3; k++) { const t = k / N3, z = zE + 0.25 + (zLipW - zE - 0.25) * t, w = 1.6 + 0.25 * t, y = lerpN(MP.y - 0.02, shelfY - 0.4, Math.pow(t, 1.7)); P3.push(F.x - w, y, z, F.x + w, y, z); U3.push(0, t, 1, t); if (k) { const a = (k - 1) * 2; I3.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) } }
+        for (let k = 0; k <= N3; k++) { const t = k / N3, z = zE + 0.25 + (zLipW - zE - 0.25) * t, w = 2.15 + 0.2 * t, y = lerpN(MP.y - 0.02, shelfY - 0.4, Math.pow(t, 1.7)); P3.push(F.x - w, y, z, F.x + w, y, z); U3.push(0, t, 1, t); if (k) { const a = (k - 1) * 2; I3.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) } }
         const g3 = new THREE.BufferGeometry(); g3.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3)); g3.setAttribute('uv', new THREE.Float32BufferAttribute(U3, 2)); g3.setIndex(I3)
         const m3 = new THREE.Mesh(g3, fallMat({ spd: 0.5, a: 0.9, dark: 0.25 })); m3.renderOrder = 5; m3.name = 'midSpill'; g.add(m3) }
       // 水潭邊的岩石（掃描的真岩石）：圍一圈、高出水面 0.2～0.6 m；前面的出水口留 3 m、後面是岩壁不用放；水裡兩三顆露出來
@@ -522,12 +611,12 @@ export function buildYosemite(scene, { lib } = {}) {
         for (let i = 0; i < 60; i++) {
           const a = (i + rnd() * 0.6) / 60 * TAU, [ex, ez] = mpRim(a)
           if (ez > zUp - 0.5) continue                                         // 後面貼著岩壁
-          if (ez < MP.z - MP.rz * 0.6 && Math.abs(ex - F.x) < 1.65) continue   // 出水口
+          if (ez < MP.z - MP.rz * 0.6 && Math.abs(ex - F.x) < 2.25) continue   // 出水口（2026-11-13 加寬到 4.4 m）
           const rr = 1.0 + rnd() * 0.1; put(MP.x + (ex - MP.x) * rr, MP.z + (ez - MP.z) * rr, 0.2 + rnd() * 0.4, rnd() < 0.3)
         }
         // 跨過出水口的踏腳石（扁的掃描石頭，頂面比水面高一點）
         { const FH = { mrock_10: 0.77, mrock_12: 0.74, mrock_7: 0.74 }, fn = Object.keys(FH).filter((n) => lib[n]), sl = {}
-          fn.length && [198.75, 199.65, 200.5, 201.4].forEach((sx, k) => { const n = fn[k % fn.length], sc = 0.5 + 0.08 * (k % 2), near = SHP.filter(([px]) => Math.abs(px - sx) < 0.6 && true).sort((a, b) => a[1] - b[1])[0]; (sl[n] ||= []).push({ p: V(sx, shelfY - FH[n] * sc * 0.55 + 0.22, near ? near[1] : YOSE.base(sx) + 0.8), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), k * 1.7), s: V(sc, sc * 0.55, sc) }) })
+          fn.length && [197.95, 198.85, 199.75, 200.65, 201.55, 202.3].forEach((sx, k) => { const n = fn[k % fn.length], sc = 0.5 + 0.08 * (k % 2), near = SHP.filter(([px]) => Math.abs(px - sx) < 0.6 && true).sort((a, b) => a[1] - b[1])[0]; (sl[n] ||= []).push({ p: V(sx, shelfY - FH[n] * sc * 0.55 + 0.22, near ? near[1] : YOSE.base(sx) + 0.8), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), k * 1.7), s: V(sc, sc * 0.55, sc) }) })
           for (const [n, l3] of Object.entries(sl)) scatter(g, lib[n], l3, { cast: true }) }
         put(MP.x - 2.1, MP.z - 0.6, 0.25, true); put(MP.x + 2.3, MP.z + 0.3, 0.18, false); put(MP.x + 1.2, MP.z - 1.3, 0.12, false)   // 水裡露出來的
         for (const n of names) if (list[n].length) scatter(g, lib[n], list[n], { cast: true })
@@ -539,7 +628,7 @@ export function buildYosemite(scene, { lib } = {}) {
     }
     // 岩棚前緣的欄杆（水潭前面那段步道外側；出水口上面不立柱）
     { const pp = [], sg = [], ironL = new THREE.MeshStandardMaterial({ color: 0x33363a, roughness: 0.5, metalness: 0.6 }); let prev = null
-      for (let x = 193.6; x <= 208.4; x += 1.2) { const p = V(x, shelfY, YOSE.base(x) - 0.25); if (Math.abs(x - F.x) < 1.9) { prev = null; continue } pp.push(p); addCollider(p.x, p.z, 0.12, p.y + 1.1, p.y - 0.4); if (prev) sg.push([prev, p]); prev = p }
+      for (let x = 193.6; x <= 208.4; x += 1.2) { const p = V(x, shelfY, YOSE.base(x) - 0.25); if (Math.abs(x - F.x) < 2.4) { prev = null; continue } pp.push(p); addCollider(p.x, p.z, 0.12, p.y + 1.1, p.y - 0.4); if (prev) sg.push([prev, p]); prev = p }
       for (let x = 193.6; x <= 208.4; x += 0.45) addCollider(x, YOSE.base(x) - 0.45, 0.3, shelfY + 1.2, shelfY - 0.5)   // 整條前緣擋住（出水口那 3 m 也是）
       const pm2 = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 6).translate(0, 0.55, 0), ironL, pp.length); pp.forEach((p, k) => pm2.setMatrixAt(k, new THREE.Matrix4().makeTranslation(p.x, p.y, p.z))); g.add(pm2)
       const rm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.022, 0.022, 1, 5).rotateZ(Math.PI / 2), ironL, sg.length * 2), q4 = new THREE.Quaternion()
@@ -547,9 +636,20 @@ export function buildYosemite(scene, { lib } = {}) {
       g.add(rm) }
     // 下段
     const yLipW = shelfY - 0.4
-    tier(yLipW, poolY, zLipW, 1.8, 5.4, 0.1, 2.0, fallMat({ spd: 0.7, a: 0.5, dark: 0.35 }), 3)
-    tier(yLipW, poolY, zLipW, 2.0, 6.2, 0.25, 3.0, fallMat({ spd: 1.0, a: 0.95 }), 4)
-    tier(yLipW, poolY, zLipW, 2.3, 6.8, 0.6, 3.8, fallMat({ spd: 1.35, a: 0.42, low: 1 }), 5, 0.3)
+    // 2026-11-13 Pass 1A-R（ChatGPT：側邊的水不能從步道底下憑空冒出來）：下段 7 股全部從岩棚出水口（4.4 m）翻下來；
+    // 中間 3 股是主水流（約 7 成水量），外側 4 股是從主流分出去、邊落邊往兩側散開的薄水（約 3 成），落到湖面展到約 14 m、左右不對稱
+    const LOW7 = [
+      { a: -1.9, b: -6.6, w0: 0.7, w1: 1.6, th: 0.15, k: 1.5, al: 0.55 },
+      { a: -1.65, b: -4.5, w0: 0.8, w1: 1.8, th: 0.2, k: 1.25, al: 0.65, hit: [0.35, -0.3, 0.2] },
+      { a: -1.2, b: -1.9, w0: 1.35, w1: 2.4, th: 0.38, k: 1.0 },
+      { a: 0.05, b: 0.15, w0: 1.5, w1: 2.6, th: 0.45, k: 1.0 },
+      { a: 1.3, b: 2.1, w0: 1.35, w1: 2.3, th: 0.36, k: 1.1 },
+      { a: 1.7, b: 4.2, w0: 0.85, w1: 1.7, th: 0.2, k: 1.35, al: 0.65 },
+      { a: 1.95, b: 6.9, w0: 0.65, w1: 1.5, th: 0.15, k: 1.7, al: 0.5, hit: [0.5, 0.35, 0.18] },
+    ]
+    strands(yLipW, poolY, zLipW, LOW7, { back: 0.1, outK: 2.0, mat: fallMat({ spd: 0.7, a: 0.45, dark: 0.35, strand: 1 }), ro: 3 })
+    strands(yLipW, poolY, zLipW, LOW7.map((q) => ({ ...q, w0: q.w0 * 1.08, w1: q.w1 * 1.08 })), { back: 0.25, outK: 3.0, mat: fallMat({ spd: 1.0, a: 0.8, strand: 1 }), ro: 4 })
+    strands(yLipW, poolY, zLipW, LOW7.map((q) => ({ ...q, w0: q.w0 * 1.2, w1: q.w1 * 1.25, th: q.th + 0.2 })), { back: 0.6, outK: 3.8, mat: fallMat({ spd: 1.35, a: 0.36, low: 1, strand: 1 }), ro: 5, v0: 0.3 })
     // 2026-11-12 水霧裡的彩虹（使用者：有水下來加上太陽，產生彩虹更好）。照物理來：主虹在「背對太陽的方向」外 42°——
     // 把落水點周圍的水霧當成一顆半徑 10 m 的球，球面上每一點看「鏡頭→這一點」跟反日方向的夾角，40～43° 那一圈上色（裡紫外紅）。
     // 所以要太陽在背後、站對位置才看得到，太陽移動彩虹也跟著移動；陰天、晚上沒有
@@ -574,14 +674,31 @@ export function buildYosemite(scene, { lib } = {}) {
       // 球的背面會被岩壁擋住 → 改成落水點前面 1 m 的一片直立的面（寬 22、高 18），夾角照樣逐點算
       const rb = new THREE.Mesh(new THREE.PlaneGeometry(22, 18, 1, 1), rbM); rb.position.copy(rbM.uniforms.uC.value).add(V(0, 1.5, -1.0)); rb.renderOrder = 6; rb.frustumCulled = false; rb.name = 'rainbow'; g.add(rb) }
     // 水潭：橢圓、深綠帶一點藍
-    const poolM = new THREE.MeshStandardMaterial({ color: 0x16604e, roughness: 0.06, metalness: 0.12, transparent: true, opacity: 0.74 })   /* 2026-11-12 ChatGPT：不透明的土耳其藍像油漆 → 深一點的翡翠綠、透一點（看得到岸邊水下的石頭） */   // 2026-11-12 翡翠綠（參考照的水色）
+    // 2026-11-13 Pass 1B（ChatGPT）：湖面不再是一片固定的翡翠綠——照水深上色（淺處透、看得到湖底石頭，深處暗藍綠）、
+    // 下段瀑布落水的地方是一條橫的衝擊帶（0～2.5 m 翻騰白水、2.5～5 m 破碎泡沫往外散、5～9 m 慢慢減弱），
+    // 波紋：平靜處很細（0.5～2.5 cm）、落水附近大（4～12 cm），好幾個方向、波長 0.3～2.5 m 混在一起；岸邊零星的細白沫
+    const zLipL = fc.lip ? fc.lip.z - 0.35 : fz, zImp = zLipL - 3.25   // 下段主水簾落到湖面的地方（水簾底部往外 3.25 m）
+    const DB = { x0: 181, z0: 64, w: 34, h: 40, n: 0.5 }   // 水深貼圖範圍（湖＋凹槽）
+    const depthTex = (() => { const nx = DB.w / DB.n, nz = DB.h / DB.n, d = new Uint8Array(nx * nz)
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const x = DB.x0 + (i + 0.5) * DB.n, z = DB.z0 + (j + 0.5) * DB.n; d[j * nx + i] = Math.round(255 * Math.min(1, Math.max(0, (poolY - alpineHeight(x, z)) / 4))) }
+      const t = new THREE.DataTexture(d, nx, nz, THREE.RedFormat, THREE.UnsignedByteType); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t })()
+    const poolM = new THREE.MeshStandardMaterial({ envMapIntensity: 0.55, color: 0x16604e, roughness: 0.14, metalness: 0.02, transparent: true, opacity: 0.74 })   /* 2026-11-12 ChatGPT：不透明的土耳其藍像油漆 → 深一點的翡翠綠、透一點（看得到岸邊水下的石頭） */   // 2026-11-12 翡翠綠（參考照的水色）
     // 2026-11-11 使用者：下雨時這座湖也要有漣漪（濕地那支水面 shader 已經有，這裡是一片平的標準材質）→ 同一套雨滴圈：改法線＋圈的亮邊
     poolM.onBeforeCompile = (sh) => {
       sh.uniforms.uRT = uT; sh.uniforms.uRain = weatherU.rain
+      sh.uniforms.uDepth = { value: depthTex }; sh.uniforms.uDB = { value: new THREE.Vector4(DB.x0, DB.z0, DB.w, DB.h) }
+      sh.uniforms.uImp = { value: new THREE.Vector3(F.x - 2.4, F.x + 2.5, zImp) }; sh.uniforms.uImp2 = { value: new THREE.Vector2(F.x - 7.0, F.x + 7.3) }
+      sh.uniforms.uOutlet = { value: new THREE.Vector2(183.5, 76.5) }
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vRW;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvRW = (modelMatrix * vec4(position, 1.0)).xyz;')
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
         varying vec3 vRW; uniform float uRT; uniform float uRain;
+        uniform sampler2D uDepth; uniform vec4 uDB; uniform vec3 uImp; uniform vec2 uImp2; uniform vec2 uOutlet;
         float rhash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float lvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rhash(i), rhash(i + vec2(1, 0)), f.x), mix(rhash(i + vec2(0, 1)), rhash(i + vec2(1, 1)), f.x), f.y); }
+        float lfbm(vec2 p) { return lvn(p) * 0.55 + lvn(p * 2.07 + 3.1) * 0.3 + lvn(p * 4.3 + 7.7) * 0.15; }
+        float segD(vec2 p, float x0, float x1, float zc, out vec2 away) { vec2 c = vec2(clamp(p.x, x0, x1), zc), d = p - c; float L = length(d); away = L > 1e-3 ? d / L : vec2(0.0, -1.0); return L; }
+        float lkFoam, lkImp, lkDep;
+        vec2 lkGrad;
         vec3 rainRings(vec2 p, float cell, float seed) {
           vec3 acc = vec3(0.0);
           vec2 g = floor(p / cell);
@@ -597,7 +714,48 @@ export function buildYosemite(scene, { lib } = {}) {
           }
           return acc;
         }`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+        {
+          vec2 q = vRW.xz; float t = uRT;
+          lkDep = texture2D(uDepth, clamp((q - uDB.xy) / uDB.zw, 0.0, 1.0)).r * 4.0;
+          vec2 aw1, aw2; float d1 = segD(q, uImp.x, uImp.y, uImp.z, aw1), d2 = segD(q, uImp2.x, uImp2.y, uImp.z, aw2) + 1.8;   // 兩側薄水落點的衝擊小一號
+          float dI = min(d1, d2); vec2 away = d1 < d2 ? aw1 : aw2;
+          // 1B 收尾（ChatGPT：外圈像畫好的圓環）：衝擊範圍的邊界用低頻雜訊推進推出 ±0.8 m，每一段擴散速度不同
+          float segK = lvn(q * 0.28 + 4.0);
+          dI = max(0.0, dI + (lfbm(q * 0.35 + vec2(t * 0.04, 0.0)) - 0.5) * 1.7);
+          lkImp = smoothstep(9.0, 0.0, dI);
+          // 流向：從落水帶往外推，離遠了慢慢轉向出水口
+          vec2 toOut = normalize(uOutlet - q + 1e-3), flow = normalize(mix(away, toOut, smoothstep(2.5, 8.0, dI)));   // 泡沫一離開落水帶就慢慢轉向出水口漂
+          vec2 adv = q - flow * t * mix(0.9, 0.25, smoothstep(2.0, 12.0, dI)) * (0.65 + 0.7 * segK);
+          float core = smoothstep(2.5, 0.8, dI), mid = smoothstep(5.0, 2.5, dI) * (1.0 - core), outer = smoothstep(9.0, 5.0, dI) * (1.0 - smoothstep(5.0, 2.5, dI));
+          float nA = lfbm(adv * 1.6 + vec2(0.0, t * 0.7)), nB = lfbm(adv * 3.1 - t * 0.4 + 11.0), nC = lfbm(adv * 0.9 + 5.0);
+          float holes = smoothstep(0.52, 0.66, lfbm(adv * 1.15 + vec2(33.0, t * 0.3)));     // 白水裡約 2 成露出深色的水（翻上來的水團之間）
+          float foam = core * (0.58 + 0.42 * nA) * (1.0 - 0.85 * holes);                    // 0～2.5 m：翻騰的白水
+          foam += mid * smoothstep(0.42, 0.68, nA * 0.6 + nB * 0.5) * 0.85 * smoothstep(0.2, 0.45, segK + nC * 0.4);   // 破碎的弧，一段段斷開           // 2.5～5 m：破碎、一塊塊往外散
+          foam += outer * smoothstep(0.66, 0.86, nB * 0.7 + nC * 0.4) * 0.38;           // 5～9 m：零星的泡沫線
+          foam += smoothstep(14.0, 8.0, dI) * (1.0 - lkImp) * smoothstep(0.8, 0.92, lfbm(adv * 2.2 + 21.0)) * 0.12;   // 再遠：順著流向的細泡沫
+          float shore = smoothstep(0.32, 0.06, lkDep);                                // 岸邊 0.2～0.6 m：一小段一小段，不是一整圈白線
+          foam += shore * smoothstep(0.55, 0.78, lfbm(q * 1.4 + t * 0.15)) * 0.5;
+          lkFoam = clamp(foam, 0.0, 1.0);
+          // 波紋（法線用的斜率）：四個方向、波長 0.35～2.4 m；平靜處振幅約 1 cm、落水附近 4～12 cm
+          float A = mix(0.0045, 0.06, lkImp * lkImp);
+          vec2 g = vec2(0.0);
+          vec2 D1 = normalize(vec2(0.8, 0.6)), D2 = normalize(vec2(-0.5, 0.86)), D3 = normalize(vec2(0.95, -0.3)), D4 = normalize(vec2(-0.9, -0.42));
+          g += D1 * 2.6 * cos(dot(D1, q) * 2.6 - t * 2.0) * 1.0; g += D2 * 4.5 * cos(dot(D2, q) * 4.5 - t * 2.7) * 0.6;
+          g += D3 * 9.0 * cos(dot(D3, q) * 9.0 + nC * 3.0 - t * 3.8) * 0.22; g += D4 * 17.9 * cos(dot(D4, q) * 17.9 + nB * 4.0 - t * 5.3) * mix(0.06, 0.18, lkImp);   // 細波：平靜處很弱（不然太陽在湖面上灑一片白點）
+          g += away * 6.0 * cos(dI * 6.0 + nC * 9.0 - t * 7.0) * 0.22 * lkImp * (0.3 + nA);   // 往外推的波，相位被雜訊打亂（不要一圈圈同心圓）        // 落水往外推的波
+          lkGrad = g * A;
+          // 水色：照水深（淺處透、偏綠褐看得到底；深處暗藍綠），翻騰的水帶一點氣泡的青白
+          vec3 shallowC = vec3(0.13, 0.21, 0.16), deepC = vec3(0.016, 0.06, 0.075);
+          diffuseColor.rgb = mix(shallowC, deepC, smoothstep(0.08, 2.6, lkDep));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.78, 0.78), core * 0.35 * (1.0 - holes));
+          diffuseColor.a = mix(0.3, 0.94, smoothstep(0.05, 1.9, lkDep)) * smoothstep(0.0, 0.05, lkDep);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.94, 0.95), lkFoam);
+          diffuseColor.a = max(diffuseColor.a, lkFoam * smoothstep(0.0, 0.05, lkDep));
+        }`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.75, lkFoam);')
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        normal = normalize(normal + (viewMatrix * vec4(-lkGrad.x, 0.0, -lkGrad.y, 0.0)).xyz);
         float rainK = 0.0;
         if (uRain > 0.01) {
           float rf = 1.0 / (1.0 + 0.00035 * dot(cameraPosition - vRW, cameraPosition - vRW));
@@ -617,14 +775,21 @@ export function buildYosemite(scene, { lib } = {}) {
       { const nn = rg.attributes.normal; for (let k = 0; k < nn.count; k++) nn.setXYZ(k, 0, 1, 0) }
       const rw = new THREE.Mesh(rg, poolM); rw.renderOrder = pool.renderOrder; rw.name = 'recessWater'; g.add(rw) }
     const foamT = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'), r = mulberry32(9); for (let i = 0; i < 1600; i++) { const a = r() * TAU, d = Math.pow(r(), 0.7) * 120; x.fillStyle = `rgba(255,255,255,${(0.1 + r() * 0.45) * (1 - d / 130)})`; x.beginPath(); x.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 1 + r() * 5, 0, TAU); x.fill() } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t })()
-    for (const [k, sc] of [[0, 6.5], [1, 4.2]]) {
+    for (const [k, sc] of []) {   // 2026-11-13 Pass 1B：落水白沫改在湖面 shader 裡（照落水帶的形狀），這兩片圓形貼圖拿掉
       const fm = new THREE.Mesh(new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamT, transparent: true, depthWrite: false, opacity: 0.8 }))
       fm.scale.set(sc, 1, sc * 0.6); fm.position.set(F.x, poolY + 0.02 + k * 0.01, fz - 3.2); fm.userData = { sc, k }; fm.renderOrder = 2; g.add(fm); foams.push(fm)
     }
     // 水霧：大片、慢慢飄、有的往步道那邊飄過來
+    const zImpM = (fc.lip ? fc.lip.z - 0.35 : fz) - 3.25
     const mistT = mistTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c) })()
-    for (let k = 0; k < 26; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.4 })); const p0 = V(F.x + (rnd() - 0.5) * 11, poolY + 0.6 + rnd() * 9, fz - 2.8 - rnd() * 4); sp.position.copy(p0); sp.scale.setScalar(4 + rnd() * 6); sp.userData = { ph: rnd() * TAU, p0 }; sp.renderOrder = 6; g.add(sp); mist.push(sp) }
-    for (let k = 0; k < 9; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.3 })); const p0 = V(F.x + (rnd() - 0.5) * 5, SHELF_Y + 0.6 + rnd() * 3.2, fz + YOSE.rec(F.x) - 1.2 - rnd() * 2.2); sp.position.copy(p0); sp.scale.setScalar(2.2 + rnd() * 3); sp.userData = { ph: rnd() * TAU, p0, op: 0.75 }; sp.renderOrder = 6; g.add(sp); mist.push(sp) }   // 2026-11-12 中段水潭上面的水霧（落點 2～3 m 內濃）
+    // 2026-11-13 Pass 1B（ChatGPT：水霧太白、把森林洗白）：重新分配——落水帶附近 0～5 m 濃（12 團）、5～12 m 慢慢變淡（9 團）、
+    // 12～25 m 只剩幾團很淡的（5 團）、再遠沒有；每團有自己的高度、會順著風往湖面飄；顏色跟著天色（晚上不再像發光的白煙）
+    for (const [n, r0, r1, op, s0, s1, h0, h1] of [[12, 0, 5, 0.34, 3, 6, 0.4, 5], [9, 5, 12, 0.16, 4, 7, 0.8, 7], [5, 12, 25, 0.06, 5, 8, 1.5, 9]]) for (let k = 0; k < n; k++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0 })), dx = (rnd() - 0.5) * 2, r = r0 + rnd() * (r1 - r0)
+      const p0 = V(F.x + dx * (r0 < 1 ? 5.5 : 8 + r * 0.4), poolY + h0 + rnd() * (h1 - h0), zImpM - r * (0.6 + 0.4 * rnd()))
+      sp.position.copy(p0); sp.scale.setScalar(s0 + rnd() * (s1 - s0)); sp.userData = { ph: rnd() * TAU, p0, k: op * (0.7 + 0.6 * rnd()), drift: 0.6 + rnd() * 0.8 }; sp.renderOrder = 6; g.add(sp); mist.push(sp)
+    }
+    for (let k = 0; k < 9; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.3 })); const p0 = V(F.x + (rnd() - 0.5) * 5, SHELF_Y + 0.6 + rnd() * 3.2, fz + YOSE.rec(F.x) - 1.2 - rnd() * 2.2); sp.position.copy(p0); sp.scale.setScalar(2.2 + rnd() * 3); sp.userData = { ph: rnd() * TAU, p0, k: 0.22, drift: 0.3 }; sp.renderOrder = 6; g.add(sp); mist.push(sp) }   // 2026-11-12 中段水潭上面的水霧（落點 2～3 m 內濃）
     // 水花：落點往上往外噴的小水滴（加色、會飄散）
     const NS = 500, sp = new Float32Array(NS * 3), sv = []
     const reset = (i, first) => { const x = F.x + (rnd() - 0.5) * 9, z = fz - 2.6 - rnd() * 1.8; sp[i * 3] = x; sp[i * 3 + 1] = poolY + (first ? rnd() * 5 : 0.1); sp[i * 3 + 2] = z; sv[i] = V((rnd() - 0.5) * 1.6, 2 + rnd() * 4.5, -(0.4 + rnd() * 2.2)) }
@@ -632,7 +797,7 @@ export function buildYosemite(scene, { lib } = {}) {
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3))
     const sprayM = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.55, depthWrite: false, map: mistT, blending: THREE.AdditiveBlending })
     const spray = new THREE.Points(sg, sprayM); spray.frustumCulled = false; spray.renderOrder = 7; g.add(spray)
-    sprayU = (dt) => { for (let i = 0; i < NS; i++) { sv[i].y -= 3.2 * dt; sv[i].multiplyScalar(1 - 0.9 * dt); sp[i * 3] += sv[i].x * dt; sp[i * 3 + 1] += sv[i].y * dt; sp[i * 3 + 2] += sv[i].z * dt; if (sp[i * 3 + 1] < poolY || rnd() < 0.004) reset(i, false) } sg.attributes.position.needsUpdate = true }
+    sprayU = (dt) => { sprayM.color.setScalar(0.1 + 0.9 * dayLight.value); for (let i = 0; i < NS; i++) { sv[i].y -= 3.2 * dt; sv[i].multiplyScalar(1 - 0.9 * dt); sp[i * 3] += sv[i].x * dt; sp[i * 3 + 1] += sv[i].y * dt; sp[i * 3 + 2] += sv[i].z * dt; if (sp[i * 3 + 1] < poolY || rnd() < 0.004) reset(i, false) } sg.attributes.position.needsUpdate = true }
   }
 
   // ---------- 秘境瀑布步道（2026-11-12；路線 layout.js YOSE.stairs、設計 docs/GORGE_ROUTE.txt）----------
@@ -760,8 +925,8 @@ export function buildYosemite(scene, { lib } = {}) {
       const F2 = YOSE.fall, zLip = YOSE.base(F2.x) + 0.45 + YOSE.rec(F2.x), zSrc = 101.6, NS = 40, P = [], U = [], I = []   // 2026-11-10 起點改在上游小溪接進來的地方（以前從公園邊界憑空冒出來）
       const cx = (t) => F2.x + 1.6 * Math.sin(t * 2.6 + 0.5) * (1 - t) - 0.8 * (1 - t)
       for (let i = 0; i <= NS; i++) {
-        const t = i / NS, z = lerpN(zSrc, zLip, t), x = cx(t), w = lerpN(1.6, 3.0, t * t), y = YOSE.topY(x) + 0.07 - 0.02 * t
-        P.push(x - w, y, z, x + w, y, z); U.push(0, t * 5, 1, t * 5)
+        const t = i / NS, z = lerpN(zSrc, zLip, t), x = cx(t), w = lerpN(1.6, 4.0, t * t * t), dy = 0.07 - 0.02 * t   // 2026-11-13 Pass 1A：接近岩唇展到 8 m 寬的匯流岩槽（接上段 6 股，頂寬 7.6 m）
+        P.push(x - w, YOSE.topY(x - w) + dy, z, x + w, YOSE.topY(x + w) + dy, z); U.push(0, t * 5, 1, t * 5)
         if (i) { const a = (i - 1) * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3) }
       }
       const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); sg.setIndex(I); sg.computeVertexNormals()
@@ -1102,7 +1267,11 @@ export function buildYosemite(scene, { lib } = {}) {
   function tick(t) {
     const dt = Math.min(0.1, Math.max(0, t - lastT)); lastT = t
     uT.value = t
-    for (const sp of mist) { const u = sp.userData; sp.material.opacity = (u.op ?? 1) * (0.28 + 0.16 * Math.sin(t * 0.6 + u.ph)); sp.position.set(u.p0.x + Math.sin(t * 0.13 + u.ph) * 1.5, u.p0.y + Math.sin(t * 0.21 + u.ph) * 0.8, u.p0.z - (0.5 + 0.5 * Math.sin(t * 0.09 + u.ph)) * 2.5) }
+    { const lit = 0.1 + 0.9 * dayLight.value
+      for (const sp of mist) { const u = sp.userData, ph = ((t * 0.05 * u.drift + u.ph / TAU) % 1)   // 順著風（往湖面、微微往東）飄出去再從落水處重來，頭尾淡入淡出
+        sp.material.opacity = u.k * (0.75 + 0.25 * Math.sin(t * 0.6 + u.ph)) * Math.sin(Math.PI * ph)
+        sp.material.color.setScalar(lit)
+        sp.position.set(u.p0.x + Math.sin(t * 0.13 + u.ph) * 1.2 + ph * 1.5 * u.drift, u.p0.y + Math.sin(t * 0.21 + u.ph) * 0.6 + ph * 1.2, u.p0.z - ph * 3.0 * u.drift) } }
     for (const f of foams) { const k = (t * (f.userData.k ? 0.35 : 0.22) + f.userData.k * 0.5) % 1; f.rotation.y = t * (f.userData.k ? -0.05 : 0.03); f.material.opacity = 0.85 * (1 - k * 0.6) }
     if (sprayU && dt > 0) sprayU(dt)
   }
