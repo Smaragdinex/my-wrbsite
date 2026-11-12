@@ -332,20 +332,48 @@ svg.controls image { mix-blend-mode: multiply; }
 .tier button.on { background: #fff; color: #1f2a24; font-weight: 700; }
 .tier small { display: block; margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: rgba(255, 255, 255, 0.7); }
 
-/* 2026-11-12 使用者：「一開始網頁先進主畫面，再載入」——還沒下載任何模型之前的第一個畫面：選載入等級、按了才開始載 */
-#pre { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 24px; background: radial-gradient(120% 90% at 30% 20%, #2f5a45 0%, #17301f 55%, #0c1a12 100%); color: #fff; }
-#pre[hidden] { display: none !important; }
-#pre .box { width: min(560px, 100%); }
-#pre h1 { margin: 0; font-size: clamp(40px, 7vw, 68px); letter-spacing: 0.06em; }
-#pre p { margin: 10px 0 30px; font-size: 17px; color: rgba(255, 255, 255, 0.82); }
-#pre b { display: block; font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, 0.8); margin-bottom: 10px; }
+/* 2026-11-12 標題畫面：網頁一打開的第一個畫面（還沒下載模型）。背景是 CSS／SVG 動畫：清晨的天空、飄的雲、三層山、飛過去的鳥 */
+#pre { position: fixed; inset: 0; z-index: 30; overflow: hidden; color: #fff; display: grid; place-items: center; }
+#pre[hidden], #pre [hidden] { display: none !important; }
+#pre .sky { position: absolute; inset: 0; background: linear-gradient(180deg, #5f9fd0 0%, #9cc8e2 38%, #f3d9b0 70%, #f6c98f 100%); }
+#pre .sky::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10, 22, 16, 0.62) 0%, rgba(10, 22, 16, 0.28) 42%, rgba(10, 22, 16, 0) 75%); }
+#pre .sun { position: absolute; left: 68%; top: 46%; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, #fff7df 0%, #ffe3a1 45%, rgba(255, 215, 140, 0) 70%); animation: preSun 9s ease-in-out infinite alternate; }
+#pre .cl { position: absolute; left: -30%; height: 46px; border-radius: 999px; background: rgba(255, 255, 255, 0.78); filter: blur(7px); animation: preDrift linear infinite; }
+#pre .cl::before, #pre .cl::after { content: ''; position: absolute; border-radius: 50%; background: inherit; }
+#pre .cl::before { left: 18%; top: -55%; width: 38%; height: 150%; }
+#pre .cl::after { left: 48%; top: -30%; width: 30%; height: 120%; }
+#pre .c1 { top: 12%; width: 300px; animation-duration: 95s; animation-delay: -30s; }
+#pre .c2 { top: 26%; width: 210px; opacity: 0.75; animation-duration: 130s; animation-delay: -85s; }
+#pre .c3 { top: 6%; width: 380px; opacity: 0.6; animation-duration: 160s; animation-delay: -120s; }
+#pre .hill { position: absolute; left: -5%; width: 110%; bottom: 0; }
+#pre .h1 { height: 46%; fill: #7fa48f; animation: preSway 26s ease-in-out infinite alternate; }
+#pre .h2 { height: 38%; fill: #4d7a61; animation: preSway 19s ease-in-out infinite alternate-reverse; }
+#pre .h3 { height: 27%; fill: #24432f; }
+#pre .tb { position: absolute; left: -8%; width: 92px; fill: #1d2b24; animation: preFly linear infinite; }
+#pre .tb .w { transform-origin: 30px 13px; animation: preFlap 0.55s ease-in-out infinite alternate; }
+#pre .tb .w2 { animation-name: preFlap2; }
+#pre .b1 { top: 30%; animation-duration: 24s; }
+#pre .b2 { top: 22%; width: 56px; animation-duration: 31s; animation-delay: -12s; }
+#pre .b3 { top: 38%; width: 70px; animation-duration: 27s; animation-delay: -19s; }
+@keyframes preDrift { to { transform: translateX(160vw); } }
+@keyframes preFly { 0% { transform: translate(0, 0); } 50% { transform: translate(60vw, -5vh); } 100% { transform: translate(120vw, 2vh); } }
+@keyframes preFlap { from { transform: scaleY(1); } to { transform: scaleY(-0.55); } }
+@keyframes preFlap2 { from { transform: scaleY(1); } to { transform: scaleY(-0.55); } }
+@keyframes preSway { from { transform: translateX(-1.5%); } to { transform: translateX(1.5%); } }
+@keyframes preSun { from { transform: scale(1); opacity: 0.9; } to { transform: scale(1.12); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #pre .cl, #pre .tb, #pre .tb .w, #pre .hill, #pre .sun { animation: none; } #pre .tb { left: 60%; } }
+#pre .menu-sheet { position: relative; z-index: 2; width: min(620px, calc(100vw - 32px)); color: #1f2a24; }
+#pre .lbl { display: block; margin: 16px 0 8px; font-size: 14px; color: #55645b; }
 #pre .opts { display: grid; gap: 8px; }
-#pre .opts button { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 12px 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.08); border: 1.5px solid rgba(255, 255, 255, 0.16); }
-#pre .opts button:hover { background: rgba(255, 255, 255, 0.14); }
-#pre .opts button.on { background: rgba(255, 255, 255, 0.18); border-color: #fff; }
+#pre .opts button { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 11px 15px; border-radius: 12px; background: rgba(0, 0, 0, 0.045); border: 1.5px solid transparent; color: #1f2a24; }
+#pre .opts button:hover { background: rgba(0, 0, 0, 0.08); }
+#pre .opts button.on { background: #e5f3ea; border-color: #2f8f58; }
 #pre .opts button strong { font-size: 16px; }
-#pre .opts button em { font-style: normal; font-size: 12px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #3fa46a; }
-#pre .opts button span { display: block; margin-top: 3px; font-size: 13px; line-height: 1.45; color: rgba(255, 255, 255, 0.72); }
-#pre .go { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; margin-top: 22px; padding: 15px 18px; text-align: center; border-radius: 12px; font-size: 18px; font-weight: 700; background: #2f8f58; }
-#pre .go:hover { background: #37a465; }
-#pre .go:focus-visible, #pre .opts button:focus-visible { outline: 3px solid #9fe0b8; outline-offset: 2px; }
+#pre .opts button span { display: block; margin-top: 2px; font-size: 13px; line-height: 1.45; color: #55645b; }
+#pre .lg { display: flex; flex-wrap: wrap; gap: 6px; }
+#pre .lg button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font-size: 14px; color: #1f2a24; background: rgba(0, 0, 0, 0.06); }
+#pre .lg button.on { background: #2f8f58; color: #fff; font-weight: 700; }
+#pre small { display: block; margin-top: 16px; font-size: 13px; color: #6a776f; }
+#pre button:focus-visible, #enter:focus-visible { outline: 3px solid #9fe0b8; outline-offset: 2px; }
+#enter { all: unset; position: fixed; left: 50%; bottom: 14vh; transform: translateX(-50%); z-index: 9; cursor: pointer; padding: 16px 44px; border-radius: 14px; font-size: 20px; font-weight: 700; color: #fff; background: var(--accent, #2f8f58); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
+#enter:hover { background: #3f8a5c; }

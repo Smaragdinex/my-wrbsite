@@ -46,25 +46,44 @@ function setLoad(f, msg) {
   ldNum.textContent = p; ldFill.style.width = p + '%'; ldBird.style.left = p + '%'
   if (msg) ldMsg.textContent = msg
 }
-// 2026-11-12 使用者：「一開始網頁先進主畫面，再載入，是不是比較好」——以前一打開就開始下載、蓋場景，等級是載完才能改（改了還要整個重載一次）。
-// 現在第一個畫面只有標題和「載入等級」，什麼都還沒下載；選好按「載入公園」才開始。上次選的會記住（預設幫你選好），所以回來的玩家按一下就進去。
+// 2026-11-12 標題畫面（使用者：「要跟其他遊戲一樣，一進入有額外的動畫主畫面，那裡可以設定、看控制、play」）：
+// 網頁一打開先是這個畫面——純 CSS／SVG 的動畫背景（天空、飄的雲、三層山、飛過去的鳥），什麼模型都還沒下載。
+// 「開始遊戲」才開始載入，載完直接進公園；「設定」＝載入等級（要載多細的貼圖和多少鳥，載入前才能決定）和語言，其他畫質在遊戲裡的設定調；「操作說明」＝按鍵圖。
 // 錄影、自動測試（網址有 rec 或 tier）不顯示
+let fromTitle = false
 { const qs0 = new URLSearchParams(location.search), pre = document.getElementById('pre')
   if (pre && !qs0.has('rec') && !qs0.has('tier')) {
     let saved = null; try { saved = localStorage.getItem('birdpark.tier') } catch {}
     let pick = saved === 'full' || saved === 'mid' || saved === 'lite' ? saved : 'auto'
-    // 自動會選哪一級（跟 world.js 的判斷一樣，只是先講給玩家聽；顯示卡名稱要等建了畫面才知道，這裡只看記憶體和是不是手機）
-    const mem = navigator.deviceMemory ?? 8, phone = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820
     const O = [['auto', tr('自動'), tr('照這台電腦的規格決定，不確定就選這個。')], ['full', tr('完整'), tr('貼圖原尺寸、所有鳥都載入。最漂亮，需要較好的電腦，載入最久。')], ['mid', tr('均衡'), tr('貼圖減半、只載入 170 公尺內的鳥。')], ['lite', tr('輕量'), tr('貼圖再減半、只載入 110 公尺內的鳥。電腦跑不動或打不開時選這個。')]]
-    const draw = () => { pre.innerHTML = `<div class="box"><h1>${tr('鳥類生態園')}</h1><p>${tr('帶著相機走進公園，找鳥、拍照。')}</p><b>${tr('載入等級')}</b><div class="opts">${O.map(([k, n, h]) => `<button data-tier="${k}" class="${k === pick ? 'on' : ''}" aria-pressed="${k === pick}"><strong>${n}</strong>${k === 'auto' && (phone || mem <= 4) ? `<em>${tr('這台裝置建議')}</em>` : ''}<span>${h}</span></button>`).join('')}</div><button class="go">${tr('載入公園')}</button></div>` }
-    draw(); pre.hidden = false; loadingEl.hidden = true
+    const X = `<button class="x" aria-label="${tr('關閉')}" title="${tr('關閉')}"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>`
+    const bird = (cls) => `<svg class="tb ${cls}" viewBox="0 0 60 24" aria-hidden="true"><path class="w" d="M30 13 Q20 2 4 6 Q16 8 24 15 Z"/><path class="w w2" d="M30 13 Q40 2 56 6 Q44 8 36 15 Z"/><path d="M22 14 Q30 10 40 14 Q32 18 22 14 Z"/></svg>`
+    const hill = (cls, d) => `<svg class="hill ${cls}" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><path d="${d}"/></svg>`
+    pre.innerHTML = `<div class="sky" aria-hidden="true"><i class="sun"></i><i class="cl c1"></i><i class="cl c2"></i><i class="cl c3"></i>${bird('b1')}${bird('b2')}${bird('b3')}
+        ${hill('h1', 'M0 300 L0 170 Q150 90 300 150 Q420 60 560 130 Q700 40 860 120 Q1000 70 1200 150 L1200 300 Z')}${hill('h2', 'M0 300 L0 210 Q120 150 260 200 Q400 120 540 190 Q700 140 820 200 Q1000 130 1200 210 L1200 300 Z')}${hill('h3', 'M0 300 L0 250 Q200 200 380 245 Q560 190 760 240 Q960 200 1200 250 L1200 300 Z')}</div>
+      <div class="menu" id="preMenu"><div class="brand"><h1>${tr('鳥類生態園')}</h1><p>${tr('帶著相機走進公園，找鳥、拍照。')}</p></div>
+        <nav><button class="go">${tr('開始遊戲')}</button><button class="ghost" data-open="set">${tr('設定')}</button><button class="ghost" data-open="help">${tr('操作說明')}</button></nav></div>
+      <div class="panel menu-sheet" id="preSet" hidden><div class="sheet-head">${X}<h2>${tr('設定')}</h2></div>
+        <b class="lbl">${tr('載入等級')}</b><div class="opts"></div>
+        <b class="lbl">LANGUAGE</b><div class="lg">${LANGS.map((l) => `<button data-lang="${l.id}" class="${l.id === LANG ? 'on' : ''}">${l.label}</button>`).join('')}</div>
+        <small>${tr('解析度、陰影、音量這些，進遊戲後按 Esc 在「設定」裡調。')}</small></div>
+      <div class="panel menu-sheet" id="preHelp" hidden><div class="sheet-head">${X}<h2>${tr('操作說明')}</h2></div><div class="ctl">${controlsSvg()}</div></div>`
+    const menu = pre.querySelector('#preMenu'), setEl = pre.querySelector('#preSet'), hlpEl = pre.querySelector('#preHelp'), opts = setEl.querySelector('.opts')
+    const drawOpts = () => { opts.innerHTML = O.map(([k, n, h]) => `<button data-tier="${k}" class="${k === pick ? 'on' : ''}" aria-pressed="${k === pick}"><strong>${n}</strong><span>${h}</span></button>`).join('') }
+    const show = (el) => { menu.hidden = !!el; setEl.hidden = el !== setEl; hlpEl.hidden = el !== hlpEl }
+    const savePick = () => { try { if (pick === 'auto') localStorage.removeItem('birdpark.tier'); else localStorage.setItem('birdpark.tier', pick) } catch {} }
+    drawOpts(); pre.hidden = false; loadingEl.hidden = true
+    const onKey = (e) => { if (e.key === 'Escape') show(null) }; addEventListener('keydown', onKey)
     await new Promise((res) => pre.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return
-      if (b.dataset.tier) { pick = b.dataset.tier; draw(); return }
-      if (b.classList.contains('go')) res()
+      if (b.dataset.tier) { pick = b.dataset.tier; savePick(); drawOpts() }
+      else if (b.dataset.lang) { if (b.dataset.lang !== LANG) setLang(b.dataset.lang) }
+      else if (b.dataset.open) show(b.dataset.open === 'set' ? setEl : hlpEl)
+      else if (b.classList.contains('x')) show(null)
+      else if (b.classList.contains('go')) res()
     }))
-    try { if (pick === 'auto') localStorage.removeItem('birdpark.tier'); else localStorage.setItem('birdpark.tier', pick) } catch {}
-    pre.hidden = true; loadingEl.hidden = false
+    removeEventListener('keydown', onKey); savePick()
+    pre.hidden = true; pre.innerHTML = ''; loadingEl.hidden = false; fromTitle = true
   }
 }
 const world = await buildWorld(document.getElementById('scene'), {
@@ -275,6 +294,12 @@ startEl.hidden = false
 document.body.classList.add('in-menu')   // 首頁選單上不顯示右上的錢、時間（HUD）
 const goEl = document.getElementById('go')
 goEl.onclick = () => player.controls.lock()
+// 從標題畫面按「開始遊戲」進來的：載完不再出一次選單，只剩一顆「進入公園」（鎖滑鼠一定要玩家再點一下，瀏覽器的規定）；之後按 Esc 才是暫停選單
+if (fromTitle) {
+  startEl.hidden = true
+  const en = document.createElement('button'); en.id = 'enter'; en.textContent = tr('進入公園'); document.body.append(en); en.focus()
+  en.onclick = () => { en.remove(); player.controls.lock(); setTimeout(() => { if (!player.controls.isLocked) startEl.hidden = false }, 1200) }
+}
 player.controls.addEventListener('lock', () => { setMenuCam(false); startEl.hidden = true; document.body.classList.remove('in-menu'); goEl.textContent = tr('繼續') })
 player.controls.addEventListener('unlock', () => { if (!panelOpen()) { setMenuCam(true); showSheet(null); startEl.hidden = false; document.body.classList.add('in-menu') } })
 

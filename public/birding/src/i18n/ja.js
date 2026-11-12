@@ -130,6 +130,8 @@ export const UI = {
  "照這台電腦的規格決定，不確定就選這個。": "Decided from this computer's specs. Pick this if unsure.",
  "這台裝置建議": "Suggested for this device",
  "載入公園": "Load the park",
+ "解析度、陰影、音量這些，進遊戲後按 Esc 在「設定」裡調。": "Resolution, shadows and volume are under Settings in the game (press Esc).",
+ "進入公園": "Enter the park",
  "操作說明": "操作説明",
  "收購底價": "買取の最低価格",
  "整體畫質": "全体の画質",
