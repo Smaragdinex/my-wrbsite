@@ -229,6 +229,21 @@ const settings = createSettings({ world, player })
 const amb = createAmbience({ getMusic: () => settings.state.music, getAmb: () => settings.state.amb })   // 背景音樂＋溫室環境音（程式合成）
 uiFx = createUiFx({ getSound: () => settings.state.sound })   // 滑鼠圓圈＋按鈕音效
 const startEl = document.getElementById('start'), menuEl = document.getElementById('menu'), helpEl = document.getElementById('help')
+// 主畫面的「載入等級」：自動（照這台電腦決定）／完整／均衡／輕量。選了存起來、重新載入後生效（貼圖縮小了沒辦法原地放大回來）
+{ const box = document.getElementById('tier')
+  if (box) {
+    let saved = null; try { saved = localStorage.getItem('birdpark.tier') } catch {}
+    const cur = saved === 'full' || saved === 'mid' || saved === 'lite' ? saved : 'auto', used = world.memStat?.tier ?? 'full'
+    const NAME = { auto: tr('自動'), full: tr('完整'), mid: tr('均衡'), lite: tr('輕量') }
+    const HINT = { full: tr('貼圖原尺寸、所有鳥都載入。最漂亮，需要較好的電腦，載入最久。'), mid: tr('貼圖減半、只載入 170 公尺內的鳥。'), lite: tr('貼圖再減半、只載入 110 公尺內的鳥。電腦跑不動或打不開時選這個。') }
+    box.innerHTML = `<b>${tr('載入等級')}</b><div class="opts">${['auto', 'full', 'mid', 'lite'].map((k) => `<button data-tier="${k}" class="${k === cur ? 'on' : ''}">${NAME[k]}</button>`).join('')}</div><small>${cur === 'auto' ? tr('自動：這台電腦目前用「{n}」。', { n: NAME[used] }) + ' ' : ''}${HINT[used]}</small>`
+    box.addEventListener('click', (e) => {
+      const k = e.target?.dataset?.tier; if (!k || k === cur) return
+      try { if (k === 'auto') localStorage.removeItem('birdpark.tier'); else localStorage.setItem('birdpark.tier', k) } catch {}
+      location.reload()
+    })
+  }
+}
 startEl.append(settings.el)
 helpEl.querySelector('.ctl').innerHTML = controlsSvg()   // 鍵盤滑鼠按鍵圖
 const showSheet = (sheet) => { menuEl.hidden = !!sheet; for (const s of [helpEl, settings.el]) s.hidden = s !== sheet }

@@ -176,6 +176,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 貼圖縮小＝畫到小的 canvas 換掉原圖（2048² 一張連 mipmap 佔 22 MB 顯示記憶體，縮到 1024 剩四分之一、512 剩十六分之一）。網址加 ?tier=full|mid|lite 可以強制
   const TIER = (() => {
     const q = new URLSearchParams(location.search).get('tier'); if (q === 'full' || q === 'mid' || q === 'lite') return q
+    try { const sv = localStorage.getItem('birdpark.tier'); if (sv === 'full' || sv === 'mid' || sv === 'lite') return sv } catch {}   // 玩家在主畫面選的（沒選＝自動）
     let name = ''; try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) } catch {}
     const mem = navigator.deviceMemory ?? 8
     if (PHONE || mem <= 4 || /swiftshader|llvmpipe|software|basic render|intel|uhd|iris|hd graphics|mali|adreno|powervr|vega \d/i.test(name)) return 'lite'

@@ -50,7 +50,8 @@ export function lodRegister(meshes, h, lows = [], { solid = false } = {}) {
   // 2026-11-12 遠景替身（ChatGPT：3A 遊戲的遠景不是整片烘成一張圖，是遠處的樹換成「多角度替身貼片」）：
   // 4 m 以上的樹，遠到在畫面上不到 IMP_PX 像素高的那幾棵不畫模型，改畫一片面向鏡頭的貼片（2 個三角形），貼圖是這種樹從 8 個方向拍下來的（第一次用到時烘）。
   // 一棵冷杉 1,000～5,000 個三角形 → 2 個；所以遠處的樹不用再變稀（以前 230～330 m 之間抽掉），整片森林都在
-  if (h >= 4 && !solid && n >= 12 && typeof document !== 'undefined') {
+  // 2026-11-12 使用者：「還是用原本的吧，遠景根本糊掉。讓玩家載入久一點是可以的」——替身貼片在他的螢幕上是一塊塊方形（貼圖的透明邊沒去乾淨、解析度也不夠）→ 關掉，遠處照舊畫真的樹
+  if (IMP_ON && h >= 4 && !solid && n >= 12 && typeof document !== 'undefined') {
     const org = new Float32Array(n * 3), sz = new Float32Array(n * 4), p3 = new THREE.Vector3(), q4 = new THREE.Quaternion(), e3 = new THREE.Euler()
     const bb = new THREE.Box3(); for (const m of meshes) { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); bb.union(m.geometry.boundingBox) }
     const R = Math.max(-bb.min.x, bb.max.x, -bb.min.z, bb.max.z)
@@ -115,6 +116,7 @@ export function lodShadowCull(cx, cz, r) {
   }
 }
 
+const IMP_ON = false
 const TF0 = 230, TF1 = 330, PXK = 750, MINPX = 5, IMP_PX = 150, IMP_N = 8, IMP_W = 128, IMP_H = 256
 // ---------- 遠景替身 ----------
 let impCtx = null   // { renderer, sun, hemi }（world.js 建好之後給）

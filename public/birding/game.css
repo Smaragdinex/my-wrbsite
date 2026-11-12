@@ -322,3 +322,12 @@ svg.controls image { mix-blend-mode: multiply; }
 .comms > p.muted { font-size: 12px; margin: 6px 0 0; }
 .comm-hit { color: #8a5a12; font-weight: 700; margin: 4px 0; }
 .comm-badge { display: block; color: #fff; background: #b07a2a; border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 700; margin: 2px 0; }
+
+/* 2026-11-12 主畫面的「載入等級」：玩家自己選要載多細的模型和貼圖（以前是程式照電腦規格偷偷決定） */
+.tier { margin-top: 20px; max-width: 340px; }
+.tier b { display: block; font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.8); margin-bottom: 7px; }
+.tier .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.tier button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font-size: 14px; color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18); }
+.tier button:hover { background: rgba(255, 255, 255, 0.2); }
+.tier button.on { background: #fff; color: #1f2a24; font-weight: 700; }
+.tier small { display: block; margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: rgba(255, 255, 255, 0.7); }
