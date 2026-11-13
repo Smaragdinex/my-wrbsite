@@ -148,8 +148,8 @@ export function buildYosemite(scene, { lib } = {}) {
         if ((x - ax) * (x - bx) > 0.04) continue
         const t = Math.abs(bx - ax) < 1e-6 ? 0 : Math.max(0, Math.min(1, (x - ax) / (bx - ax))), y = lerpN(T.yy[i - 1], T.yy[i], t), d = lerpN(T.pts[i - 1][1] - YOSE.base(ax), bz - YOSE.base(bx), t)
         // 2026-11-13 使用者（龍岩窟）：瀑布前後這一段改成有岩頂的廊道（高 3.6 m），不是往上整片挖開的階地——頭上是岩石、水簾在外側落下
-        const roofed = Math.abs(x - YOSE.fall.x) < 9.5
-        out.push({ y0: y - 0.3, y1: roofed ? y + 3.6 : y + 90, depth: d + 1.25 })
+        const roofed = x > YOSE.GAL[0] - 0.6 && x < YOSE.GAL[1] + 0.6 && y > YOSE.shelfY() - 1.0   // 只有那兩段岩廊（第 0 段的起點也在這個 x 範圍，但它在下面、不要加頂）
+        out.push({ y0: y - (roofed ? 0.65 : 0.3), y1: roofed ? y + 3.6 : y + 90, depth: d + 1.25 })   // 岩廊多往地板下切 0.35 m：切口轉角那條岩壁的薄邊才會落在石板底下（以前在 x196～198 冒出地板 0.2～0.3 m）
         for (const b of T.bays ?? []) if (Math.abs(x - b.x) < b.half + 0.25 && Math.abs(y - b.y) < 0.8) out.push({ y0: y - 0.3, y1: y + 3.2, depth: d + 1.25 + b.depth })   // 賞鳥台的凹龕
       } else if (k === 'alc' || (k === 'open' && bz - YOSE.base(bx) > 0.2 && bx > 207.5)) {
         if (Math.abs(x - bx) > 1.5) continue
@@ -784,6 +784,26 @@ export function buildYosemite(scene, { lib } = {}) {
     strands(yLipW, poolY, zLipW, LOW7, { back: 0.1, outK: 2.0, mat: fallMat({ spd: 0.7, a: 0.45, dark: 0.35, strand: 1 }), ro: 3 })
     strands(yLipW, poolY, zLipW, LOW7.map((q) => ({ ...q, w0: q.w0 * 1.08, w1: q.w1 * 1.08 })), { back: 0.25, outK: 3.0, mat: fallMat({ spd: 1.0, a: 0.8, strand: 1 }), ro: 4 })
     strands(yLipW, poolY, zLipW, LOW7.map((q) => ({ ...q, w0: q.w0 * 1.2, w1: q.w1 * 1.25, th: q.th + 0.2 })), { back: 0.6, outK: 3.8, mat: fallMat({ spd: 1.35, a: 0.36, low: 1, strand: 1 }), ro: 5, v0: 0.3 })
+    // 2026-11-13 使用者（ChatGPT 生的「龍岩窟」參考圖：「做一樣」）：岩廊外面整段都要有水簾，不是只有中間 8 m 那道瀑布。
+    // 從上層岩廊的岩頂邊緣（滲出來的水）一路落到下層岩廊底下，貼著退進去的岩面（離岩面 0.35 m，往下越落越往外）。
+    // 水簾 shader 的左右邊會淡出 → 用 6 m 寬、每 4 m 一片互相重疊的水簾拼成一整面；每片給不同的 aSeed，紋路才不會一模一樣
+    { const T = YOSE.stairs(), G = YOSE.GAL, SHf = YOSE.shelfY()
+      let yG2 = SHf; for (let i = 0; i < T.pts.length; i++) if (T.kind[i] === 'gal' && T.pts[i][0] > G[0] && T.pts[i][0] < G[1] && T.yy[i] > SHf + 3) yG2 = Math.max(yG2, T.yy[i])
+      const yA = yG2 + 3.6 + 0.3, yB = SHf - 2.6, HW = 3.0, NX = 12, NY = 26
+      const panels = []; for (let xc = G[0] - 1.0; xc <= G[1] + 1.0 + 1e-6; xc += 4.0) panels.push(xc)
+      for (const [layer, mat] of [[0, fallMat({ spd: 0.6, a: 0.42, dark: 0.3, strand: 1 })], [1, fallMat({ spd: 0.95, a: 0.66, strand: 1 })]]) {
+        panels.forEach((xc, pi) => {
+          const P = [], U = [], SD = [], SW = [], AL = [], I = [], seed = (pi * 0.618 + layer * 0.37) % 1
+          for (let j = 0; j <= NY; j++) { const v = j / NY, y = yA - (yA - yB) * v
+            for (let i = 0; i <= NX; i++) { const u = i / NX, x = xc - HW + 2 * HW * u, z = YOSE.base(x) + YOSE.rec(x) - 0.35 - 0.3 * layer - 0.7 * v * v
+              P.push(x, y, z); U.push(u, v); SD.push(seed); SW.push(0.05); AL.push(layer ? 0.8 : 0.65) } }
+          for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const q = j * (NX + 1) + i; I.push(q, q + NX + 1, q + 1, q + 1, q + NX + 1, q + NX + 2) }
+          const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); gg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2))
+          gg.setAttribute('aSeed', new THREE.Float32BufferAttribute(SD, 1)); gg.setAttribute('aSway', new THREE.Float32BufferAttribute(SW, 1)); gg.setAttribute('aAlpha', new THREE.Float32BufferAttribute(AL, 1)); gg.setIndex(I)
+          const m = new THREE.Mesh(gg, mat); m.renderOrder = 3 + layer; m.name = 'galleryCurtain'; g.add(m)
+        })
+      }
+    }
     // 2026-11-12 水霧裡的彩虹（使用者：有水下來加上太陽，產生彩虹更好）。照物理來：主虹在「背對太陽的方向」外 42°——
     // 把落水點周圍的水霧當成一顆半徑 10 m 的球，球面上每一點看「鏡頭→這一點」跟反日方向的夾角，40～43° 那一圈上色（裡紫外紅）。
     // 所以要太陽在背後、站對位置才看得到，太陽移動彩虹也跟著移動；陰天、晚上沒有
@@ -1031,6 +1051,7 @@ export function buildYosemite(scene, { lib } = {}) {
       tm.castShadow = true; tm.receiveShadow = true; tm.computeBoundingSphere(); tm.name = 'gorgeSteps'; g.add(tm)
     }
     // 外側的欄杆（靠湖那一側）：折返平台用鐵管欄杆、一般路段的鐵樁和鐵鍊記在 CHAIN
+    const WOOD = []   // 岩廊段的欄杆點（一段一段）
     { const ironR = new THREE.MeshStandardMaterial({ color: 0x33363a, roughness: 0.5, metalness: 0.6 }), pp = [], segs = []
       let acc = 9, prev = null
       for (let i = 1; i < NP; i++) {
@@ -1042,6 +1063,8 @@ export function buildYosemite(scene, { lib } = {}) {
         const p = C3[i].clone().addScaledVector(SIDE[i], sd * 1.2)
         // 2026-11-12 ChatGPT：整條黑鐵管欄杆像都市樓梯 → 折返平台前後才用鐵管欄杆，一般路段是鑿進岩石的鐵樁＋垂鍊（Angels Landing），賞鳥台外緣是矮石牆
         if ((st.bays ?? []).some((b) => Math.abs(C3[i].x - b.x) < b.half + 0.2 && Math.abs(C3[i].y - b.y) < 0.8)) { prev = null; continue }
+        // 2026-11-13（龍岩窟參考圖）：兩段岩廊不用鐵鍊，改成矮石緣上的原木欄杆（下面 WOOD 另外蓋）
+        if (st.kind[i] === 'gal' && p.x > YOSE.GAL[0] - 0.5 && p.x < YOSE.GAL[1] + 0.5 && p.y > YOSE.shelfY() - 1.0) { const last = WOOD.at(-1); if (!last || last.at(-1).distanceTo(p) > 3.0) WOOD.push([]); WOOD.at(-1).push(p); prev = null; continue }
         let sturdy = false; for (let q = Math.max(0, i - 3); q <= Math.min(NP - 1, i + 3); q++) if (st.kind[q] === 'alc' || st.kind[q] === 'top') sturdy = true
         p.sturdy = sturdy
         if (prev && prev.distanceTo(p) < 3.8) (sturdy || prev.sturdy ? segs : CHAIN.segs).push([prev, p])
@@ -1054,6 +1077,30 @@ export function buildYosemite(scene, { lib } = {}) {
         segs.forEach(([a, b], k) => { const d = b.clone().sub(a), L = d.length(); q.setFromUnitVectors(V(1, 0, 0), d.clone().normalize()); for (const [j, hh] of [[0, 1.05], [1, 0.55]]) rm.setMatrixAt(k * 2 + j, m4.compose(a.clone().add(b).multiplyScalar(0.5).add(V(0, hh, 0)), q, V(L, 1, 1))) })
         g.add(rm)
       }
+    }
+    // 2026-11-13 岩廊的欄杆（龍岩窟參考圖）：一道矮石緣（高 0.34、寬 0.4，石階同一個材質）上面立原木柱（直徑 18 cm、高 0.95 m），兩道原木橫桿（0.55、0.92 m）。
+    // 樹皮用 Poly Haven 的柳杉樹皮（bark.js），調成淋濕的灰褐色
+    if (WOOD.length) {
+      const logM = barkMaterial('japanese_cedar_bark', { normal: 1.3, color: [1.45, 1.3, 1.12] })   /* 參考圖是淋濕、褪色的灰褐原木，樹皮貼圖本身偏暗紅 */
+      const postG = new THREE.CylinderGeometry(0.085, 0.095, 1, 9).translate(0, 0.5, 0), railG = new THREE.CylinderGeometry(0.06, 0.065, 1, 8).rotateZ(Math.PI / 2)
+      for (const gg of [postG, railG]) { const uv = gg.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * 1.0, uv.getY(k) * 1.6) }
+      const curbG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)
+      const posts = [], rails = [], curbs = [], q = new THREE.Quaternion(), X1 = V(1, 0, 0)
+      const CURB_H = 0.34
+      for (const run of WOOD) {
+        for (let k = 0; k < run.length; k++) {
+          const p = run[k]
+          posts.push(m4.compose(V(p.x, p.y + CURB_H, p.z), q.identity(), V(1, 0.97 + 0.06 * hsh(k * 3.7 + p.x), 1)).clone())
+          addCollider(p.x, p.z, 0.15, p.y + 1.2, p.y - 0.4)
+          if (!k) continue
+          const a2 = run[k - 1], d = p.clone().sub(a2), L = d.length(); q.setFromUnitVectors(X1, d.clone().normalize())
+          for (const hh of [0.55, 0.92]) rails.push(m4.compose(a2.clone().add(p).multiplyScalar(0.5).add(V(0, CURB_H + hh, 0)), q, V(L + 0.12, 1, 1)).clone())
+          // 石緣：沿著欄杆線，寬 0.4、高 0.34（往地板底下多埋 0.1）
+          const ya = Math.min(a2.y, p.y); curbs.push(m4.compose(V((a2.x + p.x) / 2, ya - 0.1, (a2.z + p.z) / 2), new THREE.Quaternion().setFromUnitVectors(X1, V(d.x, 0, d.z).normalize()), V(Math.hypot(d.x, d.z) + 0.04, CURB_H + 0.1 + Math.abs(a2.y - p.y), 0.4)).clone())
+        }
+      }
+      const mk = (geo, mat, list, name) => { const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((mm, k) => im.setMatrixAt(k, mm)); im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = name; g.add(im) }
+      mk(postG, logM, posts, 'galleryPosts'); mk(railG, logM, rails, 'galleryRails'); mk(curbG, stepM, curbs, 'galleryCurb')
     }
     // Blender 做的石板踏板（tools/make-gorge-rock-kit.py 裡的 step_a～d；同一份套件裡的岩拱、岩棚、緣石、掛燈是隧道用的，2026-11-12 隧道拆掉後不再用）：四種輪流、一半轉 180 度，載好就換掉上面的方塊
     new GLTFLoader().loadAsync(`models/props/gorge_rock_kit.glb?v=${VER}`).then((gl) => {

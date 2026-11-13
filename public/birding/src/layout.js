@@ -425,11 +425,14 @@ export const YOSE = (() => {
   // rec2：岩棚後壁在上段瀑布正後方再凹一個洞（步道從水簾後面穿過去）
   Y.rec = (x) => 6.5 * Math.exp(-Math.pow((x - Y.fall.x) / 7.5, 4))
   Y.rec2 = (x) => Y.rec(x) + 3.4 * Math.exp(-Math.pow((x - Y.fall.x) / 6.5, 4))   // 2026-11-12 凹洞從 7 m 寬加到 13 m：步道從水簾後面穿過去
-  Y.shelfY = () => Y.g0(Y.fall.x) + Y.caveH(Y.fall.x) + 2.3
+  // 2026-11-13 岩棚高度改用「凹槽湖底的最終高度」（水面 −0.9，下面「凹槽變湖」那一步挖成的）：以前用當下的地面高度，
+  // 步道比較早算（地面還沒挖成湖）拿到 50.53，岩壁比較晚算拿到 49.26，下層岩廊就懸在凹洞上 1.27 m
+  Y.shelfY = () => (Y.lake.water ? Y.lake.water - 0.9 : Y.g0(Y.fall.x)) + Y.caveH(Y.fall.x) + 2.3
   // 2026-11-12 秘境瀑布步道（使用者：後面上山的兩條步道都拆掉，改成從瀑布湖旁邊進去往上；全程走上去不停 3 分鐘。路線設計 docs/GORGE_ROUTE.txt）：
   // 一條連續的路，從瀑布後面岩窟的東口開始，沿湖邊踩石板到岩壁腳，再沿岩壁外側之字形往上到岩壁頂（隧道、螺旋岩室 2026-11-12 拆掉了）。pts＝中線 [x, z]、yy＝高度、kind＝這一點是哪一種：
   // 'open' 露天、'gal' 岩壁上鑿出來的步道（岩壁網格上切橫槽）、'alc' 折返平台（槽切得深）、'top' 岩壁頂
   Y.TRAIL_HW = 1.35   // 可以走的半寬（2026-11-12 使用者「路再寬一點」1.2 → 1.35）
+  Y.GAL = [189, 211]   // 2026-11-13 兩段穿越瀑布的岩廊（有岩頂、不爬坡）的 x 範圍：layout.js 排高度、yosemite.js 切岩壁和換欄杆都用它
   Y.stairs = (() => {
     let built = null
     return () => {
@@ -462,17 +465,29 @@ export const YOSE = (() => {
       // 第二版（使用者看了 ChatGPT 概念圖：「就是這概念，但下面一樣就一道往上走」）：
       // 第 1 段從 U1 一路往西爬、穿過瀑布到西邊的折返平台 A（x182），不再在瀑布東邊折返；第 2 段從 A 折回來、在上層再穿過瀑布一次。
       // 兩次穿越都是「岩壁裡的廊道、頭上有岩頂、水簾在外側」（像龍岩窟），由 yosemite.js slotsAt 在瀑布前後改切有頂的廊道
-      const legs = [[210.5, 244], [244, 182], [182, 241], [241, 216], [216, 240]], SH = Y.shelfY()
+      // 2026-11-13（第三版，使用者給了 ChatGPT 生的「龍岩窟」圖：「做一樣」）：兩段穿越瀑布改成**平的岩廊**（踏板會變成平鋪的石板）——
+      // 下層岩廊在岩棚高度（瀑布正後方原本那個凹洞 rec2，水從外側落進中段水潭），上層岩廊比它高 7 m；GAL 範圍內不爬坡，爬升都放在岩廊兩頭。
+      // 西邊的折返平台 A 往西移到 x176：兩層之間要爬 7 m，平台兩邊各 13 m 的路才不會太陡
+      const legs = [[210.5, 244], [244, 176], [176, 241], [241, 216], [216, 240]], SH = Y.shelfY(), GAL = Y.GAL
       const BAYS = [{ leg: 1, x: 224.5, name: 'waterfall' }, { leg: 2, x: 234.5, name: 'canopy' }, { leg: 3, x: 229.5, name: 'raptor' }], BH = 2.0
-      const XF = 207   // 第 1 段走到瀑布東緣（x207）剛好爬到岩棚的高度，之後照同一個坡度繼續往上、穿過瀑布到西邊   // 半長。猛禽台放在第四段（頭上是第五段的地板）：最上面那段頭上是岩壁頂、沒有東西可以當岩簷
-      const flatIn = (li) => BAYS.filter((b) => b.leg === li).length * 2 * BH
-      const lenOf = (li) => Math.abs(legs[li][1] - legs[li][0]) - flatIn(li), rA = (SH - Y0) / (lenOf(0) + (legs[1][0] - XF) - flatIn(1)), yA = SH + rA * (XF - legs[1][1]), rB = (YT - yA) / (lenOf(2) + lenOf(3) + lenOf(4) - 3)   // 前兩段剛好爬到岩棚的高度；最後 3 m 走平
+      const galOn = (li) => li === 1 || li === 2
+      // 岩廊的步道貼著岩面走（龍岩窟參考圖：欄杆外面就是落差和水簾，不是一片岩石平台）：中線離退進去的岩面 1.5 m（欄杆剛好在岩面邊緣），
+      // 瀑布正中那 10 m 再往裡 1.2 m——主瀑布本身有 2.6 m 厚、背面比岩面還深 0.4 m，不退進去欄杆就泡在水裡。岩廊兩頭外 4 m 慢慢接回階地的深度
+      const galD = (x) => Y.rec(x) + 1.5 + 1.2 * Math.exp(-(((x - Y.fall.x) / 5) ** 4))
+      const galW = (x) => smoothstep(GAL[0] - 4, GAL[0], x) * smoothstep(GAL[1] + 4, GAL[1], x)
+      const flatIn = (li) => BAYS.filter((b) => b.leg === li).length * 2 * BH + (galOn(li) ? GAL[1] - GAL[0] : 0)
+      const lenOf = (li) => Math.abs(legs[li][1] - legs[li][0]) - flatIn(li)
+      // 第 0、1 段走到岩廊東口（x211）剛好爬到岩棚高度；走完岩廊照同一個坡度爬到平台 A；之後第 2～4 段一起爬到頂
+      const preGal1 = Math.abs(legs[1][0] - GAL[1]) - BAYS.filter((b) => b.leg === 1 && (b.x - GAL[1]) * (b.x - legs[1][0]) < 0).length * 2 * BH
+      const rA = (SH - Y0) / (lenOf(0) + preGal1), yA = SH + rA * Math.abs(GAL[0] - legs[1][1]), rB = (YT - yA) / (lenOf(2) + lenOf(3) + lenOf(4) - 3)
       let y = Y0; const bays = []
       legs.forEach(([xa, xb], li) => {
         const len = Math.abs(xb - xa), n = Math.round(len / 1.05), dir = Math.sign(xb - xa), last = li === legs.length - 1, rise = li < 2 ? rA : rB, riseT = li < 1 ? rA : rB
         const myB = BAYS.filter((b) => b.leg === li)
-        const climbTo = (s) => { let c = Math.min(s, last ? len - 3 : len); for (const b of myB) { const sb = Math.abs(b.x - xa); c -= clamp(s - (sb - BH), 0, 2 * BH) } return Math.max(0, c) }
-        for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(xa, xb, t), yy2 = last && t === 1 ? YT : y + rise * climbTo(t * len); add(x, Y.base(x) + Math.max(dK(li, yy2), Y.rec(x) + 1.6), yy2, 'gal') }   /* 2026-11-13 瀑布那段的岩壁本身就往後退了 rec（最深 6.5 m），水簾掛在退進去的岩面前面；步道要再往裡 1.6 m 才會在水簾後面、頭上有岩頂 */
+        const climbTo = (s) => { let c = Math.min(s, last ? len - 3 : len); for (const b of myB) { const sb = Math.abs(b.x - xa); c -= clamp(s - (sb - BH), 0, 2 * BH) }
+          if (galOn(li)) { const g0 = Math.min(Math.abs(GAL[0] - xa), Math.abs(GAL[1] - xa)), g1 = Math.max(Math.abs(GAL[0] - xa), Math.abs(GAL[1] - xa)); c -= clamp(s - g0, 0, g1 - g0) }   // 岩廊那段不爬
+          return Math.max(0, c) }
+        for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(xa, xb, t), yy2 = last && t === 1 ? YT : y + rise * climbTo(t * len); add(x, Y.base(x) + (galOn(li) ? lerp(dK(li, yy2), galD(x), galW(x)) : dK(li, yy2)), yy2, 'gal') }   /* 2026-11-13 瀑布那段的岩壁本身就往後退了 rec（最深 6.5 m），水簾掛在退進去的岩面前面；步道要再往裡 1.6 m 才會在水簾後面、頭上有岩頂 */
         for (const b of myB) { const yb = y + rise * climbTo(Math.abs(b.x - xa)); bays.push({ ...b, y: yb, d: dK(li, yb), half: BH, depth: 1.9 }) }
         y = last ? YT : y + rise * climbTo(len)
         // 2026-11-13 岩棚那一圈（原本走到 x194 再原路折回 x210）拆掉：改成第 2 段直接往西穿過去、第 3 段再從西邊一路往東，
@@ -489,7 +504,7 @@ export const YOSE = (() => {
       const h = (s) => { if (s <= 0) return yy[0]; if (s >= L) return yy[yy.length - 1]; let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m] < s) lo = m; else hi = m } return lerp(yy[lo], yy[hi], (s - S[lo]) / Math.max(1e-6, S[hi] - S[lo])) }
       // 全程（湖西岸 cave 支線起點到岩壁頂）不停走 3 分鐘：湖邊那 40 m 照平常的速度，步道上的速度 v 照長度反推（濕的石階，小心走）
       const v = Math.min(3.2, L / (180 - 40 / 3.2))
-      built = { pts, yy, kind, S, L, h, h0: yy[0], top, v, bays, TS, dTop: dK(4, YT) }
+      built = { pts, yy, kind, S, L, h, h0: yy[0], top, v, bays, TS, dTop: dK(4, YT), dbg: { rA, rB, yA, SH, Y0, preGal1, l0: lenOf(0), l1: lenOf(1), l2: lenOf(2), l3: lenOf(3), l4: lenOf(4) } }
       return built
     }
   })()
