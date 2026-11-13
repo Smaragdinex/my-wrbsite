@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, landingAt, alpineHeight, addCollider, deckAt, EAST, deckFrame } from './layout.js'
+import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, landingAt, alpineHeight, addCollider, addRailSeg, deckAt, EAST, deckFrame } from './layout.js'
 import { dappled } from './alpine.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
@@ -245,6 +245,7 @@ export function buildWalkways(scene, kit) {
     for (let i = 1; i < posts.length; i++) {
       const p = posts[i - 1], q = posts[i]
       if (q.brk) continue   // 2026-11-13 使用者「再做完整 有開口」：中間被支線開口拆掉柱子的地方不能拉一道欄杆擋住開口
+      { const L = Math.hypot(q.x - p.x, q.z - p.z); if (L >= 0.05 && L <= 3) addRailSeg(p.x, p.z, q.x, q.z, Math.min(p.y, q.y)) }   // 扶手的碰撞（跟下面畫扶手同一個條件）
       for (const [part, h, inset] of [['bw_rail_top', 1.04, 0.0], ['bw_rail_mid', 0.64, 0.0725], ['bw_rail_mid', 0.27, 0.0725]]) {
         const P0 = V(p.x - p.nx * inset, p.y + h, p.z - p.nz * inset), P1 = V(q.x - q.nx * inset, q.y + h, q.z - q.nz * inset)
         const d = P1.clone().sub(P0), L = d.length()

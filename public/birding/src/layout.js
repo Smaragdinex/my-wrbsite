@@ -1428,6 +1428,18 @@ export function boardwalkAt(x, z) {
 export const colliders = []   // { x, z, r, top }
 // bottom：碰撞只在這個高度以上才算（2026-11-10 瀑布頂上的鐵箱子連帶擋住了正下方 12 m 的石階）
 export function addCollider(x, z, r, top = 99, bottom = -99) { colliders.push({ x, z, r, top, bottom }) }
+// 2026-11-13 使用者（濕地木道照片）：「這位置可以跳下、木欄杆沒有碰撞」——以前只有柱子有碰撞（半徑 0.08、每 1.4 m 一根），柱子之間 0.5 m 的空隙人直接走出去。
+// 扶手一段一段登記成線段（walkway.js railRun），人的中心離線段不到 PLAYER_R 就擋；只擋在扶手那個高度範圍（y＝那段木道面）
+export const railSegs = []
+export function addRailSeg(x0, z0, x1, z1, y) { railSegs.push({ x0, z0, x1, z1, y, bx0: Math.min(x0, x1) - 0.6, bx1: Math.max(x0, x1) + 0.6, bz0: Math.min(z0, z1) - 0.6, bz1: Math.max(z0, z1) + 0.6 }) }
+function railHit(x, z, feet) {
+  for (const r of railSegs) {
+    if (x < r.bx0 || x > r.bx1 || z < r.bz0 || z > r.bz1 || feet < r.y - 0.5 || feet > r.y + 0.95) continue
+    const dx = r.x1 - r.x0, dz = r.z1 - r.z0, t = clamp(((x - r.x0) * dx + (z - r.z0) * dz) / (dx * dx + dz * dz || 1), 0, 1)
+    if (Math.hypot(x - r.x0 - dx * t, z - r.z0 - dz * t) < PLAYER_R) return true
+  }
+  return false
+}
 
 const PLAYER_R = 0.38
 export function supportAt(x, z, feet) {
@@ -1477,6 +1489,7 @@ export let coastDoors = { a: 1, b: 1 }   // coast.js 每格更新   // alpine.js
 export function blocked(x, z, feet, ref = feet) {
   if (inAlpine(x, z, 0.45)) {
     if (domeRho(x, z) > 0.955) return true   // 溫室的牆
+    if (railHit(x, z, feet)) return true   // 木道扶手
     // 山區：太陡（一步高過 0.6 公尺）就走不上去；吊橋上不算
     if (bridgeAt(x, z) != null && Math.abs(bridgeAt(x, z) - feet) < 0.6) return false
     const rbq = riverBridgeAt(x, z)
@@ -1593,6 +1606,7 @@ for (const w of ALP_WALKS) {
     if ((e === 0 && w.joinA) || (e === n - 1 && w.joinB)) continue   // 接在別的木道／平台上的那一頭不墊坡
     const ex = w.xs[e], ez = w.zs[e], dy = w.y[e] - alpineHeight(ex, ez)
     if (dy < 0.2) continue
+    if (eastZone(ex, ez) === 'wet' && alpineHeight(ex, ez) < EAST.W) continue   // 2026-11-13 使用者（荷葉池照片）：沼澤環線的終點接翡翠灣、在水裡 → 以前也墊坡，灣前面堆出一塊 5 m 的土 → 水裡的那頭不墊
     // 這一頭往木道裡面的方向（踏板底下整段都墊到 deck−0.08，直到木道本身已經貼地）
     let inner = 0; for (let k = 0; k < 160; k++) { const i = e === 0 ? k : n - 1 - k; if (w.y[i] - alpineHeight(w.xs[i], w.zs[i]) < 0.15) break; inner = k }
     const i0 = Math.floor((ex - 9 - AG.x0) / AG.cell), i1 = Math.ceil((ex + 9 - AG.x0) / AG.cell), j0 = Math.floor((ez - 9 - AG.z0) / AG.cell), j1 = Math.ceil((ez + 9 - AG.z0) / AG.cell)
