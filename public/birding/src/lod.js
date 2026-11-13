@@ -108,6 +108,8 @@ function tinyScan(scene) {
   const L = []
   const skip = (o) => { for (let p = o; p; p = p.parent) { if (p.userData.noTinyCull || /_rig$|Armature/.test(p.name) || p.userData.bird) return true } return false }
   scene.traverse((o) => {
+    // 2026-11-14 霧片（Sprite：瀑布水霧、地面霧氣）：一片一次 draw call，從花園往山那邊看一格 300 多片，大多在 100 m 外、被霧蓋得幾乎看不到 → 照它的大小一樣算「畫面上太小就不畫」（係數放寬：霧片是淡的大片）
+    if (o.isSprite) { if (!(o.layers.mask & 1) && !tiny.off.has(o)) return; o.userData.tinyK = 0.35; L.push(o); return }
     if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.frustumCulled || o.geometry.isInstancedBufferGeometry || o.userData.batched) return   // batched：已合併（batch.js），原件不畫
     if (!(o.layers.mask & 1) && !tiny.off.has(o)) return
     const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere()
@@ -124,8 +126,10 @@ export function tinyCull(scene, camera, dt) {
   const cp = camera.position, K = PXK * zoom / MINPX
   for (const o of tiny.list) {
     if (o.userData.batched) { tiny.off.delete(o); delete o.userData.tinyOff; continue }
-    const g = o.geometry; _tc.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld)
-    const r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis() * K, far = _tc.distanceToSquared(cp) > r * r
+    let r
+    if (o.isSprite) { _tc.setFromMatrixPosition(o.matrixWorld); r = Math.max(o.scale.x, o.scale.y) * 0.5 * K * o.userData.tinyK }
+    else { const g = o.geometry; _tc.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld); r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis() * K }
+    const far = _tc.distanceToSquared(cp) > r * r
     if (far) { if (o.layers.mask & 1) { o.layers.disable(0); tiny.off.add(o); o.userData.tinyOff = true } }
     else if (tiny.off.has(o)) { o.layers.enable(0); tiny.off.delete(o); delete o.userData.tinyOff }
   }
