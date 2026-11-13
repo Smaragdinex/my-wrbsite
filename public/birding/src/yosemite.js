@@ -1317,34 +1317,59 @@ export function buildYosemite(scene, { lib } = {}) {
     if (sp) {
       const woodM = new THREE.MeshStandardMaterial({ color: 0x2b3033, roughness: 0.42, metalness: 0.65 }), parts2 = []   // 2026-11-11 改成跟石階一樣的深色鐵欄杆（濕的）
       const post = new THREE.CylinderGeometry(0.035, 0.035, 1, 8), bar = new THREE.CylinderGeometry(0.028, 0.028, 1, 8).rotateZ(Math.PI / 2)
-      const LK = YOSE.lake, rail = []
-      const P = sp.pts
-      for (let i = 2; i < P.length - 1; i++) {
-        const [ax, az] = P[i], [bx, bz] = P[i + 1], L = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / L, nz = (bx - ax) / L
-        const sgn = (LK.x - (ax + bx) / 2) * nx + (LK.z - (az + bz) / 2) * nz > 0 ? 1 : -1
-        for (let d = 0; d < L - 0.01; d += 1.4) { const x = ax + (bx - ax) * d / L + nx * sgn * 1.2, z = az + (bz - az) * d / L + nz * sgn * 1.2; rail.push([x, z]) }
+      // 2026-11-13 使用者（沿步道逐幀看）「欄杆錯誤」：舊版是「每一段各自往外偏 1.2 m」。轉角處相鄰兩段的偏移點會互相擠進走道，
+      // 被擠到的柱子就整根不立，但 prev 沒有跟著清掉，橫桿還是硬連到下一根（距離 >2.2 m 就乾脆不畫）→ 欄杆變成一截一截。
+      // 而且柱子高度取腳下地形，路肩的地會往下掉，柱子就忽高忽低、看起來懸空。
+      // 改法：(1) 先把整條路的偏移線算出來（轉角走角平分線、並補長度），偏移線本身就連續，不用再剔除柱子；
+      //      (2) 欄杆頂面跟著步道的縱斷面（prof）走，柱子再各自往下長到地面，所以高度一致、腳也踩得到地。
+      const LK = YOSE.lake
+      const P = sp.pts, RP = P.slice(2)
+      const sgn = (() => { const [ax, az] = RP[0], [bx, bz] = RP[RP.length - 1], L = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / L, nz = (bx - ax) / L
+        return (LK.x - (ax + bx) / 2) * nx + (LK.z - (az + bz) / 2) * nz > 0 ? 1 : -1 })()
+      const segN = []
+      for (let i = 1; i < RP.length; i++) { const dx = RP[i][0] - RP[i - 1][0], dz = RP[i][1] - RP[i - 1][1], L = Math.hypot(dx, dz); segN.push([-dz / L, dx / L]) }
+      const off = RP.map((q, i) => {
+        const a = segN[Math.max(0, i - 1)], b = segN[Math.min(segN.length - 1, i)]
+        let nx = a[0] + b[0], nz = a[1] + b[1]; const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L
+        const k = 1.2 / Math.max(0.55, nx * b[0] + nz * b[1])   // 角平分線要拉長，轉角的淨距才跟直線段一樣
+        return [q[0] + nx * sgn * k, q[1] + nz * sgn * k]
+      })
+      const OS = [0]; for (let i = 1; i < off.length; i++) OS.push(OS[i - 1] + Math.hypot(off[i][0] - off[i - 1][0], off[i][1] - off[i - 1][1]))
+      const rail = []
+      for (let d = 0; d <= OS[OS.length - 1] + 1e-6; d += 1.4) {
+        let i = 1; while (i < off.length - 1 && OS[i] < d) i++
+        const t = (d - OS[i - 1]) / Math.max(1e-6, OS[i] - OS[i - 1])
+        rail.push([off[i - 1][0] + (off[i][0] - off[i - 1][0]) * t, off[i - 1][1] + (off[i][1] - off[i - 1][1]) * t])
       }
-      // 平台：盡頭往前（水簾那側）半圈
-      const [ex, ez] = P.at(-1)
-      for (let a = -2.45; a <= 0.95; a += 0.42) rail.push([ex + 0.4 + Math.cos(a) * 2.2, ez + Math.sin(a) * 2.0])   // 西邊（步道進來那側）不圍
+      // 欄杆頂面的高度＝離中線最近那一點的步道縱斷面高
+      const pathY = (x, z) => {
+        let best = 1e9, by = alpineHeight(x, z)
+        for (let i = 1; i < P.length; i++) {
+          const [ax, az] = P[i - 1], [bx, bz] = P[i], dx = bx - ax, dz = bz - az
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)))
+          const dd = Math.hypot(x - ax - dx * t, z - az - dz * t)
+          if (dd < best) { best = dd; by = (+sp.prof[i - 1]) + ((+sp.prof[i]) - (+sp.prof[i - 1])) * t }
+        }
+        return by
+      }
       let prev = null
-      // 2026-11-12 使用者：走到瀑布後面就是死路，往上的步道接不過去——平台那半圈欄杆剛好橫在上山步道（YOSE.stairs）的起點上，欄杆柱擋在路中間。
+      // 2026-11-12 使用者：走到瀑布後面就是死路，往上的步道接不過去——平台那半圈欄杆剛好橫在上山步道（YOSE.stairs）的起點上。
       // 上山步道頭 14 個點兩側 1.5 m 內不立欄杆（開一個口，從平台直接走上去）
       const stP = YOSE.stairs().pts.slice(0, 15)
       const onStairs = (x, z) => { for (let i = 1; i < stP.length; i++) { const [ax, az] = stP[i - 1], [bx, bz] = stP[i], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); if (Math.hypot(x - ax - dx * t, z - az - dz * t) < 1.5) return true } return false }
       for (const [x, z] of rail) {
-        if (onStairs(x, z)) { prev = null; continue }
-        // 轉彎處相鄰兩段的柱子會擠進走道（量到離中線只有 0.5 m）：離岩窟步道中線不到 0.95 m 的柱子不立
-        if (P.some((q, i) => { if (!i) return false; const [ax, az] = P[i - 1], [bx, bz] = q, dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); return Math.hypot(x - ax - dx * t, z - az - dz * t) < 0.95 })) continue
-        const y = alpineHeight(x, z), top = y + 1.1
-        parts2.push(post.clone().scale(1, 1.15, 1).translate(x, y + 0.52, z))
+        if (onStairs(x, z)) { prev = null; continue }   // 開口：橫桿也要跟著斷，不能飛過去
+        const top = pathY(x, z) + 1.1
+        const gy = Math.min(alpineHeight(x, z), top - 0.75)   // 柱腳踩到地：路肩比路面低就把柱子加長
+        const len = top - gy + 0.06
+        parts2.push(post.clone().scale(1, len, 1).translate(x, top - len / 2, z))
         if (prev && Math.hypot(prev[0] - x, prev[2] - z) < 2.2) for (const h of [0, -0.45]) {
-          const a = V(prev[0], prev[1] + h, prev[2]), b = V(x, top + h, z), len = a.distanceTo(b)
+          const a = V(prev[0], prev[1] + h, prev[2]), b = V(x, top + h, z), len2 = a.distanceTo(b)
           const m = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(V(1, 0, 0), b.clone().sub(a).normalize()))
-          parts2.push(bar.clone().scale(len, 1, 1).applyMatrix4(m).translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2))
+          parts2.push(bar.clone().scale(len2, 1, 1).applyMatrix4(m).translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2))
         }
         prev = [x, top, z]
-        addCollider(x, z, 0.12, y + 1.2)
+        addCollider(x, z, 0.12, top + 0.1)
       }
       const rm = new THREE.Mesh(mergeGeometries(parts2.map((q2) => q2.index ? q2.toNonIndexed() : q2)), woodM); rm.castShadow = true; rm.receiveShadow = true; g.add(rm)
     }
