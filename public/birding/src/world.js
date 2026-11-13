@@ -1,7 +1,7 @@
 // 整個園區（溫室、山、水、植物、鳥、雲）：導覽頁（main.js）和遊戲（game/main.js）共用同一份，兩邊看到的世界一模一樣
 import './fogzone.js'   // 一定要在任何材質編譯前（改霧的 shader）
 import * as THREE from 'three'
-import { lodUpdate, lodRegister, lodInit } from './lod.js'
+import { lodUpdate, lodRegister, lodInit, lodAutoRegister, tinyCull } from './lod.js'
 import { createAlpine , loadConiferKit } from './alpine.js'
 import { createHalls } from './halls.js'
 import { createShadowCache } from './shadowcache.js'
@@ -448,8 +448,11 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   // 每格：風、水、鳥（只更新鏡頭附近的，骨架動畫很吃 CPU）、水霧、雲
   const _sd = new THREE.Vector3()
+  let autoLodT = 0, tinyT = 0
   function tick(t, dt, { phone = false } = {}) {
+    if ((autoLodT += dt) > 2.5) { autoLodT = 0; if (lodAutoRegister(scene)) shadows.dirty() }   // 2026-11-14 FPS：沒登記 LOD 的石頭、岩廊牆、石橋…自動登記（lod.js）
     lodUpdate(camera)
+    if ((tinyT += dt) > 0.2) { for (const b of birds) if (b.group) b.group.userData.bird = true; tinyCull(scene, camera, tinyT); tinyT = 0 }   // 2026-11-14 FPS：遠處的小東西不畫（lod.js）
     halls.tick(t, dt, camera)
     if (halls.mode.endsWith('D')) {   // 陰影範圍跟著玩家（在館內時由 halls.js 指定館的中心）
       const gx = Math.round(camera.position.x / 24) * 24, gz = Math.round(camera.position.z / 24) * 24

@@ -720,11 +720,14 @@ export function buildWater(scene) {
   // 草葉放在 layer 1，倒影不畫（最花效能、倒影裡也看不出來）；鏡頭離水池太遠就不更新
   const vCam = new THREE.PerspectiveCamera(), clip = new THREE.Plane(), cp = new THREE.Vector4(), qv = new THREE.Vector4()
   const center = new THREE.Vector3(POOL.x, POOL.water, POOL.z)
+  const _rfr = new THREE.Frustum(), _rpm = new THREE.Matrix4(), _rsp = new THREE.Sphere()
   let frame = 0
   // every：每幾格更新一次倒影（水面一直在晃，看不出來；手機 3 格一次省效能）
   out.reflect = (renderer, scene, camera, scale = 0.5, every = 2) => {
     const far = camera.position.distanceTo(center) > 90 || camera.position.y < POOL.water + 0.05
     uReflOn.value = far ? 0 : 1
+    // 2026-11-14 FPS：水池不在畫面裡就不重畫倒影（出生點離水池約 80 m，以前背對水池也每兩格把整個場景多畫一次）
+    if (!far) { camera.updateMatrixWorld(); _rpm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _rfr.setFromProjectionMatrix(_rpm); if (!_rfr.intersectsSphere(_rsp.set(center, Math.max(POOL.rx, POOL.rz) + 2))) return }
     if (far || frame++ % every) return   // 沒更新的那幾格沿用上一張（投影矩陣跟著那張，位置還是對的）
     const w = Math.max(64, Math.round(renderer.domElement.width * scale)), h = Math.max(64, Math.round(renderer.domElement.height * scale))
     if (reflRT.width !== w || reflRT.height !== h) reflRT.setSize(w, h)

@@ -603,7 +603,7 @@ function buildInterior(lib, avoid = []) {
       for (const nm of Object.keys(geo.attributes)) if (!wg.attributes[nm]) wg.setAttribute(nm, new THREE.Float32BufferAttribute(new Float32Array(S0.length * geo.attributes[nm].itemSize), geo.attributes[nm].itemSize))
       wg.setIndex(I)
       // 2026-11-11 濕地 V3：湖水的顏色／透明度曲線＋真的倒影（MIRROR）
-      const wetMirror = createMirror({ Y: EAST.W, center: [(x0 + x1) / 2, (z0 + z1) / 2], maxDist: 120 })
+      const wetMirror = createMirror({ Y: EAST.W, center: [(x0 + x1) / 2, (z0 + z1) / 2], maxDist: 120, radius: Math.hypot(x1 - x0, z1 - z0) / 2 + 2 })
       const wetM = waterM.clone(); wetM.uniforms = { ...waterM.uniforms, uRefl: wetMirror.uRefl, uReflMat: wetMirror.uReflMat, uReflOn: wetMirror.uReflOn }
       wetM.defines = { ...(waterM.defines || {}), LAKE: 1, MIRROR: 1 }
       const wet = new THREE.Mesh(wg, wetM); wet.renderOrder = 2; wet.name = 'eastWetland'; g.add(wet)

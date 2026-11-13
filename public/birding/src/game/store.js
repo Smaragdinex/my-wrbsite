@@ -83,6 +83,30 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     })
     t.flipY = false; o.material = new THREE.MeshStandardMaterial({ map: t, roughness: 0.45 })
   })
+  // 2026-11-14 FPS：店裡展示的相機、鏡頭每台幾十個零件＝幾十次 draw call，出生點（店門口）往裡看一格 2,000 多次。
+  // 展示用的複本先照材質合併（每台剩 5～10 塊，外觀不變）；gearModel 原檔不動（手上的相機、別的地方還要用零件）
+  const showCache = {}
+  const showModel = (id) => {
+    if (!showCache[id]) {
+      const src = gearModel[id]; src.updateMatrixWorld(true)
+      const inv = new THREE.Matrix4().copy(src.matrixWorld).invert(), by = new Map(); let cast = false, recv = false
+      src.traverse((o) => { if (!o.isMesh || o.isSkinnedMesh) return
+        cast ||= o.castShadow; recv ||= o.receiveShadow
+        let g = o.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld))
+        if (g.index) g = g.toNonIndexed()
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k)
+        if (!g.attributes.normal) g.computeVertexNormals()
+        if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2))
+        g.morphAttributes = {}
+        const L = by.get(o.material) || []; L.push(g); by.set(o.material, L) })
+      const grp = new THREE.Group()
+      try {
+        for (const [m, L] of by) { const mg = mergeGeometries(L, false); if (!mg) throw new Error('merge'); const ms = new THREE.Mesh(mg, m); ms.castShadow = cast; ms.receiveShadow = recv; grp.add(ms) }
+        showCache[id] = grp
+      } catch { showCache[id] = src }
+    }
+    return showCache[id].clone()
+  }
 
   const g = new THREE.Group()
   const white = new THREE.MeshStandardMaterial({ color: 0xf2f4f5, roughness: 0.45, metalness: 0.5 })
@@ -355,7 +379,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   box('steel', GX0 - GX1, 0.04, 0.05, (GX0 + GX1) / 2, 0.14, cf - 0.02)
   rect(V(GX0, 0.16, cf - 0.03), V(GX1, 0.16, cf - 0.03), V(GX1, ch - 0.08, cf - 0.03), V(GX0, ch - 0.08, cf - 0.03))
   ;['l1', 'l2', 'l3', 'l4', 'l2', 'l1'].forEach((id, k) => {
-    const m = gearModel[id].clone(); m.rotation.y = Math.PI / 2   // 側躺，鏡頭朝 +x
+    const m = showModel(id); m.rotation.y = Math.PI / 2   // 側躺，鏡頭朝 +x
     m.position.set(GX0 - 0.42 - k * 0.45, 0.48, cz - 0.05); g.add(m)
   })
   for (let i = 0; i < 7; i++) addCollider(cx1 + 0.4 + i * (cw - 0.8) / 6, cz, 0.5, ch + 0.2)
@@ -514,7 +538,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
       else pack(0.16, 0.12, 0.13, x + 0.15, y, z, 0.4)
       return
     }
-    const m = gearModel[id].clone()
+    const m = showModel(id)
     m.scale.setScalar(1.25)    // 格子裡放大一點，從櫃台外面看得清楚
     if (id[0] === 'l') m.rotation.x = Math.PI / 2; else m.rotation.y = Math.PI + 0.35
     // 量大小再擺：立起來放不下（600mm 放大後 76 公分、格子只有 60）就橫躺，鏡頭朝一邊；最後讓它底部貼著層板、置中
@@ -825,8 +849,8 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   // 檯面上：濾鏡盒、幾顆鏡頭蓋、一台展示機
   for (let i = 0; i < 5; i++) pack(0.12, 0.03 + (i % 2) * 0.02, 0.12, AX0 - 0.4 - i * 0.18, 0.78, AZ + 0.32, (i - 2) * 0.1)
   pack(0.12, 0.03, 0.12, AX0 - 0.48, 0.81, AZ + 0.32, 0.4)
-  { const m = gearModel.b1.clone(); m.rotation.y = 0.4; m.position.set(AX1 + 0.7, 0.85, AZ + 0.27); g.add(m) }
-  { const m = gearModel.l2.clone(); m.rotation.x = Math.PI / 2; m.position.set(AX1 + 1.15, 0.78, AZ + 0.3); g.add(m) }
+  { const m = showModel('b1'); m.rotation.y = 0.4; m.position.set(AX1 + 0.7, 0.85, AZ + 0.27); g.add(m) }
+  { const m = showModel('l2'); m.rotation.x = Math.PI / 2; m.position.set(AX1 + 1.15, 0.78, AZ + 0.3); g.add(m) }
   for (let x = AX0 - 0.3; x > AX1; x -= 0.75) addCollider(x, AZ + 0.25, 0.4, 3)
 
   /* ---------- 門口附近：直立數位看板，輪播鳥照（每 6 秒換一張） ---------- */
@@ -873,7 +897,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   const spec = (it) => it.af != null ? tr('對焦 {af}s・連拍 {fps} 張/秒', { af: it.af, fps: it.fps }) : `${it.min === it.max ? it.min : it.min + '–' + it.max}mm・f/${it.ap}`
   const place = (it, kind, x, z) => {
     // 先擺器材、量它的大小，玻璃罩照它開：最長的 600mm 立起來 61 公分，以前固定高度會穿出罩子
-    const m = gearModel[it.id].clone()
+    const m = showModel(it.id)
     if (kind === 'lens') { m.rotation.x = Math.PI / 2; m.position.set(x, 0.935, z - 0.04) }
     else { m.rotation.y = 0.5; m.position.set(x, 1.01, z - 0.04) }
     m.updateMatrixWorld(true)
@@ -990,5 +1014,17 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
     if (k !== slide && printT.image) { slide = k; drawSlide(k) }
   }
   const refresh = () => items.forEach((it) => it.draw())
-  return { group: g, focus, tick, refresh, items, checkout: keeper.checkout, keeper, gearModel }
+  // 2026-11-14 使用者「修正 FPS」：量出來店裡展示的相機、鏡頭（每台幾十個小零件）在花園、草原那邊（100～150 m 外）每格還畫將近 3,000 次 draw call。
+  // 店的直接子物件裡，外框小於 0.8 m 的（相機、鏡頭、價格條、小盒子…）離店 40 m 以外不畫；建築本身照舊 150 m
+  const detail = []
+  { const bb = new THREE.Box3(), sp = new THREE.Sphere(); g.updateMatrixWorld(true)
+    for (const c of g.children) { if (c === keeper.model) continue; bb.setFromObject(c); if (bb.isEmpty()) continue; bb.getBoundingSphere(sp); if (sp.radius < 0.8) detail.push(c) } }
+  let detailOn = true
+  const tick0 = tick
+  function tickD(t, dt, cam, opt) {
+    const on = Math.hypot(cam.position.x + 82, cam.position.z) < 40
+    if (on !== detailOn) { detailOn = on; for (const c of detail) c.visible = on }
+    return tick0(t, dt, cam, opt)
+  }
+  return { group: g, focus, tick: tickD, refresh, items, checkout: keeper.checkout, keeper, gearModel }
 }

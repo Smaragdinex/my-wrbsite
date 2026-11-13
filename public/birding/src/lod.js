@@ -19,9 +19,11 @@ export const lodSetScale = (k) => { if (Math.abs(lodQuality.scale - k) > 1e-3) {
 
 // meshes：共用同一份擺放清單的 InstancedMesh（一種植物的各個材質）；h：這種植物大概多高（公尺）
 // lows：（可選）跟 meshes 一一對應的低面數版本（plants.js 的 lowGeo），沒有的放 null；遠處的株改畫低面數版本
-export function lodRegister(meshes, h, lows = [], { solid = false } = {}) {
+export function lodRegister(meshes, h, lows = [], { solid = false, auto = false } = {}) {
   const keep = meshes.map((m, i) => m?.isInstancedMesh && m.count > 0 ? i : -1).filter((i) => i >= 0)
   meshes = keep.map((i) => meshes[i]); lows = keep.map((i) => lows[i] ?? null)
+  // 2026-11-14 FPS：自己建的 InstancedMesh（石頭一顆 2.6 萬面、岩廊牆、樹）以前沒有低面數版本，多遠都畫原本的 → 這裡自動用 meshoptimizer 減面補一份（plants.js lowGeo）
+  lows = lows.map((lo, i) => lo ?? autoLow(meshes[i]))
   if (!meshes.length) return
   const m0 = meshes[0], n = m0.count
   // 每株自己做視野剔除：整組的 three.js 剔除關掉（它的包圍球被 LOD 改過 count 之後會過時，整組被誤判在視野外、全部不畫）
@@ -43,11 +45,11 @@ export function lodRegister(meshes, h, lows = [], { solid = false } = {}) {
   // 矮的（蕨類、地被）14～40 公尺開始變稀、更遠就不畫；4 公尺以上的樹只做視野外不畫
   // 2026-11-13 使用者「草可以遠一點都先畫嗎，不然靠近才出現很怪」：矮植物 14 m 開始變稀、32 m 不畫 → 30 m 開始變稀、80 m 才全部不畫
   const d0 = Math.max(30, h * 30), d1 = h >= 4 || solid ? Infinity : Math.max(80, h * 90)
-  if (!solid) for (const m of [...meshes, ...lows]) if (m?.castShadow) m.userData.lodManaged = true   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
+  if (!solid || auto) for (const m of [...meshes, ...lows]) if (m?.castShadow) m.userData.lodManaged = true   // auto：自動登記的（石頭、岩廊牆）影子也交給替身，轉頭時畫面外的影子不會不見   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
   // 換成低面數的距離：一公尺的蕨類 10 公尺外、越高的越遠才換（長焦時照變焦倍率拉遠）
   // 2026-11-12 使用者：遠景的樹看起來是板狀的低模——「應該像人眼一樣：圓的、看不清楚，但不是低模」→ 4 m 以上的樹換低面數版本的距離拉遠一倍多（20 m 的樹 200 m → 440 m）
   const dL = h >= 4 ? h * 12 : Math.max(10, h * 10)   // 4 m 以上：120～150 m 外換輕量版（冷杉的輕量版也是立體樹冠，不是板）
-  const S0 = { meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), scl: new Float32Array(n), proxies: null }
+  const S0 = { meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), scl: new Float32Array(n), proxies: null, auto }
   sets.push(S0)
   // 2026-11-12 遠景替身（ChatGPT：3A 遊戲的遠景不是整片烘成一張圖，是遠處的樹換成「多角度替身貼片」）：
   // 4 m 以上的樹，遠到在畫面上不到 IMP_PX 像素高的那幾棵不畫模型，改畫一片面向鏡頭的貼片（2 個三角形），貼圖是這種樹從 8 個方向拍下來的（第一次用到時烘）。
@@ -62,6 +64,89 @@ export function lodRegister(meshes, h, lows = [], { solid = false } = {}) {
   }
   lodStats.instances += n * meshes.length
   last.fov = 0   // 下一格強制更新
+}
+
+// 2026-11-14 使用者「修正 FPS 問題，讓他有 60 FPS 以上」：量出來每格畫 1,100 萬～3,500 萬個三角形——石頭（一顆 2.6 萬面）、岩廊牆、石橋砌石、巨木林、山頂這些
+// InstancedMesh 沒有登記 LOD，在 200 m 外照樣整批畫。這裡自動把「不會動、面數夠多、還沒登記」的 InstancedMesh 交給上面同一套 LOD（solid：不變稀，只做視野外／太遠太小不畫）。
+// 會動的（魚、鳥、燈火…自己每格改矩陣的）不能交：第一次看到先記矩陣的指紋，隔 2 秒以上再看一次，沒變才登記
+const _auto = new WeakMap(), _seen = new WeakSet()
+const _fp = (m) => { const a = m.instanceMatrix.array, n = Math.min(a.length, m.count * 16); let h = m.count * 7.13; for (let i = 0; i < n; i += 13) h += a[i] * ((i % 97) + 1); return h }
+export function lodAutoRegister(scene, now = performance.now()) {
+  if (typeof location !== "undefined" && location.search.includes("noautolod")) return 0   // 量測對照用
+  if (!_seen.size) for (const S of sets) for (const m of [...S.meshes, ...S.lows, ...(S.proxies || [])]) if (m) _seen.add(m)
+  const add = []
+  scene.traverse((o) => {
+    if (!o.isInstancedMesh || _seen.has(o) || o.isSkinnedMesh || o.userData.shadowProxy || o.userData.noLod) return
+    if (o.count < 2 || !(o.layers.mask & 1)) return
+    const g = o.geometry, per = (g.index ? g.index.count : g.attributes.position?.count || 0) / 3
+    if (per < 120 || per * o.count < 20000) return
+    if (o.instanceMatrix.usage === THREE.DynamicDrawUsage) { _seen.add(o); return }
+    const f = _fp(o), r = _auto.get(o)
+    if (!r) { _auto.set(o, { f, t: now, n: o.count }); return }
+    if (r.f !== f || r.n !== o.count) { _seen.add(o); return }   // 會動：不管
+    if (now - r.t < 2000) return
+    _seen.add(o); add.push(o)
+  })
+  for (const m of add) {
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
+    const bb = m.geometry.boundingBox, s = new THREE.Vector3(), m4 = new THREE.Matrix4(); m4.fromArray(m.instanceMatrix.array, 0); s.setFromMatrixScale(m4)
+    const h = Math.max(0.3, (bb.max.y - bb.min.y) * s.y)
+    lodRegister([m], h, [], { solid: true, auto: true })
+    if (m.castShadow) m.layers.disable(5)   // 影子改由替身投（shadowcache.js SHADOW_LAYER＝5）
+  }
+  if (add.length) lodShadowProxies()
+  for (const S of sets) for (const m of S.meshes) _seen.add(m)
+  return add.length
+}
+
+// 2026-11-14 FPS：不是 InstancedMesh 的小東西（相機行的展示機每台幾十個零件、燈籠、鏈條、小石頭…）在幾百公尺外照樣畫，一格多上千次 draw call。
+// 跟上面植物同一個門檻：在畫面上半徑不到 MINPX 像素就不畫（長鏡頭拉近照倍率畫得更遠）。只關掉 layer 0（主鏡頭看的層）——不動 visible（別的系統會切）、不影響影子層。
+// 鳥、老闆（有骨架的模型）、會動的不管：鳥再小也要看得到
+const tiny = { list: [], t: 1e9, off: new Set() }
+const _tc = new THREE.Vector3()
+function tinyScan(scene) {
+  const L = []
+  const skip = (o) => { for (let p = o; p; p = p.parent) { if (p.userData.noTinyCull || /_rig$|Armature/.test(p.name) || p.userData.bird) return true } return false }
+  scene.traverse((o) => {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.frustumCulled || o.geometry.isInstancedBufferGeometry) return
+    if (!(o.layers.mask & 1) && !tiny.off.has(o)) return
+    const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere()
+    const r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis(); if (!(r > 0) || r > 2.5) return
+    if (o.parent && o.parent.children.some((c) => c.isSkinnedMesh)) return
+    if (skip(o)) return
+    L.push(o)
+  })
+  tiny.list = L
+}
+export function tinyCull(scene, camera, dt) {
+  if ((tiny.t += dt) > 3) { tiny.t = 0; tinyScan(scene) }
+  const zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(WALK_FOV / 2)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * lodQuality.scale
+  const cp = camera.position, K = PXK * zoom / MINPX
+  for (const o of tiny.list) {
+    const g = o.geometry; _tc.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld)
+    const r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis() * K, far = _tc.distanceToSquared(cp) > r * r
+    if (far) { if (o.layers.mask & 1) { o.layers.disable(0); tiny.off.add(o) } }
+    else if (tiny.off.has(o)) { o.layers.enable(0); tiny.off.delete(o) }
+  }
+}
+lodStats.tiny = () => ({ list: tiny.list.length, off: tiny.off.size })
+
+let lowGen = null
+export const lodSetLowGen = (f) => { lowGen = f }
+function autoLow(m) {
+  if (!lowGen || !m.parent || m.userData.noAutoLow) return null
+  const g = m.geometry, per = (g.index ? g.index.count : 0) / 3
+  if (per < 1200) return null
+  const lg = lowGen(g); if (!lg) return null
+  const lo = new THREE.InstancedMesh(lg, m.material, m.count)
+  lo.instanceMatrix.array.set(m.instanceMatrix.array.subarray(0, m.count * 16))
+  if (m.instanceColor) lo.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(m.instanceColor.array), 3)
+  lo.position.copy(m.position); lo.quaternion.copy(m.quaternion); lo.scale.copy(m.scale)
+  lo.castShadow = m.castShadow; lo.receiveShadow = m.receiveShadow; lo.layers.mask = m.layers.mask & ~(1 << 5); lo.renderOrder = m.renderOrder
+  lo.customDepthMaterial = m.customDepthMaterial; lo.customDistanceMaterial = m.customDistanceMaterial
+  if (!m.boundingSphere) m.computeBoundingSphere(); lo.boundingSphere = m.boundingSphere.clone(); lo.count = 0; lo.name = (m.name || '') + ':low'
+  m.parent.add(lo)
+  return lo
 }
 
 // 草葉一塊：mesh（InstancedBufferGeometry，草已經打亂順序）、中心、半徑
@@ -193,6 +278,14 @@ export function lodUpdate(camera, force = false) {
   const zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(WALK_FOV / 2)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * lodQuality.scale
   const P = _fr.planes
   let drawn = 0, lowTris = 0, nearN = 0; lodStats.impDrawn = 0
+  // 自動登記的：別的程式後來自己改了 count（例如石橋套件載入後用 count = 0 藏起舊橋面）→ 交還給它，不再管（矩陣先還原成原本的全部）
+  for (let si = sets.length - 1; si >= 0; si--) { const S = sets[si]; if (!S.auto) continue
+    if (!S.meshes.some((m) => m.userData.lodCount !== undefined && m.count !== m.userData.lodCount)) continue
+    for (const m of S.meshes) { const ext = m.count; m.instanceMatrix.array.set(S.base); m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.needsUpdate = true; m.count = ext === m.userData.lodCount ? S.n : ext; delete m.userData.lodCount; m.userData.noLod = true; m.frustumCulled = true; if (m.castShadow) m.layers.enable(5); m.userData.lodManaged = false }
+    for (const lo of S.lows) if (lo) { lo.count = 0; lo.parent?.remove(lo) }
+    for (const px of S.proxies || []) px.parent?.remove(px)
+    sets.splice(si, 1)
+  }
   for (const S of sets) {
     const zS = S.d1 !== Infinity ? zoom / lodQuality.scale * Math.max(0.8, lodQuality.scale) : zoom, d0 = S.d0 * zS, d1 = S.d1 * zS,   /* 矮植物也一樣：畫質降級最多縮到八成 */ d1s = d1 * d1, dLs = (S.dL * zoom) ** 2
     let k = 0, ki = 0
@@ -233,7 +326,7 @@ export function lodUpdate(camera, force = false) {
         if (ca && co) { ca[c * 3] = co[i * 3]; ca[c * 3 + 1] = co[i * 3 + 1]; ca[c * 3 + 2] = co[i * 3 + 2] }
         c++
       }
-      m.count = c   // 不動 visible：高山館切換兩館時會整批藏起來（alpine.js），這裡設 visible 會把它又打開
+      m.count = c; m.userData.lodCount = c   // 不動 visible：高山館切換兩館時會整批藏起來（alpine.js），這裡設 visible 會把它又打開
       m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.addUpdateRange(0, Math.max(1, c) * 16); m.instanceMatrix.needsUpdate = true
       if (ca && co) { m.instanceColor.clearUpdateRanges(); m.instanceColor.addUpdateRange(0, Math.max(1, c) * 3); m.instanceColor.needsUpdate = true }
       return c

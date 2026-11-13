@@ -3,15 +3,18 @@
 // 鏡頭離 center 超過 maxDist 就不更新、uReflOn = 0（shader 退回假的環境倒影）
 import * as THREE from 'three'
 
-export function createMirror({ Y, center, maxDist = 110, hide = [] }) {
+export function createMirror({ Y, center, maxDist = 110, hide = [], radius = 0 }) {
   const rt = new THREE.WebGLRenderTarget(512, 512, { type: THREE.HalfFloatType, samples: 4 })   // 2026-11-11 使用者：倒影太 pixel、看了暈 → 抗鋸齒（原本沒有，半解析度的鋸齒放大成一格一格）
   const uRefl = { value: rt.texture }, uReflMat = { value: new THREE.Matrix4() }, uReflOn = { value: 0 }
   const vCam = new THREE.PerspectiveCamera(), clip = new THREE.Plane(), cp = new THREE.Vector4(), qv = new THREE.Vector4()
   const C = new THREE.Vector3(center[0], Y, center[1]), dir = new THREE.Vector3(), N = new THREE.Vector3(0, 1, 0), P0 = new THREE.Vector3(0, Y, 0)
   let frame = 0
+  const _fr = new THREE.Frustum(), _pm = new THREE.Matrix4(), _sp = new THREE.Sphere()
   function reflect(renderer, scene, camera, scale = 0.5, every = 2) {
     const far = camera.position.distanceTo(C) > maxDist || camera.position.y < Y + 0.05
     uReflOn.value = far ? 0 : 1
+    // 2026-11-14 FPS：水面不在畫面裡就不重畫倒影（以前只看距離，背對水面也每兩格把整個場景多畫一次）
+    if (!far && radius > 0) { camera.updateMatrixWorld(); _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm); if (!_fr.intersectsSphere(_sp.set(C, radius))) return }
     if (far || frame++ % every) return
     const w = Math.max(64, Math.round(renderer.domElement.width * scale)), h = Math.max(64, Math.round(renderer.domElement.height * scale))
     if (rt.width !== w || rt.height !== h) rt.setSize(w, h)

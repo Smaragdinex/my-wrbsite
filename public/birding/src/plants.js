@@ -1,7 +1,7 @@
 // 寫實植物／岩石模型（models/plants/*.glb，由 tools/export-plants.py 產生）
 // 每個 glb 裡一株一個節點，原點在根部中心、單位公尺；這裡負責載入並用 InstancedMesh 大量擺放
 import * as THREE from 'three'
-import { lodRegister } from './lod.js'
+import { lodRegister, lodSetLowGen } from './lod.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { addWind } from './wind.js'
@@ -41,6 +41,7 @@ export function lowGeo(geo) {
   lowCache.set(geo, out)
   return out
 }
+lodSetLowGen(lowGeo)   // lod.js 自動補低面數版本用（石頭、岩廊牆…不是 scatter 種的）
 
 export async function loadPlants(onProgress) {
   simp = await import('https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_simplifier.module.js')
