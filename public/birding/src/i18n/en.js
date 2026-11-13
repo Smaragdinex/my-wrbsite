@@ -1289,6 +1289,18 @@ export const BIRDS = {
    "In Taiwan it is a scarce passage migrant, almost always seen without the collar."
   ]
  },
+ "lapwing": {
+  "name": "Northern Lapwing",
+  "where": "Open Wetland between the Emerald Marsh and the Mountain Lake",
+  "intro": "Also called the peewit. A long, thin black crest curls up from the back of its head like a little pigtail; its back looks black until the sun catches it and flashes metallic green and purple. It loves short grass, farmland and shallow muddy pools, where it runs a few steps, stops, pecks, and runs again.",
+  "facts": [
+   "It patters one foot quickly on the ground to shake worms and insects up from the soil.",
+   "Its wings are broad and rounded; in spring the male tumbles and dives through the air, his wings making a humming throb.",
+   "The name peewit imitates its call.",
+   "It has declined sharply on European farmland and is now listed as Near Threatened.",
+   "In Taiwan it is an uncommon winter visitor, sometimes seen in western fields and wetlands."
+  ]
+ },
  "grebe": {
   "name": "Great Crested Grebe",
   "where": "Deep Pool of the Emerald Marsh",

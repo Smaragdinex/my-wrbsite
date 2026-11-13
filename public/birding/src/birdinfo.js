@@ -973,6 +973,19 @@ const ALL = [
       "這座公園的瀑布區住著來自世界各地的鳥，烏林鴞在這裡是「來作客」的。",
     ],
   },
+  // 2026-11-13 使用者：翡翠沼澤和山下湖中間加一片開放淡水濕地（open freshwater wetland），放小辮鴴（還有彩鷸）
+  {
+    id: 'lapwing', spot: [92, -79.5], perch: 'ground', view: 250, dist: 4, camH: 1.0, lookY: 0.25,
+    name: "小辮鴴", sci: 'Vanellus vanellus', where: "翡翠沼澤與山下湖之間的開放濕地",
+    intro: "又叫鳳頭麥雞。頭頂後面翹著一根細長的黑色冠羽，像綁了一條小辮子；背上看起來是黑的，太陽一照會閃出金屬綠和紫紅色的光。喜歡短草地、農田和淺水的泥灘，走幾步、停下來、低頭啄，再走幾步。",
+    facts: [
+      "會用一隻腳在地上快速踩動，把土裡的蚯蚓和小蟲震出來再吃掉。",
+      "翅膀又寬又圓，春天雄鳥會在空中翻滾、俯衝，翅膀拍出「嗡嗡」的聲音來求偶。",
+      "英文俗名 Peewit 就是模仿牠的叫聲。",
+      "在歐洲的農地大量減少，已經被列為近危物種。",
+      "在台灣是不常見的冬候鳥，偶爾在西部的田野和濕地看得到。",
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -981,6 +994,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

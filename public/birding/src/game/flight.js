@@ -69,6 +69,7 @@ export const ESCAPE = {
   sarus: { r: 9, run: 2, fly: { speed: 9, hz: 2.4, style: 'flap', k: 3.0 } },
   redcrowned: { r: 9, run: 2, fly: { speed: 9, hz: 2.5, style: 'flap', k: 2.9 } },
   ruff: { r: 5, run: 3, fly: { speed: 12, hz: 8, style: 'flap', k: 0.87 } },
+  lapwing: { r: 6, run: 3 },   // 2026-11-13 小辮鴴：先跑開（飛行模型還沒做）
   grebe: { r: 9, swim: 4, fly: { speed: 11, hz: 9, style: 'flap', k: 1.25 } },
   // 2026-11-13 Pass 1D：遊隼巡航快、拍幾下就滑；黑雨燕又快又急（離步道 4～5 m 高，靠很近才飛）；烏林鴞慢、低、安靜
   peregrine: { r: 16, fly: { speed: 15, hz: 4.5, style: 'glide', k: 1.05 } },

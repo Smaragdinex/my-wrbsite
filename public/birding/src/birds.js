@@ -306,7 +306,7 @@ const BUILD = {
   mandarin, spotbill, partridge, nuthatch, finchbill, minivet, pitta, grassowl,
   liocichla, whitebrow, bullfinch, barwing, islandthrush, tit, rustylt, whitethroat, hwamei, styan, scimitar, fulvetta, bamboo, flowing, bushwarbler, cupwing, shortwing,
   scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier, rnpheasant, skylark, cisticola, nutcracker, wbwood,
-  shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe,
+  shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe, lapwing,
   peregrine, blackswift, greatgreyowl,
 }
 /* ---------- 現成模型 ---------- */
@@ -322,7 +322,7 @@ const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-ri
     'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
-    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig']
+    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig']
 export class MissingModel extends Error { constructor(n) { super('model not loaded: ' + n); this.model = n } }
 let _loader = null, _extra = []
 const _loading = new Map(), FAILED = new Set()
@@ -1620,6 +1620,7 @@ function bulbul(env) {
 }
 
 /* ---------- 2026-11 新增的 9 種（ChatGPT 參考圖 → Tripo → tools/rig-distance.py，點位在 tools/bird-points.json） ---------- */
+const LAPWING_H0 = 0.83   // 小辮鴴模型頭頂高（不含冠羽，冠羽到 0.98）
 const TRIPO = { rotY: Math.PI / 2, lat: V(0, 0, -1) }   // Tripo 模型都是頭朝 -x
 // 只在枝條外段跳：靠樹幹那段在寬螢幕上會被左邊的卡片蓋住
 const outer = (env, min) => env.branch?.lock ? env : ({ ...env, branch: { ...env.branch, min } })   // lock：真的樹枝量好的長度，不能再往外延
@@ -1984,6 +1985,12 @@ function ruff(env) {
     walk: { radius: 1.6, speed: 0.2, avoid }, swingT: 0.3, lift: 0.01, knee: [0.8, 1.4], focusY: 0.4,
     acts: { stand: [4, 1.5, 3.5], look: [3, 1, 2], walk: [3, 99, 99], peck: [1.5, 0.8, 1.4], turn: [1.5, 99, 99], show: [0, 999, 999] } }))
 }
+// 2026-11-13 小辮鴴：開放濕地三隻，典型的「跑幾步、停、低頭啄」（plover 的覓食方式）：走得快、常停下來站著看、啄得多
+function lapwing(env) {
+  return groundGroup(3, 0.8, (avoid) => groundTripo(env, { name: 'lapwing-rig', H: 0.27, h0: LAPWING_H0, ...TRIPO, reach: 0.3, bill: 0.06,
+    walk: { radius: 1.8, speed: 0.42, avoid }, swingT: 0.18, lift: 0.012, knee: [0.8, 1.4], focusY: 0.5,
+    acts: { stand: [4, 1.2, 3], look: [3, 0.8, 1.8], walk: [4, 99, 99], peck: [3, 0.5, 1.0], turn: [1.5, 99, 99] } }))
+}
 // 鳳頭鸊鷉：深水池一對，浮在水面慢慢游、偶爾低頭
 function grebe(env) {
   const show = grebeShow()
@@ -2231,7 +2238,7 @@ export const REAL_CM = {
   islandthrush: 22, tit: 12, rustylt: 26, whitethroat: 28, hwamei: 23, styan: 18, scimitar: 25, fulvetta: 11, bamboo: 30, flowing: 14,
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
-  shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, grebe: 50,
+  shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, lapwing: 30, grebe: 50,
   peregrine: 42, blackswift: 18, greatgreyowl: 68,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
