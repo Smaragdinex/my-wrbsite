@@ -164,7 +164,17 @@ const product = createProductView({ state, getModel: (id) => store.gearModel[id]
 const panelOpen = () => album.isOpen || shop.isOpen || product.isOpen || cam.panelOpen || guide.isOpen
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
+// 2026-11-13 回報問題用：按 ` 在左上角顯示目前位置／面向／時間（截圖給我們就知道在哪裡、往哪看），再按一次關掉
+const posEl = Object.assign(document.createElement('div'), { hidden: true })
+posEl.style.cssText = 'position:fixed;left:10px;top:10px;z-index:50;font:600 13px ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.6);padding:6px 9px;border-radius:6px;pointer-events:none;white-space:pre'
+document.body.appendChild(posEl)
+setInterval(() => {
+  if (posEl.hidden) return
+  const p = camera.getWorldPosition(new THREE.Vector3()), d = camera.getWorldDirection(new THREE.Vector3())
+  posEl.textContent = `x ${p.x.toFixed(1)}  y ${p.y.toFixed(1)}  z ${p.z.toFixed(1)}\nlook ${d.x.toFixed(2)} ${d.y.toFixed(2)} ${d.z.toFixed(2)}  fov ${camera.fov.toFixed(0)}\n${tr('時間')} ${hour.toFixed(2)}`
+}, 200)
 addEventListener('keydown', (e) => {
+  if (e.code === 'Backquote') { posEl.hidden = !posEl.hidden; return }
   if (guide.isOpen) { if (e.code === 'KeyE') guide.close(); if (e.code === 'Tab') e.preventDefault(); return }   // 圖鑑開著：翻頁、Esc 在 guide.js 處理
   if (album.key(e)) return   // 回放開著：方向鍵、Q/E、刪除…都給它（Tab、Esc 關掉）
   if (e.code === 'Tab') { e.preventDefault(); if (album.isOpen) album.close(); else if (!shop.isOpen && !product.isOpen) openPanel(album) }

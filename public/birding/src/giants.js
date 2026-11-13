@@ -198,13 +198,13 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
       const len = t.H * (0.15 + rnd() * 0.1) * (1.25 - h / t.H), rad = R * (0.08 + rnd() * 0.05) * (1.15 - h / t.H)
       const dir = v.set(Math.cos(a) * Math.cos(up), Math.sin(up), Math.sin(a) * Math.cos(up))
       const base = new THREE.Vector3(t.x + Math.cos(a) * rr * 0.6, t.y + h, t.z + Math.sin(a) * rr * 0.6)
-      limbs.push({ p: base, q: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir), s: new THREE.Vector3(rad, len, rad), t: i })
+      limbs.push({ p: base, q: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir), s: new THREE.Vector3(rad, len, rad) })
       // 枝葉團：沿著大枝掛 3 團（中段、外段、枝梢），越往上越小
       const sz = (1.25 - yy) * (0.9 + rnd() * 0.5)
       for (const u of [0.22, 0.6, 0.98]) {   // 從靠近樹幹就開始有葉：不然近看是一根根光禿禿的棍子插在樹幹上
         const S = (4.2 + rnd() * 3) * sz * (u > 1 ? 0.85 : 1)
         const cp = base.clone().addScaledVector(dir, len * u).add(new THREE.Vector3((rnd() - 0.5) * 1.2, -S * 0.35 + (rnd() - 0.5), (rnd() - 0.5) * 1.2))
-        clumps.push({ p: cp, q: new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.9, rnd() * TAU, (rnd() - 0.5) * 0.9)), s: new THREE.Vector3(S * 1.15, S, S * 1.15), c: cc.clone().offsetHSL(0, 0, (rnd() - 0.5) * 0.08), t: i })
+        clumps.push({ p: cp, q: new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.9, rnd() * TAU, (rnd() - 0.5) * 0.9)), s: new THREE.Vector3(S * 1.15, S, S * 1.15), c: cc.clone().offsetHSL(0, 0, (rnd() - 0.5) * 0.08) })
       }
     }
     // 樹梢：頂端 30% 一根窄的冷杉尖塔
@@ -222,11 +222,7 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
   const crownB = new THREE.InstancedMesh(coniferGeo('hemlock', 8), crownA.material, clumps.length)   // 輕量版（8 層）：一團小，層數少看不出來
   clumps.forEach((c, i) => { m4.compose(c.p, c.q, c.s); crownB.setMatrixAt(i, m4); crownB.setColorAt(i, c.c) })
   for (const m of [trunk, sacredT, limbM, crownA, crownB]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m) }
-  // 2026-11-13 使用者影片「天空一條黑線」：遠處（230～330 m）變稀時四組各抽各的，巨木常常只剩樹幹（樹冠被抽掉），遠看是一根細細的黑桿。
-  // 現在每一株都標上屬於哪棵樹（group）、用那棵樹的位置算距離（gpos）：整棵一起留、一起拿掉
-  const gOf = (ids) => { const gp = new Float32Array(ids.length * 3); ids.forEach((k, j) => { const t = spots[k]; gp.set([t.x, t.y + t.H * 0.5, t.z], j * 3) }); return { group: ids, gpos: gp } }
-  const treeIds = spots.map((_, i) => i)
-  lodRegister([trunk], 40, [], gOf(treeIds)); lodRegister([crownA], 40, [], gOf(treeIds)); lodRegister([crownB], 40, [], gOf(clumps.map((c) => c.t))); lodRegister([limbM], 40, [], gOf(limbs.map((l) => l.t)))
+  lodRegister([trunk], 40); lodRegister([crownA], 40); lodRegister([crownB], 40); lodRegister([limbM], 40)
 
   // ---------- 神木的柵欄、巨大樹頭、倒木、木棧道 ----------
   const woodM = new THREE.MeshStandardMaterial({ color: 0x7a5a3c, roughness: 0.9 })
