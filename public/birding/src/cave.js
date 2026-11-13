@@ -172,6 +172,20 @@ export function buildCave(scene, kit, sum, lib) {
     }
     const idx = []
     for (let i = 0; i < NXc; i++) for (let j = 0; j < NS; j++) { const a = i * (NS + 1) + j, b = a + NS + 1; idx.push(a, a + 1, b, a + 1, b + 1, b) }
+    // 2026-11-13 使用者（凹槽口往上的石階）「這裡不是牆擋著了嗎」：這層岩壁內襯整片往洞裡墊了 1.25 m（還有岩層凸出），
+    // 凹槽西口石階轉彎那裡離步道中線只剩 0.85 m，比半個步道寬還近——岩壁壓在石階上。步道（崖壁石階凹槽那段＋凹槽支線最後一段）
+    // 周圍 1.65 m、人走得到的高度（腳下 0.6 m 到頭上 2.8 m）以內的內襯一律往岩壁裡退，其他地方不動
+    { const T = YOSE.stairs(), sm = []
+      const addSeg = (ax, az, ay, bx, bz, by) => { const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / 0.3)); for (let k = 0; k <= n; k++) { const t = k / n; sm.push([ax + (bx - ax) * t, az + (bz - az) * t, ay + (by - ay) * t]) } }
+      for (let i = 1; i < T.pts.length && T.yy[i] < 36; i++) addSeg(T.pts[i - 1][0], T.pts[i - 1][1], T.yy[i - 1], T.pts[i][0], T.pts[i][1], T.yy[i])
+      const cv = ALP_SPURS.find((q) => q.name === 'cave'); if (cv) for (let i = Math.max(1, cv.pts.length - 2); i < cv.pts.length; i++) addSeg(cv.pts[i - 1][0], cv.pts[i - 1][1], alpineHeight(...cv.pts[i - 1]), cv.pts[i][0], cv.pts[i][1], alpineHeight(...cv.pts[i]))
+      const R = 1.65
+      for (let v = 0; v < pos.length / 3; v++) {
+        const vx = pos[v * 3], vy = pos[v * 3 + 1], vz = pos[v * 3 + 2]
+        let need = -1e9
+        for (const [px, pz, py] of sm) { const dx = vx - px; if (Math.abs(dx) >= R || vy < py - 0.6 || vy > py + 2.8 || vz < pz - 0.5) continue; need = Math.max(need, pz + Math.sqrt(R * R - dx * dx)) }
+        if (vz < need) pos[v * 3 + 2] = need
+      } }
     const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); cg.setIndex(idx); cg.computeVertexNormals()
     // 面要朝洞口（-z／往下）：檢查一個後壁中間的法線，反了就整個翻面
     { const nrm = cg.attributes.normal, mid = Math.round(NXc / 2) * (NS + 1) + 10; if (nrm.getZ(mid) > 0) { for (let t = 0; t < idx.length; t += 3) { const q = idx[t + 1]; idx[t + 1] = idx[t + 2]; idx[t + 2] = q } cg.setIndex(idx); cg.computeVertexNormals() } }

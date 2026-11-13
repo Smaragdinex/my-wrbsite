@@ -1779,6 +1779,24 @@ for (const b of RIVER_BRIDGES) {
   }
 }
 
+// 2026-11-13 使用者（站在瀑布石橋西頭往湖看）「少一個 補起來，不然邏輯來說水會跑出來」：橋靠湖那側的石欄到橋頭就斷了，
+// 再往北 2 m 才接上那道沙堤——中間這段地面比湖面低 0.6～1.3 m，河面順著低地漫到步道上。補一道岸：沿這條線地面墊到水面上 0.18 m，
+// 兩側 0.8 m 內接回原地形（只墊高、不挖）；上面 yosemite.js 再排一排 Blender 的石緣收邊（YOSE.DIKE）
+YOSE.DIKE = [[180.5, 70.75], [180.05, 71.55], [179.55, 72.4], [179.15, 73.25], [178.95, 73.9]]
+{
+  const W = YOSE.lake.water + 0.18, P = YOSE.DIKE
+  for (let k = 1; k < P.length; k++) {
+    const [ax, az] = P[k - 1], [bx, bz] = P[k], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz
+    const i0 = Math.floor((Math.min(ax, bx) - 2 - AG.x0) / AG.cell), i1 = Math.ceil((Math.max(ax, bx) + 2 - AG.x0) / AG.cell), j0 = Math.floor((Math.min(az, bz) - 2 - AG.z0) / AG.cell), j1 = Math.ceil((Math.max(az, bz) + 2 - AG.z0) / AG.cell)
+    for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+      const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, t = clamp(((x - ax) * dx + (z - az) * dz) / l2, 0, 1), d = Math.hypot(x - ax - dx * t, z - az - dz * t), q = j * AG.nx + i
+      if (d > 1.4) continue
+      const w = 1 - clamp((d - 0.6) / 0.8, 0, 1), h = lerp(aHeight[q], W, w * w * (3 - 2 * w))
+      if (h > aHeight[q]) aHeight[q] = h
+    }
+  }
+}
+
 // 2026-11-13 驗收第 11 條：瀑布湖和往下流的溪之間隔著一道比水面高的土堤（湖西岸 186～188 一帶高 27.6～27.9，水面 27.5）→ 挖一條水道接起來（水面下 0.6、半寬 2.5 m、外面 2 m 接回）
 {
   const W = YOSE.lake.water, P = [190.5, 79.3], Q = [184.6, 75.4], dx = Q[0] - P[0], dz = Q[1] - P[1], l2 = dx * dx + dz * dz

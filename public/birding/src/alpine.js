@@ -1000,6 +1000,23 @@ function buildInterior(lib, avoid = []) {
         }
       }
     }
+    // 2026-11-13 使用者（瀑布石橋西頭）「少一個 補起來」：橋靠湖那側的石欄斷在橋頭，湖水從旁邊漫出去 → layout.js 沿 YOSE.DIKE 墊了一道比水面高的岸，
+    // 這裡接著橋的石欄、用同一套亂石牆＋壓頂石往北砌一段（牆腳埋進岸裡 0.3 m，露出地面約 0.35 m）
+    if (YOSE.DIKE) {
+      const P = YOSE.DIKE, yb = YOSE.lake.water + 0.18 - 0.3
+      for (let k = 1; k < P.length; k++) {
+        const [ax, az] = P[k - 1], [bx, bz] = P[k], L2 = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / L2, dz = (bz - az) / L2
+        const qb = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(V(dx, 0, dz), V(0, 1, 0), V(-dz, 0, dx)))
+        for (let s2 = 0; s2 < L2 - 0.05; s2 += 0.42) {
+          const x = ax + dx * s2, z = az + dz * s2
+          cores.push({ p: V(x, yb + 0.26, z), q: qb, s: V(0.46, 0.55, 0.32) })
+          for (let c = 0; c < 3; c++) for (let kk = 0; kk < 2; kk++) { const o = kk * 0.21 + (c % 2) * 0.1 - 0.1, w = (rb() - 0.5) * 0.03
+            stones.push({ p: V(x + dx * o - dz * w, yb + 0.09 + c * 0.17, z + dz * o + dx * w), q: qb.clone().multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), (rb() - 0.5) * 0.3)), s: V(0.3 + rb() * 0.16, 0.17 + rb() * 0.05, 0.36), c: 0.62 + rb() * 0.3 }) }
+          addCollider(x, z, 0.24, yb + 0.8)
+        }
+        copes.push({ p: V((ax + bx) / 2, yb + 0.62, (az + bz) / 2), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.atan2(-dz, dx), (rb() - 0.5) * 0.02, 'YXZ')), s: V(L2 + 0.02, 0.13 + rb() * 0.03, 0.42 + rb() * 0.04), c: 0.82 + rb() * 0.22 })
+      }
+    }
     const im = (list, geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, list.length), m4b = new THREE.Matrix4(), cc = new THREE.Color(); list.forEach((c, i) => { m.setMatrixAt(i, m4b.compose(c.p, c.q, c.s)); if (c.c) m.setColorAt(i, cc.setScalar(c.c)) }); m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m) }
     im(cores, new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ map: rubbleT, color: 0x77726a, roughness: 0.98 }))
     im(stones, stoneG, stoneM)

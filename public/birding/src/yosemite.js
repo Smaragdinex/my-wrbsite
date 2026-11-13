@@ -489,6 +489,11 @@ export function buildYosemite(scene, { lib } = {}) {
         const dir = new THREE.Vector3(A.ux * dt * A.span / 2, dh * A.H, A.uz * dt * A.span / 2).normalize()
         const q = new THREE.Quaternion().setFromUnitVectors(la, dir).multiply(new THREE.Quaternion().setFromAxisAngle(la, spin))
         if (wob) q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(A.vx, 0, A.vz), wob))
+        // 2026-11-13 使用者（凹槽口往上的石階）「這裡不是牆擋著了嗎」：背面接岩壁那幾顆 3 m 的大石頭壓在石階第一段上，近看像一整面牆。
+        // 石頭跟步道（崖壁石階、凹槽支線）水平距離不到「半徑＋1.3 m」、高度又重疊的，不放
+        { const rad = ax[0] * k * 0.5, blocks = (px, pz, py) => Math.hypot(px - x, pz - z) < rad * 0.8 + 1.3 && py > y - rad - 1.0 && py < y + rad + 0.5
+          for (let q2 = 0; q2 < TRall.pts.length; q2++) if (blocks(TRall.pts[q2][0], TRall.pts[q2][1], TRall.yy[q2])) return null
+          const cv = ALP_SPURS.find((sp) => sp.name === 'cave'); if (cv) for (let q2 = 1; q2 < cv.pts.length; q2++) for (let f = 0; f <= 1; f += 0.25) { const px = cv.pts[q2 - 1][0] + (cv.pts[q2][0] - cv.pts[q2 - 1][0]) * f, pz = cv.pts[q2 - 1][1] + (cv.pts[q2][1] - cv.pts[q2 - 1][1]) * f; if (blocks(px, pz, alpineHeight(px, pz))) return null } }
         lists[n].push({ p: V(x, y, z), q, s: V(k, k * (0.74 + rnd() * 0.22), k), c: wetC(x) })
         return { x, z }
       }
@@ -514,7 +519,7 @@ export function buildYosemite(scene, { lib } = {}) {
       // 補縫：拱肩與拱頂的接縫各塞一顆小的
       put('boulder', 134, 1.5, 0.3, -0.05, 1.4, 0)
       put('boulder', 46, 1.5, -0.3, -0.05, 2.9, 0)
-      for (const f of feet) addCollider(f.x, f.z, 1.0, alpineHeight(f.x, f.z) + 2.2, alpineHeight(f.x, f.z) - 1.5)
+      for (const f of feet) if (f) addCollider(f.x, f.z, 1.0, alpineHeight(f.x, f.z) + 2.2, alpineHeight(f.x, f.z) - 1.5)
     }
     // 岩石改成灰白（花崗岩）：材質複製一份、顏色去飽和再提亮（原本掃描的是褐色、長青苔的石頭），跟岩壁一致
     for (const n of names) {
@@ -1140,7 +1145,7 @@ export function buildYosemite(scene, { lib } = {}) {
     }
     // 2026-11-13 岩廊（龍岩窟參考圖，使用者：「都用 Blender 生成」）：tools/make-gallery-kit.py 做的原木柱、原木橫桿、矮石緣、不規則石板地。
     // 原木掛柳杉樹皮（淋濕褪色的灰褐）、石頭跟石階同一份三向投影石材；石板地另外一份「濕」的（粗糙度 0.32，反光一塊塊不一樣）
-    if (WOOD.length) new GLTFLoader().loadAsync(`models/props/gallery_kit.glb?v=${VER}`).then((gl) => {
+    new GLTFLoader().loadAsync(`models/props/gallery_kit.glb?v=${VER}`).then((gl) => {
       const K = {}
       gl.scene.updateMatrixWorld(true)
       gl.scene.traverse((o) => { if (o.isMesh) { const gg = o.geometry.clone(); gg.applyMatrix4(o.matrixWorld); if (gg.attributes.color_1 && !gg.attributes.color) gg.setAttribute('color', gg.attributes.color_1); K[o.name] = gg } })
@@ -1172,11 +1177,34 @@ export function buildYosemite(scene, { lib } = {}) {
             next += 0.95
           }
         } }
-      const mats = { post: logM, rail: logM, curb: stepM, floor: wetM }
+      // 天然石階：整條崖壁步道的每一階（岩廊段已經是平鋪石板，那幾階本來就縮成 0）
+      { const names = ['nat_step_a', 'nat_step_b', 'nat_step_c', 'nat_step_d'].filter((n) => K[n]), flip = new THREE.Matrix4().makeRotationY(Math.PI)
+        if (names.length) {
+          STEPS.forEach((e, n) => { const nm = names[Math.floor(hsh(n * 3.7 + 1) * names.length) % names.length]; const sc = new THREE.Vector3(); e.m.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc); if (sc.x < 0.01) return
+            (L[nm] ||= []).push(hsh(n * 9.1) < 0.5 ? e.m.clone().multiply(flip) : e.m.clone()); (L.__stepC ||= {})[nm] = (L.__stepC?.[nm] || []); L.__stepC[nm].push(e.c) })
+          const old = g.getObjectByName('gorgeSteps'); if (old) { g.remove(old); old.geometry.dispose() }
+        } }
+      // 岩壁：沿整條崖壁步道內側（往岩壁那側 1.25 m＝鑿進去的那面牆）每 2.9 m 貼一片 3 m 寬、3.4 m 高的層疊砂岩；牆面朝步道
+      { const names = ['wall_a', 'wall_b', 'wall_c'].filter((n) => K[n])
+        if (names.length) { let acc = 99, k = 0
+          for (let i = 1; i < NP; i++) {
+            if (st.kind[i] !== 'gal' && st.kind[i] !== 'open') { acc = 99; continue }
+            acc += st.S[i] - st.S[i - 1]; if (acc < 2.9) continue; acc = 0
+            const sd = SIDE[i].z < 0 ? 1 : -1, inn = SIDE[i].clone().multiplyScalar(-sd)   // 欄杆在 +sd 那側，牆在另一側
+            const base = C3[i].clone().addScaledVector(inn, 1.25)
+            const yaw = Math.atan2(-inn.x, -inn.z)                                              // 套件的 +z（凸出那面）朝步道
+            put(names[k++ % names.length], m4.compose(V(base.x, C3[i].y - 0.25, base.z), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(1, 0.95 + 0.15 * hsh(i * 2.3), 1)))
+          } } }
+      const wallM = stepM.clone(); wallM.onBeforeCompile = stepM.onBeforeCompile; wallM.customProgramCacheKey = () => 'stepTriplanarWall'; wallM.color.setRGB(0.98, 0.82, 0.62)   // 崖壁的暖砂岩色（石階那份偏冷灰）
+      const mats = { post: logM, rail: logM, curb: stepM, floor: wetM, step: stepM, wall: wallM }
       for (const [name, list] of Object.entries(L)) {
         if (!K[name] || !list.length) continue
-        const im = new THREE.InstancedMesh(K[name], mats[name.split('_')[1]], list.length)
-        list.forEach((mm, k) => im.setMatrixAt(k, mm)); im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'galKit_' + name; g.add(im)
+        if (name.startsWith('__')) continue
+        const kind = name.startsWith('wall_') ? 'wall' : name.split('_')[1]
+        const im = new THREE.InstancedMesh(K[name], mats[kind], list.length)
+        const warm = new THREE.Color()
+        list.forEach((mm, k) => { im.setMatrixAt(k, mm); const cc = L.__stepC?.[name]?.[k]; if (cc) im.setColorAt(k, cc); else if (kind === 'wall') im.setColorAt(k, warm.setRGB(1.12 + 0.1 * hsh(k * 1.7), 0.92 + 0.06 * hsh(k * 2.9), 0.66)) })   // 岩壁：每片暖砂岩色、深淺差一點
+        im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'galKit_' + name; g.add(im)
       }
     }).catch((e) => console.error('gallery kit', String(e?.stack ?? e)))
     // Blender 做的石板踏板（tools/make-gorge-rock-kit.py 裡的 step_a～d；同一份套件裡的岩拱、岩棚、緣石、掛燈是隧道用的，2026-11-12 隧道拆掉後不再用）：四種輪流、一半轉 180 度，載好就換掉上面的方塊
@@ -1185,7 +1213,8 @@ export function buildYosemite(scene, { lib } = {}) {
       gl.scene.traverse((o) => { if (!o.isMesh) return; const ge = o.geometry.clone(); o.updateWorldMatrix(true, false); ge.applyMatrix4(o.matrixWorld); if (!ge.attributes.color && ge.attributes.color_1) ge.setAttribute('color', ge.attributes.color_1); K[o.name] = ge })
       const inst = (geo, list, mat, shadow = true) => { if (!geo || !list.length) return null; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((e, k) => { im.setMatrixAt(k, e.m); if (e.c) im.setColorAt(k, e.c) }); im.castShadow = shadow; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im); return im }
       // 踏板：四種石板輪流用，一半轉 180 度
-      { const names = ['step_a', 'step_b', 'step_c', 'step_d'].filter((n) => K[n]), lists = names.map(() => []), flip = new THREE.Matrix4().makeRotationY(Math.PI)
+      // 2026-11-13 使用者：「你也沒用 Blender 做啊，石階、岩壁」→ 方方正正的 step_a～d 不用了，改成 gallery_kit 的天然石階（下面 gallery kit 載好再換）
+      if (false) { const names = ['step_a', 'step_b', 'step_c', 'step_d'].filter((n) => K[n]), lists = names.map(() => []), flip = new THREE.Matrix4().makeRotationY(Math.PI)
         if (names.length) {
           STEPS.forEach((e, n) => { const k = Math.floor(hsh(n * 3.7 + 1) * names.length) % names.length; lists[k].push({ m: hsh(n * 9.1) < 0.5 ? e.m.clone().multiply(flip) : e.m, c: e.c }) })
           names.forEach((n, k) => { const im = inst(K[n], lists[k], stepM); if (im) im.name = 'gorgeSteps_' + n })
