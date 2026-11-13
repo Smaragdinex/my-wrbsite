@@ -29,6 +29,10 @@ function nearBirdLane(avoid, x, z) {
 function sightBlock(x, z) {
   for (const h of HIDES) {
     const fx = h.look[0] - h.x, fz = h.look[1] - h.z, L = Math.hypot(fx, fz), dx = x - h.x, dz = z - h.z, d = Math.hypot(dx, dz)
+    if (h.name === 'O8') {   // 2026-11-13 使用者：O8 前面的水池要乾淨 → 屋子 12 m 內全不長高草／蘆葦、看出去的扇形 30 m、張角 ±57°
+      if (d < 12 || (d < 30 && (dx * fx + dz * fz) / (d * L) > 0.54)) return true
+      continue
+    }
     if (d < 18 && d > 0.5 && (dx * fx + dz * fz) / (d * L) > 0.77) return true
   }
   return false

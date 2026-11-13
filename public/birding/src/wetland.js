@@ -90,7 +90,7 @@ export function buildWetlandProps(scene, kit, wk) {
 function buildReeds(g, kit) {
   const W = EAST.W, [x0, x1, z0, z1] = EAST.wetBox, rnd = mulberry(4242), L = {}
   const H8 = HIDES.find((h) => h.name === 'O8')
-  const fan = (x, z) => { if (!H8) return false; const dx = x - H8.x, dz = z - H8.z, d = Math.hypot(dx, dz); if (d > 20) return false; const lx = H8.look[0] - H8.x, lz = H8.look[1] - H8.z; return (dx * lx + dz * lz) / (d * Math.hypot(lx, lz)) > Math.cos(0.75) }
+  const fan = (x, z) => { if (!H8) return false; const dx = x - H8.x, dz = z - H8.z, d = Math.hypot(dx, dz); if (d < 12) return true; if (d > 30) return false; const lx = H8.look[0] - H8.x, lz = H8.look[1] - H8.z; return (dx * lx + dz * lz) / (d * Math.hypot(lx, lz)) > Math.cos(1.0) }   // 2026-11-13 使用者：O8 前面水池要乾淨 → 屋子 12 m 內全不種、看出去的扇形 20→30 m、張角加大
   const ss = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
   const patch = (x, z) => 0.5 + 0.35 * Math.sin(x * 0.21 + Math.sin(z * 0.13) * 2) * Math.cos(z * 0.17 + 1.3) + 0.15 * Math.sin(x * 0.7 + z * 0.5)
   // 2026-11-12 使用者：木道上長草、要移開 → 所有蘆葦／香蒲／紙莎草一律離棧道、觀景灣邊緣 2 m 以上（葉子會往外倒 1 m 多；以前只擋 1.5 m，新蓋的環線上長了一排）
