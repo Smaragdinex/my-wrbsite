@@ -347,8 +347,59 @@ function buildInterior(lib, avoid = []) {
       for (let i = 0; i < 5000; i++) { const l = 150 + Math.random() * 105; x.fillStyle = `rgba(${l},${l},${l},0.5)`; x.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 1 + Math.random() * 3) }
     })
     detail.wrapS = detail.wrapT = THREE.RepeatWrapping
-    const ground = new THREE.Mesh(geo, dappled(wetify(new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.95 }), { dark: 0.32, rough: 0.45 })))
-    ground.receiveShadow = true; ground.userData.terrain = true; g.add(ground)   // terrain：拍照算遮擋時用高度表，不逐個三角形打射線（scoring.js）
+    const groundM = dappled(wetify(new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.95 }), { dark: 0.32, rough: 0.45 }))
+    // 2026-11-14 使用者「FPS 60 就可，要順暢」：以前整片山區地形是一個網格（0.5 m 一格、88 萬個三角形），走到哪都整片畫、倒影也畫一次。
+    // 切成 32 m 一塊（看不到的塊整塊不畫），每塊三種精細度：70 m 內 0.5 m 格、160 m 內 1 m 格、更遠 2 m 格（長鏡頭拉近照倍率拉遠）。
+    // 粗細不同的塊接在一起：粗的塊貼邊那一格改用細格的頂點收成扇形（見下面），接縫密合
+    {
+      const CH = 64, N = nrm.array, chunks = []
+      const mk = (i0, j0, i1, j1, st) => {
+        const map = new Map(), p = [], n = [], cc = [], u = [], idx = []
+        const vid = (k) => { let v = map.get(k); if (v === undefined) { v = p.length / 3; map.set(k, v); p.push(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]); n.push(N[k * 3], N[k * 3 + 1], N[k * 3 + 2]); cc.push(col[k * 3], col[k * 3 + 1], col[k * 3 + 2]); u.push(uv[k * 2], uv[k * 2 + 1]) } return v }
+        // 粗的塊（st > 1）：貼著塊邊的那一格，邊上改用細格的每一個頂點、往格子中心收成扇形——跟隔壁細的塊共用同一串頂點，接縫密合（不用裙邊）
+        const cen = (ks) => { const v = p.length / 3, m = ks.length; let x = 0, y = 0, z = 0, a = 0, b2 = 0, c3 = 0, r = 0, gg = 0, bb = 0, u0 = 0, u1 = 0
+          for (const k of ks) { x += pos[k * 3]; y += pos[k * 3 + 1]; z += pos[k * 3 + 2]; a += N[k * 3]; b2 += N[k * 3 + 1]; c3 += N[k * 3 + 2]; r += col[k * 3]; gg += col[k * 3 + 1]; bb += col[k * 3 + 2]; u0 += uv[k * 2]; u1 += uv[k * 2 + 1] }
+          const nl = Math.hypot(a, b2, c3) || 1
+          p.push(x / m, y / m, z / m); n.push(a / nl, b2 / nl, c3 / nl); cc.push(r / m, gg / m, bb / m); u.push(u0 / m, u1 / m); return v }
+        const I1 = Math.min(i1, nx - 1), J1 = Math.min(j1, nz - 1)
+        for (let j = j0; j < j1; j += st) for (let i = i0; i < i1; i += st) {
+          const ia = i, ib = Math.min(i + st, I1), ja = j, jb = Math.min(j + st, J1); if (ib <= ia || jb <= ja) continue
+          if (!(keep[ja * nx + ia] | keep[ja * nx + ib] | keep[jb * nx + ia] | keep[jb * nx + ib])) continue
+          const K = (ii, jj) => jj * nx + ii
+          const onL = st > 1 && ia === i0, onR = st > 1 && ib === I1, onB = st > 1 && ja === j0, onT = st > 1 && jb === J1
+          if (!(onL || onR || onB || onT)) { const a = vid(K(ia, ja)), b = vid(K(ib, ja)), c = vid(K(ia, jb)), d = vid(K(ib, jb)); idx.push(a, c, b, b, c, d); continue }
+          // 外圈：a(ia,ja) → 左邊往上 → c(ia,jb) → 上邊往右 → d(ib,jb) → 右邊往下 → b(ib,ja) → 下邊往左 → 回到 a（跟原本 (a,c,b) 同一個繞向）
+          const loop = []
+          for (let jj = ja; jj < jb; jj += onL ? 1 : jb - ja) loop.push(K(ia, jj))
+          for (let ii = ia; ii < ib; ii += onT ? 1 : ib - ia) loop.push(K(ii, jb))
+          for (let jj = jb; jj > ja; jj -= onR ? 1 : jb - ja) loop.push(K(ib, jj))
+          for (let ii = ib; ii > ia; ii -= onB ? 1 : ib - ia) loop.push(K(ii, ja))
+          const mid = cen([K(ia, ja), K(ib, ja), K(ia, jb), K(ib, jb)]), L = loop.map(vid)
+          for (let q = 0; q < L.length; q++) idx.push(mid, L[q], L[(q + 1) % L.length])
+        }
+        if (!idx.length) return null
+        const q = new THREE.BufferGeometry()
+        q.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); q.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3))
+        q.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3)); q.setAttribute('uv', new THREE.Float32BufferAttribute(u, 2)); q.setIndex(idx); q.computeBoundingSphere()
+        const m = new THREE.Mesh(q, groundM); m.receiveShadow = true; m.userData.terrain = true; m.userData.noMerge = true; m.name = 'alpTerrain'   // terrain：拍照算遮擋時用高度表（scoring.js）；noMerge：batch.js 不合
+        g.add(m); return m
+      }
+      for (let j0 = 0; j0 < nz - 1; j0 += CH) for (let i0 = 0; i0 < nx - 1; i0 += CH) {
+        const i1 = Math.min(i0 + CH, nx - 1), j1 = Math.min(j0 + CH, nz - 1)
+        const L = [mk(i0, j0, i1, j1, 1), mk(i0, j0, i1, j1, 2), mk(i0, j0, i1, j1, 4)]
+        if (!L[0]) continue
+        chunks.push({ x0: AG.x0 + i0 * AG.cell, x1: AG.x0 + i1 * AG.cell, z0: AG.z0 + j0 * AG.cell, z1: AG.z0 + j1 * AG.cell, L, cur: -1 })
+      }
+      TERRAIN_LOD.fn = (cam) => {
+        const zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(31)) / Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))), px = cam.position.x, pz = cam.position.z
+        for (const C of chunks) {
+          const d = Math.hypot(Math.max(C.x0 - px, 0, px - C.x1), Math.max(C.z0 - pz, 0, pz - C.z1)) / zoom
+          let lv = d < 70 ? 0 : d < 160 ? 1 : 2
+          while (lv > 0 && !C.L[lv]) lv--
+          if (lv !== C.cur) { C.L.forEach((m, k) => { if (m) m.visible = k === lv }); C.cur = lv }
+        }
+      }
+    }
   }
   // 水池＋溪：自己寫的水 shader（溪和池共用）。
   // 水面是平的（不沿著岸往上爬），岸邊靠深度測試自然切掉；每個頂點帶「水深」（水面 - 地形）和「坡度」：
@@ -1989,14 +2040,17 @@ export function dappled(mat) {
 
 /* ---------- 對外 ---------- */
 // 山區就是溫室東半邊（2026-11-07 改成一個館）：館內一開始就蓋好、一直畫；animate 每格跑（溪水、雲霧）
+const TERRAIN_LOD = { fn: null }   // 山區地形分塊的精細度切換（buildInterior 設好，animate／lodSync 呼叫）
 export function createAlpine({ scene, lib, avoid = [] }) {
   let interior = null
   return {
     build() { if (!interior) { interior = buildInterior(lib, avoid); scene.add(interior.g) } return interior.g },
     get group() { return interior?.g },
-    get wetMirror() { return interior?.wetMirror },   // 濕地鏡面倒影（world.js 跟花園水池一起更新）
+    get wetMirror() { return interior?.wetMirror },
+    terrainLod(cam) { TERRAIN_LOD.fn?.(cam) },   // 濕地鏡面倒影（world.js 跟花園水池一起更新）
     animate(t, dt, camera) {
       if (!interior) return
+      TERRAIN_LOD.fn?.(camera)
       interior.waterU.uTime.value = t
       dapU.uDapT.value = t
       for (const o of interior.fallFx) {

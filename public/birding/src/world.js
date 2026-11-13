@@ -19,7 +19,7 @@ import { loadAnimalModels, placeAnimal, REAL_CM, gameLen, ensureModel, modelsFor
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { SPAWN, MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt, FIG_FORCED, EAST, wetSD , walkAt, deckAt } from './layout.js'
+import { STORE, SPAWN, MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt, FIG_FORCED, EAST, wetSD , walkAt, deckAt } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
@@ -516,7 +516,17 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   // 畫質設定（遊戲的設定畫面會改）：水面倒影的解析度、幾格更新一次
   const quality = { reflScale: PHONE ? 0.3 : 1, reflEvery: PHONE ? 3 : 2, dof: !PHONE }   // dof：遠景柔焦（settings.js 照畫質等級開關）
-  { const r0 = water.reflect; water.reflect = (...args) => { r0(...args); alpine.wetMirror?.reflect(...args) } }   // 2026-11-11 濕地的鏡面倒影跟花園水池一起更新（拍照、預熱那兩處也是呼叫 water.reflect）
+  // 2026-11-14 FPS：花園水池和濕地兩片水都在範圍內時，以前輪流各每 2 格畫一次倒影＝每一格都多畫一次場景（約 5 ms）。
+  // 兩片都在範圍內：各自每 4 格更新一次、錯開（一半的格完全不畫倒影）；只有一片在範圍內：照舊每 2 格。沒更新的格沿用上一張（投影矩陣跟著那張，位置還是對的）
+  { const r0 = water.reflect; let fr = 0
+    water.reflect = (renderer, sc, cam, scale, every) => {
+      const p = cam.position; if (p.x < STORE.X0 + 0.5 && p.x > STORE.X1 - 0.5 && Math.abs(p.z) < STORE.HZ + 0.5) return   // 人在相機行裡：牆擋住，水面看不到（出生點就在店裡）
+      const wm = alpine.wetMirror, poolOn = cam.position.distanceTo(_poolC) <= 90 && cam.position.y > POOL.water + 0.05, wetOn = !!wm?.active(cam)
+      if (!(poolOn && wetOn)) { r0(renderer, sc, cam, scale, every); wm?.reflect(renderer, sc, cam, scale, every); return }
+      const k = fr++ % (2 * every)
+      r0(renderer, sc, cam, scale, k === 0 ? 1 : 1e9); wm.reflect(renderer, sc, cam, scale, k === every ? 1 : 1e9)
+    } }   // 2026-11-11 濕地的鏡面倒影跟花園水池一起更新（拍照、預熱那兩處也是呼叫 water.reflect）
+  const _poolC = new THREE.Vector3(POOL.x, POOL.water, POOL.z)
   const shadows = createShadowCache({ renderer, scene, sun, camera })
   let lastR = performance.now()
   // 2026-11-12 遠景柔焦（使用者：遠處應該像人眼一樣圓的、看不清楚，但不是低模）：場景先畫到一張 HDR 暫存圖（含深度），
@@ -547,7 +557,11 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     depthTest: false, depthWrite: false, toneMapped: false,
   })
   { const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post.mat); q.frustumCulled = false; post.scene.add(q) }
+  // 2026-11-14 FPS（CPU 分析）：每次 renderer.render 都會把整個場景（上萬個物件）的世界矩陣重算一次——主畫面、倒影各一次，佔 CPU 約 14%。
+  // 改成每格在這裡算一次，renderer 自己不算（scene.matrixWorldAutoUpdate = false）；別的地方單獨畫場景（拍照、陰影）用的是這一格剛算好的
+  scene.matrixWorldAutoUpdate = false
   function render(cam = camera) {
+    scene.updateMatrixWorld()
     const now = performance.now(); shadows.update(Math.min(0.1, (now - lastR) / 1000)); lastR = now
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     if (!quality.dof || renderer.getRenderTarget() || !cam.isPerspectiveCamera) { renderer.render(scene, cam); return }
@@ -571,7 +585,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   const groundAt = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)   // 相機對焦用（camera.js aim）
   // lodSync：截圖／錄影工具（tools/record/helpers.js still）直接把鏡頭擺到某處就畫，沒跑 tick → LOD、遠處小東西剔除還停在玩家的位置（石橋的石塊會被當成太遠不畫）。畫之前先照這台鏡頭更新一次
-  const lodSync = (cam = camera) => { lodUpdate(cam, true); tinyCull(scene, cam, 0) }
+  const lodSync = (cam = camera) => { lodUpdate(cam, true); tinyCull(scene, cam, 0); alpine.terrainLod?.(cam) }
   return { groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 

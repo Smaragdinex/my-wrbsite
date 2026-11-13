@@ -178,7 +178,7 @@ export function lodHideFar(scene, x0, z0, x1, z1, R) {   // 水面範圍（長�
     if (moved) { m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.needsUpdate = true; if (ca) { m.instanceColor.clearUpdateRanges(); m.instanceColor.needsUpdate = true } }
     if (k < n) { cnt.push([m, n]); m.count = k }
   }
-  for (const S of sets) for (const m of [...S.meshes, ...S.lows]) if (m && m.visible) part(m)
+  // （逐株篩選量過：面數少了但時間沒變，反而每次倒影多 4% CPU → 不做；整組都在遠處的照樣整組藏）
   for (const o of _all) {
     if (!o.visible || L.inSets.has(o)) continue
     const g = o.geometry; if (!g) continue
@@ -187,7 +187,6 @@ export function lodHideFar(scene, x0, z0, x1, z1, R) {   // 水面範圍（長�
     _sp.applyMatrix4(o.matrixWorld)
     if (_sp.radius > 5000) continue   // 天空球
     if (dRect(_sp.center.x, _sp.center.z) - _sp.radius > (_sp.radius < 2 ? 25 : R)) { o.visible = false; off.push(o) }
-    else if (o.isInstancedMesh && !o.instanceColor && _sp.radius > R) part(o)   // 不在 LOD 裡、很分散的（沒有每株顏色的才換列：會動的魚、鳥下一格會照自己的編號重寫矩陣）
   }
   return () => { for (const m of off) m.visible = true; for (const [m, n] of cnt) m.count = n }
 }

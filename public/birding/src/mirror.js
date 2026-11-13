@@ -39,5 +39,6 @@ export function createMirror({ Y, center, maxDist = 110, hide = [], radius = 0, 
     renderer.setRenderTarget(prevRT); renderer.shadowMap.autoUpdate = prevAuto
     for (const m of hide) m.visible = true
   }
-  return { uRefl, uReflMat, uReflOn, reflect, hide }
+  const active = (camera) => !(camera.position.distanceTo(C) > maxDist || camera.position.y < Y + 0.05)
+  return { uRefl, uReflMat, uReflOn, reflect, hide, active }
 }
