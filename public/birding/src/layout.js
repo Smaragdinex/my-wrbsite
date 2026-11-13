@@ -999,6 +999,9 @@ function buildAlpine() {
       rv.halfAt = (sv) => sv < sLip + 0.5 ? lerp(h0(sv), 2.7, smoothstep(sA, sLip - 2.5, sv)) : lerp(2.7, 4.2, smoothstep(sLip + 0.5, sEnd + 1.5, sv))
       rv.mouthS = sEnd; rv.lipS = sLip
     }
+    // 2026-11-13 使用者（湖往石拱橋看）「瀑布橋這邊請做好 接好」：出水口那段河只有 4 m 寬，湖岸那圈 +18 cm 的岸剩一條灰色土舌把湖跟河隔開 →
+    // 出湖的前 7.5 m 河面放寬（最多 +2.2 m 半寬），湖直接開口變成河；到橋那裡（s≈9）已經回到原本的寬度，拱橋不用變
+    { const h1 = rv.halfAt; rv.halfAt = (sv) => h1(sv) + 2.2 * (1 - smoothstep(2, 7.5, sv)) }
     for (const c of XS) { const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 2.1),   /* 2026-11-13 使用者：橋再高一點（離水 1.2 → 2.1 m） */ half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
   }
   // 斷面（參考台灣山溪的影片）：水邊不是直的——寬度用 2D 雜訊，兩岸不對稱、一凹一凸；
@@ -1081,6 +1084,9 @@ function buildAlpine() {
         // 只挖河本身（水面外 0.3 m），往外照 1.3:1 的坡接回路面
         const RVb = ALP_RIVER, sb = RVb.sAt(x, z), over = Math.max(0, RVb.dist(x, z) - RVb.halfAt(sb) - 0.3), hDig = Math.max(hRiver, Math.min(h, RVb.water(sb) + 0.1 + over * 1.3))
         h = lerp(Math.min(h, hDig), h, k2)
+        // 2026-11-13 使用者「瀑布橋這邊請做好 接好」：拱洞（橋中心 ±(河半寬+0.6)）裡一半是乾的岸——河中線偏一邊、岸比水面高 →
+        // 拱洞整個寬度、橋身前後各 2 m 挖到水面下 0.3 m，水從整個拱洞底下流過；再往外 2 m 接回原本的岸
+        { const sp = (b.river ?? 2.3) + 0.6, ka = smoothstep(sp + 0.5, sp - 0.2, Math.abs(along)) * smoothstep(b.hw + 4, b.hw + 2, lat); if (ka > 0) h = Math.min(h, lerp(h, RVb.water(sb) - 0.3, ka)) }
         { const wl = smoothstep(b.hw + 4.5, b.hw + 0.6, lat), wa = smoothstep(b.half + 8.5, b.half + 1.0, Math.abs(along)); if (wl > 0 && wa > 0) h = lerp(h, b.y + b.k * along - 0.02, wa * wl * k2) }   // 橋頭外 1 公尺內路面＝橋面（石板鋪出去、不露一片懸空的板子）
       }
     }
@@ -1120,7 +1126,7 @@ function buildAlpine() {
     // 最後再保一次：水邊 0.8 公尺內的岸至少比水面高 0.12，往外最陡 1:1.1 接回地形（像一道亂石堤）；橋頭、步道路面本身不墊
     {
       let nearBridge = false
-      for (const b of RIVER_BRIDGES) { const ax = x - b.x, az = z - b.z; if (Math.abs(-ax * b.dir[1] + az * b.dir[0]) < b.hw + 0.8 && Math.abs(ax * b.dir[0] + az * b.dir[1]) < b.half + 1.5) nearBridge = true }   // 只有橋面那條（以前範圍太大，出水口兩岸整片被跳過）
+      for (const b of RIVER_BRIDGES) { const ax = x - b.x, az = z - b.z; const lt = Math.abs(-ax * b.dir[1] + az * b.dir[0]), al = Math.abs(ax * b.dir[0] + az * b.dir[1]); if ((lt < b.hw + 0.8 && al < b.half + 1.5) || (lt < b.hw + 4 && al < (b.river ?? 2.3) + 1.1)) nearBridge = true }   /* 拱洞前後挖低的那塊也不墊 */   // 只有橋面那條（以前範圍太大，出水口兩岸整片被跳過）
       const onPath = smoothstep(1.3, 2.4, dAll)
       if (!nearBridge) {
         const [dr, ri, rt] = polyDist(x, z, ALP_RIVER)
@@ -1302,8 +1308,12 @@ function mkLandWalk(xs, zs, tag, { closed = false, y0, y1, joinA = false, joinB 
   for (let i = 0; i < N; i++) if (onDeck[i] != null) sm0[i] = onDeck[i]
   const sm = env(sm0)
   // 接在別的木道／平台上的那一頭：最後 1.5 m 慢慢接到對方的高度（一樣高才不會有台階）
-  if (y0 != null && onDeck[0] == null) for (let i = 0; i < Math.min(N, 30); i++) sm[i] = lerp(y0, sm[i], ss01(i / 30))
-  if (y1 != null) for (let i = 0; i < Math.min(N, 30); i++) sm[N - 1 - i] = lerp(y1, sm[N - 1 - i], ss01(i / 30))
+  // 2026-11-13 使用者（接口照片）：接在另一條木道上的那頭，對方木道寬 3.2 m——以前 1.5 m 就離開對方的高度，走到對方側邊時已經高出一截（看得到台階和木板側面）。
+  // 改成：在對方木道寬度內（中線起 WALK_HW + 0.1）完全跟對方一樣高，出了對方側邊再用 1.5 m 接到自己的坡
+  const H = Math.round((WALK_HW + 0.1) / 0.05)
+  const hold = (i0, yv, at) => { for (let i = 0; i < Math.min(N, i0 + 30); i++) { const k = at(i); sm[k] = i < i0 ? yv : lerp(yv, sm[k], ss01((i - i0) / 30)) } }
+  if (y0 != null && onDeck[0] == null) hold(joinA ? H : 0, y0, (i) => i)
+  if (y1 != null) hold(joinB ? H : 0, y1, (i) => N - 1 - i)
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9
   for (let i = 0; i < N; i++) { x0 = Math.min(x0, xs[i]); x1 = Math.max(x1, xs[i]); z0 = Math.min(z0, zs[i]); z1 = Math.max(z1, zs[i]) }
   const w = { head: { t: tag }, xs, zs, tx, tz, y: sm, ground: base, N, ds: 0.05, closed, joinA, joinB, branch: joinA || joinB, box: [x0 - 2, x1 + 2, z0 - 2, z1 + 2] }
