@@ -2,8 +2,9 @@
 // 鏡射鏡頭對 y = Y 翻過去、斜切近平面（水面以下不畫進倒影），畫到一張小貼圖；水面 shader 用 uReflMat 投影回去取樣。
 // 鏡頭離 center 超過 maxDist 就不更新、uReflOn = 0（shader 退回假的環境倒影）
 import * as THREE from 'three'
+import { lodHideFar } from './lod.js'
 
-export function createMirror({ Y, center, maxDist = 110, hide = [], radius = 0 }) {
+export function createMirror({ Y, center, maxDist = 110, hide = [], radius = 0, box = null }) {
   const rt = new THREE.WebGLRenderTarget(512, 512, { type: THREE.HalfFloatType, samples: 4 })   // 2026-11-11 使用者：倒影太 pixel、看了暈 → 抗鋸齒（原本沒有，半解析度的鋸齒放大成一格一格）
   const uRefl = { value: rt.texture }, uReflMat = { value: new THREE.Matrix4() }, uReflOn = { value: 0 }
   const vCam = new THREE.PerspectiveCamera(), clip = new THREE.Plane(), cp = new THREE.Vector4(), qv = new THREE.Vector4()
@@ -34,7 +35,7 @@ export function createMirror({ Y, center, maxDist = 110, hide = [], radius = 0 }
     for (const m of hide) m.visible = false
     const prevRT = renderer.getRenderTarget(), prevAuto = renderer.shadowMap.autoUpdate
     renderer.shadowMap.autoUpdate = false
-    renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, vCam)
+    renderer.setRenderTarget(rt); renderer.clear(); { const back = lodHideFar(scene, ...(box ?? [C.x - radius, C.z - radius, C.x + radius, C.z + radius]), 60); try { renderer.render(scene, vCam) } finally { back() } }   // 2026-11-14 FPS：倒影只畫水面附近
     renderer.setRenderTarget(prevRT); renderer.shadowMap.autoUpdate = prevAuto
     for (const m of hide) m.visible = true
   }

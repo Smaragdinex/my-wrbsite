@@ -9,6 +9,7 @@ import {
 } from './layout.js'
 import { fbm3, noise3, mulberry32 } from './noise.js'
 import * as T from './textures.js'
+import { lodHideFar } from './lod.js'   // 2026-11-14 倒影只畫水池附近
 
 const tmpM = new THREE.Matrix4()
 
@@ -719,7 +720,7 @@ export function buildWater(scene) {
   // 倒影：鏡射鏡頭（對 y = 水面），斜切近平面讓水面以下的東西（池底、鳥腳）不會畫進倒影。
   // 草葉放在 layer 1，倒影不畫（最花效能、倒影裡也看不出來）；鏡頭離水池太遠就不更新
   const vCam = new THREE.PerspectiveCamera(), clip = new THREE.Plane(), cp = new THREE.Vector4(), qv = new THREE.Vector4()
-  const center = new THREE.Vector3(POOL.x, POOL.water, POOL.z)
+  const center = new THREE.Vector3(POOL.x, POOL.water, POOL.z), REFL_R = 100
   const _rfr = new THREE.Frustum(), _rpm = new THREE.Matrix4(), _rsp = new THREE.Sphere()
   let frame = 0
   // every：每幾格更新一次倒影（水面一直在晃，看不出來；手機 3 格一次省效能）
@@ -755,7 +756,7 @@ export function buildWater(scene) {
     const prevRT = renderer.getRenderTarget(), prevAuto = renderer.shadowMap.autoUpdate
     renderer.shadowMap.autoUpdate = false
     renderer.setRenderTarget(reflRT); renderer.clear()
-    renderer.render(scene, vCam)
+    { const back = lodHideFar(scene, POOL.x - POOL.rx, POOL.z - POOL.rz, POOL.x + POOL.rx, POOL.z + POOL.rz, REFL_R); try { renderer.render(scene, vCam) } finally { back() } }   // 2026-11-14 FPS：倒影只畫水池附近（lod.js lodHideFar）
     renderer.setRenderTarget(prevRT); renderer.shadowMap.autoUpdate = prevAuto
     water.visible = true
   }

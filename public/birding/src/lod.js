@@ -131,6 +131,66 @@ export function tinyCull(scene, camera, dt) {
 }
 lodStats.tiny = () => ({ list: tiny.list.length, off: tiny.off.size })
 
+// 2026-11-14 使用者「想保持水倒影」＋ FPS：花園水池的倒影把整座山、巨木林、高山區又畫一次（26 ms，關掉倒影 12 ms；倒影解析度減半沒差＝是東西太多）。
+// 畫倒影那一下，整組 LOD 植物／石頭（所有株都離水面中心 R 公尺以外的）和很遠的大網格先藏起來，畫完再放回來：
+// 水面附近的山壁、瀑布、樹照樣在倒影裡；更遠、在倒影裡只剩地平線上一條細邊的森林不畫（天空補上）
+const _farCache = new Map()
+let _all = null, _allT = 0
+const _sp = new THREE.Sphere()
+export function lodHideFar(scene, x0, z0, x1, z1, R) {   // 水面範圍（長方形 x0..x1、z0..z1）外 R 公尺
+  if (typeof location !== 'undefined' && location.search.includes('noreflcut')) return () => {}   // 對照用
+  const key = [x0, z0, x1, z1, R].map((v) => v.toFixed(1)).join(',')
+  const dRect = (x, z) => Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(z0 - z, 0, z - z1))
+  let L = _farCache.get(key)
+  if (!L || L.n !== sets.length) {
+    const hide = [], inSets = new Set()
+    for (const S of sets) {
+      for (const m of [...S.meshes, ...S.lows]) if (m) inSets.add(m)
+      let near = false
+      for (let i = 0; i < S.n && !near; i++) if (dRect(S.pos[i * 3], S.pos[i * 3 + 2]) < R + S.rad[i]) near = true
+      if (!near) for (const m of [...S.meshes, ...S.lows]) if (m) hide.push(m)
+    }
+    L = { n: sets.length, hide, inSets }; _farCache.set(key, L)
+  }
+  // 其他所有東西（不在 LOD 裡的 InstancedMesh、一般網格、鳥、魚）：每次照現在的位置量（會動的也對）；清單每 5 秒重掃一次
+  const now = performance.now()
+  if (!_all || now - _allT > 5000) { _allT = now; _all = []; scene.traverse((o) => { if ((o.isMesh || o.isPoints) && !o.userData.shadowProxy) _all.push(o) }) }
+  const off = [], cnt = []
+  for (const m of L.hide) if (m.visible) { m.visible = false; off.push(m) }
+  // 一組散布全區的 InstancedMesh（高山的冷杉、巨木林、錦鯉）：只留水面附近那幾株——把近的那幾列矩陣換到前面、count 暫時改小，畫完還原 count
+  const part = (m) => {
+    const n = m.count; if (n < 2) return
+    const a = m.instanceMatrix.array, ca = m.instanceColor?.array, w = m.matrixWorld.elements, g = m.geometry
+    if (!g.boundingSphere) g.computeBoundingSphere()
+    const gr = g.boundingSphere.radius
+    let k = 0, moved = false
+    for (let j = 0; j < n; j++) {
+      const o = j * 16, x = a[o + 12], y = a[o + 13], z = a[o + 14]
+      const wx = w[0] * x + w[4] * y + w[8] * z + w[12], wz = w[2] * x + w[6] * y + w[10] * z + w[14]
+      const sc = Math.hypot(a[o], a[o + 1], a[o + 2]) * Math.hypot(w[0], w[1], w[2])
+      const rr = gr * sc
+      if (dRect(wx, wz) < (rr < 2 ? 25 : R) + rr) {   // 小的（草叢、蕨、石頭）在倒影裡只留水邊 25 m 內
+        if (j !== k) { for (let e = 0; e < 16; e++) { const t = a[k * 16 + e]; a[k * 16 + e] = a[o + e]; a[o + e] = t } if (ca) for (let e = 0; e < 3; e++) { const t = ca[k * 3 + e]; ca[k * 3 + e] = ca[j * 3 + e]; ca[j * 3 + e] = t } moved = true }
+        k++
+      }
+    }
+    if (moved) { m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.needsUpdate = true; if (ca) { m.instanceColor.clearUpdateRanges(); m.instanceColor.needsUpdate = true } }
+    if (k < n) { cnt.push([m, n]); m.count = k }
+  }
+  for (const S of sets) for (const m of [...S.meshes, ...S.lows]) if (m && m.visible) part(m)
+  for (const o of _all) {
+    if (!o.visible || L.inSets.has(o)) continue
+    const g = o.geometry; if (!g) continue
+    if (o.isInstancedMesh) { if (!o.boundingSphere) o.computeBoundingSphere(); _sp.copy(o.userData.fullSphere ?? o.boundingSphere) }
+    else { if (!g.boundingSphere) g.computeBoundingSphere(); _sp.copy(g.boundingSphere) }
+    _sp.applyMatrix4(o.matrixWorld)
+    if (_sp.radius > 5000) continue   // 天空球
+    if (dRect(_sp.center.x, _sp.center.z) - _sp.radius > (_sp.radius < 2 ? 25 : R)) { o.visible = false; off.push(o) }
+    else if (o.isInstancedMesh && !o.instanceColor && _sp.radius > R) part(o)   // 不在 LOD 裡、很分散的（沒有每株顏色的才換列：會動的魚、鳥下一格會照自己的編號重寫矩陣）
+  }
+  return () => { for (const m of off) m.visible = true; for (const [m, n] of cnt) m.count = n }
+}
+
 let lowGen = null
 export const lodSetLowGen = (f) => { lowGen = f }
 function autoLow(m) {
