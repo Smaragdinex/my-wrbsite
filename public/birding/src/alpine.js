@@ -944,7 +944,7 @@ function buildInterior(lib, avoid = []) {
       { const E = 1.4, NU = 40, pos = [], uv = [], col = [], idx = []
         for (let i = 0; i <= NU; i++) {
           const u = -L - E + (2 * (L + E)) * i / NU, out = Math.max(0, Math.abs(u) - L), y = deckY(Math.max(-L, Math.min(L, u))) + b.k * Math.sign(u) * out + 0.005 - 0.07 * ss(0, E, out)
-          for (const v of [-b.hw - 0.05, b.hw + 0.05]) { const p = toW(u, y, v); pos.push(p.x, p.y, p.z); uv.push(u * 0.42, v * 0.42); const f = 1 - 0.35 * ss(0.2, E, out); col.push(f, f, f) }
+          for (const v of [-b.hw - 0.05 - 0.7 * Math.min(out, 1.0), b.hw + 0.05 + 0.7 * Math.min(out, 1.0)]) { const p = toW(u, y, v);   /* 2026-11-13 橋頭的石板跟著石欄往外撇，鋪成喇叭口 */ pos.push(p.x, p.y, p.z); uv.push(u * 0.42, v * 0.42); const f = 1 - 0.35 * ss(0.2, E, out); col.push(f, f, f) }
           if (i) { const a = (i - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) }
         }
         const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); dg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); dg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); dg.setIndex(idx); dg.computeVertexNormals()
@@ -956,21 +956,21 @@ function buildInterior(lib, avoid = []) {
         vous.push({ p: toW(u, y, sd * (b.hw + 0.32)), q: new THREE.Quaternion().setFromRotationMatrix(basis).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, nrm - Math.PI / 2))), s: V(0.32, 0.5, 0.12) })
       }
       // 石欄：低矮的乾砌石牆，兩端往外撇（接到路邊）
-      for (const sd of [-1, 1]) for (let u = -L - 0.6; u <= L + 0.6; u += 0.42) {
+      for (const sd of [-1, 1]) for (let u = -L - 1.0; u <= L + 1.0 + 1e-6; u += 0.42) {   // 2026-11-13 使用者「所有橋開始跟尾巴的上面都要往外翹、直接加寬道路」：兩端往外撇 0.6 → 1.0 m，不再因為碰到路就拆掉（layout.js 把橋頭的路加寬成喇叭口）
         const flare = Math.max(0, Math.abs(u) - L) * 0.7, v = sd * (b.hw + 0.12 + flare), y = deckY(Math.max(-L, Math.min(L, u))) + b.k * Math.sign(u) * Math.max(0, Math.abs(u) - L)
-        { const q0 = toW(u, 0, v); if (Math.abs(u) > L && alpineTrailDist(q0.x, q0.z) < 1.35) continue }   // 橋頭外面那段石欄：路在橋頭轉彎時不能伸到路上（2026-11-13 橋身上的石欄一律保留：營地坡道把路畫寬了，以前連橋上的石欄都被拆光）
+   // 橋頭外面那段石欄：路在橋頭轉彎時不能伸到路上（2026-11-13 橋身上的石欄一律保留：營地坡道把路畫寬了，以前連橋上的石欄都被拆光）
         cores.push({ p: toW(u, y + 0.26, v), q: new THREE.Quaternion().setFromRotationMatrix(basis), s: V(0.46, 0.55, 0.32) })
         for (let c = 0; c < 3; c++) for (let k = 0; k < 2; k++) stones.push({ p: toW(u + k * 0.21 + (c % 2) * 0.1 - 0.1, y + 0.09 + c * 0.17, v + (rb() - 0.5) * 0.03), q: new THREE.Quaternion().setFromRotationMatrix(basis).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), (rb() - 0.5) * 0.3)), s: V(0.3 + rb() * 0.16, 0.17 + rb() * 0.05, 0.36), c: 0.62 + rb() * 0.3 })
         const cp = toW(u, 0, v); addCollider(cp.x, cp.z, 0.24, y + 0.8)
       }
       // 壓頂石：沿石欄一塊接一塊（0.45～0.9 公尺長、0.42 寬、0.14 厚，接縫 1 公分），順著橋面坡度、兩端往外撇的那段也跟著
       for (const sd of [-1, 1]) {
-        let u = -L - 0.6
-        while (u < L + 0.6) {
+        let u = -L - 1.0
+        while (u < L + 1.0 - 0.2) {
           const len = 0.45 + rb() * 0.45, um = u + len / 2
           const fl = (uu) => Math.max(0, Math.abs(uu) - L) * 0.7, yAt = (uu) => deckY(Math.max(-L, Math.min(L, uu))) + b.k * Math.sign(uu) * Math.max(0, Math.abs(uu) - L)
           const q0 = toW(um, 0, sd * (b.hw + 0.12 + fl(um)))
-          if (Math.abs(um) <= L || alpineTrailDist(q0.x, q0.z) >= 1.35) {
+          if (true) {
             const ya = yAt(u), yb = yAt(u + len), va = sd * (b.hw + 0.12 + fl(u)), vb = sd * (b.hw + 0.12 + fl(u + len))
             const pa = toW(u, ya, va), pb = toW(u + len, yb, vb), d = pb.clone().sub(pa)
             const yaw = Math.atan2(-d.z, d.x), pitch = Math.atan2(d.y, Math.hypot(d.x, d.z))

@@ -1079,6 +1079,13 @@ function buildAlpine() {
       dAll = Math.min(dAll, d2 + 0.35)   // 小路畫得窄一點（alpineTrailDist 用來畫路面、樹讓開）
     }
     aTrail[k] = dAll
+    // 2026-11-13 使用者「橋開始跟尾巴…往外翹、可以直接加寬道路」：石拱橋兩頭的路畫成喇叭口——橋頭外 1.5 m 內路面半寬 2.5 m（石欄往外撇的那段在路邊），往外 7 m 收回原本的寬
+    for (const b of RIVER_BRIDGES) {
+      const ax = x - b.x, az = z - b.z, out = Math.abs(ax * b.dir[0] + az * b.dir[1]) - (b.half + 0.3), lat = Math.abs(-ax * b.dir[1] + az * b.dir[0])
+      if (out < -1 || out > 7 || lat > 4) continue
+      const wd = lerp(2.5, 1.3, smoothstep(1.5, 7, out))
+      aTrail[k] = Math.min(aTrail[k], Math.max(0, lat - (wd - 1.3)))
+    }
     for (const b of RIVER_BRIDGES) {   // 橋下：河道照挖（路面攤平會把河填掉），兩端 4 公尺外接回路面；橋頭的路面接到橋面高
       const ax = x - b.x, az = z - b.z, along = ax * b.dir[0] + az * b.dir[1], lat = Math.abs(-ax * b.dir[1] + az * b.dir[0])
       if (lat < b.hw + 6 && Math.abs(along) < b.half + 9) {   /* 2026-11-13 使用者「斜坡再順一點」：橋頭的引道拉長到 8 m、兩側 4 m 慢慢接回地面（以前 3.6 m、路兩邊直直掉下去像一道土堤） */
@@ -1090,7 +1097,7 @@ function buildAlpine() {
         // 2026-11-13 使用者「瀑布橋這邊請做好 接好」：拱洞（橋中心 ±(河半寬+0.6)）裡一半是乾的岸——河中線偏一邊、岸比水面高 →
         // 拱洞整個寬度、橋身前後各 2 m 挖到水面下 0.3 m，水從整個拱洞底下流過；再往外 2 m 接回原本的岸
         { const sp = (b.river ?? 2.3) + 0.6, ka = smoothstep(sp + 0.5, sp - 0.2, Math.abs(along)) * smoothstep(b.hw + 4, b.hw + 2, lat); if (ka > 0) h = Math.min(h, lerp(h, RVb.water(sb) - 0.3, ka)) }
-        { const wl = smoothstep(b.hw + 4.5, b.hw + 0.6, lat), wa = smoothstep(b.half + 8.5, b.half + 1.0, Math.abs(along)); if (wl > 0 && wa > 0) h = lerp(h, b.y + b.k * along - 0.02, wa * wl * k2) }   // 橋頭外 1 公尺內路面＝橋面（石板鋪出去、不露一片懸空的板子）
+        { const wl = smoothstep(b.hw + 5.2, b.hw + 1.3, lat), wa = smoothstep(b.half + 8.5, b.half + 1.0, Math.abs(along)); if (wl > 0 && wa > 0) h = lerp(h, b.y + b.k * along - 0.02, wa * wl * k2) }   // 橋頭外 1 公尺內路面＝橋面（石板鋪出去、不露一片懸空的板子）
       }
     }
     // 小木屋底下和四周攤平（門口那塊空地也是）

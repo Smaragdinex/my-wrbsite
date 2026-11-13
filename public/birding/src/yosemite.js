@@ -827,7 +827,7 @@ export function buildYosemite(scene, { lib } = {}) {
     const LK = YOSE.lake, pool = new THREE.Mesh(new THREE.CircleGeometry(1, 72).rotateX(-Math.PI / 2), poolM); pool.scale.set(LK.rx * 1.015, 1, LK.rz * 1.015); pool.position.set(LK.x, poolY, LK.z); pool.receiveShadow = true; g.add(pool)
     // 2026-11-13 凹槽也是湖：一條沿著岩壁的水面（從牆腳前 3 m 到凹槽最裡面），跟湖同一個材質、同一個高度；岩架比水面高，自然蓋住後面那一截
     { const P = [], I = [], C0 = YOSE.cave; let n = 0
-      for (let x = C0.x0; x <= C0.x1 + 1e-6; x += 0.5) { const b = YOSE.base(x), D = YOSE.caveD(x); P.push(x, LK.water + 0.004, b - 3.2, x, LK.water + 0.004, b + D + 0.3); if (n) { const a = (n - 1) * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3) } n++ }
+      for (let x = C0.x0; x <= C0.x1 + 1e-6; x += 0.5) { const b = YOSE.base(x), D = YOSE.caveD(x); P.push(x, LK.water + 0.004, b - 3.2, x, LK.water + 0.004, b + D + 0.3); if (n) { const a = (n - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) } n++ }   // 2026-11-13 使用者「瀑布後面沒有水」：以前三角形繞反了（面朝下），從上面看被背面剔除、整片水面看不到
       const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); rg.setIndex(I); rg.computeVertexNormals()
       { const nn = rg.attributes.normal; for (let k = 0; k < nn.count; k++) nn.setXYZ(k, 0, 1, 0) }
       const rw = new THREE.Mesh(rg, poolM); rw.renderOrder = pool.renderOrder; rw.name = 'recessWater'; g.add(rw) }
