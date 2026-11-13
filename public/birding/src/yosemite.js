@@ -429,6 +429,7 @@ export function buildYosemite(scene, { lib } = {}) {
     for (let k = 0; k < 260; k++) {
       const x = X0 + 4 + rnd() * (X1 - X0 - 8), z = YOSE.base(x) - 0.5 - rnd() * 4
       const n = names[Math.floor(rnd() * names.length)], k2 = (n === 'boulder' ? 0.25 + rnd() * 0.35 : 0.6 + rnd() * 0.9) * 1.6
+      if (Math.hypot(x - 185.0, z - 90.3) < 6.5) continue   // 2026-11-13 凹槽入口的岩拱改成明確擺（下面 ARCH），這一圈不要再丟亂數落石進來疊
       if (alpineTrailDist(x, z) < 3.2 + k2 * (n === 'boulder' ? 2.2 : 0.7) || inPool(x, z, 0.6) || YOSE.inLake(x, z, 1.5) || alpineStreamDist(x, z) < 2.5 || (x > 204 && x < 244) || stairD(x, z) < 1.8 + k2 * 0.7) continue
       putRock(n, x, z, k2)
     }
@@ -450,6 +451,67 @@ export function buildYosemite(scene, { lib } = {}) {
       for (const [x, z] of cand) { if (got.some(([a, b]) => Math.hypot(a - x, b - z) < 1.25)) continue; got.push([x, z]) }
       const big = names.filter((n) => n !== 'boulder')
       for (const [x, z] of got) { const n = big[Math.floor(rnd() * big.length)], k2 = 0.65 + rnd() * 0.35; putRock(n, x, z, k2, 0.3); addCollider(x, z, 0.6, alpineHeight(x, z) + 1.1, alpineHeight(x, z) - 1.0) }
+    }
+    // 2026-11-13 使用者＋ChatGPT 驗收（十個角度）：凹槽入口那座「石頭拱門」本來是落石堆亂數剛好疊成的——
+    // 從西側看是一疊各自分開的角礫石、仰視透得到天空、有大石平衡在很窄的尖點上，讀起來像「石砌拱門」而不是天然岩拱。
+    // ChatGPT 的結論是「只連上面不夠」，順序要：先兩側拱腳 → 再拱肩 → 最後拱頂 → 背面接回岩壁。照它的數值重擺：
+    // 跨距 5 m、洞高 3.2 m；拱腳埋進地形 0.6～1.2 m；拱肩靠長軸對齊切線自然內傾 20～40°；
+    // 拱頂 3 顆連續（不是單顆橫跨，避免兩端尖點平衡）；相鄰石頭中心距 ~1.5 m、石長 2.6～3.2 m ⇒ 重疊約 45%；
+    // 拱頂厚度／跨距 ≈ 0.3；背面 3 顆往岩壁穿插 0.5～1.0 m；左右洞高差 0.35 m（天然岩拱不是完美半圓）
+    {
+      const A = { cx: 185.0, cz: 90.3, span: 5.0, H: 3.4, ux: -0.645, uz: 0.763, vx: 0.763, vz: 0.645 }   // u＝跨距方向（垂直步道）、v＝前後厚度方向（順步道、+v 朝岩壁）
+      // 每種掃描石頭的原始尺寸：模型大小不一，要先量過才能縮放到指定的世界長度
+      const bbSize = {}
+      for (const n of names) {
+        const bb = new THREE.Box3()
+        for (const { geo } of parts(lib[n])) { if (!geo.boundingBox) geo.computeBoundingBox(); bb.union(geo.boundingBox) }
+        bbSize[n] = bb.getSize(new THREE.Vector3())
+      }
+      const sorted = (q) => [q.x, q.y, q.z].sort((m, n2) => n2 - m)
+      const longAxis = (q) => q.x >= q.y && q.x >= q.z ? new THREE.Vector3(1, 0, 0) : (q.y >= q.z ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1))
+      // ang：沿拱的角度（180°＝左拱腳、90°＝拱頂、0°＝右拱腳）；len：這顆在世界裡多長；dep：往岩壁方向偏多少；
+      // dy：再上下挪多少（負的＝埋進地形）；spin：繞自己長軸轉；wob：繞前後軸再歪一點
+      // 關鍵：石頭要以「內緣」貼著拱線，不是把中心放在拱線上——否則整顆的厚度都往洞裡吃，開口會被壓掉一半
+      const feet = []
+      const put = (n, ang, len, dep, dy, spin, wob = 0) => {
+        const a = ang * Math.PI / 180, t = Math.cos(a), hy = Math.sin(a)
+        const sz = bbSize[n], la = longAxis(sz), ax = sorted(sz), k = len / ax[0]
+        const halfCross = (ax[1] + ax[2]) / 4 * k            // 橫斷面半徑：往外推這麼多，內緣才剛好落在拱線上
+        const nt = t / (A.span / 2), nh = hy / A.H, nl = Math.hypot(nt, nh) || 1   // 橢圓的外法線
+        const ot = nt / nl * halfCross, oh = nh / nl * halfCross
+        const tw = t * A.span / 2 + ot
+        const x = A.cx + A.ux * tw + A.vx * dep, z = A.cz + A.uz * tw + A.vz * dep
+        const y = alpineHeight(x, z) + hy * A.H + oh + dy
+        const dt = -Math.sin(a), dh = Math.cos(a)   // 拱的切線：長軸對齊它，拱肩就自然內傾
+        const dir = new THREE.Vector3(A.ux * dt * A.span / 2, dh * A.H, A.uz * dt * A.span / 2).normalize()
+        const q = new THREE.Quaternion().setFromUnitVectors(la, dir).multiply(new THREE.Quaternion().setFromAxisAngle(la, spin))
+        if (wob) q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(A.vx, 0, A.vz), wob))
+        lists[n].push({ p: V(x, y, z), q, s: V(k, k * (0.74 + rnd() * 0.22), k), c: wetC(x) })
+        return { x, z }
+      }
+      // 拱腳（先做）：每邊兩顆，大的埋進地形約 1 m、寬面朝地，上面再壓一顆把尖端藏起來
+      feet.push(put('mrock_8', 180, 3.2, 0.35, -1.05, 0.5, 0.10))
+      put('mrock_3', 166, 2.7, -0.95, -0.45, 2.2, -0.08)
+      feet.push(put('mrock_5', 0, 3.2, -0.3, -1.15, 1.7, -0.09))
+      put('mrock_1', 14, 2.7, 1.0, -0.5, 3.1, 0.07)
+      // 拱肩：左右各兩顆往中心靠（長軸對齊切線＝內傾 20～40°）
+      put('mrock_1', 148, 2.8, 0.55, -0.15, 1.3, 0.06)
+      put('mrock_5', 120, 2.7, -0.75, 0.0, 3.0, -0.05)
+      put('mrock_8', 60, 2.7, 0.8, -0.3, 0.9, 0.05)
+      put('mrock_3', 32, 2.8, -0.6, -0.1, 2.6, -0.06)
+      // 拱頂：三顆連續（左右洞高差 0.35 m，不是完美半圓）
+      put('mrock_11', 104, 2.9, 0.4, 0.05, 0.3, 0.04)
+      put('mrock_3', 90, 3.0, -0.55, 0.3, 1.9, -0.03)
+      put('mrock_5', 76, 2.9, 0.5, -0.05, 2.8, 0.03)
+      // 背面：沿「兩側」往既有岩壁延伸（不能擺在拱頂正後方，會從開口看出去變成一道牆把凹槽擋掉）
+      put('mrock_8', 156, 3.0, 2.5, -0.5, 1.1, 0.08)
+      put('mrock_1', 24, 3.2, 2.9, -0.8, 2.3, -0.06)
+      put('mrock_5', 162, 3.0, 4.6, -1.2, 0.7, 0.05)
+      put('mrock_3', 18, 3.0, 4.8, -1.4, 2.0, -0.04)
+      // 補縫：拱肩與拱頂的接縫各塞一顆小的
+      put('boulder', 134, 1.5, 0.3, -0.05, 1.4, 0)
+      put('boulder', 46, 1.5, -0.3, -0.05, 2.9, 0)
+      for (const f of feet) addCollider(f.x, f.z, 1.0, alpineHeight(f.x, f.z) + 2.2, alpineHeight(f.x, f.z) - 1.5)
     }
     // 岩石改成灰白（花崗岩）：材質複製一份、顏色去飽和再提亮（原本掃描的是褐色、長青苔的石頭），跟岩壁一致
     for (const n of names) {
@@ -1092,7 +1154,7 @@ export function buildYosemite(scene, { lib } = {}) {
     const x = X0 - 6 + rnd() * (X1 - X0 + 10), z = YOSE.base(x) - 3 - rnd() * 30
     if (!YOSE.inside(x, z) || domeRho(x, z) > 0.9) continue
     if (alpineTrailDist(x, z) < 3 || nearStairs(x, z, 6) || Math.hypot(x - F.x, z - F.z) < 14 || PINES.some((p) => Math.hypot(p.x - x, p.z - z) < 7)) continue
-    if (Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4 || YOSE.behind(x, z) || YOSE.inLake(x, z, 4) || alpineStreamDist(x, z) < 4) continue   // 營地裡、石階、湖、河上不長
+    if (Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4 || YOSE.behind(x, z) || YOSE.inArch(x, z, 2.5) || YOSE.inLake(x, z, 4) || alpineStreamDist(x, z) < 4) continue   // 營地裡、石階、湖、河上不長
     const y = alpineHeight(x, z), H = 18 + rnd() * 10
     if (H < 10) continue
     PINES.push({ x, z, y, H, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.05 })
@@ -1223,7 +1285,7 @@ export function buildYosemite(scene, { lib } = {}) {
 
   // 2026-11-11 瀑布湖的岸（使用者：左岸一片光禿的米色坡）：一層草（花園那套草葉）、蕨類、長青苔的石頭；步道、河道、石階、岩壁讓開
   {
-    const LK = YOSE.lake, ok = (x, z) => !YOSE.behind(x, z) && alpineTrailDist(x, z) > 1.3 && alpineStreamDist(x, z) > 1.6 && !YOSE.inLake(x, z, 0.4) && domeRho(x, z) < 0.93
+    const LK = YOSE.lake, ok = (x, z) => !YOSE.behind(x, z) && !YOSE.inArch(x, z, 2.5) && alpineTrailDist(x, z) > 1.3 && alpineStreamDist(x, z) > 1.6 && !YOSE.inLake(x, z, 0.4) && domeRho(x, z) < 0.93
     const A = [], B = [], c = new THREE.Color(), sunV = V(-0.45, 0.8, 0.3).normalize()
     for (let k = 0; k < 120000 && A.length / 4 < 40000; k++) {
       const a = rnd() * TAU, e = 1.03 + Math.pow(rnd(), 1.4) * 2.6, x = LK.x + Math.cos(a) * LK.rx * e, z = LK.z + Math.sin(a) * LK.rz * e

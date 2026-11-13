@@ -1160,8 +1160,8 @@ function buildInterior(lib, avoid = []) {
       const list = []
       for (let k = 0; k < 40000 * AK && list.length < (kind === 'fir' ? 400 : 430) * AK * 1.25; k++) {   // 2026-11-10 溫室往南北加寬 26%：樹的數量跟著加
         const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-        if (YOSE.behind(x, z) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
-      if (YOSE.behind(x, z) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
+        if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
+      if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
         const inB = BAND(x, z)
         if ((!inAlpine(x, z, 3) && !inB) || domeRho(x, z) > 0.94 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4.4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4.4)) continue
         if (alpineTrailDist(x, z) < 3.2 || alpineStreamDist(x, z) < 2.5 || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 2.5) continue
@@ -1622,7 +1622,7 @@ function buildInterior(lib, avoid = []) {
     const pick = (a) => a[Math.floor(rnd() * a.length)]
     for (let k = 0; k < 8000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (YOSE.behind(x, z) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
+      if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       { const ez0 = eastZone(x, z); if (ez0 === 'wet' || ez0 === 'hide') continue }   // 濕地、觀察屋旁不放山區的石頭（草原留著零星的）
       if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 2.4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 2.4) || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
@@ -1640,7 +1640,7 @@ function buildInterior(lib, avoid = []) {
     const ferns = []
     for (let k = 0; k < 12000 * AK && ferns.length < 420 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (YOSE.behind(x, z) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
+      if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.95 || eastZone(x, z)) continue
       const sd = alpineStreamDist(x, z), dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
       if (!((sd > 1.3 && sd < 4.5) || (dp > ALP_POND.r + 0.8 && dp < ALP_POND.r + 3.5)) || alpineTrailDist(x, z) < 1.6) continue
@@ -1674,7 +1674,7 @@ function buildInterior(lib, avoid = []) {
     const A = [], B = [], c = new THREE.Color(), MAXI = 450000 * AK
     for (let k = 0; k < 140000 * AK && A.length / 4 < MAXI; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (YOSE.behind(x, z) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
+      if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955 || eastZone(x, z)) continue
             if (groundClear(avoid, x, z, 1.6)) continue   // 地上的鳥走動的地方、到鏡頭那條線：不長
             if (bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8 || nearGiant(x, z, 0.1)) continue   // 吊橋兩端橋面貼近地面：箭竹會從木板縫長出來（2026-11-09）；巨木樹幹裡不長
@@ -1758,7 +1758,7 @@ function buildInterior(lib, avoid = []) {
     const list = [], c = new THREE.Color()
     for (let k = 0; k < 160000 * AK && list.length < 90000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
-      if (YOSE.behind(x, z) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
+      if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955 || eastZone(x, z)) continue
       if (groundClear(avoid, x, z, 1.8) || bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8 || nearGiant(x, z, 0.2)) continue
       if ((Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 0.2 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 0.2)) continue

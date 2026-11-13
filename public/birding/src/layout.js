@@ -406,6 +406,8 @@ export const YOSE = (() => {
   // 南岸在步道下面的坡（zS），北邊到岩壁腳；岩壁腳 1 m 內不挖（岩壁網格的底照那裡的地形）
   Y.lakeE = { x0: 205, x1: 247, zS: (x) => 73 + 0.2 * (x - 205) }
   // 驗收第 11 條：湖西岸接到溪的水道（layout.js 檔尾挖的）
+  // 2026-11-13 凹槽入口那座岩拱的淨空區：樹、大植被不要長在拱上面或拱洞裡（俯視整座拱被一棵紅杉的樹冠蓋掉）
+  Y.inArch = (x, z, pad = 0) => Math.hypot(x - 185.0, z - 90.3) < 5.5 + pad
   Y.inOutlet = (x, z, pad = 0) => { const P = [190.5, 79.3], Q = [184.6, 75.4], dx = Q[0] - P[0], dz = Q[1] - P[1], t = Math.max(0, Math.min(1, ((x - P[0]) * dx + (z - P[1]) * dz) / (dx * dx + dz * dz))); return Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t) < 2.5 + pad }
   Y.inEastLake = (x, z, pad = 0) => x > Y.lakeE.x0 - pad && x < Y.lakeE.x1 + pad && z > Y.lakeE.zS(x) - pad && z < Y.base(x) - 0.2 + pad
   Y.inLake = (x, z, pad = 0) => ((x - Y.lake.x) / (Y.lake.rx + pad)) ** 2 + ((z - Y.lake.z) / (Y.lake.rz + pad)) ** 2 < 1 || Y.inEastLake(x, z, pad) || Y.inOutlet(x, z, pad) || Y.inRecessWater(x, z, pad)
