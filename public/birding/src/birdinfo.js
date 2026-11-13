@@ -963,7 +963,7 @@ const ALL = [
     ],
   },
   {
-    id: 'greatgreyowl', spot: [178.5, 63.5], perch: 'branch', dist: 3.6, camH: 3.6, lookY: 3.5,
+    id: 'greatgreyowl', spot: [187, 59.5],   /* 2026-11-14 河改走 x180，原本的樹在河中間 → 搬到東岸 */ perch: 'branch', dist: 3.6, camH: 3.6, lookY: 3.5,
     name: "烏林鴞", sci: 'Strix nebulosa', where: "瀑布湖西南邊的林緣枝頭",
     intro: "體型很大的貓頭鷹，圓圓的大頭沒有耳羽，灰色的大面盤上一圈圈同心圓，眼睛黃色而小，下巴有黑白兩色的「領結」。常停在林緣看著草地，靠聽覺找雪下或草裡的鼠類。",
     facts: [
