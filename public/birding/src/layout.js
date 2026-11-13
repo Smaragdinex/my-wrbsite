@@ -1825,9 +1825,24 @@ YOSE.DIKE = null   // 2026-11-14 石橋拆掉，橋頭那道補的岸跟石牆�
   for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 68 || z > 92) continue
     for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < 172 || x > 194) continue
       const q = j * AG.nx + i, e = YOSE.basinEdgeD(x, z)
-      if (e < 0) { aHeight[q] = Math.min(aHeight[q], lerp(W + 0.1, W - 0.55, smoothstep(0, 1.2, -e))); continue }
+      if (e < 0) continue   // 湖底在下面那一步一起挖
       if (e > 3 || YOSE.inLake(x, z, 0)) continue
       if (R.dist(x, z) < R.halfAt(R.sAt(x, z)) + 0.3) continue
       const tgt = lerp(W + 0.15, aHeight[q], smoothstep(1.2, 3.0, e)); if (aHeight[q] < tgt) aHeight[q] = tgt
+    } }
+}
+
+// 2026-11-14 使用者：「你要跟後面湖同深度」「水要同一個」：第一版 BASIN 只挖到水面下 0.55 m，湖西緣原本也有一圈 0.6 m 的淺棚，
+// 兩片淺灘連成一大片淺色的沙底，跟後面 2～3 m 深的湖之間一道陡坡——看起來就是兩段水。
+// 改成：整個湖面輪廓（YOSE.lakeR：橢圓＋出水口＋BASIN）的西半邊，湖底照「離湖岸多遠」往下：岸邊 0.3 m、每往裡 1 m 再深 0.7 m，最深 2.6 m（跟湖心一樣）；
+// 只往下挖、不墊高（湖心本來就更深的地方不動）。瀑布那邊（x 193 以東）、凹槽（z 88 以北）不動
+{
+  const W = YOSE.lake.water, LK = YOSE.lake
+  for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 66 || z > 88) continue
+    for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < 174 || x > 193) continue
+      const dx = x - LK.x, dz = z - LK.z, dShore = YOSE.lakeR(Math.atan2(dz, dx)) - Math.hypot(dx, dz)
+      if (dShore <= 0) continue
+      const q = j * AG.nx + i, bed = W - Math.min(2.6, 0.3 + 0.7 * dShore)
+      if (aHeight[q] > bed) aHeight[q] = bed
     } }
 }
