@@ -953,13 +953,13 @@ function buildInterior(lib, avoid = []) {
     const copes = []
     for (const b of RIVER_BRIDGES) {
       const st = ALP_STREAMS[1], w = st.water(st.sAt(b.x, b.z)), L = b.half + 0.3, top0 = b.y
-      const span = Math.min((b.river ?? 2.3) + 0.6, b.half - 0.8), archTop = Math.min(top0 - Math.abs(b.k) * span - 0.6, w + 1.9), bot = w - 1.2 - Math.abs(b.k) * L
+      const span = Math.min((b.river ?? 2.3) + 0.6, b.half - 0.8), archTop = Math.min(top0 - Math.abs(b.k) * span - 0.75, w + 2.5), bot = w - 1.2 - Math.abs(b.k) * L
       const deckY = (u) => top0 + b.k * u + 0.25 * Math.cos(Math.min(1, Math.abs(u) / b.half) * Math.PI / 2) ** 2
       const sh = new THREE.Shape(), N = 28
       sh.moveTo(-L, bot); sh.lineTo(-L, deckY(-L) - 0.12)
       for (let i = 0; i <= N; i++) { const u = -L + 2 * L * i / N; sh.lineTo(u, deckY(u) - 0.12) }
       sh.lineTo(L, bot); sh.lineTo(span, bot)
-      for (let i = 0; i <= N; i++) { const a2 = Math.PI * i / N; sh.lineTo(span * Math.cos(a2), w - 0.4 + (archTop - (w - 0.4)) * Math.sin(a2)) }
+      for (let i = 0; i <= N; i++) { const a2 = Math.PI * i / N; sh.lineTo(span * Math.cos(a2), w + 0.1 + (archTop - (w + 0.1)) * Math.sin(a2)) }   /* 拱腳在水面上 0.1（以前在水面下 0.4，拱洞一半泡在水裡） */
       sh.lineTo(-span, bot); sh.lineTo(-L, bot)
       const D = (b.hw + 0.3) * 2, eg = new THREE.ExtrudeGeometry(sh, { depth: D, bevelEnabled: false }); eg.translate(0, 0, -D / 2)
       { const pp = eg.attributes.position, cc = new Float32Array(pp.count * 3)
@@ -980,7 +980,7 @@ function buildInterior(lib, avoid = []) {
         const dm = new THREE.Mesh(dg, deckM); dm.receiveShadow = true; g.add(dm) }
       // 拱圈：兩面各一圈楔形拱石（比牆面凸一點、顏色淡一點）
       for (const sd of [-1, 1]) for (let i = 0; i <= 13; i++) {
-        const a2 = Math.PI * i / 13, rx = span + 0.22, ry = archTop - (w - 0.4) + 0.22, u = rx * Math.cos(a2), y = w - 0.4 + ry * Math.sin(a2)
+        const a2 = Math.PI * i / 13, rx = span + 0.22, ry = archTop - (w + 0.1) + 0.22, u = rx * Math.cos(a2), y = w + 0.1 + ry * Math.sin(a2)
         const nrm = Math.atan2(Math.sin(a2) / ry, Math.cos(a2) / rx)
         vous.push({ p: toW(u, y, sd * (b.hw + 0.32)), q: new THREE.Quaternion().setFromRotationMatrix(basis).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, nrm - Math.PI / 2))), s: V(0.32, 0.5, 0.12) })
       }

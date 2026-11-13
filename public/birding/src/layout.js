@@ -1073,7 +1073,7 @@ function buildAlpine() {
     // 出湖的前 7.5 m 河面放寬（最多 +2.2 m 半寬），湖直接開口變成河；到橋那裡（s≈9）已經回到原本的寬度，拱橋不用變
     { const h1 = rv.halfAt; rv.halfAt = (sv) => h1(sv) + 2.2 * (1 - smoothstep(2, 7.5, sv)) }
     for (const c of XS) { if (Math.hypot(c.x - 182, c.z - 68) < 8) continue   /* 2026-11-14 使用者：「先拿掉橋，先把陸地溪流修好」→ 瀑布湖出水口下面那座石拱橋先拆 */
-      const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 2.1),   /* 2026-11-13 使用者：橋再高一點（離水 1.2 → 2.1 m） */ half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
+      const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 3.0   /* 2026-11-14 使用者「都太貼水面」：2.1 → 3.0，拱洞露出水面 */),   /* 2026-11-13 使用者：橋再高一點（離水 1.2 → 2.1 m） */ half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
   }
   // 斷面（參考台灣山溪的影片）：水邊不是直的——寬度用 2D 雜訊，兩岸不對稱、一凹一凸；
   // 水裡是 U 形的潭底；岸是緩緩爬上去的坡，坡上有一塊塊凸起的石頭（不是一面平滑的牆）
