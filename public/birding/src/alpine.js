@@ -7,6 +7,7 @@
 import * as THREE from 'three'
 import { createMirror } from './mirror.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'   // 2026-11-14 圓樹冠闊葉樹（取代雀榕）
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { buildSummit } from './summit.js'
 import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, bridgeLanterns, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
@@ -1583,37 +1584,27 @@ function buildInterior(lib, avoid = []) {
       list.forEach((it, i) => { m.setMatrixAt(i, mm.compose(it.p, it.q, it.s)); m.setColorAt(i, c.setHSL(0.3, 0.1, 0.92 + rnd() * 0.12)) })
       m.castShadow = cast; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m); return m
     }
-    if (lib.figtree) {
-      // 2026-11-10 寫實版：樹幹、枝條、葉子用掃描的樹（Poly Haven island_tree_01 縮減，tools/make-figtree.py）；
-      // 榕果、氣根照這棵樹真正的枝條位置長：從細枝、樹幹上段的頂點挑點，一處一串榕果，少數幾處垂下氣根
-      // 掃描的樹偏暗：雀榕的葉子是亮綠有光澤、樹皮灰白，材質顏色提亮
-      // 風：只有葉子輕輕晃（樹高 9 公尺時樹梢約 5 公分）；樹幹、枝不動——以前整棵一起彎（樹梢擺 1 公尺），樹扭來扭去、榕果和氣根跟不上
-      for (const { mat } of parts(lib.figtree)) { if (/leaves/.test(mat.name)) { mat.color.setRGB(1.3, 1.45, 1.1); mat.roughness = 0.55; addWind(mat, 0.006) } else mat.color.setRGB(1.6, 1.55, 1.5) }
-      scatter(g, lib.figtree, FIG)
-      const pts = []
-      for (const { geo, mat } of parts(lib.figtree)) {
-        if (/leaves/.test(mat.name)) continue
-        const p = geo.attributes.position
-        for (let i = 0; i < p.count; i += 7) { const y = p.getY(i); if (y > 0.3 && y < 0.82) pts.push(V(p.getX(i), y, p.getZ(i))) }
+    // 2026-11-14 使用者：「還是改用這棵樹，不要用雀榕」（指鳥棲樹那種圓樹冠的闊葉樹）＋ FPS：
+    // 以前是 Poly Haven 掃描的雀榕（一棵 12.6 萬面，tools/make-figtree.py），換成公園外圍、鳥棲樹同一套圓樹冠（fju-foliage.js）：
+    // 主冠＋側冠（凹凸的實心樹冠，上亮下暗）＋一圈葉片卡＋樹幹，一棵約 2,000 面；遠處換 320 面的同形狀樹冠。吃果實的鳥改停一般的鳥棲樹（birdinfo.js 拿掉 onFig）
+    {
+      const crown = (detail) => {
+        let base = detail === 3 ? canopyGeometry().clone() : (() => {
+          const q = new THREE.IcosahedronGeometry(1, detail), p = q.attributes.position, v = V(), col = new Float32Array(p.count * 3)
+          for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); v.multiplyScalar(canopyBump(v)); if (v.y < 0) v.y *= 0.75; p.setXYZ(i, v.x, v.y, v.z); const k = 0.55 + 0.53 * THREE.MathUtils.smoothstep(v.y, -0.8, 0.9); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k }
+          q.setAttribute('color', new THREE.BufferAttribute(col, 3)); q.deleteAttribute('uv'); q.computeVertexNormals(); return q
+        })()
+        if (base.index) base = base.toNonIndexed()
+        return mergeGeometries([base.clone().scale(0.36, 0.3, 0.36).translate(0, 0.66, 0), base.clone().scale(0.26, 0.22, 0.26).translate(0.18, 0.55, 0.08), base.clone().scale(0.24, 0.2, 0.24).translate(-0.16, 0.56, -0.1)])
       }
-      const rf = mulberry32(91), pick = () => pts[Math.floor(rf() * pts.length)]
-      const fr = [], rt = []
-      for (let c = 0; c < 90 && pts.length; c++) {   // 一串擠在枝上
-        const o = pick(), n = 14 + Math.floor(rf() * 14)   // 果子小（樹高 9 公尺時直徑約 2～3 公分），一串擠在一起
-        for (let k = 0; k < n; k++) fr.push(figBall(0.0022 + rf() * 0.0012, o.x + (rf() - 0.5) * 0.022, o.y + (rf() - 0.5) * 0.018, o.z + (rf() - 0.5) * 0.022))
-      }
-      for (let c = 0; c < 9 && pts.length; c++) {   // 氣根：從枝下垂，大多掛在半空
-        const anc = pick(), n = 3 + Math.floor(rf() * 4)
-        for (let k = 0; k < n; k++) {
-          const ground = rf() < 0.15, len = ground ? anc.y : anc.y * (0.2 + rf() * 0.4), ox = (rf() - 0.5) * 0.025, oz = (rf() - 0.5) * 0.025, ph = rf() * 6, q = []
-          for (let j = 0; j <= 6; j++) { const t = j / 6; q.push(V(anc.x + ox + Math.sin(t * 3 + ph) * 0.005, anc.y - 0.01 - len * t, anc.z + oz + Math.cos(t * 2.4 + ph) * 0.005)) }
-          rt.push(colG(taper(q, 0.0016 + rf() * 0.0007, ground ? 0.0011 : 0.0003), 0.78, 0.55, 0.42))
-        }
-      }
-      lodRegister([inst(mergeGeometries(fr), fruitM, FIG), inst(mergeGeometries(rt), bark, FIG)], 12)
-    } else {
-      const crownMesh = inst(figCrown, figM, FIG); crownMesh.receiveShadow = false   // 葉團自己互相遮的陰影會讓整片樹冠從下面看全黑
-      lodRegister([crownMesh, inst(figTrunk, bark, FIG), inst(figFruit, fruitM, FIG)], 12)
+      const cards = (() => { const c = leafCardGeometry(140); return mergeGeometries([c.clone().scale(0.36, 0.3, 0.36).translate(0, 0.66, 0), c.clone().scale(0.26, 0.22, 0.26).translate(0.18, 0.55, 0.08), c.clone().scale(0.24, 0.2, 0.24).translate(-0.16, 0.56, -0.1)]) })()
+      const trunk = mergeGeometries([new THREE.CylinderGeometry(0.02, 0.038, 0.62, 8).translate(0, 0.31, 0), new THREE.CylinderGeometry(0.008, 0.016, 0.26, 6).translate(0, 0.13, 0).rotateZ(-0.7).translate(0.01, 0.4, 0.03), new THREE.CylinderGeometry(0.007, 0.014, 0.22, 6).translate(0, 0.11, 0).rotateZ(0.75).translate(-0.01, 0.42, -0.04)])
+      const leafM = leafify(new THREE.MeshStandardMaterial({ color: 0x4f7f3a, roughness: 0.85, vertexColors: true }))
+      const barkM = barkify(new THREE.MeshStandardMaterial({ color: 0x6d5544, roughness: 0.9 }))
+      const ms = [inst(crown(3), leafM, FIG), inst(cards, leafCardMaterial(0x5a8a42), FIG), inst(trunk, barkM, FIG)]
+      ms[0].receiveShadow = false   // 樹冠自己互相遮的陰影會讓整片從下面看全黑
+      const lo = inst(crown(2), leafM, FIG); lo.count = 0
+      lodRegister(ms, 9, [lo, null, null])
     }
     // 2026-11-10 鵝掌藤立體版（以前是 9 片交叉的平面卡片）：6 根從基部彎上來的莖；每個節一片掌狀複葉＝葉柄＋7～9 片倒卵形小葉像傘一樣放射；
     // 莖頂一把把放射的果序（繖形），果子從橘黃熟到紅、紫黑。高約 1.1（擺放時再乘 1.1～1.8）

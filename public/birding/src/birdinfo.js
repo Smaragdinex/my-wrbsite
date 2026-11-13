@@ -299,7 +299,7 @@ const ALL = [
     ],
   },
   {
-    id: 'sibia', onFig: true, spot: AM(158, -7), perch: 'branch', view: 90, dist: 3.0, camH: 3.6, lookY: 3.4,
+    id: 'sibia', spot: AM(158, -7), perch: 'branch', view: 90, dist: 3.0, camH: 3.6, lookY: 3.4,
     name: '白耳畫眉', sci: 'Heterophasia auricularis', where: '山腰的樹冠',
     intro: '台灣特有種。黑頭上一道寬寬的白色過眼線，末端是蓬鬆下垂的白色耳羽，像戴了白色的耳環；肚子是鮮豔的栗橙色，尾巴長長的。中海拔森林裡很常見。',
     facts: [
@@ -415,7 +415,7 @@ const ALL = [
     ],
   },
   {
-    id: 'finchbill', onFig: true, figExtra: [[89.5, 10.5]], spot: AM(78.52, -1.99), perch: 'branch', view: 0, dist: 2.6, camH: 3.6, lookY: 3.4,
+    id: 'finchbill', spot: AM(78.52, -1.99), perch: 'branch', view: 0, dist: 2.6, camH: 3.6, lookY: 3.4,
     name: '白環鸚嘴鵯', sci: 'Spizixos semitorques', where: '山區入口的果樹旁',
     intro: '台灣特有亞種。厚厚短短、象牙白色的嘴有點像鸚鵡，頭是灰黑色，前頸一道明顯的白色頸環，身體是橄欖綠到黃綠色。常一小群停在枝頭或電線上，叫聲短促響亮。',
     facts: [
