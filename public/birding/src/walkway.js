@@ -143,7 +143,7 @@ export function buildWalkways(scene, kit) {
       if (!on) continue
       const r = locOn(w, x, z, i0, i1)
       if (r.lat > WALK_HW + 0.15) continue
-      if (r.bi === endI && (endI === 0 ? r.along < 0 : r.along > 0)) continue
+      if ((r.bi === i0 && r.along < 0) || (r.bi === i1 && r.along > 0)) continue   // 投影落在這一段外面（主木道對面那排、支線另一半）不算開口
       return true
     }
     return false
@@ -338,7 +338,8 @@ export function buildWalkways(scene, kit) {
         const p0 = posts[k]; if (!on || !p0) continue
         let best = null, bd = 2.8
         for (const q of allPosts) {
-          if (q.tag === w.head.t || (!q.edge && !String(q.tag).startsWith('deck'))) continue   // 只接開口旁邊那根（以前接最近的任何一根，常常斜斜跨過主木道）
+          if (q.tag === w.head.t) continue
+          if (!q.edge && !String(q.tag).startsWith('deck') && Math.hypot(q.x - p0.x, q.z - p0.z) > 0.9) continue   // 只接開口旁邊那根（以前接最近的任何一根，常常斜斜跨過主木道）；0.9 m 內的（橋頭平台角落那根東邊木道的第一根）照接，不留縫
           const lat = -(q.x - w.xs[sgnI]) * w.tz[sgnI] + (q.z - w.zs[sgnI]) * w.tx[sgnI]
           if (Math.sign(lat) !== sd) continue
           const d = Math.hypot(q.x - p0.x, q.z - p0.z); if (d < bd) { bd = d; best = q }

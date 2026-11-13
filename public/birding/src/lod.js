@@ -19,7 +19,9 @@ export const lodSetScale = (k) => { if (Math.abs(lodQuality.scale - k) > 1e-3) {
 
 // meshes：共用同一份擺放清單的 InstancedMesh（一種植物的各個材質）；h：這種植物大概多高（公尺）
 // lows：（可選）跟 meshes 一一對應的低面數版本（plants.js 的 lowGeo），沒有的放 null；遠處的株改畫低面數版本
-export function lodRegister(meshes, h, lows = [], { solid = false } = {}) {
+// group／gpos（可選）：同一棵樹拆成好幾組 InstancedMesh（樹幹、大枝、枝葉團…）時，每一株屬於哪棵樹、那棵樹的位置。
+// 230～330 公尺之間變稀（TF0～TF1）要整棵一起決定——以前各組照自己的編號抽，巨木常常樹幹留著、枝葉團被抽掉，遠處剩一根光禿禿的細桿（天空一條點點的黑線）
+export function lodRegister(meshes, h, lows = [], { solid = false, group = null, gpos = null } = {}) {
   const keep = meshes.map((m, i) => m?.isInstancedMesh && m.count > 0 ? i : -1).filter((i) => i >= 0)
   meshes = keep.map((i) => meshes[i]); lows = keep.map((i) => lows[i] ?? null)
   if (!meshes.length) return
@@ -47,7 +49,8 @@ export function lodRegister(meshes, h, lows = [], { solid = false } = {}) {
   // 換成低面數的距離：一公尺的蕨類 10 公尺外、越高的越遠才換（長焦時照變焦倍率拉遠）
   // 2026-11-12 使用者：遠景的樹看起來是板狀的低模——「應該像人眼一樣：圓的、看不清楚，但不是低模」→ 4 m 以上的樹換低面數版本的距離拉遠一倍多（20 m 的樹 200 m → 440 m）
   const dL = h >= 4 ? h * 12 : Math.max(10, h * 10)   // 4 m 以上：120～150 m 外換輕量版（冷杉的輕量版也是立體樹冠，不是板）
-  const S0 = { meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), scl: new Float32Array(n), proxies: null }
+  const tk = new Float32Array(n); for (let i = 0; i < n; i++) tk[i] = ((group ? group[i] : i) * 0.6180339887) % 1   // 遠處變稀用的亂數：同一棵樹的各組一樣
+  const S0 = { meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, tk, tp: gpos, vis: new Uint32Array(n), far: new Uint8Array(n), scl: new Float32Array(n), proxies: null }
   sets.push(S0)
   // 2026-11-12 遠景替身（ChatGPT：3A 遊戲的遠景不是整片烘成一張圖，是遠處的樹換成「多角度替身貼片」）：
   // 4 m 以上的樹，遠到在畫面上不到 IMP_PX 像素高的那幾棵不畫模型，改畫一片面向鏡頭的貼片（2 個三角形），貼圖是這種樹從 8 個方向拍下來的（第一次用到時烘）。
@@ -208,7 +211,8 @@ export function lodUpdate(camera, force = false) {
       // 230～330 公尺之間慢慢變稀（150～210 試過：山頂往下看整片森林不見）（每株照自己的雜湊值，不會一條線整排消失），再遠不畫；霧已經把那麼遠的樹蓋得很淡。長鏡頭拉近時照倍率拉遠
       // 2026-11-12 使用者：「邊走有些樹才跑出來」——以前過了門檻整棵突然出現。現在快要出現的那一段從很小慢慢長到原本大小（sc 0.15→1），看起來是從遠處淡進來，不是蹦出來
       let sc = 1
-      if (!S.imp && dd > TF0 * TF0 * zoom * zoom) { const d = Math.sqrt(dd) / zoom; if (d > TF1) continue; const m = 1 - (d - TF0) / (TF1 - TF0) - ((i * 0.6180339887) % 1); if (m < 0) continue; sc = Math.min(sc, 0.15 + 0.85 * Math.min(1, m / 0.22)) }
+      const ddT = S.tp ? (S.tp[i * 3] - p.x) ** 2 + (S.tp[i * 3 + 1] - p.y) ** 2 + (S.tp[i * 3 + 2] - p.z) ** 2 : dd   // 整棵樹一起決定：用樹的位置算距離
+      if (!S.imp && ddT > TF0 * TF0 * zoom * zoom) { const d = Math.sqrt(ddT) / zoom; if (d > TF1) continue; const m = 1 - (d - TF0) / (TF1 - TF0) - S.tk[i]; if (m < 0) continue; sc = Math.min(sc, 0.15 + 0.85 * Math.min(1, m / 0.22)) }
       if (d1 !== Infinity) { const d = Math.sqrt(dd); if (d > d0) { const m = 1 - (d - d0) / (d1 - d0) - S.hash[i]; if (m < 0) continue; sc = Math.min(sc, 0.15 + 0.85 * Math.min(1, m / 0.2)) } }
       // 視野外不畫；邊界多留 6 公尺（畫面外的植物影子會投進畫面）＋距離的 8%（約 4.6 度）：
       // 鏡頭轉不到 2.8 度不重算，遠處的樹以前只留 6 公尺（200 公尺外不到 2 度），慢慢轉頭時畫面邊緣的樹會突然冒出來、消失（2026-11-08 山上）
