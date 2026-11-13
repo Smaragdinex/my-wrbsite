@@ -27,7 +27,7 @@ import { summitRests } from '../summit.js'
 // 頁面上寫死的字（data-i18n）換成這個語言；標題列
 for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = tr(el.textContent.trim())
 for (const el of document.querySelectorAll('[data-i18n-aria]')) { el.setAttribute('aria-label', tr(el.dataset.i18nAria)); el.title = tr(el.dataset.i18nAria) }
-document.title = 'Birdwatch'
+document.title = tr('鳥類生態園：攝影')
 // 首頁的語言按鈕：換語言就重新載入（貼圖上的字都是一開始畫的）
 {
   const box = document.getElementById('langs')

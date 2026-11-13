@@ -3,162 +3,84 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Birdwatch</title>
-<meta name="description" content="Birdwatch：走進 3D 自然公園，找鳥、拍照的攝影遊戲（電腦瀏覽器）。A 3D bird-photography game in your desktop browser.">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="xarts.games">
-<meta property="og:title" content="Birdwatch｜3D 賞鳥攝影遊戲 · Bird Photography Game">
-<meta property="og:description" content="走進 3D 自然公園，找鳥、拍照。請用電腦瀏覽器開啟。Explore a 3D park and photograph the world's birds — play on a desktop browser.">
-<meta property="og:url" content="https://xarts.games/birding/game.html">
-<meta property="og:image" content="https://xarts.games/birding/title-plate.jpg">
-<meta property="og:image:width" content="1968">
-<meta property="og:image:height" content="734">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Birdwatch｜3D 賞鳥攝影遊戲 · Bird Photography Game">
-<meta name="twitter:image" content="https://xarts.games/birding/title-plate.jpg">
+<title>鳥類生態園：攝影</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="game.css?v=1794537143">
+<link rel="stylesheet" href="game.css?v=1794537243">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/",
-  "./src/structures.js": "./src/structures.js?v=1794537143",
-  "./src/flora.js": "./src/flora.js?v=1794537143",
-  "./src/plants.js": "./src/plants.js?v=1794537143",
-  "./src/lod.js": "./src/lod.js?v=1794537143",
-  "./src/shadowcache.js": "./src/shadowcache.js?v=1794537143",
-  "./src/alpine.js": "./src/alpine.js?v=1794537143",
-  "./src/east.js": "./src/east.js?v=1794537143",
-  "./src/outside.js": "./src/outside.js?v=1794537143",
-  "./src/weather.js": "./src/weather.js?v=1794537143",
-  "./src/summit.js": "./src/summit.js?v=1794537143",
-  "./src/halls.js": "./src/halls.js?v=1794537143",
-  "./src/fogzone.js": "./src/fogzone.js?v=1794537143",
-  "./src/i18n.js": "./src/i18n.js?v=1794537143",
-  "./src/i18n/en.js": "./src/i18n/en.js?v=1794537143",
-  "./src/i18n/ko.js": "./src/i18n/ko.js?v=1794537143",
-  "./src/i18n/ja.js": "./src/i18n/ja.js?v=1794537143",
-  "./src/coast.js": "./src/coast.js?v=1794537143",
-  "./src/cloudsea.js": "./src/cloudsea.js?v=1794537143",
-  "./src/owlnest.js": "./src/owlnest.js?v=1794537143",
-  "./src/camp.js": "./src/camp.js?v=1794537143",
-  "./src/giants.js": "./src/giants.js?v=1794537143",
-  "./src/walkway.js": "./src/walkway.js?v=1794537143",
-  "./src/streambed.js": "./src/streambed.js?v=1794537143",
-  "./src/mirror.js": "./src/mirror.js?v=1794537143",
-  "./src/wetland.js": "./src/wetland.js?v=1794537143",
-  "./src/yosemite-top.js": "./src/yosemite-top.js?v=1794537143",
-  "./src/cave.js": "./src/cave.js?v=1794537143",
-  "./src/yosemite.js": "./src/yosemite.js?v=1794537143",
-  "./src/pondlife.js": "./src/pondlife.js?v=1794537143",
-  "./src/bark.js": "./src/bark.js?v=1794537143",
-  "./src/layout.js": "./src/layout.js?v=1794537143",
-  "./src/stops.js": "./src/stops.js?v=1794537143",
-  "./src/snap.js": "./src/snap.js?v=1794537143",
-  "./src/wind.js": "./src/wind.js?v=1794537143",
-  "./src/noise.js": "./src/noise.js?v=1794537143",
-  "./src/textures.js": "./src/textures.js?v=1794537143",
-  "./src/birds.js": "./src/birds.js?v=1794537143",
-  "./src/fish.js": "./src/fish.js?v=1794537143",
-  "./src/birdinfo.js": "./src/birdinfo.js?v=1794537143",
-  "./src/fju-foliage.js": "./src/fju-foliage.js?v=1794537143",
-  "./src/world.js": "./src/world.js?v=1794537143",
-  "./src/player.js": "./src/player.js?v=1794537143",
-  "./src/game/camera.js": "./src/game/camera.js?v=1794537143",
-  "./src/game/title3d.js": "./src/game/title3d.js?v=1794537143",
-  "./src/game/camera-sfx.js": "./src/game/camera-sfx.js?v=1794537143",
-  "./src/game/door-sfx.js": "./src/game/door-sfx.js?v=1794537143",
-  "./src/game/hud.js": "./src/game/hud.js?v=1794537143",
-  "./src/game/scoring.js": "./src/game/scoring.js?v=1794537143",
-  "./src/game/presence.js": "./src/game/presence.js?v=1794537143",
-  "./src/game/album.js": "./src/game/album.js?v=1794537143",
-  "./src/game/playback.js": "./src/game/playback.js?v=1794537143",
-  "./src/game/guide.js": "./src/game/guide.js?v=1794537143",
-  "./src/game/save.js": "./src/game/save.js?v=1794537143",
-  "./src/game/shop.js": "./src/game/shop.js?v=1794537143",
-  "./src/game/commissions.js": "./src/game/commissions.js?v=1794537143",
-  "./src/game/store.js": "./src/game/store.js?v=1794537143",
-  "./src/game/product.js": "./src/game/product.js?v=1794537143",
-  "./src/game/shopkeeper.js": "./src/game/shopkeeper.js?v=1794537143",
-  "./src/game/judge.js": "./src/game/judge.js?v=1794537143",
-  "./src/game/flight.js": "./src/game/flight.js?v=1794537143",
-  "./src/game/exposure.js": "./src/game/exposure.js?v=1794537143",
-  "./src/game/settings.js": "./src/game/settings.js?v=1794537143",
-  "./src/game/viewmodel.js": "./src/game/viewmodel.js?v=1794537143",
-  "./src/game/controls-help.js": "./src/game/controls-help.js?v=1794537143",
-  "./src/game/ui-fx.js": "./src/game/ui-fx.js?v=1794537143",
-  "./src/game/ambience.js": "./src/game/ambience.js?v=1794537143"
+  "./src/structures.js": "./src/structures.js?v=1794537243",
+  "./src/flora.js": "./src/flora.js?v=1794537243",
+  "./src/plants.js": "./src/plants.js?v=1794537243",
+  "./src/lod.js": "./src/lod.js?v=1794537243",
+  "./src/shadowcache.js": "./src/shadowcache.js?v=1794537243",
+  "./src/alpine.js": "./src/alpine.js?v=1794537243",
+  "./src/east.js": "./src/east.js?v=1794537243",
+  "./src/outside.js": "./src/outside.js?v=1794537243",
+  "./src/weather.js": "./src/weather.js?v=1794537243",
+  "./src/summit.js": "./src/summit.js?v=1794537243",
+  "./src/halls.js": "./src/halls.js?v=1794537243",
+  "./src/fogzone.js": "./src/fogzone.js?v=1794537243",
+  "./src/i18n.js": "./src/i18n.js?v=1794537243",
+  "./src/i18n/en.js": "./src/i18n/en.js?v=1794537243",
+  "./src/i18n/ko.js": "./src/i18n/ko.js?v=1794537243",
+  "./src/i18n/ja.js": "./src/i18n/ja.js?v=1794537243",
+  "./src/coast.js": "./src/coast.js?v=1794537243",
+  "./src/cloudsea.js": "./src/cloudsea.js?v=1794537243",
+  "./src/owlnest.js": "./src/owlnest.js?v=1794537243",
+  "./src/camp.js": "./src/camp.js?v=1794537243",
+  "./src/giants.js": "./src/giants.js?v=1794537243",
+  "./src/walkway.js": "./src/walkway.js?v=1794537243",
+  "./src/streambed.js": "./src/streambed.js?v=1794537243",
+  "./src/mirror.js": "./src/mirror.js?v=1794537243",
+  "./src/wetland.js": "./src/wetland.js?v=1794537243",
+  "./src/yosemite-top.js": "./src/yosemite-top.js?v=1794537243",
+  "./src/cave.js": "./src/cave.js?v=1794537243",
+  "./src/yosemite.js": "./src/yosemite.js?v=1794537243",
+  "./src/pondlife.js": "./src/pondlife.js?v=1794537243",
+  "./src/bark.js": "./src/bark.js?v=1794537243",
+  "./src/layout.js": "./src/layout.js?v=1794537243",
+  "./src/stops.js": "./src/stops.js?v=1794537243",
+  "./src/snap.js": "./src/snap.js?v=1794537243",
+  "./src/wind.js": "./src/wind.js?v=1794537243",
+  "./src/noise.js": "./src/noise.js?v=1794537243",
+  "./src/textures.js": "./src/textures.js?v=1794537243",
+  "./src/birds.js": "./src/birds.js?v=1794537243",
+  "./src/fish.js": "./src/fish.js?v=1794537243",
+  "./src/birdinfo.js": "./src/birdinfo.js?v=1794537243",
+  "./src/fju-foliage.js": "./src/fju-foliage.js?v=1794537243",
+  "./src/world.js": "./src/world.js?v=1794537243",
+  "./src/player.js": "./src/player.js?v=1794537243",
+  "./src/game/camera.js": "./src/game/camera.js?v=1794537243",
+  "./src/game/title3d.js": "./src/game/title3d.js?v=1794537243",
+  "./src/game/camera-sfx.js": "./src/game/camera-sfx.js?v=1794537243",
+  "./src/game/door-sfx.js": "./src/game/door-sfx.js?v=1794537243",
+  "./src/game/hud.js": "./src/game/hud.js?v=1794537243",
+  "./src/game/scoring.js": "./src/game/scoring.js?v=1794537243",
+  "./src/game/presence.js": "./src/game/presence.js?v=1794537243",
+  "./src/game/album.js": "./src/game/album.js?v=1794537243",
+  "./src/game/playback.js": "./src/game/playback.js?v=1794537243",
+  "./src/game/guide.js": "./src/game/guide.js?v=1794537243",
+  "./src/game/save.js": "./src/game/save.js?v=1794537243",
+  "./src/game/shop.js": "./src/game/shop.js?v=1794537243",
+  "./src/game/commissions.js": "./src/game/commissions.js?v=1794537243",
+  "./src/game/store.js": "./src/game/store.js?v=1794537243",
+  "./src/game/product.js": "./src/game/product.js?v=1794537243",
+  "./src/game/shopkeeper.js": "./src/game/shopkeeper.js?v=1794537243",
+  "./src/game/judge.js": "./src/game/judge.js?v=1794537243",
+  "./src/game/flight.js": "./src/game/flight.js?v=1794537243",
+  "./src/game/exposure.js": "./src/game/exposure.js?v=1794537243",
+  "./src/game/settings.js": "./src/game/settings.js?v=1794537243",
+  "./src/game/viewmodel.js": "./src/game/viewmodel.js?v=1794537243",
+  "./src/game/controls-help.js": "./src/game/controls-help.js?v=1794537243",
+  "./src/game/ui-fx.js": "./src/game/ui-fx.js?v=1794537243",
+  "./src/game/ambience.js": "./src/game/ambience.js?v=1794537243"
 } }
 </script>
 <!-- Google Analytics（Scotty Lai 帳號，xarts.games 資源）：看玩家停留多久；遊戲事件用 window.gtag?.('event', …) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-5JJDGLR6Z4"></script>
 <script>window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments)} gtag('js', new Date()); gtag('config', 'G-5JJDGLR6Z4')</script>
-<!-- 2026-11-13 Threads 玩家回饋「打開畫面等好久」：手機／App 內建瀏覽器先擋下來說明；載入條太久沒動要給提示。普通 script，遊戲模組載入失敗也照樣會跑 -->
-<script>
-(function () {
-  var zh = true
-  try { var l = localStorage.getItem('lang'); zh = l ? /^zh/.test(l) : /^zh/i.test(navigator.language || '') } catch (e) {}
-  var ua = navigator.userAgent || ''
-  var inApp = /FBAN|FBAV|FB_IAB|Instagram|Barcelona|Threads|Line\/|MicroMessenger|KAKAOTALK|; wv\)/i.test(ua)
-  var phone = (matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820) || /iPhone|iPod|Android.+Mobile/i.test(ua)
-  var T = zh ? {
-    t: inApp && !phone ? '請用瀏覽器開啟' : '請用電腦開啟',
-    b: (inApp ? 'App 內建的瀏覽器跑不動這個 3D 遊戲。' : '') + 'Birdwatch 是需要電腦顯示卡的 3D 遊戲，手機目前還不支援。請在電腦上用 Chrome、Edge 或 Safari 打開這個網址：',
-    c: '複製連結', d: '已複製', g: '仍然試試看',
-    s: '載入好像卡住了。可以重新整理再試一次；如果一直卡住，請改用電腦的 Chrome 或 Edge。', r: '重新整理'
-  } : {
-    t: inApp && !phone ? 'Open in a browser' : 'Please play on a computer',
-    b: (inApp ? 'In-app browsers can\'t run this 3D game. ' : '') + 'Birdwatch is a 3D game that needs a desktop graphics card; phones are not supported yet. Open this link in Chrome, Edge or Safari on a computer:',
-    c: 'Copy link', d: 'Copied', g: 'Try anyway',
-    s: 'Loading seems stuck. Try reloading; if it keeps happening, please use Chrome or Edge on a computer.', r: 'Reload'
-  }
-  var url = 'https://xarts.games/birding/game.html'
-  function el(tag, css, txt) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (txt != null) e.textContent = txt; return e }
-  var btn = 'font:600 15px system-ui,sans-serif;padding:11px 20px;border-radius:10px;border:0;cursor:pointer;margin:6px'
-  function gate() {
-    var o = el('div', 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(180deg,#4a5878,#2c2a33);color:#fff;font:16px/1.6 system-ui,sans-serif;text-align:center')
-    o.id = 'device-gate'
-    var box = el('div', 'max-width:420px')
-    box.appendChild(el('div', 'font-size:13px;letter-spacing:.2em;opacity:.7;margin-bottom:6px', 'BIRDWATCH'))
-    box.appendChild(el('h1', 'font-size:24px;margin:0 0 12px', T.t))
-    box.appendChild(el('p', 'margin:0 0 14px;opacity:.92', T.b))
-    box.appendChild(el('div', 'font:600 15px ui-monospace,monospace;background:rgba(255,255,255,.12);padding:10px;border-radius:8px;word-break:break-all;user-select:all;-webkit-user-select:all;margin-bottom:14px', url))
-    var c = el('button', btn + ';background:#f2c46d;color:#2c2a33', T.c)
-    c.onclick = function () {
-      var ok = function () { c.textContent = T.d }
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(ok, function () {})
-      else { var a = el('textarea'); a.value = url; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); ok() } catch (e) {} a.remove() }
-    }
-    var g = el('button', btn + ';background:rgba(255,255,255,.16);color:#fff', T.g)
-    g.onclick = function () { o.remove(); try { sessionStorage.setItem('bw.tryPhone', '1') } catch (e) {} }
-    box.appendChild(c); box.appendChild(g); o.appendChild(box)
-    document.body.appendChild(o)
-    window.gtag && gtag('event', 'device_gate', { in_app: inApp, phone: phone })
-  }
-  var q = new URLSearchParams(location.search), tried = false
-  try { tried = sessionStorage.getItem('bw.tryPhone') === '1' } catch (e) {}
-  var showGate = (phone || inApp) && !tried && !q.has('rec') && !q.has('tier') && !q.has('nogate')
-  // 載入條：同一個數字停太久（0% 停 20 秒、其他 45 秒）就在下面加提示＋重新整理鈕
-  var last = null, since = 0, warned = null
-  function watch() {
-    var ld = document.getElementById('loading'), n = document.getElementById('ld-num')
-    if (!ld || !n) return
-    var shown = !ld.hidden && !ld.classList.contains('done') && getComputedStyle(ld).display !== 'none'
-    if (!shown) { last = null; return }
-    var v = n.textContent, now = Date.now()
-    if (v !== last) { last = v; since = now; if (warned) { warned.remove(); warned = null } return }
-    if (!warned && now - since > (v === '0' ? 20000 : 45000)) {
-      warned = el('div', 'margin-top:14px;font:14px/1.6 system-ui,sans-serif;max-width:360px;text-align:center;color:#33413f')
-      warned.appendChild(el('div', '', T.s))
-      var r = el('button', btn + ';background:#33413f;color:#fff', T.r); r.onclick = function () { location.reload() }
-      warned.appendChild(r)
-      ld.querySelector('.ld').appendChild(warned)
-      window.gtag && gtag('event', 'load_stall', { pct: +v })
-    }
-  }
-  document.addEventListener('DOMContentLoaded', function () { if (showGate) gate(); setInterval(watch, 1000) })
-})()
-</script>
 </head>
 <body>
 <canvas id="scene"></canvas>
@@ -191,7 +113,7 @@
 <div class="panel menu-sheet" id="help" hidden><div class="sheet-head"><button class="back x" data-i18n-aria="關閉" aria-label="關閉" title="關閉"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button><h2 data-i18n>操作說明</h2></div>
 <div class="ctl"></div></div>
 </div>
-<script type="module" src="src/game/main.js?v=1794537143"></script>
-<script type="module" src="src/game/tabtitle.js?v=1794537143"></script>
+<script type="module" src="src/game/main.js?v=1794537243"></script>
+<script type="module" src="src/game/tabtitle.js?v=1794537243"></script>
 </body>
 </html>

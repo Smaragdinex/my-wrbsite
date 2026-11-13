@@ -3,55 +3,49 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Birdwatch</title>
-<meta name="description" content="Birdwatch：3D 賞鳥攝影遊戲。A 3D bird-photography game in your desktop browser.">
-<meta property="og:type" content="website">
-<meta property="og:title" content="Birdwatch｜3D 賞鳥攝影遊戲 · Bird Photography Game">
-<meta property="og:description" content="走進 3D 自然公園，找鳥、拍照。請用電腦瀏覽器開啟。Explore a 3D park and photograph the world's birds — play on a desktop browser.">
-<meta property="og:image" content="https://xarts.games/birding/title-plate.jpg">
-<meta name="twitter:card" content="summary_large_image">
+<title>鳥類生態園</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=1794537143">
+<link rel="stylesheet" href="style.css?v=1794537243">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/",
-  "./src/structures.js": "./src/structures.js?v=1794537143",
-  "./src/flora.js": "./src/flora.js?v=1794537143",
-  "./src/plants.js": "./src/plants.js?v=1794537143",
-  "./src/lod.js": "./src/lod.js?v=1794537143",
-  "./src/shadowcache.js": "./src/shadowcache.js?v=1794537143",
-  "./src/alpine.js": "./src/alpine.js?v=1794537143",
-  "./src/east.js": "./src/east.js?v=1794537143",
-  "./src/outside.js": "./src/outside.js?v=1794537143",
-  "./src/weather.js": "./src/weather.js?v=1794537143",
-  "./src/halls.js": "./src/halls.js?v=1794537143",
-  "./src/fogzone.js": "./src/fogzone.js?v=1794537143",
-  "./src/coast.js": "./src/coast.js?v=1794537143",
-  "./src/cloudsea.js": "./src/cloudsea.js?v=1794537143",
-  "./src/owlnest.js": "./src/owlnest.js?v=1794537143",
-  "./src/camp.js": "./src/camp.js?v=1794537143",
-  "./src/giants.js": "./src/giants.js?v=1794537143",
-  "./src/walkway.js": "./src/walkway.js?v=1794537143",
-  "./src/streambed.js": "./src/streambed.js?v=1794537143",
-  "./src/mirror.js": "./src/mirror.js?v=1794537143",
-  "./src/wetland.js": "./src/wetland.js?v=1794537143",
-  "./src/yosemite-top.js": "./src/yosemite-top.js?v=1794537143",
-  "./src/cave.js": "./src/cave.js?v=1794537143",
-  "./src/yosemite.js": "./src/yosemite.js?v=1794537143",
-  "./src/pondlife.js": "./src/pondlife.js?v=1794537143",
-  "./src/bark.js": "./src/bark.js?v=1794537143",
-  "./src/layout.js": "./src/layout.js?v=1794537143",
-  "./src/stops.js": "./src/stops.js?v=1794537143",
-  "./src/snap.js": "./src/snap.js?v=1794537143",
-  "./src/wind.js": "./src/wind.js?v=1794537143",
-  "./src/noise.js": "./src/noise.js?v=1794537143",
-  "./src/textures.js": "./src/textures.js?v=1794537143",
-  "./src/birds.js": "./src/birds.js?v=1794537143",
-  "./src/fish.js": "./src/fish.js?v=1794537143",
-  "./src/birdinfo.js": "./src/birdinfo.js?v=1794537143",
-  "./src/fju-foliage.js": "./src/fju-foliage.js?v=1794537143",
-  "./src/world.js": "./src/world.js?v=1794537143"
+  "./src/structures.js": "./src/structures.js?v=1794537243",
+  "./src/flora.js": "./src/flora.js?v=1794537243",
+  "./src/plants.js": "./src/plants.js?v=1794537243",
+  "./src/lod.js": "./src/lod.js?v=1794537243",
+  "./src/shadowcache.js": "./src/shadowcache.js?v=1794537243",
+  "./src/alpine.js": "./src/alpine.js?v=1794537243",
+  "./src/east.js": "./src/east.js?v=1794537243",
+  "./src/outside.js": "./src/outside.js?v=1794537243",
+  "./src/weather.js": "./src/weather.js?v=1794537243",
+  "./src/halls.js": "./src/halls.js?v=1794537243",
+  "./src/fogzone.js": "./src/fogzone.js?v=1794537243",
+  "./src/coast.js": "./src/coast.js?v=1794537243",
+  "./src/cloudsea.js": "./src/cloudsea.js?v=1794537243",
+  "./src/owlnest.js": "./src/owlnest.js?v=1794537243",
+  "./src/camp.js": "./src/camp.js?v=1794537243",
+  "./src/giants.js": "./src/giants.js?v=1794537243",
+  "./src/walkway.js": "./src/walkway.js?v=1794537243",
+  "./src/streambed.js": "./src/streambed.js?v=1794537243",
+  "./src/mirror.js": "./src/mirror.js?v=1794537243",
+  "./src/wetland.js": "./src/wetland.js?v=1794537243",
+  "./src/yosemite-top.js": "./src/yosemite-top.js?v=1794537243",
+  "./src/cave.js": "./src/cave.js?v=1794537243",
+  "./src/yosemite.js": "./src/yosemite.js?v=1794537243",
+  "./src/pondlife.js": "./src/pondlife.js?v=1794537243",
+  "./src/bark.js": "./src/bark.js?v=1794537243",
+  "./src/layout.js": "./src/layout.js?v=1794537243",
+  "./src/stops.js": "./src/stops.js?v=1794537243",
+  "./src/snap.js": "./src/snap.js?v=1794537243",
+  "./src/wind.js": "./src/wind.js?v=1794537243",
+  "./src/noise.js": "./src/noise.js?v=1794537243",
+  "./src/textures.js": "./src/textures.js?v=1794537243",
+  "./src/birds.js": "./src/birds.js?v=1794537243",
+  "./src/fish.js": "./src/fish.js?v=1794537243",
+  "./src/birdinfo.js": "./src/birdinfo.js?v=1794537243",
+  "./src/fju-foliage.js": "./src/fju-foliage.js?v=1794537243",
+  "./src/world.js": "./src/world.js?v=1794537243"
 } }
 </script>
 </head>
@@ -61,6 +55,6 @@
 <main id="story"></main>
 <div id="loading">園區建造中…</div>
 <!-- ?v= 是版本號：上線後每次部署跑 tools/bump-version.sh 換號，瀏覽器才不會拿到舊的 JS -->
-<script type="module" src="src/main.js?v=1794537143"></script>
+<script type="module" src="src/main.js?v=1794537243"></script>
 </body>
 </html>
