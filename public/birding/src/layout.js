@@ -1184,10 +1184,13 @@ function buildAlpine() {
         const wl = RV.water(sR)
         h = Math.min(h, dr < hw ? wl - 0.06 - 0.32 * (1 - (dr / hw) ** 2) : wl + 0.1 + (dr - hw) * 1.3)
       }
-      // 2026-11-13 使用者「水跑出來了」（瀑布湖出水口西岸）：岸比水面低，水面那片多邊形攤在草地上 → 水面外 0.1～1.6 m 的岸墊到水面上 8 cm，再往外 1.4 m 慢慢接回原地形
-      if (dr > hw + 0.1 && dr < hw + 3 && sR > 0.5 && sR < RV.lipS - 8) {
+      // 2026-11-13 使用者「水跑出來了」（瀑布湖出水口西岸）：岸比水面低，水面那片多邊形攤在草地上 → 水面外的岸墊到水面上 8 cm
+      // 2026-11-13（第二版）使用者「步道西邊那道土脊」：外緣本來只用 1.4 m 收，2 m 的高差擠在 1.4 m 裡＝一道垂直土牆，
+      // 而且不分是不是步道一律墊，步道只要走進那一圈就被墊成牆。→ 外緣拉到 5.5 m 慢慢收，並且步道上不墊、離步道 1.2～3.6 m 才慢慢接上
+      if (dr > hw + 0.1 && dr < hw + 5.5 && sR > 0.5 && sR < RV.lipS - 8) {
         const wl = RV.water(sR)
-        if (h < wl + 0.08) h = lerp(wl + 0.08, h, smoothstep(hw + 1.6, hw + 3, dr))
+        const kBank = smoothstep(hw + 5.5, hw + 1.6, dr) * smoothstep(1.2, 3.6, dAll)
+        if (kBank > 0 && h < wl + 0.08) h = lerp(h, wl + 0.08, kBank)
       }
     }
     aHeight[k] = Number.isFinite(h) ? h : 0   // 2026-11-11 格子往西擴到 x -62 以後包到花園中心 (0,0)：gardenEdgeH 在原點是 NaN（地形網格的外框變 NaN，整片地形被剔除）
@@ -1613,6 +1616,7 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
 // 路面半寬 2.6 m（原本 1.4）、外面 3 m 慢慢接回原本的坡；同時登記成步道（草、石頭讓開，地面畫成泥土路）
 {
   const sp = ALP_SPURS.find((q) => q.name === 'yose'), n = sp.pts.length
+  const caveSp = ALP_SPURS.find((q) => q.name === 'cave')
   const A = [CAMP.x, CAMP.z], M = sp.pts[n - 2], B = sp.pts[n - 3]
   const yA = alpineHeight(A[0], A[1]), yB = alpineHeight(B[0], B[1])
   const L1 = Math.hypot(M[0] - A[0], M[1] - A[1]), L2 = Math.hypot(B[0] - M[0], B[1] - M[1]), yM = lerp(yA, yB, L1 / (L1 + L2))
@@ -1623,6 +1627,7 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
     for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
       const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, t = clamp(((x - P[0]) * dx + (z - P[1]) * dz) / l2, 0, 1), d = Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t), q = j * AG.nx + i
       if (d > 5.6 || YOSE.inLake(x, z, 0.5) || aStream[q] < 3.2) continue   // 2026-11-13 使用者照片：坡道把石拱橋底下的河道填平了（河面浮在土上、橋像放在地上）→ 河道和河岸不動
+      if (caveSp && polyDist(x, z, caveSp.pts)[0] < 2.5) continue   // 2026-11-13 岔去瀑布後面那條步道自己有 12% 的坡度，被這條坡道的直線一拉就歪成 31%，它的路面不要動
       // 2026-11-13 使用者（橋頭照片圈起來）「這是哪裡 不平」：石橋被刻意墊高到離水面 2.1 m，這條坡道卻照自己的直線把橋頭前面壓到低 0.3～0.7 m，
       // 石板邊緣就懸在那、前面凹一塊。橋的影響範圍內改成往橋面那條線靠過去（跟主迴圈裡橋頭引道同一個目標），兩邊才接得上
       let tgt = lerp(ya, yb, t)
