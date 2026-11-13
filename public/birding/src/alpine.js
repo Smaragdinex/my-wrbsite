@@ -365,6 +365,7 @@ function buildInterior(lib, avoid = []) {
       }`,
     fragmentShader: `
       uniform float uTime; uniform float uDay; uniform float uDusk; uniform float uRain; uniform vec3 uSun; uniform sampler2D uFlow; uniform vec4 uFlowBox;
+      uniform vec4 uLakeJoin;   // 2026-11-13 瀑布湖的橢圓 (中心 x, 中心 z, rx, rz)：河面在湖口淡入、顏色也接過去
       #ifdef MIRROR
         uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
       #endif
@@ -452,6 +453,19 @@ function buildInterior(lib, avoid = []) {
             col = mix(col, lagCol, lagK);
           #endif
         #endif
+        // 2026-11-13 使用者（石橋上往湖看）「兩邊水沒接好、顏色要一樣 這很明顯不同」：
+        // 瀑布湖是 yosemite.js 的 poolM（翡翠綠），流出來的河是這支 shader（淺處黃褐），兩片水在湖口對接，顏色硬生生換一塊。
+        // eJ＝離湖心幾倍橢圓半徑（1.0 就是湖岸）。湖口那一段河面直接用湖的配色，往下游 2 倍半徑才完全變回溪水色
+        float eJ = length(vec2((vW.x - uLakeJoin.x) / uLakeJoin.z, (vW.z - uLakeJoin.y) / uLakeJoin.w));
+        #ifndef LAKE
+        {
+          float kJ = 1.0 - smoothstep(1.15, 1.95, eJ);
+          if (kJ > 0.002) {
+            vec3 lkc = mix(vec3(0.13, 0.21, 0.16), vec3(0.016, 0.06, 0.075), smoothstep(0.08, 2.6, vDepth));
+            col = mix(col, lkc, kJ);
+          }
+        }
+        #endif
         col += vec3(0.01, 0.026, 0.02) * (h0 - 0.5) * (1.0 - d * 0.5);
         #ifndef MIRROR
         {
@@ -533,12 +547,18 @@ function buildInterior(lib, avoid = []) {
           a = clamp((0.26 + 0.70 * (1.0 - exp(-vDepth / 0.34)) + foam * 0.3 + fres * 0.3) * smoothstep(0.0, 0.015, vDepth), 0.0, 0.97);   // 2026-11-12 山上的湖：岸邊半公尺清澈見底，往裡才是湖水色
           #endif   // 1 cm 就 55%，水線只淡 1.5 cm（以前 5 cm 才 31%）
         #endif                                      // 岸邊淡掉，不會有一條硬邊
+        // 河面網格從湖裡 2 m 處才開始鋪，跟湖面重疊——兩層半透明疊起來會多一塊明顯較暗的水。
+        // 河面在重疊那段淡入（湖口全透明、湖面邊界處才滿），同一塊水面永遠只有一層
+        #ifndef LAKE
+        a *= smoothstep(1.00, 1.17, eJ);
+        #endif
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
         #include <fog_fragment>
       }`,
   })
+  waterM.uniforms.uLakeJoin = { value: new THREE.Vector4(YOSE.lake.x, YOSE.lake.z, YOSE.lake.rx * 1.015, YOSE.lake.rz * 1.015) }
   waterM.uniforms.uFlow = { value: flowTexDummy }
   waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uDusk = duskLight; waterM.uniforms.uSun = waterU.uSun; waterM.uniforms.uRain = weatherU.rain
   {
@@ -941,7 +961,7 @@ function buildInterior(lib, avoid = []) {
       const m = new THREE.Mesh(eg, bodyM); m.quaternion.setFromRotationMatrix(basis); m.position.set(b.x, 0, b.z); m.castShadow = true; m.receiveShadow = true; g.add(m)
       const toW = (u, y, v) => V(b.x + b.dir[0] * u - b.dir[1] * v, y, b.z + b.dir[1] * u + b.dir[0] * v)
       // 橋面石板：一條帶子，兩頭各多 1.4 公尺鋪到步道上、慢慢壓進土裡
-      { const E = 1.4, NU = 40, pos = [], uv = [], col = [], idx = []
+      { const E = 0.65, NU = 40, pos = [], uv = [], col = [], idx = []   // 2026-11-13 使用者（橋頭俯視圖）：石板本來往外多鋪 1.4 m、比石欄（到 L+0.6）多凸 0.8 m，橋頭露出一塊光禿的方舌頭 → 收到跟石欄齊
         for (let i = 0; i <= NU; i++) {
           const u = -L - E + (2 * (L + E)) * i / NU, out = Math.max(0, Math.abs(u) - L), y = deckY(Math.max(-L, Math.min(L, u))) + b.k * Math.sign(u) * out + 0.005   /* 2026-11-13 不再往土裡壓：地形在石板底下讓開 8 cm（layout.js 橋頭最後一步），石板盡頭露一道邊 */
           for (const v of [-b.hw - 0.05, b.hw + 0.05]) { const p = toW(u, y, v); pos.push(p.x, p.y, p.z); uv.push(u * 0.42, v * 0.42); const f = 1 - 0.35 * ss(0.2, E, out); col.push(f, f, f) }

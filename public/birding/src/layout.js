@@ -365,7 +365,10 @@ export const ALP_SPURS = [
   { name: 'lagoonRing', world: true, k: 0.15, noClear: true, pts: [[34.2, -85.8], [22, -87.5], [8, -86], [-6, -84.5], [-22, -86.5], [-38, -89], [-52, -96], [-62, -108], [-66, -124], [-62, -142], [-52, -156], [-38, -165], [-20, -170], [-2, -167], [12, -161], [24, -159], [36, -159]] },   // 2026-11-11 加大後：繞潟湖一圈接到木棧道南端
   { name: 'meadow', world: true, y0: 0, k: 0.15, noClear: true, pts: [[2, 58], [5, 68], [9, 80], [10, 92], [16, 104]] },   // 2026-11-11 花園北邊 → 西北的新草原
   { name: 'wetBoard', world: true, k: 0.15, pts: [[321.5, -27.3], [322.6, -31], [326, -34], [330.5, -35.3], [334.2, -34.8]] },
-  { name: 'cave', world: true, k: 0.12, pts: [[177, 70.5], [179.5, 77], [182.5, 84], [185.6, 90.2], [187.6, 93.2]] },   // 2026-11-13 使用者：瀑布後面的凹槽改成湖、從瀑布身後直接往上 → 支線走到凹槽西口就接崖壁步道
+  // 2026-11-13 使用者（手畫路線）「比較順的走上去 不然突然變高 很怪」：舊路線 [177,70.5]→[179.5,77] 貼著出水口走，
+  // 落在「河岸防溢」那一圈（離河中心 hw+0.1～hw+1.6）裡，整段被墊到河面 +8 cm＝27.59，步道該是 26 → 1 m 內爬 1.8 m 像一道牆。
+  // 照使用者畫的往西繞開河口（離河中心都 >6.6 m，不再被墊），路也拉長到 26 m，配 startOn 之後全程 ≤12% 慢慢爬上凹槽
+  { name: 'cave', world: true, k: 0.12, startOn: 'yose', pts: [[177, 70.5], [176.8, 74.5], [177.6, 79], [180, 84], [183, 88], [185.6, 90.2], [187.6, 93.2]] },   // 2026-11-13 使用者：瀑布後面的凹槽改成湖、從瀑布身後直接往上 → 支線走到凹槽西口就接崖壁步道
   { name: 'lakeLoop', world: true, y0: 0, flat: 3, k: 0.15,   /* 2026-11-10 使用者：花園出口左邊那條路有一道凸起的破圖（前 12 m 貼著花園邊，路面被墊到 0.5 m，花園地面是 0） */ noClear: true, endOn: 'lakeGorge', pts: [[76.5, 0], [78.2, -6], [78, -12], [76.5, -35], [77, -57], [81, -63], [88, -68], [96, -71], [106, -72.5], [116, -69], [123, -63]] },   /* 2026-11-13 湖北邊加一片開放淡水濕地：這段改貼著山下湖南緣走（以前 84,-73／98,-78 那段在濕地裡）；濕地夾在湖和山下湖中間，從路上看得到小辮鴴、彩鷸 */
   { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, landings: true, endOn: 'grass', pts: null },   // pts：ridgeTrailPts()（EAST.ridge 定義之後）
 ].map((sp) => sp.world ? sp : ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
@@ -903,6 +906,17 @@ function buildAlpine() {
     const pp = sp.pts.map(([x, z]) => alpBase(x, z)); pp[0] = sp.y0 ?? (sp.world ? alpBase(...sp.pts[0]) : prof[sp.from])
     const k = sp.k ?? (sp.join ? 0.26 : 0.22), seg = (i) => Math.hypot(sp.pts[i][0] - sp.pts[i - 1][0], sp.pts[i][1] - sp.pts[i - 1][1])
     for (let i = 1; i < pp.length; i++) pp[i] = i < (sp.flat ?? 0) ? pp[0] : clamp(pp[i], pp[i - 1] - seg(i) * k, pp[i - 1] + seg(i) * k)   // flat：前幾點跟起點一樣高（貼著花園邊走的那段，不能比花園地面高）
+    // 2026-11-13 使用者（瀑布旁步道）「不然突然變高 很怪」：岔出去的支線起點高度本來是直接取當地地形，
+    // 但岔路口的地已經被母步道壓平了（低 0.5 m 以上）→ 支線一開頭就得追回那個高差，1 m 內爬 1.8 m，變成一道牆。
+    // startOn：起點高度改成取母步道最近一點的高度，再從起點往下游重新夾坡度，整段爬升攤平到整條支線上
+    if (sp.startOn) {
+      const o = ALP_SPURS.find((q) => q.name === sp.startOn), e = sp.pts[0]
+      let bi = 0; o.pts.forEach((q, i) => { if (Math.hypot(q[0] - e[0], q[1] - e[1]) < Math.hypot(o.pts[bi][0] - e[0], o.pts[bi][1] - e[1])) bi = i })
+      const raw = sp.pts.map(([x, z]) => alpBase(x, z))
+      raw[0] = o.prof[bi]
+      for (let i = 1; i < raw.length; i++) raw[i] = clamp(raw[i], raw[i - 1] - seg(i) * k, raw[i - 1] + seg(i) * k)
+      for (let i = 0; i < pp.length; i++) pp[i] = raw[i]
+    }
     if (sp.join) {   // 終點要剛好接上那條支線的終點：從終點往回再夾一次坡度
       pp[pp.length - 1] = ALP_SPURS.find((q) => q.name === sp.join).prof.at(-1)
       for (let i = pp.length - 2; i > 0; i--) pp[i] = clamp(pp[i], pp[i + 1] - seg(i + 1) * k, pp[i + 1] + seg(i + 1) * k)
@@ -1609,7 +1623,15 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
     for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
       const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, t = clamp(((x - P[0]) * dx + (z - P[1]) * dz) / l2, 0, 1), d = Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t), q = j * AG.nx + i
       if (d > 5.6 || YOSE.inLake(x, z, 0.5) || aStream[q] < 3.2) continue   // 2026-11-13 使用者照片：坡道把石拱橋底下的河道填平了（河面浮在土上、橋像放在地上）→ 河道和河岸不動
-      const tgt = lerp(ya, yb, t), w = 1 - clamp((d - 2.6) / 3.0, 0, 1), ww = w * w * (3 - 2 * w)
+      // 2026-11-13 使用者（橋頭照片圈起來）「這是哪裡 不平」：石橋被刻意墊高到離水面 2.1 m，這條坡道卻照自己的直線把橋頭前面壓到低 0.3～0.7 m，
+      // 石板邊緣就懸在那、前面凹一塊。橋的影響範圍內改成往橋面那條線靠過去（跟主迴圈裡橋頭引道同一個目標），兩邊才接得上
+      let tgt = lerp(ya, yb, t)
+      for (const b of RIVER_BRIDGES) {
+        const ax = x - b.x, az = z - b.z, along = ax * b.dir[0] + az * b.dir[1], lat = Math.abs(-ax * b.dir[1] + az * b.dir[0])
+        const kb = smoothstep(b.half + 8.5, b.half + 1.0, Math.abs(along)) * smoothstep(b.hw + 5.2, b.hw + 1.3, lat)
+        if (kb > 0) tgt = lerp(tgt, b.y + b.k * along - 0.02, kb)
+      }
+      const w = 1 - clamp((d - 2.6) / 3.0, 0, 1), ww = w * w * (3 - 2 * w)
       aHeight[q] = lerp(aHeight[q], tgt, ww)
       if (d < 2.6) aTrail[q] = Math.min(aTrail[q], Math.max(0, d - 1.2))
     }
@@ -1716,15 +1738,16 @@ for (const w of ALP_WALKS) {
 // 2026-11-13 使用者（石拱橋俯視圖）「sand too high」「bridge and sand 重疊嗎」：最後一步——橋頭（橋面＋往外 1.4 m 的石板）底下的地一律比橋面低 8 cm，
 // 橋身兩側 2.5 m 內的岸不能高過橋面下 35 cm（以前營地坡道、步道攤平在後面又把沙堆回去，蓋住石板、埋住橋頭）
 for (const b of RIVER_BRIDGES) {
+  const DE = 0.65   // 石板往橋頭外多鋪多少（alpine.js 的 E 要一樣，不然地會從石板底下冒出來或石板懸空）
   const L = b.half + 0.3, R = L + 4
   const i0 = Math.floor((b.x - R - AG.x0) / AG.cell), i1 = Math.ceil((b.x + R - AG.x0) / AG.cell), j0 = Math.floor((b.z - R - AG.z0) / AG.cell), j1 = Math.ceil((b.z + R - AG.z0) / AG.cell)
   for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
     const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, ax = x - b.x, az = z - b.z, al = ax * b.dir[0] + az * b.dir[1], lat = Math.abs(-ax * b.dir[1] + az * b.dir[0]), q = j * AG.nx + i
-    const out = Math.abs(al) - L; if (out > 1.4 + 1.5 || lat > b.hw + 2.5) continue
+    const out = Math.abs(al) - L; if (out > DE + 1.5 || lat > b.hw + 2.5) continue
     const line = b.y + b.k * al   // 橋面（兩頭延伸出去照同一個坡）
     let cap
-    if (lat < b.hw + 0.35) cap = line - 0.08 + Math.max(0, out - 1.4) * 0.12   // 路面：石板盡頭之後 1.5 m 慢慢可以高回來
-    else cap = line - 0.08 - 0.27 * smoothstep(b.hw + 0.35, b.hw + 0.9, lat) * (1 - smoothstep(1.4, 2.9, out)) + Math.max(0, out - 1.4) * 0.12
+    if (lat < b.hw + 0.35) cap = line - 0.08 + Math.max(0, out - DE) * 0.12   // 路面：石板盡頭之後 1.5 m 慢慢可以高回來
+    else cap = line - 0.08 - 0.27 * smoothstep(b.hw + 0.35, b.hw + 0.9, lat) * (1 - smoothstep(DE, DE + 1.5, out)) + Math.max(0, out - DE) * 0.12
     if (aHeight[q] > cap) aHeight[q] = cap
   }
 }

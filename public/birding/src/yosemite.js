@@ -837,7 +837,25 @@ export function buildYosemite(scene, { lib } = {}) {
         .replace('#include <opaque_fragment>', 'outgoingLight += vec3(0.75, 0.8, 0.85) * rainK * 0.07;\n#include <opaque_fragment>')
     }
     // 湖：剛好到湖岸那一圈（湖裡往下挖、岸往上一階，邊緣接在那一階上；以前放大 12%，出水口那邊水面浮在河道上面）
-    const LK = YOSE.lake, pool = new THREE.Mesh(new THREE.CircleGeometry(1, 72).rotateX(-Math.PI / 2), poolM); pool.scale.set(LK.rx * 1.015, 1, LK.rz * 1.015); pool.position.set(LK.x, poolY, LK.z); pool.receiveShadow = true; g.add(pool)
+    // 2026-11-13 使用者（石橋上往湖看）「這裡兩邊水沒接好」：湖面以前是一個正橢圓，走到出水口就切掉，
+    // 但下游那片河面的網格是從 ALP_RIVER 第一點 (185,76) 才開始鋪 → 中間空著一條約 0.8 m 的乾溝（看得到挖下去的河床）。
+    // 改成：橢圓邊界在出水口那個方向（±20°）往外推，一路推過河面網格的起點，兩片水重疊約 1.5 m，接縫被水花蓋住。
+    // 推到岸上的部分不用管：shader 的 alpha 照水深算，地比水面高就是全透明（recessWater、eastLakeWater 也靠這個）
+    const LK = YOSE.lake
+    const OUTP = [184.0, 74.5]   // 出水口外、河面網格起點再往下游一點
+    const outA = Math.atan2(OUTP[1] - LK.z, OUTP[0] - LK.x), outR = Math.hypot(OUTP[0] - LK.x, OUTP[1] - LK.z)
+    const poolG = new THREE.CircleGeometry(1, 128).rotateX(-Math.PI / 2)   // 用 CircleGeometry 改點（三角形繞向跟原本一樣，不會變成背面）
+    { const pp = poolG.attributes.position
+      for (let i = 1; i < pp.count; i++) {
+        const a = Math.atan2(pp.getZ(i), pp.getX(i)), ux = Math.cos(a), uz = Math.sin(a)
+        const rE = 1.015 / Math.hypot(ux / LK.rx, uz / LK.rz)                                  // 原本的橢圓邊
+        const da = Math.abs(((a - outA + Math.PI * 3) % TAU) - Math.PI)                        // 跟出水口方向差多少
+        const k = Math.cos(Math.min(Math.PI / 2, da * 4.5)) ** 2                               // ±20° 內才往外推
+        const r = rE + Math.max(0, outR - rE) * k
+        pp.setXYZ(i, ux * r, 0, uz * r)
+      }
+      pp.needsUpdate = true; poolG.computeBoundingSphere() }
+    const pool = new THREE.Mesh(poolG, poolM); pool.position.set(LK.x, poolY, LK.z); pool.receiveShadow = true; g.add(pool)
     // 2026-11-13 凹槽也是湖：一條沿著岩壁的水面（從牆腳前 3 m 到凹槽最裡面），跟湖同一個材質、同一個高度；岩架比水面高，自然蓋住後面那一截
     { const P = [], I = [], C0 = YOSE.cave; let n = 0
       for (let x = C0.x0; x <= C0.x1 + 1e-6; x += 0.5) { const b = YOSE.base(x), D = YOSE.caveD(x); P.push(x, LK.water + 0.004, b - 3.2, x, LK.water + 0.004, b + D + 0.3); if (n) { const a = (n - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) } n++ }   // 2026-11-13 使用者「瀑布後面沒有水」：以前三角形繞反了（面朝下），從上面看被背面剔除、整片水面看不到
