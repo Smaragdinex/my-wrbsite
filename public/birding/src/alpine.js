@@ -62,14 +62,24 @@ export function needleTex() {
     x.clearRect(0, 0, W, H)
     const rnd = mulberry32(7), HW = W / 2
     const col = (k) => { const r = 62 + k * 70 + rnd() * 14, g = 96 + k * 72 + rnd() * 16, b = 60 + k * 44 + rnd() * 12; return `rgb(${r | 0},${g | 0},${b | 0})` }
-    // 左半：底色＋幾層短針（深→淺），每層方向大致一致但有亂度，看起來是一簇簇針葉的表面
-    x.fillStyle = 'rgb(70,104,66)'; x.fillRect(0, 0, HW, H)
-    for (let layer = 0; layer < 4; layer++) {
-      for (let k = 0; k < 5200; k++) {
-        const px = rnd() * HW, py = rnd() * H, a = -0.6 + (rnd() - 0.5) * 1.6 + (py / H) * 0.4, len = 6 + rnd() * 10
-        x.strokeStyle = col(layer / 3 * 0.75 + rnd() * 0.25); x.lineWidth = 1.4 + rnd() * 1.1
-        x.beginPath(); x.moveTo(px, py); x.lineTo(Math.min(HW - 1, px + Math.cos(a) * len), py + Math.sin(a) * len); x.stroke()
+    // 左半（2026-11-14 提升）：一簇簇小枝疊起來——每根小枝一條細梗、兩側斜出的短針，尖端亮、根部暗；
+    // 枝與枝之間留深色的縫（看得出針葉是一叢一叢、有深度），不再是一片均勻的短線（像草地）
+    x.fillStyle = 'rgb(56,84,54)'; x.fillRect(0, 0, HW, H)   // 縫的顏色不要太深（第一版 40,64,42 在樹上變一條條黑紋）
+    const sprig = (sx, sy, a, L, lit) => {
+      x.strokeStyle = `rgba(${70 + lit * 30 | 0},${62 + lit * 24 | 0},${44 + lit * 14 | 0},0.9)`; x.lineWidth = 1.6
+      x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + Math.cos(a) * L, sy + Math.sin(a) * L); x.stroke()
+      for (let k = 0; k < 14; k++) {
+        const u = k / 14, px = sx + Math.cos(a) * L * u, py = sy + Math.sin(a) * L * u
+        for (const sd of [-1, 1]) {
+          const b2 = a + sd * (0.75 + rnd() * 0.3), nl = (5 + rnd() * 3) * (1 - u * 0.35)
+          x.strokeStyle = col(Math.min(1, lit * 0.75 + u * 0.3 + rnd() * 0.12)); x.lineWidth = 1.2 + rnd() * 0.6
+          x.beginPath(); x.moveTo(px, py); x.lineTo(Math.max(0, Math.min(HW - 1, px + Math.cos(b2) * nl)), py + Math.sin(b2) * nl); x.stroke()
+        }
       }
+    }
+    for (let layer = 0; layer < 4; layer++) for (let k = 0; k < 520; k++) {   // 小而密（貼圖在一團葉簇上會被拉大，第一版一根枝看起來 15 公分、太粗）
+      const sx = rnd() * HW, sy = rnd() * H
+      sprig(sx, sy, -0.5 + (rnd() - 0.5) * 1.4, 18 + rnd() * 16, 0.25 + layer / 3 * 0.6 + rnd() * 0.15)
     }
     // 右半：一根短枝（從左往右），兩側斜出的短針，尖端亮
     x.save(); x.translate(HW, 0)
@@ -124,10 +134,13 @@ export async function loadConiferKit() {
 function shadeConifer(g, fir) {
   const R = fir ? 0.19 : 0.29
   const p = g.attributes.position, n = g.attributes.normal ?? new THREE.BufferAttribute(new Float32Array(p.count * 3), 3), col = new Float32Array(p.count * 3)
+  const on = g.attributes.normal ? g.attributes.normal.array.slice() : null   // 2026-11-14 提升：新套件帶自己的平滑法線（每團針葉簇是圓的），跟「樹冠朝外上方」混合，一團一團有立體光影
   const own = g.attributes.color   // 2026-11-14 新套件每團針葉簇自己的明暗（底面暗、頂面亮），乘上去
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i), l = Math.hypot(x, z) || 1
-    n.setXYZ(i, x / l * 0.55, 0.8, z / l * 0.55)
+    { let nx = x / l * 0.55, ny = 0.8, nz = z / l * 0.55; const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl
+      if (on) { nx = nx * 0.45 + on[i * 3] * 0.55; ny = ny * 0.45 + on[i * 3 + 1] * 0.55; nz = nz * 0.45 + on[i * 3 + 2] * 0.55; const m2 = Math.hypot(nx, ny, nz) || 1; nx /= m2; ny /= m2; nz /= m2 }
+      n.setXYZ(i, nx, ny, nz) }
     const rMax = R * Math.pow(Math.max(0, 1 - (y - 0.08) / 0.9), fir ? 0.9 : 0.72) + 0.03
     const out = Math.min(1, l / rMax), k = (0.62 + 0.38 * out) * (0.78 + 0.22 * y)   // 2026-11-14 裡面、下面的暗部提亮（ChatGPT：陰影用低飽和深綠、避免接近純黑）
     const ko = own ? own.getX(i) : 1
@@ -1261,7 +1274,7 @@ function buildInterior(lib, avoid = []) {
       const crown = coniferGeo(kind), trunk = new THREE.CylinderGeometry(0.006, 0.026, 0.86, 14, 6).translate(0, 0.43, 0)
       { const u = trunk.attributes.uv; for (let i = 0; i < u.count; i++) u.setXY(i, u.getX(i) * 2, u.getY(i) * 8) }   // 樹皮貼圖照真實大小重複   // 樹幹到 86% 就停：不然樹梢會冒出一根光禿禿的樹幹
       // 樹冠裡面一個實心的深綠圓錐：卡片樹側看會透光，遠看只剩枝幹像竹竿；有這個芯遠看才是一棵實心的針葉樹
-      const core = new THREE.ConeGeometry(kind === 'fir' ? 0.075 : 0.12, 0.74, 9, 1, true).translate(0, 0.5, 0)
+      const core = new THREE.ConeGeometry(kind === 'fir' ? 0.045 : 0.07, 0.66, 9, 1, true).translate(0, 0.52, 0)   /* 2026-11-14 新針葉簇夠密，芯縮細（以前從簇之間露出一根平滑的綠圓錐） */
       const list = []
       for (let k = 0; k < 40000 * AK && list.length < (kind === 'fir' ? 400 : 430) * AK * 1.25; k++) {   // 2026-11-10 溫室往南北加寬 26%：樹的數量跟著加
         const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2

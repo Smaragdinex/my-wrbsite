@@ -200,7 +200,7 @@ export function buildOutside(renderer = null) {
       for (const kind of ['fir', 'hemlock']) {
         const list = conL.filter((_, i) => (i % 2 === 0) === (kind === 'fir'))
         const crown = coniferGeo(kind), trunk = new THREE.CylinderGeometry(0.006, 0.026, 0.86, 8).translate(0, 0.43, 0)
-        const core = new THREE.ConeGeometry(kind === 'fir' ? 0.075 : 0.12, 0.74, 9, 1, true).translate(0, 0.5, 0)
+        const core = new THREE.ConeGeometry(kind === 'fir' ? 0.045 : 0.07, 0.66, 9, 1, true).translate(0, 0.52, 0)   /* 2026-11-14 新針葉簇夠密，芯縮細（以前從簇之間露出一根平滑的綠圓錐） */
         // 遠處：疊三層圓錐（樹冠的輪廓），顏色跟近處的針葉一樣有深淺
         const R0 = kind === 'fir' ? 0.19 : 0.27
         const farCore = mergeGeometries([[0.3, 0.42, 1], [0.52, 0.34, 0.75], [0.72, 0.28, 0.5]].map(([y, h, r]) => new THREE.ConeGeometry(R0 * r * 1.1, h, 7, 1).translate(0, y, 0).toNonIndexed()))
