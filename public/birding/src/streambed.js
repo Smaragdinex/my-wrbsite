@@ -94,7 +94,14 @@ export async function buildStreambed(scene) {
       const sc = 0.8 + rnd() * 0.9; put('weed_' + Math.floor(rnd() * 3), x + (rnd() - 0.5) * 0.3, h + 0.01, z, sc, sc * Math.min(1.5, dep / 0.35), sc, rnd() * 6.283, new THREE.Color().setScalar(0.75 + 0.45 * rnd())); got++ }
     for (let i = 0, got = 0; i < 4000 && got < 3; i++) { const x = rx(), z = YOSE.base(x) - 2 + rnd() * (YOSE.recPath(x) - 1), dep = W - alpineHeight(x, z); if (!inR(x, z) || dep < 0.3 || Math.abs(x - YOSE.fall.x) < 5 || boulders.some((b) => Math.hypot(b.x - x, b.z - z) < 3)) continue
       boulders.push({ x, z, y: W, s: 0.9 + rnd() * 0.6, yaw: rnd() * 6.283, v: Math.floor(rnd() * 3) }); got++ } }
-  for (const b of boulders) b.y = Math.min(b.y, alpineHeight(b.x, b.z) + 0.42 * b.s)   // 2026-11-14 使用者（石頭浮在水上）：河床、湖底挖深之後照水面放的苔石底下是空的 → 最多只能比水底高 0.42×大小（石頭坐在水底）
+  // 2026-11-14 使用者（湖口照片）「還是你用石頭擋住，不然看得出縫隙」：湖水流進河的地方排一道石堰——橫跨河口 7 顆大苔石，
+  // 頂面露出水面 0.15～0.45 m、中間留兩三道縫讓水流出去；湖面跟河面交接的那條線、底下挖深的暗洞都藏在石堰後面
+  { const W = YOSE.lake.water, C = [180.9, 74.6], px = 0.96, pz = -0.26, rw = mulberry32(777)
+    for (const [o, sz] of [[-3.9, 1.9], [-2.7, 1.5], [-1.45, 1.25], [-0.2, 1.05], [1.15, 1.3], [2.45, 1.55], [3.7, 1.95]]) {
+      const x = C[0] + px * o + (rw() - 0.5) * 0.35, z = C[1] + pz * o + (rw() - 0.5) * 0.5, s2 = sz * (0.9 + rw() * 0.25)
+      boulders.push({ x, z, y: W - 0.5 * s2 + 0.15 + rw() * 0.3, s: s2, yaw: rw() * 6.283, v: Math.floor(rw() * 3), weir: true })
+    } }
+  for (const b of boulders) if (!b.weir) b.y = Math.min(b.y, alpineHeight(b.x, b.z) + 0.42 * b.s)   // 2026-11-14 使用者（石頭浮在水上）：河床、湖底挖深之後照水面放的苔石底下是空的 → 最多只能比水底高 0.42×大小（石頭坐在水底）
   for (const b of boulders) { put('boulder_' + b.v, b.x, b.y, b.z, b.s, b.s, b.s, b.yaw, new THREE.Color().setScalar(0.9 + 0.25 * rnd()), 0.12); addCollider(b.x, b.z, b.s * 0.5, b.y + b.s * 0.4) }
 
   /* ---------- 材質 ---------- */
