@@ -147,7 +147,9 @@ export function buildYosemite(scene, { lib } = {}) {
       if (k === 'gal' && T.kind[i - 1] !== 'alc') {
         if ((x - ax) * (x - bx) > 0.04) continue
         const t = Math.abs(bx - ax) < 1e-6 ? 0 : Math.max(0, Math.min(1, (x - ax) / (bx - ax))), y = lerpN(T.yy[i - 1], T.yy[i], t), d = lerpN(T.pts[i - 1][1] - YOSE.base(ax), bz - YOSE.base(bx), t)
-        out.push({ y0: y - 0.3, y1: y + 90, depth: d + 1.25 })
+        // 2026-11-13 使用者（龍岩窟）：瀑布前後這一段改成有岩頂的廊道（高 3.6 m），不是往上整片挖開的階地——頭上是岩石、水簾在外側落下
+        const roofed = Math.abs(x - YOSE.fall.x) < 9.5
+        out.push({ y0: y - 0.3, y1: roofed ? y + 3.6 : y + 90, depth: d + 1.25 })
         for (const b of T.bays ?? []) if (Math.abs(x - b.x) < b.half + 0.25 && Math.abs(y - b.y) < 0.8) out.push({ y0: y - 0.3, y1: y + 3.2, depth: d + 1.25 + b.depth })   // 賞鳥台的凹龕
       } else if (k === 'alc' || (k === 'open' && bz - YOSE.base(bx) > 0.2 && bx > 207.5)) {
         if (Math.abs(x - bx) > 1.5) continue

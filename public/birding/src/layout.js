@@ -457,23 +457,26 @@ export const YOSE = (() => {
       const TS = 2.6, RT = TS / 2, dK = (k, y) => lean(y) + 1.25 + TS * k   // 2026-11-13 使用者「步道可以穿牆、要變寬」：內側石壁從中線 0.7 m 退到 1.25 m、可走的內側 0.75 m（鏡頭離牆 0.5 m 才不會穿進去）；外側 1.35 m。上下兩層要錯開 2.8 m 才不重疊   // 2026-11-12 使用者「路再寬一點」：每層 1.7 → 2.0 m（外側 1.35、內側 0.65）
       // 2026-11-12 使用者「中間一段設計穿過瀑布後面走過去」：第二段往西多走 8 m 到瀑布中段的岩棚（x 210、高度剛好＝岩棚），
       // 在岩棚上繞水潭一圈——從後面的凹洞穿過上段瀑布的水簾後面到西側，再沿水潭前緣踩著石頭跨過出水口回來——然後才折返往上
-      const legs = [[210.5, 244], [244, 210], [210, 241], [241, 216], [216, 240]], SH = Y.shelfY()
-      const BAYS = [{ leg: 1, x: 224.5, name: 'waterfall' }, { leg: 2, x: 234.5, name: 'canopy' }, { leg: 3, x: 229.5, name: 'raptor' }], BH = 2.0   // 半長。猛禽台放在第四段（頭上是第五段的地板）：最上面那段頭上是岩壁頂、沒有東西可以當岩簷
+      // 2026-11-13 使用者手畫新路線：中間那兩段要橫跨整面崖壁、穿過瀑布——從 U3 往西穿到 x182（原本只到 194 的岩棚迴圈），
+      // 再從 x182 一路往東拉到 x241。第二次穿越的高度比岩棚高 6 m 多，那裡原本是齊平的岩壁 → 靠 slotsAt 把岩壁往裡鑿（使用者：「岩壁挖深一點讓玩家走過去」）
+      // 第二版（使用者看了 ChatGPT 概念圖：「就是這概念，但下面一樣就一道往上走」）：
+      // 第 1 段從 U1 一路往西爬、穿過瀑布到西邊的折返平台 A（x182），不再在瀑布東邊折返；第 2 段從 A 折回來、在上層再穿過瀑布一次。
+      // 兩次穿越都是「岩壁裡的廊道、頭上有岩頂、水簾在外側」（像龍岩窟），由 yosemite.js slotsAt 在瀑布前後改切有頂的廊道
+      const legs = [[210.5, 244], [244, 182], [182, 241], [241, 216], [216, 240]], SH = Y.shelfY()
+      const BAYS = [{ leg: 1, x: 224.5, name: 'waterfall' }, { leg: 2, x: 234.5, name: 'canopy' }, { leg: 3, x: 229.5, name: 'raptor' }], BH = 2.0
+      const XF = 207   // 第 1 段走到瀑布東緣（x207）剛好爬到岩棚的高度，之後照同一個坡度繼續往上、穿過瀑布到西邊   // 半長。猛禽台放在第四段（頭上是第五段的地板）：最上面那段頭上是岩壁頂、沒有東西可以當岩簷
       const flatIn = (li) => BAYS.filter((b) => b.leg === li).length * 2 * BH
-      const lenOf = (li) => Math.abs(legs[li][1] - legs[li][0]) - flatIn(li), rA = (SH - Y0) / (lenOf(0) + lenOf(1)), rB = (YT - SH) / (lenOf(2) + lenOf(3) + lenOf(4) - 3)   // 前兩段剛好爬到岩棚的高度；最後 3 m 走平
+      const lenOf = (li) => Math.abs(legs[li][1] - legs[li][0]) - flatIn(li), rA = (SH - Y0) / (lenOf(0) + (legs[1][0] - XF) - flatIn(1)), yA = SH + rA * (XF - legs[1][1]), rB = (YT - yA) / (lenOf(2) + lenOf(3) + lenOf(4) - 3)   // 前兩段剛好爬到岩棚的高度；最後 3 m 走平
       let y = Y0; const bays = []
       legs.forEach(([xa, xb], li) => {
         const len = Math.abs(xb - xa), n = Math.round(len / 1.05), dir = Math.sign(xb - xa), last = li === legs.length - 1, rise = li < 2 ? rA : rB, riseT = li < 1 ? rA : rB
         const myB = BAYS.filter((b) => b.leg === li)
         const climbTo = (s) => { let c = Math.min(s, last ? len - 3 : len); for (const b of myB) { const sb = Math.abs(b.x - xa); c -= clamp(s - (sb - BH), 0, 2 * BH) } return Math.max(0, c) }
-        for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(xa, xb, t), yy2 = last && t === 1 ? YT : y + rise * climbTo(t * len); add(x, Y.base(x) + dK(li, yy2), yy2, 'gal') }
+        for (let i = 1; i <= n; i++) { const t = i / n, x = lerp(xa, xb, t), yy2 = last && t === 1 ? YT : y + rise * climbTo(t * len); add(x, Y.base(x) + Math.max(dK(li, yy2), Y.rec(x) + 1.6), yy2, 'gal') }   /* 2026-11-13 瀑布那段的岩壁本身就往後退了 rec（最深 6.5 m），水簾掛在退進去的岩面前面；步道要再往裡 1.6 m 才會在水簾後面、頭上有岩頂 */
         for (const b of myB) { const yb = y + rise * climbTo(Math.abs(b.x - xa)); bays.push({ ...b, y: yb, d: dK(li, yb), half: BH, depth: 1.9 }) }
         y = last ? YT : y + rise * climbTo(len)
-        if (li === 1) {
-          y = SH
-          const d1 = dK(1, SH), LOOP = [[210, d1], [209, 2.7], [208, 1.7], [206.3, 3.4], [204.4, 6.0], [202.6, 8.2], [197.6, 8.2], [195.4, 6.6], [194.3, 4.6], [194.5, 2.3], [196.3, 0.9], [200, 0.8], [203.6, 0.85], [206.2, 1.1], [208, 1.7], [209, 2.7], [210, d1]]
-          for (let q = 1; q < LOOP.length; q++) { const [ax, ad] = LOOP[q - 1], [bx, bd] = LOOP[q], m = Math.max(1, Math.round(Math.hypot(bx - ax, bd - ad) / 0.8)); for (let i = 1; i <= m; i++) { const x = lerp(ax, bx, i / m); add(x, Y.base(x) + lerp(ad, bd, i / m), SH, 'shelf') } }
-        }
+        // 2026-11-13 岩棚那一圈（原本走到 x194 再原路折回 x210）拆掉：改成第 2 段直接往西穿過去、第 3 段再從西邊一路往東，
+        // 整條崖壁只剩「之」字，不再有原路折返的迴圈（使用者：「原本外面那個 U 外道都要刪除」）
         if (!last) {
           const d0 = dK(li, y), sx = dir
           for (let i = 1; i <= 8; i++) { const f = i / 8 * PI, yy2 = y;   /* 2026-11-12 折返平台是平的（原本繞半圈升 1 m：踏板像一疊大石塊貼在岩壁上） */ add(xb + sx * RT * 1.9 * Math.sin(f), Y.base(xb) + d0 + RT - RT * Math.cos(f) + (lean(yy2) - lean(y)), yy2, 'alc') }   // 平台往外鼓出去一點（橢圓：沿岩壁方向 1.6 m）
@@ -521,7 +524,9 @@ export const YOSE = (() => {
   // [x, 從哪一段步道看（0 起算）, 模型, 縮放, 轉向]：一群一群擺，賞鳥台兩側多
   const CT_PERCH = {pine_a: [[0.832, 5.6, -3.852], [2.127, 5.16, -4.741], [-0.651, 3.095, -4.356]], pine_b: [[-1.466, 4.0, -2.782], [-1.809, 3.655, -3.537], [0.416, 2.415, -3.325]], pine_c: [[-1.503, 6.8, -4.708], [-2.596, 6.3, -5.79], [0.496, 4.041, -5.752]], pine_d: [[1.579, 3.2, -2.354], [1.387, 2.918, -3.121], [-0.943, 1.953, -2.744]], snag_a: [[1.651, 5.2, -3.638], [1.777, 4.599, -3.826], [1.884, 3.985, -3.297], [1.311, 2.906, -4.047]]}   // tools/cliff-kit.json：樹梢＋光禿的棲枝
   // [x, 第幾段, 模型, 大小, 轉幾度]。2026-11-12 ChatGPT V3：每個賞鳥台左右 5～9 m 各一棵，棲枝在眼睛的高度到往上 2 m；猛禽台東邊那棵枯木的頂比眼睛高 2 m、後面是天空
-  const CT_LIST = [[231.5, 1, 'pine_c', 0.8, 0.2], [219.6, 1, 'pine_d', 1.0, -0.3], [237.0, 1, 'pine_b', 0.85, 0.3], [227.5, 2, 'pine_a', 0.85, -0.15], [239.6, 2, 'pine_b', 0.8, 0.3], [222.5, 3, 'snag_a', 1.15, -0.25], [234.0, 3, 'pine_d', 1.0, 0.25], [230.0, 4, 'pine_c', 0.55, 0.3], [233.5, 4, 'pine_a', 0.6, -0.2], [239.0, 4, 'pine_d', 0.9, 0.1]]   // 樹根在這一層外緣底下的石壁上、樹幹從下一層步道頭上伸出去：只放在上下兩層差 5 m 以上的地方（離共用的折返平台 7 m 以上）；最下面那段外面是天然岩面、位置算不準，不放
+  // 2026-11-13 使用者：「原本外面那個 U 外道都要刪除 還有樹」→ 崖壁上那些掛在階地外緣的松樹整組拿掉。
+  // （它們的樹根是綁在「第幾段步道」上的，新路線多了兩段、段號全部錯位，樹就浮在半空中了）
+  const CT_LIST = []
   let _ct = null
   Y.cliffTrees = () => {
     if (_ct) return _ct
