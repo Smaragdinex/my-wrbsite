@@ -910,7 +910,7 @@ export function buildYosemite(scene, { lib } = {}) {
           vec3 shallowC = vec3(0.13, 0.21, 0.16), deepC = vec3(0.016, 0.06, 0.075);
           diffuseColor.rgb = mix(shallowC, deepC, smoothstep(0.08, 2.6, lkDep));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.78, 0.78), core * 0.35 * (1.0 - holes));
-          diffuseColor.a = mix(0.3, 0.94, smoothstep(0.05, 1.9, lkDep)) * smoothstep(0.0, 0.05, lkDep);
+          diffuseColor.a = mix(0.52, 0.94, smoothstep(0.05, 1.9, lkDep)) * smoothstep(0.0, 0.05, lkDep);   // 2026-11-14 使用者（淺水顏色錯誤）：0.3 太透，淺色沙底整片透出來變成乳白色 → 0.52
           { float aL = atan(vRW.z - uLK.y, vRW.x - uLK.x), tL = (aL + 3.14159265) / 6.2831853 * 64.0; int iL = int(floor(tL)); float fL = tL - floor(tL);
             float rL = mix(uLakeR[((iL % 64) + 64) % 64], uLakeR[(((iL + 1) % 64) + 64) % 64], fL);
             diffuseColor.a *= smoothstep(0.0, 1.2, rL - length(vRW.xz - uLK)); }   // 2026-11-14 湖面外緣 1.2 m 淡掉（河面在這段底下是滿的）   // 2026-11-14 湖面外緣 1.2 m 淡掉，跟河面交叉淡化

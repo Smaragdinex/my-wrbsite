@@ -94,6 +94,7 @@ export async function buildStreambed(scene) {
       const sc = 0.8 + rnd() * 0.9; put('weed_' + Math.floor(rnd() * 3), x + (rnd() - 0.5) * 0.3, h + 0.01, z, sc, sc * Math.min(1.5, dep / 0.35), sc, rnd() * 6.283, new THREE.Color().setScalar(0.75 + 0.45 * rnd())); got++ }
     for (let i = 0, got = 0; i < 4000 && got < 3; i++) { const x = rx(), z = YOSE.base(x) - 2 + rnd() * (YOSE.recPath(x) - 1), dep = W - alpineHeight(x, z); if (!inR(x, z) || dep < 0.3 || Math.abs(x - YOSE.fall.x) < 5 || boulders.some((b) => Math.hypot(b.x - x, b.z - z) < 3)) continue
       boulders.push({ x, z, y: W, s: 0.9 + rnd() * 0.6, yaw: rnd() * 6.283, v: Math.floor(rnd() * 3) }); got++ } }
+  for (const b of boulders) b.y = Math.min(b.y, alpineHeight(b.x, b.z) + 0.42 * b.s)   // 2026-11-14 使用者（石頭浮在水上）：河床、湖底挖深之後照水面放的苔石底下是空的 → 最多只能比水底高 0.42×大小（石頭坐在水底）
   for (const b of boulders) { put('boulder_' + b.v, b.x, b.y, b.z, b.s, b.s, b.s, b.yaw, new THREE.Color().setScalar(0.9 + 0.25 * rnd()), 0.12); addCollider(b.x, b.z, b.s * 0.5, b.y + b.s * 0.4) }
 
   /* ---------- 材質 ---------- */

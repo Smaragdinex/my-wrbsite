@@ -345,7 +345,8 @@ export const ALP_SPURS = [
   // join：終點接到別條支線的終點（營地），高度兩頭都要對上、盡頭不另外攤平
   // 2026-11-11 使用者：瀑布底下要有一座湖、湖再流出一條河 → 原本貼著岩壁走過瀑布前面的那段，改從湖的南岸繞過去、在湖的出水口過一座石橋（世界座標寫的，換回設計座標）
   // 2026-11-13 使用者照片「這邊橋沒做好」：路在石拱橋東頭 2 m 就轉彎（舊點 186, 66），橋身伸過轉角 → 石欄被「不能擋到路」那條規則拆到只剩一顆。轉角沿同一條線往東移 5 m，路直直過河
-  { name: 'yose', from: 13, join: 'camp', pts: [[152.92, 22.75], [147.96, 26.47], ...[[236, 65.5], [222, 64.5], [210, 63.5], [197, 63.5], [190.3, 63.3], [178, 71]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]), [114.25, 28.95]] },
+  // 2026-11-14 使用者：「補上石橋」→ 河改道後這條路在湖口（水面 27.5、路面 26.3，路比水還低）沒辦法過河；改從湖口下游 9 m（水面 24.1）過，石橋架在那
+  { name: 'yose', from: 13, join: 'camp', pts: [[152.92, 22.75], [147.96, 26.47], ...[[236, 65.5], [222, 64.5], [210, 63.5], [197, 63.5], [190.3, 63.3], [185, 61.5], [175.5, 63], [170.8, 66.3]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]), [114.25, 28.95]] },
   // 2026-11-10 東部擴建（ChatGPT V2；路線用坡度 ≤20% 的 A* 在高度圖上找、再簡化）：
   // wet：主步道第 9 點（248,-51）往東南下坡，一個之字形下到濕地南岸（316,-30），再沿南岸高處走到東邊的遠距觀察點（濕地核心不能進）
   // 2026-11-13 使用者「這是舊的道路，可以移除了」：以前往東邊舊濕地的支線（濕地 11/11 已經搬到西南），拿掉
@@ -1072,8 +1073,8 @@ function buildAlpine() {
     // 2026-11-13 使用者（湖往石拱橋看）「瀑布橋這邊請做好 接好」：出水口那段河只有 4 m 寬，湖岸那圈 +18 cm 的岸剩一條灰色土舌把湖跟河隔開 →
     // 出湖的前 7.5 m 河面放寬（最多 +2.2 m 半寬），湖直接開口變成河；到橋那裡（s≈9）已經回到原本的寬度，拱橋不用變
     { const h1 = rv.halfAt; rv.halfAt = (sv) => h1(sv) + 2.2 * (1 - smoothstep(2, 7.5, sv)) }
-    for (const c of XS) { if (Math.hypot(c.x - 182, c.z - 68) < 8) continue   /* 2026-11-14 使用者：「先拿掉橋，先把陸地溪流修好」→ 瀑布湖出水口下面那座石拱橋先拆 */
-      const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 3.0   /* 2026-11-14 使用者「都太貼水面」：2.1 → 3.0，拱洞露出水面 */),   /* 2026-11-13 使用者：橋再高一點（離水 1.2 → 2.1 m） */ half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
+    for (const c of XS) {   /* 2026-11-14 使用者：「先拿掉橋，先把陸地溪流修好」→ 瀑布湖出水口下面那座石拱橋先拆 */
+      const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + (Math.hypot(c.x - 180, c.z - 62.3) < 6 ? 2.3 : 3.0)   /* 2026-11-14 使用者「都太貼水面」：2.1 → 3.0，拱洞露出水面；瀑布下那座離營地只有 9 m，2.3 m 坡才不會太陡 */),   /* 2026-11-13 使用者：橋再高一點（離水 1.2 → 2.1 m） */ half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
   }
   // 斷面（參考台灣山溪的影片）：水邊不是直的——寬度用 2D 雜訊，兩岸不對稱、一凹一凸；
   // 水裡是 U 形的潭底；岸是緩緩爬上去的坡，坡上有一塊塊凸起的石頭（不是一面平滑的牆）
@@ -1883,4 +1884,72 @@ YOSE.DIKE = null   // 2026-11-14 石橋拆掉，橋頭那道補的岸跟石牆�
       const q = j * AG.nx + i, bed = W - 2.4 * smoothstep(hw, hw - 1.2, d) + 0.05
       if (aHeight[q] > bed) aHeight[q] = bed
     } }
+}
+
+// 2026-11-14 使用者（瀑布下的河岸照片）「修正這些石頭跟草」：新河道切過原本墊高的坡，東岸變成一道 2～3 m 的垂直土牆、石頭懸在牆頂。
+// 出湖後 22 m 內，河岸從水邊往外最陡 0.75（約 37°），超過的削掉（只削、不墊）；步道、橋頭不動
+{
+  const R = ALP_RIVER
+  for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 45 || z > 82) continue
+    for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < 168 || x > 194) continue
+      const sR = R.sAt(x, z); if (sR > 22) continue
+      const d = R.dist(x, z), hw = R.halfAt(sR); if (d < hw || d > hw + 6) continue
+      if (YOSE.inLake(x, z, 0.3) || alpineTrailDist(x, z) < 1.8) continue
+      let nearB = false; for (const b of RIVER_BRIDGES) { const ax = x - b.x, az = z - b.z; if (Math.abs(ax * b.dir[0] + az * b.dir[1]) < b.half + 3 && Math.abs(-ax * b.dir[1] + az * b.dir[0]) < b.hw + 2) nearB = true } if (nearB) continue
+      const q = j * AG.nx + i, cap = R.water(sR) + 0.12 + (d - hw) * 0.75
+      if (aHeight[q] > cap) aHeight[q] = lerp(aHeight[q], cap, smoothstep(hw + 6, hw + 3.5, d))
+    } }
+}
+
+// 2026-11-14 同一張照片：舊路（以前從 x190 一路下到 x178 過河）拆掉後留下一塊塊被削過、墊過的土台，一公尺升 1.7 m 的土牆上擺著石頭。
+// 瀑布下這一塊（x 181～194、z 58～76）把地形抹順 40 次（每格換成跟四周的平均），湖、河道、步道、橋頭那幾格固定不動
+{
+  const x0 = 174, x1 = 194, z0 = 58, z1 = 78, R = ALP_RIVER
+  const ia = Math.round((x0 - AG.x0) / AG.cell), ib = Math.round((x1 - AG.x0) / AG.cell), ja = Math.round((z0 - AG.z0) / AG.cell), jb = Math.round((z1 - AG.z0) / AG.cell)
+  const W = ib - ia + 1, H = jb - ja + 1, fix = new Uint8Array(W * H)
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const x = AG.x0 + (ia + i) * AG.cell, z = AG.z0 + (ja + j) * AG.cell
+    let f = YOSE.inLake(x, z, 0.8) || R.dist(x, z) < R.halfAt(R.sAt(x, z)) + 0.6 || alpineTrailDist(x, z) < 1.6 || i === 0 || j === 0 || i === W - 1 || j === H - 1
+    for (const b of RIVER_BRIDGES) { const ax = x - b.x, az = z - b.z; if (Math.abs(ax * b.dir[0] + az * b.dir[1]) < b.half + 2 && Math.abs(-ax * b.dir[1] + az * b.dir[0]) < b.hw + 1.5) f = true }
+    fix[j * W + i] = f ? 1 : 0 }
+  const tmp = new Float32Array(W * H)
+  for (let it = 0; it < 40; it++) {
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const q = (ja + j) * AG.nx + ia + i
+      tmp[j * W + i] = fix[j * W + i] ? aHeight[q] : (aHeight[q - 1] + aHeight[q + 1] + aHeight[q - AG.nx] + aHeight[q + AG.nx] + aHeight[q] * 2) / 6 }
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) aHeight[(ja + j) * AG.nx + ia + i] = tmp[j * W + i]
+  }
+  // 抹完：水邊外 0.1～1.6 m 的岸至少比水面高 8 cm（不然河面漫到岸上）
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const x = AG.x0 + (ia + i) * AG.cell, z = AG.z0 + (ja + j) * AG.cell, q = (ja + j) * AG.nx + ia + i
+    if (YOSE.inLake(x, z, 0)) continue
+    const sR = R.sAt(x, z), d = R.dist(x, z), hw = R.halfAt(sR); if (d < hw + 0.1 || d > hw + 1.6) continue
+    const need = R.water(sR) + 0.08; if (aHeight[q] < need) aHeight[q] = need }
+}
+
+// 2026-11-14 使用者（橋頭照片）「缺口橋沒弄好」：橋墊高之後橋頭前面的路比橋面低 0.2～0.3 m，石板和石欄的頭懸在路上。
+// 最後一步：橋頭外 1.2 m 內的路面墊到橋面下 6 cm，往外 6 m 慢慢接回（只墊高）
+for (const b of RIVER_BRIDGES) {
+  const L = b.half + 0.3, R = L + 8
+  const i0 = Math.floor((b.x - R - AG.x0) / AG.cell), i1 = Math.ceil((b.x + R - AG.x0) / AG.cell), j0 = Math.floor((b.z - R - AG.z0) / AG.cell), j1 = Math.ceil((b.z + R - AG.z0) / AG.cell)
+  for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+    const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, ax = x - b.x, az = z - b.z, al = ax * b.dir[0] + az * b.dir[1], lat = Math.abs(-ax * b.dir[1] + az * b.dir[0]), q = j * AG.nx + i
+    const out = Math.abs(al) - L; if (out < -0.6 || out > 7 || lat > b.hw + 2.2) continue
+    const tgt = b.y + b.k * al - 0.06, w = smoothstep(7, 1.2, out) * smoothstep(b.hw + 2.2, b.hw + 0.8, lat)
+    const h = lerp(aHeight[q], tgt, w); if (h > aHeight[q]) aHeight[q] = h
+  }
+}
+
+// 2026-11-14 改線後 yose 最後兩段（過河後到營地）路面照縱斷面重新鋪一次：營地邊上有一道 1.4 m 的坎（別的整地留下的）
+{
+  const sp = ALP_SPURS.find((q) => q.name === 'yose'), n = sp.pts.length, segs = []
+  for (let k = n - 2; k < n; k++) segs.push([sp.pts[k - 1], sp.pts[k], +sp.prof[k - 1], +sp.prof[k]])
+  for (const [P, Q, ya, yb] of segs) {
+    const dx = Q[0] - P[0], dz = Q[1] - P[1], l2 = dx * dx + dz * dz
+    const i0 = Math.floor((Math.min(P[0], Q[0]) - 4 - AG.x0) / AG.cell), i1 = Math.ceil((Math.max(P[0], Q[0]) + 4 - AG.x0) / AG.cell), j0 = Math.floor((Math.min(P[1], Q[1]) - 4 - AG.z0) / AG.cell), j1 = Math.ceil((Math.max(P[1], Q[1]) + 4 - AG.z0) / AG.cell)
+    for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+      const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, t = clamp(((x - P[0]) * dx + (z - P[1]) * dz) / l2, 0, 1), d = Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t), q = j * AG.nx + i
+      if (d > 3.6) continue
+      let kb = 0; for (const b of RIVER_BRIDGES) { const ax = x - b.x, az = z - b.z, out = Math.abs(ax * b.dir[0] + az * b.dir[1]) - b.half - 0.3, lat = Math.abs(-ax * b.dir[1] + az * b.dir[0]); kb = Math.max(kb, smoothstep(7, 2, out) * smoothstep(b.hw + 2.2, b.hw + 0.8, lat)) }   // 橋頭引道那段讓橋自己管
+      const w = 1 - clamp((d - 1.6) / 2.0, 0, 1)
+      aHeight[q] = lerp(aHeight[q], lerp(ya, yb, t), w * w * (3 - 2 * w) * (1 - kb))
+    }
+  }
 }

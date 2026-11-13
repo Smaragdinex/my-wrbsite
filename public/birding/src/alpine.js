@@ -555,7 +555,7 @@ function buildInterior(lib, avoid = []) {
         #ifndef LAKE
         a *= smoothstep(-1.6, -1.3, dJ);   // 2026-11-14 使用者「看得到透明的縫」：交叉淡化中間兩層都只剩一半 → 改成河在湖淡出之前就完全出現（湖從輪廓內 1.2 m 才開始淡）
         if (uRiverLake > 0.5) {   // 2026-11-14 瀑布湖的河：不透明度照湖的規則（湖 yosemite.js poolM），不然淺的地方透出沙底、整條偏綠灰
-          a = max(a * step(0.001, a), mix(0.3, 0.94, smoothstep(0.05, 1.9, vDepth)) * smoothstep(0.0, 0.05, vDepth) * smoothstep(-1.6, -1.3, dJ));
+          a = max(a * step(0.001, a), mix(0.52, 0.94, smoothstep(0.05, 1.9, vDepth)) * smoothstep(0.0, 0.05, vDepth) * smoothstep(-1.6, -1.3, dJ));
           col *= mix(vec3(0.74, 0.98, 1.18), vec3(1.9, 1.7, 1.55), smoothstep(0.3, 1.5, vDepth));   // 湖面有天空倒影、比較亮；深水的地方河暗最多（量：河 6/60/75、湖 32/93/101）
         }
         #endif
@@ -950,11 +950,12 @@ function buildInterior(lib, avoid = []) {
       const bb = eg.boundingBox, pp = eg.attributes.position
       for (let i = 0; i < pp.count; i++) pp.setXYZ(i, (pp.getX(i) - (bb.min.x + bb.max.x) / 2) / (bb.max.x - bb.min.x), (pp.getY(i) - bb.max.y) / (bb.max.y - bb.min.y) + 0.5, (pp.getZ(i) - (bb.min.z + bb.max.z) / 2) / (bb.max.z - bb.min.z))
       eg.computeVertexNormals(); return eg })()
-    const copes = []
+    const copes = [], BRG = []
     for (const b of RIVER_BRIDGES) {
       const st = ALP_STREAMS[1], w = st.water(st.sAt(b.x, b.z)), L = b.half + 0.3, top0 = b.y
       const span = Math.min((b.river ?? 2.3) + 0.6, b.half - 0.8), archTop = Math.min(top0 - Math.abs(b.k) * span - 0.75, w + 2.5), bot = w - 1.2 - Math.abs(b.k) * L
       const deckY = (u) => top0 + b.k * u + 0.25 * Math.cos(Math.min(1, Math.abs(u) / b.half) * Math.PI / 2) ** 2
+      BRG.push({ b, w, L, top0, span, archTop, bot, deckY })
       const sh = new THREE.Shape(), N = 28
       sh.moveTo(-L, bot); sh.lineTo(-L, deckY(-L) - 0.12)
       for (let i = 0; i <= N; i++) { const u = -L + 2 * L * i / N; sh.lineTo(u, deckY(u) - 0.12) }
@@ -1038,6 +1039,7 @@ function buildInterior(lib, avoid = []) {
       const swap = (mesh, name) => { if (!K[name] || !mesh) return; mesh.geometry = K[name]; mesh.material.vertexColors = true; mesh.material.needsUpdate = true; mesh.computeBoundingSphere() }
       swap(mStones, 'br_stone_a'); swap(mCores, 'br_core'); swap(mCopes, 'br_cope_a'); swap(mVous, 'br_vous_a')
       if (mCopes) mCopes.material.map = grainT
+      for (const mm of [mVous, mCores]) if (mm) { mm.material.map = grainT; mm.material.color.setHex(0xa8a294); mm.material.needsUpdate = true }   // 拱石、牆心不要再用亂石格紋貼圖
       // 橋面石板：沿橋每 0.55 m 一排，照橋面坡度斜；兩頭多鋪到石欄盡頭
       const flagM = new THREE.MeshStandardMaterial({ map: grainT, color: 0xc2baa8, roughness: 0.82, vertexColors: true }); lampLit(flagM)
       const FL = [], q = new THREE.Quaternion(), e = new THREE.Euler(), m4c = new THREE.Matrix4()
@@ -1051,15 +1053,61 @@ function buildInterior(lib, avoid = []) {
       const flagNames = ['br_flag_a', 'br_flag_b', 'br_flag_c'].filter((n) => K[n])
       flagNames.forEach((n, k) => { const list = FL.filter((_, i) => i % flagNames.length === k); if (!list.length) return
         const fm = new THREE.InstancedMesh(K[n], flagM, list.length); list.forEach((mm, i) => fm.setMatrixAt(i, mm)); fm.receiveShadow = true; fm.castShadow = true; fm.computeBoundingSphere(); fm.name = 'bridgeFlags'; g.add(fm) })
+      // 2026-11-14 使用者：「橋身側面那片亂石牆跟拱圈下面還不是 Blender 做的，補上」→ 兩側牆面、拱圈底面都用 Blender 石塊一顆顆砌上去
+      // （原本那個擠出來的橋身留著當牆心，壓暗成石縫）：牆面一層層 0.26～0.36 m 高、每顆 0.38～0.62 m 長、上下層錯縫，拱洞那一圈不砌；拱圈底面沿拱一排排、橫跨整個橋寬
+      { const WS = [], hs = (n) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v) }
+        const UP = V(0, 1, 0)
+        for (const G of BRG) { const { b, w, L, span, archTop, bot, deckY } = G
+          const basis = new THREE.Matrix4().makeBasis(V(b.dir[0], 0, b.dir[1]), UP, V(-b.dir[1], 0, b.dir[0])), qb = new THREE.Quaternion().setFromRotationMatrix(basis)
+          const toW = (u, y, v) => V(b.x + b.dir[0] * u - b.dir[1] * v, y, b.z + b.dir[1] * u + b.dir[0] * v)
+          const ay0 = w + 0.1, ary = archTop - ay0
+          const inArch = (u, y) => Math.abs(u) < span + 0.25 && y < ay0 + (ary + 0.25) * Math.sqrt(Math.max(0, 1 - (u / (span + 0.25)) ** 2))
+          for (const sd of [-1, 1]) { let row = 0
+            for (let y = Math.max(bot, w - 0.6); y < deckY(0) + 0.3; row++) {
+              const th = 0.26 + 0.1 * hs(row * 3.1 + b.x), yc = y + th / 2
+              let u = -L - 0.1 + (row % 2) * 0.27
+              while (u < L + 0.1) { const ln = 0.38 + 0.24 * hs(u * 7.3 + row * 1.9 + sd), uc = u + ln / 2
+                if (yc < deckY(uc) - 0.1 && !inArch(uc, yc)) {
+                  const k = hs(uc * 3.7 + yc * 5.1 + sd * 9)
+                  WS.push({ n: 'br_stone_' + 'abc'[Math.floor(k * 3)], m: new THREE.Matrix4().compose(toW(uc, yc, sd * (b.hw + 0.3 - 0.06 + 0.04 * k)), qb.clone().multiply(new THREE.Quaternion().setFromAxisAngle(UP, (k - 0.5) * 0.08)), V(ln - 0.025, th - 0.025, 0.22)) }) }
+                u += ln }
+              y += th } }
+          const rx = span + 0.05, ry = ary + 0.05, N = Math.max(8, Math.round(Math.PI * (rx + ry) / 2 / 0.42))
+          for (let i = 0; i < N; i++) { const a0 = Math.PI * (i + 0.5) / N, cu = rx * Math.cos(a0), cy = ay0 + ry * Math.sin(a0)
+            const nrm = Math.atan2(Math.sin(a0) / ry, Math.cos(a0) / rx), qr = qb.clone().multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), nrm - Math.PI / 2))
+            const D = 2 * (b.hw + 0.3), nP = 3 + Math.floor(hs(i * 2.3 + b.z) * 2), pl = D / nP
+            for (let j = 0; j < nP; j++) { const v = -D / 2 + pl * (j + 0.5) + (i % 2 ? pl * 0.3 : 0); if (Math.abs(v) > D / 2 - 0.1) continue
+              WS.push({ n: 'br_stone_' + 'abc'[(i + j) % 3], m: new THREE.Matrix4().compose(toW(cu, cy, v), qr, V(0.4, 0.2, pl - 0.03)) }) } } }
+        const wallM = new THREE.MeshStandardMaterial({ map: grainT, color: 0xa69f92, roughness: 0.92, vertexColors: true }); lampLit(wallM)
+        for (const n of ['br_stone_a', 'br_stone_b', 'br_stone_c']) { const list = WS.filter((e) => e.n === n); if (!K[n] || !list.length) continue
+          const wm = new THREE.InstancedMesh(K[n], wallM, list.length); list.forEach((e, i) => wm.setMatrixAt(i, e.m)); wm.castShadow = true; wm.receiveShadow = true; wm.computeBoundingSphere(); wm.name = 'bridgeFacade'; g.add(wm) }
+        bodyM.color.setScalar(0.35) }
       // 石燈籠
       const L4 = bridgeLanterns()
       if (K.br_lantern && L4.length) {
         const lanM = new THREE.MeshStandardMaterial({ map: grainT, color: 0xbab4a6, roughness: 0.9, vertexColors: true }); lampLit(lanM)
         const lm = new THREE.InstancedMesh(K.br_lantern, lanM, L4.length), gm = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: new THREE.Color().setRGB(1, 0.5, 0.18), emissiveIntensity: 0, roughness: 0.6 })
-        const gmesh = new THREE.InstancedMesh(K.br_lantern_glow, gm, L4.length)
+        // 2026-11-14 使用者：「燈籠窗格是一塊純白方塊、沒有火光的漸層」→ 火袋改成自己的 shader：中心白黃、往外橘紅、四角暗，每盞各自微微閃
+        const gU = { uOn: { value: 0 }, uT: { value: 0 } }
+        const gmS = new THREE.ShaderMaterial({ uniforms: gU,
+          vertexShader: 'varying vec3 vL; varying float vSeed; void main(){ vL = position - vec3(0.0, 0.49, 0.0); vSeed = instanceMatrix[3].x * 1.7 + instanceMatrix[3].z * 2.3; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }',
+          fragmentShader: `uniform float uOn, uT; varying vec3 vL; varying float vSeed;
+            void main(){ vec3 p = vL / 0.075;
+              vec2 q = abs(p.x) > 0.99 ? p.yz : (abs(p.z) > 0.99 ? p.xy : p.xz);
+              float r = length(q * vec2(0.85, 0.7) + vec2(0.0, 0.18));
+              float fl = 0.82 + 0.1 * sin(uT * 9.0 + vSeed) + 0.08 * sin(uT * 23.0 + vSeed * 2.1);
+              float core = exp(-r * r * 2.6) * fl;
+              vec3 c = mix(vec3(0.55, 0.12, 0.02), vec3(1.0, 0.55, 0.16), smoothstep(0.0, 0.5, core));
+              c = mix(c, vec3(1.0, 0.92, 0.7), smoothstep(0.55, 1.0, core));
+              float e = (0.25 + 2.2 * core) * uOn;
+              gl_FragColor = vec4(mix(vec3(0.05, 0.035, 0.02), c * e, clamp(uOn * 3.0, 0.0, 1.0)), 1.0);
+              #include <tonemapping_fragment>
+              #include <colorspace_fragment>
+            }` })
+        const gmesh = new THREE.InstancedMesh(K.br_lantern_glow, gmS, L4.length)
         L4.forEach(([x, y, z], i) => { m4c.compose(V(x, y, z), q.setFromAxisAngle(V(0, 1, 0), i * 0.7), V(1, 1, 1)); lm.setMatrixAt(i, m4c); gmesh.setMatrixAt(i, m4c); addCollider(x, z, 0.2, y + 0.8, y - 0.8) })
         lm.castShadow = true; lm.receiveShadow = true; lm.computeBoundingSphere(); gmesh.computeBoundingSphere(); lm.name = 'bridgeLanterns'
-        gmesh.onBeforeRender = () => { gm.emissiveIntensity = 2.6 * LAMP_U.uLampOn.value }   // 跟木棧道的燈同一個開關（天黑才亮）
+        gmesh.onBeforeRender = () => { gU.uOn.value = LAMP_U.uLampOn.value; gU.uT.value = performance.now() / 1000 }
         g.add(lm, gmesh)
       }
     }).catch((e) => console.error('bridge kit', String(e?.stack ?? e)))
