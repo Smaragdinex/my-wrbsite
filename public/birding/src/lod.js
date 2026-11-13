@@ -108,7 +108,7 @@ function tinyScan(scene) {
   const L = []
   const skip = (o) => { for (let p = o; p; p = p.parent) { if (p.userData.noTinyCull || /_rig$|Armature/.test(p.name) || p.userData.bird) return true } return false }
   scene.traverse((o) => {
-    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.frustumCulled || o.geometry.isInstancedBufferGeometry) return
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.frustumCulled || o.geometry.isInstancedBufferGeometry || o.userData.batched) return   // batched：已合併（batch.js），原件不畫
     if (!(o.layers.mask & 1) && !tiny.off.has(o)) return
     const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere()
     const r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis(); if (!(r > 0) || r > 2.5) return
@@ -123,10 +123,11 @@ export function tinyCull(scene, camera, dt) {
   const zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(WALK_FOV / 2)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * lodQuality.scale
   const cp = camera.position, K = PXK * zoom / MINPX
   for (const o of tiny.list) {
+    if (o.userData.batched) { tiny.off.delete(o); delete o.userData.tinyOff; continue }
     const g = o.geometry; _tc.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld)
     const r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis() * K, far = _tc.distanceToSquared(cp) > r * r
-    if (far) { if (o.layers.mask & 1) { o.layers.disable(0); tiny.off.add(o) } }
-    else if (tiny.off.has(o)) { o.layers.enable(0); tiny.off.delete(o) }
+    if (far) { if (o.layers.mask & 1) { o.layers.disable(0); tiny.off.add(o); o.userData.tinyOff = true } }
+    else if (tiny.off.has(o)) { o.layers.enable(0); tiny.off.delete(o); delete o.userData.tinyOff }
   }
 }
 lodStats.tiny = () => ({ list: tiny.list.length, off: tiny.off.size })
@@ -211,7 +212,7 @@ function autoLow(m) {
 
 // 草葉一塊：mesh（InstancedBufferGeometry，草已經打亂順序）、中心、半徑
 export function lodRegisterGrass(mesh, center, r) {
-  grass.push({ mesh, c: center.clone(), r, n: mesh.geometry.instanceCount })
+  grass.push({ mesh, c: center.clone(), r, n: mesh.geometry.instanceCount, mask0: mesh.layers.mask })
   lodStats.grass += mesh.geometry.instanceCount
   last.fov = 0
 }
@@ -412,6 +413,7 @@ export function lodUpdate(camera, force = false) {
     let f = d < 55 ? 1 : d < 150 ? 1 - 0.6 * (d - 55) / 95 : d < 220 ? 0.4 * (1 - (d - 150) / 70) : 0   // 55 m 內全密、150 m 剩四成、220 m 外不畫
     if (!_fr.intersectsSphere(sph)) f = 0
     G.mesh.geometry.instanceCount = Math.round(G.n * f)
+    { const on = G.mesh.geometry.instanceCount > 0; if (on !== (G.mesh.layers.mask !== 0)) { if (on) G.mesh.layers.mask = G.mask0; else { G.mask0 ??= G.mesh.layers.mask; G.mesh.layers.mask = 0 } } }   // 0 根草的塊不發 draw call
     gd += G.mesh.geometry.instanceCount
   }
   lodStats.drawn = drawn; lodStats.grassDrawn = gd; lodStats.trisSaved = Math.round(lowTris)

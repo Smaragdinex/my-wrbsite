@@ -2,6 +2,7 @@
 import './fogzone.js'   // 一定要在任何材質編譯前（改霧的 shader）
 import * as THREE from 'three'
 import { lodUpdate, lodRegister, lodInit, lodAutoRegister, tinyCull } from './lod.js'
+import { staticBatch } from './batch.js'
 import { createAlpine , loadConiferKit } from './alpine.js'
 import { createHalls } from './halls.js'
 import { createShadowCache } from './shadowcache.js'
@@ -450,9 +451,9 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const _sd = new THREE.Vector3()
   let autoLodT = 0, tinyT = 0
   function tick(t, dt, { phone = false } = {}) {
-    if ((autoLodT += dt) > 2.5) { autoLodT = 0; if (lodAutoRegister(scene)) shadows.dirty() }   // 2026-11-14 FPS：沒登記 LOD 的石頭、岩廊牆、石橋…自動登記（lod.js）
+    if ((autoLodT += dt) > 2.5) { autoLodT = 0; if (lodAutoRegister(scene)) shadows.dirty(); if (!/nobatch/.test(location.search) && staticBatch(scene)) shadows.dirty() }   // 2026-11-14 FPS：不會動的同材質網格合併（batch.js）   // 2026-11-14 FPS：沒登記 LOD 的石頭、岩廊牆、石橋…自動登記（lod.js）
     lodUpdate(camera)
-    if ((tinyT += dt) > 0.2) { for (const b of birds) if (b.group) b.group.userData.bird = true; tinyCull(scene, camera, tinyT); tinyT = 0 }   // 2026-11-14 FPS：遠處的小東西不畫（lod.js）
+    if ((tinyT += dt) > 0.2) { for (const b of birds) { if (b.group) b.group.userData.bird = true; for (const m of b.built?.birds ?? [b.built]) if (m?.obj) m.obj.userData.noMerge = true }   /* 鳥本身不合併（batch.js），鳥棲樹可以 */ tinyCull(scene, camera, tinyT); tinyT = 0 }   // 2026-11-14 FPS：遠處的小東西不畫（lod.js）
     halls.tick(t, dt, camera)
     if (halls.mode.endsWith('D')) {   // 陰影範圍跟著玩家（在館內時由 halls.js 指定館的中心）
       const gx = Math.round(camera.position.x / 24) * 24, gz = Math.round(camera.position.z / 24) * 24
@@ -569,7 +570,9 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     renderer.render(post.scene, post.cam)
   }
   const groundAt = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)   // 相機對焦用（camera.js aim）
-  return { groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  // lodSync：截圖／錄影工具（tools/record/helpers.js still）直接把鏡頭擺到某處就畫，沒跑 tick → LOD、遠處小東西剔除還停在玩家的位置（石橋的石塊會被當成太遠不畫）。畫之前先照這台鏡頭更新一次
+  const lodSync = (cam = camera) => { lodUpdate(cam, true); tinyCull(scene, cam, 0) }
+  return { groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */

@@ -1018,7 +1018,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   // 店的直接子物件裡，外框小於 0.8 m 的（相機、鏡頭、價格條、小盒子…）離店 40 m 以外不畫；建築本身照舊 150 m
   const detail = []
   { const bb = new THREE.Box3(), sp = new THREE.Sphere(); g.updateMatrixWorld(true)
-    for (const c of g.children) { if (c === keeper.model) continue; bb.setFromObject(c); if (bb.isEmpty()) continue; bb.getBoundingSphere(sp); if (sp.radius < 0.8) detail.push(c) } }
+    for (const c of g.children) { if (c === keeper.model) continue; bb.setFromObject(c); if (bb.isEmpty()) continue; bb.getBoundingSphere(sp); if (sp.radius < 0.8) { detail.push(c); c.userData.noMerge = true } } }   // noMerge：batch.js 不合（照距離切換顯示）
   let detailOn = true
   const tick0 = tick
   function tickD(t, dt, cam, opt) {
