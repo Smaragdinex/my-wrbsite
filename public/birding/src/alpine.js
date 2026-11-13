@@ -552,9 +552,9 @@ function buildInterior(lib, avoid = []) {
         // 河面網格從湖裡 2 m 處才開始鋪，跟湖面重疊——兩層半透明疊起來會多一塊明顯較暗的水。
         // 河面在重疊那段淡入（湖口全透明、湖面邊界處才滿），同一塊水面永遠只有一層
         #ifndef LAKE
-        a *= smoothstep(-1.3, -0.1, dJ);   // 湖面在輪廓內 1.2 m 慢慢淡掉、河面同一段慢慢出現（交叉淡化，沒有硬邊）
+        a *= smoothstep(-2.4, -1.4, dJ);   // 2026-11-14 使用者「看得到透明的縫」：交叉淡化中間兩層都只剩一半 → 改成河在湖淡出之前就完全出現（湖從輪廓內 1.2 m 才開始淡）
         if (uRiverLake > 0.5) {   // 2026-11-14 瀑布湖的河：不透明度照湖的規則（湖 yosemite.js poolM），不然淺的地方透出沙底、整條偏綠灰
-          a = max(a * step(0.001, a), mix(0.3, 0.94, smoothstep(0.05, 1.9, vDepth)) * smoothstep(0.0, 0.05, vDepth) * smoothstep(-1.3, -0.1, dJ));
+          a = max(a * step(0.001, a), mix(0.3, 0.94, smoothstep(0.05, 1.9, vDepth)) * smoothstep(0.0, 0.05, vDepth) * smoothstep(-2.4, -1.4, dJ));
           col *= vec3(0.74, 0.98, 1.18);   // 湖面有天空倒影，量出來比河藍
         }
         #endif
