@@ -339,7 +339,7 @@ export function buildWalkways(scene, kit) {
         let best = null, bd = 2.8
         for (const q of allPosts) {
           if (q.tag === w.head.t) continue
-          if (!q.edge && !String(q.tag).startsWith('deck') && Math.hypot(q.x - p0.x, q.z - p0.z) > 0.9) continue   // 只接開口旁邊那根（以前接最近的任何一根，常常斜斜跨過主木道）；0.9 m 內的（橋頭平台角落那根東邊木道的第一根）照接，不留縫
+          if (!q.edge && !String(q.tag).startsWith('deck') && Math.hypot(q.x - p0.x, q.z - p0.z) > 1.5) continue   // 只接開口旁邊那根（以前接最近的任何一根，常常斜斜跨過主木道）；0.9 m 內的（橋頭平台角落那根東邊木道的第一根）照接，不留縫
           const lat = -(q.x - w.xs[sgnI]) * w.tz[sgnI] + (q.z - w.zs[sgnI]) * w.tx[sgnI]
           if (Math.sign(lat) !== sd) continue
           const d = Math.hypot(q.x - p0.x, q.z - p0.z); if (d < bd) { bd = d; best = q }
