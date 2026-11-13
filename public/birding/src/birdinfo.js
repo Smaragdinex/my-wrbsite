@@ -521,7 +521,7 @@ const ALL = [
   // 2026-11-10 山下湖再加四種：黃麻鴨（湖中游）、紫鷺（北岸淺水，避開蓮花叢）、高蹺鴴（西邊淺水，三隻）、西方澤鵟（南岸草地）
   {
     // 2026-11-10 搬到東部擴建區（PARK_PLAN.md、ChatGPT V2；原本 [112, -47]）
-    id: 'shelduck', spot: [64, -112], perch: 'ground', swim: 'eastWet', view: 96, y: EAST.W - 0.17, water: EAST.W, dist: 10, camH: 1.6, lookY: 0.3,
+    id: 'shelduck', spot: [57, -110], perch: 'ground', swim: 'eastWet', view: 96, y: EAST.W - 0.17, water: EAST.W, dist: 10, camH: 1.6, lookY: 0.3,
     name: "黃麻鴨", sci: 'Tadorna ferruginea', where: "翡翠沼澤的開闊水面",
     intro: "全身橙黃褐色的大型鴨子，頭頸淡棕黃、臉偏白，雄鳥繁殖期頸上一圈黑色細環。飛起來翅膀前半全白、飛羽黑色、還有綠色翼鏡，對比非常強烈。",
     facts: [
@@ -592,8 +592,8 @@ const ALL = [
     ],
   },
   {
-    id: 'psnipe', spot: [89.4, -58.6], perch: 'ground', view: -130, dist: 2.4, camH: 0.9, lookY: 0.12,
-    name: "彩鷸", sci: 'Rostratula benghalensis', where: "山下湖西南邊的泥灘",
+    id: 'psnipe', spot: [85.5, -76],   /* 2026-11-13 使用者：湖跟山下湖中間的開放淡水濕地也給彩鷸（以前 89.4,-58.6 山下湖西南泥灘） */ perch: 'ground', view: -130, dist: 2.4, camH: 0.9, lookY: 0.12,
+    name: "彩鷸", sci: 'Rostratula benghalensis', where: "翡翠沼澤與山下湖之間的開放濕地",
     intro: "長得跟一般的鷸很不一樣：雌鳥比雄鳥漂亮——頭頸深栗紅色，眼睛一圈白色的眼圈往後拉成一條白線，像戴了眼鏡，肩膀一條白帶；背上是橄欖褐色帶金黃斑點，翅膀張開有一排排金色圓斑。嘴長而微彎，在泥灘上低頭探找食物。",
     facts: [
       "角色顛倒：雌鳥漂亮、會求偶、會打架；雄鳥樸素，負責孵蛋和照顧小鳥。",
@@ -904,7 +904,7 @@ const ALL = [
     ],
   },
   {
-    id: 'redcrowned', spot: [73, -103], perch: 'ground', view: 200, dist: 9, camH: 1.7, lookY: 0.9,
+    id: 'redcrowned', spot: [64, -98],   /* 2026-11-13 草甸往西南讓給新木道 */ perch: 'ground', view: 200, dist: 9, camH: 1.7, lookY: 0.9,
     name: "丹頂鶴", sci: 'Grus japonensis', where: "翡翠沼澤北邊的濕草甸",
     intro: "東亞的大型鶴，全身雪白，只有脖子和翅膀後緣是黑色，頭頂一塊鮮紅的裸皮，所以叫「丹頂」。在日本北海道的釧路濕原和中國東北繁殖，是東方文化裡長壽和吉祥的象徵。",
     facts: [
@@ -928,7 +928,7 @@ const ALL = [
     ],
   },
   {
-    id: 'grebe', spot: [60, -116], perch: 'ground', swim: 'eastWet', view: 110, y: EAST.W - 0.22, water: EAST.W, dist: 10, camH: 1.6, lookY: 0.3,
+    id: 'grebe', spot: [70, -121],   /* 2026-11-13 新木道穿過深水池中間 → 起點移到池子東南 */ perch: 'ground', swim: 'eastWet', view: 110, y: EAST.W - 0.22, water: EAST.W, dist: 10, camH: 1.6, lookY: 0.3,
     name: "鳳頭鸊鷉", sci: 'Podiceps cristatus', where: "翡翠沼澤的深水池",
     intro: "體型最大的鸊鷉，脖子細長雪白，嘴像一把粉紅色的匕首。繁殖季頭頂會長出黑色的冠羽，臉頰兩側一圈栗紅色鑲黑邊的飾羽。很會潛水抓魚，最有名的是牠們優雅又複雜的求偶舞。",
     facts: [

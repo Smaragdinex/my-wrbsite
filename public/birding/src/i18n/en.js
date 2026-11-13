@@ -922,7 +922,7 @@ export const BIRDS = {
  },
  "psnipe": {
   "name": "Greater Painted-snipe",
-  "where": "Mudflat on the Southwest Shore of the Mountain Lake",
+  "where": "Open Wetland between the Emerald Marsh and the Mountain Lake",
   "intro": "Unlike ordinary snipes, the female is the showier sex: a deep chestnut head and neck, a bold white eye-ring trailing back like spectacles, and a white shoulder strap; the back is olive-brown with golden spots, and the open wings show rows of gold discs. Its long, slightly curved bill probes the mud for food.",
   "facts": [
    "Roles are reversed: the bright female courts and fights, while the plain male incubates and raises the young.",

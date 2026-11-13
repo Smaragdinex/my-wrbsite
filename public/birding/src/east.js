@@ -101,7 +101,7 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
     const M = EAST.marsh, inE = (o, x, z, k = 1) => Math.hypot((x - o.x) / o.rx, (z - o.z) / o.rz) < k
     const islAt = (x, z) => EAST.islands.find((I) => { const cr = Math.cos(I.rot), sr = Math.sin(I.rot), dx = x - I.x, dz = z - I.z; return Math.hypot((dx * cr + dz * sr) / I.rx, (-dx * sr + dz * cr) / I.rz) < 1.15 })
     let nReed = 0, nSedge = 0, nSalt = 0, nCat = 0, nMead = 0, nSam = 0
-    for (let k = 0; k < 420000 && (nReed < 3800 || nSedge < 3600 || nSalt < 5200 || nMead < 3400 || nSam < 3600); k++) {
+    for (let k = 0; k < 420000 && (nReed < 3800 || nSedge < 3600 || nSalt < 5200 || nMead < 5600 || nSam < 3600); k++) {
       const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0)
       const sd = wetSD(x, z)
       if (sd > 14 || !ok(x, z)) continue
@@ -111,7 +111,7 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
         if (inE(M.lily, x, z, 1.05) || inE(M.papyrus, x, z, 1.1)) continue
         const md = M.meadows.find((o) => inE(o, x, z, 1.08))
         if (md) {   // 濕草甸：翠綠的矮濕草（0.15～0.4 m），一窪窪積水的地方稀一點
-          if (nMead < 3400 && rnd() < (dep > 0.02 ? 0.25 : 0.9)) { nMead++; c.setHSL(0.24 + rnd() * 0.05, 0.5, 0.2 + rnd() * 0.06); for (let j = 0; j < 9; j++) push('blade', x + (rnd() - 0.5) * 0.4, Math.min(y, W) - 0.02, z + (rnd() - 0.5) * 0.4, rnd() * TAU, c.clone().multiplyScalar(0.85 + rnd() * 0.3), 0.15 + rnd() * 0.25) }
+          if (nMead < 5600 && rnd() < (dep > 0.02 ? 0.25 : 0.9)) { nMead++; c.setHSL(0.24 + rnd() * 0.05, 0.5, 0.2 + rnd() * 0.06); for (let j = 0; j < 9; j++) push('blade', x + (rnd() - 0.5) * 0.4, Math.min(y, W) - 0.02, z + (rnd() - 0.5) * 0.4, rnd() * TAU, c.clone().multiplyScalar(0.85 + rnd() * 0.3), 0.15 + rnd() * 0.25) }
           continue
         }
       }
