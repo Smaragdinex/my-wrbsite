@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, landingAt, alpineHeight, addCollider, addRailSeg, deckAt, EAST, deckFrame } from './layout.js'
+import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, landingAt, alpineHeight, addCollider, addRailSeg, deckAt, EAST, deckFrame, bridgeLanterns } from './layout.js'
 import { dappled } from './alpine.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
@@ -380,8 +380,9 @@ export function buildWalkways(scene, kit) {
     hp.frustumCulled = false
     // 燈打在木頭上的光只能算 LAMP_MAX 盞：取離鏡頭最近的那幾盞（鏡頭走 3 m 以上才重排）
     const lampLast = new THREE.Vector3(1e9, 0, 0)
-    const pickLamps = (cp) => { const order = lampAt.map((l, i) => [(l[0] - cp.x) ** 2 + (l[2] - cp.z) ** 2, i]).sort((a, b) => a[0] - b[0]).slice(0, LAMP_MAX)
-      for (let i = 0; i < LAMP_MAX; i++) { const o = order[i]; if (!o) { LAMP_U.uLampP.value[i].set(0, -999, 0); continue } const [x, y, z, nx, nz] = lampAt[o[1]]; LAMP_U.uLampP.value[i].set(x - nx * 0.06, y - 0.02, z - nz * 0.06) } }
+    const allLamps = lampAt.concat(bridgeLanterns().map(([x, y, z]) => [x, y + 0.1, z, 0, 0]))   // 2026-11-14 石拱橋的石燈籠也打光（光源點放在燈籠底部：火袋高 1.2 m，照到橋面太暗）
+    const pickLamps = (cp) => { const order = allLamps.map((l, i) => [(l[0] - cp.x) ** 2 + (l[2] - cp.z) ** 2, i]).sort((a, b) => a[0] - b[0]).slice(0, LAMP_MAX)
+      for (let i = 0; i < LAMP_MAX; i++) { const o = order[i]; if (!o) { LAMP_U.uLampP.value[i].set(0, -999, 0); continue } const [x, y, z, nx, nz] = allLamps[o[1]]; LAMP_U.uLampP.value[i].set(x - nx * 0.06, y - 0.02, z - nz * 0.06) } }
     pickLamps(new THREE.Vector3())
     glow.onBeforeRender = (r, sc, cam) => { if (cam && cam.position.distanceToSquared(lampLast) > 9) { lampLast.copy(cam.position); pickLamps(cam.position) } const k = gm.emissiveIntensity / 2.4; LAMP_U.uLampOn.value = k; hp.material.opacity = 0.75 * k; hp.visible = k > 0.01 }
     glow.frustumCulled = false

@@ -9,8 +9,9 @@ import { createMirror } from './mirror.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { buildSummit } from './summit.js'
-import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
+import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, bridgeLanterns, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
+import { lampLit, LAMP_U } from './walkway.js'
 import { nearGiant, forestK } from './giants.js'
 import { barkMaterial } from './bark.js'
 import { bladeMesh } from './flora.js'
@@ -1025,11 +1026,43 @@ function buildInterior(lib, avoid = []) {
         copes.push({ p: V((ax + bx) / 2, yb + 0.62, (az + bz) / 2), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.atan2(-dz, dx), (rb() - 0.5) * 0.02, 'YXZ')), s: V(L2 + 0.02, 0.13 + rb() * 0.03, 0.42 + rb() * 0.04), c: 0.82 + rb() * 0.22 })
       }
     }
-    const im = (list, geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, list.length), m4b = new THREE.Matrix4(), cc = new THREE.Color(); list.forEach((c, i) => { m.setMatrixAt(i, m4b.compose(c.p, c.q, c.s)); if (c.c) m.setColorAt(i, cc.setScalar(c.c)) }); m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m) }
-    im(cores, new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ map: rubbleT, color: 0x77726a, roughness: 0.98 }))
-    im(stones, stoneG, stoneM)
-    im(copes, copeG, new THREE.MeshStandardMaterial({ map: grainT, color: 0xb3ada1, roughness: 0.9 }))
-    im(vous, new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ map: rubbleT, color: 0xb0aa9e, roughness: 0.95 }))
+    const im = (list, geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, list.length), m4b = new THREE.Matrix4(), cc = new THREE.Color(); list.forEach((c, i) => { m.setMatrixAt(i, m4b.compose(c.p, c.q, c.s)); if (c.c) m.setColorAt(i, cc.setScalar(c.c)) }); m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m); return m }
+    const coreM = new THREE.MeshStandardMaterial({ map: rubbleT, color: 0x77726a, roughness: 0.98 }), copeM = new THREE.MeshStandardMaterial({ map: grainT, color: 0xb3ada1, roughness: 0.9 }), vousM = new THREE.MeshStandardMaterial({ map: rubbleT, color: 0xb0aa9e, roughness: 0.95 })
+    const mCores = im(cores, new THREE.BoxGeometry(1, 1, 1), coreM), mStones = im(stones, stoneG, stoneM), mCopes = im(copes, copeG, copeM), mVous = im(vous, new THREE.BoxGeometry(1, 1, 1), vousM)
+    // 2026-11-14 使用者：「石橋用 Blender 做，加上燈，晚上拍照給我看」→ tools/make-bridge-kit.py 的天然石塊換掉上面的方塊（位置、縮放照舊，零件都正規化成 1×1×1）；
+    // 橋面另外鋪 Blender 的石板（原本那條貼圖帶子壓低當灰縫）；四個角的壓頂石上各一盞石燈籠。石頭材質都接上木棧道那套燈光（晚上被燈籠照亮）
+    for (const m of [bodyM, deckM, stoneM, coreM, copeM, vousM]) lampLit(m)
+    new GLTFLoader().loadAsync(`models/props/bridge_kit.glb?v=${CVER}`).then((gl) => {
+      const K = {}; gl.scene.updateMatrixWorld(true)
+      gl.scene.traverse((o) => { if (o.isMesh) { const ge = o.geometry.clone(); ge.applyMatrix4(o.matrixWorld); if (ge.attributes.color_1 && !ge.attributes.color) ge.setAttribute('color', ge.attributes.color_1); K[o.name] = ge } })
+      const swap = (mesh, name) => { if (!K[name] || !mesh) return; mesh.geometry = K[name]; mesh.material.vertexColors = true; mesh.material.needsUpdate = true; mesh.computeBoundingSphere() }
+      swap(mStones, 'br_stone_a'); swap(mCores, 'br_core'); swap(mCopes, 'br_cope_a'); swap(mVous, 'br_vous_a')
+      if (mCopes) mCopes.material.map = grainT
+      // 橋面石板：沿橋每 0.55 m 一排，照橋面坡度斜；兩頭多鋪到石欄盡頭
+      const flagM = new THREE.MeshStandardMaterial({ map: grainT, color: 0xc2baa8, roughness: 0.82, vertexColors: true }); lampLit(flagM)
+      const FL = [], q = new THREE.Quaternion(), e = new THREE.Euler(), m4c = new THREE.Matrix4()
+      for (const b of RIVER_BRIDGES) { const L = b.half + 0.3, top0 = b.y
+        const deckY = (u) => top0 + b.k * u + 0.25 * Math.cos(Math.min(1, Math.abs(u) / b.half) * Math.PI / 2) ** 2
+        const yAt = (u) => deckY(Math.max(-L, Math.min(L, u))) + b.k * Math.sign(u) * Math.max(0, Math.abs(u) - L)
+        for (let u = -L - 0.62; u < L + 0.62; u += 0.55) { const uc = u + 0.275, y0 = yAt(uc), pitch = Math.atan2(yAt(uc + 0.2) - yAt(uc - 0.2), 0.4)
+          const p = V(b.x + b.dir[0] * uc, y0 + 0.02, b.z + b.dir[1] * uc)
+          q.setFromEuler(e.set(0, Math.atan2(-b.dir[1], b.dir[0]), pitch, 'YXZ'))
+          FL.push(m4c.compose(p, q, V(0.56, 0.09, 2 * b.hw + 0.08)).clone()) } }
+      const flagNames = ['br_flag_a', 'br_flag_b', 'br_flag_c'].filter((n) => K[n])
+      flagNames.forEach((n, k) => { const list = FL.filter((_, i) => i % flagNames.length === k); if (!list.length) return
+        const fm = new THREE.InstancedMesh(K[n], flagM, list.length); list.forEach((mm, i) => fm.setMatrixAt(i, mm)); fm.receiveShadow = true; fm.castShadow = true; fm.computeBoundingSphere(); fm.name = 'bridgeFlags'; g.add(fm) })
+      // 石燈籠
+      const L4 = bridgeLanterns()
+      if (K.br_lantern && L4.length) {
+        const lanM = new THREE.MeshStandardMaterial({ map: grainT, color: 0xbab4a6, roughness: 0.9, vertexColors: true }); lampLit(lanM)
+        const lm = new THREE.InstancedMesh(K.br_lantern, lanM, L4.length), gm = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: new THREE.Color().setRGB(1, 0.5, 0.18), emissiveIntensity: 0, roughness: 0.6 })
+        const gmesh = new THREE.InstancedMesh(K.br_lantern_glow, gm, L4.length)
+        L4.forEach(([x, y, z], i) => { m4c.compose(V(x, y, z), q.setFromAxisAngle(V(0, 1, 0), i * 0.7), V(1, 1, 1)); lm.setMatrixAt(i, m4c); gmesh.setMatrixAt(i, m4c); addCollider(x, z, 0.2, y + 0.8, y - 0.8) })
+        lm.castShadow = true; lm.receiveShadow = true; lm.computeBoundingSphere(); gmesh.computeBoundingSphere(); lm.name = 'bridgeLanterns'
+        gmesh.onBeforeRender = () => { gm.emissiveIntensity = 2.6 * LAMP_U.uLampOn.value }   // 跟木棧道的燈同一個開關（天黑才亮）
+        g.add(lm, gmesh)
+      }
+    }).catch((e) => console.error('bridge kit', String(e?.stack ?? e)))
   }
   // 吊橋：照台灣山區的人行吊橋做——兩端鋼構橋塔（H 形、漆成深綠，站在混凝土基座上），
   // 兩條主鋼纜從塔頂垂成拋物線、往後拉到地上的錨碇；每 0.6 公尺一根吊索拉著橋面的橫樑；

@@ -1264,6 +1264,13 @@ export const ALP_GRID = AG
 export { aHeight as ALP_HEIGHTS }
 // 吊橋：橋面是兩端之間的直線（中間微微下垂），寬 1.4 公尺
 // 石拱橋的橋面高（中間拱起 0.25）；不在橋上回傳 null
+// 2026-11-14 石拱橋四個角（兩頭、兩側石欄的壓頂石上）各一盞石燈籠：[x, 底面 y, z]。alpine.js 擺燈籠、walkway.js 把它們加進燈光表（晚上照亮橋）
+export function bridgeLanterns() {
+  const out = []
+  for (const b of RIVER_BRIDGES) { const L = b.half + 0.3
+    for (const u of [-(L + 0.3), 0, L + 0.3]) for (const v of [-(b.hw + 0.12), b.hw + 0.12]) out.push([b.x + b.dir[0] * u - b.dir[1] * v, b.y + b.k * u + 0.25 * Math.cos(Math.min(1, Math.abs(u) / b.half) * Math.PI / 2) ** 2 + 0.69, b.z + b.dir[1] * u + b.dir[0] * v]) }   // 兩頭＋橋中間
+  return out
+}
 export function riverBridgeAt(x, z) {
   for (const b of RIVER_BRIDGES) {
     const ax = x - b.x, az = z - b.z, along = ax * b.dir[0] + az * b.dir[1], lat = Math.abs(-ax * b.dir[1] + az * b.dir[0])
