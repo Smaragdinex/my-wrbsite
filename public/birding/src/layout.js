@@ -426,7 +426,10 @@ export const YOSE = (() => {
     const OUTP = [180.6, 72.2], outA = Math.atan2(OUTP[1] - LK.z, OUTP[0] - LK.x), outR = Math.hypot(OUTP[0] - LK.x, OUTP[1] - LK.z)
     for (let i = 0; i < N; i++) { const a = -Math.PI + 2 * Math.PI * i / N, ux = Math.cos(a), uz = Math.sin(a)
       const rE = 1.015 / Math.hypot(ux / LK.rx, uz / LK.rz), da = Math.abs(((a - outA + Math.PI * 3) % (2 * Math.PI)) - Math.PI)
-      let r = rE   // 2026-11-14 河改走西南角，出水口那片楔形不要了（出水口整個在 BASIN 裡）
+      let r = rE
+      // 2026-11-14 使用者「有縫沒接好」：出湖那段河面（s 0～2.5）跟湖一樣高、是平的 → 湖面直接蓋過去，交接點放在河開始往下掉之前（同高度，看不出縫）
+      { const OA = Math.atan2(74.59 - LK.z, 180.94 - LK.x), OR = Math.hypot(180.94 - LK.x, 74.59 - LK.z), dd = Math.abs(((a - OA + Math.PI * 3) % (2 * Math.PI)) - Math.PI)
+        r = Math.max(r, rE + Math.max(0, OR - rE) * Math.cos(Math.min(Math.PI / 2, dd * 7.5)) ** 2) }
       for (let d = 0; d < 40; d += 0.1) if (Y.inBasin(LK.x + ux * d, LK.z + uz * d)) r = Math.max(r, d + 0.4)
       tab[i] = r }
     const f = (a) => { const t = ((a + Math.PI) / (2 * Math.PI)) * N, i0 = Math.floor(t), w = t - i0; return tab[((i0 % N) + N) % N] * (1 - w) + tab[(((i0 + 1) % N) + N) % N] * w }

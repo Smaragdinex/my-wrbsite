@@ -365,7 +365,7 @@ function buildInterior(lib, avoid = []) {
       }`,
     fragmentShader: `
       uniform float uTime; uniform float uDay; uniform float uDusk; uniform float uRain; uniform vec3 uSun; uniform sampler2D uFlow; uniform vec4 uFlowBox;
-      uniform vec4 uLakeJoin; uniform float uLakeR[64];   // 2026-11-13 瀑布湖的橢圓 (中心 x, 中心 z, rx, rz)：河面在湖口淡入、顏色也接過去
+      uniform vec4 uLakeJoin; uniform float uLakeR[64]; uniform float uRiverLake;   // 2026-11-13 瀑布湖的橢圓 (中心 x, 中心 z, rx, rz)：河面在湖口淡入、顏色也接過去
       #ifdef MIRROR
         uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
       #endif
@@ -461,7 +461,7 @@ function buildInterior(lib, avoid = []) {
         float dJ = length(vW.xz - uLakeJoin.xy) - rJ;   // 離湖面輪廓幾公尺（負＝在湖裡，那裡是湖面在畫）
         #ifndef LAKE
         {
-          float kJ = 1.0 - smoothstep(0.3, 9.0, dJ);
+          float kJ = max(uRiverLake, 1.0 - smoothstep(0.3, 9.0, dJ));   // 2026-11-14 使用者「溪流跟湖顏色做一樣」：瀑布湖流出來的河整條用湖的水色
           if (kJ > 0.002) {
             vec3 lkc = mix(vec3(0.13, 0.21, 0.16), vec3(0.016, 0.06, 0.075), smoothstep(0.08, 2.6, vDepth));
             col = mix(col, lkc, kJ);
@@ -552,7 +552,11 @@ function buildInterior(lib, avoid = []) {
         // 河面網格從湖裡 2 m 處才開始鋪，跟湖面重疊——兩層半透明疊起來會多一塊明顯較暗的水。
         // 河面在重疊那段淡入（湖口全透明、湖面邊界處才滿），同一塊水面永遠只有一層
         #ifndef LAKE
-        a *= smoothstep(-0.4, 0.4, dJ);
+        a *= smoothstep(-1.3, -0.1, dJ);   // 湖面在輪廓內 1.2 m 慢慢淡掉、河面同一段慢慢出現（交叉淡化，沒有硬邊）
+        if (uRiverLake > 0.5) {   // 2026-11-14 瀑布湖的河：不透明度照湖的規則（湖 yosemite.js poolM），不然淺的地方透出沙底、整條偏綠灰
+          a = max(a * step(0.001, a), mix(0.3, 0.94, smoothstep(0.05, 1.9, vDepth)) * smoothstep(0.0, 0.05, vDepth) * smoothstep(-1.3, -0.1, dJ));
+          col *= vec3(0.74, 0.98, 1.18);   // 湖面有天空倒影，量出來比河藍
+        }
         #endif
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>
@@ -561,7 +565,8 @@ function buildInterior(lib, avoid = []) {
       }`,
   })
   waterM.uniforms.uLakeJoin = { value: new THREE.Vector4(YOSE.lake.x, YOSE.lake.z, YOSE.lake.rx * 1.015, YOSE.lake.rz * 1.015) }
-  waterM.uniforms.uLakeR = { value: Array.from(YOSE.lakeR.tab) }   // 2026-11-14 湖面輪廓的半徑表（跟 yosemite.js 的湖面同一個），河面在輪廓外 0.4 m 才出現
+  waterM.uniforms.uLakeR = { value: Array.from(YOSE.lakeR.tab) }
+  waterM.uniforms.uRiverLake = { value: 0 }   // 2026-11-14 湖面輪廓的半徑表（跟 yosemite.js 的湖面同一個），河面在輪廓外 0.4 m 才出現
   waterM.uniforms.uFlow = { value: flowTexDummy }
   waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uDusk = duskLight; waterM.uniforms.uSun = waterU.uSun; waterM.uniforms.uRain = weatherU.rain
   {
@@ -609,7 +614,7 @@ function buildInterior(lib, avoid = []) {
     // 每個頂點帶：水深、坡度（跌水那幾格很陡）、白沫量（跌水底下最多，往下游漂散）。
     // 2026-11-11 兩條：原本的溪、瀑布湖流出來的河（同一套水面、石頭、流向圖；河另外一份材質，流向圖各自一張）
     for (const st of ALP_STREAMS) {
-    const wm = st === ALP_STREAM ? waterM : (() => { const m = waterM.clone(); m.uniforms = { ...m.uniforms, uTime: waterU.uTime, uDay: dayLight, uDusk: duskLight, uSun: waterU.uSun, uRain: weatherU.rain }; return m })()
+    const wm = st === ALP_STREAM ? waterM : (() => { const m = waterM.clone(); m.uniforms = { ...m.uniforms, uRiverLake: { value: 1 }, uTime: waterU.uTime, uDay: dayLight, uDusk: duskLight, uSun: waterU.uSun, uRain: weatherU.rain }; return m })()
     const P = []
     for (let i = 0; i < st.length; i++) P.push(V(st[i][0], 0, st[i][1]))
     const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.25), K = st.wide ? 26 : 16, WK = st.wide ? 2.1 : 1, LATR = st.wide ? 7.5 : 4   // 寬的河：斷面 26 個頂點、往兩邊找 7.5 公尺；石頭的位置照河寬放大 WK 倍

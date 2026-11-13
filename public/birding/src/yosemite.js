@@ -849,10 +849,11 @@ export function buildYosemite(scene, { lib } = {}) {
       sh.uniforms.uDepth = { value: depthTex }; sh.uniforms.uDB = { value: new THREE.Vector4(DB.x0, DB.z0, DB.w, DB.h) }
       sh.uniforms.uImp = { value: new THREE.Vector3(F.x - 2.4, F.x + 2.5, zImp) }; sh.uniforms.uImp2 = { value: new THREE.Vector2(F.x - 7.0, F.x + 7.3) }
       sh.uniforms.uOutlet = { value: new THREE.Vector2(183.5, 76.5) }
+      sh.uniforms.uLakeR = { value: Array.from(YOSE.lakeR.tab) }; sh.uniforms.uLK = { value: new THREE.Vector2(YOSE.lake.x, YOSE.lake.z) }
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vRW;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvRW = (modelMatrix * vec4(position, 1.0)).xyz;')
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
         varying vec3 vRW; uniform float uRT; uniform float uRain;
-        uniform sampler2D uDepth; uniform vec4 uDB; uniform vec3 uImp; uniform vec2 uImp2; uniform vec2 uOutlet;
+        uniform sampler2D uDepth; uniform vec4 uDB; uniform vec3 uImp; uniform vec2 uImp2; uniform vec2 uOutlet; uniform float uLakeR[64]; uniform vec2 uLK;
         float rhash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float lvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rhash(i), rhash(i + vec2(1, 0)), f.x), mix(rhash(i + vec2(0, 1)), rhash(i + vec2(1, 1)), f.x), f.y); }
         float lfbm(vec2 p) { return lvn(p) * 0.55 + lvn(p * 2.07 + 3.1) * 0.3 + lvn(p * 4.3 + 7.7) * 0.15; }
@@ -910,6 +911,9 @@ export function buildYosemite(scene, { lib } = {}) {
           diffuseColor.rgb = mix(shallowC, deepC, smoothstep(0.08, 2.6, lkDep));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.78, 0.78), core * 0.35 * (1.0 - holes));
           diffuseColor.a = mix(0.3, 0.94, smoothstep(0.05, 1.9, lkDep)) * smoothstep(0.0, 0.05, lkDep);
+          { float aL = atan(vRW.z - uLK.y, vRW.x - uLK.x), tL = (aL + 3.14159265) / 6.2831853 * 64.0; int iL = int(floor(tL)); float fL = tL - floor(tL);
+            float rL = mix(uLakeR[((iL % 64) + 64) % 64], uLakeR[(((iL + 1) % 64) + 64) % 64], fL);
+            diffuseColor.a *= smoothstep(0.0, 1.2, rL - length(vRW.xz - uLK)); }   // 2026-11-14 湖面外緣 1.2 m 淡掉，跟河面交叉淡化
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.94, 0.95), lkFoam);
           diffuseColor.a = max(diffuseColor.a, lkFoam * smoothstep(0.0, 0.05, lkDep));
         }`)
