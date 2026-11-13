@@ -1852,3 +1852,28 @@ YOSE.DIKE = null   // 2026-11-14 石橋拆掉，橋頭那道補的岸跟石牆�
       if (aHeight[q] > bed) aHeight[q] = bed
     } }
 }
+
+// 2026-11-14 使用者（出湖那段河）「這裡土可挖掉，是不是太薄」：河道中間 1.7～3.7 m 深，但兩邊各一條淺棚，水只有幾公分 → 看起來是一層薄水蓋在土上。
+// 出湖之後 12 m 內，水面寬度裡的河床一律挖到水面下 0.8 m 以上，離水邊 0.5 m 內斜上去接岸（只挖、不墊）
+{
+  const R = ALP_RIVER
+  for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 52 || z > 80) continue
+    for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < 172 || x > 190) continue
+      const sR = R.sAt(x, z); if (sR > 12) continue
+      const d = R.dist(x, z), hw = R.halfAt(sR); if (d > hw) continue
+      const q = j * AG.nx + i, bed = R.water(sR) - 0.8 * smoothstep(hw, hw - 0.5, d) + 0.05
+      if (aHeight[q] > bed) aHeight[q] = bed
+    } }
+}
+
+// 2026-11-14 出水口那段湖底：照湖岸算的話它在湖的邊緣、只有 0.9 m 深（透出沙底、一條亮帶），但它其實是河的開頭 → 河寬裡、出湖前後 4 m，湖底挖到跟河一樣深（水面下 2.4 m，兩側 1.2 m 內斜上去）
+{
+  const R = ALP_RIVER, W = YOSE.lake.water
+  for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 68 || z > 82) continue
+    for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < 174 || x > 190) continue
+      const sR = R.sAt(x, z); if (sR > 4) continue
+      const d = R.dist(x, z), hw = R.halfAt(sR); if (d > hw) continue
+      const q = j * AG.nx + i, bed = W - 2.4 * smoothstep(hw, hw - 1.2, d) + 0.05
+      if (aHeight[q] > bed) aHeight[q] = bed
+    } }
+}

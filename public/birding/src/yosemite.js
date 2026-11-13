@@ -913,7 +913,7 @@ export function buildYosemite(scene, { lib } = {}) {
           diffuseColor.a = mix(0.3, 0.94, smoothstep(0.05, 1.9, lkDep)) * smoothstep(0.0, 0.05, lkDep);
           { float aL = atan(vRW.z - uLK.y, vRW.x - uLK.x), tL = (aL + 3.14159265) / 6.2831853 * 64.0; int iL = int(floor(tL)); float fL = tL - floor(tL);
             float rL = mix(uLakeR[((iL % 64) + 64) % 64], uLakeR[(((iL + 1) % 64) + 64) % 64], fL);
-            diffuseColor.a *= smoothstep(0.0, 1.2, rL - length(vRW.xz - uLK)); }   // 2026-11-14 湖面外緣 1.2 m 淡掉，跟河面交叉淡化
+            diffuseColor.a *= smoothstep(0.0, 1.2, rL - length(vRW.xz - uLK)); }   // 2026-11-14 湖面外緣 1.2 m 淡掉（河面在這段底下是滿的）   // 2026-11-14 湖面外緣 1.2 m 淡掉，跟河面交叉淡化
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.94, 0.95), lkFoam);
           diffuseColor.a = max(diffuseColor.a, lkFoam * smoothstep(0.0, 0.05, lkDep));
         }`)
