@@ -365,7 +365,7 @@ function buildInterior(lib, avoid = []) {
       }`,
     fragmentShader: `
       uniform float uTime; uniform float uDay; uniform float uDusk; uniform float uRain; uniform vec3 uSun; uniform sampler2D uFlow; uniform vec4 uFlowBox;
-      uniform vec4 uLakeJoin;   // 2026-11-13 瀑布湖的橢圓 (中心 x, 中心 z, rx, rz)：河面在湖口淡入、顏色也接過去
+      uniform vec4 uLakeJoin; uniform float uLakeR[64];   // 2026-11-13 瀑布湖的橢圓 (中心 x, 中心 z, rx, rz)：河面在湖口淡入、顏色也接過去
       #ifdef MIRROR
         uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
       #endif
@@ -456,10 +456,12 @@ function buildInterior(lib, avoid = []) {
         // 2026-11-13 使用者（石橋上往湖看）「兩邊水沒接好、顏色要一樣 這很明顯不同」：
         // 瀑布湖是 yosemite.js 的 poolM（翡翠綠），流出來的河是這支 shader（淺處黃褐），兩片水在湖口對接，顏色硬生生換一塊。
         // eJ＝離湖心幾倍橢圓半徑（1.0 就是湖岸）。湖口那一段河面直接用湖的配色，往下游 2 倍半徑才完全變回溪水色
-        float eJ = length(vec2((vW.x - uLakeJoin.x) / uLakeJoin.z, (vW.z - uLakeJoin.y) / uLakeJoin.w));
+        float aJ = atan(vW.z - uLakeJoin.y, vW.x - uLakeJoin.x), tJ = (aJ + 3.14159265) / 6.2831853 * 64.0; int iJ = int(floor(tJ)); float fJ = tJ - floor(tJ);
+        float rJ = mix(uLakeR[((iJ % 64) + 64) % 64], uLakeR[(((iJ + 1) % 64) + 64) % 64], fJ);
+        float dJ = length(vW.xz - uLakeJoin.xy) - rJ;   // 離湖面輪廓幾公尺（負＝在湖裡，那裡是湖面在畫）
         #ifndef LAKE
         {
-          float kJ = 1.0 - smoothstep(1.15, 1.95, eJ);
+          float kJ = 1.0 - smoothstep(0.3, 9.0, dJ);
           if (kJ > 0.002) {
             vec3 lkc = mix(vec3(0.13, 0.21, 0.16), vec3(0.016, 0.06, 0.075), smoothstep(0.08, 2.6, vDepth));
             col = mix(col, lkc, kJ);
@@ -550,7 +552,7 @@ function buildInterior(lib, avoid = []) {
         // 河面網格從湖裡 2 m 處才開始鋪，跟湖面重疊——兩層半透明疊起來會多一塊明顯較暗的水。
         // 河面在重疊那段淡入（湖口全透明、湖面邊界處才滿），同一塊水面永遠只有一層
         #ifndef LAKE
-        a *= smoothstep(1.00, 1.17, eJ);
+        a *= smoothstep(-0.4, 0.4, dJ);
         #endif
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>
@@ -559,6 +561,7 @@ function buildInterior(lib, avoid = []) {
       }`,
   })
   waterM.uniforms.uLakeJoin = { value: new THREE.Vector4(YOSE.lake.x, YOSE.lake.z, YOSE.lake.rx * 1.015, YOSE.lake.rz * 1.015) }
+  waterM.uniforms.uLakeR = { value: Array.from(YOSE.lakeR.tab) }   // 2026-11-14 湖面輪廓的半徑表（跟 yosemite.js 的湖面同一個），河面在輪廓外 0.4 m 才出現
   waterM.uniforms.uFlow = { value: flowTexDummy }
   waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uDusk = duskLight; waterM.uniforms.uSun = waterU.uSun; waterM.uniforms.uRain = weatherU.rain
   {

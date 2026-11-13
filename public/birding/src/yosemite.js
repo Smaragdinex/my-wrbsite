@@ -838,7 +838,7 @@ export function buildYosemite(scene, { lib } = {}) {
     // 下段瀑布落水的地方是一條橫的衝擊帶（0～2.5 m 翻騰白水、2.5～5 m 破碎泡沫往外散、5～9 m 慢慢減弱），
     // 波紋：平靜處很細（0.5～2.5 cm）、落水附近大（4～12 cm），好幾個方向、波長 0.3～2.5 m 混在一起；岸邊零星的細白沫
     const zLipL = fc.lip ? fc.lip.z - 0.35 : fz, zImp = zLipL - 3.25   // 下段主水簾落到湖面的地方（水簾底部往外 3.25 m）
-    const DB = { x0: 181, z0: 60, w: 70, h: 50, n: 0.5 }   // 水深貼圖範圍（湖＋凹槽＋東邊的湖）
+    const DB = { x0: 172, z0: 60, w: 79, h: 50, n: 0.5 }   // 2026-11-14 往西多 9 m（BASIN 到 x179）   // 水深貼圖範圍（湖＋凹槽＋東邊的湖）
     const depthTex = (() => { const nx = DB.w / DB.n, nz = DB.h / DB.n, d = new Uint8Array(nx * nz)
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const x = DB.x0 + (i + 0.5) * DB.n, z = DB.z0 + (j + 0.5) * DB.n; d[j * nx + i] = Math.round(255 * Math.min(1, Math.max(0, (poolY - alpineHeight(x, z)) / 4))) }
       const t = new THREE.DataTexture(d, nx, nz, THREE.RedFormat, THREE.UnsignedByteType); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t })()
@@ -932,18 +932,9 @@ export function buildYosemite(scene, { lib } = {}) {
     // 改成：橢圓邊界在出水口那個方向（±20°）往外推，一路推過河面網格的起點，兩片水重疊約 1.5 m，接縫被水花蓋住。
     // 推到岸上的部分不用管：shader 的 alpha 照水深算，地比水面高就是全透明（recessWater、eastLakeWater 也靠這個）
     const LK = YOSE.lake
-    const OUTP = [184.0, 74.5]   // 出水口外、河面網格起點再往下游一點
-    const outA = Math.atan2(OUTP[1] - LK.z, OUTP[0] - LK.x), outR = Math.hypot(OUTP[0] - LK.x, OUTP[1] - LK.z)
     const poolG = new THREE.CircleGeometry(1, 128).rotateX(-Math.PI / 2)   // 用 CircleGeometry 改點（三角形繞向跟原本一樣，不會變成背面）
-    { const pp = poolG.attributes.position
-      for (let i = 1; i < pp.count; i++) {
-        const a = Math.atan2(pp.getZ(i), pp.getX(i)), ux = Math.cos(a), uz = Math.sin(a)
-        const rE = 1.015 / Math.hypot(ux / LK.rx, uz / LK.rz)                                  // 原本的橢圓邊
-        const da = Math.abs(((a - outA + Math.PI * 3) % TAU) - Math.PI)                        // 跟出水口方向差多少
-        const k = Math.cos(Math.min(Math.PI / 2, da * 4.5)) ** 2                               // ±20° 內才往外推
-        const r = rE + Math.max(0, outR - rE) * k
-        pp.setXYZ(i, ux * r, 0, uz * r)
-      }
+    { const pp = poolG.attributes.position   // 2026-11-14 湖面輪廓＝layout.js YOSE.lakeR（橢圓＋出水口＋挖掉的 BASIN），河面在 alpine.js 用同一張半徑表淡入
+      for (let i = 1; i < pp.count; i++) { const a = Math.atan2(pp.getZ(i), pp.getX(i)), r = YOSE.lakeR(a); pp.setXYZ(i, Math.cos(a) * r, 0, Math.sin(a) * r) }
       pp.needsUpdate = true; poolG.computeBoundingSphere() }
     const pool = new THREE.Mesh(poolG, poolM); pool.position.set(LK.x, poolY, LK.z); pool.receiveShadow = true; g.add(pool)
     // 2026-11-13 凹槽也是湖：一條沿著岩壁的水面（從牆腳前 3 m 到凹槽最裡面），跟湖同一個材質、同一個高度；岩架比水面高，自然蓋住後面那一截

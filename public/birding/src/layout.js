@@ -368,7 +368,10 @@ export const ALP_SPURS = [
   // 2026-11-13 使用者（手畫路線）「比較順的走上去 不然突然變高 很怪」：舊路線 [177,70.5]→[179.5,77] 貼著出水口走，
   // 落在「河岸防溢」那一圈（離河中心 hw+0.1～hw+1.6）裡，整段被墊到河面 +8 cm＝27.59，步道該是 26 → 1 m 內爬 1.8 m 像一道牆。
   // 照使用者畫的往西繞開河口（離河中心都 >6.6 m，不再被墊），路也拉長到 26 m，配 startOn 之後全程 ≤12% 慢慢爬上凹槽
-  { name: 'cave', world: true, k: 0.12, startOn: 'yose', pts: [[177, 70.5], [176.8, 74.5], [177.6, 79], [180, 84], [183, 88], [185.6, 90.2], [187.6, 93.2]] },   // 2026-11-13 使用者：瀑布後面的凹槽改成湖、從瀑布身後直接往上 → 支線走到凹槽西口就接崖壁步道
+  // 2026-11-14 使用者：「旁邊道路位置低，修到一樣高，讓上去的位置往右移」→ 岔路口往西挪到 x175（離河 8 m 以上，不會被河岸墊高），
+  // 先往西北在西側爬上來，到 x177 z86.6 已經跟湖岸一樣高，再沿新湖岸（BASIN 北邊 3 m 外）走到凹槽
+  { name: 'cave', world: true, k: 0.13, startOn: 'yose', pts: [[175, 70.3], [173.4, 73.4], [172.4, 78], [173.6, 83], [177, 86.6], [180.5, 88.4], [183.6, 89], [185.6, 90.2], [187.6, 93.2]],
+    minY: [null, null, null, null, 27.72, 27.72, 27.72, 27.72, 27.72] },   // 沿湖那段＝湖水面 27.5 再高 0.22（跟湖岸一樣高）   // 2026-11-13 使用者：瀑布後面的凹槽改成湖、從瀑布身後直接往上 → 支線走到凹槽西口就接崖壁步道
   { name: 'lakeLoop', world: true, y0: 0, flat: 3, k: 0.15,   /* 2026-11-10 使用者：花園出口左邊那條路有一道凸起的破圖（前 12 m 貼著花園邊，路面被墊到 0.5 m，花園地面是 0） */ noClear: true, endOn: 'lakeGorge', pts: [[76.5, 0], [78.2, -6], [78, -12], [76.5, -35], [77, -57], [81, -63], [88, -68], [96, -71], [106, -72.5], [116, -69], [123, -63]] },   /* 2026-11-13 湖北邊加一片開放淡水濕地：這段改貼著山下湖南緣走（以前 84,-73／98,-78 那段在濕地裡）；濕地夾在湖和山下湖中間，從路上看得到小辮鴴、彩鷸 */
   { name: 'ridge', world: true, y0: 75.8, k: 0.27, noClear: true, landings: true, endOn: 'grass', pts: null },   // pts：ridgeTrailPts()（EAST.ridge 定義之後）
 ].map((sp) => sp.world ? sp : ({ ...sp, pts: [ALP_TRAIL_D[sp.from], ...sp.pts].map(([x, z]) => AM(x, z)) }))
@@ -410,7 +413,23 @@ export const YOSE = (() => {
   Y.inArch = (x, z, pad = 0) => Math.hypot(x - 185.0, z - 90.3) < 5.5 + pad
   Y.inOutlet = (x, z, pad = 0) => { const P = [190.5, 79.3], Q = [184.6, 75.4], dx = Q[0] - P[0], dz = Q[1] - P[1], t = Math.max(0, Math.min(1, ((x - P[0]) * dx + (z - P[1]) * dz) / (dx * dx + dz * dz))); return Math.hypot(x - P[0] - dx * t, z - P[1] - dz * t) < 2.5 + pad }
   Y.inEastLake = (x, z, pad = 0) => x > Y.lakeE.x0 - pad && x < Y.lakeE.x1 + pad && z > Y.lakeE.zS(x) - pad && z < Y.base(x) - 0.2 + pad
-  Y.inLake = (x, z, pad = 0) => ((x - Y.lake.x) / (Y.lake.rx + pad)) ** 2 + ((z - Y.lake.z) / (Y.lake.rz + pad)) ** 2 < 1 || Y.inEastLake(x, z, pad) || Y.inOutlet(x, z, pad) || Y.inRecessWater(x, z, pad)
+  // 2026-11-14 使用者（湖西岸照片）「中間這是舊的可以走的，你可以挖掉，這樣水位才正確」：湖跟出水口之間那條舊路廊留下的土舌（比水面高，把水隔成兩片）
+  // 挖成湖的一部分。BASIN＝挖掉的範圍；湖面（yosemite.js）、河面淡入（alpine.js）、擋人走進水裡都照「湖心往外的半徑表」lakeR(θ)
+  Y.BASIN = [[179.6, 73.8], [179.0, 76.5], [179.0, 80.5], [179.6, 83.6], [181.2, 85.2], [183.8, 85.8], [186.5, 85.2], [187.5, 82], [187.5, 76], [185.8, 73.5]]
+  const inPoly = (P, x, z) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, zi] = P[i], [xj, zj] = P[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c } return c }
+  const polyEdgeD = (P, x, z) => { let m = 1e9; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [ax, az] = P[j], [bx, bz] = P[i], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); m = Math.min(m, Math.hypot(x - ax - dx * t, z - az - dz * t)) } return m }
+  Y.basinEdgeD = (x, z) => polyEdgeD(Y.BASIN, x, z) * (inPoly(Y.BASIN, x, z) ? -1 : 1)   // 離 BASIN 邊緣幾公尺（負＝在裡面）
+  Y.inBasin = (x, z, pad = 0) => Y.basinEdgeD(x, z) < pad
+  Y.lakeR = (() => { const N = 64, tab = new Float32Array(N), LK = Y.lake
+    const OUTP = [184.0, 74.5], outA = Math.atan2(OUTP[1] - LK.z, OUTP[0] - LK.x), outR = Math.hypot(OUTP[0] - LK.x, OUTP[1] - LK.z)
+    for (let i = 0; i < N; i++) { const a = -Math.PI + 2 * Math.PI * i / N, ux = Math.cos(a), uz = Math.sin(a)
+      const rE = 1.015 / Math.hypot(ux / LK.rx, uz / LK.rz), da = Math.abs(((a - outA + Math.PI * 3) % (2 * Math.PI)) - Math.PI)
+      let r = rE + Math.max(0, outR - rE) * Math.cos(Math.min(Math.PI / 2, da * 4.5)) ** 2   // 出水口那一片（舊的楔形）
+      for (let d = 0; d < 40; d += 0.1) if (Y.inBasin(LK.x + ux * d, LK.z + uz * d)) r = Math.max(r, d + 0.4)
+      tab[i] = r }
+    const f = (a) => { const t = ((a + Math.PI) / (2 * Math.PI)) * N, i0 = Math.floor(t), w = t - i0; return tab[((i0 % N) + N) % N] * (1 - w) + tab[(((i0 + 1) % N) + N) % N] * w }
+    f.tab = tab; return f })()
+  Y.inLake = (x, z, pad = 0) => ((x - Y.lake.x) / (Y.lake.rx + pad)) ** 2 + ((z - Y.lake.z) / (Y.lake.rz + pad)) ** 2 < 1 || Y.inEastLake(x, z, pad) || Y.inOutlet(x, z, pad) || Y.inRecessWater(x, z, pad) || Y.inBasin(x, z, pad)
   // 岩壁高：yosemite.js 畫、步道算高度都用這個
   Y.g0 = (x) => alpineHeight(x, Y.base(x))
   // 2026-11-10 使用者：玻璃早就拆了 → 岩壁中段 40～58 公尺（瀑布那一帶最高），兩端收矮
@@ -933,11 +952,18 @@ function buildAlpine() {
     // startOn：起點高度改成取母步道最近一點的高度，再從起點往下游重新夾坡度，整段爬升攤平到整條支線上
     if (sp.startOn) {
       const o = ALP_SPURS.find((q) => q.name === sp.startOn), e = sp.pts[0]
-      let bi = 0; o.pts.forEach((q, i) => { if (Math.hypot(q[0] - e[0], q[1] - e[1]) < Math.hypot(o.pts[bi][0] - e[0], o.pts[bi][1] - e[1])) bi = i })
+      let best = 1e9, by = o.prof[0]
+      for (let i = 1; i < o.pts.length; i++) { const [ax, az] = o.pts[i - 1], [bx, bz] = o.pts[i], dx = bx - ax, dz = bz - az, t = clamp(((e[0] - ax) * dx + (e[1] - az) * dz) / (dx * dx + dz * dz), 0, 1), d = Math.hypot(e[0] - ax - dx * t, e[1] - az - dz * t); if (d < best) { best = d; by = lerp(+o.prof[i - 1], +o.prof[i], t) } }
       const raw = sp.pts.map(([x, z]) => alpBase(x, z))
-      raw[0] = o.prof[bi]
+      raw[0] = by
       for (let i = 1; i < raw.length; i++) raw[i] = clamp(raw[i], raw[i - 1] - seg(i) * k, raw[i - 1] + seg(i) * k)
       for (let i = 0; i < pp.length; i++) pp[i] = raw[i]
+    }
+    // 2026-11-14 minY：某幾點至少要多高（null＝不管）。第一個有指定的點之前，從起點照路長線性爬上去（不讓坡度上限把路壓在低地）
+    if (sp.minY) {
+      const first = sp.minY.findIndex((v) => v != null), cum = [0]; for (let i = 1; i < pp.length; i++) cum.push(cum[i - 1] + seg(i))
+      for (let i = 1; i < first; i++) pp[i] = lerp(pp[0], sp.minY[first], cum[i] / cum[first])
+      for (let i = first; i < pp.length; i++) if (sp.minY[i] != null) pp[i] = Math.max(pp[i], sp.minY[i])
     }
     if (sp.join) {   // 終點要剛好接上那條支線的終點：從終點往回再夾一次坡度
       pp[pp.length - 1] = ALP_SPURS.find((q) => q.name === sp.join).prof.at(-1)
@@ -1041,7 +1067,8 @@ function buildAlpine() {
     // 2026-11-13 使用者（湖往石拱橋看）「瀑布橋這邊請做好 接好」：出水口那段河只有 4 m 寬，湖岸那圈 +18 cm 的岸剩一條灰色土舌把湖跟河隔開 →
     // 出湖的前 7.5 m 河面放寬（最多 +2.2 m 半寬），湖直接開口變成河；到橋那裡（s≈9）已經回到原本的寬度，拱橋不用變
     { const h1 = rv.halfAt; rv.halfAt = (sv) => h1(sv) + 2.2 * (1 - smoothstep(2, 7.5, sv)) }
-    for (const c of XS) { const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 2.1),   /* 2026-11-13 使用者：橋再高一點（離水 1.2 → 2.1 m） */ half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
+    for (const c of XS) { if (Math.hypot(c.x - 183.9, c.z - 67.3) < 4) continue   /* 2026-11-14 使用者：「先拿掉橋，先把陸地溪流修好」→ 瀑布湖出水口下面那座石拱橋先拆 */
+      const sc = rv.sAt(c.x, c.z); RIVER_BRIDGES.push({ x: c.x, z: c.z, dir: c.dir, k: c.k, y: Math.max(c.py, rv.water(sc) + 2.1),   /* 2026-11-13 使用者：橋再高一點（離水 1.2 → 2.1 m） */ half: Math.max(4.2, rv.halfAt(sc) + 2.4), hw: 1.3, river: rv.halfAt(sc) }) }   // 橋跨過整條河（寬的河橋就長）
   }
   // 斷面（參考台灣山溪的影片）：水邊不是直的——寬度用 2D 雜訊，兩岸不對稱、一凹一凸；
   // 水裡是 U 形的潭底；岸是緩緩爬上去的坡，坡上有一塊塊凸起的石頭（不是一面平滑的牆）
@@ -1207,12 +1234,11 @@ function buildAlpine() {
         h = Math.min(h, dr < hw ? wl - 0.06 - 0.32 * (1 - (dr / hw) ** 2) : wl + 0.1 + (dr - hw) * 1.3)
       }
       // 2026-11-13 使用者「水跑出來了」（瀑布湖出水口西岸）：岸比水面低，水面那片多邊形攤在草地上 → 水面外的岸墊到水面上 8 cm
-      // 2026-11-13（第二版）使用者「步道西邊那道土脊」：外緣本來只用 1.4 m 收，2 m 的高差擠在 1.4 m 裡＝一道垂直土牆，
-      // 而且不分是不是步道一律墊，步道只要走進那一圈就被墊成牆。→ 外緣拉到 5.5 m 慢慢收，並且步道上不墊、離步道 1.2～3.6 m 才慢慢接上
-      if (dr > hw + 0.1 && dr < hw + 5.5 && sR > 0.5 && sR < RV.lipS - 8) {
+      // 2026-11-14 改回原本的規則（使用者照片：水漫到草坡上）：第二版讓步道附近不墊，結果河岸比水面低、河面整片攤在陸地上。
+      // 這次改成把步道移走（凹槽支線改從西邊爬上來），岸照樣一定比水面高
+      if (dr > hw + 0.1 && dr < hw + 3 && sR > 0.5 && sR < RV.lipS - 8) {
         const wl = RV.water(sR)
-        const kBank = smoothstep(hw + 5.5, hw + 1.6, dr) * smoothstep(1.2, 3.6, dAll)
-        if (kBank > 0 && h < wl + 0.08) h = lerp(h, wl + 0.08, kBank)
+        if (h < wl + 0.08) h = lerp(wl + 0.08, h, smoothstep(hw + 1.6, hw + 3, dr))
       }
     }
     aHeight[k] = Number.isFinite(h) ? h : 0   // 2026-11-11 格子往西擴到 x -62 以後包到花園中心 (0,0)：gardenEdgeH 在原點是 NaN（地形網格的外框變 NaN，整片地形被剔除）
@@ -1779,23 +1805,7 @@ for (const b of RIVER_BRIDGES) {
   }
 }
 
-// 2026-11-13 使用者（站在瀑布石橋西頭往湖看）「少一個 補起來，不然邏輯來說水會跑出來」：橋靠湖那側的石欄到橋頭就斷了，
-// 再往北 2 m 才接上那道沙堤——中間這段地面比湖面低 0.6～1.3 m，河面順著低地漫到步道上。補一道岸：沿這條線地面墊到水面上 0.18 m，
-// 兩側 0.8 m 內接回原地形（只墊高、不挖）；上面 yosemite.js 再排一排 Blender 的石緣收邊（YOSE.DIKE）
-YOSE.DIKE = [[180.5, 70.75], [180.05, 71.55], [179.55, 72.4], [179.15, 73.25], [178.95, 73.9]]
-{
-  const W = YOSE.lake.water + 0.18, P = YOSE.DIKE
-  for (let k = 1; k < P.length; k++) {
-    const [ax, az] = P[k - 1], [bx, bz] = P[k], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz
-    const i0 = Math.floor((Math.min(ax, bx) - 2 - AG.x0) / AG.cell), i1 = Math.ceil((Math.max(ax, bx) + 2 - AG.x0) / AG.cell), j0 = Math.floor((Math.min(az, bz) - 2 - AG.z0) / AG.cell), j1 = Math.ceil((Math.max(az, bz) + 2 - AG.z0) / AG.cell)
-    for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
-      const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, t = clamp(((x - ax) * dx + (z - az) * dz) / l2, 0, 1), d = Math.hypot(x - ax - dx * t, z - az - dz * t), q = j * AG.nx + i
-      if (d > 1.4) continue
-      const w = 1 - clamp((d - 0.6) / 0.8, 0, 1), h = lerp(aHeight[q], W, w * w * (3 - 2 * w))
-      if (h > aHeight[q]) aHeight[q] = h
-    }
-  }
-}
+YOSE.DIKE = null   // 2026-11-14 石橋拆掉，橋頭那道補的岸跟石牆一起拿掉
 
 // 2026-11-13 驗收第 11 條：瀑布湖和往下流的溪之間隔著一道比水面高的土堤（湖西岸 186～188 一帶高 27.6～27.9，水面 27.5）→ 挖一條水道接起來（水面下 0.6、半寬 2.5 m、外面 2 m 接回）
 {
@@ -1807,4 +1817,17 @@ YOSE.DIKE = [[180.5, 70.75], [180.05, 71.55], [179.55, 72.4], [179.15, 73.25], [
     const w = 1 - clamp((d - 2.5) / 2.0, 0, 1), h = lerp(aHeight[q], W - 0.6, w * w * (3 - 2 * w))
     if (h < aHeight[q]) aHeight[q] = h
   }
+}
+
+// 2026-11-14 BASIN 挖成湖：湖底＝水面 −0.55，邊緣 1.2 m 內斜上去；外面 3 m 內、不在湖裡也不在河道裡的地墊到水面上 0.15（湖水不會漫到岸上）
+{
+  const W = YOSE.lake.water, R = ALP_RIVER
+  for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 68 || z > 92) continue
+    for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < 172 || x > 194) continue
+      const q = j * AG.nx + i, e = YOSE.basinEdgeD(x, z)
+      if (e < 0) { aHeight[q] = Math.min(aHeight[q], lerp(W + 0.1, W - 0.55, smoothstep(0, 1.2, -e))); continue }
+      if (e > 3 || YOSE.inLake(x, z, 0)) continue
+      if (R.dist(x, z) < R.halfAt(R.sAt(x, z)) + 0.3) continue
+      const tgt = lerp(W + 0.15, aHeight[q], smoothstep(1.2, 3.0, e)); if (aHeight[q] < tgt) aHeight[q] = tgt
+    } }
 }
