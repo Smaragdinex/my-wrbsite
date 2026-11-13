@@ -55,37 +55,33 @@ const quad = (pts, mat, parent, order = 5) => {
 // 2026-11-07 改寫得比較寫實：一根側枝＝主枝＋兩側一排排的小枝，小枝上密密的短針葉；針葉裡深外淺、枝梢是嫩綠的新芽，
 // 沒有黑色描邊（原本每根針都描深色，看起來像漫畫）。透明底（alphaTest）。
 export function needleTex() {
-  // 2026-11-10 畫在兩倍大的畫布上（1024×512）：針葉更細、近看不糊。座標還是用 512×256 的單位畫
+  // 2026-11-14 ChatGPT 推薦的道格拉斯冷杉（tools/make-conifer-kit.py）：貼圖分兩半——
+  //   左半：不透明、密密麻麻的短針葉（實心針葉簇用；鼠尾草綠 #52764C 為主，亮一點、不再接近黑）
+  //   右半：帶透明的短針葉枝（外緣點綴）。以前整張是一根根像蕨葉的羽狀枝，使用者說像蕨類、太暗
   const t = canvasTex(1024, 512, (x, W, H) => {
-    x.clearRect(0, 0, W, H); x.scale(2, 2)
-    const w = W / 2, h = H / 2
-    const rnd = mulberry32(7)
-    const needle = (px, py, a, len, tip) => {
-      const g = 95 + rnd() * 45 + tip * 45, r = 48 + rnd() * 20 + tip * 45, b = 46 + rnd() * 16
-      x.strokeStyle = `rgba(${r | 0},${g | 0},${b | 0},0.95)`; x.lineWidth = 1.5 + rnd() * 0.8
-      x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len); x.stroke()
-    }
-    // 主枝：從左（樹幹那頭）往右，微微彎
-    const main = (u) => [u * w * 0.97, h / 2 + Math.sin(u * 2.2) * h * 0.04]
-    x.strokeStyle = 'rgba(70,52,36,0.9)'; x.lineWidth = 3; x.beginPath(); for (let i = 0; i <= 20; i++) x.lineTo(...main(i / 20)); x.stroke()
-    // 小枝：兩側交錯，越往外越短；每根小枝上兩排針葉
-    for (let i = 0; i < 18; i++) {
-      const u = 0.05 + i / 18 * 0.88, [mx, my] = main(u), side = i % 2 ? 1 : -1
-      const L = (0.42 - u * 0.25) * h * (0.8 + rnd() * 0.4), a = side * (0.75 + rnd() * 0.35) + 0.25
-      const ex = mx + Math.cos(a) * L * 1.6, ey = my + Math.sin(a) * L
-      // 先鋪一片實心的葉團（中間深、邊緣亮一點）：遠看是一團團的枝葉，不是一根根黑線
-      const ang = Math.atan2(ey - my, ex - mx), ln = Math.hypot(ex - mx, ey - my)
-      x.save(); x.translate((mx + ex) / 2, (my + ey) / 2); x.rotate(ang)
-      const gr = x.createLinearGradient(0, -L * 0.35, 0, L * 0.35)
-      gr.addColorStop(0, 'rgb(78,118,70)'); gr.addColorStop(0.5, 'rgb(46,82,48)'); gr.addColorStop(1, 'rgb(66,104,62)')
-      x.fillStyle = gr; x.beginPath(); x.ellipse(0, 0, ln * 0.55, L * 0.26, 0, 0, TAU); x.fill(); x.restore()
-      x.strokeStyle = 'rgba(80,60,40,0.8)'; x.lineWidth = 1.4; x.beginPath(); x.moveTo(mx, my); x.lineTo(ex, ey); x.stroke()
-      for (let k = 0; k < 40; k++) {
-        const v = rnd(), px = mx + (ex - mx) * v, py = my + (ey - my) * v, s2 = rnd() < 0.5 ? -1 : 1
-        needle(px, py, a + s2 * (0.9 + rnd() * 0.5), 9 + rnd() * 7, v > 0.8 ? 1 : 0)
+    x.clearRect(0, 0, W, H)
+    const rnd = mulberry32(7), HW = W / 2
+    const col = (k) => { const r = 62 + k * 70 + rnd() * 14, g = 96 + k * 72 + rnd() * 16, b = 60 + k * 44 + rnd() * 12; return `rgb(${r | 0},${g | 0},${b | 0})` }
+    // 左半：底色＋幾層短針（深→淺），每層方向大致一致但有亂度，看起來是一簇簇針葉的表面
+    x.fillStyle = 'rgb(70,104,66)'; x.fillRect(0, 0, HW, H)
+    for (let layer = 0; layer < 4; layer++) {
+      for (let k = 0; k < 5200; k++) {
+        const px = rnd() * HW, py = rnd() * H, a = -0.6 + (rnd() - 0.5) * 1.6 + (py / H) * 0.4, len = 6 + rnd() * 10
+        x.strokeStyle = col(layer / 3 * 0.75 + rnd() * 0.25); x.lineWidth = 1.4 + rnd() * 1.1
+        x.beginPath(); x.moveTo(px, py); x.lineTo(Math.min(HW - 1, px + Math.cos(a) * len), py + Math.sin(a) * len); x.stroke()
       }
     }
-    for (let k = 0; k < 160; k++) { const u = rnd() * 0.97, [px, py] = main(u); needle(px, py, (rnd() - 0.5) * 3, 8 + rnd() * 8, u > 0.88 ? 1 : 0) }   // 主枝本身也長針
+    // 右半：一根短枝（從左往右），兩側斜出的短針，尖端亮
+    x.save(); x.translate(HW, 0)
+    const main = (u) => [u * HW * 0.96, H / 2 + Math.sin(u * 2.4) * H * 0.04]
+    x.strokeStyle = 'rgba(92,72,52,0.9)'; x.lineWidth = 4; x.beginPath(); for (let i = 0; i <= 20; i++) x.lineTo(...main(i / 20)); x.stroke()
+    for (let k = 0; k < 900; k++) {
+      const u = rnd() * 0.97, [mx, my] = main(u), s2 = rnd() < 0.5 ? -1 : 1, spread = (1 - u * 0.55) * H * 0.42
+      const a = s2 * (0.55 + rnd() * 0.6) + 0.15, len = spread * (0.35 + rnd() * 0.65)
+      x.strokeStyle = col(0.35 + u * 0.5 + rnd() * 0.2); x.lineWidth = 2 + rnd() * 1.2
+      x.beginPath(); x.moveTo(mx, my); x.lineTo(mx + Math.cos(a) * len * 0.6, my + Math.sin(a) * len); x.stroke()
+    }
+    x.restore()
   })
   t.anisotropy = 8
   return t
@@ -100,7 +96,7 @@ export function needleMaterial() {
   needleM.onBeforeCompile = (sh) => {
     // 2026-11-11 夜裡天比樹亮：針葉之間的小縫透出天空，遠處的樹看起來一點一點白白在閃（使用者回報）→ 夜裡遠處補得更多，樹冠比較實
     sh.uniforms.uDayN = dayLight
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uDayN;').replace('#include <alphatest_fragment>', `
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uDayN;').replace('#include <normal_fragment_begin>', 'float faceDirection = 1.0;\nvec3 normal = normalize( vNormal );\nvec3 nonPerturbedNormal = normal;')   /* 2026-11-14 雙面但不翻法線：背面也照樹冠朝外打光（以前背面一片黑） */.replace('#include <alphatest_fragment>', `
       vec2 nDx = dFdx(vMapUv * vec2(512.0, 256.0)), nDy = dFdy(vMapUv * vec2(512.0, 256.0));
       diffuseColor.a *= 1.0 + max(0.0, 0.5 * log2(max(dot(nDx, nDx), dot(nDy, nDy)))) * mix(1.1, 0.95, uDayN);
       #include <alphatest_fragment>`)
@@ -128,12 +124,14 @@ export async function loadConiferKit() {
 function shadeConifer(g, fir) {
   const R = fir ? 0.19 : 0.29
   const p = g.attributes.position, n = g.attributes.normal ?? new THREE.BufferAttribute(new Float32Array(p.count * 3), 3), col = new Float32Array(p.count * 3)
+  const own = g.attributes.color   // 2026-11-14 新套件每團針葉簇自己的明暗（底面暗、頂面亮），乘上去
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i), l = Math.hypot(x, z) || 1
     n.setXYZ(i, x / l * 0.55, 0.8, z / l * 0.55)
     const rMax = R * Math.pow(Math.max(0, 1 - (y - 0.08) / 0.9), fir ? 0.9 : 0.72) + 0.03
-    const out = Math.min(1, l / rMax), k = (0.45 + 0.55 * out) * (0.7 + 0.3 * y)
-    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k
+    const out = Math.min(1, l / rMax), k = (0.62 + 0.38 * out) * (0.78 + 0.22 * y)   // 2026-11-14 裡面、下面的暗部提亮（ChatGPT：陰影用低飽和深綠、避免接近純黑）
+    const ko = own ? own.getX(i) : 1
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k * ko
   }
   g.setAttribute('normal', n); g.setAttribute('color', new THREE.BufferAttribute(col, 3))
   return g
@@ -1249,7 +1247,7 @@ function buildInterior(lib, avoid = []) {
   {
     const needleM = needleMaterial()
     const barkM = barkMaterial('pine_bark', { normal: 1.2, color: [1.3, 1.2, 1.1] })   // 2026-11-10 掃描的松樹皮（以前是一個純色）
-    const coreM = new THREE.MeshStandardMaterial({ color: 0x223a26, roughness: 1 })   // 跟針葉同色系，從上面看不會是一顆黑色金字塔
+    const coreM = new THREE.MeshStandardMaterial({ color: 0x52764c, roughness: 1 })   // 跟針葉同色系，從上面看不會是一顆黑色金字塔
     // 雀榕的位置先挑好（低海拔、步道邊 5～12 公尺、彼此隔 16 公尺），針葉樹再避開它周圍 9 公尺：不然雀榕整棵被鐵杉林包住看不到
     for (const f of FIG_FORCED) FIGPOS.push({ x: f.x, z: f.z, H: 9.5, forced: true, ref: f })   // 吃果實的鳥停的那幾棵（birds.js dressFig）
     for (let k = 0; k < 20000 && FIGPOS.length < 18; k++) {
