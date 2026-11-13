@@ -1097,7 +1097,7 @@ function buildAlpine() {
         // 2026-11-13 使用者「瀑布橋這邊請做好 接好」：拱洞（橋中心 ±(河半寬+0.6)）裡一半是乾的岸——河中線偏一邊、岸比水面高 →
         // 拱洞整個寬度、橋身前後各 2 m 挖到水面下 0.3 m，水從整個拱洞底下流過；再往外 2 m 接回原本的岸
         { const sp = (b.river ?? 2.3) + 0.6, ka = smoothstep(sp + 0.5, sp - 0.2, Math.abs(along)) * smoothstep(b.hw + 4, b.hw + 2, lat); if (ka > 0) h = Math.min(h, lerp(h, RVb.water(sb) - 0.3, ka)) }
-        { const wl = smoothstep(b.hw + 5.2, b.hw + 1.3, lat), wa = smoothstep(b.half + 8.5, b.half + 1.0, Math.abs(along)); if (wl > 0 && wa > 0) h = lerp(h, b.y + b.k * along - 0.02, wa * wl * k2) }   // 橋頭外 1 公尺內路面＝橋面（石板鋪出去、不露一片懸空的板子）
+        { const wl = smoothstep(b.hw + 2.9, b.hw + 1.2, lat), wa   /* 2026-11-13 使用者（橋頭俯視圖圈河岸）「sand too high」：路兩側墊高的範圍收窄——只墊路面（半寬 2.5 m），外面 1.7 m 接回原本的岸，不再在河邊堆一道沙堤 */ = smoothstep(b.half + 8.5, b.half + 1.0, Math.abs(along)); if (wl > 0 && wa > 0) h = lerp(h, b.y + b.k * along - 0.02, wa * wl * k2) }   // 橋頭外 1 公尺內路面＝橋面（石板鋪出去、不露一片懸空的板子）
       }
     }
     // 小木屋底下和四周攤平（門口那塊空地也是）
@@ -1710,6 +1710,22 @@ for (const w of ALP_WALKS) {
       const tgt = lerp(ya, yb, t) - 0.06, w = 1 - clamp((d - 1.8) / 1.5, 0, 1), h = lerp(aHeight[q], tgt, w * w * (3 - 2 * w))
       if (h > aHeight[q]) aHeight[q] = h
     }
+  }
+}
+
+// 2026-11-13 使用者（石拱橋俯視圖）「sand too high」「bridge and sand 重疊嗎」：最後一步——橋頭（橋面＋往外 1.4 m 的石板）底下的地一律比橋面低 8 cm，
+// 橋身兩側 2.5 m 內的岸不能高過橋面下 35 cm（以前營地坡道、步道攤平在後面又把沙堆回去，蓋住石板、埋住橋頭）
+for (const b of RIVER_BRIDGES) {
+  const L = b.half + 0.3, R = L + 4
+  const i0 = Math.floor((b.x - R - AG.x0) / AG.cell), i1 = Math.ceil((b.x + R - AG.x0) / AG.cell), j0 = Math.floor((b.z - R - AG.z0) / AG.cell), j1 = Math.ceil((b.z + R - AG.z0) / AG.cell)
+  for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+    const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, ax = x - b.x, az = z - b.z, al = ax * b.dir[0] + az * b.dir[1], lat = Math.abs(-ax * b.dir[1] + az * b.dir[0]), q = j * AG.nx + i
+    const out = Math.abs(al) - L; if (out > 1.4 + 1.5 || lat > b.hw + 2.5) continue
+    const line = b.y + b.k * al   // 橋面（兩頭延伸出去照同一個坡）
+    let cap
+    if (lat < b.hw + 0.35) cap = line - 0.08 + Math.max(0, out - 1.4) * 0.12   // 路面：石板盡頭之後 1.5 m 慢慢可以高回來
+    else cap = line - 0.08 - 0.27 * smoothstep(b.hw + 0.35, b.hw + 0.9, lat) * (1 - smoothstep(1.4, 2.9, out)) + Math.max(0, out - 1.4) * 0.12
+    if (aHeight[q] > cap) aHeight[q] = cap
   }
 }
 

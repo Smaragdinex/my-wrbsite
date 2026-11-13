@@ -86,6 +86,14 @@ export async function buildStreambed(scene) {
   }
   shore(ALP_POND.x, ALP_POND.z, ALP_POND.r, ALP_POND.r, ALP_POND.water, 4200, 260, 9)
   shore(YOSE.lake.x, YOSE.lake.z, YOSE.lake.rx, YOSE.lake.rz, YOSE.lake.water, 2400, 140, 6)
+  // 2026-11-13 使用者（瀑布後面的水潭照片）「Add some seaweed and 鵝卵石」：凹槽變湖之後湖底是一片光禿的平底 → 整片鋪卵石（清水看得到底）、水草一叢叢，兩三顆苔石
+  { const C = YOSE.cave, W = YOSE.lake.water, inR = (x, z) => YOSE.inRecessWater(x, z) && W - alpineHeight(x, z) > 0.04
+    const rx = () => C.x0 + 1.5 + rnd() * (C.x1 - C.x0 - 2.5)
+    for (let i = 0, got = 0; i < 40000 && got < 1700; i++) { const x = rx(), z = YOSE.base(x) - 3 + rnd() * (YOSE.recPath(x) + 1.4); if (!inR(x, z) || alpineTrailDist(x, z) < 1.25) continue; if (fbm2(x * 0.5 + 3, z * 0.5, 2) < 0.3 && rnd() < 0.5) continue; pebble(x, z, W, 1.15); got++ }
+    for (let i = 0, got = 0; i < 30000 && got < 150; i++) { const x = rx(), z = YOSE.base(x) - 3 + rnd() * (YOSE.recPath(x) + 1.4), h = alpineHeight(x, z), dep = W - h; if (!inR(x, z) || dep < 0.2 || dep > 1.1) continue; if (fbm2(x * 0.35 - 7, z * 0.35 + 2, 2) < 0.45) continue
+      const sc = 0.8 + rnd() * 0.9; put('weed_' + Math.floor(rnd() * 3), x + (rnd() - 0.5) * 0.3, h + 0.01, z, sc, sc * Math.min(1.5, dep / 0.35), sc, rnd() * 6.283, new THREE.Color().setScalar(0.75 + 0.45 * rnd())); got++ }
+    for (let i = 0, got = 0; i < 4000 && got < 3; i++) { const x = rx(), z = YOSE.base(x) - 2 + rnd() * (YOSE.recPath(x) - 1), dep = W - alpineHeight(x, z); if (!inR(x, z) || dep < 0.3 || Math.abs(x - YOSE.fall.x) < 5 || boulders.some((b) => Math.hypot(b.x - x, b.z - z) < 3)) continue
+      boulders.push({ x, z, y: W, s: 0.9 + rnd() * 0.6, yaw: rnd() * 6.283, v: Math.floor(rnd() * 3) }); got++ } }
   for (const b of boulders) { put('boulder_' + b.v, b.x, b.y, b.z, b.s, b.s, b.s, b.yaw, new THREE.Color().setScalar(0.9 + 0.25 * rnd()), 0.12); addCollider(b.x, b.z, b.s * 0.5, b.y + b.s * 0.4) }
 
   /* ---------- 材質 ---------- */

@@ -438,6 +438,19 @@ export function buildYosemite(scene, { lib } = {}) {
       if (!lists[n] || YOSE.behind(x, z - 1.5) || alpineTrailDist(x, z) < 3.4 + k2 * (n === 'boulder' ? 2.2 : 0.7) || (Math.sin(a) < -0.3 && rnd() < 0.7) || YOSE.inLake(x, z, -0.5) || stairD(x, z) < 1.7 + k2 * (n === 'boulder' ? 1.6 : 0.6)) continue
       if (alpineHeight(x, z) > YOSE.lake.water + 9) continue;   /* 2026-11-12 岩壁腳的地形格子是岩壁頂的高度：石頭被擺到 76 m 高、碰撞體沒有底，把底下的崖壁步道擋住 */ putRock(n, x, z, k2, 0.3); addCollider(x, z, k2 * (n === 'boulder' ? 1.6 : 0.6), alpineHeight(x, z) + k2 * 0.8, alpineHeight(x, z) - 1.5); made++
     }
+    // 2026-11-13 使用者（瀑布後面水潭、圈潭邊靠步道那一圈）「這裡應該要用大石頭擋著」：潭邊（水線上、步道那側）一顆接一顆排大石頭當擋土／護欄，有碰撞
+    { const W = YOSE.lake.water, C = YOSE.cave, cand = []
+      for (let x = C.x0 + 1; x <= 196; x += 0.25) for (let z = YOSE.base(x) - 3.5; z <= YOSE.base(x) + 10; z += 0.25) {
+        const h = alpineHeight(x, z); if (h < W - 0.05 || h > W + 0.5) continue
+        let deep = false; for (const [dx, dz] of [[1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2], [0.85, 0.85], [-0.85, 0.85], [0.85, -0.85], [-0.85, -0.85]]) if (YOSE.inRecessWater(x + dx, z + dz) && W - alpineHeight(x + dx, z + dz) > 0.3) deep = true
+        if (!deep || alpineTrailDist(x, z) < 1.7 || stairD(x, z) < 2.1) continue   // 鐵鍊欄杆外面（石頭不能壓到階梯、欄杆柱）
+        cand.push([x, z]) }
+      const got = []
+      for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]] }
+      for (const [x, z] of cand) { if (got.some(([a, b]) => Math.hypot(a - x, b - z) < 1.25)) continue; got.push([x, z]) }
+      const big = names.filter((n) => n !== 'boulder')
+      for (const [x, z] of got) { const n = big[Math.floor(rnd() * big.length)], k2 = 0.65 + rnd() * 0.35; putRock(n, x, z, k2, 0.3); addCollider(x, z, 0.6, alpineHeight(x, z) + 1.1, alpineHeight(x, z) - 1.0) }
+    }
     // 岩石改成灰白（花崗岩）：材質複製一份、顏色去飽和再提亮（原本掃描的是褐色、長青苔的石頭），跟岩壁一致
     for (const n of names) {
       if (!lists[n].length) continue
