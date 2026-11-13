@@ -425,7 +425,7 @@ export function buildYosemite(scene, { lib } = {}) {
     const FL = YOSE.fall, inPool = (x, z, pad) => ((x - FL.x) / (FL.rx + pad)) ** 2 + ((z - FL.z) / (FL.rz + pad)) ** 2 < 1
     const wetC = (x) => { const w = Math.exp(-(((x - FL.x) / 9) ** 2)); return new THREE.Color().setScalar(1.35 - 0.3 * w) }
     // 2026-11-12 上山步道（YOSE.stairs）露天的頭一段不在 alpineTrailDist 裡，石頭會擺到路上把路堵死 → 另外量離它多遠
-    const stOpen = YOSE.stairs().pts.slice(0, 26)
+    const stOpen = YOSE.stairs().pts.slice(0, 26), TRall = YOSE.stairs()
     const stairD = (x, z) => { let m = 1e9; for (let i = 1; i < stOpen.length; i++) { const [ax, az] = stOpen[i - 1], [bx, bz] = stOpen[i], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); m = Math.min(m, Math.hypot(x - ax - dx * t, z - az - dz * t)) } return m }
     const putRock = (n, x, z, k2, sink = 0.25) => lists[n].push({ p: V(x, alpineHeight(x, z) - sink * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * (0.7 + rnd() * 0.5), k2), c: wetC(x) })
     for (let k = 0; k < 260; k++) {
@@ -447,6 +447,7 @@ export function buildYosemite(scene, { lib } = {}) {
         const h = alpineHeight(x, z); if (h < W - 0.05 || h > W + 0.5) continue
         let deep = false; for (const [dx, dz] of [[1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2], [0.85, 0.85], [-0.85, 0.85], [0.85, -0.85], [-0.85, -0.85]]) if (YOSE.inRecessWater(x + dx, z + dz) && W - alpineHeight(x + dx, z + dz) > 0.3) deep = true
         if (!deep || alpineTrailDist(x, z) < 1.7 || stairD(x, z) < 2.1) continue   // 鐵鍊欄杆外面（石頭不能壓到階梯、欄杆柱）
+        { const hh = alpineHeight(x, z); let near = false; for (let q = 0; q < TRall.pts.length && !near; q += 2) if (Math.abs(TRall.yy[q] - hh) < 3 && Math.hypot(TRall.pts[q][0] - x, TRall.pts[q][1] - z) < 2.6) near = true; if (near) continue }   // 2026-11-13 岩廊鋪過來了：整條崖壁步道（不只前 26 點）旁邊都不放
         cand.push([x, z]) }
       const got = []
       for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]] }
@@ -968,6 +969,64 @@ export function buildYosemite(scene, { lib } = {}) {
       sp.position.copy(p0); sp.scale.setScalar(s0 + rnd() * (s1 - s0)); sp.userData = { ph: rnd() * TAU, p0, k: op * (0.7 + 0.6 * rnd()), drift: 0.6 + rnd() * 0.8 }; sp.renderOrder = 6; g.add(sp); mist.push(sp)
     }
     for (let k = 0; k < 9; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.3 })); const p0 = V(F.x + (rnd() - 0.5) * 5, SHELF_Y + 0.6 + rnd() * 3.2, fz + YOSE.rec(F.x) - 1.2 - rnd() * 2.2); sp.position.copy(p0); sp.scale.setScalar(2.2 + rnd() * 3); sp.userData = { ph: rnd() * TAU, p0, k: 0.22, drift: 0.3 }; sp.renderOrder = 6; g.add(sp); mist.push(sp) }   // 2026-11-12 中段水潭上面的水霧（落點 2～3 m 內濃）
+    // 2026-11-13 岩廊的氛圍（使用者：「氛圍也要對」，參考圖 docs/acceptance-1113/chatgpt_gallery_ref.png）：
+    // 陽光穿過水簾斜斜照進廊道——一道道暖色光束（兩片交叉的面，從欄杆外的水簾斜到靠內側的地板）＋落在地板上一塊塊會晃的光斑（水簾晃，光就跟著閃）；
+    // 廊道裡一團團水霧從靠岩壁那側飄向水簾（用上面瀑布水霧同一套 sprite、同一個更新）。晚上、陰天跟著變暗
+    { const T = YOSE.stairs(), G = YOSE.GAL, SHf = YOSE.shelfY(), pts = []
+      for (let i = 0; i < T.pts.length; i++) if (T.kind[i] === 'gal' && T.pts[i][0] > G[0] + 0.5 && T.pts[i][0] < G[1] - 0.5 && T.yy[i] > SHf - 1) pts.push(i)
+      const outward = (x) => { const db = YOSE.base(x + 0.5) - YOSE.base(x - 0.5), l = Math.hypot(db, 1); return [db / l, -1 / l] }   // 岩壁面的外法線（xz）
+      const shaftU = { uT, uDay: dayLight, uCloud: weatherU.cloud }
+      const shaftM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms: shaftU,
+        vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+        fragmentShader: `varying vec2 vUv; varying vec3 vW; uniform float uT, uDay, uCloud;
+          float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+          float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+          void main(){
+            float side = smoothstep(0.0, 0.35, vUv.x) * smoothstep(1.0, 0.65, vUv.x);
+            float len = smoothstep(0.0, 0.12, vUv.y) * smoothstep(1.0, 0.7, vUv.y) * (1.0 - 0.45 * vUv.y);   // 進光那頭最亮，落到地板前淡掉
+            float flick = 0.55 + 0.45 * n(vec2(vW.x * 0.9 + uT * 0.7, vW.y * 0.6 - uT * 1.9));               // 水簾晃動，光一下亮一下暗
+            float streak = 0.7 + 0.3 * n(vec2(vUv.x * 9.0, vUv.y * 2.0 - uT * 0.4));
+            float a = side * len * flick * streak * 0.16 * uDay * (1.0 - 0.75 * uCloud);
+            gl_FragColor = vec4(vec3(1.0, 0.86, 0.62) * a, 1.0);
+          }` })
+      const patchM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: shaftU, polygonOffset: true, polygonOffsetFactor: -2,
+        vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+        fragmentShader: `varying vec2 vUv; varying vec3 vW; uniform float uT, uDay, uCloud;
+          float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+          float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+          void main(){
+            vec2 d = vUv * 2.0 - 1.0; float e = smoothstep(1.0, 0.25, length(d));
+            // 水簾後面的光斑：一條條會流動的亮紋（像焦散），不是一塊均勻的亮
+            float c1 = n(vec2(vW.x * 3.1 + uT * 0.5, vW.z * 3.1 - uT * 1.4)), c2 = n(vec2(vW.x * 5.3 - uT * 0.8, vW.z * 4.7 + uT * 1.1));
+            float caus = pow(clamp(1.0 - abs(c1 - c2) * 2.2, 0.0, 1.0), 4.0);
+            float a = e * (0.35 + 0.9 * caus) * 0.22 * uDay * (1.0 - 0.75 * uCloud);
+            gl_FragColor = vec4(vec3(1.0, 0.84, 0.58) * a, 1.0);
+          }` })
+      const SG = [], PG = []
+      const quad = (A, B, W, U) => { const h2 = U.clone().multiplyScalar(W / 2); return [A.clone().sub(h2), A.clone().add(h2), B.clone().add(h2), B.clone().sub(h2)] }
+      let last = -1e9, k = 0
+      for (const i of pts) {
+        const x = T.pts[i][0], z = T.pts[i][1], y = T.yy[i]
+        if (Math.abs(x - last) < 2.3) continue
+        last = x; k++
+        const [ox, oz] = outward(x), tx = -oz, tz = ox, jit = hsh(k * 7.7 + y)
+        const A = V(x + ox * (1.9 + 0.4 * jit), y + 3.25, z + oz * (1.9 + 0.4 * jit)), B = V(x - ox * (0.4 + 0.5 * jit), y + 0.05, z - oz * (0.4 + 0.5 * jit))
+        const beam = B.clone().sub(A).normalize(), Tn = V(tx, 0, tz), W = 0.7 + 0.6 * hsh(k * 3.1)
+        const N2 = V().crossVectors(beam, Tn).normalize()
+        for (const U of [Tn, N2]) SG.push(quad(A, B, W, U))
+        const Cn = B.clone().add(V(0, 0.015, 0)), L2 = 0.8 + 0.6 * jit, W2 = 0.55 + 0.35 * hsh(k * 5.3)
+        PG.push([Cn.clone().add(Tn.clone().multiplyScalar(-L2)).add(V(ox, 0, oz).multiplyScalar(-W2)), Cn.clone().add(Tn.clone().multiplyScalar(L2)).add(V(ox, 0, oz).multiplyScalar(-W2)), Cn.clone().add(Tn.clone().multiplyScalar(L2)).add(V(ox, 0, oz).multiplyScalar(W2)), Cn.clone().add(Tn.clone().multiplyScalar(-L2)).add(V(ox, 0, oz).multiplyScalar(W2))])
+        // 水霧：每道光束附近兩團，從靠岩壁那側飄向水簾
+        for (let m2 = 0; m2 < 2; m2++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0 })), r2 = hsh(k * 11.3 + m2)
+          const p0 = V(x - ox * (0.6 + r2) + tx * (r2 - 0.5) * 2, y + 0.5 + r2 * 1.8, z - oz * (0.6 + r2) + tz * (r2 - 0.5) * 2)
+          sp.position.copy(p0); sp.scale.setScalar(1.6 + r2 * 1.6); sp.userData = { ph: r2 * TAU, p0, k: 0.12 + 0.1 * r2, drift: 0.35 + 0.3 * r2 }; sp.renderOrder = 6; g.add(sp); mist.push(sp) }
+      }
+      const mk = (list, mat, name) => { const P = [], U = [], I = []; list.forEach((q4, j) => { for (const v of q4) P.push(v.x, v.y, v.z); U.push(0, 0, 1, 0, 1, 1, 0, 1); const b = j * 4; I.push(b, b + 1, b + 2, b, b + 2, b + 3) })
+        const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); gg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); gg.setIndex(I); gg.computeBoundingSphere()
+        const m = new THREE.Mesh(gg, mat); m.renderOrder = 7; m.name = name; m.frustumCulled = true; g.add(m) }
+      if (SG.length) mk(SG, shaftM, 'galleryShafts')
+      if (PG.length) mk(PG, patchM, 'galleryPatches')
+    }
     // 水花：落點往上往外噴的小水滴（加色、會飄散）
     const NS = 500, sp = new Float32Array(NS * 3), sv = []
     const reset = (i, first) => { const x = F.x + (rnd() - 0.5) * 9, z = fz - 2.6 - rnd() * 1.8; sp[i * 3] = x; sp[i * 3 + 1] = poolY + (first ? rnd() * 5 : 0.1); sp[i * 3 + 2] = z; sv[i] = V((rnd() - 0.5) * 1.6, 2 + rnd() * 4.5, -(0.4 + rnd() * 2.2)) }
@@ -1043,7 +1102,8 @@ export function buildYosemite(scene, { lib } = {}) {
         const h1 = hsh(n * 3.1 + 1), h2 = hsh(n * 5.7 + 2), h3 = hsh(n * 7.3 + 3), h4 = hsh(n * 11.9 + 4), h5 = hsh(n * 2.3 + 5)
         q.setFromAxisAngle(UP, Math.atan2(tn.x, tn.z) + (h1 - 0.5) * 0.09)
         const gal = st.kind[ii] === 'gal', alc = st.kind[ii] === 'alc', shf = st.kind[ii] === 'shelf', wet = shf && p.x > 197.55 && p.x < 202.65 && p.z < YOSE.base(p.x) + 3   /* 驗收第 23 條：出水口 1A 加寬成 4.4 m（F.x−2.3～+2.3），跨水那段的石板也要跟著讓出來（踏腳石接手） */, so = (h3 - 0.5) * (gal || alc ? 0.04 : 0.1) + (gal ? (SIDE[ii].z < 0 ? 1 : -1) * 0.3 : 0)   // 階地：踏板只鋪到內側的石壁（寬 1.8 m，往外移 0.27）
-        tm.setMatrixAt(n, m4.compose(V(p.x + SIDE[ii].x * so, yTop - 0.3 - h5 * 0.012, p.z + SIDE[ii].z * so), q, V(wet ? 0.0001 : gal ? 0.86 : alc ? 0.75 : shf ? 0.62 : 1, 1, 0.93 + 0.12 * h2)))   /* 折返平台：踏板窄一點（2.5 m 寬的踏板在半徑 0.85 m 的彎上互相戳出來，像貼在岩壁上的大石塊） */
+        const galF = gal && p.x > YOSE.GAL[0] - 0.3 && p.x < YOSE.GAL[1] + 0.3 && p.y > SHELF_Y - 1   /* 岩廊：不放方塊踏板，鋪 gallery_kit 的石板 */
+        tm.setMatrixAt(n, m4.compose(V(p.x + SIDE[ii].x * so, yTop - 0.3 - h5 * 0.012, p.z + SIDE[ii].z * so), q, V(wet || galF ? 0.0001 : gal ? 0.86 : alc ? 0.75 : shf ? 0.62 : 1, 1, 0.93 + 0.12 * h2)))   /* 折返平台：踏板窄一點（2.5 m 寬的踏板在半徑 0.85 m 的彎上互相戳出來，像貼在岩壁上的大石塊） */
         const kk = 0.87 + 0.26 * h4, wm = (h5 - 0.5) * 0.08
         tm.setColorAt(n, c.setRGB(1.0 * kk + wm, 0.9 * kk, 0.74 * kk - wm))
         STEPS.push({ m: m4.clone(), c: c.clone() })
@@ -1078,30 +1138,47 @@ export function buildYosemite(scene, { lib } = {}) {
         g.add(rm)
       }
     }
-    // 2026-11-13 岩廊的欄杆（龍岩窟參考圖）：一道矮石緣（高 0.34、寬 0.4，石階同一個材質）上面立原木柱（直徑 18 cm、高 0.95 m），兩道原木橫桿（0.55、0.92 m）。
-    // 樹皮用 Poly Haven 的柳杉樹皮（bark.js），調成淋濕的灰褐色
-    if (WOOD.length) {
-      const logM = barkMaterial('japanese_cedar_bark', { normal: 1.3, color: [1.45, 1.3, 1.12] })   /* 參考圖是淋濕、褪色的灰褐原木，樹皮貼圖本身偏暗紅 */
-      const postG = new THREE.CylinderGeometry(0.085, 0.095, 1, 9).translate(0, 0.5, 0), railG = new THREE.CylinderGeometry(0.06, 0.065, 1, 8).rotateZ(Math.PI / 2)
-      for (const gg of [postG, railG]) { const uv = gg.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * 1.0, uv.getY(k) * 1.6) }
-      const curbG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)
-      const posts = [], rails = [], curbs = [], q = new THREE.Quaternion(), X1 = V(1, 0, 0)
-      const CURB_H = 0.34
-      for (const run of WOOD) {
-        for (let k = 0; k < run.length; k++) {
-          const p = run[k]
-          posts.push(m4.compose(V(p.x, p.y + CURB_H, p.z), q.identity(), V(1, 0.97 + 0.06 * hsh(k * 3.7 + p.x), 1)).clone())
-          addCollider(p.x, p.z, 0.15, p.y + 1.2, p.y - 0.4)
-          if (!k) continue
-          const a2 = run[k - 1], d = p.clone().sub(a2), L = d.length(); q.setFromUnitVectors(X1, d.clone().normalize())
-          for (const hh of [0.55, 0.92]) rails.push(m4.compose(a2.clone().add(p).multiplyScalar(0.5).add(V(0, CURB_H + hh, 0)), q, V(L + 0.12, 1, 1)).clone())
-          // 石緣：沿著欄杆線，寬 0.4、高 0.34（往地板底下多埋 0.1）
-          const ya = Math.min(a2.y, p.y); curbs.push(m4.compose(V((a2.x + p.x) / 2, ya - 0.1, (a2.z + p.z) / 2), new THREE.Quaternion().setFromUnitVectors(X1, V(d.x, 0, d.z).normalize()), V(Math.hypot(d.x, d.z) + 0.04, CURB_H + 0.1 + Math.abs(a2.y - p.y), 0.4)).clone())
-        }
+    // 2026-11-13 岩廊（龍岩窟參考圖，使用者：「都用 Blender 生成」）：tools/make-gallery-kit.py 做的原木柱、原木橫桿、矮石緣、不規則石板地。
+    // 原木掛柳杉樹皮（淋濕褪色的灰褐）、石頭跟石階同一份三向投影石材；石板地另外一份「濕」的（粗糙度 0.32，反光一塊塊不一樣）
+    if (WOOD.length) new GLTFLoader().loadAsync(`models/props/gallery_kit.glb?v=${VER}`).then((gl) => {
+      const K = {}
+      gl.scene.updateMatrixWorld(true)
+      gl.scene.traverse((o) => { if (o.isMesh) { const gg = o.geometry.clone(); gg.applyMatrix4(o.matrixWorld); if (gg.attributes.color_1 && !gg.attributes.color) gg.setAttribute('color', gg.attributes.color_1); K[o.name] = gg } })
+      const logM = barkMaterial('japanese_cedar_bark', { normal: 1.4, color: [1.5, 1.34, 1.15] }); logM.vertexColors = true
+      const wetM = stepM.clone(); wetM.onBeforeCompile = stepM.onBeforeCompile; wetM.customProgramCacheKey = () => 'stepTriplanarWet'; wetM.roughness = 0.3; wetM.envMapIntensity = 1.7; wetM.color.setRGB(0.86, 0.74, 0.58)   /* 參考圖：淋濕的暖褐色砂岩石板，不是冷灰 */
+      const L = {}, put = (name, M) => (L[name] ||= []).push(M.clone()), X1 = V(1, 0, 0), q = new THREE.Quaternion(), UPv = V(0, 1, 0)
+      const CURB_H = 0.34, POST_H = 0.8   // 柱子從石緣頂面往上 0.8 m（欄杆頂離地板約 1.12 m）
+      for (const run of WOOD) for (let k = 0; k < run.length; k++) {
+        const p = run[k], dir = run[Math.min(run.length - 1, k + 1)].clone().sub(run[Math.max(0, k - 1)]); dir.y = 0; dir.normalize()
+        put('gal_post_' + 'abc'[Math.floor(hsh(p.x * 7.1 + p.z) * 3)], m4.compose(V(p.x, p.y + CURB_H - 0.04, p.z), q.setFromAxisAngle(UPv, hsh(p.x * 3.3) * 6.28), V(1, POST_H, 1)))
+        addCollider(p.x, p.z, 0.15, p.y + 1.2, p.y - 0.4)
+        if (!k) continue
+        const a2 = run[k - 1], d = p.clone().sub(a2), Lh = Math.hypot(d.x, d.z)
+        q.setFromUnitVectors(X1, d.clone().normalize())
+        for (const [hh, j] of [[0.34, 0], [0.74, 1]]) put('gal_rail_' + 'ab'[(k + j) % 2], m4.compose(a2.clone().add(p).multiplyScalar(0.5).add(V(0, CURB_H + hh, 0)), q, V(d.length() + 0.14, 1, 1)))
+        const qf = new THREE.Quaternion().setFromUnitVectors(X1, V(d.x, 0, d.z).normalize())
+        put('gal_curb_' + 'abc'[k % 3], m4.compose(V((a2.x + p.x) / 2, Math.min(a2.y, p.y) - 0.04, (a2.z + p.z) / 2), qf, V(Lh + 0.06, 1 + Math.abs(a2.y - p.y) / CURB_H, 1)))
       }
-      const mk = (geo, mat, list, name) => { const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((mm, k) => im.setMatrixAt(k, mm)); im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = name; g.add(im) }
-      mk(postG, logM, posts, 'galleryPosts'); mk(railG, logM, rails, 'galleryRails'); mk(curbG, stepM, curbs, 'galleryCurb')
-    }
+      // 石板地：沿岩廊中線每 0.95 m 一塊（1.0 × 2.4），轉到路的方向
+      { const G = YOSE.GAL, inGal = (i) => st.kind[i] === 'gal' && st.pts[i][0] > G[0] - 0.4 && st.pts[i][0] < G[1] + 0.4 && st.yy[i] > SHELF_Y - 1
+        let next = -1, nf = 0
+        for (let i = 1; i < NP; i++) {
+          if (!inGal(i)) { next = -1; continue }
+          if (next < 0) next = st.S[i - 1]
+          while (next <= st.S[i]) {
+            const t = (next - st.S[i - 1]) / Math.max(1e-6, st.S[i] - st.S[i - 1]), c = C3[i - 1].clone().lerp(C3[i], t), tn = TAN[i]
+            q.setFromAxisAngle(UPv, Math.atan2(-tn.z, tn.x))
+            put('gal_floor_' + 'abc'[nf++ % 3], m4.compose(V(c.x, c.y + 0.004, c.z), q, V(1, 1, 1)))
+            next += 0.95
+          }
+        } }
+      const mats = { post: logM, rail: logM, curb: stepM, floor: wetM }
+      for (const [name, list] of Object.entries(L)) {
+        if (!K[name] || !list.length) continue
+        const im = new THREE.InstancedMesh(K[name], mats[name.split('_')[1]], list.length)
+        list.forEach((mm, k) => im.setMatrixAt(k, mm)); im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'galKit_' + name; g.add(im)
+      }
+    }).catch((e) => console.error('gallery kit', String(e?.stack ?? e)))
     // Blender 做的石板踏板（tools/make-gorge-rock-kit.py 裡的 step_a～d；同一份套件裡的岩拱、岩棚、緣石、掛燈是隧道用的，2026-11-12 隧道拆掉後不再用）：四種輪流、一半轉 180 度，載好就換掉上面的方塊
     new GLTFLoader().loadAsync(`models/props/gorge_rock_kit.glb?v=${VER}`).then((gl) => {
       const K = {}
