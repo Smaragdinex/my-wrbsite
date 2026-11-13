@@ -56,7 +56,9 @@ export function buildSky(scene) {
         // 2026-11-12 大太陽（weather 'sunny'）：天頂更深的藍、地平線從灰白變成淡藍（平常的晴天偏白、像薄雲天）
         top = mix(top, vec3(0.13, 0.38, 0.86), uSunny * uDay * 0.85); hor = mix(hor, vec3(0.6, 0.79, 0.97), uSunny * uDay * 0.75);
         // 黃昏：太陽那一側的地平線橘紅、天頂偏紫
-        float sunSide = 0.5 + 0.5 * dot(normalize(d.xz + 1e-4), normalize(sunDir.xz + 1e-4));
+        // 2026-11-13 使用者「天空一條黑色破圖線、繞著太陽轉」：正對太陽反方向那條經線上 dot = -1，捨入誤差讓 sunSide 變成 -0.0000001，
+        // 下面 pow(sunSide, 2.5) = NaN → 整條變黑點（乘 uDusk = 0 也救不回來：NaN × 0 還是 NaN）。夾在 0～1
+        float sunSide = clamp(0.5 + 0.5 * dot(normalize(d.xz + 1e-4), normalize(sunDir.xz + 1e-4)), 0.0, 1.0);
         // 2026-11-11 濕地夕陽（ChatGPT，linear）：太陽兩側 ±35° 的地平線橘 (1,.43,.2)、其他方向偏粉紫；上層一帶 (.76,.38,.36)、天頂 (.27,.32,.49)
         float warm = pow(sunSide, 2.5);
         hor = mix(hor, mix(vec3(0.42, 0.38, 0.46), vec3(1.0, 0.43, 0.2) * 1.15, warm), uDusk);
