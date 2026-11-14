@@ -66,7 +66,10 @@ export function rockTex() {
 export const GLSL_ROCK = `
   vec3 rockSample(sampler2D t, vec3 p, vec3 n) {   // 側面兩個投影（沿 x 的牆用 xy、沿 z 的牆用 zy），4 m 一張；垂直方向不鏡像
     vec2 w = pow(abs(n.xz), vec2(4.0)); w /= (w.x + w.y + 1e-4);
-    return texture2D(t, vec2(p.z, p.y) * 0.25).rgb * w.x + texture2D(t, vec2(p.x, p.y) * 0.25).rgb * w.y;
+    vec3 a = texture2D(t, vec2(p.z, p.y) * 0.25).rgb * w.x + texture2D(t, vec2(p.x, p.y) * 0.25).rgb * w.y;
+    vec3 b = texture2D(t, vec2(p.z * 0.71 + p.y * 0.08, p.y * 0.93) * 0.083 + 0.37).rgb * w.x + texture2D(t, vec2(p.x * 0.71 + p.y * 0.08, p.y * 0.93) * 0.083 + 0.61).rgb * w.y;   // 2026-11-14 驗收：重複太明顯 → 再疊一張 12 m 的（明暗＋色偏），不同位置看起來就不一樣
+    float lb = dot(b, vec3(0.33)), la = dot(a, vec3(0.33)) + 1e-3;
+    return a * mix(1.0, lb / la, 0.45) * (0.85 + 0.3 * smoothstep(0.2, 0.6, lb));
   }`
 export function buildYosemite(scene, { lib } = {}) {
   const M0 = { XA: 206, XB: 215.5 }   // 2026-11-12 之字形石階拆了：XB 只剩「步道上到岩壁頂的出口在哪」（路牌用）
@@ -361,7 +364,7 @@ export function buildYosemite(scene, { lib } = {}) {
           float sdist = length(vViewPosition);
           // 2026-11-14 ChatGPT 的砂岩貼圖：垂直的岩面直接用它（顏色、層理、裂、地衣都在圖裡），下面那套程式畫的層理只留一點點
           vec3 rkC = rockSample(uRock, vTpW, normalize(vTpN));
-          diffuseColor.rgb = mix(diffuseColor.rgb, rkC * 1.55, max(wallK, 0.85));   /* 朝上的岩架頂也用砂岩色（以前是花崗岩的灰白，一條條亮白） */
+          diffuseColor.rgb = mix(diffuseColor.rgb, rkC * vec3(1.7, 1.5, 1.3), max(wallK, 0.85));   /* 驗收第 5 條：岩壁比步道岩塊淡、偏白 → 暖一點，兩邊看起來是同一種岩石 */   /* 朝上的岩架頂也用砂岩色（以前是花崗岩的灰白，一條條亮白） */
           tpH += wallK * dot(rkC, vec3(0.33)) * 2.2;
           wallK *= 0.25;
           // 直的節理把岩壁切成 2～3 m 寬的一塊塊，每塊的層面上下錯開一點（不然整面像掃描線）；層的密度隨高度變（薄頁岩帶、厚砂岩帶交替）
@@ -416,7 +419,7 @@ export function buildYosemite(scene, { lib } = {}) {
         diffuseColor.rgb *= 1.0 - 0.12 * wetR; }`) }
   }
   if (GRANITE) cliffM.defines = { GRANITE: 1 }
-  cliffM.customProgramCacheKey = () => 'cliffTriplanarRock2' + (GRANITE ? 'G' : '')
+  cliffM.customProgramCacheKey = () => 'cliffTriplanarRock3' + (GRANITE ? 'G' : '')
   const cliff = new THREE.Mesh(cg, cliffM); cliff.castShadow = true; cliff.receiveShadow = true; g.add(cliff)
   cliff.name = 'cliffFace'   // world.js 用射線在岩面上擺鳥（Pass 1D）
   // 2026-11-14 使用者（圈東頭陡山脊，三輪）：「要像岩石山、Zion 那種」「這裡應該是天然的岩石，你這樣是人工的」——
@@ -1104,7 +1107,7 @@ export function buildYosemite(scene, { lib } = {}) {
   // 露天的地方外側加鐵欄杆（3）；隧道裡每 8 m 一盞壁燈，燈光直接算進隧道壁和踏板的顏色裡（不用真的光源）
   {
     const st = TR, topYm = YOSE.topY(214), NP = st.pts.length
-    const stepM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: new THREE.Color(0.66, 0.56, 0.45), roughness: 0.88, vertexColors: true })   /* 2026-11-14 概念圖：石階是暖灰褐的砂岩（以前冷灰白） */   /* 頂點色＝Blender 烘的環境遮蔽（岩石套件）；方塊踏板給全白 */
+    const stepM = new THREE.MeshStandardMaterial({ map: rockTex(), color: new THREE.Color(1.05, 0.92, 0.8), roughness: 0.88, vertexColors: true })   /* 2026-11-14 驗收第 4 條：石階淡灰綠、跟暖色砂岩崖壁不像同一種石頭 → 用同一張砂岩貼圖 */   /* 2026-11-14 概念圖：石階是暖灰褐的砂岩（以前冷灰白） */   /* 頂點色＝Blender 烘的環境遮蔽（岩石套件）；方塊踏板給全白 */
     stepM.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTpW; varying vec3 vTpN;')
         .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
@@ -1117,7 +1120,7 @@ export function buildYosemite(scene, { lib } = {}) {
         .replace('#include <map_fragment>', `
           vec3 tpB = pow(abs(normalize(vTpN)), vec3(5.0)); tpB /= (tpB.x + tpB.y + tpB.z + 1e-4);
           vec4 tpC = texture2D(map, vTpW.zy * 0.45) * tpB.x + texture2D(map, vTpW.xz * 0.45) * tpB.y + texture2D(map, vTpW.xy * 0.45) * tpB.z;
-          diffuseColor *= mix(vec4(0.8), tpC, 0.7);
+          diffuseColor *= mix(vec4(0.62), tpC * 1.25, 0.75);
           // 越靠瀑布越濕（ChatGPT：濕的花崗岩暗 10～25%、粗糙度 0.35～0.55）
           float wet = smoothstep(30.0, 8.0, distance(vTpW.xz, vec2(${F.x.toFixed(1)}, ${F.z.toFixed(1)})));
           diffuseColor.rgb *= 1.0 - 0.24 * wet;`)
@@ -1152,7 +1155,7 @@ export function buildYosemite(scene, { lib } = {}) {
           float lam = vfbm(vec2(vTpW.y * 34.0, (vTpW.x + vTpW.z) * 0.7)), lam2 = vfbm(vec2(vTpW.y * 9.0 + 3.0, (vTpW.x - vTpW.z) * 0.4));
           diffuseColor.rgb *= 1.0 - (1.0 - smoothstep(0.3, 0.7, abs(upF))) * (0.34 * smoothstep(0.5, 0.72, lam) + 0.22 * smoothstep(0.45, 0.7, lam2)) * (1.0 - cov); }`) }
     }
-    stepM.customProgramCacheKey = () => 'stepTriplanar7'
+    stepM.customProgramCacheKey = () => 'stepTriplanar8'
     STEP_MAT = stepM
     const C3 = [], TAN = [], SIDE = [], UP = V(0, 1, 0)
     for (let i = 0; i < NP; i++) C3.push(V(st.pts[i][0], st.yy[i], st.pts[i][1]))
@@ -1317,7 +1320,7 @@ export function buildYosemite(scene, { lib } = {}) {
         } }
       const wallM = stepM.clone(); wallM.map = rockTex(); wallM.onBeforeCompile = (sh) => { STEP_BASE_OBC(sh)
         // ChatGPT 砂岩貼圖：4 m 一張、整個顏色用貼圖的（以前是花崗岩貼圖 ×0.7 混灰）
-        sh.fragmentShader = sh.fragmentShader.replace(/vTpW\.(zy|xz|xy) \* 0\.45/g, (m0, a) => 'vTpW.' + a + ' * 0.25').replace('diffuseColor *= mix(vec4(0.8), tpC, 0.7);', 'diffuseColor.rgb *= tpC.rgb * 1.9;')
+        sh.fragmentShader = sh.fragmentShader.replace(/vTpW\.(zy|xz|xy) \* 0\.45/g, (m0, a) => 'vTpW.' + a + ' * 0.25').replace('diffuseColor *= mix(vec4(0.62), tpC * 1.25, 0.75);', 'diffuseColor.rgb *= tpC.rgb * 1.75;')
         // 概念圖：暖橘褐砂岩、縫和凹處很暗（對比強）；頂點色裡烘的 AO 再壓深一點
         sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + GLSL_VNOISE).replace('#include <color_fragment>', `#include <color_fragment>
           { float l = dot(vColor.rgb, vec3(0.33)); diffuseColor.rgb *= mix(0.55, 1.12, smoothstep(0.25, 0.85, l));
@@ -1330,7 +1333,7 @@ export function buildYosemite(scene, { lib } = {}) {
             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.09, 0.15, 0.04) * (0.8 + 0.5 * li), up * mo * 0.85);
             float drip = smoothstep(0.62, 0.8, vfbm(vec2((p.x + p.z) * 2.4, p.y * 0.12)));        // 往下流的深色水痕
             diffuseColor.rgb *= 1.0 - 0.32 * drip * (1.0 - up); }`) }
-      wallM.customProgramCacheKey = () => 'sandWallRock'; wallM.color.setRGB(1.0, 0.92, 0.85); addBounce(wallM, 0.3)   // 崖壁的暖砂岩色（石階那份偏冷灰）
+      wallM.customProgramCacheKey = () => 'sandWallRock2'; wallM.color.setRGB(1.0, 0.92, 0.85); addBounce(wallM, 0.3)   // 崖壁的暖砂岩色（石階那份偏冷灰）
       const mats = { post: logM, rail: logM, curb: stepM, floor: wetM, step: stepM, wall: wallM }
       for (const [name, list] of Object.entries(L)) {
         if (!K[name] || !list.length) continue

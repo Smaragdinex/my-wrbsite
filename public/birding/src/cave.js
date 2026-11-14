@@ -7,6 +7,8 @@ import { mulberry32, fbm2 } from './noise.js'
 import { windUniforms } from './wind.js'
 import { scatter, parts, lowGeo } from './plants.js'
 import { mossRockMaterial } from './yosemite-top.js'
+import { rockTex } from './yosemite.js'
+import { dayLight } from './structures.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
@@ -207,6 +209,12 @@ export function buildCave(scene, kit, sum, lib) {
     })
     cg.setAttribute('color', new THREE.BufferAttribute(col, 3))
     const wallM = mossRockMaterial(); wallM.roughness = 0.5; wallM.side = THREE.DoubleSide
+    // 2026-11-14 ChatGPT 美術驗收第 1 名「瀑布後面那個洞像一個大黑洞」：洞壁改用跟岩壁同一張砂岩貼圖、暖色，再補從水面／洞口反進來的光（白天）
+    wallM.map = rockTex(); wallM.color.setRGB(1.15, 1.0, 0.85)
+    { const ob = wallM.onBeforeCompile, key = wallM.customProgramCacheKey?.bind(wallM)
+      wallM.onBeforeCompile = (sh, r) => { ob?.(sh, r); sh.uniforms.uDayC = dayLight
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uDayC;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.92, 0.8) * 0.45 * uDayC;') }
+      wallM.customProgramCacheKey = () => (key ? key() : '') + '|caveSandLit' }
     const shell = new THREE.Mesh(cg, wallM); shell.name = 'caveShell'; shell.receiveShadow = true; shell.castShadow = false; g.add(shell)
     // 後壁和天花板貼滿岩壁掃描（Poly Haven rock_face：一片單面的岩壁浮雕，面朝斜上方 (0, .7, .7)）：
     // 每片轉到面朝洞裡（後壁朝洞口、天花板朝下，中間彎的地方照斷面的角度），像貼磁磚一樣互相疊一點；每片中心貼在程式算的那層岩面前面 0.25 m。
