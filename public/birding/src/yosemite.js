@@ -223,6 +223,10 @@ export function buildYosemite(scene, { lib } = {}) {
     // 2026-11-12 階地的轉角（地板的內外緣）要剛好落在取樣點上，不然等距取樣會把直角削成斜面、石壁歪到步道上面
     const snap = new Map(); for (let i = 0; i < P.length; i++) if (P[i][3]) snap.set(Math.max(1, Math.min(FACE - 1, Math.round(Ls[i] / Ls.at(-1) * FACE))), P[i])
     const yTerr = slots.length ? Math.min(...slots.map((sl) => sl.y0)) - 0.4 : 1e9
+    // 2026-11-15 使用者（瀑布腳下的露天石階整片岩石從下擋到上、穿得過去）：凹槽東口（x 201～207.5）岩窟收窄、caveD 變小，步道中線還是離牆腳 1.2 m，
+    // 那裡又沒有橫槽 → 石階整段埋在岩面裡。露天步道經過的地方：步道高度往上 3 m 內，岩面至少退到步道中線往裡 1.5 m
+    const openClr = []; for (let i = 0; i < TR.pts.length; i++) if (TR.kind[i] === 'open' && Math.abs(x - TR.pts[i][0]) < 1.0) openClr.push([TR.yy[i] - 0.25, TR.yy[i] + 3.0, TR.pts[i][1] - YOSE.base(TR.pts[i][0]) + 1.5])
+    const clrD = (y, d) => { for (const [y0, y1, dm] of openClr) if (y > y0 && y < y1 && d < dm) d = dm; return d }
     // 2026-11-12 ChatGPT V4（遠看五條橫帶太整齊）：兩層步道之間的石壁上加直的侵蝕溝、往裡凹的岩層（0.3～0.8 m），頭上 2.6 m 以上才有往外凸的岩塊；
     // 離地板、岩簷 0.35 m 以內不動（步道的寬度、能走的範圍都不變）
     const lvl = []; for (const sl of slots) { lvl.push(sl.y0); if (sl.y1 < sl.y0 + 20) lvl.push(sl.y1) }
@@ -245,7 +249,7 @@ export function buildYosemite(scene, { lib } = {}) {
       const u = (s0 - Ls[i - 1]) / Math.max(1e-6, Ls[i] - Ls[i - 1]), sp = snap.get(k), d = sp ? sp[0] : lerpN(P[i - 1][0], P[i][0], u), y = sp ? sp[1] : lerpN(P[i - 1][1], P[i][1], u), q = lerpN(P[i - 1][2], P[i][2], u)
       // 層理只往裡凹（瀑布水簾那幾公尺）或前後都有（其他地方）；岩窟裡也有
       const b = bedAt(x, y), bo0 = sed * (fallK > 0.3 ? Math.max(0, b.off) + 0.2 : b.off) * ss(g0 - 0.5, g0 + 1.5, y), bo = y > yTerr ? (sp ? 0 : Math.max(-0.1, Math.min(0.3, bo0 * 0.4)) * 0.5 + rough(y, bo0)) : bo0   // 階地以上：層理不能凸到步道上
-      out.push([y, Math.max(push, zb + d + bo), q, b.ledge * sed, b.tone, b.joint * sed])
+      out.push([y, Math.max(push, zb + clrD(y, d + bo)), q, b.ledge * sed, b.tone, b.joint * sed])
     }
     if (A > 0.25) out.lip = { y: g0 + Ho + 0.3, z: zb + lip - 0.35 * A, A }
     out.cutTop = cutTop; out.topD = normalD(yTop) + cutTop   // topD＝岩壁頂的前緣離牆腳多遠（cutTop 是扣掉岩壁後仰的量之後的切深）

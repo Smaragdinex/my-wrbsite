@@ -187,7 +187,14 @@ export function buildCave(scene, kit, sum, lib) {
         let need = -1e9
         for (const [px, pz, py] of sm) { const dx = vx - px; if (Math.abs(dx) >= R || vy < py - 0.6 || vy > py + 2.8 || vz < pz - 0.5) continue; need = Math.max(need, pz + Math.sqrt(R * R - dx * dx)) }
         if (vz < need) pos[v * 3 + 2] = need
-      } }
+      }
+      // 2026-11-15 使用者（凹槽東口的露天石階「從下到上都擋住、穿得過去」）：岩窟東端收口那面內襯是橫著擋在石階上的（往 +z 推沒用）→
+      // 步道中線水平 1.1 m、腳下 0.4 m 到頭上 2.6 m 以內有頂點的三角形直接不畫，後面那層岩壁（yosemite.js clrD 已退到步道後面）露出來
+      const blocked = new Uint8Array(pos.length / 3)
+      for (let v = 0; v < blocked.length; v++) { const vx = pos[v * 3], vy = pos[v * 3 + 1], vz = pos[v * 3 + 2]
+        for (const [px, pz, py] of sm) if (Math.abs(vx - px) < 1.1 && Math.abs(vz - pz) < 1.1 && vy > py - 0.4 && vy < py + 2.6 && Math.hypot(vx - px, vz - pz) < 1.1) { blocked[v] = 1; break } }
+      const keep = []; for (let t = 0; t < idx.length; t += 3) if (!blocked[idx[t]] && !blocked[idx[t + 1]] && !blocked[idx[t + 2]]) keep.push(idx[t], idx[t + 1], idx[t + 2])
+      console.debug('[cave] 步道上的內襯拿掉', (idx.length - keep.length) / 3, '個三角形'); idx.length = 0; idx.push(...keep) }
     const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); cg.setIndex(idx); cg.computeVertexNormals()
     // 面要朝洞口（-z／往下）：檢查一個後壁中間的法線，反了就整個翻面
     { const nrm = cg.attributes.normal, mid = Math.round(NXc / 2) * (NS + 1) + 10; if (nrm.getZ(mid) > 0) { for (let t = 0; t < idx.length; t += 3) { const q = idx[t + 1]; idx[t + 1] = idx[t + 2]; idx[t + 2] = q } cg.setIndex(idx); cg.computeVertexNormals() } }
