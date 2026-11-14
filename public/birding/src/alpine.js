@@ -1819,6 +1819,9 @@ function buildInterior(lib, avoid = []) {
     const lists = {}, put = (n, it) => (lists[n] ||= []).push(it)
     const big = ['rock_face', 'rock_face_02', 'boulder', 'mrock_3', 'mrock_7', 'mrock_9', 'mrock_12'], moss = ['rock_moss_set', 'rock_moss_set_02', 'mrock_8', 'mrock_10', 'boulder']
     const pick = (a) => a[Math.floor(rnd() * a.length)]
+    // 2026-11-14 使用者截圖「這石頭懸空」（瀑布湖出水溪 x 172、z 43 的陡坡）：以前照石頭中心的地面高放，陡坡上下坡那側整個懸空
+    // → 照石頭腳下一圈（半徑 r）最低的地面放，上坡那側埋進坡裡（位置、亂數順序都沒變，只改高度）
+    const footMin = (x, z, r, H) => { let m = H(x, z); for (let a = 0; a < 8; a++) m = Math.min(m, H(x + Math.cos(a * Math.PI / 4) * r, z + Math.sin(a * Math.PI / 4) * r)); return m }
     for (let k = 0; k < 8000 * AK; k++) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
@@ -1827,11 +1830,11 @@ function buildInterior(lib, avoid = []) {
       const h = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - h, alpineHeight(x, z + 1) - h)
       if (h < ALP_POND.water - 0.2 && Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 0.5) continue   // 2026-11-10 檢查員：河口挖深後一顆苔石留在湖底、像一團褐色珊瑚 → 湖裡（水深 > 0.2）不放
       const sd = alpineStreamDist(x, z)
-      if (sd > 1.4 && sd < 4 && rnd() < 0.25) put(pick(moss), { p: V(x, h - 0.15, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 1.2), c: new THREE.Color().setHSL(0.25, 0.12, 0.85 + rnd() * 0.1) })
+      if (sd > 1.4 && sd < 4 && rnd() < 0.25) put(pick(moss), { p: V(x, footMin(x, z, 0.8, alpineHeight) - 0.15, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 1.2), c: new THREE.Color().setHSL(0.25, 0.12, 0.85 + rnd() * 0.1) })
       else if (slope > 0.55 && rnd() < 0.06) {
         const k = 1.5 + rnd() * 2
         if (alpineTrailDist(x, z) < 2.2 + k * 1.3 || bridgeDist(x, z) < 2.5 + k * 1.3) continue   // 大岩塊不能壓到步道
-        put(pick(big), { p: V(x, h - 0.6, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(k), c: new THREE.Color().setHSL(0.1, 0.05, 0.8 + rnd() * 0.12) })
+        put(pick(big), { p: V(x, footMin(x, z, 0.55 * k, alpineHeight) - 0.6, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(k), c: new THREE.Color().setHSL(0.1, 0.05, 0.8 + rnd() * 0.12) })
       }
     }
     for (const [n, list] of Object.entries(lists)) if (lib[n]) { scatter(g, lib[n], list, { cast: true }); rockColliders(lib[n], list) }
@@ -1858,7 +1861,7 @@ function buildInterior(lib, avoid = []) {
       if (r < 0.035) {
         const k2 = 0.7 + rnd() * 1.4
         if (pathClearAt(x, z) < 1.4 + k2 || alpineTrailDist(x, z) < 2.4 + k2) continue
-        ;(bl[pick(rnd() < 0.5 ? moss : big)] ||= []).push({ p: V(x, h - 0.25 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(k2), c: new THREE.Color().setHSL(0.22, 0.1, 0.78 + rnd() * 0.15) })
+        ;(bl[pick(rnd() < 0.5 ? moss : big)] ||= []).push({ p: V(x, footMin(x, z, 0.55 * k2, GY) - 0.25 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rnd() * TAU, 0)), s: V(1, 1, 1).multiplyScalar(k2), c: new THREE.Color().setHSL(0.22, 0.1, 0.78 + rnd() * 0.15) })
       } else if (r < 0.2 && fbm2(x * 0.09 + 5, z * 0.09, 2) > 0.45) {
         (bf[pick(['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a', 'fern_b'])] ||= []).push({ p: V(x, h - 0.05, z), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 0.6), c: new THREE.Color().setHSL(0.25, 0.15, 0.85 + rnd() * 0.1) })
       }
