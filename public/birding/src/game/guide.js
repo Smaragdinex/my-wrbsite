@@ -275,6 +275,9 @@ function drawFrontBird(ctx, cx, cy, s) {
 // 扉頁（第一個跨頁的左頁）：系列名、書名、中間一幅會動的插圖（FRONTIS，小場景畫上去）、下面出版資訊
 const FRONTIS_LIVE = false   // 2026-11-13 使用者：扉頁設計一個鳥的圖案就好，不用動態 3D（titlePage 直接畫一幅鳥）
 const FRONTIS = { x: 0.13, y: 1 - 930 / CH, w: 0.74, h: 490 / CH }   // 插圖範圍（uv，y 往上）
+// 2026-11-14 使用者「跟 ChatGPT 生成鳥，但是用水彩畫」：扉頁改貼 ChatGPT 畫的水彩藍鵲（白紙底 → multiply 疊在書頁紙色上，白的地方就是紙）。
+// 圖每次打開圖鑑都會重畫書頁（refresh 清快取），還沒載完就先畫舊的線稿藍鵲
+const FRONT_IMG = new Image(); FRONT_IMG.src = 'models/guide/frontis_magpie_wc.jpg'
 function titlePage() {
   return canvasTex((ctx) => {
     paper(ctx, 'L')
@@ -290,8 +293,11 @@ function titlePage() {
     const px = FRONTIS.x * CW, py = (1 - FRONTIS.y - FRONTIS.h) * CH, pw = FRONTIS.w * CW, ph = FRONTIS.h * CH
     const g = ctx.createRadialGradient(cx, py + ph * 0.62, 10, cx, py + ph * 0.55, pw * 0.55)
     g.addColorStop(0, 'rgba(182,196,158,0.40)'); g.addColorStop(0.7, 'rgba(182,196,158,0.12)'); g.addColorStop(1, 'rgba(182,196,158,0)')
-    ctx.fillStyle = g; ctx.fillRect(px, py, pw, ph)
-    if (!FRONTIS_LIVE) drawFrontBird(ctx, cx, py + ph * 0.5, Math.min(pw, ph * 1.4) / 560)
+    if (!(FRONT_IMG.complete && FRONT_IMG.naturalWidth)) { ctx.fillStyle = g; ctx.fillRect(px, py, pw, ph) }   // 水彩圖自己有底色
+    if (!FRONTIS_LIVE && FRONT_IMG.complete && FRONT_IMG.naturalWidth) {
+      const k = Math.min(pw / FRONT_IMG.naturalWidth, (ph + 40) / FRONT_IMG.naturalHeight), w = FRONT_IMG.naturalWidth * k, h = FRONT_IMG.naturalHeight * k
+      ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(FRONT_IMG, cx - w / 2, py + ph * 0.5 - h / 2, w, h); ctx.restore()
+    } else if (!FRONTIS_LIVE) drawFrontBird(ctx, cx, py + ph * 0.5, Math.min(pw, ph * 1.4) / 560)
     ctx.textAlign = 'center'
     ctx.font = `26px ${SERIF}`; ctx.fillStyle = INK; ctx.fillText(tr('觀察・辨識・記錄'), cx, 990)
     ctx.font = `italic 20px Georgia, ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText('An Illustrated Field Guide', cx, 1024)
