@@ -1223,10 +1223,10 @@ export function buildYosemite(scene, { lib } = {}) {
     // 外側的欄杆（靠湖那一側）：折返平台用鐵管欄杆、一般路段的鐵樁和鐵鍊記在 CHAIN
     const WOOD = []   // 岩廊段的欄杆點（一段一段）
     { const ironR = new THREE.MeshStandardMaterial({ color: 0x33363a, roughness: 0.5, metalness: 0.6 }), pp = [], segs = []
-      let acc = 9, prev = null
+      let acc = 9, prev = null, woodTail = null; const BAY_DONE = new Set()
       for (let i = 1; i < NP; i++) {
         const k = st.kind[i], open = k === 'gal' || k === 'alc' || (k === 'open' && st.pts[i][0] > 189.5)   /* 2026-11-13 凹槽裡的岩架步道（湖那一側）也要欄杆 */
-        if (!open) { prev = null; acc = 9; continue }
+        if (!open) { prev = null; woodTail = null; acc = 9; continue }
         // 2026-11-14 使用者三次圈圖（「欄杆邏輯不對」「中間沒有」「要到岩壁」）：折返平台的欄杆＝下面那段步道外側（湖那邊）那條，
         // 沿同一條線直直往前延伸，一直接到平台盡頭的端牆為止；平台裡面、靠端牆那側都不立柱；上面那段剛離開平台的頭兩點也不立（那邊是平台，不是落差）
         if (st.kind[i] === 'alc') {
@@ -1249,13 +1249,25 @@ export function buildYosemite(scene, { lib } = {}) {
         const sd = SIDE[i].z < 0 ? 1 : -1
         const p = C3[i].clone().addScaledVector(SIDE[i], sd * 1.2)
         // 2026-11-12 ChatGPT：整條黑鐵管欄杆像都市樓梯 → 折返平台前後才用鐵管欄杆，一般路段是鑿進岩石的鐵樁＋垂鍊（Angels Landing），賞鳥台外緣是矮石牆
-        if ((st.bays ?? []).some((b) => Math.abs(C3[i].x - b.x) < b.half + 0.2 && Math.abs(C3[i].y - b.y) < 0.8)) { prev = null; continue }
+        { const bb = (st.bays ?? []).find((b) => Math.abs(C3[i].x - b.x) < b.half + 0.2 && Math.abs(C3[i].y - b.y) < 0.8)
+          if (bb) {
+            // 2026-11-15 使用者（賞鳥台照片，左右各圈一個缺口）「左右都缺少 railing」：以前賞鳥台前後 2.2 m 的鐵樁全部不立、矮石牆又只到兩端 →
+            // 石階最後一根樁到牆頭、牆尾到下一根樁之間各空一段。牆的兩端各補一根樁，鐵鍊從兩側接到牆頭
+            if (!BAY_DONE.has(bb)) { BAY_DONE.add(bb)
+              const zAt = (x) => YOSE.base(x) + bb.d, ang = Math.atan2(zAt(bb.x + 1) - zAt(bb.x - 1), 2), ca = Math.cos(ang)
+              const E = [-1, 1].map((sg) => { const x = bb.x + sg * 2.25 * ca, q = V(x + Math.sin(ang) * 1.2, bb.y, zAt(x) - ca * 1.2); q.sturdy = false; return q })
+              if (prev && prev.distanceTo(E[1]) < prev.distanceTo(E[0])) E.reverse()
+              if (prev && prev.distanceTo(E[0]) < 3.8) CHAIN.segs.push([prev, E[0]])
+              CHAIN.posts.push(E[0], E[1]); prev = E[1]; acc = 0
+            }
+            continue } }
         // 2026-11-13（龍岩窟參考圖）：兩段岩廊不用鐵鍊，改成矮石緣上的原木欄杆（下面 WOOD 另外蓋）
-        if (st.kind[i] === 'gal' && p.x > YOSE.GAL[0] - 0.5 && p.x < YOSE.GAL[1] + 0.5 && p.y > YOSE.shelfY() - 1.0) { const last = WOOD.at(-1); if (!last || last.at(-1).distanceTo(p) > 3.0) WOOD.push([]); WOOD.at(-1).push(p); prev = null; continue }
+        if (st.kind[i] === 'gal' && p.x > YOSE.GAL[0] - 0.5 && p.x < YOSE.GAL[1] + 0.5 && p.y > YOSE.shelfY() - 1.0) { const last = WOOD.at(-1); if (!last || last.at(-1).distanceTo(p) > 4.5) WOOD.push(prev && prev.distanceTo(p) < 3.8 ? [prev.clone()] : []); WOOD.at(-1).push(p); woodTail = WOOD.at(-1); prev = null; continue }   // 2026-11-15 使用者「這裡也缺少 railing」：鐵鍊最後一根樁到原木欄杆第一根之間空一段（原木那段只有一根孤零零的柱子）→ 原木欄杆從鐵鍊最後一根樁接過來
         const sturdy = false   // 2026-11-14 使用者「都改鐵鍊」：折返平台、岩壁頂的鐵管欄杆全部換成鐵樁＋鐵鍊
         p.sturdy = sturdy
         if (prev && prev.distanceTo(p) < 3.8) (sturdy || prev.sturdy ? segs : CHAIN.segs).push([prev, p])
         ;(sturdy ? pp : CHAIN.posts).push(p); prev = p
+        if (woodTail && woodTail.at(-1).distanceTo(p) < 3.8) woodTail.push(p.clone()); woodTail = null   // 反方向：原木欄杆結束的地方也接到下一根鐵鍊樁
       }
       if (pp.length) {
         const pm2 = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 6).translate(0, 0.55, 0), ironR, pp.length)
