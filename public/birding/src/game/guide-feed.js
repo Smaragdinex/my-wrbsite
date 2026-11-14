@@ -119,7 +119,7 @@ function dio(b) {
   if (dios.has(b.id)) return dios.get(b.id)
   if (waiting.has(b.id)) return null
   try {
-    const d = makeDiorama(b, SQ, 0.82); d.update(0, 0.016); d.ready = false
+    const d = makeDiorama(b, SQ, 1, 0.62); d.update(0, 0.016); d.ready = false
     renderer.compileAsync(d.scene, d.cam).then(() => { d.ready = true })
     dios.set(b.id, d); return d
   } catch (e) {
@@ -154,14 +154,49 @@ addEventListener('keydown', (e) => { if (e.code === 'ArrowRight') go(Math.min(BI
 const start = Math.max(0, BIRDS.findIndex((b) => b.id === location.hash.slice(1)) + 1)
 requestAnimationFrame(() => go(start, false))
 
+// 使用者「讓鳥是固定的比例大小、左右太長」：書裡的取景是照第一格的外框算一次，走動、伸脖子、長尾巴的鳥在正方形裡會超出去或太小
+// → 量鳥實際的外框（頂點＋骨頭），投影到鏡頭的左右／上下，鏡頭距離和對準點跟著調：鳥的最長邊固定佔畫面 FILL
+const FILL = 0.7, TAN = Math.tan(THREE.MathUtils.degToRad(15))
+const _bx = new THREE.Box3(), _c = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3(), _f = new THREE.Vector3(), _p = new THREE.Vector3(), _q = new THREE.Vector3()
+const _m = new THREE.Matrix4(), _lb = new THREE.Box3()
+const shown = (o) => { let v = o; while (v && v.visible) v = v.parent; return !v }   // 一群的鳥只留第一隻，其他整隻藏起來（往上找祖先的 visible）
+function fitCam(d, dt) {
+  if (!d._sk) { d._sk = []; d.scene.traverse((o) => { if (o.isSkinnedMesh && !o.userData.catcher && o.material?.visible !== false && shown(o)) d._sk.push(o) }); d._body = d._sk[0] && (d._sk[0].skeleton.bones.find((b) => b.name === 'body') ?? d._sk[0].skeleton.bones[0]) }
+  if (!d._sk.length || !d._body) return
+  const cam = d.cam, body = d._body
+  body.updateWorldMatrix(true, false)
+  // 頂點外框（貴）每 0.5 秒量一次，存成「鳥身體座標」裡的框；每一格用身體現在的位置轉回世界——鳥走、轉身都跟得上，不會落後跑出畫面
+  if ((d._tm = (d._tm ?? 0) - dt) <= 0 || !d._lb) {
+    d._tm = 0.5
+    _m.copy(body.matrixWorld).invert(); _lb.makeEmpty()
+    for (const o of d._sk) { o.updateWorldMatrix(true, false); const n = o.geometry.attributes.position.count, st = Math.max(1, Math.floor(n / 4000))   // 抽 4000 個頂點就夠
+      for (let i = 0; i < n; i += st) _lb.expandByPoint(o.getVertexPosition(i, _p).applyMatrix4(o.matrixWorld).applyMatrix4(_m)) }
+    if (_lb.isEmpty()) return
+    d._lb = _lb.clone(); d._mg = Math.max(..._lb.getSize(_p).toArray()) * 0.06
+  }
+  // 投影到鏡頭的左右（r）、上下（u）、前後（f）：框的 8 個角＋每根骨頭（±邊）
+  _r.set(1, 0, 0).applyQuaternion(cam.quaternion); _u.set(0, 1, 0).applyQuaternion(cam.quaternion); cam.getWorldDirection(_f)
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9
+  const add = (q, m = 0) => { const x = q.dot(_r), y = q.dot(_u), z = q.dot(_f); x0 = Math.min(x0, x - m); x1 = Math.max(x1, x + m); y0 = Math.min(y0, y - m); y1 = Math.max(y1, y + m); z0 = Math.min(z0, z - m); z1 = Math.max(z1, z + m) }
+  for (let i = 0; i < 8; i++) add(_p.set(i & 1 ? d._lb.max.x : d._lb.min.x, i & 2 ? d._lb.max.y : d._lb.min.y, i & 4 ? d._lb.max.z : d._lb.min.z).applyMatrix4(body.matrixWorld))
+  for (const o of d._sk) for (const bn of o.skeleton.bones) add(bn.getWorldPosition(_p), d._mg)
+  _c.copy(_r).multiplyScalar((x0 + x1) / 2).addScaledVector(_u, (y0 + y1) / 2).addScaledVector(_f, (z0 + z1) / 2)
+  const h = Math.max(x1 - x0, y1 - y0) / 2, zn = (z1 - z0) / 2
+  const dist = h / (FILL * TAN) + zn
+  if (!d._now) d._now = { c: _c.clone(), dist }
+  const n = d._now
+  n.c.lerp(_c, 1 - Math.exp(-dt * 12)); n.dist += (dist - n.dist) * (1 - Math.exp(-dt * 3))   // 位置緊跟、遠近慢慢變（不會一直拉近拉遠）
+  cam.position.copy(n.c).addScaledVector(_f, -n.dist); cam.lookAt(n.c)
+}
+
 let last = performance.now(), T = 0
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now; T += dt
   if (cur > 0) {
     const d = dio(BIRDS[cur - 1])
-    if (d && d.ready) { d.update(T, dt); renderer.setRenderTarget(null); renderer.clear(); renderer.render(d.scene, d.cam); shownT += dt }
+    if (d && d.ready) { d.update(T, dt); fitCam(d, dt); renderer.setRenderTarget(null); renderer.clear(); renderer.render(d.scene, d.cam); shownT += dt }
   }
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
-window.__feed = { go, get cur() { return cur } }   // 測試腳本用
+window.__feed = { go, dios, get cur() { return cur } }   // 測試腳本用

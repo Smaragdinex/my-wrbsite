@@ -424,7 +424,7 @@ function softDisc() {
 }
 /* ---------- 右頁的小場景（一種鳥一個，打開過就留著） ---------- */
 const SIL = new THREE.MeshBasicMaterial({ color: 0x2b2722, side: THREE.DoubleSide })   // 鳥身上零星反的小碎片：剪影也要畫兩面（不然有白點）
-function makeDiorama(def, P = PLATE, zoom = 1) {
+function makeDiorama(def, P = PLATE, zoom = 1, fit = 0) {   // fit：正方形卡片用（手機圖鑑）——照鳥的最長邊取景，最長邊佔畫面 fit 倍
   const sc = new THREE.Scene()
   sc.add(new THREE.HemisphereLight(0xf6f2e8, 0x8a7c66, 1.7))
   const sun = new THREE.DirectionalLight(0xfff3df, 2.4)
@@ -482,9 +482,9 @@ function makeDiorama(def, P = PLATE, zoom = 1) {
   }
   const _want = new THREE.Vector3()
   let aimed = false
-  const s = Math.max(size.y, Math.max(size.x, size.z) * 0.75)
+  const s = fit ? Math.max(size.x, size.y, size.z) : Math.max(size.y, Math.max(size.x, size.z) * 0.75)
   // 一群鳥會散開，退遠一點
-  const dist = s / 0.55 / 2 / Math.tan(THREE.MathUtils.degToRad(15)) / zoom
+  const dist = s / (fit || 0.55) / 2 / Math.tan(THREE.MathUtils.degToRad(15)) / zoom
   // 鏡頭對準鳥身上的追蹤點（built.focus，跟溫室跟拍用的同一點），再加上它和外框中心的差：鳥走到哪都在正中間
   const focusAt = (v) => one.obj.parent.localToWorld(v.copy(one.focus))
   const off = mid.clone().sub(focusAt(new THREE.Vector3()))
