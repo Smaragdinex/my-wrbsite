@@ -1132,24 +1132,26 @@ export function buildYosemite(scene, { lib } = {}) {
       for (let i = 1; i < NP; i++) {
         const k = st.kind[i], open = k === 'gal' || k === 'alc' || (k === 'open' && st.pts[i][0] > 189.5)   /* 2026-11-13 凹槽裡的岩架步道（湖那一側）也要欄杆 */
         if (!open) { prev = null; acc = 9; continue }
+        // 2026-11-14 使用者三次圈圖（「欄杆邏輯不對」「中間沒有」「要到岩壁」）：折返平台的欄杆＝下面那段步道外側（湖那邊）那條，
+        // 沿同一條線直直往前延伸，一直接到平台盡頭的端牆為止；平台裡面、靠端牆那側都不立柱；上面那段剛離開平台的頭兩點也不立（那邊是平台，不是落差）
+        if (st.kind[i] === 'alc') {
+          if (st.kind[i - 1] !== 'alc') {
+            let s1 = i; while (s1 < NP - 1 && st.kind[s1 + 1] === 'alc') s1++
+            const L0 = C3[i - 1], sx = Math.sign(C3[Math.round((i + s1) / 2)].x - L0.x) || 1, dl = L0.z - YOSE.base(L0.x)
+            const xEnd = Math.max(...Array.from({ length: s1 - i + 1 }, (_, k) => sx * C3[i + k].x)) * sx + sx * 1.35, yA = C3[i].y
+            for (let x = L0.x + sx * 1.3; sx * (xEnd - x) > -0.01; x += sx * 1.3) {
+              const xx = sx * (x - xEnd) > 0 ? xEnd : x, q = V(xx, yA, YOSE.base(xx) + dl - 1.2)
+              q.sturdy = false; if (prev && prev.distanceTo(q) < 3.8) CHAIN.segs.push([prev, q]); CHAIN.posts.push(q); prev = q
+            }
+            { const q = V(xEnd, yA, YOSE.base(xEnd) + dl - 1.2); if (prev && prev.distanceTo(q) > 0.3) { CHAIN.segs.push([prev, q]); CHAIN.posts.push(q) } }
+          }
+          prev = null; continue
+        }
+        if ((i > 0 && st.kind[i - 1] === 'alc') || (i > 1 && st.kind[i - 2] === 'alc')) { prev = null; continue }
         acc += st.S[i] - st.S[i - 1]; if (acc < 1.35) continue
         acc = 0
         const sd = SIDE[i].z < 0 ? 1 : -1
-        let p = C3[i].clone().addScaledVector(SIDE[i], sd * 1.2)
-        // 2026-11-14 使用者（截圖圈起來）「欄杆邏輯不對，不用轉過去，不然正常無法走」：折返平台是半圈，轉到一半路的方向變成沿 z，
-        // 「SIDE.z 的正負」選邊在那裡翻面 → 鐵鍊從路中間橫過去擋住。半圈上（和進出半圈的那兩點）改成「離半圈中心往外」1.2 m
-        { let a = i, b = i; while (a > 0 && st.kind[a - 1] === 'alc') a--; while (b < NP - 1 && st.kind[b + 1] === 'alc') b++
-          const near = (j) => j >= 0 && j < NP && st.kind[j] === 'alc'
-          if (near(i) || near(i - 1) || near(i + 1)) {
-            let j0 = i; if (!near(j0)) j0 = near(i + 1) ? i + 1 : i - 1
-            let s0 = j0, s1 = j0; while (s0 > 0 && st.kind[s0 - 1] === 'alc') s0--; while (s1 < NP - 1 && st.kind[s1 + 1] === 'alc') s1++
-            const c0 = C3[Math.max(0, s0 - 1)], c1 = C3[Math.min(NP - 1, s1 + 1)], cx = (c0.x + c1.x) / 2, cz = (c0.z + c1.z) / 2
-            const ox = C3[i].x - cx, oz = C3[i].z - cz, ol = Math.hypot(ox, oz) || 1
-            // 使用者（第二張圈圖）「中間沒有對吧，直的打到底部牆壁」：半圈靠端牆那段（往外是 ±x、貼著岩壁，沒有落差）不立柱；
-            // 只有往湖那側（-z）才有欄杆，鐵鍊直直接到端牆為止
-            if (oz / ol > -0.4) { prev = null; continue }
-            p = V(C3[i].x + ox / ol * 1.2, C3[i].y, C3[i].z + oz / ol * 1.2)
-          } }
+        const p = C3[i].clone().addScaledVector(SIDE[i], sd * 1.2)
         // 2026-11-12 ChatGPT：整條黑鐵管欄杆像都市樓梯 → 折返平台前後才用鐵管欄杆，一般路段是鑿進岩石的鐵樁＋垂鍊（Angels Landing），賞鳥台外緣是矮石牆
         if ((st.bays ?? []).some((b) => Math.abs(C3[i].x - b.x) < b.half + 0.2 && Math.abs(C3[i].y - b.y) < 0.8)) { prev = null; continue }
         // 2026-11-13（龍岩窟參考圖）：兩段岩廊不用鐵鍊，改成矮石緣上的原木欄杆（下面 WOOD 另外蓋）
