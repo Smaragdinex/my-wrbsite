@@ -12,7 +12,7 @@ const WORKS = [
   { no:'03', title:'Ocean Cleanup',    tag:'iOS Game · Beach Cleanup',  url:'https://apps.apple.com/tw/app/id6771914760', img:'/assets/oceancleanup.jpg' },
   { no:'04', title:'Tiny Planet',      tag:'Three.js · Flight Sandbox',  url:'/tiny-planet/', img:'/assets/tinyplanet.jpg?v=2' },
   { no:'05', title:'Wooden Rails',     tag:'Three.js · Track Puzzle',   url:'/wooden-rails/', img:'/assets/woodenrails.jpg' },
-  { no:'06', title:'Birdwatch',        tag:'Three.js · Birdwatching',   url:'/birding/game.html', img:'/assets/birdpark.jpg' },
+  { no:'06', title:'Birdwatching',     tag:'Three.js · Birdwatching',   url:'/birding/game.html', img:'/assets/birdpark.jpg' },
 ];
 
 /* ===== 游標 ===== */
