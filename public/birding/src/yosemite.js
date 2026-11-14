@@ -1185,15 +1185,39 @@ export function buildYosemite(scene, { lib } = {}) {
             if (st.kind[i] !== 'gal' && st.kind[i] !== 'open') { acc = 99; continue }
             acc += st.S[i] - st.S[i - 1]; if (acc < 2.9) continue; acc = 0
             const sd = SIDE[i].z < 0 ? 1 : -1, inn = SIDE[i].clone().multiplyScalar(-sd)   // 欄杆在 +sd 那側，牆在另一側
-            const base = C3[i].clone().addScaledVector(inn, 1.25)
+            // 2026-11-14 使用者「步道岩壁都做仔細」：岩壁的槽是照 z（同一個 x 往岩壁裡量 1.25 m）切的，以前沿步道的垂直方向退 1.25 m，
+            // 岩壁斜著走（每往東 1 m 往北 0.55 m），等於多退了 0.18 m → 一片片岩層幾乎整片埋在岩壁裡、只露出幾塊碎角。改成同一個 x 往裡 1.2 m（比牆面凸出 5 cm）
+            const base = st.kind[i] === 'gal' ? V(C3[i].x, C3[i].y, C3[i].z + 1.2) : C3[i].clone().addScaledVector(inn, 1.25)
             const yaw = Math.atan2(-inn.x, -inn.z)                                              // 套件的 +z（凸出那面）朝步道
             // 2026-11-14 這片牆的上面常常就是上一層步道（階地往裡退 2.6 m，牆剛好在上一層外緣的正下方）：兩層高低差不到 3.4 m 的地方，
             // 牆會穿出上一層的地板、在欄杆外面露出一片片單面的岩層（從上面看像飄在空中的薄片）→ 牆頂壓到上一層地板下 0.12 m，太矮就不貼
-            const dep = (j) => C3[j].z - YOSE.base(C3[j].x), di = dep(i); let ceil = 1e9; for (let j = 0; j < NP; j++) { const dy = C3[j].y - C3[i].y; if (dy < -0.3 || dy > 5 || dep(j) - di < 1.5 || Math.abs(C3[j].x - base.x) > 2.2) continue; ceil = Math.min(ceil, C3[j].y - 0.3) }   /* 上一層＝更往岩壁裡（深 1.5 m 以上）的那條；折返平台附近兩層幾乎一樣高 → 不貼 */
-            const y0w = C3[i].y - 0.25, sy = Math.min(0.95 + 0.15 * hsh(i * 2.3), (ceil - 0.12 - y0w) / 3.4)
-            if (sy < 0.3) continue
-            put(names[k++ % names.length], m4.compose(V(base.x, y0w, base.z), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(1, sy, 1)))
+            const dep = (j) => C3[j].z - YOSE.base(C3[j].x), di = dep(i); let ceil = 1e9; for (let j = 0; j < NP; j++) { const dy = C3[j].y - C3[i].y; if (dy < -0.3 || dy > 14 || dep(j) - di < 1.5 || Math.abs(C3[j].x - base.x) > 2.2) continue; ceil = Math.min(ceil, C3[j].y - 0.3) }   /* 上一層＝更往岩壁裡（深 1.5 m 以上）的那條；折返平台附近兩層幾乎一樣高 → 不貼 */
+            // 往上疊到上一層的地板底下（最多三層、約 10 m）；露天、上面沒有步道的地方疊兩層。每層左右錯開一點、高低不一，接縫才不會排成一條線
+            const qW = new THREE.Quaternion().setFromAxisAngle(UPv, yaw), top = Math.min(ceil - 0.12, C3[i].y + (ceil < 1e8 ? 10.5 : 6.6))
+            let y0w = C3[i].y - 0.25
+            for (let c = 0; c < 3 && y0w < top - 1.0; c++) {
+              const sy = Math.min(0.95 + 0.15 * hsh(i * 2.3 + c * 5.1), (top - y0w) / 3.4)
+              if (sy < 0.3) break
+              const sh = c ? (hsh(i * 7.7 + c) - 0.5) * 1.2 : 0, ax = V(-inn.z, 0, inn.x)
+              put(names[(k++ + c) % names.length], m4.compose(V(base.x + ax.x * sh, y0w, base.z + ax.z * sh + (c ? 0.03 * c : 0)), qW, V(1 + 0.06 * c, sy, 1)))
+              y0w += 3.4 * sy - 0.06
+            }
           } } }
+      // 2026-11-14 折返平台兩側那面彎的岩壁（階地的端牆）也貼岩層：從平台中心往外打射線找到岩面，照岩面的方向貼兩片、疊兩層
+      { const names = ['wall_a', 'wall_b', 'wall_c'].filter((n) => K[n]), cf = g.getObjectByName('cliffFace'), rc = new THREE.Raycaster(), groups = []
+        for (let i = 0; i < NP; i++) if (st.kind[i] === 'alc') { if (!groups.length || groups.at(-1).at(-1) !== i - 1) groups.push([]); groups.at(-1).push(i) }
+        if (names.length && cf) for (const G of groups) {
+          const c = V(); for (const i of G) c.add(C3[i]); c.multiplyScalar(1 / G.length)
+          const sx = Math.sign(c.x - C3[G[0]].x) || 1   /* 半圈往外鼓的那一側（平均點相對起點） */
+          let n = 0
+          for (const dz of [-2.4, -1.2, 0, 1.2, 2.4]) {
+            rc.set(V(c.x, c.y + 1.6, c.z + dz), V(sx, 0, 0)); rc.far = 7
+            const h = rc.intersectObject(cf, false)[0]; if (!h || !h.face) continue
+            const nW = h.face.normal.clone().transformDirection(cf.matrixWorld); nW.y = 0; if (nW.lengthSq() < 0.2) continue; nW.normalize(); if (nW.x * sx > 0) nW.negate()
+            const yaw = Math.atan2(nW.x, nW.z)
+            for (let cc = 0, y0 = c.y - 0.25; cc < 2; cc++) { const sy = 0.95 + 0.12 * hsh(G[0] * 3.1 + dz + cc); put(names[(n++ + G[0]) % names.length], m4.compose(V(h.point.x - nW.x * 0.04, y0, h.point.z - nW.z * 0.04), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(0.5, sy, 1))); y0 += 3.4 * sy - 0.06 }
+          }
+        } }
       const wallM = stepM.clone(); wallM.onBeforeCompile = stepM.onBeforeCompile; wallM.customProgramCacheKey = () => 'stepTriplanarWall'; wallM.color.setRGB(0.98, 0.82, 0.62)   // 崖壁的暖砂岩色（石階那份偏冷灰）
       const mats = { post: logM, rail: logM, curb: stepM, floor: wetM, step: stepM, wall: wallM }
       for (const [name, list] of Object.entries(L)) {
@@ -1635,6 +1659,11 @@ export function buildYosemite(scene, { lib } = {}) {
         const c = geo.attributes.color_1 || geo.attributes.color
         geo.setAttribute('snag', c); geo.deleteAttribute('color'); geo.deleteAttribute('color_1')
         const t = new THREE.Mesh(geo, m); t.name = 'eagleSnag'; t.position.set(S.x, S.y, S.z); t.castShadow = true; t.receiveShadow = true; g.add(t)
+        // 2026-11-14 使用者「枯木位置」：岩壁東端轉角的岩面上長出來的一棵。模型本身往 -z 斜伸 5 m
+        const extra = []   // 山脊上那幾棵使用者說不要（只留岩壁轉角這棵）
+        { const cf = g.getObjectByName('cliffFace'), rc = new THREE.Raycaster()
+          for (const [cx, cy, yaw, sc] of [[247.6, 54.5, 0.3, 1.0]]) { rc.set(V(cx, cy, 60), V(0, 0, 1)); const h = cf ? rc.intersectObject(cf, false)[0] : null; if (h) extra.push({ x: cx, y: cy, z: h.point.z + 0.35, yaw, s: sc }) } }
+        for (const e of extra) { const t2 = new THREE.Mesh(geo, m); t2.name = 'gorgeSnag'; t2.position.set(e.x, e.y, e.z); t2.rotation.y = e.yaw; t2.scale.setScalar(e.s); t2.castShadow = true; t2.receiveShadow = true; g.add(t2) }
       })
     })
   }

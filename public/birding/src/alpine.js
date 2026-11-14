@@ -348,6 +348,39 @@ function buildInterior(lib, avoid = []) {
     })
     detail.wrapS = detail.wrapT = THREE.RepeatWrapping
     const groundM = dappled(wetify(new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.95 }), { dark: 0.32, rough: 0.45 }))
+    // 2026-11-14 使用者「步道岩壁都做仔細」：瀑布步道東頭那座陡山脊（地形網格）整面是平平的沙土色，從步道看出去像一面光滑的牆 →
+    // 峽谷附近（x 160～275、z 55～135）太陡的地形面改畫成跟岩壁一樣的層狀砂岩（厚薄不一的岩層、斷層錯位、直的裂隙、水痕、青苔）
+    { const ob = groundM.onBeforeCompile, ok = groundM.customProgramCacheKey?.bind(groundM)
+      groundM.onBeforeCompile = (sh, r) => {
+        ob?.(sh, r)
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSgW; varying vec3 vSgN;')
+          .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSgW = (modelMatrix * vec4(transformed, 1.0)).xyz; vSgN = normalize(mat3(modelMatrix) * objectNormal);')
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+          varying vec3 vSgW; varying vec3 vSgN;
+          float sgH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float sgN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(sgH(i), sgH(i + vec2(1, 0)), f.x), mix(sgH(i + vec2(0, 1)), sgH(i + vec2(1, 1)), f.x), f.y); }
+          float sgF(vec2 p) { return sgN(p) * 0.55 + sgN(p * 2.3 + 7.1) * 0.3 + sgN(p * 5.1 + 3.7) * 0.15; }`)
+          .replace('#include <color_fragment>', `#include <color_fragment>
+          { vec3 nW = normalize(vSgN);
+            float reg = smoothstep(156.0, 166.0, vSgW.x) * smoothstep(279.0, 269.0, vSgW.x) * smoothstep(51.0, 61.0, vSgW.z) * smoothstep(139.0, 129.0, vSgW.z);
+            float steep = (1.0 - smoothstep(0.5, 0.74, nW.y + 0.12 * (sgF(vSgW.xz * 0.2) - 0.5))) * reg;
+            if (steep > 0.01) {
+              vec2 hz = vec2(vSgW.x + vSgW.z * 0.6, vSgW.z - vSgW.x * 0.3);
+              float flt = (sgH(floor(hz / vec2(7.0, 11.0))) - 0.5) * 1.6;
+              float yb = vSgW.y + 0.012 * (vSgW.x - 195.0) + flt + 0.5 * sgF(hz * 0.12);
+              float u1 = yb * 1.1, b1 = fract(u1), h1 = sgH(vec2(floor(u1), 3.7));
+              float nT = floor(1.0 + 4.99 * fract(h1 * 7.31)), b2 = fract(b1 * nT), h2 = sgH(vec2(floor(u1) * 7.0 + floor(b1 * nT), 1.3));
+              float seam = max(smoothstep(0.12, 0.0, b2) * step(0.4, h2) * 0.5, smoothstep(0.06, 0.0, b1) * 0.95);
+              vec3 rockC = vec3(0.33, 0.255, 0.17) * mix(vec3(0.8, 0.86, 0.92), vec3(1.25, 1.02, 0.78), h1) * (0.72 + 0.5 * h2) * (1.0 - 0.6 * seam) * (0.8 + 0.4 * sgF(hz * 0.25 + vSgW.y * 0.05));
+              float crack = sgF(vec2(hz.x * 0.8, vSgW.y * 0.06 + 2.0));
+              rockC *= 1.0 - 0.45 * smoothstep(0.68, 0.76, crack);
+              rockC *= 1.0 - 0.3 * smoothstep(0.58, 0.76, sgF(vec2(hz.x * 0.35, vSgW.y * 0.02)));   // 往下流的深色水痕
+              float moss = smoothstep(0.55, 0.75, sgF(hz * 0.5 + vSgW.y * 0.1)) * 0.6 + smoothstep(0.1, 0.0, b1) * 0.3;
+              rockC = mix(rockC, vec3(0.07, 0.12, 0.035) * (0.8 + 0.4 * h2), clamp(moss, 0.0, 0.7));
+              diffuseColor.rgb = mix(diffuseColor.rgb, rockC, steep);
+            } }`)
+      }
+      groundM.customProgramCacheKey = () => (ok ? ok() : '') + '|steepRock' }
     // 2026-11-14 使用者「FPS 60 就可，要順暢」：以前整片山區地形是一個網格（0.5 m 一格、88 萬個三角形），走到哪都整片畫、倒影也畫一次。
     // 切成 32 m 一塊（看不到的塊整塊不畫），每塊三種精細度：70 m 內 0.5 m 格、160 m 內 1 m 格、更遠 2 m 格（長鏡頭拉近照倍率拉遠）。
     // 粗細不同的塊接在一起：粗的塊貼邊那一格改用細格的頂點收成扇形（見下面），接縫密合
