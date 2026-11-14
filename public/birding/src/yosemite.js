@@ -1145,6 +1145,9 @@ export function buildYosemite(scene, { lib } = {}) {
             let s0 = j0, s1 = j0; while (s0 > 0 && st.kind[s0 - 1] === 'alc') s0--; while (s1 < NP - 1 && st.kind[s1 + 1] === 'alc') s1++
             const c0 = C3[Math.max(0, s0 - 1)], c1 = C3[Math.min(NP - 1, s1 + 1)], cx = (c0.x + c1.x) / 2, cz = (c0.z + c1.z) / 2
             const ox = C3[i].x - cx, oz = C3[i].z - cz, ol = Math.hypot(ox, oz) || 1
+            // 使用者（第二張圈圖）「中間沒有對吧，直的打到底部牆壁」：半圈靠端牆那段（往外是 ±x、貼著岩壁，沒有落差）不立柱；
+            // 只有往湖那側（-z）才有欄杆，鐵鍊直直接到端牆為止
+            if (oz / ol > -0.4) { prev = null; continue }
             p = V(C3[i].x + ox / ol * 1.2, C3[i].y, C3[i].z + oz / ol * 1.2)
           } }
         // 2026-11-12 ChatGPT：整條黑鐵管欄杆像都市樓梯 → 折返平台前後才用鐵管欄杆，一般路段是鑿進岩石的鐵樁＋垂鍊（Angels Landing），賞鳥台外緣是矮石牆
