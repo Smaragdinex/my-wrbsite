@@ -95,12 +95,14 @@ export async function buildStreambed(scene, lib = null) {
       const sc = 0.8 + rnd() * 0.9; put('weed_' + Math.floor(rnd() * 3), x + (rnd() - 0.5) * 0.3, h + 0.01, z, sc, sc * Math.min(1.5, dep / 0.35), sc, rnd() * 6.283, new THREE.Color().setScalar(0.75 + 0.45 * rnd())); got++ }
     for (let i = 0, got = 0; i < 4000 && got < 3; i++) { const x = rx(), z = YOSE.base(x) - 2 + rnd() * (YOSE.recPath(x) - 1), dep = W - alpineHeight(x, z); if (!inR(x, z) || dep < 0.3 || Math.abs(x - YOSE.fall.x) < 5 || boulders.some((b) => Math.hypot(b.x - x, b.z - z) < 3)) continue
       boulders.push({ x, z, y: W, s: 0.9 + rnd() * 0.6, yaw: rnd() * 6.283, v: Math.floor(rnd() * 3) }); got++ } }
+  // 2026-11-14 使用者（湖口照片）「紅色那顆往黃色圈去蓋住 stream」：第 3 顆（鏽色斑點那顆）從 -1.45 往中間挪到 -0.65，補掉它和下一顆中間露出湖／溪接縫的空隙
   // 2026-11-14 使用者（湖口照片）「還是你用石頭擋住，不然看得出縫隙」：湖水流進河的地方排一道石堰——橫跨河口 7 顆大苔石，
   // 頂面露出水面 0.15～0.45 m、中間留兩三道縫讓水流出去；湖面跟河面交接的那條線、底下挖深的暗洞都藏在石堰後面
   { const W = YOSE.lake.water, C = [180.9, 74.6], px = 0.96, pz = -0.26, rw = mulberry32(777)
-    for (const [o, sz] of [[-3.9, 1.9], [-2.7, 1.5], [-1.45, 1.25], [-0.2, 1.05], [1.15, 1.3], [2.45, 1.55], [3.7, 1.95]]) {
+    let wi = 0
+    for (const [o, sz] of [[-3.9, 1.9], [-2.7, 1.5], [-0.65, 1.3], [-0.2, 1.05], [1.15, 1.3], [2.45, 1.55], [3.7, 1.95]]) {
       const x = C[0] + px * o + (rw() - 0.5) * 0.35, z = C[1] + pz * o + (rw() - 0.5) * 0.5, s2 = sz * (0.9 + rw() * 0.25)
-      boulders.push({ x, z, y: W - 0.5 * s2 + 0.15 + rw() * 0.3, s: s2, yaw: rw() * 6.283, v: Math.floor(rw() * 3), weir: true })
+      boulders.push({ x, z, y: W - 0.5 * s2 + 0.15 + rw() * 0.3, s: s2, yaw: rw() * 6.283, v: Math.floor(rw() * 3), weir: true, wi: wi++ })
     } }
   for (const b of boulders) if (!b.weir) b.y = Math.min(b.y, alpineHeight(b.x, b.z) + 0.42 * b.s)   // 2026-11-14 使用者（石頭浮在水上）：河床、湖底挖深之後照水面放的苔石底下是空的 → 最多只能比水底高 0.42×大小（石頭坐在水底）
   // 2026-11-14 使用者（湖口照片，紅圈）「應該放上黃色圈那種，不是 pebble stone」＋「溪、湖、河都要」：
@@ -120,7 +122,7 @@ export async function buildStreambed(scene, lib = null) {
     const h = NH * k
     let bot = oTop - h; if (bot > gnd - 0.08 && bot - gnd < 0.5) bot = gnd - 0.08   // 差一點就碰到底：往下放（頂面低一點沒關係）；河口挖很深的地方頂面維持露出水面，底下藏在深水裡
     const yaw = b.yaw, cx = (nb.min.x + nb.max.x) / 2 * k, cz = (nb.min.z + nb.max.z) / 2 * k, c = Math.cos(yaw), s = Math.sin(yaw)
-    ;(realL[n] ||= []).push({ p: new THREE.Vector3(b.x - (cx * c + cz * s), bot - nb.min.y * k, b.z - (-cx * s + cz * c)), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), s: new THREE.Vector3(k, k, k), c: new THREE.Color().setScalar(0.85 + 0.25 * rnd()) })
+    ;(realL[n] ||= []).push({ p: new THREE.Vector3(b.x - (cx * c + cz * s), bot - nb.min.y * k, b.z - (-cx * s + cz * c)), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), s: new THREE.Vector3(k, k, k), c: ((v) => (b.weir && location.search.includes('weirdbg')) ? new THREE.Color([0xff0000, 0xff8800, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff][b.wi]) : new THREE.Color().setScalar(v))(0.85 + 0.25 * rnd()) })   // weirdbg：石堰 7 顆照順序上色（找是哪一顆用）
     addCollider(b.x, b.z, oW * 0.5, bot + h)
   }
   for (const [n, list] of Object.entries(realL)) for (const im of scatter(G, lib[n], list, { cast: true })) im.name = 'bed_rock_' + n
