@@ -750,10 +750,14 @@ export function buildYosemite(scene, { lib } = {}) {
     // （岩棚是岩壁網格的一部分、沒辦法往下挖 → 水面比岩棚高 0.32 m，靠那圈岩石圍住；深淺用顏色和透明度做）
     const MP = { x: F.x + 0.2, z: zUp - 2.5, rx: 4.25, rz: 2.75,   /* 2026-11-13 Pass 1A：3.7 → 4.25（上段落水展到 8.2 m 要整片落進潭裡；兩側步道在 x≈195.7／203.7，不能再大） */ y: shelfY + 0.16, ix: F.x, iz: zUp - 1.9 }
     const mpRim = (a) => { const k = 1 + 0.15 * Math.sin(a * 2 + 0.7) + 0.09 * Math.sin(a * 3 + 2.1) - 0.22 * Math.max(0, Math.cos(a - 4.25)) ** 3; return [MP.x + Math.cos(a) * MP.rx * k, MP.z + Math.sin(a) * MP.rz * k] }
+    // 2026-11-15 使用者「道路步道不要被擋住、外面的小湖乾淨」：水潭橢圓兩頭（x 195／205）壓到岩廊的石板上，一片半透明的水蓋在步道上 →
+    // 水面和外圈濕泥的每個點，離岩廊中線不到 1.55 m 就往潭心縮
+    const WALK = TR.pts.filter((_, i) => TR.kind[i] === 'gal' && Math.abs(TR.yy[i] - shelfY) < 1.2)
+    const offWalk = (x, z) => { for (let it = 0; it < 30; it++) { if (WALK.every(([px, pz]) => Math.hypot(px - x, pz - z) > 1.55)) break; x = MP.x + (x - MP.x) * 0.94; z = MP.z + (z - MP.z) * 0.94 } return [x, z] }
     { const NA = 56, NR = 7, P = [], E = [], I = []
-      for (let r = 0; r <= NR; r++) for (let a = 0; a < NA; a++) { const [ex, ez] = mpRim(a / NA * TAU), t = r / NR; P.push(lerpN(MP.x, ex, t), MP.y, lerpN(MP.z, ez, t)); E.push(1 - t) }
+      for (let r = 0; r <= NR; r++) for (let a = 0; a < NA; a++) { const [ex, ez] = mpRim(a / NA * TAU), t = r / NR, [qx, qz] = offWalk(lerpN(MP.x, ex, t), lerpN(MP.z, ez, t)); P.push(qx, MP.y, qz); E.push(1 - t) }
       // ChatGPT 水潭 V1：水像倒在平台上的一片 → 水面只比岩棚高 0.16 m；外面再一圈 0.7 m 斜下去貼到岩棚的深色濕泥砂（蓋住水和岩棚交界那條線）
-      for (let a = 0; a < NA; a++) { const [ex, ez] = mpRim(a / NA * TAU), t = 1 + (0.6 + 0.25 * Math.sin(a * 1.7)) / 3.4; P.push(lerpN(MP.x, ex, t), shelfY + 0.015, lerpN(MP.z, ez, t)); E.push(-1) }
+      for (let a = 0; a < NA; a++) { const [ex, ez] = mpRim(a / NA * TAU), t = 1 + (0.6 + 0.25 * Math.sin(a * 1.7)) / 3.4, [qx, qz] = offWalk(lerpN(MP.x, ex, t), lerpN(MP.z, ez, t)); P.push(qx, shelfY + 0.015, qz); E.push(-1) }
       for (let r = 0; r < NR + 1; r++) for (let a = 0; a < NA; a++) { const a2 = (a + 1) % NA, p = r * NA + a, q = r * NA + a2, u = p + NA, w = q + NA; I.push(p, u, q, q, u, w) }
       const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); pg.setAttribute('aEdge', new THREE.Float32BufferAttribute(E, 1)); pg.setIndex(I)
       const pm = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide,
@@ -767,9 +771,10 @@ export function buildYosemite(scene, { lib } = {}) {
           void main(){
             vec2 d = vW.xz - uImp; float dI = length(vec2(d.x * 0.5, d.y));   /* 2026-11-13 Pass 1A：落水帶跟著上段水簾拉成 8 m 寬（x 方向壓扁） */
             float lit = 0.12 + 0.95 * uDay;
+            if (vE < 0.0) discard;   /* 2026-11-15 ChatGPT：拿掉一整圈深色濕泥 */
             if (vE < 0.0) {   /* 外圈：濕的深色泥砂、碎石，往外淡掉 */
               float g = n(vW.xz * 9.0) * 0.5 + n(vW.xz * 23.0) * 0.5;
-              gl_FragColor = vec4(mix(vec3(0.075, 0.07, 0.055), vec3(0.16, 0.14, 0.11), g) * lit, smoothstep(-1.0, -0.15, vE) * (0.55 + 0.4 * g)); return; }
+              gl_FragColor = vec4(mix(vec3(0.12, 0.11, 0.085), vec3(0.2, 0.18, 0.14), g) * lit, smoothstep(-1.0, -0.15, vE) * (0.3 + 0.25 * g)); return; }   /* 2026-11-15 外圈太黑（俯視像一個黑洞）→ 淡一點、淺一點 */
             float chan = step(vW.z, uOut.z + 0.05);                                                                                  // 水道那一段（另一片網格，同一個材質）
             float depth = 0.25 + 1.0 * smoothstep(0.0, 0.5, vE) + 1.2 * smoothstep(3.6, 0.8, dI) * smoothstep(0.1, 0.5, vE);          // 邊上 0.25 m、中間 1.25 m、落點底下 2.4 m
             depth = mix(depth, 0.25 + 0.4 * smoothstep(0.0, 0.5, vE), chan);
@@ -805,19 +810,20 @@ export function buildYosemite(scene, { lib } = {}) {
       // 水道：水潭前面的缺口 → 岩簷口（接下段瀑布）。一片斜斜的薄水，流得比瀑布慢
       { const P2 = [], E2 = [], I2 = [], N = 6, M = 6, z0 = MP.z - MP.rz * 0.9, zE = fz - 1.25   // zE＝岩棚的前緣
         pm.uniforms.uOut.value.z = z0; pm.uniforms.uLip.value = zE
-        for (let k = 0; k <= N; k++) for (let m = 0; m <= M; m++) { const t = k / N, u = m / M, z = z0 + (zE - z0) * t, w = 2.05 + 0.15 * t; P2.push(F.x + (u * 2 - 1) * w, MP.y - 0.03 * t, z); E2.push(Math.sin(u * Math.PI) * 0.6) }
+        for (let k = 0; k <= N; k++) for (let m = 0; m <= M; m++) { const t = k / N, u = m / M, z = z0 + (zE - z0) * t, w = 1.8 - 0.4 * t, sd = u < 0.5 ? -1 : 1, wb = w * (1 + 0.08 * Math.sin(t * 4.1 + (sd > 0 ? 1.9 : 0))); P2.push(F.x + (u * 2 - 1) * wb, MP.y - 0.03 * t, z)   /* ChatGPT：出水口從 3.6 m 收到 2.8 m、兩岸彎一點（不是平行直線） */; E2.push(Math.sin(u * Math.PI) * 0.6) }
         for (let k = 0; k < N; k++) for (let m = 0; m < M; m++) { const a = k * (M + 1) + m, b = a + 1, c2 = a + M + 1, d2 = c2 + 1; I2.push(a, c2, b, b, c2, d2) }
         const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(P2, 3)); fg.setAttribute('aEdge', new THREE.Float32BufferAttribute(E2, 1)); fg.setIndex(I2)
         const m = new THREE.Mesh(fg, pm); m.renderOrder = 4; m.name = 'midChannel'; g.add(m)
         // 過了岩棚前緣：水往下彎、變成一片白白的水簾，接到下段瀑布的頂（用瀑布的材質；第一版整段用水潭的材質，懸在空中像一塊玻璃板）
         const P3 = [], U3 = [], I3 = [], N3 = 8
-        for (let k = 0; k <= N3; k++) { const t = k / N3, z = zE + 0.25 + (zLipW - zE - 0.25) * t, w = 2.15 + 0.2 * t, y = lerpN(MP.y - 0.02, shelfY - 0.4, Math.pow(t, 1.7)); P3.push(F.x - w, y, z, F.x + w, y, z); U3.push(0, t, 1, t); if (k) { const a = (k - 1) * 2; I3.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) } }
+        for (let k = 0; k <= N3; k++) { const t = k / N3, z = zE + 0.25 + (zLipW - zE - 0.25) * t, w = 1.4 + 0.1 * t, y = lerpN(MP.y - 0.02, shelfY - 0.4, Math.pow(t, 1.7)); P3.push(F.x - w, y, z, F.x + w, y, z); U3.push(0, t, 1, t); if (k) { const a = (k - 1) * 2; I3.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) } }
         const g3 = new THREE.BufferGeometry(); g3.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3)); g3.setAttribute('uv', new THREE.Float32BufferAttribute(U3, 2)); g3.setIndex(I3)
-        const m3 = new THREE.Mesh(g3, fallMat({ spd: 0.5, a: 0.9, dark: 0.25 })); m3.renderOrder = 5; m3.name = 'midSpill'; g.add(m3) }
+        const m3 = new THREE.Mesh(g3, fallMat({ spd: 0.5, a: 0.9, dark: 0.25 })); m3.renderOrder = 5; m3.name = 'midSpill'; g.add(m3)
+        { const under = new THREE.Mesh(g3, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.16, 0.3, 0.28), transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide, fog: true })); under.renderOrder = 4; under.name = 'midSpillSheet'; g.add(under) } }   // ChatGPT：水簾要是一整片（以前只有一條條白線、中間是空的）
       // 水潭邊的岩石（掃描的真岩石）：圍一圈、高出水面 0.2～0.6 m；前面的出水口留 3 m、後面是岩壁不用放；水裡兩三顆露出來
       if (lib) {
         const names = ['boulder', 'mrock_3', 'mrock_5', 'mrock_8'].filter((n) => lib[n]), list = Object.fromEntries(names.map((n) => [n, []]))
-        const SHP = TR.pts.filter((_, i) => TR.kind[i] === 'shelf'), offPath = (x, z, r) => SHP.every(([px, pz]) => Math.hypot(px - x, pz - z) > r)   // 岩棚上那一圈步道：石頭、蕨不能擺在路上
+        const SHP = TR.pts.filter((_, i) => TR.kind[i] === 'shelf' || (TR.kind[i] === 'gal' && Math.abs(TR.yy[i] - shelfY) < 1.2)), offPath = (x, z, r) => SHP.every(([px, pz]) => Math.hypot(px - x, pz - z) > Math.max(r, 1.8))   // 2026-11-15 使用者「步道不要被石頭擋住」：岩棚步道早就改成岩廊（kind 'gal'），只看 'shelf' 的話一個點都沒有 → 石頭、蕨全部擺到岩廊上；岩廊中線 1.8 m 內不擺   // 岩棚上那一圈步道：石頭、蕨不能擺在路上
         const put = (x, z, top, big) => { if (!offPath(x, z, 1.25)) return; const n = big && lib.boulder ? 'boulder' : names[1 + Math.floor(rnd() * (names.length - 1))] ?? names[0], k2 = n === 'boulder' ? 0.16 + rnd() * 0.1 : 0.26 + rnd() * 0.26   /* 0.5～1.0 m（第一版 1.5 m 一顆，把水潭整個蓋住） */
           list[n].push({ p: V(x, shelfY - 0.14 * k2, z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: V(k2, k2 * (0.75 + top), k2) }) }   // 石頭的原點在底部：坐在岩棚上、埋一點（第二版照中心算、浮在水面上）
         for (let i = 0; i < 60; i++) {
@@ -828,14 +834,22 @@ export function buildYosemite(scene, { lib } = {}) {
         }
         // 跨過出水口的踏腳石（扁的掃描石頭，頂面比水面高一點）
         { const FH = { mrock_10: 0.77, mrock_12: 0.74, mrock_7: 0.74 }, fn = Object.keys(FH).filter((n) => lib[n]), sl = {}
-          fn.length && [197.95, 198.85, 199.75, 200.65, 201.55, 202.3].forEach((sx, k) => { const n = fn[k % fn.length], sc = 0.5 + 0.08 * (k % 2), near = SHP.filter(([px]) => Math.abs(px - sx) < 0.6 && true).sort((a, b) => a[1] - b[1])[0]; (sl[n] ||= []).push({ p: V(sx, shelfY - FH[n] * sc * 0.55 + 0.22, near ? near[1] : YOSE.base(sx) + 0.8), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), k * 1.7), s: V(sc, sc * 0.55, sc) }) })
-          for (const [n, l3] of Object.entries(sl)) scatter(g, lib[n], l3, { cast: true }) }
+          fn.length && [197.95, 198.85, 199.75, 200.65, 201.55, 202.3].forEach((sx, k) => { const n = fn[k % fn.length], sc = 0.5 + 0.08 * (k % 2), near = null;   /* 2026-11-15：SHP 現在含岩廊點，不能拿來排踏腳石（會擺到岩廊上）→ 照原本的出水口前緣 */ (sl[n] ||= []).push({ p: V(sx, shelfY - FH[n] * sc * 0.55 + 0.22, near ? near[1] : YOSE.base(sx) + 0.8), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), k * 1.7), s: V(sc, sc * 0.55, sc) }) })
+          // ChatGPT：一排踏腳石像人工步道 → 只留兩顆、偏離中線、半泡在水裡
+          { let k = 0; for (const n of Object.keys(sl)) sl[n] = sl[n].filter((it) => { const keepIt = Math.abs(it.p.x - 198.85) < 0.05 || Math.abs(it.p.x - 201.55) < 0.05; k++; if (keepIt) { it.p.y -= 0.12; it.p.z += Math.abs(it.p.x - 198.85) < 0.05 ? 0.5 : -0.3 } return keepIt }) }
+          for (const [n, l3] of Object.entries(sl)) if (l3.length) scatter(g, lib[n], l3, { cast: true }) }
         put(MP.x - 2.1, MP.z - 0.6, 0.25, true); put(MP.x + 2.3, MP.z + 0.3, 0.18, false); put(MP.x + 1.2, MP.z - 1.3, 0.12, false)   // 水裡露出來的
+        // 2026-11-15 使用者「外面的小湖乾淨、完整修正」＋ChatGPT 清理清單：石頭 ~20 → 7 顆小的（只留後面和兩側、出水口前緣不放、水裡的拿掉）＋出水口兩側岩棚前緣各一顆大石（蓋住看下去的黑縫）。
+        // 亂數照舊每一顆都抽（後面別的東西的位置才不會跟著變），只是抽完再篩
+        { const all = []; for (const n of names) for (const it of list[n]) all.push([n, it]); for (const n of names) list[n].length = 0
+          const keep = all.filter(([, it]) => { const dx = it.p.x - MP.x, dz = it.p.z - MP.z; return ((dx / MP.rx) ** 2 + (dz / MP.rz) ** 2 > 0.9) && dz > -MP.rz * 0.35 })
+          keep.filter((_, k) => k % 2 === 0).slice(0, 7).forEach(([n, it]) => list[n].push(it))
+          if (lib.boulder) for (const [ax, az, sc, yw] of [[F.x - 3.9, fz - 0.9, 0.62, 0.6], [F.x - 4.4, fz - 1.8, 0.55, 2.9], [F.x - 5.3, fz - 0.1, 0.5, 1.7], [F.x + 4.1, fz - 0.7, 0.58, 2.3]]) (list.boulder ||= []).push({ p: V(ax, shelfY - 0.6, az), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.05, yw, -0.04)), s: V(sc * 1.25, sc * 0.75, sc) }) }
         for (const n of names) if (list[n].length) scatter(g, lib[n], list[n], { cast: true })
         // 蕨類：長在後面岩壁腳、岩石後面背水的縫裡（8 叢）；落點和出水口不長
         { const ferns = ['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a'].filter((n) => lib[n]), fl = {}
           for (const [dx, dz, k3] of [[-5.3, 1.2, 1.0], [-4.9, -0.4, 0.7], [-5.6, 2.2, 1.2], [5.6, 1.4, 1.1], [5.1, -0.3, 0.75], [5.9, 2.3, 0.9], [-3.4, -3.1, 0.6], [3.9, -3.0, 0.65]]) if (ferns.length && offPath(MP.x + dx, Math.min(zUp - 0.4, MP.z + dz), 1.3)) (fl[ferns[Math.floor(rnd() * ferns.length)]] ||= []).push({ p: V(MP.x + dx, shelfY - 0.04, Math.min(zUp - 0.4, MP.z + dz)), q: new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), rnd() * TAU), s: V(k3, k3, k3) })
-          for (const [n, l2] of Object.entries(fl)) scatter(g, lib[n], l2, { cast: true }) }
+          for (const [n, l2] of Object.entries(fl)) { const l3 = l2.filter((it) => it.p.z > MP.z + 0.5); if (l3.length) scatter(g, lib[n], l3, { cast: true }) } }   // ChatGPT：蕨 8 叢 → 只留後面岩壁腳那幾叢
       }
     }
     // 岩棚前緣的欄杆（水潭前面那段步道外側；出水口上面不立柱）
