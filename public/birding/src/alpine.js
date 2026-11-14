@@ -380,13 +380,14 @@ function buildInterior(lib, avoid = []) {
               float moss = smoothstep(0.55, 0.75, sgF(hz * 0.5 + vSgW.y * 0.1)) * 0.6 + smoothstep(0.1, 0.0, b1) * 0.3;
               rockC = mix(rockC, vec3(0.07, 0.12, 0.035) * (0.8 + 0.4 * h2), clamp(moss, 0.0, 0.7));
               // 2026-11-14 ChatGPT 的砂岩貼圖（跟岩壁同一張，4 m 一張）：顏色主要用貼圖，程式畫的層理只留明暗
-              { vec2 w = pow(abs(nW.xz), vec2(4.0)); w /= (w.x + w.y + 1e-4);
+              { vec3 nF = normalize(cross(dFdx(vSgW), dFdy(vSgW)));   /* 地形的頂點法線在近垂直的陡壁上不準（貼圖選錯投影方向，拉成一條條直紋）→ 用每個像素真正的面方向 */
+                vec2 w = pow(abs(nF.xz), vec2(4.0)); w /= (w.x + w.y + 1e-4);
                 vec3 rt = texture2D(uRockT, vec2(vSgW.z, vSgW.y) * 0.25).rgb * w.x + texture2D(uRockT, vec2(vSgW.x, vSgW.y) * 0.25).rgb * w.y;
                 rockC = rt * 0.82 * (0.9 + 0.2 * h2); }
               diffuseColor.rgb = mix(diffuseColor.rgb, rockC, steep);
             } }`)
       }
-      groundM.customProgramCacheKey = () => (ok ? ok() : '') + '|steepRockTex2' }
+      groundM.customProgramCacheKey = () => (ok ? ok() : '') + '|steepRockTex3' }
     // 2026-11-14 使用者「FPS 60 就可，要順暢」：以前整片山區地形是一個網格（0.5 m 一格、88 萬個三角形），走到哪都整片畫、倒影也畫一次。
     // 切成 32 m 一塊（看不到的塊整塊不畫），每塊三種精細度：70 m 內 0.5 m 格、160 m 內 1 m 格、更遠 2 m 格（長鏡頭拉近照倍率拉遠）。
     // 粗細不同的塊接在一起：粗的塊貼邊那一格改用細格的頂點收成扇形（見下面），接縫密合
