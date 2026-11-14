@@ -349,21 +349,29 @@ export function buildYosemite(scene, { lib } = {}) {
           float cell = floor(vTpW.x / 3.3 + 0.37);   // 只看 x：混進 z 的話岩棚凹凸會讓格子來回跳，層線斷成一截一截的虛線
           // 層面只跟高度有關（加一點點沿 x 的起伏和每塊的錯位）：混進二維雜訊的話，層線會繞成一圈圈像木紋
           float vy = vTpW.y + 0.07 * sin(vTpW.x * 0.21) + 0.012 * (vTpW.x - 195.0) + 0.1 * fract(sin(cell * 17.3) * 4375.5);
-          float u1 = vy * 1.1 + 0.6 * vn(vec2(vy * 0.7, 3.0));
+          float u1 = vy * 0.85 + 0.9 * vn(vec2(vy * 0.45, 3.0));   /* 2026-11-14 概念圖：主岩層厚 0.35～1.4 m（以前每層 0.9 m 很整齊） */
           float b1 = fract(u1), h1 = fract(sin(floor(u1) * 78.233) * 43758.5453);
           // 每個厚層裡再分 1～6 片薄層（頁岩帶片數多、砂岩帶是整塊）
           float nThin = floor(1.0 + 5.99 * fract(h1 * 7.31)), u2 = b1 * nThin;
           float b2 = fract(u2), h2 = fract(sin((floor(u1) * 7.0 + floor(u2)) * 12.9898) * 43758.5453);
           float thin = smoothstep(75.0, 22.0, sdist);                         // 遠處薄層糊掉（比像素細，會閃）
           float cont = step(0.28, vn(vec2(vTpW.x * (0.25 + 0.3 * h1) + floor(u2) * 7.0, floor(u1) * 3.0)));   // 薄層的縫約 7 成連續、偶爾斷開
-          float seam = max(smoothstep(0.12, 0.0, b2) * step(0.35, h2) * 0.45 * thin * cont, smoothstep(0.05, 0.0, b1) * 0.9 * (0.6 + 0.4 * cont));
-          vec3 tint = mix(vec3(0.86, 0.9, 0.93), vec3(1.16, 1.0, 0.8), h1) * mix(1.0, 0.8 + 0.4 * h2, thin);   // 冷灰的頁岩層／暖褐的砂岩層
+          float seam = max(smoothstep(0.12, 0.0, b2) * step(0.5, h2) * 0.2 * thin * cont, smoothstep(0.05, 0.0, b1) * 0.65 * (0.6 + 0.4 * cont));   /* 細層理淡很多（以前一條條細白線很規則） */
+          vec3 tint = mix(vec3(0.95, 0.9, 0.86), vec3(1.12, 0.96, 0.78), h1) * mix(1.0, 0.9 + 0.2 * h2, thin);   // 冷灰的頁岩層／暖褐的砂岩層
           diffuseColor.rgb *= mix(vec3(1.0), tint * (1.0 - 0.42 * seam), wallK);
           tpH += wallK * ((1.0 - abs(b2 * 2.0 - 1.0)) * 0.22 * thin + (1.0 - abs(b1 * 2.0 - 1.0)) * 0.55); }
         #endif`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         { float dist = length(vViewPosition); vec2 dH = clamp(vec2(dFdx(tpH), dFdy(tpH)) * 2.2, -0.9, 0.9) * smoothstep(90.0, 15.0, dist); normal = tpPerturb(-vViewPosition, normal, dH, faceDirection); }   // clamp：層面那條線高度是跳的，導數會爆掉、變成一截一截的亮線`)
   }
+
+  // 2026-11-14 概念圖 2（瀑布後岩廊）：岩頂、岩簷的底面朝下、只吃得到天光，渲染出來幾乎全黑 → 補一點從地板／水面反上來的暖光（白天才有）
+  const addBounce = (m, k) => { const ob = m.onBeforeCompile, key = m.customProgramCacheKey?.bind(m)
+    m.onBeforeCompile = (sh, r) => { ob?.(sh, r); sh.uniforms.uDayB = dayLight
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uDayB;').replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.9, 0.75) * ${k.toFixed(2)} * uDayB * smoothstep(-0.15, -0.75, normalize(vTpN).y);`) }
+    m.customProgramCacheKey = () => (key ? key() : '') + '|bounce' }
+  addBounce(cliffM, 0.32)
   { const ob = cliffM.onBeforeCompile
     // 朝上的面長青苔／草：岩棚一塊塊苔、山頂平台（y > 70）大片草地（中間留些露岩）；越靠瀑布越濕、苔越綠
     cliffM.onBeforeCompile = (sh) => { ob(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -1042,7 +1050,7 @@ export function buildYosemite(scene, { lib } = {}) {
   // 露天的地方外側加鐵欄杆（3）；隧道裡每 8 m 一盞壁燈，燈光直接算進隧道壁和踏板的顏色裡（不用真的光源）
   {
     const st = TR, topYm = YOSE.topY(214), NP = st.pts.length
-    const stepM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: 0xc4c0b8, roughness: 0.88, vertexColors: true })   /* 頂點色＝Blender 烘的環境遮蔽（岩石套件）；方塊踏板給全白 */
+    const stepM = new THREE.MeshStandardMaterial({ map: cliffM.map, color: new THREE.Color(0.66, 0.56, 0.45), roughness: 0.88, vertexColors: true })   /* 2026-11-14 概念圖：石階是暖灰褐的砂岩（以前冷灰白） */   /* 頂點色＝Blender 烘的環境遮蔽（岩石套件）；方塊踏板給全白 */
     stepM.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTpW; varying vec3 vTpN;')
         .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
@@ -1061,6 +1069,7 @@ export function buildYosemite(scene, { lib } = {}) {
           diffuseColor.rgb *= 1.0 - 0.24 * wet;`)
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor *= 1.0 - 0.5 * wet;')
     }
+    const STEP_BASE_OBC = stepM.onBeforeCompile   // 2026-11-14 岩壁（sandstone_wall_kit）用：只要三向投影＋濕，不要踏板那套青苔
     { const ob = stepM.onBeforeCompile
       // 踏板：邊角、縫裡長青苔（踏面中間被踩的地方少），越靠瀑布越多
       stepM.onBeforeCompile = (sh) => { ob(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + GLSL_VNOISE + `
@@ -1139,10 +1148,11 @@ export function buildYosemite(scene, { lib } = {}) {
     }
     // 2026-11-13 岩廊（龍岩窟參考圖，使用者：「都用 Blender 生成」）：tools/make-gallery-kit.py 做的原木柱、原木橫桿、矮石緣、不規則石板地。
     // 原木掛柳杉樹皮（淋濕褪色的灰褐）、石頭跟石階同一份三向投影石材；石板地另外一份「濕」的（粗糙度 0.32，反光一塊塊不一樣）
-    new GLTFLoader().loadAsync(`models/props/gallery_kit.glb?v=${VER}`).then((gl) => {
+    // 2026-11-14 使用者「照這六張做」：岩壁改用 tools/make-sandstone-wall-kit.py 的大塊砂岩（sw_a～d、岩簷 sw_ovh_a/b），一起載進 K
+    Promise.all([new GLTFLoader().loadAsync(`models/props/gallery_kit.glb?v=${VER}`), new GLTFLoader().loadAsync(`models/props/sandstone_wall_kit.glb?v=${VER}`).catch(() => null)]).then(([gl, gl2]) => {
       const K = {}
       gl.scene.updateMatrixWorld(true)
-      gl.scene.traverse((o) => { if (o.isMesh) { const gg = o.geometry.clone(); gg.applyMatrix4(o.matrixWorld); if (gg.attributes.color_1 && !gg.attributes.color) gg.setAttribute('color', gg.attributes.color_1); K[o.name] = gg } })
+      for (const sc2 of [gl.scene, gl2?.scene]) { if (!sc2) continue; sc2.updateMatrixWorld(true); sc2.traverse((o) => { if (o.isMesh) { const gg = o.geometry.clone(); gg.applyMatrix4(o.matrixWorld); if (gg.attributes.color_1 && (!gg.attributes.color || /^sw_/.test(o.name))) gg.setAttribute('color', gg.attributes.color_1); K[o.name] = gg } }) }   /* sandstone_wall_kit：COLOR_0 是全白，烘好的色在 COLOR_1 */
       const logM = barkMaterial('japanese_cedar_bark', { normal: 1.4, color: [1.5, 1.34, 1.15] }); logM.vertexColors = true
       const wetM = stepM.clone(); wetM.onBeforeCompile = stepM.onBeforeCompile; wetM.customProgramCacheKey = () => 'stepTriplanarWet'; wetM.roughness = 0.3; wetM.envMapIntensity = 1.7; wetM.color.setRGB(0.86, 0.74, 0.58)   /* 參考圖：淋濕的暖褐色砂岩石板，不是冷灰 */
       const L = {}, put = (name, M) => (L[name] ||= []).push(M.clone()), X1 = V(1, 0, 0), q = new THREE.Quaternion(), UPv = V(0, 1, 0)
@@ -1179,11 +1189,11 @@ export function buildYosemite(scene, { lib } = {}) {
           const old = g.getObjectByName('gorgeSteps'); if (old) { g.remove(old); old.geometry.dispose() }
         } }
       // 岩壁：沿整條崖壁步道內側（往岩壁那側 1.25 m＝鑿進去的那面牆）每 2.9 m 貼一片 3 m 寬、3.4 m 高的層疊砂岩；牆面朝步道
-      { const names = ['wall_a', 'wall_b', 'wall_c'].filter((n) => K[n])
+      { const names = ['sw_a', 'sw_b', 'sw_c', 'sw_d'].filter((n) => K[n]), ovh = ['sw_ovh_a', 'sw_ovh_b'].filter((n) => K[n]), WFERN = []
         if (names.length) { let acc = 99, k = 0
           for (let i = 1; i < NP; i++) {
             if (st.kind[i] !== 'gal' && st.kind[i] !== 'open') { acc = 99; continue }
-            acc += st.S[i] - st.S[i - 1]; if (acc < 2.9) continue; acc = 0
+            acc += st.S[i] - st.S[i - 1]; if (acc < 4.3) continue; acc = 0
             const sd = SIDE[i].z < 0 ? 1 : -1, inn = SIDE[i].clone().multiplyScalar(-sd)   // 欄杆在 +sd 那側，牆在另一側
             // 2026-11-14 使用者「步道岩壁都做仔細」：岩壁的槽是照 z（同一個 x 往岩壁裡量 1.25 m）切的，以前沿步道的垂直方向退 1.25 m，
             // 岩壁斜著走（每往東 1 m 往北 0.55 m），等於多退了 0.18 m → 一片片岩層幾乎整片埋在岩壁裡、只露出幾塊碎角。改成同一個 x 往裡 1.2 m（比牆面凸出 5 cm）
@@ -1196,15 +1206,25 @@ export function buildYosemite(scene, { lib } = {}) {
             const qW = new THREE.Quaternion().setFromAxisAngle(UPv, yaw), top = Math.min(ceil - 0.12, C3[i].y + (ceil < 1e8 ? 10.5 : 6.6))
             let y0w = C3[i].y - 0.25
             for (let c = 0; c < 3 && y0w < top - 1.0; c++) {
-              const sy = Math.min(0.95 + 0.15 * hsh(i * 2.3 + c * 5.1), (top - y0w) / 3.4)
+              const sy = Math.min(0.95 + 0.12 * hsh(i * 2.3 + c * 5.1), (top - y0w) / 3.6)
               if (sy < 0.3) break
               const sh = c ? (hsh(i * 7.7 + c) - 0.5) * 1.2 : 0, ax = V(-inn.z, 0, inn.x)
-              put(names[(k++ + c) % names.length], m4.compose(V(base.x + ax.x * sh, y0w, base.z + ax.z * sh + (c ? 0.03 * c : 0)), qW, V(1 + 0.06 * c, sy, 1)))
-              y0w += 3.4 * sy - 0.06
+              put(names[(k++ + c) % names.length], m4.compose(V(base.x + ax.x * sh, y0w, base.z + ax.z * sh + (c ? 0.03 * c : 0)), qW, V(1 + 0.04 * c, sy, 1)))
+              // 概念圖 1、3：頭頂 2.8～3.2 m 偶爾一道往外伸的大岩簷（上面至少還要有 1 m 才放，不然會頂到上一層的地板）
+              if (!c && ovh.length && hsh(i * 5.3) < 0.4 && top - (y0w + 3.6 * sy) > 1.0) put(ovh[Math.floor(hsh(i * 9.7) * ovh.length) % ovh.length], m4.compose(V(base.x, C3[i].y + 2.85 + 0.3 * hsh(i * 1.9), base.z + 0.02), qW, V(0.8 + 0.3 * hsh(i * 4.1), 1, 0.9)))
+              // 概念圖 1、3：蕨類長在潮濕的縫——牆腳、第一層岩層的頂（岩架）；越靠瀑布越多
+              { const wetK = Math.exp(-(((C3[i].x - YOSE.fall.x) / 22) ** 2)), pr = 0.25 + 0.45 * wetK
+                if (!c && hsh(i * 3.9) < pr) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 2.2) - 0.5) * 3, C3[i].y - 0.05, base.z - 0.25), s: 0.55 + 0.4 * hsh(i * 6.1) })
+                if (hsh(i * 7.1 + c) < pr * 0.8) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 4.4 + c) - 0.5) * 3.4, y0w + 3.6 * sy * (0.45 + 0.4 * hsh(i * 8.3 + c)), base.z + 0.12), s: 0.4 + 0.35 * hsh(i * 5.7 + c), hang: true }) }
+              y0w += 3.6 * sy - 0.06
             }
-          } } }
+          } }
+        if (lib && WFERN.length) { const fn = ['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a'].filter((n) => lib[n]), fl = {}
+          WFERN.forEach((f, j) => { if (!fn.length) return; const e = new THREE.Euler(f.hang ? -0.55 - 0.3 * hsh(j * 1.3) : (hsh(j * 2.1) - 0.5) * 0.3, hsh(j * 3.7) * 6.28, 0, 'YXZ')
+            for (let r = 0; r < (f.hang ? 2 : 3); r++) (fl[fn[Math.floor(hsh(j * 5.1 + r) * fn.length) % fn.length]] ||= []).push({ p: f.p.clone().add(V((hsh(j + r * 7) - 0.5) * 0.7, 0, (hsh(j * 2 + r) - 0.5) * 0.2)), q: new THREE.Quaternion().setFromEuler(e), s: V(1, 1, 1).multiplyScalar(f.s * (0.8 + 0.4 * hsh(j * 9 + r))) }) })
+          for (const [n, l2] of Object.entries(fl)) scatter(g, lib[n], l2, { cast: false }) } }
       // 2026-11-14 折返平台兩側那面彎的岩壁（階地的端牆）也貼岩層：從平台中心往外打射線找到岩面，照岩面的方向貼兩片、疊兩層
-      { const names = ['wall_a', 'wall_b', 'wall_c'].filter((n) => K[n]), cf = g.getObjectByName('cliffFace'), rc = new THREE.Raycaster(), groups = []
+      { const names = ['sw_a', 'sw_b', 'sw_c', 'sw_d'].filter((n) => K[n]), cf = g.getObjectByName('cliffFace'), rc = new THREE.Raycaster(), groups = []
         for (let i = 0; i < NP; i++) if (st.kind[i] === 'alc') { if (!groups.length || groups.at(-1).at(-1) !== i - 1) groups.push([]); groups.at(-1).push(i) }
         if (names.length && cf) for (const G of groups) {
           const c = V(); for (const i of G) c.add(C3[i]); c.multiplyScalar(1 / G.length)
@@ -1215,18 +1235,35 @@ export function buildYosemite(scene, { lib } = {}) {
             const h = rc.intersectObject(cf, false)[0]; if (!h || !h.face) continue
             const nW = h.face.normal.clone().transformDirection(cf.matrixWorld); nW.y = 0; if (nW.lengthSq() < 0.2) continue; nW.normalize(); if (nW.x * sx > 0) nW.negate()
             const yaw = Math.atan2(nW.x, nW.z)
-            for (let cc = 0, y0 = c.y - 0.25; cc < 2; cc++) { const sy = 0.95 + 0.12 * hsh(G[0] * 3.1 + dz + cc); put(names[(n++ + G[0]) % names.length], m4.compose(V(h.point.x - nW.x * 0.04, y0, h.point.z - nW.z * 0.04), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(0.5, sy, 1))); y0 += 3.4 * sy - 0.06 }
+            for (let cc = 0, y0 = c.y - 0.25; cc < 2; cc++) { const sy = 0.95 + 0.12 * hsh(G[0] * 3.1 + dz + cc); put(names[(n++ + G[0]) % names.length], m4.compose(V(h.point.x - nW.x * 0.04, y0, h.point.z - nW.z * 0.04), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(0.5, sy, 1))); y0 += 3.6 * sy - 0.06 }
           }
         } }
-      const wallM = stepM.clone(); wallM.onBeforeCompile = stepM.onBeforeCompile; wallM.customProgramCacheKey = () => 'stepTriplanarWall'; wallM.color.setRGB(0.98, 0.82, 0.62)   // 崖壁的暖砂岩色（石階那份偏冷灰）
+      const wallM = stepM.clone(); wallM.onBeforeCompile = (sh) => { STEP_BASE_OBC(sh)
+        // 概念圖：暖橘褐砂岩、縫和凹處很暗（對比強）；頂點色裡烘的 AO 再壓深一點
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + GLSL_VNOISE).replace('#include <color_fragment>', `#include <color_fragment>
+          { float l = dot(vColor.rgb, vec3(0.33)); diffuseColor.rgb *= mix(0.55, 1.12, smoothstep(0.25, 0.85, l));
+            vec3 n = normalize(vTpN); vec3 p = vTpW;
+            float lam = vfbm(vec2(p.x * 0.6 + p.z * 0.6, p.y * 9.0));                          // 細層理（1～8 cm）：很淡的橫紋
+            diffuseColor.rgb *= 0.9 + 0.2 * lam;
+            float tone = vfbm(vec2(p.x + p.z, p.y * 0.8) * 0.35);                               // 一塊塊偏黃／偏灰
+            diffuseColor.rgb *= mix(vec3(0.92, 0.96, 1.04), vec3(1.08, 0.98, 0.86), tone);
+            float crk = vfbm(vec2((p.x - p.z) * 1.7, p.y * 0.5) + 3.0);                         // 直的細裂
+            diffuseColor.rgb *= 1.0 - 0.45 * smoothstep(0.7, 0.76, crk);
+            float li = vfbm(p.xy * 7.0 + p.z * 5.3) * 0.6 + vfbm(p.xy * 1.3 + p.z) * 0.4;      // 地衣：一點一點的淡灰綠小斑
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.52, 0.44), 0.4 * smoothstep(0.6, 0.7, li) * (1.0 - smoothstep(0.4, 0.8, n.y)));
+            float up = smoothstep(0.55, 0.85, n.y), mo = smoothstep(0.45, 0.65, vfbm(p.xz * 1.3 + 7.0));   // 朝上的面：青苔
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.09, 0.15, 0.04) * (0.8 + 0.5 * li), up * mo * 0.85);
+            float drip = smoothstep(0.62, 0.8, vfbm(vec2((p.x + p.z) * 2.4, p.y * 0.12)));        // 往下流的深色水痕
+            diffuseColor.rgb *= 1.0 - 0.32 * drip * (1.0 - up); }`) }
+      wallM.customProgramCacheKey = () => 'sandWall4'; wallM.color.setRGB(1.0, 0.7, 0.45); addBounce(wallM, 0.3)   // 崖壁的暖砂岩色（石階那份偏冷灰）
       const mats = { post: logM, rail: logM, curb: stepM, floor: wetM, step: stepM, wall: wallM }
       for (const [name, list] of Object.entries(L)) {
         if (!K[name] || !list.length) continue
         if (name.startsWith('__')) continue
-        const kind = name.startsWith('wall_') ? 'wall' : name.split('_')[1]
+        const kind = name.startsWith('wall_') || name.startsWith('sw_') ? 'wall' : name.split('_')[1]
         const im = new THREE.InstancedMesh(K[name], mats[kind], list.length)
         const warm = new THREE.Color()
-        list.forEach((mm, k) => { im.setMatrixAt(k, mm); const cc = L.__stepC?.[name]?.[k]; if (cc) im.setColorAt(k, cc); else if (kind === 'wall') im.setColorAt(k, warm.setRGB(1.12 + 0.1 * hsh(k * 1.7), 0.92 + 0.06 * hsh(k * 2.9), 0.66)) })   // 岩壁：每片暖砂岩色、深淺差一點
+        list.forEach((mm, k) => { im.setMatrixAt(k, mm); const cc = L.__stepC?.[name]?.[k]; if (cc) im.setColorAt(k, cc); else if (kind === 'wall') im.setColorAt(k, warm.setRGB(0.92 + 0.12 * hsh(k * 1.7), 0.92 + 0.08 * hsh(k * 2.9), 0.92)) })   // 岩壁：每片暖砂岩色、深淺差一點
         im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'galKit_' + name; g.add(im)
       }
     }).catch((e) => console.error('gallery kit', String(e?.stack ?? e)))
