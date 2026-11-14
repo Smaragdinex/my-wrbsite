@@ -150,7 +150,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   giantSpots(alpAvoid)   // 巨木的位置先算好：山區的其他樹、草要避開
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
   scene.add(buildEast({ avoid: alpAvoid, lib: plantLib, hideKit, walkKit }))
-  buildStreambed(scene).then((r) => console.log('streambed', JSON.stringify(r))).catch((e) => console.error('streambed', e))   // 2026-11-12 溪床卵石、苔石、水草（不擋進場，載好就出現）   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
+  buildStreambed(scene, plantLib).then((r) => console.log('streambed', JSON.stringify(r))).catch((e) => console.error('streambed', e))   // 2026-11-12 溪床卵石、苔石、水草（不擋進場，載好就出現）   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
   alpine.build()
   // 2026-11-13 使用者「把這裡的營區暫時都移除，讓進入瀑布步道更順暢」：帳篷、柴堆、營火、冰桶都不擺（buildCamp 留著，要放回來把這行換回去）
   const camp = { tick() {} }   // buildCamp(scene)

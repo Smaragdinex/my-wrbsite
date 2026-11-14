@@ -6,12 +6,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { ALP_STREAMS, ALP_POND, YOSE, alpineHeight, alpineTrailDist, addCollider } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { lodRegister } from './lod.js'
+import { scatter } from './plants.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 const timeU = { value: 0 }
 export const streambedTick = (t) => { timeU.value = t }
 
-export async function buildStreambed(scene) {
+export async function buildStreambed(scene, lib = null) {
   const gl = await new GLTFLoader().loadAsync(`models/props/streambed_kit.glb?v=${VER}`)
   const geo = {}
   gl.scene.updateMatrixWorld(true)
@@ -102,7 +103,27 @@ export async function buildStreambed(scene) {
       boulders.push({ x, z, y: W - 0.5 * s2 + 0.15 + rw() * 0.3, s: s2, yaw: rw() * 6.283, v: Math.floor(rw() * 3), weir: true })
     } }
   for (const b of boulders) if (!b.weir) b.y = Math.min(b.y, alpineHeight(b.x, b.z) + 0.42 * b.s)   // 2026-11-14 使用者（石頭浮在水上）：河床、湖底挖深之後照水面放的苔石底下是空的 → 最多只能比水底高 0.42×大小（石頭坐在水底）
-  for (const b of boulders) { put('boulder_' + b.v, b.x, b.y, b.z, b.s, b.s, b.s, b.yaw, new THREE.Color().setScalar(0.9 + 0.25 * rnd()), 0.12); addCollider(b.x, b.z, b.s * 0.5, b.y + b.s * 0.4) }
+  // 2026-11-14 使用者（湖口照片，紅圈）「應該放上黃色圈那種，不是 pebble stone」＋「溪、湖、河都要」：
+  // 這批苔石（kit 的 boulder_0～2，頂面平、綠）泡在水裡只露出一片綠色的圓盤 → 全部換成岸邊那種掃描的真岩石（plants.js lib 的 mrock／boulder）。
+  // 大小照原本苔石的寬，頂面高度照原本的；底下如果離水底還有空隙就往下放（不懸空）
+  const REAL = ['mrock_7', 'mrock_8', 'mrock_9', 'mrock_10', 'mrock_12', 'boulder'].filter((n) => lib?.[n])
+  const realL = {}, rbox = {}
+  for (const b of boulders) {
+    if (!REAL.length) { put('boulder_' + b.v, b.x, b.y, b.z, b.s, b.s, b.s, b.yaw, new THREE.Color().setScalar(0.9 + 0.25 * rnd()), 0.12); addCollider(b.x, b.z, b.s * 0.5, b.y + b.s * 0.4); continue }
+    const og = geo['boulder_' + b.v]; if (og && !og.boundingBox) og.computeBoundingBox()
+    const ob = og?.boundingBox, oTop = b.y + (ob ? ob.max.y : 0.4) * b.s + (b.weir ? 0.35 : 0.12),   /* 掃描石頭頂是尖的，跟平頂苔石同高只露出一點尖 → 抬高一點，露出一整塊 */ oW = (ob ? Math.max(ob.max.x - ob.min.x, ob.max.z - ob.min.z) : 1) * b.s
+    const n = REAL[Math.floor(rnd() * REAL.length)], nb = rbox[n] ||= new THREE.Box3().setFromObject(lib[n])
+    const NW = Math.max(nb.max.x - nb.min.x, nb.max.z - nb.min.z), NH = nb.max.y - nb.min.y, gnd = alpineHeight(b.x, b.z)
+    // 頂面固定在原本苔石的頂（露出水面）；石頭不夠高、碰不到水底（河口挖得深）就整顆放大，最多寬到原本的 2.2 倍，還不夠再往下放
+    let k = oW * (0.95 + 0.2 * rnd()) / NW
+    k = Math.min(Math.max(k, (oTop - gnd + 0.1) / NH), oW * 2.2 / NW)
+    const h = NH * k
+    let bot = oTop - h; if (bot > gnd - 0.08 && bot - gnd < 0.5) bot = gnd - 0.08   // 差一點就碰到底：往下放（頂面低一點沒關係）；河口挖很深的地方頂面維持露出水面，底下藏在深水裡
+    const yaw = b.yaw, cx = (nb.min.x + nb.max.x) / 2 * k, cz = (nb.min.z + nb.max.z) / 2 * k, c = Math.cos(yaw), s = Math.sin(yaw)
+    ;(realL[n] ||= []).push({ p: new THREE.Vector3(b.x - (cx * c + cz * s), bot - nb.min.y * k, b.z - (-cx * s + cz * c)), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), s: new THREE.Vector3(k, k, k), c: new THREE.Color().setScalar(0.85 + 0.25 * rnd()) })
+    addCollider(b.x, b.z, oW * 0.5, bot + h)
+  }
+  for (const [n, list] of Object.entries(realL)) for (const im of scatter(G, lib[n], list, { cast: true })) im.name = 'bed_rock_' + n
 
   /* ---------- 材質 ---------- */
   const stoneM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.48, metalness: 0 })     // 濕的石頭：有一點反光
