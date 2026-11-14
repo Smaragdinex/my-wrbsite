@@ -611,7 +611,7 @@ export function buildYosemite(scene, { lib } = {}) {
   // 2026-11-13 Pass 1A（ChatGPT 規格）：水簾 shader 接上場景霧（FogExp2）、日夜亮度、雲量（共用 uniform，不多開 program）；
   // o.strand：分股水簾用的版本（頂點橫向紊流＝寬度 2～6%、每股自己的亂數 aSeed、白沫集中在岩唇和落水段）
   const fallMat = (o) => {
-    const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSpd: { value: o.spd }, uA: { value: o.a }, uDark: { value: o.dark ?? 0 }, uLow: { value: o.low ?? 0 } }])
+    const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSpd: { value: o.spd }, uA: { value: o.a }, uDark: { value: o.dark ?? 0 }, uLow: { value: o.low ?? 0 }, uThin: { value: o.thin ?? 0 } }])
     u.uT = uT; u.uDay = dayLight; u.uCloud = weatherU.cloud
     return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true, defines: o.strand ? { STRAND: 1 } : {},
@@ -629,7 +629,7 @@ export function buildYosemite(scene, { lib } = {}) {
         #include <fog_vertex>
       }`,
     fragmentShader: `
-      varying vec2 vUv; varying float vSeed; uniform float uT, uSpd, uA, uDark, uLow, uDay, uCloud;
+      varying vec2 vUv; varying float vSeed; uniform float uT, uSpd, uA, uDark, uLow, uDay, uCloud, uThin;
       #ifdef STRAND
       varying float vA;
       #endif
@@ -662,12 +662,16 @@ export function buildYosemite(scene, { lib } = {}) {
         float edge = smoothstep(0.0, spread, x) * smoothstep(1.0, 1.0 - spread, x);
         edge *= 0.75 + 0.25 * n(vec2(sx * 9.0, fall * 3.0 - t * 1.5));                     // 邊緣破碎
         float low = mix(1.0, smoothstep(0.35, 0.75, y), uLow);                               // 水霧簾只在下半段
-        float a = (0.22 + 0.55 * str + 0.45 * plume) * edge * low * uA * mix(0.85, 1.0, y);
+        float foot = smoothstep(0.72, 1.0, y) * (1.0 - uDark) * (1.0 - uThin);                                // 2026-11-14 使用者「瀑布、水氣修好看」：落水前一段整片打成白水
+        plume = max(plume, foot * (0.55 + 0.45 * n(vec2(sx * 11.0, fall * 5.0 - t * 2.6))));
+        // uThin：岩廊外整面的滲水簾——從外面看以前像一片灰玻璃（底色透明度＋好幾片重疊）→ 只留一條條水絲，中間透空
+        str = mix(str, smoothstep(0.55, 0.95, str), uThin); plume *= 1.0 - 0.7 * uThin;
+        float a = (mix(0.3, 0.0, uThin) + 0.55 * str + 0.6 * plume) * edge * low * uA * mix(0.85, 1.0, y);
         #ifdef STRAND
         a = (a * mix(0.4, 1.0, brk) + spray * 0.35 * edge * low) * vA;
         plume = max(plume, spray * 0.7);
         #endif
-        vec3 c = mix(vec3(0.72, 0.8, 0.84), vec3(1.0), clamp(str * 0.6 + plume, 0.0, 1.0));
+        vec3 c = mix(vec3(0.8, 0.87, 0.9), vec3(1.0), clamp(str * 0.7 + plume, 0.0, 1.0));   // 以前 0.72/0.8/0.84 → 整片灰灰透透的
         c = mix(c, c * 0.6, uDark);
         c *= (0.2 + 0.8 * uDay) * (1.0 - 0.25 * uCloud);                                   // 晚上、陰天跟著變暗（以前整晚發白）
         gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
@@ -860,7 +864,7 @@ export function buildYosemite(scene, { lib } = {}) {
       let yG2 = SHf; for (let i = 0; i < T.pts.length; i++) if (T.kind[i] === 'gal' && T.pts[i][0] > G[0] && T.pts[i][0] < G[1] && T.yy[i] > SHf + 3) yG2 = Math.max(yG2, T.yy[i])
       const yA = yG2 + 3.6 + 0.3, yB = SHf - 2.6, HW = 3.0, NX = 12, NY = 26
       const panels = []; for (let xc = G[0] - 1.0; xc <= G[1] + 1.0 + 1e-6; xc += 4.0) panels.push(xc)
-      for (const [layer, mat] of [[0, fallMat({ spd: 0.6, a: 0.42, dark: 0.3, strand: 1 })], [1, fallMat({ spd: 0.95, a: 0.66, strand: 1 })]]) {
+      for (const [layer, mat] of [[0, fallMat({ spd: 0.6, a: 0.42, dark: 0.3, strand: 1, thin: 1 })], [1, fallMat({ spd: 0.95, a: 0.8, strand: 1, thin: 1 })]]) {
         panels.forEach((xc, pi) => {
           const P = [], U = [], SD = [], SW = [], AL = [], I = [], seed = (pi * 0.618 + layer * 0.37) % 1
           for (let j = 0; j <= NY; j++) { const v = j / NY, y = yA - (yA - yB) * v
@@ -1025,14 +1029,24 @@ export function buildYosemite(scene, { lib } = {}) {
     // 水霧：大片、慢慢飄、有的往步道那邊飄過來
     const zImpM = (fc.lip ? fc.lip.z - 0.35 : fz) - 3.25
     const mistT = mistTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c) })()
+    // 2026-11-14 使用者「水氣修好看」：水霧團以前是一顆均勻的圓（看起來像一顆顆白球、又淡到幾乎看不到）→ 改成有雲狀破碎邊的一團（fbm），落水處濃、往外淡
+    const cloudT = (() => { const N = 128, c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'), im = x.createImageData(N, N)
+      const hs = (i, j) => { const v = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return v - Math.floor(v) }
+      const vn = (u, v) => { const i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j, a = fu * fu * (3 - 2 * fu), b = fv * fv * (3 - 2 * fv), w = (p, q) => hs(((i + p) % 8 + 8) % 8, ((j + q) % 8 + 8) % 8); return (w(0, 0) * (1 - a) + w(1, 0) * a) * (1 - b) + (w(0, 1) * (1 - a) + w(1, 1) * a) * b }
+      for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+        const u = px / N * 8, v = py / N * 8; let f = 0, amp = 0.5, fr = 1; for (let o = 0; o < 4; o++) { f += amp * vn(u * fr, v * fr); amp *= 0.5; fr *= 2 }
+        const r = Math.hypot(px - N / 2, py - N / 2) / (N / 2), fall = Math.max(0, 1 - r) ** 1.3
+        const a = Math.max(0, Math.min(1, fall * (0.45 + 1.5 * (f - 0.25)))), k = (py * N + px) * 4
+        im.data[k] = im.data[k + 1] = im.data[k + 2] = 255; im.data[k + 3] = a * 255 }
+      x.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t })()
     // 2026-11-13 Pass 1B（ChatGPT：水霧太白、把森林洗白）：重新分配——落水帶附近 0～5 m 濃（12 團）、5～12 m 慢慢變淡（9 團）、
     // 12～25 m 只剩幾團很淡的（5 團）、再遠沒有；每團有自己的高度、會順著風往湖面飄；顏色跟著天色（晚上不再像發光的白煙）
-    for (const [n, r0, r1, op, s0, s1, h0, h1] of [[12, 0, 5, 0.34, 3, 6, 0.4, 5], [9, 5, 12, 0.16, 4, 7, 0.8, 7], [5, 12, 25, 0.06, 5, 8, 1.5, 9]]) for (let k = 0; k < n; k++) {
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0 })), dx = (rnd() - 0.5) * 2, r = r0 + rnd() * (r1 - r0)
+    for (const [n, r0, r1, op, s0, s1, h0, h1] of [[16, 0, 5, 1.0, 4, 8, 0.2, 6], [10, 5, 12, 0.35, 5, 9, 0.8, 8], [5, 12, 25, 0.08, 6, 9, 1.5, 9]]) for (let k = 0; k < n; k++) {   // 2026-11-14 落水處濃很多（0.34→0.7，貼圖本身也比較實）
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudT, transparent: true, depthWrite: false, opacity: 0, rotation: rnd() * TAU })), dx = (rnd() - 0.5) * 2, r = r0 + rnd() * (r1 - r0)
       const p0 = V(F.x + dx * (r0 < 1 ? 5.5 : 8 + r * 0.4), poolY + h0 + rnd() * (h1 - h0), zImpM - r * (0.6 + 0.4 * rnd()))
       sp.position.copy(p0); sp.scale.setScalar(s0 + rnd() * (s1 - s0)); sp.userData = { ph: rnd() * TAU, p0, k: op * (0.7 + 0.6 * rnd()), drift: 0.6 + rnd() * 0.8 }; sp.renderOrder = 6; g.add(sp); mist.push(sp)
     }
-    for (let k = 0; k < 9; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mistT, transparent: true, depthWrite: false, opacity: 0.3 })); const p0 = V(F.x + (rnd() - 0.5) * 5, SHELF_Y + 0.6 + rnd() * 3.2, fz + YOSE.rec(F.x) - 1.2 - rnd() * 2.2); sp.position.copy(p0); sp.scale.setScalar(2.2 + rnd() * 3); sp.userData = { ph: rnd() * TAU, p0, k: 0.22, drift: 0.3 }; sp.renderOrder = 6; g.add(sp); mist.push(sp) }   // 2026-11-12 中段水潭上面的水霧（落點 2～3 m 內濃）
+    for (let k = 0; k < 9; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudT, transparent: true, depthWrite: false, opacity: 0.3, rotation: rnd() * TAU })); const p0 = V(F.x + (rnd() - 0.5) * 5, SHELF_Y + 0.6 + rnd() * 3.2, fz + YOSE.rec(F.x) - 1.2 - rnd() * 2.2); sp.position.copy(p0); sp.scale.setScalar(2.2 + rnd() * 3); sp.userData = { ph: rnd() * TAU, p0, k: 0.4, drift: 0.3 }; sp.renderOrder = 6; g.add(sp); mist.push(sp) }   // 2026-11-12 中段水潭上面的水霧（落點 2～3 m 內濃）
     // 2026-11-13 岩廊的氛圍（使用者：「氛圍也要對」，參考圖 docs/acceptance-1113/chatgpt_gallery_ref.png）：
     // 陽光穿過水簾斜斜照進廊道——一道道暖色光束（兩片交叉的面，從欄杆外的水簾斜到靠內側的地板）＋落在地板上一塊塊會晃的光斑（水簾晃，光就跟著閃）；
     // 廊道裡一團團水霧從靠岩壁那側飄向水簾（用上面瀑布水霧同一套 sprite、同一個更新）。晚上、陰天跟著變暗
@@ -1092,11 +1106,11 @@ export function buildYosemite(scene, { lib } = {}) {
       if (PG.length) mk(PG, patchM, 'galleryPatches')
     }
     // 水花：落點往上往外噴的小水滴（加色、會飄散）
-    const NS = 500, sp = new Float32Array(NS * 3), sv = []
+    const NS = 800, sp = new Float32Array(NS * 3), sv = []
     const reset = (i, first) => { const x = F.x + (rnd() - 0.5) * 9, z = fz - 2.6 - rnd() * 1.8; sp[i * 3] = x; sp[i * 3 + 1] = poolY + (first ? rnd() * 5 : 0.1); sp[i * 3 + 2] = z; sv[i] = V((rnd() - 0.5) * 1.6, 2 + rnd() * 4.5, -(0.4 + rnd() * 2.2)) }
     for (let i = 0; i < NS; i++) reset(i, true)
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3))
-    const sprayM = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.55, depthWrite: false, map: mistT, blending: THREE.AdditiveBlending })
+    const sprayM = new THREE.PointsMaterial({ color: 0xffffff, size: 0.2, transparent: true, opacity: 0.6, depthWrite: false, map: mistT, blending: THREE.AdditiveBlending })
     const spray = new THREE.Points(sg, sprayM); spray.frustumCulled = false; spray.renderOrder = 7; g.add(spray)
     sprayU = (dt) => { sprayM.color.setScalar(0.1 + 0.9 * dayLight.value); for (let i = 0; i < NS; i++) { sv[i].y -= 3.2 * dt; sv[i].multiplyScalar(1 - 0.9 * dt); sp[i * 3] += sv[i].x * dt; sp[i * 3 + 1] += sv[i].y * dt; sp[i * 3 + 2] += sv[i].z * dt; if (sp[i * 3 + 1] < poolY || rnd() < 0.004) reset(i, false) } sg.attributes.position.needsUpdate = true }
   }
@@ -1741,7 +1755,7 @@ export function buildYosemite(scene, { lib } = {}) {
     { const lit = 0.1 + 0.9 * dayLight.value
       for (const sp of mist) { const u = sp.userData, ph = ((t * 0.05 * u.drift + u.ph / TAU) % 1)   // 順著風（往湖面、微微往東）飄出去再從落水處重來，頭尾淡入淡出
         sp.material.opacity = u.k * (0.75 + 0.25 * Math.sin(t * 0.6 + u.ph)) * Math.sin(Math.PI * ph)
-        sp.material.color.setScalar(lit)
+        sp.material.color.setScalar(lit); sp.material.rotation += dt * 0.04 * (u.ph > Math.PI ? 1 : -1)
         sp.position.set(u.p0.x + Math.sin(t * 0.13 + u.ph) * 1.2 + ph * 1.5 * u.drift, u.p0.y + Math.sin(t * 0.21 + u.ph) * 0.6 + ph * 1.2, u.p0.z - ph * 3.0 * u.drift) } }
     for (const f of foams) { const k = (t * (f.userData.k ? 0.35 : 0.22) + f.userData.k * 0.5) % 1; f.rotation.y = t * (f.userData.k ? -0.05 : 0.03); f.material.opacity = 0.85 * (1 - k * 0.6) }
     if (sprayU && dt > 0) sprayU(dt)
