@@ -767,13 +767,11 @@ export function buildYosemite(scene, { lib } = {}) {
       }
     }
     // 岩棚前緣的欄杆（水潭前面那段步道外側；出水口上面不立柱）
-    { const pp = [], sg = [], ironL = new THREE.MeshStandardMaterial({ color: 0x33363a, roughness: 0.5, metalness: 0.6 }); let prev = null
+    { const pp = [], sg = []; let prev = null
       for (let x = 193.6; x <= 208.4; x += 1.2) { const p = V(x, shelfY, YOSE.base(x) - 0.25); if (Math.abs(x - F.x) < 2.4) { prev = null; continue } pp.push(p); addCollider(p.x, p.z, 0.12, p.y + 1.1, p.y - 0.4); if (prev) sg.push([prev, p]); prev = p }
       for (let x = 193.6; x <= 208.4; x += 0.45) addCollider(x, YOSE.base(x) - 0.45, 0.3, shelfY + 1.2, shelfY - 0.5)   // 整條前緣擋住（出水口那 3 m 也是）
-      const pm2 = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 6).translate(0, 0.55, 0), ironL, pp.length); pp.forEach((p, k) => pm2.setMatrixAt(k, new THREE.Matrix4().makeTranslation(p.x, p.y, p.z))); g.add(pm2)
-      const rm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.022, 0.022, 1, 5).rotateZ(Math.PI / 2), ironL, sg.length * 2), q4 = new THREE.Quaternion()
-      sg.forEach(([a, b], k) => { const d = b.clone().sub(a), L = d.length(); q4.setFromUnitVectors(V(1, 0, 0), d.clone().normalize()); for (const [j, hh] of [[0, 1.05], [1, 0.55]]) rm.setMatrixAt(k * 2 + j, new THREE.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5).add(V(0, hh, 0)), q4, V(L, 1, 1))) })
-      g.add(rm) }
+      for (const p of pp) CHAIN.posts.push(p); for (const sgm of sg) CHAIN.segs.push(sgm)   // 2026-11-14 使用者「都改鐵鍊」
+    }
     // 下段
     const yLipW = shelfY - 0.4
     // 2026-11-13 Pass 1A-R（ChatGPT：側邊的水不能從步道底下憑空冒出來）：下段 7 股全部從岩棚出水口（4.4 m）翻下來；
@@ -1126,7 +1124,7 @@ export function buildYosemite(scene, { lib } = {}) {
         if ((st.bays ?? []).some((b) => Math.abs(C3[i].x - b.x) < b.half + 0.2 && Math.abs(C3[i].y - b.y) < 0.8)) { prev = null; continue }
         // 2026-11-13（龍岩窟參考圖）：兩段岩廊不用鐵鍊，改成矮石緣上的原木欄杆（下面 WOOD 另外蓋）
         if (st.kind[i] === 'gal' && p.x > YOSE.GAL[0] - 0.5 && p.x < YOSE.GAL[1] + 0.5 && p.y > YOSE.shelfY() - 1.0) { const last = WOOD.at(-1); if (!last || last.at(-1).distanceTo(p) > 3.0) WOOD.push([]); WOOD.at(-1).push(p); prev = null; continue }
-        let sturdy = false; for (let q = Math.max(0, i - 3); q <= Math.min(NP - 1, i + 3); q++) if (st.kind[q] === 'alc' || st.kind[q] === 'top') sturdy = true
+        const sturdy = false   // 2026-11-14 使用者「都改鐵鍊」：折返平台、岩壁頂的鐵管欄杆全部換成鐵樁＋鐵鍊
         p.sturdy = sturdy
         if (prev && prev.distanceTo(p) < 3.8) (sturdy || prev.sturdy ? segs : CHAIN.segs).push([prev, p])
         ;(sturdy ? pp : CHAIN.posts).push(p); prev = p
@@ -1189,7 +1187,12 @@ export function buildYosemite(scene, { lib } = {}) {
             const sd = SIDE[i].z < 0 ? 1 : -1, inn = SIDE[i].clone().multiplyScalar(-sd)   // 欄杆在 +sd 那側，牆在另一側
             const base = C3[i].clone().addScaledVector(inn, 1.25)
             const yaw = Math.atan2(-inn.x, -inn.z)                                              // 套件的 +z（凸出那面）朝步道
-            put(names[k++ % names.length], m4.compose(V(base.x, C3[i].y - 0.25, base.z), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(1, 0.95 + 0.15 * hsh(i * 2.3), 1)))
+            // 2026-11-14 這片牆的上面常常就是上一層步道（階地往裡退 2.6 m，牆剛好在上一層外緣的正下方）：兩層高低差不到 3.4 m 的地方，
+            // 牆會穿出上一層的地板、在欄杆外面露出一片片單面的岩層（從上面看像飄在空中的薄片）→ 牆頂壓到上一層地板下 0.12 m，太矮就不貼
+            const dep = (j) => C3[j].z - YOSE.base(C3[j].x), di = dep(i); let ceil = 1e9; for (let j = 0; j < NP; j++) { const dy = C3[j].y - C3[i].y; if (dy < -0.3 || dy > 5 || dep(j) - di < 1.5 || Math.abs(C3[j].x - base.x) > 2.2) continue; ceil = Math.min(ceil, C3[j].y - 0.3) }   /* 上一層＝更往岩壁裡（深 1.5 m 以上）的那條；折返平台附近兩層幾乎一樣高 → 不貼 */
+            const y0w = C3[i].y - 0.25, sy = Math.min(0.95 + 0.15 * hsh(i * 2.3), (ceil - 0.12 - y0w) / 3.4)
+            if (sy < 0.3) continue
+            put(names[k++ % names.length], m4.compose(V(base.x, y0w, base.z), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(1, sy, 1)))
           } } }
       const wallM = stepM.clone(); wallM.onBeforeCompile = stepM.onBeforeCompile; wallM.customProgramCacheKey = () => 'stepTriplanarWall'; wallM.color.setRGB(0.98, 0.82, 0.62)   // 崖壁的暖砂岩色（石階那份偏冷灰）
       const mats = { post: logM, rail: logM, curb: stepM, floor: wetM, step: stepM, wall: wallM }
@@ -1218,14 +1221,13 @@ export function buildYosemite(scene, { lib } = {}) {
         } }
     }).catch((e) => console.error('gorge rock kit', String(e?.stack ?? e)))
     // 岩壁頂上：觀景台（瀑布口東邊）欄杆＋後面不能走出去
-    const ironM = new THREE.MeshStandardMaterial({ color: 0x3b3d3f, roughness: 0.5, metalness: 0.6 }), posts = []
+    const posts = []
     for (let x = 201.4; x < 250; x += 0.9) if (x < 236.4 || x > 243.2) posts.push(V(x, YOSE.topY(x), YOSE.topFront(x) + 0.15))   /* 2026-11-12 新的崖壁步道從 x 237～243 上來 */   // 2026-11-12 前緣整排欄杆，步道上來的地方（x 210～214）留開口
     for (let z = YOSE.topFront(201.4) + 0.15; z < YOSE.edge(201.4) - 2.2; z += 0.9) posts.push(V(201.3, YOSE.topY(201.3), z))   // 西邊（溪那側）
     for (const p of posts) addCollider(p.x, p.z, 0.2, p.y + 1.1, p.y)
     for (let x = 201.2; x < 251; x += 1) addCollider(x, YOSE.edge(x) - 1.9, 0.35, topYm + 3, topYm - 1.5)   // 2026-11-12 加底：沒有底的碰撞體會連岩體裡的隧道步道一起擋住
-    const pg = new THREE.CylinderGeometry(0.035, 0.035, 1.05, 6).translate(0, 0.52, 0), pm = new THREE.InstancedMesh(pg, ironM, posts.length)
-    posts.forEach((p, i) => pm.setMatrixAt(i, m4.makeTranslation(p.x, p.y, p.z))); pm.castShadow = true; g.add(pm)
-    for (let i = 1; i < posts.length; i++) { const a = posts[i - 1], b = posts[i]; if (a.distanceTo(b) > 1.4) continue; const d = b.clone().sub(a), r = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, d.length(), 5), ironM); r.position.copy(a).add(b).multiplyScalar(0.5).setY((a.y + b.y) / 2 + 1.0); r.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); g.add(r) }
+    // 2026-11-14 使用者「都改鐵鍊」：岩壁頂前緣也是鐵樁＋垂鍊（每隔一根取一根，跨距約 1.8 m）
+    { let pv = null; posts.forEach((p, i) => { if (i % 2 && i !== posts.length - 1) return; if (pv && pv.distanceTo(p) < 2.6) CHAIN.segs.push([pv, p]); CHAIN.posts.push(p); pv = p }) }
 
     // 岩壁頂上的溪：從後面（玻璃前）流到瀑布口，越靠瀑布口越寬、越快；兩岸一顆顆花崗岩
     {
@@ -1248,13 +1250,15 @@ export function buildYosemite(scene, { lib } = {}) {
         // 上游：泉→岩板→潭（寬的一片水）；下游：潭→往西的小溪→接到原本的溪中段
         const runs = [
           { pts: [[spx, spz], [252.5, 120.7], [250.6, 120.2], [248.5, 119.8], [POOL.x + POOL.rx - 0.3, POOL.z + 0.3]], w: [0.5, 1.5], spd: 0.9, a: 0.8 },
+          // 2026-11-14 山頂湖的出水小溪（layout.js YOSE.slakeOut）：湖面 → 平台上的溪；水面高度照湖面慢慢降到平台（溝是 yosemite-top.js 的山體挖的）
+          { pts: YOSE.slakeOut, w: [0.75, 0.95], spd: 0.75, a: 0.85, gy: (t) => lerpN(YOSE.slakeW() + 0.03, YOSE.topY(205) + 0.07, t) },
           { pts: [[POOL.x - POOL.rx + 0.3, POOL.z - 0.2], [233, back(233)], [228, back(228)], [222, back(222)], [216, back(216)], [210, back(210)], [205, back(205) - 0.5], [201.2, 101]], w: [0.9, 1.1], spd: 0.45, a: 0.82 },
         ]
         for (const R of runs) {
           const pts = R.pts.map(([x, z]) => V(x, 0, z)), curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), Lr = curve.getLength(), NSr = Math.ceil(Lr / 0.4), P2 = [], U2 = [], I2 = []
           for (let i = 0; i <= NSr; i++) {
             const t = i / NSr, p = curve.getPointAt(t), tg = curve.getTangentAt(t), w = lerpN(R.w[0], R.w[1], t) * (0.85 + 0.15 * Math.sin(t * 17)), nx = -tg.z, nz = tg.x
-            for (const sd of [-1, 1]) { const x = p.x + nx * w * sd, z = p.z + nz * w * sd; P2.push(x, groundY(x, z) + 0.07, z) }
+            for (const sd of [-1, 1]) { const x = p.x + nx * w * sd, z = p.z + nz * w * sd; P2.push(x, R.gy ? R.gy(t) : groundY(x, z) + 0.07, z) }
             U2.push(0, t * Lr / 3, 1, t * Lr / 3)
             if (i) { const a2 = (i - 1) * 2; I2.push(a2, a2 + 2, a2 + 1, a2 + 1, a2 + 2, a2 + 3) }
           }
@@ -1514,11 +1518,7 @@ export function buildYosemite(scene, { lib } = {}) {
         const gy = Math.min(alpineHeight(x, z), top - 0.75)   // 柱腳踩到地：路肩比路面低就把柱子加長
         const len = top - gy + 0.06
         parts2.push(post.clone().scale(1, len, 1).translate(x, top - len / 2, z))
-        if (prev && Math.hypot(prev[0] - x, prev[2] - z) < 2.2) for (const h of [0, -0.45]) {
-          const a = V(prev[0], prev[1] + h, prev[2]), b = V(x, top + h, z), len2 = a.distanceTo(b)
-          const m = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(V(1, 0, 0), b.clone().sub(a).normalize()))
-          parts2.push(bar.clone().scale(len2, 1, 1).applyMatrix4(m).translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2))
-        }
+        if (prev && Math.hypot(prev[0] - x, prev[2] - z) < 2.2) CHAIN.segs.push([V(prev[0], prev[1] - 1.1, prev[2]), V(x, top - 1.1, z)])   // 2026-11-14 使用者「都改鐵鍊」：橫桿換成垂鍊（鍊子掛在柱頂下 0.18 m）
         prev = [x, top, z]
         addCollider(x, z, 0.12, top + 0.1)
       }

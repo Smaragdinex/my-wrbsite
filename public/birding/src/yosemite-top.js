@@ -12,6 +12,7 @@ import { mulberry32, fbm2 } from './noise.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
+import { waterNormalTex } from './textures.js'
 import { graniteMaterial } from './yosemite.js'
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
@@ -88,7 +89,13 @@ export function summitHeight(x, z) {
   const w = ss(166, 182, x) * ss(272, 258, x)
   const bench = rh - 0.12 + 0.7 * ss(3, 10, d) + 1.8 * ss(8, 20, d)            // 平台後面先一小段緩坡草地
   const near = Math.max(bench, lerp(bench, Math.max(bench, M), ss(8, 33, d)))
-  return lerp(M, near, w)
+  let h = lerp(M, near, w)
+  // 2026-11-14 山頂湖：湖底往下挖（中間深 2.4 m）、湖岸一圈比水面高 0.12 m 再接回原本的坡；出水小溪挖一條淺溝
+  const W = YOSE.slakeW(), lr = YOSE.slakeR(x, z)
+  if (lr < 1.6) h = lr < 1 ? W - 0.15 - 2.4 * ss(0.95, 0.25, lr) : lerp(W + 0.12, h, ss(1.0, 1.6, lr))
+  const o = YOSE.slakeOutDist(x, z)
+  if (o.d < 2.0) { const cy = lerp(W, YOSE.topY(205) + 0.07, o.s) - 0.1; h = Math.min(h, lerp(cy, cy + 0.6, ss(0.6, 2.0, o.d))) }
+  return h
 }
 
 // 輕量版冷杉樹冠的頂芽在遠處變成一根浮在樹梢上的黑點 → 拿掉（y > 0.93 的那幾片卡）
@@ -126,9 +133,10 @@ export function buildSummit(scene, kit, lib) {
   const forest = new THREE.Color(0.075, 0.095, 0.045), meadow = new THREE.Color(0.2, 0.25, 0.08), moss = new THREE.Color(0.1, 0.17, 0.04), dry = new THREE.Color(0.33, 0.3, 0.16)
   for (let v = 0; v < n; v++) {
     const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2], slope = 1 - N.getY(v), nz = fbm2(x * 0.07, z * 0.07, 3), d = z - rimZ(x)
-    const rock = Math.min(1, ss(0.4, 0.62, slope + (nz - 0.5) * 0.3) + ss(126, 140, y) * 0.9 + ss(0.72, 0.92, ridged(x, z)) * ss(105, 135, y) * 0.7)
+    let rock = Math.min(1, ss(0.4, 0.62, slope + (nz - 0.5) * 0.3) + ss(126, 140, y) * 0.9 + ss(0.72, 0.92, ridged(x, z)) * ss(105, 135, y) * 0.7)
     c.copy(forest).lerp(meadow, ss(0.12, 0.03, slope) * ss(0.35, 0.65, nz)).lerp(meadow, ss(16, 4, d) * 0.7).lerp(dry, ss(0.62, 0.8, nz) * 0.4)
     c.multiplyScalar(0.85 + 0.3 * fbm2(x * 0.3, z * 0.3, 2))
+    { const lr = YOSE.slakeR(x, z); if (lr < 1.12) { c.setRGB(0.13, 0.12, 0.075).lerp(new THREE.Color(0.06, 0.1, 0.035), ss(1.12, 0.9, lr) * 0.5); rock = 0 } }   // 湖底：濕泥、青苔
     C.set([c.r, c.g, c.b], v * 3); R[v] = rock
     info.push({ x, y, z, slope, rock, d })
   }
@@ -178,6 +186,7 @@ export function buildSummit(scene, kit, lib) {
       const edge = v.rock > 0.35 || v.slope > 0.68
       if (edge && (v.rock > 0.8 || v.slope > 0.84 || rnd() > 0.1)) continue
       if (!edge && fbm2(x * 0.035 + 11, z * 0.035, 3) < 0.38 && rnd() < 0.85) continue   // 林間空地
+      if (YOSE.slakeR(x, z) < 1.75 || YOSE.slakeOutDist(x, z).d < 3.2) continue   // 山頂湖、出水小溪
       if (trees.some((t) => Math.abs(t.x - x) < 2.6 && Math.abs(t.z - z) < 2.6)) continue
       const H = edge ? 3.5 + rnd() * 4.5 : (v.y > 118 ? 7 : 11) + rnd() * 9
       trees.push({ x, z, y: summitHeight(x, z) - 0.3, H, w: 0.75 + rnd() * 0.35, c: rnd() })
@@ -201,7 +210,7 @@ export function buildSummit(scene, kit, lib) {
   const onTop = (x, z) => x > 201.5 && x < 250 && z > YOSE.topFront(x) + 0.4 && z < YOSE.edge(x) - 0.3
   // 平台上的溪（yosemite.js：沿 edge-6.5 往西流到瀑布口、上游一個潭）不長草
   const inCreek = (x, z) => (x > 200 && x < 243 && Math.abs(z - (YOSE.edge(x) - 6.5 + 1.2 * Math.min(1, Math.max(0, (x - 211) / 3)))) < 1.7) || Math.hypot((x - 241) / 4.4, (z - 120.1) / 3.0) < 1 || (x > 196 && x < 205 && z < 102.5 && z > YOSE.base(200))
-  const free = (x, z) => !(Math.abs(x - SH.x) < 2.7 && Math.abs(z - SH.z) < 3.0) && pathDist(x, z) > 0.75 && alpineStreamDist(x, z) > 1.2 && !inCreek(x, z)
+  const free = (x, z) => YOSE.slakeR(x, z) > 1.06 && YOSE.slakeOutDist(x, z).d > 1.1 && !(Math.abs(x - SH.x) < 2.7 && Math.abs(z - SH.z) < 3.0) && pathDist(x, z) > 0.75 && alpineStreamDist(x, z) > 1.2 && !inCreek(x, z)
   const groundY = (x, z) => onTop(x, z) && z < YOSE.edge(x) - 1.2 ? YOSE.topY(x) + 0.05 : summitHeight(x, z)
   // 平台以外、山腳那圈也鋪（rim 後面 0～14 m）
   const sample = () => {
@@ -273,6 +282,50 @@ export function buildSummit(scene, kit, lib) {
       }
     }
     for (const [nm, list] of Object.entries(fl)) scatter(g, lib[nm], list, { cast: true })
+  }
+  // ---------- 4) 山頂湖（2026-11-14）：湖面＋湖岸的石頭、青苔、蕨、草 ----------
+  {
+    const LK = YOSE.slake, W = YOSE.slakeW(), NA = 120, NR = 14, Pp = [], Cc = [], Ii = []
+    const shape = (th) => 1 + 0.13 * Math.sin(3 * th + 1) + 0.07 * Math.sin(5 * th + 2.3)
+    for (let j = 0; j <= NR; j++) for (let a = 0; a < NA; a++) {
+      const th = a / NA * TAU, r = (j / NR) * 1.04 * shape(th), x = LK.x + Math.cos(th) * LK.rx * r, z = LK.z + Math.sin(th) * LK.rz * r
+      Pp.push(x, W, z)
+      const k = ss(0.25, 1.0, j / NR)   // 0＝湖心（深）、1＝岸邊（淺、看得到湖底）
+      Cc.push(lerp(0.02, 0.2, k), lerp(0.16, 0.36, k), lerp(0.15, 0.28, k), lerp(0.96, 0.5, k))
+    }
+    for (let j = 0; j < NR; j++) for (let a = 0; a < NA; a++) { const i0 = j * NA + a, i1 = j * NA + (a + 1) % NA; Ii.push(i0, i0 + NA, i1, i1, i0 + NA, i1 + NA) }
+    const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(Pp, 3)); lg.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 4)); lg.setIndex(Ii); lg.computeVertexNormals()
+    { const nrm = lg.attributes.normal; if (nrm.getY(0) < 0) { for (let t = 0; t < Ii.length; t += 3) { const s2 = Ii[t + 1]; Ii[t + 1] = Ii[t + 2]; Ii[t + 2] = s2 } lg.setIndex(Ii); lg.computeVertexNormals() } }
+    const uvA = new Float32Array(Pp.length / 3 * 2); for (let v = 0; v < Pp.length / 3; v++) { uvA[v * 2] = Pp[v * 3] * 0.09; uvA[v * 2 + 1] = Pp[v * 3 + 2] * 0.09 } lg.setAttribute('uv', new THREE.BufferAttribute(uvA, 2))
+    const nt = waterNormalTex()
+    const lm = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 0.04, metalness: 0.0, normalMap: nt, normalScale: new THREE.Vector2(0.18, 0.18), envMapIntensity: 1.6, depthWrite: false })
+    const lake = new THREE.Mesh(lg, lm); lake.name = 'summitLake'; lake.renderOrder = 3; lake.receiveShadow = false   /* 湖面收影子會在陰影快取的格子邊界切出一條直線 */
+    lake.onBeforeRender = () => { const t = performance.now() * 0.001; nt.offset.set(t * 0.006, t * 0.0035) }
+    g.add(lake)
+    // 湖岸：大小石頭一圈（出水口留開）、石頭腳邊青苔墊和草、北岸（背陰、靠山）多蕨類
+    const out0 = YOSE.slakeOut[0], aOut = Math.atan2((out0[1] - LK.z) / LK.rz, (out0[0] - LK.x) / LK.rx)
+    for (let i = 0, n = 0; i < 400 && n < 70; i++) {
+      const th = rnd() * TAU; if (Math.abs(Math.atan2(Math.sin(th - aOut), Math.cos(th - aOut))) < 0.22) continue
+      const r = (0.98 + rnd() * 0.16) * shape(th), x = LK.x + Math.cos(th) * LK.rx * r, z = LK.z + Math.sin(th) * LK.rz * r, y = summitHeight(x, z), u = rnd()
+      if (u < 0.45) { const S = 0.35 + Math.pow(rnd(), 1.8) * 1.3; push('mrockm_' + Math.floor(rnd() * 4), { p: V(x, Math.min(y, W + 0.1) - 0.12 * S, z), q: Q(rnd() * TAU, 0.25), s: V(S, S * (0.6 + rnd() * 0.4), S) }) }
+      else if (u < 0.7) { const S = 0.5 + rnd() * 0.7; push('mosspad_' + Math.floor(rnd() * 3), { p: V(x, y - 0.03, z), q: Q(rnd() * TAU), s: V(S, S * 0.8, S) }) }
+      else push('grass_' + Math.floor(rnd() * 3), { p: V(x, y - 0.02, z), q: Q(rnd() * TAU, 0.15), s: V(1, 1, 1).multiplyScalar(0.9 + rnd() * 0.8) })
+      n++
+    }
+    // 出水小溪兩岸
+    for (let i = 0; i < 26; i++) { const P = YOSE.slakeOut, k = Math.floor(rnd() * (P.length - 1)), t = rnd(), x0 = lerp(P[k][0], P[k + 1][0], t), z0 = lerp(P[k][1], P[k + 1][1], t), sd = rnd() < 0.5 ? -1 : 1, x = x0 + sd * (1.0 + rnd() * 0.8), z = z0 + (rnd() - 0.5) * 0.6
+      const top = z < YOSE.edge(x) - 1.2, y = top ? YOSE.topY(x) + 0.05 : summitHeight(x, z), S = 0.3 + rnd() * 0.6
+      push(rnd() < 0.5 ? 'mrockm_' + Math.floor(rnd() * 4) : 'mosspad_' + Math.floor(rnd() * 3), { p: V(x, y - 0.1 * S, z), q: Q(rnd() * TAU, 0.2), s: V(S, S * 0.7, S) }) }
+    if (lib) {
+      const ferns = ['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a'].filter((nm) => lib[nm]), fl = {}
+      for (let i = 0, n = 0; i < 300 && n < 40 && ferns.length; i++) {
+        const th = rnd() * TAU, north = Math.sin(th) > -0.2; if (!north && rnd() < 0.7) continue
+        const r = (1.08 + rnd() * 0.3) * shape(th), x = LK.x + Math.cos(th) * LK.rx * r, z = LK.z + Math.sin(th) * LK.rz * r
+        if (YOSE.slakeOutDist(x, z).d < 1.3) continue
+        ;(fl[ferns[Math.floor(rnd() * ferns.length)]] ||= []).push({ p: V(x, summitHeight(x, z) - 0.05, z), q: Q(rnd() * TAU), s: V(1, 1, 1).multiplyScalar(0.7 + rnd() * 0.7) }); n++
+      }
+      for (const [nm, list] of Object.entries(fl)) scatter(g, lib[nm], list, { cast: true })
+    }
   }
   for (const [nm, list] of Object.entries(L)) place(nm, list)
   return g

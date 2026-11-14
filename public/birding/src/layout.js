@@ -558,6 +558,13 @@ export const YOSE = (() => {
   // 岩壁頂上走得到的地方（平的，高 topY）：瀑布口東邊到 x 250；前緣＝岩壁的邊（瀑布口那段跟著岩棚往後退），後面到山腳前
   // x 213～237：最後一段迴廊在岩壁頂的邊緣底下往上爬（最後幾公尺頂上是開的），那一條不算岩壁頂（不然快到頂時腳下突然變成平台的高度，被當成一階太高擋住）
   // 2026-11-12 鷹之窗：最高那段岩壁廊道（x 236→214、+71～76 m）外的岩壁上長一棵大枯樹（原本放第一個回頭彎外：被松樹和旁邊岩壁擋住不顯眼）；perch＝頂端橫枝（模型座標，tools/gorge-kit.json）
+  // 2026-11-14 驗收第 18 條（使用者：「山頂美術很爛，可以讓他上面有湖嗎？漂亮的湖、溪流往下到瀑布」）：岩壁頂平台後面、山腳的緩坡上挖一座湖，
+  // 出水口在湖的西南角，一條小溪往南流過平台、接上平台上原本那條溪 → 瀑布口。湖面比平台高 0.35 m；湖岸形狀＝橢圓加兩個正弦的起伏
+  Y.slake = { x: 225, z: 130, rx: 17.5, rz: 9 }
+  Y.slakeW = () => Y.topY(225) + 0.35
+  Y.slakeR = (x, z) => { const L = Y.slake, dx = (x - L.x) / L.rx, dz = (z - L.z) / L.rz, th = Math.atan2(dz, dx); return Math.hypot(dx, dz) / (1 + 0.13 * Math.sin(3 * th + 1) + 0.07 * Math.sin(5 * th + 2.3)) }
+  Y.slakeOut = [[211, 124.5], [209.4, 121.6], [207.8, 118.4], [206.3, 112.6], [205.3, 106.8], [205, 102.6]]   // 出水小溪（湖→平台上的溪）
+  Y.slakeOutDist = (x, z) => { const P = Y.slakeOut; let b = 1e9, bs = 0, acc = 0; for (let i = 1; i < P.length; i++) { const [ax, az] = P[i - 1], [bx, bz] = P[i], dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz), t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (l * l))), d = Math.hypot(x - ax - dx * t, z - az - dz * t); if (d < b) { b = d; bs = acc + t * l } acc += l } return { d: b, s: bs / acc } }
   Y.snag = { x: 226.5, y: 70.5, z: Y.base(226.5) + 1.5, perch: [-0.992, 5.946, -5.35], dir: [-0.986, -0.151], r: 0.082 }
   // 2026-11-12 崖壁上橫生的樹（tools/make-cliff-kit.py → cliff_kit.glb；每棵的枝梢＝鳥站的點，數字抄自 tools/cliff-kit.json，模型座標）
   // 根紮在「上面那段步道的地板底下 1 m」那層岩簷的外緣（再往下是下面那段步道挑高的槽，沒有岩壁可以紮根）；樹往外 2～3.5 m、往上長到步道上的人眼睛上方 0～2.5 m。
