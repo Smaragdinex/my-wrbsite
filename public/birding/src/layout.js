@@ -1884,7 +1884,7 @@ YOSE.DIKE = null   // 2026-11-14 石橋拆掉，橋頭那道補的岸跟石牆�
       const dx = x - LK.x, dz = z - LK.z, out = Math.hypot(dx, dz) - YOSE.lakeR(Math.atan2(dz, dx))
       if (out <= 0 || out > 2.0) continue
       if (YOSE.inOutlet?.(x, z, 1.5)) continue
-      { const sR = R.sAt(x, z); if (sR < 20 && R.dist(x, z) < R.halfAt(sR) + 1.0) continue }
+      { const sR = R.sAt(x, z); if (sR < 20 && R.dist(x, z) < R.halfAt(sR) - 0.15) continue }   // 2026-11-15 使用者（河口西側破圖）：以前河寬外多留 1 m 不墊 → 那一條沒有湖面也沒有河面、地又比水面低，露出挖下去的河道 → 只留河面底下
       const q = j * AG.nx + i, want = W + 0.12 * smoothstep(0, 0.6, out)
       if (aHeight[q] < want) aHeight[q] = want
     } }

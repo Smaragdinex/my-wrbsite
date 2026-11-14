@@ -112,6 +112,13 @@ export async function buildStreambed(scene, lib = null) {
     for (const [o, sz] of [[-3.9, 1.9], [-2.7, 1.5], [-0.65, 1.3], [-0.2, 1.05], [1.15, 1.3], [2.45, 1.55], [3.7, 1.95]]) {
       const x = C[0] + px * o + (rw() - 0.5) * 0.35, z = C[1] + pz * o + (rw() - 0.5) * 0.5, s2 = sz * (0.9 + rw() * 0.25)
       boulders.push({ x, z, y: W - 0.5 * s2 + 0.15 + rw() * 0.3, wl: W, s: s2, yaw: rw() * 6.283, v: Math.floor(rw() * 3), weir: true, wi: wi++ })
+    }
+    // 2026-11-15 使用者（河口西側照片）「我說的石頭是水流往那邊往下的溪流」：湖面在 x≈178.7、z 75～79 收邊，剛好落在河道西半邊裡 →
+    // 湖面切邊、河面淡色那條接縫露在外面。沿著那條接縫再排一列大石（跟石堰同一種），把湖跟河的交界蓋住；自己的亂數，不動石堰
+    const rs = mulberry32(1115)
+    for (const [x, z, sz] of [[178.45, 75.2, 1.5], [178.25, 76.45, 1.3], [178.2, 77.65, 1.55], [178.35, 78.9, 1.35]]) {
+      const s2 = sz * (0.9 + rs() * 0.25)
+      boulders.push({ x: x + (rs() - 0.5) * 0.2, z: z + (rs() - 0.5) * 0.25, y: W - 0.5 * s2 + 0.1 + rs() * 0.2, wl: W, s: s2, yaw: rs() * 6.283, v: Math.floor(rs() * 3), weir: true, wi: wi++ })
     } }
   for (const b of boulders) if (!b.weir) b.y = Math.min(b.y, alpineHeight(b.x, b.z) + 0.42 * b.s)   // 2026-11-14 使用者（石頭浮在水上）：河床、湖底挖深之後照水面放的苔石底下是空的 → 最多只能比水底高 0.42×大小（石頭坐在水底）
   // 2026-11-14 使用者（湖口照片，紅圈）「應該放上黃色圈那種，不是 pebble stone」＋「溪、湖、河都要」：
