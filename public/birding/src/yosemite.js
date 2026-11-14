@@ -361,7 +361,7 @@ export function buildYosemite(scene, { lib } = {}) {
           float sdist = length(vViewPosition);
           // 2026-11-14 ChatGPT 的砂岩貼圖：垂直的岩面直接用它（顏色、層理、裂、地衣都在圖裡），下面那套程式畫的層理只留一點點
           vec3 rkC = rockSample(uRock, vTpW, normalize(vTpN));
-          diffuseColor.rgb = mix(diffuseColor.rgb, rkC * 1.55, wallK);
+          diffuseColor.rgb = mix(diffuseColor.rgb, rkC * 1.55, max(wallK, 0.85));   /* 朝上的岩架頂也用砂岩色（以前是花崗岩的灰白，一條條亮白） */
           tpH += wallK * dot(rkC, vec3(0.33)) * 2.2;
           wallK *= 0.25;
           // 直的節理把岩壁切成 2～3 m 寬的一塊塊，每塊的層面上下錯開一點（不然整面像掃描線）；層的密度隨高度變（薄頁岩帶、厚砂岩帶交替）
@@ -416,9 +416,44 @@ export function buildYosemite(scene, { lib } = {}) {
         diffuseColor.rgb *= 1.0 - 0.12 * wetR; }`) }
   }
   if (GRANITE) cliffM.defines = { GRANITE: 1 }
-  cliffM.customProgramCacheKey = () => 'cliffTriplanarRock' + (GRANITE ? 'G' : '')
+  cliffM.customProgramCacheKey = () => 'cliffTriplanarRock2' + (GRANITE ? 'G' : '')
   const cliff = new THREE.Mesh(cg, cliffM); cliff.castShadow = true; cliff.receiveShadow = true; g.add(cliff)
   cliff.name = 'cliffFace'   // world.js 用射線在岩面上擺鳥（Pass 1D）
+  // 2026-11-14 使用者（圈東頭陡山脊，三輪）：「要像岩石山、Zion 那種」「這裡應該是天然的岩石，你這樣是人工的」——
+  // 一格格擺的岩塊像砌牆、掃描岩片埋進坡裡只剩碎片 → 山脊朝峽谷那面（往 -x）蓋一張連續的岩面網格，跟主岩壁同一個材質：
+  // 每個 (z, y) 先找地形在那個高度的 x（坡面），再往外推：岩層（厚 0.6～2 m，每層凸出量不同）＋沿 z 的節理把每層切成 2～6 m 的岩塊（邊緣圓）
+  // ＋大尺度的鼓起／凹進（像 Zion 的岩壁）＋細的起伏；邊緣、太緩的地方、步道旁邊都收回坡裡（埋 0.8 m）
+  {
+    const Z0 = 76, Z1 = 118, Y0r = 22, Y1r = 84, STP = 0.4, NZ = Math.round((Z1 - Z0) / STP), NY = Math.round((Y1r - Y0r) / STP)
+    const hs = (a, b = 0) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v) }
+    const faceX = (z, y) => { let px = 240, ph = alpineHeight(px, z); for (let x = 240.5; x <= 268; x += 0.5) { const h = alpineHeight(x, z); if (ph < y && h >= y) { let a = px, b = x; for (let k = 0; k < 12; k++) { const m = (a + b) / 2; if (alpineHeight(m, z) < y) a = m; else b = m } const xf = (a + b) / 2, sl = (alpineHeight(xf + 0.4, z) - alpineHeight(xf - 0.4, z)) / 0.8; return { x: xf, sl } } px = x; ph = h } return null }
+    const TP = TR.pts.map((q, qi) => [q[0], q[1], TR.yy[qi]])
+    const P = new Float32Array((NZ + 1) * (NY + 1) * 3), Cc = new Float32Array((NZ + 1) * (NY + 1) * 3), keep = new Uint8Array((NZ + 1) * (NY + 1))
+    for (let iz = 0; iz <= NZ; iz++) { let last = null
+      for (let iy = 0; iy <= NY; iy++) {
+        const z = Z0 + iz * STP, y = Y0r + iy * STP, f = faceX(z, y), v = iz * (NY + 1) + iy
+        let w = f && f.x > 243.5 ? Math.min(1, Math.max(0, (f.sl - 0.7) / 0.6)) : 0   // 坡度 > 42° 才是岩面
+        w *= Math.min(1, (iz) / 6, (NZ - iz) / 6, iy / 6, (NY - iy) / 6)
+        let nearT = 99; for (const [tx, tz, ty] of TP) { if (Math.abs(tz - z) > 6 || Math.abs(ty - y) > 6) continue; nearT = Math.min(nearT, Math.hypot((f ? f.x : 250) - tx, tz - z)) }
+        w *= Math.min(1, Math.max(0, (nearT - 3) / 3))
+        const xf = f ? f.x : (last ?? 252); last = xf
+        // 岩層＋岩塊
+        const u = y * 0.6 + 0.6 * Math.sin(y * 0.37 + z * 0.05), bed = Math.floor(u), fb = u - bed
+        const cw = 2 + 4 * hs(bed * 3.3), cu = (z + hs(bed) * 9) / cw, cell = Math.floor(cu), fz = cu - cell
+        const e = Math.min(1, Math.min(fb, 1 - fb) / 0.12) * Math.min(1, Math.min(fz, 1 - fz) * cw / 0.3)
+        const es = e * e * (3 - 2 * e)
+        const D = (0.3 + 1.1 * hs(bed * 1.7) + 0.7 * hs(bed * 2.3, cell)) * es * (fb > 0.55 ? 1.0 : 0.75 + 0.45 * fb) + 2.6 * (fbm2(z * 0.04, y * 0.03, 3) - 0.5) + 0.25 * (fbm2(z * 0.7, y * 0.7, 2) - 0.5)   /* 每層頂上那段凸得多（岩簷）、底下往裡收 */
+        const o = w * (0.35 + Math.max(0, D)) - (1 - w) * 0.8
+        P.set([xf - o, y, z], v * 3); keep[v] = w > 0.02 ? 1 : 0
+        const ao = 0.5 + 0.5 * es, tone = 0.88 + 0.24 * hs(bed * 4.1, cell)
+        Cc.set([ao * tone, ao * tone, ao * tone], v * 3)
+      } }
+    const I = []
+    for (let iz = 0; iz < NZ; iz++) for (let iy = 0; iy < NY; iy++) { const a = iz * (NY + 1) + iy, b = a + 1, c = a + NY + 1, d = c + 1; if (!(keep[a] || keep[b] || keep[c] || keep[d])) continue; I.push(a, c, b, b, c, d) }
+    const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(P, 3)); rg.setAttribute('color', new THREE.BufferAttribute(Cc, 3)); rg.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((NZ + 1) * (NY + 1) * 2), 2)); rg.setIndex(I); rg.computeVertexNormals()
+    { let sx = 0; const nr = rg.attributes.normal; for (let k = 0; k < nr.count; k += 97) sx += nr.getX(k); if (sx > 0) { for (let t = 0; t < I.length; t += 3) { const q = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = q } rg.setIndex(I); rg.computeVertexNormals() } }   // 面要朝 -x（峽谷那側）
+    const ridge = new THREE.Mesh(rg, cliffM); ridge.name = 'ridgeRockFace'; ridge.castShadow = true; ridge.receiveShadow = true; g.add(ridge)
+  }
   // 岩壁封起來（ChatGPT：要是有厚度的封閉岩體）：兩端各一片側面（從岩壁斷面一路接到後下角）、後面一道牆往下埋進地裡——
   // 以前從岩壁尾端下面往上看，頂面是一片懸空的薄板
   {
@@ -1280,24 +1315,6 @@ export function buildYosemite(scene, { lib } = {}) {
             for (let cc = 0, y0 = c.y - 0.25; cc < 2; cc++) { const sy = 0.95 + 0.12 * hsh(G[0] * 3.1 + dz + cc); put(names[(n++ + G[0]) % names.length], m4.compose(V(h.point.x - nW.x * 0.04, y0, h.point.z - nW.z * 0.04), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(0.5, sy, 1))); y0 += 3.6 * sy - 0.06 }
           }
         } }
-      // 2026-11-14 使用者（圈東頭陡山脊）「生成那種像岩石山、Zion 那種岩石，或者像概念圖這種」：光貼圖還是一面平牆 →
-      // 從峽谷這側往山脊打射線，在陡的面上一格一格（橫 4.6 m、高 4.2 m）貼放大的砂岩岩塊（1.3～1.6 倍）、偶爾一道岩簷；
-      // 岩塊往岩面裡埋 0.35 m、照岩面的方向轉（岩塊的背面是空的，要埋進去才不會從旁邊看到）
-      { const names = ['sw_a', 'sw_b', 'sw_c', 'sw_d'].filter((n) => K[n]), ovh = ['sw_ovh_a', 'sw_ovh_b'].filter((n) => K[n]), terr = [], rc = new THREE.Raycaster()
-        scene.traverse((o) => { if (o.isMesh && o.name === 'alpTerrain') terr.push(o) })
-        let n = 0
-        if (names.length && terr.length) for (let z = 80; z <= 114; z += 4.6) for (let y = 30; y <= 76; y += 4.2) {
-          const jz = z + (hsh(z * 3.1 + y) - 0.5) * 1.6, jy = y + (hsh(z + y * 2.7) - 0.5) * 1.2
-          rc.set(V(236, jy, jz), V(1, 0, 0)); rc.far = 26
-          const h = rc.intersectObjects(terr, false)[0]; if (!h || !h.face || h.point.x < 243 || h.point.x > 262) continue
-          const nW = h.face.normal.clone().transformDirection(h.object.matrixWorld); if (Math.abs(nW.y) > 0.62) continue
-          if (st.pts.some((q, qi) => Math.abs(q[0] - h.point.x) < 4 && Math.abs(q[1] - h.point.z) < 4 && Math.abs(st.yy[qi] - h.point.y) < 6)) continue   // 步道旁邊不放
-          nW.y = 0; nW.normalize()
-          const sc = 1.3 + 0.3 * hsh(jz * 1.7 + jy), yaw = Math.atan2(nW.x, nW.z) + (hsh(jz + jy * 5.1) - 0.5) * 0.25
-          put(names[n++ % names.length], m4.compose(V(h.point.x - nW.x * 0.35, h.point.y - 1.6 * sc, h.point.z - nW.z * 0.35), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(sc, sc, sc)))
-          if (ovh.length && hsh(jz * 9.3 + jy) < 0.18) put(ovh[n % ovh.length], m4.compose(V(h.point.x - nW.x * 0.3, h.point.y + 1.9 * sc, h.point.z - nW.z * 0.3), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(sc * 0.9, sc * 0.8, sc)))
-        }
-        console.log('ridge rock blocks', n) }
       const wallM = stepM.clone(); wallM.map = rockTex(); wallM.onBeforeCompile = (sh) => { STEP_BASE_OBC(sh)
         // ChatGPT 砂岩貼圖：4 m 一張、整個顏色用貼圖的（以前是花崗岩貼圖 ×0.7 混灰）
         sh.fragmentShader = sh.fragmentShader.replace(/vTpW\.(zy|xz|xy) \* 0\.45/g, (m0, a) => 'vTpW.' + a + ' * 0.25').replace('diffuseColor *= mix(vec4(0.8), tpC, 0.7);', 'diffuseColor.rgb *= tpC.rgb * 1.9;')
