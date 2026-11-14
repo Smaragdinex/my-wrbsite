@@ -1498,7 +1498,7 @@ function perchRigged(env, cfg) {
     r.turn('body', LAT, -0.3 * crouch + 0.1 * push - 0.06 * air + 0.03 * beat - 0.35 * (c.eat ?? 0) * (cfg.eatSign ?? 1) - 0.12 * bw)
     if (bw) r.turn('body', AX.y, -0.1 * bw * acts.sgn)
     r.turn('neck', AX.y, c.yaw * 0.45); r.turn('neck', LAT, c.pitch * 0.4 - 0.12 * beat + 0.15 * crouch)
-    r.turn('head', AX.y, c.yaw * 0.55); r.turn('head', LAT, c.pitch * 0.6 - 0.18 * beat + 0.15 * crouch)
+    r.turn('head', AX.y, c.yaw * 0.55 + (cfg.headYaw ?? 0)); r.turn('head', LAT, c.pitch * 0.6 - 0.18 * beat + 0.15 * crouch)   // cfg.headYaw：模型生成時頭就轉了（大冠鷲 90°），先轉回正前方
     r.turn('tail', LAT, -0.45 * land + 0.3 * hp.pre - 0.2 * air)
     const flap = dive?.flap ? Math.sin(t * 38) : 0
     for (const [w, sg] of [['wingL', 1], ['wingR', -1]]) {
@@ -1737,7 +1737,7 @@ function yuhina(env) {
 // 2026-11-08 山區猛禽：鳳頭蒼鷹（中海拔林緣的大樹上）、褐林鴞（溪谷旁的森林裡）。ChatGPT 參考圖 → Tripo → rig-distance（點位在 bird-points.json）
 // 2026-11-12 大冠鷲（Tripo）：瀑布秘境步道最高那段廊道外，岩壁枯樹的橫枝上（perch 'snag'）
 function serpenteagle(env) {
-  return perchRigged(outer(env, -1.1), { name: 'serpenteagle-rig', k: 0.62, ...TRIPO, foot: 0.01, drop: 0.05, beat: 4, grip: 1.2 })
+  return perchRigged(outer(env, -1.1), { name: 'serpenteagle-rig', k: 0.62, ...TRIPO, headYaw: Math.PI / 2, foot: 0.01, drop: 0.05, beat: 4, grip: 1.2 })
 }
 function goshawk(env) {
   return perchRigged(outer(env, -1.1), { name: 'goshawk-rig', k: 0.42, ...TRIPO, foot: 0.045, drop: 0.05, beat: 5, grip: 1.2 })
