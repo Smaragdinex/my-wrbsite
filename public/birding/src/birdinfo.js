@@ -323,7 +323,7 @@ const ALL = [
   {
     // 2026-11-12 鷹之窗：瀑布秘境步道最高那段廊道外，岩壁上的大枯樹（layout YOSE.snag；模型 tools/make-gorge-kit.py）頂端的橫枝
     id: 'serpenteagle', spot: [YOSE.snag.x + YOSE.snag.perch[0], YOSE.snag.z + YOSE.snag.perch[2]], y: YOSE.snag.y + YOSE.snag.perch[1] - YOSE.snag.r, perch: 'snag', limb: { dir: [-YOSE.snag.dir[0], -YOSE.snag.dir[1]],   /* 2026-11-14 枝條方向反過來＝鳥轉 180°：搬到轉角後原本是背對峽谷、面向岩壁 */ r: YOSE.snag.r },
-    view: 200, dist: 6, camH: 0.6, lookY: 0.4,
+    view: 169, dist: 6, camH: 0.6, lookY: 0.4,
     name: '大冠鷲', sci: 'Spilornis cheela', where: '瀑布岩壁上的枯樹',
     intro: '台灣山區最容易看到的大型猛禽，又叫蛇鵰。全身深褐色，胸腹和翅膀上灑滿白色的小圓點，後腦有一撮黑白相間的短冠羽，眼睛前面到嘴基是鮮黃色的裸皮。晴天的上午常乘著上升氣流在山谷上空盤旋，一邊發出嘹亮的「忽、忽、忽悠－」。',
     facts: [

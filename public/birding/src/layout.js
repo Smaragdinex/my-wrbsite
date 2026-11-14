@@ -567,7 +567,9 @@ export const YOSE = (() => {
   Y.slakeOutDist = (x, z) => { const P = Y.slakeOut; let b = 1e9, bs = 0, acc = 0; for (let i = 1; i < P.length; i++) { const [ax, az] = P[i - 1], [bx, bz] = P[i], dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz), t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (l * l))), d = Math.hypot(x - ax - dx * t, z - az - dz * t); if (d < b) { b = d; bs = acc + t * l } acc += l } return { d: b, s: bs / acc } }
   // 2026-11-14 使用者：原本那棵（最高廊道外 x 226.5）拆掉，大冠鷲搬到岩壁東端轉角那棵（以前是另外射線擺的複本）。
   // 模型繞 y 轉 yaw：棲枝位置 perch 和橫枝方向 dir 是模型座標，這裡先轉好
-  Y.snag = (() => { const yaw = 0.3, c = Math.cos(yaw), s = Math.sin(yaw), rot = ([x, z]) => [x * c + z * s, -x * s + z * c]
+  // 2026-11-14 使用者「讓玩家看到老鷹是側面、不是背面」：玩家看牠的兩個地方——正下方那段步道（在牠背後、靠岩壁那側）和西南邊那段；
+  // 整棵樹連老鷹繞樹幹轉 -31°（0.3 → -0.24），兩個地方看過去都差不多 110°＝側面偏一點正面
+  Y.snag = (() => { const yaw = -0.24, c = Math.cos(yaw), s = Math.sin(yaw), rot = ([x, z]) => [x * c + z * s, -x * s + z * c]
     const P = [-0.992, 5.946, -5.35], pr = rot([P[0], P[2]]), dr = rot([-0.986, -0.151])
     return { x: 247.6, y: 54.5, z: 110.2, yaw, perch: [pr[0], P[1], pr[1]], dir: dr, r: 0.082 } })()
   // 2026-11-12 崖壁上橫生的樹（tools/make-cliff-kit.py → cliff_kit.glb；每棵的枝梢＝鳥站的點，數字抄自 tools/cliff-kit.json，模型座標）
