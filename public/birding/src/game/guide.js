@@ -716,6 +716,30 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     if (d < 0 && side === 1) { side = 0; return }
     turn(d); if (st.flip) side = d > 0 ? 0 : 1
   }
+  // 2026-11-14 使用者「手機版畫面變大」：直的手機雙指縮放（1～3 倍）、放大後單指拖曳；放大時點書頁中間不翻頁（只有點左右邊緣 15% 才翻）
+  const zm = { z: 1, x: 0, y: 0, moved: false, t0: null }
+  const tpts = (e) => [...e.touches].map((t) => [t.clientX, t.clientY])
+  const el = renderer.domElement
+  el.style.touchAction = 'none'
+  el.addEventListener('touchstart', (e) => {
+    if (!portrait()) return
+    const p = tpts(e); zm.t0 = { p, z: zm.z, x: zm.x, y: zm.y }; if (p.length > 1) zm.moved = true
+    if (e.touches.length === 1) zm.moved = false
+  }, { passive: true })
+  el.addEventListener('touchmove', (e) => {
+    if (!portrait() || !zm.t0) return
+    e.preventDefault()
+    const p = tpts(e), s = zm.t0, H = el.clientHeight, upp = 2 * Math.tan(THREE.MathUtils.degToRad(15)) * cam.position.z / H   // 每個螢幕像素＝幾個書的單位
+    if (p.length > 1 && s.p.length > 1) {
+      const d0 = Math.hypot(s.p[0][0] - s.p[1][0], s.p[0][1] - s.p[1][1]), d1 = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1])
+      zm.z = Math.min(2.5, Math.max(1, s.z * d1 / Math.max(1, d0))); zm.moved = true
+    } else if (p.length === 1 && s.p.length === 1 && zm.z > 1.02) {
+      const dx = p[0][0] - s.p[0][0], dy = p[0][1] - s.p[0][1]
+      if (Math.hypot(dx, dy) > 6) zm.moved = true
+      zm.x = s.x - dx * upp; zm.y = s.y + dy * upp
+    } else if (p.length === 1 && s.p.length > 1) zm.t0 = { p, z: zm.z, x: zm.x, y: zm.y }   // 從兩指放開一指：接著單指拖
+  }, { passive: false })
+  el.addEventListener('touchend', (e) => { if (e.touches.length === 0) zm.t0 = null; else zm.t0 = { p: tpts(e), z: zm.z, x: zm.x, y: zm.y } })
   // 直接翻到第 to 個跨頁（目錄點鳥名、回到目錄）：一張紙翻過去，紙的正面是現在的右頁、背面是目標的左頁
   function jump(to) {
     if (!st.open || st.t < 0.98 || st.flip || to === st.spread || to < 0 || to >= NS) return
@@ -771,7 +795,10 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     if (!st.open) return
     const pk = pagePick(e)
     pressed = false; setHover(null)
-    if (pk) { sfx('click'); jump(pk.to); side = 0 } else step(e.clientX > innerWidth / 2 ? 1 : -1)
+    if (portrait() && zm.moved) { zm.moved = false; return }   // 剛剛是縮放／拖曳，不算點
+    if (pk) { sfx('click'); jump(pk.to); side = 0; zm.y = 9 }
+    else if (portrait() && zm.z > 1.02) { const u = e.clientX / innerWidth; if (u < 0.15 || u > 0.85) { step(u > 0.5 ? 1 : -1); zm.x = u > 0.5 ? -9 : 9; zm.y = 9 } }   // 放大時：換頁後回到那一頁的上緣
+    else step(e.clientX > innerWidth / 2 ? 1 : -1)
   })
   renderer.domElement.addEventListener('mousemove', (e) => {
     if (!st.open) return
@@ -803,9 +830,12 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     const fitOpen = Math.max((PH + 0.22) / 2 / tn, (2 * PW + 0.28) / 2 / tn / asp)
     const fitClosed = Math.max((PH + 0.1) / 2 / tn / 0.62, (PW + 0.1) / 2 / tn / asp / 0.62)
     if (portrait()) {
-      const fitPage = Math.max((PH + 0.1) / 2 / tn, (PW + 0.05) / 2 / tn / asp)
+      const fitPage = Math.max((PH + 0.06) / 2 / tn, (PW + 0.012) / 2 / tn / asp) / zm.z
       sideX += ((side ? PW / 2 : -PW / 2) - sideX) * Math.min(1, dt * 9)
-      cam.position.set(sideX * opn, 0, THREE.MathUtils.lerp(fitClosed, fitPage, opn)); cam.lookAt(sideX * opn, 0, 0)
+      const hh = tn * fitPage, hw = hh * asp, mx = Math.max(0, PW / 2 - hw + 0.01), my = Math.max(0, PH / 2 - hh + 0.02)   // 拖曳不超出這一頁
+      zm.x = Math.max(-mx, Math.min(mx, zm.x)); zm.y = Math.max(-my, Math.min(my, zm.y))
+      const cx = (sideX + zm.x) * opn, cy = zm.y * opn
+      cam.position.set(cx, cy, THREE.MathUtils.lerp(fitClosed, fitPage, opn)); cam.lookAt(cx, cy, 0)
     } else { cam.position.set(0, 0, THREE.MathUtils.lerp(fitClosed, fitOpen, opn)); cam.lookAt(0, 0, 0) }
 
     // 頁面
@@ -853,6 +883,6 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     renderer.render(scene, cam)
     renderer.autoClear = ac
   }
-  return { open, close, render, turn, jump, step, get isOpen() { return st.open }, get visible() { return st.t > 0 }, st, dbg: { scene, cam, leftPage, rightPage, mats, dim, dioramas } }
+  return { open, close, render, turn, jump, step, zm, get isOpen() { return st.open }, get visible() { return st.t > 0 }, st, dbg: { scene, cam, leftPage, rightPage, mats, dim, dioramas } }
 }
 export { makeDiorama as _makeDiorama }   // 測試腳本用（離線拍圖鑑插圖）
