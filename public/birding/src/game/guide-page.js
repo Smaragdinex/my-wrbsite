@@ -1,13 +1,13 @@
 // 2026-11-14 使用者「單獨的圖鑑也做網站，直接看全部鳥，就只有書打開」：guide.html
 // 跟遊戲裡按 E 打開的是同一本書（guide.js），catalog 模式：全部鳥都解鎖、沒有拍照成績、書不能闔上。
 // 頁面只畫書（沒有 3D 園區），背景是深色桌面。
-// 直的手機（窄、直式）不畫書，改用 guide-feed.js：一張一張卡片、上面 3D 鳥、下面文字、左右滑（使用者：像 Instagram）
+// guide-feed.js（卡片版：上面 3D 鳥、下面文字、左右滑）做過但使用者要回到書，只在網址加 ?feed 時用
 import * as THREE from 'three'
 import { BIRDS } from '../birdinfo.js'
 import { createGuide, guideAniso } from './guide.js'
 import { t as tr, LANG, LANGS, setLang } from '../i18n.js'
 
-const FEED = matchMedia('(max-width: 760px) and (orientation: portrait)').matches || new URLSearchParams(location.search).has('feed')
+const FEED = new URLSearchParams(location.search).has('feed')   // 2026-11-14 使用者「手機還是恢復原本的吧」：手機也用書（直拿一次一頁＋雙指放大）；卡片版只留 ?feed 可以看
 if (FEED) {
   document.querySelector('.guide-ui')?.remove()
   await import(new URL('./guide-feed.js' + new URL(import.meta.url).search, import.meta.url).href)
