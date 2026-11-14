@@ -8,7 +8,7 @@ const scenery = ['⛰️', BLANK, '🌲', BLANK, BLANK, '🌳', BLANK, '🏔️'
 const W = 9   // 只顯示前 9 格，其他留在畫面外輪流捲進來
 
 function draw() {
-  document.title = `Birdwatch ${scenery.slice(0, W).map((c, i) => (i === BIRD ? '🐦' : c)).join('')}`
+  document.title = `Birdwatching ${scenery.slice(0, W).map((c, i) => (i === BIRD ? '🐦' : c)).join('')}`
 }
 
 draw()

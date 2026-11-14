@@ -73,7 +73,7 @@ const cover = `<section class="fd-card fd-cover">
   <div class="ser">X-ARTS NATURAL HISTORY SERIES</div>
   <h1>${esc(tr('鳥類圖鑑'))}</h1><div class="en">Birds of the Park</div>
   <div class="pic"></div>
-  <div class="pre"><p>${esc(tr('這本圖鑑收錄《Birdwatch》園區裡可以遇見的 {m} 種野鳥：每一種都有會動的插圖、在園區的棲地、出沒時間，還有介紹和小知識。', { m: BIRDS.length }))}</p>
+  <div class="pre"><p>${esc(tr('這本圖鑑收錄《Birdwatching》園區裡可以遇見的 {m} 種野鳥：每一種都有會動的插圖、在園區的棲地、出沒時間，還有介紹和小知識。', { m: BIRDS.length }))}</p>
   <p>${esc(tr('帶著相機走進公園，拍到的鳥會記進你自己的圖鑑：xarts.games/birding/game.html'))}</p></div>
   <a class="go" href="game.html">${esc(tr('開始遊戲'))}</a>
 </section>`

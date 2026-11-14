@@ -2,7 +2,7 @@
 export const UI = {
  "左右滑動換下一種鳥": "Swipe left or right for the next bird",
  "點左右兩邊翻頁・雙指放大": "Tap left or right to turn · pinch to zoom",
- "這本圖鑑收錄《Birdwatch》園區裡可以遇見的 {m} 種野鳥：每一種都有會動的插圖、在園區的棲地、出沒時間，還有介紹和小知識。": "This field guide covers all {m} wild birds you can meet in the Birdwatch park. Each one has a living illustration, its habitat in the park, when it is active, a description and fun facts.",
+ "這本圖鑑收錄《Birdwatching》園區裡可以遇見的 {m} 種野鳥：每一種都有會動的插圖、在園區的棲地、出沒時間，還有介紹和小知識。": "This field guide covers all {m} wild birds you can meet in the Birdwatching park. Each one has a living illustration, its habitat in the park, when it is active, a description and fun facts.",
  "← →、A D、滾輪或點書頁翻頁": "← →, A D, mouse wheel or click the page to turn",
  "Home 或 T 回目錄": "Home or T for contents",
  "到園區找牠們": "Find them in the park",

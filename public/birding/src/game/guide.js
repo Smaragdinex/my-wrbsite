@@ -318,7 +318,7 @@ function prefacePage(nRec, nNew) {
     ctx.fillStyle = INK; ctx.font = `600 46px ${SERIF}`; ctx.fillText(tr('前言'), X, 176)
     let y = 252
     ctx.font = `28px ${SERIF}`
-    for (const l of wrap(ctx, tr('這本圖鑑收錄《Birdwatch》園區裡可以遇見的 {m} 種野鳥：每一種都有會動的插圖、在園區的棲地、出沒時間，還有介紹和小知識。', { m: BIRDS.length }), W)) { ctx.fillText(l, X, y); y += 46 }
+    for (const l of wrap(ctx, tr('這本圖鑑收錄《Birdwatching》園區裡可以遇見的 {m} 種野鳥：每一種都有會動的插圖、在園區的棲地、出沒時間，還有介紹和小知識。', { m: BIRDS.length }), W)) { ctx.fillText(l, X, y); y += 46 }
     y += 60
     spaced(ctx, tr('使用方法'), X, y, 18, ACCENT, 'left', 0.25); y += 22
     rule(ctx, X, X + W, y, 0.25, 1); y += 56
