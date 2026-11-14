@@ -201,90 +201,135 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
   }
 
 
-  /* ---------- 2026-11-14 看照片（appraise.js）：站在櫃台後面，雙手拿著一張照片看，一張看完翻到下一張，一直循環到看完 ----------
-     手：兩節骨頭的 IK（肩→手肘→手），手腕停在照片左右兩邊；頭往下看照片；每 1.7 秒照片繞直軸翻一面換下一張，頭點一下。
-     照片：正面貼玩家的照片（老闆看的那面）、背面是相紙背面的米白。模型是 Tripo＋Mixamo 骨架，不用另外生成動畫 */
+  /* ---------- 2026-11-14 看照片（appraise.js）——第二版（使用者「照片在桌上，他一張一張看」）----------
+     開始：玩家的照片一張張平放在櫃台上排成一排（每張稍微歪一點，像隨手攤開）。
+     每一張（appraise.js 看完一張叫 appraiseShow(i)）：身體往前傾、雙手到櫃台把那張拿起來 → 拿到胸前低頭看 → 下一張開始時把它放到櫃台另一頭「看完」那疊，再拿下一張。
+     手：兩節骨頭 IK（肩→手肘→手），手跟著照片走；拿、放的時候上身往前彎（櫃台後緣離他 0.7 m，不彎手搆不到）；頭看著照片。
+     照片：每張一片（正面＝玩家的照片、背面相紙米白），模型座標裡排位置，轉成店裡（父物件）的座標。不需要另外生成模型或動畫 */
   const BN = {}; root.traverse((o) => { if (o.isBone) BN[o.name.replace('mixamorig', '')] = o })
-  const appr = { on: false, w: 0, tex: [], i: 0, flipT: 0, flip: -1, nod: 0 }
+  const appr = { on: false, w: 0, cards: [], cur: -1, want: -1, lean: 0, look: 0 }
   const TL = new THREE.TextureLoader()
-  const cardG = new THREE.Group(); cardG.visible = false
-  const cardFront = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.135), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }))
-  const cardBack = new THREE.Mesh(new THREE.PlaneGeometry(0.205, 0.14), new THREE.MeshStandardMaterial({ color: 0xece6d8, roughness: 0.9 }))
-  cardBack.rotation.y = Math.PI; cardBack.position.z = -0.001
-  // 手上那疊（後面幾張的邊）
-  const stack = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.135, 0.006), new THREE.MeshStandardMaterial({ color: 0xf4f0e6, roughness: 0.9 })); stack.position.z = -0.006
-  cardG.add(cardFront, cardBack, stack)
-  ;(parent ?? model.parent)?.add(cardG)
+  const cardsG = new THREE.Group(); (parent ?? model.parent)?.add(cardsG)
+  const CW_ = 0.2, CH_ = 0.135, TABLE_Y = 1.088            // 照片大小；櫃台面（store.js COUNTER h 1.05＋檯面板 0.03）＋一點
+  const backM = new THREE.MeshStandardMaterial({ color: 0xece6d8, roughness: 0.9 })
+  const HOLD = new THREE.Vector3(0, 1.24, 0.34)              // 拿著看：胸前（模型座標，前方 +z）
+  function makeCard(url) {
+    const t = TL.load(url); t.colorSpace = THREE.SRGBColorSpace
+    const c = new THREE.Group()
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(CW_, CH_), new THREE.MeshStandardMaterial({ map: t, roughness: 0.55 }))
+    const b = new THREE.Mesh(new THREE.PlaneGeometry(CW_, CH_), backM); b.rotation.y = Math.PI; b.position.z = -0.0008
+    f.castShadow = b.castShadow = true; c.add(f, b); cardsG.add(c)
+    return { g: c, tex: t, state: 'table', t: 1, from: null, fromQ: null }
+  }
+  // 模型座標的姿態 → 店裡座標
+  const _mq = new THREE.Quaternion(), _pq0 = new THREE.Quaternion()
+  function toParent(posL, quatL, outP, outQ) {
+    model.updateWorldMatrix(true, false)
+    outP.copy(posL); model.localToWorld(outP); cardsG.parent.worldToLocal(outP)
+    model.getWorldQuaternion(_mq); cardsG.parent.getWorldQuaternion(_pq0)
+    outQ.copy(_pq0.invert()).multiply(_mq).multiply(quatL)
+  }
+  const flatQ = (yaw) => new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, yaw, 'YXZ'))   // 平放、正面朝上（照片的上緣朝玩家那邊，老闆看是倒的、玩家看是正的）
+  function slotPose(i, n, pos, quat) {   // 桌上第 i 張：櫃台後緣往前 0.18 m 一排，左右攤開
+    const span = Math.min(1.25, n * 0.2), x = n > 1 ? -span / 2 + span * i / (n - 1) : 0
+    const r = Math.sin(i * 12.9898) * 43758.5453, j = r - Math.floor(r)
+    pos.set(x + (j - 0.5) * 0.04, TABLE_Y + i * 0.0004, 0.8 + (j - 0.5) * 0.05); quat.copy(flatQ(Math.PI + (j - 0.5) * 0.35))
+  }
+  function pilePose(k, pos, quat) {      // 看完那疊：他的右手邊（模型 -x）
+    pos.set(-0.72, TABLE_Y + 0.002 + k * 0.0016, 0.8); quat.copy(flatQ(Math.PI + 0.25 + Math.sin(k * 3.1) * 0.12))
+  }
+  function holdPose(pos, quat) {          // 拿在胸前：正面朝他的臉（往上斜 35°）
+    pos.copy(HOLD); quat.setFromEuler(new THREE.Euler(-0.6, Math.PI, 0, 'YXZ'))   // 背面朝外（玩家看到相紙背面），正面朝他
+  }
   function appraise(urls) {
     if (urls && urls.length) {
-      appr.tex.forEach((t) => t.dispose())
-      appr.tex = urls.slice(0, 24).map((u) => { const t = TL.load(u); t.colorSpace = THREE.SRGBColorSpace; return t })
-      appr.i = 0; appr.want = 0; appr.flipT = 1.2; appr.flip = -1; appr.on = true
-      cardFront.material.map = appr.tex[0]; cardFront.material.needsUpdate = true
+      for (const c of appr.cards) { cardsG.remove(c.g); c.tex.dispose() }
+      appr.cards = urls.slice(0, 30).map(makeCard)
+      appr.cards.forEach((c, i) => { const p = new THREE.Vector3(), q = new THREE.Quaternion(); slotPose(i, appr.cards.length, p, q); c.endP = p; c.endQ = q; c.t = 1 })
+      appr.cur = -1; appr.want = -1; appr.on = true; appr.pile = 0
       path = []; onArrive = null; pending = null; state = 'appraise'; faceYaw = homeYaw; oneOn = false
-    } else if (appr.on) { appr.on = false; state = 'home' }
+    } else if (appr.on) {
+      appr.on = false; state = 'home'
+      if (appr.cur >= 0) moveCard(appr.cards[appr.cur], 'done')   // 最後一張放回看完那疊
+      appr.cur = -1; appr.clearT = 4   // 4 秒後把那疊收走
+    }
   }
-  const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _pq = new THREE.Quaternion()
-  // 把骨頭轉到「往 dir 指」（世界座標）：骨頭→子骨頭的方向 = dir；w 是比重
+  function moveCard(c, to) {
+    c.fromP = c.endP.clone(); c.fromQ = c.endQ.clone(); c.t = 0; c.state = to
+    c.endP = new THREE.Vector3(); c.endQ = new THREE.Quaternion()
+    if (to === 'held') holdPose(c.endP, c.endQ); else pilePose(appr.pile++, c.endP, c.endQ)
+  }
+  const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _pq = new THREE.Quaternion()
   function aim(bone, child, dir, w) {
     bone.updateWorldMatrix(true, true)
     const a = bone.getWorldPosition(new THREE.Vector3()), b = child.getWorldPosition(new THREE.Vector3())
-    const cur = b.sub(a).normalize()
-    _q.setFromUnitVectors(cur, dir.clone().normalize())
+    _q.setFromUnitVectors(b.sub(a).normalize(), dir.clone().normalize())
     bone.getWorldQuaternion(_q2); _q2.premultiply(_q)
     bone.parent.getWorldQuaternion(_pq); _q2.premultiply(_pq.invert())
     bone.quaternion.slerp(_q2, w); bone.updateWorldMatrix(false, true)
   }
-  function arm(side, T, w) {
+  function bend(bone, axis, ang) {       // 骨頭繞世界軸轉 ang
+    if (!bone) return
+    bone.updateWorldMatrix(true, false)
+    _q.setFromAxisAngle(axis, ang); bone.getWorldQuaternion(_q2); _q2.premultiply(_q)
+    bone.parent.getWorldQuaternion(_pq); _q2.premultiply(_pq.invert()); bone.quaternion.copy(_q2); bone.updateWorldMatrix(false, true)
+  }
+  function arm(side, T, w, right) {
     const U = BN[side + 'Arm'], F = BN[side + 'ForeArm'], H = BN[side + 'Hand']; if (!U || !F || !H) return
     model.updateWorldMatrix(true, true)
     const S = U.getWorldPosition(new THREE.Vector3()), E0 = F.getWorldPosition(new THREE.Vector3()), H0 = H.getWorldPosition(new THREE.Vector3())
     const a = S.distanceTo(E0), b = E0.distanceTo(H0)
     const d0 = T.clone().sub(S), d = Math.min(d0.length(), (a + b) * 0.985), dir = d0.normalize()
     const x = (a * a - b * b + d * d) / (2 * d), h = Math.sqrt(Math.max(0, a * a - x * x))
-    // 手肘往下、往外
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(model.getWorldQuaternion(new THREE.Quaternion())), sideSg = side === 'Left' ? 1 : -1
-    const pole = new THREE.Vector3(0, -1, 0).addScaledVector(right, 0.55 * sideSg)
+    const pole = new THREE.Vector3(0, -1, 0).addScaledVector(right, 0.55 * (side === 'Left' ? 1 : -1))
     pole.addScaledVector(dir, -pole.dot(dir)).normalize()
     const E = S.clone().addScaledVector(dir, x).addScaledVector(pole, h)
     aim(U, F, E.clone().sub(S), w)
-    const E1 = F.getWorldPosition(new THREE.Vector3())
-    aim(F, H, T.clone().sub(E1), w)
+    aim(F, H, T.clone().sub(F.getWorldPosition(new THREE.Vector3())), w)
   }
+  const ease = (t) => t * t * (3 - 2 * t)
+  const _cp = new THREE.Vector3(), _cq = new THREE.Quaternion(), _wp = new THREE.Vector3()
   function appraiseTick(dt) {
-    appr.w += ((appr.on ? 1 : 0) - appr.w) * Math.min(1, dt * 3)
-    cardG.visible = appr.w > 0.25
+    appr.w += ((appr.on || appr.cards.some((c) => c.t < 1) ? 1 : 0) - appr.w) * Math.min(1, dt * 3)
+    cardsG.visible = appr.cards.length > 0
+    if (!appr.cards.length) return
+    if (!appr.on && appr.clearT > 0 && (appr.clearT -= dt) <= 0) { for (const c of appr.cards) { cardsG.remove(c.g); c.tex.dispose() } appr.cards = []; return }
+    // 換下一張：手上那張放到看完那疊，再去拿下一張（放完才拿）
+    if (appr.on && appr.want !== appr.cur) {
+      const held = appr.cur >= 0 ? appr.cards[appr.cur] : null
+      if (held && held.state === 'held' && held.t >= 1) moveCard(held, 'done')
+      if ((!held || (held.state === 'done' && held.t >= 1)) && appr.want < appr.cards.length) { appr.cur = appr.want; moveCard(appr.cards[appr.cur], 'held') }
+    }
+    // 照片位置（模型座標裡內插：拿起來、放下去都走一條往上拱的弧線）
+    let reach = 0, active = null
+    for (const c of appr.cards) {
+      if (c.t < 1) { c.t = Math.min(1, c.t + dt / 0.75); active = c; reach = Math.max(reach, Math.sin(Math.PI * c.t) * 0.9 + (c.state === 'held' ? 1 - c.t : c.t) * 0.1) }
+      const k = ease(c.t)
+      const p = c.fromP && c.t < 1 ? c.fromP.clone().lerp(c.endP, k).add(new THREE.Vector3(0, Math.sin(Math.PI * k) * 0.08, 0)) : c.endP
+      const q = c.fromQ && c.t < 1 ? c.fromQ.clone().slerp(c.endQ, k) : c.endQ
+      toParent(p, q, _cp, _cq); c.g.position.copy(_cp); c.g.quaternion.copy(_cq)
+    }
     if (appr.w < 0.01) return
     const w = appr.w
-    // 翻下一張
-    if (appr.on && appr.want !== appr.i && appr.flip < 0) { appr.flip = 0; appr.nod = 1 }   // appraise.js 看完一張才翻下一張（手上那張＝下面評語那張）
-    let flipA = 0
-    if (appr.flip >= 0) {
-      appr.flip += dt / 0.45; flipA = Math.PI * Math.min(1, appr.flip)
-      if (appr.flip >= 0.5 && !appr.swapped) { appr.swapped = true; appr.i = appr.want; cardFront.material.map = appr.tex[appr.i] ?? null; cardFront.material.needsUpdate = true }
-      if (appr.flip >= 1) { appr.flip = -1; appr.swapped = false; appr.flipT = 1.7; flipA = 0 }
-    }
-    appr.nod = Math.max(0, appr.nod - dt * 1.6)
-    // 照片在胸前：模型座標（前方 +z）
     model.updateWorldMatrix(true, true)
-    const mq = model.getWorldQuaternion(new THREE.Quaternion())
-    const C = model.localToWorld(_v.set(0, 1.24 + 0.015 * Math.sin(performance.now() / 900), 0.34))   // 胸口前（以前 1.13 在腰）
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(mq)
-    arm('Left', C.clone().addScaledVector(right, 0.1), w)
-    arm('Right', C.clone().addScaledVector(right, -0.1), w)
-    // 頭往下看照片（點頭：翻頁時多低一點）
-    const Hd = BN.Head, Nk = BN.Neck
-    for (const [bn, k] of [[Nk, 0.45], [Hd, 0.55]]) if (bn) {
-      bn.updateWorldMatrix(true, false)
-      _q.setFromAxisAngle(right, (0.42 + 0.18 * Math.sin(appr.nod * Math.PI)) * k * w)
-      bn.getWorldQuaternion(_q2); _q2.premultiply(_q); bn.parent.getWorldQuaternion(_pq); _q2.premultiply(_pq.invert()); bn.quaternion.copy(_q2); bn.updateWorldMatrix(false, true)
+    const mq = model.getWorldQuaternion(new THREE.Quaternion()), right = new THREE.Vector3(1, 0, 0).applyQuaternion(mq)
+    // 上身前傾：拿、放的時候彎下去（櫃台後緣搆得到），拿著看的時候稍微往前
+    const holding = appr.cur >= 0 && appr.cards[appr.cur].state === 'held'
+    appr.lean += ((active ? 0.8 * reach : 0) + (holding ? 0.08 : 0) - appr.lean) * Math.min(1, dt * 6)
+    bend(BN.Spine, right, appr.lean * 0.4 * w); bend(BN.Spine1, right, appr.lean * 0.35 * w); bend(BN.Spine2, right, appr.lean * 0.25 * w)
+    // 手：抓著正在動的那張；沒在動就拿著手上那張；都沒有（剛開始、看完）就放鬆
+    const target = active ?? (holding ? appr.cards[appr.cur] : null)
+    if (target) {
+      const cw = target.g.getWorldPosition(_wp)
+      const along = new THREE.Vector3(1, 0, 0).applyQuaternion(target.g.getWorldQuaternion(new THREE.Quaternion()))   // 照片的左右邊
+      if (along.dot(right) < 0) along.negate()
+      arm('Left', cw.clone().addScaledVector(along, CW_ * 0.48), w, right)
+      arm('Right', cw.clone().addScaledVector(along, -CW_ * 0.48), w, right)
     }
-    // 照片：在兩手中間，正面朝老闆的臉（往上斜），翻頁時繞直軸轉
-    const head = Hd ? Hd.getWorldPosition(new THREE.Vector3()) : model.localToWorld(new THREE.Vector3(0, 1.6, 0))
-    const p = cardG.parent
-    cardG.position.copy(p ? p.worldToLocal(C.clone()) : C)
-    const look = head.clone(); if (p) p.worldToLocal(look)
-    cardG.lookAt(look); cardG.rotateY(flipA)
+    // 頭：看著手上（或正在拿）的那張；點一下：剛拿起來時
+    appr.look += ((target ? 1 : 0.4) - appr.look) * Math.min(1, dt * 4)
+    const pitch = (0.32 + (active ? 0.25 * reach : 0)) * appr.look * w
+    bend(BN.Neck, right, pitch * 0.45); bend(BN.Head, right, pitch * 0.55)
   }
 
   function tick(t, dt, cam, focusItem, camDir) {
@@ -398,5 +443,5 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     model.position.set(pos.x, 0, pos.y)
     appraiseTick(dt)
   }
-  return { model, tick, checkout, say, appraise, appraiseShow: (i) => { appr.want = Math.min(i, appr.tex.length - 1) }, get appraising() { return appr.on }, get state() { return state }, get anim() { return one && oneW > 0.5 ? one.getClip().name : moveW > 0.5 ? 'walk' : 'idle' }, get engaged() { return engaged }, get ignored() { return ignored }, get moveW() { return moveW }, get path() { return path }, pos }
+  return { model, tick, checkout, say, appraise, appraiseShow: (i) => { appr.want = Math.min(i, appr.cards.length - 1) }, get appraising() { return appr.on }, get state() { return state }, get anim() { return one && oneW > 0.5 ? one.getClip().name : moveW > 0.5 ? 'walk' : 'idle' }, get engaged() { return engaged }, get ignored() { return ignored }, get moveW() { return moveW }, get path() { return path }, pos }
 }

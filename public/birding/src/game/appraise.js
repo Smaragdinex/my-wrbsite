@@ -20,8 +20,8 @@ export function createAppraisal({ keeper, camera, sellOne, onChange, onWatch, to
     const m = keeper.model; m.updateWorldMatrix(true, false)
     const o = m.getWorldPosition(new THREE.Vector3()), f = m.getWorldDirection(new THREE.Vector3()).setY(0).normalize()
     const r = new THREE.Vector3(f.z, 0, -f.x)
-    view.p.copy(o).addScaledVector(f, 1.55).addScaledVector(r, -0.3); view.p.y = o.y + 1.58   // 稍微偏左（右邊有一台螢幕會擋到）、近一點
-    view.t.copy(o).addScaledVector(r, -0.05); view.t.y = o.y + 1.33
+    view.p.copy(o).addScaledVector(f, 1.95).addScaledVector(r, -0.3); view.p.y = o.y + 1.72   // 稍微偏左（右邊有一台螢幕會擋到）、高一點看得到櫃台上攤開的照片
+    view.t.copy(o).addScaledVector(f, 0.45).addScaledVector(r, -0.1); view.t.y = o.y + 1.3
   }
   function render() {
     const cur = st.list[Math.min(st.i, st.list.length - 1)], L = st.last
@@ -54,7 +54,7 @@ export function createAppraisal({ keeper, camera, sellOne, onChange, onWatch, to
       for (let i = 0; i < list.length; i++) {
         st.i = i; if (st.watching) render()
         keeper.appraiseShow?.(i)   // 手上翻到這一張
-        const p = list[i], [r] = await Promise.all([sellOne(p), new Promise((ok) => setTimeout(ok, 1800))])   // 一張最少看 1.8 秒（沒有語言模型時評價是瞬間的，不然老闆看起來沒在看）
+        const p = list[i], [r] = await Promise.all([sellOne(p), new Promise((ok) => setTimeout(ok, 2600))])   // 一張最少看 1.8 秒（沒有語言模型時評價是瞬間的，不然老闆看起來沒在看）
         st.total += r.price + r.bonus; st.n++; if (r.bonus) { st.bonus += r.bonus; st.hits++ }
         st.last = { p, price: r.price, bonus: r.bonus, comment: r.comment }
         onChange?.(p)
