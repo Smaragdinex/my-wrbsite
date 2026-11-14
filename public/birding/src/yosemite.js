@@ -1310,14 +1310,17 @@ export function buildYosemite(scene, { lib } = {}) {
               if (!c && ovh.length && hsh(i * 5.3) < 0.4 && top - (y0w + 3.6 * sy) > 1.0) put(ovh[Math.floor(hsh(i * 9.7) * ovh.length) % ovh.length], m4.compose(V(base.x, C3[i].y + 2.85 + 0.3 * hsh(i * 1.9), base.z + 0.02), qW, V(0.8 + 0.3 * hsh(i * 4.1), 1, 0.9)))
               // 概念圖 1、3：蕨類長在潮濕的縫——牆腳、第一層岩層的頂（岩架）；越靠瀑布越多
               { const wetK = Math.exp(-(((C3[i].x - YOSE.fall.x) / 22) ** 2)), pr = 0.25 + 0.45 * wetK
-                if (!c && hsh(i * 3.9) < pr) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 2.2) - 0.5) * 3, C3[i].y - 0.05, base.z - 0.25), s: 0.55 + 0.4 * hsh(i * 6.1) })
+                if (!c && hsh(i * 3.9) < pr) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 2.2) - 0.5) * 3, C3[i].y - 0.05, base.z - 0.1), s: 0.45 + 0.3 * hsh(i * 6.1), foot: true })
                 if (hsh(i * 7.1 + c) < pr * 0.8) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 4.4 + c) - 0.5) * 3.4, y0w + 3.6 * sy * (0.45 + 0.4 * hsh(i * 8.3 + c)), base.z + 0.12), s: 0.4 + 0.35 * hsh(i * 5.7 + c), hang: true }) }
               y0w += 3.6 * sy - 0.06
             }
           } }
         if (lib && WFERN.length) { const fn = ['fern_sa', 'fern_sb', 'fern2_b', 'fern2_c', 'fern_a'].filter((n) => lib[n]), fl = {}
+          // 2026-11-14 使用者（瀑布步道照片）「這草跟邊邊都有點偏高」：牆腳的蕨照這一點步道的高度放，但一叢左右散開 1.5 m，石階在那段已經往下了 → 浮在階梯上面。
+          // 改成每一小叢照它自己那個位置的步道高度（找同一層、最近的中線那一段內插）
+          const TS = st, footY = (x, z, y0) => { let best = 1e9, by = y0; for (let q = 1; q < TS.pts.length; q++) { if (Math.abs(TS.yy[q] - y0) > 2.5) continue; const [ax2, az2] = TS.pts[q - 1], [bx2, bz2] = TS.pts[q], dx = bx2 - ax2, dz = bz2 - az2, l2 = dx * dx + dz * dz || 1e-6, t = Math.max(0, Math.min(1, ((x - ax2) * dx + (z - az2) * dz) / l2)), d = Math.hypot(x - ax2 - dx * t, z - az2 - dz * t); if (d < best) { best = d; by = TS.yy[q - 1] + (TS.yy[q] - TS.yy[q - 1]) * t } } return by }
           WFERN.forEach((f, j) => { if (!fn.length) return; const e = new THREE.Euler(f.hang ? -0.55 - 0.3 * hsh(j * 1.3) : (hsh(j * 2.1) - 0.5) * 0.3, hsh(j * 3.7) * 6.28, 0, 'YXZ')
-            for (let r = 0; r < (f.hang ? 2 : 3); r++) (fl[fn[Math.floor(hsh(j * 5.1 + r) * fn.length) % fn.length]] ||= []).push({ p: f.p.clone().add(V((hsh(j + r * 7) - 0.5) * 0.7, 0, (hsh(j * 2 + r) - 0.5) * 0.2)), q: new THREE.Quaternion().setFromEuler(e), s: V(1, 1, 1).multiplyScalar(f.s * (0.8 + 0.4 * hsh(j * 9 + r))) }) })
+            for (let r = 0; r < (f.hang ? 2 : 3); r++) (fl[fn[Math.floor(hsh(j * 5.1 + r) * fn.length) % fn.length]] ||= []).push({ p: ((pp) => { if (f.foot) pp.y = footY(pp.x, pp.z, f.p.y + 0.05) - 0.06; return pp })(f.p.clone().add(V((hsh(j + r * 7) - 0.5) * 0.7, 0, (hsh(j * 2 + r) - 0.5) * 0.2))), q: new THREE.Quaternion().setFromEuler(e), s: V(1, 1, 1).multiplyScalar(f.s * (0.8 + 0.4 * hsh(j * 9 + r))) }) })
           for (const [n, l2] of Object.entries(fl)) scatter(g, lib[n], l2, { cast: false }) } }
       // 2026-11-14 折返平台兩側那面彎的岩壁（階地的端牆）也貼岩層：從平台中心往外打射線找到岩面，照岩面的方向貼兩片、疊兩層
       { const names = ['sw_a', 'sw_b', 'sw_c', 'sw_d'].filter((n) => K[n]), cf = g.getObjectByName('cliffFace'), rc = new THREE.Raycaster(), groups = []
