@@ -840,7 +840,8 @@ export function buildYosemite(scene, { lib } = {}) {
     }
     // 岩棚前緣的欄杆（水潭前面那段步道外側；出水口上面不立柱）
     { const pp = [], sg = []; let prev = null
-      for (let x = 193.6; x <= 208.4; x += 1.2) { const p = V(x, shelfY, YOSE.base(x) - 0.25); if (Math.abs(x - F.x) < 2.4) { prev = null; continue } pp.push(p); addCollider(p.x, p.z, 0.12, p.y + 1.1, p.y - 0.4); if (prev) sg.push([prev, p]); prev = p }
+      for (let x = 193.6; x <= 208.4; x += 1.2) { const p = V(x, shelfY, YOSE.base(x) - 0.25); if (Math.abs(x - F.x) < 2.4) { prev = null; continue }
+        if (x > 202.6) { prev = null; continue }   /* 2026-11-15 欄杆懸空檢查：水潭東邊（x 203～208）底下沒有岩棚，五根柱子站在空中（岩廊自己有原木欄杆） */ pp.push(p); addCollider(p.x, p.z, 0.12, p.y + 1.1, p.y - 0.4); if (prev) sg.push([prev, p]); prev = p }
       for (let x = 193.6; x <= 208.4; x += 0.45) addCollider(x, YOSE.base(x) - 0.45, 0.3, shelfY + 1.2, shelfY - 0.5)   // 整條前緣擋住（出水口那 3 m 也是）
       for (const p of pp) CHAIN.posts.push(p); for (const sgm of sg) CHAIN.segs.push(sgm)   // 2026-11-14 使用者「都改鐵鍊」
     }
@@ -1232,12 +1233,13 @@ export function buildYosemite(scene, { lib } = {}) {
           if (st.kind[i - 1] !== 'alc') {
             let s1 = i; while (s1 < NP - 1 && st.kind[s1 + 1] === 'alc') s1++
             const L0 = C3[i - 1], sx = Math.sign(C3[Math.round((i + s1) / 2)].x - L0.x) || 1, dl = L0.z - YOSE.base(L0.x)
-            const xEnd = Math.max(...Array.from({ length: s1 - i + 1 }, (_, k) => sx * C3[i + k].x)) * sx + sx * 1.35, yA = C3[i].y
-            for (let x = L0.x + sx * 1.3; sx * (xEnd - x) > -0.01; x += sx * 1.3) {
-              const xx = sx * (x - xEnd) > 0 ? xEnd : x, q = V(xx, yA, YOSE.base(xx) + dl - 1.2)
-              q.sturdy = false; if (prev && prev.distanceTo(q) < 3.8) CHAIN.segs.push([prev, q]); CHAIN.posts.push(q); prev = q
-            }
-            { const q = V(xEnd, yA, YOSE.base(xEnd) + dl - 1.2); if (prev && prev.distanceTo(q) > 0.3) { CHAIN.segs.push([prev, q]); CHAIN.posts.push(q) } }
+            // 2026-11-15 使用者（折返平台照片，紅線畫石階外緣）「欄杆要跟著石階，現在有點懸空」：以前沿下段外緣直直拉到最遠那點再外 1.35 m，
+            // 但平台盡頭是半圓（半徑≈1.25＋路寬），直線末端 2～3 根柱子站在空中 → 直線只拉到半圓圓心，接著沿半圓外緣（中線外 1.2 m）繞到最遠那端
+            const A = Array.from({ length: s1 - i + 1 }, (_, k) => C3[i + k]), zs = A.map((p) => p.z), z0 = Math.min(...zs), z1 = Math.max(...zs)
+            const R0 = (z1 - z0) / 2, cz = (z0 + z1) / 2, ex = Math.max(...A.map((p) => sx * p.x)) * sx, cx = ex - sx * R0, yA = C3[i].y, Ro = R0 + 0.4   // 量過：半圓那圈石板只鋪到離圓心 1.65～2.1 m（不是中線外 1.35）→ 柱子站在圓心外 1.65 m
+            const pts = []; for (let x = L0.x + sx * 1.3; sx * (cx - x) > 1.1; x += sx * 1.3) pts.push(V(x, yA, YOSE.base(x) + dl - 1.2))
+            const nA = Math.max(2, Math.round(Ro * Math.PI / 2 / 1.15)); for (let k = 0; k <= nA; k++) { const ph = k / nA * Math.PI / 2; pts.push(V(cx + sx * Ro * Math.sin(ph), yA, cz - Ro * Math.cos(ph))) }
+            for (const q of pts) { q.sturdy = false; if (prev && prev.distanceTo(q) < 3.8) CHAIN.segs.push([prev, q]); CHAIN.posts.push(q); prev = q }
           }
           prev = null; continue
         }
