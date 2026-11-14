@@ -381,3 +381,34 @@ svg.controls image { mix-blend-mode: multiply; }
 #pre small { display: block; margin-top: 16px; font-size: 13px; color: #6a776f; }
 #pre button:focus-visible { outline: 3px solid #9fe0b8; outline-offset: 2px; }
 #clicktip { position: fixed; left: 50%; bottom: 12vh; transform: translateX(-50%); z-index: 9; pointer-events: none; padding: 10px 22px; border-radius: 999px; font-size: 16px; font-weight: 600; color: #fff; background: rgba(15, 25, 20, 0.62); }
+
+/* 2026-11-14 相機行改版：跟老闆說話（買器材／賣照片）、賣照片左委託右照片、定格看老闆看照片 */
+.talk-in { width: min(560px, 92vw); }
+.talk-say { font-size: 17px; margin: 6px 0 16px; }
+.talk-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.talk-btn { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 6px; padding: 18px 18px; border-radius: 14px; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); transition: transform 0.12s, box-shadow 0.12s; }
+.talk-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16); }
+.talk-btn b { font-size: 19px; }
+.talk-btn span { color: #66706a; font-size: 14px; }
+.sell-in { width: min(1180px, 96vw); }
+.sell-layout { display: grid; grid-template-columns: minmax(280px, 1fr) 2fr; gap: 20px; align-items: start; }
+.sell-left { position: sticky; top: 50px; }
+.sell-right .grid { margin-top: 0; }
+.comm-tag { color: #b5452c; font-weight: 600; }
+.sell-in .sell-all { position: static; padding: 16px 0 4px; text-align: center; }
+.sell-in .sell-all .btn { background: var(--accent); color: #fff; }
+.btn.sell-btn { font-size: 17px; padding: 13px 26px; }
+@media (max-width: 760px) { .sell-layout { grid-template-columns: 1fr; } .sell-left { position: static; } .talk-choices { grid-template-columns: 1fr; } }
+.appraise-ui { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; display: flex; justify-content: center; padding: 0 16px 22px; pointer-events: none; }
+.appraise-ui[hidden] { display: none; }
+.ap-bar { pointer-events: auto; display: flex; gap: 16px; align-items: center; width: min(900px, 100%); padding: 14px 18px; border-radius: 16px; background: rgba(20, 26, 22, 0.82); color: #f1ead8; backdrop-filter: blur(6px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
+.ap-pic { width: 150px; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; border: 3px solid #f4f0e6; transform: rotate(-2deg); flex: none; }
+.ap-main { flex: 1; min-width: 0; }
+.ap-main h3 { margin: 0 0 8px; font-size: 18px; display: flex; justify-content: space-between; gap: 12px; }
+.ap-money { color: #f3cf6a; font-weight: 600; }
+.ap-prog { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
+.ap-prog i { display: block; height: 100%; background: #f3cf6a; transition: width 0.4s; }
+.ap-say { margin: 8px 0 0; font-size: 15px; line-height: 1.5; color: #e6e0d0; }
+.ap-key { flex: none; font-size: 13px; color: #c8c2b2; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 999px; padding: 6px 12px; }
+.ap-bar.done h3 { color: #f3cf6a; }
+@media (max-width: 640px) { .ap-pic { width: 96px; } .ap-key { display: none; } }

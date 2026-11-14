@@ -9,6 +9,7 @@ import { createCamera, BODIES, LENSES } from './camera.js'
 import { createPlayback } from './playback.js'
 import { createGuide, guideAniso } from './guide.js'
 import { createShop } from './shop.js'
+import { createAppraisal } from './appraise.js'
 import { createCommissions } from './commissions.js'
 import { createProductView } from './product.js'
 import { buildStore } from './store.js'
@@ -148,7 +149,10 @@ const relock = () => player.controls.lock()
 // Tab：相機背面螢幕的回放（playback.js，2026-11-08 取代網頁式的相簿）
 const album = createPlayback({ photos, onDelete: (p) => { const i = photos.indexOf(p); if (i >= 0) photos.splice(i, 1); deletePhoto(p.time) }, onClose: relock })
 const store = await buildStore(scene, state, world.plantLib, { getSound: () => settings.state.sound })   // 自動門音效跟著設定的「音效」開關（只在玩的時候才會叫到，那時 settings 已經建好）   // 相機行：溫室門口外面那棟店，遊戲從店裡開始
-const shop = createShop({ state, photos, comm, judge: judgePhoto, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) }, onClose: relock, onView: (it, all) => product.open(it, all) })
+const shop = createShop({ state, photos, comm, judge: judgePhoto, onClose: relock, onView: (it, all) => product.open(it, all), onAppraise: (list) => appraisal.start(list) })
+// 2026-11-14 賣照片：定格看老闆一張一張看（appraise.js）；中途可以離開，看完自動入帳
+const appraisal = createAppraisal({ keeper: store.keeper, camera, sellOne: shop.sellOne, onChange: (p) => { save(); store.refresh(); if (p) putPhoto(p) },
+  onWatch: (on) => { if (on) player.controls.unlock(); else { flight.snap(); vm.snap(); relock() } }, toast: (s) => hud.toast(s) })
 // Esc 闔上：瀏覽器不讓 Esc 重新鎖滑鼠，就回到首頁選單（跟平常按 Esc 一樣）
 let uiFx = null   // 下面 createUiFx 才建；圖鑑的按鈕、翻頁音效用它
 guideAniso(renderer)
@@ -161,7 +165,7 @@ const guide = createGuide({ renderer, sfx: (k) => uiFx?.play(k), onClose: (why) 
   return r
 }, onRead: (id) => { if (!state.read.includes(id)) { state.read.push(id); save(); hud.setGuideNew(unreadN()) } } })
 const product = createProductView({ state, getModel: (id) => store.gearModel[id], onChange: () => { save(); store.refresh(); shop.render() }, onClose: () => { if (!shop.isOpen) relock() } })   // 從櫃台的器材清單打開的：關掉回到清單
-const panelOpen = () => album.isOpen || shop.isOpen || product.isOpen || cam.panelOpen || guide.isOpen
+const panelOpen = () => album.isOpen || shop.isOpen || product.isOpen || cam.panelOpen || guide.isOpen || appraisal.watching
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
 // 2026-11-13 回報問題用：按 ` 在左上角顯示目前位置／面向／時間（截圖給我們就知道在哪裡、往哪看），再按一次關掉
@@ -186,7 +190,8 @@ addEventListener('keydown', (e) => {
     if (shop.isOpen) return shop.close()
     const f = !album.isOpen && player.controls.isLocked ? store.focus(camera) : null
     if (f?.type === 'item') { product.open(f.item, store.items); player.controls.unlock() }      // 逛店：看著展示台 → 器材介紹頁（左邊介紹＋購買，右邊 3D 轉著看）
-    else if (f?.type === 'counter') store.checkout(() => { shop.open('sell'); player.controls.unlock() })   // 櫃台：老闆不在櫃台就先走回來，到了才開買賣畫面
+    else if (f?.type === 'counter' && appraisal.running) appraisal.rewatch()   // 老闆還在看上一批：回來繼續看他看
+    else if (f?.type === 'counter') store.checkout(() => { shop.open('menu'); player.controls.unlock() })   // 2026-11-14：先問要買器材還是賣照片   // 櫃台：老闆不在櫃台就先走回來，到了才開買賣畫面
     else if (!panelOpen() && player.controls.isLocked && nearBench()) rest()
     else if (!panelOpen() && player.controls.isLocked) { guide.open(); player.controls.unlock() }   // 附近沒有可以按 E 的東西：打開鳥類圖鑑
   }
@@ -356,13 +361,14 @@ function tick(dt, t) {
   cam.state.vfReady = vm.st.raise > 0.85
   world.tick(t, dt)
   store.tick(t, dt, camera, { play: !menuCam, look: !panelOpen() && player.controls.isLocked && !cam.state.raised })
+  appraisal.tick()
   flight.tick(t, dt, { sneak: player.state.sneak })
   const sf = !panelOpen() && player.controls.isLocked && !cam.state.raised ? store.focus(camera) : null
   hud.setHint(!panelOpen() && player.controls.isLocked ? (sf?.type === 'item' ? `${sf.item.name}　${state.owned.includes(sf.item.id) ? tr('已擁有') : '$' + sf.item.price.toLocaleString()}　${tr('按 E 查看')}` : sf?.type === 'counter' ? tr('按 E 跟老闆說話（賣照片、買器材）') : nearBench() ? tr(nearBench().kind === 'bed' ? '按 E 睡一下（跳到下一個時段）' : '按 E 坐下休息（跳到下一個時段）') : '') : '')
   hud.update(dt)
   settings.tick(dt, player.controls.isLocked)
   world.render()
-  if (startEl.hidden) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
+  if (startEl.hidden && !appraisal.watching) vm.render(renderer, scene)   // 手和相機另外畫（固定視角，不跟著變焦放大）；首頁選單上不畫，背景乾淨
   // 2026-11-11 圖鑑太糊：自動畫質會把解析度降到 0.65 倍，書也跟著糊 → 書打開時用螢幕原生解析度（書的場景很輕），闔上再交回自動畫質
   if (guide.visible) { const hi = Math.min(devicePixelRatio || 1, 2); if (Math.abs(renderer.getPixelRatio() - hi) > 1e-3) { renderer.setPixelRatio(hi); guideHi = true } }
   else if (guideHi) { guideHi = false; settings.apply() }
