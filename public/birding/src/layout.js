@@ -565,7 +565,11 @@ export const YOSE = (() => {
   Y.slakeR = (x, z) => { const L = Y.slake, dx = (x - L.x) / L.rx, dz = (z - L.z) / L.rz, th = Math.atan2(dz, dx); return Math.hypot(dx, dz) / (1 + 0.13 * Math.sin(3 * th + 1) + 0.07 * Math.sin(5 * th + 2.3)) }
   Y.slakeOut = [[211, 124.5], [209.4, 121.6], [207.8, 118.4], [206.3, 112.6], [205.3, 106.8], [205, 102.6]]   // 出水小溪（湖→平台上的溪）
   Y.slakeOutDist = (x, z) => { const P = Y.slakeOut; let b = 1e9, bs = 0, acc = 0; for (let i = 1; i < P.length; i++) { const [ax, az] = P[i - 1], [bx, bz] = P[i], dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz), t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (l * l))), d = Math.hypot(x - ax - dx * t, z - az - dz * t); if (d < b) { b = d; bs = acc + t * l } acc += l } return { d: b, s: bs / acc } }
-  Y.snag = { x: 226.5, y: 70.5, z: Y.base(226.5) + 1.5, perch: [-0.992, 5.946, -5.35], dir: [-0.986, -0.151], r: 0.082 }
+  // 2026-11-14 使用者：原本那棵（最高廊道外 x 226.5）拆掉，大冠鷲搬到岩壁東端轉角那棵（以前是另外射線擺的複本）。
+  // 模型繞 y 轉 yaw：棲枝位置 perch 和橫枝方向 dir 是模型座標，這裡先轉好
+  Y.snag = (() => { const yaw = 0.3, c = Math.cos(yaw), s = Math.sin(yaw), rot = ([x, z]) => [x * c + z * s, -x * s + z * c]
+    const P = [-0.992, 5.946, -5.35], pr = rot([P[0], P[2]]), dr = rot([-0.986, -0.151])
+    return { x: 247.6, y: 54.5, z: 110.2, yaw, perch: [pr[0], P[1], pr[1]], dir: dr, r: 0.082 } })()
   // 2026-11-12 崖壁上橫生的樹（tools/make-cliff-kit.py → cliff_kit.glb；每棵的枝梢＝鳥站的點，數字抄自 tools/cliff-kit.json，模型座標）
   // 根紮在「上面那段步道的地板底下 1 m」那層岩簷的外緣（再往下是下面那段步道挑高的槽，沒有岩壁可以紮根）；樹往外 2～3.5 m、往上長到步道上的人眼睛上方 0～2.5 m。
   // [x, 從哪一段步道看（0 起算）, 模型, 縮放, 轉向]：一群一群擺，賞鳥台兩側多
@@ -1647,7 +1651,7 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
   // 2026-11-12 使用者「懸空樹木」：枯木的根原本在舊的岩壁廊道外面，步道改成階地之後那裡是空的 → 改種在最上面那層步道外緣底下的石壁上
   { const T = YOSE.stairs(), near = (lo, hi) => { let b = -1; for (let i = 0; i < T.pts.length; i++) if (T.kind[i] === 'gal' && T.yy[i] > lo && T.yy[i] < hi && (b < 0 || Math.abs(T.pts[i][0] - 226.5) < Math.abs(T.pts[b][0] - 226.5))) b = i; return b }
     const top = T.top, i4 = near(top - 9.5, top + 1), i3 = near(T.yy[i4] - 16, T.yy[i4] - 3)
-    if (i4 >= 0 && i3 >= 0) { YOSE.snag.y = T.yy[i4] - 1.2; YOSE.snag.z = T.pts[i3][1] + 1.25 + 0.15 } }
+    if (false && i4 >= 0 && i3 >= 0) { YOSE.snag.y = T.yy[i4] - 1.2; YOSE.snag.z = T.pts[i3][1] + 1.25 + 0.15 } }   // 2026-11-14 枯木搬到岩壁轉角（位置固定在 YOSE.snag），不再跟步道走
   const st = YOSE.stairs()
   for (let i = 1; i < st.pts.length; i++) {
     const k = st.kind[i]; if (k !== 'open' && !(k === 'gal' && st.yy[i] < 36)) continue

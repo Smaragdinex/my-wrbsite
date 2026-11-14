@@ -1787,11 +1787,12 @@ export function buildYosemite(scene, { lib } = {}) {
         const geo = o.geometry.clone(); o.updateWorldMatrix(true, false); geo.applyMatrix4(o.matrixWorld)
         const c = geo.attributes.color_1 || geo.attributes.color
         geo.setAttribute('snag', c); geo.deleteAttribute('color'); geo.deleteAttribute('color_1')
-        const t = new THREE.Mesh(geo, m); t.name = 'eagleSnag'; t.position.set(S.x, S.y, S.z); t.castShadow = true; t.receiveShadow = true; g.add(t)
+        const t = new THREE.Mesh(geo, m); t.name = 'eagleSnag'; t.position.set(S.x, S.y, S.z); t.rotation.y = S.yaw ?? 0; t.castShadow = true; t.receiveShadow = true; g.add(t)
         // 2026-11-14 使用者「枯木位置」：岩壁東端轉角的岩面上長出來的一棵。模型本身往 -z 斜伸 5 m
         const extra = []   // 山脊上那幾棵使用者說不要（只留岩壁轉角這棵）
         { const cf = g.getObjectByName('cliffFace'), rc = new THREE.Raycaster()
-          for (const [cx, cy, yaw, sc] of [[247.6, 54.5, 0.3, 1.0]]) { rc.set(V(cx, cy, 60), V(0, 0, 1)); const h = cf ? rc.intersectObject(cf, false)[0] : null; if (h) extra.push({ x: cx, y: cy, z: h.point.z + 0.35, yaw, s: sc }) } }
+          for (const [cx, cy, yaw, sc] of []) {   // 2026-11-14 轉角這棵變成唯一一棵（YOSE.snag，大冠鷲停這裡）
+             rc.set(V(cx, cy, 60), V(0, 0, 1)); const h = cf ? rc.intersectObject(cf, false)[0] : null; if (h) extra.push({ x: cx, y: cy, z: h.point.z + 0.35, yaw, s: sc }) } }
         for (const e of extra) { const t2 = new THREE.Mesh(geo, m); t2.name = 'gorgeSnag'; t2.position.set(e.x, e.y, e.z); t2.rotation.y = e.yaw; t2.scale.setScalar(e.s); t2.castShadow = true; t2.receiveShadow = true; g.add(t2) }
       })
     })
