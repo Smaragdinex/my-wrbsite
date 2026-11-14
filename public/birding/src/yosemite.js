@@ -1300,7 +1300,7 @@ export function buildYosemite(scene, { lib } = {}) {
             const dep = (j) => C3[j].z - YOSE.base(C3[j].x), di = dep(i); let ceil = 1e9; for (let j = 0; j < NP; j++) { const dy = C3[j].y - C3[i].y; if (dy < -0.3 || dy > 14 || dep(j) - di < 1.5 || Math.abs(C3[j].x - base.x) > 2.2) continue; ceil = Math.min(ceil, C3[j].y - 0.3) }   /* 上一層＝更往岩壁裡（深 1.5 m 以上）的那條；折返平台附近兩層幾乎一樣高 → 不貼 */
             // 往上疊到上一層的地板底下（最多三層、約 10 m）；露天、上面沒有步道的地方疊兩層。每層左右錯開一點、高低不一，接縫才不會排成一條線
             const qW = new THREE.Quaternion().setFromAxisAngle(UPv, yaw), top = Math.min(ceil - 0.12, C3[i].y + (ceil < 1e8 ? 10.5 : 6.6))
-            let y0w = C3[i].y - 0.25
+            let y0w = C3[i].y - 0.6   // 2026-11-14 使用者「石階邊也偏高」：牆最底下那層岩層往外凸 0.1～0.35 m，以前從步道下 0.25 m 起疊，看起來像石階靠牆那邊多一道高起來的邊 → 埋深一點
             for (let c = 0; c < 3 && y0w < top - 1.0; c++) {
               const sy = Math.min(0.95 + 0.12 * hsh(i * 2.3 + c * 5.1), (top - y0w) / 3.6)
               if (sy < 0.3) break
