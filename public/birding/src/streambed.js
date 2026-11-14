@@ -107,18 +107,20 @@ export async function buildStreambed(scene, lib = null) {
   // 2026-11-14 使用者（湖口照片）「紅色那顆往黃色圈去蓋住 stream」：第 3 顆（鏽色斑點那顆）從 -1.45 往中間挪到 -0.65，補掉它和下一顆中間露出湖／溪接縫的空隙
   // 2026-11-14 使用者（湖口照片）「還是你用石頭擋住，不然看得出縫隙」：湖水流進河的地方排一道石堰——橫跨河口 7 顆大苔石，
   // 頂面露出水面 0.15～0.45 m、中間留兩三道縫讓水流出去；湖面跟河面交接的那條線、底下挖深的暗洞都藏在石堰後面
+  // 2026-11-15 使用者（畫箭頭）「河是往這邊流，不是一圈一圈」＋ChatGPT：出水口的石頭要有往下游的尾流，不是往外擴的圓圈 → 石堰、接縫那排石頭給下游方向（往橋那邊）
+  const OUT_FLOW = Math.atan2(0.96, -0.27)
   { const W = YOSE.lake.water, C = [180.9, 74.6], px = 0.96, pz = -0.26, rw = mulberry32(777)
     let wi = 0
     for (const [o, sz] of [[-3.9, 1.9], [-2.7, 1.5], [-0.65, 1.3], [-0.2, 1.05], [1.15, 1.3], [2.45, 1.55], [3.7, 1.95]]) {
       const x = C[0] + px * o + (rw() - 0.5) * 0.35, z = C[1] + pz * o + (rw() - 0.5) * 0.5, s2 = sz * (0.9 + rw() * 0.25)
-      boulders.push({ x, z, y: W - 0.5 * s2 + 0.15 + rw() * 0.3, wl: W, s: s2, yaw: rw() * 6.283, v: Math.floor(rw() * 3), weir: true, wi: wi++ })
+      boulders.push({ x, z, y: W - 0.5 * s2 + 0.15 + rw() * 0.3, wl: W, s: s2, yaw: rw() * 6.283, v: Math.floor(rw() * 3), weir: true, wi: wi++, flow: OUT_FLOW })
     }
     // 2026-11-15 使用者（河口西側照片）「我說的石頭是水流往那邊往下的溪流」：湖面在 x≈178.7、z 75～79 收邊，剛好落在河道西半邊裡 →
     // 湖面切邊、河面淡色那條接縫露在外面。沿著那條接縫再排一列大石（跟石堰同一種），把湖跟河的交界蓋住；自己的亂數，不動石堰
     const rs = mulberry32(1115)
     for (const [x, z, sz] of [[178.45, 75.2, 1.5], [178.25, 76.45, 1.3], [178.2, 77.65, 1.55], [178.35, 78.9, 1.35]]) {
       const s2 = sz * (0.9 + rs() * 0.25)
-      boulders.push({ x: x + (rs() - 0.5) * 0.2, z: z + (rs() - 0.5) * 0.25, y: W - 0.5 * s2 + 0.1 + rs() * 0.2, wl: W, s: s2, yaw: rs() * 6.283, v: Math.floor(rs() * 3), weir: true, wi: wi++ })
+      boulders.push({ x: x + (rs() - 0.5) * 0.2, z: z + (rs() - 0.5) * 0.25, y: W - 0.5 * s2 + 0.1 + rs() * 0.2, wl: W, s: s2, yaw: rs() * 6.283, v: Math.floor(rs() * 3), weir: true, wi: wi++, flow: OUT_FLOW })
     } }
   for (const b of boulders) if (!b.weir) b.y = Math.min(b.y, alpineHeight(b.x, b.z) + 0.42 * b.s)   // 2026-11-14 使用者（石頭浮在水上）：河床、湖底挖深之後照水面放的苔石底下是空的 → 最多只能比水底高 0.42×大小（石頭坐在水底）
   // 2026-11-14 使用者（湖口照片，紅圈）「應該放上黃色圈那種，不是 pebble stone」＋「溪、湖、河都要」：
@@ -176,8 +178,8 @@ export async function buildStreambed(scene, lib = null) {
     // ChatGPT：不要完整的白圈——迎水面一道碎碎的新月形白沫（寬 3～15 cm）＋下游一條 0.3～1.5 m 的尾流，順著水流漂；湖裡的石頭沒有水流，只有貼著石頭一點點
     const ring = new THREE.PlaneGeometry(3.2, 1.7, 1, 1).rotateX(-Math.PI / 2).translate(0.75, 0, 0)   // 本地 +X＝下游
     const foamM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uT: timeU },
-      vertexShader: `varying vec2 vP; varying float vPh; varying float vFlow; void main(){ vP = position.xz; vPh = instanceMatrix[3].x * 3.1 + instanceMatrix[3].z * 1.7; vFlow = step(1.5, length(instanceMatrix[1].xyz)) > 0.5 ? 0.0 : 1.0; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position.x, 0.0, position.z, 1.0); }`,
-      fragmentShader: `uniform float uT; varying vec2 vP; varying float vPh; varying float vFlow;
+      vertexShader: `varying vec2 vP; varying float vPh; varying float vFlow; varying float vSoft; void main(){ vP = position.xz; vSoft = length(instanceMatrix[1].xyz) < 0.75 ? 0.3 : 1.0; vPh = instanceMatrix[3].x * 3.1 + instanceMatrix[3].z * 1.7; vFlow = step(1.5, length(instanceMatrix[1].xyz)) > 0.5 ? 0.0 : 1.0; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position.x, 0.0, position.z, 1.0); }`,
+      fragmentShader: `uniform float uT; varying vec2 vP; varying float vPh; varying float vFlow; varying float vSoft;
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
         void main(){ float r = length(vP), a = atan(vP.y, vP.x);
@@ -188,7 +190,7 @@ export async function buildStreambed(scene, lib = null) {
           float wake = vFlow * smoothstep(0.25, 0.6, vP.x) * (1.0 - smoothstep(1.0, 2.2, vP.x)) * (1.0 - smoothstep(0.0, 0.5 * (1.0 - vP.x / 2.6), abs(abs(vP.y) - 0.34 + 0.1 * vP.x))) * step(0.5, r);
           float al = max(cres * smoothstep(0.3, 0.6, n + 0.15), wake * smoothstep(0.42, 0.7, n) * 0.75);
           if (al < 0.02) discard;
-          gl_FragColor = vec4(vec3(0.93, 0.96, 0.97), al * 0.8);
+          gl_FragColor = vec4(vec3(0.93, 0.96, 0.97), al * 0.8 * vSoft);   // 出水口的石頭（高度縮放 0.5 當旗標）：ChatGPT「白色弧太大」→ 淡 7 成
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }` })
@@ -196,7 +198,7 @@ export async function buildStreambed(scene, lib = null) {
     const fb = boulders.filter((b) => b.flow != null)
     const fm = new THREE.InstancedMesh(ring, foamM, Math.max(1, fb.length)); fm.count = fb.length
     // 石頭在水線的截面半徑約 0.5 × 尺寸；有水流的照下游方向擺（高度的縮放當旗標：1＝有水流、2＝湖裡）
-    fb.forEach((b, k) => fm.setMatrixAt(k, m4.compose(new THREE.Vector3(b.x, b.y + 0.012, b.z), q.setFromEuler(e.set(0, b.flow ?? b.yaw, 0)), new THREE.Vector3(b.s * 1.15, b.flow != null ? 1 : 2, b.s * 1.15))))
+    fb.forEach((b, k) => fm.setMatrixAt(k, m4.compose(new THREE.Vector3(b.x, (b.wl ?? b.y) + 0.012, b.z), q.setFromEuler(e.set(0, b.flow ?? b.yaw, 0)), new THREE.Vector3(b.s * 1.15, b.weir ? 0.5 : b.flow != null ? 1 : 2, b.s * 1.15))))
     fm.renderOrder = 6; fm.frustumCulled = false; fm.name = 'bed_foam'; G.add(fm)
     // 2026-11-14 使用者（湖岸照片）「水波紋到石頭」：湖裡（沒有水流）的石頭，水線上一圈一圈慢慢往外擴的細波紋（會動、越外越淡），石頭邊一道若有若無的亮線
     const lb = boulders.filter((b) => b.flow == null && b.wl != null)

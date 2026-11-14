@@ -967,6 +967,23 @@ export function buildYosemite(scene, { lib } = {}) {
           foam += smoothstep(14.0, 8.0, dI) * (1.0 - lkImp) * smoothstep(0.8, 0.92, lfbm(adv * 2.2 + 21.0)) * 0.12;   // 再遠：順著流向的細泡沫
           float shore = smoothstep(0.32, 0.06, lkDep);                                // 岸邊 0.2～0.6 m：一小段一小段，不是一整圈白線
           foam += shore * smoothstep(0.55, 0.78, lfbm(q * 1.4 + t * 0.15)) * 0.5;
+          // 2026-11-15 使用者（畫箭頭：湖水往石堰、往橋下流）＋ChatGPT（出水口三段：離喉口 11 m 開始收、3 m 內最快）：
+          // 出水口附近的湖面加順著流向的細長流痕（0.8～3 m 長、幾公分寬），越靠喉口越密、越快；方向從「往喉口」慢慢轉成「往下游（橋）」。
+          // 兩段相位交替的 flowmap 平移（不會越拉越歪）
+          { vec2 Th = vec2(181.2, 75.6), Dn = normalize(vec2(-0.27, -0.96)); float dTh = length(q - Th);
+            float wC = smoothstep(11.0, 2.5, dTh) * smoothstep(-1.5, 1.0, dot(Th - q, Dn) + 2.5);
+            if (wC > 0.001) {
+              vec2 fd = normalize(mix(normalize(Th - q + 1e-3), Dn, smoothstep(4.5, 0.5, dTh)));
+              float spd = mix(0.1, 1.1, pow(smoothstep(11.0, 1.0, dTh), 2.2));   // ChatGPT：8～11 m 0.1 m/s、3～5 m 0.3～0.5、喉口 1 m/s
+              vec2 fp = vec2(-fd.y, fd.x);
+              float st = 0.0; vec2 rel = q - Th, Pn = vec2(-Dn.y, Dn.x); float rr = length(rel), ang = atan(dot(rel, Pn), -dot(rel, Dn)), nearK = smoothstep(4.5, 1.0, rr);
+              // 遠處用極座標（往喉口收：沿 r 往裡流、橫向＝角度），近喉口換成往下游的直線座標；兩段相位交替的 flowmap 平移
+              for (int k = 0; k < 2; k++) { float ph = fract(t * 0.18 + float(k) * 0.5), wk = 1.0 - abs(ph * 2.0 - 1.0), adv = spd * ph * 5.5, o = float(k) * 7.3;
+                vec2 cP = vec2(ang * 26.0 + o, (rr + adv) * 0.55), cS = vec2(dot(rel, Pn) * 6.0 + o, (dot(rel, Dn) - adv) * 0.6);
+                vec2 c1 = mix(cP, cS, nearK), c2 = mix(vec2(ang * 20.0 + o, (rr + adv) * 0.9), vec2(dot(rel, Pn) * 5.5 + o, (dot(rel, Dn) - adv) * 0.9), nearK);
+                st += wk * (smoothstep(0.86, 0.93, lvn(c1)) * 0.5 + smoothstep(0.88, 0.95, lvn(c2 + 3.0)) * 0.3) * (0.75 + 0.6 * smoothstep(4.0, 1.5, rr)); }   // 斷成 0.3～1.5 m 一段、細；喉口 2 m 內多一點
+              foam += wC * st * 0.09 * smoothstep(45.0, 10.0, length(vViewPosition));   // 遠處細線會閃 → 淡掉
+            } }
           lkFoam = clamp(foam, 0.0, 1.0);
           // 波紋（法線用的斜率）：四個方向、波長 0.35～2.4 m；平靜處振幅約 1 cm、落水附近 4～12 cm
           float A = mix(0.0045, 0.06, lkImp * lkImp);
