@@ -1,5 +1,12 @@
 // English（自動產生：key 是程式裡的中文原文）
 export const UI = {
+ "這本圖鑑收錄《Birdwatch》園區裡可以遇見的 {m} 種野鳥：每一種都有會動的插圖、在園區的棲地、出沒時間，還有介紹和小知識。": "This field guide covers all {m} wild birds you can meet in the Birdwatch park. Each one has a living illustration, its habitat in the park, when it is active, a description and fun facts.",
+ "← →、A D、滾輪或點書頁翻頁": "← →, A D, mouse wheel or click the page to turn",
+ "Home 或 T 回目錄": "Home or T for contents",
+ "到園區找牠們": "Find them in the park",
+ "帶著相機走進公園，拍到的鳥會記進你自己的圖鑑：xarts.games/birding/game.html": "Take a camera into the park. Every bird you photograph goes into your own field guide: xarts.games/birding/game.html",
+ "← → 翻頁　Home 回目錄": "← → turn page   Home contents",
+ "點書頁左右兩邊翻頁": "Tap the left or right side to turn pages",
  "出沒時間": "Active",
  "清晨到白天": "Dawn to day",
  "晨昏": "Dawn & dusk",

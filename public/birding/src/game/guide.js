@@ -707,6 +707,15 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     if (st.flip) { if (st.flip.queue === 0) st.flip.queue = dirn; return }
     jump(st.spread + dirn)
   }
+  // 2026-11-14 圖鑑網頁在直的手機上：一次只看一頁（整個寬度），點右邊＝看右頁／翻下一頁，點左邊＝看左頁／翻回上一頁
+  let side = 0, sideX = -PW / 2
+  const portrait = () => CATALOG && renderer.domElement.clientWidth / renderer.domElement.clientHeight < 0.8
+  function step(d) {
+    if (!portrait()) return turn(d)
+    if (d > 0 && side === 0) { side = 1; return }
+    if (d < 0 && side === 1) { side = 0; return }
+    turn(d); if (st.flip) side = d > 0 ? 0 : 1
+  }
   // 直接翻到第 to 個跨頁（目錄點鳥名、回到目錄）：一張紙翻過去，紙的正面是現在的右頁、背面是目標的左頁
   function jump(to) {
     if (!st.open || st.t < 0.98 || st.flip || to === st.spread || to < 0 || to >= NS) return
@@ -753,16 +762,16 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
   }
   addEventListener('keydown', (e) => {
     if (!st.open) return
-    if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'PageDown') turn(1)
-    else if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'PageUp') turn(-1)
-    else if (e.code === 'Home' || e.code === 'KeyT') jump(TOC_S)
+    if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'PageDown') step(1)
+    else if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'PageUp') step(-1)
+    else if (e.code === 'Home' || e.code === 'KeyT') { jump(TOC_S); side = 0 }
     else if (e.code === 'Escape') close('esc')
   })
   renderer.domElement.addEventListener('click', (e) => {
     if (!st.open) return
     const pk = pagePick(e)
     pressed = false; setHover(null)
-    if (pk) { sfx('click'); jump(pk.to) } else turn(e.clientX > innerWidth / 2 ? 1 : -1)
+    if (pk) { sfx('click'); jump(pk.to); side = 0 } else step(e.clientX > innerWidth / 2 ? 1 : -1)
   })
   renderer.domElement.addEventListener('mousemove', (e) => {
     if (!st.open) return
@@ -773,7 +782,7 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
   renderer.domElement.addEventListener('mousedown', (e) => { if (st.open && hover) { pressed = true; setHover(hover) } })
   addEventListener('mouseup', () => { if (pressed) { pressed = false; if (hover) setHover(hover) } })
   let wheelT = 0
-  addEventListener('wheel', (e) => { if (!st.open || performance.now() - wheelT < 350 || Math.abs(e.deltaY) < 4) return; wheelT = performance.now(); turn(e.deltaY > 0 ? 1 : -1) })
+  addEventListener('wheel', (e) => { if (!st.open || performance.now() - wheelT < 350 || Math.abs(e.deltaY) < 4) return; wheelT = performance.now(); step(e.deltaY > 0 ? 1 : -1) })
 
   function render(dt) {
     if (st.t <= 0 && !st.open) return
@@ -793,7 +802,11 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     const tn = Math.tan(THREE.MathUtils.degToRad(15))
     const fitOpen = Math.max((PH + 0.22) / 2 / tn, (2 * PW + 0.28) / 2 / tn / asp)
     const fitClosed = Math.max((PH + 0.1) / 2 / tn / 0.62, (PW + 0.1) / 2 / tn / asp / 0.62)
-    cam.position.set(0, 0, THREE.MathUtils.lerp(fitClosed, fitOpen, opn)); cam.lookAt(0, 0, 0)
+    if (portrait()) {
+      const fitPage = Math.max((PH + 0.1) / 2 / tn, (PW + 0.05) / 2 / tn / asp)
+      sideX += ((side ? PW / 2 : -PW / 2) - sideX) * Math.min(1, dt * 9)
+      cam.position.set(sideX * opn, 0, THREE.MathUtils.lerp(fitClosed, fitPage, opn)); cam.lookAt(sideX * opn, 0, 0)
+    } else { cam.position.set(0, 0, THREE.MathUtils.lerp(fitClosed, fitOpen, opn)); cam.lookAt(0, 0, 0) }
 
     // 頁面
     const f = st.flip
@@ -840,6 +853,6 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     renderer.render(scene, cam)
     renderer.autoClear = ac
   }
-  return { open, close, render, turn, jump, get isOpen() { return st.open }, get visible() { return st.t > 0 }, st, dbg: { scene, cam, leftPage, rightPage, mats, dim, dioramas } }
+  return { open, close, render, turn, jump, step, get isOpen() { return st.open }, get visible() { return st.t > 0 }, st, dbg: { scene, cam, leftPage, rightPage, mats, dim, dioramas } }
 }
 export { makeDiorama as _makeDiorama }   // 測試腳本用（離線拍圖鑑插圖）
