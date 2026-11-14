@@ -1072,7 +1072,7 @@ export function buildYosemite(scene, { lib } = {}) {
     const STEP_BASE_OBC = stepM.onBeforeCompile   // 2026-11-14 岩壁（sandstone_wall_kit）用：只要三向投影＋濕，不要踏板那套青苔
     { const ob = stepM.onBeforeCompile
       // 踏板：邊角、縫裡長青苔（踏面中間被踩的地方少），越靠瀑布越多
-      stepM.onBeforeCompile = (sh) => { ob(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + GLSL_VNOISE + `
+      stepM.onBeforeCompile = (sh) => { ob(sh); sh.fragmentShader = sh.fragmentShader.replace('roughnessFactor *= 1.0 - 0.5 * wet;', 'roughnessFactor *= 1.0 - 0.5 * wet; roughnessFactor = mix(roughnessFactor, 1.0, stMoss);').replace('#include <common>', '#include <common>\nfloat stMoss = 0.0;' + GLSL_VNOISE + `
         vec3 stPerturb(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) {
           vec3 vSigmaX = normalize(dFdx(surf_pos)), vSigmaY = normalize(dFdy(surf_pos)), vN = surf_norm;
           vec3 R1 = cross(vSigmaY, vN), R2 = cross(vN, vSigmaX); float fDet = dot(vSigmaX, R1) * faceDirection;
@@ -1083,15 +1083,22 @@ export function buildYosemite(scene, { lib } = {}) {
         { float nn = vfbm(vTpW.xz * 1.6 + vTpW.y * 0.7), nf = vfbm(vTpW.xz * 6.0 + 2.0);
           float upF = normalize(vTpN).y;
           float nz = vfbm(vTpW.xz * 14.0 + vTpW.y * 3.0);
-          float cov = smoothstep(0.64 - 0.1 * wet, 0.8 - 0.1 * wet, nn + 0.18 * nf + 0.22 * (nz - 0.5)) * mix(1.0, 0.6, smoothstep(0.5, 0.9, upF));
-          cov = max(cov, (1.0 - abs(upF)) * smoothstep(0.6, 0.75, nn) * 0.4);
-          vec3 mossC = mix(vec3(0.05, 0.1, 0.022), vec3(0.16, 0.23, 0.05), nf);
-          diffuseColor.rgb = mix(diffuseColor.rgb, mossC * (0.7 + 0.6 * nz), cov * 0.7);
+          // 2026-11-14 使用者「地面要有青苔」（概念圖：石板縫、踏階邊、靠牆那側長滿青苔，踏面中間被踩的地方少）
+          float ao = clamp(dot(vColor.rgb, vec3(0.333)), 0.0, 1.0);                                   // Blender 烘的 AO：縫、石塊交界暗
+          float crev = smoothstep(0.66, 0.42, ao);                                                     // 縫裡
+          float patchy = smoothstep(0.52 - 0.1 * wet, 0.66 - 0.1 * wet, nn + 0.2 * nf + 0.25 * (nz - 0.5));   // 一塊塊的苔蘚墊
+          float fuzz = smoothstep(0.35, 0.65, nz);                                                     // 苔蘚邊緣毛毛的
+          float cov = max(crev * (0.75 + 0.25 * fuzz), patchy * mix(1.0, 0.4, smoothstep(0.6, 0.95, upF)) * (0.6 + 0.4 * fuzz));
+          cov = max(cov, (1.0 - abs(upF)) * smoothstep(0.45, 0.65, nn) * 0.75);                      // 踏階的立面
+          cov = max(cov, smoothstep(0.25, 0.5, upF) * smoothstep(0.92, 0.7, upF) * (0.55 + 0.45 * fuzz));   // 踏階的邊（倒角那一圈）
+          cov = clamp(cov * (0.75 + 0.45 * wet), 0.0, 1.0);
+          vec3 mossC = mix(vec3(0.035, 0.085, 0.018), vec3(0.12, 0.2, 0.04), nf) * (0.7 + 0.6 * nz);
+          diffuseColor.rgb = mix(diffuseColor.rgb, mossC, cov * 0.9); stMoss = cov;   /* 青苔的地方不反光（以前濕石頭的亮面蓋在青苔上，看起來一層淡綠） */
           /* 側面一條條細的層理（頁岩一片片的斷面） */
           float lam = vfbm(vec2(vTpW.y * 34.0, (vTpW.x + vTpW.z) * 0.7)), lam2 = vfbm(vec2(vTpW.y * 9.0 + 3.0, (vTpW.x - vTpW.z) * 0.4));
           diffuseColor.rgb *= 1.0 - (1.0 - smoothstep(0.3, 0.7, abs(upF))) * (0.34 * smoothstep(0.5, 0.72, lam) + 0.22 * smoothstep(0.45, 0.7, lam2)) * (1.0 - cov); }`) }
     }
-    stepM.customProgramCacheKey = () => 'stepTriplanar3'
+    stepM.customProgramCacheKey = () => 'stepTriplanar7'
     STEP_MAT = stepM
     const C3 = [], TAN = [], SIDE = [], UP = V(0, 1, 0)
     for (let i = 0; i < NP; i++) C3.push(V(st.pts[i][0], st.yy[i], st.pts[i][1]))
@@ -1152,7 +1159,7 @@ export function buildYosemite(scene, { lib } = {}) {
     Promise.all([new GLTFLoader().loadAsync(`models/props/gallery_kit.glb?v=${VER}`), new GLTFLoader().loadAsync(`models/props/sandstone_wall_kit.glb?v=${VER}`).catch(() => null)]).then(([gl, gl2]) => {
       const K = {}
       gl.scene.updateMatrixWorld(true)
-      for (const sc2 of [gl.scene, gl2?.scene]) { if (!sc2) continue; sc2.updateMatrixWorld(true); sc2.traverse((o) => { if (o.isMesh) { const gg = o.geometry.clone(); gg.applyMatrix4(o.matrixWorld); if (gg.attributes.color_1 && (!gg.attributes.color || /^sw_/.test(o.name))) gg.setAttribute('color', gg.attributes.color_1); K[o.name] = gg } }) }   /* sandstone_wall_kit：COLOR_0 是全白，烘好的色在 COLOR_1 */
+      for (const sc2 of [gl.scene, gl2?.scene]) { if (!sc2) continue; sc2.updateMatrixWorld(true); sc2.traverse((o) => { if (o.isMesh) { const gg = o.geometry.clone(); gg.applyMatrix4(o.matrixWorld); if (gg.attributes.color_1) gg.setAttribute('color', gg.attributes.color_1); K[o.name] = gg } }) }   /* 2026-11-14 Blender 匯出的 COLOR_0 是全白，烘好的 AO＋每塊深淺在 COLOR_1（以前石階、石板地一直是平平的白，縫裡沒有暗） */
       const logM = barkMaterial('japanese_cedar_bark', { normal: 1.4, color: [1.5, 1.34, 1.15] }); logM.vertexColors = true
       const wetM = stepM.clone(); wetM.onBeforeCompile = stepM.onBeforeCompile; wetM.customProgramCacheKey = () => 'stepTriplanarWet'; wetM.roughness = 0.3; wetM.envMapIntensity = 1.7; wetM.color.setRGB(0.86, 0.74, 0.58)   /* 參考圖：淋濕的暖褐色砂岩石板，不是冷灰 */
       const L = {}, put = (name, M) => (L[name] ||= []).push(M.clone()), X1 = V(1, 0, 0), q = new THREE.Quaternion(), UPv = V(0, 1, 0)

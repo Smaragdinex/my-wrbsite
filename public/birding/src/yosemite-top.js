@@ -327,6 +327,25 @@ export function buildSummit(scene, kit, lib) {
       for (const [nm, list] of Object.entries(fl)) scatter(g, lib[nm], list, { cast: true })
     }
   }
+  // ---------- 5) 瀑布步道的地面青苔（2026-11-14 使用者「地面要有青苔」；概念圖 docs/GORGE_WALLS_SPEC.txt）：
+  // 靠岩壁那側的牆腳一路青苔墊、偶爾一叢草；踏階外側（欄杆那邊）零星幾塊；越靠瀑布越密。踏面中間不放（被踩的地方）
+  {
+    const T = YOSE.stairs(), F = YOSE.fall
+    let acc = 0
+    for (let i = 1; i < T.pts.length; i++) {
+      const k = T.kind[i]; if (k !== 'gal' && k !== 'open' && k !== 'alc') continue
+      const [ax, az] = T.pts[i - 1], [bx, bz] = T.pts[i], d = Math.hypot(bx - ax, bz - az); acc += d
+      if (acc < 0.55) continue; acc = 0
+      const wetK = Math.exp(-(((bx - F.x) / 24) ** 2)), y = T.yy[i]
+      const tx = (bx - ax) / (d || 1), tz = (bz - az) / (d || 1)
+      const nx = 0, nz = 1   // 岩壁的槽是照 z 切的：牆在同一個 x 往 +z 1.25 m
+      const step = (T.yy[i] - T.yy[i - 1]) / (d || 1) > 0.05, yTop = step ? Math.floor(y / 0.16) * 0.16 + 0.1 : y + 0.02
+      if (rnd() < 0.55 + 0.35 * wetK) { const S = 0.4 + rnd() * 0.4, o = 0.82 + rnd() * 0.15
+        push('mosspad_' + Math.floor(rnd() * 3), { p: V(bx + nx * o, yTop - 0.06, bz + nz * o), q: Q(rnd() * TAU, 0.1), s: V(S * 1.3, S * 0.55, S * 0.8) }) }
+      if (rnd() < 0.18 + 0.2 * wetK) push('grass_' + Math.floor(rnd() * 3), { p: V(bx + nx * 0.95, yTop - 0.02, bz + nz * 0.95), q: Q(rnd() * TAU, 0.15), s: V(1, 1, 1).multiplyScalar(0.5 + rnd() * 0.4) })
+      if (false) { const S = 0.3 + rnd() * 0.35; push('mosspad_' + Math.floor(rnd() * 3), { p: V(bx - nx * 1.05, yTop - 0.05, bz - nz * 1.05), q: Q(rnd() * TAU, 0.1), s: V(S, S * 0.5, S) }) }
+    }
+  }
   for (const [nm, list] of Object.entries(L)) place(nm, list)
   return g
 }
