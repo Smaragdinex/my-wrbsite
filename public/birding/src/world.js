@@ -1,6 +1,7 @@
 // 整個園區（溫室、山、水、植物、鳥、雲）：導覽頁（main.js）和遊戲（game/main.js）共用同一份，兩邊看到的世界一模一樣
 import './fogzone.js'   // 一定要在任何材質編譯前（改霧的 shader）
 import * as THREE from 'three'
+const _camFwd = new THREE.Vector3(), _camTo = new THREE.Vector3()   // 長鏡頭時遠處鳥要不要動（tick 裡用）
 import { lodUpdate, lodRegister, lodInit, lodAutoRegister, tinyCull } from './lod.js'
 import { staticBatch } from './batch.js'
 import { createAlpine , loadConiferKit } from './alpine.js'
@@ -470,10 +471,15 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     // 2026-11-10 玩家回饋「好卡」：每隻鳥的模型 3～4 萬個三角形，以前遠到只剩一個點也照畫（一個畫面幾百萬個三角形）。
     // 在畫面上不到 3 像素高的鳥不畫（照鏡頭焦距算：長鏡頭拉近時遠的鳥照樣畫出來）；藏的是鳥底下那層，不跟驚飛、出現時段的開關打架
     const pxK = renderer.domElement.clientHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
+    // 2026-11-14 使用者「用最遠的鏡頭，鳥不會動，要走近一點才動」：以前 70 m 外一律不更新動作 → 長鏡頭看得到卻是定格的。
+    // 改成：70 m 內照舊；70 m 外，在畫面裡（視野 1.2 倍內）的鳥照「看起來多近」算（距離 ÷ 變焦倍率 < 70 m 就動）——只多算看得到的那幾隻
+    const zoomK = Math.tan(THREE.MathUtils.degToRad(27.5)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), cosV = Math.cos(THREE.MathUtils.degToRad(Math.min(80, camera.fov * 0.6 * Math.max(1, camera.aspect))))
+    camera.getWorldDirection(_camFwd)
     for (const b of birds) {
       const d = b.target.distanceTo(camera.position), show = (b.size ?? 0.3) * pxK / Math.max(d, 0.1) > 3
       if (b.shown !== show) { b.shown = show; for (const m of b.built.birds ?? [b.built]) for (const ch of m.obj.children) ch.visible = show }
-      if (!b.absent && d < 70) b.update(t, dt, phone)
+      const near = d < 70 || (zoomK > 1.05 && show && d / zoomK < 70 && _camTo.subVectors(b.target, camera.position).dot(_camFwd) > d * cosV)
+      if (!b.absent && near) b.update(t, dt, phone)
     }
     water.mist.update(dt, camera)
     time?.tick(t, dt)
