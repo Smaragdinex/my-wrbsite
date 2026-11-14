@@ -1872,6 +1872,22 @@ YOSE.DIKE = null   // 2026-11-14 石橋拆掉，橋頭那道補的岸跟石牆�
     } }
 }
 
+// 2026-11-14 使用者（西岸照片）「黃色那邊判斷是 transparent，應該是湖水顏色」＋「360 檢查這裡」：湖面網格到 lakeR 就停，
+// 但西岸外面一圈地比水面還低 0.3～0.7 m（草、蕨長在水裡）→ 湖面邊緣一道垂直的切面、外面看起來像透明的水蓋在草上。
+// 湖面輪廓外 2 m 內、比水面低的地墊高到水面上 0.12 m（往外慢慢接回原本的地；只墊、不挖；河道和出水口不動）
+{
+  const W = YOSE.lake.water, LK = YOSE.lake, R = ALP_RIVER
+  for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 64 || z > 90) continue
+    for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < 172 || x > 194) continue
+      const dx = x - LK.x, dz = z - LK.z, out = Math.hypot(dx, dz) - YOSE.lakeR(Math.atan2(dz, dx))
+      if (out <= 0 || out > 2.0) continue
+      if (YOSE.inOutlet?.(x, z, 1.5)) continue
+      { const sR = R.sAt(x, z); if (sR < 20 && R.dist(x, z) < R.halfAt(sR) + 1.0) continue }
+      const q = j * AG.nx + i, want = W + 0.12 * smoothstep(0, 0.6, out)
+      if (aHeight[q] < want) aHeight[q] = want
+    } }
+}
+
 // 2026-11-14 使用者（出湖那段河）「這裡土可挖掉，是不是太薄」：河道中間 1.7～3.7 m 深，但兩邊各一條淺棚，水只有幾公分 → 看起來是一層薄水蓋在土上。
 // 出湖之後 12 m 內，水面寬度裡的河床一律挖到水面下 0.8 m 以上，離水邊 0.5 m 內斜上去接岸（只挖、不墊）
 {

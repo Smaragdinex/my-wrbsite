@@ -974,12 +974,15 @@ export function buildYosemite(scene, { lib } = {}) {
           g += away * 6.0 * cos(dI * 6.0 + nC * 9.0 - t * 7.0) * 0.22 * lkImp * (0.3 + nA);   // 往外推的波，相位被雜訊打亂（不要一圈圈同心圓）        // 落水往外推的波
           lkGrad = g * A;
           // 水色：照水深（淺處透、偏綠褐看得到底；深處暗藍綠），翻騰的水帶一點氣泡的青白
-          vec3 shallowC = vec3(0.13, 0.21, 0.16), deepC = vec3(0.016, 0.06, 0.075);
+          vec3 shallowC = vec3(0.07, 0.2, 0.19), deepC = vec3(0.016, 0.06, 0.075);   // 2026-11-14 淺水偏湖水的藍綠（以前偏綠褐，跟沙底混成乳白）
           diffuseColor.rgb = mix(shallowC, deepC, smoothstep(0.08, 2.6, lkDep));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.78, 0.78), core * 0.35 * (1.0 - holes));
-          diffuseColor.a = mix(0.52, 0.94, smoothstep(0.05, 1.9, lkDep)) * smoothstep(0.0, 0.05, lkDep);   // 2026-11-14 使用者（淺水顏色錯誤）：0.3 太透，淺色沙底整片透出來變成乳白色 → 0.52
+          diffuseColor.a = mix(0.7, 0.95, smoothstep(0.05, 1.6, lkDep)) * smoothstep(0.0, 0.05, lkDep);   // 2026-11-14 淺水再不透一點（0.52→0.7）：看起來是湖水，不是一片透明   // 2026-11-14 使用者（淺水顏色錯誤）：0.3 太透，淺色沙底整片透出來變成乳白色 → 0.52
           // 2026-11-14 使用者（東湖照片）「這裡水不見」：這個材質東湖、凹槽也在用，淡出只能做在出水口那一側（西南），不然整片東湖被淡成透明
-          if (vRW.x < 194.0 && vRW.z < 86.5) { float aL = atan(vRW.z - uLK.y, vRW.x - uLK.x), tL = (aL + 3.14159265) / 6.2831853 * 64.0; int iL = int(floor(tL)); float fL = tL - floor(tL);
+          // 2026-11-14 使用者（西岸照片）「黃色那邊判斷是 transparent，應該是湖水顏色」：以前整個西南象限的湖緣都淡掉，西岸底下沒有河面 → 透出沙底、邊緣一道垂直的切面。
+          // 改成只有出水口（湖接河那段 190.5,79.3 → 184.6,75.4）附近 4 m 內才淡
+          vec2 oA = vec2(190.5, 79.3), oB = vec2(184.6, 75.4), oD = oB - oA; float oT = clamp(dot(vRW.xz - oA, oD) / dot(oD, oD), -0.2, 1.4);
+          if (length(vRW.xz - oA - oD * oT) < 4.0) { float aL = atan(vRW.z - uLK.y, vRW.x - uLK.x), tL = (aL + 3.14159265) / 6.2831853 * 64.0; int iL = int(floor(tL)); float fL = tL - floor(tL);
             float rL = mix(uLakeR[((iL % 64) + 64) % 64], uLakeR[(((iL + 1) % 64) + 64) % 64], fL);
             diffuseColor.a *= smoothstep(0.0, 1.2, rL - length(vRW.xz - uLK)); }   // 2026-11-14 湖面外緣 1.2 m 淡掉（河面在這段底下是滿的）   // 2026-11-14 湖面外緣 1.2 m 淡掉，跟河面交叉淡化
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.94, 0.95), lkFoam);
@@ -1674,6 +1677,30 @@ export function buildYosemite(scene, { lib } = {}) {
         if (prev && Math.hypot(prev[0] - x, prev[2] - z) < 2.2) CHAIN.segs.push([V(prev[0], prev[1] - 1.1, prev[2]), V(x, top - 1.1, z)])   // 2026-11-14 使用者「都改鐵鍊」：橫桿換成垂鍊（鍊子掛在柱頂下 0.18 m）
         prev = [x, top, z]
         addCollider(x, z, 0.12, top + 0.1)
+      }
+      // 2026-11-14 使用者（岩拱旁邊的照片）「這裡加上欄杆，不然我會掉下去」：以前只有湖那側有欄杆，另一側當成岩壁；
+      // 但岩拱腳旁邊、岩塊之間有開口，外面是落差 → 另一側也照同一條偏移線走，路肩外 1 m 的地面比路面低 0.9 m 以上的地方才立柱掛鍊
+      {
+        const off2 = RP.map((q, i) => {
+          const a = segN[Math.max(0, i - 1)], b = segN[Math.min(segN.length - 1, i)]
+          let nx = a[0] + b[0], nz = a[1] + b[1]; const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L
+          const k = 1.25 / Math.max(0.55, nx * b[0] + nz * b[1])
+          return [q[0] - nx * sgn * k, q[1] - nz * sgn * k, -nx * sgn, -nz * sgn]
+        })
+        const OS2 = [0]; for (let i = 1; i < off2.length; i++) OS2.push(OS2[i - 1] + Math.hypot(off2[i][0] - off2[i - 1][0], off2[i][1] - off2[i - 1][1]))
+        let pv = null
+        for (let d = 0; d <= OS2[OS2.length - 1] + 1e-6; d += 1.3) {
+          let i = 1; while (i < off2.length - 1 && OS2[i] < d) i++
+          const t = (d - OS2[i - 1]) / Math.max(1e-6, OS2[i] - OS2[i - 1]), A = off2[i - 1], B = off2[i]
+          const x = A[0] + (B[0] - A[0]) * t, z = A[1] + (B[1] - A[1]) * t, nx = A[2] + (B[2] - A[2]) * t, nz = A[3] + (B[3] - A[3]) * t
+          const py = pathY(x, z), drop = py - Math.min(alpineHeight(x + nx * 1.0, z + nz * 1.0), alpineHeight(x + nx * 1.8, z + nz * 1.8))
+          if (drop < 0.9 || onStairs(x, z)) { pv = null; continue }
+          const top = py + 1.1, gy = Math.min(alpineHeight(x, z), top - 0.75), len = top - gy + 0.06
+          parts2.push(post.clone().scale(1, len, 1).translate(x, top - len / 2, z))
+          if (pv && Math.hypot(pv[0] - x, pv[2] - z) < 2.2) CHAIN.segs.push([V(pv[0], pv[1] - 1.1, pv[2]), V(x, top - 1.1, z)])
+          pv = [x, top, z]
+          addCollider(x, z, 0.12, top + 0.1)
+        }
       }
       const rm = new THREE.Mesh(mergeGeometries(parts2.map((q2) => q2.index ? q2.toNonIndexed() : q2)), woodM); rm.castShadow = true; rm.receiveShadow = true; g.add(rm)
     }

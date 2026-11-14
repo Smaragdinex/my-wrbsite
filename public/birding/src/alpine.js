@@ -1844,6 +1844,7 @@ function buildInterior(lib, avoid = []) {
       const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
       if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.95 || eastZone(x, z)) continue
+      if (YOSE.inLake?.(x, z, 0.8) || YOSE.inRecessWater?.(x, z)) continue   // 2026-11-14 使用者（西岸照片，紅圈）：瀑布湖裡長出蕨類 → 湖面內、岸邊 0.8 m 不長
       const sd = alpineStreamDist(x, z), dp = Math.hypot(x - ALP_POND.x, z - ALP_POND.z)
       if (!((sd > 1.3 && sd < 4.5) || (dp > ALP_POND.r + 0.8 && dp < ALP_POND.r + 3.5)) || alpineTrailDist(x, z) < 1.6) continue
       if (dp < ALP_POND.r + 0.5 && alpineHeight(x, z) < ALP_POND.water + 0.15) continue   // 2026-11-10 河口挖深之後：湖裡不長蕨
