@@ -91,6 +91,8 @@ function wrap(ctx, text, w) {
 // 2026-11-11 使用者／玩家回報：圖鑑太糊 → 每頁的畫布照螢幕放大（一頁大約佔滿螢幕高：CH 對應 innerHeight×DPR），最少 1.4 倍、最多 2 倍
 const K_SCREEN = Math.min(2, Math.max(1.4, (innerHeight * Math.min(devicePixelRatio || 1, 2) * 0.95) / CH))
 let MAX_ANISO = 8
+// 2026-11-14 使用者「單獨的圖鑑也做網站，直接看全部鳥，只有書打開」：guide.html 用 catalog 模式——全部解鎖、不顯示拍照成績和印章、書不能闔上
+let CATALOG = false
 export function guideAniso(r) { MAX_ANISO = r.capabilities.getMaxAnisotropy?.() || 8 }
 function canvasTex(draw, k = 1) {
   k = Math.max(k, K_SCREEN)
@@ -163,7 +165,7 @@ function birdLeft(b, i, rec, unread) {
     let y = 120
     ctx.fillStyle = MUTED; ctx.font = `26px ${SERIF}`; ctx.fillText(`No. ${String(i + 1).padStart(2, '0')}`, X, y)
     if (unread) newTag(ctx, X + ctx.measureText(`No. ${String(i + 1).padStart(2, '0')}`).width + 16, y, 24)
-    if (rec) stamp(ctx, tr('已記錄'), CW - 190, 118, '#a8442f')
+    if (rec && !CATALOG) stamp(ctx, tr('已記錄'), CW - 190, 118, '#a8442f')
     y += 84
     ctx.fillStyle = INK; ctx.font = `bold 72px ${SERIF}`; ctx.fillText(rec ? b.name : '？？？', X, y, W)   // 沒拍到：名字跟目錄一樣先藏起來，只給在哪裡
     if (b.nick && rec && ctx.measureText(b.name).width < W * 0.6) { const w = ctx.measureText(b.name).width; ctx.font = `34px ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText(`（${b.nick}）`, X + w + 8, y - 6) }
@@ -177,7 +179,7 @@ function birdLeft(b, i, rec, unread) {
     row(tr('棲地'), b.where)
     row(tr('出沒時間'), tr(activityLabel(b.id)))   // 沒拍到也給：晚上才出來的鳥要讓玩家知道晚上來找
     row(tr('稀有度'), rec ? tr(RARITY[b.id] ?? '普通') : '？')
-    row(tr('收購底價'), rec ? `$${(VALUE[b.id] ?? 50) * 3}` : '？')
+    if (!CATALOG) row(tr('收購底價'), rec ? `$${(VALUE[b.id] ?? 50) * 3}` : '？')
     y += 18
     if (!rec) {
       ctx.font = `30px ${SANS}`; ctx.fillStyle = INK
@@ -224,7 +226,8 @@ function birdRight(b, i, rec, info) {
     ctx.textAlign = 'center'
     ctx.fillStyle = INK; ctx.font = `38px ${SERIF}`; ctx.fillText(`${tr('圖 {n}', { n: i + 1 })}　${rec ? b.name : '？？？'}`, CW / 2, y, CW - 120)
     y += 46; ctx.fillStyle = MUTED; ctx.font = `24px ${SANS}`
-    ctx.fillText(rec ? tr('拍過 {n} 張・最高 {best} 分', { n: info.n, best: info.best }) : tr('尚未記錄'), CW / 2, y)
+    if (CATALOG) { ctx.font = `italic 26px Georgia, ${SERIF}`; ctx.fillText(b.sci, CW / 2, y) }
+    else ctx.fillText(rec ? tr('拍過 {n} 張・最高 {best} 分', { n: info.n, best: info.best }) : tr('尚未記錄'), CW / 2, y)
     ctx.textAlign = 'left'
     pageNo(ctx, birdPageNo(i) + 1, 'R')
   })
@@ -308,6 +311,29 @@ function titlePage() {
 }
 // 前言（第一個跨頁的右頁）：一段簡介、觀察進度、使用方法
 function prefacePage(nRec, nNew) {
+  if (CATALOG) return canvasTex((ctx) => {
+    paper(ctx, 'R')
+    runningHead(ctx, 'PREFACE', 'R')
+    const X = 96, W = CW - 2 * X
+    ctx.fillStyle = INK; ctx.font = `600 46px ${SERIF}`; ctx.fillText(tr('前言'), X, 176)
+    let y = 252
+    ctx.font = `28px ${SERIF}`
+    for (const l of wrap(ctx, tr('這本圖鑑收錄《Birdwatch》園區裡可以遇見的 {m} 種野鳥：每一種都有會動的插圖、在園區的棲地、出沒時間，還有介紹和小知識。', { m: BIRDS.length }), W)) { ctx.fillText(l, X, y); y += 46 }
+    y += 60
+    spaced(ctx, tr('使用方法'), X, y, 18, ACCENT, 'left', 0.25); y += 22
+    rule(ctx, X, X + W, y, 0.25, 1); y += 56
+    ctx.font = `26px ${SANS}`
+    for (const t of [tr('← →、A D、滾輪或點書頁翻頁'), tr('點目錄裡的鳥，直接翻到那一頁'), tr('Home 或 T 回目錄')]) {
+      ctx.fillStyle = ACCENT; ctx.beginPath(); ctx.arc(X + 6, y - 9, 4, 0, 7); ctx.fill()
+      ctx.fillStyle = INK; ctx.fillText(t, X + 26, y, W - 26); y += 50
+    }
+    y += 50
+    spaced(ctx, tr('到園區找牠們'), X, y, 18, ACCENT, 'left', 0.25); y += 22
+    rule(ctx, X, X + W, y, 0.25, 1); y += 56
+    ctx.font = `26px ${SANS}`; ctx.fillStyle = INK
+    for (const l of wrap(ctx, tr('帶著相機走進公園，拍到的鳥會記進你自己的圖鑑：xarts.games/birding/game.html'), W)) { ctx.fillText(l, X, y); y += 44 }
+    ctx.textAlign = 'right'; ctx.font = `italic 22px Georgia, ${SERIF}`; ctx.fillStyle = MUTED; ctx.fillText('— X-ARTS Field Notes', X + W, CH - 90); ctx.textAlign = 'left'
+  })
   return canvasTex((ctx) => {
     paper(ctx, 'R')
     runningHead(ctx, 'PREFACE', 'R')
@@ -523,7 +549,8 @@ function leather(title) {
   return t
 }
 
-export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, sfx = () => {} }) {
+export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, sfx = () => {}, catalog = false }) {
+  CATALOG = catalog
   const scene = new THREE.Scene()
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50)
   scene.add(cam)
@@ -579,6 +606,8 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
   const TOC_S = 1
   let recs = [], infos = [], unread = []
   const mats = new Map()   // key 'L3' / 'R3' / 'B3'（背面用的左頁）→ 材質
+  // 扉頁的水彩圖比書晚載完（圖鑑網頁一打開就翻開）：載完把扉頁重畫，不然會停在舊的線稿藍鵲
+  FRONT_IMG.addEventListener('load', () => { for (const k of ['L0', 'B0']) { const m = mats.get(k); if (m) { if (k === 'L0') m.uniforms.map.value.dispose(); mats.delete(k) } } })
   const dioramas = new Map()
   function refresh() {
     const r = getRecords()
@@ -668,7 +697,7 @@ export function createGuide({ renderer, getRecords, onClose, onRead = () => {}, 
     warmAround(st.spread); markRead(st.spread)
   }
   function close(why) {
-    if (!st.open) return
+    if (!st.open || CATALOG) return
     setHover(null)
     st.open = false; st.target = 0; hud.hidden = true; st.flip = null
     onClose?.(why)
