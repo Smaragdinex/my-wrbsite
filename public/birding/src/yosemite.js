@@ -1135,7 +1135,18 @@ export function buildYosemite(scene, { lib } = {}) {
         acc += st.S[i] - st.S[i - 1]; if (acc < 1.35) continue
         acc = 0
         const sd = SIDE[i].z < 0 ? 1 : -1
-        const p = C3[i].clone().addScaledVector(SIDE[i], sd * 1.2)
+        let p = C3[i].clone().addScaledVector(SIDE[i], sd * 1.2)
+        // 2026-11-14 使用者（截圖圈起來）「欄杆邏輯不對，不用轉過去，不然正常無法走」：折返平台是半圈，轉到一半路的方向變成沿 z，
+        // 「SIDE.z 的正負」選邊在那裡翻面 → 鐵鍊從路中間橫過去擋住。半圈上（和進出半圈的那兩點）改成「離半圈中心往外」1.2 m
+        { let a = i, b = i; while (a > 0 && st.kind[a - 1] === 'alc') a--; while (b < NP - 1 && st.kind[b + 1] === 'alc') b++
+          const near = (j) => j >= 0 && j < NP && st.kind[j] === 'alc'
+          if (near(i) || near(i - 1) || near(i + 1)) {
+            let j0 = i; if (!near(j0)) j0 = near(i + 1) ? i + 1 : i - 1
+            let s0 = j0, s1 = j0; while (s0 > 0 && st.kind[s0 - 1] === 'alc') s0--; while (s1 < NP - 1 && st.kind[s1 + 1] === 'alc') s1++
+            const c0 = C3[Math.max(0, s0 - 1)], c1 = C3[Math.min(NP - 1, s1 + 1)], cx = (c0.x + c1.x) / 2, cz = (c0.z + c1.z) / 2
+            const ox = C3[i].x - cx, oz = C3[i].z - cz, ol = Math.hypot(ox, oz) || 1
+            p = V(C3[i].x + ox / ol * 1.2, C3[i].y, C3[i].z + oz / ol * 1.2)
+          } }
         // 2026-11-12 ChatGPT：整條黑鐵管欄杆像都市樓梯 → 折返平台前後才用鐵管欄杆，一般路段是鑿進岩石的鐵樁＋垂鍊（Angels Landing），賞鳥台外緣是矮石牆
         if ((st.bays ?? []).some((b) => Math.abs(C3[i].x - b.x) < b.half + 0.2 && Math.abs(C3[i].y - b.y) < 0.8)) { prev = null; continue }
         // 2026-11-13（龍岩窟參考圖）：兩段岩廊不用鐵鍊，改成矮石緣上的原木欄杆（下面 WOOD 另外蓋）
