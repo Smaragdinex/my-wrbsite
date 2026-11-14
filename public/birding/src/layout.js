@@ -1867,7 +1867,7 @@ YOSE.DIKE = null   // 2026-11-14 石橋拆掉，橋頭那道補的岸跟石牆�
     for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < 174 || x > 193) continue
       const dx = x - LK.x, dz = z - LK.z, dShore = YOSE.lakeR(Math.atan2(dz, dx)) - Math.hypot(dx, dz)
       if (dShore <= 0) continue
-      const q = j * AG.nx + i, bed = W - Math.min(2.6, 0.3 + 0.7 * dShore)
+      const q = j * AG.nx + i, bed = W - Math.min(2.6, 0.06 + 0.75 * dShore)   // 2026-11-14 使用者「沒補完」：岸邊以前一下就 0.3 m 深、外面又墊高 → 一道 0.4 m 的台階；改成岸邊 6 cm 慢慢往下
       if (aHeight[q] > bed) aHeight[q] = bed
     } }
 }

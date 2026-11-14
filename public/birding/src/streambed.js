@@ -82,11 +82,20 @@ export async function buildStreambed(scene, lib = null) {
       const a = rnd() * 6.283, k = 0.7 + rnd() * 0.35, x = cx + Math.cos(a) * rx * k, z = cz + Math.sin(a) * rz * k, dep = water - alpineHeight(x, z)
       if (dep < 0.08 || dep > 0.5 || alpineTrailDist(x, z) < 2.5 || boulders.some((b) => Math.hypot(b.x - x, b.z - z) < 2.5)) continue
       if (YOSE.inOutlet?.(x, z, 0.6)) continue   // 驗收第 11 條：湖接溪的水道裡（挖下去之後泡在水裡）不放卵石、溪岸植物
-      boulders.push({ x, z, y: water, s: 0.8 + rnd() * 0.8, yaw: rnd() * 6.283, v: Math.floor(rnd() * 3) }); got++
+      boulders.push({ x, z, y: water, wl: water, s: 0.8 + rnd() * 0.8, yaw: rnd() * 6.283, v: Math.floor(rnd() * 3) }); got++
     }
   }
   shore(ALP_POND.x, ALP_POND.z, ALP_POND.r, ALP_POND.r, ALP_POND.water, 4200, 260, 9)
   shore(YOSE.lake.x, YOSE.lake.z, YOSE.lake.rx, YOSE.lake.rz, YOSE.lake.water, 2400, 140, 6)
+  // 2026-11-14 使用者（湖岸照片）「下面要加點水草」：照真正的湖岸輪廓（YOSE.lakeR）往裡 0.4～3 m，水深 0.12～0.9 m 的地方一叢叢水草
+  { const LK = YOSE.lake, W = LK.water, rnd = mulberry32(20261114)   // 自己的亂數：不能吃掉後面石堰挑石頭用的亂數（不然石堰的石頭會換）
+    for (let i = 0, got = 0; i < 9000 && got < 320; i++) {
+      const th = rnd() * 6.283, r = YOSE.lakeR(th) - (0.4 + 2.6 * rnd() * rnd()), x = LK.x + Math.cos(th) * r, z = LK.z + Math.sin(th) * r, h = alpineHeight(x, z), dep = W - h
+      if (dep < 0.12 || dep > 0.9 || YOSE.inOutlet?.(x, z, 0.6) || alpineTrailDist(x, z) < 1.0 || Math.hypot(x - YOSE.fall.x, z - YOSE.fall.z) < 7) continue
+      if (fbm2(x * 0.4 + 9, z * 0.4, 2) < 0.38) continue   // 一叢一叢、不是平均灑
+      for (let c = 0, nc = 1 + Math.floor(rnd() * 3); c < nc; c++) { const sc = 0.7 + rnd() * 0.8, xx = x + (rnd() - 0.5) * 0.6, zz = z + (rnd() - 0.5) * 0.6, hh = alpineHeight(xx, zz); put('weed_' + Math.floor(rnd() * 3), xx, hh + 0.01, zz, sc, sc * Math.min(1.3, (W - hh) / 0.35), sc, rnd() * 6.283, new THREE.Color().setScalar(0.75 + 0.45 * rnd())) }
+      got++
+    } }
   // 2026-11-13 使用者（瀑布後面的水潭照片）「Add some seaweed and 鵝卵石」：凹槽變湖之後湖底是一片光禿的平底 → 整片鋪卵石（清水看得到底）、水草一叢叢，兩三顆苔石
   { const C = YOSE.cave, W = YOSE.lake.water, inR = (x, z) => YOSE.inRecessWater(x, z) && W - alpineHeight(x, z) > 0.04
     const rx = () => C.x0 + 1.5 + rnd() * (C.x1 - C.x0 - 2.5)
@@ -94,7 +103,7 @@ export async function buildStreambed(scene, lib = null) {
     for (let i = 0, got = 0; i < 30000 && got < 150; i++) { const x = rx(), z = YOSE.base(x) - 3 + rnd() * (YOSE.recPath(x) + 1.4), h = alpineHeight(x, z), dep = W - h; if (!inR(x, z) || dep < 0.2 || dep > 1.1) continue; if (fbm2(x * 0.35 - 7, z * 0.35 + 2, 2) < 0.45) continue
       const sc = 0.8 + rnd() * 0.9; put('weed_' + Math.floor(rnd() * 3), x + (rnd() - 0.5) * 0.3, h + 0.01, z, sc, sc * Math.min(1.5, dep / 0.35), sc, rnd() * 6.283, new THREE.Color().setScalar(0.75 + 0.45 * rnd())); got++ }
     for (let i = 0, got = 0; i < 4000 && got < 3; i++) { const x = rx(), z = YOSE.base(x) - 2 + rnd() * (YOSE.recPath(x) - 1), dep = W - alpineHeight(x, z); if (!inR(x, z) || dep < 0.3 || Math.abs(x - YOSE.fall.x) < 5 || boulders.some((b) => Math.hypot(b.x - x, b.z - z) < 3)) continue
-      boulders.push({ x, z, y: W, s: 0.9 + rnd() * 0.6, yaw: rnd() * 6.283, v: Math.floor(rnd() * 3) }); got++ } }
+      boulders.push({ x, z, y: W, wl: W, s: 0.9 + rnd() * 0.6, yaw: rnd() * 6.283, v: Math.floor(rnd() * 3) }); got++ } }
   // 2026-11-14 使用者（湖口照片）「紅色那顆往黃色圈去蓋住 stream」：第 3 顆（鏽色斑點那顆）從 -1.45 往中間挪到 -0.65，補掉它和下一顆中間露出湖／溪接縫的空隙
   // 2026-11-14 使用者（湖口照片）「還是你用石頭擋住，不然看得出縫隙」：湖水流進河的地方排一道石堰——橫跨河口 7 顆大苔石，
   // 頂面露出水面 0.15～0.45 m、中間留兩三道縫讓水流出去；湖面跟河面交接的那條線、底下挖深的暗洞都藏在石堰後面
@@ -102,7 +111,7 @@ export async function buildStreambed(scene, lib = null) {
     let wi = 0
     for (const [o, sz] of [[-3.9, 1.9], [-2.7, 1.5], [-0.65, 1.3], [-0.2, 1.05], [1.15, 1.3], [2.45, 1.55], [3.7, 1.95]]) {
       const x = C[0] + px * o + (rw() - 0.5) * 0.35, z = C[1] + pz * o + (rw() - 0.5) * 0.5, s2 = sz * (0.9 + rw() * 0.25)
-      boulders.push({ x, z, y: W - 0.5 * s2 + 0.15 + rw() * 0.3, s: s2, yaw: rw() * 6.283, v: Math.floor(rw() * 3), weir: true, wi: wi++ })
+      boulders.push({ x, z, y: W - 0.5 * s2 + 0.15 + rw() * 0.3, wl: W, s: s2, yaw: rw() * 6.283, v: Math.floor(rw() * 3), weir: true, wi: wi++ })
     } }
   for (const b of boulders) if (!b.weir) b.y = Math.min(b.y, alpineHeight(b.x, b.z) + 0.42 * b.s)   // 2026-11-14 使用者（石頭浮在水上）：河床、湖底挖深之後照水面放的苔石底下是空的 → 最多只能比水底高 0.42×大小（石頭坐在水底）
   // 2026-11-14 使用者（湖口照片，紅圈）「應該放上黃色圈那種，不是 pebble stone」＋「溪、湖、河都要」：
@@ -182,6 +191,30 @@ export async function buildStreambed(scene, lib = null) {
     // 石頭在水線的截面半徑約 0.5 × 尺寸；有水流的照下游方向擺（高度的縮放當旗標：1＝有水流、2＝湖裡）
     fb.forEach((b, k) => fm.setMatrixAt(k, m4.compose(new THREE.Vector3(b.x, b.y + 0.012, b.z), q.setFromEuler(e.set(0, b.flow ?? b.yaw, 0)), new THREE.Vector3(b.s * 1.15, b.flow != null ? 1 : 2, b.s * 1.15))))
     fm.renderOrder = 6; fm.frustumCulled = false; fm.name = 'bed_foam'; G.add(fm)
+    // 2026-11-14 使用者（湖岸照片）「水波紋到石頭」：湖裡（沒有水流）的石頭，水線上一圈一圈慢慢往外擴的細波紋（會動、越外越淡），石頭邊一道若有若無的亮線
+    const lb = boulders.filter((b) => b.flow == null && b.wl != null)
+    if (lb.length) {
+      const ripM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uT: timeU },
+        vertexShader: `varying vec2 vP; varying float vPh; void main(){ vP = position.xz; vPh = instanceMatrix[3].x * 2.3 + instanceMatrix[3].z * 1.3; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position.x, 0.0, position.z, 1.0); }`,
+        fragmentShader: `uniform float uT; varying vec2 vP; varying float vPh;
+          float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
+          void main(){ float r = length(vP), a = atan(vP.y, vP.x);
+            float wob = (vn(vec2(a * 2.5 + vPh, uT * 0.3)) - 0.5) * 0.06;            // 圈不是正圓
+            float al = 0.0;
+            for (int k = 0; k < 3; k++) { float ph = fract(uT * 0.22 + float(k) / 3.0 + vPh * 0.1), rr = 0.5 + ph * 0.95 + wob;
+              al += smoothstep(0.035, 0.0, abs(r - rr)) * (1.0 - ph) * (1.0 - ph) * 0.55; }
+            al += smoothstep(0.06, 0.0, abs(r - 0.5 - wob * 0.5)) * (0.25 + 0.2 * vn(vec2(a * 6.0, uT * 0.8 + vPh)));   // 貼著石頭的那一圈
+            al *= step(0.46, r) * smoothstep(1.55, 1.2, r);
+            if (al < 0.02) discard;
+            gl_FragColor = vec4(vec3(0.9, 0.96, 0.97), al * 0.55);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+          }` })
+      const rp = new THREE.InstancedMesh(new THREE.PlaneGeometry(3.2, 3.2, 1, 1).rotateX(-Math.PI / 2), ripM, lb.length)
+      lb.forEach((b, k) => rp.setMatrixAt(k, m4.compose(new THREE.Vector3(b.x, b.wl + 0.015, b.z), q.setFromEuler(e.set(0, b.yaw, 0)), new THREE.Vector3(b.s * 1.1, 1, b.s * 1.1))))
+      rp.renderOrder = 6; rp.frustumCulled = false; rp.name = 'bed_ripple'; G.add(rp)
+    }
   }
   scene.add(G)
   return { counts: Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.length])), boulders: boulders.length }
