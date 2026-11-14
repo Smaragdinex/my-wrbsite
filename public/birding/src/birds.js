@@ -1736,8 +1736,9 @@ function yuhina(env) {
 }
 // 2026-11-08 山區猛禽：鳳頭蒼鷹（中海拔林緣的大樹上）、褐林鴞（溪谷旁的森林裡）。ChatGPT 參考圖 → Tripo → rig-distance（點位在 bird-points.json）
 // 2026-11-12 大冠鷲（Tripo）：瀑布秘境步道最高那段廊道外，岩壁枯樹的橫枝上（perch 'snag'）
+// 2026-11-14 第二版模型（舊的頭轉 90°、headYaw 補不好）：ChatGPT 側面圖 → Tripo；腳底在 0.09（尾巴比腳低）
 function serpenteagle(env) {
-  return perchRigged(outer(env, -1.1), { name: 'serpenteagle-rig', k: 0.62, ...TRIPO, headYaw: -Math.PI / 2, foot: 0.01, drop: 0.05, beat: 4, grip: 1.2 })
+  return perchRigged(outer(env, -1.1), { name: 'serpenteagle-rig', k: 0.62, ...TRIPO, foot: 0.09, drop: 0.05, beat: 4, grip: 1.2 })
 }
 function goshawk(env) {
   return perchRigged(outer(env, -1.1), { name: 'goshawk-rig', k: 0.42, ...TRIPO, foot: 0.045, drop: 0.05, beat: 5, grip: 1.2 })
