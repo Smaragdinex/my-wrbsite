@@ -410,7 +410,10 @@ export const YOSE = (() => {
   Y.inRecessWater = (x, z, pad = 0) => x > Y.cave.x0 + 1.5 - pad && x < Y.cave.x1 - 1 + pad && Y.caveD(x) > 2.4 && z > Y.base(x) - 3 && z < Y.base(x) + Y.recPath(x) - 1.6 + pad
   // 2026-11-13 驗收第 9 條（使用者：「從這裡往下一直到瀑布，整片改成湖，樹全部移除」）：瀑布湖往東接一片湖，沿著東側岩壁腳（x 205～247），
   // 南岸在步道下面的坡（zS），北邊到岩壁腳；岩壁腳 1 m 內不挖（岩壁網格的底照那裡的地形）
-  Y.lakeE = { x0: 205, x1: 247, zS: (x) => 73 + 0.2 * (x - 205) }
+  // 2026-11-15 使用者「瀑布下那個湖、不是靠山壁那邊太方」：南岸原本是一條直線 → 加幾個灣、岬（三層正弦，灣最多往步道凹 2.5 m、岬往湖裡伸 4 m，步道都在 10 m 外），
+  // 西端接瀑布湖那段不動；東端原本是 x 247 一刀切 → 岸線往岩壁彎回去，湖尾收成圓的
+  Y.lakeE = { x0: 205, x1: 247, zS: (x) => { const u = x - 205, w = smoothstep(205, 212, x)
+    return 73 + 0.2 * u + w * (1.7 * Math.sin(0.27 * u + 0.4) + 1.0 * Math.sin(0.61 * u + 2.1) + 0.5 * Math.sin(1.37 * u + 0.7)) + 17 * Math.max(0, (x - 232) / 16) ** 2 } }
   // 驗收第 11 條：湖西岸接到溪的水道（layout.js 檔尾挖的）
   // 2026-11-13 凹槽入口那座岩拱的淨空區：樹、大植被不要長在拱上面或拱洞裡（俯視整座拱被一棵紅杉的樹冠蓋掉）
   Y.inArch = (x, z, pad = 0) => Math.hypot(x - 185.0, z - 90.3) < 5.5 + pad
@@ -1790,19 +1793,27 @@ for (const w of ALP_WALKS) {
 // 2026-11-13 驗收第 9 條：東邊那片湖挖下去——湖底（水面下 0.4～1.8 m，離南岸越遠越深）；南岸往步道那邊 9 m 內削成往下的岸坡；岩壁腳 1 m、崖壁步道 3 m 內不動
 {
   const W = YOSE.lake.water, E = YOSE.lakeE, st = YOSE.stairs()
-  const nearStairs = (x, z) => { for (let i = 0; i < st.pts.length; i++) if (st.yy[i] < 36 && Math.abs(st.pts[i][0] - x) < 3 && Math.abs(st.pts[i][1] - z) < 3) return true; return false }
+  // 2026-11-15 使用者「靠山壁那邊太方」：以前崖壁步道 3 m 見方內整格不挖 → 步道底下留一塊方方正正、一階一階的大土台。
+  // 改成照離步道中線的距離：路面正下方 0.8 m 保留，往外每 1 m 降 3 m（這段步道是鑿在岩壁裡的，不用土撐；以前留的土台在湖裡像一塊方磚）
+  const stairFloor = (x, z) => { let best = 1e9, y = 0
+    for (let i = 0; i + 1 < st.pts.length; i++) { if (st.yy[i] > 36) continue
+      const [ax, az] = st.pts[i], [bx, bz] = st.pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2))
+      const d = Math.hypot(x - ax - dx * t, z - az - dz * t); if (d < best) { best = d; y = st.yy[i] + (st.yy[i + 1] - st.yy[i]) * t } }
+    return best > 14 ? -1e9 : y - 0.35 - Math.max(0, best - 0.8) * 3 }
   for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 60 || z > 110) continue
     for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < E.x0 - 6 || x > E.x1 + 6) continue
       const q = j * AG.nx + i, b = YOSE.base(x), zs = E.zS(x)
-      if (z > b - 1.0 || aTrail[q] < 3.5 || nearStairs(x, z)) continue
+      if (z > b - 1.0) continue
+      const sf = stairFloor(x, z), h0 = aHeight[q]
+      if (aTrail[q] < 3.5 && sf < -1e8) continue   // 一般步道旁不挖；崖壁步道（sf）照上面的斜坡
       const ex = smoothstep(E.x0 - 6, E.x0, x) * smoothstep(E.x1 + 6, E.x1, x)   // 東西兩端慢慢收
       if (ex <= 0) continue
       if (z >= zs) {
-        const bed = lerp(W + 0.25, W - 1.8, smoothstep(zs, zs + 6, z)) , t = lerp(aHeight[q], bed, ex)
-        if (t < aHeight[q]) aHeight[q] = t
+        const bed = lerp(W + 0.25, W - 1.8, smoothstep(zs, zs + 6, z)) , t = Math.max(lerp(aHeight[q], bed, ex), sf)
+        if (t < aHeight[q]) aHeight[q] = Math.min(h0, t)
       } else if (z > zs - 9) {
-        const bank = lerp(W + 0.25, aHeight[q], smoothstep(zs, zs - 9, z)), t = lerp(aHeight[q], bank, ex)
-        if (t < aHeight[q]) aHeight[q] = t
+        const bank = lerp(W + 0.25, aHeight[q], smoothstep(zs, zs - 9, z)), t = Math.max(lerp(aHeight[q], bank, ex), sf)
+        if (t < aHeight[q]) aHeight[q] = Math.min(h0, t)
       }
     }
   }
