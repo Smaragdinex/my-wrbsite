@@ -1568,6 +1568,8 @@ export function supportAt(x, z, feet) {
     if (wb != null && wb <= feet + 0.5 && wb > y) { y = wb; owner = 3 }
     const sy = YOSE.stairAt(x, z, feet)   // 瀑布步道（多層重疊：挑腳下那一層）
     if (sy != null && sy <= feet + 0.5 && sy > y) { y = sy; owner = 5 }
+    const swk = YOSE.summitWalk?.(x, z)   // 山頂湖外圈（yosemite-top.js）
+    if (swk != null && swk <= feet + 0.5 && swk > y) { y = swk; owner = 5 }
     const ty = YOSE.topAt(x, z)     // 岩壁頂上
     if (ty != null && ty <= feet + 0.5 && ty > y) { y = ty; owner = 5 }
     const rb = riverBridgeAt(x, z)  // 河上的石橋
@@ -1599,7 +1601,7 @@ export let coastDoors = { a: 1, b: 1 }   // coast.js 每格更新   // alpine.js
 // 原地也算擋住，player.js 就放行「卡住的人自己走出來」——結果空中完全不擋牆，從小木屋的窗戶、牆都跳得出去）
 export function blocked(x, z, feet, ref = feet) {
   if (inAlpine(x, z, 0.45)) {
-    if (domeRho(x, z) > 0.955) return true   // 溫室的牆
+    if (domeRho(x, z) > 0.955 && YOSE.summitWalk?.(x, z) == null) return true   // 溫室的牆（山頂湖外圈例外）
     if (railHit(x, z, feet)) return true   // 木道扶手
     if (wetBlock(x, z)) return true   // 濕地的水、湖對岸
     // 山區：太陡（一步高過 0.6 公尺）就走不上去；吊橋上不算

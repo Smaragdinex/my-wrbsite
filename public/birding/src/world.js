@@ -15,6 +15,9 @@ import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp,
 import { buildFlora } from './flora.js'
 import { loadPlants, parts } from './plants.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+let NEST_KIT_P = null   // 黑雨燕的巢（tools/make-swift-nest.py）
+const lerp3 = (a, b, t) => a + (b - a) * t
 import { buildStops } from './stops.js'
 import { loadAnimalModels, placeAnimal, REAL_CM, gameLen, ensureModel, modelsFor, modelFailed, MissingModel } from './birds.js'
 import { BIRDS } from './birdinfo.js'
@@ -325,38 +328,40 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
           def.spot = [hit.point.x, hit.point.z]; def.normal = [n.x, n.z]
           const b = placeDef({ ...def, y: hit.point.y }); b.def = def; birds.push(b)
         } else {
-          const ledge = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 3), face.material)
-          { const P = ledge.geometry.attributes.position, v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); const k = 1 + 0.1 * Math.sin(v.x * 7.1 + v.z * 5.3) * Math.cos(v.y * 6.2) + 0.05 * Math.sin(v.x * 17.0 - v.y * 13.0); if (v.y > 0) v.y *= 0.25 + 0.05 * Math.sin(v.x * 9.0); P.setXYZ(i, v.x * k, v.y * k, v.z * k) } ledge.geometry.computeVertexNormals() }
-          { const P = ledge.geometry.attributes.position, c = new Float32Array(P.count * 3); for (let i = 0; i < P.count; i++) { const k = 0.36 + 0.05 * Math.sin(i * 12.9898); c[i * 3] = k * 1.1; c[i * 3 + 1] = k; c[i * 3 + 2] = k * 0.85 } ledge.geometry.setAttribute('color', new THREE.BufferAttribute(c, 3)) }   // 岩壁材質吃頂點色：沒給會全黑
-          const ls = def.nest ? 0.32 : 1   // 雨燕只要一個小小的岩縫平台
-          const dz = (0.55 + back / 2) * (def.nest ? 0.6 : 1)   // 岩架從岩壁裡一直伸到上面岩簷的前緣外面
-          ledge.scale.set(0.85 * ls, 0.6 * ls, dz); ledge.rotation.y = Math.atan2(n.x, n.z)
-          ledge.position.set(hit.point.x, hit.point.y - 0.02 + (def.nest ? 0.13 - 0.15 * ls - 0.06 : 0), def.nest ? zFront - 0.2 + dz * 0.55 : hit.point.z - dz + 0.35);   /* 2026-11-15 雨燕的巢台：以前往外伸過鳥，從石階往上看整隻被台子底下擋住 → 前緣只到鳥腳下、低 6 cm */ ledge.castShadow = ledge.receiveShadow = true; ledge.name = 'falconLedge'; scene.add(ledge)
-          def.spot = [hit.point.x, zFront - (def.nest ? 0.2 : 0.4)]
-          if (def.nest) {   // 黑雨燕的巢：岩架上一個苔蘚、細根做的淺杯（直徑約 15 cm），鳥伏坐在裡面
-            const moss = new THREE.MeshStandardMaterial({ color: 0x2e3320, roughness: 1 }), rim = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.025, 8, 22).rotateX(Math.PI / 2), moss)
-            const bed = new THREE.Mesh(new THREE.CircleGeometry(0.08, 16).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x2c3319, roughness: 1 }))
-            rim.position.set(def.spot[0], hit.point.y + 0.125, def.spot[1]); bed.position.set(def.spot[0], hit.point.y + 0.11, def.spot[1]); rim.castShadow = true; scene.add(rim, bed)
-          }
-          const b = placeDef({ ...def, y: hit.point.y + 0.13 }); b.def = def; birds.push(b)
-          // 2026-11-15 使用者（從湖邊往瀑布右邊的凹洞看，紅圈）「燕子放這裡明顯一點、3 個巢」：黑雨燕是一小群在同一面濕岩壁上築巢 →
-          // 另外兩個巢（同樣的岩縫平台＋苔蘚杯），位置記在 def.colonySpots，flight.js 的另外兩隻（一隻一直在瀑布底下和湖上飛、一隻有時在巢有時出去飛）用
-          if (def.colony) {
-            def.colonySpots = []
-            for (const [cx, cy, cz] of def.colony) {
-              const c2 = (y) => new THREE.Raycaster(new THREE.Vector3(cx, y, cz), new THREE.Vector3(0, 0, 1), 0, 40).intersectObjects(solids, true).find((h) => h.object.isMesh && !h.object.material.transparent)
-              const h = c2(cy); if (!h) continue
-              let zf = h.point.z; for (let dy = 0.2; dy <= 1.21; dy += 0.2) { const h2 = c2(cy + dy); if (h2 && Math.abs(h2.point.z - h.point.z) < 3) zf = Math.min(zf, h2.point.z) }
-              const n2 = h.face ? h.face.normal.clone().transformDirection(face.matrixWorld) : new THREE.Vector3(0, 0, -1); n2.y = 0; if (n2.lengthSq() < 1e-4) n2.set(0, 0, -1); n2.normalize(); if (n2.z > 0) n2.negate()
-              const lg = ledge.clone(); const dz2 = (0.55 + (h.point.z - zf) / 2) * 0.6
-              lg.scale.set(0.85 * 0.32, 0.6 * 0.32, dz2); lg.rotation.y = Math.atan2(n2.x, n2.z)
-              const sx2 = h.point.x, sz2 = zf - 0.2
-              lg.position.set(sx2, h.point.y - 0.02 + 0.13 - 0.15 * 0.32 - 0.06, sz2 + dz2 * 0.55); scene.add(lg)
-              const moss = new THREE.MeshStandardMaterial({ color: 0x2e3320, roughness: 1 }), rim = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.025, 8, 22).rotateX(Math.PI / 2), moss)
-              const bed = new THREE.Mesh(new THREE.CircleGeometry(0.08, 16).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x2c3319, roughness: 1 }))
-              rim.position.set(sx2, h.point.y + 0.125, sz2); bed.position.set(sx2, h.point.y + 0.11, sz2); rim.castShadow = true; scene.add(rim, bed)
-              def.colonySpots.push({ x: sx2, y: h.point.y + 0.13, z: sz2, face: Math.atan2(-n2.x, -n2.z) })
+          if (def.nest) {
+            // 2026-11-15 使用者（巢的特寫照片）「巢是懸空沒對齊，巢用 Blender 做好看的」：以前是一個圓環＋一片圓板浮在岩面前、底下一顆變形球當平台，三樣各算各的高度 →
+            // 改用 tools/make-swift-nest.py 的模型：岩縫平台的原點＝頂面靠牆那條邊，直接對到射線打到的岩面；苔蘚杯坐在平台頂面上、離牆 0.11 m；鳥坐在杯裡
+            const VERN = new URL(import.meta.url).searchParams.get('v') ?? ''
+            const NEST_KIT = (NEST_KIT_P ??= new GLTFLoader().loadAsync(`models/props/swift_nest.glb?v=${VERN}`).then((gl) => { const K = {}; gl.scene.traverse((o) => { if (o.isMesh) { if (o.geometry.attributes.color_1) o.geometry.setAttribute('color', o.geometry.attributes.color_1); o.material.vertexColors = true; o.material.side = THREE.DoubleSide; if (o.name === 'swift_nest') { const c = o.geometry.attributes.color; for (let i = 0; i < c.count; i++) { const l = (c.getX(i) + c.getY(i) + c.getZ(i)) / 3; c.setXYZ(i, lerp3(c.getX(i), l * 1.15, 0.65), lerp3(c.getY(i), l * 1.0, 0.65), lerp3(c.getZ(i), l * 0.7, 0.65)) } o.material.roughness = 0.75 }   /* 巢：照片看起來太綠太飽和 → 往濕的苔褐色拉（真的黑雨燕巢多半是深褐） */ o.castShadow = o.receiveShadow = true; K[o.name] = o } }); return K }).catch((e) => { console.warn('swift nest', e); return null }))
+            const swiftNest = (hx, hy, hz, nrm, k) => {
+              // 岩面不平：巢那 0.4 m 高的範圍內打幾條射線，平台的背面貼在「最凸出來」的那一點，杯子和鳥才不會埋進凸出來的岩面裡
+              for (let dy = -0.1; dy <= 0.31; dy += 0.1) { const q = new THREE.Raycaster(new THREE.Vector3(hx + nrm.x * 3, hy + dy, hz + nrm.z * 3), new THREE.Vector3(-nrm.x, 0, -nrm.z), 0, 6).intersectObjects(solids, true).find((h) => h.object.isMesh && !h.object.material.transparent); if (q) { const t = (q.point.x - hx) * nrm.x + (q.point.z - hz) * nrm.z; if (t > 0 && t < 1.2) { hx += nrm.x * t; hz += nrm.z * t } } }
+              const yaw = Math.atan2(nrm.x, nrm.z), g2 = new THREE.Group(); g2.position.set(hx, hy, hz); g2.rotation.y = yaw; g2.name = 'swiftNest'; scene.add(g2)
+              NEST_KIT.then((K) => { if (!K?.swift_ledge || !K.swift_nest) return; const l = K.swift_ledge.clone(); l.material = face.material; l.scale.setScalar(1 + 0.15 * k);   /* 平台用岩壁同一個材質：顏色、紋理跟岩面接得起來 */ g2.add(l); const nn = K.swift_nest.clone(); nn.position.set(0, 0, 0.11); nn.rotation.y = 0.6 * k; g2.add(nn) })
+              return { x: hx + nrm.x * 0.11, y: hy + 0.06, z: hz + nrm.z * 0.11 }
             }
+            const nW = n.clone(); const mainN = swiftNest(hit.point.x, hit.point.y, hit.point.z, nW, 0)
+            def.spot = [mainN.x, mainN.z]
+            const b = placeDef({ ...def, y: mainN.y }); b.def = def; birds.push(b)
+            if (def.colony) {
+              def.colonySpots = []
+              def.colony.forEach(([cx, cy, cz], ci) => {
+                const h = new THREE.Raycaster(new THREE.Vector3(cx, cy, cz), new THREE.Vector3(0, 0, 1), 0, 40).intersectObjects(solids, true).find((q) => q.object.isMesh && !q.object.material.transparent); if (!h) return
+                const n2 = h.face ? h.face.normal.clone().transformDirection(face.matrixWorld) : new THREE.Vector3(0, 0, -1); n2.y = 0; if (n2.lengthSq() < 1e-4) n2.set(0, 0, -1); n2.normalize(); if (n2.z > 0) n2.negate()
+                const sp = swiftNest(h.point.x, h.point.y, h.point.z, n2, ci + 1)
+                def.colonySpots.push({ x: sp.x, y: sp.y, z: sp.z })
+              })
+            }
+          } else {
+            const ledge = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 3), face.material)
+            { const P = ledge.geometry.attributes.position, v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); const k = 1 + 0.1 * Math.sin(v.x * 7.1 + v.z * 5.3) * Math.cos(v.y * 6.2) + 0.05 * Math.sin(v.x * 17.0 - v.y * 13.0); if (v.y > 0) v.y *= 0.25 + 0.05 * Math.sin(v.x * 9.0); P.setXYZ(i, v.x * k, v.y * k, v.z * k) } ledge.geometry.computeVertexNormals() }
+            { const P = ledge.geometry.attributes.position, c = new Float32Array(P.count * 3); for (let i = 0; i < P.count; i++) { const k = 0.36 + 0.05 * Math.sin(i * 12.9898); c[i * 3] = k * 1.1; c[i * 3 + 1] = k; c[i * 3 + 2] = k * 0.85 } ledge.geometry.setAttribute('color', new THREE.BufferAttribute(c, 3)) }   // 岩壁材質吃頂點色：沒給會全黑
+            const ls = def.nest ? 0.32 : 1   // 雨燕只要一個小小的岩縫平台
+            const dz = (0.55 + back / 2) * (def.nest ? 0.6 : 1)   // 岩架從岩壁裡一直伸到上面岩簷的前緣外面
+            ledge.scale.set(0.85 * ls, 0.6 * ls, dz); ledge.rotation.y = Math.atan2(n.x, n.z)
+            ledge.position.set(hit.point.x, hit.point.y - 0.02 + (def.nest ? 0.13 - 0.15 * ls - 0.06 : 0), def.nest ? zFront - 0.2 + dz * 0.55 : hit.point.z - dz + 0.35);   /* 2026-11-15 雨燕的巢台：以前往外伸過鳥，從石階往上看整隻被台子底下擋住 → 前緣只到鳥腳下、低 6 cm */ ledge.castShadow = ledge.receiveShadow = true; ledge.name = 'falconLedge'; scene.add(ledge)
+            def.spot = [hit.point.x, zFront - (def.nest ? 0.2 : 0.4)]
+            const b = placeDef({ ...def, y: hit.point.y + 0.13 }); b.def = def; birds.push(b)
           }
         }
       }
@@ -469,10 +474,21 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   // 每格：風、水、鳥（只更新鏡頭附近的，骨架動畫很吃 CPU）、水霧、雲
   const _sd = new THREE.Vector3()
-  let autoLodT = 0, tinyT = 0
+  let autoLodT = 0, tinyT = 0, zoneT = 0, zoneHidden = false
+  const _bp = new THREE.Vector3()
   function tick(t, dt, { phone = false } = {}) {
     if ((autoLodT += dt) > 2.5) { autoLodT = 0; if (lodAutoRegister(scene)) shadows.dirty(); if (!/nobatch/.test(location.search) && staticBatch(scene)) shadows.dirty() }   // 2026-11-14 FPS：不會動的同材質網格合併（batch.js）   // 2026-11-14 FPS：沒登記 LOD 的石頭、岩廊牆、石橋…自動登記（lod.js）
     lodUpdate(camera)
+    // 2026-11-15 使用者「瀑布這裡的效能，不減美術、提高 FPS」：
+    // 1. 鏡頭在瀑布峽谷裡（石階、凹洞、兩層岩廊）時，四面是岩壁：花園池塘、東邊濕地、濕地道具、草鴞巢那幾組根本看不到（7 個視角逐像素比對，差異跟兩格之間的雜訊一樣）→ 不畫
+    // 2. 鳥：畫面上小於 1 像素（照目前鏡頭的視角＝變焦算）就不畫（以前整個公園 70 多隻每格都畫，峽谷裡一格省 0.3～0.9 ms）
+    if ((zoneT += dt) > 0.25) {
+      zoneT = 0
+      const cp = camera.position, inGorge = cp.x > 183 && cp.x < 217 && cp.z > 83 && cp.z < 107 && cp.y > 26 && cp.y < 60
+      if (inGorge !== zoneHidden) { zoneHidden = inGorge; for (const nm of ['east', 'wetlandProps', 'pondLife', 'grassOwlNest']) { const o = scene.getObjectByName(nm); if (o && o.parent === scene) o.visible = !inGorge } }
+      const pxK = (renderer.domElement.height / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+      for (const b of birds) { const gq = b.group; if (!gq) continue; gq.getWorldPosition(_bp); const r = (b.def.H ?? 0.35) * 0.8 * pxK / Math.max(1, _bp.distanceTo(cp)); const tiny = r < 1.0; if (tiny !== !!gq.userData.pxOff) { gq.userData.pxOff = tiny; gq.traverse((o) => { if (tiny) o.layers.disable(0); else o.layers.enable(0) }) } }
+    }
     if ((tinyT += dt) > 0.2) { for (const b of birds) { if (b.group) b.group.userData.bird = true; for (const m of b.built?.birds ?? [b.built]) if (m?.obj) m.obj.userData.noMerge = true }   /* 鳥本身不合併（batch.js），鳥棲樹可以 */ tinyCull(scene, camera, tinyT); tinyT = 0 }   // 2026-11-14 FPS：遠處的小東西不畫（lod.js）
     halls.tick(t, dt, camera)
     if (halls.mode.endsWith('D')) {   // 陰影範圍跟著玩家（在館內時由 halls.js 指定館的中心）

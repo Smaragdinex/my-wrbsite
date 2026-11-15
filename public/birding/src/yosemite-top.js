@@ -84,6 +84,9 @@ function mountain(x0, z0) {
   h += k * 7 * (1 - Math.abs(fbm2(x0 * 0.1 + 2, z0 * 0.1 + 6, 3) * 2 - 1) - 0.5)       // 2～4 m 的岩稜、凹槽
   return h
 }
+// 2026-11-15 使用者「至少可以在山頂湖外圈走動不卡」：湖在園區邊界上，北、東、西岸都在邊界外、腳下是山區低處的地形（掉 50 m）→
+// 湖岸一圈（湖半徑 1.02～1.5 倍、山頂平台後面）當成可以走的地面：layout.js supportAt 用這個高度、blocked 不把這圈當溫室的牆
+YOSE.summitWalk = (x, z) => { if (x < 196 || x > 256) return null; const lr = YOSE.slakeR(x, z); return lr > 1.02 && lr < 1.5 ? summitHeight(x, z) + 0.02 : null }
 export function summitHeight(x, z) {
   const d = z - rimZ(x), rh = rimH(x), M = mountain(x, z)
   const w = ss(166, 182, x) * ss(272, 258, x)
@@ -234,7 +237,7 @@ export function buildSummit(scene, kit, lib) {
     if (A.length) { const gm = bladeMesh(A, B, { width: [0.006, 0.008] }); gm.frustumCulled = false; g.add(gm) }
   }
   const place = (name, list) => { if (!list.length || !kit.geo[name]) return; const mat = name.startsWith('mrockm') ? kit.rockM : name.startsWith('moss') ? kit.mossM : kit.grassM; const im = new THREE.InstancedMesh(kit.geo[name], mat, list.length); list.forEach((t, i) => im.setMatrixAt(i, m4.compose(t.p, t.q, t.s))); im.castShadow = !name.startsWith('grass'); im.receiveShadow = true; im.computeBoundingSphere(); g.add(im) }
-  const L = {}; const push = (name, item) => (L[name] ||= []).push(item)
+  const L = {}; const push = (name, item) => { if (name.startsWith('mrockm')) return; (L[name] ||= []).push(item) }   /* 2026-11-15 使用者「山頂的大顆鵝卵石、石頭都移除，至少湖外圈走得動不卡；石頭只畫一面、背面沒圖」：山頂所有大岩塊（平台、湖岸、出水溪兩岸）不放 */
   for (let k = 0, nr = 0, np = 0, ng = 0; k < 20000 && (nr < 34 || np < 70 || ng < 260); k++) {
     const [x, z] = sample()
     if (!ok(x, z)) continue
@@ -242,7 +245,7 @@ export function buildSummit(scene, kit, lib) {
     if (nr < 34 && r < 0.12) {
       const S = 0.45 + Math.pow(rnd(), 1.6) * 1.5; if (pathDist(x, z) < 1.3 + S) continue
       push('mrockm_' + Math.floor(rnd() * 4), { p: V(x, y - 0.06 * S, z), q: Q(rnd() * TAU, 0.2), s: V(S, S * (0.8 + rnd() * 0.4), S) })
-      if (S > 0.7) addCollider(x, z, 0.75 * S, y + 0.6 * S, y - 1.5)   // 2026-11-12 加底：沒有底的碰撞體把正下方的崖壁步道也擋住
+      if (false) addCollider(x, z, 0.75 * S, y + 0.6 * S, y - 1.5)   // 2026-11-12 加底：沒有底的碰撞體把正下方的崖壁步道也擋住
       // 岩塊腳邊：一圈青苔墊、草
       for (let j = 0; j < 3; j++) { const a = rnd() * TAU, rr = S * (0.9 + rnd() * 0.4); push('grass_' + Math.floor(rnd() * 3), { p: V(x + Math.cos(a) * rr, y - 0.02, z + Math.sin(a) * rr), q: Q(rnd() * TAU), s: V(1, 1, 1).multiplyScalar(0.8 + rnd() * 0.6) }) }
       nr++

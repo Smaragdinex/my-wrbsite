@@ -42,7 +42,7 @@ export function createPlayer(camera, dom) {
   function tryMove(nx, nz) {
     const cliffRef = st.grounded ? st.feet : Math.min(st.feet, st.takeoff ?? st.feet)   // 空中：懸崖照起跳點算（見 layout.js blocked）
     if (blocked(nx, nz, st.feet, cliffRef)) {
-      if (!blocked(st.x, st.z, st.feet, cliffRef) || domeRho(nx, nz) > 0.955) return false   // 原地是合法的、或前面是溫室的牆：照常擋
+      if (!blocked(st.x, st.z, st.feet, cliffRef) || (domeRho(nx, nz) > 0.955 && YOSE.summitWalk?.(nx, nz) == null)) return false   // 原地是合法的、或前面是溫室的牆：照常擋
     }
     const ref = st.grounded ? st.feet : (st.takeoff ?? st.feet), owner = st.grounded ? st.owner : (st.takeoffOwner ?? 0)
     const s = supportAt(nx, nz, st.grounded ? st.feet : Math.max(st.feet, ref))

@@ -1406,6 +1406,8 @@ export function buildYosemite(scene, { lib } = {}) {
         } }
       // 岩壁：沿整條崖壁步道內側（往岩壁那側 1.25 m＝鑿進去的那面牆）每 2.9 m 貼一片 3 m 寬、3.4 m 高的層疊砂岩；牆面朝步道
       { const names = ['sw_a', 'sw_b', 'sw_c', 'sw_d'].filter((n) => K[n]), ovh = ['sw_ovh_a', 'sw_ovh_b'].filter((n) => K[n]), WFERN = []
+        // 2026-11-15 黑雨燕的三個巢（birdinfo blackswift cliffRay／colony）：前面不貼岩層片、不長蕨（以前巢被夾在兩片岩層中間、蕨蓋住）
+        const NEST_GAP = (x, z, y0, y1) => [[204, 93.6, 35.5], [208, 91.1, 36.2], [211, 90.4, 37]].some(([nx, nz, ny]) => Math.hypot(x - nx, z - nz) < 2.0 && y0 < ny + 0.6 && y1 > ny - 0.6)
         if (names.length) { let acc = 99, k = 0
           for (let i = 1; i < NP; i++) {
             if (st.kind[i] !== 'gal' && st.kind[i] !== 'open') { acc = 99; continue }
@@ -1431,13 +1433,13 @@ export function buildYosemite(scene, { lib } = {}) {
               const sy = Math.min(0.95 + 0.12 * hsh(i * 2.3 + c * 5.1), (top - y0w) / 3.6)
               if (sy < 0.3) break
               const sh = c ? (hsh(i * 7.7 + c) - 0.5) * 1.2 : 0, ax = V(-inn.z, 0, inn.x)
-              put(names[(k++ + c) % names.length], m4.compose(V(base.x + ax.x * sh * wsc, y0w, base.z + ax.z * sh * wsc + (c ? 0.03 * c : 0)), qW, V((1 + 0.04 * c) * wsc, sy, 1)))
+              if (!NEST_GAP(base.x, base.z, y0w, y0w + 3.6 * sy)) put(names[(k++ + c) % names.length], m4.compose(V(base.x + ax.x * sh * wsc, y0w, base.z + ax.z * sh * wsc + (c ? 0.03 * c : 0)), qW, V((1 + 0.04 * c) * wsc, sy, 1)))
               // 概念圖 1、3：頭頂 2.8～3.2 m 偶爾一道往外伸的大岩簷（上面至少還要有 1 m 才放，不然會頂到上一層的地板）
               if (!c && ovh.length && hsh(i * 5.3) < 0.4 && top - (y0w + 3.6 * sy) > 1.0 && ![[198, 100, 33.2], [204, 93.6, 35.5], [208, 91.1, 36.2], [211, 90.4, 37]].some(([nx, nz, ny]) => Math.hypot(base.x - nx, base.z - nz) < 4 && Math.abs(C3[i].y + 3 - ny) < 2.5))   /* 2026-11-15 第 82 隻黑雨燕的巢（birdinfo cliffRay 198,33）前面不放岩簷：以前一片岩簷剛好擋住整個巢 */ put(ovh[Math.floor(hsh(i * 9.7) * ovh.length) % ovh.length], m4.compose(V(base.x, C3[i].y + 2.85 + 0.3 * hsh(i * 1.9), base.z + 0.02), qW, V(0.8 + 0.3 * hsh(i * 4.1), 1, 0.9)))
               // 概念圖 1、3：蕨類長在潮濕的縫——牆腳、第一層岩層的頂（岩架）；越靠瀑布越多
               { const wetK = Math.exp(-(((C3[i].x - YOSE.fall.x) / 22) ** 2)), pr = 0.25 + 0.45 * wetK
-                if (!c && hsh(i * 3.9) < pr) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 2.2) - 0.5) * 3, C3[i].y - 0.05, base.z - 0.1), s: 0.45 + 0.3 * hsh(i * 6.1), foot: true })
-                if (hsh(i * 7.1 + c) < pr * 0.8) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 4.4 + c) - 0.5) * 3.4, y0w + 3.6 * sy * (0.45 + 0.4 * hsh(i * 8.3 + c)), base.z + 0.12), s: 0.4 + 0.35 * hsh(i * 5.7 + c), hang: true }) }
+                if (!c && hsh(i * 3.9) < pr && !NEST_GAP(base.x, base.z, C3[i].y - 1, C3[i].y + 6)) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 2.2) - 0.5) * 3, C3[i].y - 0.05, base.z - 0.1), s: 0.45 + 0.3 * hsh(i * 6.1), foot: true })
+                if (hsh(i * 7.1 + c) < pr * 0.8 && !NEST_GAP(base.x, base.z, y0w, y0w + 3.6 * sy)) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 4.4 + c) - 0.5) * 3.4, y0w + 3.6 * sy * (0.45 + 0.4 * hsh(i * 8.3 + c)), base.z + 0.12), s: 0.4 + 0.35 * hsh(i * 5.7 + c), hang: true }) }
               y0w += 3.6 * sy - 0.06
             }
           } }
@@ -1686,7 +1688,7 @@ export function buildYosemite(scene, { lib } = {}) {
     im.receiveShadow = true; im.renderOrder = 1; g.add(im)
     if (lib) {
       const names = ['mrock_1', 'mrock_3', 'mrock_5'].filter((n) => lib[n]), rl = Object.fromEntries(names.map((n) => [n, []]))
-      for (let k = 0, n = 0; k < 600 && n < 40 && names.length; k++) {
+      for (let k = 0, n = 0; k < 600 && n < 0 && names.length; k++) {   /* 2026-11-15 使用者：山頂的石頭都移除 */
         const x = 202 + rnd() * 47, zf = YOSE.topFront(x) + 1.2, ze = YOSE.edge(x) - 2.2, z = zf + rnd() * (ze - zf)
         if (ze < zf || Math.hypot(x - SHELTER.x, z - SHELTER.z) < 4.5 || alpineTrailDist(x, z) < 1.5) continue
         const k2 = 0.25 + rnd() * 0.45, nm = names[Math.floor(rnd() * names.length)]
@@ -1706,7 +1708,7 @@ export function buildYosemite(scene, { lib } = {}) {
         }
         scatter(g, lib[big], gate[big], { cast: true })
         const out = Object.fromEntries(names.map((n) => [n, []]))
-        for (let k = 0, n = 0; k < 400 && n < 8; k++) {
+        for (let k = 0, n = 0; k < 400 && n < 0; k++) {   /* 2026-11-15 半埋的大岩盤也拿掉（含碰撞） */
           const x = 204 + rnd() * 44, zf = YOSE.topFront(x) + 2.5, ze = YOSE.edge(x) - 3, z = zf + rnd() * (ze - zf)
           if (ze < zf + 1 || Math.hypot(x - SHELTER.x, z - SHELTER.z) < 6 || Math.hypot(x - e[0], z - e[1]) < 9 || alpineTrailDist(x, z) < 2) continue
           const k2 = 1.0 + rnd() * 0.8, nm = names[Math.floor(rnd() * names.length)]
