@@ -1719,6 +1719,16 @@ export function distToMtn(x, z) { return Math.hypot(x - MTN.x, z - MTN.z) }
   }
 }
 
+// 2026-11-15 使用者（專題 Demo 影片 1:48 帝雉「懸空」）：山區地上走的雉類站在 22° 的坡上（每公尺落差 0.4 m），鏡頭往下坡看，
+// 腳邊幾乎看不到地、後面是更低的蕨叢 → 看起來像浮著。牠們活動的那一小塊（半徑 2 m）坡度壓到原本的四分之一，往外 4.5 m 慢慢接回原地形
+for (const [bx, bz] of [[153.2, -8], [109.1, -3.9]]) {
+  const c = alpineHeight(bx, bz), i0 = Math.floor((bx - 5 - AG.x0) / AG.cell), i1 = Math.ceil((bx + 5 - AG.x0) / AG.cell), j0 = Math.floor((bz - 5 - AG.z0) / AG.cell), j1 = Math.ceil((bz + 5 - AG.z0) / AG.cell)
+  for (let j = Math.max(0, j0); j <= Math.min(AG.nz - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(AG.nx - 1, i1); i++) {
+    const q = j * AG.nx + i, d = Math.hypot(AG.x0 + i * AG.cell - bx, AG.z0 + j * AG.cell - bz), w = 1 - smoothstep(2.0, 4.5, d)
+    aHeight[q] = lerp(aHeight[q], c + (aHeight[q] - c) * 0.25, w)
+  }
+}
+
 // 2026-11-13 驗收第 1 條（使用者照片：沙土路走到木道起點，整片木道比地面高、看得到底下的橫樑）：
 // 每條木道的兩端，木道比地面高 0.2 m 以上的，把那一頭的地墊起來接一段緩坡——木道底下墊到踏板下 8 cm，往外 4.5 m 慢慢接回原本的地（溪流不墊）
 for (const w of ALP_WALKS) {

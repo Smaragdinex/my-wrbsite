@@ -201,7 +201,8 @@ export function coniferGeo(kind, tiersN) {
 function nearBird(avoid, x, z, r, w) {
   for (const b of avoid) {
     if (Math.hypot(x - b.x, z - b.z) < r) return true
-    const dx = b.cx - b.x, dz = b.cz - b.z, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - b.x) * dx + (z - b.z) * dz) / L2))
+    // 2026-11-15 使用者（Demo 影片 2:01 藍腹鷴整格都是葉子）：只清鳥到拍照點那一段，再往後退（步道那邊、拉遠拍）就被一叢擋住 → 地上的鳥往後多清到 2.6 倍距離
+    const dx = b.cx - b.x, dz = b.cz - b.z, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(b.ground ? 2.6 : 1, ((x - b.x) * dx + (z - b.z) * dz) / L2))
     if (Math.hypot(x - b.x - dx * t, z - b.z - dz * t) < w) return true
   }
   return false
