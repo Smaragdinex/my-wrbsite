@@ -2063,31 +2063,46 @@ function pelican(env) {
 // 2026-11-16 鸕鷀：站在南邊新湖裡一顆露出水面的石頭上，張開翅膀曬乾（模型本身就是張翅的姿勢；維基百科：羽毛不太防水，潛水後要張翅晾乾）；
 // 不時拍一拍翅膀、轉頭；隔一陣子飛出去在湖上繞一圈（ESCAPE.cormorant.sortie）再回到石頭上
 function cormorant(env) {
-  // 2026-11-16 使用者：圖鑑要正常站姿的照片 → 圖鑑插圖用另一個收著翅膀的站姿模型（側視點位綁骨，跟其他鳥一樣）
-  if (env.guide) return groundTripo(env, { name: 'cormorant-stand-rig', H: 0.9, h0: 0.77, ...TRIPO, bill: 0.09,
+  // 2026-11-16 使用者：圖鑑要正常站姿 → 圖鑑插圖用收著翅膀的站姿模型
+  const stand = () => groundTripo(env, { name: 'cormorant-stand-rig', H: 0.9, h0: 0.77, ...TRIPO, bill: 0.09,
     walk: { radius: 0.01, speed: 0.01 }, swingT: 0.4, lift: 0.02, knee: [0.5, 1.0], focusY: 0.45,
     acts: { stand: [4, 3, 6], look: [4, 1.0, 2.2], walk: [0.01, 99, 99], turn: [0.01, 99, 99] } })
-  // 模型本身是正面張翅（tools/rig-cormorant.py 綁的簡單骨架：body／neck／head／wingL／wingR，身體朝 +z）；不走路，站在石頭上
-  const r = rigged('cormorant-rig'), root = new THREE.Group(), K = 1.1
-  r.model.scale.setScalar(K); root.add(r.model)
-  root.rotation.y = Math.atan2(env.toCam.x, env.toCam.z) + rnd(-0.6, 0.6)   // 大致面向步道，偏一點比較自然
+  if (env.guide) return stand()
+  // 園區裡：兩個模型輪流——平常收著翅膀站著（idle：轉頭、整理），隔一陣子張開翅膀晾乾 20～40 秒，再收起來
+  // （使用者：「偶爾曬翅、偶爾一般 idle」）。張翅模型是 tools/rig-cormorant.py 綁的簡單骨架（body／neck／head／wingL／wingR，身體朝 +z）
+  const r = rigged('cormorant-rig'), dry = new THREE.Group(), K = 1.1
+  r.model.scale.setScalar(K); dry.add(r.model)
+  const face = Math.atan2(env.toCam.x, env.toCam.z) + rnd(-0.6, 0.6)   // 大致面向步道
+  dry.rotation.y = face
+  const idle = stand()
+  const root = new THREE.Group(); root.add(dry, idle.obj)
   const focus = V(0, 0.55 * K, 0)
   const acts = new Acts({ dry: [5, 3, 7], look: [3, 1.2, 2.6], shake: [1, 1.0, 1.5] })
+  const S = { mode: Math.random() < 0.5 ? 'dry' : 'idle', t: rnd(15, 30) }
+  const show = () => { dry.visible = S.mode === 'dry'; idle.obj.visible = S.mode !== 'dry' }
+  show()
   let yaw = 0
   const update = (t, dt) => {
     if (!(dt > 0)) return
+    S.t -= dt
+    if (S.t < 0) {
+      // 換姿勢：要張開翅膀前先搧一下（shake），收翅膀前也搧一下，切換才不會太突然
+      if (S.mode === 'dry') { S.mode = 'idle'; S.t = rnd(30, 60) } else { S.mode = 'dry'; S.t = rnd(20, 40); acts.next('shake') }
+      show()
+    }
+    if (S.mode !== 'dry') { idle.update(t, dt); return }
     acts.tick(dt); r.reset()
     // 頭：晾翅時慢慢左右看，偶爾大角度轉頭
-    const want = acts.name === 'look' ? acts.r * 1.2 : 0.18 * Math.sin(t * 0.35)
+    const want = acts.name === 'look' ? acts.r * 1.1 : 0.18 * Math.sin(t * 0.35)
     yaw = damp(yaw, want, acts.name === 'look' ? 7 : 2, dt)
     r.turn('neck', AX.y, yaw * 0.35); r.turn('head', AX.y, yaw * 0.65)
     r.turn('head', AX.x, 0.04 * Math.sin(t * 0.9))
-    // 翅膀：平常微微晃（風吹）；shake＝連續搧 3、4 下把水甩乾
-    const fl = acts.name === 'shake' ? 0.32 * Math.max(0, Math.sin(acts.t * Math.PI * 2 * 3.2)) : 0.035 * Math.sin(t * 1.4) + 0.02 * Math.sin(t * 3.1)
-    r.turn('wingL', AX.z, fl); r.turn('wingR', AX.z, -fl)
+    // 翅膀：平常微微晃（風吹）；shake＝連續搧 3、4 下把水甩乾（往上抬＝負的角度；2026-11-16 使用者「翅膀綁反了」：以前正的是往下收）
+    const fl = acts.name === 'shake' ? 0.45 * Math.max(0, Math.sin(acts.t * Math.PI * 2 * 3.2)) : 0.04 * Math.sin(t * 1.4) + 0.025 * Math.sin(t * 3.1)
+    r.turn('wingL', AX.z, -fl); r.turn('wingR', AX.z, fl)
     r.turn('body', AX.x, 0.012 * Math.sin(t * 1.6))   // 呼吸
   }
-  return { obj: root, focus, update, acts, noFix: true }
+  return { obj: root, focus, update, get acts() { return S.mode === 'dry' ? acts : idle.acts }, noFix: true, rig: r, get mode() { return S.mode }, set mode(v) { S.mode = v; S.t = 30; show() } }
 }
 // 黑翅鳶：停在草原上一棵樹的枝頭；每隔一陣子飛出去在草原上空「定點懸停」看獵物，再收翅往下俯衝（flight.js ESCAPE.bwkite.hover）
 function bwkite(env) {
