@@ -2107,7 +2107,9 @@ function cormorant(env) {
     const fb = 0.32 * D.amp * Math.sin(D.ph), ud = 0.2 * D.amp * Math.sin(D.ph + Math.PI / 2) - 0.05 * D.amp   // fb>0 往後、ud>0 往上
     r.turn('wingL', AX.y, fb); r.turn('wingR', AX.y, -fb)
     r.turn('wingL', AX.z, ud); r.turn('wingR', AX.z, -ud)   // 實測（整片翅膀綁好之後）：wingL 繞 +z 正的是往上抬
-    r.turn('body', AX.x, 0.012 * Math.sin(t * 1.6))   // 呼吸
+    // 身體跟著翅膀：往後搧時胸口往前挺、往上抬時肩膀微微聳起（整隻跟著用力，不是只有翅膀在動）
+    r.turn('body', AX.x, 0.012 * Math.sin(t * 1.6) + 0.07 * fb)
+    r.turn('neck', AX.x, -0.05 * fb)   // 頭保持穩定（補回胸口的前傾）
   }
   return { obj: root, focus, update, get acts() { return S.mode === 'dry' ? acts : idle.acts }, noFix: true, rig: r, get mode() { return S.mode }, set mode(v) { S.mode = v; S.t = 30; show() } }
 }
