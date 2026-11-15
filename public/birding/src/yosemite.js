@@ -172,7 +172,7 @@ export function buildYosemite(scene, { lib } = {}) {
         // 2026-11-13 使用者（龍岩窟）：瀑布前後這一段改成有岩頂的廊道（高 3.6 m），不是往上整片挖開的階地——頭上是岩石、水簾在外側落下
         const roofed = x > YOSE.GAL[0] - 0.6 && x < YOSE.GAL[1] + 0.6 && y > YOSE.shelfY() - 1.0   // 只有那兩段岩廊（第 0 段的起點也在這個 x 範圍，但它在下面、不要加頂）
         const ramp = Math.max(0, Math.min(1, Math.max((x - (YOSE.GAL[1] - 2.0)) / 2.6, ((YOSE.GAL[0] + 2.0) - x) / 2.6)))   /* 2026-11-15 使用者「擋住去路的視線」：岩頂在岩廊兩頭一欄就從 3.6 m 跳到全開，相鄰兩欄的頂點接成一大片斜三角，斜斜切過步道 → 最後 2.6 m 岩頂慢慢升高 */
-        out.push({ y0: y - (roofed ? 0.65 : 0.3), y1: roofed ? y + 3.6 + 1.6 * ramp : y + 90, depth: d + 1.25 })   // 岩廊多往地板下切 0.35 m：切口轉角那條岩壁的薄邊才會落在石板底下（以前在 x196～198 冒出地板 0.2～0.3 m）
+        out.push({ y0: y - 0.3,   /* 2026-11-15 岩廊改鋪加厚的天然石階（底在步道下 0.74 m）：槽底不用再比露天段低，低了在石階和岩柱之間露出一條黑溝 */ y1: roofed ? y + 3.6 + 1.6 * ramp : y + 90, depth: d + 1.25 })   // 岩廊多往地板下切 0.35 m：切口轉角那條岩壁的薄邊才會落在石板底下（以前在 x196～198 冒出地板 0.2～0.3 m）
         for (const b of T.bays ?? []) if (Math.abs(x - b.x) < b.half + 0.25 && Math.abs(y - b.y) < 0.8) out.push({ y0: y - 0.3, y1: y + 3.2, depth: d + 1.25 + b.depth })   // 賞鳥台的凹龕
       } else if (k === 'alc' || (k === 'open' && bz - YOSE.base(bx) > 0.2 && bx > 207.5)) {
         if (Math.abs(x - bx) > 1.5) continue
@@ -1283,9 +1283,10 @@ export function buildYosemite(scene, { lib } = {}) {
         // 2026-11-12 ChatGPT V3（石階太新太整齊）：每一階轉一點、前後深淺差一點、左右錯開幾公分，顏色深淺差 ±13%、偏黃偏灰都有
         const h1 = hsh(n * 3.1 + 1), h2 = hsh(n * 5.7 + 2), h3 = hsh(n * 7.3 + 3), h4 = hsh(n * 11.9 + 4), h5 = hsh(n * 2.3 + 5)
         q.setFromAxisAngle(UP, Math.atan2(tn.x, tn.z) + (h1 - 0.5) * 0.09)
-        const gal = st.kind[ii] === 'gal', alc = st.kind[ii] === 'alc', shf = st.kind[ii] === 'shelf', wet = shf && p.x > 197.55 && p.x < 202.65 && p.z < YOSE.base(p.x) + 3   /* 驗收第 23 條：出水口 1A 加寬成 4.4 m（F.x−2.3～+2.3），跨水那段的石板也要跟著讓出來（踏腳石接手） */, so = (h3 - 0.5) * (gal || alc ? 0.04 : 0.1) + (gal ? (SIDE[ii].z < 0 ? 1 : -1) * 0.3 : 0)   // 階地：踏板只鋪到內側的石壁（寬 1.8 m，往外移 0.27）
-        const galF = gal && p.x > YOSE.GAL[0] - 0.3 && p.x < YOSE.GAL[1] + 0.3 && p.y > SHELF_Y - 1   /* 岩廊：不放方塊踏板，鋪 gallery_kit 的石板 */
-        tm.setMatrixAt(n, m4.compose(V(p.x + SIDE[ii].x * so, yTop - 0.3 - h5 * 0.012, p.z + SIDE[ii].z * so), q, V(wet || galF ? 0.0001 : gal ? 0.86 : alc ? 0.75 : shf ? 0.62 : 1, 1, 0.93 + 0.12 * h2)))   /* 折返平台：踏板窄一點（2.5 m 寬的踏板在半徑 0.85 m 的彎上互相戳出來，像貼在岩壁上的大石塊） */
+        const gal = st.kind[ii] === 'gal', alc = st.kind[ii] === 'alc', shf = st.kind[ii] === 'shelf', wet = shf && p.x > 197.55 && p.x < 202.65 && p.z < YOSE.base(p.x) + 3   /* 驗收第 23 條：出水口 1A 加寬成 4.4 m（F.x−2.3～+2.3），跨水那段的石板也要跟著讓出來（踏腳石接手） */, so = (h3 - 0.5) * (gal || alc ? 0.04 : 0.1) + (gal ? (SIDE[ii].z < 0 ? 1 : -1) * (p.x > YOSE.GAL[0] - 1.5 && p.x < YOSE.GAL[1] + 1.5 && p.y > SHELF_Y - 1 ? 0.1 : 0.3) : 0)   // 階地：踏板只鋪到內側的石壁（寬 1.8 m，往外移 0.27）
+        /* 2026-11-15 使用者（岩廊兩頭石板浮在石階上、有黑洞）「跟原本的石頭路加青苔，統一風格」：岩廊也鋪同一種長青苔的天然石階，不再另外鋪一套石板地（兩套在岩廊口接不起來） */
+        const galF = gal && p.x > YOSE.GAL[0] - 1.5 && p.x < YOSE.GAL[1] + 1.5 && p.y > SHELF_Y - 1   /* 岩廊那段：石階整寬 2.5 m、只往外移 0.1，鋪到岩壁腳（不然靠岩柱那邊露出一條槽底的黑溝） */
+        tm.setMatrixAt(n, m4.compose(V(p.x + SIDE[ii].x * so, yTop - (gal ? 0.37 : 0.3) - h5 * 0.012, p.z + SIDE[ii].z * so), q, V(wet ? 0.0001 : galF ? 1 : gal ? 0.86 : alc ? 0.75 : shf ? 0.62 : 1, gal ? 1.24 : 1, 0.93 + 0.12 * h2)))   /* 岩廊的槽底比露天段低 0.35 m：石塊加厚，側面看不到底下的空隙（ChatGPT：每塊石頭底下都要是實心岩石） */   /* 折返平台：踏板窄一點（2.5 m 寬的踏板在半徑 0.85 m 的彎上互相戳出來，像貼在岩壁上的大石塊） */
         const kk = 0.87 + 0.26 * h4, wm = (h5 - 0.5) * 0.08
         tm.setColorAt(n, c.setRGB(1.0 * kk + wm, 0.9 * kk, 0.74 * kk - wm))
         STEPS.push({ m: m4.clone(), c: c.clone() })
@@ -1374,27 +1375,20 @@ export function buildYosemite(scene, { lib } = {}) {
       }
       // 石板地：沿岩廊中線每 0.95 m 一塊（1.0 × 2.4），轉到路的方向
       { const G = YOSE.GAL, inGal = (i) => st.kind[i] === 'gal' && st.pts[i][0] > G[0] - 0.4 && st.pts[i][0] < G[1] + 0.4 && st.yy[i] > SHELF_Y - 1
-        let next = -1, nf = 0
-        for (let i = 1; i < NP; i++) {
-          if (!inGal(i)) { next = -1; continue }
-          if (next < 0) next = st.S[i - 1]
-          while (next <= st.S[i]) {
-            const t = (next - st.S[i - 1]) / Math.max(1e-6, st.S[i] - st.S[i - 1]), c = C3[i - 1].clone().lerp(C3[i], t), tn = TAN[i]
-            q.setFromAxisAngle(UPv, Math.atan2(-tn.z, tn.x))
-            put('gal_floor_' + 'abc'[nf % 3], m4.compose(V(c.x, c.y + 0.02 + (nf++ % 3) * 0.004, c.z), q, V(1, 1, 1)))   /* 前後疊 25 cm：三種高低差 4 mm，疊的地方不閃 */
-            // 2026-11-15 使用者「這些咖啡色的要移除，是之前的殘留」：岩廊轉彎的內側（靠岩壁那邊）切出來的岩槽比步道寬，露出一片光禿的咖啡色岩地 →
-            // 那裡也鋪同一種石板（射線往下量：岩地跟步道一樣高的地方才鋪）
-            next += 1.0   // 2026-11-15 整齊的石板一塊 1.0 m：間距也 1.0，不再一塊疊一塊
-          }
-        }
+        let nf = 0
         // 2026-11-15 使用者（岩廊靠岩壁那側一片咖啡色岩地）「這些咖啡色的要移除」：石板照平滑過的中線 C3 鋪，但西頭轉彎（x 192～197）原始路線點離 C3 有 1.5 m，
         // 槽照原始路線切 → 靠岩壁那條沒鋪到、露出光禿岩地。原始路線離 C3 超過 0.6 m 的地方，沿原始路線再鋪一排
+        const LK = L
         const nearC3 = (x, z) => { let b = 1e9; for (let i = 0; i < NP; i++) if (inGal(i)) b = Math.min(b, Math.hypot(C3[i].x - x, C3[i].z - z)); return b }
         for (let i = 1; i < NP; i++) { if (!inGal(i) || !inGal(i - 1)) continue
           const [ax, az] = st.pts[i - 1], [bx, bz] = st.pts[i], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 0.95))
           q.setFromAxisAngle(UPv, Math.atan2(-(bz - az), bx - ax))
           for (let k = 0; k < n; k++) { const t = k / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t; if (nearC3(x, z) < 0.6) continue
-            put('gal_floor_' + 'abc'[nf++ % 3], m4.compose(V(x, lerpN(st.yy[i - 1], st.yy[i], t) - 0.01, z), q, V(1, 1, 1))) } } }
+            // 同一種長青苔的天然石階（橫跨路的方向 2.5 m 縮成 1.6 m，頂面跟步道一樣高）
+            const nm = ['nat_step_a', 'nat_step_b', 'nat_step_c', 'nat_step_d'][nf % 4], qs = new THREE.Quaternion().setFromAxisAngle(UPv, Math.atan2(bx - ax, bz - az) + (hsh(nf * 1.3) - 0.5) * 0.08)
+            if (!K[nm]) continue
+            const kk = 0.87 + 0.26 * hsh(nf * 4.7); (LK.__stepC ||= {})[nm] ||= []
+            ;(LK[nm] ||= []).push(m4.compose(V(x, lerpN(st.yy[i - 1], st.yy[i], t) + 0.02 - 0.3 - hsh(nf * 2.9) * 0.012, z), qs, V(0.64, 1, 2.0)).clone()); LK.__stepC[nm].push(new THREE.Color(kk, 0.9 * kk, 0.74 * kk)); nf++ } } }
       // 天然石階：整條崖壁步道的每一階（岩廊段已經是平鋪石板，那幾階本來就縮成 0）
       { const names = ['nat_step_a', 'nat_step_b', 'nat_step_c', 'nat_step_d'].filter((n) => K[n]), flip = new THREE.Matrix4().makeRotationY(Math.PI)
         if (names.length) {
