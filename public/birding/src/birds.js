@@ -309,7 +309,7 @@ const BUILD = {
   shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe, lapwing,
   peregrine, blackswift, greatgreyowl,
   dipper, forktail, redstart, harlequin,
-  avocet, pratincole, bwkite, shrike, burrowowl,
+  avocet, pratincole, bwkite, shrike, burrowowl, smew, fduck, cegret,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -1985,6 +1985,50 @@ function burrowowl(env) {
     return b
   })
 }
+// 2026-11-16 潛鴨（使用者指定：小鵲鴨、白眼潛鴨）：在深水池游，隔一陣子往前一翻潛下去（在水底找魚、看不到），
+// 4～9 秒後從別處冒出來抖一抖；不時停下來理毛（頭轉到背上、翅膀微微抬起）
+function diveDuck(env, name, H, h0, n, focusY) {
+  return groundGroup(n, 1.0, (avoid) => {
+    const D = { st: 'swim', t: rnd(5, 12), e: 0 }
+    const show = ({ t, dt, root, w }) => {
+      D.t -= dt; D.e += dt
+      const splash = () => { const p = root.getWorldPosition(V()); ripple(p.x, p.z, 0.6) }
+      if (D.st === 'swim' && D.t < 0) {
+        if (Math.random() < 0.3) { D.st = 'preen'; D.t = rnd(2.5, 5); D.e = 0; D.side = Math.random() < 0.5 ? -1 : 1 }
+        else { D.st = 'dive'; D.t = rnd(4, 9); D.e = 0; splash() }
+      } else if (D.st === 'dive' && D.t < 0) { D.st = 'up'; D.t = 0.9; D.e = 0; root.visible = true; splash() }
+      else if ((D.st === 'up' || D.st === 'preen') && D.t < 0) { D.st = 'swim'; D.t = rnd(7, 16) }
+      if (D.st === 'dive') { root.visible = D.e < 0.45; return { jump: -0.25 * ss(D.e, 0.05, 0.4), lean: 1.1 * ss(D.e, 0, 0.25), neck: 0.6, head: -0.5, tail: 0.4, rate: 30 } }
+      if (D.st === 'up') return { wing: 0.4 * Math.max(0, Math.sin(t * 36)) * D.t, jump: -0.25 * (1 - ss(D.e, 0, 0.35)), rate: 30 }
+      if (D.st === 'preen') {
+        // 理毛：頭往後轉到肩上、嘴一下一下啄羽毛；最後抖一下
+        w.goal = null
+        const k = ss(D.e, 0, 0.5) * (1 - ss(D.e, D.e + D.t - 0.5, D.e + D.t))
+        return { yaw: D.side * 2.2 * k, neck: -0.1 * k, head: 0.35 * k + 0.12 * k * Math.sin(t * 11), wing: 0.12 * k, rate: 12 }
+      }
+      return null
+    }
+    return groundTripo(env, { name, H, h0, ...TRIPO, swim: true, bill: 0.06, bob: 0.025, show,
+      walk: { radius: 3.5, speed: 0.15, avoid: swimAvoid(env, avoid) }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY,
+      acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } })
+  })
+}
+function smew(env) { return diveDuck(env, 'smew-rig', 0.3, 0.7, 2, 0.2) }
+function fduck(env) { return diveDuck(env, 'fduck-rig', 0.32, 0.7, 2, 0.22) }
+// 2026-11-16 黃嘴白鷺：潟湖潮間帶的淺水，平常慢慢走、低頭盯水面；看到魚就半張翅膀快步追 1.5～3 m，伸長脖子一戳（維基百科：常在淺水快步奔跑追捕小魚）
+function cegret(env) {
+  const R = { dash: rnd(5, 10), on: false }, BASE = 0.14
+  const show = ({ dt, w, acts, n, kk }) => {
+    R.dash -= dt
+    if (!R.on && R.dash < 0 && !w.busy && w.pick(1.5, 3)) { R.on = true; w.speed = BASE * 6; acts.next('walk') }
+    if (R.on && !w.goal) { R.on = false; R.dash = rnd(6, 14); w.speed = BASE; acts.next('strike') }
+    if (R.on) return { lean: 0.45, neck: 0.35, head: -0.25, wing: 0.35, rate: 10 }   // 追魚：身體壓低、翅膀半張
+    return null
+  }
+  return groundTripo(env, { name: 'cegret-rig', H: 0.8, h0: 0.98, ...TRIPO, reach: 0.8, wade: true, bill: 0.2, show,
+    walk: { radius: 3, speed: BASE }, swingT: 0.4, lift: 0, knee: [0.9, 1.6], focusY: 0.55,
+    acts: { stand: [2, 2, 4], hunt: [4, 2, 4], walk: [3, 99, 99], turn: [1, 99, 99], strike: [1.5, 1.4, 1.4], look: [1.5, 1.5, 3] } })
+}
 // 黑翅鳶：停在草原上一棵樹的枝頭；每隔一陣子飛出去在草原上空「定點懸停」看獵物，再收翅往下俯衝（flight.js ESCAPE.bwkite.hover）
 function bwkite(env) {
   return perchRigged(outer(env, -1.1), { name: 'bwkite-rig', k: 0.54, ...TRIPO, foot: 0.02, drop: 0.05, beat: 6, grip: 1.0 })
@@ -2425,7 +2469,7 @@ export const REAL_CM = {
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
   shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, lapwing: 30, grebe: 50,
-  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25, burrowowl: 23,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
+  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25, burrowowl: 23, smew: 40, fduck: 41, cegret: 68,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
 const _fsInv = new THREE.Matrix4(), _fsV = V()

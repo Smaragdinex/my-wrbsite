@@ -1415,6 +1415,39 @@ export const BIRDS = {
    "When cornered in its burrow it makes a hissing buzz much like a rattlesnake's rattle, scaring off intruders."
   ]
  },
+ "smew": {
+  "name": "Smew",
+  "where": "Open Water of the Deep Pool, Emerald Marsh",
+  "intro": "A small diving duck. The male is almost entirely snow-white, with a black mask around the eye, a black V-line on the back of the head and a black back, like a chunk of black-and-white ice — it is even nicknamed the 'panda duck'. It dives for small fish, then shakes and preens its feathers on the surface.",
+  "facts": [
+   "It breeds in the northern conifer forests of Eurasia, nesting in tree holes, often old woodpecker holes.",
+   "It moves south to lakes and reservoirs only in winter; in Taiwan it is a very rare vagrant or winter visitor.",
+   "Its thin bill has saw-toothed edges, typical of the mergansers, ideal for gripping slippery fish.",
+   "Females look very different: chestnut cap, white cheeks and a grey body."
+  ]
+ },
+ "fduck": {
+  "name": "Ferruginous Duck",
+  "where": "Where the Deep Pool Meets the Reeds, Emerald Marsh",
+  "intro": "A small-to-medium diving duck. The male's head, neck and breast are a rich chestnut, and its most striking feature is a pair of white eyes; there is a white patch under the tail. It likes water beside reed beds, diving for water plants, seeds and small animals, and often preens on the surface afterwards.",
+  "facts": [
+   "The IUCN lists it as Near Threatened: wetland loss and hunting have reduced its numbers.",
+   "It prefers plant-rich freshwater lakes and marshes screened by reeds, and is shyer and more secretive than other diving ducks.",
+   "Females have dark eyes and duller plumage, so eye colour tells the sexes apart.",
+   "In Taiwan it is a rare winter visitor, sometimes turning up among flocks of Tufted Ducks."
+  ]
+ },
+ "cegret": {
+  "name": "Chinese Egret",
+  "where": "Tidal Mudflats on the North Shore, Sunset Lagoon",
+  "intro": "A medium-sized, all-white egret. In the breeding season its bill is bright yellow, its legs black with yellow toes, a shaggy crest grows from the back of its head and the bare facial skin turns blue. It runs quickly through the shallows of tidal flats chasing small fish, then stabs with its outstretched neck.",
+  "facts": [
+   "The IUCN lists it as Vulnerable; only a few thousand remain, breeding only on small offshore islands of China, Korea and Russia.",
+   "It resembles the Little Egret, whose bill is black all year; the Chinese Egret's breeding bill is yellow and its crest shaggier.",
+   "It feeds almost only on coastal tidal flats and estuaries, rarely visiting inland freshwater wetlands.",
+   "It passes Taiwan's coasts on spring and autumn migration and is a prized sighting for birdwatchers."
+  ]
+ },
  "lapwing": {
   "name": "Northern Lapwing",
   "where": "Open Wetland between the Emerald Marsh and the Mountain Lake",

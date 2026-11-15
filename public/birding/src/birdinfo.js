@@ -1101,6 +1101,40 @@ const ALL = [
       '被逼進洞裡時會發出很像響尾蛇搖尾巴的嘶嘶聲，把想鑽進來的敵人嚇走。',
     ],
   },
+  {
+    // 2026-11-16 使用者指定三種（非常稀有）：小鵲鴨、白眼潛鴨在翡翠沼澤的深水池；黃嘴白鷺在夕陽潟湖北岸的潮間帶泥灘
+    id: 'smew', spot: [62, -106], perch: 'ground', swim: 'eastWet', view: 126, y: EAST.W - 0.17, water: EAST.W, dist: 8, camH: 1.6, lookY: 0.25,
+    name: '小鵲鴨', sci: 'Mergellus albellus', where: '翡翠沼澤深水池的開闊水面',
+    intro: '小型的潛鴨。雄鳥幾乎全身雪白，眼睛四周一塊黑色眼罩、後腦一道黑色 V 字線、背是黑的，遠遠看就像一團黑白分明的冰塊，所以英文也叫「熊貓鴨」。常潛進水裡抓小魚，浮上來後抖抖羽毛、整理羽毛。',
+    facts: [
+      '繁殖在歐亞大陸北方的針葉林，在樹洞裡築巢，常用啄木鳥留下的舊洞。',
+      '冬天才飛到南方的湖泊、水庫度冬；在台灣是很少見的迷鳥或冬候鳥。',
+      '嘴細細的、邊緣有鋸齒，屬於秋沙鴨的一類，很適合咬住滑溜的小魚。',
+      '雌鳥和雄鳥長得很不一樣：雌鳥頭頂栗紅色、臉頰白色，身體灰色。',
+    ],
+  },
+  {
+    id: 'fduck', spot: [60, -124], perch: 'ground', swim: 'eastWet', view: 338, y: EAST.W - 0.17, water: EAST.W, dist: 7, camH: 1.5, lookY: 0.25,
+    name: '白眼潛鴨', sci: 'Aythya nyroca', where: '翡翠沼澤深水池南邊、靠紙莎草和蘆葦的水面',
+    intro: '中小型的潛鴨。雄鳥頭、頸和胸是濃濃的栗紅褐色，最特別的是一雙白色的眼睛；尾巴下面一塊白色。喜歡躲在蘆葦叢邊的水面，潛到水底吃水草、種子和小動物，浮上來後常在水面整理羽毛。',
+    facts: [
+      '國際自然保護聯盟（IUCN）列為「近危」：濕地消失和打獵讓牠們的數量減少。',
+      '喜歡水草豐富、四周有蘆葦遮蔽的淡水湖和沼澤，比其他潛鴨更怕人、更隱密。',
+      '雌鳥的眼睛是深色的，羽色也比較暗淡，用眼睛顏色就能分辨雌雄。',
+      '在台灣是罕見的冬候鳥，偶爾會混在鳳頭潛鴨的群裡出現。',
+    ],
+  },
+  {
+    id: 'cegret', spot: [-28, -99], perch: 'ground', view: 20, y: EAST.W - 0.08, water: EAST.W, dist: 5, camH: 1.4, lookY: 0.55,
+    name: '黃嘴白鷺', sci: 'Egretta eulophotes', where: '夕陽潟湖北岸的潮間帶泥灘',
+    intro: '全身雪白的中型鷺鳥。繁殖季嘴是鮮黃色、腳黑色而腳趾黃色，頭後面長出一束蓬鬆的冠羽，臉上裸露的皮膚是藍色。常在潮間帶的淺水裡快步奔跑追小魚，追到了就伸長脖子一戳。',
+    facts: [
+      'IUCN 列為「易危」，全世界只剩幾千隻，只在中國、韓國、俄羅斯沿海的小島上繁殖。',
+      '跟小白鷺很像：小白鷺的嘴一年四季都是黑的，黃嘴白鷺繁殖季的嘴是黃的，冠羽也比較蓬亂。',
+      '幾乎只在海邊的潮間帶、河口泥灘覓食，很少到內陸的淡水濕地。',
+      '春秋過境時會經過台灣的海岸，是賞鳥人很想看到的珍稀鷺鳥。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -1109,6 +1143,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike', 'burrowowl']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike', 'burrowowl', 'smew', 'fduck', 'cegret']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

@@ -116,6 +116,8 @@ export const ESCAPE = {
   harlequin: { r: 10, swim: 5, fly: { speed: 12, hz: 7, style: 'flap', k: 0.69 } },
   // 2026-11-15 使用者指定四種。hover：自己出去時在草原上空定點懸停，再收翅俯衝；hawk：飛出去繞一圈抓飛蟲／撲地上的蟲，馬上回原位
   avocet: { r: 10, fly: { speed: 10, hz: 5, style: 'flap', k: 1.0 } },
+  smew: { r: 10, swim: 4, fly: { speed: 12, hz: 9, style: 'flap', k: 1.05 } }, fduck: { r: 10, swim: 4, fly: { speed: 12, hz: 9, style: 'flap', k: 1.07 } },   // 2026-11-16 潛鴨：先游開、逼近才飛
+  cegret: { r: 10, fly: { speed: 8, hz: 3.5, style: 'flap', k: 1.3 } },
   burrowowl: { r: 8, run: 5, burrow: true, fly: { speed: 8, hz: 7, style: 'flap', k: 0.6 } },   // 2026-11-16 穴鴞：人靠近先跑回洞裡躲（birds.js burrowowl 的 w.flee）；還在洞外又被逼到很近才飛
   pratincole: { r: 7, hawk: true, sortie: [20, 45], fly: { speed: 10, hz: 6, style: 'glide', k: 0.62 } },
   bwkite: { r: 9, hover: true, sortie: [35, 80], fly: { speed: 9, hz: 5, style: 'glide', k: 0.9 } },
