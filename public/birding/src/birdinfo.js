@@ -1,7 +1,8 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight, ALP_RIVER } from './layout.js'
+import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight, ALP_RIVER, smoothstep } from './layout.js'
+const lerp = (a, b, t) => a + (b - a) * t
 import { birdText } from './i18n.js'
 
 const ALL = [
@@ -991,8 +992,11 @@ const ALL = [
     // 地面（groundFn）：淺的地方踩在河床上（涉水），水深超過 0.1 m 就浮在水面（河烏真的會游）；depthAt 給牠判斷能不能潛
     // 2026-11-15 第二版：岸邊被蕨類、橋燈擋住 → 河中間放一顆露出水面的平頂石（def.boulder），牠在石頭上蹲、下水游、潛下去
     id: 'dipper', spot: [181.0, 68.4], y: ALP_RIVER.water(ALP_RIVER.sAt(181.0, 68.4)) + 0.2, boulder: { r: 0.45 }, perch: 'ground', view: 200, dist: 2.6, camH: 0.9, lookY: 0.15,
-    groundFn: (x, z) => { if (Math.hypot(x - 181.0, z - 68.4) < 0.3) return ALP_RIVER.water(ALP_RIVER.sAt(181.0, 68.4)) + 0.2; const W = ALP_RIVER.water(ALP_RIVER.sAt(x, z)), g = alpineHeight(x, z); return W - g > 0.1 ? W - 0.085 : g },
-    depthAt: (x, z) => ALP_RIVER.water(ALP_RIVER.sAt(x, z)) - alpineHeight(x, z),
+    // 2026-11-15 使用者「河烏走到某些點會突然掉下去」：以前三種地面（石頂／浮在水面／踩河床）之間是一刀切 → 改成連續：
+    // 水裡＝max(河床, 水面 − 0.085)；石頭 0.25 m 內是石頂、到 0.55 m 斜下來接水面；石頭 0.7 m 內不潛水（以前在石頂上潛，直接沉進石頭）
+    groundFn: (x, z) => { const W = ALP_RIVER.water(ALP_RIVER.sAt(x, z)), w = Math.max(alpineHeight(x, z), W - 0.085), top = ALP_RIVER.water(ALP_RIVER.sAt(181.0, 68.4)) + 0.2
+      const d = Math.hypot(x - 181.0, z - 68.4); return d > 0.55 ? w : lerp(top, w, smoothstep(0.25, 0.55, d)) },
+    depthAt: (x, z) => Math.hypot(x - 181.0, z - 68.4) < 0.7 ? 0 : ALP_RIVER.water(ALP_RIVER.sAt(x, z)) - alpineHeight(x, z),
     name: '河烏', sci: 'Cinclus pallasii', where: '瀑布湖出水口下的深潭、石拱橋上游',
     intro: '全世界唯一會在水底走路的鳴禽。全身巧克力褐色、體型圓胖像一顆球，尾巴短短翹起。常站在溪石上一直上下「蹲」，白色的眼瞼一眨一眨；看到獵物就走進湍急的溪水裡，整隻沉到水底，逆著水流低頭翻石頭找水生昆蟲。',
     facts: [
