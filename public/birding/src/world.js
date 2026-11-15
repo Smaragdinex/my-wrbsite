@@ -339,6 +339,25 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
             rim.position.set(def.spot[0], hit.point.y + 0.125, def.spot[1]); bed.position.set(def.spot[0], hit.point.y + 0.11, def.spot[1]); rim.castShadow = true; scene.add(rim, bed)
           }
           const b = placeDef({ ...def, y: hit.point.y + 0.13 }); b.def = def; birds.push(b)
+          // 2026-11-15 使用者（從湖邊往瀑布右邊的凹洞看，紅圈）「燕子放這裡明顯一點、3 個巢」：黑雨燕是一小群在同一面濕岩壁上築巢 →
+          // 另外兩個巢（同樣的岩縫平台＋苔蘚杯），位置記在 def.colonySpots，flight.js 的另外兩隻（一隻一直在瀑布底下和湖上飛、一隻有時在巢有時出去飛）用
+          if (def.colony) {
+            def.colonySpots = []
+            for (const [cx, cy, cz] of def.colony) {
+              const c2 = (y) => new THREE.Raycaster(new THREE.Vector3(cx, y, cz), new THREE.Vector3(0, 0, 1), 0, 40).intersectObjects(solids, true).find((h) => h.object.isMesh && !h.object.material.transparent)
+              const h = c2(cy); if (!h) continue
+              let zf = h.point.z; for (let dy = 0.2; dy <= 1.21; dy += 0.2) { const h2 = c2(cy + dy); if (h2 && Math.abs(h2.point.z - h.point.z) < 3) zf = Math.min(zf, h2.point.z) }
+              const n2 = h.face ? h.face.normal.clone().transformDirection(face.matrixWorld) : new THREE.Vector3(0, 0, -1); n2.y = 0; if (n2.lengthSq() < 1e-4) n2.set(0, 0, -1); n2.normalize(); if (n2.z > 0) n2.negate()
+              const lg = ledge.clone(); const dz2 = (0.55 + (h.point.z - zf) / 2) * 0.6
+              lg.scale.set(0.85 * 0.32, 0.6 * 0.32, dz2); lg.rotation.y = Math.atan2(n2.x, n2.z)
+              const sx2 = h.point.x, sz2 = zf - 0.2
+              lg.position.set(sx2, h.point.y - 0.02 + 0.13 - 0.15 * 0.32 - 0.06, sz2 + dz2 * 0.55); scene.add(lg)
+              const moss = new THREE.MeshStandardMaterial({ color: 0x2e3320, roughness: 1 }), rim = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.025, 8, 22).rotateX(Math.PI / 2), moss)
+              const bed = new THREE.Mesh(new THREE.CircleGeometry(0.08, 16).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x2c3319, roughness: 1 }))
+              rim.position.set(sx2, h.point.y + 0.125, sz2); bed.position.set(sx2, h.point.y + 0.11, sz2); rim.castShadow = true; scene.add(rim, bed)
+              def.colonySpots.push({ x: sx2, y: h.point.y + 0.13, z: sz2, face: Math.atan2(-n2.x, -n2.z) })
+            }
+          }
         }
       }
     }

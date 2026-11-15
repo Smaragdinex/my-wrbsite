@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import { rigged, AX, hasModel } from '../birds.js'
 import { HIDES } from '../east.js'
+import { clone as skClone } from 'three/addons/utils/SkeletonUtils.js'
 // 2026-11-11 使用者：躲在觀察屋裡，鳥不會飛走（Threads 回饋：宣傳文寫了「躲在賞鳥屋裡鳥不會跑」，以前觀察屋只是一棟房子）。
 // 觀察屋 6×3.2 m、正面朝 look；玩家在屋裡（各邊多 0.4 m，含門口）＝鳥看不到人，不會警戒
 const inHide = (P) => HIDES.some((h) => { const a = Math.atan2(h.look[0] - h.x, h.look[1] - h.z), dx = P.x - h.x, dz = P.z - h.z, lz = dx * Math.sin(a) + dz * Math.cos(a), lx = dx * Math.cos(a) - dz * Math.sin(a); return Math.abs(lx) < h.w / 2 + 0.4 && Math.abs(lz) < h.d / 2 + 0.4 })
@@ -73,7 +74,7 @@ export const ESCAPE = {
   grebe: { r: 9, swim: 4, fly: { speed: 11, hz: 9, style: 'flap', k: 1.25 } },
   // 2026-11-13 Pass 1D：遊隼巡航快、拍幾下就滑；黑雨燕又快又急（離步道 4～5 m 高，靠很近才飛）；烏林鴞慢、低、安靜
   peregrine: { r: 5,   /* 2026-11-15 使用者「81 完全沒看到」：驚飛 16 m，岩架離步道才 6～10 m → 走到上層岩廊就飛走、29 m 外才回來，永遠看不到。高高的岩架上、人在底下走，5 m 才飛 */ fly: { speed: 15, hz: 4.5, style: 'glide', k: 1.05 } },
-  blackswift: { r: 2.5, sortie: [45, 100], fly: { speed: 14, hz: 8, style: 'glide', k: 0.48 } },   // 2026-11-15 使用者「黑雨燕會一直穿梭在瀑布飛嗎」→ 真的雨燕白天在空中覓食、穿過水簾回巢：沒人打擾也每 45～100 秒自己出去一趟（sortie）
+  blackswift: { r: 2.5, sortie: [45, 100], colony: { loop: [[203.5, 34.5, 95], [199, 32, 90.5], [193, 31.5, 86], [186.5, 33, 79], [189, 35, 70.5], [199, 36, 66.5], [209, 34.5, 70], [212, 32, 78], [208, 31.5, 85.5]] }, fly: { speed: 14, hz: 8, style: 'glide', k: 0.48 } },   // 2026-11-15 使用者「黑雨燕會一直穿梭在瀑布飛嗎」→ 真的雨燕白天在空中覓食、穿過水簾回巢：沒人打擾也每 45～100 秒自己出去一趟（sortie）
   greatgreyowl: { r: 10, fly: { speed: 6, hz: 2.8, style: 'glide', k: 1.45 } },
   wbwood: { r: 8, fly: { speed: 8, hz: 9, style: 'bound', k: 0.42 } },
   nutcracker: { r: 10, fly: { speed: 9, hz: 5, style: 'glide', k: 0.55 } },
@@ -142,6 +143,71 @@ export function createFlight(world, player) {
   const { scene } = world
   const units = []   // 一個站點一組
   // 2026-11-11 串流載入：模型還沒載到的鳥（b.pending）先跳過，載到後 main.js 再呼叫 flight.add(b)
+  /* ---------- 2026-11-15 黑雨燕一小群（使用者「3 個巢，至少 1 隻一直在瀑布底下和湖上飛，另外兩隻隨機飛或停在巢上」）----------
+     第 82 號那隻本身照舊（巢裡坐著、每 45～100 秒自己出去一趟）；另外兩隻是同一筆圖鑑的成員（拍到一樣算黑雨燕）：
+     A：一直沿一圈路線飛（湖上 → 瀑布前 → 鑽進水簾後面的凹洞 → 出來），巢是空的；B：在第三個巢坐 25～70 秒，出去跟著繞 1～3 圈再回巢 */
+  const colonies = []
+  function addColony(b, esc) {
+    const main = membersOf(b)[0]
+    main.obj.updateMatrixWorld(true); b.group?.updateMatrixWorld(true)
+    const P0 = main.obj.getWorldPosition(V()), Q0 = main.obj.getWorldQuaternion(new THREE.Quaternion()), S0 = main.obj.getWorldScale(V())
+    const base = b.group ? b.group.getWorldPosition(V()) : b.target.clone(), off = P0.clone().sub(base)
+    _box.setFromObject(main.obj); const perchH = _box.getSize(_v).y
+    const L = esc.colony.loop.map(([x, y, z]) => V(x, y, z)), loop = new THREE.CatmullRomCurve3(L, true, 'centripetal'), len = loop.getLength()
+    const mk = (k) => {
+      const spot = b.def.colonySpots[k], f = makeFlier(b.def.id, perchH); scene.add(f.root)
+      const sit = skClone(main.obj); sit.traverse((o) => { o.visible = true; o.frustumCulled = false }); sit.position.copy(V(spot.x, spot.y, spot.z).add(off)); sit.quaternion.copy(Q0); sit.scale.copy(S0); scene.add(sit)
+      const c = { b, f: esc.fly, root: f.root, r: f.r, sit, spot: V(spot.x, spot.y + 0.05, spot.z), head: 0, roll: 0, pitch: 0, phase: Math.random() * 6, t: 0 }
+      const mem = { get obj() { return c.mode === 'nest' ? c.sit : c.root }, acts: { get name() { return c.mode === 'nest' ? 'stand' : 'fly' } } }
+      return { c, mem }
+    }
+    const A = mk(1), B = mk(0)
+    A.c.mode = 'loop'; A.c.u = Math.random(); A.c.sit.visible = false; A.c.alt = 0
+    B.c.mode = 'nest'; B.c.wait = 8 + Math.random() * 30; B.c.alt = 1.2; B.c.root.visible = false
+    b.built.birds = [main, A.mem, B.mem]   // 拍照、對焦、出現／不在都把這兩隻算進黑雨燕
+    colonies.push({ b, loop, len, list: [A.c, B.c] })
+  }
+  const _cq = V(), _ct = V()
+  function colonyTick(t, dt) {
+    for (const C of colonies) {
+      const off = C.b.absent
+      for (const c of C.list) {
+        if (off) { c.root.visible = false; c.sit.visible = false; continue }
+        c.t += dt
+        if (c.mode === 'nest') {
+          c.sit.visible = true; c.root.visible = false
+          if ((c.wait -= dt) <= 0) {   // 出巢：從巢接到圈上最近的那一點前面一段
+            let best = 0, bd = 1e9; for (let i = 0; i < 40; i++) { const p = C.loop.getPointAt(i / 40); const d = p.distanceTo(c.spot); if (d < bd) { bd = d; best = i / 40 } }
+            c.u = (best + 0.08) % 1; const E = C.loop.getPointAt(c.u), dir = C.loop.getTangentAt(c.u)
+            c.curve = new THREE.CubicBezierCurve3(c.spot.clone(), c.spot.clone().add(V(0, 0.6, -1.5)), E.clone().addScaledVector(dir, -4), E); c.len = c.curve.getLength(); c.dist = 0
+            c.mode = 'out'; c.laps = 1 + Math.floor(Math.random() * 3); c.t = 0
+          }
+          continue
+        }
+        c.sit.visible = false; c.root.visible = true
+        const sp = c.f.speed * (c.mode === 'back' ? THREE.MathUtils.clamp((c.len - c.dist) / 5, 0.15, 1) : c.mode === 'out' ? Math.min(1, 0.35 + c.t / 1.2) : 0.8)
+        if (c.mode === 'loop') {
+          const du = sp * dt / C.len, before = c.u; c.u = (c.u + du) % 1
+          if (c.laps != null && c.u < before && --c.laps <= 0) {   // 繞完：從這一點回巢
+            const S = C.loop.getPointAt(c.u), dir = C.loop.getTangentAt(c.u)
+            c.curve = new THREE.CubicBezierCurve3(S, S.clone().addScaledVector(dir, 5), c.spot.clone().add(V(0, 0.8, -2.2)), c.spot.clone()); c.len = c.curve.getLength(); c.dist = 0; c.mode = 'back'
+          } else { C.loop.getPointAt(c.u, _cq); _cq.y += c.alt; C.loop.getTangentAt(c.u, _ct) }
+        }
+        if (c.mode === 'out' || c.mode === 'back') {
+          c.dist = Math.min(c.len, c.dist + sp * dt); const k = c.dist / c.len
+          c.curve.getPointAt(k, _cq); c.curve.getTangentAt(Math.min(k, 0.999), _ct)
+          if (c.dist >= c.len) { if (c.mode === 'out') { c.mode = 'loop'; c.t = 0 } else { c.mode = 'nest'; c.wait = 25 + Math.random() * 45; c.laps = null; continue } }
+        }
+        c.root.position.copy(_cq)
+        const h = Math.atan2(_ct.x, _ct.z), dh = wrap(h - c.head)
+        c.head += dh * (1 - Math.exp(-7 * dt)); c.roll = damp(c.roll, clamp(-dh * 2.6, -0.8, 0.8), 4, dt)
+        c.pitch = damp(c.pitch, -Math.asin(clamp(_ct.y, -1, 1)) * 0.7, 6, dt)
+        c.root.rotation.set(c.pitch, c.head, c.roll)
+        const flare = c.mode === 'back' ? ss(1 - (c.len - c.dist) / 3, 0, 1) : 0
+        wings(c, c.f, t, dt, c.mode === 'out' ? 1 - ss(c.t, 0.3, 1.4) : 0, flare)
+      }
+    }
+  }
   function addUnit(b) {
     const esc = ESCAPE[b.def.id]
     if (!esc || b.pending || units.some((u) => u.b === b)) return
@@ -161,6 +227,7 @@ export function createFlight(world, player) {
       return s
     })
     units.push({ b, esc, ms, alarm: 0, calm: 0, state: 'home', home: b.target.clone(), base: { ...b.def } })
+    if (esc.colony && b.def.colonySpots?.length) addColony(b, esc)
   }
   for (const b of world.birds) addUnit(b)
 
@@ -323,6 +390,7 @@ export function createFlight(world, player) {
   }
 
   function tick(t, dt, { sneak = false } = {}) {
+    colonyTick(t, dt)
     const P = world.camera.position
     speed = damp(speed, P.distanceTo(last) / Math.max(dt, 1e-3), 8, dt)
     last.copy(P)
