@@ -2082,6 +2082,7 @@ function cormorant(env) {
   const show = () => { dry.visible = S.mode === 'dry'; idle.obj.visible = S.mode !== 'dry' }
   show()
   let yaw = 0
+  const D = { ph: 0, amp: 0.28 }
   const update = (t, dt) => {
     if (!(dt > 0)) return
     S.t -= dt
@@ -2097,9 +2098,15 @@ function cormorant(env) {
     yaw = damp(yaw, want, acts.name === 'look' ? 7 : 2, dt)
     r.turn('neck', AX.y, yaw * 0.35); r.turn('head', AX.y, yaw * 0.65)
     r.turn('head', AX.x, 0.04 * Math.sin(t * 0.9))
-    // 翅膀：平常微微晃（風吹）；shake＝連續搧 3、4 下把水甩乾（往上抬＝負的角度；2026-11-16 使用者「翅膀綁反了」：以前正的是往下收）
-    const fl = acts.name === 'shake' ? 0.45 * Math.max(0, Math.sin(acts.t * Math.PI * 2 * 3.2)) : 0.04 * Math.sin(t * 1.4) + 0.025 * Math.sin(t * 3.1)
-    r.turn('wingL', AX.z, -fl); r.turn('wingR', AX.z, fl)
+    // 翅膀（2026-11-16 使用者「你是上下，應該前後上下」）：真的鸕鷀晾翅時翅膀是「前後搧＋上下」一起動——
+    // 往前搧時抬起、往後收時放低，翼尖畫一個橢圓（前後 = 繞上下軸 AX.y、上下 = 繞身體前後軸 AX.z，相差 90°）。
+    // 平常：慢慢地一前一後搧（約 0.6 Hz、幅度小）；shake：連續大力搧幾下把水甩乾（約 1.8 Hz）
+    const sh = acts.name === 'shake'
+    D.ph += dt * Math.PI * 2 * (sh ? 1.8 : 0.6)
+    D.amp = damp(D.amp, sh ? 1 : 0.28, 5, dt)
+    const fb = 0.32 * D.amp * Math.sin(D.ph), ud = 0.2 * D.amp * Math.sin(D.ph + Math.PI / 2) - 0.05 * D.amp   // fb>0 往後、ud>0 往上
+    r.turn('wingL', AX.y, fb); r.turn('wingR', AX.y, -fb)
+    r.turn('wingL', AX.z, -ud); r.turn('wingR', AX.z, ud)
     r.turn('body', AX.x, 0.012 * Math.sin(t * 1.6))   // 呼吸
   }
   return { obj: root, focus, update, get acts() { return S.mode === 'dry' ? acts : idle.acts }, noFix: true, rig: r, get mode() { return S.mode }, set mode(v) { S.mode = v; S.t = 30; show() } }
