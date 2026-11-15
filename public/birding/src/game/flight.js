@@ -73,7 +73,7 @@ export const ESCAPE = {
   grebe: { r: 9, swim: 4, fly: { speed: 11, hz: 9, style: 'flap', k: 1.25 } },
   // 2026-11-13 Pass 1D：遊隼巡航快、拍幾下就滑；黑雨燕又快又急（離步道 4～5 m 高，靠很近才飛）；烏林鴞慢、低、安靜
   peregrine: { r: 16, fly: { speed: 15, hz: 4.5, style: 'glide', k: 1.05 } },
-  blackswift: { r: 5, fly: { speed: 14, hz: 8, style: 'glide', k: 0.48 } },
+  blackswift: { r: 5, sortie: [45, 100], fly: { speed: 14, hz: 8, style: 'glide', k: 0.48 } },   // 2026-11-15 使用者「黑雨燕會一直穿梭在瀑布飛嗎」→ 真的雨燕白天在空中覓食、穿過水簾回巢：沒人打擾也每 45～100 秒自己出去一趟（sortie）
   greatgreyowl: { r: 10, fly: { speed: 6, hz: 2.8, style: 'glide', k: 1.45 } },
   wbwood: { r: 8, fly: { speed: 8, hz: 9, style: 'bound', k: 0.42 } },
   nutcracker: { r: 10, fly: { speed: 9, hz: 5, style: 'glide', k: 0.55 } },
@@ -267,7 +267,7 @@ export function createFlight(world, player) {
     if (s.mode === 'away') {
       if (u.leaving) return   // 時段到了飛走（presence.js）：不回來
       s.wait -= dt
-      const far = world.camera.position.distanceTo(s.home) > u.esc.r * 1.8
+      const far = world.camera.position.distanceTo(s.home) > u.esc.r * (u.trip ? 1.0 : 1.8)   // 自己出去覓食的（sortie）：玩家在旁邊看也照樣回巢，只要不貼在巢前 5 m 內
       if (s.wait <= 0 && far) {
         s.curve = inbound(s.curve.v3, s.home, s.faceH); s.len = s.curve.getLength(); s.dist = 0; s.t = 0
         s.mode = 'back'; root.visible = true
@@ -332,6 +332,11 @@ export function createFlight(world, player) {
     for (const u of units) {
       if (u.b.absent) continue   // 這個時段不在（main.js presence）
       if (u.state === 'home') {
+        // 自己出巢覓食（ESCAPE.sortie）：沒在警戒時倒數，時間到就照驚飛那一套從岩面朝外（穿過水簾）飛出去，在遠處待一陣子再飛回巢
+        if (u.esc.sortie && u.alarm < 0.2) {
+          u.sortT = (u.sortT ?? rnd(8, u.esc.sortie[0])) - dt
+          if (u.sortT <= 0) { u.sortT = rnd(...u.esc.sortie); flush(u, t); u.trip = true; for (const s2 of u.ms) s2.wait = rnd(14, 26); continue }
+        }
         let d = Infinity
         for (const s of u.ms) { s.m.obj.getWorldPosition(_v); d = Math.min(d, _v.distanceTo(P)) }
         const R = u.esc.r * mult
@@ -343,7 +348,7 @@ export function createFlight(world, player) {
         if (u.alarm >= 1) {
           u.alarm = 0
           if (u.esc.fly && u.ms.some((s) => s.m.walker)) { u.state = 'ground'; u.calm = 0; for (const s of u.ms) fleeOnGround(u, s) }
-          else flush(u, t)
+          else { flush(u, t); u.trip = false }
         }
       } else if (u.state === 'ground') {
         let d = Infinity
@@ -356,7 +361,7 @@ export function createFlight(world, player) {
         if (u.calm > 4) { for (const s of u.ms) restoreWalker(s); u.state = 'home'; u.alarm = 0 }
       } else if (u.esc.fly) {
         for (const s of u.ms) if (s.mode !== 'perch') flyStep(u, s, t, dt)
-        if (u.ms.every((s) => s.mode === 'perch')) u.state = 'home'
+        if (u.ms.every((s) => s.mode === 'perch')) { u.state = 'home'; u.trip = false }
       } else {
         // 跑／游：到了目的地玩家還很近就再逃一次；遠了就慢下來、恢復平常的範圍
         let d = Infinity
