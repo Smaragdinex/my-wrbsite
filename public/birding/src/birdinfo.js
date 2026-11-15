@@ -1043,6 +1043,51 @@ const ALL = [
       '羽毛很密、裡面存著空氣，在冰冷的急流裡也能保暖，浮起來很快。',
     ],
   },
+  {
+    // 2026-11-15 使用者指定四種：反嘴鴴（夕陽潟湖，觀察屋 O9 前方約 20 m 的淺水）、燕鴴（草原短草地）、黑翅鳶（草原的樹）、棕背伯勞（草原邊的樹）
+    id: 'avocet', spot: [-1, -104], perch: 'ground', view: 317, y: EAST.W - 0.08, water: EAST.W, dist: 4, camH: 1.0, lookY: 0.35,
+    name: '反嘴鴴', sci: 'Recurvirostra avosetta', where: '夕陽潟湖的淺水泥灘',
+    intro: '黑白分明的優雅水鳥，頭頂和後頸黑色，翅膀上有黑色條紋，腳又長又是藍灰色。最特別的是一支細長、往上翹的黑嘴，會在淺水裡邊走邊把嘴左右來回掃動，濾食水中的小生物。',
+    facts: [
+      '覓食時嘴巴微微張開、像鐮刀一樣左右掃過水面下的泥，碰到小蝦、水生昆蟲就夾起來吃。',
+      '腳趾間有蹼，水深一點也會游泳，甚至像鴨子一樣倒栽頭找食物。',
+      '分布在歐洲、亞洲和非洲；在台灣是不常見的冬候鳥，冬天出現在西部海岸的濕地。',
+      '英國皇家鳥類保護協會（RSPB）的標誌就是一隻反嘴鴴。',
+    ],
+  },
+  {
+    id: 'pratincole', lawn: true, spot: [21, 100], perch: 'ground', view: 255, dist: 3.0, camH: 0.8, lookY: 0.12,
+    name: '燕鴴', sci: 'Glareola maldivarum', where: '草原的短草地',
+    intro: '外表像燕子：翅膀又長又尖、尾巴分叉，其實是鴴形目的鳥。喉嚨淡黃色、外圍一圈細細的黑線，嘴基紅色。常在地上快步走、休息，又會飛起來在草地上空靈巧地繞圈抓飛蟲。',
+    facts: [
+      '在台灣是夏候鳥，春天從南方飛來，在西部的河口、農田和空曠草地繁殖。',
+      '巢只是地上的一個淺凹，蛋的顏色跟地面很像，不容易被發現。',
+      '有敵人靠近巢時，會假裝翅膀受傷在地上拍打，把敵人引開。',
+      '黃昏時常成群在空中捕食昆蟲，飛行的樣子跟燕子幾乎分不出來。',
+    ],
+  },
+  {
+    id: 'bwkite', spot: [30, 95], perch: 'branch', view: 256, dist: 3.6, camH: 3.6, lookY: 3.5,
+    name: '黑翅鳶', sci: 'Elanus caeruleus', where: '草原中央的樹上',
+    intro: '小型的猛禽，全身灰白色，肩膀上一大塊黑斑，紅色的眼睛前有一道黑眼線。最拿手的是在草地上空「定點懸停」：快速拍翅、身體停在空中不動，盯著地面找老鼠，看準了就收起翅膀往下俯衝。',
+    facts: [
+      '懸停時尾巴張開、頭一直對著地面，可以在同一個位置停好幾秒。',
+      '主要吃田鼠等小型齧齒類，也吃大型昆蟲和蜥蜴。',
+      '廣泛分布在非洲、南歐和亞洲南部；近十多年在台灣西部平原越來越常見，已經在台灣繁殖。',
+      '常停在電線桿、枯樹頂端等視野好的地方，休息時尾巴會上下擺動。',
+    ],
+  },
+  {
+    id: 'shrike', spot: [16, 96], perch: 'branch', view: 225, dist: 3.0, camH: 3.6, lookY: 3.5,
+    name: '棕背伯勞', sci: 'Lanius schach formosae', where: '草原邊的樹上',
+    intro: '台灣常見的留鳥，黑色過眼罩像戴了眼罩，頭和上背灰色，腰和兩脇棕橙色，尾巴又黑又長。常停在視野好的枝頭、電線上，看到地上的昆蟲、蜥蜴就俯衝下去抓，再飛回原處。',
+    facts: [
+      '伯勞有「屠夫鳥」的外號：會把抓到的獵物插在荊棘、尖刺或鐵絲網上，方便撕食，也當作儲糧。',
+      '嘴巴前端像猛禽一樣有鉤，雖然是鳴禽，卻會捕食小鳥和老鼠。',
+      '叫聲粗啞，也很會模仿其他鳥的叫聲。',
+      '台灣的是特有亞種，住在平地到低海拔的開闊地、農田和草原。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -1051,6 +1096,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

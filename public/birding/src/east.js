@@ -53,6 +53,8 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
      芒草不再到處撒，集中成 domain-warp 雜訊的一塊塊（約 28%，大塊在內部、步道和觀察屋前稀）；其餘是一層密的矮草毯＋中草；
      偶爾一塊乾穗草；步道邊和空地有零星野花（咸豐草白、蟛蜞菊黃、紫色菊、蓼的粉紅穗）；幾叢矮灌木、幾顆半埋的石頭、一棵孤樹 */
   const GRASS_FEAT = []   // 灌木、孤樹、石頭（下面另外蓋）
+  // 2026-11-15 燕鴴住的地方：短草地（真的燕鴴停在裸地、短草上；以前整片中草把牠們整隻蓋住）
+  const CLEARINGS = [[21, 100, 6]]
   {
     const [x0, x1, z0, z1] = EAST.grassBox, L = EAST.lark
     const H = (h) => new THREE.Color(h)
@@ -75,8 +77,9 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
       if (slope > 0.8) continue   // 西緣的岩坡不長
       const lark = 1 - ss(0.7, 1.25, Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz))
       const mm = misMask(x, z), td = alpineTrailDist(x, z), r = rnd()
+      const inClear = CLEARINGS.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr)   // 燕鴴那塊：只長矮草毯
       const bare = ss(0.6, 0.7, fbm2(x * 0.12 + 11, z * 0.12, 2)) * (td < 4 ? 1 : 0.35)   // 裸土：步道兩側、零星乾的地方
-      if (mm > 0.35 && r < 0.62 * mm * (1 - lark) && nMis < 2600) {
+      if (!inClear && mm > 0.35 && r < 0.62 * mm * (1 - lark) && nMis < 2600) {
         // 芒草：一叢 2～4 根花稈（1.3～2.3 m）、底下一大把往外拱的細長葉、頂上一束銀白帶米色的花穗
         nMis++
         const Hh = 1.3 + rnd() * 1.0, k2 = 0.88 + rnd() * 0.24
@@ -92,7 +95,7 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
         continue
       }
       // 野花：步道邊 1.5～9 m、芒草塊之外，一小群一小群（雜訊高的地方）
-      if (nFl < 1500 && mm < 0.25 && td < 9 && fbm2(x * 0.15 + 2, z * 0.15 - 5, 2) > 0.6 && r < 0.5) {
+      if (!inClear && nFl < 1500 && mm < 0.25 && td < 9 && fbm2(x * 0.15 + 2, z * 0.15 - 5, 2) > 0.6 && r < 0.5) {
         nFl++
         const f = FLOW[Math.floor(rnd() * FLOW.length)], Hh = 0.25 + rnd() * 0.45
         push('blade', x, y - 0.02, z, rnd() * TAU, mixC(C.mid[0], C.carpet[0], 0.5).clone(), Hh)          // 花莖
@@ -100,14 +103,14 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
         continue
       }
       // 乾穗草：稀疏乾草的地方（乾的稜線、裸土附近）一小撮，抽出淺色的穗
-      if (nDry < 900 && (bare > 0.3 || fbm2(x * 0.05 - 9, z * 0.05 + 2, 2) > 0.62) && r < 0.35 && mm < 0.3) {
+      if (!inClear && nDry < 900 && (bare > 0.3 || fbm2(x * 0.05 - 9, z * 0.05 + 2, 2) > 0.62) && r < 0.35 && mm < 0.3) {
         nDry++
         const Hh = 0.65 + rnd() * 0.55, col = mixC(C.dry[0], C.dry[1], rnd()).clone()
         for (let j = 0; j < 5; j++) push('blade', x + (rnd() - 0.5) * 0.25, y - 0.02, z + (rnd() - 0.5) * 0.25, rnd() * TAU, col.clone().multiplyScalar(0.9 + rnd() * 0.2), Hh * (0.7 + rnd() * 0.4))
         for (let j = 0; j < 2; j++) push('plume', x + (rnd() - 0.5) * 0.1, y - 0.02 + Hh * 0.85, z + (rnd() - 0.5) * 0.1, rnd() * TAU, C.plume[1].clone(), 0.12 + rnd() * 0.08)
         continue
       }
-      if (r < 0.3 && nMid < 12000 && bare < 0.5) {
+      if (!inClear && r < 0.3 && nMid < 12000 && bare < 0.5) {
         // 中草 0.35～0.75 m：一叢 6～9 片
         nMid++
         const col = mixC(C.mid[0], C.mid[1], rnd()).clone().multiplyScalar(1.25 + rnd() * 0.2), Hh = 0.35 + rnd() * 0.4
@@ -116,7 +119,7 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
         // 矮草毯 0.08～0.25 m（小雲雀那塊一半是裸土）
         nLow++
         const col = mixC(C.carpet[0], C.carpet[1], rnd()).clone().multiplyScalar(1.25 + rnd() * 0.2)
-        for (let j = 0; j < 6; j++) push('glow', x + (rnd() - 0.5) * 0.5, y - 0.01, z + (rnd() - 0.5) * 0.5, rnd() * TAU, col, 0.12 + rnd() * 0.2)
+        for (let j = 0; j < 6; j++) push('glow', x + (rnd() - 0.5) * 0.5, y - 0.01, z + (rnd() - 0.5) * 0.5, rnd() * TAU, col, inClear ? 0.04 + rnd() * 0.05 : 0.12 + rnd() * 0.2)
       }
     }
     // 矮灌木（芒草塊邊緣、步道 3 m 外）、幾顆半埋的石頭、一棵孤樹（觀察屋看得到、離巢遠）

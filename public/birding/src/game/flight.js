@@ -114,6 +114,11 @@ export const ESCAPE = {
   forktail: { r: 4, river: true, fly: { speed: 7, hz: 15, style: 'bound', k: 0.34 } },
   redstart: { r: 5, fly: { speed: 7, hz: 14, style: 'flap', k: 0.37 } },   // 2026-11-15 瀑布湖
   harlequin: { r: 10, swim: 5, fly: { speed: 12, hz: 7, style: 'flap', k: 0.69 } },
+  // 2026-11-15 使用者指定四種。hover：自己出去時在草原上空定點懸停，再收翅俯衝；hawk：飛出去繞一圈抓飛蟲／撲地上的蟲，馬上回原位
+  avocet: { r: 10, fly: { speed: 10, hz: 5, style: 'flap', k: 1.0 } },
+  pratincole: { r: 7, hawk: true, sortie: [20, 45], fly: { speed: 10, hz: 6, style: 'glide', k: 0.62 } },
+  bwkite: { r: 9, hover: true, sortie: [35, 80], fly: { speed: 9, hz: 5, style: 'glide', k: 0.9 } },
+  shrike: { r: 7, hawk: true, sortie: [25, 60], fly: { speed: 7, hz: 11, style: 'bound', k: 0.45 } },
 }
 // 飛行模型（存在才用；還沒做好的先借翠鳥的飛行模型，大小照停棲模型的身高換算）
 const FLY_NAME = (id) => `${id}-fly-rig`
@@ -362,6 +367,24 @@ export function createFlight(world, player) {
       }
       return
     }
+    // 2026-11-15 黑翅鳶：懸停（翅膀快拍、身體幾乎不動、頭朝下看）→ 俯衝（收翅往下）→ 貼地抓一下再飛回枝頭
+    if (s.mode === 'hover') {
+      s.t += dt; s.ht -= dt
+      root.position.copy(s.hp); root.position.y += 0.06 * Math.sin(s.t * 3.1); root.position.x += 0.04 * Math.sin(s.t * 1.7)
+      root.rotation.set(-0.45, s.head, 0.05 * Math.sin(s.t * 2.3)); s.act = 'hover'
+      wings(s, f, t, dt, 0.9, 0)
+      if (s.ht <= 0) { s.mode = 'swoop'; s.gy = terrainHeight(root.position.x, root.position.z) + 0.3 }
+      return
+    }
+    if (s.mode === 'swoop') {
+      s.t += dt; root.position.y -= 7 * dt; root.rotation.set(0.85, s.head, 0); s.act = 'swoop'
+      wings(s, f, t, dt, 0, 1)
+      if (root.position.y <= s.gy) {
+        root.position.y = s.gy
+        s.curve = inbound(root.position.clone(), s.home, s.faceH); s.len = s.curve.getLength(); s.dist = 0; s.t = 0; s.mode = 'back'
+      }
+      return
+    }
     s.t += dt
     const rem = s.len - s.dist
     // 速度：起飛慢慢加速；回程最後幾公尺減速、拉起機頭（煞車）
@@ -380,7 +403,9 @@ export function createFlight(world, player) {
     s.act = s.mode === 'out' && s.t < 1.2 ? 'takeoff' : flare > 0.05 ? 'land' : 'fly'
     wings(s, f, t, dt, s.mode === 'out' ? 1 - ss(s.t, 0.3, 1.6) : 0, flare)
     if (s.dist >= s.len) {
-      if (s.mode === 'out') { s.mode = 'away'; root.visible = false }
+      if (s.mode === 'out' && u.trip && u.esc.hover) { s.mode = 'hover'; s.ht = rnd(4, 8); s.hp = root.position.clone(); s.t = 0 }
+      else if (s.mode === 'out' && u.trip && u.esc.hawk) { s.curve = inbound(root.position.clone(), s.home, s.faceH); s.len = s.curve.getLength(); s.dist = 0; s.t = 0; s.mode = 'back' }
+      else if (s.mode === 'out') { s.mode = 'away'; root.visible = false }
       else {
         // 落地：換回停棲模型，原本的動畫接著跑
         s.mode = 'perch'; root.visible = false; s.m.obj.visible = true
@@ -424,7 +449,7 @@ export function createFlight(world, player) {
         // 自己出巢覓食（ESCAPE.sortie）：沒在警戒時倒數，時間到就照驚飛那一套從岩面朝外（穿過水簾）飛出去，在遠處待一陣子再飛回巢
         if (u.esc.sortie && u.alarm < 0.2) {
           u.sortT = (u.sortT ?? rnd(8, u.esc.sortie[0])) - dt
-          if (u.sortT <= 0) { u.sortT = rnd(...u.esc.sortie); flush(u, t); u.trip = true; for (const s2 of u.ms) s2.wait = rnd(14, 26); continue }
+          if (u.sortT <= 0) { u.sortT = rnd(...u.esc.sortie); flush(u, t, !!(u.esc.hover || u.esc.hawk)); u.trip = true; for (const s2 of u.ms) s2.wait = rnd(14, 26); continue }
         }
         let d = Infinity
         for (const s of u.ms) { s.m.obj.getWorldPosition(_v); d = Math.min(d, _v.distanceTo(P)) }
@@ -474,7 +499,7 @@ export function createFlight(world, player) {
     const s = m.flight
     if (!s) return { obj: m.obj, act: m.acts?.name ?? '' }
     if (s.mode === 'away' || (s.mode === 'wait' && !m.obj.visible)) return null
-    if (s.mode === 'out' || s.mode === 'back') return { obj: s.root, act: s.act }
+    if (s.mode === 'out' || s.mode === 'back' || s.mode === 'hover' || s.mode === 'swoop') return { obj: s.root, act: s.act }
     return { obj: m.obj, act: s.mode === 'flee' ? 'run' : m.acts?.name ?? '' }
   }
   // 2026-11-10 時間到才飛來、時間到飛走（presence.js；PARK_PLAN.md 第三節）

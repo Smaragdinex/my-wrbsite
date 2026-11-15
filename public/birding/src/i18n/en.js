@@ -73,6 +73,8 @@ export const UI = {
  "免費": "Free",
  "入水的瞬間": "Diving in",
  "求偶展示": "Courtship display",
+ "定點懸停": "Hovering in place",
+ "俯衝捕獵": "Swooping on prey",
  "入水那一瞬間！很難抓到。": "Caught it right as it hit the water! Tough shot.",
  "入門機身 Lark 100": "Entry body Lark 100",
  "全部自己來，看下面的測光表調到 0。": "All up to you. Adjust until the meter below reads 0.",
@@ -1356,6 +1358,50 @@ export const BIRDS = {
    "It dives to the bottom of rapids to hunt stonefly and caddisfly larvae among the stones.",
    "It is found in northwestern North America, Greenland, Iceland and eastern Siberia.",
    "Its dense plumage traps air, keeping it warm in icy torrents and helping it pop back to the surface quickly."
+  ]
+ },
+ "avocet": {
+  "name": "Pied Avocet",
+  "where": "Shallow Mudflats of the Sunset Lagoon",
+  "intro": "An elegant black-and-white wader with a black crown and nape, black bars on the wings and long blue-grey legs. Most striking is its slender upturned black bill, which it sweeps from side to side through the shallow water as it walks, filtering out small creatures.",
+  "facts": [
+   "When feeding it holds its bill slightly open and scythes it sideways through the soft mud, snapping up shrimps and aquatic insects.",
+   "Its toes are partly webbed, so it swims in deeper water and can even up-end like a duck.",
+   "It lives across Europe, Asia and Africa; in Taiwan it is an uncommon winter visitor to western coastal wetlands.",
+   "The logo of the RSPB, Britain's bird conservation charity, is an avocet."
+  ]
+ },
+ "pratincole": {
+  "name": "Oriental Pratincole",
+  "where": "The Short Grass of the Meadow",
+  "intro": "It looks like a swallow — long pointed wings and a forked tail — but it is actually a wader. Its creamy throat is ringed by a thin black line and the base of its bill is red. It runs and rests on the ground, then takes off to swoop gracefully over the grass catching flying insects.",
+  "facts": [
+   "In Taiwan it is a summer visitor, arriving from the south in spring to breed on estuaries, farmland and open grassland in the west.",
+   "Its nest is just a shallow scrape on the ground, with eggs coloured like the soil.",
+   "When a predator nears the nest it flaps on the ground as if its wing were broken, luring the enemy away.",
+   "At dusk flocks hawk insects in the air, flying almost exactly like swallows."
+  ]
+ },
+ "bwkite": {
+  "name": "Black-winged Kite",
+  "where": "A Tree in the Middle of the Meadow",
+  "intro": "A small, pale grey-and-white bird of prey with a large black shoulder patch and red eyes behind a black eye-stripe. Its speciality is hovering in place over grassland — wings beating fast, body almost motionless — watching the ground for mice, then folding its wings and dropping onto its prey.",
+  "facts": [
+   "While hovering it fans its tail and keeps its head pointed at the ground, holding the same spot for several seconds.",
+   "It feeds mainly on voles and other small rodents, plus large insects and lizards.",
+   "It ranges across Africa, southern Europe and southern Asia; over the last decade or so it has become increasingly common on Taiwan's western plains and now breeds there.",
+   "It likes to perch on poles and dead treetops with a good view, often bobbing its tail while resting."
+  ]
+ },
+ "shrike": {
+  "name": "Long-tailed Shrike",
+  "where": "A Tree at the Edge of the Meadow",
+  "intro": "A common resident in Taiwan with a black bandit mask, grey head and upper back, orange-rufous rump and flanks and a long black tail. It perches on lookout branches and wires, swoops down on insects or lizards on the ground, then flies back to its perch.",
+  "facts": [
+   "Shrikes are nicknamed 'butcher birds': they impale prey on thorns, spikes or barbed wire to tear it apart or store it for later.",
+   "Its hooked bill tip is like a raptor's, so although it is a songbird it can catch small birds and mice.",
+   "Its call is harsh, and it is also a skilled mimic of other birds' songs.",
+   "Taiwan's birds are an endemic subspecies living in open country, farmland and grassland from the lowlands to the foothills."
   ]
  },
  "lapwing": {

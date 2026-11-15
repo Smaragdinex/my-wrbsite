@@ -309,6 +309,7 @@ const BUILD = {
   shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe, lapwing,
   peregrine, blackswift, greatgreyowl,
   dipper, forktail, redstart, harlequin,
+  avocet, pratincole, bwkite, shrike,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -320,7 +321,7 @@ const TINT = { 'thrush-rig': 0.5 }
 const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig', 'dipper-rig', 'dipper-fly-rig', 'forktail-rig', 'forktail-fly-rig', 'redstart-rig', 'redstart-fly-rig', 'harlequin-rig', 'harlequin-fly-rig', 'lapwing-fly-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig', 'dipper-rig', 'dipper-fly-rig', 'forktail-rig', 'forktail-fly-rig', 'redstart-rig', 'redstart-fly-rig', 'harlequin-rig', 'harlequin-fly-rig', 'lapwing-fly-rig', 'avocet-rig', 'avocet-fly-rig', 'pratincole-rig', 'pratincole-fly-rig', 'bwkite-rig', 'bwkite-fly-rig', 'shrike-rig', 'shrike-fly-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
     'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig']
@@ -1890,6 +1891,32 @@ function harlequin(env) {
       walk: { radius: 3.5, speed: 0.15, avoid: swimAvoid(env, avoid) }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.22,
       acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }) })
 }
+// 2026-11-15 使用者指定四種（夕陽潟湖＋草原）。大小由 REAL_CM 自動校正（fixSize），這裡的 H／k 只是起始值
+// 反嘴鴴（三隻）：在潟湖淺水裡慢慢走，頭壓低、上翹的嘴貼著水面左右掃（維基百科：在淺水中左右掃動嘴巴濾食小型無脊椎動物）
+function avocet(env) {
+  const show = ({ n, t, c }) => {
+    if (n !== 'walk' && n !== 'peck') return null
+    c.swp = (c.swp ?? Math.random() * 6) + 0.016
+    const sw = Math.sin(t * 5.2 + c.swp); return { lean: 0.5, neck: 0.75, head: -0.05, yaw: 0.3 * sw, sway: 0.35 * sw, reach: 0.75, rate: 10 }
+  }
+  return groundGroup(3, 0.9, (avoid) => groundTripo(env, { name: 'avocet-rig', H: 0.55, h0: 0.83, ...TRIPO, reach: 0.5, wade: true, bill: 0.17, show,
+    walk: { radius: 2.2, speed: 0.15, avoid }, swingT: 0.42, lift: 0, knee: [0.9, 1.6], focusY: 0.5,
+    acts: { walk: [6, 99, 99], peck: [3, 1.5, 3], stand: [1, 1.5, 3], look: [1, 1, 2], turn: [1, 99, 99] } }))
+}
+// 燕鴴（三隻）：在草原短草地上休息、快步走；不時飛起來在附近空中繞一圈抓飛蟲再落回來（flight.js ESCAPE.pratincole.hawk）
+function pratincole(env) {
+  return groundGroup(3, 0.8, (avoid) => groundTripo(env, { name: 'pratincole-rig', H: 0.24, h0: 0.62, ...TRIPO,
+    walk: { radius: 1.5, speed: 0.3, avoid }, stride: 0.06, swingT: 0.14, lift: 0.015, knee: [0.3, 0.6], focusY: 0.12,
+    acts: { walk: [3, 99, 99], peck: [2, 0.6, 1.1], look: [3, 1, 2], stand: [3, 2, 4], turn: [1, 99, 99] } }))
+}
+// 黑翅鳶：停在草原上一棵樹的枝頭；每隔一陣子飛出去在草原上空「定點懸停」看獵物，再收翅往下俯衝（flight.js ESCAPE.bwkite.hover）
+function bwkite(env) {
+  return perchRigged(outer(env, -1.1), { name: 'bwkite-rig', k: 0.54, ...TRIPO, foot: 0.02, drop: 0.05, beat: 6, grip: 1.0 })
+}
+// 棕背伯勞：停在草原邊一棵樹的枝頭，尾巴不時左右甩；不時俯衝到地上抓蟲再飛回原枝（flight.js ESCAPE.shrike.hawk）
+function shrike(env) {
+  return perchRigged(outer(env, -0.9), { name: 'shrike-rig', k: 0.48, ...TRIPO, foot: 0.01, drop: 0.045, beat: 9, grip: 0.4, plant: true })
+}
 function islandthrush(env) { return endemicGround('islandthrush-rig', 0.26, 0.705, { hop: 0.045, stride: 0.1 })(env) }
 function rustylt(env) { return endemicGround('rustylt-rig', 0.27, 0.598, { hop: 0.04, flick: 0.25 })(env) }
 function whitethroat(env) { return endemicGround('whitethroat-rig', 0.26, 0.62, { hop: 0.04, flick: 0.25 })(env) }
@@ -2322,7 +2349,7 @@ export const REAL_CM = {
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
   shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, lapwing: 30, grebe: 50,
-  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
+  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
 const _fsInv = new THREE.Matrix4(), _fsV = V()
