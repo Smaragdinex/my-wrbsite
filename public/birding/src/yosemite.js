@@ -166,7 +166,8 @@ export function buildYosemite(scene, { lib } = {}) {
         const t = Math.abs(bx - ax) < 1e-6 ? 0 : Math.max(0, Math.min(1, (x - ax) / (bx - ax))), y = lerpN(T.yy[i - 1], T.yy[i], t), d = lerpN(T.pts[i - 1][1] - YOSE.base(ax), bz - YOSE.base(bx), t)
         // 2026-11-13 使用者（龍岩窟）：瀑布前後這一段改成有岩頂的廊道（高 3.6 m），不是往上整片挖開的階地——頭上是岩石、水簾在外側落下
         const roofed = x > YOSE.GAL[0] - 0.6 && x < YOSE.GAL[1] + 0.6 && y > YOSE.shelfY() - 1.0   // 只有那兩段岩廊（第 0 段的起點也在這個 x 範圍，但它在下面、不要加頂）
-        out.push({ y0: y - (roofed ? 0.65 : 0.3), y1: roofed ? y + 3.6 : y + 90, depth: d + 1.25 })   // 岩廊多往地板下切 0.35 m：切口轉角那條岩壁的薄邊才會落在石板底下（以前在 x196～198 冒出地板 0.2～0.3 m）
+        const ramp = Math.max(0, Math.min(1, Math.max((x - (YOSE.GAL[1] - 2.0)) / 2.6, ((YOSE.GAL[0] + 2.0) - x) / 2.6)))   /* 2026-11-15 使用者「擋住去路的視線」：岩頂在岩廊兩頭一欄就從 3.6 m 跳到全開，相鄰兩欄的頂點接成一大片斜三角，斜斜切過步道 → 最後 2.6 m 岩頂慢慢升高 */
+        out.push({ y0: y - (roofed ? 0.65 : 0.3), y1: roofed ? y + 3.6 + 40 * ramp * ramp : y + 90, depth: d + 1.25 })   // 岩廊多往地板下切 0.35 m：切口轉角那條岩壁的薄邊才會落在石板底下（以前在 x196～198 冒出地板 0.2～0.3 m）
         for (const b of T.bays ?? []) if (Math.abs(x - b.x) < b.half + 0.25 && Math.abs(y - b.y) < 0.8) out.push({ y0: y - 0.3, y1: y + 3.2, depth: d + 1.25 + b.depth })   // 賞鳥台的凹龕
       } else if (k === 'alc' || (k === 'open' && bz - YOSE.base(bx) > 0.2 && bx > 207.5)) {
         if (Math.abs(x - bx) > 1.5) continue
@@ -321,6 +322,20 @@ export function buildYosemite(scene, { lib } = {}) {
   }
   const W = FACE + TOP + 1
   for (let i = 0; i < NX; i++) for (let k = 0; k < W - 1; k++) { const a = i * W + k, b = a + W; idx.push(a, a + 1, b, a + 1, b + 1, b) }
+  // 2026-11-15 使用者（岩廊東口轉彎的照片）「擋住去路的視線，雖然可以穿過，修乾淨」：照 x 一欄一欄退岩面的做法，在步道轉彎的內角管不到（那裡離中線只剩 0.89 m）。
+  // 網格做好之後再掃一次：步道（岩廊、露天段）中線水平 1.3 m 內、地板上 0.15～2.4 m 的岩面頂點，沿水平方向推到 1.3 m 外
+  { const SB = new Map(), CL = 1.3
+    for (let i = 1; i < TR.pts.length; i++) { const k = TR.kind[i]; if ((k !== 'gal' && k !== 'open') || (TR.kind[i - 1] !== 'gal' && TR.kind[i - 1] !== 'open')) continue
+      const sg = [TR.pts[i - 1][0], TR.pts[i - 1][1], TR.yy[i - 1], TR.pts[i][0], TR.pts[i][1], TR.yy[i]]
+      for (let bx = Math.floor(Math.min(sg[0], sg[3])) - 2; bx <= Math.floor(Math.max(sg[0], sg[3])) + 2; bx++) { if (!SB.has(bx)) SB.set(bx, []); SB.get(bx).push(sg) } }
+    let moved = 0
+    for (let j = 0; j < pos.length; j += 3) { const x = pos[j], y = pos[j + 1], z = pos[j + 2], L = SB.get(Math.floor(x)); if (!L) continue
+      let best = CL, cx = 0, cz = 0
+      for (const [ax, az, ay, bx, bz, by] of L) { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1e-6, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), px = ax + dx * t, pz = az + dz * t, py = ay + (by - ay) * t
+        if (y < py - 0.8 || y > py + 4.0) continue   /* 切槽底角（地板下 0.65）和岩頂（+3.6）那兩列也要推：一個三角面從地板角直接連到岩頂，就是斜切過步道那一片 */   /* 岩面的列在高度上很疏：地板附近那列不推的話，三角面還是斜斜切過轉角 */
+        const d = Math.hypot(x - px, z - pz); if (d < best && d > 0.02) { best = d; cx = px; cz = pz } }
+      if (best < CL) { const k = CL / best; pos[j] = cx + (x - cx) * k; pos[j + 2] = cz + (z - cz) * k; moved++ } }
+    console.debug('[yosemite] 步道淨空：推開岩面頂點', moved) }
   const cg = new THREE.BufferGeometry()
   cg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); cg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); cg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
   cg.setIndex(idx); cg.computeVertexNormals()
@@ -1351,7 +1366,7 @@ export function buildYosemite(scene, { lib } = {}) {
             put('gal_floor_' + 'abc'[nf++ % 3], m4.compose(V(c.x, c.y + 0.004, c.z), q, V(1, 1, 1)))
             // 2026-11-15 使用者「這些咖啡色的要移除，是之前的殘留」：岩廊轉彎的內側（靠岩壁那邊）切出來的岩槽比步道寬，露出一片光禿的咖啡色岩地 →
             // 那裡也鋪同一種石板（射線往下量：岩地跟步道一樣高的地方才鋪）
-            next += 0.95
+            next += 1.0   // 2026-11-15 整齊的石板一塊 1.0 m：間距也 1.0，不再一塊疊一塊
           }
         }
         // 2026-11-15 使用者（岩廊靠岩壁那側一片咖啡色岩地）「這些咖啡色的要移除」：石板照平滑過的中線 C3 鋪，但西頭轉彎（x 192～197）原始路線點離 C3 有 1.5 m，
