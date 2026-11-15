@@ -220,6 +220,42 @@ export function buildOutside(renderer = null) {
         lodRegister(ms, 10, lows)
       }
     }
+    // 2026-11-15 使用者（西頭折返平台往外看）「晴天看外面風景少了很多樹林，補上、要記得效能」：
+    // 樹林帶 3600 棵分散在一圈 260 m 寬的帶子上，從高處看是一大片空草地。外圈（邊界外 70～300 m）再鋪一片片「林分」：
+    // 每塊是一團凹凸的樹冠丘（20～40 m 寬，320 面），整片一次畫完、不投影，近處的真樹擋在前面；用雜訊分成一塊塊林子和林間空地
+    {
+      const r2 = mulberry32(4242), list = []
+      for (let tries = 0; tries < 20000 && list.length < 900; tries++) {
+        const a = r2() * TAU, d = 70 + Math.pow(r2(), 0.75) * 230
+        const [x, z, y] = place(a, d)
+        if (x < -70 && Math.abs(z) < 40 && d < 110) continue   // 相機行門口看出去那片留著草地
+        const patch = fbm3(x * 0.011, 3.3, z * 0.011, 3)
+        if (patch < -0.12 + 0.18 * (1 - smoothstep(70, 200, d))) continue
+        const R = 10 + r2() * 9, H = 9 + r2() * 8
+        list.push({ p: new THREE.Vector3(x, y - 2.5, z), q: new THREE.Quaternion().setFromAxisAngle(UP, r2() * TAU), R, H, k: r2(), con: r2() < 0.15 + 0.7 * smoothstep(-20, 140, x) })
+      }
+      const geo = (() => {
+        let q = new THREE.IcosahedronGeometry(1, 2); q.deleteAttribute('uv'); q = q.toNonIndexed()
+        const p = q.attributes.position, v = new THREE.Vector3(), col = new Float32Array(p.count * 3)
+        for (let i = 0; i < p.count; i++) {
+          v.fromBufferAttribute(p, i)
+          const bump = 1 + 0.32 * fbm3(v.x * 2.6, v.y * 2.6 + 1.7, v.z * 2.6, 2) + 0.16 * fbm3(v.x * 6, v.y * 6, v.z * 6, 1)   // 一個個樹冠鼓起來
+          v.multiplyScalar(bump); if (v.y < 0) v.y *= 0.25   // 底下壓扁（埋進地裡）
+          p.setXYZ(i, v.x, v.y, v.z)
+          const k = lerp(0.3, 1.0, THREE.MathUtils.smoothstep(v.y, -0.1, 0.9)) * (0.8 + 0.4 * (0.5 + fbm3(v.x * 5, v.y * 5 + 9, v.z * 5, 1)))   // 上亮下暗（林冠下是陰影）
+          col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k
+        }
+        q.setAttribute('color', new THREE.BufferAttribute(col, 3)); q.computeVertexNormals(); return q
+      })()
+      const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true, flatShading: false })
+      const m = new THREE.InstancedMesh(geo, mat, list.length), mm = new THREE.Matrix4(), c = new THREE.Color()
+      list.forEach((it, i) => {
+        m.setMatrixAt(i, mm.compose(it.p, it.q, new THREE.Vector3(it.R, it.H, it.R * (0.75 + 0.4 * it.k))))
+        m.setColorAt(i, it.con ? c.setHSL(0.33 + (it.k - 0.5) * 0.04, 0.42, 0.07 + it.k * 0.03) : c.setHSL(0.27 + (it.k - 0.5) * 0.06, 0.5, 0.1 + it.k * 0.04))
+      })
+      m.castShadow = false; m.receiveShadow = false; m.computeBoundingSphere(); m.name = 'farForestStands'
+      g.add(m)
+    }
   }
 
   /* ---------- 遠山 ---------- */

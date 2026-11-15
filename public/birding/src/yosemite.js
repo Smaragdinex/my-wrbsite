@@ -1312,6 +1312,14 @@ export function buildYosemite(scene, { lib } = {}) {
             const R0 = (z1 - z0) / 2, cz = (z0 + z1) / 2, ex = Math.max(...A.map((p) => sx * p.x)) * sx, cx = ex - sx * R0, yA = C3[i].y, Ro = R0 + 0.4   // 量過：半圓那圈石板只鋪到離圓心 1.65～2.1 m（不是中線外 1.35）→ 柱子站在圓心外 1.65 m
             const pts = []; for (let x = L0.x + sx * 1.3; sx * (cx - x) > 1.1; x += sx * 1.3) pts.push(V(x, yA, YOSE.base(x) + dl - 1.2))
             const nA = Math.max(2, Math.round(Ro * Math.PI / 2 / 1.15)); for (let k = 0; k <= nA; k++) { const ph = k / nA * Math.PI / 2; pts.push(V(cx + sx * Ro * Math.sin(ph), yA, cz - Ro * Math.cos(ph))) }
+            // 2026-11-15 使用者（西頭折返平台照片，紅線）「railing 要到岩壁」：四分之一圈只繞到平台最外那點就停，最後一根樁跟端牆之間空一大段 →
+            // 沿半圓繼續往岩壁那側繞，每一步先打一條射線，碰到岩面就在岩面前 0.3 m 立最後一根樁
+            { const cf = g.getObjectByName('cliffFace'); if (cf) { cf.updateMatrixWorld(true); const rc = new THREE.Raycaster()
+              for (let k = 1; k <= nA + 1; k++) { const ph = Math.PI / 2 + k / nA * Math.PI / 2, a2 = pts.at(-1), q = V(cx + sx * Ro * Math.sin(Math.min(Math.PI, ph)), yA, cz - Ro * Math.cos(Math.min(Math.PI, ph)))
+                const o = V(a2.x, yA + 0.6, a2.z), d = V(q.x - a2.x, 0, q.z - a2.z), L = d.length(); if (L < 0.05) break; d.normalize()
+                rc.set(o, d); rc.far = L + 0.4; const h = rc.intersectObject(cf, false)[0]
+                if (h) { const e = V(h.point.x - d.x * 0.3, yA, h.point.z - d.z * 0.3); if (e.distanceTo(a2) > 0.25) pts.push(e); break }
+                pts.push(q); if (ph >= Math.PI) break } } }
             for (const q of pts) { q.sturdy = false; if (prev && prev.distanceTo(q) < 3.8) CHAIN.segs.push([prev, q]); CHAIN.posts.push(q); prev = q }
           }
           prev = null; continue
@@ -1453,6 +1461,27 @@ export function buildYosemite(scene, { lib } = {}) {
             const nW = h.face.normal.clone().transformDirection(cf.matrixWorld); nW.y = 0; if (nW.lengthSq() < 0.2) continue; nW.normalize(); if (nW.x * sx > 0) nW.negate()
             const yaw = Math.atan2(nW.x, nW.z)
             for (let cc = 0, y0 = c.y - 0.25; cc < 2; cc++) { const sy = 0.95 + 0.12 * hsh(G[0] * 3.1 + dz + cc); put(names[(n++ + G[0]) % names.length], m4.compose(V(h.point.x - nW.x * 0.04, y0, h.point.z - nW.z * 0.04), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(0.5, sy, 1))); y0 += 3.6 * sy - 0.06 }
+          }
+        } }
+      // 2026-11-15 使用者（西頭折返平台照片，黃圈）「岩壁不夠自然」：平台外面往下斜的那片崖壁端面是一大片光滑的斜面、貼圖拉成一條條 →
+      // 從外面朝崖壁打一格格射線，打到朝外的岩面就照岩面的方向（含傾斜）貼一小片層疊砂岩（1.3 × 1.5 m），整片斜面變成一塊塊岩層
+      { const names = ['sw_a', 'sw_b', 'sw_c', 'sw_d'].filter((n) => K[n]), cf = g.getObjectByName('cliffFace'), rc = new THREE.Raycaster()
+        const G = []; for (let i = 0; i < NP; i++) if (st.kind[i] === 'alc' && C3[i].x < 180) G.push(i)
+        if (names.length && cf && G.length) {
+          cf.updateMatrixWorld(true)
+          const c = V(); for (const i of G) c.add(C3[i]); c.multiplyScalar(1 / G.length)
+          const sx = Math.sign(c.x - C3[G[0]].x) || 1, upV = V(0, 1, 0), mq = new THREE.Matrix4(), qq = new THREE.Quaternion()
+          const nearWalk = (p) => { for (let j = 0; j < NP; j++) if (Math.abs(C3[j].y - p.y) < 2.2 && Math.hypot(C3[j].x - p.x, C3[j].z - p.z) < 1.6) return true; return false }
+          let n = 0
+          for (let y = c.y - 9; y <= c.y + 0.4; y += 1.35) for (let dz = -6; dz <= 6; dz += 1.15) {
+            rc.set(V(c.x + sx * 14, y, c.z + dz), V(-sx, 0, 0)); rc.far = 16
+            const h = rc.intersectObject(cf, false)[0]; if (!h || !h.face) continue
+            if (sx * (h.point.x - c.x) < 0.8 || nearWalk(h.point)) continue
+            const nW = h.face.normal.clone().transformDirection(cf.matrixWorld).normalize(); if (nW.x * sx < 0.35) continue
+            const xA = V().crossVectors(upV, nW).normalize(), yA = V().crossVectors(nW, xA)
+            mq.makeBasis(xA, yA, nW); qq.setFromRotationMatrix(mq).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), (hsh(n * 2.7) - 0.5) * 0.12))
+            const sc = 0.4 + 0.08 * hsh(n * 5.1)
+            put(names[n % names.length], m4.compose(h.point.clone().addScaledVector(nW, -0.06).addScaledVector(yA, -0.7 * sc * 1.2), qq, V(sc, sc * 1.15, 0.7))); n++
           }
         } }
       const wallM = stepM.clone(); wallM.map = rockTex(); wallM.onBeforeCompile = (sh) => { STEP_BASE_OBC(sh)
