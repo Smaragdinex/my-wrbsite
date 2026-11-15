@@ -941,7 +941,7 @@ const ALL = [
   },
   // 2026-11-13 Pass 1D（ChatGPT 規格、使用者指定）：瀑布區的三種北美鳥。cliffRay：world.js 從這點往 +z 打射線量岩面再擺
   {
-    id: 'peregrine', spot: [186, 88], cliffRay: [186, 58, 70], flyAway: [0.15, -1], perch: 'ground', view: 180, dist: 9, camH: 0.4, lookY: 0.2,
+    id: 'peregrine', spot: [182, 88], cliffRay: [182, 58.5, 70],   /* 2026-11-15 使用者「第 81 隻在哪」：原本那點在上層岩廊西口急轉的內側，被岩層片夾住、只露半隻 → 搬到上層步道西段、步道上方 4.3 m 的岩架（仰角 35° 以內、整隻看得到的步道點有 12 個，8 m） */ flyAway: [0.15, -1], perch: 'ground', view: 180, dist: 9, camH: 0.4, lookY: 0.2,
     name: "遊隼", sci: 'Falco peregrinus', where: "瀑布西側岩壁高處的岩架",
     intro: "中型的隼，頭頂和臉頰像戴著黑色頭盔、眼下一道粗粗的黑鬍紋，背是藍灰色，胸腹白底帶細黑橫紋。喜歡站在高聳岩壁的岩架上俯瞰山谷，看到獵物就收起翅膀高速俯衝。",
     facts: [
@@ -952,7 +952,7 @@ const ALL = [
     ],
   },
   {
-    id: 'blackswift', spot: [193, 100], cliffRay: [193, 37, 95], flyAway: [0.25, -1], nest: true, perch: 'ground', view: 180, dist: 6, camH: -0.6, lookY: 0.05,   /* 2026-11-13 使用者：雨燕要在巢裡（瀑布後方潮濕岩壁的小平台、苔蘚淺杯巢）；後壁這一點量過是平的 */
+    id: 'blackswift', spot: [198, 100], cliffRay: [198, 33, 85],   /* 2026-11-15 使用者「第 82 隻在哪」：舊點在岩簷底下、從石階往上 7 m 只看得到一團黑 → 往東 5 m、低 4 m，石階上方 3.5 m（仰角 35° 以內、整隻看得到的石階點有 10 個，8 m） */ flyAway: [0.25, -1], nest: true, perch: 'ground', view: 180, dist: 6, camH: -0.6, lookY: 0.05,   /* 2026-11-13 使用者：雨燕要在巢裡（瀑布後方潮濕岩壁的小平台、苔蘚淺杯巢）；後壁這一點量過是平的 */
     name: "黑雨燕", sci: 'Cypseloides niger', where: "瀑布後面凹洞岩壁上的苔蘚巢",
     intro: "全身炭黑的大型雨燕，翅膀又長又窄像鐮刀，尾巴微微分叉。幾乎一輩子都在空中：在空中吃蟲、喝水，只有育雛時才抓在岩壁上休息。",
     facts: [

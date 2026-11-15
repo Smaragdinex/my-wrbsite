@@ -331,7 +331,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
           const ls = def.nest ? 0.32 : 1   // 雨燕只要一個小小的岩縫平台
           const dz = (0.55 + back / 2) * (def.nest ? 0.6 : 1)   // 岩架從岩壁裡一直伸到上面岩簷的前緣外面
           ledge.scale.set(0.85 * ls, 0.6 * ls, dz); ledge.rotation.y = Math.atan2(n.x, n.z)
-          ledge.position.set(hit.point.x, hit.point.y - 0.02 + (def.nest ? 0.13 - 0.15 * ls : 0), hit.point.z - dz + 0.35); ledge.castShadow = ledge.receiveShadow = true; ledge.name = 'falconLedge'; scene.add(ledge)
+          ledge.position.set(hit.point.x, hit.point.y - 0.02 + (def.nest ? 0.13 - 0.15 * ls - 0.06 : 0), def.nest ? zFront - 0.2 + dz * 0.55 : hit.point.z - dz + 0.35);   /* 2026-11-15 雨燕的巢台：以前往外伸過鳥，從石階往上看整隻被台子底下擋住 → 前緣只到鳥腳下、低 6 cm */ ledge.castShadow = ledge.receiveShadow = true; ledge.name = 'falconLedge'; scene.add(ledge)
           def.spot = [hit.point.x, zFront - (def.nest ? 0.2 : 0.4)]
           if (def.nest) {   // 黑雨燕的巢：岩架上一個苔蘚、細根做的淺杯（直徑約 15 cm），鳥伏坐在裡面
             const moss = new THREE.MeshStandardMaterial({ color: 0x2e3320, roughness: 1 }), rim = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.025, 8, 22).rotateX(Math.PI / 2), moss)

@@ -1433,7 +1433,7 @@ export function buildYosemite(scene, { lib } = {}) {
               const sh = c ? (hsh(i * 7.7 + c) - 0.5) * 1.2 : 0, ax = V(-inn.z, 0, inn.x)
               put(names[(k++ + c) % names.length], m4.compose(V(base.x + ax.x * sh * wsc, y0w, base.z + ax.z * sh * wsc + (c ? 0.03 * c : 0)), qW, V((1 + 0.04 * c) * wsc, sy, 1)))
               // 概念圖 1、3：頭頂 2.8～3.2 m 偶爾一道往外伸的大岩簷（上面至少還要有 1 m 才放，不然會頂到上一層的地板）
-              if (!c && ovh.length && hsh(i * 5.3) < 0.4 && top - (y0w + 3.6 * sy) > 1.0) put(ovh[Math.floor(hsh(i * 9.7) * ovh.length) % ovh.length], m4.compose(V(base.x, C3[i].y + 2.85 + 0.3 * hsh(i * 1.9), base.z + 0.02), qW, V(0.8 + 0.3 * hsh(i * 4.1), 1, 0.9)))
+              if (!c && ovh.length && hsh(i * 5.3) < 0.4 && top - (y0w + 3.6 * sy) > 1.0 && !(Math.hypot(base.x - 198, base.z - 100) < 4 && Math.abs(C3[i].y + 3 - 33.2) < 2.5))   /* 2026-11-15 第 82 隻黑雨燕的巢（birdinfo cliffRay 198,33）前面不放岩簷：以前一片岩簷剛好擋住整個巢 */ put(ovh[Math.floor(hsh(i * 9.7) * ovh.length) % ovh.length], m4.compose(V(base.x, C3[i].y + 2.85 + 0.3 * hsh(i * 1.9), base.z + 0.02), qW, V(0.8 + 0.3 * hsh(i * 4.1), 1, 0.9)))
               // 概念圖 1、3：蕨類長在潮濕的縫——牆腳、第一層岩層的頂（岩架）；越靠瀑布越多
               { const wetK = Math.exp(-(((C3[i].x - YOSE.fall.x) / 22) ** 2)), pr = 0.25 + 0.45 * wetK
                 if (!c && hsh(i * 3.9) < pr) WFERN.push({ p: V(base.x + ax.x * (hsh(i * 2.2) - 0.5) * 3, C3[i].y - 0.05, base.z - 0.1), s: 0.45 + 0.3 * hsh(i * 6.1), foot: true })
