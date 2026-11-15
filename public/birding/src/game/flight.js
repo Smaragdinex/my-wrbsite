@@ -70,7 +70,7 @@ export const ESCAPE = {
   sarus: { r: 9, run: 2, fly: { speed: 9, hz: 2.4, style: 'flap', k: 3.0 } },
   redcrowned: { r: 9, run: 2, fly: { speed: 9, hz: 2.5, style: 'flap', k: 2.9 } },
   ruff: { r: 5, run: 3, fly: { speed: 12, hz: 8, style: 'flap', k: 0.87 } },
-  lapwing: { r: 6, run: 3 },   // 2026-11-13 小辮鴴：先跑開（飛行模型還沒做）
+  lapwing: { r: 6, run: 3, fly: { speed: 10, hz: 5, style: 'flap', k: 0.87 } },   // 2026-11-13 小辮鴴：先跑開；2026-11-15 飛行模型做好了（寬圓的翅膀、慢拍）
   grebe: { r: 9, swim: 4, fly: { speed: 11, hz: 9, style: 'flap', k: 1.25 } },
   // 2026-11-13 Pass 1D：遊隼巡航快、拍幾下就滑；黑雨燕又快又急（離步道 4～5 m 高，靠很近才飛）；烏林鴞慢、低、安靜
   peregrine: { r: 5,   /* 2026-11-15 使用者「81 完全沒看到」：驚飛 16 m，岩架離步道才 6～10 m → 走到上層岩廊就飛走、29 m 外才回來，永遠看不到。高高的岩架上、人在底下走，5 m 才飛 */ fly: { speed: 15, hz: 4.5, style: 'glide', k: 1.05 } },
@@ -112,6 +112,8 @@ export const ESCAPE = {
   // 2026-11-15 溪鳥：river＝貼著溪面（0.5～0.9 m）沿河道飛走、再沿河道飛回來，不飛上樹
   dipper: { r: 5, river: true, fly: { speed: 9, hz: 14, style: 'flap', k: 0.5 } },
   forktail: { r: 4, river: true, fly: { speed: 7, hz: 15, style: 'bound', k: 0.34 } },
+  redstart: { r: 5, fly: { speed: 7, hz: 14, style: 'flap', k: 0.37 } },   // 2026-11-15 瀑布湖
+  harlequin: { r: 10, swim: 5, fly: { speed: 12, hz: 7, style: 'flap', k: 0.69 } },
 }
 // 飛行模型（存在才用；還沒做好的先借翠鳥的飛行模型，大小照停棲模型的身高換算）
 const FLY_NAME = (id) => `${id}-fly-rig`

@@ -115,7 +115,7 @@ function backLink(ctx) {
 // 目錄每一行的位置（畫和點擊判斷共用）
 // 2026-11-10 改成像真的書（ChatGPT 建議）：跨頁 0 是扉頁＋前言，接著目錄跨頁（一頁一欄、每頁最多 35 種，左右兩頁），再來每種鳥一個跨頁
 // 鳥變多時目錄自動加頁（湊成偶數頁，維持完整跨頁）
-const TOC_PER = 30   // 2026-11-13 使用者：一頁 30 種，字可以大一點（35 → 30，行距 34 → 39）
+const TOC_PER = 25   // 2026-11-13 使用者：一頁 30 種（35 → 30）；2026-11-15 使用者「一排 30 太擠、很難點下一頁」→ 25
 const TOC_PAGES = Math.max(2, Math.ceil(Math.ceil(BIRDS.length / TOC_PER) / 2) * 2)
 const FRONT = 1 + TOC_PAGES / 2   // 鳥的第一個跨頁
 const TOC_Y0 = 262, TOC_X0 = 74, TOC_X1 = CW - 74
@@ -486,8 +486,11 @@ function makeDiorama(def, P = PLATE, zoom = 1, fit = 0) {   // fit：正方形�
   // 一群鳥會散開，退遠一點
   const dist = s / (fit || 0.55) / 2 / Math.tan(THREE.MathUtils.degToRad(15)) / zoom
   // 鏡頭對準鳥身上的追蹤點（built.focus，跟溫室跟拍用的同一點），再加上它和外框中心的差：鳥走到哪都在正中間
+  // 2026-11-15 綠繡眼在枝條上跳到另一個點，built.focus 沒跟著換 → 改追身體骨頭（有的話），鳥跳到哪都跟得到
+  let bodyB = null; one.obj.traverse((o) => { if (o.isBone && o.name === 'body' && !bodyB) bodyB = o })
   const focusAt = (v) => one.obj.parent.localToWorld(v.copy(one.focus))
-  const off = mid.clone().sub(focusAt(new THREE.Vector3()))
+  const bodyOff = bodyB ? bodyB.worldToLocal(mid.clone()) : null   // 外框中心放在身體骨頭的座標裡：鳥轉身、跳走都跟著
+  const off = bodyB ? new THREE.Vector3() : mid.clone().sub(focusAt(new THREE.Vector3()))
   if (pond) pond.scale.setScalar(s * 1.1)
   const sunOff = new THREE.Vector3(-2, 6, 3)
   // 鳥身上的原本材質（剪影切換用）
@@ -496,6 +499,7 @@ function makeDiorama(def, P = PLATE, zoom = 1, fit = 0) {   // fit：正方形�
   let sil = null
   const rt = new THREE.WebGLRenderTarget(560, Math.round(560 * (P.h * CH) / (P.w * CW)), { samples: 4 })
   const look = mid.clone(), want = new THREE.Vector3()
+  let baseY = mid.y
   return {
     rt, ready: false, scene: sc, cam,
     setSilhouette(on) { if (sil === on) return; sil = on; for (const [o, m] of meshes) o.material = on ? SIL : m },
@@ -503,8 +507,11 @@ function makeDiorama(def, P = PLATE, zoom = 1, fit = 0) {   // fit：正方形�
       a.update(t, dt)
       if (faceDir(_want)) { if (!aimed) dir.copy(_want); else dir.lerp(_want, 1 - Math.exp(-dt * 1.5)).normalize(); aimed = true }
       // 鏡頭平順地跟著鳥（高度只跟三成，低頭啄食時畫面不上下晃）；第一格直接對準
-      focusAt(want).add(off)
-      want.y = mid.y + (want.y - mid.y) * 0.3
+      if (bodyB) bodyB.localToWorld(want.copy(bodyOff)); else focusAt(want).add(off)
+      // 2026-11-15 使用者「綠繡眼一跳，畫面就跑歪」：以前高度永遠只跟三成（以 mid.y 為準），跳到另一根高低不同的枝條就一直偏在畫面下緣。
+      // 改成基準高度慢慢追上（約 1 秒），短暫的低頭、跳起還是只跟三成
+      baseY = t === 0 ? want.y : baseY + (want.y - baseY) * (1 - Math.exp(-dt * 1.2))
+      want.y = baseY + (want.y - baseY) * 0.3
       look.lerp(want, t === 0 ? 1 : 1 - Math.exp(-dt * 4))
       cam.position.copy(look).addScaledVector(dir, dist); cam.lookAt(look)
       // 影子相機跟著走；水鳥的那灘水也跟著（游遠了還在腳下）

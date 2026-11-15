@@ -107,6 +107,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     const nearBoard = (x, z) => { for (const [dx, dz] of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5], [1.1, 1.1], [-1.1, 1.1], [1.1, -1.1], [-1.1, -1.1]]) if (walkAt(x + dx, z + dz) != null || deckAt(x + dx, z + dz) != null) return true; return false }
     if (def.swim === 'alpPond') d.swimOK = (x, z) => Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r * 0.78   // 山區入口的湖（鴛鴦、花嘴鴨）
     else if (def.swim === 'eastWet') d.swimOK = (x, z) => wetSD(x, z) < -2.5 && alpineHeight(x, z) < EAST.W - 0.3 && !nearBoard(x, z)   // 東部人工濕地（黃麻鴨、鸊鷉）：開闊、夠深的水面；2026-11-13 使用者：鸊鷉游到木棧道底下穿過去 → 離棧道、觀景台 1.5 m 以內不去
+    else if (typeof def.swim === 'function') d.swimOK = def.swim   // 2026-11-15 丑鴨：自己給能游的範圍（瀑布湖）
     else if (def.swim) d.swimOK = (x, z) => poolQ(x, z) < 0.7 && Math.hypot(x - MTN.x, z - MTN.z) > mtnR(Math.atan2(z - MTN.z, x - MTN.x), 0) + 4
     // 沒指定方位就讓鏡頭站在「鳥背對山」那一側，背景是雲霧山
     if (d.view == null) d.view = THREE.MathUtils.radToDeg(Math.atan2(def.spot[0] - MTN.x, def.spot[1] - MTN.z))

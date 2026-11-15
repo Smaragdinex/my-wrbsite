@@ -947,7 +947,7 @@ const ALL = [
     facts: [
       "俯衝抓鳥時速度可以超過每小時 300 公里，是世界上最快的動物。",
       "在高聳的峭壁岩架上築巢，也會利用大樓頂端。",
-      "這座公園的瀑布區住著來自世界各地的鳥，遊隼在這裡是「來作客」的。",
+      "分布幾乎遍及全世界，除了兩極和最深的熱帶雨林，各大洲都找得到，是分布最廣的猛禽之一。",
       "二十世紀因為農藥 DDT 一度大量減少，禁用後才慢慢恢復。",
     ],
   },
@@ -959,7 +959,7 @@ const ALL = [
       "牠們偏愛在瀑布後面或旁邊潮濕、陰暗的岩架上築巢，常常要穿過水簾才能回家。",
       "腳很短小，不能站在地上或樹枝上，只能用爪子抓住垂直的岩面。",
       "一窩只生一顆蛋，雛鳥要在巢裡待上一個半月以上。",
-      "這座公園的瀑布區住著來自世界各地的鳥，黑雨燕在這裡是「來作客」的。",
+      "在北美西部繁殖，冬天飛到南美洲過冬；直到 2009 年科學家用追蹤器，才知道牠們去巴西的亞馬遜一帶。",
     ],
   },
   {
@@ -970,7 +970,7 @@ const ALL = [
       "看起來是體型最大的貓頭鷹之一，其實羽毛很蓬鬆，體重比外表輕很多。",
       "大面盤像碟形天線，能把聲音集中到耳朵，隔著雪也聽得到老鼠。",
       "清晨和黃昏最活躍，有時白天也會出來。",
-      "這座公園的瀑布區住著來自世界各地的鳥，烏林鴞在這裡是「來作客」的。",
+      "住在北美、北歐到西伯利亞的北方針葉林，也是加拿大曼尼托巴省的省鳥。",
     ],
   },
   // 2026-11-13 使用者：翡翠沼澤和山下湖中間加一片開放淡水濕地（open freshwater wetland），放小辮鴴（還有彩鷸）
@@ -1015,6 +1015,30 @@ const ALL = [
       '中低海拔乾淨的山溪才看得到，叫聲細細尖尖的，常被水聲蓋過。',
     ],
   },
+  {
+    // 2026-11-15 使用者「瀑布下那個湖加水鳥」：鉛色水鶇站在瀑布湖南岸外 1.5 m 的一顆石頭上（def.boulder），丑鴨一對在湖面游、潛水
+    id: 'redstart', spot: [197, 72.2], y: YOSE.lake.water + 0.3, water: YOSE.lake.water, boulder: { r: 0.45 }, perch: 'ground', view: 180, dist: 2.0, camH: 0.6, lookY: 0.08,
+    name: '鉛色水鶇', sci: 'Phoenicurus fuliginosus', where: '瀑布湖南岸的石頭上',
+    intro: '台灣溪流最常見的鳥之一。雄鳥全身鉛藍色，腰和尾巴是鮮豔的栗紅色；雌鳥灰褐色、尾巴基部白色。最喜歡站在溪石上，尾巴不停地張開、收起，又上下擺動，很好認。',
+    facts: [
+      '常從石頭上飛出去，在空中抓飛蟲，再回到原本那顆石頭上。',
+      '地盤性很強，看到別的鉛色水鶇或其他小鳥靠近，會追著趕走。',
+      '分布在喜馬拉雅山區、中國南部到台灣，在台灣從低海拔到中海拔的溪流都看得到。',
+      '巢常築在溪邊的岩縫、石壁凹處或樹根之間。',
+    ],
+  },
+  {
+    id: 'harlequin', spot: [199, 79], y: YOSE.lake.water - 0.13, water: YOSE.lake.water, perch: 'ground', view: 180, dist: 9, camH: 1.4, lookY: 0.2,
+    swim: (x, z) => (Math.hypot((x - 198) / 13, (z - 80.5) / 10) < 0.82 || YOSE.inEastLake(x, z, -2.5)) && Math.hypot(x - 204, z - 92) > 5,
+    name: '丑鴨', sci: 'Histrionicus histrionicus', where: '瀑布湖的湖面',
+    intro: '一種小型的海鴨。雄鳥藍灰色的身體上有一道道鑲黑邊的白色條紋，兩脇是栗紅色，臉上有白色的月牙斑，花紋像義大利喜劇裡穿花衣的丑角，英文名 Harlequin 就是這個意思。',
+    facts: [
+      '夏天在湍急的山溪繁殖，冬天移到浪很大的岩岸海邊，都是別的鴨子不敢去的急水。',
+      '會潛到急流的水底，在石頭間找石蠅、石蛾的幼蟲吃。',
+      '分布在北美洲西北部、格陵蘭、冰島和東西伯利亞。',
+      '羽毛很密、裡面存著空氣，在冰冷的急流裡也能保暖，浮起來很快。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -1023,6 +1047,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

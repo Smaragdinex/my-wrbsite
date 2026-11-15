@@ -886,7 +886,7 @@ export const BIRDS = {
   "facts": [
    "In a hunting stoop it can exceed 300 km/h — the fastest animal on Earth.",
    "It nests on ledges of tall cliffs, and also on top of skyscrapers.",
-   "This park's waterfall area is home to birds from around the world; the Peregrine is a guest here.",
+   "It is found almost everywhere on Earth except the polar regions and the deepest rainforests, making it one of the most widespread birds of prey.",
    "Its numbers crashed in the 20th century because of DDT and slowly recovered after the pesticide was banned."
   ]
  },
@@ -898,7 +898,7 @@ export const BIRDS = {
    "It prefers to nest on damp, shaded ledges behind or beside waterfalls, often flying through the curtain of water to get home.",
    "Its feet are tiny: it cannot stand on the ground or a branch, only cling to vertical rock.",
    "It lays a single egg, and the chick stays in the nest for more than six weeks.",
-   "This park's waterfall area is home to birds from around the world; the Black Swift is a guest here."
+   "It breeds in western North America and winters in South America; only in 2009 did tracking devices reveal that it spends the winter in the Amazon of Brazil."
   ]
  },
  "greatgreyowl": {
@@ -909,7 +909,7 @@ export const BIRDS = {
    "It looks like one of the largest owls, but its feathers are so fluffy that it weighs much less than it appears.",
    "Its huge facial disc works like a satellite dish, funnelling sound to its ears; it can hear a vole under the snow.",
    "It is most active at dawn and dusk, and sometimes hunts in daylight.",
-   "This park's waterfall area is home to birds from around the world; the Great Grey Owl is a guest here."
+   "It lives in the boreal forests of North America, northern Europe and Siberia, and is the provincial bird of Manitoba, Canada."
   ]
  },
  "harrier": {
@@ -1334,6 +1334,28 @@ export const BIRDS = {
    "It hops from rock to rock in the splashing spray, picking small insects off wet stone.",
    "It often nests in a crack behind a waterfall or in a streamside cliff, building with moss.",
    "Found only on clean mid- and low-elevation mountain streams; its thin, high call is easily drowned out by the water."
+  ]
+ },
+ "redstart": {
+  "name": "Plumbeous Water Redstart",
+  "where": "On a Rock by the South Shore of the Waterfall Lake",
+  "intro": "One of the commonest birds of Taiwan's streams. The male is lead blue all over with a bright chestnut-red rump and tail; the female is grey-brown with white at the base of the tail. It loves to stand on stream rocks, constantly fanning its tail open and shut and flicking it up and down — easy to recognise.",
+  "facts": [
+   "It often flies out from its rock to snap up a flying insect, then returns to the very same rock.",
+   "It is strongly territorial and chases away other water redstarts and small birds that come too close.",
+   "It ranges from the Himalayas through southern China to Taiwan, where it lives along streams from the lowlands to mid-elevations.",
+   "It usually nests in a crevice in a streamside rock, a hollow in a rock face, or among tree roots."
+  ]
+ },
+ "harlequin": {
+  "name": "Harlequin Duck",
+  "where": "On the Waterfall Lake",
+  "intro": "A small sea duck. The male's slate-blue body is marked with black-edged white stripes, its flanks are chestnut and its face has a white crescent — patterned like the harlequin, the clown of Italian comedy, which is where its name comes from.",
+  "facts": [
+   "It breeds on fast mountain streams in summer and moves to surf-pounded rocky coasts in winter — rough water other ducks avoid.",
+   "It dives to the bottom of rapids to hunt stonefly and caddisfly larvae among the stones.",
+   "It is found in northwestern North America, Greenland, Iceland and eastern Siberia.",
+   "Its dense plumage traps air, keeping it warm in icy torrents and helping it pop back to the surface quickly."
   ]
  },
  "lapwing": {

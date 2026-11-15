@@ -308,7 +308,7 @@ const BUILD = {
   scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier, rnpheasant, skylark, cisticola, nutcracker, wbwood,
   shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe, lapwing,
   peregrine, blackswift, greatgreyowl,
-  dipper, forktail,
+  dipper, forktail, redstart, harlequin,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -320,7 +320,7 @@ const TINT = { 'thrush-rig': 0.5 }
 const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig', 'dipper-rig', 'dipper-fly-rig', 'forktail-rig', 'forktail-fly-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig', 'dipper-rig', 'dipper-fly-rig', 'forktail-rig', 'forktail-fly-rig', 'redstart-rig', 'redstart-fly-rig', 'harlequin-rig', 'harlequin-fly-rig', 'lapwing-fly-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
     'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig']
@@ -1851,6 +1851,41 @@ function forktail(env) {
     walk: { radius: 0.14, speed: 0.12, turn: 3 }, stride: 0.05, swingT: 0.12, lift: 0.012, knee: [0.3, 0.6], focusY: 0.08,
     acts: { walk: [1, 99, 99], peck: [3, 0.6, 1.1], look: [3, 0.8, 1.8], stand: [3, 1.5, 3], turn: [2, 99, 99] } })
 }
+// 2026-11-15 鉛色水鶇（雄）：瀑布湖邊的石頭上，尾巴一直「張開—收起」又上下搖（維基百科：牠站著時會不停地張尾、擺尾），偶爾低頭啄
+function redstart(env) {
+  let fan = 0, ph = 0, pause = 0
+  const show = ({ t, dt, r }) => {
+    // 一陣一陣地搖：搖 2～4 秒、停 1～2 秒；搖的時候約每秒 1.6 下，張開跟下壓同步
+    pause -= dt; if (pause < -rnd(2, 4)) pause = rnd(1, 2)
+    if (pause < 0) ph += dt * Math.PI * 2 * 1.6
+    const k = pause < 0 ? 0.5 + 0.5 * Math.sin(ph) : 0
+    fan = damp(fan, k, 14, dt)
+    const tb = r.bones.tail
+    if (tb) tb.scale.set(1 + 0.8 * fan, 1, 1 + 0.8 * fan)
+    return { tail: -0.35 * fan + 0.12, rate: 16 }
+  }
+  return groundTripo(env, { name: 'redstart-rig', H: 0.152, h0: 0.665, ...TRIPO, show, hop: 0.025,
+    walk: { radius: 0.16, speed: 0.12, turn: 3 }, stride: 0.05, swingT: 0.12, lift: 0.012, knee: [0.3, 0.6], focusY: 0.08,
+    acts: { walk: [1, 99, 99], peck: [3, 0.6, 1.1], look: [3, 0.8, 1.8], stand: [3, 1.5, 3], turn: [2, 99, 99] } })
+}
+// 2026-11-15 丑鴨（一對）：在瀑布湖面游，隔一陣子潛下去 4～8 秒再冒出來（維基百科：在湍急的水裡潛水，在水底找水生昆蟲）
+function harlequin(env) {
+  return groundGroup(2, 0.9, (avoid) => {
+    const D = { st: 'swim', t: rnd(6, 14) }
+    const show = ({ t, dt, root }) => {
+      D.t -= dt
+      const splash = () => { const p = root.getWorldPosition(V()); ripple(p.x, p.z, 0.6) }
+      if (D.st === 'swim' && D.t < 0) { D.st = 'dive'; D.t = rnd(4, 8); splash() }
+      else if (D.st === 'dive' && D.t < 0) { D.st = 'up'; D.t = 0.8; splash() }
+      else if (D.st === 'up' && D.t < 0) { D.st = 'swim'; D.t = rnd(10, 22) }
+      if (D.st === 'dive') return { jump: -0.45, lean: 0.5, neck: 0.4, head: -0.3, tail: -0.2, rate: 9 }
+      if (D.st === 'up') return { wing: 0.4 * Math.max(0, Math.sin(t * 36)) * D.t, jump: 0 }
+      return null
+    }
+    return groundTripo(env, { name: 'harlequin-rig', H: 0.32, h0: 0.677, ...TRIPO, swim: true, bill: 0.1, bob: 0.025, show,
+      walk: { radius: 3.5, speed: 0.15, avoid: swimAvoid(env, avoid) }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.22,
+      acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }) })
+}
 function islandthrush(env) { return endemicGround('islandthrush-rig', 0.26, 0.705, { hop: 0.045, stride: 0.1 })(env) }
 function rustylt(env) { return endemicGround('rustylt-rig', 0.27, 0.598, { hop: 0.04, flick: 0.25 })(env) }
 function whitethroat(env) { return endemicGround('whitethroat-rig', 0.26, 0.62, { hop: 0.04, flick: 0.25 })(env) }
@@ -2283,7 +2318,7 @@ export const REAL_CM = {
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
   shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, lapwing: 30, grebe: 50,
-  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
+  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
 const _fsInv = new THREE.Matrix4(), _fsV = V()
