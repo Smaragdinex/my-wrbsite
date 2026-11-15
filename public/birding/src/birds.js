@@ -1013,7 +1013,7 @@ function groundTripo(env, cfg) {
     const runBob = c.run * 0.02 * cfg.H * Math.abs(Math.sin(c.runPh * Math.PI * 2))   // 每一步身體上下一下
     const liftY = (cfg.hop ? 0 : 0.012 * cfg.H * up * (1 - c.run)) + runBob, gyHere = env.groundAt ? env.groundAt(P.x, P.y) : 0
     c.gy = c.gy == null ? gyHere : damp(c.gy, gyHere, 12, dt)
-    root.position.set(P.x, c.gy + liftY + hopY + hopDip + (c.jy ?? 0), P.y); root.rotation.y = w.h
+    root.position.set(P.x, c.gy + liftY + hopY + hopDip + (c.jy ?? 0) + (cfg.raise ?? 0), P.y); root.rotation.y = w.h   // cfg.raise：模型的腳底比校準的低一點（帝雉 2026-11-15）
     root.updateWorldMatrix(true, true)
     // 山鷸的頭：要等整隻鳥這一格的位置擺好之後才能釘（以前在擺位置前釘，頭永遠慢一格，每抬一次腳就上下抖 4～5 mm）。
     // 目標 = 沒搖時頭的位置，扣掉抬腳那一下的身體升起，再低通平滑一下（速度變化不會一頓一頓）
@@ -1664,7 +1664,7 @@ function babbler(env) {
 }
 // 帝雉：在森林邊緣慢慢走、低頭啄食，長尾巴跟著擺
 function mikado(env) {
-  return groundTripo(env, { name: 'mikado-rig', H: 0.59, h0: 0.455, ...TRIPO, bob: 0.02,
+  return groundTripo(env, { name: 'mikado-rig', H: 0.59, h0: 0.455, ...TRIPO, bob: 0.02, raise: 0.04,   /* 2026-11-15 使用者（錄的影片）「帝雉有點在土地下」：量過走路、啄食時腳趾在地面下 1～5 cm → 整隻抬 4 cm */
     walk: { radius: 1.6, speed: 0.16 }, stride: 0.16, swingT: 0.32, lift: 0, knee: [0.8, 1.4], focusY: 0.35,
     acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.5, 3], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } })
 }
@@ -1694,7 +1694,7 @@ function thrush(env) {
 }
 // 藍腹鷴：跟帝雉一樣在林緣慢慢走、低頭啄食
 function pheasant(env) {
-  return groundTripo(env, { name: 'pheasant-rig', H: 0.63, h0: 0.619, ...TRIPO, bob: 0.02,
+  return groundTripo(env, { name: 'pheasant-rig', H: 0.63, h0: 0.619, ...TRIPO, bob: 0.02, raise: 0.03,   /* 2026-11-15 量過腳趾平均在地面下 1.2 cm、最多 5 cm → 抬 3 cm */
     walk: { radius: 1.6, speed: 0.16 }, stride: 0.16, swingT: 0.32, lift: 0, knee: [0.8, 1.4], focusY: 0.36,
     acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.5, 3], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } })
 }
