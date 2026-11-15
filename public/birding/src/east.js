@@ -11,6 +11,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { fbm2, mulberry32 } from './noise.js'
 import { scatter } from './plants.js'
 import { plankTextures } from './textures.js'
+import { canopyGeometry, leafify, barkify } from './fju-foliage.js'
 
 const TAU = Math.PI * 2
 
@@ -42,58 +43,87 @@ const nearWalk = (x, z) => [[0, 0], [0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7], [1
 export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = null } = {}) {
   const g = new THREE.Group(); g.name = 'east'
   const rnd = mulberry32(1110)
-  const layers = { cane: [[], []], plume: [[], []], tall: [[], []], blade: [[], []], low: [[], []] }   // plume：花穗（跟 cane 同順序、不打亂：遠的變稀時稈和穗一起消失）   // cane：有稈的（芒草、蘆葦）；blade：白茅、莎草；low：短草
+  const layers = { cane: [[], []], plume: [[], []], tall: [[], []], blade: [[], []], low: [[], []], gmid: [[], []], glow: [[], []] }   /* gmid／glow：草原自己的中草、矮草毯（2026-11-15：比濕地的寬、亮） */   // plume：花穗（跟 cane 同順序、不打亂：遠的變稀時稈和穗一起消失）   // cane：有稈的（芒草、蘆葦）；blade：白茅、莎草；low：短草
   const c = new THREE.Color()
   const push = (L, x, y, z, a, col, h) => { layers[L][0].push(x, y, z, a); layers[L][1].push(col.r, col.g, col.b, h) }
   const ok = (x, z) => domeRho(x, z) < 0.952 && alpineTrailDist(x, z) > 1.5 && !nearBirdLane(avoid, x, z) && !EAST.hides.some(([hx, hz]) => Math.hypot(x - hx, z - hz) < 3.8) && !nearWalk(x, z)   // 觀察屋裡不長草
 
-  /* ---------- 草原 ---------- */
+  /* ---------- 草原 ----------
+     2026-11-15 使用者「大草原就一片大草，問 ChatGPT 怎麼改善」→ docs/GRASSLAND_SPEC_1115.txt、概念圖 docs/acceptance-1113/grassland_concept.png：
+     芒草不再到處撒，集中成 domain-warp 雜訊的一塊塊（約 28%，大塊在內部、步道和觀察屋前稀）；其餘是一層密的矮草毯＋中草；
+     偶爾一塊乾穗草；步道邊和空地有零星野花（咸豐草白、蟛蜞菊黃、紫色菊、蓼的粉紅穗）；幾叢矮灌木、幾顆半埋的石頭、一棵孤樹 */
+  const GRASS_FEAT = []   // 灌木、孤樹、石頭（下面另外蓋）
   {
     const [x0, x1, z0, z1] = EAST.grassBox, L = EAST.lark
-    let nMis = 0, nImp = 0, nLow = 0
-    for (let k = 0; k < 60000 && (nMis < 2000 || nImp < 3000 || nLow < 4000); k++) {
+    const H = (h) => new THREE.Color(h)
+    const C = { carpet: [H(0x687D46), H(0x879456)], mid: [H(0x849151), H(0xA6A16A)], dry: [H(0xB1A073), H(0xC3B387)], misLeaf: H(0x7F874E), plume: [H(0xC9C5A7), H(0xE2DECA)], stem: H(0x8a8458) }
+    const FLOW = [[H(0xF2EEE0), H(0xD7B839)], [H(0xE3BD42), H(0xC9A030)], [H(0x9975B2), H(0x7a5a96)], [H(0xC994A8), H(0xb07a90)]]
+    const mixC = (a, b, t) => c.copy(a).lerp(b, t)
+    const misMask = (x, z) => {
+      const wx = x + 18 * (fbm2(x * 0.02 + 5, z * 0.02, 2) - 0.5), wz = z + 18 * (fbm2(x * 0.02 - 7, z * 0.02 + 3, 2) - 0.5)
+      const n = fbm2(wx * 0.035 + 3, wz * 0.035 - 8, 3)
+      const [ox, oz] = EAST.owlNest, od = Math.hypot(x - ox, z - oz)
+      const m = Math.max(ss(0.45, 0.52, n), 1 - ss(6, 14, od))   // 草鴞的巢四周一定是最密的芒草
+      return m * ss(2.2, 6, alpineTrailDist(x, z))
+    }
+    let nMis = 0, nMid = 0, nLow = 0, nDry = 0, nFl = 0
+    for (let k = 0; k < 400000 && (nMis < 2600 || nMid < 12000 || nLow < 42000 || nDry < 900 || nFl < 1500); k++) {
       const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0)
       const sd = grassSD(x, z)
       if (sd > 2 || rnd() < ss(-3, 2, sd) || !ok(x, z)) continue
       const y = alpineHeight(x, z), slope = Math.hypot(alpineHeight(x + 1, z) - y, alpineHeight(x, z + 1) - y)
       if (slope > 0.8) continue   // 西緣的岩坡不長
       const lark = 1 - ss(0.7, 1.25, Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz))
-      // 高草藏身區（草鴞、環頸雉）偏西北；整片用雜訊分成一塊塊，不要均勻
-      const [ox, oz] = EAST.owlNest, od = Math.hypot(x - ox, z - oz)
-      const tallZone = Math.max(ss(312, 290, x) * ss(108, 96, z) * ss(70, 76, z), 1.6 * (1 - ss(6, 14, od)))   // 草鴞的巢四周一圈最密的芒草（藏起來）
-      const patch = fbm2(x * 0.06 + 3, z * 0.06 - 8, 3)
-      const pMis = Math.max(0, (0.15 + 0.75 * tallZone + 0.6 * (patch - 0.5)) * (1 - lark))
-      const r = rnd()
-      if (r < pMis && nMis < 2000) {
-        // 芒草：一叢 2～4 根花稈（直、1.4～2 m），底下一大把細長葉子往外拱（cane 模式的「葉」從接近地面長出來、尾端下垂），頂上一束銀白帶粉的花穗
+      const mm = misMask(x, z), td = alpineTrailDist(x, z), r = rnd()
+      const bare = ss(0.6, 0.7, fbm2(x * 0.12 + 11, z * 0.12, 2)) * (td < 4 ? 1 : 0.35)   // 裸土：步道兩側、零星乾的地方
+      if (mm > 0.35 && r < 0.62 * mm * (1 - lark) && nMis < 2600) {
+        // 芒草：一叢 2～4 根花稈（1.3～2.3 m）、底下一大把往外拱的細長葉、頂上一束銀白帶米色的花穗
         nMis++
-        const H = 1.3 + rnd() * 0.7, dry = rnd()
-        c.setHSL(0.2 - dry * 0.06, 0.38 - dry * 0.12, 0.26 + dry * 0.08)
+        const Hh = 1.3 + rnd() * 1.0, k2 = 0.88 + rnd() * 0.24
         const nl = 10 + Math.floor(rnd() * 8)
-        for (let j = 0; j < nl; j++) { const k2 = 0.85 + rnd() * 0.3; push('tall', x + (rnd() - 0.5) * 0.3, y - 0.02, z + (rnd() - 0.5) * 0.3, rnd() * TAU, c.clone().multiplyScalar(k2), (0.7 + rnd() * 0.5) * H * 0.75) }
+        for (let j = 0; j < nl; j++) push('tall', x + (rnd() - 0.5) * 0.3, y - 0.02, z + (rnd() - 0.5) * 0.3, rnd() * TAU, c.copy(C.misLeaf).multiplyScalar(k2 * (0.9 + rnd() * 0.2)).clone(), (0.6 + rnd() * 0.5) * Hh * 0.7)
         const ns = 2 + Math.floor(rnd() * 3)
-        for (let s = 0; s < ns; s++) {
-          const sx = x + (rnd() - 0.5) * 0.25, sz = z + (rnd() - 0.5) * 0.25, st = H * (0.85 + rnd() * 0.25)
-          push('cane', sx, y - 0.02, sz, rnd() * TAU, c.clone().setHSL(0.12, 0.25, 0.42), st)
-          // 花穗：從稈頂往上、微微拱彎的幾枝（第一版用 cane 的「葉」：全部往外攤平，從遠處看是一片白色星星）；銀灰帶一點粉
-          const pc = new THREE.Color().setHSL(0.06 + rnd() * 0.04, 0.2, 0.62 + rnd() * 0.08)
-          for (let j = 0; j < 6; j++) push('plume', sx, y - 0.02 + st * 0.8, sz, rnd() * TAU, pc, 0.26 + rnd() * 0.14)   // 細細的好幾枝，近看像羽毛不是一片三角形
+        for (let s2 = 0; s2 < ns; s2++) {
+          const sx = x + (rnd() - 0.5) * 0.25, sz = z + (rnd() - 0.5) * 0.25, st = Hh * (0.85 + rnd() * 0.25)
+          push('cane', sx, y - 0.02, sz, rnd() * TAU, C.stem.clone(), st)
+          const pc = mixC(C.plume[0], C.plume[1], rnd()).clone()
+          for (let j = 0; j < 6; j++) push('plume', sx, y - 0.02 + st * 0.8, sz, rnd() * TAU, pc, 0.26 + rnd() * 0.14)
         }
-      } else if (r < pMis + 0.45 * (1 - lark) && nImp < 3000) {
-        // 白茅：直立的窄葉 0.4～0.8 m，有幾根抽出白色的毛穗
-        nImp++
-        const dry = rnd()
-        c.setHSL(0.19 - dry * 0.05, 0.42 - dry * 0.15, 0.27 + dry * 0.1)
-        const n = 8 + Math.floor(rnd() * 7), H = 0.4 + rnd() * 0.4
-        for (let j = 0; j < n; j++) push('blade', x + (rnd() - 0.5) * 0.35, y - 0.02, z + (rnd() - 0.5) * 0.35, rnd() * TAU, c.clone().multiplyScalar(0.85 + rnd() * 0.3), H * (0.7 + rnd() * 0.5))
-        if (rnd() < 0.3) push('blade', x + (rnd() - 0.5) * 0.2, y - 0.02, z + (rnd() - 0.5) * 0.2, rnd() * TAU, new THREE.Color().setHSL(0.1, 0.1, 0.7), H * 1.2)   // 偶爾一根白色毛穗
-      } else if (nLow < 4000 && rnd() < 0.75 - 0.35 * lark * (fbm2(x * 0.3, z * 0.3, 2) > 0.5 ? 1 : 0)) {
-        // 短草（小雲雀那塊：有一半的地方是裸土）
+        continue
+      }
+      // 野花：步道邊 1.5～9 m、芒草塊之外，一小群一小群（雜訊高的地方）
+      if (nFl < 1500 && mm < 0.25 && td < 9 && fbm2(x * 0.15 + 2, z * 0.15 - 5, 2) > 0.6 && r < 0.5) {
+        nFl++
+        const f = FLOW[Math.floor(rnd() * FLOW.length)], Hh = 0.25 + rnd() * 0.45
+        push('blade', x, y - 0.02, z, rnd() * TAU, mixC(C.mid[0], C.carpet[0], 0.5).clone(), Hh)          // 花莖
+        for (let j = 0; j < 4; j++) push('plume', x + (rnd() - 0.5) * 0.04, y - 0.02 + Hh * 0.92, z + (rnd() - 0.5) * 0.04, rnd() * TAU, (j ? f[0] : f[1]).clone(), 0.05 + rnd() * 0.04)   // 花瓣＋花心
+        continue
+      }
+      // 乾穗草：稀疏乾草的地方（乾的稜線、裸土附近）一小撮，抽出淺色的穗
+      if (nDry < 900 && (bare > 0.3 || fbm2(x * 0.05 - 9, z * 0.05 + 2, 2) > 0.62) && r < 0.35 && mm < 0.3) {
+        nDry++
+        const Hh = 0.65 + rnd() * 0.55, col = mixC(C.dry[0], C.dry[1], rnd()).clone()
+        for (let j = 0; j < 5; j++) push('blade', x + (rnd() - 0.5) * 0.25, y - 0.02, z + (rnd() - 0.5) * 0.25, rnd() * TAU, col.clone().multiplyScalar(0.9 + rnd() * 0.2), Hh * (0.7 + rnd() * 0.4))
+        for (let j = 0; j < 2; j++) push('plume', x + (rnd() - 0.5) * 0.1, y - 0.02 + Hh * 0.85, z + (rnd() - 0.5) * 0.1, rnd() * TAU, C.plume[1].clone(), 0.12 + rnd() * 0.08)
+        continue
+      }
+      if (r < 0.3 && nMid < 12000 && bare < 0.5) {
+        // 中草 0.35～0.75 m：一叢 6～9 片
+        nMid++
+        const col = mixC(C.mid[0], C.mid[1], rnd()).clone().multiplyScalar(1.25 + rnd() * 0.2), Hh = 0.35 + rnd() * 0.4
+        for (let j = 0; j < 7; j++) push('gmid', x + (rnd() - 0.5) * 0.3, y - 0.02, z + (rnd() - 0.5) * 0.3, rnd() * TAU, col.clone().multiplyScalar(0.88 + rnd() * 0.24), Hh * (0.7 + rnd() * 0.5))
+      } else if (nLow < 42000 && rnd() > bare * 0.8 && rnd() < 1 - 0.4 * lark * (fbm2(x * 0.3, z * 0.3, 2) > 0.5 ? 1 : 0)) {
+        // 矮草毯 0.08～0.25 m（小雲雀那塊一半是裸土）
         nLow++
-        c.setHSL(0.17 + rnd() * 0.05, 0.4, 0.24 + rnd() * 0.08)
-        for (let j = 0; j < 7; j++) push('low', x + (rnd() - 0.5) * 0.4, y - 0.01, z + (rnd() - 0.5) * 0.4, rnd() * TAU, c, 0.1 + rnd() * 0.15)
+        const col = mixC(C.carpet[0], C.carpet[1], rnd()).clone().multiplyScalar(1.25 + rnd() * 0.2)
+        for (let j = 0; j < 6; j++) push('glow', x + (rnd() - 0.5) * 0.5, y - 0.01, z + (rnd() - 0.5) * 0.5, rnd() * TAU, col, 0.12 + rnd() * 0.2)
       }
     }
+    // 矮灌木（芒草塊邊緣、步道 3 m 外）、幾顆半埋的石頭、一棵孤樹（觀察屋看得到、離巢遠）
+    const okF = (x, z, r) => ok(x, z) && grassSD(x, z) < -3 && alpineTrailDist(x, z) > r && Math.hypot(x - EAST.owlNest[0], z - EAST.owlNest[1]) > 16
+    for (let k = 0, n = 0; k < 4000 && n < 26; k++) { const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0), mm = misMask(x, z); if (!okF(x, z, 3.5) || mm < 0.12 || mm > 0.55) continue; GRASS_FEAT.push({ k: 'shrub', x, z, s: 0.7 + rnd() * 0.7 }); n++ }
+    for (let k = 0, n = 0; k < 2000 && n < 7; k++) { const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0); if (!okF(x, z, 2.5) || misMask(x, z) > 0.2) continue; GRASS_FEAT.push({ k: 'rock', x, z, s: 0.35 + rnd() * 0.4 }); n++ }
+    { let best = null; for (let k = 0; k < 600; k++) { const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0); if (!okF(x, z, 6) || misMask(x, z) > 0.2) continue; const hd = Math.min(...EAST.hides.map(([hx, hz]) => Math.hypot(x - hx, z - hz))); if (hd < 14 || hd > 30) continue; best = { k: 'tree', x, z, s: 1 }; break } if (best) GRASS_FEAT.push(best) }
   }
 
   /* ---------- 濕地 ---------- */
@@ -170,7 +200,7 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
   }
 
   // 切 14 公尺一塊，每塊打亂順序（lod.js 遠的只畫前面一部分）
-  const opts = { cane: { width: [0.022, 0.014], cane: true }, plume: { width: [0.009, 0.007] }, tall: { width: [0.012, 0.01] }, blade: { width: [0.008, 0.007] }, low: { width: [0.01, 0.01] } }
+  const opts = { cane: { width: [0.022, 0.014], cane: true }, plume: { width: [0.009, 0.007] }, tall: { width: [0.012, 0.01] }, blade: { width: [0.008, 0.007] }, low: { width: [0.01, 0.01] }, gmid: { width: [0.022, 0.016] }, glow: { width: [0.03, 0.022], lawn: true } }
   let n = 0
   for (const [name, [A, B]] of Object.entries(layers)) {
     const CELL = 14, cells = new Map()
@@ -181,13 +211,34 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
       const a = [], b = []
       for (const i of idx) { a.push(A[i * 4], A[i * 4 + 1], A[i * 4 + 2], A[i * 4 + 3]); b.push(B[i * 4], B[i * 4 + 1], B[i * 4 + 2], B[i * 4 + 3]) }
       const [cx, cz] = key.split(',').map((v) => (+v + 0.5) * CELL)
-      const m = bladeMesh(a, b, opts[name]); g.add(m)
+      const m = bladeMesh(a, b, opts[name]); m.name = 'grass_' + name; g.add(m)
       // 每一塊自己的外框（bladeMesh 預設是原點、半徑 100 → 只好整個關掉剔除，每一塊不管在哪都畫一次）
       m.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, alpineHeight(cx, cz) + 1, cz), CELL * 0.75 + 4)
       // 照距離變稀（cane 層沒打亂：畫前面幾叢＝整叢消失，不會只剩穗飄著）
       lodRegisterGrass(m, new THREE.Vector3(cx, alpineHeight(cx, cz) + 0.5, cz), CELL * 0.72 + 1)
       n += idx.length
     }
+  }
+  // 草原的灌木、孤樹、石頭（GRASS_FEAT）
+  if (GRASS_FEAT.length) {
+    const crown = canopyGeometry()
+    const leafM = leafify(new THREE.MeshStandardMaterial({ color: 0x5c7f3e, roughness: 0.85, vertexColors: !!crown.attributes.color }))
+    const shrubs = GRASS_FEAT.filter((f) => f.k === 'shrub'), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), cc = new THREE.Color()
+    if (shrubs.length) {
+      const im = new THREE.InstancedMesh(crown, leafM, shrubs.length)
+      shrubs.forEach((f, i) => { const y = alpineHeight(f.x, f.z); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * TAU); im.setMatrixAt(i, m4.compose(new THREE.Vector3(f.x, y - 0.15 * f.s, f.z), q, new THREE.Vector3(0.8 * f.s, 0.55 * f.s, 0.75 * f.s))); im.setColorAt(i, cc.setHSL(0.24 + (rnd() - 0.5) * 0.05, 0.4, 0.75 + rnd() * 0.3)); addCollider(f.x, f.z, 0.45 * f.s, y + 0.8 * f.s, y - 0.5) })
+      im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); g.add(im)
+    }
+    const tree = GRASS_FEAT.find((f) => f.k === 'tree')
+    if (tree) {   // 孤樹：枝下高 2 m 的闊葉樹（兩團樹冠），樹幹微彎
+      const y = alpineHeight(tree.x, tree.z)
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, 3.2, 9).translate(0, 1.6, 0), barkify(new THREE.MeshStandardMaterial({ color: 0x6d5544, roughness: 0.9 })))
+      trunk.position.set(tree.x, y - 0.1, tree.z); trunk.rotation.z = 0.06; trunk.castShadow = true; g.add(trunk)
+      for (const [dx, dy, dz, sx, sy] of [[0, 3.6, 0, 2.6, 1.7], [0.9, 3.0, 0.5, 1.7, 1.2], [-0.8, 3.2, -0.4, 1.6, 1.1]]) { const m = new THREE.Mesh(crown, leafM); m.position.set(tree.x + dx, y + dy, tree.z + dz); m.scale.set(sx, sy, sx * 0.9); m.castShadow = true; m.receiveShadow = true; g.add(m) }
+      addCollider(tree.x, tree.z, 0.35, y + 3, y - 0.5)
+    }
+    const rocks = GRASS_FEAT.filter((f) => f.k === 'rock'), rn = ['mrock_3', 'mrock_5', 'mrock_8'].filter((n2) => lib?.[n2])
+    if (rocks.length && rn.length) { const by = Object.fromEntries(rn.map((n2) => [n2, []])); rocks.forEach((f, i) => by[rn[i % rn.length]].push({ p: new THREE.Vector3(f.x, alpineHeight(f.x, f.z) - 0.25 * f.s, f.z), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 0.3, rnd() * TAU, rnd() * 0.3)), s: new THREE.Vector3(f.s, f.s * 0.7, f.s) })); for (const n2 of rn) if (by[n2].length) scatter(g, lib[n2], by[n2], { cast: true }) }
   }
   g.userData.blades = n
   // V2：水中枯木與樹樁（ChatGPT：倒木 2～4 根 1.5～4 m、自然樹樁 2～5 個 0.3～1.2 m；集中在岸邊、水道彎；開闊泥灘中間不放）

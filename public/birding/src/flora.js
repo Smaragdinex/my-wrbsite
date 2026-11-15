@@ -144,6 +144,8 @@ export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, law
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform vec3 uSun; uniform float uDusk; varying vec3 vGcol; varying float vY; varying vec3 vGw;')
       .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= vGcol;')
+      // 2026-11-15 雙面草的背面：three 會把法線翻成朝下 → 從背面看是一片全黑的三角形（草原寬草葉特別明顯）。法線本來就偏朝上，背面也照正面的法線算光
+      .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n#ifdef DOUBLE_SIDED\nnormal *= faceDirection;\n#endif')
       .replace('#include <opaque_fragment>', `
         // 背光透光：太陽在葉子後面時，葉子邊緣和上半部透出黃綠色的光
         vec3 vd = normalize(cameraPosition - vGw);

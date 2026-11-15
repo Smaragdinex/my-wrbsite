@@ -20,6 +20,7 @@ import { addWind } from './wind.js'
 import { lodRegister, lodRegisterGrass } from './lod.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { dayLight, duskLight, mistLevel, wetify, sunDirU, weatherU } from './structures.js'
+const GR_PAL = { sand: new THREE.Color(0xB7AB86), straw: new THREE.Color(0xA8A077), olive: new THREE.Color(0x777E49), fresh: new THREE.Color(0x697D46), dark: new THREE.Color(0x625A42), pale: new THREE.Color(0xC5BA96) }   // 2026-11-15 草原地面（ChatGPT）
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const TAU = Math.PI * 2
@@ -330,8 +331,14 @@ function buildInterior(lib, avoid = []) {
         let ez = eastZone(x, z)
         if (ez === 'hide') ez = grassSD(x, z) < 2 ? 'grass' : wetSD(x, z) < 14 ? 'wet' : null   // 觀察屋旁照所在的區上色（不然一圈圓形的色塊）
         if (ez === 'grass') {
-          const dry = fbm2(x * 0.05 + 7, z * 0.05, 3)
-          c.lerp(new THREE.Color().setHSL(0.15 + dry * 0.05, 0.36, 0.2 + n * 0.06 + dry * 0.05), (1 - rock * 0.7) * (1 - tr) * ss(-1, 3, -grassSD(x, z) + 2))
+          // 2026-11-15 ChatGPT 草原規格（docs/GRASSLAND_SPEC_1115.txt）：以前整片一個沙米色 → 六色、三個尺度的雜訊混：
+          // 大色塊（約 25 m）橄欖草地↔新綠草地；中塊（約 5 m）乾稻草色、深色腐植土；細碎（0.3 m）明暗；步道兩側是乾沙土、零星淺色裸土
+          const n1 = fbm2(x * 0.04 + 7, z * 0.04, 3), n2 = fbm2(x * 0.2 - 3, z * 0.2 + 5, 2), n2b = fbm2(x * 0.18 + 11, z * 0.18 - 2, 2), n3 = fbm2(x * 2.6, z * 2.6, 1)
+          const g0 = GR_PAL.olive.clone().lerp(GR_PAL.fresh, ss(0.4, 0.62, n1))
+          g0.lerp(GR_PAL.straw, ss(0.55, 0.7, n2) * 0.85).lerp(GR_PAL.dark, ss(0.63, 0.75, n2b) * 0.7)
+          const td0 = alpineTrailDist(x, z); g0.lerp(GR_PAL.sand, ss(3.5, 1.2, td0) * 0.8).lerp(GR_PAL.pale, ss(0.72, 0.8, fbm2(x * 0.5 + 4, z * 0.5, 2)) * 0.6)
+          g0.multiplyScalar(0.94 + 0.12 * n3)
+          c.lerp(g0, (1 - rock * 0.7) * (1 - tr) * ss(-1, 3, -grassSD(x, z) + 2))
         } else if (ez === 'wet') {
           const wd = wetSD(x, z), y = pos[k * 3 + 1]
           const mud = new THREE.Color().setHSL(0.08 + stone * 0.02, 0.22, 0.13 + stone * 0.05)
