@@ -1823,7 +1823,8 @@ function dipper(env) {
       else if (D.t < 0) D.t = rnd(1, 3)
     } else if (D.st === 'dive' && (D.t < 0 || depth < 0.06)) { D.st = 'up'; D.t = 0.9; splash() }
     else if (D.st === 'up' && D.t < 0) { D.st = 'land'; D.t = rnd(6, 14) }
-    if (D.st === 'dive') return { jump: -0.32, lean: 0.45, neck: 0.5, head: -0.45, wing: 0.25, tail: -0.2, rate: 10 }
+    // 2026-11-15 潛到底：身體壓到河床上（水深 − 浮著時的吃水），在水底走
+    if (D.st === 'dive') return { jump: -Math.max(0.18, depth - 0.1), lean: 0.45, neck: 0.5, head: -0.45, wing: 0.25, tail: -0.2, rate: 10 }
     if (D.st === 'up') return { lean: 0.05, wing: 0.35 * Math.max(0, Math.sin(t * 40)) * D.t, jump: 0 }   // 冒出來抖一抖
     // 蹲一下：站著時每 2～5 秒連續上下點 3～6 下（約每秒 2 下），點的時候膝蓋彎、身體壓低、尾巴翹
     if (n === 'look' || n === 'stand' || n === 'peck') {

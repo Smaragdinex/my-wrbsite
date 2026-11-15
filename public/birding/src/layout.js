@@ -1940,6 +1940,21 @@ YOSE.DIKE = null   // 2026-11-14 石橋拆掉，橋頭那道補的岸跟石牆�
     } }
 }
 
+// 2026-11-15 使用者「河烏在水底走路，但那段溪看起來很深，河烏沒走那麼深 → 溪改淺」：河道是照「原本地形往下 1.3 m」挖的，
+// 水面卻照一階一階的淺潭算，出水口下面那段（s 4～13，河烏那裡）水深變成 3～4 m。
+// 改成淺溪：中線水深 0.55 m（河烏潛下去剛好踩到底），往兩岸 0.9 m 內變淺接岸；s 3.5～4.5 從出水口的深潭慢慢接上來（只墊、不挖）
+{
+  const R = ALP_RIVER
+  for (let j = 0; j < AG.nz; j++) { const z = AG.z0 + j * AG.cell; if (z < 60 || z > 78) continue
+    for (let i = 0; i < AG.nx; i++) { const x = AG.x0 + i * AG.cell; if (x < 174 || x > 188) continue
+      const sR = R.sAt(x, z); if (sR < 3.5 || sR > 13.5) continue
+      const d = R.dist(x, z), hw = R.halfAt(sR); if (d > hw + 0.2) continue
+      const q = j * AG.nx + i, bed = R.water(sR) - 0.55 * smoothstep(hw + 0.1, hw - 0.8, d) - 0.03
+      const k = smoothstep(3.5, 4.5, sR) * smoothstep(13.5, 12.5, sR)
+      const t = lerp(aHeight[q], bed, k); if (aHeight[q] < t) aHeight[q] = t
+    } }
+}
+
 // 2026-11-14 使用者（瀑布下的河岸照片）「修正這些石頭跟草」：新河道切過原本墊高的坡，東岸變成一道 2～3 m 的垂直土牆、石頭懸在牆頂。
 // 出湖後 22 m 內，河岸從水邊往外最陡 0.75（約 37°），超過的削掉（只削、不墊）；步道、橋頭不動
 {
