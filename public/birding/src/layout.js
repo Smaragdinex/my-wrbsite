@@ -2022,3 +2022,24 @@ for (const b of RIVER_BRIDGES) {
     }
   }
 }
+
+// 2026-11-16 穴鴞的洞（使用者：草原加穴鴞，住在地下洞穴）：洞在草原步道東邊 7 m 的平地上，洞口朝西（朝步道）。
+// 洞的模型（tools/make-owl-burrow.py）是地面上一個小土丘＋往後往下的短通道；通道比地面低，地形要在土丘底下挖一個坑，
+// 不然從洞口看進去會看到地面把通道下半截填平。只挖土丘蓋得住的地方（土丘外緣以內），洞口前面不動（鳥站的地方）
+export const BURROW = { x: 19.5, z: 89, dir: [-1, 0], S: 0.9, ZM: 0.36 }   // S 1.15 → 0.9：第一版土丘直徑 2.5 m，比鳥大太多
+{
+  const B = BURROW, th = Math.atan2(B.dir[0], B.dir[1]), sn = Math.sin(th), cs = Math.cos(th)
+  const q0 = Math.round((B.z - AG.z0) / AG.cell) * AG.nx + Math.round((B.x - AG.x0) / AG.cell)
+  B.y = aHeight[q0]   // 挖之前的地面高度：洞、鳥都照這個
+  B.mouth = [B.x + B.dir[0] * B.ZM * B.S, B.z + B.dir[1] * B.ZM * B.S]
+  const R = 1.4
+  for (let j = Math.round((B.z - R - AG.z0) / AG.cell); j <= Math.round((B.z + R - AG.z0) / AG.cell); j++)
+    for (let i = Math.round((B.x - R - AG.x0) / AG.cell); i <= Math.round((B.x + R - AG.x0) / AG.cell); i++) {
+      const x = AG.x0 + i * AG.cell, z = AG.z0 + j * AG.cell, dx = x - B.x, dz = z - B.z
+      const lz = (dx * sn + dz * cs) / B.S, lx = (dx * cs - dz * sn) / B.S   // 洞的模型座標（洞口朝 +z）
+      if (lz > B.ZM - 0.1) continue   // 洞口前面不挖
+      const r = Math.hypot(lx / 0.95, (lz + 0.02) / 0.85)
+      const k = smoothstep(0.92, 0.6, r); if (k <= 0) continue
+      const q = j * AG.nx + i; aHeight[q] = Math.min(aHeight[q], B.y - 0.75 * k)
+    }
+}

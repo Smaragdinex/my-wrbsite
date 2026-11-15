@@ -116,6 +116,7 @@ export const ESCAPE = {
   harlequin: { r: 10, swim: 5, fly: { speed: 12, hz: 7, style: 'flap', k: 0.69 } },
   // 2026-11-15 使用者指定四種。hover：自己出去時在草原上空定點懸停，再收翅俯衝；hawk：飛出去繞一圈抓飛蟲／撲地上的蟲，馬上回原位
   avocet: { r: 10, fly: { speed: 10, hz: 5, style: 'flap', k: 1.0 } },
+  burrowowl: { r: 8, run: 5, burrow: true, fly: { speed: 8, hz: 7, style: 'flap', k: 0.6 } },   // 2026-11-16 穴鴞：人靠近先跑回洞裡躲（birds.js burrowowl 的 w.flee）；還在洞外又被逼到很近才飛
   pratincole: { r: 7, hawk: true, sortie: [20, 45], fly: { speed: 10, hz: 6, style: 'glide', k: 0.62 } },
   bwkite: { r: 9, hover: true, sortie: [35, 80], fly: { speed: 9, hz: 5, style: 'glide', k: 0.9 } },
   shrike: { r: 7, hawk: true, sortie: [25, 60], fly: { speed: 7, hz: 11, style: 'bound', k: 0.45 } },
@@ -333,6 +334,7 @@ export function createFlight(world, player) {
     if (s.mode !== 'flee') { s.speed0 = w.speed; s.turn0 = w.turn; s.radius0 = w.radius }
     s.mode = 'flee'
     w.speed = s.speed0 * (u.esc.run ?? u.esc.swim ?? 2.5); w.turn = 7
+    if (u.esc.burrow) { w.flee = true; if (!w.inBurrow && w.home) { w.goal = new THREE.Vector2(...w.home); w.want = null; m.acts.next('walk') } return }   // 穴鴞：跑回洞口（鑽進去由 birds.js 接手）
     const g = u.b.group.position, P = world.camera.position
     const a0 = Math.atan2(g.x + w.p.x - P.x, g.z + w.p.y - P.z)
     m.acts.next('walk')
@@ -469,7 +471,7 @@ export function createFlight(world, player) {
         for (const s of u.ms) { s.m.obj.getWorldPosition(_v); d = Math.min(d, _v.distanceTo(P)) }
         // 慢慢走過去：牠一直往後退、保持距離（跑回家附近的範圍內，退到底被追上才飛）；用跑的衝過來（> 4 m/s），還有 0.7 倍距離就起飛
         const near = hidden ? 0 : speed > 4 ? u.esc.r * 0.7 : (u.esc.near ?? u.esc.r * 0.45) * mult
-        if (d < near) { flush(u, t, true); continue }
+        if (d < near && !(u.esc.burrow && u.ms.some((s) => s.m.walker?.inBurrow))) { flush(u, t, true); continue }   // 穴鴞：已經有一隻躲進洞了就不飛（另一隻也正在跑回洞）
         u.calm = d > u.esc.r * mult * 1.3 ? u.calm + dt : 0
         for (const s of u.ms) { if (s.m.walker && !s.m.walker.goal && u.calm < 1.5) fleeOnGround(u, s); s.act = 'run' }
         if (u.calm > 4) { for (const s of u.ms) restoreWalker(s); u.state = 'home'; u.alarm = 0 }

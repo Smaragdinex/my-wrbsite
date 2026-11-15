@@ -23,7 +23,7 @@ import { loadAnimalModels, placeAnimal, REAL_CM, gameLen, ensureModel, modelsFor
 import { BIRDS } from './birdinfo.js'
 import { foliageTime } from './fju-foliage.js'
 import { windUniforms } from './wind.js'
-import { STORE, SPAWN, MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt, FIG_FORCED, EAST, wetSD , walkAt, deckAt } from './layout.js'
+import { STORE, SPAWN, MTN, POOL, terrainHeight, poolQ, mtnR, insideGarden, COAST_ON, inAlpine, alpineHeight, ALP_POND, PATHS, alpineTrailDist, addCollider, pathClearAt, FIG_FORCED, EAST, wetSD , walkAt, deckAt, BURROW } from './layout.js'
 const FOG_D0 = 0.0034   // 白天的霧（2026-11-08 拿掉溫室：0.0052→0.0034，看得到遠景）；晚上、清晨照 mistLevel 加濃（setTime）
 import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
@@ -164,6 +164,16 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     if (hit) rk.position.y += def.y - hit.point.y
     rk.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
     rk.name = 'birdBoulder_' + def.id; scene.add(rk)
+  }
+  // 2026-11-16 穴鴞的洞（tools/make-owl-burrow.py）：土丘＋洞口＋往下的短通道；地形在 layout.js 已經挖好坑。原點＝土丘中心的地面，洞口朝 BURROW.dir
+  {
+    const B = BURROW, VERN = new URL(import.meta.url).searchParams.get('v') ?? ''
+    new GLTFLoader().loadAsync(`models/props/owl_burrow.glb?v=${VERN}`).then((gl) => {
+      gl.scene.traverse((o) => { if (o.isMesh) { if (o.geometry.attributes.color_1) o.geometry.setAttribute('color', o.geometry.attributes.color_1); o.material.vertexColors = true; o.material.side = THREE.DoubleSide; o.castShadow = o.name !== 'owl_burrow'; o.receiveShadow = true } })
+      gl.scene.position.set(B.x, B.y, B.z); gl.scene.rotation.y = Math.atan2(B.dir[0], B.dir[1]); gl.scene.scale.setScalar(B.S); gl.scene.name = 'owlBurrow'
+      scene.add(gl.scene)
+    }).catch((e) => console.warn('owl burrow', e))
+    addCollider(B.x - B.dir[0] * 0.15, B.z - B.dir[1] * 0.15, 0.85, B.y + 0.3, B.y - 0.8)   // 玩家不能踩上土丘（底下是挖空的坑）
   }
   buildStreambed(scene, plantLib).then((r) => console.log('streambed', JSON.stringify(r))).catch((e) => console.error('streambed', e))   // 2026-11-12 溪床卵石、苔石、水草（不擋進場，載好就出現）   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
   alpine.build()

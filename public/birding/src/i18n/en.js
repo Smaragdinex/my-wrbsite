@@ -1404,6 +1404,17 @@ export const BIRDS = {
    "Taiwan's birds are an endemic subspecies living in open country, farmland and grassland from the lowlands to the foothills."
   ]
  },
+ "burrowowl": {
+  "name": "Burrowing Owl",
+  "where": "A Burrow in the Meadow",
+  "intro": "A small, long-legged owl that lives underground. It often stands at the burrow entrance even by day, stretched tall and looking around; when something approaches it bobs up and down to size it up, and if threatened it scurries back into the burrow, then peeks out again a little later.",
+  "facts": [
+   "Found in grasslands, deserts and farmland across the Americas. It seldom digs its own home, usually moving into old burrows dug by prairie dogs, ground squirrels and other animals.",
+   "The entrance is often a small mound with short grass around it, so the owl can stand on it and watch in every direction.",
+   "Active both day and night, it runs after insects on the ground and drops from its lookout onto grasshoppers, beetles and small mice.",
+   "When cornered in its burrow it makes a hissing buzz much like a rattlesnake's rattle, scaring off intruders."
+  ]
+ },
  "lapwing": {
   "name": "Northern Lapwing",
   "where": "Open Wetland between the Emerald Marsh and the Mountain Lake",

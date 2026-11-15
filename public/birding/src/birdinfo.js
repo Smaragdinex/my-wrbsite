@@ -1,7 +1,7 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight, ALP_RIVER, smoothstep } from './layout.js'
+import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight, ALP_RIVER, smoothstep, BURROW } from './layout.js'
 const lerp = (a, b, t) => a + (b - a) * t
 import { birdText } from './i18n.js'
 
@@ -1088,6 +1088,19 @@ const ALL = [
       '台灣的是特有亞種，住在平地到低海拔的開闊地、農田和草原。',
     ],
   },
+  {
+    // 2026-11-16 穴鴞（一對）：住在草原步道東邊的地洞（layout.js BURROW）。鳥群原點＝洞口；地面照挖坑之前的高度（坑在土丘底下）
+    id: 'burrowowl', lawn: true, spot: BURROW.mouth, y: BURROW.y, perch: 'ground', view: 270, dist: 3.4, camH: 0.7, lookY: 0.15,
+    groundFn: (x, z) => BURROW.y + 0.015,
+    name: '穴鴞', sci: 'Athene cunicularia', where: '草原上的地洞',
+    intro: '腿很長、住在地底下的小型貓頭鷹。白天也常站在洞口，身體伸得直直的四處張望；有東西靠近時會上下點頭打量，危險時一溜煙跑回洞裡，過一會兒再從洞口探出頭來。',
+    facts: [
+      '分布在美洲的草原、沙漠和農地。牠們很少自己挖洞，多半住進草原土撥鼠、地松鼠等動物挖好的舊洞。',
+      '洞口常是一個小土丘，周圍的草很矮，站在上面就能看到四周的動靜。',
+      '白天、晚上都會活動，在地上小跑步追蟲，也會從站的地方撲下去抓蚱蜢、甲蟲和小老鼠。',
+      '被逼進洞裡時會發出很像響尾蛇搖尾巴的嘶嘶聲，把想鑽進來的敵人嚇走。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -1096,6 +1109,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike', 'burrowowl']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { bladeMesh } from './flora.js'
 import { lodRegisterGrass } from './lod.js'
-import { EAST, EAST_DW, EAST_DG, wetSD, grassSD, inLagoon, walkAt, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss, ALP_SPURS, wetBoardY, wetBoardEnd } from './layout.js'
+import { EAST, EAST_DW, EAST_DG, wetSD, grassSD, inLagoon, walkAt, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss, ALP_SPURS, wetBoardY, wetBoardEnd, BURROW } from './layout.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { fbm2, mulberry32 } from './noise.js'
 import { scatter } from './plants.js'
@@ -54,7 +54,7 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
      偶爾一塊乾穗草；步道邊和空地有零星野花（咸豐草白、蟛蜞菊黃、紫色菊、蓼的粉紅穗）；幾叢矮灌木、幾顆半埋的石頭、一棵孤樹 */
   const GRASS_FEAT = []   // 灌木、孤樹、石頭（下面另外蓋）
   // 2026-11-15 燕鴴住的地方：短草地（真的燕鴴停在裸地、短草上；以前整片中草把牠們整隻蓋住）
-  const CLEARINGS = [[21, 100, 6]]
+  const CLEARINGS = [[21, 100, 6], [BURROW.x - 1.2, BURROW.z, 4.2]]   // 2026-11-16 穴鴞的洞：洞口前 2～4 m 是矮草、裸土（ChatGPT：視線開闊，牠站在洞口看得到四周）
   {
     const [x0, x1, z0, z1] = EAST.grassBox, L = EAST.lark
     const H = (h) => new THREE.Color(h)
@@ -78,6 +78,7 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
       const lark = 1 - ss(0.7, 1.25, Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz))
       const mm = misMask(x, z), td = alpineTrailDist(x, z), r = rnd()
       const inClear = CLEARINGS.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr)   // 燕鴴那塊：只長矮草毯
+      if (Math.hypot(x - BURROW.x, z - BURROW.z) < 0.6 || (Math.hypot(x - BURROW.mouth[0], z - BURROW.mouth[1]) < 1.6 && rnd() < 0.75)) continue   // 土丘上、洞口前面不長草（挖出來的土、被踩禿的地）
       const bare = ss(0.6, 0.7, fbm2(x * 0.12 + 11, z * 0.12, 2)) * (td < 4 ? 1 : 0.35)   // 裸土：步道兩側、零星乾的地方
       if (!inClear && mm > 0.35 && r < 0.62 * mm * (1 - lark) && nMis < 2600) {
         // 芒草：一叢 2～4 根花稈（1.3～2.3 m）、底下一大把往外拱的細長葉、頂上一束銀白帶米色的花穗

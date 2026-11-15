@@ -32,7 +32,7 @@ const ACT = {
   hwamei: 'DAWN', styan: 'D', scimitar: 'CREP', fulvetta: 'D', bamboo: 'CREP', flowing: 'D', bushwarbler: 'DAWN',
   cupwing: 'D', shortwing: 'CREP', scopsowl: 'NIGHT', mtscops: 'NIGHT', jacana: 'D', psnipe: 'CREP', woodcock: 'DN',
   shelduck: 'AM', pheron: 'CREP', stilt: 'AM', harrier: 'PASS', rnpheasant: 'CREP', skylark: 'DD', cisticola: 'D',
-  dipper: 'D', forktail: 'D', redstart: 'D', harlequin: 'D', avocet: 'D', pratincole: 'D', bwkite: 'D', shrike: 'D', nutcracker: 'D', sibia: 'D', finchbill: 'D', nuthatch: 'D', wbwood: 'D',
+  burrowowl: 'D', dipper: 'D', forktail: 'D', redstart: 'D', harlequin: 'D', avocet: 'D', pratincole: 'D', bwkite: 'D', shrike: 'D', nutcracker: 'D', sibia: 'D', finchbill: 'D', nuthatch: 'D', wbwood: 'D',
   shoebill: 'D', flamingo: 'D', ajacana: 'D', gallinule: 'D', rspoonbill: 'D', sarus: 'DD', skimmer: 'D', redcrowned: 'DD', ruff: 'D', lapwing: 'D', grebe: 'D', peregrine: 'D', blackswift: 'D', greatgreyowl: 'CREP',
 }
 export const activityLabel = (id) => KIND[ACT[id] ?? 'D'].label

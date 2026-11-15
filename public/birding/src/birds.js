@@ -9,7 +9,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { ripple } from './structures.js'
 import { FishSchool, fishGeo, fishMat } from './fish.js'
-import { FIG_FORCED } from './layout.js'
+import { FIG_FORCED, BURROW } from './layout.js'
 import { canopyGeometry, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'
 
 const { clamp, lerp, smoothstep: ss, randFloat: rnd } = THREE.MathUtils
@@ -309,7 +309,7 @@ const BUILD = {
   shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe, lapwing,
   peregrine, blackswift, greatgreyowl,
   dipper, forktail, redstart, harlequin,
-  avocet, pratincole, bwkite, shrike,
+  avocet, pratincole, bwkite, shrike, burrowowl,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -1909,6 +1909,82 @@ function pratincole(env) {
     walk: { radius: 1.5, speed: 0.3, avoid }, stride: 0.06, swingT: 0.14, lift: 0.015, knee: [0.3, 0.6], focusY: 0.12,
     acts: { walk: [3, 99, 99], peck: [2, 0.6, 1.1], look: [3, 1, 2], stand: [3, 2, 4], turn: [1, 99, 99] } }))
 }
+// 2026-11-16 穴鴞（一對）：住在草原上的地洞（layout.js BURROW、world.js 擺 owl_burrow.glb）。鳥群原點＝洞口，洞口朝 BURROW.dir。
+// 狀態：out 在洞口前站崗（伸長身體、頭大角度轉）、點頭（整隻上下蹲）、突然小跑 1～3 m 撲地上的蟲；
+// home 走回洞口 → enter 轉身鑽進去（越走越低，最後不畫）→ in 待在洞裡 → peek 從洞口探出頭左右看 → emerge 走出來。
+// 玩家靠近：flight.js（ESCAPE.burrowowl.burrow）把 w.flee 打開、目的地設洞口 → 用跑的回洞；躲進去之後探頭時玩家還很近就再縮回去
+function burrowowl(env) {
+  const d = BURROW.dir, OUT = Math.atan2(d[0], d[1]), IN = OUT + Math.PI, BASE = 0.2
+  let who = 0
+  return groundGroup(2, 0.55, (avoid) => {
+    const me = who++   // 0：守衛（多半在外面站崗）；1：常常進洞
+    const S = { side: 0, st: me ? 'in' : 'out', t: me ? rnd(3, 8) : rnd(25, 45), e: 0, bob: rnd(2, 6), yaw: 0, yT: 0, dash: rnd(4, 9), dashing: false, vis: true }
+    const put = (w, k) => w.p.set(-d[0] * k, -d[1] * k)   // 洞口往裡 k 公尺（負的＝洞口外面）
+    const go = (st, t) => { S.st = st; S.e = 0; if (t != null) S.t = t }
+    const show = ({ t, dt, w, n, acts, root }) => {
+      S.t -= dt; S.e += dt
+      w.inBurrow = S.st === 'enter' || S.st === 'in' || S.st === 'peek'
+      if (w.flee && (S.st === 'out' || S.st === 'emerge')) { go('home'); S.dashing = false }
+      if (S.st === 'out' && S.t < 0) go('home')
+      // 頭：貓頭鷹轉頭是一下一下的（轉過去停住、再轉），角度很大
+      S.yT -= dt; if (S.yT < 0) { S.yT = rnd(0.8, 2.4); S.yaw = Math.random() < 0.3 ? 0 : rnd(-1.3, 1.3) }
+      if (S.st === 'home') {
+        const gx = d[0] * 0.05, gz = d[1] * 0.05
+        if (!w.goal || Math.hypot(w.goal.x - gx, w.goal.y - gz) > 0.01) { w.goal = new THREE.Vector2(gx, gz); w.want = null }
+        if (Math.hypot(w.p.x - gx, w.p.y - gz) < 0.1) go('enter')
+        return null
+      }
+      if (S.st === 'enter') {
+        // 轉身朝洞裡（0.35 s）再鑽進去：往裡走 0.45 m、身體壓低
+        w.goal = null; w.want = null; w.h = dampAngle(w.h, IN, 14, dt)
+        const k = ss(S.e, 0.3, 1.1); put(w, -0.05 + 0.5 * k)
+        if (S.e > 1.1) { go('in', w.flee ? rnd(10, 20) : me ? rnd(12, 30) : rnd(6, 14)); w.flee = false; root.visible = S.vis = false }
+        return { jump: -0.13 - 0.3 * k, lean: 0.45, neck: 0.35, head: -0.25, rate: 14 }   // 一到洞口就先壓低（洞口只有 0.22 m 高，站直會從土丘頂穿出來）
+      }
+      if (S.st === 'in') {
+        w.goal = null; w.want = null; put(w, 0.45); w.h = OUT
+        w.flee = false   // 躲著的時候不管（時間到就探頭；探頭時人還在旁邊會再縮回去）
+        if (S.t < 0) { go('peek', rnd(5, 11)); root.visible = S.vis = true }
+        return { jump: -0.45 }
+      }
+      if (S.st === 'peek') {
+        // 從洞口探出頭：身體在通道裡、只有頭和胸口高過洞口下緣，頭左右轉
+        w.goal = null; w.want = null; put(w, 0.07); w.h = OUT
+        if (w.flee && S.e > 2.5) { w.flee = false; go('enter', 0); S.e = 0.9 }   // 探頭時人還很近 → 縮回去
+        else if (S.t < 0) { go('emerge'); S.side = (Math.random() < 0.5 ? -1 : 1) * rnd(0.2, 0.45) }
+        return { jump: lerp(-0.45, -0.14, ss(S.e, 0, 1.6)), yaw: S.e > 1.6 ? S.yaw : 0, neck: -0.2, head: 0.15, rate: 10 }
+      }
+      if (S.st === 'emerge') {
+        w.goal = null; w.want = null; w.h = OUT
+        const k = ss(S.e, 0, 1.4); put(w, lerp(0.07, -0.4, k)); w.p.x += d[1] * S.side * k; w.p.y -= d[0] * S.side * k   // 出洞後往左或右偏一點（另一隻常站在洞口正前方）
+        if (S.e > 1.4) go('out', me ? rnd(15, 35) : rnd(40, 80))
+        return { jump: lerp(-0.14, 0, k), lean: 0.2, rate: 10 }
+      }
+      // ---- 在洞口外 ----
+      if (!S.vis) root.visible = S.vis = true
+      // 突然小跑 1～3 m 撲地上的蟲，到了低頭啄
+      S.dash -= dt
+      if (!S.dashing && S.dash < 0 && !w.flee && w.pick(1, 3)) { S.dashing = true; w.speed = BASE * 4.5; acts.next('walk') }
+      if (S.dashing && !w.goal) { S.dashing = false; S.dash = rnd(6, 14); if (!w.flee) w.speed = BASE; acts.next('peck') }
+      if (S.dashing) return null
+      // 站崗：身體伸直變高、頭一下一下轉；不時點頭（整隻蹲下站起 2～4 下）
+      if (n === 'look' || n === 'stand') {
+        S.bob -= dt
+        if (S.bob < -rnd(4, 9)) S.bob = rnd(0.9, 1.8)
+        const tall = n === 'look' ? 1 : 0.5
+        if (S.bob > 0) { const k = 0.5 - 0.5 * Math.cos(t * Math.PI * 2 * 2.2); return { jump: -0.045 * k, lean: 0.18 * k, neck: 0.15 * k, yaw: 0, rate: 30 } }
+        return { lean: -0.08 * tall, neck: -0.3 * tall, head: 0.25 * tall, yaw: S.yaw, rate: 9 }
+      }
+      return null
+    }
+    const b = groundTripo(env, { name: 'burrowowl-rig', H: 0.3, h0: 0.86, ...TRIPO, show, reach: 0.25,
+      walk: { radius: 1.5, speed: BASE, turn: 4, center: [d[0] * 1.5, d[1] * 1.5], avoid: (x, z, p) => x * d[0] + z * d[1] < 0.4 || avoid(x, z, p) },
+      stride: 0.07, swingT: 0.16, lift: 0.02, knee: [0.4, 0.8], focusY: 0.2,
+      acts: { look: [5, 2, 5], stand: [3, 2, 4], walk: [2, 99, 99], peck: [1.5, 0.6, 1.1], turn: [1, 99, 99] } })
+    b.walker.home = [d[0] * 0.05, d[1] * 0.05]
+    return b
+  })
+}
 // 黑翅鳶：停在草原上一棵樹的枝頭；每隔一陣子飛出去在草原上空「定點懸停」看獵物，再收翅往下俯衝（flight.js ESCAPE.bwkite.hover）
 function bwkite(env) {
   return perchRigged(outer(env, -1.1), { name: 'bwkite-rig', k: 0.54, ...TRIPO, foot: 0.02, drop: 0.05, beat: 6, grip: 1.0 })
@@ -2349,7 +2425,7 @@ export const REAL_CM = {
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
   shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, lapwing: 30, grebe: 50,
-  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
+  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25, burrowowl: 23,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
 const _fsInv = new THREE.Matrix4(), _fsV = V()
