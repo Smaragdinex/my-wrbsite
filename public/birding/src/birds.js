@@ -309,7 +309,7 @@ const BUILD = {
   shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe, lapwing,
   peregrine, blackswift, greatgreyowl,
   dipper, forktail, redstart, harlequin,
-  avocet, pratincole, bwkite, shrike, burrowowl, smew, fduck, cegret,
+  avocet, pratincole, bwkite, shrike, burrowowl, smew, fduck, cegret, pelican, cormorant,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -2029,6 +2029,66 @@ function cegret(env) {
     walk: { radius: 3, speed: BASE }, swingT: 0.4, lift: 0, knee: [0.9, 1.6], focusY: 0.55,
     acts: { stand: [2, 2, 4], hunt: [4, 2, 4], walk: [3, 99, 99], turn: [1, 99, 99], strike: [1.5, 1.4, 1.4], look: [1.5, 1.5, 3] } })
 }
+// 2026-11-16 白鵜鶘（五隻）：在南邊新湖的開闊水面慢慢漂；每隔 25～45 秒一起「合作捕魚」——游成一個半圓把魚群往中間趕，
+// 然後幾乎同時把長嘴和頭插進水裡撈（重複 2～4 次），再散開（維基百科：常成群圍成半圓、同步把嘴伸進水中捕魚）
+function pelican(env) {
+  const S = { ph: 'drift', next: rnd(12, 25), t: -1, dips: 0, c: null, dir: 0 }
+  let idx = 0
+  return groundGroup(5, 2.2, (avoid) => {
+    const me = idx++
+    const show = ({ t, w }) => {
+      if (S.t !== t) {   // 每格只推進一次（五隻共用）
+        S.t = t
+        if (S.ph === 'drift' && t > S.next) { S.ph = 'herd'; S.next = t + 9; S.c = new THREE.Vector2(rnd(-2, 2), rnd(-2, 2)); S.dir = rnd(0, Math.PI * 2) }
+        else if (S.ph === 'herd' && t > S.next) { S.ph = 'dip'; S.next = t; S.dips = 2 + Math.floor(rnd(0, 3)) }
+        else if (S.ph === 'dip' && t > S.next + 2.6) { if (--S.dips > 0) S.next = t; else { S.ph = 'drift'; S.next = t + rnd(25, 45) } }
+      }
+      if (S.ph === 'herd' || S.ph === 'dip') {
+        // 半圓：五隻排在 -75°～75°，面向圓心
+        const a = S.dir + (me - 2) * 0.65, R = 3.2, gx = S.c.x + Math.sin(a) * R, gz = S.c.y + Math.cos(a) * R
+        if (S.ph === 'herd') { if (!w.goal || Math.hypot(w.goal.x - gx, w.goal.y - gz) > 0.3) { w.goal = new THREE.Vector2(gx, gz); w.want = null } }
+        else { w.goal = null; w.want = Math.atan2(S.c.x - w.p.x, S.c.y - w.p.y) }
+        if (S.ph === 'dip') {
+          const e = t - S.next - me * 0.08, k = e > 0 && e < 1.6 ? Math.sin(Math.PI * Math.min(1, e / 1.6)) : 0   // 幾乎同時，一隻比一隻晚 0.08 秒
+          return { lean: 0.9 * k, neck: 1.1 * k, head: -0.3 * k, jump: -0.05 * k, rate: 9 }
+        }
+      }
+      return null
+    }
+    return groundTripo(env, { name: 'pelican-rig', H: 1.2, h0: 0.98, ...TRIPO, swim: true, bill: 0.35, bob: 0.03, show,
+      walk: { radius: 7, speed: 0.22, turn: 1.2, avoid: swimAvoid(env, avoid) }, stride: 0.2, swingT: 0.45, lift: 0, knee: [0.6, 1.2], focusY: 0.5,
+      acts: { walk: [4, 99, 99], look: [2, 2, 4], stand: [2, 2, 4], turn: [1, 99, 99] } })
+  })
+}
+// 2026-11-16 鸕鷀：站在南邊新湖裡一顆露出水面的石頭上，張開翅膀曬乾（模型本身就是張翅的姿勢；維基百科：羽毛不太防水，潛水後要張翅晾乾）；
+// 不時拍一拍翅膀、轉頭；隔一陣子飛出去在湖上繞一圈（ESCAPE.cormorant.sortie）再回到石頭上
+function cormorant(env) {
+  // 2026-11-16 使用者：圖鑑要正常站姿的照片 → 圖鑑插圖用另一個收著翅膀的站姿模型（側視點位綁骨，跟其他鳥一樣）
+  if (env.guide) return groundTripo(env, { name: 'cormorant-stand-rig', H: 0.9, h0: 0.77, ...TRIPO, bill: 0.09,
+    walk: { radius: 0.01, speed: 0.01 }, swingT: 0.4, lift: 0.02, knee: [0.5, 1.0], focusY: 0.45,
+    acts: { stand: [4, 3, 6], look: [4, 1.0, 2.2], walk: [0.01, 99, 99], turn: [0.01, 99, 99] } })
+  // 模型本身是正面張翅（tools/rig-cormorant.py 綁的簡單骨架：body／neck／head／wingL／wingR，身體朝 +z）；不走路，站在石頭上
+  const r = rigged('cormorant-rig'), root = new THREE.Group(), K = 1.1
+  r.model.scale.setScalar(K); root.add(r.model)
+  root.rotation.y = Math.atan2(env.toCam.x, env.toCam.z) + rnd(-0.6, 0.6)   // 大致面向步道，偏一點比較自然
+  const focus = V(0, 0.55 * K, 0)
+  const acts = new Acts({ dry: [5, 3, 7], look: [3, 1.2, 2.6], shake: [1, 1.0, 1.5] })
+  let yaw = 0
+  const update = (t, dt) => {
+    if (!(dt > 0)) return
+    acts.tick(dt); r.reset()
+    // 頭：晾翅時慢慢左右看，偶爾大角度轉頭
+    const want = acts.name === 'look' ? acts.r * 1.2 : 0.18 * Math.sin(t * 0.35)
+    yaw = damp(yaw, want, acts.name === 'look' ? 7 : 2, dt)
+    r.turn('neck', AX.y, yaw * 0.35); r.turn('head', AX.y, yaw * 0.65)
+    r.turn('head', AX.x, 0.04 * Math.sin(t * 0.9))
+    // 翅膀：平常微微晃（風吹）；shake＝連續搧 3、4 下把水甩乾
+    const fl = acts.name === 'shake' ? 0.32 * Math.max(0, Math.sin(acts.t * Math.PI * 2 * 3.2)) : 0.035 * Math.sin(t * 1.4) + 0.02 * Math.sin(t * 3.1)
+    r.turn('wingL', AX.z, fl); r.turn('wingR', AX.z, -fl)
+    r.turn('body', AX.x, 0.012 * Math.sin(t * 1.6))   // 呼吸
+  }
+  return { obj: root, focus, update, acts, noFix: true }
+}
 // 黑翅鳶：停在草原上一棵樹的枝頭；每隔一陣子飛出去在草原上空「定點懸停」看獵物，再收翅往下俯衝（flight.js ESCAPE.bwkite.hover）
 function bwkite(env) {
   return perchRigged(outer(env, -1.1), { name: 'bwkite-rig', k: 0.54, ...TRIPO, foot: 0.02, drop: 0.05, beat: 6, grip: 1.0 })
@@ -2087,6 +2147,10 @@ function peregrine(env) {
 }
 // 黑雨燕：抓在瀑布後面凹洞的潮濕後壁上（跟大赤啄木一樣直立貼著岩面；world.js 用射線量到後壁）
 function blackswift(env) {
+  // 2026-11-16 使用者：圖鑑要正常站姿 → 圖鑑插圖用站著、看得到腳的模型（園區裡還是坐在巢裡那個）
+  if (env.guide) return groundTripo(env, { name: 'blackswift-stand-rig', H: 0.2, h0: 0.5, ...TRIPO, bill: 0.02, raise: -0.016,   /* 翅尖比腳低：整隻往下一點，腳才踩到地 */
+    walk: { radius: 0.01, speed: 0.01 }, swingT: 0.3, lift: 0.01, knee: [0.2, 0.4], focusY: 0.08,
+    acts: { stand: [5, 3, 6], look: [3, 1.0, 2.0], walk: [0.01, 99, 99], turn: [0.01, 99, 99] } })
   // 2026-11-13 使用者：雨燕在巢裡 → 伏坐的模型（看不到腳），坐在 world.js 做的苔蘚巢裡，不走動，只轉頭
   return groundTripo(env, { name: 'blackswift-rig', H: 0.045, h0: 0.233, ...TRIPO, bill: 0.02,
     walk: { radius: 0.01, speed: 0.01 }, swingT: 0.4, lift: 0, knee: [0.2, 0.4], focusY: 0.03,
@@ -2469,7 +2533,7 @@ export const REAL_CM = {
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
   shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, lapwing: 30, grebe: 50,
-  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25, burrowowl: 23, smew: 40, fduck: 41, cegret: 68,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
+  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25, burrowowl: 23, smew: 40, fduck: 41, cegret: 68, pelican: 160, cormorant: 90,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
 const _fsInv = new THREE.Matrix4(), _fsV = V()
@@ -2488,7 +2552,7 @@ function bodyLen(o0) {
 }
 function fixSize(id, built) {
   const cm = REAL_CM[id]
-  if (!cm) return
+  if (!cm || built.noFix) return   // noFix：模型自己決定大小（正面張翅的鸕鷀，量身長會量到翼展）
   const ms = built.birds ?? [built]
   const k = gameLen(cm) / bodyLen(ms[0].obj)
   if (!(k > 0) || Math.abs(k - 1) < 0.06) return

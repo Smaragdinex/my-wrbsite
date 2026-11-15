@@ -1,7 +1,7 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight, ALP_RIVER, smoothstep, BURROW } from './layout.js'
+import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight, ALP_RIVER, smoothstep, BURROW, wetSD } from './layout.js'
 const lerp = (a, b, t) => a + (b - a) * t
 import { birdText } from './i18n.js'
 
@@ -1135,6 +1135,29 @@ const ALL = [
       '春秋過境時會經過台灣的海岸，是賞鳥人很想看到的珍稀鷺鳥。',
     ],
   },
+  {
+    // 2026-11-16 使用者：南邊擴大的新湖放白鵜鶘、鸕鷀。西段木棧道觀景台（westBay，約 -6,-150）往南看
+    id: 'pelican', spot: [-4, -166], perch: 'ground', swim: (x, z) => wetSD(x, z) < -4 && z < -155 && alpineHeight(x, z) < EAST.W - 0.12, view: 0, y: EAST.W - 0.55, water: EAST.W, dist: 14, camH: 2.0, lookY: 0.6,
+    name: '白鵜鶘', sci: 'Pelecanus onocrotalus', where: '夕陽潟湖南邊新擴大的開闊湖面',
+    intro: '世界上最大的水鳥之一，全身白色、繁殖季帶一點粉紅，長長的嘴下面掛著一個能撐得很大的黃色喉囊。常成群在湖面上游，一起合作捕魚：先圍成半圓把魚趕到淺處，再幾乎同時把頭和嘴插進水裡，用喉囊把魚連水一起撈起來。',
+    facts: [
+      '喉囊一次可以裝進十公升以上的水，撈到魚後要先把水擠出來再把魚吞下。',
+      '分布在非洲和歐亞大陸南部的湖泊、沼澤，常幾十到上千隻一起活動。',
+      '體型雖大，飛行時很會利用上升氣流滑翔，排成整齊的隊形，很少拍翅。',
+      '在台灣幾乎看不到，偶爾有迷鳥記錄。',
+    ],
+  },
+  {
+    id: 'cormorant', guideStand: true, spot: [-22, -161], y: EAST.W + 0.35, boulder: { r: 0.75 }, perch: 'ground', view: 10, water: EAST.W, dist: 6, camH: 1.5, lookY: 0.6,
+    name: '鸕鷀', sci: 'Phalacrocorax carbo', where: '夕陽潟湖南邊新湖裡的一顆石頭上',
+    intro: '全身黑色、帶金屬光澤的大型水鳥，嘴尖端有鉤、臉頰白色。很會潛水抓魚，可以潛到好幾公尺深。牠們的羽毛不太防水，潛水後常站在石頭、木樁或枯樹上張開翅膀晾乾，是很好認的姿勢。',
+    facts: [
+      '羽毛會吸水，讓身體比較重、潛水比較省力，代價就是上岸後要花時間晾翅膀。',
+      '在中國、日本有幾百年的「鸕鷀捕魚」傳統：漁夫在牠脖子套上環，讓牠抓到大魚吞不下去。',
+      '在台灣是冬候鳥，金門每年冬天有上萬隻在湖泊、水庫度冬，傍晚成群飛回夜棲的樹林。',
+      '在水裡用腳划水前進，不用翅膀；在水面上游時身體壓得很低，常只露出脖子和頭。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -1143,6 +1166,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike', 'burrowowl', 'smew', 'fduck', 'cegret']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike', 'burrowowl', 'smew', 'fduck', 'cegret', 'pelican', 'cormorant']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

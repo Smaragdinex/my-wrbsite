@@ -1450,6 +1450,28 @@ export const BIRDS = {
    "It passes Taiwan's coasts on spring and autumn migration and is a prized sighting for birdwatchers."
   ]
  },
+ "pelican": {
+  "name": "Great White Pelican",
+  "where": "Open Water of the New Lake South of Sunset Lagoon",
+  "intro": "One of the world's largest waterbirds: all white, flushed pink in the breeding season, with a huge yellow throat pouch under its long bill. Flocks swim together and fish cooperatively, forming a semicircle to drive fish into the shallows, then plunging their heads and bills in almost at the same moment to scoop up fish and water in their pouches.",
+  "facts": [
+   "The pouch can hold more than ten litres of water; the pelican squeezes the water out before swallowing the fish.",
+   "It lives on lakes and marshes in Africa and southern Eurasia, often in groups of dozens to thousands.",
+   "Despite its size it is a master of soaring on thermals, flying in neat formations with few wingbeats.",
+   "It is almost never seen in Taiwan, with only occasional vagrant records."
+  ]
+ },
+ "cormorant": {
+  "name": "Great Cormorant",
+  "where": "A Rock in the New Lake South of Sunset Lagoon",
+  "intro": "A large, glossy black waterbird with a hooked bill tip and white cheeks. It is an expert diver that can chase fish several metres down. Its feathers are not fully waterproof, so after diving it often stands on rocks, posts or dead trees with its wings spread out to dry — an unmistakable pose.",
+  "facts": [
+   "Feathers that soak up water make the bird heavier and diving easier; the price is time spent drying its wings afterwards.",
+   "China and Japan have centuries-old traditions of cormorant fishing, with a ring on the bird's neck so it cannot swallow large fish.",
+   "In Taiwan it is a winter visitor; tens of thousands winter on Kinmen's lakes and reservoirs, flying back to roost in flocks at dusk.",
+   "Underwater it swims with its feet, not its wings; on the surface it rides very low, often showing only its neck and head."
+  ]
+ },
  "lapwing": {
   "name": "Northern Lapwing",
   "where": "Open Wetland between the Emerald Marsh and the Mountain Lake",
