@@ -1458,7 +1458,8 @@ export function buildYosemite(scene, { lib } = {}) {
           for (const dz of [-2.4, -1.2, 0, 1.2, 2.4]) {
             rc.set(V(c.x, c.y + 1.6, c.z + dz), V(sx, 0, 0)); rc.far = 7
             const h = rc.intersectObject(cf, false)[0]; if (!h || !h.face) continue
-            const nW = h.face.normal.clone().transformDirection(cf.matrixWorld); nW.y = 0; if (nW.lengthSq() < 0.2) continue; nW.normalize(); if (nW.x * sx > 0) nW.negate()
+            { rc.set(V(c.x, c.y + 3.2, c.z + dz), V(sx, 0, 0)); rc.far = 8; const h2 = rc.intersectObject(cf, false)[0]; if (!h2 || Math.abs(h2.point.x - h.point.x) > 1.0) continue }   /* 2026-11-15 岩壁要往上延伸才貼：最外那條射線打到的是平台外緣往下掉的坡，貼了一片直立的板站在平台邊 */
+            const nW = h.face.normal.clone().transformDirection(cf.matrixWorld).normalize(); if (Math.abs(nW.y) > 0.35) continue; nW.y = 0; if (nW.lengthSq() < 0.2) continue; nW.normalize(); if (nW.x * sx > 0) nW.negate()   /* 2026-11-15 斜坡（不陡）不貼：直立的片子會從坡面冒出來，從平台往下看像一塊浮著的板 */
             const yaw = Math.atan2(nW.x, nW.z)
             for (let cc = 0, y0 = c.y - 0.25; cc < 2; cc++) { const sy = 0.95 + 0.12 * hsh(G[0] * 3.1 + dz + cc); put(names[(n++ + G[0]) % names.length], m4.compose(V(h.point.x - nW.x * 0.04, y0, h.point.z - nW.z * 0.04), new THREE.Quaternion().setFromAxisAngle(UPv, yaw), V(0.5, sy, 1))); y0 += 3.6 * sy - 0.06 }
           }
@@ -1476,8 +1477,9 @@ export function buildYosemite(scene, { lib } = {}) {
           for (let y = c.y - 9; y <= c.y + 0.4; y += 1.35) for (let dz = -6; dz <= 6; dz += 1.15) {
             rc.set(V(c.x + sx * 14, y, c.z + dz), V(-sx, 0, 0)); rc.far = 16
             const h = rc.intersectObject(cf, false)[0]; if (!h || !h.face) continue
-            if (sx * (h.point.x - c.x) < 0.8 || nearWalk(h.point)) continue
-            const nW = h.face.normal.clone().transformDirection(cf.matrixWorld).normalize(); if (nW.x * sx < 0.35) continue
+            if (sx * (h.point.x - c.x) < 0.8 || nearWalk(h.point) || h.point.y > c.y - 2.4) continue   /* 片子的頂（打到的點往上約 1.9 m）要在平台地板下 0.3 m 以下，不然在平台邊站成一塊板 */
+            const nW = h.face.normal.clone().transformDirection(cf.matrixWorld).normalize(); if (nW.x * sx < 0.35 || Math.abs(nW.y) > 0.35) continue   /* 2026-11-15 使用者（從平台往下看，紅圈）「破圖」：斜坡上照坡度斜貼的岩層片，從上面看像一片片浮著的斜板 → 只貼陡的地方、片子站直 */
+            nW.y = 0; nW.normalize()
             const xA = V().crossVectors(upV, nW).normalize(), yA = V().crossVectors(nW, xA)
             mq.makeBasis(xA, yA, nW); qq.setFromRotationMatrix(mq).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), (hsh(n * 2.7) - 0.5) * 0.12))
             const sc = 0.4 + 0.08 * hsh(n * 5.1)
