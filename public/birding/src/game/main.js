@@ -352,6 +352,7 @@ function tick(dt, t) {
   cam.update(dt)
   if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }
   hud.setClock(hour)
+  hud.setClimate(world.climate)
   comm.tickHour(hour)
   amb.tick(dt, { hour, pos: camera.position, rain: world.weather.rain, storm: world.weather.storm })
   if (world.weather.rain > 0.3 !== wasRaining) { wasRaining = !wasRaining; if (wasRaining && !menuCam) hud.toast(tr('開始下雨了')) }

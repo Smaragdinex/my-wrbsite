@@ -67,11 +67,13 @@ body.in-menu #hud { display: none; }
 /* HUD */
 #hud { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
 .crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3); }
+.wx { position: absolute; right: 18px; top: 86px; background: rgba(0, 0, 0, 0.35); color: #e8eef0; padding: 3px 11px; border-radius: 99px; font-size: 12px; }
+.wx.humid { color: #bfe3ff; }
 .clock { position: absolute; right: 18px; top: 54px; background: rgba(0, 0, 0, 0.45); color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 14px; }
 .fade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 0.6s; }
 .fade.on { opacity: 1; }
-.quest { position: absolute; right: 18px; top: 92px; max-width: 46vw; background: rgba(120, 72, 20, 0.72); color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.guide-new { position: absolute; right: 18px; top: 128px; background: #c2412d; color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 14px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.3); animation: guide-new-pulse 1.6s ease-in-out infinite; }
+.quest { position: absolute; right: 18px; top: 116px; max-width: 46vw; background: rgba(120, 72, 20, 0.72); color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.guide-new { position: absolute; right: 18px; top: 152px; background: #c2412d; color: #fff; padding: 5px 13px; border-radius: 99px; font-size: 14px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.3); animation: guide-new-pulse 1.6s ease-in-out infinite; }
 .guide-new::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #fff; margin-right: 7px; vertical-align: 1px; }
 @keyframes guide-new-pulse { 50% { transform: scale(1.06); } }
 .money { position: absolute; right: 18px; top: 16px; background: rgba(0, 0, 0, 0.45); color: #fff; padding: 6px 14px; border-radius: 99px; font-weight: 700; }

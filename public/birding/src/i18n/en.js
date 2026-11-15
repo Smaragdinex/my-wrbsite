@@ -164,6 +164,8 @@ export const UI = {
  "收購底價": "Base price",
  "整體畫質": "Overall quality",
  "旗艦機身 Falcon 9": "Flagship body Falcon 9",
+ "露點": "Dew point",
+ "能見度": "Visibility",
  "早上": "Morning",
  "晚上同時照亮四周的路燈數": "Streetlights lit at once at night",
  "普普通通，只能算你便宜。": "Pretty average, I can only give you a low price.",

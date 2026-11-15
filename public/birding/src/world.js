@@ -11,7 +11,8 @@ import { createCoast } from './coast.js'
 import { buildOutside } from './outside.js'
 import { createWeather } from './weather.js'
 import { wetify } from './structures.js'
-import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel, sunDirU } from './structures.js'
+import { elevationOf, climateAt } from './climate.js'
+import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel, sunDirU, weatherU } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants, parts } from './plants.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -413,6 +414,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     streamState.done = Promise.all([work(), work(), work()]).then(() => { streamState.left = 0 })
     return streamState.done
   }
+  let fogIn = 0, climateNow = null; const _fogW = new THREE.Color()   // 2026-11-16 溫度露點差的霧（climate.js）
   const _forestFog = new THREE.Color()   // 阿里山／紅杉林那種巨木林帶（步道中段）   // 右邊岔路上去的營地（三頂帳篷＋營火）
   const halls = COAST_ON ? createHalls({ scene, sun, halls: [createCoast({ scene })] }) : { tick() {}, prebuild: async () => {}, halls: [], mode: 'D' }
   const birdStops = birds.filter((b) => !b.def.extra).map((b) => ({
@@ -539,7 +541,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     }
     water.mist.update(dt, camera)
     time?.tick(t, dt)
-    cloudSea.tick(t, camera, { day: dayLight.value })
+    cloudSea.tick(t, camera, { day: dayLight.value, fog: fogIn })
     camp.tick(t, dt, { day: dayLight.value })
     pondLife.tick(t, dt)
     yose.tick(t)
@@ -556,6 +558,25 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
         const l = scene.fog.color.r * 0.3 + scene.fog.color.g * 0.5 + scene.fog.color.b * 0.2
         scene.fog.color.lerp(_forestFog.setRGB(l * 0.62, l * 0.78, l * 0.72), 0.6 * fk)
       }
+    }
+    if (time) {   // 只有遊戲有時鐘；導覽頁（index.html）固定白天、不起霧
+      // 2026-11-16 溫度露點差起霧（climate.js）：用玩家腳下的「真實海拔」算氣溫、露點；兩者接近就起霧。
+      // 霧只在山區，紅杉林裡最濃（林下濕、風小）。濃度直接換算成能見度：FogExp2 在 1.73/(密度×山區倍數) 公尺處遮掉 95%
+      const cp = camera.position, gy = inAlpine(cp.x, cp.z) ? alpineHeight(cp.x, cp.z) : terrainHeight(cp.x, cp.z)
+      const c = climateNow = climateAt(elevationOf(gy), time.hour, { rain: weatherU.rain.value, sunny: weatherU.sunny.value })
+      const F = c.fog * (inAlpine(cp.x, cp.z, -4) ? 0.35 + 0.65 * giants.inside(camera) : 0)
+      fogIn = THREE.MathUtils.damp(fogIn, F, 0.8, dt)   // 走進、走出霧區慢慢變（不會一步就白掉）
+      if (fogIn > 0.002) {
+        const zone = THREE.MathUtils.smoothstep(cp.x, 62, 92), mult = 1 + zone * (1.3 + 3.0 * Math.exp(-Math.max(cp.y - 1, 0) / 8))
+        const want = 1.73 / (Math.max(c.vis, 22) * mult)
+        scene.fog.density = Math.max(scene.fog.density, THREE.MathUtils.lerp(scene.fog.density, want, Math.min(1, fogIn * 1.15)))
+        const day = dayLight.value, g = 0.06 + 0.74 * Math.min(1, day * 1.3)
+        _fogW.setRGB(g * 0.95, g * 0.98, g)   // 霧本身被天光照亮：白天灰白、清晨偏冷、晚上暗
+        scene.fog.color.lerp(_fogW, Math.min(1, fogIn * 1.2))
+        sun.intensity *= 1 - 0.8 * fogIn   // 霧把直射陽光散掉：影子變淡
+        hemi.intensity *= 1 - 0.15 * fogIn
+      }
+      skyMat.uniforms.uFogIn.value = Math.min(1, fogIn * 1.3); skyMat.uniforms.uFogCol.value.copy(scene.fog.color)
     }
     {
       const mk = mistLevel.value, tint = 0.035 + 0.965 * Math.min(1, dayLight.value * 1.4) ** 1.6, cp = camera.position   /* 2026-11-15 夜拍測試：晚上 0.2 的霧比月光下的景（0.01～0.03）亮 10 倍，畫面上一團團發亮、照片拉亮後整片灰白 → 晚上壓到 0.035、偏藍 */   // 清晨天剛亮，霧就先白起來
@@ -648,7 +669,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const groundAt = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)   // 相機對焦用（camera.js aim）
   // lodSync：截圖／錄影工具（tools/record/helpers.js still）直接把鏡頭擺到某處就畫，沒跑 tick → LOD、遠處小東西剔除還停在玩家的位置（石橋的石塊會被當成太遠不畫）。畫之前先照這台鏡頭更新一次
   const lodSync = (cam = camera) => { lodUpdate(cam, true); tinyCull(scene, cam, 0); alpine.terrainLod?.(cam) }
-  return { groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  return { get climate() { return climateNow }, groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */

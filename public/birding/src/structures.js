@@ -41,9 +41,9 @@ export function buildSky(scene) {
   // 日夜：uDay 白天 1、晚上 0；uDusk 黃昏／清晨那一段地平線變橘；晚上有星星和月亮（world.setTime 在改）
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime, uCloud: weatherU.cloud, uSunny: weatherU.sunny, uGloom: weatherU.gloom, uFlash: weatherU.flash },
+    uniforms: { uFogIn: { value: 0 }, uFogCol: { value: new THREE.Color(0.8, 0.82, 0.82) }, sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime, uCloud: weatherU.cloud, uSunny: weatherU.sunny, uGloom: weatherU.gloom, uFlash: weatherU.flash },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `varying vec3 vDir; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCloud; uniform float uSunny; uniform float uGloom; uniform float uFlash;
+    fragmentShader: `varying vec3 vDir; uniform float uFogIn; uniform vec3 uFogCol; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCloud; uniform float uSunny; uniform float uGloom; uniform float uFlash;
       float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -102,6 +102,7 @@ export function buildSky(scene) {
         }
         float m = dot(d, moonDir);
         c += vec3(0.92, 0.94, 1.0) * (smoothstep(0.99935, 0.9996, m) * 1.4 + pow(max(m, 0.0), 80.0) * 0.06) * night;
+        c = mix(c, uFogCol, uFogIn);   // 2026-11-16 人在濃霧裡（climate.js）：天空也是一片霧白
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
       }`,
