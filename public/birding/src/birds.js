@@ -2075,7 +2075,7 @@ function cormorant(env) {
   const face = Math.atan2(env.toCam.x, env.toCam.z) + rnd(-0.6, 0.6)   // 大致面向步道
   dry.rotation.y = face
   const idle = stand()
-  const root = new THREE.Group(); root.add(dry, idle.obj)
+  const root = new THREE.Group(), holder = new THREE.Group(); holder.add(dry, idle.obj); root.add(holder)   // 多包一層：world.js 的畫面剔除會把 obj 的每個子物件 visible 設回 true，兩個模型會同時出現
   const focus = V(0, 0.55 * K, 0)
   const acts = new Acts({ dry: [5, 3, 7], look: [3, 1.2, 2.6], shake: [1, 1.0, 1.5] })
   const S = { mode: Math.random() < 0.5 ? 'dry' : 'idle', t: rnd(15, 30) }
@@ -2106,7 +2106,7 @@ function cormorant(env) {
     D.amp = damp(D.amp, sh ? 1 : 0.28, 5, dt)
     const fb = 0.32 * D.amp * Math.sin(D.ph), ud = 0.2 * D.amp * Math.sin(D.ph + Math.PI / 2) - 0.05 * D.amp   // fb>0 往後、ud>0 往上
     r.turn('wingL', AX.y, fb); r.turn('wingR', AX.y, -fb)
-    r.turn('wingL', AX.z, -ud); r.turn('wingR', AX.z, ud)
+    r.turn('wingL', AX.z, ud); r.turn('wingR', AX.z, -ud)   // 實測（整片翅膀綁好之後）：wingL 繞 +z 正的是往上抬
     r.turn('body', AX.x, 0.012 * Math.sin(t * 1.6))   // 呼吸
   }
   return { obj: root, focus, update, get acts() { return S.mode === 'dry' ? acts : idle.acts }, noFix: true, rig: r, get mode() { return S.mode }, set mode(v) { S.mode = v; S.t = 30; show() } }
