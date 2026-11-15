@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { ALP_SPURS, alpineHeight, alpineTrailDist, alpineStreamDist, domeRho, domeY, addCollider, YOSE, CAMP, EAST } from './layout.js'
+import { ALP_SPURS, alpineHeight, alpineTrailDist, alpineStreamDist, domeRho, domeY, addCollider, addRailSeg, YOSE, CAMP, EAST } from './layout.js'
 import { mulberry32, fbm2 } from './noise.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { barkMaterial } from './bark.js'
@@ -226,7 +226,7 @@ export function buildYosemite(scene, { lib } = {}) {
     // 2026-11-15 使用者（瀑布腳下的露天石階整片岩石從下擋到上、穿得過去）：凹槽東口（x 201～207.5）岩窟收窄、caveD 變小，步道中線還是離牆腳 1.2 m，
     // 那裡又沒有橫槽 → 石階整段埋在岩面裡。露天步道經過的地方：步道高度往上 3 m 內，岩面至少退到步道中線往裡 1.5 m
     const openClr = []; for (let i = 0; i < TR.pts.length; i++) if (TR.kind[i] === 'open' && Math.abs(x - TR.pts[i][0]) < 1.0) openClr.push([TR.yy[i] - 0.25, TR.yy[i] + 3.0, TR.pts[i][1] - YOSE.base(TR.pts[i][0]) + 1.5])
-      else if (TR.kind[i] === 'gal' && Math.abs(x - TR.pts[i][0]) < 1.0) openClr.push([TR.yy[i] - 0.06, TR.yy[i] + 2.4, TR.pts[i][1] - YOSE.base(TR.pts[i][0]) + 1.25])   // 2026-11-15 使用者（岩廊地上一塊塊咖啡色）：岩面的起伏凸出石板 0.1～0.3 m → 岩廊地面以上也要退到內側邊緣
+      else if (TR.kind[i] === 'gal' && Math.abs(x - TR.pts[i][0]) < 1.0) { const pa = TR.pts[Math.max(0, i - 1)], pb = TR.pts[Math.min(TR.pts.length - 1, i + 1)], tl = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]) || 1, tx = Math.abs(pb[0] - pa[0]) / tl; openClr.push([TR.yy[i] - 0.06, TR.yy[i] + 2.4, TR.pts[i][1] - YOSE.base(TR.pts[i][0]) + Math.min(2.6, 1.25 / Math.max(0.35, tx))]) }   /* 斜著走的路段：沿 z 退 1.25 不夠，照垂直距離算 */   // 2026-11-15 使用者（岩廊地上一塊塊咖啡色）：岩面的起伏凸出石板 0.1～0.3 m → 岩廊地面以上也要退到內側邊緣
     const clrD = (y, d) => { for (const [y0, y1, dm] of openClr) if (y > y0 && y < y1 && d < dm) d = dm; return d }
     // 2026-11-12 ChatGPT V4（遠看五條橫帶太整齊）：兩層步道之間的石壁上加直的侵蝕溝、往裡凹的岩層（0.3～0.8 m），頭上 2.6 m 以上才有往外凸的岩塊；
     // 離地板、岩簷 0.35 m 以內不動（步道的寬度、能走的範圍都不變）
@@ -1331,6 +1331,7 @@ export function buildYosemite(scene, { lib } = {}) {
         const p = run[k], dir = run[Math.min(run.length - 1, k + 1)].clone().sub(run[Math.max(0, k - 1)]); dir.y = 0; dir.normalize()
         put('gal_post_' + 'abc'[Math.floor(hsh(p.x * 7.1 + p.z) * 3)], m4.compose(V(p.x, p.y + CURB_H - 0.04, p.z), q.setFromAxisAngle(UPv, hsh(p.x * 3.3) * 6.28), V(1, POST_H, 1)))
         addCollider(p.x, p.z, 0.15, p.y + 1.2, p.y - 0.4)
+        if (k) addRailSeg(run[k - 1].x, run[k - 1].z, p.x, p.z, Math.min(run[k - 1].y, p.y))   // 2026-11-15 使用者「木欄杆沒有精準的碰撞、我可以站到木頭上」：柱子之間整段擋
         if (!k) continue
         const a2 = run[k - 1], d = p.clone().sub(a2), Lh = Math.hypot(d.x, d.z)
         q.setFromUnitVectors(X1, d.clone().normalize())
@@ -1377,7 +1378,7 @@ export function buildYosemite(scene, { lib } = {}) {
             const sd = SIDE[i].z < 0 ? 1 : -1, inn = SIDE[i].clone().multiplyScalar(-sd)   // 欄杆在 +sd 那側，牆在另一側
             // 2026-11-14 使用者「步道岩壁都做仔細」：岩壁的槽是照 z（同一個 x 往岩壁裡量 1.25 m）切的，以前沿步道的垂直方向退 1.25 m，
             // 岩壁斜著走（每往東 1 m 往北 0.55 m），等於多退了 0.18 m → 一片片岩層幾乎整片埋在岩壁裡、只露出幾塊碎角。改成同一個 x 往裡 1.2 m（比牆面凸出 5 cm）
-            const base = st.kind[i] === 'gal' ? V(C3[i].x, C3[i].y, C3[i].z + 1.2) : C3[i].clone().addScaledVector(inn, 1.25)
+            const base = st.kind[i] === 'gal' ? V(C3[i].x, C3[i].y, C3[i].z + Math.min(2.6, Math.max(1.2, 1.25 / Math.max(0.3, Math.abs(inn.z))))) : C3[i].clone().addScaledVector(inn, 1.25)   // 2026-11-15 使用者「這裡被擋住」：岩廊東口那段斜著走（往西南），沿 z 退 1.2 m 只等於離中線 0.8 m，牆和岩簷壓到步道上 → 照步道的垂直方向至少 1.25 m
             const yaw = Math.atan2(-inn.x, -inn.z)                                              // 套件的 +z（凸出那面）朝步道
             // 2026-11-14 這片牆的上面常常就是上一層步道（階地往裡退 2.6 m，牆剛好在上一層外緣的正下方）：兩層高低差不到 3.4 m 的地方，
             // 牆會穿出上一層的地板、在欄杆外面露出一片片單面的岩層（從上面看像飄在空中的薄片）→ 牆頂壓到上一層地板下 0.12 m，太矮就不貼
@@ -1925,6 +1926,7 @@ export function buildYosemite(scene, { lib } = {}) {
     inst(K.chain_post, iron, CHAIN.posts.map((p) => new THREE.Matrix4().makeTranslation(p.x, p.y, p.z)), 'cliffChainPosts')
     inst(K.chain_span, iron, CHAIN.segs.map(([a, b]) => { const X = b.clone().sub(a), L = X.length(); X.normalize(); const Z = V().crossVectors(X, UP).normalize(), Y = V().crossVectors(Z, X); return new THREE.Matrix4().compose(V(a.x, a.y + 0.92, a.z), q.setFromRotationMatrix(bm.makeBasis(X, Y, Z)), V(L, 1.7, 1)) }), 'cliffChains')
     for (const p of CHAIN.posts) addCollider(p.x, p.z, 0.1, p.y + 1.1, p.y - 0.4)
+    for (const [a2, b2] of CHAIN.segs) addRailSeg(a2.x, a2.z, b2.x, b2.z, Math.min(a2.y, b2.y))   // 2026-11-15 鐵鍊那幾段也一樣：樁和樁之間整段擋
     // 賞鳥台：平的石板地（往岩壁裡 1.9 m）＋外緣三段矮石牆（留縫，鏡頭可以從牆頭上拍）
     const T = YOSE.stairs(), par = { parapet_a: [], parapet_b: [] }
     const slabM = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.46, 0.40, 0.31), roughness: 0.92 })
