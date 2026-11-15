@@ -502,7 +502,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       }
     }
     {
-      const mk = mistLevel.value, tint = 0.2 + 0.8 * Math.min(1, dayLight.value * 1.4), cp = camera.position   // 清晨天剛亮，霧就先白起來
+      const mk = mistLevel.value, tint = 0.035 + 0.965 * Math.min(1, dayLight.value * 1.4) ** 1.6, cp = camera.position   /* 2026-11-15 夜拍測試：晚上 0.2 的霧比月光下的景（0.01～0.03）亮 10 倍，畫面上一團團發亮、照片拉亮後整片灰白 → 晚上壓到 0.035、偏藍 */   // 清晨天剛亮，霧就先白起來
       for (const sp of groundMist) {
         const u = sp.userData
         if (mk < 0.02) { sp.visible = false; continue }
@@ -510,7 +510,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
         sp.position.set(u.x, u.y + Math.sin(t * 0.15 + u.ph) * 0.2, u.z)
         const d = sp.position.distanceTo(cp)
         sp.material.opacity = Math.min(1, u.op * mk * 1.2 * (0.75 + 0.25 * Math.sin(t * 0.07 + u.ph))) * THREE.MathUtils.smoothstep(d, u.sz * 0.2, u.sz * 0.65)
-        sp.material.color.setScalar(tint)
+        sp.material.color.setRGB(tint * (0.82 + 0.18 * dayLight.value), tint * (0.9 + 0.1 * dayLight.value), tint)
         sp.visible = sp.material.opacity > 0.01
       }
     }

@@ -2043,7 +2043,7 @@ function buildInterior(lib, avoid = []) {
         const life = 0.6 + 0.4 * Math.sin(t * 0.05 + u.ph * 3)                     // 慢慢變濃變淡
         const edge = ss(X0, X0 + 8, u.x) * (1 - ss(X1 - 10, X1, u.x))                // 從西邊進來時淡入
         s.material.opacity = Math.min(1, u.op * life * (1 + 1.1 * mk)) * edge * ss(u.sz * 0.25, u.sz * 0.7, d)     // 太近就淡掉；有霧的時段濃一倍
-        s.material.color.setScalar(0.12 + 0.88 * dayLight.value)   // 霧團不受光：跟著天色變暗（晚上原本白白亮亮的，像在發光）
+        { const k = 0.03 + 0.97 * dayLight.value ** 1.4; s.material.color.setRGB(k * (0.82 + 0.18 * dayLight.value), k * (0.9 + 0.1 * dayLight.value), k) }   /* 2026-11-15 夜拍測試：0.12 還是比夜景亮好幾倍 */   // 霧團不受光：跟著天色變暗（晚上原本白白亮亮的，像在發光）
         s.visible = s.material.opacity > 0.01
       }
     }

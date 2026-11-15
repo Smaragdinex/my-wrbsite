@@ -990,6 +990,7 @@ export function buildWater(scene) {
   for (let i = 0; i < ND; i++) { dp.push(new THREE.Vector3()); dv.push(new THREE.Vector3()); spawnDrop(i); dl[i] = Math.random() }
   const _m4 = new THREE.Matrix4(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3(), _vd = new THREE.Vector3()
   const updateDrops = (dt, cam) => {
+    { const k = 0.05 + 0.95 * dayLight.value ** 1.4; drops.material.color.setRGB(0.95 * k, 0.973 * k, 0.98 * k) }   // 2026-11-15 夜拍測試：水花不受光，晚上一條條白線（照片裡翠鳥後面一片白），跟著天色變暗
     for (let i = 0; i < ND; i++) {
       dv[i].y -= 9.8 * dt
       dp[i].addScaledVector(dv[i], dt)
@@ -1062,12 +1063,13 @@ export function buildWater(scene) {
         float a = mask * smoothstep(0.18, 0.68, n) * vA;
         a *= smoothstep(uWater, uWater + 0.4, vY);                       // 碰到水面淡掉
         vec3 col = mix(vec3(0.8, 0.86, 0.88), vec3(0.97, 0.99, 1.0), clamp(vUv.y * 0.6 + n * 0.5, 0.0, 1.0));
-        col *= mix(0.1, 1.0, uDay);   // 不受光的水霧，晚上跟著暗
+        col *= mix(0.04, 1.0, pow(uDay, 1.4));   // 不受光的水霧，晚上跟著暗（2026-11-15 夜拍測試：0.1 在晚上還是一大團發白，鳥變剪影）
         gl_FragColor = vec4(col, a);
         #include <fog_fragment>
       }`,
   })
   mistMat.uniforms.uNoise.value = T.mistNoiseTex()
+  mistMat.uniforms.uDay = dayLight   // 2026-11-15 夜拍測試：UniformsUtils.merge 會複製一份，uDay 永遠停在白天的 1 → 晚上整團水霧發白（翠鳥變剪影）。接回共用的那份
   const mist = new THREE.Mesh(mGeo, mistMat)
   mist.frustumCulled = false; mist.renderOrder = 7
   scene.add(mist)

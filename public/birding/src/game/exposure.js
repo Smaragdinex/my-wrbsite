@@ -79,6 +79,10 @@ export function createMeter(renderer) {
     lum0: L_REF,   // 還沒量到之前的預設值
     get ev() { return 13 + K * log2(lum / L_REF) },
     // 照片的亮度：先把場景拉到「正常」亮度（晚上的長曝光照片本來就會比眼睛看到的亮，但不拉滿，留一點夜晚的感覺），再乘上過曝／欠曝
-    photoGain(over) { return (L_REF / lum) ** 0.85 * 2 ** over },
+    // 2026-11-15 使用者「夜拍 ISO 調高」：晚上整張拉到接近白天亮度，地面的夜霧、手電筒照到的霧和水面反光被放大成一片灰白，背景比鳥還亮、不像晚上 →
+    // 越暗拉得越少（白天 EV 10 以上照舊 0.85；EV 6 以下 0.15，大約是眼睛適應後看到的亮度再亮一點），沖洗時再把暗部和中間調拉起來（nightLift）
+    nightK() { return 0.85 - 0.7 * THREE.MathUtils.clamp((10 - (13 + K * log2(lum / L_REF))) / 4, 0, 1) },
+    photoGain(over) { return (L_REF / lum) ** this.nightK() * 2 ** over },
+    nightLift() { return 1 + 0.5 * THREE.MathUtils.clamp((10 - (13 + K * log2(lum / L_REF))) / 4, 0, 1) },
   }
 }

@@ -373,14 +373,14 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
     // 讀回照片改成非同步（2026-11-08）：以前同步讀回要等 GPU 畫完（約 50 毫秒），按快門那一格會卡一下。
     // 讀回的指令現在就發出去（照片內容就是這一刻的畫面），後面的模糊、雜訊、存 JPEG 等資料回來再做
     const px = new Uint8Array(PHOTO_W * PHOTO_H * 4)
-    const job = { s, found, result, shake, shakeDir, noise, locked: st.locked }
+    const job = { s, found, result, shake, shakeDir, noise, locked: st.locked, lift: meter.nightLift() }
     const ready = r.readRenderTargetPixelsAsync(rtOut, 0, 0, PHOTO_W, PHOTO_H, px)
     devQ = devQ.then(() => ready).then(() => develop(px, job)).catch((e) => console.warn('[camera] 沖洗失敗', e))   // 連拍時一張一張沖（共用畫布）
   }
   // 沖洗：把讀回來的像素做成照片（對焦模糊、手震、動態模糊、雜訊），存成 JPEG 交給 onShot
   // 分三段做、中間讓出一格（每段 20～40 毫秒），不會一次卡 100 多毫秒
   const nextFrame = () => new Promise((q) => setTimeout(q, 0))
-  async function develop(px, { s, found, result, shake, shakeDir, noise, locked }) {
+  async function develop(px, { s, found, result, shake, shakeDir, noise, locked, lift = 1 }) {
     const img = rctx.createImageData(PHOTO_W, PHOTO_H)
     for (let y = 0; y < PHOTO_H; y++) img.data.set(px.subarray((PHOTO_H - 1 - y) * PHOTO_W * 4, (PHOTO_H - y) * PHOTO_W * 4), y * PHOTO_W * 4)
     rctx.putImageData(img, 0, 0)
@@ -403,6 +403,8 @@ export function createCamera({ world, camera, controls, hud, gear, onShot, onPan
       for (let i = 0; i < 10; i++) { const u = i / 9 - 0.5; ctx.globalAlpha = 1 / (i + 1); ctx.drawImage(tmp, f.vx * k * u, -f.vy * k * u) }
       ctx.restore(); ctx.globalAlpha = 1
     }
+    // 夜拍：暗部、中間調往上拉（gamma），亮部幾乎不動——鳥看得清楚、天空和夜霧不會被拉成一片灰白（exposure.js nightLift）
+    { const gm = lift; if (gm > 1.01) { const d = ctx.getImageData(0, 0, PHOTO_W, PHOTO_H), a = d.data, LUT = new Uint8ClampedArray(256); for (let i = 0; i < 256; i++) LUT[i] = 255 * (i / 255) ** (1 / gm); for (let i = 0; i < a.length; i += 4) { a[i] = LUT[a[i]]; a[i + 1] = LUT[a[i + 1]]; a[i + 2] = LUT[a[i + 2]] } ctx.putImageData(d, 0, 0) } }
     // 4. 雜訊：ISO 越高、曝光越不足越多；亮度雜訊＋一點彩色雜訊
     if (noise > 1.5) {
       const d = ctx.getImageData(0, 0, PHOTO_W, PHOTO_H), a = d.data
