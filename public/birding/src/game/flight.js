@@ -72,8 +72,8 @@ export const ESCAPE = {
   lapwing: { r: 6, run: 3 },   // 2026-11-13 小辮鴴：先跑開（飛行模型還沒做）
   grebe: { r: 9, swim: 4, fly: { speed: 11, hz: 9, style: 'flap', k: 1.25 } },
   // 2026-11-13 Pass 1D：遊隼巡航快、拍幾下就滑；黑雨燕又快又急（離步道 4～5 m 高，靠很近才飛）；烏林鴞慢、低、安靜
-  peregrine: { r: 16, fly: { speed: 15, hz: 4.5, style: 'glide', k: 1.05 } },
-  blackswift: { r: 5, sortie: [45, 100], fly: { speed: 14, hz: 8, style: 'glide', k: 0.48 } },   // 2026-11-15 使用者「黑雨燕會一直穿梭在瀑布飛嗎」→ 真的雨燕白天在空中覓食、穿過水簾回巢：沒人打擾也每 45～100 秒自己出去一趟（sortie）
+  peregrine: { r: 5,   /* 2026-11-15 使用者「81 完全沒看到」：驚飛 16 m，岩架離步道才 6～10 m → 走到上層岩廊就飛走、29 m 外才回來，永遠看不到。高高的岩架上、人在底下走，5 m 才飛 */ fly: { speed: 15, hz: 4.5, style: 'glide', k: 1.05 } },
+  blackswift: { r: 2.5, sortie: [45, 100], fly: { speed: 14, hz: 8, style: 'glide', k: 0.48 } },   // 2026-11-15 使用者「黑雨燕會一直穿梭在瀑布飛嗎」→ 真的雨燕白天在空中覓食、穿過水簾回巢：沒人打擾也每 45～100 秒自己出去一趟（sortie）
   greatgreyowl: { r: 10, fly: { speed: 6, hz: 2.8, style: 'glide', k: 1.45 } },
   wbwood: { r: 8, fly: { speed: 8, hz: 9, style: 'bound', k: 0.42 } },
   nutcracker: { r: 10, fly: { speed: 9, hz: 5, style: 'glide', k: 0.55 } },

@@ -186,7 +186,7 @@ export function buildYosemite(scene, { lib } = {}) {
     // 2026-11-15 使用者（岩廊西口一根孤零零的岩柱、上層步道外面一條條碎岩片）：岩廊兩頭上下兩層步道幾乎疊在一起（x186～190 上層只比下層深 0～0.8 m），
     // 下層的開口往上切（岩頂斜坡 ramp、或露天階地的 +90）會把上層步道底下的岩石整個切掉 → 上層地板懸空、岩壁剩一條條。
     // 上面那層沒有比較深（深不到 2.2 m：步道半寬＋階地外牆再往裡侵蝕的凹槽最多 1.2 m）的話，下層的切口最高只到上層地板底下 1.5 m（那段變成有岩頂的廊道，上層地板底下留一塊厚岩）
-    for (const s of out) for (const u of out) if (u !== s && u.y0 > s.y0 + 2 && u.y0 < s.y1 && u.depth < s.depth + 2.2) s.y1 = Math.min(s.y1, Math.max(s.y0 + 3.6, u.y0 - 1.5))
+    if (x > 180 && x < 195) /* 2026-11-15 只限岩廊西口那段：折返平台（x 241 那個）也是上下兩層疊著，加了岩頂反而在平台口接成一片斜板 */ for (const s of out) for (const u of out) if (u !== s && u.y0 > s.y0 + 2 && u.y0 < s.y1 && u.depth < s.depth + 2.2) s.y1 = Math.min(s.y1, Math.max(s.y0 + 3.6, u.y0 - 1.5))
     return out
   }
   // 隧道口：岩壁網格在這幾顆球的範圍內不畫（材質裡 discard），隧道的管子才接得出來
