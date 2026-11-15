@@ -222,7 +222,7 @@ export function buildYosemite(scene, { lib } = {}) {
     const Ls = [0]; for (let i = 1; i < P.length; i++) Ls.push(Ls[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]))
     const out = []
     // 2026-11-12 階地的轉角（地板的內外緣）要剛好落在取樣點上，不然等距取樣會把直角削成斜面、石壁歪到步道上面
-    const snap = new Map(); for (let i = 0; i < P.length; i++) if (P[i][3]) snap.set(Math.max(1, Math.min(FACE - 1, Math.round(Ls[i] / Ls.at(-1) * FACE))), P[i])
+    const snap = new Map(); { let lastK = 0; for (let i = 0; i < P.length; i++) if (P[i][3]) { const k = Math.max(lastK + 1, Math.min(FACE - 1, Math.round(Ls[i] / Ls.at(-1) * FACE))); if (k > FACE - 1) break; snap.set(k, P[i]); lastK = k } }   // 2026-11-15 使用者（岩廊西口一片斜岩板）：轉彎處好幾段步道的切口轉角擠在一起、四捨五入到同一格，掉了一個轉角 → 一個三角面從地板角斜到牆上。照順序往後找空格，每個轉角都保留
     const yTerr = slots.length ? Math.min(...slots.map((sl) => sl.y0)) - 0.4 : 1e9
     // 2026-11-15 使用者（瀑布腳下的露天石階整片岩石從下擋到上、穿得過去）：凹槽東口（x 201～207.5）岩窟收窄、caveD 變小，步道中線還是離牆腳 1.2 m，
     // 那裡又沒有橫槽 → 石階整段埋在岩面裡。露天步道經過的地方：步道高度往上 3 m 內，岩面至少退到步道中線往裡 1.5 m
@@ -322,6 +322,7 @@ export function buildYosemite(scene, { lib } = {}) {
   }
   const W = FACE + TOP + 1
   for (let i = 0; i < NX; i++) for (let k = 0; k < W - 1; k++) { const a = i * W + k, b = a + W; idx.push(a, a + 1, b, a + 1, b + 1, b) }
+  let TUBE_HIT = null
   // 2026-11-15 使用者（岩廊東口轉彎的照片）「擋住去路的視線，雖然可以穿過，修乾淨」：照 x 一欄一欄退岩面的做法，在步道轉彎的內角管不到（那裡離中線只剩 0.89 m）。
   // 網格做好之後再掃一次：步道（岩廊、露天段）中線水平 1.3 m 內、地板上 0.15～2.4 m 的岩面頂點，沿水平方向推到 1.3 m 外
   { const SB = new Map(), CL = 1.3
@@ -335,7 +336,15 @@ export function buildYosemite(scene, { lib } = {}) {
         if (y < py - 0.8 || y > py + 4.0) continue   /* 切槽底角（地板下 0.65）和岩頂（+3.6）那兩列也要推：一個三角面從地板角直接連到岩頂，就是斜切過步道那一片 */   /* 岩面的列在高度上很疏：地板附近那列不推的話，三角面還是斜斜切過轉角 */
         const d = Math.hypot(x - px, z - pz); if (d < best && d > 0.02) { best = d; cx = px; cz = pz } }
       if (best < CL) { const k = CL / best; pos[j] = cx + (x - cx) * k; pos[j + 2] = cz + (z - cz) * k; moved++ } }
-    console.debug('[yosemite] 步道淨空：推開岩面頂點', moved) }
+    console.debug('[yosemite] 步道淨空：推開岩面頂點', moved)
+    // 2026-11-15 使用者（岩廊西口、東口那片斜岩板「沒移除掉」）：岩面是一欄一欄用同一個列號接起來的，步道轉彎那幾欄的切口轉角落在不同列，
+    // 相鄰兩欄接成一片從地板角斜到牆上的大三角，三個頂點都在步道外面、整片卻橫過步道 → 三角形的中心落在步道淨空裡（中線 1.2 m 內、地板上 5 cm～2.4 m）就整片不畫
+    TUBE_HIT = (x, y, z) => { const L2 = SB.get(Math.floor(x)); if (!L2) return false
+      for (const [ax, az, ay, bx, bz, by] of L2) { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1e-6, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), py = ay + (by - ay) * t
+        if (y > py + 0.05 && y < py + 2.4 && Math.hypot(x - ax - dx * t, z - az - dz * t) < 1.2) return true } return false } }
+  if (TUBE_HIT) { const keep = []; let cut = 0; for (let t = 0; t < idx.length; t += 3) { const a0 = idx[t] * 3, b0 = idx[t + 1] * 3, c0 = idx[t + 2] * 3
+      if (TUBE_HIT((pos[a0] + pos[b0] + pos[c0]) / 3, (pos[a0 + 1] + pos[b0 + 1] + pos[c0 + 1]) / 3, (pos[a0 + 2] + pos[b0 + 2] + pos[c0 + 2]) / 3)) { cut++; continue } keep.push(idx[t], idx[t + 1], idx[t + 2]) }
+    idx.length = keep.length; for (let q = 0; q < keep.length; q++) idx[q] = keep[q]; console.debug('[yosemite] 步道淨空：拿掉橫過步道的岩面三角形', cut) }
   const cg = new THREE.BufferGeometry()
   cg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); cg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); cg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
   cg.setIndex(idx); cg.computeVertexNormals()
@@ -1339,7 +1348,7 @@ export function buildYosemite(scene, { lib } = {}) {
       gl.scene.updateMatrixWorld(true)
       for (const sc2 of [gl.scene, gl2?.scene]) { if (!sc2) continue; sc2.updateMatrixWorld(true); sc2.traverse((o) => { if (o.isMesh) { const gg = o.geometry.clone(); gg.applyMatrix4(o.matrixWorld); if (gg.attributes.color_1) gg.setAttribute('color', gg.attributes.color_1); K[o.name] = gg } }) }   /* 2026-11-14 Blender 匯出的 COLOR_0 是全白，烘好的 AO＋每塊深淺在 COLOR_1（以前石階、石板地一直是平平的白，縫裡沒有暗） */
       const logM = barkMaterial('japanese_cedar_bark', { normal: 1.4, color: [1.5, 1.34, 1.15] }); logM.vertexColors = true
-      const wetM = stepM.clone(); wetM.onBeforeCompile = stepM.onBeforeCompile; wetM.customProgramCacheKey = () => 'stepTriplanarWet'; wetM.roughness = 0.3; wetM.envMapIntensity = 1.7; wetM.color.setRGB(0.86, 0.74, 0.58)   /* 參考圖：淋濕的暖褐色砂岩石板，不是冷灰 */
+      const wetM = stepM.clone(); wetM.onBeforeCompile = STEP_BASE_OBC;   /* 2026-11-15 天然岩床地板：不要踏板那套一大片一大片的青苔（平的地板整片變綠） */ wetM.customProgramCacheKey = () => 'stepTriplanarWetNoMoss'; wetM.roughness = 0.42; wetM.envMapIntensity = 1.0; wetM.map = rockTex(); wetM.color.setRGB(1.12, 0.94, 0.74);   /* 跟岩壁同一張砂岩貼圖、暖赭黃（ChatGPT #A87949） */   /* 2026-11-15 天然岩床：反光太強整片發白 */ wetM.color.setRGB(0.86, 0.74, 0.58)   /* 參考圖：淋濕的暖褐色砂岩石板，不是冷灰 */
       const L = {}, put = (name, M) => (L[name] ||= []).push(M.clone()), X1 = V(1, 0, 0), q = new THREE.Quaternion(), UPv = V(0, 1, 0)
       const CURB_H = 0.34, POST_H = 0.8   // 柱子從石緣頂面往上 0.8 m（欄杆頂離地板約 1.12 m）
       for (const run of WOOD) for (let k = 0; k < run.length; k++) {
@@ -1363,7 +1372,7 @@ export function buildYosemite(scene, { lib } = {}) {
           while (next <= st.S[i]) {
             const t = (next - st.S[i - 1]) / Math.max(1e-6, st.S[i] - st.S[i - 1]), c = C3[i - 1].clone().lerp(C3[i], t), tn = TAN[i]
             q.setFromAxisAngle(UPv, Math.atan2(-tn.z, tn.x))
-            put('gal_floor_' + 'abc'[nf++ % 3], m4.compose(V(c.x, c.y + 0.004, c.z), q, V(1, 1, 1)))
+            put('gal_floor_' + 'abc'[nf % 3], m4.compose(V(c.x, c.y + 0.02 + (nf++ % 3) * 0.004, c.z), q, V(1, 1, 1)))   /* 前後疊 25 cm：三種高低差 4 mm，疊的地方不閃 */
             // 2026-11-15 使用者「這些咖啡色的要移除，是之前的殘留」：岩廊轉彎的內側（靠岩壁那邊）切出來的岩槽比步道寬，露出一片光禿的咖啡色岩地 →
             // 那裡也鋪同一種石板（射線往下量：岩地跟步道一樣高的地方才鋪）
             next += 1.0   // 2026-11-15 整齊的石板一塊 1.0 m：間距也 1.0，不再一塊疊一塊
