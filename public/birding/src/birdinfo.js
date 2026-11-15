@@ -1,7 +1,7 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight } from './layout.js'
+import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight, ALP_RIVER } from './layout.js'
 import { birdText } from './i18n.js'
 
 const ALL = [
@@ -986,6 +986,35 @@ const ALL = [
       "在台灣是不常見的冬候鳥，偶爾在西部的田野和濕地看得到。",
     ],
   },
+  {
+    // 2026-11-15 河烏：瀑布湖出水口下面那個深潭（水深 1～4 m）靠東岸的淺邊，石拱橋上游 7 m：從橋上就看得到牠蹲一下、潛下去、冒出來。
+    // 地面（groundFn）：淺的地方踩在河床上（涉水），水深超過 0.1 m 就浮在水面（河烏真的會游）；depthAt 給牠判斷能不能潛
+    // 2026-11-15 第二版：岸邊被蕨類、橋燈擋住 → 河中間放一顆露出水面的平頂石（def.boulder），牠在石頭上蹲、下水游、潛下去
+    id: 'dipper', spot: [181.0, 68.4], y: ALP_RIVER.water(ALP_RIVER.sAt(181.0, 68.4)) + 0.2, boulder: { r: 0.45 }, perch: 'ground', view: 200, dist: 2.6, camH: 0.9, lookY: 0.15,
+    groundFn: (x, z) => { if (Math.hypot(x - 181.0, z - 68.4) < 0.3) return ALP_RIVER.water(ALP_RIVER.sAt(181.0, 68.4)) + 0.2; const W = ALP_RIVER.water(ALP_RIVER.sAt(x, z)), g = alpineHeight(x, z); return W - g > 0.1 ? W - 0.085 : g },
+    depthAt: (x, z) => ALP_RIVER.water(ALP_RIVER.sAt(x, z)) - alpineHeight(x, z),
+    name: '河烏', sci: 'Cinclus pallasii', where: '瀑布湖出水口下的深潭、石拱橋上游',
+    intro: '全世界唯一會在水底走路的鳴禽。全身巧克力褐色、體型圓胖像一顆球，尾巴短短翹起。常站在溪石上一直上下「蹲」，白色的眼瞼一眨一眨；看到獵物就走進湍急的溪水裡，整隻沉到水底，逆著水流低頭翻石頭找水生昆蟲。',
+    facts: [
+      '羽毛很密、尾脂腺特別大，羽毛防水；潛水時會把血液集中到大腦，可以在冷水裡待很久。',
+      '飛的時候貼著溪面又快又直，沿著溪道轉彎，很少飛離河道。',
+      '只住在乾淨、湍急的山溪，水汙染了就看不到牠——是溪流健康的指標鳥。',
+      '叫聲是尖銳的「茲—茲」，在嘩嘩的水聲裡也聽得很清楚。',
+    ],
+  },
+  {
+    // 2026-11-15 小剪尾：中間那座石橋上游 5 m 的急流（白水那段），一顆露出水面的大石頭（world.js 照 def.boulder 擺）
+    id: 'forktail', spot: [161.6, 41.0], y: ALP_RIVER.water(ALP_RIVER.sAt(161.6, 41.0)) + 0.34, water: ALP_RIVER.water(ALP_RIVER.sAt(161.6, 41.0)),
+    boulder: { r: 0.42 }, perch: 'ground', view: 344,   /* 面向步道上看得到牠的那一點（160.2, 46） */ dist: 2.2, camH: 0.6, lookY: 0.08,
+    name: '小剪尾', sci: 'Enicurus scouleri', where: '石橋上游急流中的大石頭',
+    intro: '台灣的留鳥，小小一隻黑白分明：額頭一塊白、頭胸背黑色，腰和肚子白色，翅膀上一條白帶。最愛站在瀑布、急流中間被水沖得濕亮的石頭上，短短的叉尾一直有節奏地上下擺、一開一合，像一把小剪刀。',
+    facts: [
+      '名字裡的「剪尾」就是那條會開合的叉尾；台灣另一種「鉛色水鶇」也住溪邊，但尾巴是紅褐色的。',
+      '在濺起水花的石頭上跳來跳去，啄食石面和水邊的小蟲。',
+      '巢常築在瀑布後面或溪邊岩壁的縫裡，用苔蘚做成。',
+      '中低海拔乾淨的山溪才看得到，叫聲細細尖尖的，常被水聲蓋過。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -994,6 +1023,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

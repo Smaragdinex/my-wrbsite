@@ -102,7 +102,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const placeDef = (def) => {
     // 山區的鳥站在山區的地形上（地面高度查 alpineHeight）
     const groundH = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)
-    const d = { ...def, y: def.y ?? groundH(...def.spot), groundAt: def.water == null && !def.cliffRay ? groundH : null }   // 岩壁上的鳥不照地形（不然會掉到岩壁腳下）
+    const d = { ...def, y: def.y ?? groundH(...def.spot), groundAt: def.groundFn ?? (def.water == null && !def.cliffRay ? groundH : null) }   // groundFn：自己的地面（河烏走在水面下一點點＝涉水）   // 岩壁上的鳥不照地形（不然會掉到岩壁腳下）
     // 游泳的鳥只在開闊水面：離池邊（石頭）和山腳都要留距離
     const nearBoard = (x, z) => { for (const [dx, dz] of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5], [1.1, 1.1], [-1.1, 1.1], [1.1, -1.1], [-1.1, -1.1]]) if (walkAt(x + dx, z + dz) != null || deckAt(x + dx, z + dz) != null) return true; return false }
     if (def.swim === 'alpPond') d.swimOK = (x, z) => Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r * 0.78   // 山區入口的湖（鴛鴦、花嘴鴨）
@@ -154,6 +154,16 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   giantSpots(alpAvoid)   // 巨木的位置先算好：山區的其他樹、草要避開
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
   scene.add(buildEast({ avoid: alpAvoid, lib: plantLib, hideKit, walkKit }))
+  // 2026-11-15 小剪尾站的溪中大石（def.boulder）：平頂的苔石，鳥站的那一點（spot 正上方往下打）剛好在 def.y
+  for (const def of BIRDS.filter((d) => d.boulder && plantLib.mrock_10)) {
+    const rk = plantLib.mrock_10.clone(true), bx = new THREE.Box3().setFromObject(rk), sz = bx.getSize(new THREE.Vector3())
+    const k = (def.boulder.r * 2) / Math.max(sz.x, sz.z); rk.scale.setScalar(k); rk.rotation.y = 0.7
+    rk.position.set(def.spot[0], def.y - (bx.max.y - 0.04 * sz.y) * k, def.spot[1]); rk.updateMatrixWorld(true)
+    const hit = new THREE.Raycaster(new THREE.Vector3(def.spot[0], def.y + 2, def.spot[1]), new THREE.Vector3(0, -1, 0)).intersectObject(rk, true)[0]
+    if (hit) rk.position.y += def.y - hit.point.y
+    rk.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+    rk.name = 'birdBoulder_' + def.id; scene.add(rk)
+  }
   buildStreambed(scene, plantLib).then((r) => console.log('streambed', JSON.stringify(r))).catch((e) => console.error('streambed', e))   // 2026-11-12 溪床卵石、苔石、水草（不擋進場，載好就出現）   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
   alpine.build()
   // 2026-11-13 使用者「把這裡的營區暫時都移除，讓進入瀑布步道更順暢」：帳篷、柴堆、營火、冰桶都不擺（buildCamp 留著，要放回來把這行換回去）

@@ -308,6 +308,7 @@ const BUILD = {
   scopsowl, mtscops, jacana, psnipe, woodcock, shelduck, pheron, stilt, harrier, rnpheasant, skylark, cisticola, nutcracker, wbwood,
   shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe, lapwing,
   peregrine, blackswift, greatgreyowl,
+  dipper, forktail,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -319,7 +320,7 @@ const TINT = { 'thrush-rig': 0.5 }
 const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
     'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
-    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig',
+    'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig', 'dipper-rig', 'dipper-fly-rig', 'forktail-rig', 'forktail-fly-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
     'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig']
@@ -1808,6 +1809,48 @@ const endemicPerch = (name, k, beat = 8, more = {}) => (env) => perchRigged(oute
 const OWL_HOP = { owlHop: true, hopper: { preT: 0.16, dur: 0.3, arc: [0.075, 0.1], apex: 0.44 } }   // 第二輪：跳高一點，腳要明顯離開樹枝
 function liocichla(env) { return endemicGround('liocichla-rig', 0.22, 0.652)(env) }
 function whitebrow(env) { return endemicGround('whitebrow-rig', 0.2, 0.727, { flick: 0.35 })(env) }
+// 2026-11-15 河烏：溪裡的石頭、淺灘走來走去，一直「蹲一下」（dipper 這名字就是這樣來的：整隻上下點，白色眼瞼一閃一閃），
+// 走進水裡就整隻沉下去在水底走（逆著水流低頭、半張翅膀把自己壓在水底），幾秒後從另一個地方冒出來、抖一抖。
+// env.depthAt：這一點的水深（站在岸上不潛）；env.ripple：在世界座標畫水波
+function dipper(env) {
+  const D = { st: 'land', t: rnd(5, 9), bob: 0 }
+  const show = ({ c, n, t, dt, w, root }) => {
+    const depth = env.depthAt ? env.depthAt(w.p.x, w.p.y) : 0
+    D.t -= dt
+    const splash = () => { const p = root.getWorldPosition(V()); ripple(p.x, p.z, 0.5) }
+    if (D.st === 'land') {
+      if (D.t < 0 && depth > 0.12) { D.st = 'dive'; D.t = rnd(3, 6); splash() }
+      else if (D.t < 0) D.t = rnd(1, 3)
+    } else if (D.st === 'dive' && (D.t < 0 || depth < 0.06)) { D.st = 'up'; D.t = 0.9; splash() }
+    else if (D.st === 'up' && D.t < 0) { D.st = 'land'; D.t = rnd(6, 14) }
+    if (D.st === 'dive') return { jump: -0.32, lean: 0.45, neck: 0.5, head: -0.45, wing: 0.25, tail: -0.2, rate: 10 }
+    if (D.st === 'up') return { lean: 0.05, wing: 0.35 * Math.max(0, Math.sin(t * 40)) * D.t, jump: 0 }   // 冒出來抖一抖
+    // 蹲一下：站著時每 2～5 秒連續上下點 3～6 下（約每秒 2 下），點的時候膝蓋彎、身體壓低、尾巴翹
+    if (n === 'look' || n === 'stand' || n === 'peck') {
+      D.bob -= dt
+      if (D.bob < -rnd(2, 5)) D.bob = rnd(1.5, 3)
+      if (D.bob > 0) { const k = 0.5 - 0.5 * Math.cos(t * Math.PI * 2 * 2.1); return { jump: -0.016 * k, lean: 0.12 * k, tail: 0.25 * k, rate: 30 } }
+    }
+    return null
+  }
+  return groundTripo(env, { name: 'dipper-rig', H: 0.24, h0: 0.70, ...TRIPO, show,
+    walk: { radius: 1.2, speed: 0.22, turn: 3 }, stride: 0.05, swingT: 0.12, lift: 0.02, knee: [0.3, 0.6], focusY: 0.12,
+    acts: { walk: [4, 99, 99], peck: [3, 0.7, 1.3], look: [2, 0.8, 1.8], stand: [2, 1.5, 3], turn: [1, 99, 99] } })
+}
+// 2026-11-15 小剪尾：站在急流中間的石頭上，尾巴一直有節奏地上下擺、一開一合（剪刀一樣），偶爾在石頭頂上小跳一下、低頭啄水邊的蟲
+function forktail(env) {
+  let fan = 0
+  const show = ({ t, dt, r }) => {
+    const ph = t * Math.PI * 2 * 0.9, k = 0.5 + 0.5 * Math.sin(ph)
+    fan = damp(fan, k, 12, dt)
+    const tb = r.bones.tail
+    if (tb) tb.scale.set(1 + 0.9 * fan, 1, 1 + 0.9 * fan)   // 尾巴張開：骨頭橫向放大（長度方向不變）
+    return { tail: 0.45 * k - 0.1, rate: 12 }
+  }
+  return groundTripo(env, { name: 'forktail-rig', H: 0.144, h0: 0.683, ...TRIPO, show, hop: 0.025,
+    walk: { radius: 0.14, speed: 0.12, turn: 3 }, stride: 0.05, swingT: 0.12, lift: 0.012, knee: [0.3, 0.6], focusY: 0.08,
+    acts: { walk: [1, 99, 99], peck: [3, 0.6, 1.1], look: [3, 0.8, 1.8], stand: [3, 1.5, 3], turn: [2, 99, 99] } })
+}
 function islandthrush(env) { return endemicGround('islandthrush-rig', 0.26, 0.705, { hop: 0.045, stride: 0.1 })(env) }
 function rustylt(env) { return endemicGround('rustylt-rig', 0.27, 0.598, { hop: 0.04, flick: 0.25 })(env) }
 function whitethroat(env) { return endemicGround('whitethroat-rig', 0.26, 0.62, { hop: 0.04, flick: 0.25 })(env) }
@@ -2240,7 +2283,7 @@ export const REAL_CM = {
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
   shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, lapwing: 30, grebe: 50,
-  peregrine: 42, blackswift: 18, greatgreyowl: 68,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
+  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
 const _fsInv = new THREE.Matrix4(), _fsV = V()
@@ -2283,6 +2326,7 @@ export function placeAnimal(def, { strict = false } = {}) {
   // 地上走的鳥：鳥群座標 (lx, lz) 的地面高度，相對鳥群原點（ground 鳥的 obj 沒有旋轉）
   if (def.patrol) env.patrol = def.patrol   // 在兩點之間來回走（山鷸）
   if (def.groundAt && def.perch === 'ground') env.groundAt = (lx, lz) => def.groundAt(x + lx, z + lz) - gy
+  if (def.depthAt) env.depthAt = (lx, lz) => def.depthAt(x + lx, z + lz)   // 河烏：腳下的水深（潛水用）
   const target = V()
   let dist = 5.5, camH = 1.6
 

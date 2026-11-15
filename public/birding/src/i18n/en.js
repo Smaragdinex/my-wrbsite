@@ -1314,6 +1314,28 @@ export const BIRDS = {
    "In Taiwan it is a scarce passage migrant, almost always seen without the collar."
   ]
  },
+ "dipper": {
+  "name": "Brown Dipper",
+  "where": "The Deep Pool below the Waterfall Lake Outlet, Upstream of the Stone Bridge",
+  "intro": "The only songbird in the world that walks underwater. Chocolate-brown all over, round as a ball, with a short cocked tail. It stands on stream rocks bobbing up and down, flashing its white eyelids; when it spots prey it walks straight into the rushing water, sinks to the bottom and turns over stones against the current to find aquatic insects.",
+  "facts": [
+   "Its plumage is dense and its preen gland unusually large, so its feathers are waterproof; underwater it sends blood to the brain and can stay a long time in cold water.",
+   "It flies fast and straight, low over the water, following every bend of the stream and rarely leaving it.",
+   "It only lives on clean, fast mountain streams — where the water is polluted it disappears, so it is an indicator of stream health.",
+   "Its call is a sharp 'dzit-dzit' that carries even over the roar of the water."
+  ]
+ },
+ "forktail": {
+  "name": "Little Forktail",
+  "where": "A Boulder in the Rapids Upstream of the Stone Bridge",
+  "intro": "A tiny, crisp black-and-white bird: a white forehead patch, black head, breast and back, white rump and belly, and a white bar across the wing. It loves to stand on spray-soaked rocks in waterfalls and rapids, rhythmically pumping its short forked tail up and down and opening and closing it like a little pair of scissors.",
+  "facts": [
+   "Its Chinese name means 'little scissor-tail' after that opening-and-closing tail.",
+   "It hops from rock to rock in the splashing spray, picking small insects off wet stone.",
+   "It often nests in a crack behind a waterfall or in a streamside cliff, building with moss.",
+   "Found only on clean mid- and low-elevation mountain streams; its thin, high call is easily drowned out by the water."
+  ]
+ },
  "lapwing": {
   "name": "Northern Lapwing",
   "where": "Open Wetland between the Emerald Marsh and the Mountain Lake",

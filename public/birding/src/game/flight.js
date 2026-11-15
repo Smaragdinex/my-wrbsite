@@ -8,7 +8,7 @@ import { clone as skClone } from 'three/addons/utils/SkeletonUtils.js'
 // 2026-11-11 使用者：躲在觀察屋裡，鳥不會飛走（Threads 回饋：宣傳文寫了「躲在賞鳥屋裡鳥不會跑」，以前觀察屋只是一棟房子）。
 // 觀察屋 6×3.2 m、正面朝 look；玩家在屋裡（各邊多 0.4 m，含門口）＝鳥看不到人，不會警戒
 const inHide = (P) => HIDES.some((h) => { const a = Math.atan2(h.look[0] - h.x, h.look[1] - h.z), dx = P.x - h.x, dz = P.z - h.z, lz = dx * Math.sin(a) + dz * Math.cos(a), lx = dx * Math.cos(a) - dz * Math.sin(a); return Math.abs(lx) < h.w / 2 + 0.4 && Math.abs(lz) < h.d / 2 + 0.4 })
-import { terrainHeight as gardenH, domeRho, domeY, mtnBase, MTN, inAlpine, alpineHeight } from '../layout.js'
+import { terrainHeight as gardenH, domeRho, domeY, mtnBase, MTN, inAlpine, alpineHeight, ALP_RIVER } from '../layout.js'
 // 地面高度：山區查山區的地形（不然鳥會飛進山坡裡）
 const terrainHeight = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : gardenH(x, z)
 
@@ -109,6 +109,9 @@ export const ESCAPE = {
   bushwarbler: { r: 6, run: 4, fly: { speed: 6, hz: 14, style: 'flap', k: 0.447 } },   // 很會躲
   cupwing: { r: 5, run: 4, fly: { speed: 5, hz: 16, style: 'flap', k: 0.254 } },
   shortwing: { r: 7, run: 4, fly: { speed: 6, hz: 14, style: 'flap', k: 0.290 } },   // 翅膀短，不太愛飛
+  // 2026-11-15 溪鳥：river＝貼著溪面（0.5～0.9 m）沿河道飛走、再沿河道飛回來，不飛上樹
+  dipper: { r: 5, river: true, fly: { speed: 9, hz: 14, style: 'flap', k: 0.5 } },
+  forktail: { r: 4, river: true, fly: { speed: 7, hz: 15, style: 'bound', k: 0.34 } },
 }
 // 飛行模型（存在才用；還沒做好的先借翠鳥的飛行模型，大小照停棲模型的身高換算）
 const FLY_NAME = (id) => `${id}-fly-rig`
@@ -263,8 +266,24 @@ export function createFlight(world, player) {
     // 找不到：往上飛
     return new THREE.CubicBezierCurve3(S.clone(), S.clone().add(V(0, 3, 0)), S.clone().add(V(0, 9, 0)), S.clone().add(V(0, 12, 0)))
   }
+  // 2026-11-15 溪鳥（河烏、小剪尾）：沿著 ALP_RIVER 往背離玩家的方向貼著水面飛 18～26 m，跟著河道轉彎；回程沿同一條路倒回來
+  const riverPt = (s, h) => {
+    const R = ALP_RIVER, i = clamp(R.S.findIndex((v) => v > s) - 1, 0, R.length - 2), t = clamp((s - R.S[i]) / (R.S[i + 1] - R.S[i]), 0, 1)
+    return V(lerp(R[i][0], R[i + 1][0], t), R.water(s) + h, lerp(R[i][1], R[i + 1][1], t))
+  }
+  function riverOut(S, away) {
+    const R = ALP_RIVER, s0 = R.sAt(S.x, S.z), tg = riverPt(s0 + 1, 0).sub(riverPt(s0 - 1, 0))
+    let dir = tg.x * away.x + tg.z * away.z >= 0 ? 1 : -1
+    const L = rnd(18, 26)
+    if (s0 + dir * L > R.len - 6 || s0 + dir * L < 2) dir = -dir
+    const pts = [S.clone()]
+    for (let d = 3; d <= L; d += 3) pts.push(riverPt(s0 + dir * d, 0.55 + 0.35 * Math.sin(d * 0.4)))
+    const curve = new THREE.CatmullRomCurve3(pts); curve.v3 = pts.at(-1).clone(); curve.river = pts
+    return curve
+  }
   // 回家：從避難點飛回來，最後從斜上方、正前方滑進原本的位置
-  function inbound(F, S, faceH) {
+  function inbound(F, S, faceH, out) {
+    if (out?.river) { const pts = out.river.slice().reverse(); pts[pts.length - 1] = S.clone(); const c = new THREE.CatmullRomCurve3(pts); c.v3 = pts.at(-1); c.river = out.river; return c }
     const fwd = V(Math.sin(faceH), 0, Math.cos(faceH))
     const dir = S.clone().sub(F).setY(0).normalize()
     // 從鳥原本面對的方向的反方向進場（落地後剛好面向原本的方向），但不要從玩家身上穿過去
@@ -288,7 +307,7 @@ export function createFlight(world, player) {
         // 2026-11-13 Pass 1D：岩壁上的鳥（def.flyAway）照岩面朝外的方向飛出去——不然背離玩家的方向可能是往岩壁裡飛（黑雨燕從凹洞橫著穿進岩體）
         const away = u.b.def.flyAway ? V(u.b.def.flyAway[0], 0, u.b.def.flyAway[1]) : s.home.clone().sub(P).setY(0)
         if (away.lengthSq() < 1e-4) away.set(1, 0, 0)
-        s.curve = outbound(s.home, away.normalize(), flock, short)
+        s.curve = u.esc.river ? riverOut(s.home, away.normalize()) : outbound(s.home, away.normalize(), flock, short)
         flock ??= { F: s.curve.v3 }
         s.len = s.curve.getLength(); s.dist = 0; s.t = 0
         s.delay = i === 0 ? 0 : rnd(0.05, 0.45)   // 一群裡第一隻先飛，其他跟著
@@ -336,7 +355,7 @@ export function createFlight(world, player) {
       s.wait -= dt
       const far = world.camera.position.distanceTo(s.home) > u.esc.r * (u.trip ? 1.0 : 1.8)   // 自己出去覓食的（sortie）：玩家在旁邊看也照樣回巢，只要不貼在巢前 5 m 內
       if (s.wait <= 0 && far) {
-        s.curve = inbound(s.curve.v3, s.home, s.faceH); s.len = s.curve.getLength(); s.dist = 0; s.t = 0
+        s.curve = inbound(s.curve.v3, s.home, s.faceH, s.curve); s.len = s.curve.getLength(); s.dist = 0; s.t = 0
         s.mode = 'back'; root.visible = true
       }
       return
@@ -472,9 +491,9 @@ export function createFlight(world, player) {
       _box.getCenter(s.home)
       m.obj.getWorldDirection(_w); s.faceH = Math.atan2(_w.x, _w.z)
       const a = Math.random() * Math.PI * 2
-      const out = outbound(s.home, V(Math.sin(a), 0, Math.cos(a)), flock)
+      const out = u.esc.river ? riverOut(s.home, V(Math.sin(a), 0, Math.cos(a))) : outbound(s.home, V(Math.sin(a), 0, Math.cos(a)), flock)
       flock ??= { F: out.v3 }
-      s.curve = inbound(out.v3, s.home, s.faceH); s.len = s.curve.getLength(); s.dist = 0; s.t = 0
+      s.curve = inbound(out.v3, s.home, s.faceH, out); s.len = s.curve.getLength(); s.dist = 0; s.t = 0
       s.curve.getTangentAt(0, _v); s.head = Math.atan2(_v.x, _v.z)
       s.mode = 'back'; m.obj.visible = false; s.root.visible = true
       s.root.position.copy(out.v3)
