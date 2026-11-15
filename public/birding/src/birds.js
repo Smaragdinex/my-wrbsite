@@ -1873,15 +1873,17 @@ function redstart(env) {
 // 2026-11-15 丑鴨（一對）：在瀑布湖面游，隔一陣子潛下去 4～8 秒再冒出來（維基百科：在湍急的水裡潛水，在水底找水生昆蟲）
 function harlequin(env) {
   return groundGroup(2, 0.9, (avoid) => {
-    const D = { st: 'swim', t: rnd(6, 14) }
+    // 2026-11-15 使用者「丑鴨游一游會掉到湖底」：以前潛水是兩格內整隻往下 0.45 m、湖水清澈 → 看起來像沉到湖底躺著。
+    // 改成真的鴨子潛水：身體往前一翻、頭先鑽下去（0.35 秒），沉到水面下就不畫（在水底找蟲看不到），4～8 秒後從別處冒出來
+    const D = { st: 'swim', t: rnd(6, 14), e: 0 }
     const show = ({ t, dt, root }) => {
-      D.t -= dt
+      D.t -= dt; D.e += dt
       const splash = () => { const p = root.getWorldPosition(V()); ripple(p.x, p.z, 0.6) }
-      if (D.st === 'swim' && D.t < 0) { D.st = 'dive'; D.t = rnd(4, 8); splash() }
-      else if (D.st === 'dive' && D.t < 0) { D.st = 'up'; D.t = 0.8; splash() }
+      if (D.st === 'swim' && D.t < 0) { D.st = 'dive'; D.t = rnd(4, 8); D.e = 0; splash() }
+      else if (D.st === 'dive' && D.t < 0) { D.st = 'up'; D.t = 0.8; D.e = 0; root.visible = true; splash() }
       else if (D.st === 'up' && D.t < 0) { D.st = 'swim'; D.t = rnd(10, 22) }
-      if (D.st === 'dive') return { jump: -0.45, lean: 0.5, neck: 0.4, head: -0.3, tail: -0.2, rate: 9 }
-      if (D.st === 'up') return { wing: 0.4 * Math.max(0, Math.sin(t * 36)) * D.t, jump: 0 }
+      if (D.st === 'dive') { root.visible = D.e < 0.45; return { jump: -0.3 * ss(D.e, 0.05, 0.4), lean: 1.1 * ss(D.e, 0, 0.25), neck: 0.6, head: -0.5, tail: 0.4, rate: 30 } }
+      if (D.st === 'up') return { wing: 0.4 * Math.max(0, Math.sin(t * 36)) * D.t, jump: -0.3 * (1 - ss(D.e, 0, 0.35)), rate: 30 }
       return null
     }
     return groundTripo(env, { name: 'harlequin-rig', H: 0.32, h0: 0.677, ...TRIPO, swim: true, bill: 0.1, bob: 0.025, show,
