@@ -786,7 +786,7 @@ function eastShape(X, Z, h) {
   if (rh > r) r = lerp(r, rh, smoothstep(246.5, 250.5, X))   // 平台（mesh）到 x 250 為止：地形在平台底下才升上來，接縫在 x 250，不會跟平台面疊在一起閃
   // 湧泉的小岩丘（2026-11-10 ChatGPT Emerald Pool／Silver Apron）：瀑布頂是全區最高點，水要有更高的地方來 → 平台東北角後面一顆 79 m 的圓頂花崗岩，
   // 泉水從頂上冒出、沿西側光滑的岩板（Silver Apron）滑到平台上（yosemite.js 畫水）
-  { const [sx, sz] = EAST.spring, d = Math.hypot(X - sx, Z - sz); if (d < 8) { const k = 79.2 - 4.6 * (d / 6) ** 2; if (k > r) r = lerp(r, k, smoothstep(246.5, 250.5, X)) } }
+  if (false) { const [sx, sz] = EAST.spring, d = Math.hypot(X - sx, Z - sz); if (d < 8) {   /* 2026-11-15 使用者：山頂的舊溪流、湧泉都移除 → 給湧泉墊高的小岩丘也拿掉 */ const k = 79.2 - 4.6 * (d / 6) ** 2; if (k > r) r = lerp(r, k, smoothstep(246.5, 250.5, X)) } }
   return r
 }
 function eastShape1(X, Z, h) {

@@ -1531,6 +1531,9 @@ export function buildYosemite(scene, { lib } = {}) {
     const posts = []
     for (let x = 201.4; x < 250; x += 0.9) if (x < 236.4 || x > 243.2) posts.push(V(x, YOSE.topY(x), YOSE.topFront(x) + 0.15))   /* 2026-11-12 新的崖壁步道從 x 237～243 上來 */   // 2026-11-12 前緣整排欄杆，步道上來的地方（x 210～214）留開口
     for (let z = YOSE.topFront(201.4) + 0.15; z < YOSE.edge(201.4) - 2.2; z += 0.9) posts.push(V(201.3, YOSE.topY(201.3), z))   // 西邊（溪那側）
+    // 2026-11-15 使用者（石階往上爬的照片，紅線）「這排 railing 移除」：石階最上段就貼著岩壁頂前緣往上爬，前緣只比石階高 1～2 m，
+    // 這排鐵鍊看起來像石階靠牆那側多一排欄杆 → 前緣底下 3 m 內就是步道的地方不立（掉下去也只是回到石階上）；真的是懸崖的地方照舊
+    { const Tst = YOSE.stairs(); for (let k = posts.length - 1; k >= 0; k--) { const p = posts[k]; for (let i = 0; i < Tst.pts.length; i++) if (p.y - Tst.yy[i] < 3 && p.y - Tst.yy[i] > -0.5 && Math.hypot(Tst.pts[i][0] - p.x, Tst.pts[i][1] - p.z) < 3.2) { posts.splice(k, 1); break } } }
     for (const p of posts) addCollider(p.x, p.z, 0.2, p.y + 1.1, p.y)
     for (let x = 201.2; x < 251; x += 1) addCollider(x, YOSE.edge(x) - 1.9, 0.35, topYm + 3, topYm - 1.5)   // 2026-11-12 加底：沒有底的碰撞體會連岩體裡的隧道步道一起擋住
     // 2026-11-14 使用者「都改鐵鍊」：岩壁頂前緣也是鐵樁＋垂鍊（每隔一根取一根，跨距約 1.8 m）
@@ -1556,10 +1559,9 @@ export function buildYosemite(scene, { lib } = {}) {
         const POOL = { x: 241, z: 120.1, rx: 3.4, rz: 2.0 }   // 2026-11-13 往後 1.5 m、縮小一點（前緣退進來了）
         // 上游：泉→岩板→潭（寬的一片水）；下游：潭→往西的小溪→接到原本的溪中段
         const runs = [
-          { pts: [[spx, spz], [252.5, 120.7], [250.6, 120.2], [248.5, 119.8], [POOL.x + POOL.rx - 0.3, POOL.z + 0.3]], w: [0.5, 1.5], spd: 0.9, a: 0.8 },
+          // 2026-11-15 使用者「山頂那些舊的溪流石頭、椅子涼亭都移除」：湧泉→岩板→翡翠潭、潭往西那條小溪、潭邊一圈大石、主溪兩岸的花崗岩拿掉；只留山頂湖出水那條和流到瀑布口的主溪
           // 2026-11-14 山頂湖的出水小溪（layout.js YOSE.slakeOut）：湖面 → 平台上的溪；水面高度照湖面慢慢降到平台（溝是 yosemite-top.js 的山體挖的）
           { pts: YOSE.slakeOut, w: [0.75, 0.95], spd: 0.75, a: 0.85, gy: (t) => lerpN(YOSE.slakeW() + 0.03, YOSE.topY(205) + 0.07, t) },
-          { pts: [[POOL.x - POOL.rx + 0.3, POOL.z - 0.2], [233, back(233)], [228, back(228)], [222, back(222)], [216, back(216)], [210, back(210)], [205, back(205) - 0.5], [201.2, 101]], w: [0.9, 1.1], spd: 0.45, a: 0.82 },
         ]
         for (const R of runs) {
           const pts = R.pts.map(([x, z]) => V(x, 0, z)), curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), Lr = curve.getLength(), NSr = Math.ceil(Lr / 0.4), P2 = [], U2 = [], I2 = []
@@ -1578,10 +1580,10 @@ export function buildYosemite(scene, { lib } = {}) {
         // Emerald Pool：翡翠綠、很清的深潭（平台是平的挖不下去 → 深色潭面＋亮一點的淺綠邊，四周一圈大石頭）
         const pg = new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2)
         const deep = new THREE.Mesh(pg, new THREE.MeshStandardMaterial({ color: 0x0f4d44, roughness: 0.06, metalness: 0.05, transparent: true, opacity: 0.93 }))
-        deep.scale.set(POOL.rx - 0.5, 1, POOL.rz - 0.4); deep.position.set(POOL.x, YOSE.topY(POOL.x) + 0.09, POOL.z); deep.renderOrder = 3; g.add(deep)
+        deep.scale.set(POOL.rx - 0.5, 1, POOL.rz - 0.4); deep.position.set(POOL.x, YOSE.topY(POOL.x) + 0.09, POOL.z); deep.renderOrder = 3
         const shal = new THREE.Mesh(pg, new THREE.MeshStandardMaterial({ color: 0x3f8a74, roughness: 0.1, transparent: true, opacity: 0.85 }))
-        shal.scale.set(POOL.rx, 1, POOL.rz); shal.position.set(POOL.x, YOSE.topY(POOL.x) + 0.075, POOL.z); shal.renderOrder = 3; g.add(shal)
-        if (lib) {
+        shal.scale.set(POOL.rx, 1, POOL.rz); shal.position.set(POOL.x, YOSE.topY(POOL.x) + 0.075, POOL.z); shal.renderOrder = 3
+        if (false) {
           const names = ['boulder', 'mrock_3', 'mrock_5', 'mrock_8'].filter((n) => lib[n]), list = Object.fromEntries(names.map((n) => [n, []]))
           for (let i = 0; i < 22; i++) {
             const a3 = i / 22 * TAU + rnd() * 0.2, inflow = Math.abs(Math.atan2(Math.sin(a3), Math.cos(a3))) < 0.35, outflow = Math.abs(Math.atan2(Math.sin(a3 - Math.PI), Math.cos(a3 - Math.PI))) < 0.35
@@ -1594,7 +1596,7 @@ export function buildYosemite(scene, { lib } = {}) {
         }
       }
       const bed = new THREE.Mesh(sg.clone(), new THREE.MeshStandardMaterial({ color: 0x3d4f4c, roughness: 0.3, metalness: 0.1 })); bed.position.y = -0.03; g.add(bed)
-      if (lib) {
+      if (false) {
         const names = ['boulder', 'mrock_3', 'mrock_5', 'mrock_8'].filter((n) => lib[n])
         const list = Object.fromEntries(names.map((n) => [n, []]))
         for (let i = 0; i < 46; i++) {
@@ -1622,7 +1624,7 @@ export function buildYosemite(scene, { lib } = {}) {
     PINES.push({ x, z, y, H, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.05 })
   }
   // 2026-11-11 岩壁頂上的休息站（使用者：山頂要有大平地、加休息站；ChatGPT：國家公園那種簡樸的——木造涼亭、長椅、步道指標、解說牌、望遠鏡，不要商業化）
-  {
+  if (false) {   /* 2026-11-15 使用者：涼亭、長椅、指標、解說牌、望遠鏡、垃圾桶都拿掉 */
     const wood = new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 0.85 }), dark = new THREE.MeshStandardMaterial({ color: 0x4b3a2a, roughness: 0.9 })
     const stone = new THREE.MeshStandardMaterial({ color: 0x9a968e, roughness: 0.95 }), metal = new THREE.MeshStandardMaterial({ color: 0x55604f, roughness: 0.6, metalness: 0.25 })
     const panelT = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 320; const x = c.getContext('2d'); x.fillStyle = '#5b3f26'; x.fillRect(0, 0, 512, 320); x.fillStyle = '#efe6cf'; x.fillRect(14, 14, 484, 292)
