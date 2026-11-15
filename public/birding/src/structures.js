@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { t as tr, FONT_SANS } from './i18n.js'
 import {
   TAU, DOME, MTN, POOL, RAMP, DECK, PATHS, clamp, smoothstep, lerp, angDiff,
-  domeRho, domeB, inAlpine, alpineHeight, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear,
+  domeRho, domeB, inAlpine, alpineHeight, terrainHeight, mtnR, rampSample, rampHeights, rampInner, poolQ, addCollider, G, pathClear, pathClearAt,
   CCORR, COAST_ON, gardenRho,
 } from './layout.js'
 import { fbm3, noise3, mulberry32 } from './noise.js'
@@ -1295,6 +1295,7 @@ export function buildRamp(scene) {
       for (const r of [p.ro - 0.3, p.ri + 0.3]) {
         const q = at(s, r)
         if (poolQ(q.x, q.z) < 1.15) continue           // 池子裡不立柱
+        if (pathClearAt(q.x, q.z) < 1.0) continue      // 2026-11-16 使用者（截圖）：步道上不立柱（以前起點附近外圈兩根正好站在花園步道上，走過去被擋）；這一格只剩內圈那根撐托架
         const gy = terrainHeight(q.x, q.z)
         const h = q.y - TH - 0.34 - gy
         if (h < 0.3) continue
