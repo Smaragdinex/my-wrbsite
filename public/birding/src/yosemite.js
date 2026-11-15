@@ -163,11 +163,16 @@ export function buildYosemite(scene, { lib } = {}) {
       const k = T.kind[i], [ax] = T.pts[i - 1], [bx, bz] = T.pts[i]
       if (k === 'gal' && T.kind[i - 1] !== 'alc') {
         if ((x - ax) * (x - bx) > 0.04) continue
-        const t = Math.abs(bx - ax) < 1e-6 ? 0 : Math.max(0, Math.min(1, (x - ax) / (bx - ax))), y = lerpN(T.yy[i - 1], T.yy[i], t), d = lerpN(T.pts[i - 1][1] - YOSE.base(ax), bz - YOSE.base(bx), t)
+        const t = Math.abs(bx - ax) < 1e-6 ? 0 : Math.max(0, Math.min(1, (x - ax) / (bx - ax))), y = lerpN(T.yy[i - 1], T.yy[i], t);
+        let d = lerpN(T.pts[i - 1][1] - YOSE.base(ax), bz - YOSE.base(bx), t)
+        // 2026-11-15 使用者（岩廊西口「這面牆整個位置錯誤」：頭上一片片岩板、一根岩柱）：步道在 x186～189 急轉往崖裡（2 m 內 z 變 4 m），
+        // 一欄 x 只照中線那一點的深度切，步道內側那半邊頭上留著岩板。斜著走的路段：這一欄步道寬度涵蓋到的最深那點都要切到
+        { const az = T.pts[i - 1][1], sz = bz - az, sl = Math.hypot(bx - ax, sz) || 1, tz = Math.abs(sz) / sl
+          if (tz > 0.3) { const w = 0.95 * tz + 0.1; for (let m = 0; m <= 10; m++) { const px = ax + (bx - ax) * m / 10; if (Math.abs(px - x) < w) d = Math.max(d, az + sz * m / 10 - YOSE.base(px)) } } }
         // 2026-11-13 使用者（龍岩窟）：瀑布前後這一段改成有岩頂的廊道（高 3.6 m），不是往上整片挖開的階地——頭上是岩石、水簾在外側落下
         const roofed = x > YOSE.GAL[0] - 0.6 && x < YOSE.GAL[1] + 0.6 && y > YOSE.shelfY() - 1.0   // 只有那兩段岩廊（第 0 段的起點也在這個 x 範圍，但它在下面、不要加頂）
         const ramp = Math.max(0, Math.min(1, Math.max((x - (YOSE.GAL[1] - 2.0)) / 2.6, ((YOSE.GAL[0] + 2.0) - x) / 2.6)))   /* 2026-11-15 使用者「擋住去路的視線」：岩頂在岩廊兩頭一欄就從 3.6 m 跳到全開，相鄰兩欄的頂點接成一大片斜三角，斜斜切過步道 → 最後 2.6 m 岩頂慢慢升高 */
-        out.push({ y0: y - (roofed ? 0.65 : 0.3), y1: roofed ? y + 3.6 + 40 * ramp * ramp : y + 90, depth: d + 1.25 })   // 岩廊多往地板下切 0.35 m：切口轉角那條岩壁的薄邊才會落在石板底下（以前在 x196～198 冒出地板 0.2～0.3 m）
+        out.push({ y0: y - (roofed ? 0.65 : 0.3), y1: roofed ? y + 3.6 + 1.6 * ramp : y + 90, depth: d + 1.25 })   // 岩廊多往地板下切 0.35 m：切口轉角那條岩壁的薄邊才會落在石板底下（以前在 x196～198 冒出地板 0.2～0.3 m）
         for (const b of T.bays ?? []) if (Math.abs(x - b.x) < b.half + 0.25 && Math.abs(y - b.y) < 0.8) out.push({ y0: y - 0.3, y1: y + 3.2, depth: d + 1.25 + b.depth })   // 賞鳥台的凹龕
       } else if (k === 'alc' || (k === 'open' && bz - YOSE.base(bx) > 0.2 && bx > 207.5)) {
         if (Math.abs(x - bx) > 1.5) continue
@@ -178,6 +183,10 @@ export function buildYosemite(scene, { lib } = {}) {
         const d = bz - YOSE.base(bx); if (d + 0.85 > YOSE.rec2(x)) out.push({ y0: T.yy[i] - 0.3, y1: T.yy[i] + 90, depth: d + 0.95 })
       }
     }
+    // 2026-11-15 使用者（岩廊西口一根孤零零的岩柱、上層步道外面一條條碎岩片）：岩廊兩頭上下兩層步道幾乎疊在一起（x186～190 上層只比下層深 0～0.8 m），
+    // 下層的開口往上切（岩頂斜坡 ramp、或露天階地的 +90）會把上層步道底下的岩石整個切掉 → 上層地板懸空、岩壁剩一條條。
+    // 上面那層沒有比較深（深不到 2.2 m：步道半寬＋階地外牆再往裡侵蝕的凹槽最多 1.2 m）的話，下層的切口最高只到上層地板底下 1.5 m（那段變成有岩頂的廊道，上層地板底下留一塊厚岩）
+    for (const s of out) for (const u of out) if (u !== s && u.y0 > s.y0 + 2 && u.y0 < s.y1 && u.depth < s.depth + 2.2) s.y1 = Math.min(s.y1, Math.max(s.y0 + 3.6, u.y0 - 1.5))
     return out
   }
   // 隧道口：岩壁網格在這幾顆球的範圍內不畫（材質裡 discard），隧道的管子才接得出來
@@ -1409,12 +1418,18 @@ export function buildYosemite(scene, { lib } = {}) {
             const dep = (j) => C3[j].z - YOSE.base(C3[j].x), di = dep(i); let ceil = 1e9; for (let j = 0; j < NP; j++) { const dy = C3[j].y - C3[i].y; if (dy < -0.3 || dy > 14 || dep(j) - di < 1.5 || Math.abs(C3[j].x - base.x) > 2.2) continue; ceil = Math.min(ceil, C3[j].y - 0.3) }   /* 上一層＝更往岩壁裡（深 1.5 m 以上）的那條；折返平台附近兩層幾乎一樣高 → 不貼 */
             // 往上疊到上一層的地板底下（最多三層、約 10 m）；露天、上面沒有步道的地方疊兩層。每層左右錯開一點、高低不一，接縫才不會排成一條線
             const qW = new THREE.Quaternion().setFromAxisAngle(UPv, yaw), top = Math.min(ceil - 0.12, C3[i].y + (ceil < 1e8 ? 10.5 : 6.6))
+            // 2026-11-15 使用者（岩廊西口「這面牆整個位置錯誤」：一根岩柱、頭上一條條碎岩片）：步道在 x186～190 急轉往崖裡，一片 3 m 寬的平板岩牆跟不上轉彎，
+            // 兩頭伸到步道上空（疊三層、側面看就是一根柱子）。岩牆正面左右各點離同一層步道中線不到 1 m → 先縮窄，還是太近就不貼
+            const ax0 = V(-inn.z, 0, inn.x), clr = (hw) => { let m = 9; for (let s2 = -hw; s2 <= hw + 1e-6; s2 += hw / 4) { const px = base.x + ax0.x * s2, pz = base.z + ax0.z * s2
+                for (let j = 1; j < NP; j++) { if (Math.abs(C3[j].y - C3[i].y) > 2.2 || Math.abs(C3[j - 1].y - C3[i].y) > 2.2) continue
+                  const qx = C3[j - 1].x, qz = C3[j - 1].z, dx = C3[j].x - qx, dz = C3[j].z - qz, l2 = dx * dx + dz * dz || 1e-6, t = Math.max(0, Math.min(1, ((px - qx) * dx + (pz - qz) * dz) / l2)); m = Math.min(m, Math.hypot(px - qx - dx * t, pz - qz - dz * t)) } } return m }
+            const wsc = clr(2.1) > 1.0 ? 1 : clr(1.2) > 1.0 ? 0.55 : 0; if (!wsc) continue
             let y0w = C3[i].y - 0.6   // 2026-11-14 使用者「石階邊也偏高」：牆最底下那層岩層往外凸 0.1～0.35 m，以前從步道下 0.25 m 起疊，看起來像石階靠牆那邊多一道高起來的邊 → 埋深一點
             for (let c = 0; c < 3 && y0w < top - 1.0; c++) {
               const sy = Math.min(0.95 + 0.12 * hsh(i * 2.3 + c * 5.1), (top - y0w) / 3.6)
               if (sy < 0.3) break
               const sh = c ? (hsh(i * 7.7 + c) - 0.5) * 1.2 : 0, ax = V(-inn.z, 0, inn.x)
-              put(names[(k++ + c) % names.length], m4.compose(V(base.x + ax.x * sh, y0w, base.z + ax.z * sh + (c ? 0.03 * c : 0)), qW, V(1 + 0.04 * c, sy, 1)))
+              put(names[(k++ + c) % names.length], m4.compose(V(base.x + ax.x * sh * wsc, y0w, base.z + ax.z * sh * wsc + (c ? 0.03 * c : 0)), qW, V((1 + 0.04 * c) * wsc, sy, 1)))
               // 概念圖 1、3：頭頂 2.8～3.2 m 偶爾一道往外伸的大岩簷（上面至少還要有 1 m 才放，不然會頂到上一層的地板）
               if (!c && ovh.length && hsh(i * 5.3) < 0.4 && top - (y0w + 3.6 * sy) > 1.0) put(ovh[Math.floor(hsh(i * 9.7) * ovh.length) % ovh.length], m4.compose(V(base.x, C3[i].y + 2.85 + 0.3 * hsh(i * 1.9), base.z + 0.02), qW, V(0.8 + 0.3 * hsh(i * 4.1), 1, 0.9)))
               // 概念圖 1、3：蕨類長在潮濕的縫——牆腳、第一層岩層的頂（岩架）；越靠瀑布越多
