@@ -163,3 +163,20 @@ export function scorePhoto(found, ex = {}) {
   if (same > 1) notes.push(tr('同一張拍到 {n} 隻', { n: same }))
   return { score, price, subject: s, notes }
 }
+
+// 2026-11-16 使用者：相機行賣照片的卡片要看得出「為什麼是這個分數」（參考寶可夢隨樂拍的分項評分）。
+// 用照片存下來的主角量測值（area／sharp／visible／inside／cx,cy／act）重算各分項 0～1，給 shop.js 畫小長條；不影響分數本身
+export function breakdown(p) {
+  const s = p?.subject; if (!s) return null
+  const size = THREE.MathUtils.smoothstep(s.area ?? 0, 0.004, 0.09) * (1 - 0.35 * THREE.MathUtils.smoothstep(s.area ?? 0, 0.45, 0.8))
+  const comp = (0.4 + 0.6 * (s.inside ?? 1)) * (1 - 0.25 * Math.min(1, Math.hypot(s.cx ?? 0, s.cy ?? 0)))
+  const [mult, label] = ACTION[s.act] ?? [1, '']
+  return { rows: [[tr('大小'), size], [tr('清晰'), s.focusSharp ?? s.sharp ?? 0], [tr('沒被擋'), s.visible ?? 0], [tr('構圖'), comp]], moment: mult > 1.12 && label ? { label, mult } : null }
+}
+// 分數 → 收購的成數（畫在卡片上：「80 分 → 五成價」）
+export function tierLabel(score) {
+  if (score > 100) return tr('超過正常價 +{n}%', { n: Math.round((score - 100) * 5) })
+  if (score >= 100) return tr('正常價')
+  const k = TIERS.find(([s]) => score >= s)?.[1]
+  return k ? tr('正常價的 {n}%', { n: Math.round(k * 100) }) : tr('不收')
+}

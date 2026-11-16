@@ -11,17 +11,26 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 export function createAppraisal({ keeper, camera, sellOne, onChange, onWatch, toast }) {
   const el = document.createElement('div'); el.className = 'appraise-ui'; el.hidden = true
   document.body.appendChild(el)
-  const st = { running: false, watching: false, done: false, list: [], i: 0, total: 0, bonus: 0, hits: 0, n: 0, last: null }
+  const st = { running: false, watching: false, framing: false, done: false, list: [], i: 0, total: 0, bonus: 0, hits: 0, n: 0, last: null }
   const view = { p: new THREE.Vector3(), t: new THREE.Vector3() }
   const saved = { p: new THREE.Vector3(), q: new THREE.Quaternion() }
 
-  function setView() {
+  function setView(side = false) {
     // 櫃台前、老闆正前方 2 m、眼睛高 1.55 m，看著他胸口到臉之間
     const m = keeper.model; m.updateWorldMatrix(true, false)
     const o = m.getWorldPosition(new THREE.Vector3()), f = m.getWorldDirection(new THREE.Vector3()).setY(0).normalize()
     const r = new THREE.Vector3(f.z, 0, -f.x)
     view.p.copy(o).addScaledVector(f, 1.95).addScaledVector(r, -0.3); view.p.y = o.y + 1.72   // 稍微偏左（右邊有一台螢幕會擋到）、高一點看得到櫃台上攤開的照片
     view.t.copy(o).addScaledVector(f, 0.45).addScaledVector(r, -0.1); view.t.y = o.y + 1.3
+    // 2026-11-16 跟老闆買賣（shop.js 面板靠右）：退後一點、往右看，老闆留在畫面左邊三分之一
+    if (side) { view.p.addScaledVector(f, 0.5); view.p.y = o.y + 1.62; view.t.addScaledVector(r, 0.95); view.t.y = o.y + 1.35 }
+  }
+  // 打開相機行面板時：鏡頭轉向老闆（玩家的鏡頭先存起來，關掉面板再還回去）
+  function frame(on) {
+    if (on === st.framing || st.watching) return
+    st.framing = on
+    if (on) { saved.p.copy(camera.position); saved.q.copy(camera.quaternion); setView(true) }
+    else { camera.position.copy(saved.p); camera.quaternion.copy(saved.q); camera.updateMatrixWorld() }
   }
   function render() {
     const cur = st.list[Math.min(st.i, st.list.length - 1)], L = st.last
@@ -75,7 +84,7 @@ export function createAppraisal({ keeper, camera, sellOne, onChange, onWatch, to
   }
   addEventListener('keydown', (e) => { if (st.watching && (e.code === 'KeyE' || e.code === 'Escape')) { e.preventDefault(); e.stopImmediatePropagation(); leave() } }, true)
   // 每格：定格鏡頭（玩家的鏡頭不動）
-  function tick() { if (st.watching) { camera.position.copy(view.p); camera.lookAt(view.t); camera.updateMatrixWorld() } }
+  function tick() { if (st.watching || st.framing) { camera.position.copy(view.p); camera.lookAt(view.t); camera.updateMatrixWorld() } }
   function rewatch() { if (st.running) watch(true) }
-  return { start, leave, rewatch, tick, get watching() { return st.watching }, get running() { return st.running } }
+  return { start, leave, rewatch, tick, frame, get framing() { return st.framing }, get watching() { return st.watching }, get running() { return st.running } }
 }

@@ -414,3 +414,65 @@ svg.controls image { mix-blend-mode: multiply; }
 .ap-key { flex: none; font-size: 13px; color: #c8c2b2; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 999px; padding: 6px 12px; }
 .ap-bar.done h3 { color: #f3cf6a; }
 @media (max-width: 640px) { .ap-pic { width: 96px; } .ap-key { display: none; } }
+
+/* ===== 2026-11-16 相機行面板改版：靠右的野外筆記本，老闆留在畫面左邊（shop.js .shop-note）===== */
+.sheet.shop-note { background: linear-gradient(90deg, rgba(10, 16, 12, 0) 38%, rgba(10, 16, 12, 0.5) 100%); place-items: stretch end; }
+.shop-note .sheet-in { --ink: #2b2418; --ink2: #6b5d45; --rule: #d9c9a5; --kraft: #b98f5a;
+  width: min(580px, 46vw); max-height: none; height: calc(100vh - 48px); margin: 24px 28px 24px 0; box-sizing: border-box; padding: 22px 26px 18px;
+  color: var(--ink); border-radius: 4px 10px 10px 4px; border: 1px solid #cdb98f;
+  background: repeating-linear-gradient(180deg, rgba(0, 0, 0, 0) 0 31px, rgba(140, 115, 70, 0.13) 31px 32px), #f3ead4;
+  box-shadow: -2px 0 0 #e4d6b4, -5px 0 0 #d7c59c, 0 18px 44px rgba(0, 0, 0, 0.45);
+  animation: note-in 0.28s cubic-bezier(.2, .8, .2, 1); }
+.shop-note .sheet-in.talk-in { height: auto; align-self: center; }
+@keyframes note-in { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }
+/* 頂端一條紙膠帶 */
+.shop-note .sheet-in::before { content: ''; position: absolute; top: -10px; left: 50%; width: 120px; height: 24px; margin-left: -60px; background: rgba(214, 196, 150, 0.85); transform: rotate(-2deg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.shop-note header { background: none; position: static; padding: 0 0 8px; border-bottom: 2px solid var(--ink); margin-bottom: 12px; }
+.shop-note header h2 { font-family: "Songti TC", "Noto Serif TC", serif; font-weight: 900; letter-spacing: 0.08em; font-size: 26px; }
+.shop-note header .back { all: unset; cursor: pointer; margin-left: auto; font-family: "Courier New", monospace; font-weight: 700; color: var(--ink2); padding: 4px 8px; border-radius: 6px; }
+.shop-note header .back:hover { background: rgba(0, 0, 0, 0.06); color: var(--ink); }
+.shop-note header .x { background: rgba(60, 45, 20, 0.08); color: var(--ink); }
+/* 委託：像夾在筆記本裡的便條 */
+.shop-note .comms { background: #fffaf0; border: 1px solid var(--rule); border-radius: 3px; box-shadow: 2px 3px 0 rgba(120, 95, 50, 0.15); margin: 0 0 12px; }
+.shop-note .comms h3 { font-family: "Songti TC", "Noto Serif TC", serif; }
+.shop-note .comm .have { display: inline-block; margin-left: 8px; font-size: 12px; font-weight: 700; color: #2f6b3b; background: #dfeedd; border-radius: 4px; padding: 0 6px; }
+.shop-note .main-prog { height: 5px; background: #eadfc6; border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.shop-note .main-prog i { display: block; height: 100%; background: #9c3b22; }
+/* 收購價色帶 */
+.shop-note .band { display: flex; align-items: stretch; gap: 3px; margin: 0 0 14px; font-family: "Courier New", monospace; font-size: 12px; }
+.shop-note .band em { font-style: normal; font-weight: 700; color: var(--ink2); align-self: center; margin-right: 6px; font-family: inherit; }
+.shop-note .band span { flex: 1; text-align: center; padding: 3px 0; border-radius: 3px; color: #fff; line-height: 1.25; }
+.shop-note .band span b { display: block; font-size: 14px; }
+.shop-note .band span:nth-of-type(1) { background: #b9a684; } .shop-note .band span:nth-of-type(2) { background: #a99260; }
+.shop-note .band span:nth-of-type(3) { background: #8d8a4a; } .shop-note .band span:nth-of-type(4) { background: #5f7f45; }
+.shop-note .band span:nth-of-type(5) { background: #2f6b3b; }
+/* 照片：拍立得＋紅色分數章＋分項長條 */
+.shop-note .pcs { display: grid; grid-template-columns: 1fr; gap: 16px; padding: 4px 2px 6px; }
+.shop-note .pc { margin: 0; display: grid; grid-template-columns: 46% 1fr; gap: 14px; align-items: start; background: #fff; padding: 9px; border-radius: 2px; box-shadow: 0 3px 10px rgba(60, 40, 10, 0.22); }
+.shop-note .pc.l { transform: rotate(-0.6deg); } .shop-note .pc.r { transform: rotate(0.5deg); }
+.shop-note .pc-pic { position: relative; }
+.shop-note .pc-pic img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: block; }
+.shop-note .stamp { position: absolute; right: -8px; bottom: -10px; width: 58px; height: 58px; border-radius: 50%; display: grid; place-content: center; text-align: center;
+  font: 900 22px/1 "Courier New", monospace; color: #b3261e; border: 3px double #b3261e; background: rgba(255, 250, 240, 0.85); transform: rotate(-12deg); }
+.shop-note .stamp small { font-size: 11px; font-weight: 700; }
+.shop-note .stamp.gold { color: #9a6b00; border-color: #9a6b00; }
+.shop-note figcaption { display: block; padding: 0; font-size: 13px; }
+.shop-note .pc-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.shop-note .pc-name { font-family: "Songti TC", "Noto Serif TC", serif; font-size: 18px; font-weight: 900; }
+.shop-note .pc-price { font: 700 17px "Courier New", monospace; color: #2f6b3b; }
+.shop-note .bars { display: grid; gap: 4px; margin-bottom: 6px; }
+.shop-note .bar { display: grid; grid-template-columns: 4em 1fr; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
+.shop-note .bar i { height: 7px; background: #efe6d2; border-radius: 4px; overflow: hidden; }
+.shop-note .bar i b { display: block; height: 100%; background: linear-gradient(90deg, #8d8a4a, #2f6b3b); border-radius: 4px; }
+.shop-note .moment { display: inline-block; font-size: 12px; font-weight: 700; color: #8a5a12; background: #fbecc8; border-radius: 4px; padding: 1px 6px; margin-bottom: 4px; }
+.shop-note .tier { font-family: "Courier New", monospace; font-size: 12px; color: var(--ink2); }
+.shop-note .pc-comm { margin-top: 5px; font-size: 12px; font-weight: 700; color: #9c3b22; }
+.shop-note .sell-all { position: sticky; bottom: -18px; margin: 14px -26px -18px; padding: 12px 26px 16px; background: linear-gradient(180deg, rgba(243, 234, 212, 0), #f3ead4 30%); }
+.shop-note .sell-btn { background: #2f6b3b; }
+.shop-note .talk-btn { background: #fffaf0; border: 1px solid var(--rule); box-shadow: 2px 3px 0 rgba(120, 95, 50, 0.15); }
+.shop-note .talk-btn b { font-family: "Songti TC", "Noto Serif TC", serif; }
+@media (max-width: 820px) {
+  .sheet.shop-note { place-items: stretch; background: rgba(10, 16, 12, 0.45); }
+  .shop-note .sheet-in { width: auto; margin: 12px; height: calc(100vh - 24px); }
+  .shop-note .pc { grid-template-columns: 1fr; }
+}

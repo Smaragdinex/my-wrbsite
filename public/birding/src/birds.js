@@ -1989,7 +1989,7 @@ function burrowowl(env) {
 // 4～9 秒後從別處冒出來抖一抖；不時停下來理毛（頭轉到背上、翅膀微微抬起）
 function diveDuck(env, name, H, h0, n, focusY) {
   return groundGroup(n, 1.0, (avoid) => {
-    const D = { st: 'swim', t: rnd(5, 12), e: 0 }
+    const D = { st: 'swim', t: rnd(5, 12), e: 0 }; (globalThis.__diveDucks ??= []).push(D)   // 錄影腳本用來控制潛水時機
     const show = ({ t, dt, root, w }) => {
       D.t -= dt; D.e += dt
       const splash = () => { const p = root.getWorldPosition(V()); ripple(p.x, p.z, 0.6) }
@@ -2034,7 +2034,7 @@ function cegret(env) {
 function pelican(env) {
   const S = { ph: 'drift', next: rnd(12, 25), t: -1, dips: 0, c: null, dir: 0 }
   let idx = 0
-  return groundGroup(5, 2.2, (avoid) => {
+  const G = groundGroup(5, 2.2, (avoid) => {
     const me = idx++
     const show = ({ t, w }) => {
       if (S.t !== t) {   // 每格只推進一次（五隻共用）
@@ -2059,6 +2059,8 @@ function pelican(env) {
       walk: { radius: 7, speed: 0.22, turn: 1.2, avoid: swimAvoid(env, avoid) }, stride: 0.2, swingT: 0.45, lift: 0, knee: [0.6, 1.2], focusY: 0.5,
       acts: { walk: [4, 99, 99], look: [2, 2, 4], stand: [2, 2, 4], turn: [1, 99, 99] } })
   })
+  G.coop = S   // 錄影腳本用：把 S.next 設 0 就馬上開始合作捕魚
+  return G
 }
 // 2026-11-16 鸕鷀：站在南邊新湖裡一顆露出水面的石頭上，張開翅膀曬乾（模型本身就是張翅的姿勢；維基百科：羽毛不太防水，潛水後要張翅晾乾）；
 // 不時拍一拍翅膀、轉頭；隔一陣子飛出去在湖上繞一圈（ESCAPE.cormorant.sortie）再回到石頭上
