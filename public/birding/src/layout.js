@@ -866,6 +866,28 @@ function eastShape0(X, Z, h) {
   return h
 }
 // 2026-11-16 稀樹草原：LOBES.sav 裡面是 11～14 m 的緩坡平原（幾道很淺的起伏、一兩處低窪），東北角一座花崗岩丘（kopje，高約 7 m）
+// 2026-11-17 使用者：「用一堆紅杉木擋住山區跟其他地區，這樣非洲應該可以提升 FPS」（開放世界的隱藏式載入：狹窄步道、轉彎、一道林牆）
+// 非洲西側一道紅杉屏障（giants.js 種樹、occlude.js 拿來算遮擋）：南段從台地南緣往東走到柵欄外，北段從步道緩坡頂沿台地邊緣往北、
+// 再貼著西北柵欄外面繞到北邊。步道（緩坡頂 302,79）從兩段中間的缺口穿過去，緩坡頂往南轉彎，從草原看上去只看得到林子
+export const AF_WALL = [
+  [[303, 63], [320, 59], [345, 56], [370, 54], [395, 52], [420, 56], [455, 60]],
+  [[311, 95], [313, 112], [318, 128], [326, 145], [330, 160], [340, 180], [349, 200], [361, 220], [381, 240], [412, 257], [440, 267]],
+]
+// 屏障底下堆一道長林山脊（高 AF_RIDGE.h、頂寬約 16 m、兩側 45 m 內接回原地形；第一版 14 m 太矮，省不到）：林牆下半段只有樹幹、有縫，
+// 從草原看過去會從樹幹之間看到後面的山坡 → 用土坡擋住下半段（開放世界常用：地形本身就是最好的遮擋物）。
+// 步道兩側 12～30 m 慢慢降回原地形（步道從山脊的缺口＝山口穿過）
+export const AF_RIDGE = { h: 24, w0: 8, w1: 45 }
+let _afGrass = null
+export function afRidgeAdd(x, z) {
+  if (x < 270 || x > 490 || z < 20 || z > 305) return 0
+  let d = 1e9
+  for (const L of AF_WALL) d = Math.min(d, _segD(x, z, L))
+  if (d >= AF_RIDGE.w1) return 0
+  _afGrass ??= ALP_SPURS.find((q) => q.name === 'grass').pts
+  const tr = smoothstep(12, 30, _segD(x, z, _afGrass))
+  const n = 0.85 + 0.3 * fbm2(x * 0.03 + 4.1, z * 0.03 - 2.7, 3)   // 稜線高高低低，不是一條直線
+  return AF_RIDGE.h * n * (1 - smoothstep(AF_RIDGE.w0, AF_RIDGE.w1, d)) * tr
+}
 export const SAV = { y: 11.6, kopje: { x: 398, z: 186, r: 15, h: 7 } }   // 2026-11-17 岩丘搬到乾草原的北邊（原本的位置變成三角洲）
 // 2026-11-17 奧卡萬戈三角洲（使用者給的空拍照：彎彎的河道、季節性淹水的綠草甸、樹島、睡蓮池跟乾草原交錯）。
 // 靠紅杉林那一側（西南）維持乾的稀樹草原；往東北越來越濕。DELTA.W＝水面高
@@ -933,6 +955,7 @@ function alpBase(X, Z) {
   h = eastShape(X, Z, h * AHS); h /= AHS   // 2026-11-10 東部擴建：濕地盆地、草原（世界座標、公尺）
   h = h * AHS
   h = savShape(X, Z, h)   // 2026-11-16 東北稀樹草原：緩緩起伏的平原＋一座岩丘
+  h += afRidgeAdd(X, Z)   // 2026-11-17 非洲西側紅杉屏障底下的山脊
   // 2026-11-08：以前 min(…, domeY - 9)（不能頂到玻璃）——圓頂拿掉之後，這個上限在邊界附近把地形壓成一面懸崖；邊界外的草地（outside.js）會從邊界的高度慢慢降下去
   return lerp(gardenEdgeH(X, Z), Math.max(lobeRho(LOBES.wet, X, Z) < 1.4 || lobeRho(LOBES.lagoon, X, Z) < 1.4 ? -3 : 0, h), smoothstep(1.0, 1.25, gardenRho(X, Z)))   // 濕地那塊可以低於 0（水面 -0.25）          // 花園那側從種植坡的高度接起，往裡面慢慢變成山的形狀
 }

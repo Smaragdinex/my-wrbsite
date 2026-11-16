@@ -4,12 +4,13 @@
 // 樹冠縫隙有一束束斜射的陽光（跟著太陽方向和時間變，晚上沒有）。
 // 全部用 InstancedMesh：一份樹幹、一份樹冠、一份光束，記憶體只多一點（學校電腦）。
 import * as THREE from 'three'
-import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, ALP_POND, ALP_SPURS, CABIN, CAMP, inAlpine, alpineHeight, alpineTrailDist, alpineStreamDist, domeY, domeRho, addCollider, SACRED } from './layout.js'
+import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, ALP_POND, ALP_SPURS, CABIN, CAMP, AF_WALL, inAlpine, alpineHeight, alpineTrailDist, alpineStreamDist, domeY, domeRho, addCollider, SACRED } from './layout.js'
 import { mulberry32 } from './noise.js'
 import { coniferGeo, needleMaterial } from './alpine.js'
 import { lodRegister } from './lod.js'
 import { barkMaterial } from './bark.js'
 import { scatter } from './plants.js'
+import { occSetWall } from './occlude.js'
 
 const TAU = Math.PI * 2
 // 巨木林的範圍：步道第 3～9 點附近（入口上坡之後、過吊橋、到南坡）
@@ -169,8 +170,54 @@ function trunkGeo() {
   return g
 }
 
-export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
-  const spots = giantSpots(avoid)
+// ---------- 2026-11-17 非洲西側的紅杉屏障（layout.js AF_WALL） ----------
+// 使用者：「非洲那邊往後看，應該只會看到紅杉木山林，擋住其他地區像山區」。真的紅杉（北美海岸紅杉）長到 90～115 m，這裡 64～88 m：
+// 山脊上兩排交錯的巨木（間距約 12 m）＋中間一排年輕紅杉（24～34 m，枝葉從 3 m 就開始）。
+// 遮擋主要靠底下的山脊（layout.js AF_RIDGE，土坡完全不透光）；occlude.js 用牆頂（地面＋BAR_EFF）、山脊頂算。
+// （第一版樹冠裡塞深色實心圓錐當芯，鳥瞰看得到一根根黑圓錐，拿掉）
+// groundAt：柵欄外的地面高度（world.js 從地面網格往下打射線）
+export const BAR_EFF = 40
+export function barrierSpots(groundAt, others = []) {
+  const t0 = performance.now()
+  const rnd = mulberry32(2024), list = [], wall = []
+  const gy = (x, z) => domeRho(x, z) < 0.955 && inAlpine(x, z, 0) ? alpineHeight(x, z) : groundAt(x, z)
+  const free = (x, z, D) => {
+    const rho = domeRho(x, z)
+    if (rho > 0.94 && rho < 0.99) return false   // 柵欄那一圈
+    if (rho < 0.955 && (alpineTrailDist(x, z) < 4 + D * 0.7 || alpineStreamDist(x, z) < 2.5 + D * 0.5)) return false
+    if (others.some((g) => Math.hypot(g.x - x, g.z - z) < (g.D + D) * 0.6 + 1.5)) return false
+    return !list.some((g) => Math.hypot(g.x - x, g.z - z) < (g.D + D) * 0.6 + 1.2)
+  }
+  const rows = [[-6, 12, 'big', 0], [6, 12, 'big', 0.5], [0, 14, 'young', 0.25]]   // 第一版三排巨木＋兩排小樹（151 棵、290 萬面）太重；遮擋主要靠山脊的土坡
+  for (const line of AF_WALL) {
+    const segs = line.slice(0, -1).map((a, i) => [a, line[i + 1]]), lens = segs.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1])), tot = lens.reduce((p, q) => p + q, 0)
+    const at = (u) => { let i = 0; while (i < segs.length - 1 && u > lens[i]) { u -= lens[i]; i++ } const [[ax, az], [bx, bz]] = segs[i], t = Math.min(1, u / lens[i]), L = lens[i]; return [ax + (bx - ax) * t, az + (bz - az) * t, -(bz - az) / L, (bx - ax) / L] }
+    for (const [off, step, kind, ph] of rows) for (let u = step * ph; u <= tot; u += step) {
+      const [px, pz, nx, nz] = at(u), o = off + (rnd() - 0.5) * 3, j = (rnd() - 0.5) * step * 0.4
+      const big = kind === 'big', D = big ? 3 + Math.pow(rnd(), 1.4) * 1.8 : 1.3 + rnd() * 0.7
+      const x = px + nx * o + nz * j, z = pz + nz * o - nx * j   // 往兩側偏 o、沿線前後抖 j
+      if (!free(x, z, D)) continue
+      const y = gy(x, z)
+      list.push({ x, z, y, D, H: big ? 64 + rnd() * 24 : 24 + rnd() * 10, rot: rnd() * TAU, lean: (rnd() - 0.5) * 0.02, bar: big ? 1 : 2 })
+    }
+    // 牆的實心頂：沿線每 4 m 取一點（山口附近山脊高度是曲線，只在轉折點取樣、中間直線內插會高估土坡 → 稜線上的植物被誤剔），
+    // 每點取屏障寬度內、前後 3 m 最低的地面＋BAR_EFF
+    const pts = []
+    for (let u = 0; ; u += 4) {
+      const uu = Math.min(u, tot), [x, z, nx, nz] = at(uu)
+      let lo = 1e9; for (const o of [-10, -5, 0, 5, 10]) for (const w of [-3, 0, 3]) lo = Math.min(lo, gy(x + nx * o + nz * w, z + nz * o - nx * w))
+      pts.push([x, z, lo + BAR_EFF, lo - 0.3])
+      if (uu >= tot) break
+    }
+    wall.push(pts)
+  }
+  occSetWall(wall)
+  globalThis.__barrierMs = performance.now() - t0
+  return list
+}
+
+export function buildGiants(scene, { sun, avoid = [], lib = null, groundAt = null } = {}) {
+  const spots = giantSpots(avoid), all = groundAt ? spots.concat(barrierSpots(groundAt, spots)) : spots
   const g = new THREE.Group(); g.name = 'giantForest'
   if (!spots.length) return { group: g, tick() {}, inside: () => 0 }
   const rnd = mulberry32(99)
@@ -180,21 +227,21 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
   const barkM = barkMaterial('metasequoia_bark', { normal: 1.6, color: [1.55, 1.3, 1.18] })
   const sacredM = barkMaterial('japanese_cedar_bark', { normal: 1.8, color: [1.9, 1.7, 1.55] })
   const tg = trunkGeo()
-  const trunk = new THREE.InstancedMesh(tg, barkM, spots.length)
+  const trunk = new THREE.InstancedMesh(tg, barkM, all.length)
   const sacredT = new THREE.InstancedMesh(tg, sacredM, 1); sacredT.count = 0
   // 樹冠（2026-11-10 改版）：以前是一整個冷杉卡片樹冠放大 1.5 倍，卡片一片好幾公尺、從下面看像幾片大蕨葉。
   // 現在：頂端一根窄窄的樹梢（冷杉），樹冠本體是掛在大枝上的一團團針葉（鐵杉卡片縮小當「枝葉團」，一團 3～6 公尺），一層一層、有縫透光
-  const crownA = new THREE.InstancedMesh(coniferGeo('fir'), needleMaterial(), spots.length)
+  const crownA = new THREE.InstancedMesh(coniferGeo('fir'), needleMaterial(), all.length)
   const col = new THREE.Color(), limbs = [], clumps = []
-  spots.forEach((t, i) => {
+  all.forEach((t, i) => {
     const R = t.D / 2
     q.setFromEuler(e.set(t.lean, t.rot, t.lean * 0.6))
     m4.compose(v.set(t.x, t.y - 0.6, t.z), q, s.set(R, t.H * 0.97, R)); trunk.setMatrixAt(i, m4)
     if (t.sacred) { sacredT.setMatrixAt(0, m4); sacredT.count = 1; m4.makeScale(0, 0, 0); trunk.setMatrixAt(i, m4) }   // 神木用另一種樹皮
     // 大枝：樹冠裡往外斜伸的粗枝（從下面抬頭看得到枝幹，不是一根電線桿插著一團葉子）
-    const nL = 9 + Math.floor(rnd() * 4), cc = new THREE.Color().setHSL(0.3 + (rnd() - 0.5) * 0.05, 0.22, 0.62 + rnd() * 0.15)   // 比一般冷杉暗一點的深綠
+    const nL = t.bar ? 8 : 9 + Math.floor(rnd() * 4), cc = new THREE.Color().setHSL(0.3 + (rnd() - 0.5) * 0.05, 0.22, 0.62 + rnd() * 0.15)   // 比一般冷杉暗一點的深綠
     for (let k = 0; k < nL; k++) {
-      const h = t.H * (0.44 + 0.46 * (k / nL) + rnd() * 0.03), a = k * 2.39 + rnd() * 0.8, up = 0.35 + rnd() * 0.4   // 跟水平的夾角；螺旋排列，不會擠在同一邊
+      const h = t.H * ((t.bar === 2 ? 0.1 : t.bar ? 0.32 : 0.44) + (t.bar === 2 ? 0.8 : t.bar ? 0.6 : 0.46) * (k / nL) + rnd() * 0.03), a = k * 2.39 + rnd() * 0.8, up = 0.35 + rnd() * 0.4   // 跟水平的夾角；螺旋排列，不會擠在同一邊
       const yy = h / t.H, rr = R * 1.6 * (0.5 * (1 - yy) + 0.12 * (1 - yy) ** 2 + 0.06)   // 那個高度樹幹的半徑（跟 trunkGeo 一樣的收細）
       const len = t.H * (0.15 + rnd() * 0.1) * (1.25 - h / t.H), rad = R * (0.08 + rnd() * 0.05) * (1.15 - h / t.H)
       const dir = v.set(Math.cos(a) * Math.cos(up), Math.sin(up), Math.sin(a) * Math.cos(up))
@@ -202,8 +249,8 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
       limbs.push({ p: base, q: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir), s: new THREE.Vector3(rad, len, rad) })
       // 枝葉團：沿著大枝掛 3 團（中段、外段、枝梢），越往上越小
       const sz = (1.25 - yy) * (0.9 + rnd() * 0.5)
-      for (const u of [0.22, 0.6, 0.98]) {   // 從靠近樹幹就開始有葉：不然近看是一根根光禿禿的棍子插在樹幹上
-        const S = (4.2 + rnd() * 3) * sz * (u > 1 ? 0.85 : 1)
+      for (const u of t.bar ? [0.35, 0.9] : [0.22, 0.6, 0.98]) {   // 從靠近樹幹就開始有葉：不然近看是一根根光禿禿的棍子插在樹幹上
+        const S = (4.2 + rnd() * 3) * sz * (u > 1 ? 0.85 : 1) * (t.bar ? 1.4 : 1)
         const cp = base.clone().addScaledVector(dir, len * u).add(new THREE.Vector3((rnd() - 0.5) * 1.2, -S * 0.35 + (rnd() - 0.5), (rnd() - 0.5) * 1.2))
         clumps.push({ p: cp, q: new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.9, rnd() * TAU, (rnd() - 0.5) * 0.9)), s: new THREE.Vector3(S * 1.15, S, S * 1.15), c: cc.clone().offsetHSL(0, 0, (rnd() - 0.5) * 0.08) })
       }
@@ -223,7 +270,25 @@ export function buildGiants(scene, { sun, avoid = [], lib = null } = {}) {
   const crownB = new THREE.InstancedMesh(coniferGeo('hemlock', 8), crownA.material, clumps.length)   // 輕量版（8 層）：一團小，層數少看不出來
   clumps.forEach((c, i) => { m4.compose(c.p, c.q, c.s); crownB.setMatrixAt(i, m4); crownB.setColorAt(i, c.c) })
   for (const m of [trunk, sacredT, limbM, crownA, crownB]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); g.add(m) }
-  lodRegister([trunk], 40); lodRegister([crownA], 40); lodRegister([crownB], 40); lodRegister([limbM], 40)
+  // 2026-11-17 遠處換輕量版（以前全部登記 h 40 → 480 m 外才換＝永遠不換；樹冠是沒索引的卡片，自動減面也跳過 → 紅杉多遠都畫全細節）：
+  // 樹幹 90 m 外自動減面版、樹梢 90 m 外冷杉輕量版、枝葉團 70 m 外只留一半的葉片卡（放大一點補密度；三分之一試過，鳥瞰看得出變稀）
+  const lowOf = (m, geo) => {
+    const lo = new THREE.InstancedMesh(geo, m.material, m.count)
+    lo.instanceMatrix.array.set(m.instanceMatrix.array.subarray(0, m.count * 16))
+    if (m.instanceColor) lo.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(m.instanceColor.array), 3)
+    lo.castShadow = m.castShadow; lo.receiveShadow = m.receiveShadow; lo.count = 0; lo.name = 'giantLow'; g.add(lo); return lo
+  }
+  const thin = (src, keep, sc) => {
+    const q = src.index ? src.toNonIndexed() : src, n = q.attributes.position.count / 3, out = new THREE.BufferGeometry()
+    for (const [k, a] of Object.entries(q.attributes)) {
+      const w = a.itemSize, arr = new a.array.constructor(Math.ceil(n / 2 / keep) * 6 * w); let o = 0
+      for (let t = 0; t < n; t++) if (Math.floor(t / 2) % keep === 0) { arr.set(a.array.subarray(t * 3 * w, t * 3 * w + 3 * w), o); o += 3 * w }
+      out.setAttribute(k, new THREE.BufferAttribute(arr.subarray(0, o), w, a.normalized))
+    }
+    return out.scale(sc, sc, sc)
+  }
+  lodRegister([trunk], 40, [null], { dL: 90 }); lodRegister([crownA], 40, [lowOf(crownA, coniferGeo('fir', 8))], { dL: 90 })
+  lodRegister([crownB], 40, [lowOf(crownB, thin(crownB.geometry, 2, 1.1))], { dL: 70 }); lodRegister([limbM], 40)
 
   // ---------- 神木的柵欄、巨大樹頭、倒木、木棧道 ----------
   const woodM = new THREE.MeshStandardMaterial({ color: 0x7a5a3c, roughness: 0.9 })

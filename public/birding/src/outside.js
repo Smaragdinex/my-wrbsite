@@ -7,7 +7,7 @@
 //   遠山：三層山脊（640、760、880 公尺），自己算空氣透視（不吃場景的霧），顏色跟著日夜
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { TAU, domeRho, inAlpine, alpineHeight, terrainHeight, smoothstep, lerp, LOBES, lobeSweep, DELTA, deltaK } from './layout.js'
+import { TAU, domeRho, inAlpine, alpineHeight, terrainHeight, smoothstep, lerp, LOBES, lobeSweep, DELTA, deltaK, afRidgeAdd } from './layout.js'
 // 2026-11-16 東北稀樹草原外面：草地接成金黃的乾草、樹林帶在那個方向幾乎不長（看出去是一望無際的草原）
 const DCOL = [2.2, 1.35, 1.6]   // 外面的草地貼圖（grassGroundTex，線性約 0.11, 0.21, 0.04）很綠：頂點色要除回去，乘出來才跟園區裡（灰色細節貼圖 × 黃綠頂點色）一樣
 const savOut = (x, z) => smoothstep(2.7, 1.3, lobeSweep(LOBES.sav, x, z))
@@ -96,7 +96,7 @@ export function buildOutside(renderer = null) {
     const n = fbm3(x * 0.006, 0, z * 0.006, 4), n2 = fbm3(x * 0.02 + 5, 0, z * 0.02, 3)
     return smoothstep(15, 220, d) * (4 + 18 * Math.max(0, n + 0.25) + 3 * n2) + smoothstep(3, 25, d) * 0.6 * n2
   }
-  const outY = (i, t, x, z, d) => lerp(lerp(hE[i], hE[(i + 1) % NA], t), 0, smoothstep(0, 40, d)) + hills(x, z, d)
+  const outY = (i, t, x, z, d) => lerp(lerp(hE[i], hE[(i + 1) % NA], t), 0, smoothstep(0, 40, d)) + hills(x, z, d) + afRidgeAdd(x, z)   // 2026-11-17 紅杉屏障的山脊延伸到柵欄外
   {
     const pos = [], col = [], uv = [], idx = [], c = new THREE.Color(), NR = RINGS.length
     for (let i = 0; i < NA; i++) {

@@ -2,7 +2,7 @@
 import './fogzone.js'   // 一定要在任何材質編譯前（改霧的 shader）
 import * as THREE from 'three'
 const _camFwd = new THREE.Vector3(), _camTo = new THREE.Vector3()   // 長鏡頭時遠處鳥要不要動（tick 裡用）
-import { lodUpdate, lodRegister, lodInit, lodAutoRegister, tinyCull } from './lod.js'
+import { lodUpdate, lodRegister, lodInit, lodAutoRegister, tinyCull, lodStats } from './lod.js'
 import { staticBatch } from './batch.js'
 import { createAlpine , loadConiferKit } from './alpine.js'
 import { createHalls } from './halls.js'
@@ -35,6 +35,7 @@ import { buildCamp } from './camp.js'
 import { buildPondLife } from './pondlife.js'
 import { buildYosemite } from './yosemite.js'
 import { buildGiants, giantSpots } from './giants.js'
+import { occUpdate, occObjects, occ } from './occlude.js'
 import { loadWalkwayKit, buildWalkways } from './walkway.js'
 import { buildStreambed, streambedTick } from './streambed.js'
 import { loadWetlandKit, buildWetlandProps } from './wetland.js'
@@ -185,7 +186,42 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const camp = { tick() {} }   // buildCamp(scene)
   const pondLife = buildPondLife(scene, { lib: plantLib })   // 2026-11-10 山下湖：荷花、錦鯉
   const yose = buildYosemite(scene, { lib: plantLib })   // 2026-11-10 帳篷區後面的花崗岩壁、瀑布、西黃松
-  const giants = buildGiants(scene, { sun, avoid: alpAvoid, lib: plantLib })
+  // 2026-11-17 紅杉屏障種到柵欄外：地面高度從外圍地面、山區地形網格往下打射線（取最高的那個面）
+  const rayGround = (() => {
+    // 第一版直接 Raycaster：外圍地面一條 1.7 ms，屏障要查一千多次（載入多 2.2 秒）→ 屏障附近的三角形放進 8 m 格子，查詢只看那一格
+    const tRG = performance.now(), X0 = 255, X1 = 505, Z0 = -5, Z1 = 315, C = 8, NX = Math.ceil((X1 - X0) / C), cells = new Map(), T = []
+    outsideG.updateMatrixWorld(true)
+    outsideG.traverse((m) => { if (m.isMesh && !m.isInstancedMesh && !m.material?.isShaderMaterial && m.name !== 'outRiver' && (m.geometry.attributes.position?.count ?? 0) > 500) T.push(m) })
+    scene.traverse((m) => { if (m.name === 'alpTerrain') { m.updateMatrixWorld(true); T.push(m) } })
+    const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3()
+    for (const m of T) {
+      const P = m.geometry.attributes.position, I = m.geometry.index, n = I ? I.count : P.count
+      const bb = (m.geometry.boundingBox ?? (m.geometry.computeBoundingBox(), m.geometry.boundingBox)).clone().applyMatrix4(m.matrixWorld)
+      if (bb.max.x < X0 || bb.min.x > X1 || bb.max.z < Z0 || bb.min.z > Z1) continue
+      for (let k = 0; k < n; k += 3) {
+        const i0 = I ? I.getX(k) : k, i1 = I ? I.getX(k + 1) : k + 1, i2 = I ? I.getX(k + 2) : k + 2
+        va.fromBufferAttribute(P, i0).applyMatrix4(m.matrixWorld); vb.fromBufferAttribute(P, i1).applyMatrix4(m.matrixWorld); vc.fromBufferAttribute(P, i2).applyMatrix4(m.matrixWorld)
+        const x0 = Math.min(va.x, vb.x, vc.x), x1 = Math.max(va.x, vb.x, vc.x), z0 = Math.min(va.z, vb.z, vc.z), z1 = Math.max(va.z, vb.z, vc.z)
+        if (x1 < X0 || x0 > X1 || z1 < Z0 || z0 > Z1) continue
+        const tri = [va.x, va.y, va.z, vb.x, vb.y, vb.z, vc.x, vc.y, vc.z]
+        for (let cx = Math.max(0, Math.floor((x0 - X0) / C)); cx <= Math.min(NX - 1, Math.floor((x1 - X0) / C)); cx++)
+          for (let cz = Math.max(0, Math.floor((z0 - Z0) / C)); cz <= Math.floor((z1 - Z0) / C); cz++) { const key = cz * NX + cx; let L = cells.get(key); if (!L) cells.set(key, L = []); L.push(tri) }
+      }
+    }
+    globalThis.__rayGroundMs = performance.now() - tRG
+    return (x, z) => {
+      const L = cells.get(Math.floor((z - Z0) / C) * NX + Math.floor((x - X0) / C))
+      let best = -1e9
+      if (L) for (const t of L) {
+        const d = (t[5] - t[8]) * (t[0] - t[6]) + (t[6] - t[3]) * (t[2] - t[8]); if (Math.abs(d) < 1e-9) continue
+        const a = ((t[5] - t[8]) * (x - t[6]) + (t[6] - t[3]) * (z - t[8])) / d, b = ((t[8] - t[2]) * (x - t[6]) + (t[0] - t[6]) * (z - t[8])) / d, c = 1 - a - b
+        if (a < -1e-4 || b < -1e-4 || c < -1e-4) continue
+        best = Math.max(best, a * t[1] + b * t[4] + c * t[7])
+      }
+      return best > -1e8 ? best : alpineHeight(x, z)
+    }
+  })()
+  const giants = buildGiants(scene, { sun, avoid: alpAvoid, lib: plantLib, groundAt: rayGround })
   buildWetlandProps(scene, wetKit, walkKit)   // 2026-11-11 濕地 V3：枯樹、舊木樁、睡蓮（Blender）
   buildCave(scene, caveKit, sumKit, plantLib)   // 2026-11-11 瀑布後面的岩窟步道（岩拱、石板路、青苔）
   buildYoseTop(scene, sumKit, plantLib)   // 2026-11-11 瀑布頂後面的整座山、平台和石階的青苔草叢
@@ -500,11 +536,14 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   // 每格：風、水、鳥（只更新鏡頭附近的，骨架動畫很吃 CPU）、水霧、雲
   const _sd = new THREE.Vector3()
-  let autoLodT = 0, tinyT = 0, zoneT = 0, zoneHidden = false
+  let autoLodT = 0, tinyT = 0, zoneT = 0, zoneHidden = false, occT = 0
+  const _occP = new THREE.Vector3()
   const _bp = new THREE.Vector3()
   function tick(t, dt, { phone = false } = {}) {
     if ((autoLodT += dt) > 2.5) { autoLodT = 0; if (lodAutoRegister(scene)) shadows.dirty(); if (!/nobatch/.test(location.search) && staticBatch(scene)) shadows.dirty() }   // 2026-11-14 FPS：不會動的同材質網格合併（batch.js）   // 2026-11-14 FPS：沒登記 LOD 的石頭、岩廊牆、石橋…自動登記（lod.js）
+    camera.getWorldPosition(_occP); occUpdate(_occP)
     lodUpdate(camera)
+    if ((occT += dt) > 0.1) { occT = 0; if (occObjects(scene)) shadows.dirty() }   // 2026-11-17 紅杉屏障後面整組看不到的東西（occlude.js）
     // 2026-11-15 使用者「瀑布這裡的效能，不減美術、提高 FPS」：
     // 1. 鏡頭在瀑布峽谷裡（石階、凹洞、兩層岩廊）時，四面是岩壁：花園池塘、東邊濕地、濕地道具、草鴞巢那幾組根本看不到（7 個視角逐像素比對，差異跟兩格之間的雜訊一樣）→ 不畫
     // 2. 鳥：畫面上小於 1 像素（照目前鏡頭的視角＝變焦算）就不畫（以前整個公園 70 多隻每格都畫，峽谷裡一格省 0.3～0.9 ms）
@@ -674,8 +713,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   }
   const groundAt = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)   // 相機對焦用（camera.js aim）
   // lodSync：截圖／錄影工具（tools/record/helpers.js still）直接把鏡頭擺到某處就畫，沒跑 tick → LOD、遠處小東西剔除還停在玩家的位置（石橋的石塊會被當成太遠不畫）。畫之前先照這台鏡頭更新一次
-  const lodSync = (cam = camera) => { lodUpdate(cam, true); tinyCull(scene, cam, 0); alpine.terrainLod?.(cam) }
-  return { shadows, cumulus, get climate() { return climateNow }, groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  const lodSync = (cam = camera) => { cam.getWorldPosition(_occP); occUpdate(_occP); occObjects(scene); lodUpdate(cam, true); tinyCull(scene, cam, 0); alpine.terrainLod?.(cam) }
+  return { occ, lodStats, shadows, cumulus, get climate() { return climateNow }, groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */

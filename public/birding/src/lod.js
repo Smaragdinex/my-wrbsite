@@ -7,6 +7,8 @@
 // 距離都照鏡頭變焦換算：長焦望遠看遠處時，遠處的植物在畫面上很大，不能變稀。
 import * as THREE from 'three'
 import { dayLight } from './structures.js'
+import { savK } from './layout.js'
+import { occ, occHidden } from './occlude.js'
 
 const WALK_FOV = 62
 const sets = [], grass = []
@@ -19,7 +21,7 @@ export const lodSetScale = (k) => { if (Math.abs(lodQuality.scale - k) > 1e-3) {
 
 // meshes：共用同一份擺放清單的 InstancedMesh（一種植物的各個材質）；h：這種植物大概多高（公尺）
 // lows：（可選）跟 meshes 一一對應的低面數版本（plants.js 的 lowGeo），沒有的放 null；遠處的株改畫低面數版本
-export function lodRegister(meshes, h, lows = [], { solid = false, auto = false } = {}) {
+export function lodRegister(meshes, h, lows = [], { solid = false, auto = false, dL: dLo = null } = {}) {
   const keep = meshes.map((m, i) => m?.isInstancedMesh && m.count > 0 ? i : -1).filter((i) => i >= 0)
   meshes = keep.map((i) => meshes[i]); lows = keep.map((i) => lows[i] ?? null)
   // 2026-11-14 FPS：自己建的 InstancedMesh（石頭一顆 2.6 萬面、岩廊牆、樹）以前沒有低面數版本，多遠都畫原本的 → 這裡自動用 meshoptimizer 減面補一份（plants.js lowGeo）
@@ -48,7 +50,7 @@ export function lodRegister(meshes, h, lows = [], { solid = false, auto = false 
   if (!solid || auto) for (const m of [...meshes, ...lows]) if (m?.castShadow) m.userData.lodManaged = true   // auto：自動登記的（石頭、岩廊牆）影子也交給替身，轉頭時畫面外的影子不會不見   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
   // 換成低面數的距離：一公尺的蕨類 10 公尺外、越高的越遠才換（長焦時照變焦倍率拉遠）
   // 2026-11-12 使用者：遠景的樹看起來是板狀的低模——「應該像人眼一樣：圓的、看不清楚，但不是低模」→ 4 m 以上的樹換低面數版本的距離拉遠一倍多（20 m 的樹 200 m → 440 m）
-  const dL = h >= 4 ? h * 12 : Math.max(10, h * 10)   // 4 m 以上：120～150 m 外換輕量版（冷杉的輕量版也是立體樹冠，不是板）
+  const dL = dLo ?? (h >= 4 ? h * 12 : Math.max(10, h * 10))   // dLo：自己指定（巨木 h 40 → 480 m 等於永遠不換）   // 4 m 以上：120～150 m 外換輕量版（冷杉的輕量版也是立體樹冠，不是板）
   const S0 = { meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), scl: new Float32Array(n), proxies: null, auto }
   sets.push(S0)
   // 2026-11-12 遠景替身（ChatGPT：3A 遊戲的遠景不是整片烘成一張圖，是遠處的樹換成「多角度替身貼片」）：
@@ -344,7 +346,7 @@ export function lodUpdate(camera, force = false) {
   _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm)
   const zoom = Math.max(1, Math.tan(THREE.MathUtils.degToRad(WALK_FOV / 2)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * lodQuality.scale
   const P = _fr.planes
-  let drawn = 0, lowTris = 0, nearN = 0; lodStats.impDrawn = 0
+  let drawn = 0, lowTris = 0, nearN = 0; lodStats.impDrawn = 0; lodStats.occ = 0
   // 自動登記的：別的程式後來自己改了 count（例如石橋套件載入後用 count = 0 藏起舊橋面）→ 交還給它，不再管（矩陣先還原成原本的全部）
   for (let si = sets.length - 1; si >= 0; si--) { const S = sets[si]; if (!S.auto) continue
     if (!S.meshes.some((m) => m.userData.lodCount !== undefined && m.count !== m.userData.lodCount)) continue
@@ -356,6 +358,8 @@ export function lodUpdate(camera, force = false) {
   for (const S of sets) {
     const zS = S.d1 !== Infinity ? zoom / lodQuality.scale * Math.max(0.8, lodQuality.scale) : zoom, d0 = S.d0 * zS, d1 = S.d1 * zS,   /* 矮植物也一樣：畫質降級最多縮到八成 */ d1s = d1 * d1, dLs = (S.dL * zoom) ** 2
     let k = 0, ki = 0
+    // 2026-11-17 紅杉屏障後面的（occlude.js）：只看非洲以外的株（第一次用到才算哪些是）
+    const OC = occ.on ? (S.occF ??= (() => { const f = new Uint8Array(S.n); for (let i = 0; i < S.n; i++) f[i] = savK(S.pos[i * 3], S.pos[i * 3 + 2]) < 0.05 ? 1 : 0; return f })()) : null
     for (let i = 0; i < S.n; i++) {
       const x = S.pos[i * 3] - p.x, y = S.pos[i * 3 + 1] - p.y, z = S.pos[i * 3 + 2] - p.z
       const dd = x * x + y * y + z * z
@@ -376,6 +380,7 @@ export function lodUpdate(camera, force = false) {
       let out = false
       for (let j = 0; j < 6; j++) { const pl = P[j]; if (pl.normal.x * cx + pl.normal.y * cy + pl.normal.z * cz + pl.constant < -r) { out = true; break } }
       if (out) continue
+      if (OC && OC[i] && occHidden(cx, cy + S.rad[i], cz, cy - S.rad[i])) { lodStats.occ = (lodStats.occ || 0) + 1; continue }
       if (S.imp) { const hpx = (S.imp.sz[i * 4 + 2] - S.imp.sz[i * 4 + 1]) * PXK * zoom; if (hpx * hpx < IMP_PX * IMP_PX * dd) { S.imp.idx[ki++] = i; continue } }
       S.far[k] = dd > dLs ? 1 : 0
       S.scl[k] = Math.min(sc, sc0)
