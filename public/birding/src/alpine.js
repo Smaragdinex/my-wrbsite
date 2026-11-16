@@ -10,7 +10,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'   // 2026-11-14 圓樹冠闊葉樹（取代雀榕）
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { buildSummit } from './summit.js'
-import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, bridgeLanterns, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
+import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_S, savK, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, bridgeLanterns, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { lampLit, LAMP_U } from './walkway.js'
 import { nearGiant, forestK } from './giants.js'
@@ -339,6 +339,16 @@ function buildInterior(lib, avoid = []) {
           const td0 = alpineTrailDist(x, z); g0.lerp(GR_PAL.sand, ss(3.5, 1.2, td0) * 0.8).lerp(GR_PAL.pale, ss(0.72, 0.8, fbm2(x * 0.5 + 4, z * 0.5, 2)) * 0.6)
           g0.multiplyScalar(0.94 + 0.12 * n3)
           c.lerp(g0, (1 - rock * 0.7) * (1 - tr) * ss(-1, 3, -grassSD(x, z) + 2))
+        } else if (ez === 'sav') {
+          // 2026-11-16 非洲稀樹草原：金黃的乾草地為主，大塊（約 30 m）的淺金↔黃褐、中塊的紅土裸地（紅壤）、低窪處一點橄欖綠；步道是紅褐色的沙土
+          const kS = savK(x, z), n1 = fbm2(x * 0.035 + 2, z * 0.035 - 6, 3), n2 = fbm2(x * 0.22 + 9, z * 0.22, 2), n3 = fbm2(x * 2.4, z * 2.4, 1)
+          const g0 = new THREE.Color().setHSL(0.105 + 0.02 * n1, 0.62, 0.29 + 0.06 * n1)
+          g0.lerp(new THREE.Color().setHSL(0.085, 0.5, 0.33), ss(0.55, 0.7, n2) * 0.6)
+          g0.lerp(new THREE.Color().setHSL(0.045, 0.48, 0.3), ss(0.66, 0.78, fbm2(x * 0.09 - 4, z * 0.09 + 1, 2)) * 0.75)
+          g0.lerp(new THREE.Color().setHSL(0.18, 0.3, 0.3), ss(0.36, 0.22, n1) * 0.45)
+          g0.multiplyScalar(0.94 + 0.12 * n3)
+          c.lerp(g0, kS * (1 - rock * 0.6) * (1 - tr))
+          c.lerp(new THREE.Color().setHSL(0.055, 0.42, 0.36 + 0.04 * n3), kS * tr * 0.9)   // 步道：紅褐色沙土
         } else if (ez === 'wet') {
           const wd = wetSD(x, z), y = pos[k * 3 + 1]
           const mud = new THREE.Color().setHSL(0.08 + stone * 0.02, 0.22, 0.13 + stone * 0.05)
@@ -1363,7 +1373,7 @@ function buildInterior(lib, avoid = []) {
     // 雀榕的位置先挑好（低海拔、步道邊 5～12 公尺、彼此隔 16 公尺），針葉樹再避開它周圍 9 公尺：不然雀榕整棵被鐵杉林包住看不到
     for (const f of FIG_FORCED) FIGPOS.push({ x: f.x, z: f.z, H: 9.5, forced: true, ref: f })   // 吃果實的鳥停的那幾棵（birds.js dressFig）
     for (let k = 0; k < 20000 && FIGPOS.length < 18; k++) {
-      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2, td = alpineTrailDist(x, z)
+      const x = ALP_S.X0 + rnd() * (ALP_S.X1 - ALP_S.X0), z = -ALP_S.HZ + rnd() * ALP_S.HZ * 2, td = alpineTrailDist(x, z)
       if (td < 5 || td > 12 || x > 230 || !inAlpine(x, z, 2) || domeRho(x, z) > 0.93 || alpineHeight(x, z) > 18 || eastZone(x, z)) continue   // 2026-11-11 濕地、草原搬到西邊之後雀榕會長進濕地的水裡
       if (alpineStreamDist(x, z) < 3 || bridgeDist(x, z) < 10 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 4) || Math.hypot(x - ALP_POND.x, z - ALP_POND.z) < ALP_POND.r + 3 || nearBird(avoid, x, z, 5, 2.5)) continue
       if (FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < 16) || nearGiant(x, z, 8)) continue
@@ -1376,7 +1386,7 @@ function buildInterior(lib, avoid = []) {
       const core = new THREE.ConeGeometry(kind === 'fir' ? 0.045 : 0.07, 0.66, 9, 1, true).translate(0, 0.52, 0)   /* 2026-11-14 新針葉簇夠密，芯縮細（以前從簇之間露出一根平滑的綠圓錐） */
       const list = []
       for (let k = 0; k < 40000 * AK && list.length < (kind === 'fir' ? 400 : 430) * AK * 1.25; k++) {   // 2026-11-10 溫室往南北加寬 26%：樹的數量跟著加
-        const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+        const x = ALP_S.X0 + rnd() * (ALP_S.X1 - ALP_S.X0), z = -ALP_S.HZ + rnd() * ALP_S.HZ * 2
         if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
         const inB = BAND(x, z)
@@ -1678,7 +1688,7 @@ function buildInterior(lib, avoid = []) {
     }
     const nearFig = (x, z, r) => FIGPOS.some((f) => Math.hypot(f.x - x, f.z - z) < r)
     for (let k = 0; k < 40000 && (SCH.length < 60 || FLW.lily.length + FLW.hyper.length + FLW.gent.length < 420); k++) {
-      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2, td = alpineTrailDist(x, z)
+      const x = ALP_S.X0 + rnd() * (ALP_S.X1 - ALP_S.X0), z = -ALP_S.HZ + rnd() * ALP_S.HZ * 2, td = alpineTrailDist(x, z)
       if (td > 14) continue
       const hgt = alpineHeight(x, z)
       if (nearFig(x, z, 1.5) || YOSE.behind(x, z)) continue   // 2026-11-10 岩簷裡（瀑布後面）不長花
@@ -1831,7 +1841,7 @@ function buildInterior(lib, avoid = []) {
     // → 照石頭腳下一圈（半徑 r）最低的地面放，上坡那側埋進坡裡（位置、亂數順序都沒變，只改高度）
     const footMin = (x, z, r, H) => { let m = H(x, z); for (let a = 0; a < 8; a++) m = Math.min(m, H(x + Math.cos(a * Math.PI / 4) * r, z + Math.sin(a * Math.PI / 4) * r)); return m }
     for (let k = 0; k < 8000 * AK; k++) {
-      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+      const x = ALP_S.X0 + rnd() * (ALP_S.X1 - ALP_S.X0), z = -ALP_S.HZ + rnd() * ALP_S.HZ * 2
       if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       { const ez0 = eastZone(x, z); if (ez0 === 'wet' || ez0 === 'hide') continue }   // 濕地、觀察屋旁不放山區的石頭（草原留著零星的）
       if (!inAlpine(x, z, 2) || domeRho(x, z) > 0.95 || (Math.hypot(x - CABIN.x, z - CABIN.z) < CABIN.R + 2.4 || Math.hypot(x - CAMP.x, z - CAMP.z) < CAMP.R + 2.4) || alpineTrailDist(x, z) < 2.2 || bridgeDist(x, z) < 2.5 || nearBird(avoid, x, z, 3, 1.5)) continue
@@ -1849,7 +1859,7 @@ function buildInterior(lib, avoid = []) {
     // 溪邊、池邊的蕨類
     const ferns = []
     for (let k = 0; k < 12000 * AK && ferns.length < 420 * AK; k++) {
-      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+      const x = ALP_S.X0 + rnd() * (ALP_S.X1 - ALP_S.X0), z = -ALP_S.HZ + rnd() * ALP_S.HZ * 2
       if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       if (!inAlpine(x, z, 1) || domeRho(x, z) > 0.95 || eastZone(x, z)) continue
       if (YOSE.inLake?.(x, z, 0.8) || YOSE.inRecessWater?.(x, z)) continue   // 2026-11-14 使用者（西岸照片，紅圈）：瀑布湖裡長出蕨類 → 湖面內、岸邊 0.8 m 不長
@@ -1884,7 +1894,7 @@ function buildInterior(lib, avoid = []) {
   {
     const A = [], B = [], c = new THREE.Color(), MAXI = 450000 * AK
     for (let k = 0; k < 140000 * AK && A.length / 4 < MAXI; k++) {
-      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+      const x = ALP_S.X0 + rnd() * (ALP_S.X1 - ALP_S.X0), z = -ALP_S.HZ + rnd() * ALP_S.HZ * 2
       if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955 || eastZone(x, z)) continue
             if (groundClear(avoid, x, z, 1.6)) continue   // 地上的鳥走動的地方、到鏡頭那條線：不長
@@ -1968,7 +1978,7 @@ function buildInterior(lib, avoid = []) {
     { const wind = mat.onBeforeCompile; mat.onBeforeCompile = (sh, r) => { wind(sh, r); sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', '')) }; mat.customProgramCacheKey = () => 'caneCard' }
     const list = [], c = new THREE.Color()
     for (let k = 0; k < 160000 * AK && list.length < 90000 * AK; k++) {
-      const x = ALP.X0 + rnd() * (ALP.X1 - ALP.X0), z = -ALP.HZ + rnd() * ALP.HZ * 2
+      const x = ALP_S.X0 + rnd() * (ALP_S.X1 - ALP_S.X0), z = -ALP_S.HZ + rnd() * ALP_S.HZ * 2
       if (YOSE.behind(x, z) || YOSE.inArch(x, z, 1.5) || YOSE.inEastLake(x, z, 0.4) || YOSE.inOutlet(x, z, 0.5)) continue
       if ((!inAlpine(x, z, 1) && !BAND(x, z)) || domeRho(x, z) > 0.955 || eastZone(x, z)) continue
       if (groundClear(avoid, x, z, 1.8) || bridgeDist(x, z) < BRIDGE_DIM.hw + 0.8 || nearGiant(x, z, 0.2)) continue
@@ -2013,7 +2023,7 @@ function buildInterior(lib, avoid = []) {
       m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(1, 'rgba(0,0,0,0)')
       x.fillStyle = m; x.fillRect(0, 0, w, h)
     }))
-    const zMax = ALP.HZ - 4, X0 = 78, X1 = ALP.X1 - 10
+    const zMax = ALP_S.HZ - 4, X0 = 78, X1 = ALP_S.X1 - 10
     const place = (s, x) => {
       const u = s.userData
       for (let k = 0; k < 40; k++) {

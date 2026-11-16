@@ -15,7 +15,8 @@ const TAU = Math.PI * 2
 // 巨木林的範圍：步道第 3～9 點附近（入口上坡之後、過吊橋、到南坡）
 const SEG = [3, 9]
 // 2026-11-11 使用者：濕地、草原搬到西邊之後，東邊空出來的地 → 紅杉林繼續長過去：沿原本往東部濕地、東部草原的兩條步道也是林帶
-const BAND_LINES = () => [ALP_TRAIL.slice(SEG[0], SEG[1] + 1), ...['wet', 'grass'].map((n) => ALP_SPURS.find((q) => q.name === n)?.pts).filter(Boolean)]
+// 2026-11-16 grass 支線往東北延伸進稀樹草原：林帶只到林緣（x 338），草原那段不長紅杉
+const BAND_LINES = () => [ALP_TRAIL.slice(SEG[0], SEG[1] + 1), ...['wet', 'grass'].map((n) => ALP_SPURS.find((q) => q.name === n)?.pts.filter((p) => p[0] < 338)).filter(Boolean)]
 let BL = null
 const bandSegs = () => (BL ??= BAND_LINES().flatMap((pl) => pl.slice(0, -1).map((a, i) => [a, pl[i + 1]])))
 const bandDist = (x, z) => {

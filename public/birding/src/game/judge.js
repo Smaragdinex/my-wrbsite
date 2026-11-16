@@ -28,21 +28,24 @@ export function ruleJudge(p) {
   return { price: p.price, comment: lines.join(LANG === 'zh' ? '' : ' ') }
 }
 
-// ---------- 本地 LLM（Qwen2.5-1.5B-Instruct，WebLLM，在 Web Worker 裡用 WebGPU 跑）----------
+// ---------- 本地 LLM（WebLLM，在 Web Worker 裡用 WebGPU 跑）----------
+// 2026-11-16 參加 Coding 101（簡章要求符合《危害國家資通安全產品審查辦法》）：拿掉大陸廠商的模型，改用 WebLLM 0.2.79 內建的歐美開源模型。
+// LLM_BASE 是模型 id 去掉量化後綴的部分；f16／f32 照顯示卡自動選。
 // 模型約 1 GB，第一次下載後瀏覽器會快取；之後包 Steam 版時改成放在遊戲資料夾裡。實測 Apple M 系列：載入 30 秒、每則評語 1～1.5 秒。
 // （之前試過 transformers.js＋0.5B：這台 Mac 的 WebGPU 會算錯、CPU 一張 20 秒、評語也不穩，所以換成 WebLLM＋1.5B）
 // 老闆看的是遊戲量出來的數據（鳥種、大小、對焦、遮擋、動作），用台灣老闆的口氣講評，最後給 80～120 的百分比調整估價。
 const WEBLLM = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/lib/index.js'
+export const LLM_BASE = 'gemma-2-2b-it'
 export const llm = { status: 'idle', progress: 0, device: '', model: '' }
 let engine = null, loading = null
 
-export function loadLLM(onUpdate) {
+export function loadLLM(onUpdate, base = LLM_BASE) {
   loading ??= (async () => {
     if (!navigator.gpu) throw new Error('這個瀏覽器沒有 WebGPU')
     const adapter = await navigator.gpu.requestAdapter()
     if (!adapter) throw new Error('沒有可用的顯示卡')
     // 顯示卡支援半精度就用 f16 版（小、快），不支援用 f32 版
-    const model = `Qwen2.5-1.5B-Instruct-${adapter.features.has('shader-f16') ? 'q4f16_1' : 'q4f32_1'}-MLC`
+    const model = `${base}-${adapter.features.has('shader-f16') ? 'q4f16_1' : 'q4f32_1'}-MLC`
     llm.status = 'loading'; llm.model = model; onUpdate?.()
     const W = await import(WEBLLM)
     const worker = new Worker(new URL('./judge-worker.js' + new URL(import.meta.url).search, import.meta.url), { type: 'module' })
@@ -60,7 +63,7 @@ const ask = async (messages, opts) => {
 const S2T = { 这: '這', 个: '個', 张: '張', 对: '對', 过: '過', 还: '還', 没: '沒', 头: '頭', 鸟: '鳥', 鲜: '鮮', 画: '畫', 准: '準', 种: '種', 拍摄: '拍攝', 镜: '鏡', 稀: '稀', 么: '麼', 们: '們', 时: '時', 会: '會', 让: '讓', 说: '說', 点: '點', 远: '遠', 观: '觀', 动: '動', 当: '當', 实: '實', 质: '質', 价: '價', 钱: '錢', 卖: '賣', 买: '買', 难: '難', 应: '應', 该: '該', 话: '話', 后: '後', 为: '為', 处: '處', 体: '體' }
 const toTrad = (t) => t.replace(/拍摄|[这个张对过还没头鸟鲜画准种镜么们时会让说点远观动当实质价钱卖买难应该话后为处体]/g, (c) => S2T[c] ?? c).replace(/這只/g, '這隻')
 // 稀有度（評語和圖鑑用）
-export const RARITY = { pelican: '稀有', cormorant: '普通', smew: '非常稀有', fduck: '非常稀有', cegret: '非常稀有', burrowowl: '不常見', dipper: '普通', forktail: '普通', redstart: '普通', harlequin: '不常見', avocet: '不常見', pratincole: '不常見', bwkite: '稀有', shrike: '普通', peregrine: '非常稀有', blackswift: '非常稀有', greatgreyowl: '非常稀有', serpenteagle: '不常見', shoebill: '不常見', flamingo: '普通', ajacana: '不常見', gallinule: '不常見', rspoonbill: '不常見', sarus: '不常見', skimmer: '不常見', redcrowned: '不常見', ruff: '不常見', lapwing: '不常見', grebe: '不常見', rnpheasant: '稀有', skylark: '普通', cisticola: '普通', nutcracker: '不常見', wbwood: '不常見', shelduck: '稀有', pheron: '不常見', stilt: '普通', harrier: '稀有', woodcock: '不常見', jacana: '稀有', psnipe: '不常見', scopsowl: '普通', mtscops: '不常見', liocichla: '不常見', whitebrow: '稀有', bullfinch: '稀有', barwing: '不常見', islandthrush: '非常稀有', tit: '不常見', rustylt: '稀有', whitethroat: '稀有', hwamei: '稀有', styan: '不常見', scimitar: '不常見', fulvetta: '普通', bamboo: '普通', flowing: '不常見', bushwarbler: '稀有', cupwing: '稀有', shortwing: '非常稀有', mandarin: '稀有', spotbill: '普通', partridge: '稀有', nuthatch: '不常見', finchbill: '普通', minivet: '不常見', pitta: '非常稀有', grassowl: '非常稀有', goshawk: '不常見', woodowl: '非常稀有', yellowtit: '非常稀有', flamecrest: '稀有', rosefinch: '不常見', niltava: '不常見', mikado: '非常稀有', spoonbill: '非常稀有', pheasant: '稀有', oriole: '稀有', thrush: '不常見', bluemagpie: '稀有', kingfisher: '稀有', babbler: '不常見', waterhen: '普通', sparrow: '很常見', dove: '很常見', bulbul: '很常見' }
+export const RARITY = { pelican: '稀有', cormorant: '普通', smew: '非常稀有', fduck: '非常稀有', cegret: '非常稀有', secretarybird: '稀有', burrowowl: '不常見', dipper: '普通', forktail: '普通', redstart: '普通', harlequin: '不常見', avocet: '不常見', pratincole: '不常見', bwkite: '稀有', shrike: '普通', peregrine: '非常稀有', blackswift: '非常稀有', greatgreyowl: '非常稀有', serpenteagle: '不常見', shoebill: '不常見', flamingo: '普通', ajacana: '不常見', gallinule: '不常見', rspoonbill: '不常見', sarus: '不常見', skimmer: '不常見', redcrowned: '不常見', ruff: '不常見', lapwing: '不常見', grebe: '不常見', rnpheasant: '稀有', skylark: '普通', cisticola: '普通', nutcracker: '不常見', wbwood: '不常見', shelduck: '稀有', pheron: '不常見', stilt: '普通', harrier: '稀有', woodcock: '不常見', jacana: '稀有', psnipe: '不常見', scopsowl: '普通', mtscops: '不常見', liocichla: '不常見', whitebrow: '稀有', bullfinch: '稀有', barwing: '不常見', islandthrush: '非常稀有', tit: '不常見', rustylt: '稀有', whitethroat: '稀有', hwamei: '稀有', styan: '不常見', scimitar: '不常見', fulvetta: '普通', bamboo: '普通', flowing: '不常見', bushwarbler: '稀有', cupwing: '稀有', shortwing: '非常稀有', mandarin: '稀有', spotbill: '普通', partridge: '稀有', nuthatch: '不常見', finchbill: '普通', minivet: '不常見', pitta: '非常稀有', grassowl: '非常稀有', goshawk: '不常見', woodowl: '非常稀有', yellowtit: '非常稀有', flamecrest: '稀有', rosefinch: '不常見', niltava: '不常見', mikado: '非常稀有', spoonbill: '非常稀有', pheasant: '稀有', oriole: '稀有', thrush: '不常見', bluemagpie: '稀有', kingfisher: '稀有', babbler: '不常見', waterhen: '普通', sparrow: '很常見', dove: '很常見', bulbul: '很常見' }
 const pct = (x) => `${Math.round(x * 100)}%`
 function facts(p) {
   const s = p.subject
@@ -88,6 +91,10 @@ const EXAMPLE = [
   { role: 'assistant', content: tr('麻雀小小一隻還有點糊，下次靠近一點、換支長鏡頭吧。\n價格：85') },
 ]
 
+// Gemma 的對話格式沒有 system 角色：把老闆設定併進第一則使用者訊息
+const msgsFor = (p) => /^gemma/i.test(llm.model)
+  ? [{ role: 'user', content: SYSTEM + '\n\n' + EXAMPLE[0].content }, ...EXAMPLE.slice(1), { role: 'user', content: facts(p) }]
+  : [{ role: 'system', content: SYSTEM }, ...EXAMPLE, { role: 'user', content: facts(p) }]
 export async function judgePhoto(p) {
   const base = ruleJudge(p)
   if (llm.status !== 'ready') return { ...base, by: 'rule' }
@@ -95,7 +102,7 @@ export async function judgePhoto(p) {
     // 稍微有一點隨機（同樣的照片不會每次講一樣的話）
     // 模型卡住（WebGPU 掉了、分頁在背景）就不等了：8 秒沒回改用寫好的評語，賣照片不會卡死
     const text = (await Promise.race([
-      ask([{ role: 'system', content: SYSTEM }, ...EXAMPLE, { role: 'user', content: facts(p) }], { max_tokens: 70, temperature: 0.6, top_p: 0.9 }),
+      ask(msgsFor(p), { max_tokens: 70, temperature: 0.6, top_p: 0.9 }),
       new Promise((_, no) => setTimeout(() => no(new Error('老闆想太久（8 秒）')), 8000)),
     ])).trim()
     if (/(.{4,})\1\1/s.test(text) || !text) throw new Error('模型輸出重複：' + text)

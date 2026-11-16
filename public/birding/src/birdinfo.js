@@ -1158,6 +1158,19 @@ const ALL = [
       '在水裡用腳划水前進，不用翅膀；在水面上游時身體壓得很低，常只露出脖子和頭。',
     ],
   },
+  {
+    // 2026-11-16 使用者：「加入蛇鷲（秘書鳥）！放在往外設計一個非洲稀樹草原」→ 東北稀樹草原（layout.js LOBES.sav），步道北邊 12 m 的乾草地，一對
+    id: 'secretarybird', spot: [418, 151], perch: 'ground', view: 182, dist: 11, camH: 1.7, lookY: 0.9,
+    name: '蛇鷲', sci: 'Sagittarius serpentarius', where: '東北稀樹草原的乾草地',
+    intro: '又叫「秘書鳥」，是一種住在非洲草原、用走的打獵的猛禽。腿非常長，站起來超過一公尺；臉上是橘紅色的裸皮，頭後一排黑色長冠羽，像古時候的秘書耳朵後面插著羽毛筆。一天可以在草原上走二、三十公里，看到蛇或蜥蜴就用腳猛踢。',
+    facts: [
+      '牠的踢擊非常快：研究量到一腳只有十五毫秒左右，力道大約是自己體重的五倍，蛇還來不及反應就被踢昏。',
+      '雖然長得像鶴，牠其實是猛禽，自己一科只有這一種，跟老鷹比較近。',
+      '會飛也很會滑翔，但大部分時間在地上走；晚上飛回金合歡樹頂平平的大巢裡睡覺。',
+      'IUCN 列為「瀕危」：草原變成農地、過度放牧，數量一直在減少。',
+      '蘇丹和南非的國徽上都有牠，是非洲草原的象徵。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -1166,6 +1179,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike', 'burrowowl', 'smew', 'fduck', 'cegret', 'pelican', 'cormorant']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike', 'burrowowl', 'smew', 'fduck', 'cegret', 'pelican', 'cormorant', 'secretarybird']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

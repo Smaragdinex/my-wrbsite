@@ -24,7 +24,10 @@ export const DECK = { r: 7, x: 0, z: 0, y: 0 }   // 頂端圓形觀景台（2026
 export const STORE = { X0: -75.6, X1: -88.6, HZ: 7.5, H: 5.0, DOOR_W: 3.4 }
 // 高山區（alpine.js）：溫室東半邊、原本花園橢圓外面那一塊。花園的 alpine 步道走到 x≈74 接上山的步道；
 // 入口一小片平地、水池，往東爬升到約 26 公尺的山頂，一條溪從東南高處沿山谷流到水池，步道之字形上山、吊橋過溪谷
-export const ALP = { X0: -90, X1: 378, HZ: 192 }   /* 2026-11-11 HZ 150→170：西南的潟湖往南到 z -158 */   // 2026-11-11 X0 25→-62：西北的草原那塊在花園北邊（x 到 -56）   // X0 45→25：inAlpine 從 x 30 就開始，以前 30～45 那一小段沒有地形資料（高度 1e9）   // 山區地形格子的範圍（實際能走的是 inAlpine）
+export const ALP = { X0: -90, X1: 515, HZ: 215 }   /* 2026-11-16 X1 378→515、HZ 192→215：東北的非洲稀樹草原（LOBES.sav） */
+// 隨機撒植物（alpine.js）用的範圍維持原本的大小：格子變大以後亂數序列才不會變（不然整片森林重新洗牌）；草原自己的植物在 savanna.js
+export const ALP_S = { X0: -90, X1: 378, HZ: 192 }
+//   /* 2026-11-11 HZ 150→170：西南的潟湖往南到 z -158 */   // 2026-11-11 X0 25→-62：西北的草原那塊在花園北邊（x 到 -56）   // X0 45→25：inAlpine 從 x 30 就開始，以前 30～45 那一小段沒有地形資料（高度 1e9）   // 山區地形格子的範圍（實際能走的是 inAlpine）
 // 第三館：海岸（coast.js，美術用 NatureManufacture「Coast Dunes Environment」，跟《淨灘大作戰》同一套）。圓頂南門（z≈-55）→ 通道（z -53～-74，A 門 -61、B 門 -67）
 // → 玻璃館（z -74～-154、x ±40）：北半邊沙丘、木棧道，中間沙灘，海岸線約 z -128，往南是館裡的淺水潟湖；館外整片都是海（到地平線）
 // 海岸館暫時拿掉（2026-11-07 使用者要求）：關掉就沒有南門、通道、館和海；程式和模型都還在，改回 true 就回來
@@ -55,7 +58,9 @@ export const LOBES = { grass: { x: 2, z: 100, rx: 58, rz: 46 }, wet: { x: 60, z:
 export const lobeRho = (L, x, z) => Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz)
 // 新地塊跟原本的園區之間不能留凹口（第一版：凹口在邊界外，地面沒畫、看得到走不到）→ 每塊從園區裡面的一點（L.from）拉出來，
 // 沿路的橢圓從小（半徑 L.r0）慢慢變成那塊的橢圓：整塊像一顆水滴長出去
-LOBES.grass.from = [8, 36]; LOBES.wet.from = [42, -52]; LOBES.lagoon.from = [40, -110]
+// 2026-11-16 使用者（地圖上從紅杉林往東北畫箭頭）：「往外設計一個非洲稀樹草原，大一點」，蛇鷲住這裡
+LOBES.sav = { x: 432, z: 146, rx: 74, rz: 56 }
+LOBES.grass.from = [8, 36]; LOBES.wet.from = [42, -52]; LOBES.lagoon.from = [40, -110]; LOBES.sav.from = [338, 90]
 for (const L of Object.values(LOBES)) L.r0 = 24
 export function lobeSweep(L, x, z) {
   let m = 1e9
@@ -74,13 +79,13 @@ function domeRho0(x, z) {
 // 2026-11-11 使用者：濕地走不過去。潟湖那塊是從東邊 (40,-110) 拉出去的，它的西半邊跟花園北緣之間留了一個凹口：地面有畫、圍籬也在更外面，
 // 但 domeRho 在那裡 > 0.955，被當成園區的牆擋住。再從花園裡面往北拉兩條到潟湖，把凹口整個包進園區
 const LAG_FILL = [[-22, -34], [8, -40]].map((from) => ({ ...LOBES.lagoon, from, r0: 24 }))
-export const domeRho = (x, z) => smin(smin(smin(smin(smin(domeRho0(x, z), lobeSweep(LOBES.grass, x, z), 0.3), lobeSweep(LOBES.wet, x, z), 0.3), lobeSweep(LOBES.lagoon, x, z), 0.3), lobeSweep(LAG_FILL[0], x, z), 0.3), lobeSweep(LAG_FILL[1], x, z), 0.3)
+export const domeRho = (x, z) => smin(smin(smin(smin(smin(smin(domeRho0(x, z), lobeSweep(LOBES.grass, x, z), 0.3), lobeSweep(LOBES.wet, x, z), 0.3), lobeSweep(LOBES.lagoon, x, z), 0.3), lobeSweep(LAG_FILL[0], x, z), 0.3), lobeSweep(LAG_FILL[1], x, z), 0.3), lobeSweep(LOBES.sav, x, z), 0.3)
 // 同一個方位上「最外面」的邊界半徑（outside.js 的草地從這裡往外鋪）：比它近、但在邊界外的凹口，山區地形網格要自己畫（不然是一個洞）
 const OUTER_N = 1440, outerTab = new Float32Array(OUTER_N).fill(-1)
 export function outerR(x, z) {
   let a = Math.atan2(z, x); if (a < 0) a += TAU
   const i = Math.round(a / TAU * OUTER_N) % OUTER_N
-  if (outerTab[i] < 0) { const dx = Math.cos(i / OUTER_N * TAU), dz = Math.sin(i / OUTER_N * TAU); let r = 0; for (let m = 420; m > 0; m -= 0.5) if (domeRho(dx * m, dz * m) < 1) { r = m; break } outerTab[i] = r }
+  if (outerTab[i] < 0) { const dx = Math.cos(i / OUTER_N * TAU), dz = Math.sin(i / OUTER_N * TAU); let r = 0; for (let m = 560; m > 0; m -= 0.5) if (domeRho(dx * m, dz * m) < 1) { r = m; break } outerTab[i] = r }
   return outerTab[i]
 }
 export const gardenRho = (x, z) => Math.hypot(x / GARDEN.A, z / GARDEN.B)
@@ -332,6 +337,11 @@ export const ALP_POND = { x: AM(88, 0)[0], z: -17 * AS, r: 9.5 * AS, water: -0.0
 const ALP_TRAIL_D = [[76, 0], [86, 3], [97, 9], [108, 12], [116, 5], [118.5, -1], [124, -12], [129.5, -22.5], [137, -26], [147, -21], [157, -15], [163, -4], [161, 8], [154, 16], [146, 15], [145, 9]]
 export const ALP_TRAIL = ALP_TRAIL_D.map(([x, z]) => AM(x, z))
 // 支線小路（2026-11-07）：從主步道岔出去，走到底是一小塊林間空地，稀有的鳥在那裡（from：接在主步道第幾個點）
+// 平滑曲線（centripetal Catmull-Rom，經過每個控制點）取等距點：給步道用，轉角變圓弧、不會有尖角
+function smoothPts(ctrl, step = 2.5) {
+  const c = new THREE.CatmullRomCurve3(ctrl.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal')
+  return c.getSpacedPoints(Math.max(2, Math.round(c.getLength() / step))).map((v) => [+v.x.toFixed(2), +v.z.toFixed(2)])
+}
 export const ALP_SPURS = [
   { name: 'north', from: 3, pts: [[110, 19], [105, 25], [101, 28.5]] },        // 北坡闊葉林：黃山雀
   { name: 'fir', from: 9, pts: [[150, -25], [155, -26], [158.5, -24.5]] },      // 南坡冷杉林：火冠戴菊鳥（2026-11-08 往北收：原本盡頭 rho 1.01，路和鳥都在玻璃外面）
@@ -352,7 +362,8 @@ export const ALP_SPURS = [
   // 2026-11-13 使用者「這是舊的道路，可以移除了」：以前往東邊舊濕地的支線（濕地 11/11 已經搬到西南），拿掉
   // { name: 'wet', from: 9, noClear: true, pts: [[255, -58], [266, -63], [282, -62], [300, -71], [300, -55], [312, -33], [316, -29], [327, -26], [339, -26], [345, -29]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
   // grass：主步道第 12 點（282,19）往東、之字形下到草原西北角，經過草原觀察棚 O7，沿北緣走到東邊看小雲雀那塊（草鴞的高草核心離路 25 m）
-  { name: 'grass', from: 12, noClear: true, pts: [[293, 20], [291, 42], [303, 45], [290, 57], [276, 67], [282, 75], [298, 74], [316, 77], [330, 86]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
+  // 2026-11-16 使用者（全園地圖圈起來）「步道弄好一點，平滑順暢」：原本是 A* 折線（兩個髮夾彎、轉角都是尖的）→ 改成順著等高線往北、再大弧線往東下坡的平滑曲線（每 2.5 m 一點）
+  { name: 'grass', from: 12, noClear: true, wide: true, k: 0.3, pts: smoothPts([[281.5, 19.3], [289, 29], [294, 42], [294.5, 55], [292, 66], [296, 75.5], [306, 80], [319, 81.5], [330, 86], [345, 95], [364, 108], [386, 122], [409, 133], [432, 141]])   /* 2026-11-16 往東北延伸穿過林緣，走進稀樹草原中央 */.slice(1).map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
   // 2026-11-10 ridge：瀑布頂東端（平台 75.8 m）沿新的岩脊之字形下到草原西北角，接上 grass 支線（坡度 ≤25%、轉彎有懲罰的 A*（tools/plan3.js），約 226 m，離草鴞巢 ≥26 m）。
   // world：點已經是世界座標、從 y0 這個高度開始（不是從主步道岔出去）；endOn：終點高度＝那條支線在同一點的高度（兩條路接起來沒有落差）
   // 2026-11-10 使用者：南坡溪谷（吊橋下那條溪谷小路的盡頭）接到山下入口的湖，湖邊有路可以走上來。走溪的南岸（不用過溪），
@@ -739,6 +750,7 @@ export const grassSD = (x, z) => sdPoly(EAST.grass, x, z) + 9 * (fbm2(x * 0.03 -
 // 東部的分區（植被用）：'wet'＝濕地（水、泥灘、岸邊 6 m 內）、'grass'＝草原；其他 null
 export function eastZone(x, z) {
   const [a, b, c, d] = EAST.wetBox, [e, f, g, h] = EAST.grassBox
+  if (savK(x, z) > 0.05) return 'sav'   // 稀樹草原：山區的針葉樹、箭竹、蕨類都不長（savanna.js 自己種）
   if (EAST.hides.some(([hx, hz]) => Math.hypot(x - hx, z - hz) < 6)) return 'hide'
   if (x > a - 8 && x < b + 8 && z > c - 8 && z < d + 8 && wetSD(x, z) < 14) return 'wet'   // 濕地＋整片壓低的岸坡（第一版只到 6 m，觀察屋裡長出兩棵冷杉）
   if (x > e && x < f && z > g && z < h && grassSD(x, z) < 2) return 'grass'
@@ -853,6 +865,21 @@ function eastShape0(X, Z, h) {
   }
   return h
 }
+// 2026-11-16 稀樹草原：LOBES.sav 裡面是 11～14 m 的緩坡平原（幾道很淺的起伏、一兩處低窪），東北角一座花崗岩丘（kopje，高約 7 m）
+export const SAV = { y: 12, kopje: { x: 462, z: 172, r: 15, h: 7 } }
+export const savK = (x, z) => x < 300 ? 0 : smoothstep(1.18, 0.82, lobeSweep(LOBES.sav, x, z))
+// 紅杉林下到草原那段山坡原本 50～60%，步道（最陡 30%）只能架在高高的土堤上 → 步道兩側 14 m 內把山坡改成一道 30% 的長緩坡，30 m 外接回原地形
+const SAV_RAMP = { a: [302, 79, 28.3], b: [357, 104, 10.3], w0: 14, w1: 30 }
+function savShape(x, z, h) {
+  { const R = SAV_RAMP, dx = R.b[0] - R.a[0], dz = R.b[1] - R.a[1], L2 = dx * dx + dz * dz, t = ((x - R.a[0]) * dx + (z - R.a[1]) * dz) / L2
+    if (t > -0.4 && t < 1.4) { const tc = clamp(t, 0, 1), d = Math.hypot(x - R.a[0] - dx * tc, z - R.a[1] - dz * tc), m = smoothstep(R.w1, R.w0, d) * smoothstep(-0.4, 0, t) * smoothstep(1.4, 1, t)
+      if (m > 0) h = lerp(h, lerp(R.a[2], R.b[2], tc), m) } }
+  const k = savK(x, z) * smoothstep(338, 372, x); if (k <= 0) return h
+  let p = SAV.y + 2.2 * (fbm2(x * 0.018 + 4.1, z * 0.018 - 2.7, 3) - 0.5) + 0.5 * (fbm2(x * 0.09, z * 0.09 + 3, 2) - 0.5)
+  const K = SAV.kopje, d = Math.hypot(x - K.x, z - K.z)
+  p += K.h * Math.exp(-((d / K.r) ** 2)) * (0.75 + 0.5 * fbm2(x * 0.15, z * 0.15, 2))
+  return lerp(h, p, k)
+}
 // 底層地形：入口平，往東爬升到山頂（偏北），南北兩道稜線，山頂後面往東牆降一點；不能頂到玻璃（離玻璃至少 9 公尺，樹才放得下）
 function alpBase(X, Z) {
   // 用放大前的設計座標算形狀，高度再乘 AHS（山區整個放大）
@@ -864,7 +891,9 @@ function alpBase(X, Z) {
   h += 2.6 * fbm2(X * 0.04 + 11, Z * 0.04 - 7, 4) * smoothstep(84, 100, x)
   h += 1.4 * Math.max(0, fbm2(X * 0.13, Z * 0.13, 3)) * smoothstep(86, 105, x)                   // 小岩塊
   h = eastShape(X, Z, h * AHS); h /= AHS   // 2026-11-10 東部擴建：濕地盆地、草原（世界座標、公尺）
-  h = h * AHS   // 2026-11-08：以前 min(…, domeY - 9)（不能頂到玻璃）——圓頂拿掉之後，這個上限在邊界附近把地形壓成一面懸崖；邊界外的草地（outside.js）會從邊界的高度慢慢降下去
+  h = h * AHS
+  h = savShape(X, Z, h)   // 2026-11-16 東北稀樹草原：緩緩起伏的平原＋一座岩丘
+  // 2026-11-08：以前 min(…, domeY - 9)（不能頂到玻璃）——圓頂拿掉之後，這個上限在邊界附近把地形壓成一面懸崖；邊界外的草地（outside.js）會從邊界的高度慢慢降下去
   return lerp(gardenEdgeH(X, Z), Math.max(lobeRho(LOBES.wet, X, Z) < 1.4 || lobeRho(LOBES.lagoon, X, Z) < 1.4 ? -3 : 0, h), smoothstep(1.0, 1.25, gardenRho(X, Z)))   // 濕地那塊可以低於 0（水面 -0.25）          // 花園那側從種植坡的高度接起，往裡面慢慢變成山的形狀
 }
 // 階梯式溪床（step-pool，台灣山溪常見）：水面一段一段是平的（水潭），潭與潭之間是一道落差（小瀑布、跌水）。
@@ -1158,12 +1187,12 @@ function buildAlpine() {
       if (sp.landings) { const Ls = Math.hypot(sp.pts[i2 + 1][0] - sp.pts[i2][0], sp.pts[i2 + 1][1] - sp.pts[i2][1]); tt = clamp((t2 * Ls - (i2 > 0 ? 1.7 : 0)) / Math.max(1, Ls - (i2 > 0 ? 1.7 : 0) - (i2 + 1 < sp.pts.length - 1 ? 1.7 : 0)), 0, 1) }
       const y2 = lerp(sp.prof[i2], sp.prof[i2 + 1], tt)
       const e = sp.pts[sp.pts.length - 1], de = Math.hypot(x - e[0], z - e[1]), C0 = sp.clear ?? 3.5, C1 = C0 + 4.5   // clear：盡頭空地多大（營地比較大）
-      if (d2 < 6) h = lerp(y2, h, smoothstep(1.0, 4, d2))
+      if (sp.wide ? d2 < 9 : d2 < 6) h = lerp(y2, h, sp.wide ? smoothstep(1.4, 7.5, d2) : smoothstep(1.0, 4, d2))   // wide：2026-11-16 使用者「那裡路都太窄、跟其他不一樣」→ 跟主步道一樣寬（路面 1.4 m、切坡 7.5 m 才接回地形）
       // 2026-11-10 ChatGPT：髮夾彎要有平台（至少 2.5×3 m、坡度 <5%），平台跟步道之間 1～2 m 的過渡 → 每個轉彎點半徑 1.7 m 攤平成轉彎點的高度，1.7～3.4 m 接回步道。
       // 地形本身就是碰撞面（supportAt 查高度表），改地形＝視覺和走路一起改
       if (sp.landings && d2 < 6) for (let i = 1; i < sp.pts.length - 1; i++) { const dv = Math.hypot(x - sp.pts[i][0], z - sp.pts[i][1]); if (dv < 3.4) h = lerp(sp.prof[i], h, smoothstep(1.7, 3.4, dv)) }
       if (!sp.join && !sp.noClear && de < C1 + 1) h = lerp(sp.prof[sp.prof.length - 1], h, smoothstep(C0, C1, de))
-      dAll = Math.min(dAll, d2 + 0.35)   // 小路畫得窄一點（alpineTrailDist 用來畫路面、樹讓開）
+      dAll = Math.min(dAll, d2 + (sp.wide ? 0 : 0.35))   // 小路畫得窄一點（alpineTrailDist 用來畫路面、樹讓開）
     }
     aTrail[k] = dAll
     // 2026-11-13 使用者「橋開始跟尾巴…往外翹、可以直接加寬道路」：石拱橋兩頭的路畫成喇叭口——橋頭外 1.5 m 內路面半寬 2.5 m（石欄往外撇的那段在路邊），往外 7 m 收回原本的寬

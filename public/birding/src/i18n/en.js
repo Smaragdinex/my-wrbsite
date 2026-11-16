@@ -259,7 +259,7 @@ export const UI = {
  "翅膀剛張開，難得。": "Wings just opening, a rare moment.",
  "翠鳥": "Common Kingfisher",
  "老闆在看…": "Owner is looking…",
- "老闆的 AI 準備中… {p}%（第一次要下載約 1 GB）": "Owner's AI loading… {p}% (first time downloads ~1 GB)",
+ "老闆的 AI 準備中… {p}%（第一次要下載約 1.5 GB）": "Owner's AI loading… {p}% (first time downloads ~1.5 GB)",
  "老闆：「拍到什麼好照片？拿來給我看看。我這裡不是資源回收，{n} 分以上才收；100 分才給正常價，拍到難得的瞬間超過 100 分還會多給。」": "Owner: \"Got any good shots? Let me see. This isn't a recycling bin, I only buy {n} pts and up. 100 pts gets full price, and rare moments over 100 get extra.\"",
  "聲音": "Sound",
  "背景音樂": "Music",
@@ -1510,6 +1510,18 @@ export const BIRDS = {
    "It eats its own feathers, which seem to protect the stomach from fish bones.",
    "Its legs are set so far back that it can hardly walk on land.",
    "It was nearly wiped out in Britain in the 1800s for its head plumes, which helped start the bird protection movement."
+  ]
+ },
+ "secretarybird": {
+  "name": "Secretarybird",
+  "where": "Dry Grassland, Northeast Savanna",
+  "intro": "A bird of prey of the African grasslands that hunts on foot. Its legs are extremely long and it stands over a metre tall; it has bare orange-red facial skin and a row of long black crest feathers behind its head, like a clerk with quill pens tucked behind the ear. It can walk 20–30 km a day across the savanna, and kicks hard at any snake or lizard it finds.",
+  "facts": [
+   "Its kick is incredibly fast: researchers measured about 15 milliseconds per strike, with a force around five times its own body weight — a snake is stunned before it can react.",
+   "Although it looks like a crane, it is actually a raptor, the only species in its own family, closer to eagles and hawks.",
+   "It flies and soars well, but spends most of its time walking; at night it returns to a large flat nest on top of an acacia to sleep.",
+   "The IUCN lists it as Endangered: grasslands turned into farmland and overgrazing keep its numbers falling.",
+   "It appears on the coats of arms of both Sudan and South Africa as a symbol of the African savanna."
   ]
  }
 }

@@ -7,7 +7,9 @@
 //   遠山：三層山脊（640、760、880 公尺），自己算空氣透視（不吃場景的霧），顏色跟著日夜
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { TAU, domeRho, inAlpine, alpineHeight, terrainHeight, smoothstep, lerp } from './layout.js'
+import { TAU, domeRho, inAlpine, alpineHeight, terrainHeight, smoothstep, lerp, LOBES, lobeSweep } from './layout.js'
+// 2026-11-16 東北稀樹草原外面：草地接成金黃的乾草、樹林帶在那個方向幾乎不長（看出去是一望無際的草原）
+const savOut = (x, z) => smoothstep(2.7, 1.3, lobeSweep(LOBES.sav, x, z))
 import { fbm3, mulberry32 } from './noise.js'
 import { dayLight, duskLight, weatherU, wetify } from './structures.js'
 import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'
@@ -24,8 +26,8 @@ const ENTRY_W = 4.3   // 相機行門口（入口石材地板寬 ±4）圍籬留
 function edgePoint(a, rho = 1) {
   const dx = Math.cos(a), dz = Math.sin(a)
   // 2026-11-11 西北、西南多了兩塊（LOBES）：同一方向可能出邊界又進邊界 → 從外面往裡找「最外面」那個交點，再二分
-  let hi = 420, lo = 0
-  for (let m = 420; m > 0; m -= 0.5) if (domeRho(dx * m, dz * m) < rho) { lo = m; hi = m + 0.5; break }
+  let hi = 560, lo = 0
+  for (let m = 560; m > 0; m -= 0.5) if (domeRho(dx * m, dz * m) < rho) { lo = m; hi = m + 0.5; break }
   for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (domeRho(dx * m, dz * m) < rho) lo = m; else hi = m }
   return [dx * lo, dz * lo, lo]
 }
@@ -79,6 +81,7 @@ export function buildOutside(renderer = null) {
         pos.push(x, outY(i, 0, x, z, d) - (k === 0 ? 0.02 : 0), z); uv.push(x / 5, z / 5)
         const n = fbm3(x * 0.03, 0, z * 0.03, 3)
         c.setRGB(0.42 + n * 0.12, 0.52 + n * 0.12, 0.3 + n * 0.08)
+        { const w = savOut(x, z); if (w > 0) c.lerp(new THREE.Color(0.62 + n * 0.1, 0.5 + n * 0.08, 0.3 + n * 0.05), w) }
         col.push(c.r, c.g, c.b)
       }
     }
@@ -152,6 +155,7 @@ export function buildOutside(renderer = null) {
       const con = rnd() < 0.1 + 0.8 * smoothstep(-20, 140, x)
       const H = (con ? 11 : 8) + rnd() * 7
       const it = { p: new THREE.Vector3(x, y - 0.2, z), q: new THREE.Quaternion().setFromAxisAngle(UP, rnd() * TAU), H, w: 0.85 + rnd() * 0.35, c: rnd() }
+      { const w = savOut(x, z); if (w > 0 && it.c < w * 0.94) continue }   // 草原那邊不長森林（用已經抽好的 it.c 判斷，亂數序列不變、其他方向的樹位置不動）
       ;(con ? conL : broadL).push(it)
     }
     const fill = (geo, mat, list, sc, color) => {

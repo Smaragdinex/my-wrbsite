@@ -309,7 +309,7 @@ const BUILD = {
   shoebill, flamingo, ajacana, rspoonbill, sarus, gallinule, skimmer, redcrowned, ruff, grebe, lapwing,
   peregrine, blackswift, greatgreyowl,
   dipper, forktail, redstart, harlequin,
-  avocet, pratincole, bwkite, shrike, burrowowl, smew, fduck, cegret, pelican, cormorant,
+  avocet, pratincole, bwkite, shrike, burrowowl, smew, fduck, cegret, pelican, cormorant, secretarybird,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -324,7 +324,7 @@ const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-ri
     'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig', 'dipper-rig', 'dipper-fly-rig', 'forktail-rig', 'forktail-fly-rig', 'redstart-rig', 'redstart-fly-rig', 'harlequin-rig', 'harlequin-fly-rig', 'lapwing-fly-rig', 'avocet-rig', 'avocet-fly-rig', 'pratincole-rig', 'pratincole-fly-rig', 'bwkite-rig', 'bwkite-fly-rig', 'shrike-rig', 'shrike-fly-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
-    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig']
+    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig', 'secretarybird-rig', 'secretarybird-fly-rig']
 export class MissingModel extends Error { constructor(n) { super('model not loaded: ' + n); this.model = n } }
 let _loader = null, _extra = []
 const _loading = new Map(), FAILED = new Set()
@@ -1090,6 +1090,8 @@ function groundTripo(env, cfg) {
           if (moving) { c.thrust = 0; c.hb0 = c.hb }
         }
       }
+      // 2026-11-16 show 回傳 legs：{ L|R: { f: 往前（公尺）, u: 往上 } }＝站著時把那隻腳從踩的地方抬起來（蛇鷲踢蛇）
+      { const o = ex?.legs?.[L.sd]; if (o && L.t >= 1) { L.pos.addScaledVector(fwd, o.f ?? 0); L.pos.y += o.u ?? 0 } }
       ik(L, L.pos)
     })
     // 鳩鴿類走路點頭：其實是頭前後移動，不是轉。每跨一步，頭很快往前推（thrust），
@@ -2238,6 +2240,36 @@ function sarus(env) {
     walk: { radius: 2.6, speed: 0.14, avoid }, swingT: 0.65, lift: 0.03, knee: [1.0, 1.8], focusY: 0.8,
     acts: { walk: [4, 99, 99], peck: [2.5, 1.4, 2.6], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99] } }))
 }
+// 2026-11-16 蛇鷲：東北稀樹草原，一對。大步慢慢走、低頭在草裡找，看到獵物就停下來用腳猛踢（招牌動作）：
+// 先把頭縮回、身體往後仰、翅膀半張保持平衡，右腳抬高一下一下往前下方踢 3～6 下（真的一腳約 15 ms，遊戲放慢到看得見），踢完低頭啄起來吃
+function secretarybird(env) {
+  return groundGroup(2, 3.2, (avoid) => {
+    const S = { t: rnd(6, 16), st: 'idle', e: 0, kicks: 4 }
+    ;(globalThis.__sbStomp ??= []).push(S)   // 錄影／測試腳本用來叫牠馬上踢
+    const show = ({ t, dt, n, w, cfg }) => {
+      S.t -= dt; S.w = w
+      if (S.st === 'idle') {
+        if (S.t < 0 && !w.flee && (n === 'stand' || n === 'look' || n === 'peck')) { S.st = 'stomp'; S.e = 0; S.kicks = 3 + Math.floor(rnd(0, 4)); w.goal = null }
+        return null
+      }
+      if (w.flee) { S.st = 'idle'; S.t = rnd(10, 20); return null }
+      S.e += dt
+      const H = cfg.H, PREP = 0.55, KICK = 0.34, kEnd = PREP + S.kicks * KICK, EAT = 1.8
+      if (S.e < PREP) { const u = ss(S.e / PREP, 0, 1); return { lean: -0.18 * u, neck: -0.35 * u, head: 0.4 * u, wing: 0.28 * u, rate: 14, legs: { R: { f: 0.12 * H * u, u: 0.2 * H * u } } } }
+      if (S.e < kEnd) {
+        const p = ((S.e - PREP) % KICK) / KICK
+        // 一下：慢慢抬高（0～0.6）→ 很快往前下方踩下去（0.6～0.72）→ 踩著停一下
+        const up = p < 0.6 ? Math.sin(p / 0.6 * Math.PI / 2) : 1 - ss(p, 0.6, 0.72)
+        return { lean: -0.14, neck: -0.3, head: 0.5, wing: 0.3 + 0.06 * Math.sin(t * 17), rate: 26, legs: { R: { f: (0.1 + 0.16 * (1 - up)) * H, u: 0.24 * H * up } } }
+      }
+      if (S.e < kEnd + EAT) { const u = (S.e - kEnd) / EAT; return { lean: 0.38, neck: 0.65, head: 0.3, reach: 0.8, wing: 0.1 * (1 - u), rate: 9 } }
+      S.st = 'idle'; S.t = rnd(14, 30); return null
+    }
+    return groundTripo(env, { name: 'secretarybird-rig', H: 1.25, h0: 0.961, ...TRIPO, reach: 0.3, bill: 0.12, show,
+      walk: { radius: 5, speed: 0.3, avoid }, stride: 0.42, swingT: 0.5, lift: 0.07, knee: [1.0, 1.8], focusY: 0.8,
+      acts: { walk: [5, 99, 99], peck: [2, 1.2, 2.2], stand: [2, 2, 4], look: [2.5, 1.5, 3], turn: [1, 99, 99] } })
+  })
+}
 // 黑剪嘴鷗：一直在飛——沿著潟湖那條筆直的深水道貼著水面剪過去（下嘴泡在水裡），到頭拉高轉彎、從旁邊高一點飛回來，再下去剪一趟。
 // 只有飛行模型（skimmer-fly-rig，翅膀舉在最高點）；路線是鳥群座標裡的一圈跑道形：長軸沿 env.toCam 的垂直方向（side）
 function skimmer(env) {
@@ -2559,7 +2591,7 @@ export const REAL_CM = {
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
   shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, lapwing: 30, grebe: 50,
-  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25, burrowowl: 23, smew: 40, fduck: 41, cegret: 68, pelican: 160, cormorant: 90,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
+  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25, burrowowl: 23, smew: 40, fduck: 41, cegret: 68, pelican: 160, cormorant: 90, secretarybird: 135,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
 const _fsInv = new THREE.Matrix4(), _fsV = V()
