@@ -313,7 +313,9 @@ for (let k = 0; k < NR - 1; k++) { const a = i * NR + k, b = j * NR + k; idx.pus
           ridge = H * valley * (0.25 + 0.75 * Math.max(0, n * 0.9 + 0.45)) * (0.55 + 0.45 * Math.abs(fbm3(cx * 0.7, seed, sz * 0.7, 2) * 2))
           ridge += H * 0.06 * fbm3(cx * 14 + seed, 4.4, sz * 14, 3)   // 次級山脊、岩稜（ChatGPT：不要只有幾個圓圓的波峰）
         }
-        const RR = layer === 3 ? edgePoint(a)[2] + 310 : R   // 森林帶貼著公園邊界外 310 公尺（樹林帶外面），東邊山區比較寬也不會穿過樹林
+        // 2026-11-17 使用者（三角洲往外看，圈起遠山）「背景要再往外移」：東北的三角洲邊界到 620 m，原本固定 560 m 的近山就在公園邊上。
+        // 各層至少離「這個方位的公園邊界」近山 450、中山 750、遠山 1150 公尺（西邊邊界近，維持原本半徑）
+        const RR = layer === 3 ? edgePoint(a)[2] + 310 : Math.max(R, edgePoint(a)[2] + [450, 750, 1150][layer])
         P.push(cx * RR, -80, sz * RR, cx * RR, ridge, sz * RR)   // 山腳拉到 -80（ChatGPT：往下接進雲層 40～80 m）
         AL.push(layer, layer); AV.push(0, 1)
       }
@@ -336,6 +338,7 @@ for (let k = 0; k < NR - 1; k++) { const a = i * NR + k, b = j * NR + k; idx.pus
   {
     const PEAKS = [[35, 1350, 330, 260, 1], [58, 1250, 285, 170, 2], [78, 1450, 310, 300, 3]].map(([b, d, h, r, k]) => {   // 2026-11-11 高度 440/370/410 → ChatGPT 遠層 230～310（太高像浮在半空中的灰色三角形）.map(([b, d, h, r, k]) => {
       const a = b * Math.PI / 180
+      d = Math.max(d, edgePoint(Math.atan2(Math.cos(a), Math.sin(a)))[2] + 1100)   // 2026-11-17 三角洲擴大：雪山也往外推
       return { x: Math.sin(a) * d, z: Math.cos(a) * d, h, r, k }
     })
     const heightAt = (x, z) => {

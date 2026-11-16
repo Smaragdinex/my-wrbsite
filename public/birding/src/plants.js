@@ -1,7 +1,9 @@
 // 寫實植物／岩石模型（models/plants/*.glb，由 tools/export-plants.py 產生）
 // 每個 glb 裡一株一個節點，原點在根部中心、單位公尺；這裡負責載入並用 InstancedMesh 大量擺放
 import * as THREE from 'three'
+import { lodSetShadowGen } from './lod.js'
 import { lodRegister, lodSetLowGen } from './lod.js'
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { addWind } from './wind.js'
@@ -41,7 +43,54 @@ export function lowGeo(geo) {
   lowCache.set(geo, out)
   return out
 }
-lodSetLowGen(lowGeo)   // lod.js 自動補低面數版本用（石頭、岩廊牆…不是 scatter 種的）
+lodSetLowGen(lowGeo)
+// 2026-11-17 使用者「紅杉林、非洲區很卡」：量到走路每 24 m 陰影搬家重畫時，陰影要畫 960 萬個三角形（紅杉林），那一格卡 50～500 ms。
+// 陰影專用的更粗版本：再減到 18%、不鎖邊（陰影貼圖一個貼素 7 公分，葉片輪廓的細節本來就畫不出來）
+const shCache = new Map()
+export function shadowGeo(geo, mat = null) {
+  const opaque = !(mat?.alphaTest > 0) && !mat?.transparent
+  if (shCache.has(geo)) return shCache.get(geo)
+  if (!simp) return null   // 減面器還沒載好：先不快取，下次再試
+  let out = null
+  if (!geo.index) { try { geo = mergeVertices(geo) } catch { geo = null } }   // 沒有索引的（針葉卡、葉片）先合併頂點才能減面
+  const src = arguments[0]
+  if (!geo?.index) { shCache.set(src, null); return null }
+  const pos = geo.attributes.position
+  if (geo.index.count / 3 >= 200) {
+    const P = new Float32Array(pos.count * 3)
+    for (let i = 0; i < pos.count; i++) { P[i * 3] = pos.getX(i); P[i * 3 + 1] = pos.getY(i); P[i * 3 + 2] = pos.getZ(i) }
+    const idx = new Uint32Array(geo.index.array)
+    const tgt = Math.max(36, Math.floor(idx.length * 0.18 / 3) * 3)
+    let [res] = simp.simplify(idx, P, 3, tgt, 0.12, [])
+    // 掃描的石頭：UV 接縫把網格切成很多塊，減面收不起來 → 不透明的（opaque）照位置把頂點焊起來再減（影子用不到 UV）
+    if (res.length > idx.length * 0.6 && opaque) {
+      const key = new Map(), remap = new Uint32Array(pos.count)
+      for (let i = 0; i < pos.count; i++) { const k = Math.round(P[i * 3] * 1e4) + ',' + Math.round(P[i * 3 + 1] * 1e4) + ',' + Math.round(P[i * 3 + 2] * 1e4); let j = key.get(k); if (j == null) { j = i; key.set(k, i) } remap[i] = j }
+      const wi = idx.map((v) => remap[v])
+      ;[res] = simp.simplify(wi, P, 3, tgt, 0.12, [])
+      // 掃描石頭的網格不是封閉流形，一般減面卡在 65%：改用頂點分群（格子 = 包圍盒最長邊的 1/14，同一格的頂點併成一點、丟掉退化的三角形）
+      if (res.length > idx.length * 0.6) {
+        if (!geo.boundingBox) geo.computeBoundingBox()
+        const bb = geo.boundingBox, cell = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z) / 14
+        const cm = new Map(), cr = new Uint32Array(pos.count)
+        for (let i = 0; i < pos.count; i++) { const k = Math.floor((P[i * 3] - bb.min.x) / cell) + ',' + Math.floor((P[i * 3 + 1] - bb.min.y) / cell) + ',' + Math.floor((P[i * 3 + 2] - bb.min.z) / cell); let j = cm.get(k); if (j == null) { j = i; cm.set(k, i) } cr[i] = j }
+        const out2 = [], seen = new Set()
+        for (let t = 0; t < idx.length; t += 3) { const a2 = cr[idx[t]], b2 = cr[idx[t + 1]], c2 = cr[idx[t + 2]]; if (a2 === b2 || b2 === c2 || a2 === c2) continue; const k = [a2, b2, c2].sort((x, y) => x - y).join(','); if (seen.has(k)) continue; seen.add(k); out2.push(a2, b2, c2) }
+        res = new Uint32Array(out2)
+      }
+    }
+    if (res.length < idx.length * 0.6) {
+      out = new THREE.BufferGeometry()
+      for (const [k, a] of Object.entries(geo.attributes)) out.setAttribute(k, a)
+      out.setIndex(new THREE.BufferAttribute(res, 1))
+      if (!geo.boundingSphere) geo.computeBoundingSphere()
+      out.boundingSphere = geo.boundingSphere.clone()
+    }
+  }
+  shCache.set(src, out)
+  return out
+}
+lodSetShadowGen(shadowGeo)   // lod.js 自動補低面數版本用（石頭、岩廊牆…不是 scatter 種的）
 
 export async function loadPlants(onProgress) {
   simp = await import('https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_simplifier.module.js')

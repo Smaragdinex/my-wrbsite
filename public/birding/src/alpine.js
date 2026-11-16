@@ -608,8 +608,13 @@ function buildInterior(lib, avoid = []) {
           // 2026-11-12 焦散光（使用者參考圖：陽光透過水紋在溪底織出一張晃動的亮網）：兩層雜訊相減取細線，淺水最明顯、1 m 以下看不到；陰天、晚上沒有
           // 2026-11-17 升級：亮網加強（0.3 → 1.1）、深到 1.5 m 都看得到、只有少數幾塊樹蔭沒有
           float ca = wfxCaustic(vW.xz + N.xz * 0.25, uTime);
-          float shallow = smoothstep(0.0, 0.05, vDepth) * (1.0 - smoothstep(0.35, 1.6, vDepth));
-          col += vec3(0.42, 0.62, 0.5) * ca * shallow * uDay * (1.0 - uRain) * (1.0 - 0.85 * uCloudK) * 1.1 * smoothstep(0.12, 0.5, vnoise(vW.xz * 0.45 + 3.7));   // 一片一片（樹蔭下沒有、空曠處才有），不是整條溪都一樣
+          // 2026-11-17 使用者（荷花湖截圖）「湖的水不夠自然，有這麼花的水紋嗎」：整片湖都是亮網太假 → 湖只在岸邊 40 cm 內、很淡；溪也減半
+          #ifdef LAKE
+          float shallow = smoothstep(0.0, 0.05, vDepth) * (1.0 - smoothstep(0.1, 0.4, vDepth)); float cK = 0.18;
+          #else
+          float shallow = smoothstep(0.0, 0.05, vDepth) * (1.0 - smoothstep(0.25, 0.9, vDepth)); float cK = 0.45;
+          #endif
+          col += vec3(0.42, 0.62, 0.5) * ca * shallow * uDay * (1.0 - uRain) * (1.0 - 0.85 * uCloudK) * cK * smoothstep(0.2, 0.6, vnoise(vW.xz * 0.45 + 3.7));   // 一片一片（樹蔭下沒有、空曠處才有），不是整條溪都一樣
         }
         #endif
         // 反射：低角度看過去倒映的是兩岸的樹和石壁（暗綠、一塊深一塊淺），只有幾乎正上方的反射才是天空
@@ -654,8 +659,16 @@ function buildInterior(lib, avoid = []) {
         col += vec3(1.0, 0.58, 0.2) * glit * 3.6;
         col += vec3(1.0, 0.98, 0.93) * pow(sg, 110.0) * spark * 2.2 * uDay * sunUp * (1.0 - uDusk);   // 白天：水面上一點一點跳動的亮點
         // 2026-11-17 白天的碎閃光（waterfx.js）：整片水面一顆顆亮星，跌水、白沫上沒有；陰天幾乎沒有
+        // 2026-11-17 使用者（濕地截圖）「wetland 還是用原本的水」：鏡面濕地（MIRROR）不加碎閃光，那片白點在倒影上很突兀
+        #ifdef MIRROR
+        float wGl = 0.0;
+        #else
         float wGl = wfxGlitter(vW, Vd, uSun, uTime) * (1.0 - fall) * (1.0 - 0.92 * uCloudK) * (1.0 - uRain);
+        #ifdef LAKE
+        wGl *= 0.35;   // 湖面平靜，閃光少一點
+        #endif
         col += mix(vec3(1.0, 0.97, 0.9), vec3(1.0, 0.7, 0.4), uDusk) * wGl * 14.0 * max(uDay, uDusk);
+        #endif
         col = mix(col, col * vec3(1.15, 0.92, 0.7), uDusk * sunUp * 0.35 * smoothstep(0.6, 0.98, sd));   // 太陽那個方向的水面整片偏金
         // 跌水：一股股白色水絲，中間夾著深色透明的水
         // 三層：粗的水股、細的水絲、最細的拉絲（長焦拉近看才不會是一片糊糊的白）

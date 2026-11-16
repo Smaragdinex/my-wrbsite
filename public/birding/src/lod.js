@@ -197,6 +197,8 @@ export function lodHideFar(scene, x0, z0, x1, z1, R) {   // 水面範圍（長�
 
 let lowGen = null
 export const lodSetLowGen = (f) => { lowGen = f }
+let shGen = null
+export const lodSetShadowGen = (f) => { shGen = f }
 function autoLow(m) {
   if (!lowGen || !m.parent || m.userData.noAutoLow) return null
   const g = m.geometry, per = (g.index ? g.index.count : 0) / 3
@@ -234,7 +236,8 @@ export function lodShadowProxies() {
     for (const [mi, m] of S.meshes.entries()) {
       if (!m.userData.lodManaged) continue
       // 影子用低面數版本（陰影貼圖每個貼素約 9 公分，看不出差別，重畫陰影比較快）
-      const px = new THREE.InstancedMesh(S.lows[mi]?.geometry ?? m.geometry, m.material, S.n)
+      const g0 = S.lows[mi]?.geometry ?? m.geometry
+      const px = new THREE.InstancedMesh(shGen?.(g0, m.material) ?? g0, m.material, S.n)   // 2026-11-17 陰影用更粗的版本（plants.js shadowGeo）
       px.instanceMatrix.array.set(S.base)
       px.position.copy(m.position); px.quaternion.copy(m.quaternion); px.scale.copy(m.scale)
       px.castShadow = true; px.receiveShadow = false

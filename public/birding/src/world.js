@@ -30,7 +30,7 @@ import { softDotTex } from './textures.js'
 import { createCloudSea } from './cloudsea.js'
 import { buildOwlNest } from './owlnest.js'
 import { buildEast, loadHideKit } from './east.js'
-import { buildSavanna } from './savanna.js'
+import { buildSavanna, loadSavannaKit } from './savanna.js'
 import { buildCamp } from './camp.js'
 import { buildPondLife } from './pondlife.js'
 import { buildYosemite } from './yosemite.js'
@@ -56,7 +56,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
 
   const scene = new THREE.Scene()
   scene.fog = new THREE.FogExp2(new THREE.Color(0xc9d8d6), FOG_D0)
-  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2000)
+  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 3200)   /* 2026-11-17 遠山往外推到 1.8 km 以上 */
   camera.layers.enable(1)   // layer 1：草葉（水面倒影的鏡頭不畫）
 
   /* 光 */
@@ -99,7 +99,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 下載進度：植物（檔案大）佔 75%、鳥 25%
   let pF = 0, bF = 0
   const prog = () => onProgress?.(pF * 0.75 + bF * 0.25, 'load')
-  const [plantLib, , walkKit, wetKit, sumKit, caveKit, hideKit] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() }, nearIds), loadWalkwayKit(), loadWetlandKit(), loadSummitKit(), loadCaveKit(), loadHideKit()])
+  const [plantLib, , walkKit, wetKit, sumKit, caveKit, hideKit, savKit] = await Promise.all([loadPlants((f) => { pF = f; prog() }), loadAnimalModels(extraModels, (f) => { bF = f; prog() }, nearIds), loadWalkwayKit(), loadWetlandKit(), loadSummitKit(), loadCaveKit(), loadHideKit(), loadSavannaKit().catch((e) => { console.warn('savanna kit', e); return null })])
   onProgress?.(1, 'build')
   // 鳥：先擺好（鏡頭位置要先知道，種植物時才能避開視線和鳥活動的範圍）
   const placeDef = (def) => {
@@ -158,7 +158,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   giantSpots(alpAvoid)   // 巨木的位置先算好：山區的其他樹、草要避開
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
   scene.add(buildEast({ avoid: alpAvoid, lib: plantLib, hideKit, walkKit }))
-  scene.add(buildSavanna({ avoid: alpAvoid }))   // 2026-11-16 東北稀樹草原
+  scene.add(buildSavanna({ avoid: alpAvoid, kit: savKit }))   // 2026-11-16 東北稀樹草原
   // 2026-11-15 小剪尾站的溪中大石（def.boulder）：平頂的苔石，鳥站的那一點（spot 正上方往下打）剛好在 def.y
   for (const def of BIRDS.filter((d) => d.boulder && plantLib.mrock_10)) {
     const rk = plantLib.mrock_10.clone(true), bx = new THREE.Box3().setFromObject(rk), sz = bx.getSize(new THREE.Vector3())
@@ -674,7 +674,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const groundAt = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)   // 相機對焦用（camera.js aim）
   // lodSync：截圖／錄影工具（tools/record/helpers.js still）直接把鏡頭擺到某處就畫，沒跑 tick → LOD、遠處小東西剔除還停在玩家的位置（石橋的石塊會被當成太遠不畫）。畫之前先照這台鏡頭更新一次
   const lodSync = (cam = camera) => { lodUpdate(cam, true); tinyCull(scene, cam, 0); alpine.terrainLod?.(cam) }
-  return { cumulus, get climate() { return climateNow }, groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  return { shadows, cumulus, get climate() { return climateNow }, groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */

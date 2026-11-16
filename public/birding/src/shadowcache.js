@@ -33,6 +33,7 @@ export function createShadowCache({ renderer, scene, sun, camera }) {
   // 但它們一直在動，留著影子就得幾乎每格重畫陰影。圖鑑（guide.js）是另一個場景、自己的光，不受影響。
   const noSun = (o) => o.isSkinnedMesh || /_rig$/.test(o.name) || o.name === 'Armature'
   function scan() {
+    const t0 = performance.now()
     lodShadowProxies()
     const list = []
     scene.traverse((o) => { if (noSun(o)) o.traverse((c) => { c.castShadow = false }) })
@@ -45,6 +46,7 @@ export function createShadowCache({ renderer, scene, sun, camera }) {
     })
     const prev = new Map(movers)
     movers = list.map((o) => [o, prev.get(o) || o.matrixWorld.clone()])
+    stats.scanMs = performance.now() - t0
   }
 
   function movingNear(dt) {
@@ -87,12 +89,13 @@ export function createShadowCache({ renderer, scene, sun, camera }) {
     if (why === 'init') scan()
     dirty = false; lastSize = size; lastDir.copy(dir); lastTgt.copy(sun.target.position); dynT = 0
     sun.shadow.needsUpdate = true
+    const t1 = performance.now()
     { const C = sun.shadow.camera; lodShadowCull(sun.target.position.x, sun.target.position.z, Math.max(Math.abs(C.left), Math.abs(C.right), Math.abs(C.top), Math.abs(C.bottom)) * 1.45 + 8) }
     const prevRT = renderer.getRenderTarget(), auto = renderer.shadowMap.autoUpdate
     renderer.shadowMap.autoUpdate = true
     renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(prevRT)
     renderer.shadowMap.autoUpdate = auto
-    stats.updates++; stats.why = why
+    stats.updates++; stats.why = why; stats.drawMs = performance.now() - t1
     return true
   }
 

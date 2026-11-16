@@ -13,6 +13,28 @@ import { canopyGeometry, leafify, barkify } from './fju-foliage.js'
 import { graniteMaterial } from './yosemite.js'
 
 const TAU = Math.PI * 2
+// 2026-11-17 Blender 做的樹（tools/make-savanna-trees.py → models/props/savanna_trees.glb，葉片貼圖 savanna_leaves.png）：
+// 每種樹兩個變化（acacia_a/b、island_a/b、palm_a/b），每個節點有 bark、leaf 兩個材質；實際公尺、底在原點
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { lodRegister } from './lod.js'
+const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
+export async function loadSavannaKit() {
+  const [gl, leafTex, barkC, barkN] = await Promise.all([
+    new GLTFLoader().loadAsync(`models/props/savanna_trees.glb?v=${VER}`),
+    new THREE.TextureLoader().loadAsync(`models/props/savanna_leaves.png?v=${VER}`),
+    new THREE.TextureLoader().loadAsync(`models/plants/bark/pine_bark_diff.jpg?v=${VER}`),
+    new THREE.TextureLoader().loadAsync(`models/plants/bark/pine_bark_nor_gl.jpg?v=${VER}`),
+  ])
+  leafTex.flipY = false; leafTex.colorSpace = THREE.SRGBColorSpace; leafTex.anisotropy = 4
+  for (const t of [barkC, barkN]) { t.flipY = false; t.wrapS = t.wrapT = THREE.RepeatWrapping }
+  barkC.colorSpace = THREE.SRGBColorSpace
+  gl.scene.updateMatrixWorld(true)
+  const geo = {}
+  gl.scene.traverse((o) => { if (o.isMesh) { const n = (o.parent?.isMesh || o.parent === gl.scene ? o.name : o.parent.name).replace(/_\d+$/, ''); const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); (geo[n] ??= {})[o.material.name] = g } })
+  const bark = barkify(new THREE.MeshStandardMaterial({ map: barkC, normalMap: barkN, color: 0xe6d8c8, roughness: 0.95, vertexColors: true }))
+  const leaf = leafify(new THREE.MeshStandardMaterial({ map: leafTex, color: 0xffffff, emissive: 0x0b1206, roughness: 0.75, alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true }))
+  return { geo, bark, leaf }
+}
 const L = LOBES.sav
 const BOX = [L.x - L.rx - 25, L.x + L.rx + 5, L.z - L.rz - 20, L.z + L.rz + 5]
 const inSav = (x, z, k = 0.6) => savK(x, z) > k && domeRho(x, z) < 0.95
@@ -40,7 +62,7 @@ function acaciaParts(rnd, H, R) {
   return { wood, crowns }
 }
 
-export function buildSavanna({ avoid = [] } = {}) {
+export function buildSavanna({ avoid = [], kit = null } = {}) {
   const g = new THREE.Group(); g.name = 'savanna'
   const rnd = mulberry32(2016)
   const c = new THREE.Color()
@@ -150,7 +172,30 @@ export function buildSavanna({ avoid = [] } = {}) {
     }
   }
 
-  // ---------- 金合歡 ----------
+  // ---------- 樹：有 Blender 的樹就用（乾草原＝金合歡；樹島＝闊葉大樹、三成扇葉棕櫚） ----------
+  if (kit) {
+    const by = {}, m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0)
+    const REF = { acacia_a: 6.0, acacia_b: 5.2, island_a: 10, island_b: 12, palm_a: 10, palm_b: 9 }   // 模型本身的高度
+    for (const t of TREES) {
+      const kind = t.broad ? (rnd() < 0.32 ? (rnd() < 0.7 ? 'palm_a' : 'palm_b') : (rnd() < 0.5 ? 'island_a' : 'island_b')) : (rnd() < 0.5 ? 'acacia_a' : 'acacia_b')
+      const s = t.H / REF[kind] * (t.broad ? 1.1 : 1.15), y = alpineHeight(t.x, t.z)
+      ;(by[kind] ??= []).push(m4.compose(new THREE.Vector3(t.x, y - 0.05, t.z), q.setFromAxisAngle(UP, t.yaw), new THREE.Vector3(s * (0.9 + rnd() * 0.2), s, s * (0.9 + rnd() * 0.2))).clone())
+      addCollider(t.x, t.z, kind.startsWith('island') ? 0.6 : 0.3, y + t.H * 0.4, y - 0.5)
+    }
+    for (const [kind, list] of Object.entries(by)) {
+      const parts = kit.geo[kind]; if (!parts) continue
+      const ms = []
+      for (const [mn, mat] of [['bark', kit.bark], ['leaf', kit.leaf]]) {
+        if (!parts[mn]) continue
+        const im = new THREE.InstancedMesh(parts[mn], mat, list.length)
+        list.forEach((m, i) => im.setMatrixAt(i, m))
+        im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'sav_' + kind + '_' + mn
+        g.add(im); ms.push(im)
+      }
+      lodRegister(ms, REF[kind] * 1.1)
+    }
+  } else
+  // ---------- 金合歡（舊的程式樹，沒有 kit 時） ----------
   {
     const woodGeos = [], crownList = []
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0)

@@ -21,7 +21,7 @@ import { priceFor } from './scoring.js'
 import { createViewmodel } from './viewmodel.js'
 import { createUiFx } from './ui-fx.js'
 import { controlsSvg } from './controls-help.js'
-import { MENU_VIEW, terrainHeight, supportAt } from '../layout.js'
+import { MENU_VIEW, terrainHeight, supportAt, ALP_TRAIL, ALP_SPURS, ALP_WALKS } from '../layout.js'
 import { t as tr, LANG, LANGS, setLang } from '../i18n.js'
 import { summitRests } from '../summit.js'
 
@@ -260,6 +260,9 @@ await renderer.compileAsync(scene, camera)
 // 水面倒影（畫到貼圖）、影子、手和相機也各有自己的版本。沒先編好的話，第一次走過去會整個卡住 0.5～1 秒
 const home = { p: camera.position.clone(), q: camera.quaternion.clone() }
 const WARM = [[-87.6, 0.4, -90], [-74, 0, -90], [-55, 2, 90], [-15, -25, 60], [103, -5, -90], [167, 12, 100]]
+// 2026-11-17 使用者「紅杉林、非洲區很卡」：量到第一次走進這些地方時卡 40～500 ms（第二次走同一條路完全不卡）＝陰影的著色器第一次編譯。
+// 紅杉林、東邊林道、稀樹草原、三角洲、濕地木棧道也先預熱
+WARM.push([200, -40, -60], [292, 60, 0], [330, 86, -60], [400, 125, -60], [447, 181, -120], [-6, -142, 180], [60, -100, 180])
 for (const [wi, [x, z, yaw]] of WARM.entries()) {
   setLoad(0.8 + 0.18 * wi / WARM.length, tr('準備畫面…'))
   camera.position.set(x, supportAt(x, z, 99).y + 1.7, z); camera.rotation.set(0, yaw * Math.PI / 180, 0, 'YXZ'); camera.updateMatrixWorld()
@@ -267,6 +270,22 @@ for (const [wi, [x, z, yaw]] of WARM.entries()) {
   await renderer.compileAsync(scene, camera)
   world.water.reflect(renderer, scene, camera, world.quality.reflScale, 1)
   world.render(); vm.render(renderer, scene)
+}
+// 2026-11-17 第一次走進新區域會卡 40～500 ms（量到是主畫面那一格：那一帶的樹、草、石頭第一次畫＝模型、貼圖上傳到顯示卡），
+// 同一條路第二次走完全不卡 → 載入時沿著所有步道每 35 m 往四個方向各畫一張，全部先上傳好
+{
+  const lines = [ALP_TRAIL, ...ALP_SPURS.map((q) => q.pts), ...(ALP_WALKS ?? []).map((w) => w.pts ?? w).filter((p) => Array.isArray(p) && Array.isArray(p[0]))]
+  const pts = []
+  for (const P of lines) { let acc = 1e9; for (let i = 1; i < P.length; i++) { const [ax, az] = P[i - 1], [bx, bz] = P[i], L = Math.hypot(bx - ax, bz - az); for (let u = 0; u < L; u += 2) { acc += 2; if (acc >= 35) { acc = 0; const t = u / L; pts.push([ax + (bx - ax) * t, az + (bz - az) * t, Math.atan2(-(bx - ax), -(bz - az))]) } } } }
+  const t0 = performance.now()
+  for (const [k, [x, z, yaw]] of pts.entries()) {
+    if (k % 4 === 0) { setLoad(0.98, tr('準備畫面…')); await new Promise((r) => setTimeout(r, 0)) }
+    for (const dy of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      camera.position.set(x, supportAt(x, z, 99).y + 1.7, z); camera.rotation.set(0, yaw + dy, 0, 'YXZ'); camera.updateMatrixWorld()
+      world.tick(0, 0.016); world.lodSync?.(camera); world.render()
+    }
+  }
+  window.__warmTour = [pts.length, Math.round(performance.now() - t0)]; console.info('[warm] trail tour', ...window.__warmTour)
 }
 camera.position.copy(home.p); camera.quaternion.copy(home.q); camera.updateMatrixWorld()
 world.tick(0, 0.016)
