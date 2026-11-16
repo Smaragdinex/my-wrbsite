@@ -11,7 +11,7 @@ import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCar
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { buildSummit } from './summit.js'
 import { WATER_FX } from './waterfx.js'
-import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_S, savK, DELTA, deltaK, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, bridgeLanterns, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
+import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_S, savK, DELTA, deltaK, LOBES, lobeSweep, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, bridgeLanterns, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { lampLit, LAMP_U } from './walkway.js'
 import { nearGiant, forestK } from './giants.js'
@@ -330,6 +330,9 @@ function buildInterior(lib, avoid = []) {
       // 2026-11-10 東部：草原是乾一點的黃綠草地（陡的西緣照舊是岩坡）；濕地水裡、泥灘是濕的灰褐泥，岸上一圈深色濕泥，再往外是鹽地的黃綠矮草
       {
         let ez = eastZone(x, z)
+        // 2026-11-17 使用者「外面草地顏色一樣」：圍籬外的這片山區格子也照草原／三角洲上色（以前是山區的綠）
+        const savOutK = x > 300 && domeRho(x, z) > 0.94 ? ss(2.7, 1.3, lobeSweep(LOBES.sav, x, z)) : 0
+        if (savOutK > 0.01) ez = 'sav'
         if (ez === 'hide') ez = grassSD(x, z) < 2 ? 'grass' : wetSD(x, z) < 14 ? 'wet' : null   // 觀察屋旁照所在的區上色（不然一圈圓形的色塊）
         if (ez === 'grass') {
           // 2026-11-15 ChatGPT 草原規格（docs/GRASSLAND_SPEC_1115.txt）：以前整片一個沙米色 → 六色、三個尺度的雜訊混：
@@ -342,7 +345,7 @@ function buildInterior(lib, avoid = []) {
           c.lerp(g0, (1 - rock * 0.7) * (1 - tr) * ss(-1, 3, -grassSD(x, z) + 2))
         } else if (ez === 'sav') {
           // 2026-11-16 非洲稀樹草原：金黃的乾草地為主，大塊（約 30 m）的淺金↔黃褐、中塊的紅土裸地（紅壤）、低窪處一點橄欖綠；步道是紅褐色的沙土
-          const kS = savK(x, z), n1 = fbm2(x * 0.035 + 2, z * 0.035 - 6, 3), n2 = fbm2(x * 0.22 + 9, z * 0.22, 2), n3 = fbm2(x * 2.4, z * 2.4, 1)
+          const kS = Math.max(savK(x, z), savOutK), n1 = fbm2(x * 0.035 + 2, z * 0.035 - 6, 3), n2 = fbm2(x * 0.22 + 9, z * 0.22, 2), n3 = fbm2(x * 2.4, z * 2.4, 1)
           const g0 = new THREE.Color().setHSL(0.105 + 0.02 * n1, 0.62, 0.29 + 0.06 * n1)
           g0.lerp(new THREE.Color().setHSL(0.085, 0.5, 0.33), ss(0.55, 0.7, n2) * 0.6)
           g0.lerp(new THREE.Color().setHSL(0.045, 0.48, 0.3), ss(0.66, 0.78, fbm2(x * 0.09 - 4, z * 0.09 + 1, 2)) * 0.75)

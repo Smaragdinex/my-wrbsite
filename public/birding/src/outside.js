@@ -7,9 +7,31 @@
 //   遠山：三層山脊（640、760、880 公尺），自己算空氣透視（不吃場景的霧），顏色跟著日夜
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { TAU, domeRho, inAlpine, alpineHeight, terrainHeight, smoothstep, lerp, LOBES, lobeSweep } from './layout.js'
+import { TAU, domeRho, inAlpine, alpineHeight, terrainHeight, smoothstep, lerp, LOBES, lobeSweep, DELTA, deltaK } from './layout.js'
 // 2026-11-16 東北稀樹草原外面：草地接成金黃的乾草、樹林帶在那個方向幾乎不長（看出去是一望無際的草原）
+const DCOL = [2.2, 1.35, 1.6]   // 外面的草地貼圖（grassGroundTex，線性約 0.11, 0.21, 0.04）很綠：頂點色要除回去，乘出來才跟園區裡（灰色細節貼圖 × 黃綠頂點色）一樣
 const savOut = (x, z) => smoothstep(2.7, 1.3, lobeSweep(LOBES.sav, x, z))
+// 2026-11-17 使用者（三角洲空拍圈起圍籬外）「那些溪流要往外延伸」：三角洲的河道走到圍籬就斷了 →
+// 每條碰到公園邊界的河道，從端點順著原本的方向繼續往外流 450 m（慢慢左右彎、越往外越寬），外面的地面在河兩旁變綠、樹讓開
+let _outRivers = null
+export function outRivers() {
+  if (_outRivers) return _outRivers
+  _outRivers = []
+  for (const c of DELTA.chans) {
+    const P = c.pts
+    for (const end of [0, 1]) {
+      const a = end ? P[P.length - 1] : P[0], b = end ? P[P.length - 4] : P[3]
+      if (domeRho(a[0], a[1]) < 0.9) continue                 // 這一端在園區裡面（接到別的河道）
+      let dx = a[0] - b[0], dz = a[1] - b[1]; const l = Math.hypot(dx, dz); dx /= l; dz /= l
+      const pts = [[a[0] - dx * 6, a[1] - dz * 6]]; let x = a[0], z = a[1], ang = Math.atan2(dz, dx), ph = (a[0] * 0.13 + a[1] * 0.07) % 6
+      for (let s = 0; s < 450; s += 6) { ang += 0.09 * Math.sin(s * 0.018 + ph); x += Math.cos(ang) * 6; z += Math.sin(ang) * 6; pts.push([x, z]) }
+      _outRivers.push({ pts, w0: c.w * 1.1, w1: c.w * 3.2 })
+    }
+  }
+  return _outRivers
+}
+const _segD2 = (x, z, P) => { let b = 1e9; for (let i = 0; i < P.length - 1; i++) { const [ax, az] = P[i], [bx, bz] = P[i + 1], ex = bx - ax, ez = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / (ex * ex + ez * ez || 1))); b = Math.min(b, Math.hypot(x - ax - ex * t, z - az - ez * t)) } return b }
+const riverOutD = (x, z) => { let b = 1e9; for (const r of outRivers()) b = Math.min(b, _segD2(x, z, r.pts) - r.w1); return b }
 import { fbm3, mulberry32 } from './noise.js'
 import { dayLight, duskLight, weatherU, wetify } from './structures.js'
 import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'
@@ -78,10 +100,14 @@ export function buildOutside(renderer = null) {
       const [ex, ez, r0] = edge[i], ux = ex / r0, uz = ez / r0
       for (let k = 0; k < NR; k++) {
         const d = RINGS[k], x = ex + ux * d, z = ez + uz * d
-        pos.push(x, outY(i, 0, x, z, d) - (k === 0 ? 0.02 : 0), z); uv.push(x / 5, z / 5)
+        let yy = outY(i, 0, x, z, d) - (k === 0 ? 0.02 : 0)
+        { const rd = d > 0 ? riverOutD(x, z) : 1e9; if (rd < 45) yy = lerp(Math.min(yy, DELTA.W - 0.7), yy, smoothstep(2, 45, rd)) }   // 河谷：河道一帶壓到比三角洲水面低一點，河才是平的、不會爬山
+        pos.push(x, yy, z); uv.push(x / 5, z / 5)
         const n = fbm3(x * 0.03, 0, z * 0.03, 3)
         c.setRGB(0.42 + n * 0.12, 0.52 + n * 0.12, 0.3 + n * 0.08)
-        { const w = savOut(x, z); if (w > 0) c.lerp(new THREE.Color(0.62 + n * 0.1, 0.5 + n * 0.08, 0.3 + n * 0.05), w) }
+        { const w = savOut(x, z); if (w > 0) c.lerp(new THREE.Color(2.6 + n * 0.4, 1.05 + n * 0.15, 1.8 + n * 0.3), w) }   // 2026-11-17 同上：草原外面的金黃（除回貼圖的綠）
+        // 2026-11-17 使用者（圈起三角洲圍籬外）「外面草地顏色一樣」：三角洲那一側的外面接成跟園區裡一樣的黃綠濕草地（河兩旁也是）
+        { const w = savOut(x, z) * deltaK(x, z); if (w > 0) c.lerp(new THREE.Color(DCOL[0] + n * 0.3, DCOL[1] + n * 0.15, DCOL[2] + n * 0.3), w) }
         col.push(c.r, c.g, c.b)
       }
     }
@@ -97,6 +123,23 @@ for (let k = 0; k < NR - 1; k++) { const a = i * NR + k, b = j * NR + k; idx.pus
     const ground = new THREE.Mesh(geo, wetify(new THREE.MeshStandardMaterial({ map: T.grassGroundTex(), vertexColors: true, roughness: 1 }), { dark: 0.3, rough: 0.55 }))
     ground.receiveShadow = true; ground.userData.terrain = true
     g.add(ground)
+    // 圍籬外的河面：照外面地面的高度（往下打射線）鋪一條帶子；水的顏色跟三角洲一樣倒映藍天，遠處淡進霧裡
+    const wM = new THREE.MeshStandardMaterial({ color: 0x4a78a8, roughness: 0.12, metalness: 0.15, envMapIntensity: 1.3 })
+    for (const r of outRivers()) {
+      const P = [], I = [], n = r.pts.length
+      for (let i = 0; i < n; i++) {
+        const [x, z] = r.pts[i], [x2, z2] = r.pts[Math.min(n - 1, i + 1)], [x0, z0] = r.pts[Math.max(0, i - 1)]
+        let tx = x2 - x0, tz = z2 - z0; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l
+        const w = lerp(r.w0, r.w1, i / (n - 1)) * (1 + 0.2 * Math.sin(i * 0.7))
+        for (const sd of [-1, 1]) {
+          const px = x - tz * w * sd, pz = z + tx * w * sd
+          P.push(px, DELTA.W - 0.28, pz)   // 跟三角洲的水面接平
+        }
+        if (i) { const a = (i - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) }
+      }
+      const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); gg.setIndex(I); gg.computeVertexNormals()
+      const m = new THREE.Mesh(gg, wM); m.name = 'outRiver'; m.receiveShadow = true; g.add(m)
+    }
   }
 
   /* ---------- 圍籬：邊界內側（玩家在 0.955 被擋），每 2.4 公尺一根柱子、兩條橫木，跟著地形 ----------
@@ -155,7 +198,8 @@ for (let k = 0; k < NR - 1; k++) { const a = i * NR + k, b = j * NR + k; idx.pus
       const con = rnd() < 0.1 + 0.8 * smoothstep(-20, 140, x)
       const H = (con ? 11 : 8) + rnd() * 7
       const it = { p: new THREE.Vector3(x, y - 0.2, z), q: new THREE.Quaternion().setFromAxisAngle(UP, rnd() * TAU), H, w: 0.85 + rnd() * 0.35, c: rnd() }
-      { const w = savOut(x, z); if (w > 0 && it.c < w * 0.94) continue }   // 草原那邊不長森林（用已經抽好的 it.c 判斷，亂數序列不變、其他方向的樹位置不動）
+      { const w = savOut(x, z); if (w > 0 && it.c < w * 0.94) continue }
+      if (riverOutD(x, z) < 10) continue   // 圍籬外延伸出去的河：河道和兩岸不長樹   // 草原那邊不長森林（用已經抽好的 it.c 判斷，亂數序列不變、其他方向的樹位置不動）
       ;(con ? conL : broadL).push(it)
     }
     const fill = (geo, mat, list, sc, color) => {
