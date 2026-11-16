@@ -258,6 +258,7 @@ export async function buildStore(scene, state, plantLib, { getSound = () => true
   }) })
   const leaves = [-1, 1].map((s) => {
     const lf = new THREE.Group(); lf.position.set(DX, 0.03, s * LEAF_W / 2)
+    lf.userData.noMerge = true   // 2026-11-17 使用者「一進去就往外跑：玻璃打開了、門框沒動」：門關著停了 3 秒，門框被靜態合併（batch.js）當成不會動的東西；門片整組不合併
     const fr = (w, h, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, w), mats.dark); m.position.set(0, y, z); m.castShadow = true; lf.add(m) }
     fr(0.05, LEAF_H, LEAF_H / 2, -LEAF_W / 2 + 0.025); fr(0.05, LEAF_H, LEAF_H / 2, LEAF_W / 2 - 0.025)
     fr(LEAF_W, 0.06, LEAF_H - 0.03, 0); fr(LEAF_W, 0.1, 0.05, 0)
