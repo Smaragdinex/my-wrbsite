@@ -23,7 +23,10 @@ export function outRivers() {
       const a = end ? P[P.length - 1] : P[0], b = end ? P[P.length - 4] : P[3]
       if (domeRho(a[0], a[1]) < 0.9) continue                 // 這一端在園區裡面（接到別的河道）
       let dx = a[0] - b[0], dz = a[1] - b[1]; const l = Math.hypot(dx, dz); dx /= l; dz /= l
-      const pts = [[a[0] - dx * 6, a[1] - dz * 6]]; let x = a[0], z = a[1], ang = Math.atan2(dz, dx), ph = (a[0] * 0.13 + a[1] * 0.07) % 6
+      // 2026-11-17 使用者「沒接上」：河道的端點在圍籬外 15 m，園區的水面在圍籬前就停了 → 外面的河從河道越過圍籬前一點的地方就開始，沿河道走到端點再往外流
+      const seq = end ? P : [...P].reverse(), pts = []
+      for (const q of seq) if (domeRho(q[0], q[1]) > 0.93) pts.push([q[0], q[1]])
+      let x = a[0], z = a[1], ang = Math.atan2(dz, dx), ph = (a[0] * 0.13 + a[1] * 0.07) % 6
       for (let s = 0; s < 450; s += 6) { ang += 0.09 * Math.sin(s * 0.018 + ph); x += Math.cos(ang) * 6; z += Math.sin(ang) * 6; pts.push([x, z]) }
       _outRivers.push({ pts, w0: c.w * 1.1, w1: c.w * 3.2 })
     }

@@ -567,7 +567,8 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       // 霧只在山區，紅杉林裡最濃（林下濕、風小）。濃度直接換算成能見度：FogExp2 在 1.73/(密度×山區倍數) 公尺處遮掉 95%
       const cp = camera.position, gy = inAlpine(cp.x, cp.z) ? alpineHeight(cp.x, cp.z) : terrainHeight(cp.x, cp.z)
       const c = climateNow = climateAt(elevationOf(gy), time.hour, { rain: weatherU.rain.value, sunny: weatherU.sunny.value })
-      const F = c.fog * (inAlpine(cp.x, cp.z, -4) ? 0.35 + 0.65 * giants.inside(camera) : 0)
+      const savE = Math.hypot((cp.x - 430) / 165, (cp.z - 145) / 125)   // 2026-11-17 稀樹草原、三角洲沒有山區的霧（跟 fogzone.js 同一個橢圓）
+      const F = c.fog * (inAlpine(cp.x, cp.z, -4) ? 0.35 + 0.65 * giants.inside(camera) : 0) * THREE.MathUtils.smoothstep(savE, 0.85, 1.15)
       fogIn = THREE.MathUtils.damp(fogIn, F, 0.8, dt)   // 走進、走出霧區慢慢變（不會一步就白掉）
       if (fogIn > 0.002) {
         const zone = THREE.MathUtils.smoothstep(cp.x, 62, 92), mult = 1 + zone * (1.3 + 3.0 * Math.exp(-Math.max(cp.y - 1, 0) / 8))

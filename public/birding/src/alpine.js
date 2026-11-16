@@ -741,7 +741,7 @@ function buildInterior(lib, avoid = []) {
     // 2026-11-17 奧卡萬戈三角洲（layout.js DELTA）：一整片方格水面蓋住三角洲，每點水深照地形算（岸上、樹島 < 0 → 透明），
     // 河道、睡蓮池、淹水草甸自然由地形切出來。用湖的配色（LAKE），淺的淹水草甸看得到底下的草
     {
-      const x0 = 430, x1 = 606, z0 = 112, z1 = 262, cs = 0.8, nxw = Math.ceil((x1 - x0) / cs), nzw = Math.ceil((z1 - z0) / cs), W = DELTA.W
+      const x0 = 430, x1 = 626, z0 = 108, z1 = 276, cs = 0.8, nxw = Math.ceil((x1 - x0) / cs), nzw = Math.ceil((z1 - z0) / cs), W = DELTA.W
       const P = [], U = [], D = [], I = [], keep = []
       for (let j = 0; j <= nzw; j++) for (let i = 0; i <= nxw; i++) {
         const x = x0 + i * cs, z = z0 + j * cs, dd = W - alpineHeight(x, z)
@@ -758,6 +758,13 @@ function buildInterior(lib, avoid = []) {
       dg.setIndex(I)
       const deltaM = lakeM.clone(); deltaM.uniforms = waterM.uniforms; deltaM.defines = { ...lakeM.defines, OPEN_SKY: 1 }
       const dm = new THREE.Mesh(dg, deltaM); dm.renderOrder = 2; dm.name = 'deltaWater'; g.add(dm)
+      // 2026-11-17 使用者「水顏色不同，統一」：圍籬外延伸出去的河（outside.js 'outRiver'）改用同一個水面材質，深度給 0.9 m
+      g.userData.adoptOutRivers = (scene) => scene.traverse((o) => { if (o.name !== 'outRiver') return
+        const n = o.geometry.attributes.position.count, P2 = o.geometry.attributes.position
+        const U2 = new Float32Array(n * 2); for (let i = 0; i < n; i++) { U2[i * 2] = P2.getX(i) * 0.35; U2[i * 2 + 1] = P2.getZ(i) * 0.35 }
+        o.geometry.setAttribute('uv', new THREE.BufferAttribute(U2, 2)); o.geometry.setAttribute('aDepth', new THREE.BufferAttribute(new Float32Array(n).fill(0.9), 1))
+        for (const k of ['aSlope', 'aFoam', 'aLip']) o.geometry.setAttribute(k, new THREE.BufferAttribute(new Float32Array(n), 1))
+        o.material = deltaM; o.renderOrder = 2 })
     }
     // 2026-11-10 東部人工濕地：方格水面蓋住整個盆地，每點水深照地形算（岸上深度 < 0 → 透明），岸線自然由深度測試切出來
     {
@@ -2161,7 +2168,7 @@ const TERRAIN_LOD = { fn: null }   // 山區地形分塊的精細度切換（bui
 export function createAlpine({ scene, lib, avoid = [] }) {
   let interior = null
   return {
-    build() { if (!interior) { interior = buildInterior(lib, avoid); scene.add(interior.g) } return interior.g },
+    build() { if (!interior) { interior = buildInterior(lib, avoid); scene.add(interior.g); interior.g.userData.adoptOutRivers?.(scene) } return interior.g },
     get group() { return interior?.g },
     get wetMirror() { return interior?.wetMirror },
     terrainLod(cam) { TERRAIN_LOD.fn?.(cam) },   // 濕地鏡面倒影（world.js 跟花園水池一起更新）

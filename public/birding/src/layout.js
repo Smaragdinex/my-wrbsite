@@ -891,7 +891,11 @@ export const deltaLagoon = (x, z) => { let b = 1e9, o = null; for (const L of DE
 export const DELTA_ISLANDS = () => (_dIsl ??= DELTA.islands.filter(([x, z, r]) => deltaChanD(x, z) > r + 1.5 && deltaLagoon(x, z)[0] > 1.6))
 // 三角洲的地面：氾濫平原比水面高一點點；一塊塊淹水草甸（水深 5～15 cm）、幾座樹島（高出 0.8～1.2 m）、河道、睡蓮池
 function deltaShape(x, z, h) {
-  const k = deltaK(x, z) * savK(x, z); if (k <= 0) return h
+  // 2026-11-17 使用者「河沒接上」：圍籬邊 savK 已經掉到 0，河道刻不下去、水面在圍籬前就斷了 → 河道附近一路刻到圍籬外
+  const kC = deltaK(x, z) * smoothstep(1.06, 0.9, domeRho(x, z))
+  const k = deltaK(x, z) * savK(x, z)
+  if (k <= 0 && kC <= 0) return h
+  if (k <= 0.02) { let p = h; for (const c of DELTA.chans) { const d = _segD(x, z, c.pts); if (d < c.w + 3) p = Math.min(p, lerp(DELTA.W - c.d, p, smoothstep(c.w * 0.35, c.w + 2.5, d))) } return lerp(h, Math.min(h, p), kC) }
   const W = DELTA.W, n1 = fbm2(x * 0.03 + 3.3, z * 0.03 - 1.7, 3), n2 = fbm2(x * 0.07 - 5, z * 0.07 + 2, 2), n3 = fbm2(x * 0.045 + 21, z * 0.045 + 8, 3)
   let p = W + 0.32 + 0.35 * (n2 - 0.5)
   p = lerp(p, W - 0.2 - 0.08 * n2, smoothstep(0.5, 0.58, n1))                  // 淹水草甸（水深 20～28 cm，看得出是一片水）

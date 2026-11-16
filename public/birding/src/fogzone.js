@@ -17,7 +17,9 @@ patch('fog_vertex', 'vFogDepth = - mvPosition.z;', 'vFogDepth = - mvPosition.z;\
 patch('fog_pars_fragment', 'varying float vFogDepth;', 'varying float vFogDepth;\n\tvarying vec3 vFogWorld;')
 const f = (v) => v.toFixed(3)
 patch('fog_fragment', 'float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );', `
-		float fogZone = 0.5 * ( smoothstep( ${f(FOG_ZONE.x0)}, ${f(FOG_ZONE.x1)}, vFogWorld.x ) + smoothstep( ${f(FOG_ZONE.x0)}, ${f(FOG_ZONE.x1)}, cameraPosition.x ) );
+		// 2026-11-17 使用者「出了紅杉林應該沒有霧」：東北的稀樹草原／三角洲不算山區（橢圓 中心 430,145、半徑 165×125 以內淡掉）
+		vec2 savQ = ( vFogWorld.xz - vec2( 430.0, 145.0 ) ) / vec2( 165.0, 125.0 ), savC = ( cameraPosition.xz - vec2( 430.0, 145.0 ) ) / vec2( 165.0, 125.0 );
+		float fogZone = 0.5 * ( smoothstep( ${f(FOG_ZONE.x0)}, ${f(FOG_ZONE.x1)}, vFogWorld.x ) * smoothstep( 0.85, 1.15, length( savQ ) ) + smoothstep( ${f(FOG_ZONE.x0)}, ${f(FOG_ZONE.x1)}, cameraPosition.x ) * smoothstep( 0.85, 1.15, length( savC ) ) );
 		float fogY = 0.5 * ( vFogWorld.y + cameraPosition.y );
 		float fogD = fogDensity * ( 1.0 + fogZone * ( ${f(FOG_ZONE.base)} + ${f(FOG_ZONE.valley)} * exp( - max( fogY - 1.0, 0.0 ) / ${f(FOG_ZONE.fall)} ) ) );
 		float fogFactor = 1.0 - exp( - fogD * fogD * vFogDepth * vFogDepth );`)
