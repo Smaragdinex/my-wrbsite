@@ -11,7 +11,7 @@ import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCar
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { buildSummit } from './summit.js'
 import { WATER_FX } from './waterfx.js'
-import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_S, savK, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, bridgeLanterns, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
+import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_S, savK, DELTA, deltaK, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, bridgeLanterns, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { lampLit, LAMP_U } from './walkway.js'
 import { nearGiant, forestK } from './giants.js'
@@ -347,6 +347,15 @@ function buildInterior(lib, avoid = []) {
           g0.lerp(new THREE.Color().setHSL(0.085, 0.5, 0.33), ss(0.55, 0.7, n2) * 0.6)
           g0.lerp(new THREE.Color().setHSL(0.045, 0.48, 0.3), ss(0.66, 0.78, fbm2(x * 0.09 - 4, z * 0.09 + 1, 2)) * 0.75)
           g0.lerp(new THREE.Color().setHSL(0.18, 0.3, 0.3), ss(0.36, 0.22, n1) * 0.45)
+          // 2026-11-17 三角洲：越濕越綠（淹水草甸是鮮綠、乾一點的地方黃綠，夾一塊塊金黃的乾草），河岸、池邊一圈深色濕泥
+          { const dk = deltaK(x, z)
+            if (dk > 0.01) {
+              const yW = pos[k * 3 + 1] - DELTA.W, nW = fbm2(x * 0.06 + 2, z * 0.06 - 9, 2)
+              const wetG = new THREE.Color().setHSL(0.2 + 0.04 * nW, 0.62, 0.27 + 0.06 * nW)
+              wetG.lerp(new THREE.Color().setHSL(0.13, 0.5, 0.36), ss(0.35, 0.9, yW) * ss(0.45, 0.62, fbm2(x * 0.04 - 7, z * 0.04 + 3, 2)))   // 高一點、乾一點的地方：一塊塊黃草
+              wetG.lerp(new THREE.Color().setHSL(0.08, 0.3, 0.17), ss(0.25, -0.1, yW) * 0.6)                                      // 水邊、水底：深色泥
+              g0.lerp(wetG, dk)
+            } }
           g0.multiplyScalar(0.94 + 0.12 * n3)
           c.lerp(g0, kS * (1 - rock * 0.6) * (1 - tr))
           c.lerp(new THREE.Color().setHSL(0.055, 0.42, 0.36 + 0.04 * n3), kS * tr * 0.9)   // 步道：紅褐色沙土
@@ -609,6 +618,10 @@ function buildInterior(lib, avoid = []) {
         float trees = fbm2(vW.xz * 0.3 + R.xz * 0.5);   // 倒影的明暗跟著位置慢慢變（太跟著反射角走，跌水那面會變成豹紋）
         vec3 bank = mix(vec3(0.008, 0.018, 0.011), vec3(0.03, 0.05, 0.032), trees);
         vec3 env = mix(bank, sky * 0.75, smoothstep(0.82, 0.99, R.y));
+        #ifdef OPEN_SKY
+          // 2026-11-17 三角洲：四周是開闊的草原（沒有兩岸的樹和石壁），水面倒映的是藍天 → 深藍、亮
+          env = mix(vec3(0.16, 0.32, 0.55), vec3(0.45, 0.62, 0.82), smoothstep(0.0, 0.6, R.y));
+        #endif
         #ifdef MIRROR
           // 2026-11-11 濕地 V3：真的倒影（mirror.js 鏡射鏡頭畫的）——天空、雲、枯樹、木樁、鳥都倒映在淺水上；水紋把倒影扭一點點
           vec4 rc = uReflMat * vec4(vW, 1.0);
@@ -709,6 +722,27 @@ function buildInterior(lib, avoid = []) {
     geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(dep, 1)); geo.setAttribute('aSlope', new THREE.Float32BufferAttribute(slo, 1)); geo.setAttribute('aFoam', new THREE.Float32BufferAttribute(new Float32Array(slo.length), 1)); geo.setAttribute('aLip', new THREE.Float32BufferAttribute(new Float32Array(slo.length), 1)); geo.setIndex(idx)
     const lakeM = waterM.clone(); lakeM.uniforms = waterM.uniforms; lakeM.defines = { ...(waterM.defines || {}), LAKE: 1 }
     const pond = new THREE.Mesh(geo, lakeM); pond.renderOrder = 2; g.add(pond)
+    // 2026-11-17 奧卡萬戈三角洲（layout.js DELTA）：一整片方格水面蓋住三角洲，每點水深照地形算（岸上、樹島 < 0 → 透明），
+    // 河道、睡蓮池、淹水草甸自然由地形切出來。用湖的配色（LAKE），淺的淹水草甸看得到底下的草
+    {
+      const x0 = 430, x1 = 606, z0 = 112, z1 = 262, cs = 0.8, nxw = Math.ceil((x1 - x0) / cs), nzw = Math.ceil((z1 - z0) / cs), W = DELTA.W
+      const P = [], U = [], D = [], I = [], keep = []
+      for (let j = 0; j <= nzw; j++) for (let i = 0; i <= nxw; i++) {
+        const x = x0 + i * cs, z = z0 + j * cs, dd = W - alpineHeight(x, z)
+        P.push(x, W, z); U.push(x * 0.35, z * 0.35); D.push(dd); keep.push(dd > -0.3 && deltaK(x, z) > 0.05 && domeRho(x, z) < 0.97)
+      }
+      for (let j = 0; j < nzw; j++) for (let i = 0; i < nxw; i++) {
+        const a = j * (nxw + 1) + i, b = a + 1, c2 = a + nxw + 1, d = c2 + 1
+        if (keep[a] || keep[b] || keep[c2] || keep[d]) I.push(a, c2, b, b, c2, d)
+      }
+      const dg = new THREE.BufferGeometry(), nv = P.length / 3
+      dg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); dg.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2))
+      dg.setAttribute('aDepth', new THREE.Float32BufferAttribute(D, 1)); dg.setAttribute('aSlope', new THREE.Float32BufferAttribute(new Float32Array(nv), 1))
+      dg.setAttribute('aFoam', new THREE.Float32BufferAttribute(new Float32Array(nv), 1)); dg.setAttribute('aLip', new THREE.Float32BufferAttribute(new Float32Array(nv), 1))
+      dg.setIndex(I)
+      const deltaM = lakeM.clone(); deltaM.uniforms = waterM.uniforms; deltaM.defines = { ...lakeM.defines, OPEN_SKY: 1 }
+      const dm = new THREE.Mesh(dg, deltaM); dm.renderOrder = 2; dm.name = 'deltaWater'; g.add(dm)
+    }
     // 2026-11-10 東部人工濕地：方格水面蓋住整個盆地，每點水深照地形算（岸上深度 < 0 → 透明），岸線自然由深度測試切出來
     {
       const [x0, x1, z0, z1] = EAST.wetBox, cs = 0.75, nxw = Math.ceil((x1 - x0) / cs), nzw = Math.ceil((z1 - z0) / cs)

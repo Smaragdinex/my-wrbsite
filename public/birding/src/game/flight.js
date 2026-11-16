@@ -120,6 +120,10 @@ export const ESCAPE = {
   cormorant: { r: 9, hawk: true, sortie: [40, 90], fly: { speed: 12, hz: 5, style: 'flap', k: 1.9 } },   // 鸕鷀：石頭上晾翅，偶爾飛出去繞一圈再回來
   smew: { r: 10, swim: 4, fly: { speed: 12, hz: 9, style: 'flap', k: 1.05 } }, fduck: { r: 10, swim: 4, fly: { speed: 12, hz: 9, style: 'flap', k: 1.07 } },   // 2026-11-16 潛鴨：先游開、逼近才飛
   cegret: { r: 10, fly: { speed: 8, hz: 3.5, style: 'flap', k: 1.3 } },
+  sbstork: { r: 12, run: 2, fly: { speed: 8, hz: 1.8, style: 'glide', k: 2.8 } },   // 2026-11-17 三角洲四種
+  bccrane: { r: 11, run: 2, fly: { speed: 9, hz: 2.4, style: 'flap', k: 1.95 } },
+  ahoopoe: { r: 6, fly: { speed: 7, hz: 6, style: 'flap', k: 0.4 } },
+  yhornbill: { r: 7, fly: { speed: 7, hz: 5, style: 'flap', k: 0.66 } },
   secretarybird: { r: 13, run: 3, fly: { speed: 8, hz: 1.8, style: 'glide', k: 2.6 } },   // 2026-11-16 蛇鷲：先跑開（很會跑），逼近才起飛滑翔
   burrowowl: { r: 8, run: 5, burrow: true, fly: { speed: 8, hz: 7, style: 'flap', k: 0.6 } },   // 2026-11-16 穴鴞：人靠近先跑回洞裡躲（birds.js burrowowl 的 w.flee）；還在洞外又被逼到很近才飛
   pratincole: { r: 7, hawk: true, sortie: [20, 45], fly: { speed: 10, hz: 6, style: 'glide', k: 0.62 } },

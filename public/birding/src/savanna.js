@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { bladeMesh } from './flora.js'
 import { lodRegisterGrass } from './lod.js'
-import { LOBES, SAV, savK, lobeSweep, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss } from './layout.js'
+import { DELTA, DELTA_ISLANDS, deltaK, deltaChanD, deltaLagoon, LOBES, SAV, savK, lobeSweep, alpineHeight, alpineTrailDist, domeRho, addCollider, smoothstep as ss } from './layout.js'
 import { fbm2, mulberry32 } from './noise.js'
 import { canopyGeometry, leafify, barkify } from './fju-foliage.js'
 import { graniteMaterial } from './yosemite.js'
@@ -50,18 +50,32 @@ export function buildSavanna({ avoid = [] } = {}) {
   const K = SAV.kopje
   const clearOf = (x, z, r) => TREES.every((t) => Math.hypot(t.x - x, t.z - z) > r + t.R) && MOUNDS.every((m) => Math.hypot(m.x - x, m.z - z) > r + m.r)
   // 樹：孤樹為主，幾處 3～5 棵一小群（雜訊高的地方）；步道 4 m 外、岩丘外
-  for (let k = 0; k < 6000 && TREES.length < 26; k++) {
+  // 2026-11-17 三角洲：濕的那一側只有樹島上長樹（高出水面 0.55 m 以上），而且是圓頂的闊葉大樹（照片裡一團團深綠的樹島），不是金合歡
+  for (let k = 0; k < 20000 && TREES.length < 70; k++) {
     const x = BOX[0] + rnd() * (BOX[1] - BOX[0]), z = BOX[2] + rnd() * (BOX[3] - BOX[2])
     if (!inSav(x, z, 0.8) || domeRho(x, z) > 0.9 || alpineTrailDist(x, z) < 4.5 || Math.hypot(x - K.x, z - K.z) < K.r + 4 || nearAvoid(avoid, x, z)) continue
+    const dk = deltaK(x, z), yW = alpineHeight(x, z) - DELTA.W
+    if (dk > 0.3 && yW < 0.55) continue
+    const broad = dk > 0.3
     const grove = fbm2(x * 0.03 + 8, z * 0.03 - 1, 2)
-    if (rnd() > 0.25 + 0.75 * ss(0.5, 0.65, grove)) continue
-    const H = 4.2 + rnd() * 2.6, R = H * (0.62 + rnd() * 0.2)
-    if (!clearOf(x, z, R * 0.9)) continue
-    TREES.push({ x, z, H, R, yaw: rnd() * TAU })
+    if (!broad && rnd() > 0.25 + 0.75 * ss(0.5, 0.65, grove)) continue
+    const H = broad ? 6.5 + rnd() * 3.5 : 4.2 + rnd() * 2.6, R = H * (broad ? 0.42 + rnd() * 0.15 : 0.62 + rnd() * 0.2)
+    if (!clearOf(x, z, R * (broad ? 0.6 : 0.9))) continue
+    TREES.push({ x, z, H, R, yaw: rnd() * TAU, broad })
+  }
+  // 樹島：每座島 3～8 棵擠在一起（照片裡一團團深綠）——另外找，不跟草原的金合歡搶名額
+  const ISL = DELTA_ISLANDS()
+  for (let k = 0, nI = 0; k < 40000 && nI < 110; k++) {
+    const [ix, iz, ir] = ISL[k % ISL.length], a = rnd() * TAU, rr = Math.sqrt(rnd()) * ir * 0.85, x = ix + Math.cos(a) * rr, z = iz + Math.sin(a) * rr
+    if (domeRho(x, z) > 0.93 || alpineTrailDist(x, z) < 4 || nearAvoid(avoid, x, z)) continue
+    if (alpineHeight(x, z) - DELTA.W < 0.45) continue
+    const H = 6 + rnd() * 4.5, R = H * (0.38 + rnd() * 0.15)
+    if (!TREES.every((t) => Math.hypot(t.x - x, t.z - z) > (t.R + R) * 0.55)) continue
+    TREES.push({ x, z, H, R, yaw: rnd() * TAU, broad: true }); nI++
   }
   for (let k = 0; k < 3000 && MOUNDS.length < 14; k++) {
     const x = BOX[0] + rnd() * (BOX[1] - BOX[0]), z = BOX[2] + rnd() * (BOX[3] - BOX[2])
-    if (!inSav(x, z, 0.85) || alpineTrailDist(x, z) < 3 || nearAvoid(avoid, x, z) || !clearOf(x, z, 3)) continue
+    if (!inSav(x, z, 0.85) || deltaK(x, z) > 0.2 || alpineTrailDist(x, z) < 3 || nearAvoid(avoid, x, z) || !clearOf(x, z, 3)) continue
     MOUNDS.push({ x, z, r: 0.5 + rnd() * 0.6, h: 0.8 + rnd() * 1.7 })
   }
 
@@ -70,8 +84,9 @@ export function buildSavanna({ avoid = [] } = {}) {
   const push = (Lr, x, y, z, a, col, h) => { layers[Lr][0].push(x, y, z, a); layers[Lr][1].push(col.r, col.g, col.b, h) }
   const P = { gold: [new THREE.Color(0xC9A55A), new THREE.Color(0xDDBF78)], tawny: [new THREE.Color(0xA87C45), new THREE.Color(0xB98F55)], green: new THREE.Color(0x8C8A4C), seed: [new THREE.Color(0xB0603A), new THREE.Color(0xD8C28E)], low: [new THREE.Color(0x9C7A3E), new THREE.Color(0x87733F)] }
   const mix = (a, b, t) => c.copy(a).lerp(b, t).clone()
-  let nT = 0, nM = 0, nL = 0
-  for (let k = 0; k < 900000 && (nT < 12000 || nM < 12000 || nL < 50000); k++) {
+  const G = { sedge: [new THREE.Color(0x7FA43C), new THREE.Color(0x9DB84E)], lush: [new THREE.Color(0x7C9A3E), new THREE.Color(0x96A84C)], papy: new THREE.Color(0x4F7A2C), umbel: new THREE.Color(0x6E9A38) }
+  let nT = 0, nM = 0, nL = 0, nP = 0
+  for (let k = 0; k < 1600000 && (nT < 12000 || nM < 22000 || nL < 75000); k++) {
     const x = BOX[0] + rnd() * (BOX[1] - BOX[0]), z = BOX[2] + rnd() * (BOX[3] - BOX[2])
     const kS = savK(x, z)
     if (kS < 0.3 || rnd() > kS || domeRho(x, z) > 0.952 || nearAvoid(avoid, x, z)) continue
@@ -79,6 +94,24 @@ export function buildSavanna({ avoid = [] } = {}) {
     if (MOUNDS.some((m) => Math.hypot(m.x - x, m.z - z) < m.r + 0.3)) continue
     if (Math.hypot(x - K.x, z - K.z) < K.r * 0.55) continue
     const y = alpineHeight(x, z)
+    const dk = deltaK(x, z)
+    if (dk > 0.3 && rnd() < dk) {
+      // 三角洲：深水不長；淺水、水邊是鮮綠的莎草（從水裡冒出來）；河岸、池邊一叢叢紙莎草；高一點的地方是綠草毯夾一點黃草
+      const yW = y - DELTA.W
+      if (yW < -0.3) continue
+      const cd = deltaChanD(x, z), [le] = deltaLagoon(x, z)
+      if (((cd > -0.6 && cd < 1.8) || (le > 0.92 && le < 1.25)) && rnd() < 0.18 && nP < 2600) {
+        nP++
+        const Hh = 1.5 + rnd() * 1.0
+        for (let j = 0; j < 5; j++) { const sx = x + (rnd() - 0.5) * 0.3, sz = z + (rnd() - 0.5) * 0.3, st = Hh * (0.75 + rnd() * 0.3); push('tall', sx, Math.min(y, DELTA.W) - 0.03, sz, rnd() * TAU, G.papy.clone().multiplyScalar(0.85 + rnd() * 0.3), st)
+          for (let u = 0; u < 4; u++) push('plume', sx, Math.min(y, DELTA.W) + st * 0.97, sz, rnd() * TAU, G.umbel.clone().multiplyScalar(0.9 + rnd() * 0.25), 0.18 + rnd() * 0.08) }
+        continue
+      }
+      if (yW < 0.08) { if (nM < 22000 && rnd() < 0.7) { nM++; const col = mix(G.sedge[0], G.sedge[1], rnd()), Hh = 0.25 + rnd() * 0.35; for (let j = 0; j < 7; j++) push('mid', x + (rnd() - 0.5) * 0.35, Math.min(y, DELTA.W) - 0.04, z + (rnd() - 0.5) * 0.35, rnd() * TAU, col.clone().multiplyScalar(0.88 + rnd() * 0.25), Hh * (0.7 + rnd() * 0.5)) } continue }
+      if (nL < 75000) { nL++; const dry = ss(0.45, 0.62, fbm2(x * 0.04 - 7, z * 0.04 + 3, 2)) * ss(0.35, 0.9, yW), col = mix(G.lush[0], G.lush[1], rnd()).lerp(P.low[0], dry)
+        for (let j = 0; j < 6; j++) push('low', x + (rnd() - 0.5) * 0.5, y - 0.01, z + (rnd() - 0.5) * 0.5, rnd() * TAU, col, 0.1 + rnd() * 0.2) }
+      continue
+    }
     const red = ss(0.66, 0.76, fbm2(x * 0.09 - 4, z * 0.09 + 1, 2))   // 紅土裸地（地面顏色同一個雜訊）：草稀
     const n1 = fbm2(x * 0.035 + 2, z * 0.035 - 6, 3), r = rnd()
     const tallMask = ss(0.42, 0.56, fbm2(x * 0.05 - 3, z * 0.05 + 7, 3)) * ss(2.5, 6, td) * (1 - red)
@@ -125,6 +158,9 @@ export function buildSavanna({ avoid = [] } = {}) {
       const y = alpineHeight(t.x, t.z), { wood, crowns } = acaciaParts(rnd, t.H, t.R)
       q.setFromAxisAngle(UP, t.yaw); m4.compose(new THREE.Vector3(t.x, y, t.z), q, new THREE.Vector3(1, 1, 1))
       for (const w of wood) { w.applyMatrix4(m4); woodGeos.push(w) }
+      if (t.broad) {   // 樹島的闊葉樹：一團團圓頂樹冠（高寬比 0.7），幾團疊成一棵
+        for (let j = 0; j < 5; j++) { const a = rnd() * TAU, rr = t.R * (j ? 0.45 : 0), v = new THREE.Vector3(Math.cos(a) * rr, 0, Math.sin(a) * rr); crownList.push({ x: t.x + v.x, y: y + t.H * (j ? 0.78 : 0.9), z: t.z + v.z, r: t.R * (j ? 0.62 : 0.8), broad: true }) }
+      } else
       for (const [cx, cy, cz, cr] of crowns) { const v = new THREE.Vector3(cx, cy, cz).applyQuaternion(q); crownList.push({ x: t.x + v.x, y: y + cy, z: t.z + v.z, r: cr }) }
       addCollider(t.x, t.z, 0.3, y + t.H * 0.4, y - 0.5)
     }
@@ -141,8 +177,8 @@ export function buildSavanna({ avoid = [] } = {}) {
       const im = new THREE.InstancedMesh(crown, leafM, crownList.length), cc = new THREE.Color()
       crownList.forEach((f, i) => {
         q.setFromAxisAngle(UP, rnd() * TAU)
-        im.setMatrixAt(i, m4.compose(new THREE.Vector3(f.x, f.y, f.z), q, new THREE.Vector3(f.r, f.r * 0.26, f.r * (0.85 + rnd() * 0.25))))
-        im.setColorAt(i, cc.setHSL(0.19 + rnd() * 0.04, 0.32, 0.36 + rnd() * 0.08))
+        im.setMatrixAt(i, m4.compose(new THREE.Vector3(f.x, f.y, f.z), q, new THREE.Vector3(f.r, f.r * (f.broad ? 0.72 : 0.26), f.r * (0.85 + rnd() * 0.25))))
+        im.setColorAt(i, f.broad ? cc.setHSL(0.24 + rnd() * 0.04, 0.42, 0.24 + rnd() * 0.06) : cc.setHSL(0.19 + rnd() * 0.04, 0.32, 0.36 + rnd() * 0.08))
       })
       im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'acacia_crown'; g.add(im)
     }
@@ -165,6 +201,24 @@ export function buildSavanna({ avoid = [] } = {}) {
       addCollider(m.x, m.z, m.r * 0.8, y + m.h)
     })
     im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'termite_mounds'; g.add(im)
+  }
+
+  // ---------- 睡蓮（三角洲的睡蓮池，水深 0.2～0.8 m）：圓葉片有一道缺口，零星幾朵白、淡紫的花 ----------
+  {
+    const pad = new THREE.CircleGeometry(1, 18, 0.25, TAU - 0.5).rotateX(-Math.PI / 2)
+    const padM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, side: THREE.DoubleSide })
+    const flower = new THREE.ConeGeometry(0.07, 0.07, 7, 1, true).rotateX(Math.PI).translate(0, 0.04, 0)
+    const flM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, side: THREE.DoubleSide, emissive: 0x222222 })
+    const P2 = [], F2 = []
+    for (const L of DELTA.lagoons.filter((o) => o.lily)) for (let k = 0; k < 3000 && P2.length < 700 * DELTA.lagoons.length; k++) {
+      const a = rnd() * TAU, r = Math.sqrt(rnd()) * 1.1, x = L.x + Math.cos(a) * r * L.rx, z = L.z + Math.sin(a) * r * L.rz, dep = DELTA.W - alpineHeight(x, z)
+      if (dep < 0.15 || dep > 0.85 || fbm2(x * 0.25 + 3, z * 0.25, 2) < 0.42) continue
+      P2.push([x, z, 0.16 + rnd() * 0.2, rnd() * TAU])
+      if (rnd() < 0.06) F2.push([x + 0.1, z, rnd() < 0.7])
+    }
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), cc = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0)
+    if (P2.length) { const im = new THREE.InstancedMesh(pad, padM, P2.length); P2.forEach(([x, z, s, a], i) => { im.setMatrixAt(i, m4.compose(new THREE.Vector3(x, DELTA.W + 0.012, z), q.setFromAxisAngle(UP, a), new THREE.Vector3(s, 1, s))); im.setColorAt(i, cc.setHSL(0.24 + rnd() * 0.06, 0.5, 0.2 + rnd() * 0.08)) }); im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'lily_pads'; im.renderOrder = 3; g.add(im) }
+    if (F2.length) { const im = new THREE.InstancedMesh(flower, flM, F2.length); F2.forEach(([x, z, w], i) => { im.setMatrixAt(i, m4.compose(new THREE.Vector3(x, DELTA.W + 0.02, z), q.identity(), new THREE.Vector3(1, 1, 1))); im.setColorAt(i, w ? cc.setRGB(0.95, 0.95, 0.92) : cc.setRGB(0.62, 0.55, 0.9)) }); im.computeBoundingSphere(); im.renderOrder = 3; g.add(im) }
   }
 
   // ---------- 花崗岩丘（kopje） ----------

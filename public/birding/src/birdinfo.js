@@ -1,7 +1,7 @@
 // 園區裡的鳥：介紹文字沿用 fju-animals（拿掉校園相關的字），位置改成溫室裡的棲地。
 // spot：園區座標（公尺；水池的 6 種 2026-11-08 跟著水池放大，照原本在池裡的相對位置往外挪）；perch：ground 地上、branch 停在樹枝上；view 不填就自動讓鏡頭背對雲霧山拍
 // （背景是山），填了就是鏡頭的方位角（度，0 = 從 +z 那邊看）。
-import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight, ALP_RIVER, smoothstep, BURROW, wetSD } from './layout.js'
+import { POOL, AM, ALP_POND, EAST, YOSE, alpineHeight, ALP_RIVER, smoothstep, BURROW, wetSD, DELTA } from './layout.js'
 const lerp = (a, b, t) => a + (b - a) * t
 import { birdText } from './i18n.js'
 
@@ -1171,6 +1171,54 @@ const ALL = [
       '蘇丹和南非的國徽上都有牠，是非洲草原的象徵。',
     ],
   },
+  {
+    // 2026-11-17 奧卡萬戈三角洲（使用者指定的四種）：鞍嘴鸛在西邊睡蓮池的淺水裡慢慢走、低頭盯魚、一啄
+    id: 'sbstork', spot: [455.5, 157], perch: 'ground', view: 320, y: DELTA.W - 0.24, water: DELTA.W, dist: 11, camH: 1.7, lookY: 1.0,
+    name: '鞍嘴鸛', sci: 'Ephippiorhynchus senegalensis', where: '三角洲西邊睡蓮池的淺水',
+    intro: '非洲最高的鸛，站起來將近一公尺半。長長的大嘴是紅、黑、紅三段，嘴基上面還貼著一塊黃色的「鞍」，名字就是這麼來的。常一個人在淺水裡慢慢走，看到魚就把嘴往水裡一插。',
+    facts: [
+      '公鳥眼睛是深褐色、母鳥是黃色，近看就分得出公母。',
+      '抓到魚會先在嘴裡甩一甩、把頭甩掉，或拿到岸邊再吞下去。',
+      '很少成群，通常一隻或一對，各自守著一大片濕地。',
+      '在奧卡萬戈三角洲這種季節性氾濫的濕地很常見，水退時魚擠在小水窪裡，最好抓。',
+    ],
+  },
+  {
+    // 河道旁的氾濫平原，一對；跟丹頂鶴同一套動作
+    id: 'bccrane', spot: [452, 189], perch: 'ground', view: 212, dist: 9, camH: 1.7, lookY: 0.8,
+    name: '黑冠鶴', sci: 'Balearica pavonina', where: '三角洲河道旁的氾濫平原',
+    intro: '頭上頂著一叢金黃色的硬冠羽，像戴著皇冠；臉頰上半白、下半紅，喉嚨下還垂著一小塊紅肉。身體黑灰色，飛起來翅膀上一大片白和金褐。常一對對在濕草地上走，低頭找草籽、蚱蜢和小青蛙。',
+    facts: [
+      '冠鶴是唯一會停在樹上的鶴：後趾比較長，抓得住樹枝，晚上常在樹上睡。',
+      '求偶時會跳舞：鞠躬、跳起來、張開翅膀，還會發出低沉的「嗡」聲（鼓起喉囊）。',
+      'IUCN 列為「易危」：濕地被開墾、被抓去當寵物，數量一直下降。',
+      '是奈及利亞的國鳥。',
+    ],
+  },
+  {
+    // 乾草原步道旁的裸地：一直用長嘴往土裡探蟲
+    id: 'ahoopoe', spot: [396, 117], perch: 'ground', view: 5, dist: 5, camH: 0.9, lookY: 0.15,
+    name: '非洲戴勝', sci: 'Upupa africana', where: '乾草原步道旁的裸地',
+    intro: '全身亮橘褐色，翅膀和尾巴是黑白相間的橫紋，頭上一排扇子一樣的冠羽，平常收著，受驚或落地時會「啪」地展開。細長微彎的嘴一直往土裡探，挖出甲蟲幼蟲和螻蛄。',
+    facts: [
+      '叫聲是低低的「呼—呼—」，英文 hoopoe 就是照叫聲取的名字。',
+      '跟一般戴勝比，非洲戴勝顏色更紅、翅膀上的白斑比較少。',
+      '巢做在樹洞裡；母鳥孵蛋時會分泌很臭的油脂，嚇跑來偷蛋的動物。',
+      '常在短草地、裸土上一邊走一邊探，走路時頭一點一點的。',
+    ],
+  },
+  {
+    // 乾草原的金合歡樹下，在地上跳著找蟲
+    id: 'yhornbill', spot: [372, 124], perch: 'ground', view: 148, dist: 6, camH: 1.1, lookY: 0.2,
+    name: '南方黃嘴犀鳥', sci: 'Tockus leucomelas', where: '乾草原金合歡樹下',
+    intro: '一張又大又彎的鮮黃色嘴，像一根香蕉。頭胸白色、背和翅膀黑褐色上滿是白點，眼睛四周一圈粉紅色裸皮。常在金合歡樹下的地上跳來跳去，翻找甲蟲、白蟻和種子。',
+    facts: [
+      '母鳥在樹洞裡孵蛋時，會用泥巴和糞便把洞口封起來，只留一條細縫，由公鳥從縫裡餵食。',
+      '大嘴看起來很重，其實裡面是中空的蜂巢狀骨頭，很輕。',
+      '在南部非洲的乾燥疏林很常見，常跟著狐獴、獴群，撿牠們翻出來的蟲吃。',
+      '動畫《獅子王》裡的沙祖（Zazu）其實是紅嘴犀鳥，跟牠是近親。',
+    ],
+  },
 ]
 
 // 導覽順序：從入口往西、繞水池一圈，再往南、往東，最後到北邊。鏡頭一站接一站不會在溫室裡來回橫越
@@ -1179,6 +1227,6 @@ const ORDER = ['sparrow', 'dove', 'heron', 'whiteeye', 'oriole', 'babbler', 'bar
   'yuhina', 'bushrobin', 'yellowtit', 'niltava', 'flamecrest', 'sibia', 'laughingthrush', 'rosefinch', 'goshawk', 'woodowl', 'serpenteagle',
   'finchbill', 'mandarin', 'spotbill', 'partridge', 'minivet', 'nuthatch', 'pitta', 'grassowl',
   'liocichla', 'whitebrow', 'bullfinch', 'barwing', 'islandthrush', 'tit', 'rustylt', 'whitethroat', 'hwamei', 'styan', 'scimitar', 'fulvetta', 'bamboo', 'flowing', 'bushwarbler', 'cupwing', 'shortwing', 'scopsowl', 'mtscops', 'jacana', 'psnipe', 'woodcock', 'shelduck', 'pheron', 'stilt', 'harrier', 'rnpheasant', 'skylark', 'cisticola', 'wbwood', 'nutcracker',
-  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike', 'burrowowl', 'smew', 'fduck', 'cegret', 'pelican', 'cormorant', 'secretarybird']
+  'shoebill', 'flamingo', 'ajacana', 'gallinule', 'rspoonbill', 'sarus', 'skimmer', 'redcrowned', 'ruff', 'grebe', 'peregrine', 'blackswift', 'greatgreyowl', 'lapwing', 'dipper', 'forktail', 'redstart', 'harlequin', 'avocet', 'pratincole', 'bwkite', 'shrike', 'burrowowl', 'smew', 'fduck', 'cegret', 'pelican', 'cormorant', 'secretarybird', 'sbstork', 'bccrane', 'ahoopoe', 'yhornbill']
 for (const b of ALL) Object.assign(b, birdText(b))   // 換成玩家選的語言（名字、棲地、介紹、小知識）
 export const BIRDS = ORDER.map((id) => ALL.find((b) => b.id === id))

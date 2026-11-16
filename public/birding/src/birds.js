@@ -310,6 +310,7 @@ const BUILD = {
   peregrine, blackswift, greatgreyowl,
   dipper, forktail, redstart, harlequin,
   avocet, pratincole, bwkite, shrike, burrowowl, smew, fduck, cegret, pelican, cormorant, secretarybird,
+  sbstork, bccrane, ahoopoe, yhornbill,
 }
 /* ---------- 現成模型 ---------- */
 // 松鼠和烏龜用網路上別人做好的寫實模型（來源與授權見 README、頁尾），載入後用頂點著色器把尾巴、頭、腳彎動。
@@ -324,7 +325,7 @@ const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-ri
     'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig', 'dipper-rig', 'dipper-fly-rig', 'forktail-rig', 'forktail-fly-rig', 'redstart-rig', 'redstart-fly-rig', 'harlequin-rig', 'harlequin-fly-rig', 'lapwing-fly-rig', 'avocet-rig', 'avocet-fly-rig', 'pratincole-rig', 'pratincole-fly-rig', 'bwkite-rig', 'bwkite-fly-rig', 'shrike-rig', 'shrike-fly-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
-    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig', 'secretarybird-rig', 'secretarybird-fly-rig']
+    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig', 'secretarybird-rig', 'secretarybird-fly-rig', 'sbstork-rig', 'sbstork-fly-rig', 'bccrane-rig', 'bccrane-fly-rig', 'ahoopoe-rig', 'ahoopoe-fly-rig', 'yhornbill-rig', 'yhornbill-fly-rig']
 export class MissingModel extends Error { constructor(n) { super('model not loaded: ' + n); this.model = n } }
 let _loader = null, _extra = []
 const _loading = new Map(), FAILED = new Set()
@@ -2270,6 +2271,23 @@ function secretarybird(env) {
       acts: { walk: [5, 99, 99], peck: [2, 1.2, 2.2], stand: [2, 2, 4], look: [2.5, 1.5, 3], turn: [1, 99, 99] } })
   })
 }
+// 2026-11-17 奧卡萬戈三角洲的四種（使用者指定）
+// 鞍嘴鸛：睡蓮池淺水，慢慢走、盯著水面、一啄（同黃嘴白鷺那套，只是慢、不追）
+function sbstork(env) {
+  return groundTripo(env, { name: 'sbstork-rig', H: 1.45, h0: 0.98, ...TRIPO, reach: 0.8, wade: true, bill: 0.3,
+    walk: { radius: 2.4, speed: 0.12 }, swingT: 0.6, lift: 0, knee: [1.0, 1.8], focusY: 0.75,
+    acts: { stand: [2, 2, 5], hunt: [5, 3, 6], walk: [3, 99, 99], turn: [1, 99, 99], strike: [1.5, 1.4, 1.4], look: [1.5, 1.5, 3] } })
+}
+// 黑冠鶴：一對，濕草地上踱步、低頭啄（同丹頂鶴）
+function bccrane(env) {
+  return groundGroup(2, 1.4, (avoid) => groundTripo(env, { name: 'bccrane-rig', H: 1.0, h0: 0.98, ...TRIPO, reach: 0.25, bill: 0.1,
+    walk: { radius: 2.6, speed: 0.14, avoid }, swingT: 0.6, lift: 0.03, knee: [1.0, 1.8], focusY: 0.7,
+    acts: { walk: [4, 99, 99], peck: [3, 1.2, 2.4], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99] } }))
+}
+// 非洲戴勝：走（不跳），常常停下來把長嘴往土裡探
+function ahoopoe(env) { return endemicGround('ahoopoe-rig', 0.26, 0.66, { hop: 0, flick: 0.15, radius: 1.3, speed: 0.15, stride: 0.06, bob: 0.012, acts: { walk: [4, 99, 99], peck: [4, 1.0, 2.0], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })(env) }
+// 南方黃嘴犀鳥：在地上跳著找蟲
+function yhornbill(env) { return endemicGround('yhornbill-rig', 0.36, 0.66, { hop: 0.05, flick: 0.25, radius: 1.5, speed: 0.22, stride: 0.1 })(env) }
 // 黑剪嘴鷗：一直在飛——沿著潟湖那條筆直的深水道貼著水面剪過去（下嘴泡在水裡），到頭拉高轉彎、從旁邊高一點飛回來，再下去剪一趟。
 // 只有飛行模型（skimmer-fly-rig，翅膀舉在最高點）；路線是鳥群座標裡的一圈跑道形：長軸沿 env.toCam 的垂直方向（side）
 function skimmer(env) {
@@ -2591,7 +2609,7 @@ export const REAL_CM = {
   bushwarbler: 13, cupwing: 9, shortwing: 13, scopsowl: 24, mtscops: 19, jacana: 45, psnipe: 25, woodcock: 34, shelduck: 64, pheron: 85,
   stilt: 36, harrier: 52, rnpheasant: 75, skylark: 16, cisticola: 10, nutcracker: 33, sibia: 24, finchbill: 22, nuthatch: 13, wbwood: 26,
   shoebill: 120, flamingo: 130, ajacana: 28, gallinule: 33, rspoonbill: 80, sarus: 160, redcrowned: 150, ruff: 29, lapwing: 30, grebe: 50,
-  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25, burrowowl: 23, smew: 40, fduck: 41, cegret: 68, pelican: 160, cormorant: 90, secretarybird: 135,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
+  peregrine: 42, blackswift: 18, greatgreyowl: 68, dipper: 21, forktail: 13, redstart: 14, harlequin: 40, avocet: 44, pratincole: 24, bwkite: 33, shrike: 25, burrowowl: 23, smew: 40, fduck: 41, cegret: 68, pelican: 160, cormorant: 90, secretarybird: 135, sbstork: 150, bccrane: 100, ahoopoe: 28, yhornbill: 50,   // 2026-11-13 瀑布區的三種（Pass 1D）   // 2026-11-11 世界濕地鳥（直立的看站高）
 }
 export const gameLen = (cm) => cm / 100 * lerp(1.6, 1.25, ss(cm, 30, 80))
 const _fsInv = new THREE.Matrix4(), _fsV = V()

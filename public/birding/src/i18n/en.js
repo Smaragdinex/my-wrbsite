@@ -1523,5 +1523,49 @@ export const BIRDS = {
    "The IUCN lists it as Endangered: grasslands turned into farmland and overgrazing keep its numbers falling.",
    "It appears on the coats of arms of both Sudan and South Africa as a symbol of the African savanna."
   ]
+ },
+ "sbstork": {
+  "name": "Saddle-billed Stork",
+  "where": "Shallows of the Western Lily Pond, Delta",
+  "intro": "Africa's tallest stork, standing almost a metre and a half. Its huge bill is banded red, black and red, with a yellow 'saddle' on top at the base — hence the name. It usually walks slowly alone through shallow water and stabs its bill in when it spots a fish.",
+  "facts": [
+   "Males have dark brown eyes and females yellow eyes, so you can tell them apart up close.",
+   "It often shakes a fish in its bill, beheading it or carrying it to the bank before swallowing.",
+   "Rarely in flocks; usually alone or in pairs, each holding a large stretch of wetland.",
+   "It is common in seasonally flooded wetlands like the Okavango Delta, where falling water traps fish in small pools."
+  ]
+ },
+ "bccrane": {
+  "name": "Black Crowned Crane",
+  "where": "Floodplain by the Channels, Delta",
+  "intro": "It wears a bristly crown of golden feathers, with cheeks white above and red below and a small red wattle under the throat. The body is dark grey; in flight the wings flash large patches of white and golden brown. Pairs walk through wet grass picking up seeds, grasshoppers and small frogs.",
+  "facts": [
+   "Crowned cranes are the only cranes that perch in trees: a longer hind toe lets them grip branches, and they often roost in trees at night.",
+   "In courtship they dance — bowing, leaping, spreading their wings — and make a deep booming call by inflating a throat sac.",
+   "The IUCN lists it as Vulnerable: wetland drainage and capture for the pet trade keep reducing its numbers.",
+   "It is the national bird of Nigeria."
+  ]
+ },
+ "ahoopoe": {
+  "name": "African Hoopoe",
+  "where": "Bare Ground by the Savanna Trail",
+  "intro": "Bright orange-brown all over, with black-and-white barred wings and tail and a fan-shaped crest that is usually folded but snaps open when it is startled or lands. Its long, slightly curved bill keeps probing the soil for beetle grubs and mole crickets.",
+  "facts": [
+   "Its call is a low 'hoo-poo', which gave the bird its English name.",
+   "Compared with the Eurasian Hoopoe, the African Hoopoe is redder with less white on the wings.",
+   "It nests in tree holes; the incubating female produces a foul-smelling oil that deters nest raiders.",
+   "It forages on short grass and bare earth, walking with a nodding head as it probes."
+  ]
+ },
+ "yhornbill": {
+  "name": "Southern Yellow-billed Hornbill",
+  "where": "Under the Acacias, Savanna",
+  "intro": "A big, curved, bright yellow bill like a banana. The head and chest are white, the back and wings dark brown covered in white spots, with a ring of pink bare skin around the eye. It hops about on the ground under acacias, turning over beetles, termites and seeds.",
+  "facts": [
+   "When the female incubates in a tree hole, she seals the entrance with mud and droppings, leaving only a narrow slit through which the male feeds her.",
+   "The heavy-looking bill is actually hollow, filled with light honeycomb-like bone.",
+   "It is common in the dry woodlands of southern Africa, often following mongoose groups to catch insects they disturb.",
+   "Zazu in The Lion King is a Red-billed Hornbill, a close relative."
+  ]
  }
 }

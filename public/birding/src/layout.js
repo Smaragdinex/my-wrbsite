@@ -24,7 +24,7 @@ export const DECK = { r: 7, x: 0, z: 0, y: 0 }   // 頂端圓形觀景台（2026
 export const STORE = { X0: -75.6, X1: -88.6, HZ: 7.5, H: 5.0, DOOR_W: 3.4 }
 // 高山區（alpine.js）：溫室東半邊、原本花園橢圓外面那一塊。花園的 alpine 步道走到 x≈74 接上山的步道；
 // 入口一小片平地、水池，往東爬升到約 26 公尺的山頂，一條溪從東南高處沿山谷流到水池，步道之字形上山、吊橋過溪谷
-export const ALP = { X0: -90, X1: 515, HZ: 215 }   /* 2026-11-16 X1 378→515、HZ 192→215：東北的非洲稀樹草原（LOBES.sav） */
+export const ALP = { X0: -90, X1: 620, HZ: 270 }   /* 2026-11-17 再擴：奧卡萬戈三角洲 X1 515→620、HZ 215→270 */   /* 2026-11-16 X1 378→515、HZ 192→215：東北的非洲稀樹草原（LOBES.sav） */
 // 隨機撒植物（alpine.js）用的範圍維持原本的大小：格子變大以後亂數序列才不會變（不然整片森林重新洗牌）；草原自己的植物在 savanna.js
 export const ALP_S = { X0: -90, X1: 378, HZ: 192 }
 //   /* 2026-11-11 HZ 150→170：西南的潟湖往南到 z -158 */   // 2026-11-11 X0 25→-62：西北的草原那塊在花園北邊（x 到 -56）   // X0 45→25：inAlpine 從 x 30 就開始，以前 30～45 那一小段沒有地形資料（高度 1e9）   // 山區地形格子的範圍（實際能走的是 inAlpine）
@@ -59,7 +59,7 @@ export const lobeRho = (L, x, z) => Math.hypot((x - L.x) / L.rx, (z - L.z) / L.r
 // 新地塊跟原本的園區之間不能留凹口（第一版：凹口在邊界外，地面沒畫、看得到走不到）→ 每塊從園區裡面的一點（L.from）拉出來，
 // 沿路的橢圓從小（半徑 L.r0）慢慢變成那塊的橢圓：整塊像一顆水滴長出去
 // 2026-11-16 使用者（地圖上從紅杉林往東北畫箭頭）：「往外設計一個非洲稀樹草原，大一點」，蛇鷲住這裡
-LOBES.sav = { x: 432, z: 146, rx: 74, rz: 56 }
+LOBES.sav = { x: 478, z: 168, rx: 122, rz: 92 }   /* 2026-11-17 使用者：「非洲那邊改成奧卡萬戈三角洲，地形再往外延伸加大」（原本 432,146、74×56） */
 LOBES.grass.from = [8, 36]; LOBES.wet.from = [42, -52]; LOBES.lagoon.from = [40, -110]; LOBES.sav.from = [338, 90]
 for (const L of Object.values(LOBES)) L.r0 = 24
 export function lobeSweep(L, x, z) {
@@ -85,7 +85,7 @@ const OUTER_N = 1440, outerTab = new Float32Array(OUTER_N).fill(-1)
 export function outerR(x, z) {
   let a = Math.atan2(z, x); if (a < 0) a += TAU
   const i = Math.round(a / TAU * OUTER_N) % OUTER_N
-  if (outerTab[i] < 0) { const dx = Math.cos(i / OUTER_N * TAU), dz = Math.sin(i / OUTER_N * TAU); let r = 0; for (let m = 560; m > 0; m -= 0.5) if (domeRho(dx * m, dz * m) < 1) { r = m; break } outerTab[i] = r }
+  if (outerTab[i] < 0) { const dx = Math.cos(i / OUTER_N * TAU), dz = Math.sin(i / OUTER_N * TAU); let r = 0; for (let m = 720; m > 0; m -= 0.5) if (domeRho(dx * m, dz * m) < 1) { r = m; break } outerTab[i] = r }
   return outerTab[i]
 }
 export const gardenRho = (x, z) => Math.hypot(x / GARDEN.A, z / GARDEN.B)
@@ -363,7 +363,7 @@ export const ALP_SPURS = [
   // { name: 'wet', from: 9, noClear: true, pts: [[255, -58], [266, -63], [282, -62], [300, -71], [300, -55], [312, -33], [316, -29], [327, -26], [339, -26], [345, -29]].map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
   // grass：主步道第 12 點（282,19）往東、之字形下到草原西北角，經過草原觀察棚 O7，沿北緣走到東邊看小雲雀那塊（草鴞的高草核心離路 25 m）
   // 2026-11-16 使用者（全園地圖圈起來）「步道弄好一點，平滑順暢」：原本是 A* 折線（兩個髮夾彎、轉角都是尖的）→ 改成順著等高線往北、再大弧線往東下坡的平滑曲線（每 2.5 m 一點）
-  { name: 'grass', from: 12, noClear: true, wide: true, k: 0.3, pts: smoothPts([[281.5, 19.3], [289, 29], [294, 42], [294.5, 55], [292, 66], [296, 75.5], [306, 80], [319, 81.5], [330, 86], [345, 95], [364, 108], [386, 122], [409, 133], [432, 141]])   /* 2026-11-16 往東北延伸穿過林緣，走進稀樹草原中央 */.slice(1).map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
+  { name: 'grass', from: 12, noClear: true, wide: true, k: 0.3, pts: smoothPts([[281.5, 19.3], [289, 29], [294, 42], [294.5, 55], [292, 66], [296, 75.5], [306, 80], [319, 81.5], [330, 86], [345, 95], [364, 108], [386, 122], [409, 133], [432, 141], [444, 152], [449, 166], [447, 181]])   /* 2026-11-17 再走進三角洲：盡頭是睡蓮池和河道旁的觀景點 */   /* 2026-11-16 往東北延伸穿過林緣，走進稀樹草原中央 */.slice(1).map(([X, Z]) => [76 + (X - 76) / AS, Z / AS]) },
   // 2026-11-10 ridge：瀑布頂東端（平台 75.8 m）沿新的岩脊之字形下到草原西北角，接上 grass 支線（坡度 ≤25%、轉彎有懲罰的 A*（tools/plan3.js），約 226 m，離草鴞巢 ≥26 m）。
   // world：點已經是世界座標、從 y0 這個高度開始（不是從主步道岔出去）；endOn：終點高度＝那條支線在同一點的高度（兩條路接起來沒有落差）
   // 2026-11-10 使用者：南坡溪谷（吊橋下那條溪谷小路的盡頭）接到山下入口的湖，湖邊有路可以走上來。走溪的南岸（不用過溪），
@@ -866,7 +866,43 @@ function eastShape0(X, Z, h) {
   return h
 }
 // 2026-11-16 稀樹草原：LOBES.sav 裡面是 11～14 m 的緩坡平原（幾道很淺的起伏、一兩處低窪），東北角一座花崗岩丘（kopje，高約 7 m）
-export const SAV = { y: 12, kopje: { x: 462, z: 172, r: 15, h: 7 } }
+export const SAV = { y: 11.6, kopje: { x: 398, z: 186, r: 15, h: 7 } }   // 2026-11-17 岩丘搬到乾草原的北邊（原本的位置變成三角洲）
+// 2026-11-17 奧卡萬戈三角洲（使用者給的空拍照：彎彎的河道、季節性淹水的綠草甸、樹島、睡蓮池跟乾草原交錯）。
+// 靠紅杉林那一側（西南）維持乾的稀樹草原；往東北越來越濕。DELTA.W＝水面高
+export const DELTA = {
+  W: 10.0,
+  chans: [
+    { w: 3.2, d: 1.5, pts: smoothPts([[606, 214], [578, 224], [553, 207], [534, 216], [511, 200], [499, 180], [511, 163], [531, 151], [552, 138], [578, 127], [606, 120]], 2) },   // 主河道
+    { w: 2.2, d: 1.2, pts: smoothPts([[511, 200], [489, 213], [470, 206], [461, 189], [476, 176], [469, 162]], 2) },   // 往西分出去，流進西邊的睡蓮池
+    { w: 1.8, d: 1.0, pts: smoothPts([[553, 207], [549, 231], [530, 249]], 2) },
+  ],
+  // 樹島（2026-11-17：用雜訊長不太出來 → 手放在河道之間；太靠近河道的在下面濾掉）
+  islands: [[488, 190, 6], [525, 190, 7], [562, 186, 8], [576, 160, 6], [531, 166, 5], [586, 202, 6], [566, 238, 7], [500, 236, 6], [480, 242, 5], [589, 141, 5], [470, 226, 5], [516, 216, 4.5], [556, 160, 5], [493, 164, 4], [579, 230, 5], [545, 252, 5]],
+  lagoons: [{ x: 466, z: 157, rx: 10, rz: 6.5, lily: true }, { x: 541, z: 178, rx: 12, rz: 8, lily: true }, { x: 521, z: 237, rx: 8, rz: 6 }],
+}
+// 濕度：0＝乾草原、1＝三角洲（西南乾、東北濕；邊界用雜訊彎一點）
+let _dTrail = null, _dIsl = null
+const DELTA_TRAIL = () => (_dTrail ??= ALP_SPURS.find((q) => q.name === 'grass').pts.filter((q) => q[0] > 418))
+export const deltaK = (x, z) => x < 380 ? 0 : smoothstep(-0.25, 0.35, ((x - 445) * 0.8 + (z - 152) * 0.6) / 40 + 0.35 * (fbm2(x * 0.02 + 9, z * 0.02 - 4, 2) - 0.5))
+const _segD = (x, z, P) => { let b = 1e9; for (let i = 0; i < P.length - 1; i++) { const [ax, az] = P[i], [bx, bz] = P[i + 1], dx = bx - ax, dz = bz - az, t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1), 0, 1); b = Math.min(b, Math.hypot(x - ax - dx * t, z - az - dz * t)) } return b }
+// 離最近河道中心幾公尺（扣掉半寬：負＝在河裡）、離最近池子邊（橢圓，負＝池裡）
+export const deltaChanD = (x, z) => { let b = 1e9; for (const c of DELTA.chans) b = Math.min(b, _segD(x, z, c.pts) - c.w); return b }
+export const deltaLagoon = (x, z) => { let b = 1e9, o = null; for (const L of DELTA.lagoons) { const e = Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz); if (e < b) { b = e; o = L } } return [b, o] }
+export const DELTA_ISLANDS = () => (_dIsl ??= DELTA.islands.filter(([x, z, r]) => deltaChanD(x, z) > r + 1.5 && deltaLagoon(x, z)[0] > 1.6))
+// 三角洲的地面：氾濫平原比水面高一點點；一塊塊淹水草甸（水深 5～15 cm）、幾座樹島（高出 0.8～1.2 m）、河道、睡蓮池
+function deltaShape(x, z, h) {
+  const k = deltaK(x, z) * savK(x, z); if (k <= 0) return h
+  const W = DELTA.W, n1 = fbm2(x * 0.03 + 3.3, z * 0.03 - 1.7, 3), n2 = fbm2(x * 0.07 - 5, z * 0.07 + 2, 2), n3 = fbm2(x * 0.045 + 21, z * 0.045 + 8, 3)
+  let p = W + 0.32 + 0.35 * (n2 - 0.5)
+  p = lerp(p, W - 0.2 - 0.08 * n2, smoothstep(0.5, 0.58, n1))                  // 淹水草甸（水深 20～28 cm，看得出是一片水）
+  p = lerp(p, W + 0.95 + 0.5 * n2, smoothstep(0.6, 0.68, n3))                  // 樹島（雜訊長出來的小塊）
+  for (const [ix, iz, ir] of DELTA_ISLANDS()) { const d = Math.hypot(x - ix, z - iz) / ir + 0.25 * (n2 - 0.5); if (d < 1.4) p = Math.max(p, lerp(W + 1.05 + 0.4 * n3, p, smoothstep(0.55, 1.35, d))) }   // 手放的樹島
+  for (const c of DELTA.chans) { const d = _segD(x, z, c.pts); if (d < c.w + 3) p = Math.min(p, lerp(W - c.d, p, smoothstep(c.w * 0.35, c.w + 2.5, d))) }   // 河道：中間最深、兩岸 2.5 m 斜坡
+  { const [e] = deltaLagoon(x, z); if (e < 1.5) p = Math.min(p, lerp(W - 0.85, p, smoothstep(0.55, 1.35, e))) }
+  // 步道經過的地方墊成一道比水面高 40 cm 的土堤（不然走在淹水草甸裡）
+  { const d = _segD(x, z, DELTA_TRAIL()); if (d < 7) p = Math.max(p, lerp(W + 0.42, p, smoothstep(2.2, 6.5, d))) }
+  return lerp(h, p, k)
+}
 export const savK = (x, z) => x < 300 ? 0 : smoothstep(1.18, 0.82, lobeSweep(LOBES.sav, x, z))
 // 紅杉林下到草原那段山坡原本 50～60%，步道（最陡 30%）只能架在高高的土堤上 → 步道兩側 14 m 內把山坡改成一道 30% 的長緩坡，30 m 外接回原地形
 const SAV_RAMP = { a: [302, 79, 28.3], b: [357, 104, 10.3], w0: 14, w1: 30 }
@@ -878,7 +914,7 @@ function savShape(x, z, h) {
   let p = SAV.y + 2.2 * (fbm2(x * 0.018 + 4.1, z * 0.018 - 2.7, 3) - 0.5) + 0.5 * (fbm2(x * 0.09, z * 0.09 + 3, 2) - 0.5)
   const K = SAV.kopje, d = Math.hypot(x - K.x, z - K.z)
   p += K.h * Math.exp(-((d / K.r) ** 2)) * (0.75 + 0.5 * fbm2(x * 0.15, z * 0.15, 2))
-  return lerp(h, p, k)
+  return deltaShape(x, z, lerp(h, p, k))
 }
 // 底層地形：入口平，往東爬升到山頂（偏北），南北兩道稜線，山頂後面往東牆降一點；不能頂到玻璃（離玻璃至少 9 公尺，樹才放得下）
 function alpBase(X, Z) {
