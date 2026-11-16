@@ -131,9 +131,9 @@ export function buildSky(scene) {
   // 日夜：uDay 白天 1、晚上 0；uDusk 黃昏／清晨那一段地平線變橘；晚上有星星和月亮（world.setTime 在改）
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { uFogIn: { value: 0 }, uFogCol: { value: new THREE.Color(0.8, 0.82, 0.82) }, sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime, uCloud: weatherU.cloud, uSunny: weatherU.sunny, uGloom: weatherU.gloom, uFlash: weatherU.flash, uCu: { value: null }, uCuOn: { value: 0 } },
+    uniforms: { uFogIn: { value: 0 }, uFogCol: { value: new THREE.Color(0.8, 0.82, 0.82) }, sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime, uCloud: weatherU.cloud, uSunny: weatherU.sunny, uGloom: weatherU.gloom, uFlash: weatherU.flash, uCu: { value: null }, uCuOn: { value: 0 }, uRain: weatherU.rain },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `varying vec3 vDir; uniform float uFogIn; uniform vec3 uFogCol; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCloud; uniform float uSunny; uniform float uGloom; uniform float uFlash; uniform sampler2D uCu; uniform float uCuOn;
+    fragmentShader: `varying vec3 vDir; uniform float uFogIn; uniform vec3 uFogCol; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCloud; uniform float uSunny; uniform float uGloom; uniform float uFlash; uniform sampler2D uCu; uniform float uCuOn; uniform float uRain;
       float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -189,8 +189,38 @@ export function buildSky(scene) {
           float el = asin(clamp(d.y, 0.0, 1.0));
           vec2 cuv = vec2(az / 6.2831853, sqrt(el / 1.5707963)), tx = vec2(1.0 / 2048.0, 1.0 / 512.0);
           vec4 cu = (texture2D(uCu, cuv) * 2.0 + texture2D(uCu, cuv + vec2(tx.x, 0.0)) + texture2D(uCu, cuv - vec2(tx.x, 0.0)) + texture2D(uCu, cuv + vec2(0.0, tx.y)) + texture2D(uCu, cuv - vec2(0.0, tx.y))) / 6.0;   // 柔一下抖動的顆粒
+          cu *= 1.0 - 0.9 * smoothstep(0.05, 0.5, uRain);   // 下雨時積雲淡掉，換成下面的雨層雲
           c = c * (1.0 - cu.a) + cu.rgb;
           cloudA = max(cloudA, cu.a);
+        }
+        // 2026-11-17 使用者「雨雲 make more realistic，現在非常不夠細節」：下雨時換成真的雨層雲——
+        //   大片雲團用扭曲的雜訊（domain warp）分出厚薄：厚的地方雲底又低又暗、薄的地方透一點亮；
+        //   底下一層飄得比較快、邊緣破碎的深色碎雲（scud）；地平線附近一條條雨幕（垂直的暗帶）、遠處淡進霧色
+        float ov = smoothstep(0.05, 0.55, uRain);
+        if (ov > 0.001 && d.y > -0.05) {
+          float yy = max(d.y, 0.0);
+          vec2 op = d.xz / (yy + 0.07) * 0.75 + vec2(uTime * 0.004, uTime * 0.0015);
+          vec2 q = vec2(fbm(op * 0.55 + 1.3), fbm(op * 0.55 + vec2(7.1, 2.4)));
+          float m = fbm(op * 0.8 + q * 1.8);
+          float m2 = fbm(op * 2.7 + q * 0.9 + uTime * 0.003);
+          float thick = clamp(m * 0.8 + m2 * 0.35 - 0.1, 0.0, 1.0);
+          float dl = 0.12 + 0.88 * uDay;
+          vec3 under = vec3(0.17, 0.185, 0.21) * dl * (1.0 - 0.35 * uGloom);
+          vec3 thin = vec3(0.5, 0.52, 0.56) * dl;
+          vec3 oc = mix(thin, under, smoothstep(0.3, 0.72, thick));
+          oc *= 0.82 + 0.4 * (m2 - 0.5) + 0.25 * smoothstep(0.62, 0.8, 1.0 - m);   // 雲底一塊塊的明暗、薄處透光
+          // 碎雲：低、快、破碎、偏暗
+          vec2 sp = d.xz / (yy + 0.035) * 1.9 + vec2(uTime * 0.025, uTime * 0.01) + q * 0.6;
+          float sc = smoothstep(0.52, 0.72, fbm(sp)) * smoothstep(0.0, 0.08, yy) * (1.0 - smoothstep(0.35, 0.7, yy));
+          oc = mix(oc, under * 0.8, sc * 0.75);
+          // 地平線：雨幕（照方位的條紋，慢慢移動）、遠處淡進霧色
+          float az = atan(d.z, d.x);
+          float shaft = smoothstep(0.42, 0.7, fbm(vec2(az * 9.0, uTime * 0.01))) * smoothstep(0.42, 0.62, fbm(vec2(az * 3.0 + 4.0, 1.7)));
+          float hz = 1.0 - smoothstep(0.0, 0.22, yy);
+          oc = mix(oc, oc * 0.62, shaft * hz * smoothstep(0.3, 0.9, uRain));
+          oc = mix(oc, uFogCol, hz * 0.55);
+          c = mix(c, oc, ov);
+          cloudA = max(cloudA, ov);
         }
         c += vec3(0.75, 0.8, 1.0) * uFlash * (0.6 + 0.4 * cloudA);   // 閃電：整片雲被照亮
         float night = (1.0 - uDay) * (1.0 - cloudA);

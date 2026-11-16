@@ -65,11 +65,13 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
       const wx = x + 18 * (fbm2(x * 0.02 + 5, z * 0.02, 2) - 0.5), wz = z + 18 * (fbm2(x * 0.02 - 7, z * 0.02 + 3, 2) - 0.5)
       const n = fbm2(wx * 0.035 + 3, wz * 0.035 - 8, 3)
       const [ox, oz] = EAST.owlNest, od = Math.hypot(x - ox, z - oz)
-      const m = Math.max(ss(0.45, 0.52, n), 1 - ss(6, 14, od))   // 草鴞的巢四周一定是最密的芒草
+      // 2026-11-17 使用者（草原截圖，圈起巢那一叢）「這再大片一點，不然很明顯是草鴞，讓玩家多花時間找」：
+      // 以前只有巢四周一圈特別高密，一眼就知道在哪 → 芒草塊整體放大（門檻降低、多幾大塊），巢那圈也放寬、邊緣跟別的芒草塊接在一起
+      const m = Math.max(ss(0.3, 0.4, n), (1 - ss(14, 34, od)) * 0.9)
       return m * ss(2.2, 6, alpineTrailDist(x, z))
     }
     let nMis = 0, nMid = 0, nLow = 0, nDry = 0, nFl = 0
-    for (let k = 0; k < 400000 && (nMis < 2600 || nMid < 12000 || nLow < 42000 || nDry < 900 || nFl < 1500); k++) {
+    for (let k = 0; k < 700000 && (nMis < 11000 || nMid < 12000 || nLow < 42000 || nDry < 900 || nFl < 1500); k++) {
       const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0)
       const sd = grassSD(x, z)
       if (sd > 2 || rnd() < ss(-3, 2, sd) || !ok(x, z)) continue
@@ -80,7 +82,7 @@ export function buildEast({ avoid = [], lib = null, hideKit = null, walkKit = nu
       const inClear = CLEARINGS.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr)   // 燕鴴那塊：只長矮草毯
       if (Math.hypot(x - BURROW.x, z - BURROW.z) < 0.6 || (Math.hypot(x - BURROW.mouth[0], z - BURROW.mouth[1]) < 1.6 && rnd() < 0.75)) continue   // 土丘上、洞口前面不長草（挖出來的土、被踩禿的地）
       const bare = ss(0.6, 0.7, fbm2(x * 0.12 + 11, z * 0.12, 2)) * (td < 4 ? 1 : 0.35)   // 裸土：步道兩側、零星乾的地方
-      if (!inClear && mm > 0.35 && r < 0.62 * mm * (1 - lark) && nMis < 2600) {
+      if (!inClear && mm > 0.35 && r < 0.62 * mm * (1 - lark) && nMis < 11000) {
         // 芒草：一叢 2～4 根花稈（1.3～2.3 m）、底下一大把往外拱的細長葉、頂上一束銀白帶米色的花穗
         nMis++
         const Hh = 1.3 + rnd() * 1.0, k2 = 0.88 + rnd() * 0.24

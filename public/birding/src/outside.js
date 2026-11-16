@@ -327,7 +327,7 @@ for (let k = 0; k < NR - 1; k++) { const a = i * NR + k, b = j * NR + k; idx.pus
           vec3 dHor = mix(vec3(0.86, 0.91, 0.93), vec3(0.9, 0.6, 0.42), uDusk * 0.6);
           vec3 dBase = pick4(vL, vec3(0.085, 0.15, 0.11), vec3(0.16, 0.22, 0.22), vec3(0.3, 0.36, 0.42), vec3(0.11, 0.2, 0.12));   // 2026-11-11 近層偏森林綠、中層藍綠灰、遠層藍灰（ChatGPT #718780／#91A5A8／#B5C4CF 的方向）
           float dW = pickf(vL, 0.4, 0.55, 0.7, 0.22) + 0.08 * (1.0 - vV);   // 山腳不要淡成天色（以前 0.22：下緣跟天空一樣亮，整座山像浮在雲上）
-          dHor = mix(dHor, vec3(dot(dHor, vec3(0.3, 0.5, 0.2))) * 0.8, uHaze);
+          dHor = mix(dHor, vec3(dot(dHor, vec3(0.3, 0.5, 0.2))) * 0.8, uHaze) * (1.0 - 0.5 * smoothstep(0.55, 0.95, uHaze));   /* 2026-11-17 下雨：遠山跟著暗下來（以前比雨雲還亮、像在發光） */
           vec3 day = mix(dBase, dHor, clamp(dW + 0.45 * uHaze, 0.0, 1.0));
           // 夜晚：近山 #202D42、中山 #343F56、遠山 #51596E、森林帶更深；霧色冷藍灰 #343D55（線性色）
           vec3 nBase = pick4(vL, vec3(0.006, 0.011, 0.024), vec3(0.013, 0.02, 0.038), vec3(0.024, 0.032, 0.056), vec3(0.003, 0.006, 0.01));   // 2026-11-11 第一版照 ChatGPT 的色太亮：遠山比夜空還亮像在發光 → 整體壓一半，一層比一層淡、但都比天暗
@@ -456,7 +456,7 @@ for (let k = 0; k < NR - 1; k++) { const a = i * NR + k, b = j * NR + k; idx.pus
           vec3 day = mix(rockD, snowC, snow);
           // 空氣透視：遠的往地平線天色混（55～75%），比 230 m 的遠山還淡
           vec3 dHor = mix(vec3(0.86, 0.91, 0.93), vec3(0.9, 0.6, 0.42), uDusk * 0.6);
-          dHor = mix(dHor, vec3(dot(dHor, vec3(0.3, 0.5, 0.2))) * 0.8, uHaze);
+          dHor = mix(dHor, vec3(dot(dHor, vec3(0.3, 0.5, 0.2))) * 0.8, uHaze) * (1.0 - 0.5 * smoothstep(0.55, 0.95, uHaze));   /* 2026-11-17 下雨：遠山跟著暗下來（以前比雨雲還亮、像在發光） */
           float fogA = clamp(0.36 + 0.2 * smoothstep(1100.0, 1700.0, vDist) - 0.1 * snow + 0.35 * uHaze, 0.0, 0.97);   // 第一版 0.5：整座山淡到看不出岩石和雪
           day = mix(day, dHor, fogA);
           // 夜晚：暗藍灰，雪只比岩石亮一點點
