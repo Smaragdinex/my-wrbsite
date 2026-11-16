@@ -41,6 +41,11 @@ export function createWeather({ scene, camera, sun, hemi, renderer, time }) {
     scene.fog.color.copy(base.fogC).lerp(grey.setRGB(lum * dk, lum * (dk + 0.03), lum * (dk + 0.06)), Math.min(1, cl * 0.75 + r * 0.3))
     scene.fog.color.lerp(grey.setRGB(lum * 0.86, lum * 1.0, lum * 1.16), 0.45 * sn)   // 遠景的霧帶一點藍
     weatherU.cloud.value = cl; weatherU.sunny.value = sn
+    // 2026-11-17 立體積雲（structures.js buildCumulus）：晴天幾乎沒有（零星幾朵）→ 多雲一朵朵 → 快下雨長成高聳的雲塔、雲底變暗；
+    // 天氣正在變壞（target 比現在高）時雲塔多長一點（下雨前先冒出積雲）
+    { const w = st.w, rising = st.target > st.w + 0.02 ? 1 : 0
+      weatherU.cumulus.value = clamp(0.12 + 0.95 * ss(-0.15, 0.5, w) + 0.12 * rising, 0, 1)
+      weatherU.tower.value = clamp(ss(0.25, 0.8, w) + 0.25 * rising * ss(0.0, 0.4, w), 0, 1) }
     weatherU.gloom.value = Math.min(1, cl * 0.75 + st.storm * 0.25)
     weatherU.flash.value = f
     weatherU.haze.value = cl * 0.5 + r * 0.4

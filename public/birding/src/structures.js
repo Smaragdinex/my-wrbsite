@@ -21,7 +21,7 @@ export const sunDirU = { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() 
 // 霧氣量：白天 0；晚上 0.75、清晨（6 點前後）最濃 1，9 點前散掉。world.setTime 改值，霧、山頂雲、山區的霧團照它加濃
 export const mistLevel = { value: 0 }
 // 天氣（weather.js 改值）：雲量 0～1、陰暗 0～1、閃電亮光 0～1、遠處的雨霧 0～1
-export const weatherU = { cloud: { value: 0 }, gloom: { value: 0 }, flash: { value: 0 }, haze: { value: 0 }, rain: { value: 0 }, wet: { value: 0 }, sunny: { value: 0 } }   // rain 正在下多大、wet 地面濕到什麼程度（雨停後慢慢乾）
+export const weatherU = { cloud: { value: 0 }, gloom: { value: 0 }, flash: { value: 0 }, haze: { value: 0 }, rain: { value: 0 }, wet: { value: 0 }, sunny: { value: 0 }, cumulus: { value: 0 }, tower: { value: 0 } }   // rain 正在下多大、wet 地面濕到什麼程度（雨停後慢慢乾）
 // 下雨地面變濕（2026-11-08）：顏色變深、表面變亮滑（粗糙度降低，會反天光）。地面、山區地形、圍牆外草地、雲霧山的岩壁都套
 export function wetify(mat, { dark = 0.36, rough = 0.32 } = {}) {
   const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey?.bind(mat)
@@ -36,14 +36,104 @@ export function wetify(mat, { dark = 0.36, rough = 0.32 } = {}) {
   mat.customProgramCacheKey = () => (prevKey ? prevKey() : '') + '|wet'
   return mat
 }
+
+/* ---------- 立體積雲（2026-11-17 使用者：「雲沒有 cumulus 那種感覺」「雲是根據天氣，如果要下雨，cumulus 會開始出現」）----------
+   天空 shader 每個像素自己算體積雲太貴 → 另外畫一張全景雲圖（方位 × 仰角，768×256），每一格只重算 1/16 列（雲飄得慢，看不出來），天空 shader 查這張圖。
+   雲是一層 900 m 起的雲層：2D 雜訊決定哪裡有雲柱、雲柱多高（中間高、邊緣低 → 一朵朵花椰菜頂），再加細節雜訊把邊緣咬碎；
+   往太陽方向取兩點算自身陰影（向陽面亮白、背光面和雲底灰）。
+   雲量 uCov、雲塔高度 uTower 照天氣（weather.js）：晴天幾乎沒有 → 轉陰一朵朵冒出來 → 快下雨時長高、雲底變暗 → 下雨時整片灰（原本那層平的雲接手） */
+export const CLOUD_W = 2048, CLOUD_H = 512
+export function buildCumulus(skyU) {
+  const rt = new THREE.WebGLRenderTarget(CLOUD_W, CLOUD_H, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false })
+  rt.texture.wrapS = THREE.RepeatWrapping
+  const mat = new THREE.ShaderMaterial({
+    depthTest: false, depthWrite: false,
+    uniforms: { sunDir: skyU.sunDir, uDay: skyU.uDay, uDusk: skyU.uDusk, uTime: skyU.uTime, uCov: weatherU.cumulus, uTower: weatherU.tower, uGloom: weatherU.gloom, uRes: { value: new THREE.Vector2(CLOUD_W, CLOUD_H) } },
+    vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `
+      uniform vec3 sunDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCov; uniform float uTower; uniform float uGloom; uniform vec2 uRes;
+      float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
+      float fbm4(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { s += a * vn(p); p = p * 2.07 + vec2(1.7, 9.2); a *= 0.5; } return s; }
+      float fbm3(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 3; i++) { s += a * vn(p); p = p * 2.11 + vec2(5.3, 2.8); a *= 0.5; } return s / 0.875; }
+      const float BASE = 900.0;
+      float topH(){ return BASE + 500.0 + 2600.0 * uTower; }
+      // 這一點的雲密度
+      float dens(vec3 p, vec2 wind){
+        vec2 q = (p.xz + wind) / 2600.0;
+        float c = fbm4(q);
+        float thr = mix(0.86, 0.47, uCov);
+        float sh = clamp((c - thr) / (1.0 - thr) * 2.2, 0.0, 1.0);            // 雲柱：中心 1、邊 0
+        if (sh <= 0.0) return 0.0;
+        float h = (p.y - BASE) / (topH() - BASE);
+        float top = pow(sh, 0.55) * (0.35 + 0.65 * uTower + 0.25 * (fbm3(q * 3.1 + 7.0) - 0.5));
+        float det = fbm3((p.xz + wind * 1.15) / 260.0 + vec2(p.y / 360.0, -p.y / 420.0));   // 花椰菜的一球球（跟著高度轉，側面也是一團團）
+        float d = top - h - 0.5 * (1.0 - det) * (0.35 + h);                   // 上面、邊緣被細節咬碎；雲底平
+        return smoothstep(0.0, 0.035, d) * smoothstep(0.0, 0.03, h);
+      }
+      void main(){
+        vec2 uv = gl_FragCoord.xy / uRes;
+        float az = uv.x * 6.2831853, el = uv.y * uv.y * 1.5707963;            // 仰角用平方：地平線附近的列比較密
+        vec3 d = vec3(cos(el) * cos(az), sin(el), cos(el) * sin(az));
+        vec2 wind = vec2(uTime * 9.0, uTime * 3.0);
+        if (d.y < 0.004) { gl_FragColor = vec4(0.0); return; }
+        float topR = BASE + (topH() - BASE) * min(1.0, 0.5 + 0.65 * uTower + 0.15);   // 雲實際長得到的最高處（步距才不會浪費在空的地方）
+        float t0 = BASE / d.y, t1 = min(topR / d.y, 32000.0);
+        if (t0 > 30000.0) { gl_FragColor = vec4(0.0); return; }
+        const int N = 40;
+        float dt = (t1 - t0) / float(N), jit = h2(gl_FragCoord.xy);   // 固定的抖動（不隨時間變：每一列在不同時間重算，會跳的抖動變成顆粒）；天空取樣時再柔一下
+        vec3 sunCol = mix(vec3(1.0, 0.5, 0.25), vec3(1.0, 0.97, 0.92), smoothstep(0.05, 0.4, sunDir.y)) * mix(0.06, 1.0, uDay);
+        sunCol = mix(sunCol, vec3(1.0, 0.55, 0.3) * 1.1, uDusk * 0.7);
+        vec3 ambTop = mix(vec3(0.05, 0.06, 0.09), vec3(0.62, 0.72, 0.86), uDay), ambBot = mix(vec3(0.03, 0.035, 0.05), vec3(0.42, 0.45, 0.52), uDay);
+        ambBot = mix(ambBot, vec3(0.42, 0.34, 0.4), uDusk * 0.6);
+        float mu = dot(d, sunDir), phase = 0.55 + 0.6 * pow(max(mu, 0.0), 6.0) + 0.15 * mu;   // 逆光時雲邊亮（銀邊）
+        vec3 col = vec3(0.0); float T = 1.0;
+        for (int i = 0; i < N; i++) {
+          float t = t0 + (float(i) + jit) * dt;
+          vec3 p = d * t;
+          float de = dens(p, wind);
+          if (de > 0.001) {
+            float l1 = dens(p + sunDir * 140.0, wind), l2 = dens(p + sunDir * 420.0, wind);
+            float Tl = (exp(-(l1 * 0.9 + l2 * 0.6)) + 0.45 * exp(-(l1 + l2) * 0.22)) * (1.0 - 0.6 * uGloom);   // 第二項＝多次散射（雲裡面也是亮的，不是一團黑）
+            float h = clamp((p.y - BASE) / (topH() - BASE), 0.0, 1.0);
+            vec3 amb = mix(ambBot, ambTop, h) * (1.0 - 0.45 * uGloom * (1.0 - h)) * mix(1.0, 0.55, uTower * (1.0 - h));   // 雲塔越高、雲底越暗（快下雨了）
+            vec3 c = sunCol * Tl * phase * 1.45 + amb * 0.85;
+            float a = 1.0 - exp(-de * dt * 0.012);
+            col += T * a * c; T *= 1.0 - a;
+            if (T < 0.02) break;
+          }
+        }
+        float A = 1.0 - T;
+        // 遠處的雲淡進天色（空氣透視）：30 km 外看不到
+        float fade = 1.0 - smoothstep(9000.0, 30000.0, t0);
+        gl_FragColor = vec4(col * fade, A * fade);
+      }`,
+  })
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat); quad.frustumCulled = false
+  const sc = new THREE.Scene(); sc.add(quad)
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+  const SL = 16, rows = CLOUD_H / SL
+  let k = 0, full = false
+  // 每一格畫 1/8（第一次整張畫完）
+  function update(renderer) {
+    const prev = renderer.getRenderTarget(), sct = renderer.getScissorTest(), ac = renderer.autoClear
+    renderer.setRenderTarget(rt); renderer.autoClear = false
+    if (!full) { renderer.setScissorTest(false); renderer.clear(); renderer.render(sc, cam); full = true }
+    else { rt.scissor.set(0, (k % SL) * rows, CLOUD_W, rows); rt.scissorTest = true; renderer.render(sc, cam); rt.scissorTest = false; k++ }
+    renderer.setRenderTarget(prev); renderer.autoClear = ac; renderer.setScissorTest(sct)
+  }
+  return { rt, update, mat }
+}
+
 export function buildSky(scene) {
   const geo = new THREE.SphereGeometry(900, 32, 16)
   // 日夜：uDay 白天 1、晚上 0；uDusk 黃昏／清晨那一段地平線變橘；晚上有星星和月亮（world.setTime 在改）
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { uFogIn: { value: 0 }, uFogCol: { value: new THREE.Color(0.8, 0.82, 0.82) }, sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime, uCloud: weatherU.cloud, uSunny: weatherU.sunny, uGloom: weatherU.gloom, uFlash: weatherU.flash },
+    uniforms: { uFogIn: { value: 0 }, uFogCol: { value: new THREE.Color(0.8, 0.82, 0.82) }, sunDir: { value: new THREE.Vector3(-0.45, 0.8, 0.35).normalize() }, moonDir: { value: new THREE.Vector3(0.45, 0.6, -0.5).normalize() }, uDay: dayLight, uDusk: duskLight, uTime: waterTime, uCloud: weatherU.cloud, uSunny: weatherU.sunny, uGloom: weatherU.gloom, uFlash: weatherU.flash, uCu: { value: null }, uCuOn: { value: 0 } },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `varying vec3 vDir; uniform float uFogIn; uniform vec3 uFogCol; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCloud; uniform float uSunny; uniform float uGloom; uniform float uFlash;
+    fragmentShader: `varying vec3 vDir; uniform float uFogIn; uniform vec3 uFogCol; uniform vec3 sunDir; uniform vec3 moonDir; uniform float uDay; uniform float uDusk; uniform float uTime; uniform float uCloud; uniform float uSunny; uniform float uGloom; uniform float uFlash; uniform sampler2D uCu; uniform float uCuOn;
       float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -86,12 +176,21 @@ export function buildSky(scene) {
           vec2 cp = d.xz / (d.y + 0.12) * 1.6 + vec2(uTime * 0.006, uTime * 0.002);
           float n = fbm(cp), n2 = fbm(cp * 2.1 + 5.0);
           float cov = smoothstep(0.48 - 0.42 * uCloud + 0.13 * uSunny, 0.75 - 0.3 * uCloud + 0.1 * uSunny, n + 0.12 * n2);   // 雲量：陰天、下雨整片蓋滿
-          cloudA = cov * smoothstep(0.0, 0.18, d.y);
+          cloudA = cov * smoothstep(0.0, 0.18, d.y) * mix(1.0, mix(0.3, 1.0, smoothstep(0.93, 1.0, uCloud)), uCuOn);   // 2026-11-17 有立體積雲之後，這層平的雲只當薄的高空雲；快下雨、下雨時才變成整片灰
           float lit = 0.72 + 0.28 * smoothstep(0.35, 0.85, n2) + 0.35 * pow(max(dot(d, sunDir), 0.0), 6.0);
           vec3 cc = mix(vec3(0.05, 0.06, 0.09), vec3(0.97, 0.98, 1.0), uDay) * lit;
           cc = mix(cc, mix(vec3(0.34, 0.33, 0.44), vec3(0.95, 0.42, 0.27) * 1.35, warm) * lit, uDusk * 0.85);   // 雲底：對著太陽那邊橘紅、背面粉紫
           cc *= 1.0 - 0.55 * uGloom * (0.6 + 0.4 * n);   // 雨雲：灰黑、厚的地方更暗
           c = mix(c, cc, cloudA * 0.92);
+        }
+        // 2026-11-17 立體積雲（buildCumulus 畫的全景圖：x＝方位、y＝仰角的平方根）
+        if (uCuOn > 0.5 && d.y > 0.0) {
+          float az = atan(d.z, d.x); if (az < 0.0) az += 6.2831853;
+          float el = asin(clamp(d.y, 0.0, 1.0));
+          vec2 cuv = vec2(az / 6.2831853, sqrt(el / 1.5707963)), tx = vec2(1.0 / 2048.0, 1.0 / 512.0);
+          vec4 cu = (texture2D(uCu, cuv) * 2.0 + texture2D(uCu, cuv + vec2(tx.x, 0.0)) + texture2D(uCu, cuv - vec2(tx.x, 0.0)) + texture2D(uCu, cuv + vec2(0.0, tx.y)) + texture2D(uCu, cuv - vec2(0.0, tx.y))) / 6.0;   // 柔一下抖動的顆粒
+          c = c * (1.0 - cu.a) + cu.rgb;
+          cloudA = max(cloudA, cu.a);
         }
         c += vec3(0.75, 0.8, 1.0) * uFlash * (0.6 + 0.4 * cloudA);   // 閃電：整片雲被照亮
         float night = (1.0 - uDay) * (1.0 - cloudA);

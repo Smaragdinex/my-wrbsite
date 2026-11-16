@@ -12,7 +12,7 @@ import { buildOutside } from './outside.js'
 import { createWeather } from './weather.js'
 import { wetify } from './structures.js'
 import { elevationOf, climateAt } from './climate.js'
-import { buildSky, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel, sunDirU, weatherU } from './structures.js'
+import { buildSky, buildCumulus, buildDome, buildGround, buildMountain, buildWater, buildRamp, waterTime, ripple, dayLight, duskLight, mistLevel, sunDirU, weatherU } from './structures.js'
 import { buildFlora } from './flora.js'
 import { loadPlants, parts } from './plants.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -61,6 +61,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
 
   /* 光 */
   const { sky, skyMat } = buildSky(scene)
+  const cumulus = buildCumulus(skyMat.uniforms); skyMat.uniforms.uCu.value = cumulus.rt.texture; skyMat.uniforms.uCuOn.value = 1   // 2026-11-17 立體積雲
   {
     // 環境反射：拿天空當光源
     const pm = new THREE.PMREMGenerator(renderer)
@@ -645,9 +646,11 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 2026-11-14 FPS（CPU 分析）：每次 renderer.render 都會把整個場景（上萬個物件）的世界矩陣重算一次——主畫面、倒影各一次，佔 CPU 約 14%。
   // 改成每格在這裡算一次，renderer 自己不算（scene.matrixWorldAutoUpdate = false）；別的地方單獨畫場景（拍照、陰影）用的是這一格剛算好的
   scene.matrixWorldAutoUpdate = false
+  let cuFrame = 0
   function render(cam = camera) {
     scene.updateMatrixWorld()
     const now = performance.now(); shadows.update(Math.min(0.1, (now - lastR) / 1000)); lastR = now
+    if (!renderer.getRenderTarget() && (cuFrame++ & 1) === 0) cumulus.update(renderer)   // 雲的全景圖每兩格重算 1/16（拍照、倒影那些另外的畫面不用再算）
     water.reflect(renderer, scene, cam, quality.reflScale, quality.reflEvery)
     if (!quality.dof || renderer.getRenderTarget() || !cam.isPerspectiveCamera) { renderer.render(scene, cam); return }
     renderer.getDrawingBufferSize(post.size)
@@ -671,7 +674,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   const groundAt = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : terrainHeight(x, z)   // 相機對焦用（camera.js aim）
   // lodSync：截圖／錄影工具（tools/record/helpers.js still）直接把鏡頭擺到某處就畫，沒跑 tick → LOD、遠處小東西剔除還停在玩家的位置（石橋的石塊會被當成太遠不畫）。畫之前先照這台鏡頭更新一次
   const lodSync = (cam = camera) => { lodUpdate(cam, true); tinyCull(scene, cam, 0); alpine.terrainLod?.(cam) }
-  return { get climate() { return climateNow }, groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
+  return { cumulus, get climate() { return climateNow }, groundAt, memStat, streamBirds, streamState, renderer, scene, camera, sun, hemi, birds, flora, water, clouds, tick, render, time, weather, quality, plantLib, halls, alpine, shadows, lodSync }   // plantLib：相機行的植物牆、花槽也用同一批寫實植物
 }
 
 /* ---------- 日夜 ---------- */

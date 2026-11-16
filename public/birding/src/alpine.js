@@ -10,6 +10,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { canopyGeometry, canopyBump, leafify, barkify, leafCardGeometry, leafCardMaterial } from './fju-foliage.js'   // 2026-11-14 圓樹冠闊葉樹（取代雀榕）
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { buildSummit } from './summit.js'
+import { WATER_FX } from './waterfx.js'
 import { ALP_WALKS, AS, CABIN, CAMP, ALP, ALP_S, savK, ALP_STREAM, ALP_STREAMS, RIVER_BRIDGES, bridgeLanterns, ALP_POND, ALP_TRAIL, ALP_BRIDGE, ALP_GRID, ALP_HEIGHTS, ALP_PEAK, BRIDGE_DIM, alpineHeight, alpineTrailDist, alpineStreamDist, alpineStreamS, streamWater, streamLatOff, inAlpine, domeY, domeRho, outerR, addCollider, gardenRho, pathClearAt, terrainHeight, YOSE, FIG_FORCED, eastZone, EAST, wetSD, inLagoon, grassSD } from './layout.js'
 import { scatter, parts } from './plants.js'
 import { lampLit, LAMP_U } from './walkway.js'
@@ -492,7 +493,9 @@ function buildInterior(lib, avoid = []) {
         uniform sampler2D uRefl; uniform mat4 uReflMat; uniform float uReflOn;
       #endif
       varying vec2 vUv; varying float vDepth; varying float vSlope; varying float vFoam; varying float vLip; varying vec3 vW;
+      uniform float uCloudK;
       #include <fog_pars_fragment>
+      ${WATER_FX}
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -559,7 +562,7 @@ function buildInterior(lib, avoid = []) {
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, Vd), 0.0), 5.0);
         float d = clamp(vDepth / 0.9, 0.0, 1.0);
         // 顏色是線性空間：山溪清澈，淺處透出黃褐石頭、深處青綠
-        vec3 bed = vec3(0.10, 0.115, 0.08), mid = vec3(0.03, 0.13, 0.10), deep = vec3(0.006, 0.05, 0.045);   // 2026-11-12 參考圖：清澈、深處翡翠綠
+        vec3 bed = vec3(0.07, 0.15, 0.135), mid = vec3(0.02, 0.125, 0.115), deep = vec3(0.004, 0.05, 0.055);   // 2026-11-17 水升級：淺處透出青綠（參考 3ditions 的溪），不再偏黃褐   // 2026-11-12 參考圖：清澈、深處翡翠綠
         vec3 col = mix(bed, mid, smoothstep(0.0, 0.45, d));
         col = mix(col, deep, smoothstep(0.45, 1.0, d));
         #ifdef LAKE
@@ -594,12 +597,10 @@ function buildInterior(lib, avoid = []) {
         #ifndef MIRROR
         {
           // 2026-11-12 焦散光（使用者參考圖：陽光透過水紋在溪底織出一張晃動的亮網）：兩層雜訊相減取細線，淺水最明顯、1 m 以下看不到；陰天、晚上沒有
-          vec2 cp = vW.xz * 3.6 + N.xz * 0.6;
-          float c1 = vnoise(cp + uTime * vec2(0.32, 0.21)), c2 = vnoise(cp * 1.37 + vec2(5.2, 1.3) - uTime * vec2(0.26, 0.34));
-          float c3 = vnoise(cp * 2.9 + vec2(2.1, 7.7) + uTime * vec2(0.41, -0.3));
-          float ca = pow(clamp(1.0 - abs(c1 - c2) * 2.6, 0.0, 1.0), 7.0) + 0.5 * pow(clamp(1.0 - abs(c2 - c3) * 2.6, 0.0, 1.0), 9.0);
-          float shallow = smoothstep(0.0, 0.06, vDepth) * (1.0 - smoothstep(0.15, 1.0, vDepth));
-          col += vec3(0.30, 0.46, 0.33) * ca * shallow * uDay * (1.0 - uRain) * 0.3 * smoothstep(0.25, 0.7, vnoise(vW.xz * 0.45 + 3.7));   // 一片一片（樹蔭下沒有、空曠處才有），不是整條溪都一樣
+          // 2026-11-17 升級：亮網加強（0.3 → 1.1）、深到 1.5 m 都看得到、只有少數幾塊樹蔭沒有
+          float ca = wfxCaustic(vW.xz + N.xz * 0.25, uTime);
+          float shallow = smoothstep(0.0, 0.05, vDepth) * (1.0 - smoothstep(0.35, 1.6, vDepth));
+          col += vec3(0.42, 0.62, 0.5) * ca * shallow * uDay * (1.0 - uRain) * (1.0 - 0.85 * uCloudK) * 1.1 * smoothstep(0.12, 0.5, vnoise(vW.xz * 0.45 + 3.7));   // 一片一片（樹蔭下沒有、空曠處才有），不是整條溪都一樣
         }
         #endif
         // 反射：低角度看過去倒映的是兩岸的樹和石壁（暗綠、一塊深一塊淺），只有幾乎正上方的反射才是天空
@@ -639,6 +640,9 @@ function buildInterior(lib, avoid = []) {
         float glit = (pow(sd, 18.0) * 0.55 + pow(sg, 70.0) * (0.3 + 3.2 * spark)) * uDusk * sunUp;
         col += vec3(1.0, 0.58, 0.2) * glit * 3.6;
         col += vec3(1.0, 0.98, 0.93) * pow(sg, 110.0) * spark * 2.2 * uDay * sunUp * (1.0 - uDusk);   // 白天：水面上一點一點跳動的亮點
+        // 2026-11-17 白天的碎閃光（waterfx.js）：整片水面一顆顆亮星，跌水、白沫上沒有；陰天幾乎沒有
+        float wGl = wfxGlitter(vW, Vd, uSun, uTime) * (1.0 - fall) * (1.0 - 0.92 * uCloudK) * (1.0 - uRain);
+        col += mix(vec3(1.0, 0.97, 0.9), vec3(1.0, 0.7, 0.4), uDusk) * wGl * 14.0 * max(uDay, uDusk);
         col = mix(col, col * vec3(1.15, 0.92, 0.7), uDusk * sunUp * 0.35 * smoothstep(0.6, 0.98, sd));   // 太陽那個方向的水面整片偏金
         // 跌水：一股股白色水絲，中間夾著深色透明的水
         // 三層：粗的水股、細的水絲、最細的拉絲（長焦拉近看才不會是一片糊糊的白）
@@ -649,7 +653,7 @@ function buildInterior(lib, avoid = []) {
         curtain *= mix(0.3, 1.0, strands);   // 2026-11-09：以前八成以上是白的，像一塊白色塑膠板 → 一股股白水絲之間露出透明的深色水；兩邊比中間薄
         // 白沫：跟著水流漂（同一組相位），一塊塊、邊緣碎；跌水底下＋石頭邊／尾跡
         float fb = mix(fbm(q * 2.6 - o0 * 1.2) * 0.55 + fbm2(q * 8.0 - o0 * 1.2) * 0.45, fbm(q * 2.6 - o1 * 1.2 + 9.1) * 0.55 + fbm2(q * 8.0 - o1 * 1.2 + 9.1) * 0.45, wB);   // 泡沫要碎（大塊模糊的白像抹上去的）
-        float amt = clamp(fv * 0.75 + rockF * 1.1, 0.0, 1.2);
+        float amt = clamp(fv * 0.55 + rockF * 0.85, 0.0, 1.2);   // 2026-11-17：白沫少一點（以前一大塊一大塊白）
         float foam = smoothstep(0.78 - amt * 0.36, 0.86 - amt * 0.3, fb) * min(1.0, amt * 1.3);
         foam += smoothstep(0.05, 0.0, vDepth) * smoothstep(0.62, 0.78, fb) * 0.3;   // 岸邊一點點
         foam *= (1.0 - lip * 0.9) * (1.0 - fall);   // 跌水那面不用（白沫是照水平面排的，貼到幾乎垂直的面會拉成一條條糊糊的白），那面只用水絲
@@ -680,6 +684,7 @@ function buildInterior(lib, avoid = []) {
           col *= mix(vec3(0.74, 0.98, 1.18), vec3(1.9, 1.7, 1.55), smoothstep(0.3, 1.5, vDepth));   // 湖面有天空倒影、比較亮；深水的地方河暗最多（量：河 6/60/75、湖 32/93/101）
         }
         #endif
+        a = max(a, clamp(wGl * 3.0, 0.0, 1.0));   // 淺水很透明，閃光不能跟著被調淡
         gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -690,7 +695,7 @@ function buildInterior(lib, avoid = []) {
   waterM.uniforms.uLakeR = { value: Array.from(YOSE.lakeR.tab) }
   waterM.uniforms.uRiverLake = { value: 0 }   // 2026-11-14 湖面輪廓的半徑表（跟 yosemite.js 的湖面同一個），河面在輪廓外 0.4 m 才出現
   waterM.uniforms.uFlow = { value: flowTexDummy }
-  waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uDusk = duskLight; waterM.uniforms.uSun = waterU.uSun; waterM.uniforms.uRain = weatherU.rain
+  waterM.uniforms.uCloudK = weatherU.cloud; waterM.uniforms.uTime = waterU.uTime; waterM.uniforms.uDay = dayLight; waterM.uniforms.uDusk = duskLight; waterM.uniforms.uSun = waterU.uSun; waterM.uniforms.uRain = weatherU.rain
   {
     // 水池：一片比池子大一點的平面，每點的水深照地形算（沒水的地方深度 < 0 → 透明）
     const R = ALP_POND.r + 3, NR = 28, NA = 64, pos = [], uv = [], dep = [], slo = [], idx = []
@@ -736,7 +741,7 @@ function buildInterior(lib, avoid = []) {
     // 每個頂點帶：水深、坡度（跌水那幾格很陡）、白沫量（跌水底下最多，往下游漂散）。
     // 2026-11-11 兩條：原本的溪、瀑布湖流出來的河（同一套水面、石頭、流向圖；河另外一份材質，流向圖各自一張）
     for (const st of ALP_STREAMS) {
-    const wm = st === ALP_STREAM ? waterM : (() => { const m = waterM.clone(); m.uniforms = { ...m.uniforms, uRiverLake: { value: 1 }, uTime: waterU.uTime, uDay: dayLight, uDusk: duskLight, uSun: waterU.uSun, uRain: weatherU.rain }; return m })()
+    const wm = st === ALP_STREAM ? waterM : (() => { const m = waterM.clone(); m.uniforms = { ...m.uniforms, uRiverLake: { value: 1 }, uCloudK: weatherU.cloud, uTime: waterU.uTime, uDay: dayLight, uDusk: duskLight, uSun: waterU.uSun, uRain: weatherU.rain }; return m })()
     const P = []
     for (let i = 0; i < st.length; i++) P.push(V(st[i][0], 0, st[i][1]))
     const curve = new THREE.CatmullRomCurve3(P, false, 'centripetal'), L = curve.getLength(), N = Math.ceil(L / 0.25), K = st.wide ? 26 : 16, WK = st.wide ? 2.1 : 1, LATR = st.wide ? 7.5 : 4   // 寬的河：斷面 26 個頂點、往兩邊找 7.5 公尺；石頭的位置照河寬放大 WK 倍
