@@ -473,10 +473,20 @@ export function createFlight(world, player) {
     const Q = new THREE.Quaternion().setFromAxisAngle(AX.y, -turn).multiply(m.obj.getWorldQuaternion(new THREE.Quaternion()))
     const off = v.clone().sub(P0).applyQuaternion(new THREE.Quaternion().setFromAxisAngle(AX.y, -turn))
     const slit = V(savNest.x, savNest.y, savNest.z), stand = slit.clone().addScaledVector(V(savNest.nx, 0, savNest.nz), 0.035).sub(off)
-    // 腳下的短枝：從樹幹中心往外伸到腳尖再多一點
-    const reach = Math.hypot(stand.x - savNest.cx, stand.z - savNest.cz) + 0.07
-    const stub = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.03, reach, 7).rotateX(Math.PI / 2).translate(0, 0, reach / 2), new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 1 }))
-    stub.position.set(savNest.cx, stand.y - 0.02, savNest.cz); stub.rotation.y = Math.atan2(savNest.nx, savNest.nz); stub.castShadow = true; stub.name = 'hornbillStub'; scene.add(stub)
+    // 腳下的斷枝（tools/make-hornbill-nest.py 的 nest_stub：沿 +z 長 0.3、末端往上彎 3.5 cm、半徑 3.2→2.2 cm）：
+    // 根部在樹幹表面，長度縮放到腳站的地方再往外 6 cm；高度讓腳那一點的枝頂剛好在腳底
+    const dF = Math.hypot(stand.x - savNest.cx, stand.z - savNest.cz) - savNest.r, Ls = Math.max(0.12, dF + 0.06), fz = clamp(dF / Ls, 0, 1)
+    const stubY = stand.y - 0.035 * fz * fz - 0.032 * (1 - 0.3 * fz) + 0.004
+    const stub = new THREE.Group(); stub.name = 'hornbillStub'
+    stub.position.set(savNest.cx + savNest.nx * savNest.r, stubY, savNest.cz + savNest.nz * savNest.r); stub.rotation.y = Math.atan2(savNest.nx, savNest.nz); stub.scale.set(1, 1, Ls / 0.3)
+    if (savNest.stub) {
+      const S = savNest.stub
+      const a = new THREE.Mesh(S.stub.geometry, S.bark), b = S.end && new THREE.Mesh(S.end.geometry, S.end.material)
+      if (!a.geometry.attributes.color) a.geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(a.geometry.attributes.position.count * 3).fill(0.62), 3))
+      stub.add(a); if (b) stub.add(b)
+    } else stub.add(new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.032, 0.3, 8).rotateX(Math.PI / 2).translate(0, 0, 0.15), new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 1 })))
+    stub.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+    scene.add(stub)
     const food = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.03, 3, 6), new THREE.MeshStandardMaterial({ color: 0x6f9a2e, roughness: 0.6 }))
     food.visible = false; scene.add(food)
     s.nest = { sit, sk, tip, Q, stand, food, wait: rnd(8, 20), on: false, k: 0, ph: '', curve: null, len: 0, dist: 0, home: V() }

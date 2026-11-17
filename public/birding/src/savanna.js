@@ -19,11 +19,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { lodRegister } from './lod.js'
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 export async function loadSavannaKit() {
-  const [gl, leafTex, barkC, barkN] = await Promise.all([
+  const [gl, leafTex, barkC, barkN, nestGl] = await Promise.all([
     new GLTFLoader().loadAsync(`models/props/savanna_trees.glb?v=${VER}`),
     new THREE.TextureLoader().loadAsync(`models/props/savanna_leaves.png?v=${VER}`),
     new THREE.TextureLoader().loadAsync(`models/plants/bark/pine_bark_diff.jpg?v=${VER}`),
     new THREE.TextureLoader().loadAsync(`models/plants/bark/pine_bark_nor_gl.jpg?v=${VER}`),
+    new GLTFLoader().loadAsync(`models/props/hornbill_nest.glb?v=${VER}`).catch(() => null),   // 2026-11-17 犀鳥巢洞＋斷枝（tools/make-hornbill-nest.py）
   ])
   leafTex.flipY = false; leafTex.colorSpace = THREE.SRGBColorSpace; leafTex.anisotropy = 4
   for (const t of [barkC, barkN]) { t.flipY = false; t.wrapS = t.wrapT = THREE.RepeatWrapping }
@@ -33,7 +34,19 @@ export async function loadSavannaKit() {
   gl.scene.traverse((o) => { if (o.isMesh) { const n = (o.parent?.isMesh || o.parent === gl.scene ? o.name : o.parent.name).replace(/_\d+$/, ''); const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); (geo[n] ??= {})[o.material.name] = g } })
   const bark = barkify(new THREE.MeshStandardMaterial({ map: barkC, normalMap: barkN, color: 0xe6d8c8, roughness: 0.95, vertexColors: true }))
   const leaf = leafify(new THREE.MeshStandardMaterial({ map: leafTex, color: 0xffffff, emissive: 0x0b1206, roughness: 0.75, alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true }))
-  return { geo, bark, leaf }
+  const nest = {}
+  nestGl?.scene.traverse((o) => { if (o.isMesh) nest[o.name] = o })
+  return { geo, bark, leaf, nest }
+}
+// 用樹幹的樹皮材質（它開了 vertexColors）：幾何補一層白色頂點色；UV 放大到跟樹幹差不多的紋理大小
+export function barkOn(geo, bark) {
+  if (!geo.userData.barkReady) {
+    const n = geo.attributes.position.count
+    if (!geo.attributes.color) geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(n * 3).fill(0.62), 3))
+    const uv = geo.attributes.uv; if (uv) { for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 0.5, uv.getY(i) * 0.14) /* 樹幹的樹皮紋是直的長條（貼圖在 y 方向拉長約 3.5 倍），唇也照拉 */; uv.needsUpdate = true }
+    geo.userData.barkReady = true
+  }
+  return bark
 }
 const L = LOBES.sav
 const BOX = [L.x - L.rx - 25, L.x + L.rx + 5, L.z - L.rz - 20, L.z + L.rz + 5]
@@ -314,13 +327,20 @@ export function buildSavanna({ avoid = [], kit = null, nestNear = null } = {}) {
       const c = new THREE.Vector3(cx, ly, cz).applyMatrix4(nestM.m)
       let nx = nestNear[0] - c.x, nz = nestNear[1] - c.z; const nl = Math.hypot(nx, nz); nx /= nl; nz /= nl
       Object.assign(savNest, { ready: true, x: c.x + nx * rr, y: c.y, z: c.z + nz * rr, nx, nz, cx: c.x, cz: c.z, r: rr })
-      // 泥封的洞口：一塊扁的泥（比樹皮紅褐），中間一條直的黑縫
-      const yaw = Math.atan2(nx, nz)
-      const mud = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshStandardMaterial({ color: 0x7a5236, roughness: 1 }))
-      mud.scale.set(0.085, 0.12, 0.03); mud.position.set(savNest.x - nx * 0.012, savNest.y, savNest.z - nz * 0.012); mud.rotation.y = yaw
-      const slit = new THREE.Mesh(new THREE.PlaneGeometry(0.018, 0.11), new THREE.MeshBasicMaterial({ color: 0x0c0806 }))
-      slit.position.set(savNest.x + nx * 0.019, savNest.y, savNest.z + nz * 0.019); slit.rotation.y = yaw
-      for (const m of [mud, slit]) { m.name = 'hornbillNest'; m.castShadow = m === mud; m.receiveShadow = true; g.add(m) }
+      // 洞口（tools/make-hornbill-nest.py）：樹皮唇用跟樹幹同一個樹皮材質（顏色才接得起來），泥團、縫用模型自己的
+      const yaw = Math.atan2(nx, nz), K = kit.nest
+      if (K.nest_rim) {
+        const grp = new THREE.Group(); grp.name = 'hornbillNest'
+        grp.position.set(savNest.x, savNest.y, savNest.z); grp.rotation.y = yaw
+        for (const n of ['nest_rim', 'nest_mud', 'nest_slit']) {
+          const src = K[n]; if (!src) continue
+          const m = new THREE.Mesh(src.geometry, src.material); m.castShadow = n !== 'nest_slit'; m.receiveShadow = true
+          if (n === 'nest_rim') m.material = barkOn(m.geometry, kit.bark)
+          grp.add(m)
+        }
+        g.add(grp)
+        savNest.stub = K.nest_stub && { stub: K.nest_stub, end: K.nest_stubEnd, bark: kit.bark }
+      }
     }
   }
   return g
