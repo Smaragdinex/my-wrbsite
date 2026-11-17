@@ -11,7 +11,7 @@ import { savK } from './layout.js'
 import { occ, occHidden } from './occlude.js'
 
 const WALK_FOV = 62
-const sets = [], grass = []
+const sets = [], grass = [], GF = [55, 150, 220]
 const _fr = new THREE.Frustum(), _pm = new THREE.Matrix4(), _c = new THREE.Vector3()
 const last = { p: new THREE.Vector3(1e9, 0, 0), q: new THREE.Quaternion(), fov: 0 }
 export const lodStats = { instances: 0, drawn: 0, grass: 0, grassDrawn: 0 }
@@ -218,8 +218,9 @@ function autoLow(m) {
 }
 
 // 草葉一塊：mesh（InstancedBufferGeometry，草已經打亂順序）、中心、半徑
-export function lodRegisterGrass(mesh, center, r) {
-  grass.push({ mesh, c: center.clone(), r, n: mesh.geometry.instanceCount, mask0: mesh.layers.mask })
+// fall：[全密到幾公尺, 到幾公尺剩四成, 幾公尺外不畫]（沒給就用預設 55／150／220）
+export function lodRegisterGrass(mesh, center, r, fall = null) {
+  grass.push({ mesh, c: center.clone(), r, n: mesh.geometry.instanceCount, mask0: mesh.layers.mask, fall })
   lodStats.grass += mesh.geometry.instanceCount
   last.fov = 0
 }
@@ -414,15 +415,18 @@ export function lodUpdate(camera, force = false) {
     if (S.imp) impFill(S, ki)
   }
   // 草：15 公尺內全密，到 60 公尺漸漸剩兩成，90 公尺外不畫（地面本身是綠的）
-  let gd = 0
+  let gd = 0; lodStats.occGrass = 0
   const sph = new THREE.Sphere()
   for (const G of grass) {
     sph.set(G.c, G.r)
     // 2026-11-13 使用者：草要在更遠的地方就出來——畫質降級時以前草的距離跟著乘 0.4～0.65（35 m 變 15 m），現在最多只縮到八成
     const zG = zoom / lodQuality.scale * Math.max(0.8, lodQuality.scale), d = Math.max(0, G.c.distanceTo(p) - G.r * 0.5) / zG
     // 草葉：35 m 內全密、到 110 m 慢慢剩三成五、160 m 外不畫（原本 15 m 就開始變稀、90 m 不畫，走過去才看到草長出來）
-    let f = d < 55 ? 1 : d < 150 ? 1 - 0.6 * (d - 55) / 95 : d < 220 ? 0.4 * (1 - (d - 150) / 70) : 0   // 55 m 內全密、150 m 剩四成、220 m 外不畫
+    const [a, b, c] = G.fall ?? GF
+    let f = d < a ? 1 : d < b ? 1 - 0.6 * (d - a) / (b - a) : d < c ? 0.4 * (1 - (d - b) / (c - b)) : 0   // 預設 55 m 內全密、150 m 剩四成、220 m 外不畫
     if (!_fr.intersectsSphere(sph)) f = 0
+    // 2026-11-17 人在非洲：紅杉屏障／山脊後面（非洲以外）的草也不畫（整塊從底到頂都被擋住才算）
+    else if (f > 0 && occ.on && (G.out ??= savK(G.c.x, G.c.z) < 0.05) && occHidden(G.c.x, G.c.y + 1.5, G.c.z, G.c.y - 0.6)) { f = 0; lodStats.occGrass = (lodStats.occGrass || 0) + 1 }
     G.mesh.geometry.instanceCount = Math.round(G.n * f)
     { const on = G.mesh.geometry.instanceCount > 0; if (on !== (G.mesh.layers.mask !== 0)) { if (on) G.mesh.layers.mask = G.mask0; else { G.mask0 ??= G.mesh.layers.mask; G.mesh.layers.mask = 0 } } }   // 0 根草的塊不發 draw call
     gd += G.mesh.geometry.instanceCount

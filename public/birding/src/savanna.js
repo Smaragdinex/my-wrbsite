@@ -102,8 +102,9 @@ export function buildSavanna({ avoid = [], kit = null } = {}) {
   }
 
   // ---------- 草 ----------
-  const layers = { tall: [[], []], plume: [[], []], mid: [[], []], low: [[], []] }
-  const push = (Lr, x, y, z, a, col, h) => { layers[Lr][0].push(x, y, z, a); layers[Lr][1].push(col.r, col.g, col.b, h) }
+  // 2026-11-17 FPS：草穗（plume）跟高草寬度幾乎一樣 → 併進同一層（少一半的 draw call）
+  const layers = { tall: [[], []], mid: [[], []], low: [[], []] }
+  const push = (Lr, x, y, z, a, col, h) => { if (Lr === 'plume') Lr = 'tall'; layers[Lr][0].push(x, y, z, a); layers[Lr][1].push(col.r, col.g, col.b, h) }
   const P = { gold: [new THREE.Color(0xC9A55A), new THREE.Color(0xDDBF78)], tawny: [new THREE.Color(0xA87C45), new THREE.Color(0xB98F55)], green: new THREE.Color(0x8C8A4C), seed: [new THREE.Color(0xB0603A), new THREE.Color(0xD8C28E)], low: [new THREE.Color(0x9C7A3E), new THREE.Color(0x87733F)] }
   const mix = (a, b, t) => c.copy(a).lerp(b, t).clone()
   const G = { sedge: [new THREE.Color(0x7FA43C), new THREE.Color(0x9DB84E)], lush: [new THREE.Color(0x7C9A3E), new THREE.Color(0x96A84C)], papy: new THREE.Color(0x4F7A2C), umbel: new THREE.Color(0x6E9A38) }
@@ -157,18 +158,22 @@ export function buildSavanna({ avoid = [], kit = null } = {}) {
       for (let j = 0; j < 6; j++) push('low', x + (rnd() - 0.5) * 0.5, y - 0.01, z + (rnd() - 0.5) * 0.5, rnd() * TAU, col, 0.08 + rnd() * 0.16)
     }
   }
-  const opts = { tall: { width: [0.011, 0.009] }, plume: { width: [0.012, 0.009] }, mid: { width: [0.018, 0.014] }, low: { width: [0.03, 0.022], lawn: true } }
+  const opts = { tall: { width: [0.011, 0.009] }, mid: { width: [0.018, 0.014] }, low: { width: [0.03, 0.022], lawn: true } }
+  // 2026-11-17 非洲 FPS（使用者：「檢查非洲那邊可以如何提升 FPS」→ 量到草佔 1.4～5.7 ms，最大一項）：
+  //   格子 14 → 24 m（589 塊 → 約兩百塊，draw call 少一大半）；
+  //   草原一眼望很遠，草葉只有 1～2 cm 寬，100 m 外比一個像素還細 → 照草的高度早一點變稀（[全密到, 剩四成, 不畫]，公尺）
+  const FALL = { tall: [45, 120, 170], mid: [35, 95, 135], low: [25, 60, 90] }
   for (const [name, [A, B]] of Object.entries(layers)) {
-    const CELL = 14, cells = new Map()
+    const CELL = 24, cells = new Map()
     for (let i = 0; i < A.length / 4; i++) { const key = Math.floor(A[i * 4] / CELL) + ',' + Math.floor(A[i * 4 + 2] / CELL); (cells.get(key) || cells.set(key, []).get(key)).push(i) }
     for (const [key, idx] of cells) {
-      for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); if (name !== 'plume') [idx[i], idx[j]] = [idx[j], idx[i]] }
+      for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]] }
       const a = [], b = []
       for (const i of idx) { a.push(A[i * 4], A[i * 4 + 1], A[i * 4 + 2], A[i * 4 + 3]); b.push(B[i * 4], B[i * 4 + 1], B[i * 4 + 2], B[i * 4 + 3]) }
       const [cx, cz] = key.split(',').map((v) => (+v + 0.5) * CELL)
       const m = bladeMesh(a, b, opts[name]); m.name = 'sav_' + name; g.add(m)
       m.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, alpineHeight(cx, cz) + 1, cz), CELL * 0.75 + 4)
-      lodRegisterGrass(m, new THREE.Vector3(cx, alpineHeight(cx, cz) + 0.5, cz), CELL * 0.72 + 1)
+      lodRegisterGrass(m, new THREE.Vector3(cx, alpineHeight(cx, cz) + 0.5, cz), CELL * 0.72 + 1, FALL[name])
     }
   }
 
