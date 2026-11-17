@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { rigged, AX, hasModel } from '../birds.js'
 import { HIDES } from '../east.js'
 import { clone as skClone } from 'three/addons/utils/SkeletonUtils.js'
+import { savNest } from '../savanna.js'
 // 2026-11-11 使用者：躲在觀察屋裡，鳥不會飛走（Threads 回饋：宣傳文寫了「躲在賞鳥屋裡鳥不會跑」，以前觀察屋只是一棟房子）。
 // 觀察屋 6×3.2 m、正面朝 look；玩家在屋裡（各邊多 0.4 m，含門口）＝鳥看不到人，不會警戒
 const inHide = (P) => HIDES.some((h) => { const a = Math.atan2(h.look[0] - h.x, h.look[1] - h.z), dx = P.x - h.x, dz = P.z - h.z, lz = dx * Math.sin(a) + dz * Math.cos(a), lx = dx * Math.cos(a) - dz * Math.sin(a); return Math.abs(lx) < h.w / 2 + 0.4 && Math.abs(lz) < h.d / 2 + 0.4 })
@@ -125,7 +126,7 @@ export const ESCAPE = {
   sbstork: { r: 8, run: 2, fly: { speed: 8, hz: 1.8, style: 'glide', k: 2.8 } },   // 2026-11-17 三角洲四種
   bccrane: { r: 7.5, run: 2, fly: { speed: 9, hz: 2.4, style: 'flap', k: 1.95 } },
   ahoopoe: { r: 5, fly: { speed: 7, hz: 6, style: 'flap', k: 0.4 } },
-  yhornbill: { r: 5.5, fly: { speed: 7, hz: 5, style: 'flap', k: 0.66 } },
+  yhornbill: { r: 5.5, nest: [30, 70], fly: { speed: 6, hz: 5, style: 'flap', k: 0.66 } },   // nest：每隔幾秒飛去樹洞餵食一次（savanna.js savNest）
   secretarybird: { r: 8, run: 3, fly: { speed: 8, hz: 1.8, style: 'glide', k: 2.6 } },   // 2026-11-16 蛇鷲：先跑開（很會跑），逼近才起飛滑翔
   burrowowl: { r: 8, run: 5, burrow: true, fly: { speed: 8, hz: 7, style: 'flap', k: 0.6 } },   // 2026-11-16 穴鴞：人靠近先跑回洞裡躲（birds.js burrowowl 的 w.flee）；還在洞外又被逼到很近才飛
   pratincole: { r: 7, hawk: true, sortie: [20, 45], fly: { speed: 10, hz: 6, style: 'glide', k: 0.62 } },
@@ -448,8 +449,102 @@ export function createFlight(world, player) {
     r.turn('tail', AX.z, -0.4 * flare)
   }
 
+  /* ---------- 2026-11-17 南方黃嘴犀鳥：樹洞餵食（使用者：每隻鳥一個特別的行為；「親鳥餵食」）----------
+     母鳥孵蛋時把自己用泥封在樹洞裡、只留一條縫，公鳥一趟趟送蟲來。這裡：地上覓食的那隻每 30～70 秒（沒被驚動時）
+     叼著一條綠色毛毛蟲飛到巢樹，站在洞口下面的短枝上，把嘴伸進縫裡兩下（蟲不見），張望一下再飛回地上原本的位置 */
+  function nestSetup(u) {
+    const s = u.ms[0], m = s.m
+    if (s.nest || !savNest.ready || !s.root) return
+    m.obj.updateMatrixWorld(true)
+    let skin = null; m.obj.traverse((o) => { if (o.isSkinnedMesh && !skin) skin = o })
+    if (!skin) return
+    const sit = skClone(m.obj); sit.traverse((o) => { o.visible = true; o.frustumCulled = false }); sit.visible = false; scene.add(sit)
+    let sk = null; sit.traverse((o) => { if (o.isSkinnedMesh && !sk) sk = o })
+    // 嘴尖：上半身最往前的頂點（照目前朝向）
+    const P0 = m.obj.getWorldPosition(V()), pos = skin.geometry.attributes.position, v = V(), box = new THREE.Box3().setFromObject(m.obj)
+    let tip = -1, best = -Infinity, fw = V()
+    { let cx = 0, cz = 0, n = 0; for (let i = 0; i < pos.count; i += 7) { skin.getVertexPosition(i, v).applyMatrix4(skin.matrixWorld); cx += v.x; cz += v.z; n++ } fw.set(cx / n, 0, cz / n) }
+    // 前方：離身體中心最遠、又在上半身的頂點方向（就是嘴）
+    for (let i = 0; i < pos.count; i++) { skin.getVertexPosition(i, v).applyMatrix4(skin.matrixWorld); if (v.y < box.min.y + (box.max.y - box.min.y) * 0.45) continue; const d = Math.hypot(v.x - fw.x, v.z - fw.z); if (d > best) { best = d; tip = i } }
+    skin.getVertexPosition(tip, v).applyMatrix4(skin.matrixWorld)
+    const f = V(v.x - fw.x, 0, v.z - fw.z).normalize(), toTrunk = V(-savNest.nx, 0, -savNest.nz)
+    // 轉成面向樹幹
+    const turn = Math.atan2(f.x * toTrunk.z - f.z * toTrunk.x, f.dot(toTrunk))
+    const Q = new THREE.Quaternion().setFromAxisAngle(AX.y, -turn).multiply(m.obj.getWorldQuaternion(new THREE.Quaternion()))
+    const off = v.clone().sub(P0).applyQuaternion(new THREE.Quaternion().setFromAxisAngle(AX.y, -turn))
+    const slit = V(savNest.x, savNest.y, savNest.z), stand = slit.clone().addScaledVector(V(savNest.nx, 0, savNest.nz), 0.035).sub(off)
+    // 腳下的短枝：從樹幹中心往外伸到腳尖再多一點
+    const reach = Math.hypot(stand.x - savNest.cx, stand.z - savNest.cz) + 0.07
+    const stub = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.03, reach, 7).rotateX(Math.PI / 2).translate(0, 0, reach / 2), new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 1 }))
+    stub.position.set(savNest.cx, stand.y - 0.02, savNest.cz); stub.rotation.y = Math.atan2(savNest.nx, savNest.nz); stub.castShadow = true; stub.name = 'hornbillStub'; scene.add(stub)
+    const food = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.03, 3, 6), new THREE.MeshStandardMaterial({ color: 0x6f9a2e, roughness: 0.6 }))
+    food.visible = false; scene.add(food)
+    s.nest = { sit, sk, tip, Q, stand, food, wait: rnd(8, 20), on: false, k: 0, ph: '', curve: null, len: 0, dist: 0, home: V() }
+  }
+  const _nq = V(), _nt = V()
+  function nestStep(u, s, t, dt) {
+    const N = s.nest, m = s.m
+    if (N.ph === 'out' || N.ph === 'back') {
+      N.dist = Math.min(N.len, N.dist + u.esc.fly.speed * 0.8 * clamp((N.len - N.dist) / 3, 0.3, 1) * dt); const k = N.dist / N.len
+      N.curve.getPointAt(k, _nq); N.curve.getTangentAt(Math.min(k, 0.999), _nt)
+      s.root.position.copy(_nq); s.root.visible = true
+      const h = Math.atan2(_nt.x, _nt.z), dh = wrap(h - s.head)
+      s.head += dh * (1 - Math.exp(-7 * dt)); s.roll = damp(s.roll, clamp(-dh * 2.6, -0.8, 0.8), 4, dt); s.pitch = damp(s.pitch, -Math.asin(clamp(_nt.y, -1, 1)) * 0.7, 6, dt)
+      s.root.rotation.set(s.pitch, s.head, s.roll); s.t += dt
+      wings(s, u.esc.fly, t, dt, 1 - ss(N.dist, 0, 1.2), ss(1 - (N.len - N.dist) / 2.5, 0, 1))
+      if (N.dist >= N.len) {
+        s.root.visible = false
+        if (N.ph === 'out') { N.ph = 'feed'; N.k = 0; N.sit.visible = true; N.food.visible = true; s.act = 'nestfeed'; nestStep(u, s, t, 0) }   // 同一格就擺到洞口（不然那一格站姿模型還在舊位置，鳥會閃一下不見）
+        else { N.ph = ''; N.on = false; m.obj.visible = true; s.mode = 'perch'; s.act = ''; N.wait = rnd(...u.esc.nest) }
+      }
+      return
+    }
+    if (N.ph === 'feed') {
+      // 0～1.2 s 站穩張望 → 兩下把嘴伸進縫裡（第二下蟲留在洞裡）→ 再張望 → 飛回去
+      N.k += dt
+      const k = N.k, poke = ss(k, 1.2, 1.45) * (1 - ss(k, 1.8, 2.05)) + ss(k, 2.3, 2.55) * (1 - ss(k, 3.0, 3.3))
+      const look = k < 1.2 || k > 3.4 ? 0.35 * Math.sin(k * 2.2) * ss(Math.sin(k * 0.9 + 1), -0.2, 0.4) : 0
+      N.sit.position.copy(N.stand).addScaledVector(V(-savNest.nx, 0, -savNest.nz), 0.045 * poke)
+      N.sit.quaternion.copy(N.Q).premultiply(_qq.setFromAxisAngle(AX.y, look))
+      N.sit.updateMatrixWorld(true)
+      if (N.food.visible) {
+        N.sk.getVertexPosition(N.tip, _nq).applyMatrix4(N.sk.matrixWorld)
+        N.food.position.copy(_nq).addScaledVector(V(savNest.nx, 0, savNest.nz), 0.012); N.food.position.y -= 0.006
+        N.food.rotation.set(0, Math.atan2(savNest.nx, savNest.nz) + 1.4, 0.2 * Math.sin(t * 9))
+        if (k > 2.75) N.food.visible = false
+      }
+      if (k > 5.2) {   // 飛回去
+        N.sit.visible = false; N.ph = 'back'; s.act = 'fly'; s.t = 0
+        const A = N.stand.clone().add(V(0, 0.15, 0)), B = N.home.clone().add(V(0, 0.2, 0))
+        N.curve = new THREE.CubicBezierCurve3(A, A.clone().add(V(savNest.nx * 1.6, 0.3, savNest.nz * 1.6)), B.clone().add(V(0, 1.6, 0)), B); N.len = N.curve.getLength(); N.dist = 0
+      }
+    }
+  }
+  const _qq = new THREE.Quaternion()
+  function nestTick(t, dt) {
+    for (const u of units) {
+      if (!u.esc.nest) continue
+      const s = u.ms[0]; if (!s?.root) continue
+      if (!s.nest) { nestSetup(u); if (!s.nest) continue }
+      const N = s.nest
+      if (N.on) {
+        if (u.b.absent) { N.on = false; N.ph = ''; N.sit.visible = false; N.food.visible = false; s.root.visible = false; s.m.obj.visible = true; s.mode = 'perch'; s.act = ''; continue }
+        u.alarm = 0; nestStep(u, s, t, dt); continue
+      }
+      if (u.b.absent || u.state !== 'home' || s.mode !== 'perch' || u.alarm > 0.2) continue
+      if ((N.wait -= dt) > 0) continue
+      // 出發：從地上目前的位置
+      N.on = true; N.ph = 'out'; s.mode = 'nest'; s.act = 'takeoff'; s.t = 0
+      s.m.obj.getWorldPosition(N.home); s.m.obj.visible = false
+      const A = N.home.clone().add(V(0, 0.2, 0)), B = N.stand.clone().add(V(0, 0.15, 0))
+      N.curve = new THREE.CubicBezierCurve3(A, A.clone().add(V(0, 1.6, 0)), B.clone().add(V(savNest.nx * 1.6, 0.35, savNest.nz * 1.6)), B); N.len = N.curve.getLength(); N.dist = 0
+      s.head = Math.atan2(B.x - A.x, B.z - A.z); s.pitch = 0; s.roll = 0
+    }
+  }
+
   function tick(t, dt, { sneak = false } = {}) {
     colonyTick(t, dt)
+    nestTick(t, dt)
     const P = world.camera.position
     speed = damp(speed, P.distanceTo(last) / Math.max(dt, 1e-3), 8, dt)
     last.copy(P)
@@ -458,6 +553,7 @@ export function createFlight(world, player) {
     const mult = hidden ? 0 : sneak ? 0.5 : speed > 6 ? 1.5 : speed > 0.6 ? 1 : 0.7
     for (const u of units) {
       if (u.b.absent) continue   // 這個時段不在（main.js presence）
+      if (u.ms[0]?.nest?.on) continue   // 正在樹洞餵食（nestTick 管）
       if (u.state === 'home') {
         // 自己出巢覓食（ESCAPE.sortie）：沒在警戒時倒數，時間到就照驚飛那一套從岩面朝外（穿過水簾）飛出去，在遠處待一陣子再飛回巢
         if (u.esc.sortie && u.alarm < 0.2) {
@@ -512,6 +608,7 @@ export function createFlight(world, player) {
     const s = m.flight
     if (!s) return { obj: m.obj, act: m.acts?.name ?? '' }
     if (s.mode === 'away' || (s.mode === 'wait' && !m.obj.visible)) return null
+    if (s.nest?.on) return s.nest.ph === 'feed' ? { obj: s.nest.sit, act: 'nestfeed' } : { obj: s.root, act: s.act || 'fly' }
     if (s.mode === 'out' || s.mode === 'back' || s.mode === 'hover' || s.mode === 'swoop') return { obj: s.root, act: s.act }
     return { obj: m.obj, act: s.mode === 'flee' ? 'run' : m.acts?.name ?? '' }
   }
@@ -549,7 +646,7 @@ export function createFlight(world, player) {
   }
   const gone = (b) => { const u = unitOf(b); return !u || u.ms.every((s) => s.mode === 'away') }
   const canFly = (b) => !!unitOf(b)?.esc.fly
-  window.__flight = { units, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
+  window.__flight = { units, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
   // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
   const snap = () => { last.copy(world.camera.position); speed = 0 }
   return { tick, units, shotOf, snap, arrive, depart, gone, canFly, add: addUnit, get speed() { return speed } }

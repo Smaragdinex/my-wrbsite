@@ -827,16 +827,20 @@ function groundTripo(env, cfg) {
     let best = Infinity
     for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); if (v.y > H.max.y * 0.6 && v.dot(FWD) < best) { best = v.dot(FWD); tipIdx = i } }
   }
-  const anchor = V(), _tip = V(), _hd = V(), wormMat = new THREE.MeshStandardMaterial({ color: 0xb8675c, roughness: 0.45, emissive: 0x2a0d08 })
+  // cfg.prey：抓的不是蚯蚓（2026-11-17 非洲戴勝：土裡的甲蟲幼蟲——短、胖、米白色；toss：吞之前往上一拋再接住，戴勝舌頭短，真的會這樣吃）
+  const PY = { L: 0.15, r: 0.0065, color: 0xb8675c, emissive: 0x2a0d08, p: 0.75, toss: false, ...(cfg.prey ?? {}) }
+  const anchor = V(), _tip = V(), _hd = V(), wormMat = new THREE.MeshStandardMaterial({ color: PY.color, roughness: 0.45, emissive: PY.emissive })
   const worm = (n, kk, t) => {
     if (n !== 'worm' || kk < 0.18) { wormOn = false; if (wormMesh) wormMesh.visible = false; return }
     r.bones.head.updateWorldMatrix(true, true)
     const tip = skin.getVertexPosition(tipIdx, _tip).applyMatrix4(skin.matrixWorld)
     // 往頭的方向縮 1.5 公分：夾在上下喙之間，不是黏在尖端外面
     tip.addScaledVector(r.bones.head.getWorldPosition(_hd).sub(tip).normalize(), 0.015)
-    if (!wormOn) { wormOn = true; caught = Math.random() < 0.75; anchor.set(tip.x, 0.004, tip.z) }
+    if (!wormOn) { wormOn = true; caught = Math.random() < PY.p; anchor.set(tip.x, 0.004, tip.z) }
     if (!caught || kk > 0.97) { if (wormMesh) wormMesh.visible = false; return }
-    const pts = [], N = 12, L = 0.15
+    const pts = [], N = 12, L = PY.L
+    // 拋起來：0.76～0.86 整隻離開嘴往上飛 7 cm 再落回嘴裡
+    const tu = PY.toss ? (kk - 0.76) / 0.1 : -1, toss = tu > 0 && tu < 1 ? 4 * tu * (1 - tu) * 0.07 : 0
     const release = ss(kk, 0.53, 0.58), swallow = ss(kk, 0.75, 0.97)
     // 露出來的那段最長 L：拉得比 L 遠，土裡那端就被拔起來跟著走
     const dir = V().subVectors(anchor, tip), dl = dir.length()
@@ -846,16 +850,17 @@ function groundTripo(env, cfg) {
       const u = i / N
       // 還連著土：從地面拉到嘴尖，中間有點下垂、扭來扭去掙扎
       const a = V().lerpVectors(end, tip, u), wob = Math.sin(Math.PI * u)
-      a.y -= wob * 0.012; a.x += Math.sin(u * 8 + t * 18) * 0.009 * wob; a.z += Math.cos(u * 7 + t * 15) * 0.007 * wob
+      const ws = L / 0.15   // 扭動幅度照獵物長度（幼蟲 3 cm 用蚯蚓的幅度會甩成一個大圈）
+      a.y -= wob * 0.012 * ws; a.x += Math.sin(u * 8 + t * 18) * 0.009 * wob * ws; a.z += Math.cos(u * 7 + t * 15) * 0.007 * wob * ws
       // 拔出來了：從嘴尖往下垂、左右扭；吞的時候長度縮短
       const len = L * (1 - swallow) * u
-      const b = V(tip.x + Math.sin(u * 5 + t * 9) * 0.035 * u, tip.y - len, tip.z + Math.cos(u * 4 + t * 7) * 0.025 * u)
+      const b = V(tip.x + Math.sin(u * 5 + t * 9) * 0.035 * u * ws, tip.y - len + toss, tip.z + Math.cos(u * 4 + t * 7) * 0.025 * u * ws)
       pts.push(a.lerp(b, release))
     }
     if (!wormMesh) { wormMesh = new THREE.Mesh(new THREE.BufferGeometry(), wormMat); wormMesh.frustumCulled = false; root.parent.add(wormMesh) }
     wormMesh.visible = true
     wormMesh.geometry.dispose()
-    wormMesh.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => root.parent.worldToLocal(p))), 18, 0.0065, 5)
+    wormMesh.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => root.parent.worldToLocal(p))), 18, PY.r, 6)
   }
   const C0 = { ...c }
   const update = (t, dt) => {
@@ -1806,7 +1811,7 @@ function sibia(env) {
 // 地上走的：H 顯示身高（公尺）、h0 模型高度（side-view 的 BOUNDS y）、size 小鳥跳著走
 const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name, H, h0, ...TRIPO, patrol: o.patrol, rock: o.rock, rockHz: o.rockHz, rockMul: o.rockMul, hop: o.hop ?? 0.035, flick: o.flick ?? 0.2, flickF: 1.6, bob: o.bob,
   walk: { radius: o.radius ?? 1.1, speed: o.speed ?? 0.2, turn: 3, ...(o.walk ?? {}) }, stride: o.stride ?? 0.08, swingT: o.swingT ?? 0.13, lift: o.lift ?? 0.035, knee: [0.3, 0.6], focusY: H * 0.6,
-  acts: o.acts ?? { walk: [4, 99, 99], peck: [3, 0.7, 1.3], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })
+  acts: o.acts ?? { walk: [4, 99, 99], peck: [3, 0.7, 1.3], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] }, ...(o.more ?? {}) })
 // （BUILD 在檔案前面就用到這些名字：要用 function 宣告才會提升，const 會在載入時出錯）
 // 停枝的：k 縮放（= 想要的身高 / 模型高度），腳底在模型 y≈0；腳趾輕輕勾住（grip 0.35）、腳底貼枝
 const endemicPerch = (name, k, beat = 8, more = {}) => (env) => perchRigged(outer(env, -0.9), { name, k, ...TRIPO, foot: 0.004, drop: 0.045, beat, grip: 0.35, plant: true, ...more })
@@ -2285,7 +2290,10 @@ function bccrane(env) {
     acts: { walk: [4, 99, 99], peck: [3, 1.2, 2.4], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99] } }))
 }
 // 非洲戴勝：走（不跳），常常停下來把長嘴往土裡探
-function ahoopoe(env) { return endemicGround('ahoopoe-rig', 0.26, 0.66, { hop: 0, flick: 0.15, radius: 1.3, speed: 0.15, stride: 0.06, bob: 0.012, acts: { walk: [4, 99, 99], peck: [4, 1.0, 2.0], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] } })(env) }
+// 2026-11-17 招牌行為（使用者：每隻鳥一個特別的行為；戴勝＝「抓蟲瞬間」）：worm 那一套——長嘴戳進裸土、分幾下把甲蟲幼蟲拔出來、甩一甩、往上一拋接住吞下
+function ahoopoe(env) { return endemicGround('ahoopoe-rig', 0.26, 0.66, { hop: 0, flick: 0.15, radius: 1.3, speed: 0.15, stride: 0.06, bob: 0.012,
+  acts: { walk: [4, 99, 99], peck: [3, 1.0, 2.0], worm: [2.2, 3.2, 3.8], look: [2, 0.8, 1.8], stand: [1.5, 1, 2.5], turn: [1, 99, 99] },
+  more: { worm: true, prey: { L: 0.026, r: 0.0068, color: 0xeee2c6, emissive: 0x2a2418, p: 0.85, toss: true } } })(env) }
 // 南方黃嘴犀鳥：在地上跳著找蟲
 function yhornbill(env) { return endemicGround('yhornbill-rig', 0.36, 0.66, { hop: 0.05, flick: 0.25, radius: 1.5, speed: 0.22, stride: 0.1 })(env) }
 // 黑剪嘴鷗：一直在飛——沿著潟湖那條筆直的深水道貼著水面剪過去（下嘴泡在水裡），到頭拉高轉彎、從旁邊高一點飛回來，再下去剪一趟。

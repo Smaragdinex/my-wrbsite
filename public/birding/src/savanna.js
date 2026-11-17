@@ -39,7 +39,8 @@ const L = LOBES.sav
 const BOX = [L.x - L.rx - 25, L.x + L.rx + 5, L.z - L.rz - 20, L.z + L.rz + 5]
 const inSav = (x, z, k = 0.6) => savK(x, z) > k && domeRho(x, z) < 0.95
 // 鳥站的地方附近不長高草（不然拍不到）
-const nearAvoid = (avoid, x, z) => avoid.some((b) => b.sav && Math.hypot(x - b.x, z - b.z) < (b.r ?? 3))
+// 邊緣 1.5 m 慢慢變密（不是一圈硬邊）
+const nearAvoid = (avoid, x, z) => avoid.some((b) => { if (!b.sav) return false; const d = Math.hypot(x - b.x, z - b.z) - (b.r ?? 3); return d < 0 || (d < 1.5 && Math.random() > d / 1.5) })
 
 // ---------- 傘形金合歡 ----------
 // 一棵的幾何：樹幹（2～2.6 m 分岔）→ 3～4 枝斜斜往外上長 → 頂上一片扁平的樹冠（幾團壓扁的葉簇疊成一層）
@@ -62,7 +63,9 @@ function acaciaParts(rnd, H, R) {
   return { wood, crowns }
 }
 
-export function buildSavanna({ avoid = [], kit = null } = {}) {
+// 2026-11-17 南方黃嘴犀鳥的巢（招牌行為「樹洞餵食」，flight.js 用）：離犀鳥最近的一棵金合歡，樹幹上一個用泥封住、只留一條縫的樹洞，朝犀鳥那邊（步道）
+export const savNest = { ready: false }
+export function buildSavanna({ avoid = [], kit = null, nestNear = null } = {}) {
   const g = new THREE.Group(); g.name = 'savanna'
   const rnd = mulberry32(2016)
   const c = new THREE.Color()
@@ -177,6 +180,8 @@ export function buildSavanna({ avoid = [], kit = null } = {}) {
     }
   }
 
+  let nestT = null, nestM = null
+  if (nestNear) { let bd = 60; for (const t of TREES) { if (t.broad) continue; const d = Math.hypot(t.x - nestNear[0], t.z - nestNear[1]); if (d < bd && d > 3) { bd = d; nestT = t } } }
   // ---------- 樹：有 Blender 的樹就用（乾草原＝金合歡；樹島＝闊葉大樹、三成扇葉棕櫚） ----------
   if (kit) {
     const by = {}, m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0)
@@ -185,6 +190,7 @@ export function buildSavanna({ avoid = [], kit = null } = {}) {
       const kind = t.broad ? (rnd() < 0.32 ? (rnd() < 0.7 ? 'palm_a' : 'palm_b') : (rnd() < 0.5 ? 'island_a' : 'island_b')) : (rnd() < 0.5 ? 'acacia_a' : 'acacia_b')
       const s = t.H / REF[kind] * (t.broad ? 1.1 : 1.15), y = alpineHeight(t.x, t.z)
       ;(by[kind] ??= []).push(m4.compose(new THREE.Vector3(t.x, y - 0.05, t.z), q.setFromAxisAngle(UP, t.yaw), new THREE.Vector3(s * (0.9 + rnd() * 0.2), s, s * (0.9 + rnd() * 0.2))).clone())
+      if (t === nestT) nestM = { kind, m: m4.clone(), y }
       addCollider(t.x, t.z, kind.startsWith('island') ? 0.6 : 0.3, y + t.H * 0.4, y - 0.5)
     }
     for (const [kind, list] of Object.entries(by)) {
@@ -296,6 +302,27 @@ export function buildSavanna({ avoid = [], kit = null } = {}) {
     im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); im.name = 'kopje'; g.add(im)
   }
   g.userData.trees = TREES
+  if (nestM && kit) {
+    // 量樹幹：離地 1.25 m 那一圈的樹皮頂點（模型座標），中心＝平均，半徑＝中位數
+    const geo = kit.geo[nestM.kind].bark, p = geo.attributes.position, sc = new THREE.Vector3(), qq = new THREE.Quaternion(), pos = new THREE.Vector3()
+    nestM.m.decompose(pos, qq, sc)
+    const hh = 1.25, ly = (hh + 0.05) / sc.y, pts = []
+    for (let i = 0; i < p.count; i++) { const y = p.getY(i) * sc.y - 0.05; if (y > 0.5 && y < 1.8) pts.push([p.getX(i), p.getZ(i)]) }   // 樹幹是低模，一圈一圈的頂點隔很開：取分岔以下一整段
+    if (pts.length > 8) {
+      const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length, cz = pts.reduce((a, q) => a + q[1], 0) / pts.length
+      const ds = pts.map(([x, z]) => Math.hypot(x - cx, z - cz)).sort((a, b) => a - b), rr = ds[ds.length >> 1] * sc.x
+      const c = new THREE.Vector3(cx, ly, cz).applyMatrix4(nestM.m)
+      let nx = nestNear[0] - c.x, nz = nestNear[1] - c.z; const nl = Math.hypot(nx, nz); nx /= nl; nz /= nl
+      Object.assign(savNest, { ready: true, x: c.x + nx * rr, y: c.y, z: c.z + nz * rr, nx, nz, cx: c.x, cz: c.z, r: rr })
+      // 泥封的洞口：一塊扁的泥（比樹皮紅褐），中間一條直的黑縫
+      const yaw = Math.atan2(nx, nz)
+      const mud = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshStandardMaterial({ color: 0x7a5236, roughness: 1 }))
+      mud.scale.set(0.085, 0.12, 0.03); mud.position.set(savNest.x - nx * 0.012, savNest.y, savNest.z - nz * 0.012); mud.rotation.y = yaw
+      const slit = new THREE.Mesh(new THREE.PlaneGeometry(0.018, 0.11), new THREE.MeshBasicMaterial({ color: 0x0c0806 }))
+      slit.position.set(savNest.x + nx * 0.019, savNest.y, savNest.z + nz * 0.019); slit.rotation.y = yaw
+      for (const m of [mud, slit]) { m.name = 'hornbillNest'; m.castShadow = m === mud; m.receiveShadow = true; g.add(m) }
+    }
+  }
   return g
 }
 

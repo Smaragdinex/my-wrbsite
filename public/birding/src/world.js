@@ -137,7 +137,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   // 第二館：高山雲霧林（外殼現在蓋，館內等玩家走過去才蓋）
   // 山區（溫室東半邊）：直接蓋、一直畫。附屬館只剩海岸館（目前關著）
   // 山區的樹、草、岩石避開鳥站的地方和鏡頭那一側
-  const alpAvoid = birds.filter((b) => inAlpine(...b.def.spot)).map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], cx: b.cam.x, cz: b.cam.z, ground: b.def.perch === 'ground' || b.def.perch === 'stem', clear: b.def.lawn ? 5 : 0 }))
+  const alpAvoid = birds.filter((b) => inAlpine(...b.def.spot)).map((b) => ({ x: b.def.spot[0], z: b.def.spot[1], cx: b.cam.x, cz: b.cam.z, ground: b.def.perch === 'ground' || b.def.perch === 'stem', clear: b.def.lawn ? 5 : 0, sav: !!b.def.bare, r: b.def.bare }))
   // 草鴞的巢（2026-11-09）：在鳥後面 1 公尺、偏旁邊一點，巢口朝鏡頭；巢那一圈山區的箭竹不長（巢自己有一叢白茅）
   const owlB = birds.find((b) => b.def.id === 'grassowl')
   if (owlB && inAlpine(...owlB.def.spot)) {
@@ -159,7 +159,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   giantSpots(alpAvoid)   // 巨木的位置先算好：山區的其他樹、草要避開
   const alpine = createAlpine({ scene, lib: plantLib, avoid: alpAvoid })
   scene.add(buildEast({ avoid: alpAvoid, lib: plantLib, hideKit, walkKit }))
-  scene.add(buildSavanna({ avoid: alpAvoid, kit: savKit }))   // 2026-11-16 東北稀樹草原
+  scene.add(buildSavanna({ avoid: alpAvoid, kit: savKit, nestNear: BIRDS.find((d) => d.id === 'yhornbill')?.spot }))   // 2026-11-16 東北稀樹草原
   // 2026-11-15 小剪尾站的溪中大石（def.boulder）：平頂的苔石，鳥站的那一點（spot 正上方往下打）剛好在 def.y
   for (const def of BIRDS.filter((d) => d.boulder && plantLib.mrock_10)) {
     const rk = plantLib.mrock_10.clone(true), bx = new THREE.Box3().setFromObject(rk), sz = bx.getSize(new THREE.Vector3())

@@ -1197,7 +1197,7 @@ const ALL = [
   },
   {
     // 乾草原步道旁的裸地：一直用長嘴往土裡探蟲
-    id: 'ahoopoe', spot: [396, 117], perch: 'ground', view: 5, dist: 5, camH: 0.9, lookY: 0.15,
+    id: 'ahoopoe', spot: [396, 117], perch: 'ground', view: 5, dist: 5, camH: 0.9, lookY: 0.15, bare: 4,   /* 2026-11-17 bare：半徑 4 m 的裸土不長草（savanna.js），牠探土抓蟲才看得到 */
     name: '非洲戴勝', sci: 'Upupa africana', where: '乾草原步道旁的裸地',
     intro: '全身亮橘褐色，翅膀和尾巴是黑白相間的橫紋，頭上一排扇子一樣的冠羽，平常收著，受驚或落地時會「啪」地展開。細長微彎的嘴一直往土裡探，挖出甲蟲幼蟲和螻蛄。',
     facts: [
