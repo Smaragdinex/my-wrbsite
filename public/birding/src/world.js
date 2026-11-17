@@ -189,7 +189,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     const gy = terrainHeight(P.x, P.z), rot = (x, z) => [P.x + x * Math.cos(a) + z * Math.sin(a), P.z - x * Math.sin(a) + z * Math.cos(a)]
     const HOLE = [0.0488, 2.75, 0.1404], TC = [0.0488, -0.0214]   // make-barbet-snag.py 印出來的（模型座標）
     const [hx, hz] = rot(HOLE[0], HOLE[2]), [tx, tz] = rot(TC[0], TC[1])
-    globalThis.__barbetNest = { x: hx, y: gy + HOLE[1], z: hz, nx: Math.sin(a), nz: Math.cos(a), cx: tx, cz: tz, r: 0.162, hr: 0.045 }
+    globalThis.__barbetNest = { x: hx, y: gy + HOLE[1], z: hz, nx: Math.sin(a), nz: Math.cos(a), cx: tx, cz: tz, r: 0.162, hr: 0.065 }
     addCollider(tx, tz, 0.24, gy + 4.2)
     new GLTFLoader().loadAsync(`models/props/barbet_snag.glb?v=${VERN}`).then((gl) => {
       gl.scene.traverse((o) => { if (o.isMesh) { if (o.geometry.attributes.color_1) o.geometry.setAttribute('color', o.geometry.attributes.color_1); if (o.geometry.attributes.color) o.material.vertexColors = true; o.castShadow = o.name === 'snag_trunk' || o.name.startsWith('snag_stub'); o.receiveShadow = true } })
