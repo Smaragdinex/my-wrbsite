@@ -288,7 +288,8 @@ export function buildGiants(scene, { sun, avoid = [], lib = null, groundAt = nul
     return out.scale(sc, sc, sc)
   }
   lodRegister([trunk], 40, [null], { dL: 90 }); lodRegister([crownA], 40, [lowOf(crownA, coniferGeo('fir', 8))], { dL: 90 })
-  lodRegister([crownB], 40, [lowOf(crownB, thin(crownB.geometry, 2, 1.1))], { dL: 70 }); lodRegister([limbM], 40)
+  // 2026-11-17 非洲 FPS（使用者選的第 3 項）：從草原回頭看紅杉屏障，枝葉團輕量版還有約 64 萬面 → 150 m 外再一級：只留四分之一的卡、放大 1.3 倍補密度
+  lodRegister([crownB], 40, [lowOf(crownB, thin(crownB.geometry, 2, 1.1))], { dL: 70, far2: [[lowOf(crownB, thin(crownB.geometry, 4, 1.3))], 150] }); lodRegister([limbM], 40)
 
   // ---------- 神木的柵欄、巨大樹頭、倒木、木棧道 ----------
   const woodM = new THREE.MeshStandardMaterial({ color: 0x7a5a3c, roughness: 0.9 })

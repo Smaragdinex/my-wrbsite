@@ -71,6 +71,7 @@ const _b = new THREE.Box3(), _b2 = new THREE.Box3(), _bs = new THREE.Sphere(), _
 function collect(scene) {
   objs = []
   for (const o of scene.children) {
+    if (o.name === 'alpineInterior') { collectSub(o); continue }
     if (SKIP.has(o.name) || o.isLight || o.isCamera || o.userData.noOcc) continue
     let skinned = false
     o.traverse((m) => { if (m.isSkinnedMesh) skinned = true })
@@ -88,6 +89,22 @@ function collect(scene) {
     objs.push({ o, b: _b.clone() })
   }
 }
+// 2026-11-17 高山區整組（alpineInterior）以前整個跳過：從非洲往西回看，山脊後面的地形塊、整批的道具（一百多萬面）照畫。
+// 改成一個一個 mesh 判斷（只看非洲以外的）。藏的方法用 layers（mask＝0），不動 visible——地形塊的遠近版本是用 visible 切的（alpine.js TERRAIN_LOD）
+function collectSub(root) {
+  root.updateWorldMatrix(true, true)
+  root.traverse((m) => {
+    if (!m.isMesh || m.isSkinnedMesh || m.userData.noOcc || m.geometry?.isInstancedBufferGeometry || !m.geometry?.attributes.position) return   // 草（InstancedBufferGeometry）lod.js 自己判斷
+    _b.makeEmpty()
+    if (m.isInstancedMesh) { const sp = m.userData.fullSphere ?? (m.computeBoundingSphere(), m.boundingSphere); if (!sp) return; _b.copy(_bs.copy(sp).applyMatrix4(m.matrixWorld).getBoundingBox(_b2)) }
+    else { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); _b.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld) }
+    if (_b.isEmpty() || !isFinite(_b.min.x) || !isFinite(_b.max.x) || _b.max.x - _b.min.x > 420 || _b.max.z - _b.min.z > 420) return
+    _b.getCenter(_v); if (savK(_v.x, _v.z) > 0.05) return   // 非洲裡面的照畫
+    objs.push({ o: m, b: _b.clone(), sub: true })
+  })
+}
+const hideSub = (o) => { o.userData.occMask = o.layers.mask; o.layers.mask = 0 }
+const showSub = (o) => { if (o.layers.mask === 0 && o.userData.occMask !== undefined) o.layers.mask = o.userData.occMask; delete o.userData.occMask }
 // 包圍盒頂面每 ≤ 8 m 取一點，全部被擋才算看不到
 function boxHidden(b) {
   const nx = Math.min(40, Math.max(1, Math.ceil((b.max.x - b.min.x) / 8))), nz = Math.min(40, Math.max(1, Math.ceil((b.max.z - b.min.z) / 8))), y = b.max.y + 0.5
@@ -97,16 +114,25 @@ function boxHidden(b) {
   return true
 }
 export function occObjects(scene, now = performance.now()) {
-  if (!occ.on) { if (mine.size) { for (const o of mine) o.visible = true; mine.clear(); return true } return false }
+  if (!occ.on) { if (mine.size) { for (const o of mine) if (o.userData.occMask !== undefined) showSub(o); else o.visible = true; mine.clear(); return true } return false }
+  const t0 = performance.now()
   if (!objs || now - objT > 6000) { collect(scene); objT = now }   // 鳥是串流載入的：隔一陣子重新收集
   let hid = 0, shown = false
   for (const it of objs) {
     let h
+    if (it.sub) {   // 高山區的 mesh：本來就沒在畫的（遠近版本沒輪到的地形塊、count 0）不用算
+      const o = it.o
+      if (!mine.has(o) && (!o.visible || o.layers.mask === 0 || (o.isInstancedMesh && o.count === 0))) continue
+      h = boxHidden(it.b)
+      if (h) { if (!mine.has(o)) { hideSub(o); mine.add(o) } hid++ }
+      else if (mine.has(o)) { showSub(o); mine.delete(o); shown = true }
+      continue
+    }
     if (it.move) { it.o.getWorldPosition(_v); _b.setFromCenterAndSize(_v, _sz); h = boxHidden(_b) }
     else h = boxHidden(it.b)
     if (h) { if (it.o.visible) { it.o.visible = false; mine.add(it.o) } if (mine.has(it.o)) hid++ }
     else if (mine.has(it.o)) { it.o.visible = true; mine.delete(it.o); shown = true }
   }
-  occ.hidden = hid; occ.checked = objs.length
+  occ.hidden = hid; occ.checked = objs.length; occ.ms = +(performance.now() - t0).toFixed(2)
   return shown   // 有東西重新出現：影子要重畫
 }

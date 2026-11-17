@@ -21,7 +21,8 @@ export const lodSetScale = (k) => { if (Math.abs(lodQuality.scale - k) > 1e-3) {
 
 // meshes：共用同一份擺放清單的 InstancedMesh（一種植物的各個材質）；h：這種植物大概多高（公尺）
 // lows：（可選）跟 meshes 一一對應的低面數版本（plants.js 的 lowGeo），沒有的放 null；遠處的株改畫低面數版本
-export function lodRegister(meshes, h, lows = [], { solid = false, auto = false, dL: dLo = null } = {}) {
+// far2：[[第三級的 mesh（每個 meshes 一個，可 null）], 距離]——再遠一級更省的版本（2026-11-17 紅杉屏障的枝葉團）
+export function lodRegister(meshes, h, lows = [], { solid = false, auto = false, dL: dLo = null, far2 = null } = {}) {
   const keep = meshes.map((m, i) => m?.isInstancedMesh && m.count > 0 ? i : -1).filter((i) => i >= 0)
   meshes = keep.map((i) => meshes[i]); lows = keep.map((i) => lows[i] ?? null)
   // 2026-11-14 FPS：自己建的 InstancedMesh（石頭一顆 2.6 萬面、岩廊牆、樹）以前沒有低面數版本，多遠都畫原本的 → 這裡自動用 meshoptimizer 減面補一份（plants.js lowGeo）
@@ -29,7 +30,7 @@ export function lodRegister(meshes, h, lows = [], { solid = false, auto = false,
   if (!meshes.length) return
   const m0 = meshes[0], n = m0.count
   // 每株自己做視野剔除：整組的 three.js 剔除關掉（它的包圍球被 LOD 改過 count 之後會過時，整組被誤判在視野外、全部不畫）
-  for (const m of [...meshes, ...lows]) if (m) { if (!m.boundingSphere) m.computeBoundingSphere(); m.userData.fullSphere ??= m.boundingSphere.clone(); m.frustumCulled = false }
+  for (const m of [...meshes, ...lows, ...(far2?.[0] || [])]) if (m) { if (!m.boundingSphere) m.computeBoundingSphere(); m.userData.fullSphere ??= m.boundingSphere.clone(); m.frustumCulled = false }
   const base = m0.instanceMatrix.array.slice(0, n * 16)
   const pos = new Float32Array(n * 3), rad = new Float32Array(n), hash = new Float32Array(n)
   const g = m0.geometry
@@ -47,11 +48,11 @@ export function lodRegister(meshes, h, lows = [], { solid = false, auto = false,
   // 矮的（蕨類、地被）14～40 公尺開始變稀、更遠就不畫；4 公尺以上的樹只做視野外不畫
   // 2026-11-13 使用者「草可以遠一點都先畫嗎，不然靠近才出現很怪」：矮植物 14 m 開始變稀、32 m 不畫 → 30 m 開始變稀、80 m 才全部不畫
   const d0 = Math.max(30, h * 30), d1 = h >= 4 || solid ? Infinity : Math.max(80, h * 90)
-  if (!solid || auto) for (const m of [...meshes, ...lows]) if (m?.castShadow) m.userData.lodManaged = true   // auto：自動登記的（石頭、岩廊牆）影子也交給替身，轉頭時畫面外的影子不會不見   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
+  if (!solid || auto) for (const m of [...meshes, ...lows, ...(far2?.[0] || [])]) if (m?.castShadow) m.userData.lodManaged = true   // auto：自動登記的（石頭、岩廊牆）影子也交給替身，轉頭時畫面外的影子不會不見   // 陰影由 lodShadowProxies 的替身負責（shadowcache.js）
   // 換成低面數的距離：一公尺的蕨類 10 公尺外、越高的越遠才換（長焦時照變焦倍率拉遠）
   // 2026-11-12 使用者：遠景的樹看起來是板狀的低模——「應該像人眼一樣：圓的、看不清楚，但不是低模」→ 4 m 以上的樹換低面數版本的距離拉遠一倍多（20 m 的樹 200 m → 440 m）
   const dL = dLo ?? (h >= 4 ? h * 12 : Math.max(10, h * 10))   // dLo：自己指定（巨木 h 40 → 480 m 等於永遠不換）   // 4 m 以上：120～150 m 外換輕量版（冷杉的輕量版也是立體樹冠，不是板）
-  const S0 = { meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), scl: new Float32Array(n), proxies: null, auto }
+  const S0 = { far2: far2 ? { m: keep.map((i) => far2[0][i] ?? null), d: far2[1] } : null, meshes, lows, n, base, cols, pos, rad, hash, d0, d1, dL, vis: new Uint32Array(n), far: new Uint8Array(n), scl: new Float32Array(n), proxies: null, auto }
   sets.push(S0)
   // 2026-11-12 遠景替身（ChatGPT：3A 遊戲的遠景不是整片烘成一張圖，是遠處的樹換成「多角度替身貼片」）：
   // 4 m 以上的樹，遠到在畫面上不到 IMP_PX 像素高的那幾棵不畫模型，改畫一片面向鏡頭的貼片（2 個三角形），貼圖是這種樹從 8 個方向拍下來的（第一次用到時烘）。
@@ -75,7 +76,7 @@ const _auto = new WeakMap(), _seen = new WeakSet()
 const _fp = (m) => { const a = m.instanceMatrix.array, n = Math.min(a.length, m.count * 16); let h = m.count * 7.13; for (let i = 0; i < n; i += 13) h += a[i] * ((i % 97) + 1); return h }
 export function lodAutoRegister(scene, now = performance.now()) {
   if (typeof location !== "undefined" && location.search.includes("noautolod")) return 0   // 量測對照用
-  if (!_seen.size) for (const S of sets) for (const m of [...S.meshes, ...S.lows, ...(S.proxies || [])]) if (m) _seen.add(m)
+  if (!_seen.size) for (const S of sets) for (const m of [...S.meshes, ...S.lows, ...(S.far2?.m || []), ...(S.proxies || [])]) if (m) _seen.add(m)
   const add = []
   scene.traverse((o) => {
     if (!o.isInstancedMesh || _seen.has(o) || o.isSkinnedMesh || o.userData.shadowProxy || o.userData.noLod) return
@@ -152,10 +153,10 @@ export function lodHideFar(scene, x0, z0, x1, z1, R) {   // 水面範圍（長�
   if (!L || L.n !== sets.length) {
     const hide = [], inSets = new Set()
     for (const S of sets) {
-      for (const m of [...S.meshes, ...S.lows]) if (m) inSets.add(m)
+      for (const m of [...S.meshes, ...S.lows, ...(S.far2?.m || [])]) if (m) inSets.add(m)
       let near = false
       for (let i = 0; i < S.n && !near; i++) if (dRect(S.pos[i * 3], S.pos[i * 3 + 2]) < R + S.rad[i]) near = true
-      if (!near) for (const m of [...S.meshes, ...S.lows]) if (m) hide.push(m)
+      if (!near) for (const m of [...S.meshes, ...S.lows, ...(S.far2?.m || [])]) if (m) hide.push(m)
     }
     L = { n: sets.length, hide, inSets }; _farCache.set(key, L)
   }
@@ -357,7 +358,7 @@ export function lodUpdate(camera, force = false) {
     sets.splice(si, 1)
   }
   for (const S of sets) {
-    const zS = S.d1 !== Infinity ? zoom / lodQuality.scale * Math.max(0.8, lodQuality.scale) : zoom, d0 = S.d0 * zS, d1 = S.d1 * zS,   /* 矮植物也一樣：畫質降級最多縮到八成 */ d1s = d1 * d1, dLs = (S.dL * zoom) ** 2
+    const zS = S.d1 !== Infinity ? zoom / lodQuality.scale * Math.max(0.8, lodQuality.scale) : zoom, d0 = S.d0 * zS, d1 = S.d1 * zS,   /* 矮植物也一樣：畫質降級最多縮到八成 */ d1s = d1 * d1, dLs = (S.dL * zoom) ** 2, dL2s = S.far2 ? (S.far2.d * zoom) ** 2 : Infinity
     let k = 0, ki = 0
     // 2026-11-17 紅杉屏障後面的（occlude.js）：只看非洲以外的株（第一次用到才算哪些是）
     const OC = occ.on ? (S.occF ??= (() => { const f = new Uint8Array(S.n); for (let i = 0; i < S.n; i++) f[i] = savK(S.pos[i * 3], S.pos[i * 3 + 2]) < 0.05 ? 1 : 0; return f })()) : null
@@ -383,7 +384,7 @@ export function lodUpdate(camera, force = false) {
       if (out) continue
       if (OC && OC[i] && occHidden(cx, cy + S.rad[i], cz, cy - S.rad[i])) { lodStats.occ = (lodStats.occ || 0) + 1; continue }
       if (S.imp) { const hpx = (S.imp.sz[i * 4 + 2] - S.imp.sz[i * 4 + 1]) * PXK * zoom; if (hpx * hpx < IMP_PX * IMP_PX * dd) { S.imp.idx[ki++] = i; continue } }
-      S.far[k] = dd > dLs ? 1 : 0
+      S.far[k] = dd > dLs ? (S.far2 && dd > dL2s ? 2 : 1) : 0
       S.scl[k] = Math.min(sc, sc0)
       S.vis[k++] = i
     }
@@ -407,9 +408,11 @@ export function lodUpdate(camera, force = false) {
     S.meshes.forEach((m, mi) => {
       const lo = S.lows[mi]
       if (!lo) { fill(m, mi, () => true); return }
-      const near = fill(m, mi, (j) => !S.far[j]), far = fill(lo, mi, (j) => S.far[j])
+      const f2 = S.far2?.m[mi]
+      const near = fill(m, mi, (j) => !S.far[j]), far = fill(lo, mi, f2 ? (j) => S.far[j] === 1 : (j) => S.far[j])
       const vc = (q) => q.index ? q.index.count : q.attributes.position.count   // 沒有索引的幾何（outside.js 的樹）用頂點數
       lowTris += far * (vc(m.geometry) - vc(lo.geometry)) / 3; nearN += near
+      if (f2) { const n2 = fill(f2, mi, (j) => S.far[j] === 2); lowTris += n2 * (vc(m.geometry) - vc(f2.geometry)) / 3 }
     })
     drawn += k * S.meshes.length
     if (S.imp) impFill(S, ki)
