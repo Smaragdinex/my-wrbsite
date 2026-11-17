@@ -180,6 +180,23 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     }).catch((e) => console.warn('owl burrow', e))
     addCollider(B.x - B.dir[0] * 0.15, B.z - B.dir[1] * 0.15, 0.85, B.y + 0.3, B.y - 0.8)   // 玩家不能踩上土丘（底下是挖空的坑）
   }
+  // 2026-11-17 五色鳥的巢樹（使用者規格 Bird #004：啄鑿樹洞）：tools/make-barbet-snag.py 做的枯木，樹洞先鑿好。
+  // 擺在五色鳥那棵樹旁邊的草地上，洞口朝觀察的方向；洞口位置給 flight.js（五色鳥飛過來鑿洞、鑽進去、餵雛）
+  {
+    const VERN = new URL(import.meta.url).searchParams.get('v') ?? ''
+    // 洞口背對五色鳥平常停的樹枝（-30.77, -19.53）：站在洞口前 5～6 m 看的人離樹枝 8 m 以上，才不會把牠嚇飛
+    const P = { x: -31.7, z: -16.6 }, perch = { x: -30.77, z: -19.53 }, a = Math.atan2(P.x - perch.x, P.z - perch.z)
+    const gy = terrainHeight(P.x, P.z), rot = (x, z) => [P.x + x * Math.cos(a) + z * Math.sin(a), P.z - x * Math.sin(a) + z * Math.cos(a)]
+    const HOLE = [0.0488, 2.75, 0.1404], TC = [0.0488, -0.0214]   // make-barbet-snag.py 印出來的（模型座標）
+    const [hx, hz] = rot(HOLE[0], HOLE[2]), [tx, tz] = rot(TC[0], TC[1])
+    globalThis.__barbetNest = { x: hx, y: gy + HOLE[1], z: hz, nx: Math.sin(a), nz: Math.cos(a), cx: tx, cz: tz, r: 0.162, hr: 0.045 }
+    addCollider(tx, tz, 0.24, gy + 4.2)
+    new GLTFLoader().loadAsync(`models/props/barbet_snag.glb?v=${VERN}`).then((gl) => {
+      gl.scene.traverse((o) => { if (o.isMesh) { if (o.geometry.attributes.color_1) o.geometry.setAttribute('color', o.geometry.attributes.color_1); if (o.geometry.attributes.color) o.material.vertexColors = true; o.castShadow = o.name === 'snag_trunk' || o.name.startsWith('snag_stub'); o.receiveShadow = true } })
+      gl.scene.position.set(P.x, gy, P.z); gl.scene.rotation.y = a; gl.scene.name = 'barbetSnag'
+      scene.add(gl.scene)
+    }).catch((e) => console.warn('barbet snag', e))
+  }
   buildStreambed(scene, plantLib).then((r) => console.log('streambed', JSON.stringify(r))).catch((e) => console.error('streambed', e))   // 2026-11-12 溪床卵石、苔石、水草（不擋進場，載好就出現）   // 2026-11-10 東部擴建：草原、人工濕地的草和蘆葦（east.js）
   alpine.build()
   // 2026-11-13 使用者「把這裡的營區暫時都移除，讓進入瀑布步道更順暢」：帳篷、柴堆、營火、冰桶都不擺（buildCamp 留著，要放回來把這行換回去）

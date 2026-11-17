@@ -26,7 +26,7 @@ export const ESCAPE = {
   whiteeye: { r: 5, fly: { speed: 7, hz: 14, style: 'bound', k: 0.8 } },
   bulbul: { r: 6, fly: { speed: 8, hz: 11, style: 'bound', k: 0.78 } },
   blackbulbul: { r: 6, fly: { speed: 8, hz: 11, style: 'bound', k: 0.88 } },
-  barbet: { r: 7, fly: { speed: 8, hz: 10, style: 'bound', k: 1.1 } },
+  barbet: { r: 7, excavate: [35, 75], fly: { speed: 8, hz: 10, style: 'bound', k: 1.1 } },   // excavate：每隔幾秒飛去枯木的樹洞鑿洞／餵雛（world.js __barbetNest）
   dove: { r: 6, display: true, fly: { speed: 10, hz: 8, style: 'flap', k: 1.15 } },   // display：求偶展示飛行（birds.js doveShow 打開 obj.userData.displayFlight）
   treepie: { r: 8, fly: { speed: 8, hz: 7, style: 'glide', k: 1.2 } },
   bluemagpie: { r: 9, fly: { speed: 8, hz: 6, style: 'glide', k: 1.35 } },
@@ -597,6 +597,202 @@ export function createFlight(world, player) {
       m.obj.visible = false; s.pitch = 0; s.roll = 0
     }
   }
+  /* ---------- 2026-11-17 五色鳥啄鑿樹洞（使用者規格 Bird #004 Nest Excavation）----------
+     停在樹冠的那隻每 35～75 秒（沒被驚動時）飛到枯木的樹洞口（world.js __barbetNest），抓在樹幹上：
+       鑿洞（65%）：張望 2 s → 對著洞口邊緣連續啄 4～7 s（脖子、頭的骨頭往前點，木屑往外噴）→ 停下張望 2 s →
+                    叼一片木屑、轉頭甩出去 2～3 s →（再啄一陣）→ 鑽進洞裡 3 s → 在裡面待 6～12 s → 探頭出來 → 飛回樹冠
+       餵雛（35%，加分）：叼著一顆紅果子飛來 → 張望 1 s → 頭伸進洞裡 1.5 s（果子不見）→ 退出來張望 → 飛走
+     動作只動脖子、頭的骨頭（整隻只有很小的前後移），木屑是 24 片的小碎片（InstancedMesh，簡單拋物線，不做物理） */
+  const BN = () => globalThis.__barbetNest
+  const chips = { mesh: null, list: [], held: null }
+  function chipSys() {
+    if (chips.mesh) return chips
+    const g = new THREE.BoxGeometry(0.014, 0.003, 0.008), m = new THREE.MeshStandardMaterial({ color: 0xc9a77a, roughness: 0.9 })
+    chips.mesh = new THREE.InstancedMesh(g, m, 24); chips.mesh.count = 0; chips.mesh.frustumCulled = false; chips.mesh.name = 'barbetChips'; scene.add(chips.mesh)
+    chips.held = new THREE.Mesh(g, m); chips.held.visible = false; scene.add(chips.held)
+    return chips
+  }
+  const _che = new THREE.Euler(), _cm = new THREE.Matrix4(), _chq = new THREE.Quaternion(), _cs = V(1, 1, 1)
+  function chipSpawn(p, n, side, k = 1) {
+    const C = chipSys()
+    for (let i = 0; i < k; i++) {
+      if (C.list.length >= 24) C.list.shift()
+      const sp = rnd(0.35, 0.9)
+      C.list.push({ p: p.clone(), v: V(n.x * sp + side.x * rnd(-0.4, 0.4), rnd(0.1, 0.6), n.z * sp + side.z * rnd(-0.4, 0.4)), r: V(rnd(0, 6), rnd(0, 6), rnd(0, 6)), w: V(rnd(-15, 15), rnd(-15, 15), rnd(-15, 15)), life: 0, ground: false })
+    }
+  }
+  function chipTick(dt) {
+    const C = chips; if (!C.mesh || !C.list.length) { if (C.mesh) C.mesh.count = 0; return }
+    let n = 0
+    for (let i = C.list.length - 1; i >= 0; i--) {
+      const c = C.list[i]; c.life += dt
+      if (!c.ground) {
+        c.v.y -= 9.8 * dt; c.p.addScaledVector(c.v, dt); c.r.addScaledVector(c.w, dt)
+        const gy = terrainHeight(c.p.x, c.p.z) + 0.004
+        if (c.p.y < gy) { c.p.y = gy; c.ground = true; c.r.x = 0; c.r.z = 0; c.t0 = c.life }
+      } else if (c.life - c.t0 > 2.5) { C.list.splice(i, 1); continue }
+    }
+    for (const c of C.list) { C.mesh.setMatrixAt(n++, _cm.compose(c.p, _chq.setFromEuler(_che.set(c.r.x, c.r.y, c.r.z)), _cs)) }
+    C.mesh.count = n; C.mesh.instanceMatrix.needsUpdate = true
+  }
+  function barbetSetup(u) {
+    const s = u.ms[0], m = s.m, N = BN()
+    if (s.dig || !N || !s.root) return
+    m.obj.updateMatrixWorld(true)
+    let skin = null; m.obj.traverse((o) => { if (o.isSkinnedMesh && !skin) skin = o })
+    if (!skin) return
+    const sit = skClone(m.obj); sit.traverse((o) => { o.visible = true; o.frustumCulled = false }); sit.visible = false; scene.add(sit)
+    let sk = null; sit.traverse((o) => { if (o.isSkinnedMesh && !sk) sk = o })
+    const bone = (n) => { let b = null; sit.traverse((o) => { if (o.isBone && o.name === n && !b) b = o }); return b }
+    const head = bone('head'), neck = bone('neck')
+    // 嘴尖（上半身離中心最遠的頂點）、身體朝向
+    const pos = skin.geometry.attributes.position, v = V(), box = new THREE.Box3().setFromObject(m.obj), P0 = m.obj.getWorldPosition(V())
+    let cx = 0, cz = 0, cn = 0; for (let i = 0; i < pos.count; i += 7) { skin.getVertexPosition(i, v).applyMatrix4(skin.matrixWorld); cx += v.x; cz += v.z; cn++ }
+    cx /= cn; cz /= cn
+    let tip = -1, best = -1
+    for (let i = 0; i < pos.count; i++) { skin.getVertexPosition(i, v).applyMatrix4(skin.matrixWorld); if (v.y < box.min.y + (box.max.y - box.min.y) * 0.45) continue; const d = Math.hypot(v.x - cx, v.z - cz); if (d > best) { best = d; tip = i } }
+    skin.getVertexPosition(tip, v).applyMatrix4(skin.matrixWorld)
+    const f = V(v.x - cx, 0, v.z - cz).normalize(), toT = V(-N.nx, 0, -N.nz)
+    const turn = Math.atan2(f.x * toT.z - f.z * toT.x, f.dot(toT))
+    // 抓樹幹的姿勢：先面向樹幹，再把身體往後仰 0.55 rad（停枝的站姿身體是斜的；抓在直立的樹幹上要更直）
+    const side = V(0, 1, 0).cross(toT).normalize()
+    const Q = new THREE.Quaternion().setFromAxisAngle(side, -0.55).multiply(new THREE.Quaternion().setFromAxisAngle(AX.y, -turn)).multiply(m.obj.getWorldQuaternion(new THREE.Quaternion()))
+    // 用這個姿勢量嘴尖相對原點的位移，讓嘴尖落在洞口下緣前 1.5 cm
+    sit.position.copy(P0); sit.quaternion.copy(Q); sit.updateMatrixWorld(true)
+    sk.getVertexPosition(tip, v).applyMatrix4(sk.matrixWorld); const off = v.clone().sub(P0)
+    const hole = V(N.x, N.y, N.z), stand = hole.clone().addScaledVector(V(N.nx, 0, N.nz), 0.015).add(V(0, -N.hr * 0.75, 0)).sub(off)
+    // 探頭用：在洞裡轉身、臉朝外（繞上下軸轉 180°、身體稍微往前趴），嘴尖相對原點的位移另外量
+    // 臉朝外（面向樹幹的方向再轉 180°），身體往前倒到「身體在嘴後面、跟嘴差不多高」＝趴在洞裡的通道裡，只有頭伸出洞口。
+    // 往前倒幾度：試 -1.2～1.2 rad，挑身體中心在嘴尖正後方（往洞裡）、高度差最小的
+    const Qout = new THREE.Quaternion().setFromAxisAngle(AX.y, Math.PI - turn).multiply(m.obj.getWorldQuaternion(new THREE.Quaternion()))
+    const nOut = V(N.nx, 0, N.nz), sideOut = V(0, 1, 0).cross(nOut).normalize(), bb = new THREE.Box3(), bc = V()
+    let Q2 = Qout.clone(), off2 = V(), bestS = Infinity
+    for (let k = -12; k <= 12; k++) {
+      const q = new THREE.Quaternion().setFromAxisAngle(sideOut, k * 0.1).multiply(Qout)
+      sit.quaternion.copy(q); sit.updateMatrixWorld(true); sk.getVertexPosition(tip, v).applyMatrix4(sk.matrixWorld)
+      bb.setFromObject(sit); bb.getCenter(bc)
+      const back = -(bc.x - v.x) * nOut.x - (bc.z - v.z) * nOut.z, sc = Math.abs(bc.y - v.y) + (back > 0.03 ? 0 : 1)
+      if (sc < bestS) { bestS = sc; Q2 = q.clone(); off2 = v.clone().sub(P0) }
+    }
+    const rest = { head: head?.quaternion.clone(), neck: neck?.quaternion.clone() }
+    const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.011, 10, 8), new THREE.MeshStandardMaterial({ color: 0xb3261e, roughness: 0.35 })); fruit.visible = false; scene.add(fruit)
+    s.dig = { sit, sk, tip, Q, Q2, off2, hole, stand, side, toT, head, neck, rest, fruit, wait: rnd(10, 25), on: false, ph: '', k: 0, home: V(), plan: null }
+  }
+  const _bq = new THREE.Quaternion(), _bv = V(), _bw = V()
+  // 骨頭繞世界座標的軸轉 a（從靜止姿勢算）
+  const boneTurn = (b, rest, axis, a) => { if (!b) return; b.quaternion.copy(rest); if (!a) return; b.parent.getWorldQuaternion(_bq).invert(); _bv.copy(axis).applyQuaternion(_bq).normalize(); b.quaternion.premultiply(_bq.setFromAxisAngle(_bv, a)) }
+  function digPlan(type) {
+    if (type === 'feed') return [['look', 1.0], ['poke', 1.6], ['look', 1.2]]
+    const P = [['look', 2], ['peck', rnd(4, 7)], ['look', 2], ['chip', rnd(2, 3)]]
+    if (Math.random() < 0.5) P.push(['peck', rnd(2, 3.5)])
+    P.push(['enter', 3], ['inside', rnd(6, 12)], ['peek', 2.2])
+    return P
+  }
+  function digStep(u, s, t, dt) {
+    const X = s.dig, m = s.m, N = BN(), n = V(N.nx, 0, N.nz)
+    if (X.ph === 'out' || X.ph === 'back') {
+      X.dist = Math.min(X.len, X.dist + u.esc.fly.speed * 0.75 * clamp((X.len - X.dist) / 2.5, 0.3, 1) * dt); const k = X.dist / X.len
+      X.curve.getPointAt(k, _nq); X.curve.getTangentAt(Math.min(k, 0.999), _nt)
+      s.root.position.copy(_nq); s.root.visible = true; s.t += dt
+      const h = Math.atan2(_nt.x, _nt.z), dh = wrap(h - s.head)
+      s.head += dh * (1 - Math.exp(-7 * dt)); s.roll = damp(s.roll, clamp(-dh * 2.6, -0.8, 0.8), 4, dt); s.pitch = damp(s.pitch, -Math.asin(clamp(_nt.y, -1, 1)) * 0.7, 6, dt)
+      s.root.rotation.set(s.pitch, s.head, s.roll)
+      wings(s, u.esc.fly, t, dt, 1 - ss(X.dist, 0, 1), ss(1 - (X.len - X.dist) / 1.6, 0, 1)); s.act = 'fly'
+      if (X.fruitOn) { s.root.updateMatrixWorld(true); X.fruit.visible = true; X.fruit.position.copy(s.root.position).addScaledVector(_nt, 0.12) }
+      if (X.dist >= X.len) {
+        s.root.visible = false
+        if (X.ph === 'out') { X.ph = 'cling'; X.step = 0; X.k = 0; X.sit.visible = true; digStep(u, s, t, 0) }
+        else { X.on = false; X.ph = ''; m.obj.visible = true; s.mode = 'perch'; s.act = ''; X.fruit.visible = false; X.wait = rnd(...u.esc.excavate) }
+      }
+      return
+    }
+    // 抓在樹幹上
+    X.k += dt
+    let [name, dur] = X.plan[X.step] ?? ['', 0]
+    if (X.k >= dur && name) { X.step++; X.k = 0; [name, dur] = X.plan[X.step] ?? ['', 0] }
+    const u01 = dur ? X.k / dur : 1
+    let fwd = 0, neckA = 0, headA = 0, yaw = 0, hide = false, climb = 0, dive = 0
+    const up = AX.y
+    if (name === 'look') { yaw = 0.55 * Math.sin(X.k * 2.3) * ss(Math.sin(X.k * 1.1 + 0.6), -0.3, 0.5); headA = -0.15; s.act = X.type === 'dig' && X.step > 0 ? 'excavate' : 'look' }   // 鑿洞中間停下來張望也算鑿洞
+    else if (name === 'peck') {
+      // 一陣一陣：連啄 5～8 下（每下 0.22 s）停 0.4 s；啄到的那一刻噴 1～2 片木屑
+      const cyc = X.k % 2.0, burst = cyc < 1.6, ph = (cyc / 0.22) % 1
+      const strike = burst ? Math.pow(Math.max(0, Math.sin(ph * Math.PI)), 3) : 0
+      neckA = 0.28 * strike; headA = 0.32 * strike; fwd = 0.01 * strike
+      const hit = burst && ph > 0.45 && ph < 0.6
+      if (hit && !X.hit) { X.sk.getVertexPosition(X.tip, _bw).applyMatrix4(X.sk.matrixWorld); chipSpawn(_bw, n, X.side, Math.random() < 0.6 ? 1 : 2) }
+      X.hit = hit; s.act = 'excavate'
+    } else if (name === 'chip') {
+      // 叼著一片木屑：先低頭在洞口叼起來（0～0.3）→ 頭轉向一邊（0.3～0.7）→ 甩出去（0.75）→ 頭轉回來
+      const C = chipSys()
+      if (u01 < 0.3) { neckA = 0.25 * ss(u01, 0, 0.2); headA = 0.25 * ss(u01, 0, 0.2) }
+      else { yaw = 0.9 * ss(u01, 0.3, 0.55) * (1 - ss(u01, 0.8, 1)); headA = -0.1 }
+      const hold = u01 > 0.22 && u01 < 0.75
+      if (hold) { X.sk.getVertexPosition(X.tip, _bw).applyMatrix4(X.sk.matrixWorld); C.held.position.copy(_bw); C.held.rotation.set(0.3, t * 0.5, 0.2); C.held.visible = true }
+      else if (C.held.visible) { C.held.visible = false; chipSpawn(C.held.position, V(X.side.x * 0.8 + n.x * 0.5, 0, X.side.z * 0.8 + n.z * 0.5), X.side, 1) }
+      s.act = 'excavate'
+    } else if (name === 'enter') {
+      // 鑽進洞（以前直接往樹幹滑，會像沉進樹皮裡）：先往上爬到身體對準洞口（0～0.45），
+      // 再身體往前倒、頭先鑽進去（0.35～1，往裡 24 cm；洞口外圈的樹皮把超出洞口的部分遮掉），最後不畫
+      climb = ss(u01, 0.05, 0.45); dive = ss(u01, 0.35, 0.8); fwd = 0.24 * ss(u01, 0.4, 1)
+      neckA = 0.3 * dive; headA = 0.15 * dive; s.act = 'nestenter'
+      if (u01 > 0.97) hide = true
+    } else if (name === 'inside') { hide = true; s.act = '' }
+    else if (name === 'peek') {
+      // 探頭：在洞裡已經轉身臉朝外，頭從洞口慢慢伸出來（嘴尖從洞裡 3 cm → 洞外 5 cm），左右看一看；結束後直接從洞口飛走
+      const e = -0.03 + 0.08 * ss(u01, 0, 0.35)
+      X.sit.visible = true
+      X.sit.position.copy(X.hole).addScaledVector(n, e).sub(X.off2)
+      X.sit.quaternion.copy(X.Q2).premultiply(_bq.setFromAxisAngle(up, u01 > 0.35 ? 0.35 * Math.sin((u01 - 0.35) * 11) : 0))
+      boneTurn(X.neck, X.rest.neck, X.side, 0); boneTurn(X.head, X.rest.head, X.side, 0)
+      if (u01 > 0.35 && X.head) { const yw = 0.7 * Math.sin((u01 - 0.35) * 9); X.head.parent.getWorldQuaternion(_bq).invert(); _bv.copy(up).applyQuaternion(_bq).normalize(); X.head.quaternion.premultiply(_bq.setFromAxisAngle(_bv, yw)) }
+      X.sit.updateMatrixWorld(true); X.fromHole = true; s.act = 'look'
+      return
+    } else if (name === 'poke') {
+      // 餵雛：頭伸進洞裡（身體往前 6 cm），停一下，果子不見，退出來
+      const inn = ss(u01, 0, 0.3) * (1 - ss(u01, 0.7, 1)); climb = 0.9 * inn; dive = 0.5 * inn; fwd = 0.09 * inn; neckA = 0.25 * inn; headA = 0.15 * inn; s.act = 'feedchick'   // 往上一點、頭伸進洞裡
+      if (u01 > 0.5) X.fruitOn = false
+    } else if (!name) {   // 做完：飛回樹冠
+      X.sit.visible = false; X.ph = 'back'; s.t = 0
+      const A = X.fromHole ? X.hole.clone().addScaledVector(n, 0.12) : X.stand.clone().add(V(0, 0.1, 0)).addScaledVector(n, 0.1), B = X.home.clone(); X.fromHole = false
+      const sd = V(-n.z, 0, n.x); if (sd.dot(V(B.x - A.x, 0, B.z - A.z)) < 0) sd.negate()
+      X.curve = new THREE.CubicBezierCurve3(A, A.clone().addScaledVector(n, 1.4).addScaledVector(sd, 1.2).add(V(0, 0.3, 0)), B.clone().add(V(0, 1.0, 0)).addScaledVector(sd, 0.6), B); X.len = X.curve.getLength(); X.dist = 0
+      s.head = Math.atan2(n.x, n.z); return
+    }
+    X.sit.visible = !hide
+    // climb：往上爬到身體中心對準洞口（約 1.6 倍洞口半徑）；dive：身體往前倒 0.9 rad（頭朝洞裡）
+    X.sit.position.copy(X.stand).addScaledVector(X.toT, fwd).add(V(0, climb * N.hr * 2.4, 0))
+    X.sit.quaternion.copy(X.Q).premultiply(_bq.setFromAxisAngle(X.side, 0.9 * dive)).premultiply(_bq.setFromAxisAngle(up, yaw * 0.25))
+    X.sit.updateMatrixWorld(true)
+    boneTurn(X.neck, X.rest.neck, X.side, -neckA); boneTurn(X.head, X.rest.head, X.side, -headA)
+    if (yaw && X.head) { X.head.parent.getWorldQuaternion(_bq).invert(); _bv.copy(up).applyQuaternion(_bq).normalize(); X.head.quaternion.premultiply(_bq.setFromAxisAngle(_bv, yaw * 0.75)) }
+    X.sit.updateMatrixWorld(true)
+    if (X.fruitOn) { X.sk.getVertexPosition(X.tip, _bw).applyMatrix4(X.sk.matrixWorld); X.fruit.position.copy(_bw).addScaledVector(n, 0.006); X.fruit.visible = !hide } else X.fruit.visible = false
+  }
+  function digTick(t, dt) {
+    chipTick(dt)
+    for (const u of units) {
+      if (!u.esc.excavate) continue
+      const s = u.ms[0]; if (!s?.root) continue
+      if (!s.dig) { barbetSetup(u); if (!s.dig) continue }
+      const X = s.dig
+      if (X.on) {
+        if (u.b.absent) { X.on = false; X.ph = ''; X.sit.visible = false; X.fruit.visible = false; s.root.visible = false; s.m.obj.visible = true; s.mode = 'perch'; s.act = ''; continue }
+        u.alarm = 0; digStep(u, s, t, dt); continue
+      }
+      if (u.b.absent || u.state !== 'home' || s.mode !== 'perch' || u.alarm > 0.2) continue
+      if ((X.wait -= dt) > 0) continue
+      const type = X.force ?? (Math.random() < 0.35 ? 'feed' : 'dig'); X.force = null
+      X.plan = digPlan(type); X.type = type; X.fruitOn = type === 'feed'
+      X.on = true; X.ph = 'out'; s.mode = 'dig'; s.act = 'takeoff'; s.t = 0
+      s.m.obj.getWorldPosition(X.home); s.m.obj.visible = false
+      const n = V(BN().nx, 0, BN().nz), A = X.home.clone(), B = X.stand.clone().add(V(0, 0.1, 0)).addScaledVector(n, 0.1)
+      // 繞過樹幹到洞口那一面：中間的控制點往洞口前方＋從家那一側偏過去（不穿過樹幹）
+      const sd = V(-n.z, 0, n.x); if (sd.dot(V(A.x - B.x, 0, A.z - B.z)) < 0) sd.negate()
+      X.curve = new THREE.CubicBezierCurve3(A, A.clone().add(V(0, 0.8, 0)).addScaledVector(sd, 0.8), B.clone().addScaledVector(n, 1.6).addScaledVector(sd, 1.2).add(V(0, 0.4, 0)), B); X.len = X.curve.getLength(); X.dist = 0
+      s.head = Math.atan2(B.x - A.x, B.z - A.z); s.pitch = 0; s.roll = 0
+    }
+  }
   function nestTick(t, dt) {
     for (const u of units) {
       if (!u.esc.nest) continue
@@ -622,6 +818,7 @@ export function createFlight(world, player) {
     colonyTick(t, dt)
     nestTick(t, dt)
     displayTick(t, dt)
+    digTick(t, dt)
     // 2026-11-17 警戒旗標給 birds.js（斑鳩求偶：玩家太近就停）
     for (const u of units) { const al = u.state !== 'home' || u.alarm > 0.3; for (const s of u.ms) if (s.m.obj) s.m.obj.userData.alert = al }
     const P = world.camera.position
@@ -632,7 +829,7 @@ export function createFlight(world, player) {
     const mult = hidden ? 0 : sneak ? 0.5 : speed > 6 ? 1.5 : speed > 0.6 ? 1 : 0.7
     for (const u of units) {
       if (u.b.absent) continue   // 這個時段不在（main.js presence）
-      if (u.ms[0]?.nest?.on || u.ms[0]?.disp?.on) continue   // 正在樹洞餵食／展示飛行（nestTick、displayTick 管）
+      if (u.ms[0]?.nest?.on || u.ms[0]?.disp?.on || u.ms[0]?.dig?.on) continue   // 正在樹洞餵食／展示飛行（nestTick、displayTick 管）
       if (u.state === 'home') {
         // 自己出巢覓食（ESCAPE.sortie）：沒在警戒時倒數，時間到就照驚飛那一套從岩面朝外（穿過水簾）飛出去，在遠處待一陣子再飛回巢
         if (u.esc.sortie && u.alarm < 0.2) {
@@ -687,6 +884,7 @@ export function createFlight(world, player) {
     const s = m.flight
     if (!s) return { obj: m.obj, act: m.acts?.name ?? '' }
     if (s.mode === 'away' || (s.mode === 'wait' && !m.obj.visible)) return null
+    if (s.dig?.on) { const X = s.dig; if (X.ph === 'out' || X.ph === 'back') return { obj: s.root, act: 'fly' }; return X.sit.visible ? { obj: X.sit, act: s.act || 'look' } : null }
     if (s.disp?.on) return { obj: s.root, act: s.act || 'displayflight' }
     if (s.nest?.on) return s.nest.ph === 'feed' ? { obj: s.nest.sit, act: 'nestfeed' } : { obj: s.root, act: s.act || 'fly' }
     if (s.mode === 'out' || s.mode === 'back' || s.mode === 'hover' || s.mode === 'swoop') return { obj: s.root, act: s.act }
@@ -726,7 +924,7 @@ export function createFlight(world, player) {
   }
   const gone = (b) => { const u = unitOf(b); return !u || u.ms.every((s) => s.mode === 'away') }
   const canFly = (b) => !!unitOf(b)?.esc.fly
-  window.__flight = { units, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
+  window.__flight = { units, digGo: (type = 'dig') => { const u = units.find((x) => x.b.def.id === 'barbet'); const X = u?.ms[0]?.dig; if (X) { X.wait = 0; X.force = type } }, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
   // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
   const snap = () => { last.copy(world.camera.position); speed = 0 }
   return { tick, units, shotOf, snap, arrive, depart, gone, canFly, add: addUnit, get speed() { return speed } }
