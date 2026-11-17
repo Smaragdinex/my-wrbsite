@@ -104,6 +104,8 @@ export const UI = {
  "右鍵": "Right click",
  "叼著蚯蚓": "Holding a worm",
  "叼著幼蟲": "Holding a grub",
+ "鳥叫聲來源": "Bird call credits",
+ "珠頸斑鳩叫聲：Ianbu，Wikimedia Commons，CC BY-SA 3.0（剪輯過）": "Spotted dove call: Ianbu, Wikimedia Commons, CC BY-SA 3.0 (edited)",
  "求偶鞠躬": "Courtship Bowing",
  "求偶展示飛行": "Display Flight",
  "斑鳩在鞠躬求偶！鼓起脖子、一下一下點頭，被你拍到了。": "Courtship bowing! Neck puffed, bobbing again and again — you caught it.",
