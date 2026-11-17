@@ -9,7 +9,7 @@ import { savNest } from '../savanna.js'
 // 2026-11-11 使用者：躲在觀察屋裡，鳥不會飛走（Threads 回饋：宣傳文寫了「躲在賞鳥屋裡鳥不會跑」，以前觀察屋只是一棟房子）。
 // 觀察屋 6×3.2 m、正面朝 look；玩家在屋裡（各邊多 0.4 m，含門口）＝鳥看不到人，不會警戒
 const inHide = (P) => HIDES.some((h) => { const a = Math.atan2(h.look[0] - h.x, h.look[1] - h.z), dx = P.x - h.x, dz = P.z - h.z, lz = dx * Math.sin(a) + dz * Math.cos(a), lx = dx * Math.cos(a) - dz * Math.sin(a); return Math.abs(lx) < h.w / 2 + 0.4 && Math.abs(lz) < h.d / 2 + 0.4 })
-import { terrainHeight as gardenH, domeRho, domeY, mtnBase, MTN, inAlpine, alpineHeight, ALP_RIVER } from '../layout.js'
+import { terrainHeight as gardenH, domeRho, domeY, mtnBase, MTN, inAlpine, alpineHeight, ALP_RIVER, colliders } from '../layout.js'
 // 地面高度：山區查山區的地形（不然鳥會飛進山坡裡）
 const terrainHeight = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : gardenH(x, z)
 
@@ -27,7 +27,7 @@ export const ESCAPE = {
   bulbul: { r: 6, fly: { speed: 8, hz: 11, style: 'bound', k: 0.78 } },
   blackbulbul: { r: 6, fly: { speed: 8, hz: 11, style: 'bound', k: 0.88 } },
   barbet: { r: 7, fly: { speed: 8, hz: 10, style: 'bound', k: 1.1 } },
-  dove: { r: 6, fly: { speed: 10, hz: 8, style: 'flap', k: 1.15 } },
+  dove: { r: 6, display: true, fly: { speed: 10, hz: 8, style: 'flap', k: 1.15 } },   // display：求偶展示飛行（birds.js doveShow 打開 obj.userData.displayFlight）
   treepie: { r: 8, fly: { speed: 8, hz: 7, style: 'glide', k: 1.2 } },
   bluemagpie: { r: 9, fly: { speed: 8, hz: 6, style: 'glide', k: 1.35 } },
   kingfisher: { r: 10, fly: { speed: 11, hz: 12, style: 'flap', k: 0.82 } },
@@ -531,6 +531,72 @@ export function createFlight(world, player) {
     }
   }
   const _qq = new THREE.Quaternion()
+  /* ---------- 2026-11-17 珠頸斑鳩展示飛行（Display Flight）----------
+     鞠躬完的雄鳥（birds.js doveShow）偶爾起飛：快拍翅膀陡陡爬升 6 m → 翅膀平伸、尾羽張開，畫一個大弧滑翔下來 → 繞回原地降落。
+     跟樹洞餵食一樣：地上那隻先藏起來，飛行模型飛完一圈再換回來 */
+  // 樹冠：每棵樹的樹幹碰撞圓（layout.js colliders，top＝樹頂）當成半徑＝樹高 40%（至少 2.5 m）的樹冠，路線上任一點在樹冠範圍內就算撞到
+  let near = []
+  const treesNear = (A) => { near = colliders.filter((c) => c.top < 60 && (c.x - A.x) ** 2 + (c.z - A.z) ** 2 < 30 * 30).map((c) => { const g = terrainHeight(c.x, c.z); return { x: c.x, z: c.z, top: c.top, g, R: Math.max(2.5, Math.min(8, (c.top - g) * 0.45)) + 1.5 /* 樹冠半徑估樹高 45%（上限 8 m）＋1.5 m 餘裕 */ } }) }
+  const treeHit = (curve) => {
+    for (let i = 2; i <= 30; i++) {
+      const p = curve.getPoint(i / 30)
+      for (const c of near) if (p.y < c.top + 1 && p.y > c.g + 1.2 && (p.x - c.x) ** 2 + (p.z - c.z) ** 2 < c.R * c.R) return true
+    }
+    return false
+  }
+  function displayStep(u, s, t, dt) {
+    const X = s.disp, f = u.esc.fly
+    const seg = X.ph === 'climb' ? X.c1 : X.c2, len = X.ph === 'climb' ? X.l1 : X.l2
+    const sp = X.ph === 'climb' ? 5.2 * Math.min(1, 0.35 + s.t / 0.8) : 6.0 * clamp((len - X.dist) / 2.5, 0.35, 1)
+    X.dist = Math.min(len, X.dist + sp * dt); const k = X.dist / len
+    seg.getPointAt(k, _nq); seg.getTangentAt(Math.min(k, 0.999), _nt)
+    s.root.position.copy(_nq); s.root.visible = true; s.t += dt
+    const h = Math.atan2(_nt.x, _nt.z), dh = wrap(h - s.head)
+    s.head += dh * (1 - Math.exp(-6 * dt)); s.roll = damp(s.roll, clamp(-dh * 3, -0.7, 0.7), 4, dt); s.pitch = damp(s.pitch, -Math.asin(clamp(_nt.y, -1, 1)) * 0.8, 5, dt)
+    s.root.rotation.set(s.pitch, s.head, s.roll)
+    const landing = X.ph === 'glide' && len - X.dist < 1.6
+    if (X.ph === 'climb') { wings(s, f, t, dt, 1, 0); s.act = 'displayflight' }
+    else if (!landing) {   // 滑翔：翅膀平伸（飛行模型本身的張翅姿勢）微微上反、不拍；尾羽張開
+      s.r.reset(); for (const [n, sg] of [['L', 1], ['R', -1]]) { s.r.turn('wing' + n, AX.x, -sg * 0.1); s.r.turn('wingtip' + n, AX.x, -sg * 0.06) }
+      s.act = 'displayflight'
+    } else { wings(s, f, t, dt, 0, ss(1 - (len - X.dist) / 1.6, 0, 1)); s.act = 'land' }
+    const tb = s.r.bones.tail
+    if (tb) { if (!X.fanAx) { const a = V(1, 0, 0).applyQuaternion(tb.userData.inv); const ax = Math.abs(a.x), ay = Math.abs(a.y), az = Math.abs(a.z); X.fanAx = ax >= ay && ax >= az ? 'x' : ay >= az ? 'y' : 'z' }
+      X.fan = damp(X.fan ?? 0, X.ph === 'glide' && !landing ? 1 : 0, 5, dt); tb.scale.set(1, 1, 1); tb.scale[X.fanAx] = 1 + 0.45 * X.fan }
+    if (X.dist >= len) {
+      if (X.ph === 'climb') { X.ph = 'glide'; X.dist = 0 }
+      else { s.root.visible = false; X.on = false; s.m.obj.visible = true; s.mode = 'perch'; s.act = ''; if (tb) tb.scale.set(1, 1, 1) }
+    }
+  }
+  function displayTick(t, dt) {
+    for (const u of units) {
+      if (!u.esc.display) continue
+      const s = u.ms[0]; if (!s?.root) continue
+      const m = s.m, X = s.disp ??= { on: false }
+      if (X.on) {
+        if (u.b.absent) { X.on = false; s.root.visible = false; m.obj.visible = true; s.mode = 'perch'; s.act = ''; continue }
+        u.alarm = 0; displayStep(u, s, t, dt); continue
+      }
+      if (!m.obj.userData.displayFlight) continue
+      m.obj.userData.displayFlight = false
+      if (u.b.absent || u.state !== 'home' || s.mode !== 'perch' || u.alarm > 0.2) continue
+      // 起飛方向：試 16 個方向，挑爬升＋滑翔整圈都不穿過樹冠的（使用者規格：要有合適的空間）；都不行就不飛
+      // 爬升 6 m、往前 4 m，滑翔一個大弧回到原地
+      const A = m.obj.getWorldPosition(V()).add(V(0, 0.15, 0)), a0 = Math.random() * Math.PI * 2, side = Math.random() < 0.5 ? 1 : -1
+      let ok = false; treesNear(A)
+      for (let tr = 0; tr < 16 && !ok; tr++) {
+        const a = a0 + tr * Math.PI * 2 / 16, fw = V(Math.sin(a), 0, Math.cos(a)), sd = V(fw.z, 0, -fw.x).multiplyScalar(side)
+        const B = A.clone().addScaledVector(fw, 4).add(V(0, 6, 0))
+        X.c1 = new THREE.CubicBezierCurve3(A.clone(), A.clone().addScaledVector(fw, 0.6).add(V(0, 2.5, 0)), B.clone().addScaledVector(fw, -1.2).add(V(0, -0.4, 0)), B); X.l1 = X.c1.getLength()
+        X.c2 = new THREE.CubicBezierCurve3(B.clone(), B.clone().addScaledVector(fw, 6).addScaledVector(sd, 2).add(V(0, -1.2, 0)), A.clone().addScaledVector(sd, 6).addScaledVector(fw, -2).add(V(0, 1.8, 0)), A.clone()); X.l2 = X.c2.getLength()
+        ok = !blockedPath(X.c1) && !treeHit(X.c1) && !treeHit(X.c2) && !blockedPath(X.c2); if (ok) s.head = a
+      }
+      if (!ok) continue
+      { let mn = 1e9; for (const cv of [X.c1, X.c2]) for (let i = 2; i <= 30; i++) { const p = cv.getPoint(i / 30); for (const c of near) if (p.y < c.top + 1) mn = Math.min(mn, Math.hypot(p.x - c.x, p.z - c.z) - c.R) } X.clear = +mn.toFixed(2); X.nTrees = near.length }
+      X.on = true; X.ph = 'climb'; X.dist = 0; s.mode = 'display'; s.t = 0; s.act = 'takeoff'
+      m.obj.visible = false; s.pitch = 0; s.roll = 0
+    }
+  }
   function nestTick(t, dt) {
     for (const u of units) {
       if (!u.esc.nest) continue
@@ -555,6 +621,9 @@ export function createFlight(world, player) {
   function tick(t, dt, { sneak = false } = {}) {
     colonyTick(t, dt)
     nestTick(t, dt)
+    displayTick(t, dt)
+    // 2026-11-17 警戒旗標給 birds.js（斑鳩求偶：玩家太近就停）
+    for (const u of units) { const al = u.state !== 'home' || u.alarm > 0.3; for (const s of u.ms) if (s.m.obj) s.m.obj.userData.alert = al }
     const P = world.camera.position
     speed = damp(speed, P.distanceTo(last) / Math.max(dt, 1e-3), 8, dt)
     last.copy(P)
@@ -563,7 +632,7 @@ export function createFlight(world, player) {
     const mult = hidden ? 0 : sneak ? 0.5 : speed > 6 ? 1.5 : speed > 0.6 ? 1 : 0.7
     for (const u of units) {
       if (u.b.absent) continue   // 這個時段不在（main.js presence）
-      if (u.ms[0]?.nest?.on) continue   // 正在樹洞餵食（nestTick 管）
+      if (u.ms[0]?.nest?.on || u.ms[0]?.disp?.on) continue   // 正在樹洞餵食／展示飛行（nestTick、displayTick 管）
       if (u.state === 'home') {
         // 自己出巢覓食（ESCAPE.sortie）：沒在警戒時倒數，時間到就照驚飛那一套從岩面朝外（穿過水簾）飛出去，在遠處待一陣子再飛回巢
         if (u.esc.sortie && u.alarm < 0.2) {
@@ -618,6 +687,7 @@ export function createFlight(world, player) {
     const s = m.flight
     if (!s) return { obj: m.obj, act: m.acts?.name ?? '' }
     if (s.mode === 'away' || (s.mode === 'wait' && !m.obj.visible)) return null
+    if (s.disp?.on) return { obj: s.root, act: s.act || 'displayflight' }
     if (s.nest?.on) return s.nest.ph === 'feed' ? { obj: s.nest.sit, act: 'nestfeed' } : { obj: s.root, act: s.act || 'fly' }
     if (s.mode === 'out' || s.mode === 'back' || s.mode === 'hover' || s.mode === 'swoop') return { obj: s.root, act: s.act }
     return { obj: m.obj, act: s.mode === 'flee' ? 'run' : m.acts?.name ?? '' }
@@ -656,7 +726,7 @@ export function createFlight(world, player) {
   }
   const gone = (b) => { const u = unitOf(b); return !u || u.ms.every((s) => s.mode === 'away') }
   const canFly = (b) => !!unitOf(b)?.esc.fly
-  window.__flight = { units, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
+  window.__flight = { units, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
   // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
   const snap = () => { last.copy(world.camera.position); speed = 0 }
   return { tick, units, shotOf, snap, arrive, depart, gone, canFly, add: addUnit, get speed() { return speed } }

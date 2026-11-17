@@ -29,7 +29,8 @@ const ACTION = {
   dive: [2.2, tr('入水的瞬間')], strike: [1.8, tr('出手捕食')], worm: [1.6, tr('叼著蚯蚓')], peck: [1.15, tr('低頭覓食')],
   takeoff: [2.0, tr('起飛的瞬間')], land: [1.8, tr('降落的瞬間')], fly: [1.7, tr('飛行中')], run: [1.25, tr('逃跑中')],
   beat: [2.0, tr('叼著魚往樹枝上摔')], gulp: [1.6, tr('正在吞魚')],
-  grub: [1.7, tr('叼著幼蟲')], nestfeed: [2.2, tr('在樹洞口餵食')],   // 2026-11-17 非洲戴勝抓蟲、南方黃嘴犀鳥樹洞餵食
+  grub: [1.7, tr('叼著幼蟲')], nestfeed: [2.2, tr('在樹洞口餵食')],
+  bowing: [1.9, tr('求偶鞠躬')], displayflight: [2.3, tr('求偶展示飛行')],   // 2026-11-17 珠頸斑鳩：Courtship Bowing、Display Flight   // 2026-11-17 非洲戴勝抓蟲、南方黃嘴犀鳥樹洞餵食
   show: [1.9, tr('求偶展示')],
   hover: [2.1, tr('定點懸停')], swoop: [2.0, tr('俯衝捕獵')],   // 2026-11-15 黑翅鳶   // 2026-11-11 鶴的舞、鸊鷉水草舞、紅鸛群舞、流蘇鷸求偶場
   call: [1.2, tr('正在鳴叫')], eat: [1.5, tr('正在吃果實')], preen: [1.15, tr('理毛')], hunt: [1.1, tr('盯著獵物')], walk: [1.0, ''], look: [1.05, tr('抬頭張望')],
@@ -117,7 +118,8 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
       if (visible === 0) continue
       const focusErr = Math.abs(dist - focusDist)
       const sharp = 1 - THREE.MathUtils.smoothstep(focusErr, dofTol, dofTol * 3)
-      const act = sh.act === 'worm' && b.def.id === 'ahoopoe' ? 'grub' : sh.act   // 戴勝用 worm 那一套動作，抓的是幼蟲
+      let act = sh.act === 'worm' && b.def.id === 'ahoopoe' ? 'grub' : sh.act   // 戴勝用 worm 那一套動作，抓的是幼蟲
+      if (b.def.id === 'dove' && act === 'show') act = sh.obj?.userData.bow ? 'bowing' : 'look'   // 斑鳩求偶：正在鞠躬的雄鳥才算；雌鳥只是在看
       const f = { id: b.def.id, name: b.def.name, dist, area, inside, visible, sharp, act, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, box: [x0, y0, x1, y1] }
       Object.defineProperty(f, 'obj', { value: sh.obj, enumerable: false })   // 相機算動態模糊用；不可列舉，存檔時不會被存進去
       found.push(f)

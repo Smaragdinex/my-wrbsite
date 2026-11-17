@@ -578,16 +578,17 @@ function curlToes(r, toes, c) { if (c) for (const t of toes) { r.turn(t.a, t.axi
 // 一對／一群鳥共用一個「導演」：每隔 gap 秒開一場（dur 秒），開場時每隻都切到 'show' 動作（動作表裡權重 0，不會自己抽到）、停下腳步；
 // 每隻自己的 cfg.show 每格問導演現在演到哪。x.c.si：這隻在群裡的編號（0 當雄鳥／帶頭的）
 export const SHOWS = []
-function showDirector({ gap, dur, first = [12, 30], onStart, onEnd }) {
+function showDirector({ gap, dur, first = [12, 30], onStart, onEnd, ready }) {   // ready(D)：開場前檢查（不合適就過 3～6 秒再看）
   const D = { birds: [], on: false, t: 0, len: 0, wait: rnd(...first), n: 0 }
   SHOWS.push(D)
   D.tick = (x) => {
-    if (x.c.si == null) { x.c.si = D.birds.length; D.birds.push({ w: x.w, acts: x.acts, c: x.c }) }
+    if (x.c.si == null) { x.c.si = D.birds.length; D.birds.push({ w: x.w, acts: x.acts, c: x.c, root: x.root }) }
     if (x.c.si === 0) {
       if (D.on) {
         D.t += x.dt
         if (D.t >= D.len || D.birds.every((b) => b.acts.name !== 'show')) { D.on = false; D.wait = rnd(...gap); onEnd?.(D); for (const b of D.birds) if (b.acts.name === 'show') b.acts.next('stand') }
       } else if ((D.wait -= x.dt) <= 0) {
+        if (ready && !ready(D)) { D.wait = rnd(3, 6); return false }
         D.on = true; D.t = 0; D.len = rnd(...dur); D.n++
         for (const b of D.birds) { b.w.goal = null; b.w.want = null; b.acts.next('show') }
         onStart?.(D)
@@ -989,6 +990,15 @@ function groundTripo(env, cfg) {
       if (c.sy) r.turn('head', AX.y, c.sy)
       if (c.sp) r.turn('body', LAT, c.sp)
       if (c.st) r.turn('tail', LAT, c.st)
+      // 2026-11-17 斑鳩求偶：鼓起脖子（puff：脖子骨頭整個放大，頭縮回原大小）、尾羽張開（fan：尾巴骨頭只往左右方向放寬）。
+      // 放大上限 14%／35%：再大脖子根的皮會被拉出折痕（截圖驗過）
+      c.pf = damp(c.pf ?? 0, ex?.puff ?? 0, 6, dt); c.fn = damp(c.fn ?? 0, ex?.fan ?? 0, 6, dt)
+      if (r.bones.neck && (c.pf > 0.002 || r.bones.neck.scale.x !== 1)) { const sc = 1 + 0.14 * c.pf; r.bones.neck.scale.setScalar(sc); r.bones.head?.scale.setScalar(1 / sc) }
+      if (r.bones.tail && (c.fn > 0.002 || c.fanAx)) {
+        const tb = r.bones.tail
+        if (!c.fanAx) { const a = LAT.clone().applyQuaternion(tb.userData.inv); const ax = Math.abs(a.x), ay = Math.abs(a.y), az = Math.abs(a.z); c.fanAx = ax >= ay && ax >= az ? 'x' : ay >= az ? 'y' : 'z' }
+        tb.scale.set(1, 1, 1); tb.scale[c.fanAx] = 1 + 0.35 * c.fn
+      }
       c.sb ??= {}
       for (const b of new Set([...Object.keys(c.sb), ...Object.keys(ex?.bones ?? {})])) { c.sb[b] = damp(c.sb[b] ?? 0, ex?.bones?.[b] ?? 0, 7, dt); if (Math.abs(c.sb[b]) > 0.002) r.turn(b, LAT, c.sb[b]) }
     }
@@ -1142,12 +1152,76 @@ function malayanHeron(env) {
     walk: { radius: 1.6, speed: 0.2 }, step: 0.17, swingT: 0.38, lift: 0, knee: [1.2, 1.9], focusY: 0.5,
     acts: { walk: [3, 99, 99], stare: [3, 2.5, 5], worm: [1.4, 3.3, 3.9], look: [2, 1.5, 3], stand: [2, 2, 4], turn: [1, 99, 99] } })
 }
+// 2026-11-17 珠頸斑鳩求偶（使用者規格：Courtship Bowing + Display Flight）
+//   雄鳥（第 0 隻）走到雌鳥面前 30 cm、面向她，鼓起脖子、尾巴微翹微張，鞠躬 3～5 下（每下 0.95～1.2 s：低頭前傾 → 挺胸抬頭），
+//   鞠躬時叫「咕咕—咕～」（audio/birds/dove_coo*.mp3，真的錄音）；
+//   雌鳥（第 1 隻）三種反應：看著他（五成）、轉頭轉身不理（三成）、第二下之後走開（兩成，走開了雄鳥就停）；
+//   鞠躬完約三成接「展示飛行」（flight.js ESCAPE.dove.display：拍翅爬升再張翅、張尾滑翔下來，繞回原地）。
+//   只在兩隻距離 0.25～1.8 m、沒有在警戒（flight.js 把 obj.userData.alert 打開）時開始；中途玩家太近（警戒）就停
+function doveShow() {
+  const D = showDirector({ gap: [30, 70], dur: [9, 9], first: [10, 25],
+    ready: (D) => { const [m, f] = D.birds; if (!f) return false; if (D.birds.some((b) => b.root.userData.alert)) return false; const d = m.w.p.distanceTo(f.w.p); return d > 0.25 && d < 1.8 },
+    onStart: (D) => {
+      const [m, f] = D.birds
+      D.bows = 3 + Math.floor(Math.random() * 3); D.P = rnd(0.95, 1.2)
+      const k = Math.random(); D.react = k < 0.5 ? 'watch' : k < 0.8 ? 'turn' : 'leave'
+      D.flight = Math.random() < 0.3
+      Object.assign(D, globalThis.__doveForce ?? {})   // 錄影測試：指定反應／要不要展示飛行
+      D.t0 = null; D.called = -1; D.stop = false; D.ending = false; D.left = false
+      // 走到她面前：從她那裡往他這邊 0.32 m 的地方
+      const dx = m.w.p.x - f.w.p.x, dz = m.w.p.y - f.w.p.y, dl = Math.hypot(dx, dz) || 1
+      m.w.goal = new THREE.Vector2(f.w.p.x + dx / dl * 0.32, f.w.p.y + dz / dl * 0.32); m.w.want = null
+      D.len = 99
+    },
+    onEnd: (D) => { for (const b of D.birds) { b.root.userData.bow = false; b.root.userData.court = false } if (D.turn0 != null && D.birds[1]) { D.birds[1].w.turn = D.turn0; D.turn0 = null } } })
+  globalThis.__doveShow = D
+  return (x) => {
+    if (!D.tick(x)) return null
+    const i = x.c.si, [m, f] = D.birds, o = { lean: 0, neck: -0.1, head: 0, reach: 0, rate: 9, puff: 0, fan: 0 }
+    x.root.userData.court = true
+    if (D.birds.some((b) => b.root.userData.alert)) { D.stop = true }   // 玩家太近：停止求偶（flight.js 接手警戒）
+    if (i === 0) {
+      const face = Math.atan2(f.w.p.x - m.w.p.x, f.w.p.y - m.w.p.y)
+      if (D.t0 == null) {   // 走過去：挺胸、脖子微鼓
+        o.puff = 0.5; o.neck = -0.25
+        if (!m.w.goal || m.w.p.distanceTo(f.w.p) < 0.4 || D.t > 3) { m.w.goal = null; m.w.want = face; D.t0 = D.t + 0.35 }
+        return o
+      }
+      m.w.want = face
+      const bt = D.t - D.t0, k = Math.floor(bt / D.P), u = (bt / D.P) % 1
+      const done = D.stop || k >= D.bows || (D.react === 'leave' && f.w.p.distanceTo(m.w.p) > 0.75)
+      if (done || bt < 0) {
+        x.root.userData.bow = false
+        if (done && !D.ending) { D.ending = true; D.len = D.t + 0.6; if (D.flight && !D.stop && D.react !== 'leave') x.root.userData.displayFlight = true }
+        o.puff = done ? 0 : 0.8; return o
+      }
+      x.root.userData.bow = true
+      if (k !== D.called && k % 2 === 0) { D.called = k; x.root.updateWorldMatrix(true, false); globalThis.__birdCall?.('dove', x.root.getWorldPosition(V()).setY(x.root.getWorldPosition(V()).y + 0.2)) }
+      // 一下鞠躬：0～0.45 往下（身體前傾、頭低到嘴快碰地、尾巴翹起張開），0.45～0.6 停在最低，0.6～1 挺回來（胸鼓最大、頭微仰）
+      const dn = ss(u, 0.05, 0.42) * (1 - ss(u, 0.6, 0.95))
+      o.lean = -0.12 + 0.62 * dn; o.neck = -0.3 + 1.25 * dn; o.head = -0.05 + 0.25 * dn; o.puff = 1; o.fan = 0.35 + 0.65 * dn
+      o.tail = -0.25 * dn; o.rate = 16
+      return o
+    }
+    // 雌鳥
+    const away = Math.atan2(f.w.p.x - m.w.p.x, f.w.p.y - m.w.p.y), toward = away + Math.PI
+    if (D.react === 'watch') { f.w.want = toward; o.yaw = 0.25 * Math.sin(D.t * 1.3) }
+    else if (D.react === 'turn') { if (D.t0 != null && D.t > D.t0 + 0.6) { f.w.want = away; o.yaw = 0.5 * Math.sin(D.t * 0.8) } else f.w.want = toward }
+    else {
+      f.w.want = toward
+      if (D.t0 != null && D.t > D.t0 + 1.1 * D.P && !D.left) { D.left = true; D.turn0 = f.w.turn; f.w.turn = 3.2; f.w.goal = new THREE.Vector2(f.w.p.x + Math.sin(away) * 0.9, f.w.p.y + Math.cos(away) * 0.9); f.w.want = null }   // 第一下鞠躬後轉身走開（轉身快一點：平常 1 rad/s 要轉 3 秒）
+    }
+    o.neck = -0.15
+    return o
+  }
+}
 // 珠頸斑鳩（ChatGPT 參考圖 → Tripo）：邊走邊點頭、啄地上的種子
 // 斑鳩常一對一起在地上走
 function spottedDove(env) {
-  return groundGroup(2, 0.45, (avoid) => groundTripo(env, { name: 'dove-rig', H: 0.36, h0: 0.53, rotY: Math.PI / 2, lat: V(0, 0, -1), bob: 0.05, bobGain: 1.9, shadow: 0.18,
+  const show = doveShow()
+  return groundGroup(2, 0.45, (avoid) => groundTripo(env, { name: 'dove-rig', H: 0.36, h0: 0.53, rotY: Math.PI / 2, lat: V(0, 0, -1), bob: 0.05, bobGain: 1.9, shadow: 0.18, show,
     walk: { radius: 1.2, speed: 0.15, avoid }, stride: 0.11, swingT: 0.16, lift: 0, knee: [0.6, 1.2], focusY: 0.3,
-    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }))
+    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99], show: [0, 999, 999] } }))
 }
 
 /* ---------- 停枝的鳥：Tripo 生成的模型 + 程式做的 IK 腳 ---------- */

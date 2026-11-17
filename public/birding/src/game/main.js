@@ -307,6 +307,7 @@ if (!PHONE && AI_Q !== '0' && (BIG_PC || AI_Q === '1')) loadLLM(() => hud.setSta
 // 首頁：開始遊戲／設定／操作說明。開始＝鎖定滑鼠（瀏覽器規定要使用者點擊才能鎖）；按 Esc 解鎖就回到這個選單（按鈕變「繼續」）
 const settings = createSettings({ world, player })
 const amb = createAmbience({ getMusic: () => settings.state.music, getAmb: () => settings.state.amb })   // 背景音樂＋溫室環境音（程式合成）
+globalThis.__birdCall = (id, pos, gain) => amb.call(id, pos, camera, gain)   // 2026-11-17 鳥叫（birds.js 求偶時叫）
 uiFx = createUiFx({ getSound: () => settings.state.sound })   // 滑鼠圓圈＋按鈕音效
 const startEl = document.getElementById('start'), menuEl = document.getElementById('menu'), helpEl = document.getElementById('help')
 // 主畫面的「載入等級」：自動（照這台電腦決定）／完整／均衡／輕量。選了存起來、重新載入後生效（貼圖縮小了沒辦法原地放大回來）

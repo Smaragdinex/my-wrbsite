@@ -283,6 +283,25 @@ export function createAmbience({ getMusic, getAmb }) {
     }, 100)
   }
 
+  // 2026-11-17 個別鳥種的叫聲（真的錄音；授權見 audio/birds/CREDITS.txt）：在世界座標某一點叫一聲。
+  // 照離鏡頭的距離變小聲（5 m 內幾乎原音量、30 m 外聽不到）、照方向左右聲道，走環境音那一路（音量設定、在店裡隔著玻璃都照算）
+  const CALLS = { dove: ['audio/birds/dove_coo1.mp3', 'audio/birds/dove_coo2.mp3', 'audio/birds/dove_coo3.mp3'] }
+  const callBufs = {}
+  function call(id, pos, cam, gain = 1) {
+    if (!ac || !CALLS[id] || ac.state !== 'running') return 0
+    const list = callBufs[id] ??= CALLS[id].map((u) => { const e = { buf: null }; loadBuf(u).then((b) => { e.buf = b }).catch(() => {}); return e })
+    const ready = list.filter((e) => e.buf); if (!ready.length) return 0
+    const dx = pos.x - cam.position.x, dy = pos.y - cam.position.y, dz = pos.z - cam.position.z, d = Math.hypot(dx, dy, dz)
+    const vol = gain * Math.min(1, 5 / Math.max(5, d)) * Math.max(0, 1 - d / 30)
+    if (vol < 0.01) return 0
+    const me = cam.matrixWorld.elements, r = { x: me[0], z: me[2] }   // 鏡頭右手邊（世界矩陣第一欄）
+    const e = list.length > 1 ? ready[Math.floor(Math.random() * ready.length)] : ready[0]
+    const src = ac.createBufferSource(); src.buffer = e.buf; src.playbackRate.value = 0.97 + Math.random() * 0.06
+    const v = voice(ac.currentTime, Math.max(-0.85, Math.min(0.85, (dx * r.x + dz * r.z) / Math.max(1, d))), 1, 0.25)
+    v.g.gain.value = vol * 1.6
+    src.connect(v.g); src.start()
+    return e.buf.duration
+  }
   // 每格更新：現在幾點、在店裡還是溫室、離瀑布多遠
   function tick(dt, { hour, pos, rain = 0, storm = 0 }) {
     st.hour = hour; st.rain = rain; st.storm = storm
@@ -291,5 +310,5 @@ export function createAmbience({ getMusic, getAmb }) {
     st.water = Math.max(0, 1 - Math.max(0, distToMtn(pos.x, pos.z) - 8) / 30)
     st.yfall = Math.max(0, 1 - Math.max(0, Math.hypot(pos.x - YOSE.fall.x, pos.z - YOSE.fall.z) - 6) / 50) ** 1.6
   }
-  return { tick, start, thunder, get ctx() { return ac }, get out() { return out }, dbg: { get musicG() { return musicG }, get birdBedG() { return birdBedG }, setK(m, b) { MUSIC_K = m; BIRD_K = b; if (musicG) musicG.gain.value = m } } }
+  return { tick, start, thunder, call, get ctx() { return ac }, get out() { return out }, dbg: { get musicG() { return musicG }, get birdBedG() { return birdBedG }, setK(m, b) { MUSIC_K = m; BIRD_K = b; if (musicG) musicG.gain.value = m } } }
 }
