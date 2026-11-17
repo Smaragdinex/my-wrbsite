@@ -656,20 +656,51 @@ export function createFlight(world, player) {
     const turn = Math.atan2(f.x * toT.z - f.z * toT.x, f.dot(toT))
     // 抓樹幹的姿勢：先面向樹幹，再把身體往後仰 0.55 rad（停枝的站姿身體是斜的；抓在直立的樹幹上要更直）
     const side = V(0, 1, 0).cross(toT).normalize()
-    const Q = new THREE.Quaternion().setFromAxisAngle(side, -0.55).multiply(new THREE.Quaternion().setFromAxisAngle(AX.y, -turn)).multiply(m.obj.getWorldQuaternion(new THREE.Quaternion()))
-    // 用這個姿勢量嘴尖相對原點的位移，讓嘴尖落在洞口下緣前 1.5 cm
-    sit.position.copy(P0); sit.quaternion.copy(Q); sit.updateMatrixWorld(true)
-    sk.getVertexPosition(tip, v).applyMatrix4(sk.matrixWorld); const off = v.clone().sub(P0)
-    const hole = V(N.x, N.y, N.z), stand = hole.clone().addScaledVector(V(N.nx, 0, N.nz), 0.015).add(V(0, -Math.min(0.045, N.hr) * 0.75 - (N.hr - 0.045), 0)).sub(off)   // 嘴尖在洞口下緣
-    // 2026-11-17 使用者「確保沒有圖形碰撞」：量過抓樹幹時肚子、尾巴插進樹皮 3 cm → 照這個姿勢把整隻往外推到只剩腳（最低 25%）碰到樹皮
-    {
-      sit.position.copy(stand); sit.quaternion.copy(Q); sit.updateMatrixWorld(true)
+    // 抓樹幹的姿勢（2026-11-18 改成用試的）：以前固定往後仰 0.55 rad，量到髖關節離樹皮 10～12 cm、腳只有 6 cm 長 → 腳碰不到樹。
+    // 現在試往後仰 0.3～1.4 rad：每個角度都先讓嘴尖落在洞口下緣、再往外推到身體（腳以外）不插進樹皮，挑兩邊髖關節離樹皮最近的
+    const hole = V(N.x, N.y, N.z), baseQ = new THREE.Quaternion().setFromAxisAngle(AX.y, -turn).multiply(m.obj.getWorldQuaternion(new THREE.Quaternion()))
+    const hips = ['thighL', 'thighR'].map((n) => bone(n)).filter(Boolean)
+    // 2026-11-18 第二版：先擺身體、再用脖子去搆——髖關節放在洞正下方、離樹皮 4 cm（腳 6 cm 搆得到），嘴尖高度對齊洞口下緣，
+    // 試往後仰 -0.2～1.2 rad，挑「嘴尖剛好在洞口那個面（±1.5 cm）、身體沒插進樹皮」的
+    const nV = V(N.nx, 0, N.nz)
+    // 腳（大腿、小腿、腳掌、腳趾）的頂點不算穿模：腳之後用 IK 擺到樹皮上（量過：沒排除時「插進樹皮最深」的是腳趾）
+    const isLeg = new Uint8Array(skin.geometry.attributes.position.count)
+    { const si = sk.geometry.attributes.skinIndex, sw = sk.geometry.attributes.skinWeight; for (let i = 0; i < isLeg.length; i++) { let bw = -1, bn = ''; for (let c = 0; c < 4; c++) if (sw.getComponent(i, c) > bw) { bw = sw.getComponent(i, c); bn = sk.skeleton.bones[si.getComponent(i, c)]?.name ?? '' } if (/thigh|shin|foot|toe/.test(bn)) isLeg[i] = 1 } }
+    const tryPitch = (p) => {
+      const q = new THREE.Quaternion().setFromAxisAngle(side, -p).multiply(baseQ)
+      sit.position.copy(P0); sit.quaternion.copy(q); sit.updateMatrixWorld(true)
+      sk.getVertexPosition(tip, v).applyMatrix4(sk.matrixWorld); const tipO = v.clone().sub(P0)
+      const hipO = hips.reduce((a, b) => a.add(b.getWorldPosition(V())), V()).divideScalar(Math.max(1, hips.length)).sub(P0)
+      // 擺位：髖關節沿洞口法線離洞口那個面 +4 cm、左右對準洞軸；嘴尖的高度＝洞口下緣往上 0.15 倍洞半徑
+      const st = hole.clone().sub(hipO)
+      st.addScaledVector(nV, 0.04 + hipO.dot(nV) - hipO.dot(nV))   // 先讓 hip 在洞口面前 4 cm
+      st.y = hole.y - N.hr * 0.85 - tipO.y
+      sit.position.copy(st); sit.updateMatrixWorld(true)
+      const hipW = hips.reduce((a, b) => a.add(b.getWorldPosition(V())), V()).divideScalar(Math.max(1, hips.length))
+      st.addScaledVector(nV, 0.04 - hipW.clone().sub(hole).dot(nV)); st.addScaledVector(side, -hipW.clone().sub(hole).dot(side))
+      sit.position.copy(st); sit.updateMatrixWorld(true)
+      sk.getVertexPosition(tip, v).applyMatrix4(sk.matrixWorld); const tipN = v.clone().sub(hole).dot(nV)
       const P = sk.geometry.attributes.position, w = V(), bx = new THREE.Box3().setFromObject(sit), yCut = bx.min.y + (bx.max.y - bx.min.y) * 0.25
-      let dep = 0
-      for (let i = 0; i < P.count; i += 2) { sk.getVertexPosition(i, w).applyMatrix4(sk.matrixWorld); if (w.y < yCut) continue; dep = Math.max(dep, N.r - Math.hypot(w.x - N.cx, w.z - N.cz)) }
-      if (dep > 0) stand.addScaledVector(V(N.nx, 0, N.nz), dep + 0.004)
-      s._digPush = +dep.toFixed(3)
+      let dep = 0, deepI = -1, deepH = 0
+      for (let i = 0; i < P.count; i += 2) {
+        if (isLeg[i]) continue
+        sk.getVertexPosition(i, w).applyMatrix4(sk.matrixWorld)
+        const rx = w.x - N.x, ry = w.y - N.y, rz = w.z - N.z, al = rx * N.nx + rz * N.nz
+        if (Math.hypot(rx - al * N.nx, ry, rz - al * N.nz) < N.hr * 0.95 && al < 0.03) continue
+        const dd = N.r - Math.hypot(w.x - N.cx, w.z - N.cz); if (dd > dep) { dep = dd; deepI = i; deepH = (w.y - bx.min.y) / (bx.max.y - bx.min.y) }
+      }
+      let deepB = ''; if (deepI >= 0) { const si = sk.geometry.attributes.skinIndex, sw = sk.geometry.attributes.skinWeight; let bw = -1; for (let c = 0; c < 4; c++) if (sw.getComponent(deepI, c) > bw) { bw = sw.getComponent(deepI, c); deepB = sk.skeleton.bones[si.getComponent(deepI, c)]?.name } }
+      const hd = head ? head.getWorldPosition(V()) : st.clone(), bill = v.clone().sub(hd), billIn = (bill.x * toT.x + bill.z * toT.z) / (bill.length() || 1)
+      const up = hd.y - hipW.y, gap = Math.hypot(hipW.x - N.cx, hipW.z - N.cz) - N.r
+      return { q, st, dep, gap, tipN, deepB, deepH: +deepH.toFixed(2), billIn: +billIn.toFixed(2), up: +up.toFixed(3), score: Math.abs(tipN) + 3 * dep }
     }
+    let bp = null
+    s._pitchTable = []
+    for (let p = -0.2; p <= 1.21; p += 0.1) { const r = tryPitch(p); r.p = p; s._pitchTable.push([+p.toFixed(1), +r.dep.toFixed(3), +r.tipN.toFixed(3), r.deepB, r.deepH]); if (r.billIn > 0.2 && r.up > 0 && (!bp || r.score < bp.score)) bp = r }
+    if (!bp) bp = tryPitch(0.55)
+    if (bp.dep > 0) { bp.st.addScaledVector(nV, bp.dep + 0.003) }
+    const Q = bp.q, stand = bp.st
+    s._digPush = +bp.dep.toFixed(3); s._digPitch = +bp.p.toFixed(2); s._hipGap = +bp.gap.toFixed(3)
     // 探頭用：在洞裡轉身、臉朝外（繞上下軸轉 180°、身體稍微往前趴），嘴尖相對原點的位移另外量
     // 臉朝外（面向樹幹的方向再轉 180°），身體往前倒到「身體在嘴後面、跟嘴差不多高」＝趴在洞裡的通道裡，只有頭伸出洞口。
     // 往前倒幾度：試 -1.2～1.2 rad，挑身體中心在嘴尖正後方（往洞裡）、高度差最小的
@@ -705,12 +736,52 @@ export function createFlight(world, player) {
       if (!bad) { poke = p; s._pokeD = +d.toFixed(2); break }
     }   // 重心在模型自己座標裡的位置（任何姿勢 q：重心 = 原點 + q·cmL）
     const rest = { head: head?.quaternion.clone(), neck: neck?.quaternion.clone(), legs: legs.map((b) => b?.quaternion.clone()) }
+    // 2026-11-18 腳的 IK（使用者：「腿要在木上、要匍匐前進」）：抓樹幹的姿勢下量兩隻腳——腳踝（foot 骨頭）的位置、離樹皮多高（d0）、
+    // 在洞軸左右哪一邊（lat）、膝蓋往哪邊彎（pole，存在鳥自己的座標裡，身體轉了跟著轉）
+    sit.position.copy(stand); sit.quaternion.copy(Q); sit.updateMatrixWorld(true)
+    const qInv = Q.clone().invert(), legIK = []
+    for (const sd of ['L', 'R']) {
+      const th = bone('thigh' + sd), sh = bone('shin' + sd), ft = bone('foot' + sd)
+      if (!th || !sh || !ft) { legIK.length = 0; break }
+      const Hp = th.getWorldPosition(V()), Kp = sh.getWorldPosition(V()), Ap = ft.getWorldPosition(V())
+      const mid = Hp.clone().lerp(Ap, 0.5), pole = Kp.clone().sub(mid).normalize().applyQuaternion(qInv)
+      // 腳要踩在樹皮上：站姿模型往後仰之後腳會翹離樹幹 5～11 cm → 抓的點投影到樹皮表面（離表面 d0＝0.8 cm，腳踝在腳趾上面一點）
+      const d0 = 0.011, rx = Ap.x - N.cx, rz = Ap.z - N.cz, rl = Math.hypot(rx, rz) || 1
+      const A0 = V(N.cx + rx / rl * (N.r + d0), Ap.y, N.cz + rz / rl * (N.r + d0)), lat = A0.clone().sub(V(N.x, N.y, N.z)).dot(side)
+      const toes = []; ft.traverse((o) => { if (o.isBone && o !== ft && /toe/.test(o.name) && o.children.every((c) => !c.isBone || !/toe/.test(c.name))) toes.push(o) })   // 腳趾的尖端
+      legIK.push({ th, sh, ft, toes, A0, d0, lat, pole, gap0: +(rl - N.r).toFixed(3), legLen: +(Hp.distanceTo(Kp) + Kp.distanceTo(Ap)).toFixed(3), hipGap: +(Math.hypot(Hp.x - N.cx, Hp.z - N.cz) - N.r).toFixed(3), hipToA0: +Hp.distanceTo(A0).toFixed(3) })
+    }
     const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.011, 10, 8), new THREE.MeshStandardMaterial({ color: 0xb3261e, roughness: 0.35 })); fruit.visible = false; scene.add(fruit)
-    s.dig = { sit, sk, tip, Q, Q2, Qp, poke, off2, entry, cmL, hole, stand, side, toT, head, neck, legs, rest, fruit, wait: rnd(10, 25), on: false, ph: '', k: 0, home: V(), plan: null }
+    s.dig = { legIK, sit, sk, tip, Q, Q2, Qp, poke, off2, entry, cmL, hole, stand, side, toT, head, neck, legs, rest, fruit, wait: rnd(10, 25), on: false, ph: '', k: 0, home: V(), plan: null }
   }
   const _bq = new THREE.Quaternion(), _bv = V(), _bw = V(), _bv2 = V(), _bq2 = new THREE.Quaternion()
   // 骨頭繞世界座標的軸轉 a（從靜止姿勢算）
   const boneTurn = (b, rest, axis, a) => { if (!b) return; b.quaternion.copy(rest); if (!a) return; b.parent.getWorldQuaternion(_bq).invert(); _bv.copy(axis).applyQuaternion(_bq).normalize(); b.quaternion.premultiply(_bq.setFromAxisAngle(_bv, a)) }
+  // 兩節 IK：大腿（thigh）→ 小腿（shin）→ 腳踝（foot 骨頭的位置）對準 T；pole＝膝蓋要往哪邊彎（世界座標）
+  const _i1 = V(), _i2 = V(), _i3 = V(), _i4 = V(), _iq = new THREE.Quaternion(), _iq2 = new THREE.Quaternion()
+  const aimBone = (b, from, to) => {   // 把骨頭轉一下，讓它原本指向 from 的方向改指向 to（世界座標）
+    _iq.setFromUnitVectors(from.normalize(), to.normalize())
+    b.getWorldQuaternion(_iq2); _iq2.premultiply(_iq)
+    b.parent.getWorldQuaternion(_iq).invert(); b.quaternion.copy(_iq.multiply(_iq2)); b.updateMatrixWorld(true)
+  }
+  function ik2(L, T, poleW) {
+    const H = L.th.getWorldPosition(_i1), K = L.sh.getWorldPosition(_i2), A = L.ft.getWorldPosition(_i3)
+    const L1 = H.distanceTo(K), L2 = K.distanceTo(A)
+    const dir = _i4.subVectors(T, H); let d = dir.length(); dir.divideScalar(d || 1)
+    d = clamp(d, Math.abs(L1 - L2) + 1e-4, (L1 + L2) * 0.999)
+    const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, L1 * L1 - a * a))
+    const pole = poleW.clone().addScaledVector(dir, -poleW.dot(dir)).normalize()
+    const Kt = H.clone().addScaledVector(dir, a).addScaledVector(pole, h)
+    aimBone(L.th, K.clone().sub(H), Kt.clone().sub(H))
+    const K2 = L.sh.getWorldPosition(V()), A2 = L.ft.getWorldPosition(V())
+    aimBone(L.sh, A2.sub(K2), H.clone().addScaledVector(dir, d).sub(K2))
+    // 腳掌貼著樹皮：腳趾的方向去掉「往樹裡」的分量（只留沿著樹皮的方向）再稍微往樹皮勾一點點
+    if (L.toes?.length && L.radial) {
+      const Af = L.ft.getWorldPosition(V()), tc = L.toes.reduce((a, b) => a.add(b.getWorldPosition(V())), V()).divideScalar(L.toes.length), td = tc.clone().sub(Af)
+      const want = td.clone().addScaledVector(L.radial, -td.dot(L.radial)).addScaledVector(L.radial, -0.05 * td.length())
+      if (want.lengthSq() > 1e-8) aimBone(L.ft, td, want)
+    }
+  }
   // 往上蹦 n 跳（u 在 [a, b] 之間）：climb 0→1 一階一階上去，crouch 起跳前蹲、落地後一壓
   function hopClimb(u, a, b, n) {
     if (u <= a) return { climb: 0, crouch: 0 }
@@ -722,7 +793,7 @@ export function createFlight(world, player) {
     if (type === 'feed') return [['look', 1.0], ['poke', 1.6], ['look', 1.2]]
     const P = [['look', 2], ['peck', rnd(4, 7)], ['look', 2], ['chip', rnd(2, 3)]]
     if (Math.random() < 0.5) P.push(['peck', rnd(2, 3.5)])
-    P.push(['enter', 3], ['inside', rnd(6, 12)], ['peek', 2.2])
+    P.push(['enter', 4.5], ['inside', rnd(6, 12)], ['peek', 2.2])
     return P
   }
   function digStep(u, s, t, dt) {
@@ -768,6 +839,36 @@ export function createFlight(world, player) {
       if (hold) { X.sk.getVertexPosition(X.tip, _bw).applyMatrix4(X.sk.matrixWorld); C.held.position.copy(_bw); C.held.rotation.set(0.3, t * 0.5, 0.2); C.held.visible = true }
       else if (C.held.visible) { C.held.visible = false; chipSpawn(C.held.position, V(X.side.x * 0.8 + n.x * 0.5, 0, X.side.z * 0.8 + n.z * 0.5), X.side, 1) }
       s.act = 'excavate'
+    } else if (name === 'enter' && X.legIK.length) {
+      // 2026-11-18 匍匐爬進洞（使用者：「腿要在木上、要匍匐前進」）：8 步，左右腳輪流。每一步前半：一隻腳抬起來（離樹皮 1.5 cm 的弧）
+      // 往前抓住下一個點（樹皮 → 洞口下緣 → 洞裡的底）；後半：身體往前拉一段。踩著的腳一直釘在樹皮上，大腿、小腿用 IK 跟著身體彎
+      const STEPS = 8, t8 = u01 * STEPS, k = Math.min(STEPS - 1, Math.floor(t8)), f = t8 - k
+      const aB = (k + ss(f, 0.5, 1)) / STEPS                                   // 身體進度（後半拍才前進）
+      const qd = _bq2.setFromAxisAngle(X.side, 1.4 * ss(aB, 0.15, 0.55)).multiply(X.Q)
+      X.sit.quaternion.copy(qd)
+      // 重心：抓樹幹的位置 → 洞軸上洞口外 5 cm（aB 0～0.5）→ 洞裡 22 cm（0.5～1）
+      const cSt = _bw.copy(X.cmL).applyQuaternion(X.Q).add(X.stand), mouth = X.hole.clone().addScaledVector(n, 0.05), deep = X.hole.clone().addScaledVector(n, -0.22)
+      const c = aB < 0.5 ? cSt.lerp(mouth, ss(aB, 0, 0.5)) : mouth.lerp(deep, ss(aB, 0.5, 1))
+      X.sit.position.copy(c).sub(_bv2.copy(X.cmL).applyQuaternion(qd)); X.sit.updateMatrixWorld(true)
+      boneTurn(X.neck, X.rest.neck, X.side, -0.25 * ss(aB, 0.2, 0.6)); boneTurn(X.head, X.rest.head, X.side, -0.15 * ss(aB, 0.2, 0.6))
+      X.legs.forEach((b, i) => { if (b) b.quaternion.copy(X.rest.legs[i]) })
+      X.sit.updateMatrixWorld(true)
+      // 腳的軌跡（s 0→1）：起點（抓樹幹時的腳踝）→ 洞口下緣（s 0.6）→ 洞裡的底（s 1），離樹皮保持 d0
+      const footAt = (L, sv, lift) => {
+        const lat = sv < 0.6 ? L.lat : L.lat * (1 - 0.4 * ss(sv, 0.6, 1)), rim = X.hole.clone().add(V(0, -N.hr * 0.95, 0)).addScaledVector(X.side, clamp(lat, -N.hr * 0.6, N.hr * 0.6)).addScaledVector(n, L.d0)
+        const p = sv < 0.6 ? L.A0.clone().lerp(rim, sv / 0.6) : rim.clone().lerp(X.hole.clone().add(V(0, -N.hr * 0.8, 0)).addScaledVector(X.side, lat * 0.5).addScaledVector(n, -0.07), (sv - 0.6) / 0.4)
+        return p.addScaledVector(n, lift)
+      }
+      X.legIK.forEach((L, li) => {
+        const mine = Array.from({ length: STEPS }, (_, j) => j).filter((j) => j % 2 === li)   // 這隻腳在第幾步動
+        let done = mine.filter((j) => j < k).length, sw = 0
+        if (k % 2 === li) sw = ss(f, 0, 0.5)
+        const sv = (done + sw) / mine.length, T = footAt(L, sv, 0.015 * Math.sin(Math.PI * sw))
+        L.radial = sv < 0.6 ? V(T.x - N.cx, 0, T.z - N.cz).normalize() : V(0, 1, 0)   // 洞裡：腳掌貼著洞的底（往上是「離開表面」）
+        ik2(L, T, L.pole.clone().applyQuaternion(X.sit.quaternion))
+      })
+      X.sit.visible = u01 < 0.985; s.act = 'nestenter'; X.fruit.visible = false
+      return
     } else if (name === 'enter') {
       // 鑽進洞（以前直接往樹幹滑，會像沉進樹皮裡）：先往上爬到身體對準洞口（0～0.45），
       // 再身體往前倒、頭先鑽進去（0.35～1，往裡 24 cm；洞口外圈的樹皮把超出洞口的部分遮掉），最後不畫
@@ -795,8 +896,15 @@ export function createFlight(world, player) {
       s.act = 'feedchick'
       X.sit.quaternion.copy(X.Q).slerp(X.Qp, inn); X.sit.position.copy(X.stand).lerp(X.poke, inn); X.sit.updateMatrixWorld(true)
       boneTurn(X.neck, X.rest.neck, X.side, 0); boneTurn(X.head, X.rest.head, X.side, 0)
-      X.legs.forEach((b, i) => { const sg = [-1, 1.6, -0.9][i % 3]; boneTurn(b, X.rest.legs[i], X.side, sg * 0.55 * crouch) })
+      X.legs.forEach((b, i) => { if (b) b.quaternion.copy(X.rest.legs[i]) })
       X.sit.visible = true; X.sit.updateMatrixWorld(true)
+      // 2026-11-18 腳用 IK 踩在樹皮上：小跳到洞口時，腳的落點跟著身體往上移（投影回樹皮表面），起跳那下離開樹皮 1.5 cm
+      if (X.legIK.length) for (const L of X.legIK) {
+        const T = L.A0.clone(); T.y += (X.poke.y - X.stand.y) * inn
+        const rl = Math.hypot(T.x - N.cx, T.z - N.cz) || 1; L.radial = V((T.x - N.cx) / rl, 0, (T.z - N.cz) / rl)
+        T.x = N.cx + L.radial.x * (N.r + L.d0 + 0.015 * crouch); T.z = N.cz + L.radial.z * (N.r + L.d0 + 0.015 * crouch)
+        ik2(L, T, L.pole.clone().applyQuaternion(X.sit.quaternion))
+      }
       if (u01 > 0.5) X.fruitOn = false
       if (X.fruitOn) { X.sk.getVertexPosition(X.tip, _bw).applyMatrix4(X.sk.matrixWorld); X.fruit.position.copy(_bw); X.fruit.visible = true } else X.fruit.visible = false
       return
@@ -820,7 +928,9 @@ export function createFlight(world, player) {
     boneTurn(X.neck, X.rest.neck, X.side, -neckA); boneTurn(X.head, X.rest.head, X.side, -headA)
     // 腳：蹲＝大腿往前收、小腿往後折、腳掌往上翻（貼著樹幹）；平常微微抓動（抓樹皮換位置）
     { const grip = name === 'peck' || name === 'look' ? 0.06 * Math.sin(X.k * 1.7) : 0
-      X.legs.forEach((b, i) => { const sg = [-1, 1.6, -0.9][i % 3]; boneTurn(b, X.rest.legs[i], X.side, sg * (0.55 * crouch + grip * (i < 3 ? 1 : -1))) })   /* 方向截圖驗過：正的會把腳往前伸直 */ }
+      X.legs.forEach((b, i) => { const sg = [-1, 1.6, -0.9][i % 3]; boneTurn(b, X.rest.legs[i], X.side, sg * (0.55 * crouch + grip * (i < 3 ? 1 : -1))) })   /* 方向截圖驗過：正的會把腳往前伸直 */
+      // 2026-11-18 腳釘在樹皮上（IK）：抓著樹幹的時候（張望、啄、叼木屑）腳踝對準樹皮上的那兩個點
+      if (X.legIK.length && (name === 'look' || name === 'peck' || name === 'chip') && X.sit.visible) { X.sit.updateMatrixWorld(true); for (const L of X.legIK) { L.radial = V(L.A0.x - N.cx, 0, L.A0.z - N.cz).normalize(); ik2(L, L.A0, L.pole.clone().applyQuaternion(X.sit.quaternion)) } } }
     if (yaw && X.head) { X.head.parent.getWorldQuaternion(_bq).invert(); _bv.copy(up).applyQuaternion(_bq).normalize(); X.head.quaternion.premultiply(_bq.setFromAxisAngle(_bv, yaw * 0.75)) }
     X.sit.updateMatrixWorld(true)
     if (X.fruitOn) { X.sk.getVertexPosition(X.tip, _bw).applyMatrix4(X.sk.matrixWorld); X.fruit.position.copy(_bw).addScaledVector(n, 0.006); X.fruit.visible = !hide } else X.fruit.visible = false
