@@ -12,6 +12,7 @@ import { barkMaterial } from './bark.js'
 import { parts, scatter } from './plants.js'
 import { bladeMesh } from './flora.js'
 import { weatherU, sunDirU, dayLight } from './structures.js'
+import { lampLit, EXTRA_LAMPS } from './lamps.js'
 
 const TAU = Math.PI * 2, V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z)
 const lerpN = (a, b, t) => a + (b - a) * t
@@ -1266,6 +1267,7 @@ export function buildYosemite(scene, { lib } = {}) {
           diffuseColor.rgb *= 1.0 - (1.0 - smoothstep(0.3, 0.7, abs(upF))) * (0.34 * smoothstep(0.5, 0.72, lam) + 0.22 * smoothstep(0.45, 0.7, lam2)) * (1.0 - cov); }`) }
     }
     stepM.customProgramCacheKey = () => 'stepTriplanar8'
+    lampLit(stepM)   // 2026-11-17 步道壁燈照在石階上（lamps.js）
     STEP_MAT = stepM
     const C3 = [], TAN = [], SIDE = [], UP = V(0, 1, 0)
     for (let i = 0; i < NP; i++) C3.push(V(st.pts[i][0], st.yy[i], st.pts[i][1]))
@@ -1292,6 +1294,45 @@ export function buildYosemite(scene, { lib } = {}) {
         STEPS.push({ m: m4.clone(), c: c.clone() })
       }
       tm.castShadow = true; tm.receiveShadow = true; tm.computeBoundingSphere(); tm.name = 'gorgeSteps'; g.add(tm)
+    }
+    // 2026-11-17 使用者：「先加上燈光在瀑布」（步道）。晚上整條崖壁步道是黑的 → 內側岩壁腳每 4 m 嵌一盞小壁燈（鍛鐵燈盒、朝步道一條琥珀色光縫），
+    // 光只往下往外打在石階上（跟花園螺旋步道、木棧道同一套 lamps.js，不加真的光源）。折返平台和頂上出口另外每 3 m 一盞
+    {
+      const spots = []   // [x, y, z, nx, nz]：nx,nz＝往岩壁裡的方向（燈面朝反方向＝步道）
+      let next = 1.5
+      for (let i = 1; i < NP - 1; i++) {
+        const k = st.kind[i]; if (st.S[i] < next) continue
+        next = st.S[i] + (k === 'alc' ? 3 : 4)
+        let sx = SIDE[i].x, sz = SIDE[i].z
+        if (k === 'alc') { sx = 0; sz = 1 }   // 折返平台：牆在 +z
+        else if (sz < 0) { sx = -sx; sz = -sz }
+        const L = Math.hypot(sx, sz); sx /= L; sz /= L
+        const off = k === 'gal' ? 1.12 : k === 'open' ? 0.95 : 1.0
+        spots.push([C3[i].x + sx * off, st.yy[i] + 0.02, C3[i].z + sz * off, sx, sz])
+      }
+      const box = [], face = []
+      for (const [x, y, z, nx, nz] of spots) {
+        const M = new THREE.Matrix4().makeRotationY(Math.atan2(nx, nz)).setPosition(x, y, z)
+        box.push(new THREE.BoxGeometry(0.16, 0.22, 0.14).translate(0, 0.3, 0.03).applyMatrix4(M))
+        box.push(new THREE.BoxGeometry(0.2, 0.03, 0.17).translate(0, 0.42, 0.02).applyMatrix4(M))   // 燈罩（上緣出簷）
+        face.push(new THREE.BoxGeometry(0.11, 0.035, 0.012).translate(0, 0.33, -0.045).applyMatrix4(M))
+        EXTRA_LAMPS.push([x - nx * 0.08, y + 0.4, z - nz * 0.08, nx, nz])
+      }
+      const ironM = new THREE.MeshStandardMaterial({ color: 0x2b2622, roughness: 0.6, metalness: 0.5 })
+      const gm = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: new THREE.Color().setRGB(1, 0.5, 0.2), emissiveIntensity: 0, roughness: 0.5 })
+      gm.userData.lamp = [0, 3]
+      const glow = new THREE.Mesh(mergeGeometries(face), gm)
+      const cv = document.createElement('canvas'); cv.width = cv.height = 64
+      { const x = cv.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,200,120,1)'); gr.addColorStop(0.25, 'rgba(255,150,70,0.45)'); gr.addColorStop(1, 'rgba(255,120,50,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64) }
+      const ht = new THREE.CanvasTexture(cv); ht.colorSpace = THREE.SRGBColorSpace
+      const hm = new THREE.PointsMaterial({ map: ht, size: 0.8, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })
+      const halo = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(spots.flatMap(([x, y, z, nx, nz]) => [x - nx * 0.09, y + 0.33, z - nz * 0.09]), 3)), hm)
+      halo.frustumCulled = false; halo.renderOrder = 8
+      glow.onBeforeRender = () => { hm.opacity = Math.min(1, gm.emissiveIntensity / 3) * 0.9 }
+      const fx = new THREE.Mesh(mergeGeometries(box), ironM); fx.castShadow = false
+      fx.name = 'gorgeLampBox'; glow.name = 'gorgeLampGlow'; halo.name = 'gorgeLampHalo'
+      g.add(fx, glow, halo)
+      globalThis.__gorgeLamps = spots.length
     }
     // 外側的欄杆（靠湖那一側）：折返平台用鐵管欄杆、一般路段的鐵樁和鐵鍊記在 CHAIN
     const WOOD = []   // 岩廊段的欄杆點（一段一段）
@@ -1503,7 +1544,8 @@ export function buildYosemite(scene, { lib } = {}) {
             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.09, 0.15, 0.04) * (0.8 + 0.5 * li), up * mo * 0.85);
             float drip = smoothstep(0.62, 0.8, vfbm(vec2((p.x + p.z) * 2.4, p.y * 0.12)));        // 往下流的深色水痕
             diffuseColor.rgb *= 1.0 - 0.32 * drip * (1.0 - up); }`) }
-      wallM.customProgramCacheKey = () => 'sandWallRock2'; wallM.color.setRGB(1.0, 0.92, 0.85); addBounce(wallM, 0.3)   // 崖壁的暖砂岩色（石階那份偏冷灰）
+      lampLit(wetM)   // 2026-11-17 clone 後 onBeforeCompile 換掉了，要再包一次
+      wallM.customProgramCacheKey = () => 'sandWallRock2'; wallM.color.setRGB(1.0, 0.92, 0.85); addBounce(wallM, 0.3); lampLit(wallM)   // 崖壁的暖砂岩色（石階那份偏冷灰）
       const mats = { post: logM, rail: logM, curb: stepM, floor: wetM, step: stepM, wall: wallM }
       for (const [name, list] of Object.entries(L)) {
         if (!K[name] || !list.length) continue
