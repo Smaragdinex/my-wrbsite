@@ -1,5 +1,6 @@
 // 溫室本體、地面、步道、雲霧山、瀑布、空中步道
 import * as THREE from 'three'
+import { lampLit, EXTRA_LAMPS } from './lamps.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { t as tr, FONT_SANS } from './i18n.js'
 import {
@@ -1324,6 +1325,7 @@ export function buildRamp(scene) {
   }
   const wood = T.woodDeckTex()
   const deckMat = new THREE.MeshStandardMaterial({ map: wood, roughness: 0.72, metalness: 0.05, side: THREE.DoubleSide })
+  lampLit(deckMat)   // 2026-11-17 地腳燈照在木板上（lamps.js）
   const steel = new THREE.MeshStandardMaterial({ color: 0xd9dddd, roughness: 0.5, metalness: 0.35, side: THREE.DoubleSide })
   const stainless = new THREE.MeshStandardMaterial({ color: 0xf2f5f5, roughness: 0.28, metalness: 0.55, envMapIntensity: 1.6 })
   // 玻璃：正面幾乎全透明，斜看越來越反光（菲涅耳），反射天空和周圍的綠
@@ -1371,6 +1373,47 @@ export function buildRamp(scene) {
     }
   }
   scene.add(new THREE.Mesh(mergeGeometries([...rails, ...posts.map((g) => g.toNonIndexed())].map((g) => (g.index ? g.toNonIndexed() : g))), stainless))
+
+  // 2026-11-17 使用者：「公園那個旋轉步道加入燈」。步道兩側只有側板上的 LED 燈條（自己發光、照不到地板，晚上走起來是暗的）→
+  // 玻璃欄杆立柱腳下加嵌入式地腳燈：不鏽鋼小燈盒、朝步道那面一條琥珀色發光縫，光只往下往前打在木板上（跟木棧道矮燈同一套 lamps.js，
+  // 不加真的光源）。每 3 m 一盞、內外側交錯（4.5 m 試過，燈跟燈之間一段暗）；頂端觀景台欄杆一圈 8 盞；每盞一小團光暈（遠看看得出一圈圈燈繞上山）
+  {
+    const spots = []   // [x, y, z, nx, nz]：燈的位置、往欄杆外的方向
+    let next = 0, side = 0
+    for (let k = startK; k <= N; k++) {
+      if (lens[k] < next) continue
+      next = lens[k] + 3
+      const s = k / N, p = rampSample(s), out = side++ % 2 === 1
+      const q = at(s, out ? p.ro - 0.1 : p.ri + 0.1)
+      if (out && inRing(q.x, q.z, q.y)) continue
+      const sg = out ? 1 : -1
+      spots.push([q.x, q.y, q.z, Math.cos(p.th) * sg, Math.sin(p.th) * sg])
+    }
+    const endP = at(1, (rampSample(1).ri + rampSample(1).ro) / 2)
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * TAU + 0.2, x = DECK.x + (RR - 0.1) * Math.cos(a), z = DECK.z + (RR - 0.1) * Math.sin(a)
+      if (Math.hypot(x - endP.x, z - endP.z) < 3.2 || Math.hypot(x - MTN.x, z - MTN.z) < rampSample(1).ri + 0.6) continue
+      spots.push([x, DECK.y, z, Math.cos(a), Math.sin(a)])
+    }
+    const box = [], face = []
+    for (const [x, y, z, nx, nz] of spots) {
+      const M = new THREE.Matrix4().makeRotationY(Math.atan2(nx, nz)).setPosition(x, y, z)   // 局部 +z＝往欄杆外，燈面朝 -z（步道）
+      box.push(new THREE.BoxGeometry(0.12, 0.2, 0.06).translate(0, 0.1, 0.01).applyMatrix4(M))
+      face.push(new THREE.BoxGeometry(0.08, 0.025, 0.012).translate(0, 0.15, -0.025).applyMatrix4(M))
+      EXTRA_LAMPS.push([x - nx * 0.05, y + 0.22, z - nz * 0.05, nx, nz])
+    }
+    const gm = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: new THREE.Color().setRGB(1, 0.5, 0.2), emissiveIntensity: 0, roughness: 0.5 })
+    gm.userData.lamp = [0, 3]
+    const glow = new THREE.Mesh(mergeGeometries(face), gm)
+    const c = document.createElement('canvas'); c.width = c.height = 64
+    { const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,200,120,1)'); gr.addColorStop(0.25, 'rgba(255,150,70,0.45)'); gr.addColorStop(1, 'rgba(255,120,50,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64) }
+    const ht = new THREE.CanvasTexture(c); ht.colorSpace = THREE.SRGBColorSpace
+    const hm = new THREE.PointsMaterial({ map: ht, size: 0.7, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })
+    const halo = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(spots.flatMap(([x, y, z, nx, nz]) => [x - nx * 0.04, y + 0.15, z - nz * 0.04]), 3)), hm)
+    halo.frustumCulled = false
+    glow.onBeforeRender = () => { hm.opacity = Math.min(1, gm.emissiveIntensity / 3) * 0.9 }
+    scene.add(new THREE.Mesh(mergeGeometries(box), stainless), glow, halo)
+  }
 
   // 底下的橫樑：每 2.4 公尺一根工字樑，從下面看才有結構感
   {
@@ -1462,7 +1505,7 @@ export function buildRamp(scene) {
   const dg = new THREE.CircleGeometry(DECK.r, 48).rotateX(-Math.PI / 2)
   const du = dg.attributes.uv
   for (let i = 0; i < du.count; i++) du.setXY(i, du.getX(i) * DECK.r * 0.5, du.getY(i) * DECK.r)
-  const platform = new THREE.Mesh(dg, new THREE.MeshStandardMaterial({ map: T.woodDeckTex(false), roughness: 0.72, metalness: 0.05 }))
+  const platform = new THREE.Mesh(dg, lampLit(new THREE.MeshStandardMaterial({ map: T.woodDeckTex(false), roughness: 0.72, metalness: 0.05 })))
   platform.position.set(DECK.x, DECK.y + 0.012, DECK.z)   // 蓋在步道末段上面（同高，差 1 公分才不會閃）
   platform.receiveShadow = platform.castShadow = true
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(DECK.r, DECK.r, TH, 48, 1, true), steel)

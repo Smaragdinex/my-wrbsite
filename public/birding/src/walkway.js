@@ -9,46 +9,14 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { ALP_TRAIL, ALP_BRIDGE, BRIDGE_DIM, BRIDGE_HEADS, ALP_WALKS, WALK_HW, landingAt, alpineHeight, addCollider, addRailSeg, deckAt, EAST, deckFrame, bridgeLanterns } from './layout.js'
 import { dappled } from './alpine.js'
+import { LAMP_MAX, LAMP_U, lampLit, EXTRA_LAMPS } from './lamps.js'
+export { LAMP_U, lampLit }
 
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
 
 // 2026-11-11 使用者：木棧道的燈光要更好、更寫實。以前借公園夜燈的白色點光源：木板上一圈圈過曝的白光、邊緣硬。
 // 改成在木頭材質裡自己算每盞矮燈的光：琥珀色（2200 K）、照度照距離平方衰減（近的亮、慢慢淡到 4 m 外）、燈上面有遮罩所以只往下往外照、
 // 木板的法線貼圖吃得到光（木紋、板縫有明暗），欄杆柱朝燈的那面亮、背面暗。不加真的光源，全公園其他材質不受影響
-const LAMP_MAX = 40
-export const LAMP_U = { uLampP: { value: Array.from({ length: LAMP_MAX }, () => new THREE.Vector3(0, -999, 0)) }, uLampOn: { value: 0 } }
-export function lampLit(mat) {
-  const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey?.bind(mat)
-  mat.onBeforeCompile = (sh, r) => {
-    prev?.call(mat, sh, r)
-    sh.uniforms.uLampP = LAMP_U.uLampP; sh.uniforms.uLampOn = LAMP_U.uLampOn
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLampW;').replace('#include <project_vertex>', `#include <project_vertex>
-      { vec4 lw = vec4(transformed, 1.0);
-        #ifdef USE_INSTANCING
-          lw = instanceMatrix * lw;
-        #endif
-        vLampW = (modelMatrix * lw).xyz; }`)
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      varying vec3 vLampW; uniform vec3 uLampP[${LAMP_MAX}]; uniform float uLampOn;`).replace('#include <opaque_fragment>', `
-      if (uLampOn > 0.003) {
-        float lampE = 0.0;
-        for (int i = 0; i < ${LAMP_MAX}; i++) {
-          vec3 d = uLampP[i] - vLampW; float r2 = dot(d, d);
-          if (r2 > 25.0) continue;
-          float r = sqrt(r2); vec3 l = (viewMatrix * vec4(d / r, 0.0)).xyz;
-          float nl = max(dot(normal, l), 0.0) * 0.85 + 0.15;
-          float att = 0.16 / (0.05 + r2) * smoothstep(5.0, 1.2, r);
-          float shield = smoothstep(-0.12, 0.2, d.y);                       // 燈罩：燈的高度以上照不到
-          lampE += nl * att * shield;
-        }
-        lampE = lampE / (1.0 + 0.35 * lampE);                               // 燈正下方不要過曝成一片白
-        outgoingLight += diffuseColor.rgb * vec3(1.0, 0.5, 0.2) * lampE * uLampOn * 5.5;
-      }
-      #include <opaque_fragment>`)
-  }
-  mat.customProgramCacheKey = () => (prevKey?.() ?? '') + 'lampLit'
-  return mat
-}
 export async function loadWalkwayKit() {
   const gl = await new GLTFLoader().loadAsync(`models/props/boardwalk_kit.glb?v=${VER}`)
   const geo = {}
@@ -380,7 +348,7 @@ export function buildWalkways(scene, kit) {
     hp.frustumCulled = false
     // 燈打在木頭上的光只能算 LAMP_MAX 盞：取離鏡頭最近的那幾盞（鏡頭走 3 m 以上才重排）
     const lampLast = new THREE.Vector3(1e9, 0, 0)
-    const allLamps = lampAt.concat(bridgeLanterns().map(([x, y, z]) => [x, y + 0.1, z, 0, 0]))   // 2026-11-14 石拱橋的石燈籠也打光（光源點放在燈籠底部：火袋高 1.2 m，照到橋面太暗）
+    const allLamps = lampAt.concat(bridgeLanterns().map(([x, y, z]) => [x, y + 0.1, z, 0, 0])).concat(EXTRA_LAMPS)   // EXTRA_LAMPS：花園螺旋步道（structures.js）   // 2026-11-14 石拱橋的石燈籠也打光（光源點放在燈籠底部：火袋高 1.2 m，照到橋面太暗）
     const pickLamps = (cp) => { const order = allLamps.map((l, i) => [(l[0] - cp.x) ** 2 + (l[2] - cp.z) ** 2, i]).sort((a, b) => a[0] - b[0]).slice(0, LAMP_MAX)
       for (let i = 0; i < LAMP_MAX; i++) { const o = order[i]; if (!o) { LAMP_U.uLampP.value[i].set(0, -999, 0); continue } const [x, y, z, nx, nz] = allLamps[o[1]]; LAMP_U.uLampP.value[i].set(x - nx * 0.06, y - 0.02, z - nz * 0.06) } }
     pickLamps(new THREE.Vector3())
