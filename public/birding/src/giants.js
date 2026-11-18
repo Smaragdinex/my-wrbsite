@@ -228,7 +228,7 @@ export function buildGiants(scene, { sun, avoid = [], lib = null, groundAt = nul
   const sacredM = barkMaterial('japanese_cedar_bark', { normal: 1.8, color: [1.9, 1.7, 1.55] })
   const tg = trunkGeo()
   const trunk = new THREE.InstancedMesh(tg, barkM, all.length)
-  const sacredT = new THREE.InstancedMesh(tg, sacredM, 1); sacredT.count = 0
+  const sacredT = new THREE.InstancedMesh(tg, sacredM, 1); sacredT.count = 0; sacredT.name = 'sacredTrunk'   // 2026-11-18 茶腹鳾爬樹要打射線量樹皮（flight.js nutSetup）
   // 樹冠（2026-11-10 改版）：以前是一整個冷杉卡片樹冠放大 1.5 倍，卡片一片好幾公尺、從下面看像幾片大蕨葉。
   // 現在：頂端一根窄窄的樹梢（冷杉），樹冠本體是掛在大枝上的一團團針葉（鐵杉卡片縮小當「枝葉團」，一團 3～6 公尺），一層一層、有縫透光
   const crownA = new THREE.InstancedMesh(coniferGeo('fir'), needleMaterial(), all.length)

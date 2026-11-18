@@ -90,7 +90,7 @@ export const ESCAPE = {
   scopsowl: { r: 5, fly: { speed: 7, hz: 5, style: 'glide', k: 0.43 } },   // 2026-11-09 領角鴞：不太怕人，翅膀寬圓、飛得慢又安靜
   mtscops: { r: 5, fly: { speed: 6.5, hz: 6, style: 'glide', k: 0.35 } },
   grassowl: { r: 6, run: 3, hunt: 'quarter', flyLegs: { bone: 'tail', y: [-1, 0.015], z: [-1, -0.12], tip: { z: -0.2, y: 0.008 } }, hipZ: -0.07, fly: { speed: 6, hz: 3.5, style: 'glide', k: 1.01 } },
-  nuthatch: { r: 5, fly: { speed: 7, hz: 14, style: 'bound', k: 0.26 } },
+  nuthatch: { r: 5, climb: {}, fly: { speed: 7, hz: 14, style: 'bound', k: 0.26 } },   // climb：神木上爬上爬下、頭朝下下樹（nutTick）
   finchbill: { r: 6, fly: { speed: 8, hz: 11, style: 'bound', k: 0.368 } },
   minivet: { r: 7, fly: { speed: 8, hz: 10, style: 'flap', k: 0.294 } },
   waterhen: { r: 9, swim: 5, fly: { speed: 7, hz: 7, style: 'flap', k: 1.07 } },
@@ -314,6 +314,7 @@ export function createFlight(world, player) {
   }
 
   /* ---------- 驚飛 ---------- */
+  const homeObj = (s) => s.nut?.sit.visible ? s.nut.sit : s.m.obj   // 2026-11-18 茶腹鳾：停著時看得到的是 nutTick 的那一份
   function flush(u, t, short = false) {
     u.state = 'away'
     const P = world.camera.position
@@ -322,10 +323,11 @@ export function createFlight(world, player) {
       let flock = null
       u.ms.forEach((s, i) => {
         const m = s.m
-        m.obj.updateMatrixWorld(true)
-        _box.setFromObject(m.obj)
+        const ho = homeObj(s); ho.updateMatrixWorld(true)
+        _box.setFromObject(ho)
         _box.getCenter(s.home)
-        m.obj.getWorldDirection(_w); s.faceH = Math.atan2(_w.x, _w.z)
+        ho.getWorldDirection(_w); s.faceH = Math.atan2(_w.x, _w.z)
+        if (s.nut) { s.nut.sit.visible = false; s.nut.grub.visible = false }
         // 2026-11-13 Pass 1D：岩壁上的鳥（def.flyAway）照岩面朝外的方向飛出去——不然背離玩家的方向可能是往岩壁裡飛（黑雨燕從凹洞橫著穿進岩體）
         const away = u.b.def.flyAway ? V(u.b.def.flyAway[0], 0, u.b.def.flyAway[1]) : s.home.clone().sub(P).setY(0)
         if (away.lengthSq() < 1e-4) away.set(1, 0, 0)
@@ -1725,6 +1727,317 @@ export function createFlight(world, player) {
     if (s.r.bones.tail) s.r.bones.tail.scale.set(1, 1, 1)
     X.wait = X.force ? 5 : rnd(...u.esc.songflight); X.n = (X.n ?? 0) + 1
   }
+  /* ---------- 2026-11-18 #35 茶腹鳾 Headfirst Tree Descent（ChatGPT 規格：先沿樹幹往上攀，接著頭朝下沿樹皮下降，途中停下用尖嘴探裂縫找蟲）----------
+     停在神木上的時候整隻改由這裡接手（站姿模型 m.obj 藏起來，換一份複製的 sit）：
+     - 樹皮表面：從樹幹外面往中心打射線（4 cm 一格）存成「半徑表」r(y, a)，表面點、法線、某一點插進樹皮多深都查表
+     - 身體：肚子朝樹皮、背朝外；前後方向在樹皮平面上（h＝0 頭朝上、π 頭朝下）；髖關節離樹皮的高度在 setup 量（身體不插進樹皮＋4 mm）
+     - 腳：兩節 IK，腳踝釘在樹皮上的固定點（世界座標，跳之間不會滑），腳掌轉到腳趾貼著樹皮；頭朝下時一腳在上（吊著）一腳在下（撐著）
+     - 跳：兩腳一起離開、身體往外弧一點；探裂縫：脖子＋頭往樹皮轉，嘴尖用回授控制剛好碰到樹皮，啄幾下，有時叼出一隻小蟲吞下去 */
+  const nutRC = new THREE.Raycaster()
+  const _uq = new THREE.Quaternion(), _uq2 = new THREE.Quaternion(), _uv = V(), _uv2 = V(), _um = new THREE.Matrix4(), _um2 = new THREE.Matrix4()
+  function nutSetup(u) {
+    const s = u.ms[0], m = s.m, T = globalThis.__sacredTree, mesh = scene.getObjectByName('sacredTrunk')
+    if (s.nut || !T || !mesh || !m.obj.parent) return
+    scene.updateMatrixWorld(true)
+    const P0 = m.obj.getWorldPosition(V()), R0 = Math.hypot(P0.x - T.x, P0.z - T.z)
+    const aH = Math.atan2(P0.x - T.x, P0.z - T.z), yH = P0.y
+    // 半徑表：y 從家往下 1.4 m 到往上 1.0 m、左右 ±32 cm，每格 4 cm
+    const dY = 0.04, NY = 61, Y0 = yH - 1.4, dA = 0.04 / R0, NA = 17, A0 = aH - dA * (NA - 1) / 2
+    const Rm = new Float32Array(NY * NA)
+    for (let j = 0; j < NY; j++) for (let i = 0; i < NA; i++) {
+      const a = A0 + i * dA, y = Y0 + j * dY
+      nutRC.set(V(T.x + Math.sin(a) * 12, y, T.z + Math.cos(a) * 12), V(-Math.sin(a), 0, -Math.cos(a))); nutRC.far = 12
+      const h = nutRC.intersectObject(mesh, false)[0]
+      Rm[j * NA + i] = h ? 12 - h.distance : NaN
+    }
+    for (let k = 0; k < Rm.length; k++) if (!(Rm[k] > 0)) Rm[k] = R0   // 沒打到（不應該）就當圓柱
+    const rAt = (y, a) => {
+      const fj = clamp((y - Y0) / dY, 0, NY - 1.001), fi = clamp((a - A0) / dA, 0, NA - 1.001), j = Math.floor(fj), i = Math.floor(fi), tj = fj - j, ti = fi - i
+      const r00 = Rm[j * NA + i], r01 = Rm[j * NA + i + 1], r10 = Rm[(j + 1) * NA + i], r11 = Rm[(j + 1) * NA + i + 1]
+      return (r00 * (1 - ti) + r01 * ti) * (1 - tj) + (r10 * (1 - ti) + r11 * ti) * tj
+    }
+    const surf = (y, a, out = V()) => { const r = rAt(y, a); return out.set(T.x + Math.sin(a) * r, y, T.z + Math.cos(a) * r) }
+    const toYA = (p) => ({ y: p.y, a: aH + wrap(Math.atan2(p.x - T.x, p.z - T.z) - aH) })
+    const depth = (p) => { const q = toYA(p); return rAt(q.y, q.a) - Math.hypot(p.x - T.x, p.z - T.z) }   // > 0：在樹皮裡面
+    const _s1 = V(), _s2 = V(), _s3 = V(), _s4 = V()
+    const normAt = (y, a, out = V(), e = 0.06) => {   // 法線：±6 cm 的差分（樹幹是 33 cm 寬的平面拼起來的，取平均才不會在稜線上突然翻）
+      const ea = e / R0
+      const dy = _s1.copy(surf(y + e, a, _s3)).sub(surf(y - e, a, _s4)), da = _s2.copy(surf(y, a + ea, _s3)).sub(surf(y, a - ea, _s4))
+      out.crossVectors(da, dy).normalize()
+      if (out.x * Math.sin(a) + out.z * Math.cos(a) < 0) out.negate()
+      return out
+    }
+    // 複製一份來動（停棲時一直用這份）：把 perchRigged 自己加的上下位移、壓扁拿掉，骨頭回到原始姿勢
+    const sit = skClone(m.obj); sit.traverse((o) => { o.visible = true; o.frustumCulled = false }); sit.visible = false
+    sit.position.set(0, 0, 0); sit.quaternion.identity(); sit.scale.copy(m.obj.getWorldScale(V())); scene.add(sit)
+    const lift = sit.children[0]; if (lift) { lift.position.set(0, 0, 0); lift.rotation.set(0, 0, 0); lift.children[0]?.scale.set(1, 1, 1) }
+    const restQ = new Map(); m.obj.traverse((o) => { if (o.isBone && o.userData.rest) restQ.set(o.name, o.userData.rest) })
+    const bones = {}; sit.traverse((o) => { if (o.isBone) { bones[o.name] = o; o.userData.nRest = (restQ.get(o.name) ?? o.quaternion).clone(); o.quaternion.copy(o.userData.nRest) } })
+    const allB = Object.values(bones)
+    let sk = null; sit.traverse((o) => { if (o.isSkinnedMesh && (!sk || o.geometry.attributes.position.count > sk.geometry.attributes.position.count)) sk = o })
+    sit.updateMatrixWorld(true)
+    // 量：身體前後軸（嘴尖相對身體中心的水平方向）、背（模型 +y）、兩邊髖關節、腳的頂點
+    const PP = sk.geometry.attributes.position, v = V(), NV = PP.count
+    const isLeg = new Uint8Array(NV), si = sk.geometry.attributes.skinIndex, sw = sk.geometry.attributes.skinWeight
+    for (let i = 0; i < NV; i++) { let bw = -1, bn = ''; for (let c = 0; c < 4; c++) if (sw.getComponent(i, c) > bw) { bw = sw.getComponent(i, c); bn = sk.skeleton.bones[si.getComponent(i, c)]?.name ?? '' } if (/thigh|shin|foot|toe/.test(bn)) isLeg[i] = 1 }
+    const rest = []; for (let i = 0; i < NV; i++) { sk.getVertexPosition(i, v).applyMatrix4(sk.matrixWorld); rest.push(v.clone()) }
+    const cm = V(); let cn = 0; for (let i = 0; i < NV; i += 3) if (!isLeg[i]) { cm.add(rest[i]); cn++ } cm.divideScalar(cn)
+    const box = new THREE.Box3().setFromPoints(rest)
+    let tip = -1, best = -1; for (let i = 0; i < NV; i++) { const w = rest[i]; if (isLeg[i] || w.y < box.min.y + (box.max.y - box.min.y) * 0.45) continue; const d = Math.hypot(w.x - cm.x, w.z - cm.z); if (d > best) { best = d; tip = i } }
+    const up0 = V(0, 1, 0), fwd0 = V(rest[tip].x - cm.x, 0, rest[tip].z - cm.z).normalize(), side0 = V().crossVectors(up0, fwd0)
+    const hipL = bones.thighL.getWorldPosition(V()), hipR = bones.thighR.getWorldPosition(V()), hipM = hipL.clone().add(hipR).multiplyScalar(0.5)
+    // 身體前傾角 p（繞 side 軸，正的＝頭離樹皮）：試 -1.0～0.6，每個角度量「身體（腳以外）最低點在髖關節下面多深」→ 髖關節要離樹皮多高
+    const axisP = V().crossVectors(fwd0, up0).normalize()
+    const hdB = bones.head.getWorldPosition(V()), tlB = bones.tail.getWorldPosition(V())
+    const pitchTab = []
+    let pBest = 0, hBest = 1e9
+    for (let p = -1.0; p <= 0.61; p += 0.05) {
+      _uq.setFromAxisAngle(axisP, p); let lo = 0
+      for (let i = 0; i < NV; i += 2) { if (isLeg[i]) continue; const d = _uv.copy(rest[i]).sub(hipM).applyQuaternion(_uq).dot(up0); if (d < lo) lo = d }
+      // 身體軸（尾巴骨頭→頭骨頭）跟樹皮的夾角：茶腹鳾抓樹幹時身體幾乎平貼、只有頭抬起來 → 挑夾角最接近 0.3 rad（17°）而且髖關節搆得到的
+      const ang = Math.asin(clamp(_uv.copy(hdB).sub(tlB).applyQuaternion(_uq).normalize().dot(up0), -1, 1))
+      pitchTab.push([+p.toFixed(2), +(-lo).toFixed(4), +ang.toFixed(2)])
+      const score = Math.abs(ang - 0.3) + (-lo > 0.016 ? 9 : 0)
+      if (score < hBest) { hBest = score; pBest = p }
+    }
+    let pitch = u.esc.climb?.pitch ?? pBest
+    _uq.setFromAxisAngle(axisP, pitch); let lo = 0
+    for (let i = 0; i < NV; i += 2) { if (isLeg[i]) continue; const d = _uv.copy(rest[i]).sub(hipM).applyQuaternion(_uq).dot(up0); if (d < lo) lo = d }
+    const hipH = -lo + 0.0055   // 身體最低點離樹皮 5.5 mm（4 mm 時走步轉身偶爾擦進樹皮 1 mm）
+    const bellyAt = (p) => { const f = clamp((p + 1.0) / 0.05, 0, pitchTab.length - 1.001), i = Math.floor(f); return lerp(pitchTab[i][1], pitchTab[i + 1][1], f - i) }
+    // 腳：兩節 IK 的資料（膝蓋往哪彎存在身體座標）；腳踝離樹皮 d0；腳趾長
+    const legs = ['L', 'R'].map((sd) => {
+      const th = bones['thigh' + sd], sh = bones['shin' + sd], ft = bones['foot' + sd]
+      const H = th.getWorldPosition(V()), K = sh.getWorldPosition(V()), A = ft.getWorldPosition(V())
+      const pole = K.clone().sub(H.clone().lerp(A, 0.5)).normalize()
+      const toes = [], fwdT = []; ft.traverse((o) => { if (o.isBone && /toe.\db$/.test(o.name)) (/toe.3b$/.test(o.name) ? toes : fwdT).push(o) })   // toe?3 是後趾
+      const tc = fwdT.reduce((a, b) => a.add(b.getWorldPosition(V())), V()).divideScalar(Math.max(1, fwdT.length))
+      return { sd, th, sh, ft, hip0: H.clone(), toes: fwdT, hallux: toes, pole, sg: Math.sign(H.clone().sub(hipM).dot(side0)) || (sd === 'L' ? 1 : -1), toeLen: tc.distanceTo(A), legLen: H.distanceTo(K) + K.distanceTo(A), hold: V(), from: V(), to: V(), dir: V() }
+    })
+    const neck = bones.neck, head = bones.head, tail = bones.tail
+    const grub = new THREE.Mesh(new THREE.CapsuleGeometry(0.0022, 0.007, 3, 6).rotateZ(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xd9c9a3, roughness: 0.6 }))
+    grub.visible = false; grub.castShadow = true; scene.add(grub)
+    s.nut = { sit, sk, bones, allB, tip, isLeg, rest, up0, fwd0, side0, axisP, hipM, pitch, pitchTab, hipH, pBest, legs, neck, head, tail, grub, bellyAt, lean: 0,
+      T, R0, aH, yH, rAt, surf, toYA, depth, normAt, yMin: yH - 1.15, yMax: yH + 0.7, aMin: aH - 0.2 / R0, aMax: aH + 0.2 / R0,
+      y: yH, a: aH, h: Math.PI, q: [], step: null, st: 0, tag: '', theta: 0, pk: 0, look: 0, lookW: 0, lookT: 2, upper: Math.random() < 0.5 ? 0 : 1,
+      wait: rnd(1.5, 4), planted: false, wasHome: false, log: [], cycle: 0, tipD: 0, swallow: 0, force: null, info: {} }
+  }
+  // 計畫：往上爬幾跳（頭朝上）→ 原地轉兩下（頭朝下）→ 往下好幾跳、中間停下探裂縫 1～2 次 → 停一下 → 轉回頭朝上
+  function nutPlan(X) {
+    // 2026-11-18 ChatGPT REVISE：不要每次都兩腳一起、同樣距離的跳 → 七成「走步」（一腳換位、身體跟上、另一腳換位，3～5 cm）、
+    // 三成跳步（5～8 cm，兩腳錯開 30～50 ms 離開）；每 2～4 步停 0.2～0.6 秒看樹皮；頭朝下時多停 0.8～1.2 秒（玩家才拍得到）
+    const q = X.q, up = Math.cos(X.h) > 0
+    let y = X.y, a = X.a, h = X.h, sinceRest = 0, restAt = 2 + Math.floor(Math.random() * 3)
+    const move = (dy, da, hh, kind) => {
+      kind ??= Math.random() < 0.7 ? 'step' : 'hop'
+      const sc = kind === 'step' ? rnd(0.02, 0.03) / Math.max(1e-3, Math.hypot(dy, da)) : 1   // 走步 2～3.5 cm（腳只有 2.5 cm 長，一步搆不到更遠）
+      y = clamp(y + dy * sc, X.yMin, X.yMax); a = clamp(a + da * sc / X.R0, X.aMin, X.aMax); h = hh
+      q.push(kind === 'step' ? { k: 'step', y, a, h, dur: rnd(0.36, 0.5), pre: 0 } : { k: 'hop', y, a, h, dur: rnd(0.17, 0.22), pre: 0.07, stag: rnd(0.03, 0.06) })
+      if (++sinceRest >= restAt) { sinceRest = 0; restAt = 2 + Math.floor(Math.random() * 3); q.push({ k: 'rest', dur: Math.cos(hh) < 0 ? rnd(0.8, 1.2) : rnd(0.2, 0.6), look: 1 }) }
+      else q.push({ k: 'rest', dur: rnd(0.04, 0.18), look: 0 })
+    }
+    if (up) {
+      const n = 5 + Math.floor(Math.random() * 5)
+      for (let i = 0; i < n && y < X.yMax - 0.05; i++) move(rnd(0.05, 0.08), rnd(-0.015, 0.015), rnd(-0.25, 0.25))
+      if (Math.random() < 0.6) q.push({ k: 'rest', dur: rnd(0.8, 1.8), look: 1 })
+      // 轉身：兩個走步各轉 ~90°
+      const sg = Math.random() < 0.5 ? 1 : -1
+      move(-0.008, 0.015 * sg, sg * Math.PI / 2, 'hop'); move(-0.012, 0.012 * sg, Math.PI + rnd(-0.3, 0.3), 'hop')   // 轉身用跳（兩腳錯開）：走步轉 90° 腳搆不到
+      q.push({ k: 'rest', dur: rnd(0.8, 1.2), look: 1 })
+      X.upper = Math.random() < 0.5 ? 0 : 1
+    } else {
+      const n = 9 + Math.floor(Math.random() * 7)
+      const probes = new Set([2 + Math.floor(Math.random() * 3)]); if (Math.random() < 0.6) probes.add(n - 3 - Math.floor(Math.random() * 2))
+      let zig = Math.random() < 0.5 ? 1 : -1
+      for (let i = 0; i < n && y > X.yMin + 0.05; i++) {
+        if (Math.random() < 0.3) zig = -zig
+        move(-rnd(0.04, 0.07), zig * rnd(0.005, 0.02), Math.PI + zig * rnd(0.1, 0.35))
+        if (probes.has(i)) { q.push({ k: 'probe', dur: rnd(2.6, 3.8), ok: Math.random() < 0.6 }); q.push({ k: 'rest', dur: rnd(0.3, 0.8), look: 1 }) }
+      }
+      q.push({ k: 'rest', dur: rnd(1.0, 2.5), look: 1 })
+      const sg = Math.random() < 0.5 ? 1 : -1
+      move(0.008, 0.015 * sg, Math.PI + sg * Math.PI / 2, 'hop'); move(0.012, 0.012 * sg, rnd(-0.2, 0.2), 'hop')
+      q.push({ k: 'rest', dur: rnd(0.3, 0.8), look: 1 })
+    }
+  }
+  // 腳的落點：身體中心在 (y,a)、頭的方向 h → 每隻腳在樹皮上的點（往外 d0）＋腳趾要指的方向
+  const NUT_D0 = 0.004
+  const NUT_OFF = typeof location !== 'undefined' && /[?&]noclimb/.test(location.search)   // 效能 A/B：?noclimb＝茶腹鳾照舊（停枝模型）
+  function nutHolds(X, y, a, h, out) {
+    const N = X.normAt(y, a, V()), tu = V(0, 1, 0).addScaledVector(N, -N.y).normalize(), ts = V().crossVectors(N, tu)
+    const F = tu.clone().multiplyScalar(Math.cos(h)).addScaledVector(ts, Math.sin(h)), S = V().crossVectors(N, F)
+    const P = X.surf(y, a, V()), down = Math.cos(h) < 0
+    X.legs.forEach((L, i) => {
+      const upper = down && i === X.upper
+      // 往上爬：兩腳在髖部兩側稍前；頭朝下：上面那隻腳在身體後上方（吊著、腳趾朝上），下面那隻在前下方（撐著、腳趾朝下斜外）
+      const fo = !down ? -0.008 : upper ? -0.012 : 0.008, la = !down ? 0.0145 : upper ? 0.011 : 0.0155
+      const pt = P.clone().addScaledVector(F, fo).addScaledVector(S, L.sg * la)
+      const q = X.toYA(pt), sp = X.surf(q.y, q.a, V()), n2 = X.normAt(q.y, q.a, V())
+      out[i] = { p: sp.addScaledVector(n2, NUT_D0), n: n2, dir: (upper ? F.clone().negate() : F.clone()).addScaledVector(S, L.sg * (upper ? 0.5 : 0.7)).normalize() }
+    })
+    return out
+  }
+  function nutPose(X, t, dt) {
+    const st = X.step, mv = st?.k === 'hop' || st?.k === 'step', k01 = mv ? clamp((X.st - st.pre) / st.dur, 0, 1) : 0
+    // 身體位置：跳的時候 (y,a,h) 從起點平滑到終點，身體往外弧；走步：先換第一隻腳、身體在中段跟上、最後換第二隻腳
+    let y = X.y, a = X.a, h = X.h, out = 0, crouch = 0
+    if (st?.k === 'step') {
+      // 身體往前的進度 e：照時間要到 ss(k, 0, 0.85)，但踩著的腳一定要搆得到（髖到腳踝 ≤ 腳長 97%）→ 搆不到就二分法退回去，慢一點跟上
+      const pN = X.pitch - 0.45 * X.lean, hN = Math.max(X.hipH, X.bellyAt(pN) + 0.004)
+      const okAt = (e) => {
+        const yy = lerp(st.y0, st.y, e), aa = lerp(st.a0, st.a, e), hh = st.h0 + wrap(st.h - st.h0) * e
+        const N2 = X.normAt(yy, aa, V()), tu2 = V(0, 1, 0).addScaledVector(N2, -N2.y).normalize(), ts2 = V().crossVectors(N2, tu2)
+        const F2 = tu2.multiplyScalar(Math.cos(hh)).addScaledVector(ts2, Math.sin(hh))
+        _um.makeBasis(X.fwd0, X.up0, V().crossVectors(X.fwd0, X.up0)); _um2.makeBasis(F2, N2, V().crossVectors(F2, N2))
+        const Q2 = new THREE.Quaternion().setFromRotationMatrix(_um2.multiply(_um.transpose())).multiply(_uq2.setFromAxisAngle(X.axisP, pN))
+        const base = X.surf(yy, aa, V()).addScaledVector(N2, hN + 0.0025 * Math.sin(Math.PI * e))
+        return X.legs.every((L, i) => {
+          const fk = i === st.lead ? ss(k01, 0.03, 0.45) : ss(k01, 0.5, 0.9)
+          if (fk > 0.001 && fk < 0.999) return true
+          const T2 = fk >= 0.999 ? L.to : L.from
+          const dd = base.clone().add(L.hip0.clone().sub(X.hipM).applyQuaternion(Q2)).distanceTo(T2); return dd <= L.legLen * 0.97 && dd >= 0.007
+        })
+      }
+      const want = ss(k01, 0.0, 0.85), e0 = st.eAch ?? 0
+      let e = want
+      if (want > e0 && !okAt(want)) { let lo = e0, hi = want; for (let it = 0; it < 7; it++) { const m = (lo + hi) / 2; if (okAt(m)) lo = m; else hi = m } e = lo }
+      st.eAch = Math.max(e0, e)
+      e = st.eAch
+      y = lerp(st.y0, st.y, e); a = lerp(st.a0, st.a, e); h = st.h0 + wrap(st.h - st.h0) * e
+      out = 0.0025 * Math.sin(Math.PI * e)
+    }
+    if (st?.k === 'hop') {
+      const e = k01 * k01 * (3 - 2 * k01)
+      y = lerp(st.y0, st.y, e); a = lerp(st.a0, st.a, e); h = st.h0 + wrap(st.h - st.h0) * e
+      out = 0.009 * Math.sin(Math.PI * k01)
+      crouch = X.st < st.pre ? ss(X.st, 0, st.pre) : k01 >= 1 ? 1 - ss(X.st - st.pre - st.dur, 0, 0.08) : 0
+    }
+    const N = X.normAt(y, a, V()), tu = V(0, 1, 0).addScaledVector(N, -N.y).normalize(), ts = V().crossVectors(N, tu)
+    const F = tu.clone().multiplyScalar(Math.cos(h)).addScaledVector(ts, Math.sin(h)), S = V().crossVectors(N, F)
+    // 身體轉向：模型的 fwd0 → F、up0 → N，再繞 side 前傾 pitch（頭朝下時多抬頭一點：茶腹鳾頭朝下時胸口離樹皮、頭往外翹）
+    const down = -Math.cos(h)
+    _um.makeBasis(X.fwd0, X.up0, V().crossVectors(X.fwd0, X.up0)); _um2.makeBasis(F, N, V().crossVectors(F, N))
+    _uq.setFromRotationMatrix(_um2.multiply(_um.transpose()))
+    // 探裂縫時上半身往樹皮壓（繞髖關節前傾），髖關節跟著抬高到肚子不碰樹皮
+    const pNow = X.pitch - 0.45 * X.lean, hipNow = Math.max(X.hipH, X.bellyAt(pNow) + 0.004)
+    _uq.multiply(_uq2.setFromAxisAngle(X.axisP, pNow))
+    X.sit.quaternion.copy(_uq)
+    const P = X.surf(y, a, V()).addScaledVector(N, hipNow + out - 0.002 * crouch)
+    X.sit.position.copy(P).sub(_uv.copy(X.hipM).applyQuaternion(_uq))
+    for (const b of X.allB) b.quaternion.copy(b.userData.nRest)
+    X.sit.updateMatrixWorld(true)
+    // 頭、脖子：平常頭往外抬（頭朝下時抬多一點）、偶爾左右看；探裂縫時往樹皮轉（theta 由嘴尖回授控制）
+    const lookOut = 0.35 + 0.35 * Math.max(0, down)
+    const pr = st?.k === 'probe'
+    const th = pr ? X.theta : 0
+    const sw = X.swallow > 0 ? Math.sin(Math.PI * (1 - X.swallow)) : 0
+    const yaw = X.look * (pr ? 0 : 1)
+    const turnB = (b, list) => { if (!b) return; b.parent.getWorldQuaternion(_uq).invert(); for (const [ax, an] of list) { _uv2.copy(ax).applyQuaternion(_uq).normalize(); b.quaternion.premultiply(_uq2.setFromAxisAngle(_uv2, an)) } b.updateMatrixWorld(true) }
+    turnB(X.neck, [[S, (-lookOut + th) * 0.55 - 0.3 * sw], [N, yaw * 0.4]])
+    turnB(X.head, [[S, (-lookOut + th) * 0.45 - 0.35 * sw], [N, yaw * 0.6]])
+    if (X.tail) turnB(X.tail, [[S, -0.08 + 0.05 * Math.sin(t * 1.3)]])
+    // 腳
+    X.legs.forEach((L, i) => {
+      // 這隻腳換位的進度 fk（0＝還在舊點、1＝已在新點）：跳步兩腳錯開 stag；走步先 lead 腳（0～0.32）、另一腳（0.6～0.92）
+      const fk = st?.k === 'hop' ? ss(k01, 0.1 + (i === st.lead ? 0 : st.stag), 0.82 + (i === st.lead ? 0 : st.stag)) : st?.k === 'step' ? (i === st.lead ? ss(k01, 0.03, 0.45) : ss(k01, 0.5, 0.9)) : 1
+      L.fk = fk; L.state = fk > 0.001 && fk < 0.999 ? 'SWING' : 'PLANT'
+      const T = mv ? L.from.clone().lerp(L.to, fk).addScaledVector(N, (st.k === 'hop' ? 0.007 : 0.006) * Math.sin(Math.PI * fk)) : L.hold
+      L.target = T
+      const poleW = L.pole.clone().applyQuaternion(X.sit.quaternion)
+      L.radial = null; ik2(L, T, poleW)
+      // 腳掌：腳趾指向 dir（樹皮平面上），往樹皮斜 asin(d0/趾長) → 趾尖剛好碰到樹皮；跳起來時腳趾放鬆一點（往外翹）
+      const dir = mv ? L.dirFrom.clone().lerp(L.dirTo, fk).normalize() : L.dir
+      const sn = clamp(NUT_D0 / Math.max(0.004, L.toeLen), 0, 0.9) * (mv ? 1 - 1.6 * Math.sin(Math.PI * fk) : 1)
+      const want = dir.clone().multiplyScalar(Math.sqrt(1 - Math.min(0.81, sn * sn))).addScaledVector(N, -sn)
+      const Af = L.ft.getWorldPosition(V()), tc = L.toes.reduce((a2, b) => a2.add(b.getWorldPosition(V())), V()).divideScalar(L.toes.length)
+      aimBone(L.ft, tc.sub(Af), want)
+      // 腳趾抓樹皮：每根腳趾的第一節轉一下，讓趾尖剛好離樹皮 1 mm（踩著的時候；跳起來時放開）
+      const gw = mv ? 1 - Math.sin(Math.PI * fk) : 1
+      if (gw > 0.02) for (const tb of L.toes.concat(L.hallux)) {
+        const ta = tb.parent; if (!ta?.isBone || ta === L.ft) continue
+        const J = ta.getWorldPosition(V()), Tt = tb.getWorldPosition(V()), d = X.depth(Tt)
+        const Tw = Tt.clone().addScaledVector(N, (d + 0.001) * gw)
+        if (Tw.distanceTo(Tt) > 1e-4) aimBone(ta, Tt.sub(J), Tw.sub(J))
+      }
+    })
+    X.cur = { y, a, h, N, F, S }
+  }
+  function nutStep(u, s, X, t, dt) {
+    if (!X.step) {
+      if (!X.q.length) nutPlan(X)
+      X.step = X.q.shift(); X.st = 0
+      const st = X.step
+      if (st.k === 'hop' || st.k === 'step') {
+        st.y0 = X.y; st.a0 = X.a; st.h0 = X.h
+        // 先動哪隻腳：頭朝下往下走＝下面那隻（前腳）；其他時候左右輪流
+        // 先動「落在後面」的那隻腳（沿移動方向最後面的；不然身體走過去會把它拉超過腳長 2.5 cm）；一樣的話左右輪流
+        { const P0 = X.surf(X.y, X.a, V()), M = X.surf(st.y, st.a, V()).sub(P0), b = X.legs.map((L) => L.hold.clone().sub(P0).dot(M))
+          st.lead = Math.abs(b[0] - b[1]) > 1e-5 ? (b[0] < b[1] ? 0 : 1) : 1 - (X.lastLead ?? 0); X.lastLead = st.lead; st.stag ??= 0 }
+        // 頭先看下一個落點（往左右偏的那邊）
+        X.lookW = clamp(wrap(st.h - X.h) * 0.8 + (st.a - X.a) * X.R0 * 15, -0.6, 0.6); X.lookT = st.dur + 0.3
+        const to = nutHolds(X, st.y, st.a, st.h, [])
+        X.legs.forEach((L, i) => { L.from.copy(L.hold); L.to.copy(to[i].p); L.dirFrom = L.dir.clone(); L.dirTo = to[i].dir; L.nTo = to[i].n })
+        X.log.push([st.k, +(st.y - X.yH).toFixed(3), +st.h.toFixed(2)])
+      } else if (st.k === 'probe') { X.theta = 0; X.pk = 0; X.caught = false; X.log.push(['probe', st.ok]) }
+    }
+    const st = X.step
+    X.st += dt
+    if ((st.k === 'hop' && X.st >= st.pre + st.dur + 0.08) || (st.k === 'step' && X.st >= st.dur + 0.02 && (st.eAch ?? 1) >= 0.999)) {
+      X.y = st.y; X.a = st.a; X.h = st.h
+      X.legs.forEach((L) => { L.hold.copy(L.to); L.dir = L.dirTo })
+      X.step = null
+    } else if (st.k !== 'hop' && st.k !== 'step' && X.st >= st.dur) {
+      if (st.k === 'probe') { X.grub.visible = false; if (X.caught) X.swallow = 1; X.caught = false; X.probeDone = true }
+      X.step = null
+    }
+    // 探裂縫：前 0.5 秒頭往樹皮靠近（嘴尖離樹皮 4 mm），之後啄 4～6 下（每下嘴尖伸進裂縫 3 mm），抓到的話最後 0.9 秒叼著蟲抬頭
+    if (st.k === 'probe') {
+      const k = X.st, hold = st.ok && k > st.dur - 0.9
+      const peckPh = k > 0.6 && !hold ? ((k - 0.6) * 2.2) % 1 : 0
+      const want = hold ? 0.012 : k < 0.6 ? 0.004 : 0.004 - 0.007 * Math.sin(Math.PI * peckPh) ** 2
+      X.tipWant = want
+      if (hold && !X.caught) X.caught = true
+    }
+    X.lean = damp(X.lean, st.k === 'probe' && X.st < st.dur - (st.ok ? 0.9 : 0.3) ? 1 : 0, 6, dt)
+    if (X.swallow > 0) X.swallow = Math.max(0, X.swallow - dt / 0.5)
+    // 平常偶爾轉頭看
+    if ((X.lookT -= dt) <= 0) { X.lookT = rnd(0.6, 2.2); X.lookW = rnd(-0.7, 0.7) }
+    X.look = damp(X.look, X.lookW, 10, dt)
+    nutPose(X, t, dt)
+    // 嘴尖：量這一格的位置（離樹皮多遠），下一格調 theta
+    const tipW = X.sk.getVertexPosition(X.tip, _uv).applyMatrix4(X.sk.matrixWorld)
+    X.tipD = -X.depth(tipW)
+    if (st.k === 'probe') {
+      X.theta = clamp(X.theta + clamp((X.tipD - X.tipWant) * 18, -0.07, 0.07) * Math.min(1, dt * 30), -0.4, 2.0)   // 增益太大會每格來回跳（量到 2 格一循環）
+      if (X.caught && X.step === st) { X.grub.visible = true; X.grub.position.copy(tipW).addScaledVector(X.cur.N, 0.002); X.grub.quaternion.setFromUnitVectors(V(1, 0, 0), X.cur.S); X.grub.rotateY(0.4 * Math.sin(t * 25)) }
+    } else X.theta = damp(X.theta, 0, 10, dt)
+    // 拍照標籤
+    const down = Math.cos(X.cur.h) < -0.3
+    X.tag = st.k === 'probe' ? (X.caught ? 'barkcatch' : 'barkprobe') : down ? 'headdown' : Math.cos(X.cur.h) > 0.3 && (X.step?.k === 'hop' || X.step?.k === 'step' || X.q.some((q) => (q.k === 'hop' || q.k === 'step') && q.y > X.y)) ? 'climbup' : 'look'
+  }
+  function nutTick(t, dt) {
+    for (const u of units) {
+      if (!u.esc.climb || NUT_OFF) continue
+      const s = u.ms[0]; if (!s?.m?.obj) continue
+      if (!s.nut) { nutSetup(u); if (!s.nut) continue }
+      const X = s.nut
+      const home = !u.b.absent && u.state === 'home' && s.mode === 'perch'
+      if (!home) { if (X.sit.visible) { X.sit.visible = false; X.grub.visible = false } X.wasHome = false; continue }
+      if (!X.wasHome) {
+        // 剛回到樹上（一開始、飛回來）：從降落的那一點開始，頭朝下停著
+        if (X.everAway && s.home) { const q = X.toYA(s.home); X.y = clamp(q.y, X.yMin, X.yMax); X.a = clamp(q.a, X.aMin, X.aMax) }
+        X.h = Math.PI; X.q.length = 0; X.step = { k: 'rest', dur: rnd(1, 3), look: 1 }; X.st = 0
+        nutHolds(X, X.y, X.a, X.h, []).forEach((o, i) => { X.legs[i].hold.copy(o.p); X.legs[i].dir = o.dir })
+        X.wasHome = true
+      }
+      X.everAway = true
+      s.m.obj.visible = false; X.sit.visible = true
+      if (X.force) { X.q.length = 0; X.step = null; if (X.force === 'down') X.h = Math.PI; if (X.force === 'probe') X.q.push({ k: 'probe', dur: 3.6, ok: true }); X.force = null }
+      const P = world.camera.position
+      if (X.cur && P.distanceTo(X.surf(X.y, X.a, _uv)) > 90) continue   // 太遠不更新（省效能）
+      try { nutStep(u, s, X, t, dt) } catch (e) { X.err = (X.err ?? 0) + 1; X.errMsg = e.message + ' ' + (e.stack ?? '').split('\n')[1] }
+    }
+  }
   function songTick(t, dt) {
     if (songCfg.off) return
     for (const u of units) {
@@ -1803,6 +2116,7 @@ export function createFlight(world, player) {
     digTick(t, dt)
     owlTick(t, dt)
     songTick(t, dt)
+    nutTick(t, dt)
     // 2026-11-17 警戒旗標給 birds.js（斑鳩求偶：玩家太近就停）
     for (const u of units) { const al = u.state !== 'home' || u.alarm > 0.3; for (const s of u.ms) if (s.m.obj) s.m.obj.userData.alert = al }
     const P = world.camera.position
@@ -1821,7 +2135,7 @@ export function createFlight(world, player) {
           if (u.sortT <= 0) { u.sortT = rnd(...u.esc.sortie); flush(u, t, !!(u.esc.hover || u.esc.hawk)); u.trip = true; for (const s2 of u.ms) s2.wait = rnd(14, 26); continue }
         }
         let d = Infinity
-        for (const s of u.ms) { s.m.obj.getWorldPosition(_v); d = Math.min(d, _v.distanceTo(P)) }
+        for (const s of u.ms) { homeObj(s).getWorldPosition(_v); d = Math.min(d, _v.distanceTo(P)) }
         const R = u.esc.r * mult
         // 警戒值：靠得越近漲得越快（距離 R 不漲、0.7R 一秒、0.5R 三分之一秒），走遠就慢慢消
         if (d < R) u.alarm += dt * Math.min(10, (R / d) ** 2 - 1)
@@ -1868,6 +2182,7 @@ export function createFlight(world, player) {
     const s = m.flight
     if (!s) return { obj: m.obj, act: m.acts?.name ?? '' }
     if (s.mode === 'away' || (s.mode === 'wait' && !m.obj.visible)) return null
+    if (s.nut?.sit.visible) return { obj: s.nut.sit, act: s.nut.tag || 'look' }   // 2026-11-18 茶腹鳾在神木上
     if (s.song?.on) return { obj: s.root, act: s.act || 'songflight' }   // 2026-11-18 小雲雀鳴唱飛行
     if (s.hunt?.on) { const H = s.hunt; if (H.sit.visible) return { obj: H.sit, act: s.act || 'look' }; return s.root.visible ? { obj: s.root, act: s.act || 'fly' } : null }   // 2026-11-18 貓頭鷹狩獵
     if (s.dig?.on) { const X = s.dig; if (X.ph === 'out' || X.ph === 'back') return { obj: s.root, act: 'fly' }; return X.sit.visible ? { obj: X.sit, act: s.act || 'look' } : null }
@@ -1910,7 +2225,7 @@ export function createFlight(world, player) {
   }
   const gone = (b) => { const u = unitOf(b); return !u || u.ms.every((s) => s.mode === 'away') }
   const canFly = (b) => !!unitOf(b)?.esc.fly
-  window.__flight = { units, prey, huntCfg, songCfg, songGo: () => { const u = units.find((x) => x.b.def.id === 'skylark'); const X = u?.ms[0]?.song; if (X) { X.force = true; X.wait = 0 } return !!X }, huntGo: (id, opt = {}) => { const u = units.find((x) => x.b.def.id === id); const H = u?.ms[0]?.hunt; if (H) { H.force = opt; H.wait = 0 } return !!H }, hunt: (id) => units.find((x) => x.b.def.id === id)?.ms[0]?.hunt, digGo: (type = 'dig') => { const u = units.find((x) => x.b.def.id === 'barbet'); const X = u?.ms[0]?.dig; if (X) { X.wait = 0; X.force = type } }, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
+  window.__flight = { units, prey, nutGo: (f = 'down') => { const u = units.find((x) => x.b.def.id === 'nuthatch'); if (u?.ms[0]?.nut) u.ms[0].nut.force = f; return !!u?.ms[0]?.nut }, huntCfg, songCfg, songGo: () => { const u = units.find((x) => x.b.def.id === 'skylark'); const X = u?.ms[0]?.song; if (X) { X.force = true; X.wait = 0 } return !!X }, huntGo: (id, opt = {}) => { const u = units.find((x) => x.b.def.id === id); const H = u?.ms[0]?.hunt; if (H) { H.force = opt; H.wait = 0 } return !!H }, hunt: (id) => units.find((x) => x.b.def.id === id)?.ms[0]?.hunt, digGo: (type = 'dig') => { const u = units.find((x) => x.b.def.id === 'barbet'); const X = u?.ms[0]?.dig; if (X) { X.wait = 0; X.force = type } }, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
   // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
   const snap = () => { last.copy(world.camera.position); speed = 0 }
   return { tick, units, shotOf, snap, arrive, depart, gone, canFly, add: addUnit, get speed() { return speed } }

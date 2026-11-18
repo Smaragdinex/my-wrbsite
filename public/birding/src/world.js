@@ -367,6 +367,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
   {
     const S = giantSpots().find((q) => q.sacred)
     if (S) {
+      globalThis.__sacredTree = { x: S.x, z: S.z, y: S.y, D: S.D }   // 2026-11-18 茶腹鳾沿樹幹爬（flight.js nutSetup）
       scene.updateMatrixWorld(true)
       let best = null
       for (let k = 0; k < 72; k++) { const a = k / 72 * Math.PI * 2, td = alpineTrailDist(S.x + Math.sin(a) * 9, S.z + Math.cos(a) * 9); if (!best || td < best.td) best = { a, td } }
