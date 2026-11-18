@@ -19,6 +19,8 @@ export function ruleJudge(p) {
   if (s.area < 0.006) lines.push(tr('鳥太小了，換支長一點的鏡頭吧。'))
   if (s.act === 'dive') lines.push(tr('入水那一瞬間！很難抓到。'))
   else if (s.act === 'strike' || s.act === 'worm' || s.act === 'grub') lines.push(tr('捕食的瞬間，好。'))
+  else if (s.act === 'crow') lines.push(tr('雄環頸雉挺直身子大聲「咯—咯」——這是在宣示地盤。'))
+  else if (s.act === 'wingwhirr') lines.push(tr('叫完馬上快速振翅，翅膀拍得噗嚕嚕響，整套是雄雉的領域展示。'))
   else if (s.act === 'headdown') lines.push(tr('茶腹鳾頭朝下往下爬——一腳在上吊著、一腳在下撐著，啄木鳥做不到這樣。'))
   else if (s.act === 'barkprobe') lines.push(tr('尖嘴伸進樹皮裂縫裡找蟲，頭朝下時看得到從上面看不到的縫。'))
   else if (s.act === 'barkcatch') lines.push(tr('從樹皮縫裡叼出一隻小蟲！'))

@@ -7,3 +7,12 @@ skylark_song1.mp3 / skylark_song2.mp3（小雲雀 Oriental Skylark, Alauda gulgu
 來源：Wikimedia Commons「File:Alauda gulgula - Oriental Skylark XC336956.mp3」（xeno-canto XC336956，2016-07-06，印度 Karnataka TG Halli Reservoir，Type: song，bird-seen: yes，playback-used: no），錄音者 Mike Prince，授權 CC BY-SA 4.0
 https://commons.wikimedia.org/wiki/File:Alauda_gulgula_-_Oriental_Skylark_XC336956.mp3
 改動：剪出 2–22 s、23–43 s 兩段連續鳴唱、1.2–11 kHz 帶通、淡入淡出、音量標準化、轉單聲道。改過的檔案同樣以 CC BY-SA 4.0 釋出。
+
+pheasant_crow1.mp3 / pheasant_crow2.mp3（環頸雉 Ring-necked Pheasant, Phasianus colchicus 雄鳥領域鳴叫）
+來源：Wikimedia Commons「File:Phasianus colchicus - Common Pheasant XC83152.mp3」與「File:Phasianus colchicus - Common Pheasant XC179662.mp3」（xeno-canto XC83152、XC179662，後者為草原邊緣展示中的雄鳥），錄音者 Jonathon Jongsma，授權 CC BY-SA 3.0
+https://commons.wikimedia.org/wiki/File:Phasianus_colchicus_-_Common_Pheasant_XC83152.mp3
+https://commons.wikimedia.org/wiki/File:Phasianus_colchicus_-_Common_Pheasant_XC179662.mp3
+改動：各剪出一聲兩音節的鳴叫（0.62–1.47 s、2.58–3.43 s）、600/700 Hz 高通、8 kHz 低通、淡入淡出、音量標準化、轉單聲道。改過的檔案同樣以 CC BY-SA 3.0 釋出。
+
+pheasant_whirr.mp3（環頸雉鳴叫後的振翅聲）
+程式合成（粉紅噪音 450 Hz 帶通、每秒 8 下的振幅調變，跟動畫的振翅同步），無第三方素材。

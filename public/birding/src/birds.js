@@ -347,6 +347,7 @@ export function ensureModel(n) {
       if (BILL_FIX[n]) straightenBill(g.scene, BILL_FIX[n])
       if (AUTO_BILL.has(n)) autoStraightenBill(g.scene)
       cleanFootWeights(g.scene)
+      if (WING_SPLIT.has(n)) splitWings(g.scene)
       GLB[n] = g.scene
       return true
     }).catch(() => { FAILED.add(n); console.warn('[birds] 沒有模型', n); return false }).finally(() => _loading.delete(n))
@@ -396,6 +397,86 @@ function straightenBill(root, { hc, d, t0, t1, yaw }) {
 // （自動綁骨工具給的），腳一抬起來那部分權重留在身體那邊，腳趾就被拉成長條。載入時修正：主要權重是 foot／toe 的頂點，
 // 只留同一隻腳的 shin／foot／toe 權重，其他（身體、脖子、另一隻腳）丟掉再重新正規化。所有鳥一起修（站著時看不出來，抬腳、跳就會拉長）
 const LEG_OF = (nm) => { const m = /^(shin|foot|toe)([LR])/.exec(nm); return m ? m[2] : null }
+// 2026-11-18 #42 環頸雉（ChatGPT REVISE：翅膀要真的離開身體，但不能把身體拉壞）：把翅膀拆成獨立的網格。
+// 原本的網格整個不跟翅膀動（翅膀權重全部拿掉＝翅膀那塊變成畫在身體上、收合時看起來一樣，張開時露出來的就是這層）；
+// 另外複製一份「主要綁翅膀」的三角形，100% 綁在 wingL／wingR（剛體，不會被拉長），往外推 0.15% 模型大小避免跟底下那層打架。
+const WING_SPLIT = new Set(globalThis.location && /[?&]nowingsplit/.test(location.search) ? [] : ['rnpheasant-rig'])
+function splitWings(root) {
+  const add = []
+  root.traverse((o) => {
+    if (!o.isSkinnedMesh || o.userData.wingSplit) return
+    const ge = o.geometry, si = ge.attributes.skinIndex, sw = ge.attributes.skinWeight, P = ge.attributes.position, Nn = ge.attributes.normal, bn = o.skeleton.bones.map((b) => b.name)
+    const dom = new Int16Array(P.count)
+    for (let i = 0; i < P.count; i++) { let t = -1, w = -1; for (let c = 0; c < 4; c++) if (sw.getComponent(i, c) > w) { w = sw.getComponent(i, c); t = si.getComponent(i, c) } dom[i] = t }
+    ge.computeBoundingBox(); const sz = ge.boundingBox.getSize(V()).length()
+    for (const side of ['wingL', 'wingR']) {
+      const wb = bn.indexOf(side); if (wb < 0) continue
+      const ix = ge.index.array, tris = []
+      for (let t = 0; t < ix.length; t += 3) { let k = 0; for (let j = 0; j < 3; j++) if (dom[ix[t + j]] === wb) k++; if (k >= 2) tris.push(ix[t], ix[t + 1], ix[t + 2]) }
+      if (tris.length < 30) continue
+      const map = new Map(), idx = []
+      for (const v of tris) { if (!map.has(v)) map.set(v, map.size); idx.push(map.get(v)) }
+      const n = map.size, ng = new THREE.BufferGeometry()
+      for (const [name, a] of Object.entries(ge.attributes)) {
+        const arr = new a.array.constructor(n * a.itemSize)
+        for (const [ov, nv] of map) for (let c = 0; c < a.itemSize; c++) arr[nv * a.itemSize + c] = a.array[ov * a.itemSize + c]
+        ng.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize, a.normalized))
+      }
+      const ns = ng.attributes.skinIndex, nw = ng.attributes.skinWeight, np = ng.attributes.position, nn = ng.attributes.normal
+      for (let i = 0; i < n; i++) { ns.setXYZW(i, wb, 0, 0, 0); nw.setXYZW(i, 1, 0, 0, 0); if (nn) np.setXYZ(i, np.getX(i) + nn.getX(i) * sz * 0.0015, np.getY(i) + nn.getY(i) * sz * 0.0015, np.getZ(i) + nn.getZ(i) * sz * 0.0015) }
+      ng.setIndex(idx)
+      // 翅根：翅膀這片跟身體相接的那圈頂點（同時出現在翅膀三角形和其他三角形裡）的中心＝新骨頭 wingLRoot／wingRRoot 的位置
+      // （原本的 wingL 骨頭不在翅根，繞它轉翅膀整片會飄離肩膀——ChatGPT V2 截圖看得到）。方向跟 wingL 一樣，所以原本的轉法照用
+      const inWing = new Uint8Array(P.count), inOther = new Uint8Array(P.count)
+      const wset = new Set(); for (let t = 0; t < tris.length; t += 3) wset.add(t)
+      for (const v of tris) inWing[v] = 1
+      for (let t = 0; t < ix.length; t += 3) { let k = 0; for (let j = 0; j < 3; j++) if (dom[ix[t + j]] === wb) k++; if (k < 2) for (let j = 0; j < 3; j++) inOther[ix[t + j]] = 1 }
+      const cen = V(); let cn = 0
+      for (let i = 0; i < P.count; i++) if (inWing[i] && inOther[i]) { cen.add(V(P.getX(i), P.getY(i), P.getZ(i)).applyMatrix4(o.bindMatrix)); cn++ }
+      const wbone = o.skeleton.bones[wb], par = wbone.parent
+      let rootBone = null
+      if (cn > 3 && par) {
+        cen.divideScalar(cn)
+        rootBone = new THREE.Bone(); rootBone.name = side + 'Root'
+        par.add(rootBone); par.updateMatrixWorld(true)
+        rootBone.position.copy(par.worldToLocal(cen.clone()))
+        rootBone.quaternion.copy(par.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(wbone.getWorldQuaternion(new THREE.Quaternion())))
+        rootBone.updateMatrixWorld(true)
+        for (let i = 0; i < n; i++) ns.setXYZW(i, 0, 0, 0, 0)
+      }
+      const wm = new THREE.SkinnedMesh(ng, o.material); wm.name = o.name + '_' + side; wm.userData.wingSplit = true; wm.userData.rootBone = rootBone
+      wm.castShadow = o.castShadow; wm.receiveShadow = o.receiveShadow
+      wm.position.copy(o.position); wm.quaternion.copy(o.quaternion); wm.scale.copy(o.scale)
+      add.push([o, wm])
+    }
+    // 原本的網格：翅膀權重全部拿掉（不再被翅膀拉）
+    for (let i = 0; i < P.count; i++) {
+      let sum = 0, cut = false
+      for (let c = 0; c < 4; c++) { if (/^wing/.test(bn[si.getComponent(i, c)]) && sw.getComponent(i, c) > 0) { sw.setComponent(i, c, 0); cut = true } sum += sw.getComponent(i, c) }
+      if (cut) { if (sum > 0) for (let c = 0; c < 4; c++) sw.setComponent(i, c, sw.getComponent(i, c) / sum); else { const b = bn.indexOf('body'); si.setComponent(i, 0, b < 0 ? 0 : b); sw.setComponent(i, 0, 1) } }
+    }
+    sw.needsUpdate = true; o.userData.wingSplit = true
+  })
+  for (const [o, wm] of add) { o.parent.add(wm); wm.bind(wm.userData.rootBone ? new THREE.Skeleton([wm.userData.rootBone]) : o.skeleton, o.bindMatrix) }
+}
+// 2026-11-18 環頸雉振翅：Tripo 綁的翅膀骨頭也拉著身體、尾巴的頂點（翅膀抬 1 rad 就有 1400 個三角形被拉長 1.5 倍以上，大多是「主要綁 body／tail」的）。
+// 主要綁定不是翅膀的頂點 → 拿掉翅膀的權重、重新正規化（翅膀本身的頂點不動）；WING_CLEAN 列出要做的模型
+const WING_CLEAN = new Set([])   // 2026-11-18 試過環頸雉：拉長的三角形反而集中到翅膀和身體的接縫（最長邊 25 倍）→ 不用；改成振翅幅度限制在 0.5 rad
+function cleanWingWeights(root) {
+  root.traverse((o) => {
+    if (!o.isSkinnedMesh) return
+    const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight, bn = o.skeleton.bones.map((b) => b.name)
+    let fixed = 0
+    for (let i = 0; i < si.count; i++) {
+      let top = -1, tw = -1; for (let c = 0; c < 4; c++) if (sw.getComponent(i, c) > tw) { tw = sw.getComponent(i, c); top = si.getComponent(i, c) }
+      if (/^wing/.test(bn[top])) continue
+      let sum = 0, cut = false
+      for (let c = 0; c < 4; c++) { if (/^wing/.test(bn[si.getComponent(i, c)]) && sw.getComponent(i, c) > 0) { sw.setComponent(i, c, 0); cut = true } sum += sw.getComponent(i, c) }
+      if (cut && sum > 0) { for (let c = 0; c < 4; c++) sw.setComponent(i, c, sw.getComponent(i, c) / sum); fixed++ }
+    }
+    if (fixed) { sw.needsUpdate = true; o.userData.wingClean = fixed }
+  })
+}
 function cleanFootWeights(root) {
   root.traverse((o) => {
     if (!o.isSkinnedMesh) return
@@ -1199,7 +1280,9 @@ function groundTripo(env, cfg) {
       // 展示用的額外動作：翅膀張開（sw）、整隻升降（jy：跳、蹲、潛水）、頭左右甩（sy）、身體仰起（sp）、個別骨頭多轉（sb）
       c.sw = damp(c.sw ?? 0, ex?.wing ?? 0, 14, dt); c.jy = damp(c.jy ?? 0, ex?.jump ?? 0, ex ? 28 : 8, dt)
       c.sy = damp(c.sy ?? 0, ex?.yaw ?? 0, 22, dt); c.sp = damp(c.sp ?? 0, ex?.pitch ?? 0, ex?.prate ?? 6, dt); c.st = damp(c.st ?? 0, ex?.tail ?? 0, 8, dt)
-      if (Math.abs(c.sw) > 0.005) for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) { r.turn(wg, FWD, sg * c.sw * (cfg.wingSign ?? 1)); r.turn(wg, AX.y, sg * c.sw * (cfg.wingOut ?? 0.3)) }
+      if (ex?.wingLR) { for (const [wg, sg, k] of [['wingL', 1, 'L'], ['wingR', -1, 'R']]) { const q = ex.wingLR[k]; const wb = r.bones[wg + 'Root'] ? wg + 'Root' : wg; r.turn(wb, FWD, sg * q.r * (ex.wingSign ?? 1)); r.turn(wb, AX.y, sg * q.r * q.o) } }   // 2026-11-18 每隻翅膀自己的上抬／外轉（環頸雉振翅）
+      const swv = ex?.wingLR ? 0 : ex?.wingFast != null ? (c.sw = ex.wingFast) : c.sw   // wingFast：每格直接給（不平滑），快速振翅用（環頸雉 11 次／秒）
+      if (Math.abs(swv) > 0.005) for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) { r.turn(wg, FWD, sg * swv * (ex?.wingSign ?? cfg.wingSign ?? 1)); r.turn(wg, AX.y, sg * swv * (ex?.wingOut ?? cfg.wingOut ?? 0.3)) }
       if (c.sy) r.turn('head', AX.y, c.sy)
       if (c.sp) r.turn('body', LAT, c.sp)
       if (c.st) r.turn('tail', LAT, c.st)
@@ -1245,7 +1328,7 @@ function groundTripo(env, cfg) {
     const runBob = c.run * 0.02 * cfg.H * Math.abs(Math.sin(c.runPh * Math.PI * 2))   // 每一步身體上下一下
     const liftY = (cfg.hop ? 0 : 0.012 * cfg.H * up * (1 - c.run)) + runBob, gyHere = env.groundAt ? env.groundAt(P.x, P.y) : 0
     c.gy = c.gy == null ? gyHere : damp(c.gy, gyHere, 12, dt)
-    root.position.set(P.x, c.gy + liftY + hopY + hopDip + (c.jy ?? 0) + (cfg.raise ?? 0), P.y); root.rotation.y = w.h   // cfg.raise：模型的腳底比校準的低一點（帝雉 2026-11-15）
+    root.position.set(P.x, c.gy + liftY + hopY + hopDip + (c.jy ?? 0) - (c.fb ?? 0) + (cfg.raise ?? 0), P.y); root.rotation.y = w.h   // cfg.raise：模型的腳底比校準的低一點（帝雉 2026-11-15）
     root.updateWorldMatrix(true, true)
     // 山鷸的頭：要等整隻鳥這一格的位置擺好之後才能釘（以前在擺位置前釘，頭永遠慢一格，每抬一次腳就上下抖 4～5 mm）。
     // 目標 = 沒搖時頭的位置，扣掉抬腳那一下的身體升起，再低通平滑一下（速度變化不會一頓一頓）
@@ -1286,6 +1369,7 @@ function groundTripo(env, cfg) {
       }
       root.position.y += 0.004 * Math.sin(t * 2.1)   // 浮在水上微微起伏
     }
+    let fbErr = 0
     if (!cfg.swim) legs.forEach((L, li) => {
       const home = r.model.localToWorld(L.rest.clone()); home.y -= liftY
       if (!L.plant) { L.plant = home.clone(); L.pos.copy(home) }
@@ -1328,7 +1412,10 @@ function groundTripo(env, cfg) {
       ik(L, L.pos)
       if (ex?.footUp?.[L.sd]) rotM('foot' + L.sd, N, ex.footUp[L.sd])   // 腳掌往上翻（拿著東西舉到嘴邊）
       if (ex?.grip?.[L.sd]) curlToes(r, L.toes, ex.grip[L.sd])   // 2026-11-18 腳趾抓住東西（紫水雞抓水草）
+      if (ex?.footFb && L.t >= 1) fbErr = Math.max(fbErr, r.bones['foot' + L.sd].getWorldPosition(_t).y - L.pos.y)
     })
+    // 2026-11-18 ex.footFb（環頸雉挺身）：踩著的腳搆不到地（腳踝比目標高）→ 下一格整隻再往下沉這麼多；不需要了就慢慢收回
+    if (ex?.footFb) c.fb = clamp((c.fb ?? 0) + fbErr * 0.8 - 0.004 * dt, 0, 0.05); else if (c.fb) c.fb = Math.max(0, c.fb - 0.05 * dt)
     // 鳩鴿類走路點頭：其實是頭前後移動，不是轉。每跨一步，頭很快往前推（thrust），
     // 之後身體往前走、頭停在空中原地不動（hold），所以相對身體慢慢往後退，下一步再推
     if (cfg.bob) {
@@ -2719,11 +2806,77 @@ function nutcracker(env) {
   return perchRigged(outer(env, -1.0), { name: 'nutcracker-rig', k: 0.21, ...TRIPO, foot: 0.02, drop: 0.05, beat: 5, eat: true,
     hopper: { hop: [0.15, 0.4] } })
 }
+// 2026-11-18 #42 環頸雉 Wing-whirring Crow（ChatGPT 規格：雄鳥站草地高處挺直大聲鳴叫，接著快速振翅，停止後昂首觀察）：
+// 每 25～50 秒一場 —— 走到附近最高的一點（避開巢）→ 挺直、脖子伸長（0.6 s）→ 兩聲「咯—咯」（真錄音，頭一下一下往上甩、胸口鼓起）
+// → 馬上原地快速振翅約 1 秒（翅膀貼著身體兩側快拍，聲音是低沉的「噗嚕嚕」）→ 挺直昂首左右看 2～3 秒 → 放鬆回去走
+function pheasantShow() {
+  const D = showDirector({ gap: [25, 50], dur: [8, 10], first: [8, 20],
+    ready: (D) => !D.birds[0]?.root.userData.alert,
+    onStart: (D) => {
+      const b = D.birds[0], w = b.w, cfg = D.cfg
+      // 高處：在走路範圍內試 40 個點，挑地面最高、路上不經過巢的
+      let best = null
+      for (let i = 0; i < 40; i++) {
+        const a = Math.random() * Math.PI * 2, r = w.radius * Math.sqrt(Math.random()), x = w.center[0] + Math.cos(a) * r, z = w.center[1] + Math.sin(a) * r
+        if (w.avoid?.(x, z, w.p)) continue
+        const y = D.env?.groundAt ? D.env.groundAt(x, z) : 0
+        if (!best || y > best.y) best = { x, z, y }
+      }
+      w.goal = best && Math.hypot(best.x - w.p.x, best.z - w.p.y) > 0.08 ? new THREE.Vector2(best.x, best.z) : null; w.want = null
+      D.t0 = null; D.called = 0; D.whirred = false
+      Object.assign(D, globalThis.__pheasForce ?? {})
+    },
+    onEnd: (D) => { const b = D.birds[0]; if (b) b.root.userData.pheasTag = null } })
+  globalThis.__pheasShow = D
+  return (x) => {
+    D.env ??= x.cfg.env
+    if (!D.tick(x)) return null
+    const w = x.w, ud = x.root.userData, o = { lean: 0.02, neck: -0.1, head: 0, reach: 0, rate: 8 }
+    if (ud.alert && D.len > D.t + 0.5) D.len = D.t + 0.5   // 玩家太近就收（flight.js 接手警戒）
+    if (D.t0 == null) {   // 走過去
+      ud.pheasTag = null
+      if (!w.goal || D.t > 3.5) { w.goal = null; D.t0 = D.t + 0.2; D.len = Math.max(D.len, D.t0 + 6.2) }
+      return o
+    }
+    const u = D.t - D.t0
+    const pos = () => { x.root.updateWorldMatrix(true, false); return x.root.getWorldPosition(V()).add(V(0, 0.3, 0)) }
+    // 挺直：身體往後立（lean 負＝直起來）、脖子伸長、頭微抬
+    const rise = ss(u, 0, 0.6) * (1 - ss(u, D.len - D.t0 - 0.7, D.len - D.t0))
+    o.lean = 0.02 - 0.42 * rise; o.neck = -0.1 - 0.5 * rise; o.head = -0.1 * rise; o.reach = 0.35 * rise; o.tail = 0.12 * rise; o.rate = 10
+    o.jump = -(globalThis.__pheasDrop ?? 0.019) * rise; o.footFb = true   // 剩下的（地面不平時一腳比較高）由 footFb 回授補   // 身體直起來髖關節會往上移、腳搆不到地（量到浮 1.5～2 cm）→ 整隻往下沉補回
+    if (u >= 0.6 && u < 1.45) {
+      // 鳴叫：兩聲（0.6～0.95、1.0～1.35），每聲頭往上甩、胸口鼓起
+      if (D.called === 0) { D.called = 1; globalThis.__birdCall?.('pheasant', pos(), 1.6) }
+      const n1 = Math.sin(Math.PI * ss(u, 0.6, 0.95)), n2 = Math.sin(Math.PI * ss(u, 1.0, 1.35))
+      const k = Math.max(n1, n2)
+      o.neck -= 0.25 * k; o.head = -0.1 - 0.3 * k; o.puff = 0.6 + 0.4 * k; o.rate = 22
+      ud.pheasTag = 'crow'
+    } else if (u >= 1.45 && u < 2.55) {
+      // 振翅：翅膀在身體兩側快速上下拍（11 次／秒），身體跟著抖、尾巴翹起
+      if (!D.whirred) { D.whirred = true; globalThis.__birdCall?.('pheasantWhirr', pos(), 1.3) }
+      const e = ss(u, 1.45, 1.55) * (1 - ss(u, 2.4, 2.55))
+      // 2026-11-18 ChatGPT V2：不要兩片水平板子 → 每秒 8 下的完整拍動：上拍到背上方的 V 字（看得到羽片寬度）、下拍到身體兩側往外下；
+      // 往外轉（out）比往上抬（raise）慢 0.13 週期＝翼尖延遲；左右錯開 0.04 週期。聲音同一個相位（每下拍一聲）
+      const wph = (side) => 2 * Math.PI * 8 * (u - 1.45) - side * 0.25
+      const wpose = (side) => { const a = wph(side); return { r: e * (1.05 + 0.65 * Math.sin(a)), o: e * (-1.05 - 0.5 * Math.sin(a - 0.8)) } }
+      o.wingLR = { L: wpose(0), R: wpose(1) }; o.wingFast = 0.01; o.wingSign = -1
+      const WT = globalThis.__pheasWingTest; if (WT) { const c = WT[Math.min(WT.length - 1, Math.floor((u - 1.45) / (1.1 / WT.length)))]; o.wingFast = c[0]; o.wingSign = c[1]; o.wingOut = c[2]; o.wingLR = { L: { r: c[0], o: c[2] }, R: { r: c[0], o: c[2] } } }
+      o.lean -= 0.08 * e; o.tail = 0.3 * e; o.puff = 0.5   // 不再整隻上下抖（腳 IK 誤差會到 1.5 cm）
+      ud.pheasTag = 'wingwhirr'
+    } else if (u >= 2.55) {
+      // 昂首觀察：挺直、頭左右慢慢看
+      o.yaw = 0.55 * Math.sin((u - 2.55) * 1.6); o.head = -0.18 * rise
+      ud.pheasTag = rise > 0.5 ? 'erectwatch' : null
+    } else ud.pheasTag = null
+    return o
+  }
+}
 function rnpheasant(env) {
   // 2026-11-10 環頸雉：湖前草地上慢慢走、低頭啄草籽；旁邊地上有一窩橄欖褐色的蛋（withNest：走路不會踩進巢）
-  return withNest(env, (avoid) => groundTripo(env, { name: 'rnpheasant-rig', H: 0.4, h0: 0.468, ...TRIPO, bob: 0.02,
+  const show = env.guide || (globalThis.location && /[?&]nopheasshow/.test(location.search)) ? null : pheasantShow()   // ?nopheasshow：效能 A/B
+  return withNest(env, (avoid) => groundTripo(env, { name: 'rnpheasant-rig', H: 0.4, h0: 0.468, ...TRIPO, bob: 0.02, show, env,
     walk: { radius: 1.1, speed: 0.15, avoid }, stride: 0.13, swingT: 0.3, lift: 0, knee: [0.8, 1.4], focusY: 0.25,
-    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.5, 3], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }), 'pheasant', 0.6)
+    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.5, 3], stand: [1.5, 1.5, 3], turn: [1, 99, 99], ...(show ? { show: [0, 999, 999] } : {}) } }), 'pheasant', 0.6)
 }
 function skylark(env) {
   // 2026-11-10 小雲雀：在草地上走（雲雀用走的，不跳），頭冠偶爾豎起；巢是草根旁的小淺碗，三顆布滿褐斑的蛋

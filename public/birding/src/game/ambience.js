@@ -286,14 +286,14 @@ export function createAmbience({ getMusic, getAmb }) {
 
   // 2026-11-17 個別鳥種的叫聲（真的錄音；授權見 audio/birds/CREDITS.txt）：在世界座標某一點叫一聲。
   // 照離鏡頭的距離變小聲（5 m 內幾乎原音量、30 m 外聽不到）、照方向左右聲道，走環境音那一路（音量設定、在店裡隔著玻璃都照算）
-  const CALLS = { dove: ['audio/birds/dove_coo1.mp3', 'audio/birds/dove_coo2.mp3', 'audio/birds/dove_coo3.mp3'] }
+  const CALLS = { dove: ['audio/birds/dove_coo1.mp3', 'audio/birds/dove_coo2.mp3', 'audio/birds/dove_coo3.mp3'], pheasant: ['audio/birds/pheasant_crow1.mp3', 'audio/birds/pheasant_crow2.mp3'], pheasantWhirr: ['audio/birds/pheasant_whirr.mp3'] }   // 2026-11-18 環頸雉鳴叫＋振翅
   const callBufs = {}
   function call(id, pos, cam, gain = 1) {
     if (!ac || !CALLS[id] || ac.state !== 'running') return 0
     const list = callBufs[id] ??= CALLS[id].map((u) => { const e = { buf: null }; loadBuf(u).then((b) => { e.buf = b }).catch(() => {}); return e })
     const ready = list.filter((e) => e.buf); if (!ready.length) return 0
     const dx = pos.x - cam.position.x, dy = pos.y - cam.position.y, dz = pos.z - cam.position.z, d = Math.hypot(dx, dy, dz)
-    const vol = gain * Math.min(1, 5 / Math.max(5, d)) * Math.max(0, 1 - d / 30)
+    const vol = Math.min(1, gain) * Math.min(1, 5 / Math.max(5, d)) * Math.max(0, 1 - d / (30 * Math.max(1, gain)))   // gain > 1：傳得比較遠（環頸雉的叫聲很響）
     if (vol < 0.01) return 0
     const me = cam.matrixWorld.elements, r = { x: me[0], z: me[2] }   // 鏡頭右手邊（世界矩陣第一欄）
     const e = list.length > 1 ? ready[Math.floor(Math.random() * ready.length)] : ready[0]
