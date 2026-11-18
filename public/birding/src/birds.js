@@ -347,7 +347,7 @@ export function ensureModel(n) {
       if (BILL_FIX[n]) straightenBill(g.scene, BILL_FIX[n])
       if (AUTO_BILL.has(n)) autoStraightenBill(g.scene)
       cleanFootWeights(g.scene)
-      if (WING_SPLIT.has(n)) splitWings(g.scene)
+      if (WING_SPLIT.has(n)) { g.scene.userData.rigName = n; splitWings(g.scene) }
       GLB[n] = g.scene
       return true
     }).catch(() => { FAILED.add(n); console.warn('[birds] 沒有模型', n); return false }).finally(() => _loading.delete(n))
@@ -401,6 +401,7 @@ const LEG_OF = (nm) => { const m = /^(shin|foot|toe)([LR])/.exec(nm); return m ?
 // 原本的網格整個不跟翅膀動（翅膀權重全部拿掉＝翅膀那塊變成畫在身體上、收合時看起來一樣，張開時露出來的就是這層）；
 // 另外複製一份「主要綁翅膀」的三角形，100% 綁在 wingL／wingR（剛體，不會被拉長），往外推 0.15% 模型大小避免跟底下那層打架。
 const WING_SPLIT = new Set(globalThis.location && /[?&]nowingsplit/.test(location.search) ? [] : ['rnpheasant-rig'])
+const WING_THR = { 'bccrane-rig': globalThis.__wingThr ?? 0.35 }
 function splitWings(root) {
   const add = []
   root.traverse((o) => {
@@ -412,7 +413,10 @@ function splitWings(root) {
     for (const side of ['wingL', 'wingR']) {
       const wb = bn.indexOf(side); if (wb < 0) continue
       const ix = ge.index.array, tris = []
-      for (let t = 0; t < ix.length; t += 3) { let k = 0; for (let j = 0; j < 3; j++) if (dom[ix[t + j]] === wb) k++; if (k >= 2) tris.push(ix[t], ix[t + 1], ix[t + 2]) }
+      // 哪些頂點算翅膀：主要綁這隻翅膀，或翅膀權重 ≥ thr（黑冠鶴收起來的翅膀大多主要綁 body，只用「主要」會只剩一小片）
+      const thr = WING_THR[root.userData.rigName] ?? 9, isW = new Uint8Array(P.count)
+      for (let i = 0; i < P.count; i++) { if (dom[i] === wb) { isW[i] = 1; continue } for (let c = 0; c < 4; c++) if (si.getComponent(i, c) === wb && sw.getComponent(i, c) >= thr) isW[i] = 1 }
+      for (let t = 0; t < ix.length; t += 3) { let k = 0; for (let j = 0; j < 3; j++) if (isW[ix[t + j]]) k++; if (k >= 2) tris.push(ix[t], ix[t + 1], ix[t + 2]) }
       if (tris.length < 30) continue
       const map = new Map(), idx = []
       for (const v of tris) { if (!map.has(v)) map.set(v, map.size); idx.push(map.get(v)) }
@@ -430,7 +434,7 @@ function splitWings(root) {
       const inWing = new Uint8Array(P.count), inOther = new Uint8Array(P.count)
       const wset = new Set(); for (let t = 0; t < tris.length; t += 3) wset.add(t)
       for (const v of tris) inWing[v] = 1
-      for (let t = 0; t < ix.length; t += 3) { let k = 0; for (let j = 0; j < 3; j++) if (dom[ix[t + j]] === wb) k++; if (k < 2) for (let j = 0; j < 3; j++) inOther[ix[t + j]] = 1 }
+      for (let t = 0; t < ix.length; t += 3) { let k = 0; for (let j = 0; j < 3; j++) if (isW[ix[t + j]]) k++; if (k < 2) for (let j = 0; j < 3; j++) inOther[ix[t + j]] = 1 }
       const cen = V(); let cn = 0
       for (let i = 0; i < P.count; i++) if (inWing[i] && inOther[i]) { cen.add(V(P.getX(i), P.getY(i), P.getZ(i)).applyMatrix4(o.bindMatrix)); cn++ }
       const wbone = o.skeleton.bones[wb], par = wbone.parent
@@ -762,23 +766,44 @@ const elAt = (P, t) => { for (const e of P) if (t >= e.t0 && t < e.t0 + e.dur) r
 // 鶴的舞（丹頂鶴、赤頸鶴）：兩隻面對面，各跳各的、互相回應（錯開 0.2～1.5 秒，不是鏡射）——
 //   鞠躬 0.8～1.6 s（頭低到水平以下 20～50°）、仰頭 0.5～1.0 s（嘴朝上 45～80°）、跳躍 0.9～1.8 s（0.3～0.9 m，翅膀張開、腳往下垂）、張翅拍動；
 //   六成的場次最後接「齊鳴」4～10 s：並肩站、脖子伸直、嘴朝天 50～85°，雄鳥把翅膀舉到背上、雌鳥翅膀收著；雄鳥一長聲 1～2 s，雌鳥兩短聲
-function craneShow(leapMax) {
-  const D = showDirector({ gap: [45, 100], dur: [16, 32], onStart: (D) => {
-    D.call = Math.random() < 0.6 ? rnd(4.5, 9) : 0
+// opts（2026-11-19 #101 黑冠鶴）：call:false 不做齊鳴；wk＝翅膀拆開（splitWings）後怎麼轉：{ r: 上抬倍數, s: 方向, o: 外轉 }，左右錯開 lag 週期；tagKey 給拍照標籤
+function craneShow(leapMax, opts = {}) {
+  const D = showDirector({ gap: opts.gap ?? [45, 100], dur: opts.dur ?? [16, 32], first: opts.first, onStart: (D) => {
+    D.call = opts.call === false ? 0 : Math.random() < 0.6 ? rnd(4.5, 9) : 0
     const end = D.len - D.call - 0.6
     D.plans = D.birds.map((b, i) => {
       const P = []; let t = 0.9 + (i ? rnd(0.3, 1.3) : 0)
       while (t < end - 1.6) {
-        const k = Math.random(), e = k < 0.3 ? ['bow', rnd(0.9, 1.6)] : k < 0.5 ? ['toss', rnd(0.6, 1.0)] : k < 0.8 ? ['leap', rnd(1.1, 1.7), rnd(0.3, leapMax)] : ['flap', rnd(1.6, 2.6)]
+        const k = Math.random(), e = k < 0.3 ? ['bow', rnd(0.9, 1.6)] : k < 0.5 ? ['toss', rnd(0.6, 1.0)] : k < 0.8 ? ['leap', rnd(1.1, 1.7), rnd(opts.leapMin ?? 0.3, leapMax)] : ['flap', rnd(1.6, 2.6)]
         P.push({ type: e[0], t0: t, dur: e[1], h: e[2] }); t += e[1] + rnd(0.3, 1.5)
       }
       return P
     })
+    D.hold = 0; D.go = false
+    if (globalThis.__cranePlan) D.plans = D.birds.map((b, i) => globalThis.__cranePlan.map((e) => ({ ...e, t0: e.t0 + (i ? 0.6 : 0) })))   // 錄影測試：指定動作順序
     const [a, b] = D.birds
-    if (b) { a.w.want = Math.atan2(b.w.p.x - a.w.p.x, b.w.p.y - a.w.p.y); b.w.want = a.w.want + Math.PI }
+    if (b) {
+      a.w.want = Math.atan2(b.w.p.x - a.w.p.x, b.w.p.y - a.w.p.y); b.w.want = a.w.want + Math.PI
+      // 黑冠鶴：原地轉身最多 1 rad（大概面向對方就好）——原地轉半圈時踩著的腳跟不上（量到浮 2～4 cm）
+      if (opts.borrow) for (const q of [a, b]) { const d = wrap(q.w.want - q.w.h); if (Math.abs(d) > 1) q.w.want = q.w.h + Math.sign(d) * 1 }
+    }
   } })
+  globalThis['__craneShow_' + (opts.tagKey ?? 'crane')] = D
+  const finish = (x, o, type) => {
+    if (opts.tagKey) x.root.userData.danceTag = type
+    if (opts.wk && o) {
+      // 拆開的翅膀：照 wing 的大小換成每隻翅膀的上抬／外轉；左右稍微錯開（照上一格的值慢一點點）
+      const KW = globalThis.__craneWK, K = Array.isArray(KW) ? KW[Math.min(KW.length - 1, Math.floor(D.t / 3))] : KW ?? opts.wk, w = o.wing ?? 0
+      const lag = x.c.wPrev ?? w; x.c.wPrev = w
+      o.wingLR = { L: { r: w * K.r, o: K.o }, R: { r: lerp(w, lag, 0.35) * K.r, o: K.o } }; o.wingSign = K.s; o.wingFast = 0.01
+    }
+    if (opts.borrow && o && (type === 'bow' || type === 'toss')) o.noStep = true
+    if (opts.borrow && o && type === 'bow') o.wing = 0   // 借來的翅膀半開時只看得到兩小截，鞠躬時不開
+    if (opts.borrow && o) { o.beat = type === 'flap' || type === 'leap' ? 1 : 0; o.beatHz = type === 'leap' ? 3.2 : 2.4; if (!opts.wk) o.wingFast = 0.0001 }
+    return o
+  }
   return (x) => {
-    if (!D.tick(x)) return null
+    if (!D.tick(x)) { if (opts.tagKey) x.root.userData.danceTag = null; return null }
     const i = x.c.si, H = x.cfg.H, o = { lean: 0, neck: -0.1, head: 0, reach: 0.5, rate: 9, wing: 0, jump: 0 }
     if (D.call && D.t > D.len - D.call) {
       if (x.c.callN !== D.n) { x.c.callN = D.n; x.w.want = D.birds[0].w.h + (i ? rnd(-0.25, 0.25) : 0) }   // 並肩、朝同一邊
@@ -786,21 +811,25 @@ function craneShow(leapMax) {
       const sing = i === 0 ? (u < 1.6 ? 1 : 0) : ((u > 0.25 && u < 0.8) || (u > 1.0 && u < 1.55) ? 1 : 0)
       o.neck = -0.3; o.reach = 1.0; o.head = -1.05 - 0.14 * sing; o.rate = 12
       if (i === 0) o.wing = 0.75 + 0.05 * Math.sin(x.t * 17) * sing
-      return o
+      return finish(x, o, 'call')
     }
-    const [e, u] = elAt(D.plans[i] ?? [], D.t)
-    if (!e) return o
+    // 黑冠鶴：先轉好面向對方（兩隻都轉完）才開始跳舞——邊轉身邊鞠躬時腳不能跨步，踩著的腳會被留在後面（量到 6 cm）
+    if (opts.borrow) { if (D.birds.some((b) => b.w.busy) && !D.go) { D.hold = (D.hold ?? 0) + x.dt / D.birds.length; return finish(x, o, null) } D.go = true }
+    const [e, u] = elAt(D.plans[i] ?? [], D.t - (D.hold ?? 0))
+    if (!e) return finish(x, o, null)
     const sn = Math.sin(Math.PI * u)
     if (e.type === 'bow') { o.lean = 0.5 * sn; o.neck = 2.0 * sn; o.head = 0.15 * sn; o.reach = 0.35; o.wing = 0.25 * sn }
     else if (e.type === 'toss') { o.neck = -0.3 * sn; o.head = -1.1 * sn; o.reach = 1.0; o.rate = 14 }
     else if (e.type === 'leap') {
       if (u < 0.2) { o.lean = 0.3; o.neck = 0.4; o.jump = -0.07 * H * ss(u, 0, 0.2); o.wing = 0.3 }
-      else { const v = Math.min(1, (u - 0.2) / 0.66); o.jump = e.h * 4 * v * (1 - v); o.wing = 1.45 * Math.sin(Math.PI * Math.min(1, v * 1.15)) + 0.2; o.neck = -0.2; o.head = -0.3; o.reach = 0.9; o.lean = u > 0.86 ? 0.2 : -0.1 }
+      else { const v = Math.min(1, (u - 0.2) / 0.66); o.jump = e.h * 4 * v * (1 - v); o.wing = 1.45 * Math.sin(Math.PI * Math.min(1, v * 1.15)) + 0.2; o.neck = -0.2; o.head = -0.3; o.reach = 0.9; o.lean = u > 0.86 ? 0.2 : -0.1
+        if (opts.borrow && u > 0.86) o.jump = -0.05 * H * Math.sin(Math.PI * (u - 0.86) / 0.14)   // 落地緩衝（ChatGPT V1）：腳先著地、膝踝往下吸收再站回來，約 0.2 秒
+      }
     } else if (e.type === 'flap') {
-      if (e.turned !== D.n) { e.turned = D.n; x.w.want = x.w.h + sgn() * rnd(0.5, 2.0) }
+      if (e.turned !== D.n) { e.turned = D.n; if (!opts.borrow) x.w.want = x.w.h + sgn() * rnd(0.5, 2.0) }   // 黑冠鶴：原地張翅不轉身（轉身時踩著的腳被扭到側邊、IK 搆不到，量到浮 1～3 cm）   // 黑冠鶴：轉太多時踩著的腳被扭到側邊、IK 搆不到（量到浮 3 cm）
       o.wing = (1.6 + 0.35 * Math.sin(x.t * Math.PI * 2 * 2.4)) * Math.min(1, sn * 2); o.neck = -0.15; o.head = -0.25; o.reach = 0.85
     }
-    return o
+    return finish(x, o, e.type)
   }
 }
 // 鳳頭鸊鷉：兩隻游到面對面（0.4～1 m）→ 甩頭儀式 5～12 s（脖子挺直，頭左右甩 ±25～45°、1.5～2.5 Hz，一陣 3～6 下）＋回頭理羽（嘴轉到肩後 90～130°）；
@@ -947,13 +976,48 @@ function groundTripo(env, cfg) {
     b.updateWorldMatrix(false, true)
   }
   r.model.updateWorldMatrix(true, true)
+  // 2026-11-19 #101 黑冠鶴：站姿模型的翅膀是畫在身體上的（沒有任何頂點主要綁翅膀，拆不出來）→ 借飛行模型的翅膀：
+  // 飛行模型複製一份、只留翅膀和翼尖的三角形，翅根（兩邊 wing 骨頭的中點）對到站姿模型的胸口，跟著 chest 骨頭動；
+  // 收著時藏起來，打開時從身體兩側「展開」（沿左右方向從 0.25 放大到 1）再用飛行模型自己的 wing／wingtip 骨頭拍（翼尖慢一點）
+  let bw = null
+  if (cfg.borrowWings) try {
+    const B = cfg.borrowWings, fr = rigged(B.name), fm = fr.model
+    fm.updateMatrixWorld(true)
+    let sk = null; fm.traverse((o) => { if (o.isSkinnedMesh && !sk) sk = o })
+    const ge = sk.geometry = sk.geometry.clone(), si = ge.attributes.skinIndex, swt = ge.attributes.skinWeight, bnm = sk.skeleton.bones.map((b) => b.name), ix = ge.index.array
+    const isW = new Uint8Array(si.count)
+    for (let i = 0; i < si.count; i++) { let t = -1, ww = -1; for (let q = 0; q < 4; q++) if (swt.getComponent(i, q) > ww) { ww = swt.getComponent(i, q); t = si.getComponent(i, q) } if (/^wing/.test(bnm[t])) isW[i] = 1 }
+    const keep = []; for (let t = 0; t < ix.length; t += 3) if (isW[ix[t]] && isW[ix[t + 1]] && isW[ix[t + 2]]) keep.push(ix[t], ix[t + 1], ix[t + 2])
+    ge.setIndex(keep)
+    fm.traverse((o) => { if (o.isMesh && o !== sk) o.visible = false })
+    // 飛行模型自己的座標：翅根中點、左右軸（左翅→右翅）、往前（身體→頭）、翼展
+    const wl = fr.bones.wingL.getWorldPosition(V()), wr = fr.bones.wingR.getWorldPosition(V()), sh = wl.clone().add(wr).multiplyScalar(0.5)
+    const Lf = wl.clone().sub(wr).normalize(), Ff0 = fr.bones.head.getWorldPosition(V()).sub(fr.bones.body.getWorldPosition(V())), Ff = Ff0.addScaledVector(Lf, -Ff0.dot(Lf)).normalize(), Uf = V().crossVectors(Ff, Lf)
+    let span = 0; { const P = ge.attributes.position, v = V(); let lo = 1e9, hi = -1e9; for (let i = 0; i < P.count; i++) { if (!isW[i]) continue; sk.getVertexPosition(i, v).applyMatrix4(sk.matrixWorld); const d = v.sub(sh).dot(Lf); lo = Math.min(lo, d); hi = Math.max(hi, d) } span = hi - lo }
+    // 站姿模型（root 座標＝原點、朝 +z）：左右軸、往前、上；翅根放在胸口骨頭往上 B.up×H、往後 B.back×H
+    const Ls = r.bones.thighL.getWorldPosition(V()).sub(r.bones.thighR.getWorldPosition(V())).setY(0).normalize(), Us = V(0, 1, 0), Fs = V().crossVectors(Ls, Us).negate()
+    if (Fs.dot(r.bones.head.getWorldPosition(V()).sub(r.bones.body.getWorldPosition(V()))) < 0) Fs.negate()
+    // 翅根：站姿模型的 wingL／wingR 骨頭（肩關節，雖然沒有頂點綁它們）的中點；沒有的話才用胸口往上往後估
+    const anchor = r.bones.wingL && r.bones.wingR ? r.bones.wingL.getWorldPosition(V()).add(r.bones.wingR.getWorldPosition(V())).multiplyScalar(0.5).addScaledVector(Us, (B.up ?? 0) * cfg.H)
+      : r.bones.chest.getWorldPosition(V()).addScaledVector(Us, (B.up ?? 0.05) * cfg.H).addScaledVector(Fs, -(B.back ?? 0.05) * cfg.H)
+    const sc = (B.span ?? 1.8) * cfg.H / span
+    const Mf = new THREE.Matrix4().makeBasis(Lf, Uf, Ff), Ms = new THREE.Matrix4().makeBasis(Ls, Us, Fs)
+    const q = new THREE.Quaternion().setFromRotationMatrix(Ms.multiply(Mf.transpose()))
+    const G = new THREE.Group(), Gi = new THREE.Group()   // G：翅根（位置＋轉向），Gi：展開用的縮放（只縮左右）
+    G.position.copy(anchor); G.quaternion.copy(q); G.add(Gi)
+    const p0 = fm.position.clone(); fm.scale.multiplyScalar(sc); fm.position.copy(sh).sub(p0).multiplyScalar(-sc); Gi.add(fm)
+    Gi.matrixAutoUpdate = false
+    root.add(G); G.updateMatrixWorld(true); r.bones.chest.attach(G)
+    G.visible = false
+    bw = { fr, G, Gi, Lf: Lf.clone() }
+  } catch (e) { console.warn('[birds] borrowWings', e) }
   const legs = ['L', 'R'].map((sd) => {
     const hip = mp('thigh' + sd), knee = mp('shin' + sd), ankle = mp('foot' + sd)
     const a = knee.clone().sub(hip), b = ankle.clone().sub(knee)
     const bend = Math.sign(a.dot(FWD) * b.y - a.y * b.dot(FWD))
     // 腳是斜的（往外張），IK 在側面平面裡算，所以骨長也要用投影到側面的長度
     return { sd, toes: toesOf(r, sd), rest: ankle, L1: Math.hypot(a.dot(FWD), a.y), L2: Math.hypot(b.dot(FWD), b.y), bend, flat: r.bones['foot' + sd].userData.inv.clone().invert(),
-      lat0: ankle.clone().sub(hip).dot(N), rollSgn: 0, plant: null, from: V(), to: V(), t: 1, pos: V() }
+      lat0: ankle.clone().sub(hip).dot(N), rollSgn: 0, plant: null, from: V(), to: V(), t: 1, pos: V(), restS: ankle.distanceTo(hip) }
   })
   const stride = cfg.stride ?? 0.22 * cfg.H, lift = cfg.lift ?? 0.06 * cfg.H, swing = cfg.swingT ?? 0.32
   const [KA, KB] = cfg.knee ?? [0.5, 1.1]   // 抬腳時：腳跟（看起來像膝蓋）往前上抬多少、跗蹠往後折多少
@@ -1280,6 +1344,23 @@ function groundTripo(env, cfg) {
       // 展示用的額外動作：翅膀張開（sw）、整隻升降（jy：跳、蹲、潛水）、頭左右甩（sy）、身體仰起（sp）、個別骨頭多轉（sb）
       c.sw = damp(c.sw ?? 0, ex?.wing ?? 0, 14, dt); c.jy = damp(c.jy ?? 0, ex?.jump ?? 0, ex ? 28 : 8, dt)
       c.sy = damp(c.sy ?? 0, ex?.yaw ?? 0, 22, dt); c.sp = damp(c.sp ?? 0, ex?.pitch ?? 0, ex?.prate ?? 6, dt); c.st = damp(c.st ?? 0, ex?.tail ?? 0, 8, dt)
+      if (bw) {
+        // 借來的翅膀：open 0～1（從 wing 的大小換算），展開＝沿左右軸從 0.25 放大到 1；beat＝拍動（翼尖慢 0.9 rad）
+        const open = clamp((ex?.wing ?? 0) / 1.4, 0, 1)
+        c.bwOpen = damp(c.bwOpen ?? 0, open, 12, dt)
+        bw.G.visible = c.bwOpen > 0.02
+        const k = 0.03 + 0.97 * ss(c.bwOpen, 0.02, 0.9)   // ChatGPT：不能突然出現整片 → 從肩膀幾乎 0 寬連續展開
+        { const L = bw.Lf, e = bw.Gi.matrix.elements, m = k - 1   // 沿飛行模型的左右軸縮放：I + (k-1)·L·Lᵀ
+          bw.Gi.matrix.set(1 + m * L.x * L.x, m * L.x * L.y, m * L.x * L.z, 0, m * L.y * L.x, 1 + m * L.y * L.y, m * L.y * L.z, 0, m * L.z * L.x, m * L.z * L.y, 1 + m * L.z * L.z, 0, 0, 0, 0, 1); bw.Gi.matrixWorldNeedsUpdate = true }
+        bw.fr.reset()
+        const beat = (ex?.beat ?? 0) * c.bwOpen, ph = t * Math.PI * 2 * (ex?.beatHz ?? 2.4)
+        const BW = globalThis.__bwCfg ? { ...cfg.borrowWings, ...globalThis.__bwCfg } : cfg.borrowWings, A = BW.amp ?? 0.6, a1 = beat * A * Math.sin(ph), a2 = beat * A * Math.sin(ph - 0.9)
+        const fold = (1 - ss(c.bwOpen, 0.2, 1)) * (BW.fold ?? 0)   // 摺翅（繞 y 轉）會把翅膀跟翼尖接縫拉長 8 倍（量過）→ 預設不摺，只靠左右縮放展開
+        for (const [n, sg] of [['L', 1], ['R', -1]]) {
+          bw.fr.turn('wing' + n, AX.x, -sg * a1); bw.fr.turn('wingtip' + n, AX.x, -sg * a2 * (BW.tipK ?? 0.4))   // 翼尖跟得少一點：0.7 時黑色初級飛羽放射成扇形
+          if (fold) bw.fr.turn('wing' + n, AX.y, sg * fold * (BW.foldSign ?? 1))
+        }
+      }
       if (ex?.wingLR) { for (const [wg, sg, k] of [['wingL', 1, 'L'], ['wingR', -1, 'R']]) { const q = ex.wingLR[k]; const wb = r.bones[wg + 'Root'] ? wg + 'Root' : wg; r.turn(wb, FWD, sg * q.r * (ex.wingSign ?? 1)); r.turn(wb, AX.y, sg * q.r * q.o) } }   // 2026-11-18 每隻翅膀自己的上抬／外轉（環頸雉振翅）
       const swv = ex?.wingLR ? 0 : ex?.wingFast != null ? (c.sw = ex.wingFast) : c.sw   // wingFast：每格直接給（不平滑），快速振翅用（環頸雉 11 次／秒）
       if (Math.abs(swv) > 0.005) for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) { r.turn(wg, FWD, sg * swv * (ex?.wingSign ?? cfg.wingSign ?? 1)); r.turn(wg, AX.y, sg * swv * (ex?.wingOut ?? cfg.wingOut ?? 0.3)) }
@@ -1369,7 +1450,7 @@ function groundTripo(env, cfg) {
       }
       root.position.y += 0.004 * Math.sin(t * 2.1)   // 浮在水上微微起伏
     }
-    let fbErr = 0
+    let fbErr = 0, fbNear = 0; const fbOn = ex?.footFb || (cfg.footFb && !((c.jy ?? 0) > 0.03))   // cfg.footFb：平常走路也開（黑冠鶴腳常搆不到地 2～3 cm）
     if (!cfg.swim) legs.forEach((L, li) => {
       const home = r.model.localToWorld(L.rest.clone()); home.y -= liftY
       if (!L.plant) { L.plant = home.clone(); L.pos.copy(home) }
@@ -1398,7 +1479,7 @@ function groundTripo(env, cfg) {
         if (hopStart) {
           // 跳：兩隻腳一起離地，落在跳完之後身體底下（同樣的相對位置）
           L.from.copy(L.plant); L.to.copy(home); L.to.x += c.hopTo.x - c.hopFrom.x; L.to.z += c.hopTo.y - c.hopFrom.y; L.t = 0
-        } else if (ex?.legs) {   // 抬腳抓東西的時候兩隻腳都不跨步（站著那隻當支點）
+        } else if (ex?.legs || ex?.noStep) {   // 抬腳抓東西的時候兩隻腳都不跨步（站著那隻當支點）；noStep：鞠躬時身體前傾，站姿位置往前移，不要因此跨步（2026-11-19 黑冠鶴）
         } else if (cfg.hop ? !moving && c.hopT >= 1 && other.t >= 1 && far > 0.06 * cfg.H
           : other.t >= 1 && (moving ? beat[li] || far > stride * 1.2 : far > 0.035 * cfg.H)) {
           L.from.copy(L.plant); L.to.copy(home).addScaledVector(fwd, moving ? stride * 0.5 : 0); L.t = 0
@@ -1412,10 +1493,18 @@ function groundTripo(env, cfg) {
       ik(L, L.pos)
       if (ex?.footUp?.[L.sd]) rotM('foot' + L.sd, N, ex.footUp[L.sd])   // 腳掌往上翻（拿著東西舉到嘴邊）
       if (ex?.grip?.[L.sd]) curlToes(r, L.toes, ex.grip[L.sd])   // 2026-11-18 腳趾抓住東西（紫水雞抓水草）
-      if (ex?.footFb && L.t >= 1) fbErr = Math.max(fbErr, r.bones['foot' + L.sd].getWorldPosition(_t).y - L.pos.y)
+      if (fbOn && L.t >= 1) {
+        // 腳搆不到地有兩種：腿伸到底還不夠長（髖太高 → 往下沉），或腿已經彎到折不下去（髖太低 → 往上抬）。以前只看「腳踝比目標高」，
+        // 第二種也會一直往下沉、越沉越糟（黑冠鶴量到身體沉了 10 cm 腳還浮 4 cm）。改用髖到目標的距離跟腿長比
+        // 跟 ik() 一樣在模型座標的側面平面裡量（L1、L2 是投影到側面的骨長）；restS＝模型原始站姿髖→腳踝的距離
+        const hm = mp('thigh' + L.sd), tg = r.model.worldToLocal(_t.copy(L.pos)), Ds = tg.distanceTo(hm)   // 3D 距離（轉身時腳在側邊，latIK 用髖側擺補，一樣要腿長夠）
+        const far = (Ds - Math.max(L.restS * 1.003, 0.97 * (L.L1 + L.L2))) * k, near = (1.25 * Math.abs(L.L1 - L.L2) - Ds) * k
+        fbErr = Math.max(fbErr, far > 0 ? far : 0)   // （試過腿直時用腳踝高度差補，會一路沉到上限 10 cm，拿掉）
+        if (near > 0) fbNear = Math.max(fbNear, near)
+      }
     })
     // 2026-11-18 ex.footFb（環頸雉挺身）：踩著的腳搆不到地（腳踝比目標高）→ 下一格整隻再往下沉這麼多；不需要了就慢慢收回
-    if (ex?.footFb) c.fb = clamp((c.fb ?? 0) + fbErr * 0.8 - 0.004 * dt, 0, 0.05); else if (c.fb) c.fb = Math.max(0, c.fb - 0.05 * dt)
+    if (fbOn) c.fb = clamp((c.fb ?? 0) + (fbErr > 0 ? fbErr : -fbNear) * 1.0 - 0.004 * dt, 0, Math.max(0.05, 0.1 * cfg.H)); else if (c.fb) c.fb = Math.max(0, c.fb - 0.05 * dt)
     // 鳩鴿類走路點頭：其實是頭前後移動，不是轉。每跨一步，頭很快往前推（thrust），
     // 之後身體往前走、頭停在空中原地不動（hold），所以相對身體慢慢往後退，下一步再推
     if (cfg.bob) {
@@ -1445,7 +1534,7 @@ function groundTripo(env, cfg) {
     for (const b of Object.values(r.bones)) if (!Number.isFinite(b.quaternion.x + b.quaternion.w + b.position.x + b.position.y)) { b.quaternion.copy(b.userData.rest); b.position.copy(b.userData.restP) }
     if (!Number.isFinite(w.p.x + w.p.y + w.h)) { w.p.set(0, 0); w.h = 0; w.goal = null; w.want = null }
   }
-  return { obj: root, focus, update, acts, walker: w, legs, rig: r, sw: SW, tip: () => (skin && tipIdx >= 0 ? skin.getVertexPosition(tipIdx, V()).applyMatrix4(skin.matrixWorld) : null), get behavior() { return acts.name === 'show' ? 'display' : null } }   // rig／tip：測試量嘴尖、腳趾的位置
+  return { obj: root, focus, update, acts, walker: w, legs, rig: r, st: c, bw: () => bw, sw: SW, tip: () => (skin && tipIdx >= 0 ? skin.getVertexPosition(tipIdx, V()).applyMatrix4(skin.matrixWorld) : null), get behavior() { return acts.name === 'show' ? 'display' : null } }   // rig／tip：測試量嘴尖、腳趾的位置
 }
 // 夜鷺（ChatGPT 參考圖 → Tripo，跟黑冠麻鷺一樣綁法：脖子三節、頭剛性、腳趾）：站著等、慢慢走、很快啄下去
 function nightHeron(env) {
@@ -2700,10 +2789,15 @@ function sbstork(env) {
     acts: { stand: [2, 2, 5], hunt: [5, 3, 6], walk: [3, 99, 99], turn: [1, 99, 99], strike: [1.5, 1.4, 1.4], look: [1.5, 1.5, 3] } })
 }
 // 黑冠鶴：一對，濕草地上踱步、低頭啄（同丹頂鶴）
+// 2026-11-19 #101 Crowned Crane Dance（ChatGPT 規格：雙鳥在濕草地相互靠近，先鞠躬再跳起，張開翅膀短暫拍動，落地轉身繼續展示；先用低幅度跳躍避免模型變形）：
+// 用 craneShow，跳 0.15～0.3 m、不做齊鳴；翅膀拆成獨立網格（splitWings）再張開——11/13 丹頂鶴／赤頸鶴就是因為翅膀拉壞身體才拿掉跳舞
 function bccrane(env) {
-  return groundGroup(2, 1.4, (avoid) => groundTripo(env, { name: 'bccrane-rig', H: 1.0, h0: 0.98, ...TRIPO, reach: 0.25, bill: 0.1,
-    walk: { radius: 2.6, speed: 0.14, avoid }, swingT: 0.6, lift: 0.03, knee: [1.0, 1.8], focusY: 0.7,
-    acts: { walk: [4, 99, 99], peck: [3, 1.2, 2.4], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99] } }))
+  const show = env.guide || (globalThis.location && /[?&]nocraneshow/.test(location.search)) ? undefined
+    : craneShow(0.3, { call: false, leapMin: 0.15, tagKey: 'bccrane', gap: [30, 60], dur: [12, 18], first: [8, 20], borrow: true })
+  return groundGroup(2, 1.4, (avoid) => groundTripo(env, { name: 'bccrane-rig', H: 1.0, h0: 0.98, ...TRIPO, reach: 0.25, bill: 0.1, show, latIK: true, footFb: true,   // latIK：轉身時踩著的腳會被拉離 6～9 cm（量到）
+    borrowWings: show ? { name: 'bccrane-fly-rig', ...(globalThis.__bwCfg ?? {}) } : null,
+    walk: { radius: 2.6, speed: 0.14, avoid, turn: 0.45 }, swingT: 0.5, lift: 0.03, knee: [1.0, 1.8], focusY: 0.7,   // 原地轉身慢一點、跨步快一點：轉太快時踩著的腳跟不上（量到浮 2～4 cm）
+    acts: { walk: [4, 99, 99], peck: [3, 1.2, 2.4], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99], ...(show ? { show: [0, 999, 999] } : {}) } }))
 }
 // 非洲戴勝：走（不跳），常常停下來把長嘴往土裡探
 // 2026-11-17 招牌行為（使用者：每隻鳥一個特別的行為；戴勝＝「抓蟲瞬間」）：worm 那一套——長嘴戳進裸土、分幾下把甲蟲幼蟲拔出來、甩一甩、往上一拋接住吞下

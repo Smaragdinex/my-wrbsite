@@ -19,6 +19,8 @@ export function ruleJudge(p) {
   if (s.area < 0.006) lines.push(tr('鳥太小了，換支長一點的鏡頭吧。'))
   if (s.act === 'dive') lines.push(tr('入水那一瞬間！很難抓到。'))
   else if (s.act === 'strike' || s.act === 'worm' || s.act === 'grub') lines.push(tr('捕食的瞬間，好。'))
+  else if (s.act === 'danceleap') lines.push(tr('黑冠鶴跳起來張開翅膀——鶴的舞蹈是成對互相回應的。'))
+  else if (s.act === 'danceflap') lines.push(tr('張開翅膀拍動、轉身，白色和栗色的翼斑一覽無遺。'))
   else if (s.act === 'crow') lines.push(tr('雄環頸雉挺直身子大聲「咯—咯」——這是在宣示地盤。'))
   else if (s.act === 'wingwhirr') lines.push(tr('叫完馬上快速振翅，翅膀拍得噗嚕嚕響，整套是雄雉的領域展示。'))
   else if (s.act === 'headdown') lines.push(tr('茶腹鳾頭朝下往下爬——一腳在上吊著、一腳在下撐著，啄木鳥做不到這樣。'))

@@ -36,6 +36,7 @@ const ACTION = {
   headtilt: [1.2, tr('歪頭聽音定位')], groundpounce: [2.2, tr('從枝頭撲向地面')], mousecapture: [2.4, tr('抓到老鼠')],   // 2026-11-18 烏林鴞（歪頭以停棲 1.05 為底 +15%）
   songflight: [2.2, tr('鳴唱飛行')],
   footfeed: [2.0, tr('用腳抓水草吃')],
+  danceleap: [2.3, tr('跳起展翅')], danceflap: [2.1, tr('張翅拍動')], dancetoss: [1.6, tr('仰頭甩嘴')],   // 2026-11-19 黑冠鶴
   crow: [1.9, tr('挺身鳴叫')], wingwhirr: [2.2, tr('鳴叫後快速振翅')], erectwatch: [1.3, tr('昂首觀察')],   // 2026-11-18 環頸雉
   headdown: [2.0, tr('頭朝下爬下樹幹')], barkprobe: [1.9, tr('用嘴探樹皮裂縫')], barkcatch: [2.2, tr('從樹皮縫叼出小蟲')], climbup: [1.3, tr('沿樹幹往上攀')],   // 2026-11-18 茶腹鳾   // 2026-11-18 紫水雞
   sweep: [1.9, tr('左右掃嘴覓食')], fishcatch: [2.2, tr('掃到小魚')],   // 2026-11-18 黑面琵鷺   // 2026-11-18 小雲雀（Song Flight）
@@ -128,6 +129,7 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
       const sharp = 1 - THREE.MathUtils.smoothstep(focusErr, dofTol, dofTol * 3)
       let act = sh.act === 'worm' && b.def.id === 'ahoopoe' ? 'grub' : sh.act   // 戴勝用 worm 那一套動作，抓的是幼蟲
       if (b.def.id === 'dove' && act === 'show') act = sh.obj?.userData.bow ? 'bowing' : 'look'
+      if (b.def.id === 'bccrane' && act === 'show') { const dt = sh.obj?.userData.danceTag; act = dt === 'bow' ? 'bowing' : dt === 'leap' ? 'danceleap' : dt === 'flap' ? 'danceflap' : dt === 'toss' ? 'dancetoss' : 'look' }   // 2026-11-19 黑冠鶴跳舞
       if (b.def.id === 'rnpheasant' && act === 'show') act = sh.obj?.userData.pheasTag ?? 'look'   // 2026-11-18 環頸雉：鳴叫／振翅／昂首   // 斑鳩求偶：正在鞠躬的雄鳥才算；雌鳥只是在看
       const f = { id: b.def.id, name: b.def.name, dist, area, inside, visible, sharp, act, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, box: [x0, y0, x1, y1] }
       Object.defineProperty(f, 'obj', { value: sh.obj, enumerable: false })   // 相機算動態模糊用；不可列舉，存檔時不會被存進去
