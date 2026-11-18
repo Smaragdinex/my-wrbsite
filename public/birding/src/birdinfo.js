@@ -859,7 +859,7 @@ const ALL = [
     ],
   },
   {
-    id: 'gallinule', spot: [46.5, -104.5], perch: 'ground', water: EAST.W, y: EAST.W + 0.03, view: 350, dist: 3.0, camH: 1.0, lookY: 0.15,
+    id: 'gallinule', spot: [48.1, -106.6],   /* 2026-11-18 ChatGPT 審 #74：原本 (46.5,-104.5) 根本不在睡蓮葉上（站在水面）→ 搬到葉子最密的一片（半徑 0.6 m 內 97% 是葉子，tools/record/padcover.js 量的） */ perch: 'ground', water: EAST.W, y: EAST.W + 0.03, view: 350, dist: 3.0, camH: 1.0, lookY: 0.15,
     name: "紫水雞", sci: 'Porphyrio martinica', where: "翡翠沼澤荷葉盆地的西邊",
     intro: "美洲沼澤裡最鮮豔的鳥之一：頭和胸是發亮的紫藍色，背是銅綠色，嘴紅色帶黃尖，額頭一塊天藍色，再配上一雙鮮黃色的大腳。走在浮葉上時尾巴一翹一翹，露出底下雪白的羽毛。",
     facts: [

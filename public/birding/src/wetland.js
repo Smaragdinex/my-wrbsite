@@ -78,7 +78,28 @@ export function buildWetlandProps(scene, kit, wk) {
   // 睡蓮：主水域東北角、水道旁比較靜的水面（貼在水面上 4 mm）
   // 荷葉盆地（觀察屋 O8 正前方，水雉、紫水雞走在上面）：一整片睡蓮
   { const LB = EAST.marsh.lily, r = mulberry(909)
-    for (let i = 0; i < 26; i++) { const a = r() * 6.283, d = Math.sqrt(r()) * 0.92, x = LB.x + Math.cos(a) * LB.rx * d, z = LB.z + Math.sin(a) * LB.rz * d; if (alpineHeight(x, z) > W - 0.08) continue; add(i % 3 ? 'lily_1' : 'lily_0', kit.lilyM, x, z, W + 0.004, r() * 6.283, 0.9 + r() * 0.5) } }
+    for (let i = 0; i < 26; i++) { const a = r() * 6.283, d = Math.sqrt(r()) * 0.92, x = LB.x + Math.cos(a) * LB.rx * d, z = LB.z + Math.sin(a) * LB.rz * d; if (alpineHeight(x, z) > W - 0.08) continue; (globalThis.__lilyMeshes ??= []).push(add(i % 3 ? 'lily_1' : 'lily_0', kit.lilyM, x, z, W + 0.004, r() * 6.283, 0.9 + r() * 0.5)) } }   // __lilyMeshes：紫水雞／水雉的腳要踩在葉子上（birds.js padAt）
+  // 2026-11-18 葉子分布表（世界座標、每 4 cm 一格）：蓋好睡蓮後馬上把每片葉的三角形投影到 xz 填格子（不打射線；之後 staticBatch 會把這些 mesh 合併掉）
+  if (globalThis.__lilyMeshes?.length) {
+    const LB = EAST.marsh.lily, S = 0.04, x0 = LB.x - LB.rx - 2, z0 = LB.z - LB.rz - 2, NX = Math.ceil((2 * LB.rx + 4) / S), NZ = Math.ceil((2 * LB.rz + 4) / S), grid = new Uint8Array(NX * NZ)
+    const a = new THREE.Vector3(), b2 = new THREE.Vector3(), c2 = new THREE.Vector3()
+    for (const m of globalThis.__lilyMeshes) {
+      m.updateMatrixWorld(true); const P = m.geometry.attributes.position, I = m.geometry.index
+      const tri = I ? I.count / 3 : P.count / 3
+      for (let t = 0; t < tri; t++) {
+        const i0 = I ? I.getX(t * 3) : t * 3, i1 = I ? I.getX(t * 3 + 1) : t * 3 + 1, i2 = I ? I.getX(t * 3 + 2) : t * 3 + 2
+        a.fromBufferAttribute(P, i0).applyMatrix4(m.matrixWorld); b2.fromBufferAttribute(P, i1).applyMatrix4(m.matrixWorld); c2.fromBufferAttribute(P, i2).applyMatrix4(m.matrixWorld)
+        if (Math.max(a.y, b2.y, c2.y) < W - 0.1) continue   // 水面下的葉柄不算
+        const minx = Math.floor((Math.min(a.x, b2.x, c2.x) - x0) / S), maxx = Math.ceil((Math.max(a.x, b2.x, c2.x) - x0) / S), minz = Math.floor((Math.min(a.z, b2.z, c2.z) - z0) / S), maxz = Math.ceil((Math.max(a.z, b2.z, c2.z) - z0) / S)
+        const d = (b2.x - a.x) * (c2.z - a.z) - (c2.x - a.x) * (b2.z - a.z); if (Math.abs(d) < 1e-12) continue
+        for (let j = Math.max(0, minz); j <= Math.min(NZ - 1, maxz); j++) for (let i = Math.max(0, minx); i <= Math.min(NX - 1, maxx); i++) {
+          const px = x0 + i * S, pz = z0 + j * S, u = ((b2.x - px) * (c2.z - pz) - (c2.x - px) * (b2.z - pz)) / d, v = ((c2.x - px) * (a.z - pz) - (a.x - px) * (c2.z - pz)) / d
+          if (u >= 0 && v >= 0 && u + v <= 1) grid[j * NX + i] = 1
+        }
+      }
+    }
+    globalThis.__padAt = (x, z) => { const i = Math.round((x - x0) / S), j = Math.round((z - z0) / S); return i >= 0 && j >= 0 && i < NX && j < NZ && grid[j * NX + i] === 1 }
+  }
   buildDecks(g, kit, wk)
   buildReeds(g, kit)
   buildMist(g)

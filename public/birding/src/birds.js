@@ -346,6 +346,7 @@ export function ensureModel(n) {
       if (k) g.scene.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(k) } })
       if (BILL_FIX[n]) straightenBill(g.scene, BILL_FIX[n])
       if (AUTO_BILL.has(n)) autoStraightenBill(g.scene)
+      cleanFootWeights(g.scene)
       GLB[n] = g.scene
       return true
     }).catch(() => { FAILED.add(n); console.warn('[birds] 沒有模型', n); return false }).finally(() => _loading.delete(n))
@@ -389,6 +390,48 @@ function straightenBill(root, { hc, d, t0, t1, yaw }) {
       if (N) { const nx = N.getX(i), nz = N.getZ(i); N.setXYZ(i, nx * c + nz * sn, N.getY(i), -nx * sn + nz * c) }
     }
     P.needsUpdate = true; if (N) N.needsUpdate = true; ge.computeBoundingBox(); ge.computeBoundingSphere()
+  })
+}
+// 2026-11-18 使用者「74 抬起腳，腳趾變成像很長很長的樹根」：量過紫水雞——右腳腳趾的頂點有 86 個同時綁了 body、20 個綁了 neck
+// （自動綁骨工具給的），腳一抬起來那部分權重留在身體那邊，腳趾就被拉成長條。載入時修正：主要權重是 foot／toe 的頂點，
+// 只留同一隻腳的 shin／foot／toe 權重，其他（身體、脖子、另一隻腳）丟掉再重新正規化。所有鳥一起修（站著時看不出來，抬腳、跳就會拉長）
+const LEG_OF = (nm) => { const m = /^(shin|foot|toe)([LR])/.exec(nm); return m ? m[2] : null }
+function cleanFootWeights(root) {
+  root.traverse((o) => {
+    if (!o.isSkinnedMesh) return
+    const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight, bn = o.skeleton.bones.map((b) => b.name)
+    let fixed = 0
+    // 第二種（量到紫水雞抬腳時 71 個三角形被拉長，全部是「主要綁 body 的頂點＋腳／腳趾的頂點」）：腳掌、爪子那一帶有頂點被綁到 body。
+    // 位置在腳踝高度以下的 body／neck 頂點＝其實是腳的一部分 → 整個改綁到最近的 foot／toe 關節（綁定空間的關節位置）
+    const P = o.geometry.attributes.position
+    const jp = o.skeleton.bones.map((b, i) => new THREE.Vector3().applyMatrix4(o.skeleton.boneInverses[i].clone().invert()).applyMatrix4(o.bindMatrixInverse))
+    const feet = bn.map((nm, i) => (/^(foot|toe)/.test(nm) ? i : -1)).filter((i) => i >= 0)
+    if (feet.length) {
+      const ankleY = Math.max(...bn.map((nm, i) => (/^foot/.test(nm) ? jp[i].y : -1e9))) + 0.004
+      // 只收「真的貼在腳上」的：離最近的腳／腳趾關節不超過腳趾一節長的 3.5 倍（長尾巴垂到腳下的鳥，尾巴不會被誤抓）
+      let seg = 0; bn.forEach((nm, i) => { if (/^toe.*b$/.test(nm)) { const a = bn.indexOf(nm.slice(0, -1) + 'a'); if (a >= 0) seg = Math.max(seg, jp[i].distanceTo(jp[a])) } })
+      const near = Math.max(seg * 3.5, 1e-4)
+      for (let i = 0; i < si.count; i++) {
+        let top = -1, tw = -1
+        for (let c = 0; c < 4; c++) { const w = sw.getComponent(i, c); if (w > tw) { tw = w; top = si.getComponent(i, c) } }
+        if (!/^(body|neck|chest)/.test(bn[top]) || P.getY(i) > ankleY) continue
+        let best = feet[0], bd = 1e9
+        for (const f of feet) { const d = Math.hypot(P.getX(i) - jp[f].x, P.getY(i) - jp[f].y, P.getZ(i) - jp[f].z); if (d < bd) { bd = d; best = f } }
+        if (bd > near) continue
+        si.setXYZW(i, best, 0, 0, 0); sw.setXYZW(i, 1, 0, 0, 0); fixed++
+      }
+      if (fixed) si.needsUpdate = true
+    }
+    for (let i = 0; i < si.count; i++) {
+      let top = -1, tw = -1
+      for (let c = 0; c < 4; c++) { const w = sw.getComponent(i, c); if (w > tw) { tw = w; top = si.getComponent(i, c) } }
+      const tn = bn[top]; if (!/^(foot|toe)/.test(tn)) continue
+      const sd = LEG_OF(tn); let sum = 0, cut = false
+      for (let c = 0; c < 4; c++) { const w = sw.getComponent(i, c); if (w <= 0) continue; if (LEG_OF(bn[si.getComponent(i, c)]) !== sd) { sw.setComponent(i, c, 0); cut = true } else sum += w }
+      if (cut && sum > 0) { for (let c = 0; c < 4; c++) sw.setComponent(i, c, sw.getComponent(i, c) / sum); fixed++ }
+    }
+    if (fixed) sw.needsUpdate = true
+    o.userData.footWeightFix = fixed
   })
 }
 // 2026-11-18 使用者「17 號黑面琵鷺嘴巴是歪的，不是直的」：量過模型——頭是正的，扁嘴從嘴基往旁邊彎了約 27°（生成的模型就長這樣）。
@@ -989,26 +1032,40 @@ function groundTripo(env, cfg) {
   const stemFx = (n, kk, t, ex) => {
     const par = root.parent; if (!par || !skin) return
     if (!FF.stem) {
-      const g = new THREE.CylinderGeometry(0.0045, 0.006, 1, 7, 4).translate(0, 0.5, 0), pa = g.attributes.position, col = new Float32Array(pa.count * 3)
-      for (let i = 0; i < pa.count; i++) { const y = pa.getY(i), w = 1 - ss(y, 0.25, 0.6); col[i * 3] = lerp(0.36, 0.93, w); col[i * 3 + 1] = lerp(0.58, 0.95, w); col[i * 3 + 2] = lerp(0.2, 0.86, w) }
+      // 2026-11-18 ChatGPT 審 #74（P2）：白色直棍像吸管 → 細的淡綠水草莖，微微彎（單位長度的管子，長度用 y 縮放）＋頂端一片小嫩葉（另一個網格，不跟著縮放）
+      const cv = new THREE.QuadraticBezierCurve3(V(0, 0, 0), V(0.06, 0.5, 0), V(0, 1, 0))
+      const g = new THREE.TubeGeometry(cv, 8, 0.0035, 5, false), pa = g.attributes.position, col = new Float32Array(pa.count * 3)
+      for (let i = 0; i < pa.count; i++) { const y = pa.getY(i); col[i * 3] = lerp(0.72, 0.42, y); col[i * 3 + 1] = lerp(0.8, 0.62, y); col[i * 3 + 2] = lerp(0.55, 0.24, y) }
       g.setAttribute('color', new THREE.BufferAttribute(col, 3))
-      FF.stem = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 })); FF.stem.visible = false; FF.stem.castShadow = false; par.add(FF.stem)
+      const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, side: THREE.DoubleSide })
+      FF.stem = new THREE.Mesh(g, mat); FF.stem.visible = false; par.add(FF.stem)
+      const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.012, 0.018, 0.002, 0, 0.045, 0, 0, 0, 0, -0.012, 0.02, -0.002, 0, 0.045, 0], 3)); lg.computeVertexNormals()
+      lg.setAttribute('color', new THREE.Float32BufferAttribute(Array(18).fill(0).map((_, i) => [0.36, 0.6, 0.22][i % 3]), 3))
+      FF.leaf = new THREE.Mesh(lg, mat); FF.leaf.visible = false; par.add(FF.leaf)
     }
     const st = ex?.stem
-    FF.stem.visible = !!st
-    if (!st) return
+    FF.stem.visible = !!st; FF.leaf.visible = !!st && (st.len ?? 1) > 0.12
     r.bones.head.updateWorldMatrix(true, true)
-    const tip = skin.getVertexPosition(tipIdx, _tip).applyMatrix4(skin.matrixWorld), k = cfg.H / 0.3
-    let base, dir
+    c.billTip = (c.billTip ?? V()).copy(skin.getVertexPosition(tipIdx, _tip).applyMatrix4(skin.matrixWorld))
+    if (!st) return
+    const tip = c.billTip, k = cfg.H / 0.3
+    let base, top
     if (st.inBill) {   // 叼在嘴裡：莖的上端在嘴尖，往下垂進水裡
-      base = tip.clone().add(_hd.set(0, -st.len * k * 0.85, 0)); dir = _d.subVectors(tip, base).normalize()
-    } else {           // 握在腳裡：從腳趾中間往上、指向嘴尖
-      const L = legs.find((q) => q.sd === st.foot), toe = L.toes.reduce((a, q) => a.add(r.bones[q.b].getWorldPosition(V())), V()).divideScalar(L.toes.length)   // 腳趾末節的中間＝握住的地方
-      base = toe.clone().add(_hd.set(0, -0.01 * k, 0)); dir = _d.subVectors(tip, base); const d = dir.length(); dir.divideScalar(d || 1)
+      top = tip.clone(); base = tip.clone().add(_hd.set(0, -st.len * k * 0.85, 0))
+    } else {
+      // 握在腳裡（P1）：莖的下端卡在兩根相鄰腳趾（末節離得最近的兩根）中段的 V 形夾縫裡；上端一直接到嘴尖（不會浮在嘴下面）
+      const L = legs.find((q) => q.sd === st.foot)
+      if (!L.vPair) { let bd = 1e9; for (let i = 0; i < L.toes.length; i++) for (let j = i + 1; j < L.toes.length; j++) { const d = r.bones[L.toes[i].b].getWorldPosition(V()).distanceTo(r.bones[L.toes[j].b].getWorldPosition(V())); if (d < bd) { bd = d; L.vPair = [L.toes[i], L.toes[j]] } } }
+      const mid = (q) => r.bones[q.a].getWorldPosition(V()).lerp(r.bones[q.b].getWorldPosition(V()), 0.6)
+      base = mid(L.vPair[0]).add(mid(L.vPair[1])).multiplyScalar(0.5)
+      top = tip.clone().add(_hd.set(0, -0.004 * k, 0))
     }
+    const dir = _d.subVectors(top, base), len = dir.length(); dir.divideScalar(len || 1)
     FF.stem.position.copy(par.worldToLocal(base.clone()))
-    FF.stem.quaternion.setFromUnitVectors(_up2, dir); FF.stem.scale.set(k, st.len * k, k)
+    FF.stem.quaternion.setFromUnitVectors(_up2, dir); FF.stem.scale.set(k, len, k)
+    FF.leaf.position.copy(par.worldToLocal(top.clone().addScaledVector(dir, -0.01 * k))); FF.leaf.quaternion.copy(FF.stem.quaternion).multiply(_lq.setFromAxisAngle(_up2, t * 0.7)); FF.leaf.scale.setScalar(k)
   }
+  const _lq = new THREE.Quaternion()
   const _up2 = V(0, 1, 0)
   const C0 = { ...c }
   const update = (t, dt) => {
@@ -1266,7 +1323,10 @@ function groundTripo(env, cfg) {
       }
       // 2026-11-16 show 回傳 legs：{ L|R: { f: 往前（公尺）, u: 往上 } }＝站著時把那隻腳從踩的地方抬起來（蛇鷲踢蛇）
       { const o = ex?.legs?.[L.sd]; if (o && L.t >= 1) { L.pos.addScaledVector(fwd, o.f ?? 0); L.pos.y += o.u ?? 0 } }
+      // 2026-11-18 toBill：抬起的腳往嘴尖下方 below 公尺的地方伸（上一格量到的嘴尖；IK 搆不到就停在最遠處）
+      { const o = ex?.toBill?.[L.sd]; if (o && L.t >= 1 && c.billTip) { _t.copy(c.billTip); _t.y -= o.below ?? 0.06; L.pos.lerp(_t, o.w ?? 1) } }
       ik(L, L.pos)
+      if (ex?.footUp?.[L.sd]) rotM('foot' + L.sd, N, ex.footUp[L.sd])   // 腳掌往上翻（拿著東西舉到嘴邊）
       if (ex?.grip?.[L.sd]) curlToes(r, L.toes, ex.grip[L.sd])   // 2026-11-18 腳趾抓住東西（紫水雞抓水草）
     })
     // 鳩鴿類走路點頭：其實是頭前後移動，不是轉。每跨一步，頭很快往前推（thrust），
@@ -2477,18 +2537,31 @@ function ajacana(env) { return endemicGround('ajacana-rig', 0.29, 0.979, { hop: 
 // 0～0.16 低頭從水裡拔起一根莖（叼在嘴上）→ 0.16～0.28 抬起右腳、腳趾握住莖（莖換到腳上）→ 0.28～0.86 腳舉在胸前、頭低下來咬 4 口（莖變短）→ 0.86～1 放下腳
 const footFeedPose = ({ n, kk, t }) => {
   if (n !== 'footfeed') return null
+  const O = globalThis.__ffOver   // 測試用：調姿勢參數
   const up = ss(kk, 0.14, 0.28) * (1 - ss(kk, 0.86, 0.96)), bitesK = clamp((kk - 0.32) / 0.5, 0, 1), bite = kk > 0.32 && kk < 0.82 ? Math.max(0, Math.sin(bitesK * Math.PI * 8)) : 0
-  const len = kk < 0.32 ? 0.22 : lerp(0.22, 0.07, Math.floor(bitesK * 4) / 4 + ss((bitesK * 4) % 1, 0.4, 0.6) / 4)
+  const len = kk < 0.32 ? 0.2 : lerp(0.2, 0.06, Math.floor(bitesK * 4) / 4 + ss((bitesK * 4) % 1, 0.4, 0.6) / 4)
   const pluck = kk < 0.16
   return {
-    lean: pluck ? 0.55 : -0.15 * up, neck: pluck ? 0.85 * ss(kk, 0, 0.06) : 0.55 + 0.25 * bite, head: pluck ? -0.1 : 0.25 + 0.15 * bite, reach: pluck ? 0.9 : 0.55, rate: pluck ? 8 : 10,
-    legs: up > 0.01 ? { R: { f: 0.05 * up, u: 0.075 * up } } : null, grip: { R: 0.95 * ss(kk, 0.2, 0.28) * (1 - ss(kk, 0.88, 0.96)) },
+    lean: pluck ? 0.55 : (O?.lean ?? 0.1) * up, neck: pluck ? 0.85 * ss(kk, 0, 0.06) : (O?.neck ?? 0.9) + 0.2 * bite, head: pluck ? -0.1 : (O?.head ?? -0.3) + 0.12 * bite, reach: pluck ? 0.9 : 0.7, rate: pluck ? 8 : 10,
+    // 真的紫水雞：跗蹠往前舉到幾乎水平、腳掌翻起來讓抓著的東西朝上，頭只稍微低下來咬
+    // 腳往嘴尖下方伸（IK 目標＝上一格的嘴尖往下 below；參數 tools/record/ffsearch.js 搜的）。2026-11-18 使用者：腳趾不用動，但腳踝可以彎 → footUp 繞腳踝把腳掌往上翹、勾住莖
+    legs: up > 0.01 ? { R: { f: 0, u: 0 } } : null, toBill: up > 0.01 ? { R: { below: (O?.below ?? 0.04) * (1 - 0.6 * bitesK), w: (O?.w ?? 0.75) * up } } : null,
+    footUp: { R: (O?.fu ?? -0.9) * up }, grip: { R: (O?.grip ?? 0) * up },   // -0.9：腳趾往上翹（量過：最近的腳趾離嘴尖 11 → 6 cm）
     stem: kk < 0.06 || kk > 0.88 ? null : kk < 0.22 ? { inBill: true, len } : { foot: 'R', len },
   }
 }
-function gallinule(env) { return endemicGround('gallinule-rig', 0.3, 0.979, { hop: 0, flick: 0.5, radius: 1.0, speed: 0.1, stride: 0.09,
-  acts: { walk: [3, 99, 99], peck: [2, 0.7, 1.3], look: [1.5, 0.8, 1.8], stand: [1, 1, 2.5], turn: [1, 99, 99], footfeed: [3, 7, 9] },
-  more: { feed: footFeedPose, footFeed: true } })(env) }
+// 2026-11-18 ChatGPT 審 #74：「支撐腳有時在浮葉邊緣甚至懸在水面上」→ 第一次用到時，在鳥群原點 ±1.8 m 每 4 cm 往下打射線到睡蓮葉（wetland.js __lilyMeshes），
+// 做一張「這一格有沒有葉子」的表；走路的目的地和路上，身體中心和左右 7 cm（兩隻腳）都要在葉子上
+function padMap(at) {   // 鳥群座標（相對原點）→ 這一點有沒有葉子（wetland.js 蓋睡蓮時填好的 __padAt）
+  const f = globalThis.__padAt; if (!f) return null
+  return (x, z) => f(at[0] + x, at[1] + z)
+}
+const onPadsAvoid = (env) => { let pm; return (x, z, p) => { pm ??= padMap(env.at); if (!pm) return false
+  for (let k = 0; k <= 6; k++) { const px = p ? lerp(p.x, x, k / 6) : x, pz = p ? lerp(p.y, z, k / 6) : z; for (const [dx, dz] of [[0, 0], [0.07, 0], [-0.07, 0], [0, 0.07], [0, -0.07]]) if (!pm(px + dx, pz + dz)) return true }
+  return false } }
+function gallinule(env) { return endemicGround('gallinule-rig', 0.3, 0.979, { hop: 0, flick: 0.5, radius: 0.6, speed: 0.1, stride: 0.09, walk: { avoid: onPadsAvoid(env) },
+  acts: { walk: [3, 99, 99], peck: [2, 0.7, 1.3], look: [1.5, 0.8, 1.8], stand: [1, 1, 2.5], turn: [1, 99, 99], footfeed: [1.2, 7, 9] },
+  more: { feed: footFeedPose, footFeed: true, latIK: true } })(env) }
 // 玫瑰琵鷺：潟湖南岸的淺灘，兩隻，嘴泡在水裡左右掃
 function rspoonbill(env) {
   return groundGroup(2, 1.0, (avoid) => groundTripo(env, { name: 'rspoonbill-rig', H: 0.8, h0: 0.981, ...TRIPO, reach: 0.6, wade: true, bill: 0.24, feed: feeder(FEED.rspoonbill),
@@ -2910,7 +2983,7 @@ export function placeAnimal(def, { strict = false } = {}) {
   g.position.set(x, gy, z); g.add(obj)
   // 朝向：沿著 side 方向，再往鏡頭轉 turn 弧度，看起來是四分之三側面
   const face = (s, turn) => { const d = side.clone().multiplyScalar(s * Math.cos(turn)).addScaledVector(toCam, Math.sin(turn)); return Math.atan2(d.x, d.z) }
-  const env = { toCam, face, waterY, groundW: def.water != null ? gy : null, guide: !!def.guide }   // groundW：涉水鳥腳下的泥底高度（琵鷺嘴尖不插進泥裡）   // guide：圖鑑插圖（黑剪嘴鷗在圖鑑裡用站姿）
+  const env = { toCam, face, waterY, at: [x, z], groundW: def.water != null ? gy : null, guide: !!def.guide }   // at：鳥群原點的世界座標   // groundW：涉水鳥腳下的泥底高度（琵鷺嘴尖不插進泥裡）   // guide：圖鑑插圖（黑剪嘴鷗在圖鑑裡用站姿）
   // 游泳的鳥：目的地和游過去的路線都要在開闊水面（不撞山、不撞池邊的石頭）；def.swimOK 吃溫室座標
   if (def.swimOK) env.swimOK = (lx, lz, p) => { for (let k = 1; k <= 8; k++) if (!def.swimOK(x + lerp(p.x, lx, k / 8), z + lerp(p.y, lz, k / 8))) return true; return false }
   // 地上走的鳥：鳥群座標 (lx, lz) 的地面高度，相對鳥群原點（ground 鳥的 obj 沒有旋轉）
