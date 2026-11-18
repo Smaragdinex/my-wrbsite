@@ -176,6 +176,7 @@ export function createAmbience({ getMusic, getAmb }) {
     const dry = ac.createGain(); dry.gain.value = 1 - wet * 0.5
     const send = ac.createGain(); send.gain.value = wet
     g.connect(p); p.connect(dry); dry.connect(ambBus); p.connect(send); send.connect(ambVerb)
+    g._pan = p   // 2026-11-18 持續的聲音（song）要每格改左右聲道
     return { g, peak: gain }
   }
   function tone(dest, t, dur, f0, f1, peak, type = 'sine', fm = null) {
@@ -302,6 +303,33 @@ export function createAmbience({ getMusic, getAmb }) {
     src.connect(v.g); src.start()
     return e.buf.duration
   }
+  // 2026-11-18 持續的鳴唱（小雲雀鳴唱飛行）：跟著鳥移動，每格 update(位置) 重算音量和左右聲道；stop() 淡出
+  const SONGS = { skylark: ['audio/birds/skylark_song1.mp3', 'audio/birds/skylark_song2.mp3'] }
+  function song(id) {
+    if (!ac || !SONGS[id]) return null
+    const list = callBufs['song:' + id] ??= SONGS[id].map((u) => { const e = { buf: null }; loadBuf(u).then((b) => { e.buf = b }).catch(() => {}); return e })
+    let src = null, v = null, done = false
+    const h = {
+      update(pos, cam) {
+        if (done || ac.state !== 'running') return
+        if (!src) {
+          const ready = list.filter((e) => e.buf); if (!ready.length) return
+          src = ac.createBufferSource(); src.buffer = ready[Math.floor(Math.random() * ready.length)].buf; src.loop = true; src.loopStart = 0.05; src.loopEnd = src.buffer.duration - 0.05
+          v = voice(ac.currentTime, 0, 1, 0.3)
+          src.connect(v.g); src.start(ac.currentTime, Math.random() * 6)
+        }
+        const dx = pos.x - cam.position.x, dy = pos.y - cam.position.y, dz = pos.z - cam.position.z, d = Math.hypot(dx, dy, dz)
+        // 雲雀的歌很響、高空也聽得到：8 m 內原音量、60 m 外聽不到
+        const vol = Math.min(1, 8 / Math.max(8, d)) * Math.max(0, 1 - d / 60)
+        const me = cam.matrixWorld.elements, p = Math.max(-0.8, Math.min(0.8, (dx * me[0] + dz * me[2]) / Math.max(1, d)))
+        v.g.gain.setTargetAtTime(vol * 1.3, ac.currentTime, 0.15)
+        v.g._pan.pan.setTargetAtTime(p, ac.currentTime, 0.15)
+      },
+      stop(fade = 1.2) { if (done) return; done = true; if (src) { v.g.gain.setTargetAtTime(0, ac.currentTime, fade / 3); src.stop(ac.currentTime + fade + 0.1) } },
+      get playing() { return !!src && !done },
+    }
+    return h
+  }
   // 每格更新：現在幾點、在店裡還是溫室、離瀑布多遠
   function tick(dt, { hour, pos, rain = 0, storm = 0 }) {
     st.hour = hour; st.rain = rain; st.storm = storm
@@ -310,5 +338,5 @@ export function createAmbience({ getMusic, getAmb }) {
     st.water = Math.max(0, 1 - Math.max(0, distToMtn(pos.x, pos.z) - 8) / 30)
     st.yfall = Math.max(0, 1 - Math.max(0, Math.hypot(pos.x - YOSE.fall.x, pos.z - YOSE.fall.z) - 6) / 50) ** 1.6
   }
-  return { tick, start, thunder, call, get ctx() { return ac }, get out() { return out }, dbg: { get musicG() { return musicG }, get birdBedG() { return birdBedG }, setK(m, b) { MUSIC_K = m; BIRD_K = b; if (musicG) musicG.gain.value = m } } }
+  return { tick, start, thunder, call, song, get ctx() { return ac }, get out() { return out }, dbg: { get musicG() { return musicG }, get birdBedG() { return birdBedG }, setK(m, b) { MUSIC_K = m; BIRD_K = b; if (musicG) musicG.gain.value = m } } }
 }

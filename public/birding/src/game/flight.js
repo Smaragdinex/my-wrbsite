@@ -82,7 +82,7 @@ export const ESCAPE = {
   wbwood: { r: 8, fly: { speed: 8, hz: 9, style: 'bound', k: 0.42 } },
   nutcracker: { r: 10, fly: { speed: 9, hz: 5, style: 'glide', k: 0.55 } },
   rnpheasant: { r: 7, run: 3, fly: { speed: 9, hz: 10, style: 'flap', k: 1.2 } },
-  skylark: { r: 5, fly: { speed: 7, hz: 9, style: 'flap', k: 0.42 } },
+  skylark: { r: 5, songflight: [40, 90], fly: { speed: 7, hz: 9, style: 'flap', k: 0.42 } },
   cisticola: { r: 4, fly: { speed: 6, hz: 12, style: 'bound', k: 0.3 } },
   woodcock: { r: 4, fly: { speed: 7, hz: 9, style: 'flap', k: 0.55 } },   // 2026-11-10 山鷸：不太怕人，靠很近才「咻咻」飛起
   jacana: { r: 7, fly: { speed: 7, hz: 5, style: 'glide', k: 0.58 } },   // 2026-11-10 水雉：翅膀幾乎全白，飛起來長腳往後伸
@@ -1633,6 +1633,136 @@ export function createFlight(world, player) {
     }
   }
 
+  /* ---------- 2026-11-18 小雲雀鳴唱飛行（使用者規格 Bird #043 Song Flight）----------
+     地上那隻每 40～90 秒（沒被驚動、玩家不在 8 m 內）：起飛 → 快拍翅膀繞小圈往上爬（一邊唱）→ 在離地 10～16 m 慢慢繞圈、高度微微起伏、一直振翅唱 10～16 秒
+     → 一段一段往下（還在唱）→ 最後 3 m 翅膀半張、尾羽張開滑下來 → 降落回原本的草地。歌聲是真的錄音（audio/birds/skylark_song*.mp3，跟著鳥移動）
+     爬升的圓圈中心挑附近沒有樹幹、不在步道上的方向；玩家走近（水平 7 m）就中斷，照驚飛那套飛走 */
+  const songCfg = { noAbort: false, off: /[?&]nosong/.test(location.search) }   // off：效能 A/B 測試
+  function songStart(u, s) {
+    const m = s.m, X = s.song
+    m.obj.updateMatrixWorld(true); _box.setFromObject(m.obj); const home = _box.getCenter(V())
+    const g0 = terrainHeight(home.x, home.z)
+    // 圈的中心：8 個方向試，離樹幹（碰撞圓）5 m 以上、不在步道上的
+    let best = null, bs = -1
+    for (let k = 0; k < 8; k++) {
+      const a = X.a0 + k * Math.PI / 4, c = V(home.x + Math.sin(a) * 2.5, 0, home.z + Math.cos(a) * 2.5)
+      let mn = 99; for (const cl of colliders) if (cl.top > g0 + 1) mn = Math.min(mn, Math.hypot(cl.x - c.x, cl.z - c.z) - (cl.r ?? 0.3))
+      const sc = Math.min(mn, 12) + Math.min(4, alpineTrailDist(c.x, c.z))
+      if (sc > bs) { bs = sc; best = c }
+    }
+    X.c = best; X.g0 = g0; X.home = home; X.top = rnd(10, 16); X.singT = rnd(10, 16); X.R = rnd(3, 4.5); X.dir = Math.random() < 0.5 ? 1 : -1
+    X.ang = Math.atan2(home.x - best.x, home.z - best.z); X.r0 = Math.hypot(home.x - best.x, home.z - best.z)
+    X.on = true; X.ph = 'climb'; X.t = 0; X.y = home.y; X.sung = null
+    m.obj.getWorldDirection(_w); s.head = Math.atan2(_w.x, _w.z); s.pitch = -0.5; s.roll = 0
+    s.root.position.copy(home); s.root.rotation.set(s.pitch, s.head, 0); s.root.visible = true; m.obj.visible = false
+    s.mode = 'song'; s.act = 'takeoff'; s.t = 0
+  }
+  function songStop(X, fade) { if (X.voice) { X.voice.stop(fade); X.voice = null } }
+  const _sp = V(), _sp2 = V()
+  function songStep(u, s, t, dt) {
+    const X = s.song, f = u.esc.fly
+    X.t += dt; s.t += dt
+    const gNow = terrainHeight(s.root.position.x, s.root.position.z)
+    let r, w, yT, flut = 0.35, act = 'songflight'
+    if (X.ph === 'climb') {
+      // 一邊爬升一邊把圈拉大到 R；速度一開始快、後面慢（約 1.4 → 0.9 m/s）
+      const k = ss(X.t, 0, 1.2)
+      r = lerp(X.r0, X.R, ss(X.t, 0, 3)); w = X.dir * 0.42
+      X.y += lerp(0.6, lerp(1.6, 0.9, ss(X.y - X.g0, 2, X.top)), k) * dt; yT = X.y
+      flut = lerp(1, 0.45, ss(X.t, 0, 1.5)); act = X.t < 1 ? 'takeoff' : 'songflight'
+      if (X.y >= X.g0 + X.top) { X.ph = 'sing'; X.t = 0; X.yS = X.y }
+    } else if (X.ph === 'sing') {
+      // 高空慢慢繞圈（不定點懸停），高度微微起伏
+      r = X.R; w = X.dir * 0.3; yT = X.yS + 0.5 * Math.sin(X.t * 0.9); X.y = yT
+      if (X.t > X.singT) { X.ph = 'down'; X.t = 0 }
+    } else if (X.ph === 'down') {
+      // 一段一段往下：降 1.5 s、停 0.8 s（還在唱、還在拍），最後 3 m 換成滑翔降落
+      const cyc = X.t % 2.3, desc = cyc < 1.5 ? 1.6 : 0.15
+      X.y -= desc * dt; yT = X.y; r = lerp(X.R, X.r0, 1 - ss(X.y - X.g0, 4, X.top * 0.7)); w = X.dir * 0.32
+      if (X.y < X.g0 + 3.2) { X.ph = 'land'; X.t = 0; songStop(X, 1.0)
+        const P = s.root.position.clone(); X.lc = new THREE.CubicBezierCurve3(P, P.clone().lerp(X.home, 0.35).add(V(0, -0.6, 0)), X.home.clone().add(V(0, 0.8, 0)).addScaledVector(_sp2.set(X.home.x - P.x, 0, X.home.z - P.z).normalize(), -0.8), X.home.clone()); X.ll = X.lc.getLength(); X.ld = 0 }
+    }
+    if (X.ph === 'land') {
+      // 滑下來：翅膀半張不拍、尾羽張開，最後一下張翅煞車
+      const rem = X.ll - X.ld; X.ld = Math.min(X.ll, X.ld + clamp(rem / 1.2, 0.6, 3.0) * dt); const k = X.ld / X.ll
+      X.lc.getPointAt(k, _sp); X.lc.getTangentAt(Math.min(k, 0.999), _sp2)
+      s.root.position.copy(_sp); const h = Math.atan2(_sp2.x, _sp2.z); s.head += wrap(h - s.head) * (1 - Math.exp(-5 * dt))
+      const flare = ss(1 - rem / 0.9, 0, 1)
+      s.pitch = damp(s.pitch, -Math.asin(clamp(_sp2.y, -1, 1)) * 0.6 - 0.6 * flare, 5, dt); s.roll = damp(s.roll, 0, 4, dt)
+      s.root.rotation.set(s.pitch, s.head, s.roll)
+      if (flare > 0.05) wings(s, f, t, dt, 0, flare); else { s.r.reset(); for (const [n, sg] of [['L', 1], ['R', -1]]) { s.r.turn('wing' + n, AX.x, -sg * 0.35); s.r.turn('wing' + n, AX.y, sg * 0.25) } }
+      fanTail(s, X, 1 - flare)
+      s.act = flare > 0.05 ? 'land' : 'fly'
+      if (X.ld >= X.ll) songEnd(u, s)
+      return
+    }
+    // 繞圈：位置＝圈中心＋半徑；航向＝切線方向；側傾跟著轉彎
+    X.ang += w * dt
+    const px = X.c.x + Math.sin(X.ang) * r, pz = X.c.z + Math.cos(X.ang) * r
+    const y = Math.max(yT, terrainHeight(px, pz) + (X.ph === 'climb' ? Math.min(0.6, 0.05 + X.t * 0.6) : 0.6))   // 離地至少 0.6 m（剛起飛那一秒從草地上慢慢升，不跳）
+    const vx = px - s.root.position.x, vz = pz - s.root.position.z, vy = y - s.root.position.y
+    s.root.position.set(px, y, pz)
+    if (vx * vx + vz * vz > 1e-8) { const h = Math.atan2(vx, vz), dh = wrap(h - s.head); s.head += dh * (1 - Math.exp(-6 * dt)); s.roll = damp(s.roll, clamp(-X.dir * 0.28, -0.4, 0.4), 3, dt) }
+    const climb = vy / Math.max(dt, 1e-3)
+    s.pitch = damp(s.pitch, X.ph === 'climb' ? -0.75 + 0.25 * ss(X.y - X.g0, 3, X.top) : -0.25 - clamp(climb * 0.1, -0.2, 0.2), 4, dt)
+    s.root.rotation.set(s.pitch, s.head, s.roll)
+    // 振翅：雲雀唱歌時是快速、幅度小的顫翅（不是滑翔）
+    wings(s, { ...f, hz: 13, style: 'flap' }, t, dt, flut, 0)
+    fanTail(s, X, X.ph === 'climb' ? 0.4 : 0.7)
+    s.act = act
+    // 歌：起飛 1 秒後開始
+    if (!X.voice && X.t > 0.8 && X.ph === 'climb' && !X.sung) { X.voice = globalThis.__birdSong?.('skylark') ?? null; X.sung = true }
+    X.voice?.update(s.root.position, world.camera)
+  }
+  function fanTail(s, X, k) {
+    const tb = s.r.bones.tail; if (!tb) return
+    if (!X.fanAx) { const a = V(1, 0, 0).applyQuaternion(tb.userData.inv); const ax = Math.abs(a.x), ay = Math.abs(a.y), az = Math.abs(a.z); X.fanAx = ax >= ay && ax >= az ? 'x' : ay >= az ? 'y' : 'z' }
+    X.fan = damp(X.fan ?? 0, k, 4, 1 / 30); tb.scale.set(1, 1, 1); tb.scale[X.fanAx] = 1 + 0.35 * X.fan
+  }
+  function songEnd(u, s) {
+    const X = s.song; songStop(X, 0.6)
+    X.on = false; X.ph = ''; s.root.visible = false; s.m.obj.visible = true; s.mode = 'perch'; s.act = ''
+    if (s.r.bones.tail) s.r.bones.tail.scale.set(1, 1, 1)
+    X.wait = X.force ? 5 : rnd(...u.esc.songflight); X.n = (X.n ?? 0) + 1
+  }
+  function songTick(t, dt) {
+    if (songCfg.off) return
+    for (const u of units) {
+      if (!u.esc.songflight) continue
+      const s = u.ms[0]; if (!s?.root) continue
+      const X = s.song ??= { on: false, wait: rnd(12, 30), a0: Math.random() * 6.28, n: 0, aborts: 0 }
+      const P = world.camera.position
+      if (X.on) {
+        if (u.b.absent) { songStop(X, 0.3); X.on = false; s.root.visible = false; s.m.obj.visible = true; s.mode = 'perch'; s.act = ''; continue }
+        // 玩家走近（不在觀察屋裡）：中斷，照驚飛那套從現在的位置飛走
+        const d = Math.hypot(P.x - s.root.position.x, P.z - s.root.position.z)
+        if (!songCfg.noAbort && !inHide(P) && (d < 5 || (d < 7 && speed > 0.6))) {   // 站在步道上看不會打斷；走進草地到牠底下 5 m（或走著靠近到 7 m）才會
+          songStop(X, 0.4); X.on = false; X.ph = ''; X.aborts++
+          if (s.r.bones.tail) s.r.bones.tail.scale.set(1, 1, 1)
+          const pos = s.root.position.clone(), away = pos.clone().sub(P).setY(0); if (away.lengthSq() < 1e-4) away.set(1, 0, 0)
+          s.home.copy(X.home); s.faceH = s.head
+          s.curve = outbound(pos, away.normalize(), null); s.len = s.curve.getLength(); s.dist = 0; s.t = 0
+          s.mode = 'out'; s.wait = rnd(20, 38); u.state = 'away'; u.trip = false; u.alarm = 0
+          X.wait = rnd(...u.esc.songflight)
+          continue
+        }
+        u.alarm = 0
+        // 離玩家 90 m 外：每 3 格算一次
+        X.fr = (X.fr ?? 0) + 1; X.acc = (X.acc ?? 0) + dt
+        if (P.distanceTo(s.root.position) > 90 && X.fr % 3) continue
+        songStep(u, s, t, Math.min(X.acc, 0.1)); X.acc = 0
+        if (X.t > 40) songEnd(u, s)   // 保險
+        continue
+      }
+      if (u.b.absent || u.state !== 'home' || s.mode !== 'perch' || u.alarm > 0.2) continue
+      if ((X.wait -= dt) > 0 && !X.force) continue
+      s.m.obj.getWorldPosition(_sp)
+      const d = Math.hypot(P.x - _sp.x, P.z - _sp.z)
+      if (!X.force && (d < 8 || d > 150)) { X.wait = 4; continue }   // 人太近不飛起來唱；沒人在附近也不唱（省效能）
+      X.force = false; songStart(u, s)
+    }
+  }
+
   const huntCfg = { noAbort: false, off: /[?&]nohunt/.test(location.search) }   // off：效能 A/B 測試（整個狩獵系統不跑）   // 測試錄影用：鏡頭跟拍時不要被當成玩家逼近
   function owlTick(t, dt) {
     if (huntCfg.off) return
@@ -1672,6 +1802,7 @@ export function createFlight(world, player) {
     displayTick(t, dt)
     digTick(t, dt)
     owlTick(t, dt)
+    songTick(t, dt)
     // 2026-11-17 警戒旗標給 birds.js（斑鳩求偶：玩家太近就停）
     for (const u of units) { const al = u.state !== 'home' || u.alarm > 0.3; for (const s of u.ms) if (s.m.obj) s.m.obj.userData.alert = al }
     const P = world.camera.position
@@ -1682,7 +1813,7 @@ export function createFlight(world, player) {
     const mult = hidden ? 0 : sneak ? 0.5 : speed > 6 ? 1.5 : speed > 0.6 ? 1 : 0.7
     for (const u of units) {
       if (u.b.absent) continue   // 這個時段不在（main.js presence）
-      if (u.ms[0]?.nest?.on || u.ms[0]?.disp?.on || u.ms[0]?.dig?.on || u.ms[0]?.hunt?.on) continue   // 正在樹洞餵食／展示飛行（nestTick、displayTick 管）
+      if (u.ms[0]?.nest?.on || u.ms[0]?.disp?.on || u.ms[0]?.dig?.on || u.ms[0]?.hunt?.on || u.ms[0]?.song?.on) continue   // 正在樹洞餵食／展示飛行（nestTick、displayTick 管）
       if (u.state === 'home') {
         // 自己出巢覓食（ESCAPE.sortie）：沒在警戒時倒數，時間到就照驚飛那一套從岩面朝外（穿過水簾）飛出去，在遠處待一陣子再飛回巢
         if (u.esc.sortie && u.alarm < 0.2) {
@@ -1737,6 +1868,7 @@ export function createFlight(world, player) {
     const s = m.flight
     if (!s) return { obj: m.obj, act: m.acts?.name ?? '' }
     if (s.mode === 'away' || (s.mode === 'wait' && !m.obj.visible)) return null
+    if (s.song?.on) return { obj: s.root, act: s.act || 'songflight' }   // 2026-11-18 小雲雀鳴唱飛行
     if (s.hunt?.on) { const H = s.hunt; if (H.sit.visible) return { obj: H.sit, act: s.act || 'look' }; return s.root.visible ? { obj: s.root, act: s.act || 'fly' } : null }   // 2026-11-18 貓頭鷹狩獵
     if (s.dig?.on) { const X = s.dig; if (X.ph === 'out' || X.ph === 'back') return { obj: s.root, act: 'fly' }; return X.sit.visible ? { obj: X.sit, act: s.act || 'look' } : null }
     if (s.disp?.on) return { obj: s.root, act: s.act || 'displayflight' }
@@ -1778,7 +1910,7 @@ export function createFlight(world, player) {
   }
   const gone = (b) => { const u = unitOf(b); return !u || u.ms.every((s) => s.mode === 'away') }
   const canFly = (b) => !!unitOf(b)?.esc.fly
-  window.__flight = { units, prey, huntCfg, huntGo: (id, opt = {}) => { const u = units.find((x) => x.b.def.id === id); const H = u?.ms[0]?.hunt; if (H) { H.force = opt; H.wait = 0 } return !!H }, hunt: (id) => units.find((x) => x.b.def.id === id)?.ms[0]?.hunt, digGo: (type = 'dig') => { const u = units.find((x) => x.b.def.id === 'barbet'); const X = u?.ms[0]?.dig; if (X) { X.wait = 0; X.force = type } }, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
+  window.__flight = { units, prey, huntCfg, songCfg, songGo: () => { const u = units.find((x) => x.b.def.id === 'skylark'); const X = u?.ms[0]?.song; if (X) { X.force = true; X.wait = 0 } return !!X }, huntGo: (id, opt = {}) => { const u = units.find((x) => x.b.def.id === id); const H = u?.ms[0]?.hunt; if (H) { H.force = opt; H.wait = 0 } return !!H }, hunt: (id) => units.find((x) => x.b.def.id === id)?.ms[0]?.hunt, digGo: (type = 'dig') => { const u = units.find((x) => x.b.def.id === 'barbet'); const X = u?.ms[0]?.dig; if (X) { X.wait = 0; X.force = type } }, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
   // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
   const snap = () => { last.copy(world.camera.position); speed = 0 }
   return { tick, units, shotOf, snap, arrive, depart, gone, canFly, add: addUnit, get speed() { return speed } }

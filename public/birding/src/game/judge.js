@@ -19,6 +19,7 @@ export function ruleJudge(p) {
   if (s.area < 0.006) lines.push(tr('鳥太小了，換支長一點的鏡頭吧。'))
   if (s.act === 'dive') lines.push(tr('入水那一瞬間！很難抓到。'))
   else if (s.act === 'strike' || s.act === 'worm' || s.act === 'grub') lines.push(tr('捕食的瞬間，好。'))
+  else if (s.act === 'songflight') lines.push(tr('小雲雀一邊振翅爬升一邊唱——在高空唱歌是牠宣示地盤的方式。'))
   else if (s.act === 'quarter') lines.push(tr('草鴞貼著草頂來回低飛，在用耳朵找老鼠。'))
   else if (s.act === 'pounce') lines.push(tr('撲進草裡那一下！腳往前伸、翅膀高舉，草鴞抓老鼠就是這樣。'))
   else if (s.act === 'capture') lines.push(tr('抓到老鼠了！草鴞在野外很難拍到這一刻。'))
