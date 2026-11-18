@@ -122,6 +122,8 @@ export const UI = {
  "掃到小魚": "Sweep Catch",
  "黑面琵鷺把匙嘴泡在水裡左右掃，靠觸覺找魚蝦——這才是牠真正的吃法。": "Bill tip in the water, sweeping side to side and feeling for fish and shrimp — this is how a spoonbill really feeds.",
  "掃到了！匙嘴尖夾著一條小魚。": "Got one! A little fish pinched in the tip of the spoon.",
+ "用腳抓水草吃": "Foot-held Plant Feeding",
+ "紫水雞用長腳趾抓著水草送到嘴邊吃——很少鳥會這樣用腳拿東西。": "Holding a water-plant stem in its long toes and lifting it to its bill — very few birds use their feet like hands.",
  "啄鑿樹洞": "Nest Excavation",
  "餵食幼鳥": "Feeding Chicks",
  "鑽進樹洞": "Entering the Nest Hole",

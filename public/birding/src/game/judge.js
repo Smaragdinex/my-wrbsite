@@ -19,6 +19,7 @@ export function ruleJudge(p) {
   if (s.area < 0.006) lines.push(tr('鳥太小了，換支長一點的鏡頭吧。'))
   if (s.act === 'dive') lines.push(tr('入水那一瞬間！很難抓到。'))
   else if (s.act === 'strike' || s.act === 'worm' || s.act === 'grub') lines.push(tr('捕食的瞬間，好。'))
+  else if (s.act === 'footfeed') lines.push(tr('紫水雞用長腳趾抓著水草送到嘴邊吃——很少鳥會這樣用腳拿東西。'))
   else if (s.act === 'sweep') lines.push(tr('黑面琵鷺把匙嘴泡在水裡左右掃，靠觸覺找魚蝦——這才是牠真正的吃法。'))
   else if (s.act === 'fishcatch') lines.push(tr('掃到了！匙嘴尖夾著一條小魚。'))
   else if (s.act === 'songflight') lines.push(tr('小雲雀一邊振翅爬升一邊唱——在高空唱歌是牠宣示地盤的方式。'))
