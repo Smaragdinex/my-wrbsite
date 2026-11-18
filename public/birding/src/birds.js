@@ -320,12 +320,12 @@ const TINT = { 'thrush-rig': 0.5 }
 // 現在進場前只載入口附近那幾種（world.js 挑），其餘的鳥先放一個空的替身，進場後在背景由近到遠一隻隻載、載到就換上真的（world.streamBirds）。
 // 不用替每隻鳥登記牠用哪些模型：rigged() 找不到模型會丟 MissingModel，placeAnimal 接住、記下缺哪個，載完再重蓋一次
 const MODEL_NAMES = ['night-heron-rig', 'barbet-rig', 'bulbul-rig', 'whiteeye-rig', 'treepie-rig', 'dove-rig', 'heron-rig',
-    'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
+    'kingfisher-rig', 'kingfisher-fly-rig', 'egret-rig', 'moorhen-rig', 'sparrow-rig', 'sparrow-dust-rig', 'waterhen-rig', 'bluemagpie-rig', 'blackbulbul-rig', 'babbler-rig', 'mikado-rig',
     'spoonbill-rig', 'thrush-rig', 'pheasant-rig', 'oriole-rig',
     'flamecrest-rig', 'bushrobin-rig', 'rosefinch-rig', 'yellowtit-rig', 'laughingthrush-rig', 'niltava-rig', 'yuhina-rig', 'sibia-rig', 'goshawk-rig', 'serpenteagle-rig', 'serpenteagle-fly-rig', 'woodowl-rig', 'scopsowl-rig', 'mtscops-rig', 'jacana-rig', 'psnipe-rig', 'woodcock-rig', 'shelduck-rig', 'pheron-rig', 'stilt-rig', 'harrier-rig', 'wbwood2-rig', 'wbwood-rig', 'peregrine-rig', 'blackswift-rig', 'greatgreyowl-rig', 'rnpheasant-rig', 'skylark-rig', 'cisticola-rig', 'nutcracker-rig', 'dipper-rig', 'dipper-fly-rig', 'forktail-rig', 'forktail-fly-rig', 'redstart-rig', 'redstart-fly-rig', 'harlequin-rig', 'harlequin-fly-rig', 'lapwing-fly-rig', 'avocet-rig', 'avocet-fly-rig', 'pratincole-rig', 'pratincole-fly-rig', 'bwkite-rig', 'bwkite-fly-rig', 'shrike-rig', 'shrike-fly-rig',
     'mandarin-rig', 'mandarinf-rig', 'spotbill-rig', 'partridge-rig', 'nuthatch-rig', 'finchbill-rig', 'minivet-rig', 'pitta-rig', 'grassowl-rig',
     'liocichla-rig', 'whitebrow-rig', 'bullfinch-rig', 'barwing-rig', 'islandthrush-rig', 'tit-rig', 'rustylt-rig', 'whitethroat-rig', 'hwamei-rig', 'styan-rig', 'scimitar-rig', 'fulvetta-rig', 'bamboo-rig', 'flowing-rig', 'bushwarbler-rig', 'cupwing-rig', 'shortwing-rig',
-    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig', 'secretarybird-rig', 'secretarybird-fly-rig', 'sbstork-rig', 'sbstork-fly-rig', 'bccrane-rig', 'bccrane-fly-rig', 'ahoopoe-rig', 'ahoopoe-fly-rig', 'yhornbill-rig', 'yhornbill-fly-rig']
+    'shoebill-rig', 'flamingo-rig', 'ajacana-rig', 'rspoonbill-rig', 'sarus-rig', 'gallinule-rig', 'skimmer-fly-rig', 'skimmer-rig', 'redcrowned-rig', 'ruff-rig', 'grebe-rig', 'lapwing-rig', 'secretarybird-rig', 'secretarybird-fly-rig', 'sbstork-rig', 'sbstork-fly-rig', 'bccrane-rig', 'bccrane-wingsonly-rig', 'bccrane-fly-rig', 'ahoopoe-rig', 'ahoopoe-fly-rig', 'yhornbill-rig', 'yhornbill-fly-rig']
 export class MissingModel extends Error { constructor(n) { super('model not loaded: ' + n); this.model = n } }
 let _loader = null, _extra = []
 const _loading = new Map(), FAILED = new Set()
@@ -798,6 +798,19 @@ function craneShow(leapMax, opts = {}) {
       o.wingLR = { L: { r: w * K.r, o: K.o }, R: { r: lerp(w, lag, 0.35) * K.r, o: K.o } }; o.wingSign = K.s; o.wingFast = 0.01
     }
     if (opts.borrow && o && (type === 'bow' || type === 'toss')) o.noStep = true
+    if (opts.altWings && o) {
+      // 2026-11-19 使用者：用 Tripo 生成的張翅模型（bccrane-wings-rig）取代借來的飛行模型翅膀。張翅、跳的時候整隻換過去：
+      // 剛換過去翅膀從往下貼著身體（-WK.fold）打開；拍＝翅膀繞前後軸上下拍、翼尖慢 0.8 rad
+      const WK = globalThis.__craneAltWK ?? opts.altWings, wv = o.wing ?? 0
+      const open = clamp(wv / 1.4, 0, 1)
+      x.c.altOpen = damp(x.c.altOpen ?? 0, (type === 'flap' || type === 'leap') && wv > 0.05 ? open : 0, 14, x.dt)
+      if (x.c.altOpen > 0.04) {
+        const beat = type === 'flap' ? Math.sin(x.t * Math.PI * 2 * 2.4) : type === 'leap' ? Math.sin(x.t * Math.PI * 2 * 3.0) : 0
+        const op = ss(x.c.altOpen, 0.04, 0.85)
+        o.alt = { wing: WK.s * ((1 - op) * -WK.fold + op * WK.amp * beat), tip: WK.s * op * WK.amp * 0.7 * Math.sin(x.t * Math.PI * 2 * (type === 'leap' ? 3 : 2.4) - 0.8), head: 0 }
+      }
+      o.wingFast = 0.0001
+    }
     if (opts.borrow && o && type === 'bow') o.wing = 0   // 借來的翅膀半開時只看得到兩小截，鞠躬時不開
     if (opts.borrow && o) { o.beat = type === 'flap' || type === 'leap' ? 1 : 0; o.beatHz = type === 'leap' ? 3.2 : 2.4; if (!opts.wk) o.wingFast = 0.0001 }
     return o
@@ -822,7 +835,7 @@ function craneShow(leapMax, opts = {}) {
     else if (e.type === 'toss') { o.neck = -0.3 * sn; o.head = -1.1 * sn; o.reach = 1.0; o.rate = 14 }
     else if (e.type === 'leap') {
       if (u < 0.2) { o.lean = 0.3; o.neck = 0.4; o.jump = -0.07 * H * ss(u, 0, 0.2); o.wing = 0.3 }
-      else { const v = Math.min(1, (u - 0.2) / 0.66); o.jump = e.h * 4 * v * (1 - v); o.wing = 1.45 * Math.sin(Math.PI * Math.min(1, v * 1.15)) + 0.2; o.neck = -0.2; o.head = -0.3; o.reach = 0.9; o.lean = u > 0.86 ? 0.2 : -0.1
+      else { const v = Math.min(1, (u - 0.2) / 0.66); o.jump = e.h * 4 * v * (1 - v); o.wing = (opts.borrow ? 1.45 * ss(v, 0, 0.3) * (1 - ss(v, 0.62, 0.95)) : 1.45 * Math.sin(Math.PI * Math.min(1, v * 1.15))) + 0.2;   /* 黑冠鶴：張到最開停 0.2～0.3 s 讓玩家看清羽色（ChatGPT V4） */ o.neck = -0.2; o.head = -0.3; o.reach = 0.9; o.lean = u > 0.86 ? 0.2 : -0.1
         if (opts.borrow && u > 0.86) o.jump = -0.05 * H * Math.sin(Math.PI * (u - 0.86) / 0.14)   // 落地緩衝（ChatGPT V1）：腳先著地、膝踝往下吸收再站回來，約 0.2 秒
       }
     } else if (e.type === 'flap') {
@@ -1010,7 +1023,11 @@ function groundTripo(env, cfg) {
     root.add(G); G.updateMatrixWorld(true); r.bones.chest.attach(G)
     G.visible = false
     bw = { fr, G, Gi, Lf: Lf.clone() }
-  } catch (e) { console.warn('[birds] borrowWings', e) }
+  } catch (e) { if (e instanceof MissingModel) throw e; console.warn('[birds] borrowWings', e) }
+  // 2026-11-19 cfg.alt：另一個 Tripo 直接生成的姿勢模型（麻雀沙浴：蹲低、翅膀張開），展示時整隻換過去、用它自己的骨頭動
+  // （使用者：開翅膀用 Tripo 生成再上骨架，比程式拆翅膀乾淨）。模型頭朝 +z、上 +y、肚子在 y 0
+  let alt = null
+  if (cfg.alt) try { alt = rigged(cfg.alt.name); alt.model.scale.setScalar(k * (cfg.alt.scale ?? 1)); alt.model.visible = false; root.add(alt.model) } catch (e) { if (e instanceof MissingModel) throw e; console.warn('[birds] alt', e) }   // MissingModel 要丟出去：placeAnimal 會載好模型再重蓋一次
   const legs = ['L', 'R'].map((sd) => {
     const hip = mp('thigh' + sd), knee = mp('shin' + sd), ankle = mp('foot' + sd)
     const a = knee.clone().sub(hip), b = ankle.clone().sub(knee)
@@ -1344,6 +1361,16 @@ function groundTripo(env, cfg) {
       // 展示用的額外動作：翅膀張開（sw）、整隻升降（jy：跳、蹲、潛水）、頭左右甩（sy）、身體仰起（sp）、個別骨頭多轉（sb）
       c.sw = damp(c.sw ?? 0, ex?.wing ?? 0, 14, dt); c.jy = damp(c.jy ?? 0, ex?.jump ?? 0, ex ? 28 : 8, dt)
       c.sy = damp(c.sy ?? 0, ex?.yaw ?? 0, 22, dt); c.sp = damp(c.sp ?? 0, ex?.pitch ?? 0, ex?.prate ?? 6, dt); c.st = damp(c.st ?? 0, ex?.tail ?? 0, 8, dt)
+      if (alt) {
+        const A = ex?.alt, on = !!A
+        alt.model.visible = on; r.model.visible = !on
+        if (on) {
+          alt.reset(); const sg0 = cfg.alt.sign ?? 1
+          for (const [n, sg] of [['L', 1], ['R', -1]]) { alt.turn('wing' + n, AX.z, sg * sg0 * (A.wing ?? 0)); alt.turn('wingtip' + n, AX.z, sg * sg0 * (A.tip ?? 0)) }
+          if (A.roll) alt.turn('body', AX.z, A.roll); if (A.head) alt.turn('head', AX.x, A.head); if (A.tail) alt.turn('tail', AX.x, A.tail)
+          alt.model.position.y = (cfg.alt.keepJump ? 0 : -(c.jy ?? 0)) + (c.fb ?? 0)   // 換模型時不要跟著站姿的蹲低／腳高回授往下沉（沙浴模型本來就肚子貼地、鶴的張翅模型腳是直的）；keepJump：跳起來照跳
+        }
+      }
       if (bw) {
         // 借來的翅膀：open 0～1（從 wing 的大小換算），展開＝沿左右軸從 0.25 放大到 1；beat＝拍動（翼尖慢 0.9 rad）
         const open = clamp((ex?.wing ?? 0) / 1.4, 0, 1)
@@ -1353,12 +1380,19 @@ function groundTripo(env, cfg) {
         { const L = bw.Lf, e = bw.Gi.matrix.elements, m = k - 1   // 沿飛行模型的左右軸縮放：I + (k-1)·L·Lᵀ
           bw.Gi.matrix.set(1 + m * L.x * L.x, m * L.x * L.y, m * L.x * L.z, 0, m * L.y * L.x, 1 + m * L.y * L.y, m * L.y * L.z, 0, m * L.z * L.x, m * L.z * L.y, 1 + m * L.z * L.z, 0, 0, 0, 0, 1); bw.Gi.matrixWorldNeedsUpdate = true }
         bw.fr.reset()
-        const beat = (ex?.beat ?? 0) * c.bwOpen, ph = t * Math.PI * 2 * (ex?.beatHz ?? 2.4)
-        const BW = globalThis.__bwCfg ? { ...cfg.borrowWings, ...globalThis.__bwCfg } : cfg.borrowWings, A = BW.amp ?? 0.6, a1 = beat * A * Math.sin(ph), a2 = beat * A * Math.sin(ph - 0.9)
+        // 2026-11-19 ChatGPT V4：肩膀先動、翼尖晚 ~100 ms 跟上（用時間算，不用相位差）；收翅時翼尖先收、主翼再收
+        const BW = globalThis.__bwCfg ? { ...cfg.borrowWings, ...globalThis.__bwCfg } : cfg.borrowWings, A = BW.amp ?? 0.6, LAG = BW.tipLag ?? 0.1
+        c.bwHist ??= []; c.bwHist.push([t, c.bwOpen]); while (c.bwHist.length > 2 && c.bwHist[1][0] <= t - LAG) c.bwHist.shift()
+        const delayed = c.bwHist[0][1], closing = c.bwOpen < (c.bwPrev ?? 0) - 1e-4; c.bwPrev = c.bwOpen
+        c.tipOpen = closing ? Math.min(c.tipOpen ?? 0, clamp(c.bwOpen * 1.4 - 0.4, 0, 1)) : Math.min(c.bwOpen, delayed)
+        const beat = (ex?.beat ?? 0) * c.bwOpen, hz = ex?.beatHz ?? 2.4, ph = t * Math.PI * 2 * hz, a1 = beat * A * Math.sin(ph), a2 = beat * A * Math.sin(ph - Math.PI * 2 * hz * LAG)
         const fold = (1 - ss(c.bwOpen, 0.2, 1)) * (BW.fold ?? 0)   // 摺翅（繞 y 轉）會把翅膀跟翼尖接縫拉長 8 倍（量過）→ 預設不摺，只靠左右縮放展開
         for (const [n, sg] of [['L', 1], ['R', -1]]) {
-          bw.fr.turn('wing' + n, AX.x, -sg * a1); bw.fr.turn('wingtip' + n, AX.x, -sg * a2 * (BW.tipK ?? 0.4))   // 翼尖跟得少一點：0.7 時黑色初級飛羽放射成扇形
+          const FA = BW.flapAx === 'z' ? AX.z : AX.x   // 拍翅的軸：飛行模型頭朝 -x（繞 x）；Tripo 張翅模型頭朝 +z（繞 z）
+          bw.fr.turn('wing' + n, FA, -sg * a1 * (BW.flapSign ?? 1)); bw.fr.turn('wingtip' + n, FA, -sg * a2 * (BW.tipK ?? 0.4) * (BW.flapSign ?? 1))   // 翼尖跟得少一點：0.7 時黑色初級飛羽放射成扇形
           if (fold) bw.fr.turn('wing' + n, AX.y, sg * fold * (BW.foldSign ?? 1))
+          const tf = (1 - ss(c.tipOpen ?? 0, 0.05, 1)) * (BW.tipFold ?? 0.9)   // 翼尖還沒跟上／先收時往後下折
+          if (tf > 1e-3) bw.fr.turn('wingtip' + n, AX.y, sg * tf * (BW.tipFoldSign ?? 1))
         }
       }
       if (ex?.wingLR) { for (const [wg, sg, k] of [['wingL', 1, 'L'], ['wingR', -1, 'R']]) { const q = ex.wingLR[k]; const wb = r.bones[wg + 'Root'] ? wg + 'Root' : wg; r.turn(wb, FWD, sg * q.r * (ex.wingSign ?? 1)); r.turn(wb, AX.y, sg * q.r * q.o) } }   // 2026-11-18 每隻翅膀自己的上抬／外轉（環頸雉振翅）
@@ -1366,6 +1400,7 @@ function groundTripo(env, cfg) {
       if (Math.abs(swv) > 0.005) for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) { r.turn(wg, FWD, sg * swv * (ex?.wingSign ?? cfg.wingSign ?? 1)); r.turn(wg, AX.y, sg * swv * (ex?.wingOut ?? cfg.wingOut ?? 0.3)) }
       if (c.sy) r.turn('head', AX.y, c.sy)
       if (c.sp) r.turn('body', LAT, c.sp)
+      if (ex?.roll != null || c.sr) { c.sr = ex?.rollFast ? (ex.roll ?? 0) : damp(c.sr ?? 0, ex?.roll ?? 0, 10, dt); if (Math.abs(c.sr) > 1e-4) r.turn('body', FWD, c.sr) }   // 2026-11-19 身體左右側滾（麻雀沙浴、抖羽）
       if (c.st) r.turn('tail', LAT, c.st)
       // 2026-11-17 斑鳩求偶：鼓起脖子（puff：脖子骨頭整個放大，頭縮回原大小）、尾羽張開（fan：尾巴骨頭只往左右方向放寬）。
       // 放大上限 14%／35%：再大脖子根的皮會被拉出折痕（截圖驗過）
@@ -2132,10 +2167,99 @@ function waterhen(env) {
     acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } })
 }
 // 麻雀：三隻在地上，兩腳併攏一跳一跳地找草籽
+// 2026-11-19 #12 麻雀 Dust Bathing（ChatGPT 規格：在乾沙土蹲低快速拍翅，把細沙揚到背上，左右側身摩擦後站起抖羽）：
+// 草坪上有一小塊乾土窩（沙浴坑）。每 25～55 秒其中一隻跳過去 → 蹲低到肚子貼地、羽毛蓬起 → 3～4 陣快速拍翅（每秒 12 下，翅膀往外往下拍地）
+// 每拍一下揚起一小撮細沙落到背上和旁邊，身體左右側滾磨蹭 → 站起來全身快速抖羽（沙子從身上抖落）→ 回去覓食。其他兩隻照常
+function sparrowShow(env) {
+  const bowl = { x: 0, z: 0, mesh: null }
+  const D = showDirector({ gap: [25, 55], dur: [9, 12], first: [6, 16],
+    ready: (D) => !D.birds[0]?.root.userData.alert,
+    onStart: (D) => {
+      const b = D.birds[0]; if (!b) return
+      b.w.goal = new THREE.Vector2(bowl.x, bowl.z); b.w.want = null
+      D.t0 = null; D.bouts = 3 + (Math.random() < 0.5 ? 1 : 0); D.puffs = 0
+      for (const q of D.birds.slice(1)) { q.acts.next('look') }   // 其他兩隻不參加
+      Object.assign(D, globalThis.__sparForce ?? {})
+    },
+    onEnd: (D) => { const b = D.birds[0]; if (b) b.root.userData.dustTag = null } })
+  globalThis.__sparShow = D
+  // 細沙：最多 90 顆小土粒（InstancedMesh），每顆自己的拋物線、落地停一下再消失
+  const dust = { mesh: null, ps: [], n: 90 }
+  const dustInit = (parent) => {
+    if (dust.mesh) return
+    const geo = new THREE.IcosahedronGeometry(0.0035, 0), m = new THREE.MeshStandardMaterial({ color: 0xb59a72, roughness: 1 })
+    dust.mesh = new THREE.InstancedMesh(geo, m, dust.n); dust.mesh.count = 0; dust.mesh.frustumCulled = false; parent.add(dust.mesh)
+    for (let i = 0; i < dust.n; i++) dust.ps.push({ on: false, p: V(), v: V(), t: 0, life: 1, s: 1 })
+    // 沙浴坑：一小塊乾土（略凹的圓盤，邊緣淡出）
+    const disk = new THREE.CircleGeometry(0.16, 28).rotateX(-Math.PI / 2), col = new Float32Array(disk.attributes.position.count * 3)
+    for (let i = 0; i < disk.attributes.position.count; i++) { const x = disk.attributes.position.getX(i), z = disk.attributes.position.getZ(i), r = Math.hypot(x, z) / 0.16; const c = new THREE.Color(0xa88d68).lerp(new THREE.Color(0x8a7a4e), r); col.set([c.r, c.g, c.b], i * 3) }
+    disk.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    bowl.mesh = new THREE.Mesh(disk, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, transparent: true, opacity: 0.92, polygonOffset: true, polygonOffsetFactor: -2 }))
+    bowl.mesh.receiveShadow = true; bowl.mesh.position.set(bowl.x, (env.groundAt ? env.groundAt(bowl.x, bowl.z) : 0) + 0.003, bowl.z); parent.add(bowl.mesh)
+    // 坑裡不長草：把半徑 20 cm 內的草葉（flora.js bladeMesh，gB.w＝高度）高度設 0（土窩是光禿的乾土）
+    parent.updateWorldMatrix(true, false)
+    const cw = parent.localToWorld(V(bowl.x, 0, bowl.z)); let sc = parent; while (sc.parent) sc = sc.parent
+    sc.traverse((o) => {
+      const gA = o.geometry?.attributes?.gA, gB = o.geometry?.attributes?.gB; if (!gA || !gB || !o.isMesh) return
+      o.updateWorldMatrix(true, false); const inv = new THREE.Matrix4().copy(o.matrixWorld).invert(), c = cw.clone().applyMatrix4(inv); let n = 0
+      for (let i = 0; i < gA.count; i++) { const dx = gA.getX(i) - c.x, dz = gA.getZ(i) - c.z; if (dx * dx + dz * dz < 0.04 && Math.abs(gA.getY(i) - c.y) < 1) { gB.setW(i, 0); n++ } }
+      if (n) gB.needsUpdate = true
+    })
+  }
+  const _m4 = new THREE.Matrix4(), _q4 = new THREE.Quaternion(), _s4 = V()
+  const burst = (at, n, up, spread) => { for (let k = 0; k < n; k++) { const p = dust.ps.find((q) => !q.on); if (!p) return; const a = Math.random() * Math.PI * 2, sp = spread * rnd(0.3, 1); p.on = true; p.t = 0; p.life = rnd(0.5, 0.9); p.s = rnd(0.6, 1.4); p.p.copy(at).add(V(Math.cos(a) * 0.02, 0.01, Math.sin(a) * 0.02)); p.v.set(Math.cos(a) * sp, up * rnd(0.6, 1.2), Math.sin(a) * sp) } }
+  const dustStep = (dt, gy) => {
+    let n = 0
+    for (const p of dust.ps) {
+      if (!p.on) continue
+      p.t += dt; if (p.t > p.life) { p.on = false; continue }
+      p.v.y -= 3.2 * dt; p.p.addScaledVector(p.v, dt); if (p.p.y < gy + 0.002) { p.p.y = gy + 0.002; p.v.set(0, 0, 0) }
+      const fade = 1 - ss(p.t, p.life * 0.7, p.life)
+      _m4.compose(p.p, _q4, _s4.setScalar(p.s * fade)); dust.mesh.setMatrixAt(n++, _m4)
+    }
+    dust.mesh.count = n; dust.mesh.instanceMatrix.needsUpdate = true
+  }
+  return (x) => {
+    if (x.c.si === 0 || x.c.si == null) { /* 粒子由第一隻（會沙浴的那隻）推進 */ }
+    if (!dust.mesh && x.root.parent) { const w = x.w; bowl.x = w.center[0] + 0.28; bowl.z = w.center[1] - 0.12; dustInit(x.root.parent) }
+    if (x.c.si === 0 && dust.mesh) dustStep(x.dt, env.groundAt ? env.groundAt(bowl.x, bowl.z) : 0)
+    if (!D.tick(x)) { x.root.userData.dustTag = null; return null }
+    if (x.c.si !== 0) return null
+    const w = x.w, ud = x.root.userData, H = x.cfg.H, o = { lean: 0.05, neck: 0, head: 0, reach: 0, rate: 10, jump: 0 }
+    if (ud.alert && D.len > D.t + 0.4) D.len = D.t + 0.4
+    if (D.t0 == null) { ud.dustTag = null; if (!w.goal || D.t > 3) { w.goal = null; D.t0 = D.t + 0.15; D.len = Math.max(D.len, D.t0 + 8.5) } return o }
+    const u = D.t - D.t0, end = D.len - D.t0, bathEnd = end - 1.6
+    const low = ss(u, 0, 0.4) * (1 - ss(u, bathEnd, bathEnd + 0.35))
+    o.jump = -0.32 * H * low; o.lean = 0.05 + 0.25 * low; o.neck = -0.1 + 0.35 * low; o.head = 0.1 * low; o.puff = 0.9 * low; o.tail = 0.25 * low; o.noStep = true; o.rate = 12
+    const pos = () => { x.root.updateWorldMatrix(true, false); return x.root.parent.worldToLocal(x.root.getWorldPosition(V())) }
+    if (u > 0.45 && u < bathEnd) {
+      // 拍翅一陣 1.0～1.4 s、停 0.3～0.5 s；陣中翅膀往外往下快速拍（每秒 12 下），身體跟著左右側滾
+      const per = (bathEnd - 0.45) / D.bouts, k = (u - 0.45) / per, bi = Math.floor(k), f = k - bi, on = f < 0.72
+      const beat = on ? Math.sin(2 * Math.PI * 12 * (u - 0.45)) : 0, amp = on ? ss(f, 0, 0.06) * (1 - ss(f, 0.64, 0.72)) : 0
+      const side = bi % 2 ? 1 : -1
+      // 換成 Tripo 生成的沙浴模型（翅膀本來就張開一半）：剛換過去 0.25 s 內翅膀從貼身打開，拍翅＝翅膀上下快速拍、翼尖慢 0.6 rad
+      const WK = globalThis.__dustWK ?? { open: -0.55, amp: 0.38 }
+      const op = ss(u, 0.45, 0.7), ph = 2 * Math.PI * 12 * (u - 0.45)
+      o.alt = { wing: (1 - op) * WK.open + amp * WK.amp * Math.sin(ph), tip: amp * WK.amp * 0.6 * Math.sin(ph - 0.6), roll: side * 0.28 * amp + (on ? 0 : side * 0.4 * Math.sin(Math.PI * ss(f, 0.72, 1))), head: -0.15 * amp, tail: 0.1 * amp }
+      o.roll = 0
+      if (on && beat > 0.95 && (x.c.lastBeat ?? -1) !== Math.floor((u - 0.45) * 12)) { x.c.lastBeat = Math.floor((u - 0.45) * 12); burst(pos().add(V(0, 0.01, 0)), 3, 0.55, 0.22) }
+      ud.dustTag = on ? 'dustbath' : 'dustrub'
+    } else if (u >= bathEnd + 0.35 && u < bathEnd + 1.3) {
+      // 站起來抖羽：身體快速左右抖（每秒 18 下）、羽毛蓬起再收，抖下沙子
+      const v = (u - bathEnd - 0.35) / 0.95, a = Math.sin(Math.PI * v)
+      o.roll = 0.22 * a * Math.sin(2 * Math.PI * 18 * u); o.rollFast = true; o.puff = 0.8 * a
+      o.wingLR = { L: { r: 0.15 * a, o: -0.3 }, R: { r: 0.15 * a, o: -0.3 } }; o.wingSign = 1; o.wingFast = 0.01
+      if (D.puffs < 3 && v > D.puffs * 0.3) { D.puffs++; burst(pos().add(V(0, 0.08, 0)), 5, 0.35, 0.3) }
+      ud.dustTag = 'shake'
+    } else ud.dustTag = u < bathEnd ? 'dustbath' : null
+    return o
+  }
+}
 function sparrow(env) {
-  return groundGroup(3, 0.22, (avoid) => groundTripo(env, { name: 'sparrow-rig', H: 0.2, h0: 0.65, ...TRIPO, hop: 0.035, flick: 0.15,
+  const show = env.guide || !(globalThis.location && /[?&]dustbath/.test(location.search)) ? null : sparrowShow(env)   // 2026-11-19 #12 沙浴還在做（未驗收）：先只在 ?dustbath 開
+  return groundGroup(3, 0.22, (avoid) => groundTripo(env, { name: 'sparrow-rig', H: 0.2, h0: 0.65, ...TRIPO, hop: 0.035, flick: 0.15, show, latIK: true, alt: show ? { name: 'sparrow-dust-rig', scale: globalThis.__dustScale ?? 1 } : null,
     walk: { radius: 0.9, speed: 0.22, turn: 3, avoid }, stride: 0.07, swingT: 0.12, lift: 0.035, knee: [0.3, 0.6], focusY: 0.12,
-    acts: { walk: [4, 99, 99], peck: [4, 0.6, 1.0], look: [2, 0.8, 1.8], stand: [1, 1, 2], turn: [1, 99, 99] } }))
+    acts: { walk: [4, 99, 99], peck: [4, 0.6, 1.0], look: [2, 0.8, 1.8], stand: [1, 1, 2], turn: [1, 99, 99], ...(show ? { show: [0, 999, 999] } : {}) } }))
 }
 // 小彎嘴：在林下的落葉上一跳一跳，用彎嘴翻找蟲子
 function babbler(env) {
@@ -2795,7 +2919,8 @@ function bccrane(env) {
   const show = env.guide || (globalThis.location && /[?&]nocraneshow/.test(location.search)) ? undefined
     : craneShow(0.3, { call: false, leapMin: 0.15, tagKey: 'bccrane', gap: [30, 60], dur: [12, 18], first: [8, 20], borrow: true })
   return groundGroup(2, 1.4, (avoid) => groundTripo(env, { name: 'bccrane-rig', H: 1.0, h0: 0.98, ...TRIPO, reach: 0.25, bill: 0.1, show, latIK: true, footFb: true,   // latIK：轉身時踩著的腳會被拉離 6～9 cm（量到）
-    borrowWings: show ? { name: 'bccrane-fly-rig', ...(globalThis.__bwCfg ?? {}) } : null,
+    // 2026-11-19 翅膀：Tripo 生成的張翅模型（使用者要求）只拿翅膀、裝在站姿模型肩膀上（ChatGPT V3：整隻換模型會跳變，身體只用站姿那一個）
+    borrowWings: show ? { name: 'bccrane-wingsonly-rig', span: 1.2, flapAx: 'z', amp: 0.3, tipK: 0.6, ...(globalThis.__bwCfg ?? {}) } : null,
     walk: { radius: 2.6, speed: 0.14, avoid, turn: 0.45 }, swingT: 0.5, lift: 0.03, knee: [1.0, 1.8], focusY: 0.7,   // 原地轉身慢一點、跨步快一點：轉太快時踩著的腳跟不上（量到浮 2～4 cm）
     acts: { walk: [4, 99, 99], peck: [3, 1.2, 2.4], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99], ...(show ? { show: [0, 999, 999] } : {}) } }))
 }
