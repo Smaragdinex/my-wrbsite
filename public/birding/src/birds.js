@@ -762,7 +762,12 @@ function groundTripo(env, cfg) {
   w.h = env.face(sgn(), rnd(0.3, 0.8))
   // cfg.patrol：[[x,z],[x,z]]（鳥群座標）在兩點之間走過去、走回來（山鷸在步道上）；每次走到端點附近隨機一點
   if (cfg.patrol) { let e = 0; w.pick = () => { e ^= 1; const [x, z] = cfg.patrol[e]; w.goal = new THREE.Vector2(x + rnd(-0.15, 0.15), z + rnd(-0.15, 0.15)); w.want = null; return true } }
+  let prevAct = ''
   const acts = new Acts(cfg.acts, (n, a) => {
+    // 2026-11-18 黑面琵鷺：掃完一段，三成機率掃到東西（抬頭叼著小魚吞下）
+    if (cfg.sweep && prevAct === 'sweep' && n !== 'fishcatch' && n !== 'sweep' && Math.random() < (cfg.sweep.catchP ?? 0.35)) { prevAct = 'fishcatch'; a.next('fishcatch'); return }
+    prevAct = n
+    if (n === 'sweep' && !w.pick(0.25)) w.want = w.h + a.sgn * rnd(0.3, 0.8)   // 一邊掃一邊慢慢往前走
     if (n === 'walk' && !w.pick(0.25)) a.next('look')
     if (n === 'turn') w.want = w.h + a.sgn * rnd(0.6, 2)
   })
@@ -788,7 +793,7 @@ function groundTripo(env, cfg) {
     const bend = Math.sign(a.dot(FWD) * b.y - a.y * b.dot(FWD))
     // 腳是斜的（往外張），IK 在側面平面裡算，所以骨長也要用投影到側面的長度
     return { sd, toes: toesOf(r, sd), rest: ankle, L1: Math.hypot(a.dot(FWD), a.y), L2: Math.hypot(b.dot(FWD), b.y), bend, flat: r.bones['foot' + sd].userData.inv.clone().invert(),
-      plant: null, from: V(), to: V(), t: 1, pos: V() }
+      lat0: ankle.clone().sub(hip).dot(N), rollSgn: 0, plant: null, from: V(), to: V(), t: 1, pos: V() }
   })
   const stride = cfg.stride ?? 0.22 * cfg.H, lift = cfg.lift ?? 0.06 * cfg.H, swing = cfg.swingT ?? 0.32
   const [KA, KB] = cfg.knee ?? [0.5, 1.1]   // 抬腳時：腳跟（看起來像膝蓋）往前上抬多少、跗蹠往後折多少
@@ -804,6 +809,14 @@ function groundTripo(env, cfg) {
     rotM('thigh' + L.sd, N, want - ang(hip, mp('shin' + L.sd)))
     const knee = mp('shin' + L.sd)
     rotM('shin' + L.sd, N, ang(knee, tg) - ang(knee, mp('foot' + L.sd)))
+    // 2026-11-18 cfg.latIK（黑面琵鷺）：IK 只在側面平面裡解，身體轉向時踩著的腳會被拖著橫向滑（量到最多 19 cm）。
+    // 剩下的左右偏差用髖關節往外／往內擺（繞身體前後軸轉大腿）補上，腳踝就真的釘在落點不動
+    if (cfg.latIK) {
+      const hp = mp('thigh' + L.sd), an = mp('foot' + L.sd), want = tg.clone().sub(hp).dot(N), now = an.clone().sub(hp).dot(N), h = Math.max(0.05, hp.y - tg.y)
+      if (!L.rollSgn) { rotM('thigh' + L.sd, FWD, 0.1); L.rollSgn = Math.sign(mp('foot' + L.sd).sub(hp).dot(N) - now) || 1; rotM('thigh' + L.sd, FWD, -0.1) }
+      const da = clamp(Math.atan2(want - now, h), -0.6, 0.6)
+      if (Math.abs(da) > 1e-4) rotM('thigh' + L.sd, FWD, da * L.rollSgn)
+    }
     // 抬腳（照影片）：腳跟往前上提、跗蹠往後折讓腳掌拖在後面，過一半後再往前伸直、落地
     const sw = L.t < 1 ? L.t : 0
     if (sw) {
@@ -822,7 +835,7 @@ function groundTripo(env, cfg) {
   // 蚯蚓：每格用目前嘴尖的位置重排一條管子。拔的時候一端還在土裡、被拉長；拔出來後掛在嘴上扭，吞的時候越來越短
   let wormMesh = null, wormOn = false, caught = false, skin = null, tipIdx = -1
   // 嘴尖：模型上最往前的那個頂點（只看上半身），每格用蒙皮後的位置，蚯蚓才真的夾在嘴裡
-  if (cfg.worm) {
+  if (cfg.worm || cfg.sweep) {
     r.model.traverse((o) => { if (o.isSkinnedMesh) skin = o })
     const p = skin.geometry.attributes.position, v = V(), H = skin.geometry.boundingBox ?? (skin.geometry.computeBoundingBox(), skin.geometry.boundingBox)
     let best = Infinity
@@ -863,6 +876,77 @@ function groundTripo(env, cfg) {
     wormMesh.geometry.dispose()
     wormMesh.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => root.parent.worldToLocal(p))), 18, PY.r, 6)
   }
+  // 2026-11-18 黑面琵鷺掃嘴（ChatGPT 審查 REVISE 後第二版）：
+  //   水紋：嘴尖劃水時留下一串 V 形尾流（往後張開、變淡；跟著真的嘴尖位置與移動方向），10 個物件池輪流用；腳落地時腳邊一小圈泥水
+  //   小魚：抬頭時斜 35° 夾在匙嘴尖（從側面看得到魚身），停 0.5 秒給玩家看 → 甩兩下、轉成順著嘴 → 仰頭沿著嘴滑到喉嚨吞下
+  const SW = cfg.sweep ? { vs: [], vi: 0, vt: 0, rings: [], ri: 0, fish: null, prev: null } : null, _d2 = V(), _d3 = V(), _up = V(0, 1, 0), _m4 = new THREE.Matrix4(), _q4 = new THREE.Quaternion()
+  const sweepInit = (par) => {
+    // V 形尾流：兩條細長的四邊形組成 V（尖端在原點、往 -z 張開），頂點 alpha 往後變淡
+    const vg = new THREE.BufferGeometry(), P = [], A = []
+    for (const sd of [-1, 1]) { const ax = Math.sin(0.42) * sd, az = -Math.cos(0.42), nx = Math.cos(0.42) * 0.1, nz = Math.sin(0.42) * sd * 0.1   /* 臂寬（單位長度的 7%：放大後約 1 cm）*/
+      P.push(0, 0, 0, nx * sd, 0, nz * sd, ax + nx * sd, 0, az + nz * sd, 0, 0, 0, ax + nx * sd, 0, az + nz * sd, ax, 0, az); A.push(1, 1, 0, 1, 0, 0) }
+    vg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); vg.setAttribute('alpha', new THREE.Float32BufferAttribute(A, 1))
+    const vm = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uO: { value: 0 } }, vertexShader: 'attribute float alpha; varying float vA; void main(){ vA = alpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', fragmentShader: 'uniform float uO; varying float vA; void main(){ gl_FragColor = vec4(0.92, 0.96, 0.97, uO * vA); }' })
+    for (let i = 0; i < 10; i++) { const m = new THREE.Mesh(vg, vm.clone()); m.visible = false; m.renderOrder = 2; m.userData.noOcc = true; m.userData.age = 9; m.frustumCulled = false; par.add(m); SW.vs.push(m) }
+    const rg = new THREE.RingGeometry(0.8, 1, 24).rotateX(-Math.PI / 2)
+    for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xc9c0b0, transparent: true, opacity: 0, depthWrite: false })); m.visible = false; m.renderOrder = 2; m.userData.noOcc = true; m.userData.age = 9; par.add(m); SW.rings.push(m) }
+    // 小魚（約 10 cm，沿 x 軸）：扁的身體＋尾鰭，背深腹白（頂點色）
+    const body = new THREE.SphereGeometry(1, 12, 8).scale(0.045, 0.014, 0.009), tail = new THREE.BufferGeometry()
+    tail.setAttribute('position', new THREE.Float32BufferAttribute([-0.04, 0, 0, -0.068, 0.017, 0, -0.068, -0.017, 0], 3)); tail.computeVertexNormals()
+    body.deleteAttribute('uv')
+    const fg = mergeGeometries([body.toNonIndexed(), tail]), fp = fg.attributes.position, fc = new Float32Array(fp.count * 3)
+    for (let i = 0; i < fp.count; i++) { const k = clamp(fp.getY(i) / 0.014 * 0.5 + 0.5, 0, 1); fc[i * 3] = 0.82 - 0.5 * k; fc[i * 3 + 1] = 0.86 - 0.45 * k; fc[i * 3 + 2] = 0.88 - 0.38 * k }
+    fg.setAttribute('color', new THREE.BufferAttribute(fc, 3))
+    SW.fish = new THREE.Mesh(fg, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.35, side: THREE.DoubleSide })); SW.fish.visible = false; par.add(SW.fish)
+  }
+  // 腳落地：腳邊一小圈泥水（棕灰色、小、很快散掉）
+  const sweepStep = (p) => { if (!SW?.rings.length || env.waterY == null) return; const m = SW.rings[SW.ri++ % SW.rings.length]; m.position.copy(root.parent.worldToLocal(_hd.set(p.x, env.waterY + 0.003, p.z))); m.userData.age = 0; m.visible = true }
+  const sweepFx = (n, kk, t, dt) => {
+    const par = root.parent; if (!par || !skin) return
+    if (!SW.vs.length) sweepInit(par)
+    r.bones.head.updateWorldMatrix(true, true)
+    const tip = skin.getVertexPosition(tipIdx, _tip).applyMatrix4(skin.matrixWorld)
+    const wy = env.waterY ?? -99
+    // 嘴尖的高度回授：掃的時候對準水面下 3.5 cm（也不低於泥底上 1.5 cm），用脖子根抬／壓修正；不掃的時候慢慢歸零
+    if (n === 'sweep' && kk > 0.06 && kk < 0.94) {
+      const want = Math.max(wy - 0.035, (env.groundW ?? -99) + 0.015)
+      c.tipAdj = clamp((c.tipAdj ?? 0) + (want - tip.y) * Math.min(1.4, 40 * dt), -0.5, 0.9)   // 脖子根轉 1 rad 嘴尖約動 0.6 m：每格補回大約 85% 的誤差
+    } else c.tipAdj = damp(c.tipAdj ?? 0, 0, 3, dt)
+    // V 形尾流：嘴尖在水裡、而且在動（> 4 cm/s）時，每 0.09 秒在嘴尖放一個、朝移動方向
+    const mv = SW.prev ? _d2.set(tip.x - SW.prev.x, 0, tip.z - SW.prev.z) : _d2.set(0, 0, 0), sp = mv.length() / Math.max(dt, 1e-3)
+    SW.prev = (SW.prev ?? V()).copy(tip)
+    if (n === 'sweep' && tip.y < wy + 0.02 && sp > 0.04 && (SW.vt -= dt) <= 0) {
+      SW.vt = 0.09; const m = SW.vs[SW.vi++ % SW.vs.length]
+      m.position.copy(par.worldToLocal(_hd.set(tip.x, wy + 0.004, tip.z))); m.rotation.set(0, Math.atan2(mv.x, mv.z), 0); m.userData.age = 0; m.userData.sp = clamp(sp, 0.1, 0.8); m.visible = true
+    }
+    for (const m of SW.vs) {
+      if (!m.visible) continue
+      const a = (m.userData.age += dt) / 0.9
+      if (a >= 1) { m.visible = false; continue }
+      const s2 = (0.08 + 0.3 * a) * (0.6 + m.userData.sp); m.scale.set(s2 * (0.7 + 0.6 * a), 1, s2); m.material.uniforms.uO.value = 0.85 * (1 - a) * (1 - a)
+    }
+    for (const m of SW.rings) {
+      if (!m.visible) continue
+      const a = (m.userData.age += dt) / 0.8
+      if (a >= 1) { m.visible = false; continue }
+      m.scale.setScalar(0.03 + 0.09 * Math.sqrt(a)); m.material.opacity = 0.45 * (1 - a)
+    }
+    // 小魚
+    const on = n === 'fishcatch' && kk > 0.07 && kk < 0.8
+    SW.fish.visible = on
+    if (on) {
+      const hd = r.bones.head.getWorldPosition(_hd), fw = _d.subVectors(tip, hd).normalize()
+      const side = _d2.crossVectors(fw, _up).normalize(); if (side.lengthSq() < 1e-6) side.set(1, 0, 0)
+      const k = Math.max(0.1, cfg.H / 1.3)
+      // 角度：先斜 35°（側面看得到魚身）→ 0.3～0.55 甩的時候轉成順著嘴 → 吞的時候沿著嘴往喉嚨滑
+      const turn = lerp(0.96, 1.45, ss(kk, 0.32, 0.55)), slide = ss(kk, 0.56, 0.78)   // 0.96：魚身跟嘴的方向差 35°（ChatGPT：側面看要看得到魚的輪廓）
+      _m4.makeBasis(side, _d3.crossVectors(fw, side).normalize(), fw); SW.fish.quaternion.setFromRotationMatrix(_m4)
+      SW.fish.rotateY(turn + (kk > 0.32 && kk < 0.55 ? 0.3 * Math.sin(t * 20) : 0.06 * Math.sin(t * 9)))
+      const at = tip.clone().addScaledVector(fw, 0.012 * k).addScaledVector(_d3, -0.01 * k).lerp(hd, slide * 0.85)   // 夾在匙嘴最尖端外一點（不藏在黑色的匙裡）
+      SW.fish.position.copy(par.worldToLocal(at))
+      SW.fish.scale.setScalar(1.6 * k * (1 - 0.35 * slide))
+    }
+  }
   const C0 = { ...c }
   const update = (t, dt) => {
     if (!(dt > 0)) return   // dt = 0（同一格第二次）不用動
@@ -895,6 +979,7 @@ function groundTripo(env, cfg) {
     }
     const P = cfg.hop ? c.dp : w.p
     if ((acts.name === 'walk' || acts.name === 'turn') && !w.busy) acts.next()
+    if (acts.name === 'sweep' && !w.busy) w.pick(0.25)   // 掃的時候一直慢慢往前走（走到了就換一個方向）
     // 山鷸：腳步跟搖擺共用同一個相位（一個搖擺週期＝左右各一步），不再各算各的而慢慢錯開
     if (cfg.rock) c.phase += w.busy ? dt * c.rf * c.mv : 0
     else c.phase += d / stride
@@ -919,6 +1004,14 @@ function groundTripo(env, cfg) {
       } else if (kk < 0.75) { lean = 0.2; neck = 0.05; head = -0.05; reach = 0.85; rate = 8 }
       else { lean = 0.05; neck = -0.35; head = -0.6 + 0.08 * Math.sin(t * 9); reach = 0.9; rate = 7 }
     }
+    else if (n === 'fishcatch') {
+      // 2026-11-18 黑面琵鷺掃到東西：嘴從水裡猛抬起來（叼著小魚）→ 甩兩下 → 嘴朝上把魚往喉嚨送 → 回到前傾
+      // 0～0.12 嘴抬出水面 → 0.12～0.32 頭停住（叼著魚給玩家看約 0.5 秒）→ 0.32～0.55 甩兩下、把魚轉正 → 0.56～0.8 仰頭吞 → 回到前傾
+      if (kk < 0.12) { lean = 0.55; neck = 0.5; head = -0.3; reach = 0.7; rate = 6 }
+      else if (kk < 0.56) { lean = 0.25; neck = 0.05; head = -0.45; reach = 0.75; rate = 12 }
+      else if (kk < 0.8) { lean = 0.15; neck = -0.3; head = -0.95; reach = 0.85; rate = 9 }
+      else { lean = 0.35; neck = 0.3; head = -0.2; reach = 0.65; rate = 5 }
+    }
     // 2026-11-11 求偶／群體展示（cfg.show，見 showDirector）：回傳這一格的目標姿勢，蓋掉上面照動作名字給的
     // 2026-11-11 cfg.feed：長脖子的鳥低頭覓食的姿勢（跟 show 同一種回傳值；沒有展示在演才用）。使用者：琵鷺、紅鶴低頭時身體往下彎、脖子動得很怪
     // ——原本只有「身體前傾＋整條脖子一起轉」，S 形的長脖子根本伸不到水面
@@ -934,7 +1027,7 @@ function groundTripo(env, cfg) {
     c.yaw = damp(c.yaw, n === 'look' || n === 'stand' ? glance.yaw * (n === 'look' ? 1 : 0.4) : 0, 10, dt)
     // 盯地面時脖子左右慢慢晃（頭保持對著同一點，用視差判斷獵物位置），晃一陣停一陣
     c.sway = damp(c.sway, ex?.sway != null ? ex.sway : n === 'stare' && cfg.sway ? 0.35 * ss(Math.sin(t * 0.45), -0.3, 0.3) * Math.sin(t * 3.4)
-      : n === 'worm' && kk > 0.55 && kk < 0.75 ? 0.3 * Math.sin(t * 13) : 0, n === 'worm' ? 20 : 8, dt)   // 叼著蚯蚓時頭左右甩
+      : n === 'worm' && kk > 0.55 && kk < 0.75 ? 0.3 * Math.sin(t * 13) : n === 'fishcatch' && kk > 0.32 && kk < 0.55 ? 0.22 * Math.sin(t * 12) : 0, n === 'worm' || n === 'fishcatch' ? 20 : 8, dt)   // 叼著蚯蚓／小魚時頭左右甩
     const ph = c.phase * Math.PI * 2
     r.reset()
     // 走路時重心移到踩地的那隻腳（身體側傾）、每一步前後點一下；站著時慢慢呼吸
@@ -981,7 +1074,7 @@ function groundTripo(env, cfg) {
       c.hph = rp
       rockNeck = 0.035 * A * rk - 0.024 * A * (rockCurve(rp - 0.13, HEAD_KEYS) - 0.5)   // 頭往前探到底時嘴尖微微往下點（±0.7°，比位移慢 0.05 週期）                                               // 頭的角度補回來，保持水平
     }
-    r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 - c.sway * 0.95)
+    r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 + c.sway * (ex?.headSway ?? -0.95))   // headSway：琵鷺掃嘴時頭跟著脖子一起擺（嘴畫弧線）；其他鳥盯地面時頭反向補回（嘴尖對著同一點）
     if (cfg.show || cfg.feed) {
       // 展示用的額外動作：翅膀張開（sw）、整隻升降（jy：跳、蹲、潛水）、頭左右甩（sy）、身體仰起（sp）、個別骨頭多轉（sb）
       c.sw = damp(c.sw ?? 0, ex?.wing ?? 0, 14, dt); c.jy = damp(c.jy ?? 0, ex?.jump ?? 0, ex ? 28 : 8, dt)
@@ -1001,6 +1094,7 @@ function groundTripo(env, cfg) {
       }
       c.sb ??= {}
       for (const b of new Set([...Object.keys(c.sb), ...Object.keys(ex?.bones ?? {})])) { c.sb[b] = damp(c.sb[b] ?? 0, ex?.bones?.[b] ?? 0, 7, dt); if (Math.abs(c.sb[b]) > 0.002) r.turn(b, LAT, c.sb[b]) }
+      if (cfg.sweep && c.tipAdj) r.turn('neck', LAT, c.tipAdj)   // 2026-11-18 琵鷺：嘴尖只泡進水裡 3～4 cm，不插進泥裡（sweepFx 量嘴尖高度回授）
     }
     // 尾巴：前傾時翹起、走路時跟著步伐上下左右擺
     const flick = cfg.flick ? cfg.flick * Math.pow(Math.max(0, Math.sin(t * (cfg.flickF ?? 2.4))), 6) : 0
@@ -1092,7 +1186,7 @@ function groundTripo(env, cfg) {
         L.t = Math.min(1, L.t + dt / swing)
         const e = L.t * L.t * (3 - 2 * L.t)
         L.pos.lerpVectors(L.from, L.to, e); L.pos.y += lift * Math.sin(Math.PI * L.t)
-        if (L.t >= 1) { L.plant.copy(L.to); if (cfg.wade) ripple(L.to.x, L.to.z, 0.35) }   // 涉水時每踩一步一圈小水波
+        if (L.t >= 1) { L.plant.copy(L.to); if (cfg.wade) ripple(L.to.x, L.to.z, 0.35); if (cfg.sweep) sweepStep(L.to) }   // 涉水時每踩一步一圈小水波（琵鷺：腳邊一小圈泥水）
       } else {
         L.pos.copy(L.plant)
         // 腳落後太多（走路）或離站姿位置太遠（停下、轉身）就跨一步；另一隻腳在空中時不跨
@@ -1123,6 +1217,7 @@ function groundTripo(env, cfg) {
       hd.position.add(FWD.clone().multiplyScalar(-c.hb).add(_d.set(0, -0.3 * Math.max(0, c.hb), 0)).applyQuaternion(modelQ(hd.parent, new THREE.Quaternion()).invert()))
     }
     if (cfg.worm) worm(n, kk, t)
+    if (cfg.sweep) sweepFx(n, kk, t, dt)
     // 涉水的鷺鷥啄下去、嘴碰到水面時激起一圈大水波
     if (cfg.wade) {
       if (n !== 'strike') c.splash = false
@@ -1137,7 +1232,7 @@ function groundTripo(env, cfg) {
     for (const b of Object.values(r.bones)) if (!Number.isFinite(b.quaternion.x + b.quaternion.w + b.position.x + b.position.y)) { b.quaternion.copy(b.userData.rest); b.position.copy(b.userData.restP) }
     if (!Number.isFinite(w.p.x + w.p.y + w.h)) { w.p.set(0, 0); w.h = 0; w.goal = null; w.want = null }
   }
-  return { obj: root, focus, update, acts, walker: w, legs, get behavior() { return acts.name === 'show' ? 'display' : null } }
+  return { obj: root, focus, update, acts, walker: w, legs, rig: r, sw: SW, tip: () => (skin && tipIdx >= 0 ? skin.getVertexPosition(tipIdx, V()).applyMatrix4(skin.matrixWorld) : null), get behavior() { return acts.name === 'show' ? 'display' : null } }   // rig／tip：測試量嘴尖、腳趾的位置
 }
 // 夜鷺（ChatGPT 參考圖 → Tripo，跟黑冠麻鷺一樣綁法：脖子三節、頭剛性、腳趾）：站著等、慢慢走、很快啄下去
 function nightHeron(env) {
@@ -1766,9 +1861,12 @@ function blackbulbul(env) {
 // 2026-11-06 新增四種（ChatGPT 參考圖 → Tripo → tools/rig-distance.py，點位在 bird-points.json）
 // 黑面琵鷺：在淺水裡慢慢走、低頭用湯匙嘴掃水面（跟小白鷺同一套涉水動作，步伐更慢）
 function spoonbill(env) {
-  return groundTripo(env, { name: 'spoonbill-rig', H: 1.3, h0: 0.98, ...TRIPO, reach: 0.6, wade: true, bill: 0.38,
-    walk: { radius: 1.0, speed: 0.12 }, swingT: 0.55, lift: 0, knee: [1.0, 1.7], focusY: 0.7,
-    acts: { stand: [3, 3, 6], hunt: [4, 3, 6], walk: [3, 99, 99], turn: [1, 99, 99], strike: [1, 1.4, 1.4], look: [1.5, 1.5, 3] } })
+  // 2026-11-18 招牌行為改成真正的左右掃嘴（以前跟小白鷺共用「盯水面→刺」，黑面琵鷺不是這樣吃）：
+  // sweep 一邊慢慢往前走一邊大幅左右掃；掃完三成機率 fishcatch（抬頭、匙嘴夾著小魚甩兩下吞下）；嘴尖劃水有一圈圈水紋
+  return groundTripo(env, { name: 'spoonbill-rig', H: 1.3, h0: 0.98, ...TRIPO, reach: 0.6, wade: true, bill: 0.38, feed: feeder(FEED.spoonbill),
+    sweep: { catchP: 0.35 }, latIK: true,
+    walk: { radius: 1.6, speed: 0.1 }, swingT: 0.55, lift: 0, knee: [1.0, 1.7], focusY: 0.7,
+    acts: { sweep: [6, 6, 12], stand: [1.5, 2, 4], look: [1.5, 1.5, 3], walk: [1.5, 99, 99], turn: [0.6, 99, 99], fishcatch: [0, 2.6, 2.6] } })
 }
 // 台灣紫嘯鶇：在地上一跳一跳，停下來翹尾巴
 function thrush(env) {
@@ -2291,12 +2389,15 @@ export const FEED = {
   // 紅鶴濾食：身體只微微前傾，脖子從胸口直直垂下去，頭整個倒過來、上嘴朝下貼著水面，慢慢左右擺
   flamingo: { acts: ['peck'], lean: 0.16, neck: 0, head: 0, reach: 0.2, rate: 2.2, bones: { neck: 0.35, neck2: -0.17, neck3: -0.52, neck4: -0.66, neck5: -0.66, neck6: -0.63, neck7: -0.52, neck8: -0.35, neck9: -0.09, neck10: 0.26, head: 1.75 }, sweep: 0.12, hz: 0.25, inT: 0.2, outT: 0.8 },   // 2026-11-12 第五版：脖子 10 節平均分攤往下彎成一條弧（每節最多 38°）、喝水時脖子伸長 4 成；頭在頭頸交界轉 100° 倒過來（頭的權重只到交界往前 3 cm，脖子整條一樣細）
   // 玫瑰琵鷺：身體前傾，脖子往前下伸直，匙狀的嘴尖泡在水裡、張著一點左右快速掃
+  // 2026-11-18 黑面琵鷺（使用者規格 #17 Spoonbill Side-to-side Sweeping）：身體前傾、脖子往前下伸，匙嘴尖端泡在水裡，
+  // 頭跟著脖子大幅左右掃（約 ±35°、每秒 0.9 次來回），一邊慢慢往前走
+  spoonbill: { acts: ['sweep'], lean: 0.6, neck: 0, head: 0, reach: 0.65, bones: { neck: -1.25, neck2: -0.4, neck3: -0.1, head: 1.9 }, sweep: 0.42, hz: 0.9, headSway: 0.55, inT: 0.1, outT: 0.94 },
   rspoonbill: { acts: ['hunt', 'strike'], lean: 0.6, neck: 0, head: 0, reach: 0.65, bones: { neck: -1.25, neck2: -0.4, neck3: -0.1, head: 1.9 }, sweep: 0.3,   /* 2026-11-12 使用者：頭歪著喝水——頭往後折了 97°，嘴尖朝著腳；改成脖子往前下斜、嘴朝前下插進水裡 */ hz: 1.1, inT: 0.12, outT: 0.9 },
 }
 const feeder = (F) => ({ n, kk, t }) => {
   if (!F.acts.includes(n) || kk < 0.02 || kk > F.outT) return null   // 動作尾段回到站姿（骨頭的額外轉動會自己慢慢退回 0）
   const k = Math.min(1, kk / F.inT)
-  return { lean: F.lean, neck: F.neck, head: F.head, reach: F.reach, rate: F.rate ?? 5, bones: F.bones, sway: k >= 1 ? F.sweep * Math.sin(t * Math.PI * 2 * F.hz) : 0 }
+  return { lean: F.lean, neck: F.neck, head: F.head, reach: F.reach, rate: F.rate ?? 5, bones: F.bones, headSway: F.headSway, sway: k >= 1 ? F.sweep * Math.sin(t * Math.PI * 2 * F.hz) : 0 }
 }
 function flamingo(env) {
   const show = flamingoShow({ neck6: -0.42, neck7: -0.3, neck8: -0.03, neck9: 0.23, neck10: 0.44, head: 0.1 })   // 行進展示：只把上半段的 S 拉直（下半段留在胸前；整條從肩膀拉直會露出胸前那團原本黏著脖子的地方）
@@ -2728,7 +2829,7 @@ export function placeAnimal(def, { strict = false } = {}) {
   g.position.set(x, gy, z); g.add(obj)
   // 朝向：沿著 side 方向，再往鏡頭轉 turn 弧度，看起來是四分之三側面
   const face = (s, turn) => { const d = side.clone().multiplyScalar(s * Math.cos(turn)).addScaledVector(toCam, Math.sin(turn)); return Math.atan2(d.x, d.z) }
-  const env = { toCam, face, waterY, guide: !!def.guide }   // guide：圖鑑插圖（黑剪嘴鷗在圖鑑裡用站姿）
+  const env = { toCam, face, waterY, groundW: def.water != null ? gy : null, guide: !!def.guide }   // groundW：涉水鳥腳下的泥底高度（琵鷺嘴尖不插進泥裡）   // guide：圖鑑插圖（黑剪嘴鷗在圖鑑裡用站姿）
   // 游泳的鳥：目的地和游過去的路線都要在開闊水面（不撞山、不撞池邊的石頭）；def.swimOK 吃溫室座標
   if (def.swimOK) env.swimOK = (lx, lz, p) => { for (let k = 1; k <= 8; k++) if (!def.swimOK(x + lerp(p.x, lx, k / 8), z + lerp(p.y, lz, k / 8))) return true; return false }
   // 地上走的鳥：鳥群座標 (lx, lz) 的地面高度，相對鳥群原點（ground 鳥的 obj 沒有旋轉）
