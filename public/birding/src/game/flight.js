@@ -2,14 +2,16 @@
 // 會飛的起飛、飛到遠處躲起來，等玩家走開再飛回原本的地方降落；帝雉、小彎嘴用跑的；紅冠水雞、白腹秧雞游開。
 // 飛的時候換成另一個翅膀張開的模型（ChatGPT 畫飛行姿勢 → Tripo → tools/rig-distance.py 的 fly 骨架：body、head、tail、wingL/R、wingtipL/R）。
 import * as THREE from 'three'
-import { rigged, AX, hasModel } from '../birds.js'
+import { rigged, AX, hasModel, REAL_CM } from '../birds.js'
 import { HIDES } from '../east.js'
 import { clone as skClone } from 'three/addons/utils/SkeletonUtils.js'
 import { savNest } from '../savanna.js'
 // 2026-11-11 使用者：躲在觀察屋裡，鳥不會飛走（Threads 回饋：宣傳文寫了「躲在賞鳥屋裡鳥不會跑」，以前觀察屋只是一棟房子）。
 // 觀察屋 6×3.2 m、正面朝 look；玩家在屋裡（各邊多 0.4 m，含門口）＝鳥看不到人，不會警戒
 const inHide = (P) => HIDES.some((h) => { const a = Math.atan2(h.look[0] - h.x, h.look[1] - h.z), dx = P.x - h.x, dz = P.z - h.z, lz = dx * Math.sin(a) + dz * Math.cos(a), lx = dx * Math.cos(a) - dz * Math.sin(a); return Math.abs(lx) < h.w / 2 + 0.4 && Math.abs(lz) < h.d / 2 + 0.4 })
-import { terrainHeight as gardenH, domeRho, domeY, mtnBase, MTN, inAlpine, alpineHeight, ALP_RIVER, colliders } from '../layout.js'
+import { terrainHeight as gardenH, domeRho, domeY, mtnBase, MTN, inAlpine, alpineHeight, ALP_RIVER, colliders, EAST, alpineTrailDist, YOSE } from '../layout.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { grassPush } from '../flora.js'
 // 地面高度：山區查山區的地形（不然鳥會飛進山坡裡）
 const terrainHeight = (x, z) => inAlpine(x, z) ? alpineHeight(x, z) : gardenH(x, z)
 
@@ -76,7 +78,7 @@ export const ESCAPE = {
   // 2026-11-13 Pass 1D：遊隼巡航快、拍幾下就滑；黑雨燕又快又急（離步道 4～5 m 高，靠很近才飛）；烏林鴞慢、低、安靜
   peregrine: { r: 5,   /* 2026-11-15 使用者「81 完全沒看到」：驚飛 16 m，岩架離步道才 6～10 m → 走到上層岩廊就飛走、29 m 外才回來，永遠看不到。高高的岩架上、人在底下走，5 m 才飛 */ fly: { speed: 15, hz: 4.5, style: 'glide', k: 1.05 } },
   blackswift: { r: 2.5, sortie: [45, 100], colony: { loop: [[203.5, 34.5, 95], [199, 32, 90.5], [193, 31.5, 86], [186.5, 33, 79], [189, 35, 70.5], [199, 36, 66.5], [209, 34.5, 70], [212, 32, 78], [208, 31.5, 85.5]] }, fly: { speed: 14, hz: 8, style: 'glide', k: 0.48 } },   // 2026-11-15 使用者「黑雨燕會一直穿梭在瀑布飛嗎」→ 真的雨燕白天在空中覓食、穿過水簾回巢：沒人打擾也每 45～100 秒自己出去一趟（sortie）
-  greatgreyowl: { r: 10, fly: { speed: 6, hz: 2.8, style: 'glide', k: 1.45 } },
+  greatgreyowl: { r: 10, hunt: 'perch', flyLegs: { y: [-1, -0.13], z: [-0.05, 0.22] }, hipZ: 0.09, fly: { speed: 6, hz: 2.8, style: 'glide', k: 1.45 } },
   wbwood: { r: 8, fly: { speed: 8, hz: 9, style: 'bound', k: 0.42 } },
   nutcracker: { r: 10, fly: { speed: 9, hz: 5, style: 'glide', k: 0.55 } },
   rnpheasant: { r: 7, run: 3, fly: { speed: 9, hz: 10, style: 'flap', k: 1.2 } },
@@ -87,7 +89,7 @@ export const ESCAPE = {
   psnipe: { r: 5, run: 4, fly: { speed: 7, hz: 7, style: 'flap', k: 0.45 } },
   scopsowl: { r: 5, fly: { speed: 7, hz: 5, style: 'glide', k: 0.43 } },   // 2026-11-09 領角鴞：不太怕人，翅膀寬圓、飛得慢又安靜
   mtscops: { r: 5, fly: { speed: 6.5, hz: 6, style: 'glide', k: 0.35 } },
-  grassowl: { r: 6, run: 3, fly: { speed: 6, hz: 3.5, style: 'glide', k: 1.01 } },
+  grassowl: { r: 6, run: 3, hunt: 'quarter', flyLegs: { bone: 'tail', y: [-1, 0.015], z: [-1, -0.12], tip: { z: -0.2, y: 0.008 } }, hipZ: -0.07, fly: { speed: 6, hz: 3.5, style: 'glide', k: 1.01 } },
   nuthatch: { r: 5, fly: { speed: 7, hz: 14, style: 'bound', k: 0.26 } },
   finchbill: { r: 6, fly: { speed: 8, hz: 11, style: 'bound', k: 0.368 } },
   minivet: { r: 7, fly: { speed: 8, hz: 10, style: 'flap', k: 0.294 } },
@@ -980,11 +982,696 @@ export function createFlight(world, player) {
     }
   }
 
+  /* ---------- 2026-11-18 貓頭鷹狩獵（使用者規格：#039 草鴞、#083 烏林鴞，兩種策略要一看就分得出來）----------
+     草鴞：白天躲在巢的高草裡；起飛 → 在草頂上 0.5～1.5 m 來回低飛搜（S 形兩趟）→ 聽到了減速、頭朝下 → 撲進草裡 → 抓到（約六成）就帶著老鼠飛到旁邊的高草裡吃，吃完飛回巢
+     烏林鴞：停在林緣枝頭；靜靜看（慢慢轉頭、呼吸）→ 臉盤對著老鼠歪頭左右聽 → 身體前傾離枝、一路滑下去撲地上的老鼠 → 抓到帶回枝頭吃
+     腳：飛行模型沒有腳的骨頭 → 站姿模型再複製一份、只留腳的三角形（同一張貼圖），掛在飛行模型肚子下面，撲下去時往前伸、落地時踩在地上
+     老鼠：最多 4 隻輪流用（物件池），HIDDEN／MOVING／TARGETED／CAPTURED／ESCAPED；平常不畫，被鎖定前後才出來跑一跑 */
+  const prey = { list: [], geo: null, mat: null }
+  function preyGeo() {
+    if (prey.geo) return
+    const C = new THREE.Color(), part = (g, hex) => {
+      g.deleteAttribute('uv'); C.set(hex)
+      const n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = C.r; a[i * 3 + 1] = C.g; a[i * 3 + 2] = C.b }
+      g.setAttribute('color', new THREE.BufferAttribute(a, 3)); if (!g.index) g.setIndex([...Array(n).keys()]); return g
+    }
+    // 頭朝 +z；身體長約 0.12（鼻尖到屁股），尾巴另外 0.09。實際大小照貓頭鷹的遊戲放大倍率縮放（preyGet）
+    prey.geo = mergeGeometries([
+      part(new THREE.SphereGeometry(1, 10, 7).scale(0.026, 0.022, 0.046).translate(0, 0.023, 0), 0x6b5847),
+      part(new THREE.SphereGeometry(1, 9, 6).scale(0.018, 0.017, 0.024).translate(0, 0.028, 0.048), 0x735e4b),
+      part(new THREE.ConeGeometry(0.009, 0.018, 7).rotateX(Math.PI / 2).translate(0, 0.025, 0.074), 0x6e5a48),
+      part(new THREE.SphereGeometry(0.0035, 5, 4).translate(0, 0.024, 0.083), 0x2a1f1a),
+      part(new THREE.SphereGeometry(0.0032, 5, 4).translate(0.011, 0.034, 0.06), 0x111111),
+      part(new THREE.SphereGeometry(0.0032, 5, 4).translate(-0.011, 0.034, 0.06), 0x111111),
+      part(new THREE.CircleGeometry(0.009, 8).rotateY(0.5).translate(0.012, 0.046, 0.042), 0x9b7c6c),
+      part(new THREE.CircleGeometry(0.009, 8).rotateY(-0.5).translate(-0.012, 0.046, 0.042), 0x9b7c6c),
+      part(new THREE.CylinderGeometry(0.0032, 0.0012, 0.09, 5).rotateX(Math.PI / 2 + 0.22).translate(0, 0.013, -0.088), 0x8b7565),
+    ])
+    prey.mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide })
+  }
+  function preyGet(scale) {
+    preyGeo()
+    let M = prey.list.find((q) => q.state === 'HIDDEN' && !q.owner)
+    if (!M && prey.list.length < 4) {
+      const mesh = new THREE.Mesh(prey.geo, prey.mat); mesh.visible = false; mesh.name = 'owlPrey'; mesh.userData.noOcc = true; mesh.receiveShadow = true; scene.add(mesh)
+      M = { mesh, state: 'HIDDEN', p: V(), spot: V(), h: 0, t: 0, v: 0, goal: null, pause: 0, owner: null }; prey.list.push(M)
+    }
+    if (M) M.mesh.scale.setScalar(scale)
+    return M
+  }
+  const preySet = (M, st) => { if (!M) return; M.state = st; M.t = 0; M.goal = null; M.pause = 0; M.mesh.visible = st !== 'HIDDEN'; if (st === 'HIDDEN') M.owner = null; if (st !== 'CAPTURED' && st !== 'HIDDEN') { M.p.y = terrainHeight(M.p.x, M.p.z); M.mesh.position.copy(M.p) } }
+  // 被嚇跑：往背離貓頭鷹的方向跑 2～2.5 m，鑽進草裡不見
+  const preyEscape = (M, from) => { if (!M || M.state === 'HIDDEN') return; preySet(M, 'ESCAPED'); const d = V(M.p.x - from.x, 0, M.p.z - from.z); if (d.lengthSq() < 1e-4) d.set(1, 0, 0); d.normalize(); M.goal = M.p.clone().addScaledVector(d, rnd(2, 2.5)); M.spot.copy(M.goal) }
+  function preyTick(dt) {
+    for (const M of prey.list) {
+      if (M.state === 'HIDDEN' || M.state === 'CAPTURED') continue
+      M.t += dt
+      if (!M.goal || Math.hypot(M.p.x - M.goal.x, M.p.z - M.goal.z) < 0.03) {
+        if (M.state === 'ESCAPED') { preySet(M, 'HIDDEN'); continue }
+        M.pause = M.state === 'TARGETED' ? rnd(0.15, 0.4) : rnd(0.4, 1.4)   // 跑一小段、停一下（鎖定之後停得比較短、比較緊張）
+        const a = rnd(0, Math.PI * 2), r = rnd(0.08, M.state === 'TARGETED' ? 0.22 : 0.45)
+        M.goal = V(M.spot.x + Math.sin(a) * r, 0, M.spot.z + Math.cos(a) * r)
+      }
+      if ((M.pause -= dt) > 0) M.v = 0
+      else {
+        const sp = M.state === 'ESCAPED' ? 1.4 : M.state === 'TARGETED' ? 0.8 : 0.5
+        const dx = M.goal.x - M.p.x, dz = M.goal.z - M.p.z, d = Math.hypot(dx, dz) || 1, st = Math.min(d, sp * dt)
+        M.p.x += dx / d * st; M.p.z += dz / d * st; M.h = Math.atan2(dx, dz); M.v = sp
+      }
+      M.p.y = terrainHeight(M.p.x, M.p.z)
+      M.mesh.position.copy(M.p); if (M.v) M.mesh.position.y += 0.004 * M.mesh.scale.x * Math.abs(Math.sin(M.t * 26))
+      M.mesh.rotation.set(0, M.h, M.v ? 0.06 * Math.sin(M.t * 26) : 0)
+    }
+  }
+
+  const _oq = new THREE.Quaternion(), _oq2 = new THREE.Quaternion(), _ov = V(), _ov2 = V(), _ov3 = V(), _ov4 = V(), YAX = V(0, 1, 0)
+  const boneOf = (root, n) => { let b = null; root.traverse((o) => { if (o.isBone && o.name === n && !b) b = o }); return b }
+  // 骨頭繞世界座標的軸依序轉（從 rest 姿勢算）
+  function boneWorld(b, rest, turns) {
+    if (!b) return
+    b.quaternion.copy(rest); b.parent.updateWorldMatrix(true, false); b.parent.getWorldQuaternion(_oq).invert()
+    for (const [ax, a] of turns) { if (!a) continue; _ov.copy(ax).applyQuaternion(_oq).normalize(); b.quaternion.premultiply(_oq2.setFromAxisAngle(_ov, a)) }
+    b.updateMatrixWorld(true)
+  }
+  // 停棲模型的骨頭姿勢（照順序）複製到 sit：換模型那一格姿勢一模一樣，看不出換了
+  const syncPose = (from, to) => { for (let i = 0; i < from.length; i++) { to[i].quaternion.copy(from[i].quaternion); to[i].position.copy(from[i].position) } }
+
+  function owlSetup(u) {
+    const s = u.ms[0], m = s.m
+    if (s.hunt || !s.root || !m.obj) return
+    m.obj.updateMatrixWorld(true)
+    let skin = null; m.obj.traverse((o) => { if (o.isSkinnedMesh && !skin) skin = o })
+    if (!skin || !boneOf(m.obj, 'thighL') || !boneOf(m.obj, 'footL')) return
+    const P0 = m.obj.getWorldPosition(V()), Q0 = m.obj.getWorldQuaternion(new THREE.Quaternion()), S0 = m.obj.getWorldScale(V())
+    // 朝向：Tripo 模型頭朝模型的 -x
+    const fw = V(-1, 0, 0).transformDirection(skin.matrixWorld).setY(0).normalize(), h0 = Math.atan2(fw.x, fw.z)
+    const sit = skClone(m.obj); sit.traverse((o) => { o.visible = true; o.frustumCulled = false; if (o.isMesh) o.castShadow = false }); sit.visible = false; scene.add(sit)   // 有骨架的鳥不投太陽影子（shadowcache.js noSun）
+    const mB = [], sB = []; m.obj.traverse((o) => { if (o.isBone) mB.push(o) }); sit.traverse((o) => { if (o.isBone) sB.push(o) })
+    // 腳：只留小腿、腳掌、腳趾（跟它們相連的大腿下緣）的三角形
+    const legs = skClone(m.obj); let lsk = null; legs.traverse((o) => { o.visible = true; o.frustumCulled = false; if (o.isSkinnedMesh && !lsk) lsk = o })
+    {
+      const g = lsk.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, bn = lsk.skeleton.bones.map((b) => b.name)
+      const leg = new Uint8Array(g.attributes.position.count)
+      for (let i = 0; i < leg.length; i++) { let bw = -1, nm = ''; for (let c = 0; c < 4; c++) if (sw.getComponent(i, c) > bw) { bw = sw.getComponent(i, c); nm = bn[si.getComponent(i, c)] ?? '' } leg[i] = /shin|foot|toe/.test(nm) ? 2 : /thigh/.test(nm) ? 1 : 0 }
+      const ix = g.index.array, keep = []
+      for (let i = 0; i < ix.length; i += 3) { const a = leg[ix[i]], b = leg[ix[i + 1]], c = leg[ix[i + 2]]; if (a && b && c && (a === 2 || b === 2 || c === 2)) keep.push(ix[i], ix[i + 1], ix[i + 2]) }
+      const g2 = g.clone(); g2.setIndex(keep); lsk.geometry = g2
+    }
+    lsk.castShadow = false
+    legs.traverse((o) => { if (o.isMesh && o !== lsk) o.visible = false })
+    const lb = (n) => boneOf(legs, n), L = { thL: lb('thighL'), thR: lb('thighR'), shL: lb('shinL'), shR: lb('shinR'), ftL: lb('footL'), ftR: lb('footR'), toesL: [], toesR: [], rest: new Map() }
+    legs.traverse((o) => { if (o.isBone) { L.rest.set(o, o.quaternion.clone()); if (/^toeL/.test(o.name)) L.toesL.push(o); if (/^toeR/.test(o.name)) L.toesR.push(o) } })
+    const mb = (n) => boneOf(m.obj, n).getWorldPosition(V())
+    const hipW = mb('thighL').add(mb('thighR')).multiplyScalar(0.5)
+    const legLen = mb('thighL').distanceTo(mb('shinL')) + mb('shinL').distanceTo(mb('footL'))
+    const qy = new THREE.Quaternion().setFromAxisAngle(YAX, -h0), hipRel = hipW.clone().sub(P0).applyQuaternion(qy)
+    // 飛行模型肚子的高度：root 暫時放原點、不轉，量身體中段最低的頂點
+    const R0 = s.root, keepP = R0.position.clone(), keepR = R0.rotation.clone()
+    R0.position.set(0, 0, 0); R0.rotation.set(0, 0, 0); R0.updateMatrixWorld(true)
+    let fsk = null; s.r.model.traverse((o) => { if (o.isSkinnedMesh && !fsk) fsk = o })
+    s.r.reset(); s.r.model.updateMatrixWorld(true)
+    const fbox = new THREE.Box3().setFromObject(s.r.model), fl = fbox.max.z - fbox.min.z, fspan = fbox.max.x - fbox.min.x
+    // 飛行模型自己畫的腳（草鴞：拖在尾巴下面、綁在 tail 骨頭；烏林鴞：垂在肚子下面）：腳伸出來的時候把那幾片面拿掉，不然會有四隻腳
+    // （位置是 root 座標、公尺；tools/record/owlfly.js 畫側視散佈圖量的）
+    const FL = u.esc.flyLegs, FP = fsk.geometry.attributes.position, fsi = fsk.geometry.attributes.skinIndex, fsw = fsk.geometry.attributes.skinWeight, fbn = fsk.skeleton.bones.map((b) => b.name)
+    const isFL = new Uint8Array(FP.count), fv = []
+    let belly = 0, v = V(), hz = u.esc.hipZ ?? 0
+    for (let i = 0; i < FP.count; i++) {
+      fsk.getVertexPosition(i, v).applyMatrix4(fsk.matrixWorld); fv.push(v.x, v.y, v.z)
+      let bw = -1, bn = ''; for (let c = 0; c < 4; c++) if (fsw.getComponent(i, c) > bw) { bw = fsw.getComponent(i, c); bn = fbn[fsi.getComponent(i, c)] }
+      if (FL && ((v.y > FL.y[0] && v.y < FL.y[1] && v.z > FL.z[0] && v.z < FL.z[1] && (!FL.bone || bn === FL.bone)) || (FL.tip && v.z < FL.tip.z && v.y < FL.tip.y))) isFL[i] = 1   // tip：尾巴後下方的腳趾（有的綁在 body 骨頭）
+    }
+    for (let i = 0; i < FP.count; i++) if (!isFL[i] && Math.abs(fv[i * 3]) < fspan * 0.06 && Math.abs(fv[i * 3 + 2] - hz) < 0.04) belly = Math.min(belly, fv[i * 3 + 1])
+    fsk.geometry = fsk.geometry.clone()
+    const idxFull = fsk.geometry.index, ia = idxFull.array, keepF = []
+    for (let i = 0; i < ia.length; i += 3) if (!(isFL[ia[i]] && isFL[ia[i + 1]] && isFL[ia[i + 2]])) keepF.push(ia[i], ia[i + 1], ia[i + 2])
+    const idxNoLeg = new THREE.BufferAttribute(ia.length > 65535 * 3 || FP.count > 65535 ? new Uint32Array(keepF) : new Uint16Array(keepF), 1)
+    legs.quaternion.copy(qy).multiply(Q0); legs.scale.copy(S0)
+    legs.position.copy(V(0, belly + legLen * 0.3, hz)).sub(hipRel)
+    legs.visible = false; R0.add(legs)  ; R0.updateMatrixWorld(true)
+    // 大腿往前轉的正負號用試的（腳掌往 +z＝前面走的那個方向）
+    const f0 = L.ftL.getWorldPosition(V()).z
+    boneWorld(L.thL, L.rest.get(L.thL), [[V(1, 0, 0), 0.5]])
+    L.sgn = L.ftL.getWorldPosition(V()).z > f0 ? 1 : -1
+    boneWorld(L.thL, L.rest.get(L.thL), [])
+    L.len = legLen
+    R0.position.copy(keepP); R0.rotation.copy(keepR); R0.updateMatrixWorld(true)
+    const realK = s.m.obj && REAL_CM[u.b.def.id] ? (u.b.size || 0.5) / (REAL_CM[u.b.def.id] / 100) : 1.4
+    const H = { kind: u.esc.hunt, sit, mB, sB, legs, L, P0, Q0, S0, h0, fw, fl, fsk, idxFull, idxNoLeg, nFL: isFL.reduce((a, b) => a + b, 0), belly: -belly * 0.9, on: false, ph: '', pt: 0, wait: rnd(15, 35), mouse: null, mouseK: realK * 0.8, retry: 0, acc: 0, fr: 0, n: 0, log: [] }
+    s.hunt = H
+    if (H.kind === 'quarter') grassSetup(u, s, H)
+    else ggSetup(u, s, H)
+  }
+  // ---- 草鴞的場地：西北草原。巢＝EAST.owlNest；狩獵區 25 × 35 m（巢的南邊、觀察屋 O7 看得到）；草頂高度表、獵物點、安全降落點 ----
+  function grassSetup(u, s, H) {
+    const [nx, nz] = EAST.owlNest
+    const Z = { x0: nx - 16, x1: nx + 9, z0: nz - 28, z1: nz + 7 }
+    H.zone = Z; H.nest = V(nx, 0, nz)
+    // 草頂高度（每 1 m 一格，取格子裡最高的草尖；再取周圍 1 格的最大值，飛的時候不會擦過草尖）
+    const gx0 = Z.x0 - 6, gz0 = Z.z0 - 6, NX = Math.ceil(Z.x1 - Z.x0 + 12), NZ = Math.ceil(Z.z1 - Z.z0 + 12), top = new Float32Array(NX * NZ)
+    scene.traverse((o) => {
+      const A = o.geometry?.attributes?.gA, B = o.geometry?.attributes?.gB; if (!A || !B || !o.geometry.isInstancedBufferGeometry) return
+      const a = A.array, b = B.array
+      for (let i = 0; i < a.length; i += 4) {
+        const ix = Math.floor(a[i] - gx0), iz = Math.floor(a[i + 2] - gz0); if (ix < 0 || iz < 0 || ix >= NX || iz >= NZ) continue
+        const t = a[i + 1] + Math.abs(b[i + 3]) - terrainHeight(a[i], a[i + 2]); if (t > top[iz * NX + ix]) top[iz * NX + ix] = t
+      }
+    })
+    const top2 = new Float32Array(NX * NZ)
+    for (let z = 0; z < NZ; z++) for (let x = 0; x < NX; x++) { let mx = 0; for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Zz = z + dz; if (X >= 0 && Zz >= 0 && X < NX && Zz < NZ) mx = Math.max(mx, top[Zz * NX + X]) } top2[z * NX + x] = mx }
+    const T2 = (ix, iz) => top2[clamp(iz, 0, NZ - 1) * NX + clamp(ix, 0, NX - 1)]
+    H.top = (x, z) => { const fx = x - gx0 - 0.5, fz = z - gz0 - 0.5, ix = Math.floor(fx), iz = Math.floor(fz), u = fx - ix, w = fz - iz; return lerp(lerp(T2(ix, iz), T2(ix + 1, iz), u), lerp(T2(ix, iz + 1), T2(ix + 1, iz + 1), u), w) }   // 雙線性（以前一格一格跳，飛行高度會突然差 0.6 m）
+    H.topRaw = (x, z) => { const ix = clamp(Math.floor(x - gx0), 0, NX - 1), iz = clamp(Math.floor(z - gz0), 0, NZ - 1); return top[iz * NX + ix] }
+    // 獵物可能出現的點：狩獵區南半邊（芒草塊的邊緣、中高草裡），離步道 4 m 以上、離觀察屋 6 m 以上
+    const hide = EAST.hides[0]
+    H.prey = [[-10, -23.5], [-3, -25], [4, -23], [-13, -17], [6, -18.5]].map(([dx, dz]) => V(nx + dx, 0, nz + dz))
+      .filter((p) => alpineTrailDist(p.x, p.z) > 4 && Math.hypot(p.x - hide[0], p.z - hide[1]) > 6 && p.x > Z.x0 && p.x < Z.x1 && p.z > Z.z0 && p.z < Z.z1)
+    for (const p of H.prey) p.y = terrainHeight(p.x, p.z)
+    { const near = nearMeshes(V(nx, 0, nz - 20), 22); H.prey = H.prey.filter((p) => !spotClutter(near, p)) }   // 灌木、石頭、孤樹旁邊不要
+    // 安全降落點：巢附近 6～12 m、草最高最密、離步道 8 m 以上的地方（吃老鼠的地方）
+    let best = -1; H.safe = H.nest.clone().add(V(-6, 0, -3))
+    for (let a = 0; a < 24; a++) for (const r of [6, 8, 10, 12]) {
+      const x = nx + Math.sin(a / 24 * Math.PI * 2) * r, z = nz + Math.cos(a / 24 * Math.PI * 2) * r
+      if (alpineTrailDist(x, z) < 8) continue
+      const sc = H.topRaw(x, z) + H.topRaw(x + 1, z) + H.topRaw(x - 1, z) + H.topRaw(x, z + 1) + H.topRaw(x, z - 1)
+      if (sc > best) { best = sc; H.safe.set(x, 0, z) }
+    }
+    H.routes = new Map()
+    H.grassH = (x, z) => terrainHeight(x, z) + Math.max(0.5, H.top(x, z))
+  }
+  // 巡獵路線（照獵物點、從哪一邊開始掃 快取起來）：巢 → 第一趟橫掃 → U 形轉彎 → 第二趟往獵物那邊 → 聽音的起點
+  function grassRoute(H, pi, vr) {
+    const key = pi * 2 + vr
+    if (H.routes.has(key)) return H.routes.get(key)
+    const Z = H.zone, p = H.prey[pi], W = Z.x0 + 2.5, E = Z.x1 - 2.5, s0 = vr ? W : E, s1 = vr ? E : W
+    const zA = H.nest.z - 6, zB = p.z + 2.5, dir = Math.sign(s1 - s0)
+    const sgn = Math.abs(s1 - p.x) > 4 ? Math.sign(s1 - p.x) : -dir   // 第二趟從 s1 那邊往獵物飛
+    const Ls = V(p.x + sgn * 4.2, 0, zB), Le = V(p.x + sgn * 1.4, 0, p.z + 0.7)
+    const r = Math.max(2.5, (zA - zB) / 2)
+    const pts = [H.nest.clone(), V(H.nest.x + (s0 - H.nest.x) * 0.45, 0, zA + 2.2), V(s0, 0, zA), V((s0 + s1) / 2, 0, zA - 0.6), V(s1, 0, zA),
+      V(s1 + dir * r * 0.55, 0, (zA + zB) / 2), V(s1, 0, zB)]
+    if (Math.abs(s1 - Ls.x) > 7) pts.push(V((s1 + Ls.x) / 2, 0, zB + 0.4))
+    pts.push(Ls)
+    const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), len = curve.getLength()
+    const listen = new THREE.QuadraticBezierCurve3(Ls, V(p.x + sgn * 2.4, 0, zB - 0.3), Le), R = { curve, len, listen, llen: listen.getLength(), p, Le }
+    H.routes.set(key, R); return R
+  }
+  // ---- 烏林鴞：停的枝頭不動；地上找 3 個老鼠點（7～13 m、在枝頭前方、不在步道和水裡、坡平、滑下去的路上沒有樹幹） ----
+  function ggSetup(u, s, H) {
+    const P = s.m.obj.getWorldPosition(V()), fw = H.fw
+    H.home = P.clone()
+    const box = new THREE.Box3().setFromObject(s.m.obj); H.homeC = box.getCenter(V()); H.perchH = box.max.y - box.min.y
+    const trunks = colliders.filter((c) => c.top < 60 && (c.x - P.x) ** 2 + (c.z - P.z) ** 2 < 30 * 30)
+    const cands = [], rej = H.rej = { drop: 0, trail: 0, slope: 0, river: 0, lake: 0, front: 0, trunk: 0 }
+    for (let a = 0; a < 48; a++) for (let r = 6; r <= 13; r += 1) {
+      const th = a / 48 * Math.PI * 2, x = P.x + Math.sin(th) * r, z = P.z + Math.cos(th) * r, g = terrainHeight(x, z)
+      if (P.y - g < 1.4) { rej.drop++; continue } if (alpineTrailDist(x, z) < 2.2) { rej.trail++; continue }
+      const sl = Math.max(Math.abs(terrainHeight(x + 0.6, z) - g), Math.abs(terrainHeight(x, z + 0.6) - g))
+      if (sl > 0.42) { rej.slope++; continue }   // 緩坡（0.6 m 內高差 42 cm 以內）
+      if (riverDist(x, z) < 4) { rej.river++; continue }
+      if (lakeWater != null && g < lakeWater + 0.8) { rej.lake++; continue }   // 湖邊、河谷底（比瀑布湖水面高不到 0.8 m）不要
+      // 2026-11-18 不看牠現在面向哪邊（停著會自己轉身，每次不一樣）：在背後的話，靜候時身體先在枝上轉過去。這根枝朝西看河谷（西邊是 8～10 m 深的河谷、東邊坡比枝還高）→ 能撲的大多是北邊緩坡
+      // 滑下去的路（直線，從枝頭往下）離每根樹幹至少 0.9 m
+      let clear = 9
+      for (let k = 1; k <= 12; k++) {
+        const t = k / 12, qx = P.x + (x - P.x) * t, qz = P.z + (z - P.z) * t, qy = P.y + (g - P.y) * t
+        for (const c of trunks) { if (qy > c.top) continue; const d = Math.hypot(qx - c.x, qz - c.z) - (c.r ?? 0.3); if (Math.hypot(c.x - P.x, c.z - P.z) < 1.2) continue; clear = Math.min(clear, d) }
+      }
+      if (clear < 0.9) { rej.trunk++; continue }
+      cands.push({ p: V(x, g, z), score: Math.min(clear, 3) - Math.abs(r - 8.5) * 0.25 - sl * 2, th })
+    }
+    cands.sort((a, b) => b.score - a.score)
+    const near = nearMeshes(P, 16), cam = u.b.cam ? V(u.b.cam.x, u.b.cam.y, u.b.cam.z) : null
+    H.prey = []; rej.clutter = 0; rej.unseen = 0; spotClutter.hits = []; H.hits = spotClutter.hits
+    for (const c of cands) {
+      if (H.prey.some((q) => q.distanceTo(c.p) < 1.4)) continue
+      if (spotClutter(near, c.p)) { rej.clutter++; continue }
+      if (cam && (!spotSeen(near, cam, c.p) || trunkBlock(trunks, cam, c.p))) { rej.unseen++; continue }
+      H.prey.push(c.p); if (H.prey.length >= 3) break
+    }
+    H.cands = cands.length
+    const mb = (n) => boneOf(H.sit, n)
+    H.head = mb('head'); H.neck = mb('neck'); H.body = mb('body'); H.wingL = mb('wingL'); H.wingR = mb('wingR')
+    H.ok = H.prey.length > 0
+  }
+  // 獵物點附近的東西（石頭、灌木、樹幹、步道欄杆…）：獵物點旁邊 0.8 m 內有東西 → 貓頭鷹撲下去會插進去，不要；
+  // 從觀察點（鳥的 cam）看過去被擋住 → 玩家看不到，扣分。草（InstancedBufferGeometry）、地形（很大的 mesh）、會動的不算
+  function nearMeshes(c, R) {
+    const out = [], sp = new THREE.Sphere()
+    scene.traverse((o) => {
+      if (!o.isMesh || o.isSkinnedMesh || o.geometry?.isInstancedBufferGeometry || !o.geometry?.attributes?.position || o.name === 'owlPrey' || /terrain|ground/i.test(o.name)) return   // 地形另外用高度表算（斜坡會被水平射線打到）
+      // 不看 visible（遠近版本、遮擋剔除會暫時藏起來，結果每次不一樣）
+      if (o.isInstancedMesh) { if (!o.boundingSphere) o.computeBoundingSphere(); sp.copy(o.boundingSphere) } else { if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); sp.copy(o.geometry.boundingSphere) }
+      sp.applyMatrix4(o.matrixWorld)
+      if (sp.radius < 60 && sp.center.distanceTo(c) < R + sp.radius) out.push(o)
+    })
+    return out
+  }
+  const _rc = new THREE.Raycaster()
+  function spotClutter(list, p) {   // 0.8 m 內、離地 0.1～1.0 m 有東西
+    for (const h of [0.15, 0.5, 0.9]) for (let a = 0; a < 8; a++) {
+      _rc.set(V(p.x, p.y + h, p.z), V(Math.sin(a * Math.PI / 4), 0, Math.cos(a * Math.PI / 4))); _rc.far = 0.8
+      const hit = _rc.intersectObjects(list, false)[0]
+      if (hit) { (spotClutter.hits ??= []).push((hit.object.name || hit.object.parent?.name || '?') + '|' + (hit.object.material?.name ?? '') + '|' + h + '|' + hit.distance.toFixed(2)); return true }
+    }
+    return false
+  }
+  function spotSeen(list, from, p) {   // 觀察點看獵物點（離地 0.3 m）有沒有被擋住
+    const to = V(p.x, p.y + 0.3, p.z), d = to.clone().sub(from), L = d.length()
+    _rc.set(from, d.divideScalar(L)); _rc.far = L - 0.4
+    return _rc.intersectObjects(list, false).length === 0
+  }
+  // 視線（觀察點 → 獵物點上方 0.3 m）有沒有穿過樹幹（碰撞圓柱，樹幹比視線高的才算）
+  const trunkBlock = (trunks, A, p) => {
+    for (const c of trunks) {
+      const bx = p.x - A.x, bz = p.z - A.z, t = clamp(((c.x - A.x) * bx + (c.z - A.z) * bz) / (bx * bx + bz * bz), 0, 1)
+      const d = Math.hypot(A.x + bx * t - c.x, A.z + bz * t - c.z), y = A.y + (p.y + 0.3 - A.y) * t
+      if (d < (c.r ?? 0.3) + 0.25 && y < c.top && t > 0.02 && t < 0.98) return true
+    }
+    return false
+  }
+  const riverDist = (x, z) => { let d = 1e9; const R = ALP_RIVER; for (let i = 0; i < R.length - 1; i++) { const ax = R[i][0], az = R[i][1], bx = R[i + 1][0] - ax, bz = R[i + 1][1] - az, t = clamp(((x - ax) * bx + (z - az) * bz) / (bx * bx + bz * bz), 0, 1); d = Math.min(d, Math.hypot(x - ax - bx * t, z - az - bz * t)) } return d }
+  const lakeWater = YOSE.lake?.water ?? null
+
+  // ---- 飛行模型的姿勢 ----
+  // 翅膀固定姿勢：up 往上抬（+1 高舉成 V 字、-1 往下垂、蓋住獵物），sweep 往前收（+）往後收（-）
+  function wingHold(s, up, sweep = 0, flut = 0, t = 0) {
+    const r = s.r
+    for (const [n, sg] of [['L', 1], ['R', -1]]) {
+      const f = flut * Math.sin(t * 13 + (sg > 0 ? 0 : 0.4))
+      r.turn('wing' + n, AX.y, sg * sweep); r.turn('wingtip' + n, AX.y, sg * sweep * 0.6)
+      r.turn('wing' + n, AX.x, -sg * (up * 0.85 + f)); r.turn('wingtip' + n, AX.x, -sg * (up * 0.45 + f * 0.6))
+    }
+  }
+  // 頭：pitch 往下看（+）、yaw 往左右轉
+  const headTurn = (s, pitch, yaw = 0) => { s.r.turn('head', AX.z, pitch * OWL_HEAD_SGN); if (yaw) s.r.turn('head', AX.y, yaw) }
+  const OWL_HEAD_SGN = 1
+  // 腳：ext -1 往後收、0 垂直（站姿）、1 往前下方伸直
+  function legPose(s, H, ext) {
+    const L = H.L, lat = _ov3.set(1, 0, 0).applyQuaternion(s.root.quaternion)
+    for (const sd of ['L', 'R']) {
+      boneWorld(L['th' + sd], L.rest.get(L['th' + sd]), [[lat, L.sgn * ext * 0.95]])
+      boneWorld(L['sh' + sd], L.rest.get(L['sh' + sd]), [[lat, -L.sgn * Math.max(0, ext) * 0.3]])
+      boneWorld(L['ft' + sd], L.rest.get(L['ft' + sd]), [[lat, L.sgn * ext * 0.4]])
+    }
+  }
+  // 兩隻腳腳趾最低的高度、兩腳中間（抓老鼠的點）
+  function feetInfo(H, out) {
+    const L = H.L; let lo = 1e9
+    for (const tb of [...L.toesL, ...L.toesR]) { tb.getWorldPosition(_ov4); lo = Math.min(lo, _ov4.y) }
+    L.ftL.getWorldPosition(out); L.ftR.getWorldPosition(_ov4); out.add(_ov4).multiplyScalar(0.5)
+    return lo
+  }
+  // 沿著曲線飛（curve 是 3D 的；speed 公尺/秒）：位置、航向、側傾、俯仰都平滑
+  function owlFly(s, X, curve, len, sp, dt, { pitchAdd = 0, yFn = null } = {}) {
+    X.dist = Math.min(len, X.dist + sp * dt); const k = X.dist / len
+    curve.getPointAt(k, _ov); curve.getTangentAt(Math.min(k, 0.999), _ov2)
+    if (yFn) { const yt = yFn(_ov.x, _ov.z, k); X.yS = X.yS == null || X.ySreset ? yt : X.yS + (yt - X.yS) * (1 - Math.exp(-3 * dt)); X.ySreset = false; _ov.y = Math.max(X.yS, yt - 0.25); const k2 = Math.min(1, k + 0.02); curve.getPointAt(k2, _ov4); _ov2.y = (yFn(_ov4.x, _ov4.z, k2) - _ov.y) / Math.max(0.05, len * (k2 - k)); _ov2.normalize() }
+    s.root.position.copy(_ov)
+    const h = Math.atan2(_ov2.x, _ov2.z), dh = wrap(h - s.head)
+    s.head += dh * (1 - Math.exp(-5 * dt)); s.roll = damp(s.roll, clamp(-dh * 2.4, -0.55, 0.55), 3, dt)
+    s.pitch = damp(s.pitch, -Math.asin(clamp(_ov2.y, -1, 1)) * 0.7 + pitchAdd, 4, dt)
+    s.root.rotation.set(s.pitch, s.head, s.roll); s.root.updateMatrixWorld(true)
+    return k >= 1
+  }
+  // 腳伸出來（借的腳）↔ 收起來（飛行模型自己畫的腳）
+  const legsOut = (H, on) => { if (H.legs.visible === on) return; H.legs.visible = on; H.fsk.geometry.setIndex(on ? H.idxNoLeg : H.idxFull) }
+  const showRoot = (s, H, on) => { s.root.visible = on; if (!on) legsOut(H, false) }
+  function setPh(s, H, ph) { H.ph = ph; H.pt = 0; H.log.push(ph); if (H.log.length > 60) H.log.shift() }
+  // 收尾：回到原本的停棲模型（換模型那一格同一個姿勢）
+  function huntEnd(u, s, H) {
+    H.on = false; H.ph = ''; H.retry = 0; H.n++
+    showRoot(s, H, false); H.sit.visible = false; s.m.obj.visible = true; s.mode = 'perch'; s.act = ''
+    if (H.mouse) { preySet(H.mouse, 'HIDDEN'); H.mouse = null }
+    H.pushK = 0; huntPush(H)
+    H.wait = H.kind === 'quarter' ? grassWait() : rnd(35, 75)
+  }
+  const grassWait = () => { const h = world.time?.hour ?? 12; return h < 6.5 || h > 16.5 ? rnd(25, 55) : rnd(150, 300) }   // 黃昏、夜間、清晨常出來巡獵；白天大多在睡
+  function huntPush(H) { const P = grassPush.value[H.kind === 'quarter' ? 0 : 1]; if (!H.pushK) { P.w = 0; return } P.set(H.pushP.x, H.pushP.z, H.pushR ?? 1.1, H.pushK) }
+  // 玩家逼太近：中斷，照驚飛那一套從現在的位置飛走（抓到的老鼠一起帶走；還沒抓到的老鼠跑掉）
+  function huntAbort(u, s, H) {
+    const pos = (H.sit.visible ? H.sit.getWorldPosition(V()) : s.root.position.clone())
+    if (H.mouse && H.mouse.state !== 'CAPTURED') preyEscape(H.mouse, pos)
+    if (H.mouse?.state === 'CAPTURED') preySet(H.mouse, 'HIDDEN')
+    H.mouse = null; H.on = false; H.ph = ''; H.retry = 0; H.sit.visible = false; legsOut(H, false); H.pushK = 0; huntPush(H)
+    s.m.obj.updateMatrixWorld(true); _box.setFromObject(s.m.obj); _box.getCenter(s.home)
+    s.m.obj.getWorldDirection(_w); s.faceH = Math.atan2(_w.x, _w.z)
+    const P = world.camera.position, away = pos.clone().sub(P).setY(0); if (away.lengthSq() < 1e-4) away.set(1, 0, 0)
+    s.curve = outbound(pos, away.normalize(), null); s.len = s.curve.getLength(); s.dist = 0; s.t = 0
+    s.mode = 'out'; s.root.visible = true; s.m.obj.visible = false; s.wait = rnd(20, 38)
+    u.state = 'away'; u.trip = false; u.alarm = 0
+    H.wait = H.kind === 'quarter' ? grassWait() : rnd(35, 75); H.aborts = (H.aborts ?? 0) + 1; H.log.push('ABORT')
+  }
+
+  /* ---- 草鴞：GRASS_REST → TAKEOFF → QUARTERING → LISTEN → POUNCE → CAPTURE／MISS → DEPART → （安全點吃）→ 回巢 → REST ---- */
+  function grassStart(u, s, H, opt = {}) {
+    if (!H.prey.length) return false
+    const pi = opt.prey ?? Math.floor(Math.random() * H.prey.length), vr = opt.side ?? (Math.random() < 0.5 ? 0 : 1)
+    H.R = grassRoute(H, pi, vr); H.result = opt.result ?? (Math.random() < 0.6 ? 'catch' : 'miss'); H.retry = 0
+    H.mouse = preyGet(H.mouseK * 0.7)
+    if (H.mouse) { H.mouse.owner = H; H.mouse.spot.copy(H.R.p); H.mouse.p.copy(H.R.p); preySet(H.mouse, 'HIDDEN') }
+    // 起飛點：巢裡的模型現在站的地方
+    s.m.obj.getWorldPosition(H.from = V()); H.R.curve.points[0].set(H.from.x, 0, H.from.z); H.R.curve.updateArcLengths?.(); H.R.len = H.R.curve.getLength()
+    syncPose(H.mB, H.sB); H.sit.visible = false
+    s.m.obj.visible = false; s.root.visible = true; legsOut(H, false)
+    s.r.reset(); s.mode = 'hunt'; H.on = true; H.dist = 0; H.qv = clamp(H.R.len / 15, 2.6, 4.0)   // 巡獵 2.6～4 m/s，整段 15 秒左右
+    s.head = H.h0; s.pitch = -0.3; s.roll = 0
+    H.pushP = H.from.clone(); H.pushR = 1.4; H.pushK = 1; H.ySreset = true
+    s.root.position.copy(H.from).add(V(0, 0.15, 0)); s.root.rotation.set(s.pitch, s.head, 0); s.root.updateMatrixWorld(true)   // 同一格就擺好（不然第一格飛行模型還在上次的位置）
+    setPh(s, H, 'takeoff'); s.act = 'takeoff'
+    return true
+  }
+  function grassStep(u, s, H, t, dt) {
+    H.pt += dt; s.t += dt
+    const R = H.R, alt = (x, z, k) => H.grassH(x, z) + 0.75 + 0.3 * Math.sin(k * R.len * 0.32)   // 草頂上 0.45～1.05 m（草頂取周圍 1 m 最高的，平均草頂上約 0.7～1.6 m）
+    if (H.ph === 'takeoff' || H.ph === 'quarter') {
+      // 起飛：前 1.5 秒用力拍、從草裡慢慢升到巡獵高度；之後滑翔為主、偶爾拍幾下
+      const tk = H.ph === 'takeoff' ? 1 - ss(H.pt, 0.2, 1.5) : 0, sp = H.ph === 'takeoff' ? lerp(0.9, H.qv, ss(H.pt, 0, 1.5)) : H.qv
+      const g0 = H.from.y + 0.15, rise = ss(H.dist, 0, 3.2)
+      const done = owlFly(s, H, R.curve, R.len, sp, dt, { pitchAdd: -0.35 * tk, yFn: (x, z, k) => lerp(g0, alt(x, z, k), rise) })
+      s.r.reset(); wings(s, u.esc.fly, t, dt, tk, 0)
+      headTurn(s, 0.3 + 0.1 * Math.sin(H.pt * 0.9), 0.35 * Math.sin(H.pt * 0.55))   // 頭微微朝下、左右慢慢掃
+      H.pushK = H.ph === 'takeoff' ? 1 - ss(H.pt, 0.6, 1.6) : 0; huntPush(H)
+      if (H.ph === 'takeoff' && H.pt > 1.5) setPh(s, H, 'quarter')
+      s.act = H.ph === 'takeoff' ? 'takeoff' : 'quarter'
+      if (done) { setPh(s, H, 'listen'); H.dist = 0; H.lv = sp; H.ly0 = s.root.position.y - H.grassH(s.root.position.x, s.root.position.z); if (H.mouse) { H.mouse.p.copy(R.p); preySet(H.mouse, 'MOVING') } }
+      return
+    }
+    if (H.ph === 'listen') {
+      // 聽音定位：速度降到 1 m/s 左右、頭往下對著聲音、身體微調方向（不定點懸停）
+      H.lv = damp(H.lv, 0.95, 2.2, dt)
+      const done = owlFly(s, H, R.listen, R.llen, H.lv, dt, { pitchAdd: -0.2, yFn: (x, z) => H.grassH(x, z) + lerp(H.ly0 ?? 1.15, 1.35, ss(H.pt, 0, 1.5)) })   // 從巡獵結束的高度慢慢升到草頂上 1.35 m（不跳）
+      s.r.reset(); wings(s, u.esc.fly, t, dt, 0.25, 0.35)
+      const d = R.p.clone().sub(s.root.position), yaw = wrap(Math.atan2(d.x, d.z) - s.head)
+      headTurn(s, 0.55 + 0.25 * ss(H.pt, 0, 1), clamp(yaw, -1.2, 1.2) * 0.8)
+      s.act = 'quarter'
+      if (done || H.pt > 3) {
+        setPh(s, H, 'pounce'); H.p0 = s.root.position.clone(); H.pitch0 = s.pitch
+        if (H.mouse) preySet(H.mouse, 'TARGETED'), (H.mouse.mesh.visible = true)
+        legsOut(H, true)
+      }
+      return
+    }
+    if (H.ph === 'pounce') return pounceStep(u, s, H, t, dt, 1.15, 'pounce', () => setPh(s, H, H.result === 'catch' ? 'capture' : 'miss'))
+    if (H.ph === 'capture' || H.ph === 'miss') {
+      groundStep(u, s, H, t, dt)
+      if (H.ph === 'capture' && H.pt > 2.6) { departStart(u, s, H, H.safe, 'depart') }
+      if (H.ph === 'miss' && H.pt > 1.7) {
+        // 沒抓到：一半機率再巡一小段找別的老鼠（一次），不然就回去
+        const others = H.prey.filter((q) => q.distanceTo(R.p) > 3)
+        if (H.retry < 1 && others.length && Math.random() < 0.5) {
+          H.retry++; const p = others[Math.floor(Math.random() * others.length)]
+          const A = s.root.position.clone().setY(0), sgn = Math.sign(A.x - p.x) || 1
+          const Ls = V(p.x + sgn * 4.2, 0, p.z + 2.5), Le = V(p.x + sgn * 1.4, 0, p.z + 0.7)
+          const curve = new THREE.CatmullRomCurve3([A, A.clone().lerp(Ls, 0.5).add(V(0, 0, 3)), Ls], false, 'centripetal')
+          H.R = { curve, len: curve.getLength(), listen: new THREE.QuadraticBezierCurve3(Ls, V(p.x + sgn * 2.4, 0, p.z + 2.2), Le), p, Le }; H.R.llen = H.R.listen.getLength()
+          H.result = Math.random() < 0.7 ? 'catch' : 'miss'
+          H.mouse = preyGet(H.mouseK * 0.7); if (H.mouse) { H.mouse.owner = H; H.mouse.spot.copy(p); H.mouse.p.copy(p); preySet(H.mouse, 'HIDDEN') }
+          H.from = s.root.position.clone(); H.dist = 0; H.qv = 3.0; H.ySreset = true; legsOut(H, false)
+          H.pushP = H.from.clone(); H.pushR = 1.2; H.pushK = 1
+          setPh(s, H, 'takeoff'); s.act = 'takeoff'
+        } else departStart(u, s, H, H.safe, 'depart')
+      }
+      return
+    }
+    if (H.ph === 'depart' || H.ph === 'home') {
+      const done = departStep(u, s, H, t, dt)
+      if (done) {
+        if (H.ph === 'depart') {
+          // 降落在安全點的高草裡：換站姿模型（大部分被草蓋住），吃老鼠 6～10 秒
+          setPh(s, H, 'eat'); showRoot(s, H, false)
+          const g = terrainHeight(H.safe.x, H.safe.z)
+          H.sit.position.set(H.safe.x, g + (H.P0.y - terrainHeight(H.P0.x, H.P0.z)), H.safe.z); H.sit.quaternion.copy(H.Q0).premultiply(_oq.setFromAxisAngle(YAX, wrap(s.head - H.h0))); H.sit.scale.copy(H.S0); H.sit.visible = true
+          H.eatT = rnd(6, 10); H.pushP = H.safe.clone(); H.pushR = 1.0; H.pushK = 0.5
+          if (H.mouse) { preySet(H.mouse, 'HIDDEN'); H.mouse = null }   // 在草裡吃（看不到）
+        } else huntEnd(u, s, H)
+      }
+      return
+    }
+    if (H.ph === 'eat') {
+      H.pushK = 0.5 * (1 - ss(H.pt, 0.5, 1.5)); huntPush(H)
+      if (H.mouse && H.pt > 1.5) { preySet(H.mouse, 'HIDDEN'); H.mouse = null }
+      if (H.pt > H.eatT) {   // 吃完：低低地飛回巢
+        H.sit.visible = false
+        const to = s.m.obj.getWorldPosition(V())
+        departStart(u, s, H, to, 'home', H.sit.position.clone())
+      }
+    }
+  }
+  // 撲下去（兩種共用）：dur 秒從 H.p0 落到獵物上；身體先頭朝下、最後半秒往後仰讓腳往前伸，翅膀高舉
+  function pounceStep(u, s, H, t, dt, dur, tag, next) {
+    const k = clamp(H.pt / dur, 0, 1), P = H.R.p, gy = terrainHeight(P.x, P.z)
+    const e = k * k * (3 - 2 * k), drop = Math.pow(k, 1.5)
+    const tgt = _ov.set(lerp(H.p0.x, P.x, e), 0, lerp(H.p0.z, P.z, e))
+    tgt.y = H.p0.y
+    s.root.position.copy(tgt)
+    const dx = P.x - H.p0.x, dz = P.z - H.p0.z; if (dx * dx + dz * dz > 0.01) s.head = s.head + wrap(Math.atan2(dx, dz) - s.head) * (1 - Math.exp(-6 * dt))
+    s.pitch = lerp(H.pitch0 + 0.55 * ss(k, 0, 0.35), -0.55, ss(k, 0.55, 0.95)); s.roll = damp(s.roll, 0, 6, dt)
+    s.root.rotation.set(s.pitch, s.head, s.roll); s.root.updateMatrixWorld(true)
+    s.r.reset(); wingHold(s, lerp(0.2, 1.05, ss(k, 0.1, 0.6)), lerp(0, -0.25, ss(k, 0.4, 1)))
+    headTurn(s, 0.6 - 0.3 * ss(k, 0.6, 1))
+    legsOut(H, true); legPose(s, H, lerp(-0.6, 1.0, ss(k, 0.2, 0.85)))
+    // 高度：最後腳趾剛好碰到地面（姿勢擺好後量身體中心到腳趾的距離）
+    s.root.updateMatrixWorld(true); const off = s.root.position.y - feetInfo(H, _ov2)
+    s.root.position.y = Math.max(lerp(H.p0.y, gy + 0.004 + off, drop), gy + 0.004 + off, gy + H.belly); s.root.updateMatrixWorld(true)   // 腳趾、肚子都不能到地面下
+    if (k > 0.75) { H.pushP = P.clone(); H.pushR = 1.3; H.pushK = ss(k, 0.75, 1); huntPush(H) }
+    s.act = tag
+    if (k >= 1) { next(); H.p0 = s.root.position.clone(); if (H.mouse) { if (H.result === 'catch') { preySet(H.mouse, 'CAPTURED'); H.mouse.mesh.visible = true; holdMouse(H, true) } else preyEscape(H.mouse, P) } }
+  }
+  // 地上：翅膀垂下張開蓋住獵物（mantling）、身體前傾、偶爾拍一下保持平衡；腳踩在地上（用腳趾最低點對齊地面）
+  function groundStep(u, s, H, t, dt) {
+    const P = H.R.p, gy = terrainHeight(P.x, P.z), catchIt = H.ph === 'capture' || H.ph === 'mcapture'
+    const lean = catchIt ? 0.42 + 0.06 * Math.sin(H.pt * 2.1) : 0.15
+    s.pitch = damp(s.pitch, lean, 5, dt); s.roll = damp(s.roll, 0.05 * Math.sin(H.pt * 1.7), 4, dt)
+    s.root.rotation.set(s.pitch, s.head, s.roll); s.root.updateMatrixWorld(true)
+    s.r.reset()
+    const settle = 1 - ss(H.pt, 0, 0.5)
+    if (catchIt) wingHold(s, lerp(1.0, -0.55, ss(H.pt, 0, 0.45)), lerp(-0.25, 0.25, ss(H.pt, 0, 0.45)), 0.12 * ss(Math.sin(H.pt * 1.3), 0.6, 1), H.pt)
+    else wingHold(s, lerp(1.0, -0.05, ss(H.pt, 0, 0.4)), lerp(-0.25, -0.6, ss(H.pt, 0, 0.4)))
+    headTurn(s, catchIt ? 0.75 : 0.35, catchIt ? 0 : 0.9 * Math.sin(H.pt * 2.4) * ss(H.pt, 0.3, 0.6))
+    legPose(s, H, lerp(1.0, catchIt ? 0.35 : 0.15, ss(H.pt, 0, 0.35)))
+    // 腳趾最低點貼地
+    s.root.updateMatrixWorld(true); const lo = feetInfo(H, _ov2)
+    s.root.position.y += gy + 0.004 - lo; if (s.root.position.y < gy + H.belly) s.root.position.y = gy + H.belly
+    s.root.updateMatrixWorld(true)
+    H.pushP = P.clone(); H.pushR = 1.3; H.pushK = 0.85 + 0.15 * Math.sin(H.pt * 9) * settle; huntPush(H)
+    if (catchIt && H.mouse) holdMouse(H, true)
+    s.act = catchIt ? (H.kind === 'quarter' ? 'capture' : 'mousecapture') : 'look'
+  }
+  // 老鼠在兩腳中間（地上：踩著；飛的時候：吊在腳下）
+  function holdMouse(H, ground) {
+    const M = H.mouse; if (!M) return
+    feetInfo(H, _ov2)
+    M.mesh.position.copy(_ov2); M.mesh.position.y -= ground ? 0.03 * M.mesh.scale.x : 0.045 * M.mesh.scale.x
+    M.mesh.rotation.set(ground ? 0 : 0.35, H.holdH ?? 0, ground ? 0.25 : 0); M.p.copy(M.mesh.position)
+    if (!ground) M.mesh.position.y -= 0
+  }
+  // 從地上（或安全點）起飛，飛到 to（降落在地上）：從地面往上升到草頂上，再滑下去
+  function departStart(u, s, H, to, ph, from = null) {
+    const A = from ?? s.root.position.clone(), B = to.clone(), gB = terrainHeight(B.x, B.z), dist = Math.hypot(B.x - A.x, B.z - A.z)
+    A.y = Math.max(A.y, terrainHeight(A.x, A.z) + H.belly + 0.03)   // 從地上（安全點）起飛：身體中心先放在肚子不碰地的高度
+    const cruise = (x, z) => (H.kind === 'quarter' ? H.grassH(x, z) + 1.0 : terrainHeight(x, z) + 2.2)
+    const dir = V(B.x - A.x, 0, B.z - A.z).normalize()
+    const A1 = A.clone().addScaledVector(dir, Math.min(3, dist * 0.3)); A1.y = Math.max(A.y + 1.0, cruise(A1.x, A1.z))
+    const B1 = B.clone().addScaledVector(dir, -Math.min(3, dist * 0.3)); B1.y = cruise(B1.x, B1.z) + 0.3
+    B.y = gB + H.L.len * 0.85
+    H.dc = new THREE.CubicBezierCurve3(A.clone(), A1, B1, B); H.dlen = H.dc.getLength(); H.dist = 0
+    H.holdH = Math.atan2(dir.x, dir.z)
+    s.root.visible = true; legsOut(H, !!(H.mouse?.state === 'CAPTURED' || ph !== 'home'))
+    if (ph === 'home') { s.r.reset(); s.head = Math.atan2(dir.x, dir.z); s.pitch = -0.3; s.roll = 0 }
+    H.pushP = A.clone(); H.pushR = 1.3; H.pushK = 1
+    setPh(s, H, ph); s.act = 'takeoff'
+  }
+  function departStep(u, s, H, t, dt) {
+    const rem = H.dlen - H.dist, sp = lerp(1.2, 4.2, ss(H.pt, 0, 1.2)) * clamp(rem / 2.5, 0.35, 1)
+    const done = owlFly(s, H, H.dc, H.dlen, sp, dt)
+    const tk = 1 - ss(H.pt, 0.3, 1.4), flare = ss(1 - rem / 2.2, 0, 1)
+    s.r.reset(); wings(s, u.esc.fly, t, dt, tk, flare)
+    const carry = H.mouse?.state === 'CAPTURED'
+    if (H.legs.visible) { legPose(s, H, carry ? lerp(0.6, 0.1, ss(H.pt, 0, 1)) + flare * 0.5 : lerp(0.4, -0.6, ss(H.pt, 0, 0.8)) + flare * 1.2); if (!carry && H.pt > 0.8 && flare < 0.05) legsOut(H, false) }
+    else if (flare > 0.05) { legsOut(H, true); legPose(s, H, -0.6 + flare * 1.4) }
+    if (H.legs.visible) { s.root.updateMatrixWorld(true); const gy = terrainHeight(s.root.position.x, s.root.position.z), lo = feetInfo(H, _ov2); if (lo < gy + 0.004) { s.root.position.y += gy + 0.004 - lo; s.root.updateMatrixWorld(true) } }   // 剛起飛、腳往下伸的那幾格腳趾不能插進地面
+    if (carry) holdMouse(H, false)
+    H.pushK = 1 - ss(H.pt, 0.4, 1.4); huntPush(H)
+    s.act = carry ? (H.kind === 'quarter' ? 'capture' : 'mousecapture') : H.pt < 1.2 ? 'takeoff' : flare > 0.05 ? 'land' : 'fly'
+    if (done) { H.pushK = 0; huntPush(H) }
+    return done
+  }
+
+  /* ---- 烏林鴞：OWL_PERCH → LISTEN（靜候）→ HEAD_TILT → LAUNCH → GROUND_POUNCE → CAPTURE／MISS → RETURN → PERCH ---- */
+  function ggStart(u, s, H, opt = {}) {
+    if (!H.ok) return false
+    const pi = opt.prey ?? Math.floor(Math.random() * H.prey.length), p = H.prey[pi]
+    H.R = { p }; H.result = opt.result ?? (Math.random() < 0.65 ? 'catch' : 'miss')
+    H.mouse = preyGet(H.mouseK * 0.85)
+    if (H.mouse) { H.mouse.owner = H; H.mouse.spot.copy(p); H.mouse.p.copy(p); preySet(H.mouse, 'MOVING') }
+    // 換成 sit（同一個姿勢），之後頭、身體的動作都在 sit 上做
+    s.m.obj.updateMatrixWorld(true)
+    syncPose(H.mB, H.sB); s.m.obj.matrixWorld.decompose(H.sit.position, H.sit.quaternion, H.sit.scale); H.sit.visible = true; s.m.obj.visible = false
+    H.sit.updateMatrixWorld(true)
+    H.restHead = H.head?.quaternion.clone(); H.restNeck = H.neck?.quaternion.clone(); H.restBody = H.body?.quaternion.clone(); H.restWL = H.wingL?.quaternion.clone(); H.restWR = H.wingR?.quaternion.clone()
+    H.sitP = H.sit.position.clone(); H.sitQ = H.sit.quaternion.clone()
+    // 現在面向（Tripo 頭朝 -x）；獵物在背後（頭要轉超過 60°）：靜候時身體在枝上慢慢轉過去，剩下的用頭轉
+    let skin = null; H.sit.traverse((o) => { if (o.isSkinnedMesh && !skin) skin = o })
+    H.fw = V(-1, 0, 0).transformDirection(skin.matrixWorld).setY(0).normalize(); H.h0 = Math.atan2(H.fw.x, H.fw.z)
+    const yp = wrap(Math.atan2(p.x - H.sitP.x, p.z - H.sitP.z) - H.h0)
+    H.byT = Math.abs(yp) > 1.0 ? yp - Math.sign(yp) * 0.7 : 0; H.by = 0
+    s.mode = 'hunt'; H.on = true; H.watchT = rnd(5, 8); H.tiltT = rnd(2.4, 3.4); H.side = Math.random() < 0.5 ? 1 : -1
+    setPh(s, H, 'watch'); s.act = 'look'
+    return true
+  }
+  // 頭：yaw 往獵物轉、pitch 往下看、roll 歪頭（世界座標的軸；從換進來那一格的姿勢算）
+  function ggHead(H, yaw, pitch, roll) {
+    if (!H.head) return
+    const f = _ov2.copy(H.fw).applyAxisAngle(YAX, yaw + (H.by ?? 0)), lat = _ov4.crossVectors(YAX, f).normalize()
+    if (H.neck) boneWorld(H.neck, H.restNeck, [[YAX, yaw * 0.35]])
+    boneWorld(H.head, H.restHead, [[YAX, yaw * 0.65], [lat, pitch], [f, roll]])
+  }
+  function ggStep(u, s, H, t, dt) {
+    H.pt += dt; s.t += dt
+    const p = H.R.p, toP = V(p.x - H.sitP.x, 0, p.z - H.sitP.z)
+    // 身體在枝上轉（繞腳下的原點，前 2.5 秒轉完）
+    if (H.ph === 'watch' || H.ph === 'tilt') { H.by = H.byT * ss(H.ph === 'watch' ? H.pt : 9, 0.3, 2.5); H.sit.quaternion.copy(H.sitQ).premultiply(_oq.setFromAxisAngle(YAX, H.by)) }
+    const yawP = wrap(Math.atan2(toP.x, toP.z) - H.h0 - H.by)
+    const pitchP = Math.atan2(H.sitP.y - p.y, toP.length()) * 0.6
+    const breathe = () => { if (H.body) { H.body.quaternion.copy(H.restBody); H.body.scale.setScalar(1 + 0.008 * Math.sin(H.pt * 1.9)) } }
+    if (H.ph === 'watch') {
+      // 靜候：身體不動、慢慢轉頭（兩三秒一次），胸口起伏
+      const look = 0.75 * Math.sin(H.pt * 0.5) * ss(Math.sin(H.pt * 0.35 + 1), -0.2, 0.6) + 0.35 * ss(H.pt, H.watchT - 1.6, H.watchT) * yawP
+      ggHead(H, clamp(look, -1.6, 1.6), 0.08, 0); breathe()
+      s.act = 'look'
+      if (H.pt > H.watchT) { setPh(s, H, 'tilt'); H.tilt0 = clamp(look, -1.6, 1.6) }
+      return
+    }
+    if (H.ph === 'tilt') {
+      // 歪頭聽：臉盤轉向老鼠、往一邊歪 19° 停一下，再往另一邊 15°（身體不動）
+      const k = H.pt, yaw = lerp(H.tilt0, clamp(yawP, -1.7, 1.7), ss(k, 0, 0.6))
+      const roll = H.side * (0.33 * ss(k, 0.3, 0.7) * (1 - ss(k, 1.3, 1.7)) - 0.26 * ss(k, 1.4, 1.8) * (1 - ss(k, H.tiltT - 0.4, H.tiltT)))   // 19° → 另一邊 15°
+      ggHead(H, yaw, pitchP * ss(k, 0, 0.8), roll); breathe()
+      s.act = 'headtilt'
+      if (k > H.tiltT) { setPh(s, H, 'lean'); H.yawEnd = yaw; if (H.mouse) preySet(H.mouse, 'TARGETED') }
+      return
+    }
+    if (H.ph === 'lean') {
+      // 起飛前：身體轉向獵物、往前傾、翅膀微微抬起（0.5 秒）→ 換飛行模型
+      const k = ss(H.pt, 0, 0.5), turn = yawP * 0.5 * k
+      const side = _ov2.crossVectors(YAX, _ov4.copy(H.fw).applyAxisAngle(YAX, H.by + turn)).normalize()
+      H.sit.quaternion.copy(H.sitQ).premultiply(_oq.setFromAxisAngle(YAX, H.by + turn)).premultiply(_oq2.setFromAxisAngle(side, -0.45 * k))
+      ggHead(H, (H.yawEnd - turn) * (1 - k * 0.6), pitchP, 0)
+      if (H.wingL) { boneWorld(H.wingL, H.restWL, [[_ov4.copy(H.fw).applyAxisAngle(YAX, H.by + turn), 0.25 * k]]); boneWorld(H.wingR, H.restWR, [[_ov4.copy(H.fw).applyAxisAngle(YAX, H.by + turn), -0.25 * k]]) }
+      s.act = 'takeoff'
+      if (H.pt > 0.5) {
+        // 換飛行模型：位置＝sit 的身體中心，航向朝獵物，往前傾
+        _box.setFromObject(H.sit); const c = _box.getCenter(V())
+        H.sit.visible = false; s.root.visible = true; s.r.reset()
+        s.head = Math.atan2(toP.x, toP.z); s.pitch = 0.35; s.roll = 0; s.root.position.copy(c); s.root.rotation.set(s.pitch, s.head, 0)
+        const gy = terrainHeight(p.x, p.z), d = toP.length(), dir = toP.clone().normalize()
+        const end = V(p.x, gy + 2.2, p.z).addScaledVector(dir, -1.6)
+        H.dc = new THREE.CubicBezierCurve3(c.clone(), c.clone().addScaledVector(dir, d * 0.3).add(V(0, -0.9, 0)), end.clone().addScaledVector(dir, -d * 0.25).add(V(0, 0.6, 0)), end); H.dlen = H.dc.getLength(); H.dist = 0
+        setPh(s, H, 'glide')
+      }
+      return
+    }
+    if (H.ph === 'glide') {
+      // 從枝頭滑下去：先拍兩三下、翅膀張開滑，最後 1.6 m 換成撲擊
+      const rem = H.dlen - H.dist, sp = lerp(2.2, 5.2, ss(H.pt, 0, 0.8)) * clamp(rem / 3, 0.6, 1)
+      const done = owlFly(s, H, H.dc, H.dlen, sp, dt, { pitchAdd: 0.15 })
+      s.r.reset(); if (H.pt < 0.9) wings(s, u.esc.fly, t, dt, 1 - ss(H.pt, 0.2, 0.9), 0); else wingHold(s, 0.12 + 0.05 * Math.sin(H.pt * 3), 0)
+      headTurn(s, 0.45)
+      s.act = H.pt < 0.6 ? 'takeoff' : 'groundpounce'
+      if (done) { setPh(s, H, 'pounce'); H.p0 = s.root.position.clone(); H.pitch0 = s.pitch; legsOut(H, true) }
+      return
+    }
+    if (H.ph === 'pounce') return pounceStep(u, s, H, t, dt, 0.9, 'groundpounce', () => setPh(s, H, H.result === 'catch' ? 'mcapture' : 'mmiss'))
+    if (H.ph === 'mcapture' || H.ph === 'mmiss') {
+      groundStep(u, s, H, t, dt)
+      if (H.pt > (H.ph === 'mcapture' ? 2.5 : 2.0)) {
+        // 回枝頭：降落點＝原本站的位置（身體中心），最後從前方滑進來
+        const B = H.homeC.clone(), A = s.root.position.clone(), dir = V(B.x - A.x, 0, B.z - A.z).normalize()
+        const A1 = A.clone().addScaledVector(dir, 1.8).add(V(0, 1.4, 0)), B1 = B.clone().addScaledVector(dir, -2.4).add(V(0, -0.3, 0))
+        H.dc = new THREE.CubicBezierCurve3(A, A1, B1, B); H.dlen = H.dc.getLength(); H.dist = 0; H.holdH = Math.atan2(dir.x, dir.z)
+        setPh(s, H, 'return'); s.act = 'takeoff'
+      }
+      return
+    }
+    if (H.ph === 'return') {
+      const rem = H.dlen - H.dist, sp = lerp(1.5, 4.6, ss(H.pt, 0, 1.0)) * clamp(rem / 2.5, 0.3, 1)
+      const flare = ss(1 - rem / 2.0, 0, 1)
+      const done = owlFly(s, H, H.dc, H.dlen, sp, dt, { pitchAdd: -0.5 * flare })
+      s.r.reset(); wings(s, u.esc.fly, t, dt, 1 - ss(H.pt, 0.3, 1.3), flare)
+      const carry = H.mouse?.state === 'CAPTURED'
+      legPose(s, H, carry ? lerp(0.5, 0.1, ss(H.pt, 0, 1)) + flare * 0.4 : lerp(0.3, -0.6, ss(H.pt, 0, 0.7)) + flare * 1.0)
+      legsOut(H, !!(carry || H.pt < 0.7 || flare > 0.05))
+      if (carry) holdMouse(H, false)
+      H.pushK = 1 - ss(H.pt, 0.3, 1.2); huntPush(H)
+      s.act = carry ? 'mousecapture' : flare > 0.05 ? 'land' : 'fly'
+      if (done) {
+        // 回到枝頭：換回 sit（原本的站姿、方向），抓著老鼠站一下 → 低頭吞下去 → 換回停棲模型
+        // 降落時面向飛來的方向（背對獵物），之後在枝上慢慢轉回原本的方向（跟停棲模型一樣，換回去才不會跳）
+        showRoot(s, H, false); H.by = H.byL = wrap(s.head - H.h0); H.sit.position.copy(H.sitP); H.sit.quaternion.copy(H.sitQ).premultiply(_oq.setFromAxisAngle(YAX, H.by)); H.sit.visible = true
+        if (H.wingL) { H.wingL.quaternion.copy(H.restWL); H.wingR.quaternion.copy(H.restWR) }
+        ggHead(H, 0, 0, 0); H.sit.updateMatrixWorld(true)
+        setPh(s, H, carry ? 'swallow' : 'settle')
+      }
+      return
+    }
+    if (H.ph === 'swallow' || H.ph === 'settle') {
+      const k = H.pt
+      H.by = H.byL * (1 - ss(k, H.ph === 'swallow' ? 0.6 : 0.3, H.ph === 'swallow' ? 3.2 : 1.8)); H.sit.quaternion.copy(H.sitQ).premultiply(_oq.setFromAxisAngle(YAX, H.by))
+      if (H.ph === 'swallow') {
+        const down = ss(k, 1.6, 2.2) * (1 - ss(k, 2.8, 3.3))
+        ggHead(H, 0, 0.9 * down, 0); breathe()
+        if (H.mouse) {
+          if (k < 2.3) { // 抓在腳下：sit 的兩腳中間
+            const fl = boneOf(H.sit, 'footL'), fr = boneOf(H.sit, 'footR')
+            if (fl && fr) { fl.getWorldPosition(_ov2); fr.getWorldPosition(_ov4); _ov2.add(_ov4).multiplyScalar(0.5); H.mouse.mesh.position.copy(_ov2); H.mouse.mesh.position.y -= 0.02 * H.mouse.mesh.scale.x; H.mouse.mesh.rotation.set(0.3, H.h0, 0) }
+          } else { preySet(H.mouse, 'HIDDEN'); H.mouse = null }
+        }
+        s.act = k < 2.3 ? 'mousecapture' : 'look'
+        if (k > 3.6) huntEnd(u, s, H)
+      } else { ggHead(H, 0, 0, 0); if (k > 2.0) huntEnd(u, s, H) }
+    }
+  }
+
+  const huntCfg = { noAbort: false, off: /[?&]nohunt/.test(location.search) }   // off：效能 A/B 測試（整個狩獵系統不跑）   // 測試錄影用：鏡頭跟拍時不要被當成玩家逼近
+  function owlTick(t, dt) {
+    if (huntCfg.off) return
+    preyTick(dt)
+    for (const u of units) {
+      if (!u.esc.hunt) continue
+      const s = u.ms[0]; if (!s?.root) continue
+      if (!s.hunt) { owlSetup(u); if (!s.hunt) continue }
+      const H = s.hunt
+      if (H.on) {
+        if (u.b.absent) { huntEnd(u, s, H); continue }
+        // 玩家逼太近（不在觀察屋裡）：中斷狩獵、飛走
+        const P = world.camera.position, at = H.sit.visible ? H.sit.position : s.root.position
+        const d = P.distanceTo(at), lim = (u.esc.huntR ?? 6) * (speed > 4 ? 1.4 : 1)   // 狩獵中：玩家 6 m 內（用跑的 8.4 m）就中斷
+        if (!huntCfg.noAbort && !inHide(P) && d < lim) { huntAbort(u, s, H); continue }
+        // 離玩家很遠（80 m 外）：每 3 格才算一次（動作照樣進行，只是更新頻率低）
+        H.acc += dt; H.fr++
+        if (d > 80 && H.fr % 3) continue
+        const step = Math.min(H.acc, 0.1); H.acc = 0
+        u.alarm = 0
+        if (H.kind === 'quarter') grassStep(u, s, H, t, step); else ggStep(u, s, H, t, step)
+        if (H.pt > 25) { H.log.push('WATCHDOG:' + H.ph); huntEnd(u, s, H) }   // 保險：任何一個階段卡超過 25 秒就收掉
+        continue
+      }
+      if (u.b.absent || u.state !== 'home' || s.mode !== 'perch' || u.alarm > 0.2) continue
+      if ((H.wait -= dt) > 0 && !H.force) continue
+      const P = world.camera.position, at = s.m.obj.getWorldPosition(_ov)
+      if (!H.force && (P.distanceTo(at) > 140 || P.distanceTo(at) < u.esc.r)) { H.wait = 5; continue }   // 沒人在附近不出去（省效能）；人就在旁邊也不出去
+      const opt = H.force ?? {}; H.force = null
+      if (!(H.kind === 'quarter' ? grassStart(u, s, H, opt) : ggStart(u, s, H, opt))) H.wait = 30
+    }
+  }
+
   function tick(t, dt, { sneak = false } = {}) {
     colonyTick(t, dt)
     nestTick(t, dt)
     displayTick(t, dt)
     digTick(t, dt)
+    owlTick(t, dt)
     // 2026-11-17 警戒旗標給 birds.js（斑鳩求偶：玩家太近就停）
     for (const u of units) { const al = u.state !== 'home' || u.alarm > 0.3; for (const s of u.ms) if (s.m.obj) s.m.obj.userData.alert = al }
     const P = world.camera.position
@@ -995,7 +1682,7 @@ export function createFlight(world, player) {
     const mult = hidden ? 0 : sneak ? 0.5 : speed > 6 ? 1.5 : speed > 0.6 ? 1 : 0.7
     for (const u of units) {
       if (u.b.absent) continue   // 這個時段不在（main.js presence）
-      if (u.ms[0]?.nest?.on || u.ms[0]?.disp?.on || u.ms[0]?.dig?.on) continue   // 正在樹洞餵食／展示飛行（nestTick、displayTick 管）
+      if (u.ms[0]?.nest?.on || u.ms[0]?.disp?.on || u.ms[0]?.dig?.on || u.ms[0]?.hunt?.on) continue   // 正在樹洞餵食／展示飛行（nestTick、displayTick 管）
       if (u.state === 'home') {
         // 自己出巢覓食（ESCAPE.sortie）：沒在警戒時倒數，時間到就照驚飛那一套從岩面朝外（穿過水簾）飛出去，在遠處待一陣子再飛回巢
         if (u.esc.sortie && u.alarm < 0.2) {
@@ -1050,6 +1737,7 @@ export function createFlight(world, player) {
     const s = m.flight
     if (!s) return { obj: m.obj, act: m.acts?.name ?? '' }
     if (s.mode === 'away' || (s.mode === 'wait' && !m.obj.visible)) return null
+    if (s.hunt?.on) { const H = s.hunt; if (H.sit.visible) return { obj: H.sit, act: s.act || 'look' }; return s.root.visible ? { obj: s.root, act: s.act || 'fly' } : null }   // 2026-11-18 貓頭鷹狩獵
     if (s.dig?.on) { const X = s.dig; if (X.ph === 'out' || X.ph === 'back') return { obj: s.root, act: 'fly' }; return X.sit.visible ? { obj: X.sit, act: s.act || 'look' } : null }
     if (s.disp?.on) return { obj: s.root, act: s.act || 'displayflight' }
     if (s.nest?.on) return s.nest.ph === 'feed' ? { obj: s.nest.sit, act: 'nestfeed' } : { obj: s.root, act: s.act || 'fly' }
@@ -1090,7 +1778,7 @@ export function createFlight(world, player) {
   }
   const gone = (b) => { const u = unitOf(b); return !u || u.ms.every((s) => s.mode === 'away') }
   const canFly = (b) => !!unitOf(b)?.esc.fly
-  window.__flight = { units, digGo: (type = 'dig') => { const u = units.find((x) => x.b.def.id === 'barbet'); const X = u?.ms[0]?.dig; if (X) { X.wait = 0; X.force = type } }, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
+  window.__flight = { units, prey, huntCfg, huntGo: (id, opt = {}) => { const u = units.find((x) => x.b.def.id === id); const H = u?.ms[0]?.hunt; if (H) { H.force = opt; H.wait = 0 } return !!H }, hunt: (id) => units.find((x) => x.b.def.id === id)?.ms[0]?.hunt, digGo: (type = 'dig') => { const u = units.find((x) => x.b.def.id === 'barbet'); const X = u?.ms[0]?.dig; if (X) { X.wait = 0; X.force = type } }, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
   // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
   const snap = () => { last.copy(world.camera.position); speed = 0 }
   return { tick, units, shotOf, snap, arrive, depart, gone, canFly, add: addUnit, get speed() { return speed } }

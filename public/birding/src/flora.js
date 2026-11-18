@@ -95,6 +95,9 @@ function randInGarden(rnd) {
 const _sunDefault = new THREE.Vector3(-0.45, 0.8, 0.3).normalize()
 // lawn：短草坪用 2 段（3 個三角形）、法線大多朝上（像地面一樣均勻受光，不會一片亮一片黑）
 // cane：玉山箭竹（2026-11-07）。gB.w > 0 是竹稈（細、直）；gB.w < 0 是葉子：從稈上某個高度長出來、往外斜伸、尾端微垂，葉形是披針形（下三分之一最寬、尖尾）
+// 2026-11-18 貓頭鷹狩獵：鳥撲進草裡／從草裡起飛時，那一圈草往外倒（兩個點：x、z、半徑、強度 0～1；強度 0 不動）
+const NOPUSH = /[?&]nopush/.test(globalThis.location?.search ?? '')   // 效能 A/B 測試用：不編進草被推開的那段
+export const grassPush = { value: [new THREE.Vector4(0, 0, 1, 0), new THREE.Vector4(0, 0, 1, 0)] }
 export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, lawn = false, cane = false } = {}) {
   const ys = lawn ? [0, 0.5] : cane ? [0, 0.18, 0.42, 0.7] : [0, 0.3, 0.56, 0.78], ws = lawn ? [1, 0.55] : cane ? [0.3, 0.92, 1, 0.62] : [1, 0.85, 0.62, 0.36], P = [], I = []
   ys.forEach((y, i) => P.push(-0.5 * ws[i], y, 0, 0.5 * ws[i], y, 0))
@@ -112,11 +115,12 @@ export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, law
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide })
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = windUniforms.uTime
+    sh.uniforms.uPush = grassPush
     sh.uniforms.uSun = sun === _sunDefault ? sunDirU : { value: sun.clone() }   // 2026-11-11 照真的太陽方向（夕陽逆光才在對的那一邊）
     sh.uniforms.uDusk = duskLight
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
-        uniform float uTime;
+        uniform float uTime; uniform vec4 uPush[2];
         attribute vec4 gA;   // x, y, z, 方向
         attribute vec4 gB;   // 顏色 + 高度
         varying vec3 vGcol; varying float vY; varying vec3 vGw;`)
@@ -135,6 +139,10 @@ export function bladeMesh(A, B, { width = [0.014, 0.016], sun = _sunDefault, law
         transformed.xz += vec2(-dir.y, dir.x) * position.x * wid;
         transformed.xz += dir * lean * y * y * h + vec2(0.7, 0.35) * w * y * y * h * 0.25;
         transformed.y += y * h * (1.0 - 0.18 * lean) - leaf * y * y * h * 0.45;   // 葉子尾端微垂
+        ${NOPUSH ? '' : `for (int i = 0; i < 2; i++) {   // 2026-11-18 貓頭鷹撲下去／起飛：那一圈草往外倒、壓低
+          vec2 pd = gA.xz - uPush[i].xy; float pl = length(pd), pf = uPush[i].w * (1.0 - smoothstep(uPush[i].z * 0.35, uPush[i].z, pl));
+          if (pf > 0.0) { transformed.xz += pd / max(pl, 0.05) * pf * y * y * h * 0.75; transformed.y -= pf * y * y * h * 0.35; }
+        }`}
         vY = y;
         // 每片草顏色都不一樣一點（亮度、偏黃偏藍），根部暗、往上變亮
         float jit = fract(sin(dot(gA.xz, vec2(12.9898, 78.233))) * 43758.5453);
