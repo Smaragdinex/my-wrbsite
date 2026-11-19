@@ -817,7 +817,7 @@ function craneShow(leapMax, opts = {}) {
   }
   return (x) => {
     if (!D.tick(x)) { if (opts.tagKey) x.root.userData.danceTag = null; return null }
-    const i = x.c.si, H = x.cfg.H, o = { lean: 0, neck: -0.1, head: 0, reach: 0.5, rate: 9, wing: 0, jump: 0 }
+    const i = x.c.si, H = x.cfg.H, o = opts.borrow ? { lean: 0, neck: 0, head: 0, reach: 0.45, rate: 9, wing: 0, jump: 0 } : { lean: 0, neck: -0.1, head: 0, reach: 0.5, rate: 9, wing: 0, jump: 0 }   // 黑冠鶴：跳舞的基本姿勢＝平常站著（使用者：一個挺胸一個低頭，要一致）
     if (D.call && D.t > D.len - D.call) {
       if (x.c.callN !== D.n) { x.c.callN = D.n; x.w.want = D.birds[0].w.h + (i ? rnd(-0.25, 0.25) : 0) }   // 並肩、朝同一邊
       const u = (D.t - (D.len - D.call)) % 2.6
@@ -836,7 +836,7 @@ function craneShow(leapMax, opts = {}) {
     else if (e.type === 'leap') {
       if (u < 0.2) { if (opts.borrow) { o.lean = 0.08; o.neck = -0.8 * ss(u, 0, 0.2); o.head = 0.15 * ss(u, 0, 0.2) } else { o.lean = 0.3; o.neck = 0.4 } o.jump = -0.07 * H * ss(u, 0, 0.2); o.wing = 0.3 }   // 2026-11-19 使用者：黑冠鶴張翅時頭要跟原本一樣高 → 蹲下蓄力時脖子往上撐（以前往前彎，頭掉 16 cm）
       else { const v = Math.min(1, (u - 0.2) / 0.66); o.jump = e.h * 4 * v * (1 - v); o.wing = (opts.borrow ? 1.45 * ss(v, 0, 0.3) * (1 - ss(v, 0.62, 0.95)) : 1.45 * Math.sin(Math.PI * Math.min(1, v * 1.15))) + 0.2;   /* 黑冠鶴：張到最開停 0.2～0.3 s 讓玩家看清羽色（ChatGPT V4） */ o.neck = -0.2; o.head = -0.3; o.reach = 0.9; o.lean = u > 0.86 ? 0.2 : -0.1
-        if (opts.borrow && u > 0.86) { const k = Math.sin(Math.PI * (u - 0.86) / 0.14); o.jump = -0.05 * H * k; o.neck = -0.1 - 0.6 * k }   // 落地緩衝（ChatGPT V1）：腳先著地、膝踝往下吸收再站回來，約 0.2 秒
+        if (opts.borrow && u > 0.86) { const k = Math.sin(Math.PI * (u - 0.86) / 0.14); o.jump = -0.05 * H * k; o.neck = -0.6 * k }   // 落地緩衝（ChatGPT V1）：腳先著地、膝踝往下吸收再站回來，約 0.2 秒
       }
     } else if (e.type === 'flap') {
       if (e.turned !== D.n) { e.turned = D.n; if (!opts.borrow) x.w.want = x.w.h + sgn() * rnd(0.5, 2.0) }   // 黑冠鶴：原地張翅不轉身（轉身時踩著的腳被扭到側邊、IK 搆不到，量到浮 1～3 cm）   // 黑冠鶴：轉太多時踩著的腳被扭到側邊、IK 搆不到（量到浮 3 cm）
