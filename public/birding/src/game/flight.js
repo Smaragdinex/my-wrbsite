@@ -73,7 +73,7 @@ export const ESCAPE = {
   sarus: { r: 9, run: 2, fly: { speed: 9, hz: 2.4, style: 'flap', k: 3.0 } },
   redcrowned: { r: 9, run: 2, fly: { speed: 9, hz: 2.5, style: 'flap', k: 2.9 } },
   ruff: { r: 5, run: 3, fly: { speed: 12, hz: 8, style: 'flap', k: 0.87 } },
-  lapwing: { r: 6, run: 3, tumble: /[?&]tumble/.test(location.search) ? [35, 70] : null,   // 2026-11-19 #84 翻滾展示飛行還在 ChatGPT 驗收中，線上先只在 ?tumble 開
+  lapwing: { r: 6, run: 3, tumble: /[?&]notumble/.test(location.search) ? null : [35, 70],   // 2026-11-19 #84 翻滾展示飛行（ChatGPT V3 PASS 9.1，使用者同意部署）；?notumble 關掉
     tumbleArea: { x: 99, z: -81, rx: 7.5, rz: 5 }, fly: { speed: 10, hz: 5, style: 'flap', k: 0.87 } },   // 2026-11-13 小辮鴴：先跑開；2026-11-15 飛行模型做好了（寬圓的翅膀、慢拍）
   grebe: { r: 9, swim: 4, fly: { speed: 11, hz: 9, style: 'flap', k: 1.25 } },
   // 2026-11-13 Pass 1D：遊隼巡航快、拍幾下就滑；黑雨燕又快又急（離步道 4～5 m 高，靠很近才飛）；烏林鴞慢、低、安靜
@@ -1712,6 +1712,7 @@ export function createFlight(world, player) {
     if (X.fastLand) { s.m.obj.getWorldDirection(_w); X.hG = Math.atan2(_w.x, _w.z); dir = _sp2.set(Math.sin(X.hG), 0, Math.cos(X.hG)) }
     const back = X.fastLand ? 2.2 : 0.8
     const P1 = X.fastLand && X.lastV ? P.clone().addScaledVector(X.lastV, 0.22) : P.clone().lerp(X.home, 0.35).add(V(0, -0.6, 0))   // 小辮鴴：第一段順著現在的速度方向（不急轉）
+    if (X.fastLand) { s.m.obj.updateMatrixWorld(true); X.gOff = X.home.clone().sub(s.m.obj.getWorldPosition(V())); X.early = false }   // 鳥的中心 − 站姿模型原點（腳底）
     X.lc = new THREE.CubicBezierCurve3(P, P1, X.home.clone().add(V(0, 0.8, 0)).addScaledVector(dir, -back), X.home.clone()); X.ll = X.lc.getLength(); X.ld = 0
   }
   const lerpAng = (a, b, k) => a + wrap(b - a) * k
@@ -1722,13 +1723,28 @@ export function createFlight(world, player) {
       const rem = X.ll - X.ld; X.ld = Math.min(X.ll, X.ld + (X.fastLand ? clamp(rem / 0.5, 1.4, 6.0) : clamp(rem / 1.2, 0.6, 3.0)) * dt); const k = X.ld / X.ll
       X.lc.getPointAt(k, _sp); X.lc.getTangentAt(Math.min(k, 0.999), _sp2)
       s.root.position.copy(_sp); let h = Math.atan2(_sp2.x, _sp2.z); if (X.hG != null && X.fastLand) h = lerpAng(h, X.hG, ss(k, 0.6, 0.95)); s.head += wrap(h - s.head) * (1 - Math.exp(-(X.fastLand ? 9 : 5) * dt))
-      const flare = ss(1 - rem / 0.9, 0, 1)
+      const flare = ss(1 - rem / (X.fastLand ? 4.5 : 0.9), 0, 1)   // 小辮鴴：最後約 1 s 就把翅膀舉起來，換站姿模型（剩 0.65 m）時已經舉到頂
       s.pitch = damp(s.pitch, -Math.asin(clamp(_sp2.y, -1, 1)) * 0.6 - 0.6 * flare, 5, dt); s.roll = damp(s.roll, 0, 4, dt)
       s.root.rotation.set(s.pitch, s.head, s.roll)
-      if (X.fastLand && flare > 0.55) { s.m.obj.userData.wingRaise = 1.5; s.r.reset(); const up = ss(flare, 0.55, 0.85); for (const [n, sg] of [['L', 1], ['R', -1]]) { s.r.turn('wing' + n, AX.x, -sg * lerp(0.4, 1.15, up) * tumbleCfg.upSign); s.r.turn('wingtip' + n, AX.x, -sg * 0.3 * up * tumbleCfg.upSign) } s.r.turn('tail', AX.z, -0.4 * flare) }   // 最後一下：雙翅舉高停住（落地後站姿模型接著舉、再收）
+      if (X.fastLand && flare > 0.55) {   // 最後：雙翅舉高煞車 → 換站姿模型前 0.5 m 收起來（2026-11-19 使用者：站姿模型硬舉翅膀會變形，不用）
+        const up = ss(flare, 0.55, 0.85), fold = ss(1 - (rem - 0.3) / 0.5, 0, 1); s.r.reset()
+        for (const [n, sg] of [['L', 1], ['R', -1]]) { s.r.turn('wing' + n, AX.y, sg * 0.9 * fold); s.r.turn('wingtip' + n, AX.y, sg * 0.72 * fold); s.r.turn('wing' + n, AX.x, -sg * lerp(0.4, 1.15, up) * (1 - fold) * tumbleCfg.upSign); s.r.turn('wingtip' + n, AX.x, -sg * 0.3 * up * (1 - fold) * tumbleCfg.upSign) }
+        s.r.turn('tail', AX.z, -0.4 * flare) }
       else if (flare > 0.05) wings(s, f, t, dt, 0, flare); else { s.r.reset(); for (const [n, sg] of [['L', 1], ['R', -1]]) { s.r.turn('wing' + n, AX.x, -sg * 0.35); s.r.turn('wing' + n, AX.y, sg * 0.25) } }
       fanTail(s, X, 1 - flare)
       s.act = flare > 0.05 ? 'land' : 'fly'
+      // 2026-11-19 ChatGPT V2：腳要在著地前就伸出來 → 飛行模型沒有腳骨頭，所以最後 0.65 m（約 0.3 s）先換站姿模型：
+      // 翅膀舉著（wingRaise）、位置照降落曲線（landPos，身體跟飛行模型同一點）、腳 IK 搆不到地所以整條伸直往下，碰到地才彎
+      if (X.fastLand && !X.early && X.ll - X.ld < 0.3 && X.ld < X.ll) {
+        X.early = true; s.root.visible = false; s.m.obj.visible = true; s.m.obj.userData.wingRaise = 0
+        if (s.m.walker) { s.m.walker.goal = null; s.m.walker.want = null } s.m.acts?.next?.('stand')
+      }
+      if (X.early) {
+        s.m.obj.userData.landPos = (s.m.obj.userData.landPos ?? V()).copy(_sp).sub(X.gOff)
+        if (s.m.walker) { s.m.walker.h = s.head; s.m.walker.want = null }   // 站姿模型朝向跟著飛行模型（最後會轉到原本的朝向），接手那格不轉頭
+        const md = s.mode; s.mode = 'perch'; s.m.update?.(t, dt); s.mode = md   // 飛行中站姿模型不會自己更新 → 這裡手動更新一格
+        s.act = 'land'
+      }
       if (X.ld >= X.ll) songEnd(u, s)
     }
   }
@@ -1768,15 +1784,15 @@ export function createFlight(world, player) {
     } else if (X.ph === 'low') {
       // 貼地低飛：寬翅膀慢而深的拍（嗡嗡聲）、高度微微起伏
       yT = Math.max(gNow, X.g0) + 1.5 + 0.25 * Math.sin(X.t * 3.1); vT = 6
-      if (X.t > X.lowT) { X.ph = 'climb'; X.t = 0; X.top = rnd(8, 12); X.yC = X.y; yT = X.y }   // 換階段這格高度不跳（V2 量到一格 37 cm）
+      if (X.t > X.lowT) { X.ph = 'climb'; X.t = 0; X.top = rnd(8, 12); X.yC = X.y; X.vyC = X.vy ?? 0; yT = X.y + X.vyC * dt; X.t = dt }   // 換階段這格高度不跳（V2 量到一格 37 cm）
     } else if (X.ph === 'climb') {
       // 陡升：每秒 4～5 m
-      yT = X.yC + 4.6 * X.t * ss(X.t, 0, 0.4) + 0.6 * X.t; vT = 5.2; wingMode = 'climb'
+      yT = X.yC + X.vyC * 0.25 * (1 - Math.exp(-X.t / 0.25)) + 5.2 * (X.t - 0.35 * (1 - Math.exp(-X.t / 0.35)))   // 爬升速度從低飛的垂直速度平順接上（V2 量到 81 m/s²）; vT = 5.2; wingMode = 'climb'
       if (X.y >= X.g0 + X.top - 0.05) { X.ph = 'tumble'; X.t = 0; X.yT0 = yT; X.vy0 = Math.max(0, X.vy ?? 0); X.tumD = rnd(1.7, 2.1); X.rollDir = X.cyc % 2 ? -X.dir : X.dir; tumbleCall(X, s, 'lapwing', 1.4); tumbleCall(X, s, 'lapwingWing', 1.2) }
     } else if (X.ph === 'tumble') {
       // 翻滾俯衝：先側翻到快朝天、頭朝下往下掉，中途回正又往另一邊扭一下，最後 0.4 s 拉起
       const k = clamp(X.t / X.tumD, 0, 1)
-      yT = lerp(X.yT0, X.g0 + 1.6, ss(k, 0.05, 0.92) ** 1.25) + X.vy0 * X.t * Math.exp(-X.t / 0.12)   // 頂點先順著爬升的速度往上滑一點、停住再翻下（不一格就從上升變下降）
+      yT = lerp(X.yT0, Math.max(X.g0, gNow) + 1.6, ss(k, 0.05, 1) ** 1.25) + X.vy0 * X.t * Math.exp(-X.t / 0.25)   // 拉起高度看腳下的地（東岸比較高，V2 會在拉起那格被最低高度夾住）；   // 頂點先順著爬升的速度往上滑一點、停住再翻下（不一格就從上升變下降）
       vT = lerp(4.5, 7.5, ss(k, 0, 0.6))
       rollT = X.rollDir * (2.5 * Math.sin(Math.PI * ss(k, 0, 0.55)) - 1.1 * Math.sin(Math.PI * ss(k, 0.5, 0.88)))
       offT = -1.1 * Math.sin(Math.PI * ss(k, 0.05, 0.75))   // 往內側閃（翻滾方向還是左右交替）
@@ -1845,7 +1861,8 @@ export function createFlight(world, player) {
   function songEnd(u, s) {
     const X = s.song; songStop(X, 0.6)
     X.on = false; X.ph = ''; s.root.visible = false; s.m.obj.visible = true; s.mode = 'perch'; s.act = ''
-    if (X.fastLand && X.ld >= X.ll) { X.settle = 0; s.m.obj.userData.wingRaise = 1.5; if (s.m.walker) { s.m.walker.goal = null; s.m.walker.want = null } s.m.acts?.next?.('stand'); s.m.update?.(X.tNow ?? 0, 1 / 60) }   // 落地先站著（收翅），不要一落地就走   // 站姿模型飛行時沒在更新（停在起飛前的姿勢）→ 交接這一格先算一次，不然第一格是舊姿勢   // 落地：站姿模型接手時翅膀還舉著（接飛行模型最後的上舉姿勢），0.12 s 後 0.4 s 收好
+    s.m.obj.userData.landPos = null; X.early = false
+    if (X.fastLand && X.ld >= X.ll) { s.m.obj.userData.wingRaise = 0; if (s.m.walker) { s.m.walker.goal = null; s.m.walker.want = null } s.m.acts?.next?.('stand'); s.m.update?.(X.tNow ?? 0, 1 / 60) }   // 落地先站著（收翅），不要一落地就走   // 站姿模型飛行時沒在更新（停在起飛前的姿勢）→ 交接這一格先算一次，不然第一格是舊姿勢   // 落地：站姿模型接手時翅膀還舉著（接飛行模型最後的上舉姿勢），0.12 s 後 0.4 s 收好
     if (s.r.bones.tail) s.r.bones.tail.scale.set(1, 1, 1)
     X.wait = X.force ? 5 : rnd(...(u.esc.songflight ?? u.esc.tumble)); X.n = (X.n ?? 0) + 1
   }
@@ -2175,6 +2192,7 @@ export function createFlight(world, player) {
         const ab = u.esc.tumble ? [3.5, 5] : [5, 7]   // 小辮鴴：路線離土路 3 m 多，站在路上看不會打斷
         if (!songCfg.noAbort && !inHide(P) && (d < ab[0] || (d < ab[1] && speed > 0.6))) {   // 站在步道上看不會打斷；走進草地到牠底下 5 m（或走著靠近到 7 m）才會
           songStop(X, 0.4); X.on = false; X.ph = ''; X.aborts++
+          if (X.early) { X.early = false; s.m.obj.visible = false; s.root.visible = true; s.m.obj.userData.landPos = null; s.m.obj.userData.wingRaise = 0 }
           if (s.r.bones.tail) s.r.bones.tail.scale.set(1, 1, 1)
           const pos = s.root.position.clone(), away = pos.clone().sub(P).setY(0); if (away.lengthSq() < 1e-4) away.set(1, 0, 0)
           s.home.copy(X.home); s.faceH = s.head

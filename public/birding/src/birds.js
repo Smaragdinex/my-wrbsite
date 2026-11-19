@@ -1446,6 +1446,7 @@ function groundTripo(env, cfg) {
     const liftY = (cfg.hop ? 0 : 0.012 * cfg.H * up * (1 - c.run)) + runBob, gyHere = env.groundAt ? env.groundAt(P.x, P.y) : 0
     c.gy = c.gy == null ? gyHere : damp(c.gy, gyHere, 12, dt)
     root.position.set(P.x, c.gy + liftY + hopY + hopDip + (c.jy ?? 0) - (c.fb ?? 0) + (cfg.raise ?? 0), P.y); root.rotation.y = w.h   // cfg.raise：模型的腳底比校準的低一點（帝雉 2026-11-15）
+    if (root.userData.landPos && root.parent) { root.parent.updateWorldMatrix(true, false); root.position.copy(root.parent.worldToLocal(root.userData.landPos.clone())) }   // 2026-11-19 小辮鴴降落：著地前 0.3 s 站姿模型就接手，位置由 flight.js 給（腳伸直、還沒踩到地）
     root.updateWorldMatrix(true, true)
     // 山鷸的頭：要等整隻鳥這一格的位置擺好之後才能釘（以前在擺位置前釘，頭永遠慢一格，每抬一次腳就上下抖 4～5 mm）。
     // 目標 = 沒搖時頭的位置，扣掉抬腳那一下的身體升起，再低通平滑一下（速度變化不會一頓一頓）
@@ -1502,6 +1503,7 @@ function groundTripo(env, cfg) {
         ik(L, L.pos)
         return
       }
+      if (root.userData.landPos) { L.t = 1; L.plant.copy(home); L.pos.copy(home); ik(L, L.pos); return }   // 2026-11-19 小辮鴴降落前懸空：兩腳對準身體正下方的站姿位置（伸直往下），著地時剛好踩在那裡，不在空中跨步
       const other = legs.find((o) => o !== L)
       if (L.t < 1) {
         L.t = Math.min(1, L.t + dt / swing)
