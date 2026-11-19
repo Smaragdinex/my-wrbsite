@@ -1471,13 +1471,30 @@ function groundTripo(env, cfg) {
     if (cfg.swim) {
       // 游泳（照影片）：腳整隻收進肚子底下看不到（大腿骨縮小，整條腿跟著縮到髖關節），在水面下輪流往後划；
       // 身體微微前傾、尾巴翹起來，每划一下頭往前點一下
-      legs.forEach((L, li) => {
-        const kick = c.amp * Math.sin(ph + li * Math.PI)
-        r.bones['thigh' + L.sd].scale.setScalar(0.2)
-        r.turn('thigh' + L.sd, LAT, 0.8 + 0.25 * kick)
-        r.turn('shin' + L.sd, LAT, -1.6 - 0.35 * kick)
-        r.turn('foot' + L.sd, LAT, 1.2 + 0.3 * kick)
-        curlToes(r, L.toes, 0.6 - 0.4 * kick)
+      c.pd = damp(c.pd ?? 0, ex?.paddle ?? 0, 8, dt)   // 2026-11-20 花嘴鴨倒立：腳伸出來在水面附近快速划（平衡）
+      const PD = globalThis.__paddle ?? PADDLE
+      if (c.pd > 0.01) r.bones.body.updateWorldMatrix(true, true)   // 倒立划水要用身體這一格的位置換算
+      legs.forEach((L, li) => { L.pw = true
+        // 划水相位：左右差半圈＋一點點各自的快慢（ChatGPT V1：不要兩隻腳完全對稱）；推水時（相位 0～π）腳蹼張開、回收時收起來減少阻力
+        L.pph = (L.pph ?? li * Math.PI) + dt * Math.PI * 2 * (PD.hz ?? 1.4) * (1 + (li ? 0.06 : -0.06) * Math.sin(t * 0.7 + li))
+        const pk = c.pd, kick = (1 - pk) * c.amp * Math.sin(ph + li * Math.PI), sp = Math.sin(L.pph), pkk = pk * sp
+        r.bones['thigh' + L.sd].scale.setScalar(0.2 + 0.8 * pk)
+        // 這隻鴨的腿骨只有 2 cm（整條腿幾乎都是腳蹼）→ 轉關節只划得動 1 cm；倒立時把整隻腳沿世界座標的軌跡移動：
+        // 前後 ±stroke（推水往後、回收往前）、推水時壓深一點，軌跡中心比水面低 dep（ChatGPT V1：行程 6～10 cm、腳掌在水下 3～7 cm、出水不超過 2 cm）
+        if (pk > 0.01) {
+          const tb = r.bones['thigh' + L.sd], par = tb.parent
+          if (!L.pw) { r.bones.body.updateWorldMatrix(true, false); L.pw = true }
+          const a = par.localToWorld(_t.copy(tb.position)), tgt = a.clone().addScaledVector(fwd, -pk * (PD.st ?? 0.04) * Math.cos(L.pph)); tgt.y += pk * ((PD.dy ?? -0.043) - (PD.dd ?? 0.01) * sp)
+          const d = par.worldToLocal(tgt).sub(par.worldToLocal(a.clone())); tb.position.add(d)
+        }
+        r.turn('thigh' + L.sd, LAT, 0.8 + 0.25 * kick + pk * (PD.th + PD.a1 * sp))
+        r.turn('shin' + L.sd, LAT, -1.6 - 0.35 * kick + pk * (PD.sh - PD.a2 * sp))
+        r.turn('foot' + L.sd, LAT, 1.2 + 0.3 * kick + pk * (PD.ft + PD.a3 * Math.sin(L.pph + 0.6)))
+        curlToes(r, L.toes, 0.6 - 0.4 * kick - pk * (0.5 + 0.5 * Math.cos(L.pph)))
+        // 每推一下水，在那隻腳的位置冒一圈小水紋（左右交替）
+        const cyc = Math.floor(L.pph / (Math.PI * 2))
+        if (pk > 0.8 && cyc !== L.pcyc && r.bones['foot' + L.sd]) { const fp = r.bones['foot' + L.sd].getWorldPosition(_d); ripple(fp.x, fp.z, PD.rip ?? 0.13) }
+        L.pcyc = cyc
       })
       // 每划一下：頭往前點一下、身體後面一圈小水波
       if (beat[0] || beat[1]) {
@@ -2365,10 +2382,39 @@ function mandarin(env) {
     walk: { radius: 3.2, speed: 0.13, avoid: swimAvoid(env, avoid) }, stride: 0.1, swingT: 0.35, lift: 0, knee: [0.6, 1.2], focusY: 0.24,
     acts: { walk: [4, 99, 99], peck: [2, 0.9, 1.3], look: [2, 1.2, 2.5], stand: [1.5, 1.5, 3], turn: [1, 99, 99] } }) })
 }
+// 2026-11-20 #33 Dabbling Up-end：游著游著停下來，頭頸整個伸進水裡、屁股和尾巴翹出水面 2.5～5 秒（腳在水面附近划著保持平衡），
+// 再翻回來抖一抖頭。?noupend 關掉；__upends 給錄影腳本控制時機（force=true 下一格就翻）
+const PADDLE = { th: -0.6, sh: 0.5, ft: -0.4, a1: 0.15, a2: 0.15, a3: 0.4, hz: 1.4, st: 0.04, dy: -0.037, dd: 0.012 }   // a3 0.4 rad＝腳踝 ±23°；st 前後 ±4 cm   // 倒立划水時腿的姿勢（相對游泳收腳）
+const UPEND_OFF = /[?&]noupend/.test(location.search)
 function spotbill(env) {
-  return groundGroup(2, 0.9, (avoid) => groundTripo(env, { name: 'spotbill-rig', H: 0.42, h0: 0.716, ...TRIPO, swim: true, bill: 0.13, bob: 0.03,
-    walk: { radius: 3.6, speed: 0.14, avoid: swimAvoid(env, avoid) }, stride: 0.11, swingT: 0.35, lift: 0, knee: [0.7, 1.3], focusY: 0.28,
-    acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } }))
+  return groundGroup(2, 0.9, (avoid) => {
+    const U = { st: 'swim', t: rnd(6, 16), e: 0, len: 0, force: false }; (globalThis.__upends ??= []).push(U)
+    const TIP = 0.55, RISE = 0.5, SHAKE = 0.7
+    const show = UPEND_OFF ? null : ({ t, dt, root, w }) => {
+      const ud = root.userData
+      U.t -= dt; U.e += dt
+      const splash = (r) => { const p = root.getWorldPosition(V()); ripple(p.x, p.z, r) }
+      if (U.st === 'swim' && (U.t < 0 || U.force)) { U.st = 'up'; U.e = 0; U.force = false; U.len = U.hold ?? rnd(2.5, 5); U.rip = 0.4; splash(0.5) }
+      if (U.st !== 'up') { ud.upendTag = null; return null }
+      const e = U.e, T1 = TIP + U.len, T2 = T1 + RISE, T3 = T2 + SHAKE
+      if (e > T3) { U.st = 'swim'; U.t = rnd(8, 20); ud.upendTag = null; return null }
+      if (e > T1 && e - dt <= T1) splash(0.45)
+      w.goal = null
+      const k = ss(e, 0, TIP) * (1 - ss(e, T1, T2))   // 0＝平常游、1＝倒立
+      U.rip -= dt; if (k > 0.8 && U.rip < 0) { U.rip = rnd(0.5, 0.9); splash(0.25) }   // 腳划水：身體周圍一圈圈小水波
+      ud.upendTag = k > 0.7 ? 'upend' : null
+      const hold = ss(e, TIP, TIP + 0.3) * (1 - ss(e, T1 - 0.2, T1))
+      const sway = hold * 0.05 * Math.sin(e * 2.3)   // 倒立時身體前後微微晃（腳在調整平衡）
+      const sh = e > T2 ? Math.sin((e - T2) / SHAKE * Math.PI) : 0   // 浮上來後甩頭、抖一下翅膀
+      return { lean: 1.35 * k + sway, neck: 0.55 * k, head: -0.15 * k, tail: 0.25 * k, jump: -0.02 * k, paddle: k, rate: 7,
+        yaw: 0.35 * sh * Math.sin((e - T2) * 30), wing: 0.25 * sh * Math.max(0, Math.sin((e - T2) * 34)) }
+    }
+    const m = groundTripo(env, { name: 'spotbill-rig', H: 0.42, h0: 0.716, ...TRIPO, swim: true, bill: 0.13, bob: 0.03, show,
+      walk: { radius: 3.6, speed: 0.14, avoid: swimAvoid(env, avoid) }, stride: 0.11, swingT: 0.35, lift: 0, knee: [0.7, 1.3], focusY: 0.28,
+      acts: { walk: [4, 99, 99], peck: [3, 0.9, 1.4], look: [2, 1.2, 2.5], stand: [1, 1.5, 3], turn: [1, 99, 99] } })
+    m.obj.userData.upend = U
+    return m
+  })
 }
 // 臺灣山鷓鴣：林下三隻一群，圓滾滾地慢慢走、低頭翻落葉
 function partridge(env) {
