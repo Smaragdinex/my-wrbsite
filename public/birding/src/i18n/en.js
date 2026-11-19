@@ -120,6 +120,8 @@ export const UI = {
  "小雲雀一邊振翅爬升一邊唱——在高空唱歌是牠宣示地盤的方式。": "Climbing on fluttering wings and singing the whole way up — that is how a skylark claims its territory.",
  "小辮鴴的展示飛行，寬圓的翅膀拍得又慢又深，會發出嗡嗡聲。": "A lapwing display flight. Those broad, rounded wings beat slow and deep, with an audible throb.",
  "翻滾俯衝！小辮鴴在空中側翻、頭朝下往下掉再急轉——這是牠在宣示繁殖地盤。": "A tumbling dive! The lapwing rolls over in mid-air, plunges head-first and jinks sharply. It's claiming its breeding ground.",
+ "擬態偽裝！領角鴞發現你了：身體拉高變瘦、耳羽豎起，假裝自己是一截樹皮，只有頭慢慢轉過來盯著你。": "Camouflage pose! The scops owl has spotted you: it stretches tall and thin with its ear tufts raised, pretending to be a piece of bark, while slowly turning its head to watch you.",
+ "擬態偽裝": "Camouflage pose",
  "倒立覓食！花嘴鴨把頭伸進水裡、屁股翹出水面，在吃水底的水草和種子。": "Up-ending! The spot-billed duck tips head-down with its tail in the air, grazing on plants and seeds below the surface.",
  "倒立覓食": "Up-ending",
  "翻滾俯衝": "Tumbling dive",

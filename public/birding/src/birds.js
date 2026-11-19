@@ -1883,6 +1883,46 @@ function perchRigged(env, cfg) {
   // 收腳只收一點點；身體壓扁／拉長一點；落地是腳先著地、身體再往下沉一次再回來（不再彈跳抖動）；
   // 頭穩住、慢半拍反向補身體的前傾、落地後輕點一下頭；翅膀幾乎不開；尾巴慢 50 ms；腳趾分開放開、再抓緊
   const owlS = { bp: 0, lead: 1, ox: 0 }, _fa = V(), _fb = V()
+  // 2026-11-20 #52 領角鴞 Ear-tuft Camouflage：玩家走近（8 m 內）→ 1～1.5 秒內身體拉高變瘦、羽毛貼緊、耳羽豎起、尾巴往下，像一截樹皮；
+  // 不跳、不叫；頭一段一段慢慢轉向玩家（每次停 1.5～3.5 秒，轉頭最快 0.7 rad/s）。玩家退到 11 m 外 → 2～3 秒慢慢放鬆變回圓滾滾。
+  // root.userData.concealTag：拍到偽裝姿勢的標籤。?noconceal 關掉
+  const cz = { k: 0, on: false, yaw: 0, want: 0, next: 0, hold: 0, aimed: false, turning: false }, _pp = V(), _fw = V(), _hp = V(), _hq = new THREE.Quaternion()
+  let tuft = null
+  if (cfg.conceal && r.bones.earTuftL && r.bones.earTuftR) {
+    r.model.updateWorldMatrix(true, true)
+    const pL = r.model.worldToLocal(r.bones.earTuftL.getWorldPosition(V())), pR = r.model.worldToLocal(r.bones.earTuftR.getWorldPosition(V()))
+    const lat = pL.sub(pR).setY(0).normalize(), face = V(0, 1, 0).cross(lat).normalize()
+    const hl = lat.clone().applyQuaternion(r.bones.head.userData.inv), m = [Math.abs(hl.x), Math.abs(hl.y), Math.abs(hl.z)]
+    tuft = { face, hAx: m[0] >= m[1] && m[0] >= m[2] ? 'x' : m[1] >= m[2] ? 'y' : 'z' }
+  }
+  const concealTick = (dt) => {
+    const cam = globalThis.__concealCam ?? globalThis.__game?.camera
+    if (!cam || CNC().off) return null
+    root.getWorldPosition(_pp); const d = _pp.distanceTo(cam.position)
+    if (!cz.on && d < (CNC().near ?? 8)) cz.on = true
+    else if (cz.on && d > (CNC().far ?? 11)) cz.on = false
+    cz.k = cz.on ? Math.min(1, cz.k + dt / 1.3) : Math.max(0, cz.k - dt / 2.5)
+    const kk = ss(cz.k, 0, 1)
+    if (kk > 0.05) { hp.wait = Math.max(hp.wait, 1.5); c.call = 0 }   // 偽裝時不跳、不叫
+    // 頭朝玩家（ChatGPT V1：偽裝的鳥不會一直精準盯著人）：開始偽裝時慢慢轉過來看玩家一次；之後頭基本不動，
+    // 至少隔 3～6 秒、而且玩家已經偏離超過 ~30° 才再慢慢轉一次（最快 0.5 rad/s）
+    cz.next -= dt; cz.hold -= dt
+    if (cz.next <= 0 && r.bones.head) {
+      cz.next = 0.25
+      // 量頭現在實際朝哪（頭骨頭的 -x＝臉，量過）。這時骨頭還是這一格「沒套偽裝轉頭」的姿勢（只有 c.yaw），所以從 c.yaw 起算
+      const hq = r.bones.head.getWorldQuaternion(_hq), f = _fw.set(-1, 0, 0).applyQuaternion(hq); f.y = 0; f.normalize()
+      const p = _pp.copy(cam.position).sub(r.bones.head.getWorldPosition(_hp)); p.y = 0; p.normalize()
+      const err = Math.atan2(f.z * p.x - f.x * p.z, f.x * p.x + f.z * p.z), cand = clamp(c.yaw + err * (CNC().ysign ?? 1), -2.3, 2.3)   // 貓頭鷹頭可以轉 ±135°
+      cz.err = err
+      if (!cz.aimed && kk > 0.02) { cz.want = cand; cz.aimed = true; cz.hold = rnd(3, 6) }
+      else if (cz.aimed && cz.hold <= 0 && Math.abs(cand - cz.want) > (CNC().reaim ?? 0.52)) { cz.want = cand; cz.hold = rnd(3, 6) }
+    }
+    if (kk < 0.02) cz.aimed = false
+    const y0 = cz.yaw, dy = clamp(cz.want - cz.yaw, -0.5 * dt, 0.5 * dt); cz.yaw += dy * ss(Math.abs(cz.want - cz.yaw), 0, 0.25)   // 快到了就慢下來
+    cz.turning = Math.abs(cz.yaw - y0) / Math.max(dt, 1e-3) > 0.15
+    root.userData.concealTag = kk >= 0.85 && !cz.turning ? 'conceal' : null; root.userData.cz = cz   // 姿勢還沒到位、或頭正在轉，不算偽裝照
+    return { k: kk, yaw: cz.yaw }
+  }
   const owlPose = (t, dt) => {
     const pre = hp.pre, hop = hp.hopping, k01 = hop ? hp.k : 1, L = hp.landed
     const crA = pre < 0.69 ? ss(pre, 0, 0.69) : 1 - 0.85 * ss(pre, 0.69, 1)      // 蹲下 → 最後一下蹬直
@@ -1902,11 +1942,18 @@ function perchRigged(env, cfg) {
     const bodyP = clamp(-0.1 * crA + 0.06 * ext - 0.04 * air - 0.06 * landC, -0.11, 0.11)
     owlS.ox = hop || hp.s1 == null ? 0 : 0.007 * (Math.sign(hp.s1 - hp.s0) || 0) * (L < 0.15 ? Math.sin(Math.PI * L / 0.15) : 0)   // 落地往前多滑一點點再回來
     owlS.bp = damp(owlS.bp, bodyP, 28, dt)   // 頭慢半拍（約 35 ms）跟著補
+    const cz = cfg.conceal ? concealTick(dt) : null, cs = cz?.k ?? 0, yaw = cz ? lerp(c.yaw, cz.yaw, ss(cs, 0.2, 0.8)) : c.yaw
     r.reset()
-    r.turn('body', LAT, bodyP + 0.03 * (c.call > 0 ? Math.max(0, Math.sin(t * (cfg.beat ?? 9))) * c.call : 0))
-    r.turn('neck', AX.y, c.yaw * 0.45); r.turn('neck', LAT, c.pitch * 0.4 + 0.06 * crA - 0.35 * owlS.bp)
-    r.turn('head', AX.y, c.yaw * 0.55); r.turn('head', LAT, c.pitch * 0.6 - 0.4 * owlS.bp + 0.03 * nod)
-    r.turn('tail', LAT, 0.12 * ext + 0.06 * crA - 0.1 * air - 0.2 * landD)
+    r.turn('body', LAT, bodyP + 0.03 * (c.call > 0 ? Math.max(0, Math.sin(t * (cfg.beat ?? 9))) * c.call : 0) - 0.07 * cs)
+    r.turn('neck', AX.y, yaw * 0.45); r.turn('neck', LAT, c.pitch * 0.4 * (1 - cs) + 0.06 * crA - 0.35 * owlS.bp)
+    r.turn('head', AX.y, yaw * 0.55); r.turn('head', LAT, c.pitch * 0.6 * (1 - cs) - 0.4 * owlS.bp + 0.03 * nod + 0.05 * cs)
+    r.turn('tail', LAT, 0.12 * ext + 0.06 * crA - 0.1 * air - 0.2 * landD + 0.12 * cs)
+    if (cz && tuft) {
+      // 頭左右收窄 4%（沿兩撮耳羽連線那一軸）；耳羽繞臉的前後軸往內上收 12°（2026-11-20 rig-scops-tufts.py 加的骨頭）
+      const hb = r.bones.head; hb.scale.set(1, 1, 1); hb.scale[tuft.hAx] = 1 - (CNC().narrow ?? 0.04) * cs
+      const ang = (CNC().tuft ?? 0.21) * cs * (CNC().tsign ?? -1)
+      r.turn('earTuftL', tuft.face, ang); r.turn('earTuftR', tuft.face, -ang)
+    }
     for (const [w, sg] of [['wingL', 1], ['wingR', -1]]) r.turn(w, AX.y, sg * (0.16 * air + 0.05 * ext))
     for (const s of ['L', 'R']) {
       const lt = legT(s), bend = crA + 0.75 * landC
@@ -1919,8 +1966,8 @@ function perchRigged(env, cfg) {
     const g = hop ? lerp(0.35, 0.05, ss(k01, 0, 0.1)) - 0.05 * ss(k01, 0.8, 1) : pre > 0 ? 0.38 - 0.33 * rel : 0.05 + 0.33 * ss(L, 0, 0.075)
     toes.forEach((tt) => curlToes(r, tt, g))
     // 身體壓扁／拉長（蹲 0.96、蹬直 1.025、落地 50 ms 0.97），整隻往下沉
-    const sq = 1 - 0.04 * crA + 0.025 * ext - 0.03 * (hop ? 0 : 1 - ss(L, 0, 0.05)) * (L < 1 ? 1 : 0)
-    inner.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq))
+    const sq = (1 - 0.04 * crA + 0.025 * ext - 0.03 * (hop ? 0 : 1 - ss(L, 0, 0.05)) * (L < 1 ? 1 : 0)) * (1 - (CNC().fluff ?? 0.03) * (1 - cs) + (CNC().tall ?? 0.16) * cs)   // 偽裝：拉高變瘦；放鬆時羽毛蓬鬆一點、圓一點
+    { const wq = (1 - (CNC().thin ?? 0.04) * cs) / Math.sqrt(sq); inner.scale.set(wq, sq, wq) }   // 偽裝：寬度再多收 4%（總共約 -11%）
     lift.position.y = -0.022 * crA - 0.016 * landC
   }
   // 2026-11-10 啄木鳥攀在樹幹上（使用者：腳在樹幹上是錯的 → ChatGPT 給的攀爬姿勢）：三點支撐——兩腳在髖部下前方抓樹皮、
@@ -2462,6 +2509,8 @@ const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name,
 // （BUILD 在檔案前面就用到這些名字：要用 function 宣告才會提升，const 會在載入時出錯）
 // 停枝的：k 縮放（= 想要的身高 / 模型高度），腳底在模型 y≈0；腳趾輕輕勾住（grip 0.35）、腳底貼枝
 const endemicPerch = (name, k, beat = 8, more = {}) => (env) => perchRigged(outer(env, -0.9), { name, k, ...TRIPO, foot: 0.004, drop: 0.045, beat, grip: 0.35, plant: true, ...more })
+const CONCEAL0 = { off: typeof location !== 'undefined' && /[?&]noconceal/.test(location.search) }
+const CNC = () => globalThis.__conceal ?? CONCEAL0   // 錄影時可以即時調（__conceal）
 const OWL_HOP = { owlHop: true, hopper: { preT: 0.16, dur: 0.3, arc: [0.075, 0.1], apex: 0.44 } }   // 第二輪：跳高一點，腳要明顯離開樹枝
 function liocichla(env) { return endemicGround('liocichla-rig', 0.22, 0.652)(env) }
 function whitebrow(env) { return endemicGround('whitebrow-rig', 0.2, 0.727, { flick: 0.35 })(env) }
@@ -2796,7 +2845,7 @@ function barwing(env) { return endemicPerch('barwing-rig', 0.22 / 0.65, 8)(env) 
 function tit(env) { return endemicPerch('tit-rig', 0.18 / 0.65, 9)(env) }
 function styan(env) { return endemicPerch('styan-rig', 0.22 / 0.637, 7)(env) }
 // 2026-11-09 角鴞：白天停在樹枝上不太動，拍翅慢
-function scopsowl(env) { return endemicPerch('scopsowl-rig', 0.21, 5, OWL_HOP)(env) }
+function scopsowl(env) { return endemicPerch('scopsowl-rig', 0.21, 5, { ...OWL_HOP, conceal: true })(env) }
 function mtscops(env) { return endemicPerch('mtscops-rig', 0.17, 6, OWL_HOP)(env) }
 // 2026-11-10 水雉：慢慢在荷葉上走（範圍小，不會走出荷葉外）；彩鷸：泥灘上低頭探找、尾巴上下擺
 function jacana(env) { return endemicGround('jacana-rig', 0.3, 0.724, { hop: 0, flick: 0.05, radius: 0.45, speed: 0.08, stride: 0.1 })(env) }
