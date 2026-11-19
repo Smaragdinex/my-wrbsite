@@ -29,6 +29,8 @@ export function ruleJudge(p) {
   else if (s.act === 'footfeed') lines.push(tr('紫水雞用長腳趾抓著水草送到嘴邊吃——很少鳥會這樣用腳拿東西。'))
   else if (s.act === 'sweep') lines.push(tr('黑面琵鷺把匙嘴泡在水裡左右掃，靠觸覺找魚蝦——這才是牠真正的吃法。'))
   else if (s.act === 'fishcatch') lines.push(tr('掃到了！匙嘴尖夾著一條小魚。'))
+  else if (s.act === 'tumbledive') lines.push(tr('翻滾俯衝！小辮鴴在空中側翻、頭朝下往下掉再急轉——這是牠在宣示繁殖地盤。'))
+  else if (s.act === 'tumbleflight') lines.push(tr('小辮鴴的展示飛行，寬圓的翅膀拍得又慢又深，會發出嗡嗡聲。'))
   else if (s.act === 'songflight') lines.push(tr('小雲雀一邊振翅爬升一邊唱——在高空唱歌是牠宣示地盤的方式。'))
   else if (s.act === 'quarter') lines.push(tr('草鴞貼著草頂來回低飛，在用耳朵找老鼠。'))
   else if (s.act === 'pounce') lines.push(tr('撲進草裡那一下！腳往前伸、翅膀高舉，草鴞抓老鼠就是這樣。'))

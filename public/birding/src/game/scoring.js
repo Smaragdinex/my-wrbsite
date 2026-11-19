@@ -35,6 +35,7 @@ const ACTION = {
   quarter: [1.95, tr('低空巡獵')], pounce: [2.2, tr('撲進草裡抓鼠')], capture: [2.4, tr('抓到老鼠')],   // 2026-11-18 草鴞（規格 +15%／+30%／+40%，以飛行 1.7 為底）
   headtilt: [1.2, tr('歪頭聽音定位')], groundpounce: [2.2, tr('從枝頭撲向地面')], mousecapture: [2.4, tr('抓到老鼠')],   // 2026-11-18 烏林鴞（歪頭以停棲 1.05 為底 +15%）
   songflight: [2.2, tr('鳴唱飛行')],
+  tumbleflight: [2.0, tr('展示飛行')], tumbledive: [2.4, tr('翻滾俯衝')],   // 2026-11-19 小辮鴴
   footfeed: [2.0, tr('用腳抓水草吃')],
   danceleap: [2.3, tr('跳起展翅')], danceflap: [2.1, tr('張翅拍動')], dancetoss: [1.6, tr('仰頭甩嘴')],   // 2026-11-19 黑冠鶴
   crow: [1.9, tr('挺身鳴叫')], wingwhirr: [2.2, tr('鳴叫後快速振翅')], erectwatch: [1.3, tr('昂首觀察')],   // 2026-11-18 環頸雉

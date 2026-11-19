@@ -834,13 +834,13 @@ function craneShow(leapMax, opts = {}) {
     if (e.type === 'bow') { o.lean = 0.5 * sn; o.neck = 2.0 * sn; o.head = 0.15 * sn; o.reach = 0.35; o.wing = 0.25 * sn }
     else if (e.type === 'toss') { o.neck = -0.3 * sn; o.head = -1.1 * sn; o.reach = 1.0; o.rate = 14 }
     else if (e.type === 'leap') {
-      if (u < 0.2) { o.lean = 0.3; o.neck = 0.4; o.jump = -0.07 * H * ss(u, 0, 0.2); o.wing = 0.3 }
+      if (u < 0.2) { if (opts.borrow) { o.lean = 0.08; o.neck = -0.8 * ss(u, 0, 0.2); o.head = 0.15 * ss(u, 0, 0.2) } else { o.lean = 0.3; o.neck = 0.4 } o.jump = -0.07 * H * ss(u, 0, 0.2); o.wing = 0.3 }   // 2026-11-19 使用者：黑冠鶴張翅時頭要跟原本一樣高 → 蹲下蓄力時脖子往上撐（以前往前彎，頭掉 16 cm）
       else { const v = Math.min(1, (u - 0.2) / 0.66); o.jump = e.h * 4 * v * (1 - v); o.wing = (opts.borrow ? 1.45 * ss(v, 0, 0.3) * (1 - ss(v, 0.62, 0.95)) : 1.45 * Math.sin(Math.PI * Math.min(1, v * 1.15))) + 0.2;   /* 黑冠鶴：張到最開停 0.2～0.3 s 讓玩家看清羽色（ChatGPT V4） */ o.neck = -0.2; o.head = -0.3; o.reach = 0.9; o.lean = u > 0.86 ? 0.2 : -0.1
-        if (opts.borrow && u > 0.86) o.jump = -0.05 * H * Math.sin(Math.PI * (u - 0.86) / 0.14)   // 落地緩衝（ChatGPT V1）：腳先著地、膝踝往下吸收再站回來，約 0.2 秒
+        if (opts.borrow && u > 0.86) { const k = Math.sin(Math.PI * (u - 0.86) / 0.14); o.jump = -0.05 * H * k; o.neck = -0.1 - 0.6 * k }   // 落地緩衝（ChatGPT V1）：腳先著地、膝踝往下吸收再站回來，約 0.2 秒
       }
     } else if (e.type === 'flap') {
       if (e.turned !== D.n) { e.turned = D.n; if (!opts.borrow) x.w.want = x.w.h + sgn() * rnd(0.5, 2.0) }   // 黑冠鶴：原地張翅不轉身（轉身時踩著的腳被扭到側邊、IK 搆不到，量到浮 1～3 cm）   // 黑冠鶴：轉太多時踩著的腳被扭到側邊、IK 搆不到（量到浮 3 cm）
-      o.wing = (1.6 + 0.35 * Math.sin(x.t * Math.PI * 2 * 2.4)) * Math.min(1, sn * 2); o.neck = -0.15; o.head = -0.25; o.reach = 0.85
+      o.wing = (1.6 + 0.35 * Math.sin(x.t * Math.PI * 2 * 2.4)) * Math.min(1, sn * 2); if (!opts.borrow) { o.neck = -0.15; o.head = -0.25; o.reach = 0.85 }   // 黑冠鶴（borrow）：張翅時頭的姿勢跟平常站著一樣（使用者：頭要對齊原本、看起來偏低）
     }
     return finish(x, o, e.type)
   }
@@ -1357,6 +1357,7 @@ function groundTripo(env, cfg) {
       rockNeck = 0.035 * A * rk - 0.024 * A * (rockCurve(rp - 0.13, HEAD_KEYS) - 0.5)   // 頭往前探到底時嘴尖微微往下點（±0.7°，比位移慢 0.05 週期）                                               // 頭的角度補回來，保持水平
     }
     r.turn('head', LAT, -c.neck * 0.3 - c.head + rockNeck); r.turn('head', AX.y, c.yaw * 0.6 + c.sway * (ex?.headSway ?? -0.95))   // headSway：琵鷺掃嘴時頭跟著脖子一起擺（嘴畫弧線）；其他鳥盯地面時頭反向補回（嘴尖對著同一點）
+    { const wr = root.userData.wingRaise ?? 0; if (wr > 0.005) for (const [wg, sg] of [['wingL', 1], ['wingR', -1]]) { r.turn(wg, FWD, sg * wr); r.turn(wg, AX.y, sg * wr * 0.3) } }   // 2026-11-19 小辮鴴落地後雙翅上舉再收（flight.js 降落接手時設定）
     if (cfg.show || cfg.feed) {
       // 展示用的額外動作：翅膀張開（sw）、整隻升降（jy：跳、蹲、潛水）、頭左右甩（sy）、身體仰起（sp）、個別骨頭多轉（sb）
       c.sw = damp(c.sw ?? 0, ex?.wing ?? 0, 14, dt); c.jy = damp(c.jy ?? 0, ex?.jump ?? 0, ex ? 28 : 8, dt)
@@ -2920,7 +2921,7 @@ function bccrane(env) {
     : craneShow(0.3, { call: false, leapMin: 0.15, tagKey: 'bccrane', gap: [30, 60], dur: [12, 18], first: [8, 20], borrow: true })
   return groundGroup(2, 1.4, (avoid) => groundTripo(env, { name: 'bccrane-rig', H: 1.0, h0: 0.98, ...TRIPO, reach: 0.25, bill: 0.1, show, latIK: true, footFb: true,   // latIK：轉身時踩著的腳會被拉離 6～9 cm（量到）
     // 2026-11-19 翅膀：Tripo 生成的張翅模型（使用者要求）只拿翅膀、裝在站姿模型肩膀上（ChatGPT V3：整隻換模型會跳變，身體只用站姿那一個）
-    borrowWings: show ? { name: 'bccrane-wingsonly-rig', span: 1.2, flapAx: 'z', amp: 0.3, tipK: 0.6, ...(globalThis.__bwCfg ?? {}) } : null,
+    borrowWings: show ? { name: 'bccrane-wingsonly-rig', span: 1.2, flapAx: 'z', amp: 0.3, tipK: 0.6, up: +(globalThis.location?.search.match(/[?&]bwup=([-\d.]+)/)?.[1] ?? 0), ...(globalThis.__bwCfg ?? {}) } : null,
     walk: { radius: 2.6, speed: 0.14, avoid, turn: 0.45 }, swingT: 0.5, lift: 0.03, knee: [1.0, 1.8], focusY: 0.7,   // 原地轉身慢一點、跨步快一點：轉太快時踩著的腳跟不上（量到浮 2～4 cm）
     acts: { walk: [4, 99, 99], peck: [3, 1.2, 2.4], stand: [2.5, 2, 5], look: [2.5, 1.5, 3], turn: [1, 99, 99], ...(show ? { show: [0, 999, 999] } : {}) } }))
 }

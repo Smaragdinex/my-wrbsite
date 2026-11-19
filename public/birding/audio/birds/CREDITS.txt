@@ -16,3 +16,11 @@ https://commons.wikimedia.org/wiki/File:Phasianus_colchicus_-_Common_Pheasant_XC
 
 pheasant_whirr.mp3（環頸雉鳴叫後的振翅聲）
 程式合成（粉紅噪音 450 Hz 帶通、每秒 8 下的振幅調變，跟動畫的振翅同步），無第三方素材。
+
+lapwing_call1.mp3 / lapwing_call2.mp3 / lapwing_call3.mp3（小辮鴴 Northern Lapwing, Vanellus vanellus「pee-wit」鳴叫）
+來源：Wikimedia Commons「File:Vanellus vanellus - Northern Lapwing XC467004.mp3」（xeno-canto XC467004，砂石坑旁一群約 8 隻中的一隻，bird-seen: yes，playback-used: no），錄音者 Marie-Lan Taÿ Pamart，授權 CC BY-SA 4.0
+https://commons.wikimedia.org/wiki/File:Vanellus_vanellus_-_Northern_Lapwing_XC467004.mp3
+改動：剪出三聲（6.42 s、10.12 s、15.34 s 起各 0.85 s）、900 Hz 高通、9 kHz 低通、淡入淡出、音量標準化、轉單聲道。改過的檔案同樣以 CC BY-SA 4.0 釋出。
+
+lapwing_wing.mp3（小辮鴴展示飛行翻滾俯衝時的翅膀「嗡嗡」聲）
+程式合成（粉紅噪音 420 Hz 頻帶、每秒 5 下的振幅調變，跟展示飛行的拍翅同步），無第三方素材。

@@ -73,7 +73,8 @@ export const ESCAPE = {
   sarus: { r: 9, run: 2, fly: { speed: 9, hz: 2.4, style: 'flap', k: 3.0 } },
   redcrowned: { r: 9, run: 2, fly: { speed: 9, hz: 2.5, style: 'flap', k: 2.9 } },
   ruff: { r: 5, run: 3, fly: { speed: 12, hz: 8, style: 'flap', k: 0.87 } },
-  lapwing: { r: 6, run: 3, fly: { speed: 10, hz: 5, style: 'flap', k: 0.87 } },   // 2026-11-13 小辮鴴：先跑開；2026-11-15 飛行模型做好了（寬圓的翅膀、慢拍）
+  lapwing: { r: 6, run: 3, tumble: /[?&]tumble/.test(location.search) ? [35, 70] : null,   // 2026-11-19 #84 翻滾展示飛行還在 ChatGPT 驗收中，線上先只在 ?tumble 開
+    tumbleArea: { x: 99, z: -81, rx: 7.5, rz: 5 }, fly: { speed: 10, hz: 5, style: 'flap', k: 0.87 } },   // 2026-11-13 小辮鴴：先跑開；2026-11-15 飛行模型做好了（寬圓的翅膀、慢拍）
   grebe: { r: 9, swim: 4, fly: { speed: 11, hz: 9, style: 'flap', k: 1.25 } },
   // 2026-11-13 Pass 1D：遊隼巡航快、拍幾下就滑；黑雨燕又快又急（離步道 4～5 m 高，靠很近才飛）；烏林鴞慢、低、安靜
   peregrine: { r: 5,   /* 2026-11-15 使用者「81 完全沒看到」：驚飛 16 m，岩架離步道才 6～10 m → 走到上層岩廊就飛走、29 m 外才回來，永遠看不到。高高的岩架上、人在底下走，5 m 才飛 */ fly: { speed: 15, hz: 4.5, style: 'glide', k: 1.05 } },
@@ -1681,23 +1682,9 @@ export function createFlight(world, player) {
       // 一段一段往下：降 1.5 s、停 0.8 s（還在唱、還在拍），最後 3 m 換成滑翔降落
       const cyc = X.t % 2.3, desc = cyc < 1.5 ? 1.6 : 0.15
       X.y -= desc * dt; yT = X.y; r = lerp(X.R, X.r0, 1 - ss(X.y - X.g0, 4, X.top * 0.7)); w = X.dir * 0.32
-      if (X.y < X.g0 + 3.2) { X.ph = 'land'; X.t = 0; songStop(X, 1.0)
-        const P = s.root.position.clone(); X.lc = new THREE.CubicBezierCurve3(P, P.clone().lerp(X.home, 0.35).add(V(0, -0.6, 0)), X.home.clone().add(V(0, 0.8, 0)).addScaledVector(_sp2.set(X.home.x - P.x, 0, X.home.z - P.z).normalize(), -0.8), X.home.clone()); X.ll = X.lc.getLength(); X.ld = 0 }
+      if (X.y < X.g0 + 3.2) { songStop(X, 1.0); landStart(s, X) }
     }
-    if (X.ph === 'land') {
-      // 滑下來：翅膀半張不拍、尾羽張開，最後一下張翅煞車
-      const rem = X.ll - X.ld; X.ld = Math.min(X.ll, X.ld + clamp(rem / 1.2, 0.6, 3.0) * dt); const k = X.ld / X.ll
-      X.lc.getPointAt(k, _sp); X.lc.getTangentAt(Math.min(k, 0.999), _sp2)
-      s.root.position.copy(_sp); const h = Math.atan2(_sp2.x, _sp2.z); s.head += wrap(h - s.head) * (1 - Math.exp(-5 * dt))
-      const flare = ss(1 - rem / 0.9, 0, 1)
-      s.pitch = damp(s.pitch, -Math.asin(clamp(_sp2.y, -1, 1)) * 0.6 - 0.6 * flare, 5, dt); s.roll = damp(s.roll, 0, 4, dt)
-      s.root.rotation.set(s.pitch, s.head, s.roll)
-      if (flare > 0.05) wings(s, f, t, dt, 0, flare); else { s.r.reset(); for (const [n, sg] of [['L', 1], ['R', -1]]) { s.r.turn('wing' + n, AX.x, -sg * 0.35); s.r.turn('wing' + n, AX.y, sg * 0.25) } }
-      fanTail(s, X, 1 - flare)
-      s.act = flare > 0.05 ? 'land' : 'fly'
-      if (X.ld >= X.ll) songEnd(u, s)
-      return
-    }
+    if (X.ph === 'land') { landStep(u, s, X, f, t, dt); return }
     // 繞圈：位置＝圈中心＋半徑；航向＝切線方向；側傾跟著轉彎
     X.ang += w * dt
     const px = X.c.x + Math.sin(X.ang) * r, pz = X.c.z + Math.cos(X.ang) * r
@@ -1716,6 +1703,140 @@ export function createFlight(world, player) {
     if (!X.voice && X.t > 0.8 && X.ph === 'climb' && !X.sung) { X.voice = globalThis.__birdSong?.('skylark') ?? null; X.sung = true }
     X.voice?.update(s.root.position, world.camera)
   }
+  // 降落（雲雀、小辮鴴共用）：從現在的位置畫一條貝茲曲線滑回原本站的地方
+  function landStart(s, X) {
+    X.ph = 'land'; X.t = 0
+    const P = s.root.position.clone()
+    // 小辮鴴（fastLand）：最後一段沿著站姿模型面對的方向進場 → 落地換回站姿模型時朝向一樣（V1 量到差 130°）
+    let dir = _sp2.set(X.home.x - P.x, 0, X.home.z - P.z).normalize()
+    if (X.fastLand) { s.m.obj.getWorldDirection(_w); X.hG = Math.atan2(_w.x, _w.z); dir = _sp2.set(Math.sin(X.hG), 0, Math.cos(X.hG)) }
+    const back = X.fastLand ? 2.2 : 0.8
+    const P1 = X.fastLand && X.lastV ? P.clone().addScaledVector(X.lastV, 0.22) : P.clone().lerp(X.home, 0.35).add(V(0, -0.6, 0))   // 小辮鴴：第一段順著現在的速度方向（不急轉）
+    X.lc = new THREE.CubicBezierCurve3(P, P1, X.home.clone().add(V(0, 0.8, 0)).addScaledVector(dir, -back), X.home.clone()); X.ll = X.lc.getLength(); X.ld = 0
+  }
+  const lerpAng = (a, b, k) => a + wrap(b - a) * k
+  function landStep(u, s, X, f, t, dt) {
+    X.tNow = t
+    {
+      // 滑下來：翅膀半張不拍、尾羽張開，最後一下張翅煞車
+      const rem = X.ll - X.ld; X.ld = Math.min(X.ll, X.ld + (X.fastLand ? clamp(rem / 0.5, 1.4, 6.0) : clamp(rem / 1.2, 0.6, 3.0)) * dt); const k = X.ld / X.ll
+      X.lc.getPointAt(k, _sp); X.lc.getTangentAt(Math.min(k, 0.999), _sp2)
+      s.root.position.copy(_sp); let h = Math.atan2(_sp2.x, _sp2.z); if (X.hG != null && X.fastLand) h = lerpAng(h, X.hG, ss(k, 0.6, 0.95)); s.head += wrap(h - s.head) * (1 - Math.exp(-(X.fastLand ? 9 : 5) * dt))
+      const flare = ss(1 - rem / 0.9, 0, 1)
+      s.pitch = damp(s.pitch, -Math.asin(clamp(_sp2.y, -1, 1)) * 0.6 - 0.6 * flare, 5, dt); s.roll = damp(s.roll, 0, 4, dt)
+      s.root.rotation.set(s.pitch, s.head, s.roll)
+      if (X.fastLand && flare > 0.55) { s.m.obj.userData.wingRaise = 1.5; s.r.reset(); const up = ss(flare, 0.55, 0.85); for (const [n, sg] of [['L', 1], ['R', -1]]) { s.r.turn('wing' + n, AX.x, -sg * lerp(0.4, 1.15, up) * tumbleCfg.upSign); s.r.turn('wingtip' + n, AX.x, -sg * 0.3 * up * tumbleCfg.upSign) } s.r.turn('tail', AX.z, -0.4 * flare) }   // 最後一下：雙翅舉高停住（落地後站姿模型接著舉、再收）
+      else if (flare > 0.05) wings(s, f, t, dt, 0, flare); else { s.r.reset(); for (const [n, sg] of [['L', 1], ['R', -1]]) { s.r.turn('wing' + n, AX.x, -sg * 0.35); s.r.turn('wing' + n, AX.y, sg * 0.25) } }
+      fanTail(s, X, 1 - flare)
+      s.act = flare > 0.05 ? 'land' : 'fly'
+      if (X.ld >= X.ll) songEnd(u, s)
+    }
+  }
+  /* ---------- 2026-11-19 #84 小辮鴴 Tumbling Display Flight（ChatGPT 規格：雄鳥從草地快速升空，突然左右翻滾急轉彎，伴隨鳴叫後下降回開闊地面）----------
+     草地上的那隻每 35～70 秒（沒被驚動、玩家不在 8 m 內）：起飛 → 貼著草地低飛、翅膀又寬又慢地「嗡嗡」深拍 → 陡升到 8～12 m
+     → 在頂點側翻（身體轉到快朝天）、頭朝下翻滾俯衝，一邊叫「pee-wit」、翅膀發出嗡聲 → 離地 1.5 m 拉起、貼地左右急轉 Z 字 → 再來一輪（共 2～3 輪）
+     → 繞回原本的位置降落。路線＝繞著草地上一個圓心飛（圓心挑附近沒有樹的方向，原本站的點在圓上），翻滾和 Z 字是在這條圓上加側向偏移＋身體滾轉。
+     聲音：真錄音 lapwing_call1～3（CC BY-SA 4.0）＋程式合成的翅膀嗡聲 */
+  const tumbleCfg = { force: null, upSign: 1 }
+  function tumbleStart(u, s) {
+    const m = s.m, X = s.song
+    m.obj.updateMatrixWorld(true); _box.setFromObject(m.obj); const home = _box.getCenter(V())
+    const g0 = terrainHeight(home.x, home.z)
+    // 飛行路線：固定的橢圓（ESCAPE.lapwing.tumbleArea），2026-11-19 ChatGPT V1 REVISE 後用俯視圖挑的：
+    // 涵蓋草島東半＋東邊岸上的草地（橢圓上 72% 是陸地），南緣離土路 3.6 m、西緣離木棧道 8 m 以上、附近沒有樹；側閃只往橢圓內側（外緣不會超出）
+    const md = u.esc.tumbleArea ?? { x: home.x, z: home.z, rx: 7, rz: 4 }
+    X.c = V(md.x, 0, md.z); X.Rx = md.rx; X.Rz = md.rz; X.R = (X.Rx + X.Rz) / 2
+    X.g0 = g0; X.home = home; X.dir = Math.random() < 0.5 ? 1 : -1
+    X.ang = Math.atan2((home.x - md.x) / X.Rx, (home.z - md.z) / X.Rz); X.ang0 = X.ang; X.trav = 0
+    X.on = true; X.ph = 'up'; X.t = 0; X.y = home.y; X.cyc = 0; X.ncyc = tumbleCfg.force?.ncyc ?? (Math.random() < 0.5 ? 2 : 3)
+    X.off = 0; X.offV = 0; X.voff = 0; X.called = 0; X.v = 2; X.log = []; X.fastLand = true   // 小辮鴴降落快、最後才張翅煞車（雲雀是慢慢滑）
+    m.obj.getWorldDirection(_w); s.head = Math.atan2(_w.x, _w.z); s.pitch = -0.4; s.roll = 0
+    s.root.position.copy(home); s.root.rotation.set(s.pitch, s.head, 0); s.root.visible = true; m.obj.visible = false
+    s.mode = 'song'; s.act = 'takeoff'; s.t = 0
+  }
+  function tumbleCall(X, s, id, gain) { s.root.updateWorldMatrix(true, false); globalThis.__birdCall?.(id, s.root.position, gain) }
+  function tumbleStep(u, s, t, dt) {
+    const X = s.song, f = u.esc.fly
+    X.t += dt; s.t += dt
+    if (X.ph === 'land') { landStep(u, s, X, f, t, dt); return }
+    const gNow = terrainHeight(s.root.position.x, s.root.position.z)
+    let yT = X.y, vT = 6.5, offT = 0, rollT = 0, wingMode = 'low', act = 'tumbleflight'
+    if (X.ph === 'up') {
+      // 起飛：從草地上斜斜升到 1.5 m，速度從 2 加到 6
+      yT = lerp(X.home.y, X.g0 + 1.5, ss(X.t, 0, 1.1)); vT = lerp(2.5, 6.5, ss(X.t, 0, 1)); wingMode = 'takeoff'; act = 'takeoff'   // 從站著的身體高度開始（V2 第一格掉 15 cm）
+      if (X.t > 1.1) { X.ph = 'low'; X.t = 0; X.lowT = rnd(2.2, 3.2) }
+    } else if (X.ph === 'low') {
+      // 貼地低飛：寬翅膀慢而深的拍（嗡嗡聲）、高度微微起伏
+      yT = Math.max(gNow, X.g0) + 1.5 + 0.25 * Math.sin(X.t * 3.1); vT = 6
+      if (X.t > X.lowT) { X.ph = 'climb'; X.t = 0; X.top = rnd(8, 12); X.yC = X.y; yT = X.y }   // 換階段這格高度不跳（V2 量到一格 37 cm）
+    } else if (X.ph === 'climb') {
+      // 陡升：每秒 4～5 m
+      yT = X.yC + 4.6 * X.t * ss(X.t, 0, 0.4) + 0.6 * X.t; vT = 5.2; wingMode = 'climb'
+      if (X.y >= X.g0 + X.top - 0.05) { X.ph = 'tumble'; X.t = 0; X.yT0 = yT; X.vy0 = Math.max(0, X.vy ?? 0); X.tumD = rnd(1.7, 2.1); X.rollDir = X.cyc % 2 ? -X.dir : X.dir; tumbleCall(X, s, 'lapwing', 1.4); tumbleCall(X, s, 'lapwingWing', 1.2) }
+    } else if (X.ph === 'tumble') {
+      // 翻滾俯衝：先側翻到快朝天、頭朝下往下掉，中途回正又往另一邊扭一下，最後 0.4 s 拉起
+      const k = clamp(X.t / X.tumD, 0, 1)
+      yT = lerp(X.yT0, X.g0 + 1.6, ss(k, 0.05, 0.92) ** 1.25) + X.vy0 * X.t * Math.exp(-X.t / 0.12)   // 頂點先順著爬升的速度往上滑一點、停住再翻下（不一格就從上升變下降）
+      vT = lerp(4.5, 7.5, ss(k, 0, 0.6))
+      rollT = X.rollDir * (2.5 * Math.sin(Math.PI * ss(k, 0, 0.55)) - 1.1 * Math.sin(Math.PI * ss(k, 0.5, 0.88)))
+      offT = -1.1 * Math.sin(Math.PI * ss(k, 0.05, 0.75))   // 往內側閃（翻滾方向還是左右交替）
+      wingMode = k < 0.85 ? 'tumble' : 'pull'; act = 'tumbledive'
+      if (k > 0.45 && X.called < 2 * X.cyc + 2) { X.called = 2 * X.cyc + 2; tumbleCall(X, s, 'lapwing', 1.4) }
+      if (k >= 1) { X.ph = 'zig'; X.t = 0; X.zigN = 0 }
+    } else if (X.ph === 'zig') {
+      // 貼地 Z 字：每 0.45 s 換邊，身體跟著大角度側傾
+      yT = Math.max(gNow, X.g0) + 1.4 + 0.2 * Math.sin(X.t * 5); vT = 6.5
+      offT = -0.65 * (1 - Math.cos(Math.PI * 2 * X.t / 0.9)) * ss(X.t, 0, 0.2) * (1 - ss(X.t, 1.6, 1.95))   // Z 字：內側／路線上交替（每 0.45 s 換邊；連續曲線＋彈簧，V2 用跳的目標會一格急轉）
+      act = 'tumbledive'
+      if (X.t > 2.0) { X.cyc++; X.t = 0; X.ph = X.cyc >= X.ncyc ? 'back' : 'low'; X.lowT = rnd(1.4, 2.2); X.y0B = X.y }
+    } else if (X.ph === 'back') {
+      // 最後一圈：繞回原本站的點，邊飛邊降到 2.5 m，到了前面 5 m 就換降落曲線
+      yT = Math.max(gNow, X.g0) + 2.3; vT = 6
+      const da = wrap(X.ang0 - X.ang) * X.dir
+      if (da > 0 && da * X.R < 6) { landStart(s, X); X.t = 0; landStep(u, s, X, f, t, dt); return }   // 同一格就開始沿降落曲線走（不停一格）
+    }
+    // 位置：沿圓走（角速度＝速度／半徑），加側向偏移
+    const lr = Math.hypot(X.Rx * Math.cos(X.ang), X.Rz * Math.sin(X.ang))
+    const rc = lr ** 3 / (X.Rx * X.Rz)   // 這一點的轉彎半徑：橢圓兩端比較急 → 放慢
+    X.v = damp(X.v, vT * clamp(Math.sqrt(rc / 5), 0.65, 1), 3, dt)   // 橢圓上這一點的「切線長度」（角速度＝速度／它）
+    X.ang += X.dir * X.v / lr * dt; X.trav += X.v * dt
+    const offPrev = X.off; X.offV = (X.offV ?? 0) + (70 * (offT - X.off) - 2 * Math.sqrt(70) * (X.offV ?? 0)) * dt; X.off += X.offV * dt   // 側向偏移用臨界阻尼彈簧（速度連續）
+    let px = X.c.x + Math.sin(X.ang) * (X.Rx + X.off), pz = X.c.z + Math.cos(X.ang) * (X.Rz + X.off)
+    if (X.ph === 'up') { const k = ss(X.t, 0, 1.1); px = lerp(X.home.x, px, k); pz = lerp(X.home.z, pz, k) }   // 起飛：從站的地方斜斜接上路線
+    const prevY = X.y
+    if (X.ph === 'up' || X.ph === 'climb' || X.ph === 'tumble') { X.y = yT; X.vy = (X.y - prevY) / Math.max(dt, 1e-3) }
+    else { X.vy = (X.vy ?? 0) + (30 * (yT - X.y) - 2 * Math.sqrt(30) * (X.vy ?? 0)) * dt; X.y += X.vy * dt }   // 高度用臨界阻尼彈簧（速度連續）
+    const y = X.ph === 'up' ? X.y : Math.max(X.y, terrainHeight(px, pz) + 0.9)
+    const vx = px - s.root.position.x, vz = pz - s.root.position.z, vy = y - s.root.position.y
+    s.root.position.set(px, y, pz)
+    const vh = Math.hypot(vx, vz)
+    X.lastV = (X.lastV ?? V()).set(vx, vy, vz).divideScalar(Math.max(dt, 1e-3))
+    if (vh > 1e-6) { const h = Math.atan2(vx, vz); s.head += wrap(h - s.head) * (1 - Math.exp(-10 * dt)) }
+    // 姿勢：俯仰跟著速度方向；側傾＝轉彎＋偏移造成的側向加速度＋翻滾
+    const pT = -Math.atan2(vy, Math.max(vh, 1e-4)) * 0.9
+    s.pitch = damp(s.pitch, clamp(pT, -1.0, 1.1), X.ph === 'tumble' ? 9 : 5, dt)
+    const lat = (X.off - offPrev) / Math.max(dt, 1e-3)
+    X.voff = damp(X.voff, lat, 6, dt)
+    const bank = -X.dir * Math.atan(X.v * X.v / rc / 9.8) * 0.8 + clamp(X.voff * 0.35 * X.dir, -1.0, 1.0)
+    s.roll = damp(s.roll, clamp(bank + rollT, -2.7, 2.7), X.ph === 'tumble' ? 10 : 5, dt)
+    s.root.rotation.set(s.pitch, s.head, s.roll)
+    // 翅膀
+    if (wingMode === 'takeoff') wings(s, { ...f, hz: 6, style: 'flap' }, t, dt, 1, 0)
+    else if (wingMode === 'low') wings(s, { ...f, hz: 4.2, style: 'flap' }, t, dt, 0.7, 0)
+    else if (wingMode === 'climb') wings(s, { ...f, hz: 5.5, style: 'flap' }, t, dt, 0.9, 0)
+    else if (wingMode === 'pull') wings(s, { ...f, hz: 5, style: 'flap' }, t, dt, 0.6, 0.4)
+    else {
+      // 翻滾時翅膀半收、不規則地拍兩三下
+      wings(s, { ...f, hz: 7, style: 'flap' }, t, dt, 0.2, 0)
+      for (const [n, sg] of [['L', 1], ['R', -1]]) { s.r.turn('wing' + n, AX.y, sg * 0.45); s.r.turn('wingtip' + n, AX.y, sg * 0.35) }
+    }
+    fanTail(s, X, X.ph === 'tumble' || X.ph === 'zig' ? 0.8 : 0.3)
+    // 照片標籤看「看得到的姿勢」：身體側翻超過 35° 或頭朝下超過 20° 才算翻滾俯衝，不然只是展示飛行
+    if (act === 'tumbledive' && !(Math.abs(s.roll) > 0.6 || s.pitch > 0.35)) act = 'tumbleflight'
+    s.act = act
+    if (X.ph === 'zig' && X.called < 2 * X.cyc + 3 && X.t > 0.5) { X.called = 2 * X.cyc + 3; tumbleCall(X, s, 'lapwing', 1.3) }
+    if (X.log && X.log.length < 4000) X.log.push([+X.t.toFixed(3), X.ph, +px.toFixed(3), +y.toFixed(3), +pz.toFixed(3), +s.pitch.toFixed(3), +s.roll.toFixed(3), +(y - terrainHeight(px, pz)).toFixed(2)])
+  }
   function fanTail(s, X, k) {
     const tb = s.r.bones.tail; if (!tb) return
     if (!X.fanAx) { const a = V(1, 0, 0).applyQuaternion(tb.userData.inv); const ax = Math.abs(a.x), ay = Math.abs(a.y), az = Math.abs(a.z); X.fanAx = ax >= ay && ax >= az ? 'x' : ay >= az ? 'y' : 'z' }
@@ -1724,8 +1845,9 @@ export function createFlight(world, player) {
   function songEnd(u, s) {
     const X = s.song; songStop(X, 0.6)
     X.on = false; X.ph = ''; s.root.visible = false; s.m.obj.visible = true; s.mode = 'perch'; s.act = ''
+    if (X.fastLand && X.ld >= X.ll) { X.settle = 0; s.m.obj.userData.wingRaise = 1.5; if (s.m.walker) { s.m.walker.goal = null; s.m.walker.want = null } s.m.acts?.next?.('stand'); s.m.update?.(X.tNow ?? 0, 1 / 60) }   // 落地先站著（收翅），不要一落地就走   // 站姿模型飛行時沒在更新（停在起飛前的姿勢）→ 交接這一格先算一次，不然第一格是舊姿勢   // 落地：站姿模型接手時翅膀還舉著（接飛行模型最後的上舉姿勢），0.12 s 後 0.4 s 收好
     if (s.r.bones.tail) s.r.bones.tail.scale.set(1, 1, 1)
-    X.wait = X.force ? 5 : rnd(...u.esc.songflight); X.n = (X.n ?? 0) + 1
+    X.wait = X.force ? 5 : rnd(...(u.esc.songflight ?? u.esc.tumble)); X.n = (X.n ?? 0) + 1
   }
   /* ---------- 2026-11-18 #35 茶腹鳾 Headfirst Tree Descent（ChatGPT 規格：先沿樹幹往上攀，接著頭朝下沿樹皮下降，途中停下用尖嘴探裂縫找蟲）----------
      停在神木上的時候整隻改由這裡接手（站姿模型 m.obj 藏起來，換一份複製的 sit）：
@@ -2041,29 +2163,31 @@ export function createFlight(world, player) {
   function songTick(t, dt) {
     if (songCfg.off) return
     for (const u of units) {
-      if (!u.esc.songflight) continue
+      if (!u.esc.songflight && !u.esc.tumble) continue
       const s = u.ms[0]; if (!s?.root) continue
       const X = s.song ??= { on: false, wait: rnd(12, 30), a0: Math.random() * 6.28, n: 0, aborts: 0 }
       const P = world.camera.position
+      if (X.settle != null) { X.settle += dt; const k = ss(X.settle, 0.12, 0.52); s.m.obj.userData.wingRaise = 1.5 * (1 - k); if (k >= 1) { X.settle = null; s.m.obj.userData.wingRaise = 0 } }
       if (X.on) {
         if (u.b.absent) { songStop(X, 0.3); X.on = false; s.root.visible = false; s.m.obj.visible = true; s.mode = 'perch'; s.act = ''; continue }
         // 玩家走近（不在觀察屋裡）：中斷，照驚飛那套從現在的位置飛走
         const d = Math.hypot(P.x - s.root.position.x, P.z - s.root.position.z)
-        if (!songCfg.noAbort && !inHide(P) && (d < 5 || (d < 7 && speed > 0.6))) {   // 站在步道上看不會打斷；走進草地到牠底下 5 m（或走著靠近到 7 m）才會
+        const ab = u.esc.tumble ? [3.5, 5] : [5, 7]   // 小辮鴴：路線離土路 3 m 多，站在路上看不會打斷
+        if (!songCfg.noAbort && !inHide(P) && (d < ab[0] || (d < ab[1] && speed > 0.6))) {   // 站在步道上看不會打斷；走進草地到牠底下 5 m（或走著靠近到 7 m）才會
           songStop(X, 0.4); X.on = false; X.ph = ''; X.aborts++
           if (s.r.bones.tail) s.r.bones.tail.scale.set(1, 1, 1)
           const pos = s.root.position.clone(), away = pos.clone().sub(P).setY(0); if (away.lengthSq() < 1e-4) away.set(1, 0, 0)
           s.home.copy(X.home); s.faceH = s.head
           s.curve = outbound(pos, away.normalize(), null); s.len = s.curve.getLength(); s.dist = 0; s.t = 0
           s.mode = 'out'; s.wait = rnd(20, 38); u.state = 'away'; u.trip = false; u.alarm = 0
-          X.wait = rnd(...u.esc.songflight)
+          X.wait = rnd(...(u.esc.songflight ?? u.esc.tumble))
           continue
         }
         u.alarm = 0
         // 離玩家 90 m 外：每 3 格算一次
         X.fr = (X.fr ?? 0) + 1; X.acc = (X.acc ?? 0) + dt
         if (P.distanceTo(s.root.position) > 90 && X.fr % 3) continue
-        songStep(u, s, t, Math.min(X.acc, 0.1)); X.acc = 0
+        ;(u.esc.tumble ? tumbleStep : songStep)(u, s, t, Math.min(X.acc, 0.1)); X.acc = 0
         if (X.t > 40) songEnd(u, s)   // 保險
         continue
       }
@@ -2072,7 +2196,7 @@ export function createFlight(world, player) {
       s.m.obj.getWorldPosition(_sp)
       const d = Math.hypot(P.x - _sp.x, P.z - _sp.z)
       if (!X.force && (d < 8 || d > 150)) { X.wait = 4; continue }   // 人太近不飛起來唱；沒人在附近也不唱（省效能）
-      X.force = false; songStart(u, s)
+      X.force = false; (u.esc.tumble ? tumbleStart : songStart)(u, s)
     }
   }
 
@@ -2225,7 +2349,7 @@ export function createFlight(world, player) {
   }
   const gone = (b) => { const u = unitOf(b); return !u || u.ms.every((s) => s.mode === 'away') }
   const canFly = (b) => !!unitOf(b)?.esc.fly
-  window.__flight = { units, prey, nutGo: (f = 'down') => { const u = units.find((x) => x.b.def.id === 'nuthatch'); if (u?.ms[0]?.nut) u.ms[0].nut.force = f; return !!u?.ms[0]?.nut }, huntCfg, songCfg, songGo: () => { const u = units.find((x) => x.b.def.id === 'skylark'); const X = u?.ms[0]?.song; if (X) { X.force = true; X.wait = 0 } return !!X }, huntGo: (id, opt = {}) => { const u = units.find((x) => x.b.def.id === id); const H = u?.ms[0]?.hunt; if (H) { H.force = opt; H.wait = 0 } return !!H }, hunt: (id) => units.find((x) => x.b.def.id === id)?.ms[0]?.hunt, digGo: (type = 'dig') => { const u = units.find((x) => x.b.def.id === 'barbet'); const X = u?.ms[0]?.dig; if (X) { X.wait = 0; X.force = type } }, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
+  window.__flight = { units, prey, nutGo: (f = 'down') => { const u = units.find((x) => x.b.def.id === 'nuthatch'); if (u?.ms[0]?.nut) u.ms[0].nut.force = f; return !!u?.ms[0]?.nut }, huntCfg, songCfg, tumbleCfg, tumbleGo: (opt = {}) => { const u = units.find((x) => x.b.def.id === 'lapwing'); const X = u?.ms[0]?.song; tumbleCfg.force = opt; if (X) { X.force = true; X.wait = 0 } return !!X }, songCfg, songGo: () => { const u = units.find((x) => x.b.def.id === 'skylark'); const X = u?.ms[0]?.song; if (X) { X.force = true; X.wait = 0 } return !!X }, huntGo: (id, opt = {}) => { const u = units.find((x) => x.b.def.id === id); const H = u?.ms[0]?.hunt; if (H) { H.force = opt; H.wait = 0 } return !!H }, hunt: (id) => units.find((x) => x.b.def.id === id)?.ms[0]?.hunt, digGo: (type = 'dig') => { const u = units.find((x) => x.b.def.id === 'barbet'); const X = u?.ms[0]?.dig; if (X) { X.wait = 0; X.force = type } }, shotOf: (m) => shotOf(m), displayGo: (id) => { const u = units.find((x) => x.b.def.id === id); const m = u?.ms[0]?.m; if (m) m.obj.userData.displayFlight = true }, nestGo: (id) => { const u = units.find((x) => x.b.def.id === id); const N = u?.ms[0]?.nest; if (N) N.wait = 0 }, flush: (id) => { const u = units.find((x) => x.b.def.id === id); if (u && u.state === 'home') flush(u, 0) } }
   // 鏡頭被程式直接搬走時呼叫：這一跳不算玩家在跑（不然手會狂晃、鳥會被嚇飛）
   const snap = () => { last.copy(world.camera.position); speed = 0 }
   return { tick, units, shotOf, snap, arrive, depart, gone, canFly, add: addUnit, get speed() { return speed } }

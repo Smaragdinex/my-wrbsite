@@ -286,7 +286,7 @@ export function createAmbience({ getMusic, getAmb }) {
 
   // 2026-11-17 個別鳥種的叫聲（真的錄音；授權見 audio/birds/CREDITS.txt）：在世界座標某一點叫一聲。
   // 照離鏡頭的距離變小聲（5 m 內幾乎原音量、30 m 外聽不到）、照方向左右聲道，走環境音那一路（音量設定、在店裡隔著玻璃都照算）
-  const CALLS = { dove: ['audio/birds/dove_coo1.mp3', 'audio/birds/dove_coo2.mp3', 'audio/birds/dove_coo3.mp3'], pheasant: ['audio/birds/pheasant_crow1.mp3', 'audio/birds/pheasant_crow2.mp3'], pheasantWhirr: ['audio/birds/pheasant_whirr.mp3'] }   // 2026-11-18 環頸雉鳴叫＋振翅
+  const CALLS = { dove: ['audio/birds/dove_coo1.mp3', 'audio/birds/dove_coo2.mp3', 'audio/birds/dove_coo3.mp3'], pheasant: ['audio/birds/pheasant_crow1.mp3', 'audio/birds/pheasant_crow2.mp3'], pheasantWhirr: ['audio/birds/pheasant_whirr.mp3'], lapwing: ['audio/birds/lapwing_call1.mp3', 'audio/birds/lapwing_call2.mp3', 'audio/birds/lapwing_call3.mp3'], lapwingWing: ['audio/birds/lapwing_wing.mp3'] }   // 2026-11-18 環頸雉鳴叫＋振翅
   const callBufs = {}
   function call(id, pos, cam, gain = 1) {
     if (!ac || !CALLS[id] || ac.state !== 'running') return 0
