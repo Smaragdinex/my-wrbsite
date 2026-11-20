@@ -29,6 +29,8 @@ export function ruleJudge(p) {
   else if (s.act === 'footfeed') lines.push(tr('紫水雞用長腳趾抓著水草送到嘴邊吃——很少鳥會這樣用腳拿東西。'))
   else if (s.act === 'sweep') lines.push(tr('黑面琵鷺把匙嘴泡在水裡左右掃，靠觸覺找魚蝦——這才是牠真正的吃法。'))
   else if (s.act === 'fishcatch') lines.push(tr('掃到了！匙嘴尖夾著一條小魚。'))
+  else if (s.act === 'nightcall') lines.push(tr('夜間鳴叫！黃嘴角鴞抬起頭、喉嚨一鼓，吹出兩聲短促的口哨——牠在宣告這片山林是牠的。'))
+  else if (s.act === 'listen') lines.push(tr('叫完停下來聆聽：黃嘴角鴞在等附近的同類回應。'))
   else if (s.act === 'conceal') lines.push(tr('擬態偽裝！領角鴞發現你了：身體拉高變瘦、耳羽豎起，假裝自己是一截樹皮，只有頭慢慢轉過來盯著你。'))
   else if (s.act === 'upend') lines.push(tr('倒立覓食！花嘴鴨把頭伸進水裡、屁股翹出水面，在吃水底的水草和種子。'))
   else if (s.act === 'tumbledive') lines.push(tr('翻滾俯衝！小辮鴴在空中側翻、頭朝下往下掉再急轉——這是牠在宣示繁殖地盤。'))

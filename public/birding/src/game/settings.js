@@ -157,7 +157,7 @@ export function createSettings({ world, player }) {
       <div class="row"><div><b>${tr('背景音樂')}</b><small>${tr('輕柔的環境音樂')}</small></div>${seg('music', LEVELS, st.music)}</div>
       <div class="row"><div><b>${tr('環境音')}</b><small>${tr('鳥叫、蟲鳴、瀑布水聲')}</small></div>${seg('amb', LEVELS, st.amb)}</div>
       <div class="row"><div><b>${tr('音效')}</b><small>${tr('按鈕、對焦嗶聲、快門聲')}</small></div>${seg('sound', { off: tr('關'), on: tr('開') }, st.sound ? 'on' : 'off')}</div>
-      <div class="row credits"><div><b>${tr('鳥叫聲來源')}</b><small>${tr('珠頸斑鳩叫聲：Ianbu，Wikimedia Commons，CC BY-SA 3.0（剪輯過）')}<br>${tr('小雲雀鳴唱：Mike Prince（xeno-canto XC336956），Wikimedia Commons，CC BY-SA 4.0（剪輯過）')}<br>${tr('環頸雉鳴叫：Jonathon Jongsma（xeno-canto XC83152、XC179662），Wikimedia Commons，CC BY-SA 3.0（剪輯過）')}<br>${tr('小辮鴴鳴叫：Marie-Lan Taÿ Pamart（xeno-canto XC467004），Wikimedia Commons，CC BY-SA 4.0（剪輯過）')}</small></div></div>`   /* 2026-11-17 CC BY-SA 要在遊戲裡標示作者（audio/birds/CREDITS.txt） */
+      <div class="row credits"><div><b>${tr('鳥叫聲來源')}</b><small>${tr('珠頸斑鳩叫聲：Ianbu，Wikimedia Commons，CC BY-SA 3.0（剪輯過）')}<br>${tr('小雲雀鳴唱：Mike Prince（xeno-canto XC336956），Wikimedia Commons，CC BY-SA 4.0（剪輯過）')}<br>${tr('環頸雉鳴叫：Jonathon Jongsma（xeno-canto XC83152、XC179662），Wikimedia Commons，CC BY-SA 3.0（剪輯過）')}<br>${tr('小辮鴴鳴叫：Marie-Lan Taÿ Pamart（xeno-canto XC467004），Wikimedia Commons，CC BY-SA 4.0（剪輯過）')}<br>${tr('黃嘴角鴞鳴叫：Mandar Bhagat（xeno-canto XC417765），Wikimedia Commons，CC BY-SA 4.0（剪輯過）')}</small></div></div>`   /* 2026-11-17 CC BY-SA 要在遊戲裡標示作者（audio/birds/CREDITS.txt） */
   }
   el.addEventListener('click', (e) => {
     const b = e.target.closest('.seg button'); if (!b) return

@@ -24,3 +24,8 @@ https://commons.wikimedia.org/wiki/File:Vanellus_vanellus_-_Northern_Lapwing_XC4
 
 lapwing_wing.mp3（小辮鴴展示飛行翻滾俯衝時的翅膀「嗡嗡」聲）
 程式合成（粉紅噪音 420 Hz 頻帶、每秒 5 下的振幅調變，跟展示飛行的拍翅同步），無第三方素材。
+
+mtscops_call1.mp3 / mtscops_call2.mp3 / mtscops_call3.mp3（黃嘴角鴞 Mountain Scops Owl, Otus spilocephalus 兩聲口哨鳴叫）
+來源：Wikimedia Commons「File:Otus spilocephalus - Mountain Scops Owl XC417765.mp3」（xeno-canto XC417765，印度 Uttarakhand Kausani，type: call，playback-used: no），錄音者 Mandar Bhagat，授權 CC BY-SA 4.0
+https://commons.wikimedia.org/wiki/File:Otus_spilocephalus_-_Mountain_Scops_Owl_XC417765.mp3
+改動：剪出三段（0.62 s、5.82 s、11.58 s 起各 1.45 s，每段一組兩聲）、500 Hz 高通、3.5 kHz 低通、降噪、淡入淡出、音量標準化、轉單聲道。改過的檔案同樣以 CC BY-SA 4.0 釋出。

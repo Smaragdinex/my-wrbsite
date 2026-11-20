@@ -38,7 +38,8 @@ const ACTION = {
   tumbleflight: [2.0, tr('展示飛行')], tumbledive: [2.4, tr('翻滾俯衝')],   // 2026-11-19 小辮鴴
   footfeed: [2.0, tr('用腳抓水草吃')],
   upend: [1.9, tr('倒立覓食')],
-  conceal: [1.8, tr('擬態偽裝')],   // 2026-11-20 領角鴞   // 2026-11-20 花嘴鴨
+  conceal: [1.8, tr('擬態偽裝')],
+  nightcall: [1.8, tr('夜間鳴叫')], listen: [1.3, tr('停下來聆聽')],   // 2026-11-20 黃嘴角鴞   // 2026-11-20 領角鴞   // 2026-11-20 花嘴鴨
   danceleap: [2.3, tr('跳起展翅')], danceflap: [2.1, tr('張翅拍動')], dancetoss: [1.6, tr('仰頭甩嘴')],   // 2026-11-19 黑冠鶴
   crow: [1.9, tr('挺身鳴叫')], wingwhirr: [2.2, tr('鳴叫後快速振翅')], erectwatch: [1.3, tr('昂首觀察')],   // 2026-11-18 環頸雉
   headdown: [2.0, tr('頭朝下爬下樹幹')], barkprobe: [1.9, tr('用嘴探樹皮裂縫')], barkcatch: [2.2, tr('從樹皮縫叼出小蟲')], climbup: [1.3, tr('沿樹幹往上攀')],   // 2026-11-18 茶腹鳾   // 2026-11-18 紫水雞
@@ -133,6 +134,7 @@ export function measurePhoto(world, cam, { focusDist, dofTol }) {
       let act = sh.act === 'worm' && b.def.id === 'ahoopoe' ? 'grub' : sh.act   // 戴勝用 worm 那一套動作，抓的是幼蟲
       if (b.def.id === 'dove' && act === 'show') act = sh.obj?.userData.bow ? 'bowing' : 'look'
       if (b.def.id === 'bccrane' && act === 'show') { const dt = sh.obj?.userData.danceTag; act = dt === 'bow' ? 'bowing' : dt === 'leap' ? 'danceleap' : dt === 'flap' ? 'danceflap' : dt === 'toss' ? 'dancetoss' : 'look' }   // 2026-11-19 黑冠鶴跳舞
+      if (b.def.id === 'mtscops' && sh.obj?.userData.callTag) act = sh.obj.userData.callTag   // 2026-11-20 黃嘴角鴞夜鳴
       if (b.def.id === 'scopsowl' && sh.obj?.userData.concealTag) act = 'conceal'   // 2026-11-20 領角鴞拉長偽裝
       if (b.def.id === 'spotbill' && sh.obj?.userData.upendTag) act = 'upend'   // 2026-11-20 花嘴鴨倒立覓食
       if (b.def.id === 'rnpheasant' && act === 'show') act = sh.obj?.userData.pheasTag ?? 'look'   // 2026-11-18 環頸雉：鳴叫／振翅／昂首   // 斑鳩求偶：正在鞠躬的雄鳥才算；雌鳥只是在看

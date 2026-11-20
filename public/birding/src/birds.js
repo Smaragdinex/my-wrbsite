@@ -1923,6 +1923,49 @@ function perchRigged(env, cfg) {
     root.userData.concealTag = kk >= 0.85 && !cz.turning ? 'conceal' : null; root.userData.cz = cz   // 姿勢還沒到位、或頭正在轉，不算偽裝照
     return { k: kk, yaw: cz.yaw }
   }
+  // 2026-11-20 #53 黃嘴角鴞 Mountain Night Calling：一輪叫 4～7 次（每次是真錄音的兩聲口哨「噓—噓」，間隔 4.5～6 秒，跟錄音裡一樣），
+  // 每一聲頭微微抬起、喉嚨鼓一下；叫完停下來聽 6～10 秒（頭分 2～3 次慢慢轉向不同方向、停住），再跳到樹枝另一頭換位置，安靜一陣再叫。
+  // root.userData.callTag：'nightcall'（正在出聲那一下）／'listen'（叫完在聽）。?nonightcall 關掉；__nightcall 給錄影腳本控制
+  const NOTE = [0.13, 0.98], NOTE_LEN = 0.38   // 錄音裡兩聲口哨的起點（秒）、每聲長度
+  const nc = cfg.nightcall ? { st: 'quiet', t: rnd(3, 8), e: 0, n: 0, yaw: 0, want: 0, look: 0 } : null
+  if (nc) (globalThis.__nightcall ??= []).push(nc)
+  const ncTick = (dt) => {
+    if (!nc || NC_OFF) return null
+    nc.t -= dt; nc.e += dt
+    if (nc.st === 'quiet' && (nc.t <= 0 || nc.force)) { nc.force = false; nc.st = 'bout'; nc.n = nc.N ?? (4 + Math.floor(Math.random() * 4)); nc.e = 0; nc.t = 0.6; nc.k = 0 }
+    let raise = 0, puff = 0
+    if (nc.st === 'bout') {
+      hp.wait = Math.max(hp.wait, 2); c.call = 0
+      if (nc.t <= 0 && nc.k < nc.n) {
+        nc.k++; nc.ce = 0; nc.t = rnd(4.5, 6); nc.rv = rnd(-0.09, 0.09)
+        root.updateWorldMatrix(true, false); globalThis.__birdCall?.('mtscops', root.getWorldPosition(_pp), 1.3)
+      }
+      if (nc.ce != null) {
+        nc.ce += dt
+        // 每一聲各自鼓一次喉嚨（ChatGPT V1：0.10～0.16 秒鼓起、0.18～0.25 秒消下去）：聲音開始前 0.03 秒起鼓、0.13 秒到頂、撐到這聲快結束、0.22 秒消掉
+        for (const n0 of NOTE) { const x = nc.ce - n0; if (x > -0.05 && x < NOTE_LEN + 0.25) puff = Math.max(puff, ss(x, -0.03, 0.1) * (1 - ss(x, NOTE_LEN - 0.12, NOTE_LEN + 0.1))) }
+        raise = (1 + nc.rv) * ss(nc.ce, 0, 0.12) * (1 - ss(nc.ce, 1.35, 1.9))   // 整段（兩聲）頭都抬著，叫完放下；每次抬的高度差 ±0.02 rad
+      }
+      if (nc.k >= nc.n && nc.ce > 2.2) { nc.st = 'listen'; nc.e = 0; nc.t = rnd(6, 10); nc.next = 0.8 }
+    } else if (nc.st === 'listen') {
+      hp.wait = Math.max(hp.wait, 1); c.call = 0
+      nc.next -= dt
+      if (nc.next <= 0) { nc.want = clamp(nc.want * -0.4 + (Math.random() < 0.5 ? -1 : 1) * rnd(0.5, 1.1), -1.3, 1.3); nc.next = rnd(2, 3.2); nc.tiltW = Math.random() < 0.5 ? (Math.random() < 0.5 ? -1 : 1) * rnd(0.09, 0.17) : 0 }   // 換個方向聽；一半的時候頭側歪 5～10°
+      if (nc.t <= 0) { nc.st = 'move'; nc.want = 0; nc.t = 6; hp.wait = 0.4; nc.s0 = hp.s; nc.hopN = 0 }
+    } else if (nc.st === 'move') {
+      // 換位置：跳到樹枝別處（Hopper 有三成機率只原地轉身 → 沒移動超過 12 cm 就再跳一次）
+      if (hp.k >= 1 && hp.landed > 0.4 && hp.landed < 0.5 + dt) { if (Math.abs(hp.s - nc.s0) > 0.12 || ++nc.hopN >= 3) { nc.st = 'quiet'; nc.t = rnd(8, 16) } else hp.wait = 0.5 }
+      if (nc.t <= 0) { nc.st = 'quiet'; nc.t = rnd(8, 16) }
+    }
+    if (nc.st !== 'quiet' && acts.name !== 'idle') acts.next('idle')   // 這段期間的叫聲只有真錄音那幾下；不要再跑一般的「張嘴叫」動作（照片也不會被標成鳴唱）
+    nc.yaw += clamp(nc.want - nc.yaw, -0.9 * dt, 0.9 * dt) * ss(Math.abs(nc.want - nc.yaw), 0, 0.2)
+    if (nc.st !== 'listen' && nc.st !== 'move') nc.want = 0
+    if (nc.st !== 'listen') nc.tiltW = 0
+    nc.tilt = damp(nc.tilt ?? 0, nc.tiltW ?? 0, 3, dt)
+    nc.puff = puff; nc.raise = damp(nc.raise ?? 0, raise, 9, dt)   // 喉嚨的曲線本身已經是平滑的，不再追加阻尼（不然會慢半拍）
+    root.userData.callTag = nc.puff > 0.35 ? 'nightcall' : nc.st === 'listen' && nc.e > 0.5 ? 'listen' : null
+    return nc
+  }
   const owlPose = (t, dt) => {
     const pre = hp.pre, hop = hp.hopping, k01 = hop ? hp.k : 1, L = hp.landed
     const crA = pre < 0.69 ? ss(pre, 0, 0.69) : 1 - 0.85 * ss(pre, 0.69, 1)      // 蹲下 → 最後一下蹬直
@@ -1942,11 +1985,13 @@ function perchRigged(env, cfg) {
     const bodyP = clamp(-0.1 * crA + 0.06 * ext - 0.04 * air - 0.06 * landC, -0.11, 0.11)
     owlS.ox = hop || hp.s1 == null ? 0 : 0.007 * (Math.sign(hp.s1 - hp.s0) || 0) * (L < 0.15 ? Math.sin(Math.PI * L / 0.15) : 0)   // 落地往前多滑一點點再回來
     owlS.bp = damp(owlS.bp, bodyP, 28, dt)   // 頭慢半拍（約 35 ms）跟著補
-    const cz = cfg.conceal ? concealTick(dt) : null, cs = cz?.k ?? 0, yaw = cz ? lerp(c.yaw, cz.yaw, ss(cs, 0.2, 0.8)) : c.yaw
+    const cz = cfg.conceal ? concealTick(dt) : null, cs = cz?.k ?? 0, ncs = cfg.nightcall ? ncTick(dt) : null
+    const yaw = (cz ? lerp(c.yaw, cz.yaw, ss(cs, 0.2, 0.8)) : c.yaw) * (ncs && ncs.st !== 'quiet' ? 0.2 : 1) + (ncs?.yaw ?? 0), raise = ncs?.raise ?? 0, puffN = ncs?.puff ?? 0
     r.reset()
     r.turn('body', LAT, bodyP + 0.03 * (c.call > 0 ? Math.max(0, Math.sin(t * (cfg.beat ?? 9))) * c.call : 0) - 0.07 * cs)
     r.turn('neck', AX.y, yaw * 0.45); r.turn('neck', LAT, c.pitch * 0.4 * (1 - cs) + 0.06 * crA - 0.35 * owlS.bp)
-    r.turn('head', AX.y, yaw * 0.55); r.turn('head', LAT, c.pitch * 0.6 * (1 - cs) - 0.4 * owlS.bp + 0.03 * nod + 0.05 * cs)
+    r.turn('head', AX.y, yaw * 0.55); r.turn('head', LAT, c.pitch * 0.6 * (1 - cs) - 0.4 * owlS.bp + 0.03 * nod + 0.05 * cs - (NC().raise ?? 0.22) * raise)
+    if (ncs) { r.turn('neck', LAT, -0.08 * raise); if (ncs.tilt) r.turn('head', FWDAX, ncs.tilt); const sc = 1 + (NC().puff ?? 0.07) * puffN; r.bones.neck.scale.setScalar(sc); r.bones.head.scale.setScalar(1 / sc); r.bones.head.position.copy(r.bones.head.userData.restP).multiplyScalar(1 / sc) }   // 頭的位置也縮回去：只有脖子（喉嚨）那圈鼓起，頭不會被推出去   // 叫的時候頭抬起、喉嚨鼓起（脖子骨頭放大、頭縮回原大小）
     r.turn('tail', LAT, 0.12 * ext + 0.06 * crA - 0.1 * air - 0.2 * landD + 0.12 * cs)
     if (cz && tuft) {
       // 頭左右收窄 4%（沿兩撮耳羽連線那一軸）；耳羽繞臉的前後軸往內上收 12°（2026-11-20 rig-scops-tufts.py 加的骨頭）
@@ -2510,6 +2555,7 @@ const endemicGround = (name, H, h0, o = {}) => (env) => groundTripo(env, { name,
 // 停枝的：k 縮放（= 想要的身高 / 模型高度），腳底在模型 y≈0；腳趾輕輕勾住（grip 0.35）、腳底貼枝
 const endemicPerch = (name, k, beat = 8, more = {}) => (env) => perchRigged(outer(env, -0.9), { name, k, ...TRIPO, foot: 0.004, drop: 0.045, beat, grip: 0.35, plant: true, ...more })
 const CONCEAL0 = { off: typeof location !== 'undefined' && /[?&]noconceal/.test(location.search) }
+const NC_OFF = typeof location !== 'undefined' && /[?&]nonightcall/.test(location.search), NC = () => globalThis.__ncCfg ?? {}
 const CNC = () => globalThis.__conceal ?? CONCEAL0   // 錄影時可以即時調（__conceal）
 const OWL_HOP = { owlHop: true, hopper: { preT: 0.16, dur: 0.3, arc: [0.075, 0.1], apex: 0.44 } }   // 第二輪：跳高一點，腳要明顯離開樹枝
 function liocichla(env) { return endemicGround('liocichla-rig', 0.22, 0.652)(env) }
@@ -2846,7 +2892,7 @@ function tit(env) { return endemicPerch('tit-rig', 0.18 / 0.65, 9)(env) }
 function styan(env) { return endemicPerch('styan-rig', 0.22 / 0.637, 7)(env) }
 // 2026-11-09 角鴞：白天停在樹枝上不太動，拍翅慢
 function scopsowl(env) { return endemicPerch('scopsowl-rig', 0.21, 5, { ...OWL_HOP, conceal: true })(env) }
-function mtscops(env) { return endemicPerch('mtscops-rig', 0.17, 6, OWL_HOP)(env) }
+function mtscops(env) { return endemicPerch('mtscops-rig', 0.17, 6, { ...OWL_HOP, nightcall: true })(env) }
 // 2026-11-10 水雉：慢慢在荷葉上走（範圍小，不會走出荷葉外）；彩鷸：泥灘上低頭探找、尾巴上下擺
 function jacana(env) { return endemicGround('jacana-rig', 0.3, 0.724, { hop: 0, flick: 0.05, radius: 0.45, speed: 0.08, stride: 0.1 })(env) }
 function psnipe(env) { return endemicGround('psnipe-rig', 0.24, 0.717, { hop: 0, flick: 0.3, radius: 0.9, speed: 0.12, stride: 0.07 })(env) }
