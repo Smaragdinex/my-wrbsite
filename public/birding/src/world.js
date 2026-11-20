@@ -462,8 +462,14 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
         try { b.finish() } catch (e) { if (!(e instanceof MissingModel)) { console.error('[stream]', b.def.id, e); return false } b.need = e.model }
       }
       if (b.pending) return false
-      b.shown = undefined
-      renderer.compileAsync?.(b.group, camera, scene).catch(() => {})   // 著色器先在背景編好，第一次看到牠才不會頓一下
+      // 2026-11-20 卡頓：以前編譯丟到背景就馬上顯示，第一次畫到時著色器還沒編好／貼圖還沒上傳 → 那一格卡 60～600 ms。
+      // 改成：先藏著，等著色器編好、貼圖一張一張（每張讓出一格）上傳到顯示卡，才讓牠出現
+      b.warm = true; b.shown = false; for (const m of b.built.birds ?? [b.built]) for (const ch of m.obj.children) ch.visible = false
+      try { await renderer.compileAsync?.(b.group, camera, scene) } catch {}
+      capTextures(b.group)
+      { const texs = new Set(); b.group.traverse((o) => { for (const m of o.material ? [].concat(o.material) : []) for (const k in m) { const t = m[k]; if (t && t.isTexture && !t.isRenderTargetTexture) texs.add(t) } })
+        for (const t of texs) { try { renderer.initTexture(t) } catch {} await new Promise((r) => setTimeout(r, 16)) } }
+      b.warm = false; b.shown = undefined
       return true
     }
     const inRange = () => pend.filter((b) => b.target.distanceTo(camera.position) < BIRD_RANGE).length
@@ -594,7 +600,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     const zoomK = Math.tan(THREE.MathUtils.degToRad(27.5)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), cosV = Math.cos(THREE.MathUtils.degToRad(Math.min(80, camera.fov * 0.6 * Math.max(1, camera.aspect))))
     camera.getWorldDirection(_camFwd)
     for (const b of birds) {
-      const d = b.target.distanceTo(camera.position), show = (b.size ?? 0.3) * pxK / Math.max(d, 0.1) > 3
+      const d = b.target.distanceTo(camera.position), show = !b.warm && (b.size ?? 0.3) * pxK / Math.max(d, 0.1) > 3
       if (b.shown !== show) { b.shown = show; for (const m of b.built.birds ?? [b.built]) for (const ch of m.obj.children) ch.visible = show }
       const near = d < 70 || (zoomK > 1.05 && show && d / zoomK < 70 && _camTo.subVectors(b.target, camera.position).dot(_camFwd) > d * cosV)
       if (!b.absent && near) b.update(t, dt, phone)

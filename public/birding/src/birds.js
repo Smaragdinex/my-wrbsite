@@ -339,8 +339,10 @@ export function ensureModel(n) {
   if (FAILED.has(n)) return Promise.resolve(false)
   let pr = _loading.get(n)
   if (!pr) {
-    pr = loader().loadAsync(`models/birds/${n}.glb?v=${VER}`).then((g) => {
-      g.scene.traverse((o) => { if (o.isMesh) { cutBridges(o); fixWinding(o.geometry) } })
+    pr = loader().loadAsync(`models/birds/${n}.glb?v=${VER}`).then(async (g) => {
+      // 2026-11-20 卡頓：fixWinding 一個模型要算 100～500 ms，以前在遊戲進行中直接算＝畫面卡住。改到背景執行緒算（fixWindingAsync）
+      const ms = []; g.scene.traverse((o) => { if (o.isMesh) ms.push(o) })
+      for (const o of ms) { cutBridges(o); await fixWindingAsync(o.geometry); await new Promise((r) => setTimeout(r, 0)) }
       // Tripo 生成的羽色太鮮豔的，載入時壓暗（紫嘯鶇真實是深藍黑、只有光澤是亮藍）
       const k = TINT[n.replace('-fly', '')]
       if (k) g.scene.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(k) } })
@@ -718,6 +720,38 @@ function fixWinding(g) {
     if (all || d < 0.65) nn.setXYZ(i, W[i * 3], W[i * 3 + 1], W[i * 3 + 2])
   }
   nn.needsUpdate = true
+}
+// 2026-11-20 fixWinding 搬到 Web Worker（同一份程式碼，用 toString 帶過去；陣列複製一份過去、算完把索引和法線抄回來）。
+// 不能用的情況（交錯排列、不是 Float32 的頂點、建不出 worker）照舊在主執行緒算
+let _fw = null, _fwId = 0
+const _fwWait = new Map()
+function fwWorker() {
+  if (_fw !== null) return _fw
+  try {
+    const src = `const THREE = { Vector3: class { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z } } }
+      const Attr = (arr) => ({ array: arr, count: arr.length / 3, needsUpdate: false, getX: (i) => arr[i * 3], getY: (i) => arr[i * 3 + 1], getZ: (i) => arr[i * 3 + 2], setXYZ: (i, x, y, z) => { arr[i * 3] = x; arr[i * 3 + 1] = y; arr[i * 3 + 2] = z }, clone: () => Attr(arr.slice()) })
+      ${fixWinding.toString()}
+      onmessage = (e) => { const { id, p, n, ix, c } = e.data
+        const g = { attributes: { position: Attr(p), normal: Attr(n) }, index: { array: ix, needsUpdate: false }, boundingBox: { getCenter: (v) => { v.x = c[0]; v.y = c[1]; v.z = c[2]; return v } } }
+        try { fixWinding(g); postMessage({ id, n, ix }, [n.buffer, ix.buffer]) } catch (err) { postMessage({ id, err: String(err) }) } }`
+    _fw = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })))
+    _fw.onmessage = (e) => { const r = _fwWait.get(e.data.id); _fwWait.delete(e.data.id); r?.(e.data) }
+    _fw.onerror = () => { for (const r of _fwWait.values()) r({ err: 'worker' }); _fwWait.clear(); _fw = false }
+  } catch { _fw = false }
+  return _fw
+}
+async function fixWindingAsync(g) {
+  const p = g.attributes.position, n = g.attributes.normal, ix = g.index
+  if (!p || !n || !ix) return
+  const ok = !p.isInterleavedBufferAttribute && !n.isInterleavedBufferAttribute && p.array instanceof Float32Array && n.array instanceof Float32Array && p.itemSize === 3 && n.itemSize === 3 && !p.normalized && !n.normalized
+  const w = ok && fwWorker()
+  if (!w) return fixWinding(g)
+  if (!g.boundingBox) g.computeBoundingBox()
+  const C = g.boundingBox.getCenter(new THREE.Vector3()), id = ++_fwId
+  const r = await new Promise((res) => { _fwWait.set(id, res); w.postMessage({ id, p: p.array.slice(), n: n.array.slice(), ix: ix.array.slice(), c: [C.x, C.y, C.z] }) })
+  if (r.err) return fixWinding(g)
+  ix.array.set(r.ix); ix.needsUpdate = true
+  n.array.set(r.n); n.needsUpdate = true
 }
 // 版本號跟著 index.html 的 ?v= 走，模型檔才不會用到快取的舊版
 const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
@@ -3686,3 +3720,4 @@ export function placeAnimal(def, { strict = false } = {}) {
   try { rec.finish() } catch (e) { if (strict || !(e instanceof MissingModel)) throw e; rec.need = e.model }
   return rec
 }
+export const __fwTest = { fixWinding, fixWindingAsync, cutBridges }   // 2026-11-20 測試用：比對背景執行緒和主執行緒算出來一樣

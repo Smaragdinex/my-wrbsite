@@ -1,6 +1,7 @@
 // 遊戲入口：同一個園區（world.js），第一人稱走動、拿相機拍鳥、拿照片去相機行換錢、買鏡頭
 import * as THREE from 'three'
 import { buildWorld, PHONE } from '../world.js'
+import { pinLights } from '../lightpin.js'
 import { createSettings } from './settings.js'
 import { createAmbience } from './ambience.js'
 import { createPlayer } from '../player.js'
@@ -253,6 +254,8 @@ function setMenuCam(on) {
 }
 setMenuCam(true)
 
+// 2026-11-20 點光源數量固定（數量一變全部材質重編，走進非洲卡 1.5 秒）：見 lightpin.js
+window.__pinnedLights = pinLights(scene)
 // 預熱：先畫一張，著色器編譯完再拿掉載入畫面
 world.tick(0, 0.016)
 await renderer.compileAsync(scene, camera)

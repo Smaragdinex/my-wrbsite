@@ -1059,7 +1059,7 @@ export function createFlight(world, player) {
   // 停棲模型的骨頭姿勢（照順序）複製到 sit：換模型那一格姿勢一模一樣，看不出換了
   const syncPose = (from, to) => { for (let i = 0; i < from.length; i++) { to[i].quaternion.copy(from[i].quaternion); to[i].position.copy(from[i].position) } }
 
-  function owlSetup(u) {
+  function* owlSetup(u) {   // 2026-11-20 分格做（見 runJob）：烏林鴞找獵物點要打幾千條射線，一次做完卡 0.6 秒
     const s = u.ms[0], m = s.m
     if (s.hunt || !s.root || !m.obj) return
     m.obj.updateMatrixWorld(true)
@@ -1121,25 +1121,28 @@ export function createFlight(world, player) {
     R0.position.copy(keepP); R0.rotation.copy(keepR); R0.updateMatrixWorld(true)
     const realK = s.m.obj && REAL_CM[u.b.def.id] ? (u.b.size || 0.5) / (REAL_CM[u.b.def.id] / 100) : 1.4
     const H = { kind: u.esc.hunt, sit, mB, sB, legs, L, P0, Q0, S0, h0, fw, fl, fsk, idxFull, idxNoLeg, nFL: isFL.reduce((a, b) => a + b, 0), belly: -belly * 0.9, on: false, ph: '', pt: 0, wait: rnd(15, 35), mouse: null, mouseK: realK * 0.8, retry: 0, acc: 0, fr: 0, n: 0, log: [] }
-    s.hunt = H
-    if (H.kind === 'quarter') grassSetup(u, s, H)
-    else ggSetup(u, s, H)
+    H.pending = true; s.hunt = H   // pending：場地還在算，owlTick 先不用
+    yield 'owlSetup'
+    if (H.kind === 'quarter') yield* grassSetup(u, s, H)
+    else yield* ggSetup(u, s, H)
+    H.pending = false
   }
   // ---- 草鴞的場地：西北草原。巢＝EAST.owlNest；狩獵區 25 × 35 m（巢的南邊、觀察屋 O7 看得到）；草頂高度表、獵物點、安全降落點 ----
-  function grassSetup(u, s, H) {
+  function* grassSetup(u, s, H) {
     const [nx, nz] = EAST.owlNest
     const Z = { x0: nx - 16, x1: nx + 9, z0: nz - 28, z1: nz + 7 }
     H.zone = Z; H.nest = V(nx, 0, nz)
     // 草頂高度（每 1 m 一格，取格子裡最高的草尖；再取周圍 1 格的最大值，飛的時候不會擦過草尖）
     const gx0 = Z.x0 - 6, gz0 = Z.z0 - 6, NX = Math.ceil(Z.x1 - Z.x0 + 12), NZ = Math.ceil(Z.z1 - Z.z0 + 12), top = new Float32Array(NX * NZ)
-    scene.traverse((o) => {
-      const A = o.geometry?.attributes?.gA, B = o.geometry?.attributes?.gB; if (!A || !B || !o.geometry.isInstancedBufferGeometry) return
-      const a = A.array, b = B.array
+    const grassObjs = []; scene.traverse((o) => { const A = o.geometry?.attributes?.gA, B = o.geometry?.attributes?.gB; if (A && B && o.geometry.isInstancedBufferGeometry) grassObjs.push(o) })
+    for (const o of grassObjs) {
+      yield 'grass.obj'
+      const a = o.geometry.attributes.gA.array, b = o.geometry.attributes.gB.array
       for (let i = 0; i < a.length; i += 4) {
         const ix = Math.floor(a[i] - gx0), iz = Math.floor(a[i + 2] - gz0); if (ix < 0 || iz < 0 || ix >= NX || iz >= NZ) continue
         const t = a[i + 1] + Math.abs(b[i + 3]) - terrainHeight(a[i], a[i + 2]); if (t > top[iz * NX + ix]) top[iz * NX + ix] = t
       }
-    })
+    }
     const top2 = new Float32Array(NX * NZ)
     for (let z = 0; z < NZ; z++) for (let x = 0; x < NX; x++) { let mx = 0; for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Zz = z + dz; if (X >= 0 && Zz >= 0 && X < NX && Zz < NZ) mx = Math.max(mx, top[Zz * NX + X]) } top2[z * NX + x] = mx }
     const T2 = (ix, iz) => top2[clamp(iz, 0, NZ - 1) * NX + clamp(ix, 0, NX - 1)]
@@ -1150,7 +1153,7 @@ export function createFlight(world, player) {
     H.prey = [[-10, -23.5], [-3, -25], [4, -23], [-13, -17], [6, -18.5]].map(([dx, dz]) => V(nx + dx, 0, nz + dz))
       .filter((p) => alpineTrailDist(p.x, p.z) > 4 && Math.hypot(p.x - hide[0], p.z - hide[1]) > 6 && p.x > Z.x0 && p.x < Z.x1 && p.z > Z.z0 && p.z < Z.z1)
     for (const p of H.prey) p.y = terrainHeight(p.x, p.z)
-    { const near = nearMeshes(V(nx, 0, nz - 20), 22); H.prey = H.prey.filter((p) => !spotClutter(near, p)) }   // 灌木、石頭、孤樹旁邊不要
+    { yield 'grass.pre'; const near = nearMeshes(V(nx, 0, nz - 20), 22), kept = []; for (const p of H.prey) { yield 'grass.near'; if (!(yield* spotClutterG(near, p))) kept.push(p) } H.prey = kept }   // 灌木、石頭、孤樹旁邊不要
     // 安全降落點：巢附近 6～12 m、草最高最密、離步道 8 m 以上的地方（吃老鼠的地方）
     let best = -1; H.safe = H.nest.clone().add(V(-6, 0, -3))
     for (let a = 0; a < 24; a++) for (const r of [6, 8, 10, 12]) {
@@ -1180,13 +1183,13 @@ export function createFlight(world, player) {
     H.routes.set(key, R); return R
   }
   // ---- 烏林鴞：停的枝頭不動；地上找 3 個老鼠點（7～13 m、在枝頭前方、不在步道和水裡、坡平、滑下去的路上沒有樹幹） ----
-  function ggSetup(u, s, H) {
+  function* ggSetup(u, s, H) {
     const P = s.m.obj.getWorldPosition(V()), fw = H.fw
     H.home = P.clone()
     const box = new THREE.Box3().setFromObject(s.m.obj); H.homeC = box.getCenter(V()); H.perchH = box.max.y - box.min.y
     const trunks = colliders.filter((c) => c.top < 60 && (c.x - P.x) ** 2 + (c.z - P.z) ** 2 < 30 * 30)
     const cands = [], rej = H.rej = { drop: 0, trail: 0, slope: 0, river: 0, lake: 0, front: 0, trunk: 0 }
-    for (let a = 0; a < 48; a++) for (let r = 6; r <= 13; r += 1) {
+    for (let a = 0; a < 48; a++) { if (a % 6 === 5) yield 'gg.a'; for (let r = 6; r <= 13; r += 1) {
       const th = a / 48 * Math.PI * 2, x = P.x + Math.sin(th) * r, z = P.z + Math.cos(th) * r, g = terrainHeight(x, z)
       if (P.y - g < 1.4) { rej.drop++; continue } if (alpineTrailDist(x, z) < 2.2) { rej.trail++; continue }
       const sl = Math.max(Math.abs(terrainHeight(x + 0.6, z) - g), Math.abs(terrainHeight(x, z + 0.6) - g))
@@ -1202,14 +1205,16 @@ export function createFlight(world, player) {
       }
       if (clear < 0.9) { rej.trunk++; continue }
       cands.push({ p: V(x, g, z), score: Math.min(clear, 3) - Math.abs(r - 8.5) * 0.25 - sl * 2, th })
-    }
+    } }
     cands.sort((a, b) => b.score - a.score)
+    yield 'gg.cands'
     const near = nearMeshes(P, 16), cam = u.b.cam ? V(u.b.cam.x, u.b.cam.y, u.b.cam.z) : null
     H.prey = []; rej.clutter = 0; rej.unseen = 0; spotClutter.hits = []; H.hits = spotClutter.hits
     for (const c of cands) {
       if (H.prey.some((q) => q.distanceTo(c.p) < 1.4)) continue
-      if (spotClutter(near, c.p)) { rej.clutter++; continue }
-      if (cam && (!spotSeen(near, cam, c.p) || trunkBlock(trunks, cam, c.p))) { rej.unseen++; continue }
+      yield 'gg.cand'
+      if (yield* spotClutterG(near, c.p)) { rej.clutter++; continue }
+      if (cam && (!(yield* spotSeenG(near, cam, c.p)) || trunkBlock(trunks, cam, c.p))) { rej.unseen++; continue }
       H.prey.push(c.p); if (H.prey.length >= 3) break
     }
     H.cands = cands.length
@@ -1238,6 +1243,25 @@ export function createFlight(world, player) {
       if (hit) { (spotClutter.hits ??= []).push((hit.object.name || hit.object.parent?.name || '?') + '|' + (hit.object.material?.name ?? '') + '|' + h + '|' + hit.distance.toFixed(2)); return true }
     }
     return false
+  }
+  // 2026-11-20 分格版：一條射線對一個物件就讓出一次（一個候選點要 24 條射線 × 幾十個物件＝170 ms）。結果跟上面一樣（只看有沒有打到）。
+  // 每次都重新設定射線：草鴞、烏林鴞兩個設定可能在同一格輪流跑，共用的 _rc 會被對方改掉
+  function* spotClutterG(list, p) {
+    for (const h of [0.15, 0.5, 0.9]) for (let a = 0; a < 8; a++) {
+      const o0 = V(p.x, p.y + h, p.z), d0 = V(Math.sin(a * Math.PI / 4), 0, Math.cos(a * Math.PI / 4))
+      for (const o of list) {
+        _rc.set(o0, d0); _rc.far = 0.8
+        const hit = _rc.intersectObject(o, false)[0]
+        yield 'ray'
+        if (hit) { (spotClutter.hits ??= []).push((hit.object.name || hit.object.parent?.name || '?') + '|' + (hit.object.material?.name ?? '') + '|' + h + '|' + hit.distance.toFixed(2)); return true }
+      }
+    }
+    return false
+  }
+  function* spotSeenG(list, from, p) {
+    const to = V(p.x, p.y + 0.3, p.z), d = to.clone().sub(from), L = d.length(); d.divideScalar(L)
+    for (const o of list) { _rc.set(from, d); _rc.far = L - 0.4; const n = _rc.intersectObject(o, false).length; yield 'ray'; if (n) return false }
+    return true
   }
   function spotSeen(list, from, p) {   // 觀察點看獵物點（離地 0.3 m）有沒有被擋住
     const to = V(p.x, p.y + 0.3, p.z), d = to.clone().sub(from), L = d.length()
@@ -1874,7 +1898,7 @@ export function createFlight(world, player) {
      - 跳：兩腳一起離開、身體往外弧一點；探裂縫：脖子＋頭往樹皮轉，嘴尖用回授控制剛好碰到樹皮，啄幾下，有時叼出一隻小蟲吞下去 */
   const nutRC = new THREE.Raycaster()
   const _uq = new THREE.Quaternion(), _uq2 = new THREE.Quaternion(), _uv = V(), _uv2 = V(), _um = new THREE.Matrix4(), _um2 = new THREE.Matrix4()
-  function nutSetup(u) {
+  function* nutSetup(u) {   // 2026-11-20 改成分格做（generator，runJob 每格最多跑 4 ms）：一次做完要 0.5 秒＝畫面卡住
     const s = u.ms[0], m = s.m, T = globalThis.__sacredTree, mesh = scene.getObjectByName('sacredTrunk')
     if (s.nut || !T || !mesh || !m.obj.parent) return
     scene.updateMatrixWorld(true)
@@ -1883,12 +1907,12 @@ export function createFlight(world, player) {
     // 半徑表：y 從家往下 1.4 m 到往上 1.0 m、左右 ±32 cm，每格 4 cm
     const dY = 0.04, NY = 61, Y0 = yH - 1.4, dA = 0.04 / R0, NA = 17, A0 = aH - dA * (NA - 1) / 2
     const Rm = new Float32Array(NY * NA)
-    for (let j = 0; j < NY; j++) for (let i = 0; i < NA; i++) {
+    for (let j = 0; j < NY; j++) { yield 'nut.row'; for (let i = 0; i < NA; i++) {
       const a = A0 + i * dA, y = Y0 + j * dY
       nutRC.set(V(T.x + Math.sin(a) * 12, y, T.z + Math.cos(a) * 12), V(-Math.sin(a), 0, -Math.cos(a))); nutRC.far = 12
       const h = nutRC.intersectObject(mesh, false)[0]
       Rm[j * NA + i] = h ? 12 - h.distance : NaN
-    }
+    } }
     for (let k = 0; k < Rm.length; k++) if (!(Rm[k] > 0)) Rm[k] = R0   // 沒打到（不應該）就當圓柱
     const rAt = (y, a) => {
       const fj = clamp((y - Y0) / dY, 0, NY - 1.001), fi = clamp((a - A0) / dA, 0, NA - 1.001), j = Math.floor(fj), i = Math.floor(fi), tj = fj - j, ti = fi - i
@@ -2158,7 +2182,7 @@ export function createFlight(world, player) {
     for (const u of units) {
       if (!u.esc.climb || NUT_OFF) continue
       const s = u.ms[0]; if (!s?.m?.obj) continue
-      if (!s.nut) { nutSetup(u); if (!s.nut) continue }
+      if (!s.nut) { if (!runJob(s, 'nut', () => nutSetup(u))) continue; if (!s.nut) continue }
       const X = s.nut
       const home = !u.b.absent && u.state === 'home' && s.mode === 'perch'
       if (!home) { if (X.sit.visible) { X.sit.visible = false; X.grub.visible = false } X.wasHome = false; continue }
@@ -2219,13 +2243,22 @@ export function createFlight(world, player) {
   }
 
   const huntCfg = { noAbort: false, off: /[?&]nohunt/.test(location.search) }   // off：效能 A/B 測試（整個狩獵系統不跑）   // 測試錄影用：鏡頭跟拍時不要被當成玩家逼近
+  // 2026-11-20 卡頓：第一次設定（找獵物點、量樹幹半徑）改成 generator，每格最多跑 4 ms，做不完下一格接著做（玩家看不出來，鳥晚個一兩秒才開始那個行為）
+  const _jobs = new WeakMap()
+  function runJob(s, key, make, budget = 4) {
+    let J = _jobs.get(s); if (!J) _jobs.set(s, J = {})
+    const g = J[key] ??= make(), t0 = performance.now()
+    let t1 = t0
+    do { const r = g.next(), t2 = performance.now(); if (t2 - t1 > 30) (globalThis.__jobSlow ??= []).push([key, J.lbl ?? '', Math.round(t2 - t1)]); J.lbl = r.value; t1 = t2; if (r.done) { delete J[key]; return true } } while (performance.now() - t0 < budget)
+    return false
+  }
   function owlTick(t, dt) {
     if (huntCfg.off) return
     preyTick(dt)
     for (const u of units) {
       if (!u.esc.hunt) continue
       const s = u.ms[0]; if (!s?.root) continue
-      if (!s.hunt) { owlSetup(u); if (!s.hunt) continue }
+      if (!s.hunt || s.hunt.pending) { if (!runJob(s, 'hunt', () => owlSetup(u))) continue; if (!s.hunt || s.hunt.pending) continue }
       const H = s.hunt
       if (H.on) {
         if (u.b.absent) { huntEnd(u, s, H); continue }
