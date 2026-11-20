@@ -373,7 +373,8 @@ const presence = createPresence({ world, camera, flight, hud, state, save, rec: 
 const isRare = (b) => { const r = RARITY[b.def.id]; return r === '稀有' || r === '非常稀有' }
 world.streamBirds({ late: isRare, onReady: (b) => {
   flight.add(b); presence.sync(b)
-  if (!REC && isRare(b) && !b.absent) { const d = b.target.distanceTo(camera.position); if (d > 6 && d < 130 && flight.canFly(b)) { try { flight.arrive(b) } catch (e) { console.warn('[arrive]', b.def.id, e) } } }
+  if (REC) b.revealWait = false   // 錄影／測試：鏡頭擺好就要看到鳥（不等轉開）
+  if (!REC && isRare(b) && !b.absent) { const d = b.target.distanceTo(camera.position); if (d > 6 && d < 130 && flight.canFly(b)) { try { if (flight.arrive(b) !== false) b.revealWait = false } catch (e) { console.warn('[arrive]', b.def.id, e) } } }   // 飛進來的鳥本來就看得到在飛，不用等
 } })
 function tick(dt, t) {
   presence.update(hour, dt)

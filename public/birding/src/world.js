@@ -469,7 +469,7 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
       capTextures(b.group)
       { const texs = new Set(); b.group.traverse((o) => { for (const m of o.material ? [].concat(o.material) : []) for (const k in m) { const t = m[k]; if (t && t.isTexture && !t.isRenderTargetTexture) texs.add(t) } })
         for (const t of texs) { try { renderer.initTexture(t) } catch {} await new Promise((r) => setTimeout(r, 16)) } }
-      b.warm = false; b.shown = undefined
+      b.warm = false; b.shown = undefined; b.revealWait = true   // 2026-11-20 Threads 玩家建議：載好時玩家正看著那裡就先不出現，等轉開或很小再出現（不會「蹦」出來）
       return true
     }
     const inRange = () => pend.filter((b) => b.target.distanceTo(camera.position) < BIRD_RANGE).length
@@ -600,7 +600,9 @@ export async function buildWorld(canvas, { onProgress, extraReserve = [], extraM
     const zoomK = Math.tan(THREE.MathUtils.degToRad(27.5)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), cosV = Math.cos(THREE.MathUtils.degToRad(Math.min(80, camera.fov * 0.6 * Math.max(1, camera.aspect))))
     camera.getWorldDirection(_camFwd)
     for (const b of birds) {
-      const d = b.target.distanceTo(camera.position), show = !b.warm && (b.size ?? 0.3) * pxK / Math.max(d, 0.1) > 3
+      const d = b.target.distanceTo(camera.position), px = (b.size ?? 0.3) * pxK / Math.max(d, 0.1)
+      if (b.revealWait && !(px > 8 && _camTo.subVectors(b.target, camera.position).dot(_camFwd) > d * cosV)) b.revealWait = false   // 不在畫面裡、或小到看不出來 → 可以出現了
+      const show = !b.warm && !b.revealWait && px > 3
       if (b.shown !== show) { b.shown = show; for (const m of b.built.birds ?? [b.built]) for (const ch of m.obj.children) ch.visible = show }
       const near = d < 70 || (zoomK > 1.05 && show && d / zoomK < 70 && _camTo.subVectors(b.target, camera.position).dot(_camFwd) > d * cosV)
       if (!b.absent && near) b.update(t, dt, phone)
