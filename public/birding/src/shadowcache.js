@@ -91,10 +91,15 @@ export function createShadowCache({ renderer, scene, sun, camera }) {
     sun.shadow.needsUpdate = true
     const t1 = performance.now()
     { const C = sun.shadow.camera; lodShadowCull(sun.target.position.x, sun.target.position.z, Math.max(Math.abs(C.left), Math.abs(C.right), Math.abs(C.top), Math.abs(C.bottom)) * 1.45 + 8) }
-    const prevRT = renderer.getRenderTarget(), auto = renderer.shadowMap.autoUpdate
-    renderer.shadowMap.autoUpdate = true
-    renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(prevRT)
-    renderer.shadowMap.autoUpdate = auto
+    // 2026-11-20 FPS：這次 1×1 的 render 量到什麼都沒畫（燈在 layer 0／3、這台鏡頭只看 layer 5 → 一盞燈都沒收到，陰影 pass 也沒跑；
+    // 陰影其實是下一次主畫面 render 照 sun.shadow.needsUpdate 畫的）。但「這次 0 盞燈」會讓燈光狀態版本變動，
+    // 下一次主畫面每個材質都要重查 shader（相機行一格 440 次）。拿掉；__shadowCacheRender=true 可以還原比對
+    if (globalThis.__shadowCacheRender) {
+      const prevRT = renderer.getRenderTarget(), auto = renderer.shadowMap.autoUpdate
+      renderer.shadowMap.autoUpdate = true
+      renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(prevRT)
+      renderer.shadowMap.autoUpdate = auto
+    }
     stats.updates++; stats.why = why; stats.drawMs = performance.now() - t1
     return true
   }

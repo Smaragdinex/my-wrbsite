@@ -2,6 +2,8 @@
 import * as THREE from 'three'
 import { buildWorld, PHONE } from '../world.js'
 import { pinLights } from '../lightpin.js'
+import { twoPass, twoPassToggle } from '../twopass.js'
+import { unifyVariants, variantsToggle } from '../matvariants.js'
 import { createSettings } from './settings.js'
 import { createAmbience } from './ambience.js'
 import { createPlayer } from '../player.js'
@@ -256,6 +258,8 @@ setMenuCam(true)
 
 // 2026-11-20 點光源數量固定（數量一變全部材質重編，走進非洲卡 1.5 秒）：見 lightpin.js
 window.__pinnedLights = pinLights(scene)
+window.__twoPass = twoPass(scene); window.__twoPassToggle = twoPassToggle   // 2026-11-20 透明雙面材質拆成背面＋正面兩個物件（省每格兩次 needsUpdate），見 twopass.js
+window.__whiteColor = unifyVariants(scene); window.__variantsToggle = (on) => variantsToggle(scene, on)   // 2026-11-20 共用材質的 InstancedMesh 都給 instanceColor（白），不用每個換 shader，見 matvariants.js
 // 預熱：先畫一張，著色器編譯完再拿掉載入畫面
 world.tick(0, 0.016)
 await renderer.compileAsync(scene, camera)

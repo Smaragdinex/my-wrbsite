@@ -1234,7 +1234,18 @@ export function buildWater(scene) {
     }
     iPos.needsUpdate = true; iDat.needsUpdate = true
   }
-  out.mist = { update(dt, cam) { updateDrops(dt, cam); updateMist(dt) } }
+  // 2026-11-20 FPS：900 顆水花每格都算（人在非洲也在算，約 0.4 ms）。看不到的時候不算也不畫：
+  // 「水池＋落點」整個範圍（半徑 30 m，連倒影都在裡面）不在畫面裡，或最長的水花在畫面上不到半個像素（照焦距算，長鏡頭拉近照樣會算）。
+  // 停算的時候水花停在原地，回到畫面時接著飛——水花本來就是亂數一直在換，看不出來
+  const _dfr = new THREE.Frustum(), _dpm = new THREE.Matrix4(), _dsp = new THREE.Sphere(new THREE.Vector3(impact.x, POOL.water + 2, impact.z), 30)
+  const dropsSeen = (cam) => {
+    const d = Math.max(1, cam.position.distanceTo(_dsp.center) - _dsp.radius)
+    const pxPerM = (cam.isPerspectiveCamera ? 1080 / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))) : 1e9) / d
+    if (0.4 * pxPerM < 0.5) return false
+    cam.updateMatrixWorld(); _dpm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); _dfr.setFromProjectionMatrix(_dpm)
+    return _dfr.intersectsSphere(_dsp)
+  }
+  out.mist = { update(dt, cam) { const on = dropsSeen(cam); drops.visible = on; if (on) updateDrops(dt, cam); updateMist(dt) } }
   out.fallBase = impact
   return out
 }
