@@ -154,6 +154,8 @@ def shell(t):
     box('floor_base', (W, D, .1), (0, D / 2, -.09), M_TRIM)
     # 牆:後牆、右牆整面;左牆中間挖大窗;前牆挖入口
     WT = .3; WIN = (2.0, 7.0, 1.05, 3.15)                                     # 左牆大窗 y0, y1, z0, z1
+    M_PANEL = mat(f'panel_{ROOM}', t['panel'], .55) if t.get('panel') else globals()['M_PANEL']   # 恐怖那間:牆換成舊水泥色(其他間照舊用白色艙壁)
+    M_WHITE = mat(f'frame_{ROOM}', t['frame'], .45) if t.get('frame') else globals()['M_WHITE']
     box('wall_back', (W + 2 * WT, WT, H), (0, D + WT / 2, H / 2), M_PANEL)
     box('wall_right', (WT, D, H), (W / 2 + WT / 2, D / 2, H / 2), M_PANEL)
     y0, y1, z0, z1 = WIN
@@ -202,8 +204,8 @@ def shell(t):
     M_ACC = mat('accent_light', '#000000', 1, emit=t['accent'], emit_k=8)
     for nm, size, loc in (('covel_l', (.03, D - 1.2, .03), (-W / 2 + .52, D / 2, H - .16)), ('covel_r', (.03, D - 1.2, .03), (W / 2 - .52, D / 2, H - .16)),
                           ('covel_b', (W - 1.2, .03, .03), (0, D - .52, H - .16)), ('covel_f', (W - 1.2, .03, .03), (0, .52, H - .16))):
-        box(nm, size, loc, M_WARM)
-    box('ceil_panel', (3.6, 2.6, .04), (0, D / 2 + .3, H - .02), M_STARS if t.get('ceil_panel') == 'stars' else mat('soft_panel', '#000000', 1, emit='#fff1e2', emit_k=3.2), bevel=.01)
+        box(nm, size, loc, mat(f'covel_{ROOM}', '#000000', 1, emit=t['cove_hex'], emit_k=t.get('cove_k', 12)) if t.get('cove_hex') else M_WARM)
+    box('ceil_panel', (3.6, 2.6, .04), (0, D / 2 + .3, H - .02), M_STARS if t.get('ceil_panel') == 'stars' else (mat(f'soft_panel_{ROOM}', '#000000', 1, emit=t['panel_hex'], emit_k=t.get('panel_k', 3.2)) if t.get('panel_hex') else mat('soft_panel', '#000000', 1, emit='#fff1e2', emit_k=3.2)), bevel=.01)
     box('ceil_panel_rim', (3.8, 2.8, .05), (0, D / 2 + .3, H - .01), M_TRIM)
     # 牆角燈帶(地腳線發光,跟大廳一樣)
     for nm, size, loc in (('base_b', (W - .2, .03, .03), (0, D - .07, .06)), ('base_r', (.03, D - .2, .03), (W / 2 - .07, D / 2, .06))):
@@ -779,6 +781,93 @@ def rails():
     for sd in (-1, 1): box(f'toy_side_{sd}', (.4, .04, 2.1), sh + Vector((0, sd * .8, 1.05)), M_OAK, bevel=.01)
     pendant('pd_a', c.x - .9, c.y, mat('ind_shade', '#2b2f3a', .4, metal=.4), 1.15, .24, cone=True); pendant('pd_b', c.x + .9, c.y, mat('ind_shade', '#2b2f3a', .4), 1.15, .24, cone=True)
 
+# ================= The Night Won't Let Go(恐怖遊戲《夜不肯散》,取代原本的 Wooden Rails):老公寓樓梯間 =================
+# 舊水泥牆＋綠色護牆、後牆一扇貼 X 封條的綠鐵門(503)＋鐵窗門、門上一支會閃的日光燈(prop_tube,網頁上閃)、
+# 左後神明桌(紅燈)、右牆信箱、右前堆雜物、地上一隻背對鏡頭坐著的黑貓(Mia)。整間偏暗,只有日光燈和神明燈。
+def _seg_y(name, p0, p1, th, wid, m, y):
+    d_ = p1 - p0; ang = math.atan2(d_.z, d_.x)
+    bm = bmesh.new(); g = bmesh.ops.create_cube(bm, size=1)['verts']; bmesh.ops.scale(bm, vec=(d_.length, th, wid), verts=g)
+    bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(-ang, 3, 'Y'), verts=g); bmesh.ops.translate(bm, vec=(p0 + p1) / 2 + Vector((0, y, 0)), verts=g)
+    return mesh_obj(name, bm, m)
+def night():
+    t = dict(floor_a='#5f5c55', floor_b='#4c4943', wall_a='#b9b09a', wall_b='#b1a790', wains='#41543f', rail='#2f3a2f', accent='#5a120e',
+             ceil='#6f6b63', panel='#8a857a', frame='#3a3834', cove_hex='#9fb8a8', cove_k=1.2, panel_hex='#cfe6d6', panel_k=.25)
+    shell(t)
+    area('ceil_soft', (0, D / 2 + .3, H - .08), 70, (.8, .92, .86), 3.4, sy=2.4)
+    area('window_light', (-W / 2 - .6, 4.5, 2.1), 60, (.6, .7, 1), 4.5, aim=(0, 4.5, 1.0), sy=2.0)
+    hero("THE NIGHT WON'T LET GO", '#ff2a1f', z=3.75)
+    yb = D - .14
+    M_STEEL = mat('steel_green', '#3c5746', .5, metal=.35); M_FRAME = mat('door_fr', '#262826', .5, metal=.4)
+    M_IRON = mat('iron', '#1d1f1e', .45, metal=.7); M_BRASS = mat('brass', '#9c8455', .3, metal=.85)
+    M_PAPER = mat('seal_paper', '#e6dcc2', .85); M_STAMP = mat('seal_stamp', '#a3221b', .6)
+    # 後牆中間:503 綠鐵門
+    for sx in (-1, 1): box(f'apt_frame_{sx}', (.1, .18, 2.36), (sx * .62, yb - .02, 1.18), M_FRAME, bevel=.01)
+    box('apt_frame_top', (1.34, .18, .1), (0, yb - .02, 2.41), M_FRAME, bevel=.01)
+    box('apt_door', (1.14, .06, 2.3), (0, yb, 1.15), M_STEEL, bevel=.008)
+    for k, z in enumerate((.62, 1.62)): box(f'apt_panel_{k}', (.82, .02, .76), (0, yb - .04, z), M_STEEL, bevel=.012)
+    box('apt_handle', (.16, .05, .035), (.42, yb - .08, 1.05), M_BRASS, bevel=.01)
+    cyl('apt_peep', .02, .03, (0, yb - .05, 1.62), M_BRASS, 16, rot=Matrix.Rotation(math.pi / 2, 3, 'X'))
+    box('apt_plate', (.3, .02, .13), (0, yb - .05, 2.16), mat('plate', '#c9c1ad', .4, metal=.4), bevel=.01)
+    text('apt_num', '503', (0, yb - .065, 2.16), .1, mat('plate_ink', '#1c1c1c', .5), extrude=.002, font_bold=False)
+    # X 封條(貼在門上)＋中間紅印
+    for a, b in ((Vector((-.52, 0, 2.2)), Vector((.52, 0, .25))), (Vector((.52, 0, 2.2)), Vector((-.52, 0, .25)))):
+        _seg_y(f'seal_{a.x:+.0f}', a, b, .006, .13, M_PAPER, yb - .062)
+    box('seal_stamp', (.12, .004, .12), (0, yb - .068, 1.225), M_STAMP)
+    # 鐵窗門(門前 30 公分,半開)
+    gy = yb - .34
+    for k in range(12): box(f'gate_bar_{k}', (.018, .018, 2.24), (-.55 + k * .1, gy, 1.14), M_IRON)
+    for k, z in enumerate((.05, .78, 1.5, 2.24)): box(f'gate_rail_{k}', (1.18, .03, .035), (0, gy, z), M_IRON)
+    for k in range(5):                                                            # 菱形花紋
+        cx = -.44 + k * .22
+        for a, b in ((Vector((cx - .1, 0, 1.14)), Vector((cx, 0, 1.36))), (Vector((cx, 0, 1.36)), Vector((cx + .1, 0, 1.14))), (Vector((cx - .1, 0, 1.14)), Vector((cx, 0, .92))), (Vector((cx, 0, .92)), Vector((cx + .1, 0, 1.14)))):
+            _seg_y(f'prop_gatedia_{k}_{a.x:.2f}_{a.z:.2f}', a, b, .014, .014, M_IRON, gy)
+    # 門上的日光燈(燈座烘進去;燈管 prop_tube 網頁上閃)
+    box('tube_holder', (1.3, .1, .06), (0, yb - .05, 2.78), mat('tube_holder', '#d9d4c8', .5), bevel=.01)
+    cyl('prop_tube', .022, 1.18, (0, yb - .1, 2.74), mat('tube_glow', '#000000', 1, emit='#e4fff0', emit_k=9), 16, rot=Matrix.Rotation(math.pi / 2, 3, 'Y'))
+    area('tube_light', (0, yb - .3, 2.66), 140, (.82, 1, .9), 1.3, aim=(0, yb - 2.4, .0), sy=.15)
+    # 左後:神明桌(紅桌、兩盞紅燈、香爐、照片)
+    sx_, sy_ = -3.2, D - .42
+    M_RED = mat('shrine_red', '#6e1712', .35, coat=.6); M_LAMP = mat('red_lamp', '#000000', 1, emit='#ff2a14', emit_k=7)
+    box('shrine_top', (1.5, .62, .07), (sx_, sy_, .96), M_RED, bevel=.015)
+    box('shrine_apron', (1.4, .54, .16), (sx_, sy_, .84), M_RED, bevel=.01)
+    for ax in (-1, 1):
+        for ay in (-1, 1): box(f'shrine_leg_{ax}_{ay}', (.07, .07, .9), (sx_ + ax * .66, sy_ + ay * .24, .45), M_RED, bevel=.01)
+    box('shrine_cab', (1.1, .4, .62), (sx_, sy_ + .08, 1.31), mat('shrine_cab', '#3a1b14', .4, coat=.4), bevel=.02)
+    box('shrine_niche', (.7, .05, .46), (sx_, sy_ - .13, 1.33), mat('niche', '#140a08', .8))
+    for k, dx in enumerate((-.5, .5)):
+        cyl(f'shrine_lampstem_{k}', .02, .2, (sx_ + dx, sy_ - .14, 1.1), M_BRASS, 12)
+        sphere(f'shrine_lamp_{k}', .07, (sx_ + dx, sy_ - .14, 1.25), M_LAMP, scale=(1, 1, 1.25))
+    cyl('shrine_burner', .09, .1, (sx_, sy_ - .2, 1.05), M_BRASS, 32, r2=.11)
+    for k in range(3): cyl(f'shrine_incense_{k}', .004, .26, (sx_ - .03 + k * .03, sy_ - .2, 1.23), mat('incense', '#8a3a24', .7), 6)
+    framed('shrine_photo', Vector((sx_, sy_ - .16, 1.34)), 0, .22, .3, '#5e5a52')
+    L_ = bpy.data.lights.new('shrine_glow', 'POINT'); L_.energy = 30; L_.color = (1, .22, .12); L_.shadow_soft_size = .2
+    lo = bpy.data.objects.new('shrine_glow', L_); col.objects.link(lo); lo.location = (sx_, sy_ - .5, 1.35)
+    # 右牆:一排鐵信箱
+    for r_ in range(3):
+        for c_ in range(5):
+            y_, z_ = 5.7 + c_ * .44, 1.15 + r_ * .34
+            box(f'mail_{r_}_{c_}', (.16, .4, .3), (W / 2 - .17, y_, z_), mat('mailbox', '#5d625f', .45, metal=.55), bevel=.008)
+            box(f'mail_slot_{r_}_{c_}', (.01, .22, .025), (W / 2 - .255, y_, z_ + .07), M_IRON)
+    # 右前:堆在牆邊的雜物(紙箱、倒下的椅子、一疊舊報紙)
+    M_CARD = mat('cardboard', '#8a6c49', .85)
+    for k, (x, y, z, sx2, sy2, sz2, rz) in enumerate(((4.4, 3.6, .25, .7, .6, .5, .1), (4.35, 4.3, .22, .6, .55, .44, -.2), (4.45, 3.75, .72, .55, .5, .44, .35), (3.8, 3.3, .15, .5, .45, .3, .6))):
+        box(f'junk_box_{k}', (sx2, sy2, sz2), (x, y, z), M_CARD, rz, bevel=.01)
+    box('junk_papers', (.42, .3, .14), (3.5, 4.6, .07), M_PAPER, .3, bevel=.005)
+    # 地上:背對鏡頭坐著的黑貓(Mia),脖子上一顆小鈴鐺
+    M_CAT = mat('black_cat', '#141414', .55); cxy = Vector((.75, 6.2, 0))
+    sphere('cat_body', .2, cxy + Vector((0, 0, .2)), M_CAT, scale=(.85, .8, 1.15))
+    sphere('cat_head', .13, cxy + Vector((0, .04, .5)), M_CAT, scale=(1, .95, .9))
+    for sx in (-1, 1):
+        bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=8, radius1=.05, radius2=0, depth=.1)
+        bmesh.ops.translate(bm, vec=cxy + Vector((sx * .07, .05, .63)), verts=bm.verts); mesh_obj(f'cat_ear_{sx}', bm, M_CAT)
+    for k in range(10):                                                           # 尾巴:沿地板繞到前面
+        a = k / 9 * 2.2; p_ = cxy + Vector((.16 * math.cos(a) + .1, -.2 * math.sin(a) - .02, .035 + k * .004))
+        sphere(f'cat_tail_{k}', .035 - k * .0015, p_, M_CAT, seg=12)
+    sphere('cat_bell', .025, cxy + Vector((0, -.02, .38)), M_BRASS, seg=16)
+    # 前左:地上一支螢幕亮著的手機
+    box('phone_body', (.08, .16, .012), (-1.0, 4.4, .006), M_DARK, .5, bevel=.004)
+    box('phone_screen', (.07, .14, .004), (-1.0, 4.4, .014), mat('phone_lit', '#000000', 1, emit='#cfe0ff', emit_k=2), .5)
+
 # ================= Bird Park:賞鳥小屋(鼠尾草綠、淺木地板)=================
 def _bpart(nm, kind, sc, off, m, face, p, rot=None, seg=(20, 12)):
     """小鳥零件:在原點(面朝 +x、腳在 z 0)做好,轉向 face、放到 p"""
@@ -920,7 +1009,7 @@ def birds():
     bpy.context.view_layer.update()
     for sh, w_ in wings_: w_.parent = sh; w_.matrix_parent_inverse = sh.matrix_world.inverted()
 
-THEMES = {'kitty': kitty, 'stocks': stocks, 'ocean': ocean, 'planet': planet, 'rails': rails, 'birds': birds}
+THEMES = {'kitty': kitty, 'stocks': stocks, 'ocean': ocean, 'planet': planet, 'rails': rails, 'birds': birds, 'night': night}
 THEMES[ROOM]()
 
 world = bpy.data.worlds.new('space'); scene.world = world; world.use_nodes = True

@@ -4,14 +4,14 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 const WORKS = [
   // 卡片本身連網頁版(點進去就能玩);iOS 版另外掛一顆小的 store 連結,
   // 不然 App Store 那條線會從首頁整個消失。
-  // 網頁版跟 Tiny Planet / Wooden Rails 一樣放在 public/ 的子目錄裡,
+  // 網頁版跟 Tiny Planet 一樣放在 public/ 的子目錄裡,
   // 不是另外開網域 —— 一次 git push 全部上線
   { no:'01', title:'KittyCafe',        tag:'Web · iOS · Casual Game',   url:'/kitty-cafe/', img:'/assets/kittycafe.jpg',
     store:{ label:'App Store', url:'https://apps.apple.com/tw/app/kitty-cafe-by-x-arts/id6758956069' } },
   { no:'02', title:'CatInsight Stock', tag:'Three.js · AI Stock Research · Board Game', url:'/catinsight-3d/', img:'/assets/cat-board.jpg' },
   { no:'03', title:'Ocean Cleanup',    tag:'iOS Game · Beach Cleanup',  url:'https://apps.apple.com/tw/app/id6771914760', img:'/assets/oceancleanup.jpg' },
   { no:'04', title:'Tiny Planet',      tag:'Three.js · Flight Sandbox',  url:'/tiny-planet/', img:'/assets/tinyplanet.jpg?v=2' },
-  { no:'05', title:'Wooden Rails',     tag:'Three.js · Track Puzzle',   url:'/wooden-rails/', img:'/assets/woodenrails.jpg' },
+  { no:'05', title:"The Night Won't Let Go", tag:'Horror Game · Coming Soon to Steam & iOS', url:'/nightwontletgo/', img:'/assets/nightwontletgo.jpg' },
   { no:'06', title:'Birdwatching',     tag:'Three.js · Birdwatching',   url:'/birding/game.html', img:'/assets/birdpark.jpg' },
 ];
 

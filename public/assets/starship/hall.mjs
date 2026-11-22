@@ -20,7 +20,7 @@ const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'), 
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
-const SUB = { kitty: 'Web · iOS', stocks: 'Three.js · Board Game', ocean: 'iOS Game', planet: 'Three.js', rails: 'Three.js · Track Puzzle', birds: 'Three.js · Birdwatching' };
+const SUB = { kitty: 'Web · iOS', stocks: 'Three.js · Board Game', ocean: 'iOS Game', planet: 'Three.js', rails: 'Horror · Steam · iOS', birds: 'Three.js · Birdwatching' };
 
 // ---------- 艙口裡的縮影:後牆的畫 + 幾件立體小道具 ----------
 const BACK = {
@@ -41,9 +41,12 @@ const BACK = {
     for (let k = 0; k < 120; k++) { g.fillStyle = `rgba(255,200,255,${.2 + r() * .6})`; g.fillRect(r() * W, r() * H * .6, 2, 2); }
     g.shadowColor = '#ff4fd8'; g.shadowBlur = 30; g.fillStyle = '#ffd1f6'; g.font = '900 120px "Helvetica Neue", sans-serif'; g.textAlign = 'center'; g.fillText('PLAY', W / 2, H * .3); g.shadowBlur = 0;
     g.strokeStyle = '#b48bff'; g.lineWidth = 6; g.beginPath(); g.arc(W * .22, H * .55, 50, 0, 7); g.stroke(); g.beginPath(); g.ellipse(W * .22, H * .55, 90, 22, -.3, 0, 7); g.stroke(); },
-  rails(g, W, H, r) { g.fillStyle = '#e9c79c'; g.fillRect(0, 0, W, H); g.fillStyle = '#c9965f'; g.fillRect(0, H * .66, W, H * .34);
-    g.fillStyle = '#d8b07c'; g.fillRect(W * .55, H * .1, W * .38, H * .36); g.fillStyle = '#8a5a30'; for (let x = 0; x < 5; x++) for (let y = 0; y < 4; y++) { g.beginPath(); g.arc(W * .58 + x * 40, H * .14 + y * 36, 4, 0, 7); g.fill(); }
-    for (const y of [.22, .42]) { g.fillStyle = '#a8703c'; g.fillRect(W * .06, H * y, W * .4, 10); for (let k = 0; k < 4; k++) { g.fillStyle = ['#e85c4a', '#3f8fd9', '#f2c14e', '#5cb87a'][k]; g.fillRect(W * .08 + k * 48, H * y - 30, 36, 30); } } },
+  rails(g, W, H, r) { g.fillStyle = '#2b2a27'; g.fillRect(0, 0, W, H); g.fillStyle = '#34463a'; g.fillRect(0, H * .62, W, H * .38);   // 《夜不肯散》:暗水泥牆、綠護牆、一扇貼 X 封條的門、一盞日光燈
+    const gr = g.createRadialGradient(W * .5, H * .12, 10, W * .5, H * .3, W * .6); gr.addColorStop(0, 'rgba(210,240,220,.35)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#e4fff0'; g.fillRect(W * .38, H * .1, W * .24, 8);
+    g.fillStyle = '#3c5746'; g.fillRect(W * .4, H * .16, W * .2, H * .78); g.strokeStyle = '#e6dcc2'; g.lineWidth = 14; g.beginPath(); g.moveTo(W * .41, H * .18); g.lineTo(W * .59, H * .92); g.moveTo(W * .59, H * .18); g.lineTo(W * .41, H * .92); g.stroke();
+    g.fillStyle = '#a3221b'; g.fillRect(W * .5 - 9, H * .55 - 9, 18, 18);
+    g.fillStyle = '#ff2a14'; for (const x of [.12, .3]) { g.beginPath(); g.arc(W * x, H * .52, 9, 0, 7); g.fill(); } g.fillStyle = '#6e1712'; g.fillRect(W * .08, H * .56, W * .26, 10); },
   birds(g, W, H, r) { const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#bfe4f4'); gr.addColorStop(1, '#e6f3df'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
     g.fillStyle = '#fff1b8'; g.beginPath(); g.arc(W * .75, H * .22, 34, 0, 7); g.fill();
     for (const [c, b, a] of [['#a6d39a', .62, 40], ['#79bb72', .7, 34], ['#4f9a5c', .8, 26]]) { g.fillStyle = c; g.beginPath(); g.moveTo(0, H); for (let x = 0; x <= W; x += 16) g.lineTo(x, H * b - Math.sin(x / W * 7 + a) * a); g.lineTo(W, H); g.fill(); }
@@ -60,9 +63,9 @@ function props(R, key, acc) {
     for (let k = 0; k < 4; k++) sphere(R, .12 + r() * .1, 0x8a8f99, { x: -1 + r() * 2, y: .06, z: -2.2 + r() * 1.3 }); }
   if (key === 'planet') { const a = group(R, .4, 0, -1.9, -.3); box(a, .6, 1.25, .5, 0x3a1f6e, { y: .62, r: .05 }); box(a, .58, .1, .55, 0xff4fd8, { y: 1.28, r: .03 });
     const s = new THREE.Mesh(new THREE.PlaneGeometry(.46, .36), scr(0xff8ff0, 2)); s.position.set(0, .95, .26); s.rotation.x = -.15; a.add(s); box(a, .55, .08, .25, 0x5a3d99, { y: .66, z: .3, rx: -.3, r: .02 }); }
-  if (key === 'rails') { box(R, 1.6, .08, .6, 0xc08a52, { x: .2, y: .62, z: -2.1, r: .02 }); for (const x of [-.5, .9]) cyl(R, .03, .03, .6, 0x8a5a30, { x, y: .3, z: -2.1 });
-    const t = new THREE.Mesh(new THREE.TorusGeometry(.42, .03, 6, 40), mat(0xc08a52)); t.rotation.x = -Math.PI / 2; t.scale.set(1.3, 1, 1); t.position.set(-.1, .05, -1.1); R.add(t);
-    for (const [x, c] of [[-.45, 0xe85c4a], [-.2, 0x3f8fd9]]) box(R, .2, .14, .12, c, { x, y: .12, z: -.75, r: .03 }); }
+  if (key === 'rails') { box(R, 1.0, .06, .4, 0x6e1712, { x: -.5, y: .62, z: -2.1, r: .02 }); for (const x of [-.9, -.1]) cyl(R, .03, .03, .6, 0x4a120e, { x, y: .3, z: -2.1 });   // 神明桌(紅燈)+ 地上一隻黑貓
+    for (const x of [-.85, -.15]) sphere(R, .05, scr(0xff2a14, 2.2), { x, y: .72, z: -2.15 });
+    const cm = 0x141414; sphere(R, .14, cm, { x: .55, y: .16, z: -1.3 }); sphere(R, .09, cm, { x: .55, y: .36, z: -1.32 }); }
   if (key === 'birds') { cyl(R, .07, .1, 1.3, 0x7a5a40, { x: -.5, y: .65, z: -2.0 }); for (const [x, y, z, rr] of [[-.75, 1.45, -2.0, .4], [-.25, 1.6, -2.05, .36], [-.55, 1.85, -1.95, .34]]) sphere(R, rr, 0x5fae5a, { x, y, z });
     cyl(R, .02, .02, .9, 0x7a5a40, { x: -.1, y: 1.0, z: -1.8, rz: Math.PI / 2 });
     for (const [x, c] of [[.05, 0x2c6bd8], [.3, 0xf0c93a]]) { sphere(R, .07, c, { x, y: 1.1, z: -1.8 }); sphere(R, .045, c, { x: x + .05, y: 1.18, z: -1.78 }); }
@@ -284,7 +287,7 @@ export function createHall(scene, rooms, opts = {}) {
     const enter = new THREE.Mesh(new THREE.PlaneGeometry(1.75, .33), enterM); enter.position.set(0, -.74, .42); sg.add(enter);   // 擺在厚門框前面,不會被擋住
     // 艙內(往牆外凸出):白色內壁 + 天花板燈 + 該艙的後牆畫 + 小道具 + 燈
     const R = group(ga, 0, 0, 0);
-    const floorC = { kitty: 0xf6d6e0, stocks: 0xdfe8e6, ocean: 0xe9d6a8, planet: 0x3a2466, rails: 0xd9b88f, birds: 0xe3d2b2 }[room.key] ?? 0xeeeeee;
+    const floorC = { kitty: 0xf6d6e0, stocks: 0xdfe8e6, ocean: 0xe9d6a8, planet: 0x3a2466, rails: 0x4c4943, birds: 0xe3d2b2 }[room.key] ?? 0xeeeeee;
     box(R, DOOR_W + .4, .06, ALC_D, gloss(floorC, .3), { y: .03, z: -ALC_D / 2, r: 0, shadow: false });
     const inner = glossNew(new THREE.Color(CD2).lerp(new THREE.Color(cfg.wall), .25).getHex(), .4);   // 滑過時會變色,每間自己一個
     for (const x of [-1, 1]) box(R, .1, DOOR_H + .4, ALC_D, inner, { x: x * (DOOR_W / 2 + .25), y: (DOOR_H + .4) / 2, z: -ALC_D / 2, r: 0 });
@@ -484,7 +487,8 @@ export function createHall(scene, rooms, opts = {}) {
       if (o.name.startsWith('baked_floor') && mirror) { m.transparent = true; m.opacity = .9; o.renderOrder = -2; mirror.position.y = -.012; }   // 讓即時的地板倒影透一點出來(鏡面放到磚面底下,不然會搶深度)
       if (o.name.startsWith('screen_')) { m.color.setScalar(.9);
         const key = Object.keys(SUB)[+o.name.slice(7)];                   // 平板:房間不預先載入,門洞裡先看到的是展示艙 → 艙裡的螢幕換成那間房間的照片(不是遊戲截圖)
-        if (quality.lite && key) new THREE.TextureLoader().load(`/assets/starship/models/door_${key}.jpg?v=7`, (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; m.map?.dispose(); m.map = t; m.needsUpdate = true; }); }
+        if (key === 'rails') new THREE.TextureLoader().load('/assets/nightwontletgo.jpg?v=1', (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; m.map?.dispose(); m.map = t; m.needsUpdate = true; });   // 烘好的大廳裡這格還是 Wooden Rails 的截圖 → 執行時換成《夜不肯散》
+        else if (quality.lite && key) new THREE.TextureLoader().load(`/assets/starship/models/door_${key}.jpg?v=7`, (t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; m.map?.dispose(); m.map = t; m.needsUpdate = true; }); }
       o.material = m; src.dispose(); o.matrixAutoUpdate = false; o.updateMatrix();
     });
     propsM.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; fixPropMat(o.material); }

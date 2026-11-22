@@ -93,8 +93,8 @@ export const ROOMS = [
     cfg: { slab: 0xbfe1f2, wall: '#cdeefa', wallB: '#9fd7f0', wallLow: 0x76bfe6, accent: 0x5ad0ff, floor: 'metal', planet: '#3aa0e6', seed: 3 } },
   { key: 'planet', title: 'Tiny Planet', tag: 'Three.js · Flight Sandbox', desc: 'Fly a little plane around a tiny planet.', url: '/tiny-planet/',
     cfg: { slab: 0xd5cbf3, wall: '#d9cdf7', wallB: '#b9a6ef', wallLow: 0xa48be8, accent: 0xb48bff, floor: 'wood', planet: '#9b7bea', seed: 4, lampColor: 0xd9c8ff } },
-  { key: 'rails', title: 'Wooden Rails', tag: 'Three.js · Track Puzzle', desc: 'A track-laying puzzle built from wooden rails.', url: '/wooden-rails/',
-    cfg: { slab: 0xf1d9bf, wall: '#f8e2c4', wallB: '#f2c79d', wallLow: 0xe3b17a, accent: 0xffb35c, floor: 'wood', planet: '#e6a35a', seed: 5 } },
+  { key: 'rails', title: "The Night Won't Let Go", tag: 'Horror · Steam · iOS', desc: 'A first-person horror game in an old walk-up apartment building. Coming soon.', url: '/nightwontletgo/',   // 原本是 Wooden Rails(火車);2026-11-22 換成恐怖遊戲《夜不肯散》,key 沿用 rails
+    cfg: { slab: 0x3a3a36, wall: '#8a857a', wallB: '#77736a', wallLow: 0x41543f, accent: 0xff2a1f, floor: 'tile', tileA: 0x5f5c55, tileB: 0x4c4943, planet: '#7a1d16', seed: 5, lampColor: 0xcfe6d6 } },
   { key: 'birds', title: 'Birdwatching', tag: 'Three.js · Birdwatching', desc: 'Walk an open park with a camera and photograph rare birds.', url: '/birding/game.html',
     cfg: { slab: 0xd9e8cc, wall: '#e6f0dd', wallB: '#cfe3bf', wallLow: 0x9cc58a, accent: 0xa8e063, floor: 'wood', planet: '#6fbf6a', seed: 6 } },
 ];
@@ -244,33 +244,33 @@ D.planet = (R, ctx) => {
   return { update(t) { holo.rotation.y = t * .35; const a = t * .9; plane.position.set(Math.cos(a) * 1.05, 1.9 + Math.sin(a * 2) * .15, Math.sin(a) * 1.05); plane.rotation.y = -a; beam.material.opacity = .12 + Math.sin(t * 2) * .03; } };
 };
 
-// Wooden Rails:木工房 —— 地毯上的木頭軌道(橢圓)+ 會跑的小火車、工作台(工具)、玩具層架
-D.rails = (R, ctx) => {
-  const rug = box(R, 4.2, .03, 3.2, 0x7fb38a, { x: .6, y: .065, z: .7, r: .02, shadow: false });
-  const rx = 1.6, rz = 1.05, cx = .6, cz = .7;
-  const railM = mat(0xc08a52, { roughness: .6 });
-  for (const k of [1, .84]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(1, .045, 8, 96), railM); ring.rotation.x = Math.PI / 2; ring.scale.set(rx * k, rz * k, 1); ring.position.set(cx, .13, cz); ring.castShadow = true; R.add(ring); }
-  for (let k = 0; k < 36; k++) { const a = k / 36 * Math.PI * 2; box(R, .1, .04, .42, 0xdcae78, { x: cx + Math.cos(a) * rx * .92, y: .1, z: cz + Math.sin(a) * rz * .92, ry: -Math.atan2(Math.sin(a) * rz, Math.cos(a) * rx) - Math.PI / 2 + Math.PI / 2, r: .01 }); }
-  const train = group(R);
-  const cars = [];
-  const loco = group(train); box(loco, .5, .3, .3, 0xe65a4f, { y: .3, r: .05 }); box(loco, .2, .2, .28, 0xe65a4f, { x: -.15, y: .5, r: .04 }); cyl(loco, .05, .06, .18, 0x333a4a, { x: .14, y: .54 }); cars.push(loco);
-  for (const c of [0x5cb7f0, 0xffd166]) { const car = group(train); box(car, .42, .24, .28, c, { y: .28, r: .05 }); cars.push(car); }
-  // 工作台 + 工具
-  const wb = group(R, -.2, 0, -S / 2 + T + .55);
-  box(wb, 2.6, .1, .9, new THREE.MeshStandardMaterial({ map: woodTex(1024, 256, 'u', '#d8a36a', [110, 70, 35]), roughness: .55 }), { y: .95, r: .03 });
-  for (const [x, z] of [[-1.2, -.35], [1.2, -.35], [-1.2, .35], [1.2, .35]]) box(wb, .1, .9, .1, 0x8a6040, { x, y: .45, z, r: .02 });
-  box(wb, .5, .06, .3, 0xd0d5df, { x: -.7, y: 1.04, r: .02, m: { metalness: .6 } });
-  for (let k = 0; k < 5; k++) box(wb, .2, .2, .2, [0xff8fa3, 0xffd166, 0x6cc6ff, 0x5cc77a, 0xb48bff][k], { x: .2 + (k % 3) * .25, y: 1.1 + (k > 2 ? .2 : 0), z: .1, r: .03 });
-  const pegM = 0xc49a6c; box(wb, 2.4, 1.0, .05, pegM, { y: 1.9, z: -.42, r: .02 });
-  for (const [x, len] of [[-.8, .5], [-.4, .4], [0, .55]]) box(wb, .06, len, .03, 0x9aa4b8, { x, y: 2.0, z: -.38, m: { metalness: .6 } });
-  // 玩具層架(側牆)
-  const sh = group(R, -S / 2 + T + .25, 0, 1.4);
-  for (const y of [.9, 1.7, 2.5]) box(sh, .45, .06, 1.8, new THREE.MeshStandardMaterial({ map: woodTex(512, 128, 'u'), roughness: .6 }), { y, r: .02 });
-  for (let k = 0; k < 9; k++) box(sh, .18, .18, .18, [0xff8fa3, 0xffd166, 0x6cc6ff][k % 3], { y: .99 + Math.floor(k / 3) * .8, z: -.6 + (k % 3) * .55, r: .04 });
-  leafyPlant(R, { x: 2.5, z: -2.3, pot: 0xffffff });
-  return { update(t) {
-    cars.forEach((c, k) => { const a = t * .55 - k * .32; c.position.set(cx + Math.cos(a) * rx * .92, .02, cz + Math.sin(a) * rz * .92); c.rotation.y = -Math.atan2(Math.cos(a) * rz, -Math.sin(a) * rx); });
-  } };
+// The Night Won't Let Go:老公寓樓梯間的縮影 —— 後牆一扇貼 X 封條的綠鐵門、門上會閃的日光燈、左邊紅色神明桌、地上一隻黑貓(真的房間載好前的小模型)
+const flick = (t) => { const c = t % 7.3; return c > 6.5 ? (Math.sin(t * 83) > -.2 ? 1 : .08) : c > 3.1 && c < 3.25 ? .3 : 1; };   // 日光燈:大部分時間亮著,偶爾一陣亂閃
+D.rails = (R) => {
+  const zb = -S / 2 + T + .05, dx = .4;
+  box(R, 1.1, 2.2, .06, 0x3c5746, { x: dx, y: 1.1, z: zb, r: .02, m: { metalness: .35, roughness: .5 } });
+  for (const s_ of [-1, 1]) box(R, .1, 2.32, .12, 0x262826, { x: dx + s_ * .6, y: 1.16, z: zb, r: .01 });
+  box(R, 1.3, .1, .12, 0x262826, { x: dx, y: 2.36, z: zb, r: .01 });
+  for (const s_ of [-1, 1]) box(R, 2.1, .12, .015, 0xe6dcc2, { x: dx, y: 1.15, z: zb + .045, rz: s_ * Math.atan2(1.9, .95), r: 0 });
+  box(R, .12, .12, .02, 0xa3221b, { x: dx, y: 1.15, z: zb + .055, r: 0 });
+  for (let k = 0; k < 11; k++) box(R, .018, 2.2, .018, 0x1d1f1e, { x: dx - .5 + k * .1, y: 1.12, z: zb + .32, r: 0, m: { metalness: .7, roughness: .4 } });
+  for (const y of [.06, 1.1, 2.2]) box(R, 1.1, .03, .03, 0x1d1f1e, { x: dx, y, z: zb + .32, r: 0, m: { metalness: .7 } });
+  const tubeM = glow(0xe4fff0, 2.2); box(R, 1.15, .05, .05, tubeM, { x: dx, y: 2.62, z: zb + .08, r: .02 });
+  const tubeL = new THREE.PointLight(0xcfe6d6, 5, 6, 1.6); tubeL.position.set(dx, 2.4, zb + .6); R.add(tubeL);
+  // 神明桌
+  const sx = -1.6; box(R, 1.2, .06, .5, 0x6e1712, { x: sx, y: .9, z: zb + .3, r: .02, m: { roughness: .35 } });
+  for (const [x, z] of [[-.52, .1], [.52, .1], [-.52, .5], [.52, .5]]) box(R, .06, .9, .06, 0x6e1712, { x: sx + x, y: .45, z: zb + z, r: .01 });
+  box(R, .9, .55, .35, 0x3a1b14, { x: sx, y: 1.2, z: zb + .2, r: .02 });
+  for (const x of [-.38, .38]) sphere(R, .06, glow(0xff2a14, 3), { x: sx + x, y: 1.05, z: zb + .45 });
+  const red = new THREE.PointLight(0xff3a20, 4, 4, 1.8); red.position.set(sx, 1.3, zb + .9); R.add(red);
+  // 黑貓(背對鏡頭,看著那扇門)
+  const cat = group(R, .9, 0, .4, Math.PI); const cm = mat(0x141414, { roughness: .6 });
+  const body = sphere(cat, .2, cm, { y: .22 }); body.scale.set(.85, 1.15, .8);
+  sphere(cat, .13, cm, { y: .5, z: .02 });
+  for (const s_ of [-1, 1]) cyl(cat, 0, .05, .1, cm, { x: s_ * .07, y: .63, z: .02, seg: 8 });
+  sphere(cat, .025, mat(0xc9a64a, { metalness: .8, roughness: .3 }), { y: .38, z: .14, seg: 12 });
+  const tail = cyl(cat, .03, .03, .4, cm, { x: .18, y: .04, z: -.05, rz: Math.PI / 2, ry: .6, seg: 10 });
+  return { update(t) { const f = flick(t); tubeM.emissiveIntensity = 2.2 * f; tubeL.intensity = 5 * f; red.intensity = 3.6 + Math.sin(t * 1.7) * .4; tail.rotation.y = .6 + Math.sin(t * 1.2) * .25; } };
 };
 
 // Bird Park:賞鳥小屋 —— 一棵室內樹(橫枝上三隻鳥)、攝影腳架、餵鳥台,一隻小鳥在房間裡繞圈飛(真的房間載好前的小模型)
@@ -290,7 +290,7 @@ D.birds = (R) => {
 // 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
 // 房間裡不放作品截圖(使用者:截圖跟環境不搭),點房間裡的家具 / 擺設就進作品。
 // 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
-const REAL = { kitty: { v: 6, props: false }, stocks: { v: 7, props: true }, ocean: { v: 5, props: false }, planet: { v: 8, props: true }, rails: { v: 5, props: true }, birds: { v: 1, props: true } };   // 盆栽全部拿掉(使用者:每間都不需要);props 只剩會動的東西
+const REAL = { kitty: { v: 6, props: false }, stocks: { v: 7, props: true }, ocean: { v: 5, props: false }, planet: { v: 8, props: true }, rails: { v: 2, props: true, file: 'night' }, birds: { v: 1, props: true } };   // 盆栽全部拿掉(使用者:每間都不需要);props 只剩會動的東西
 // 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
 const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { value: hzOff } }, vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: `varying vec3 vW; uniform float uHz;
@@ -314,7 +314,7 @@ const loadGLB = (url) => new Promise((ok, fail) => gltf().load(url, (g) => ok(g.
 function realRoom(R, key, ctx) {
   const cfg = REAL[key], top = new THREE.Group(); top.visible = false; R.add(top);
   const st = { ready: false, eye: new THREE.Vector3(0, 1.65, -.9), look: new THREE.Vector3(0, 1.35, -9), hits: [], loading: null };
-  st.load = () => st.loading ??= quality.minimal ? Promise.resolve() : (window.__crumb?.(`room ${key} load`), Promise.all([   /* 等級 4:不載烘焙版房間,用程式蓋的小模型 */loadGLB(asset(`/assets/starship/models/room_${key}.glb?v=${cfg.v}`)), cfg.props ? loadGLB(asset(`/assets/starship/models/room_${key}_props.glb?v=${cfg.v}`)) : null])).then(([m, props]) => { window.__crumb?.(`room ${key} loaded`);
+  st.load = () => st.loading ??= quality.minimal ? Promise.resolve() : (window.__crumb?.(`room ${key} load`), Promise.all([   /* 等級 4:不載烘焙版房間,用程式蓋的小模型 */loadGLB(asset(`/assets/starship/models/room_${cfg.file || key}.glb?v=${cfg.v}`)), cfg.props ? loadGLB(asset(`/assets/starship/models/room_${cfg.file || key}_props.glb?v=${cfg.v}`)) : null])).then(([m, props]) => { window.__crumb?.(`room ${key} loaded`);
     let mirror = null;
     if (ctx.mirror) {                                                          // 亮面地磚的倒影(低解析度 → 柔柔的,像拋光的磚)
       const dpr = Math.min(devicePixelRatio, 2);
@@ -369,14 +369,9 @@ function realRoom(R, key, ctx) {
           else { w.o.position.y += Math.abs(Math.sin(t * 9)) * .012; w.o.rotation.z = Math.sin(t * 9) * .06; }   // 貓:走路一顛一顛、左右晃
         } };
     }
-    if (key === 'rails' && props) {                                      // Wooden Rails:三節小火車沿著橢圓軌道一直繞圈跑,車頭朝前
-      const CX = .2, CY = 4.6, RX = 1.25, RY = .72, U0 = .1, GAP = .055;   // 軌道中心、橢圓半徑(Blender 座標),跟 tools/blender/room_build.py rails() 一樣
-      const cars = [0, 1, 2].map((k) => { const o = props.getObjectByName(`prop_train_${k}`); return o && { o, k, y0: o.position.y }; }).filter(Boolean);
-      st.tick = (t) => { for (const c of cars) {
-        const a = (U0 - c.k * GAP + t * .045) * Math.PI * 2, dx = -Math.sin(a) * RX, dy = Math.cos(a) * RY;
-        c.o.position.set(CX + Math.cos(a) * RX, c.y0 + Math.abs(Math.sin(t * 14 + c.k)) * .004, -(CY + Math.sin(a) * RY));
-        c.o.rotation.set(0, Math.atan2(dy, dx), 0);                      // Blender 繞 z 轉 = 網頁繞 y 轉
-      } };
+    if (key === 'rails' && props) {                                      // The Night Won't Let Go:門上那支日光燈(prop_tube)偶爾一陣亂閃
+      const tube = props.getObjectByName('prop_tube'), k0 = tube?.material?.emissiveIntensity ?? 1;
+      if (tube) st.tick = (t) => { tube.material.emissiveIntensity = k0 * flick(t); };
     }
     if (key === 'birds' && props) {                                      // Bird Park:一隻小鳥沿著橢圓繞房間中間飛(轉彎往內傾、上下起伏),翅膀一直拍
       const b = props.getObjectByName('prop_birdfly'), wl = props.getObjectByName('prop_birdfly_wl'), wr = props.getObjectByName('prop_birdfly_wr');

@@ -10,7 +10,7 @@ ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 import os
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.abspath(os.path.join(ROOT, '..', '..'))
-SHOTS = ['kittycafe.jpg', 'cat-board.jpg', 'oceancleanup.jpg', 'tinyplanet.jpg', 'woodenrails.jpg', 'birdpark.jpg']
+SHOTS = ['kittycafe.jpg', 'cat-board.jpg', 'oceancleanup.jpg', 'tinyplanet.jpg', 'nightwontletgo.jpg', 'birdpark.jpg']
 MODE = ARGS[0] if ARGS else 'preview'
 OUT = ARGS[1] if len(ARGS) > 1 else '/tmp/hall_preview.png'
 

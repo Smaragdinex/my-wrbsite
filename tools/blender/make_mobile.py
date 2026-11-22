@@ -62,9 +62,12 @@ def process(path):
     open(out, 'wb').write(glb)
     print(f'{name}: {n} images shrunk, {len(b) // 1024} KB -> {len(glb) // 1024} KB', flush=True)
 
+ONLY = os.environ.get('MOBILE_ONLY')                                        # 例:MOBILE_ONLY=room_night → 只做這間(其他 _m 檔不動),做完就結束
 for p in sorted(glob.glob(os.path.join(MODELS, '*.glb'))):
     if p.endswith('_m.glb'): continue
+    if ONLY and not os.path.basename(p).startswith(ONLY): continue
     process(p)
+if ONLY: raise SystemExit(0)
 # 戰艦的光照貼圖(單獨一張 webp)
 lm = os.path.join(MODELS, 'ship_light.webp')
 if os.path.exists(lm):
