@@ -503,8 +503,8 @@ for k, (a, sgn) in enumerate(((A0, -1), (A1, 1))):
     bmesh.ops.translate(bm, vec=(cxe, cye, .26), verts=bm.verts)
     mesh_obj(f'furn_arc_end_{k}', bm, M_LEATHER, bevel=.06, seg=5)
 for k, (da, col) in enumerate(((-.3, '#d9cfc1'), (.05, '#4b4946'), (.36, '#d9cfc1'))):   # 抱枕
-    a = ab + da; bpy.ops.mesh.primitive_cube_add(size=1, location=(TX + math.cos(a) * (RS - .08), TY + math.sin(a) * (RS - .08), .58))
-    o = link(bpy.context.active_object); o.name = f'furn_arc_pillow_{k}'; o.scale = (.13, .46, .34); o.rotation_euler = (0, -.3, a)
+    a = ab + da; bpy.ops.mesh.primitive_cube_add(size=1, location=(TX + math.cos(a) * (RS - .06), TY + math.sin(a) * (RS - .06), .59))
+    o = link(bpy.context.active_object); o.name = f'furn_arc_pillow_{k}'; o.scale = (.13, .46, .34); o.rotation_euler = (0, .3, a)   # +Y 旋轉 = 上緣往外(往椅背)倒;負的會往前倒
     o.data.materials.append(mat(f'arc_pillow_{col}', col, .85))
     bv = o.modifiers.new('bevel', 'BEVEL'); bv.width = .09; bv.segments = 6
     for pl in o.data.polygons: pl.use_smooth = True
@@ -556,6 +556,8 @@ if VIEW == 'bay':      # 第二道門的展示艙特寫
     b = BEARINGS[1]; eye, look, fov = at(b, 4.6, 1.75), at(b, 8.6, 1.9), 48
 elif VIEW == 'lounge': # 左邊休息區(弧形沙發 + 茶几)
     eye, look, fov = Vector((-2.0, -4.4, 1.6)), Vector((-5.3, -.9, .45)), 52
+elif VIEW == 'pillow': # 抱枕特寫
+    eye, look, fov = Vector((TX * .62, TY * .62 - .3, 1.7)), Vector((TX * 1.3, TY * 1.3, .5)), 48
 elif VIEW == 'planter': # 柱腳花盆特寫(看土)
     b = pillars[2]; eye, look, fov = at(b, HALL_R - 2.4, 1.6), at(b, HALL_R - .9, .5), 45
 elif VIEW == 'entry': # 入口的大圓花盆(發財樹)

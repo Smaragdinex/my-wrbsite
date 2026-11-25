@@ -290,7 +290,7 @@ D.birds = (R) => {
 // 從大廳的門走進去是一間完整的房間(第一人稱,跟大廳一樣站著看),不是小模型。還沒載好之前先顯示上面的小模型。
 // 房間裡不放作品截圖(使用者:截圖跟環境不搭),點房間裡的家具 / 擺設就進作品。
 // 房間座標:入口在 z 0,往 -z 走進去(深 9、寬 10、高 4.2)。
-const REAL = { kitty: { v: 6, props: false }, stocks: { v: 7, props: true }, ocean: { v: 5, props: false }, planet: { v: 8, props: true }, rails: { v: 2, props: true, file: 'night' }, birds: { v: 1, props: true } };   // 盆栽全部拿掉(使用者:每間都不需要);props 只剩會動的東西
+const REAL = { kitty: { v: 6, props: false }, stocks: { v: 7, props: true }, ocean: { v: 5, props: false }, planet: { v: 8, props: true }, rails: { v: 3, props: true, file: 'night' }, birds: { v: 1, props: true } };   // 盆栽全部拿掉(使用者:每間都不需要);props 只剩會動的東西
 // 窗外:星空 + 底下一大片星球(依視線方向算,有真的視差;跟通道的窗一樣)
 const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { value: hzOff } }, vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: `varying vec3 vW; uniform float uHz;
@@ -310,6 +310,7 @@ const winMat = (hzOff = 0) => new THREE.ShaderMaterial({ uniforms: { uHz: { valu
       gl_FragColor = vec4(c, 1.);
       #include <colorspace_fragment>
     }` });
+const loadGLB2 = (url) => new Promise((ok, fail) => gltf().load(url, ok, undefined, fail));   // 要動畫的:回傳整個 gltf
 const loadGLB = (url) => new Promise((ok, fail) => gltf().load(url, (g) => ok(g.scene), undefined, fail));   // 全站共用的載入器(loaders.mjs)
 function realRoom(R, key, ctx) {
   const cfg = REAL[key], top = new THREE.Group(); top.visible = false; R.add(top);
@@ -372,6 +373,23 @@ function realRoom(R, key, ctx) {
     if (key === 'rails' && props) {                                      // The Night Won't Let Go:門上那支日光燈(prop_tube)偶爾一陣亂閃
       const tube = props.getObjectByName('prop_tube'), k0 = tube?.material?.emissiveIntensity ?? 1;
       if (tube) st.tick = (t) => { tube.material.emissiveIntensity = k0 * flick(t); };
+      // Mia(寫實銀虎斑,tools/blender/mia_web.py):沿著門前的橢圓慢慢走,走一段停下來四處看。1.2 萬面、一個骨架,只有這間房顯示時才更新
+      loadGLB2('/assets/starship/models/mia.glb?v=1').then((g) => {
+        if (!st.ready) return;                                             // 載完之前已經離開、卸掉了
+        const cat = g.scene, mixer = new THREE.AnimationMixer(cat), act = (n) => mixer.clipAction(g.animations.find((c) => c.name.startsWith(n))), walk = act('Walk'), idle = act('Idle');
+        const SC = 1.35, SPD = .2068 * SC, CX = .55, CZ = -5.55, RX = 1.35, RZ = .8;   // SPD = 動畫裡腳往後踩的速度,改大小要一起乘,腳才不會滑
+        cat.scale.setScalar(SC); cat.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.material.color.setScalar(.62); o.material.roughness = .9; o.material.metalness = 0; st.hits.push(o); } });
+        const sh = document.createElement('canvas'); sh.width = sh.height = 64; const sg = sh.getContext('2d'), gr = sg.createRadialGradient(32, 32, 2, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,.62)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); sg.fillStyle = gr; sg.fillRect(0, 0, 64, 64);
+        const blob = new THREE.Mesh(new THREE.PlaneGeometry(.26, .62), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sh), transparent: true, depthWrite: false })); blob.rotation.x = -Math.PI / 2; blob.position.y = .006; blob.renderOrder = 1; cat.add(blob);
+        top.add(cat); walk.play(); idle.play(); let w = 0, want = 0, next = 0, last = 0, a = .4;
+        const prev = st.tick;
+        st.tick = (t) => { prev?.(t); const dt = Math.min(.06, Math.max(0, t - last)); last = t;
+          if (t > next) { want = want ? 0 : 1; next = t + (want ? 9 + Math.random() * 5 : 6); if (!want) idle.time = 0; }
+          w += Math.sign(want - w) * Math.min(Math.abs(want - w), dt * 2.2); walk.setEffectiveWeight(w); idle.setEffectiveWeight(1 - w);
+          const dx = -Math.sin(a) * RX, dz = Math.cos(a) * RZ, L = Math.hypot(dx, dz); a += SPD * w * dt / L;
+          cat.position.set(CX + Math.cos(a) * RX, 0, CZ + Math.sin(a) * RZ); cat.rotation.y = Math.atan2(dx, dz);
+          mixer.update(dt); };
+      }).catch((e) => console.warn('[rooms] Mia 載入失敗', e));
     }
     if (key === 'birds' && props) {                                      // Bird Park:一隻小鳥沿著橢圓繞房間中間飛(轉彎往內傾、上下起伏),翅膀一直拍
       const b = props.getObjectByName('prop_birdfly'), wl = props.getObjectByName('prop_birdfly_wl'), wr = props.getObjectByName('prop_birdfly_wr');

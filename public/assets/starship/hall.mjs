@@ -480,7 +480,7 @@ export function createHall(scene, rooms, opts = {}) {
   }).catch((e) => console.warn('[hall] 機器人模型載入失敗,用簡易版', e));
   // 先讓戰艦模型下載完(第一眼看到的是戰艦、頻寬不要互搶),大廳的模型再接著載;保險起見最多等 20 秒
   if (quality.minimal) baked = true;                                    // 等級 4(精簡):不載烘焙版大廳(3MB 模型 + 大貼圖),直接用上面程式蓋的輕量大廳
-  else Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => quality.minimal ? (baked = true, null) : Promise.all([loadGLB(asset('/assets/starship/models/hall_baked.glb?v=21')), loadGLB(asset('/assets/starship/models/hall_props.glb?v=21'))])).then((pair) => { if (!pair) return; const [hallM, propsM] = pair; window.__crumb?.('hall glb loaded');
+  else Promise.race([opts.after || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]).then(() => quality.minimal ? (baked = true, null) : Promise.all([loadGLB(asset('/assets/starship/models/hall_baked.glb?v=22')), loadGLB(asset('/assets/starship/models/hall_props.glb?v=21'))])).then((pair) => { if (!pair) return; const [hallM, propsM] = pair; window.__crumb?.('hall glb loaded');
     hallM.traverse((o) => {
       if (!o.isMesh) return;
       const src = o.material, m = new THREE.MeshBasicMaterial({ map: src.map || src.emissiveMap, toneMapped: false });   // 光影都烘在貼圖裡 → 不受光

@@ -783,12 +783,128 @@ def rails():
 
 # ================= The Night Won't Let Go(恐怖遊戲《夜不肯散》,取代原本的 Wooden Rails):老公寓樓梯間 =================
 # 舊水泥牆＋綠色護牆、後牆一扇貼 X 封條的綠鐵門(503)＋鐵窗門、門上一支會閃的日光燈(prop_tube,網頁上閃)、
-# 左後神明桌(紅燈)、右牆信箱、右前堆雜物、地上一隻背對鏡頭坐著的黑貓(Mia)。整間偏暗,只有日光燈和神明燈。
+# 左後神明桌(紅燈)、右牆信箱、右前堆雜物;Mia 在網頁上走動。整間偏暗,只有日光燈和神明燈。
 def _seg_y(name, p0, p1, th, wid, m, y):
     d_ = p1 - p0; ang = math.atan2(d_.z, d_.x)
     bm = bmesh.new(); g = bmesh.ops.create_cube(bm, size=1)['verts']; bmesh.ops.scale(bm, vec=(d_.length, th, wid), verts=g)
     bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(-ang, 3, 'Y'), verts=g); bmesh.ops.translate(bm, vec=(p0 + p1) / 2 + Vector((0, y, 0)), verts=g)
     return mesh_obj(name, bm, m)
+# ---- 神明桌(跟遊戲 401 同一套供品:使用者用 Meshy 生的模型;桌子在這裡蓋)。零件一律叫 shrine_* → room_bake 單獨烘一張貼圖 ----
+ERRAND = os.path.expanduser('~/Desktop/wei/Errand/Assets/Errand/Models')
+_am = {}
+def altar_model(kind, name, loc, h, rot=0.0, tris=6000, fbx=None, glow=None):
+    """匯入 fbx → 合併、置中、縮到高度 h、底部貼在 loc;貼圖走自己的 UV(層名 src)"""
+    if kind not in _am:
+        before = set(bpy.data.objects); bpy.ops.import_scene.fbx(filepath=f'{ERRAND}/{kind}/{fbx or kind}.fbx')
+        news = [o for o in bpy.data.objects if o not in before]; o = [x for x in news if x.type == 'MESH'][0]
+        me = o.data.copy(); me.transform(o.matrix_world)
+        for x in news: bpy.data.objects.remove(x, do_unlink=True)
+        lo = [min(v.co[k] for v in me.vertices) for k in range(3)]; hi = [max(v.co[k] for v in me.vertices) for k in range(3)]
+        me.transform(Matrix.Scale(1 / (hi[2] - lo[2]), 4) @ Matrix.Translation((-(lo[0] + hi[0]) / 2, -(lo[1] + hi[1]) / 2, -lo[2])))
+        me.uv_layers[0].name = 'src'
+        while len(me.uv_layers) > 1: me.uv_layers.remove(me.uv_layers[-1])
+        m = bpy.data.materials.new(f'altar_{kind}'); m.use_nodes = True; nt = m.node_tree; pr = nt.nodes['Principled BSDF']
+        uv = nt.nodes.new('ShaderNodeUVMap'); uv.uv_map = 'src'
+        tx = nt.nodes.new('ShaderNodeTexImage'); tx.image = bpy.data.images.load(f'{ERRAND}/{kind}/{kind}_BaseColor.png')
+        nt.links.new(uv.outputs[0], tx.inputs[0]); nt.links.new(tx.outputs[0], pr.inputs['Base Color']); pr.inputs['Roughness'].default_value = .55
+        nx = nt.nodes.new('ShaderNodeTexImage'); nx.image = bpy.data.images.load(f'{ERRAND}/{kind}/{kind}_Normal.png'); nx.image.colorspace_settings.name = 'Non-Color'
+        nm = nt.nodes.new('ShaderNodeNormalMap'); nm.uv_map = 'src'
+        nt.links.new(uv.outputs[0], nx.inputs[0]); nt.links.new(nx.outputs[0], nm.inputs['Color']); nt.links.new(nm.outputs[0], pr.inputs['Normal'])
+        if glow: nt.links.new(tx.outputs[0], pr.inputs['Emission Color']); pr.inputs['Emission Strength'].default_value = glow
+        me.materials.clear(); me.materials.append(m)
+        for pl in me.polygons: pl.use_smooth = True; pl.material_index = 0
+        _am[kind] = me
+    o = bpy.data.objects.new(name, _am[kind].copy()); col.objects.link(o); o.location = loc; o.scale = (h, h, h); o.rotation_euler = (0, 0, rot)
+    n = sum(len(p.vertices) - 2 for p in o.data.polygons)
+    if n > tris: d = o.modifiers.new('dec', 'DECIMATE'); d.ratio = tris / n
+    return o
+def lathe(name, prof, loc, m, seg=40):
+    bm = bmesh.new(); vs = [bm.verts.new((r, 0, z)) for r, z in prof]
+    es = [bm.edges.new((vs[k], vs[k + 1])) for k in range(len(vs) - 1)]
+    bmesh.ops.spin(bm, geom=vs + es, cent=(0, 0, 0), axis=(0, 0, 1), angle=math.tau, steps=seg); bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bmesh.ops.translate(bm, vec=Vector(loc), verts=bm.verts); return mesh_obj(name, bm, m)
+def altar(cx, yw):
+    """cx = 桌子中心、yw = 靠的那面牆的 y"""
+    RED = mat('shrine_lacquer', '#7a1d16', .32, coat=.5); DRED = mat('shrine_dark', '#4a100c', .4, coat=.4); GOLD = mat('shrine_gold', '#c9962f', .35)
+    CLOTH = mat('shrine_cloth', '#b5201b', .9); WAX = mat('shrine_wax', '#c4231c', .5); WHITE = mat('shrine_porcelain', '#e9e4da', .25, coat=.4); BRASS = mat('shrine_brass', '#a98238', .35)
+    ORANGE = mat('shrine_orange', '#e8822a', .6); APPLE = mat('shrine_apple', '#b3221f', .35); FLAME = mat('shrine_flame', '#000000', 1, emit='#ffb055', emit_k=9)
+    L, Dp, TOP = 2.3, .62, 1.06; y = yw - Dp / 2 - .03; b = lambda n, sz, p, m, bv=.008, rz=0: box('shrine_' + n, sz, (cx + p[0], y + p[1], p[2]), m, rz, bevel=bv)
+    # 翹頭案:厚桌面 + 兩端翹頭 + 束腰 + 抽屜 + 描金
+    b('top', (L, Dp, .06), (0, 0, TOP - .03), RED, .014); b('lip', (L - .06, Dp - .05, .03), (0, 0, TOP - .075), DRED, .008)
+    for sd in (-1, 1):                                                            # 翹頭:往外、往上捲
+        bm = bmesh.new(); pr = [(0, 0), (.05, .005), (.1, .03), (.145, .085), (.17, .15), (.135, .155), (.105, .1), (.06, .055), (0, .045)]
+        a_ = [bm.verts.new((sd * x_, -Dp / 2, z_)) for x_, z_ in pr]; c_ = [bm.verts.new((sd * x_, Dp / 2, z_)) for x_, z_ in pr]
+        bm.faces.new(a_); bm.faces.new(list(reversed(c_)))
+        for k in range(len(pr)): bm.faces.new((a_[k], a_[(k + 1) % len(pr)], c_[(k + 1) % len(pr)], c_[k]))
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bmesh.ops.translate(bm, vec=(cx + sd * (L / 2 - .05), y, TOP - .045), verts=bm.verts); mesh_obj(f'shrine_curl_{sd}', bm, RED, bevel=.012, seg=3)
+    b('apron', (L - .16, Dp - .1, .2), (0, 0, TOP - .19), RED, .006)
+    yf = -(Dp - .1) / 2
+    for k, w_ in ((-1, .56), (0, .74), (1, .56)):
+        x0 = k * .7; b(f'drawer_{k}', (w_, .02, .13), (x0, yf - .008, TOP - .19), DRED, .006)
+        for q in (-1, 1): b(f'gh_{k}_{q}', (w_ - .04, .008, .008), (x0, yf - .02, TOP - .19 + q * .05), GOLD, .002); b(f'gv_{k}_{q}', (.008, .008, .108), (x0 + q * (w_ / 2 - .02), yf - .02, TOP - .19), GOLD, .002)
+        sphere(f'shrine_knob_{k}', .016, (cx + x0, y + yf - .03, TOP - .19), BRASS, seg=16)
+        for q in range(6): sphere(f'shrine_petal_{k}_{q}', .011, (cx + x0 + .027 * math.cos(q * math.tau / 6), y + yf - .022, TOP - .19 + .027 * math.sin(q * math.tau / 6)), GOLD, scale=(1, .5, 1), seg=12)
+    for ax in (-1, 1):
+        for ay in (-1, 1):
+            lx, ly = ax * (L / 2 - .16), ay * (Dp / 2 - .1)
+            b(f'leg_{ax}_{ay}', (.085, .085, TOP - .29), (lx, ly, (TOP - .29) / 2 + .02), RED, .01); b(f'foot_{ax}_{ay}', (.11, .11, .05), (lx, ly, .025), DRED, .012); b(f'legring_{ax}_{ay}', (.095, .095, .018), (lx, ly, .62), GOLD, .004)
+        b(f'stretch_{ax}', (.04, Dp - .25, .05), (ax * (L / 2 - .16), 0, .2), RED, .006)
+    for ax in (-1, 1):                                                            # 牙條:桌腳和束腰之間的雲頭撐
+        for k in range(4): b(f'brk_{ax}_{k}', (.05, .03, .12 - k * .025), (ax * (L / 2 - .225 - k * .05), yf + .02, TOP - .29 - (.12 - k * .025) / 2), RED, .012)
+    # 前面的八仙桌 + 繡金桌裙
+    y2 = -Dp / 2 - .33; T2 = .84
+    b('t2', (1.12, .56, .05), (0, y2, T2 - .025), RED, .012); b('t2ap', (1.02, .48, .09), (0, y2, T2 - .095), DRED, .006)
+    for ax in (-1, 1):
+        for ay in (-1, 1): b(f't2leg_{ax}_{ay}', (.07, .07, T2 - .13), (ax * .47, y2 + ay * .2, (T2 - .13) / 2), RED, .01)
+    nx_ = 60; bm = bmesh.new(); gr = []                                           # 桌裙:微微打褶的布
+    for r_ in range(9):
+        row = []; v_ = r_ / 8
+        for c_ in range(nx_ + 1): u_ = c_ / nx_; row.append(bm.verts.new((cx + (u_ - .5) * 1.0, y + y2 - .295 - .012 * math.sin(u_ * 44) * (.3 + v_), T2 - .012 - v_ * .56)))
+        gr.append(row)
+    for r_ in range(8):
+        for c_ in range(nx_): bm.faces.new((gr[r_][c_], gr[r_][c_ + 1], gr[r_ + 1][c_ + 1], gr[r_ + 1][c_]))
+    o = mesh_obj('shrine_cloth', bm, CLOTH); so = o.modifiers.new('s', 'SOLIDIFY'); so.thickness = .006
+    b('hem_a', (1.0, .012, .03), (0, y2 - .318, T2 - .05), GOLD, .003); b('hem_b', (1.0, .012, .012), (0, y2 - .318, T2 - .085), GOLD, .003); b('hem_c', (1.0, .012, .03), (0, y2 - .322, T2 - .53), GOLD, .003)
+    for k in range(34): b(f'tassel_{k}', (.012, .008, .05), (-.49 + k * .0297, y2 - .318, T2 - .575), GOLD, .003)
+    cu = bpy.data.curves.new('shrine_fu', 'FONT'); cu.body = '金玉滿堂'; cu.size = .17; cu.extrude = .004; cu.align_x = 'CENTER'; cu.align_y = 'CENTER'
+    cu.font = bpy.data.fonts.load('/System/Library/Fonts/Supplemental/Arial Unicode.ttf'); o = bpy.data.objects.new('shrine_fu', cu); col.objects.link(o); cu.materials.append(GOLD); o.location = (cx, y + y2 - .32, T2 - .29); o.rotation_euler = (math.pi / 2, 0, 0)
+    # 背後:金框紅底背板 + 圓形背光
+    by = Dp / 2 + .0
+    b('board', (1.5, .03, 1.25), (0, by, TOP + .72), DRED, .006)
+    for q in (-1, 1): b(f'bfv_{q}', (.07, .05, 1.229), (q * .755, by - .01, TOP + .72), GOLD, .012); b(f'bfh_{q}', (1.58, .05, .07), (0, by - .01, TOP + .72 + q * .65), GOLD, .012); b(f'bi_{q}', (.012, .01, 1.1), (q * .66, by - .02, TOP + .72), GOLD, .002); b(f'bj_{q}', (1.33, .01, .012), (0, by - .02, TOP + .72 + q * .55), GOLD, .002)
+    for k, r_ in enumerate((.3, .36)):
+        bpy.ops.mesh.primitive_torus_add(major_radius=r_, minor_radius=.011 - k * .004, major_segments=64, minor_segments=8, location=(cx, y + by - .025, TOP + .82), rotation=(math.pi / 2, 0, 0)); o = link(bpy.context.active_object); o.name = f'shrine_halo_{k}'; o.data.materials.append(GOLD)
+    for k in range(24):
+        a = k * math.tau / 24; _seg_y(f'shrine_ray_{k}', Vector((cx + .375 * math.cos(a), 0, TOP + .82 + .375 * math.sin(a))), Vector((cx + (.47 if k % 2 else .44) * math.cos(a), 0, TOP + .82 + (.47 if k % 2 else .44) * math.sin(a))), .008, .012, GOLD, y + by - .025)
+    # 供品
+    b('dais', (.46, .3, .1), (0, .1, TOP + .05), DRED, .012); b('dais2', (.5, .34, .025), (0, .1, TOP + .1), GOLD, .006)
+    altar_model('GuanyinStatue', 'shrine_guanyin', (cx, y + .1, TOP + .11), .8)
+    for q in (-1, 1):
+        altar_model('Orchid', f'shrine_orchid_{q}', (cx + q * .56, y + .1, TOP), .62, q * .4, 9000, 'Orchid_Light')
+        altar_model('LotusLamp', f'shrine_lotus_{q}', (cx + q * .34, y - .13, TOP), .3, 0, 5000, glow=1.4)
+        X = cx + q * .93; yy = y - .06                                            # 燭台 + 紅燭 + 火焰
+        lathe(f'shrine_stick_{q}', [(0, 0), (.065, 0), (.065, .012), (.03, .03), (.018, .07), (.032, .1), (.018, .13), (.02, .18), (.05, .2), (.052, .212), (0, .212)], (X, yy, TOP), BRASS)
+        cyl(f'shrine_candle_{q}', .021, .2, (X, yy, TOP + .312), WAX, 24, bevel=.004); cyl(f'shrine_wick_{q}', .002, .02, (X, yy, TOP + .42), mat('wick', '#111111', .9), 6)
+        sphere(f'shrine_flame_{q}', .013, (X, yy, TOP + .45), FLAME, scale=(1, 1, 2.1), seg=16)
+        FX = cx + q * .33; FY = y + y2 + .02                                      # 八仙桌上的水果盤
+        lathe(f'shrine_plate_{q}', [(0, .0), (.06, 0), (.045, .03), (.12, .055), (.135, .062), (.12, .062), (0, .045)], (FX, FY, T2), WHITE)
+        fm = ORANGE if q > 0 else APPLE
+        for k in range(5): a = k * math.tau / 5; sphere(f'shrine_fr_{q}_{k}', .045, (FX + .065 * math.cos(a), FY + .065 * math.sin(a), T2 + .095), fm, scale=(1, 1, .93), seg=20)
+        for k in range(2): sphere(f'shrine_fr2_{q}_{k}', .045, (FX + (k - .5) * .085, FY, T2 + .165), fm, scale=(1, 1, .93), seg=20)
+    altar_model('IncenseBurner', 'shrine_burner', (cx, y - .16, TOP), .17, 0, 6000)
+    RND = __import__('random').Random(3)
+    for k in range(13):
+        a, r_ = RND.uniform(0, math.tau), RND.uniform(0, .05); dx, dy = r_ * math.cos(a), r_ * math.sin(a) * .7
+        _h = RND.uniform(.15, .24); bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=6, radius1=.0026, radius2=.0026, depth=_h)
+        bmesh.ops.translate(bm, vec=(0, 0, _h / 2), verts=bm.verts); bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(dx * 3, 3, 'Y') @ Matrix.Rotation(-dy * 2, 3, 'X'), verts=bm.verts)
+        bmesh.ops.translate(bm, vec=(cx + dx, y - .16 + dy, TOP + .12), verts=bm.verts); mesh_obj(f'shrine_inc_{k}', bm, mat('shrine_inc', '#9a3a26', .8))
+        sphere(f'shrine_ember_{k}', .0045, (cx + dx + dx * 3 * _h, y - .16 + dy + dy * 2 * _h, TOP + .12 + _h), mat('shrine_ember', '#000000', 1, emit='#ff5a1e', emit_k=8), seg=8)
+    for k in range(3): lathe(f'shrine_cup_{k}', [(0, 0), (.02, 0), (.028, .04), (.031, .045), (.026, .043), (0, .038)], (cx - .08 + k * .08, y + y2 - .14, T2), WHITE, 24)
+    # 筊杯
+    for q in (-1, 1): sphere(f'shrine_jiao_{q}', .05, (cx + q * .06, y + y2 - .02, T2 + .014), WAX, scale=(.5, 1.2, .3), seg=20)
+    for nm, p, e, c, r_ in (('shrine_glow', (cx, y - .55, TOP + .55), 16, (1, .33, .15), .25), ('shrine_glow_l', (cx - .34, y - .22, TOP + .2), 5, (1, .25, .12), .06), ('shrine_glow_r', (cx + .34, y - .22, TOP + .2), 5, (1, .25, .12), .06), ('shrine_key', (cx + .5, y - 1.3, 2.5), 26, (1, .72, .5), .5)):
+        l_ = bpy.data.lights.new(nm, 'POINT'); l_.energy = e; l_.color = c; l_.shadow_soft_size = r_; lo = bpy.data.objects.new(nm, l_); col.objects.link(lo); lo.location = p
+
 def night():
     t = dict(floor_a='#5f5c55', floor_b='#4c4943', wall_a='#b9b09a', wall_b='#b1a790', wains='#41543f', rail='#2f3a2f', accent='#5a120e',
              ceil='#6f6b63', panel='#8a857a', frame='#3a3834', cove_hex='#9fb8a8', cove_k=1.2, panel_hex='#cfe6d6', panel_k=.25)
@@ -825,23 +941,7 @@ def night():
     box('tube_holder', (1.3, .1, .06), (0, yb - .05, 2.78), mat('tube_holder', '#d9d4c8', .5), bevel=.01)
     cyl('prop_tube', .022, 1.18, (0, yb - .1, 2.74), mat('tube_glow', '#000000', 1, emit='#e4fff0', emit_k=9), 16, rot=Matrix.Rotation(math.pi / 2, 3, 'Y'))
     area('tube_light', (0, yb - .3, 2.66), 140, (.82, 1, .9), 1.3, aim=(0, yb - 2.4, .0), sy=.15)
-    # 左後:神明桌(紅桌、兩盞紅燈、香爐、照片)
-    sx_, sy_ = -3.2, D - .42
-    M_RED = mat('shrine_red', '#6e1712', .35, coat=.6); M_LAMP = mat('red_lamp', '#000000', 1, emit='#ff2a14', emit_k=7)
-    box('shrine_top', (1.5, .62, .07), (sx_, sy_, .96), M_RED, bevel=.015)
-    box('shrine_apron', (1.4, .54, .16), (sx_, sy_, .84), M_RED, bevel=.01)
-    for ax in (-1, 1):
-        for ay in (-1, 1): box(f'shrine_leg_{ax}_{ay}', (.07, .07, .9), (sx_ + ax * .66, sy_ + ay * .24, .45), M_RED, bevel=.01)
-    box('shrine_cab', (1.1, .4, .62), (sx_, sy_ + .08, 1.31), mat('shrine_cab', '#3a1b14', .4, coat=.4), bevel=.02)
-    box('shrine_niche', (.7, .05, .46), (sx_, sy_ - .13, 1.33), mat('niche', '#140a08', .8))
-    for k, dx in enumerate((-.5, .5)):
-        cyl(f'shrine_lampstem_{k}', .02, .2, (sx_ + dx, sy_ - .14, 1.1), M_BRASS, 12)
-        sphere(f'shrine_lamp_{k}', .07, (sx_ + dx, sy_ - .14, 1.25), M_LAMP, scale=(1, 1, 1.25))
-    cyl('shrine_burner', .09, .1, (sx_, sy_ - .2, 1.05), M_BRASS, 32, r2=.11)
-    for k in range(3): cyl(f'shrine_incense_{k}', .004, .26, (sx_ - .03 + k * .03, sy_ - .2, 1.23), mat('incense', '#8a3a24', .7), 6)
-    framed('shrine_photo', Vector((sx_, sy_ - .16, 1.34)), 0, .22, .3, '#5e5a52')
-    L_ = bpy.data.lights.new('shrine_glow', 'POINT'); L_.energy = 30; L_.color = (1, .22, .12); L_.shadow_soft_size = .2
-    lo = bpy.data.objects.new('shrine_glow', L_); col.objects.link(lo); lo.location = (sx_, sy_ - .5, 1.35)
+    altar(-3.15, D - .1)                                                          # 左後:神明桌
     # 右牆:一排鐵信箱
     for r_ in range(3):
         for c_ in range(5):
@@ -853,17 +953,7 @@ def night():
     for k, (x, y, z, sx2, sy2, sz2, rz) in enumerate(((4.4, 3.6, .25, .7, .6, .5, .1), (4.35, 4.3, .22, .6, .55, .44, -.2), (4.45, 3.75, .72, .55, .5, .44, .35), (3.8, 3.3, .15, .5, .45, .3, .6))):
         box(f'junk_box_{k}', (sx2, sy2, sz2), (x, y, z), M_CARD, rz, bevel=.01)
     box('junk_papers', (.42, .3, .14), (3.5, 4.6, .07), M_PAPER, .3, bevel=.005)
-    # 地上:背對鏡頭坐著的黑貓(Mia),脖子上一顆小鈴鐺
-    M_CAT = mat('black_cat', '#141414', .55); cxy = Vector((.75, 6.2, 0))
-    sphere('cat_body', .2, cxy + Vector((0, 0, .2)), M_CAT, scale=(.85, .8, 1.15))
-    sphere('cat_head', .13, cxy + Vector((0, .04, .5)), M_CAT, scale=(1, .95, .9))
-    for sx in (-1, 1):
-        bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=8, radius1=.05, radius2=0, depth=.1)
-        bmesh.ops.translate(bm, vec=cxy + Vector((sx * .07, .05, .63)), verts=bm.verts); mesh_obj(f'cat_ear_{sx}', bm, M_CAT)
-    for k in range(10):                                                           # 尾巴:沿地板繞到前面
-        a = k / 9 * 2.2; p_ = cxy + Vector((.16 * math.cos(a) + .1, -.2 * math.sin(a) - .02, .035 + k * .004))
-        sphere(f'cat_tail_{k}', .035 - k * .0015, p_, M_CAT, seg=12)
-    sphere('cat_bell', .025, cxy + Vector((0, -.02, .38)), M_BRASS, seg=16)
+    # Mia(寫實銀虎斑)是會動的模型,不烘:tools/blender/mia_web.py → models/mia.glb,rooms.mjs 載入
     # 前左:地上一支螢幕亮著的手機
     box('phone_body', (.08, .16, .012), (-1.0, 4.4, .006), M_DARK, .5, bevel=.004)
     box('phone_screen', (.07, .14, .004), (-1.0, 4.4, .014), mat('phone_lit', '#000000', 1, emit='#cfe0ff', emit_k=2), .5)
@@ -1022,6 +1112,7 @@ eye, look, fov = EYE, Vector((0, D, 1.35)), 56
 if VIEW == 'counter': eye, look, fov = Vector((-.5, 2.2, 1.6)), Vector((3.6, 4.6, 1.1)), 50
 elif VIEW == 'window': eye, look, fov = Vector((1.2, 2.0, 1.6)), Vector((-4.6, 4.8, 1.2)), 52
 elif VIEW == 'board': eye, look, fov = Vector((.2, 2.3, 1.55)), Vector((.2, 4.7, .9)), 46
+elif VIEW == 'altar': eye, look, fov = Vector((-2.3, 5.6, 1.65)), Vector((-3.15, 8.6, 1.2)), 48
 elif VIEW == 'cattree': eye, look, fov = Vector((-1.6, 5.2, 1.7)), Vector((-4.0, 8.0, 1.3)), 50
 cam_d.angle = math.radians(fov); cam.location = eye
 cam.rotation_mode = 'QUATERNION'; cam.rotation_quaternion = (look - eye).to_track_quat('-Z', 'Y')

@@ -27,12 +27,14 @@ def group_of(n):
     if n.startswith(('tile_', 'floor_base')): return 'floor'
     if n.startswith(('ceiling', 'cove_', 'covel_', 'ceil_panel')): return 'ceiling'
     if n.startswith(('wall_', 'wf_', 'flute_', 'rail_', 'wains_', 'paper_', 'base_', 'art_')): return 'walls'
+    if n.startswith('shrine_'): return 'furn_altar'                              # 神明桌:東西小又多,單獨一張貼圖(名字 furn 開頭 → 網頁上點得到)
     return 'furn'
-SIZES = {'floor': 4096, 'walls': 4096, 'ceiling': 2048, 'furn': 4096}
+SIZES = {'floor': 4096, 'walls': 4096, 'ceiling': 2048, 'furn': 4096, 'furn_altar': 4096, 'furn_offer': 4096}
 groups = {}
 for o in list(scene.objects):
     if o.type not in ('MESH', 'CURVE', 'FONT'): continue
     g = group_of(o.name)
+    if g == 'furn_altar' and o.type == 'MESH' and 'src' in o.data.uv_layers: g = 'furn_offer'   # 匯入的供品:沿用自己的 UV,每件佔一格(重新自動展會碎成幾千片)
     if g: groups.setdefault(g, []).append(o)
 for g, l in groups.items(): log('group', g, len(l), 'objects')
 
@@ -45,17 +47,26 @@ joined = {}
 for g, objs in groups.items():
     select_only(objs); bpy.ops.object.convert(target='MESH')
     objs = list(bpy.context.selected_objects); select_only(objs)
-    bpy.ops.object.make_single_user(object=True, obdata=True); bpy.ops.object.join()
+    bpy.ops.object.make_single_user(object=True, obdata=True)
+    if g == 'furn_offer':
+        n = math.ceil(math.sqrt(len(objs)))
+        for k, o in enumerate(objs):
+            sl = o.data.uv_layers['src']; bl = o.data.uv_layers.new(name='bake'); sl = o.data.uv_layers['src']
+            for a, b in zip(sl.data, bl.data): b.uv = ((k % n + .004 + a.uv[0] * .992) / n, (k // n + .004 + a.uv[1] * .992) / n)
+    bpy.ops.object.join()
     ob = bpy.context.view_layer.objects.active; ob.name = f'baked_{g}'
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     me = ob.data
-    while me.uv_layers: me.uv_layers.remove(me.uv_layers[0])
-    uv = me.uv_layers.new(name='bake'); me.uv_layers.active = uv
-    bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.003, area_weight=0.0, scale_to_bounds=False)
-    try: bpy.ops.uv.pack_islands(rotate=True, margin=0.003, shape_method='CONCAVE')
-    except Exception as e: log('pack_islands fallback', e); bpy.ops.uv.pack_islands(rotate=True, margin=0.003)
-    bpy.ops.object.mode_set(mode='OBJECT')
+    for nm in [l.name for l in me.uv_layers]:
+        if nm != 'src' and not (g == 'furn_offer' and nm == 'bake'): me.uv_layers.remove(me.uv_layers[nm])                     # src = 匯入模型自己的貼圖 UV(神明桌供品),烘完才刪
+    if 'bake' not in me.uv_layers: me.uv_layers.new(name='bake')
+    me.uv_layers.active = me.uv_layers['bake']; me.uv_layers['bake'].active_render = True
+    if g != 'furn_offer':
+        bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=.0008 if g == 'furn_altar' else 0.003, area_weight=0.0, scale_to_bounds=False)
+        try: bpy.ops.uv.pack_islands(rotate=True, margin=.0008 if g == 'furn_altar' else 0.003, shape_method='CONCAVE')
+        except Exception as e: log('pack_islands fallback', e); bpy.ops.uv.pack_islands(rotate=True, margin=0.003)
+        bpy.ops.object.mode_set(mode='OBJECT')
     joined[g] = ob; log('joined', g, len(me.polygons), 'faces')
 
 scene.render.engine = 'CYCLES'; scene.cycles.device = 'GPU'; scene.cycles.samples = SAMPLES
@@ -63,7 +74,7 @@ scene.cycles.bake_type = 'COMBINED'
 bk = scene.render.bake
 bk.use_pass_direct = True; bk.use_pass_indirect = True
 bk.use_pass_diffuse = True; bk.use_pass_glossy = False; bk.use_pass_transmission = False; bk.use_pass_emit = True
-bk.margin = 12; bk.margin_type = 'EXTEND'; bk.target = 'IMAGE_TEXTURES'
+bk.margin = 8; bk.margin_type = 'EXTEND'; bk.target = 'IMAGE_TEXTURES'
 scene.render.image_settings.file_format = 'PNG'; scene.render.image_settings.color_depth = '8'
 MOVERS = [o for o in scene.objects if o.name.startswith(('prop_train_', 'prop_cat_', 'prop_rabbit_', 'prop_rcplane', 'prop_birdfly'))]   # 網頁上會動的東西(火車、棋子):烘光時藏起來,不然影子烘死在原地
 for o in MOVERS: o.hide_render = True
@@ -90,6 +101,7 @@ for g, ob in joined.items():
     m.node_tree.links.new(it.outputs['Color'], p.inputs['Base Color'])
     ob.data.materials.clear(); ob.data.materials.append(m)
     for poly in ob.data.polygons: poly.material_index = 0
+    if 'src' in ob.data.uv_layers: ob.data.uv_layers.remove(ob.data.uv_layers['src'])
 
 GLTF = dict(export_format='GLB', use_selection=True, export_apply=True, export_yup=True, export_cameras=False, export_lights=False,
             export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=6, export_image_format='WEBP')
