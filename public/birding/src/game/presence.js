@@ -128,5 +128,7 @@ export function createPresence({ world, camera, flight, hud, state, save, rec })
   window.__presence = { today: () => [...todaySet(day)], get day() { return day }, set day(v) { day = v; slot = null; memo.clear() }, wanted, want }
   // 2026-11-11 串流載入：鳥的模型晚到，換上真的之後照現在這個時段該不該在重設一次（替身上的顯示狀態不會帶過去）
   const sync = (b) => { if (rec) return; const w = want.get(b); if (w !== undefined) show(b, w) }
-  return { update, activityLabel, sync }
+  // 2026-11-27 打電話問老闆（phone.js）：這種鳥今天有沒有來、現在是不是牠的時段、時段叫什麼
+  const status = (id, hour) => ({ today: todaySet(day).has(id), active: inWin(hour, KIND[ACT[id] ?? 'D'].win), label: KIND[ACT[id] ?? 'D'].label })
+  return { update, activityLabel, sync, status }
 }

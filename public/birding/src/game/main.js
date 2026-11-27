@@ -20,6 +20,7 @@ import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.j
 import { judgePhoto, loadLLM, llm, rawGen, RARITY } from './judge.js'
 import { createFlight, flyModels } from './flight.js'
 import { createPresence } from './presence.js'
+import { createPhone } from './phone.js'
 import { priceFor } from './scoring.js'
 import { createViewmodel } from './viewmodel.js'
 import { createUiFx } from './ui-fx.js'
@@ -183,6 +184,7 @@ setInterval(() => {
 }, 200)
 addEventListener('keydown', (e) => {
   if (e.code === 'Backquote') { posEl.hidden = !posEl.hidden; return }
+  if (!guide.isOpen && !album.isOpen && !shop.isOpen && !product.isOpen && window.__phoneObj?.key(e)) return
   if (guide.isOpen) { if (e.code === 'KeyE') guide.close(); if (e.code === 'Tab') e.preventDefault(); return }   // 圖鑑開著：翻頁、Esc 在 guide.js 處理
   if (album.key(e)) return   // 回放開著：方向鍵、Q/E、刪除…都給它（Tab、Esc 關掉）
   if (e.code === 'Tab') { e.preventDefault(); if (album.isOpen) album.close(); else if (!shop.isOpen && !product.isOpen) openPanel(album) }
@@ -367,6 +369,7 @@ function frame() {
 }
 // 鳥什麼時候在：每日排程＋活動時段＋飛來飛走（presence.js；PARK_PLAN.md）
 const presence = createPresence({ world, camera, flight, hud, state, save, rec: REC })
+const phone = createPhone({ world, camera, hud, state, presence, getHour: () => hour, player }); window.__phoneObj = phone   // 2026-11-27 P：打電話問老闆鳥在哪
 // 串流載入：還沒有模型的鳥在背景由近到遠補上；補上一隻就接上驚飛和出沒時段
 // 2026-11-12 使用者：稀有的鳥讀完再讓牠飛入——稀有、非常稀有的排到最後才載（進場時先把常見的載完，畫面比較快齊）；
 // 載好的時候玩家在附近（6～130 m）就從遠處飛進來降落，不是憑空出現
@@ -377,7 +380,7 @@ world.streamBirds({ late: isRare, onReady: (b) => {
   if (!REC && isRare(b) && !b.absent) { const d = b.target.distanceTo(camera.position); if (d > 6 && d < 130 && flight.canFly(b)) { try { if (flight.arrive(b) !== false) b.revealWait = false } catch (e) { console.warn('[arrive]', b.def.id, e) } } }   // 飛進來的鳥本來就看得到在飛，不用等
 } })
 function tick(dt, t) {
-  presence.update(hour, dt)
+  presence.update(hour, dt); phone.update(dt)
   if (!panelOpen() && !menuCam) player.update(dt)
   cam.update(dt)
   if (!panelOpen()) { hour = (hour + dt * 24 / DAY_SEC) % 24; world.time.setTime(hour) }

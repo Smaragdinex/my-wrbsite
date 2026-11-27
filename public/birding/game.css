@@ -476,3 +476,14 @@ svg.controls image { mix-blend-mode: multiply; }
   .shop-note .sheet-in { width: auto; margin: 12px; height: calc(100vh - 24px); }
   .shop-note .pc { grid-template-columns: 1fr; }
 }
+/* 2026-11-27 打電話問老闆（src/game/phone.js） */
+.phone { position: fixed; right: 22px; bottom: 22px; width: 300px; background: rgba(18, 20, 22, 0.86); color: #eee; border-radius: 18px; padding: 12px 14px; font-size: 14px; line-height: 1.45; box-shadow: 0 6px 24px rgba(0,0,0,0.35); z-index: 30; backdrop-filter: blur(6px); }
+.phone .ph-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: #9fd6a0; }
+.phone .ph-top b { color: #fff; font-weight: 600; }
+.phone .ph-log { max-height: 220px; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
+.phone .ph-me { align-self: flex-end; background: #2f6d4a; padding: 6px 10px; border-radius: 12px 12px 2px 12px; max-width: 85%; }
+.phone .ph-boss { align-self: flex-start; background: #33373c; padding: 6px 10px; border-radius: 12px 12px 12px 2px; max-width: 92%; }
+.phone .ph-interim { opacity: 0.6; }
+.phone .ph-st { margin-top: 8px; color: #bbb; font-size: 13px; min-height: 1em; }
+.phone .ph-in { width: 100%; box-sizing: border-box; margin-top: 6px; padding: 6px 8px; border-radius: 8px; border: 1px solid #555; background: #111; color: #fff; font-size: 14px; }
+.phone .ph-help { margin-top: 6px; color: #888; font-size: 12px; }

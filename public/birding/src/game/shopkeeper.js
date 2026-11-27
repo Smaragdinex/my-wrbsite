@@ -18,10 +18,29 @@ const CELL = 0.2, SPEED = 1.15, TURN = 5.5, NPC_R = 0.22
 const WALK_CLIP_SPEED = 0.92   // walk 這段動作原本的步伐速度（量腳著地時往後滑的速度），播放速度照實際走的速度調，腳才不會滑
 const NEAR_PLAYER = 1.4, ACCEL = 2.2, DECEL = 2.5
 
+function smoothNormals(g) {
+  const P = g.attributes.position, n = P.count, idx = g.index ? g.index.array : null, acc = new Map(), key = new Array(n)
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), fn = new THREE.Vector3()
+  for (let i = 0; i < n; i++) key[i] = `${Math.round(P.getX(i) * 1e4)},${Math.round(P.getY(i) * 1e4)},${Math.round(P.getZ(i) * 1e4)}`
+  const tri = idx ? idx.length / 3 : n / 3
+  for (let t = 0; t < tri; t++) {
+    const i0 = idx ? idx[t * 3] : t * 3, i1 = idx ? idx[t * 3 + 1] : t * 3 + 1, i2 = idx ? idx[t * 3 + 2] : t * 3 + 2
+    a.fromBufferAttribute(P, i0); b.fromBufferAttribute(P, i1); c.fromBufferAttribute(P, i2)
+    fn.subVectors(c, b).cross(a.clone().sub(b))   // 長度＝兩倍面積（面積加權）
+    for (const i of [i0, i1, i2]) { const v = acc.get(key[i]) ?? acc.set(key[i], [0, 0, 0]).get(key[i]); v[0] += fn.x; v[1] += fn.y; v[2] += fn.z }
+  }
+  const N = new Float32Array(n * 3)
+  for (let i = 0; i < n; i++) { const v = acc.get(key[i]); const l = Math.hypot(v[0], v[1], v[2]) || 1; N[i * 3] = v[0] / l; N[i * 3 + 1] = v[1] / l; N[i * 3 + 2] = v[2] / l }
+  g.setAttribute('normal', new THREE.BufferAttribute(N, 3))
+}
+
 export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYaw, inStore, inPassage, counterZone }) {
   /* ---------- 模型、動作 ---------- */
   const root = gltf.scene
   root.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.frustumCulled = false } })
+  // 2026-11-27 使用者「老闆 mesh smooth 一下」：Tripo 減面模型每個面的頂點是分開的（法線各自朝外）→ 一格一格的稜面。
+  // 同一個位置的頂點法線取平均（面積加權）＝平滑著色；UV、骨架權重都不動
+  if (new URLSearchParams(location.search).get('smooth') !== '0') root.traverse((o) => { if (o.isMesh) smoothNormals(o.geometry) })   // ?smooth=0：原本的樣子（對照用）
   const box = new THREE.Box3().setFromObject(root, true)
   const s = 1.7 / (box.max.y - box.min.y)
   const model = new THREE.Group(); root.scale.setScalar(s); root.position.y = -box.min.y * s; model.add(root)
