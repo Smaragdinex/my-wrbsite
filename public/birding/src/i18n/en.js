@@ -1,15 +1,15 @@
 // English（自動產生：key 是程式裡的中文原文）
 export const UI = {
  "相機行老闆": "Camera shop owner",
- "打字問老闆，Enter 送出": "Type to the owner, Enter to send",
+ "打字問 Tom，Enter 送出": "Type to Tom, Enter to send",
  "P 說話・Backspace 掛斷": "P to talk · Backspace to hang up",
  "P 打字・Backspace 掛斷": "P to type · Backspace to hang up",
- "打字問老闆": "Type your question",
+ "打字問 Tom": "Type your question to Tom",
  "麥克風被擋住了，改用打字": "Microphone blocked, type instead",
  "請說…": "Go ahead…",
  "老闆在想…": "The owner is thinking…",
  "撥號中…": "Calling…",
- "打電話問老闆鳥在哪": "Call the owner to ask where birds are",
+ "打電話問 Tom 鳥在哪": "Call Tom to ask where birds are",
  "✓ 手上有照片": "✓ You have one",
  "每日委託清晨 6 點更新": "Daily requests refresh at 6 AM",
  "分": "pts",

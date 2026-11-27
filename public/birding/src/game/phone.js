@@ -1,5 +1,5 @@
 // 2026-11-27 打電話問老闆鳥在哪（使用者：「讓老闆 你可以打電話問他 鳥哪裡找到 用語音的方式」）
-// P：撥給相機行老闆 → 響兩聲接起來 → 聽玩家講一句（瀏覽器的語音辨識；沒有就改打字）→ 老闆用語音回答（瀏覽器的語音合成）
+// P：撥給老闆 Tom（2026-11-27 使用者：「給老闆一個名字 不要相機行 那叫Tom」）→ 響兩聲接起來 → 聽玩家講一句（瀏覽器的語音辨識；沒有就改打字）→ 老闆用語音回答（瀏覽器的語音合成）
 // 老闆講的內容全部來自遊戲資料，不讓模型自己想：
 //   這隻鳥今天有沒有來（presence 的每日名單）、現在是不是牠活動的時段、牠在哪一區、離玩家多遠、在玩家的哪個方向（照玩家現在面對的方向講「右前方」）
 //   AI 老闆（本機 Gemma，有載入的話）只負責把這些事實講成口語；講出來的話少了地名或距離就不用，改用寫好的句子
@@ -78,8 +78,8 @@ const BYE = /掰|再見|謝謝|沒事了|bye|thanks|thank you|that's all|고마|
 export function createPhone({ world, camera, hud, state, presence, getHour, player }) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition
   const el = document.createElement('div'); el.className = 'phone'; el.hidden = true
-  el.innerHTML = `<div class="ph-top"><b>${tr('相機行老闆')}</b><span class="ph-t"></span></div><div class="ph-log"></div>
-    <div class="ph-st"></div><input class="ph-in" hidden placeholder="${tr('打字問老闆，Enter 送出')}"><div class="ph-help"></div>`
+  el.innerHTML = `<div class="ph-top"><b>Tom</b><span class="ph-t"></span></div><div class="ph-log"></div>
+    <div class="ph-st"></div><input class="ph-in" hidden placeholder="${tr('打字問 Tom，Enter 送出')}"><div class="ph-help"></div>`
   document.body.appendChild(el)
   const log = el.querySelector('.ph-log'), st = el.querySelector('.ph-st'), tEl = el.querySelector('.ph-t'), input = el.querySelector('.ph-in'), help = el.querySelector('.ph-help')
   let on = false, t0 = 0, listening = false, busy = false, rec = null, idle = 0, ac = null, ringing = null
@@ -151,7 +151,7 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
       ja: (f) => `今日はついてるね、${f.name}が出てるよ。${f.loc}、${f.dir}だいたい${f.dist}メートル。珍しいから行く価値あるよ。` },
     none: { zh: () => '這個時間鳥都休息了，等天亮再出來吧。', en: () => "The birds are all resting at this hour. Come back after sunrise.", ko: () => '이 시간엔 새들이 다 쉬고 있어요. 해 뜨고 다시 오세요.', ja: () => 'この時間は鳥もみんな休んでるよ。夜が明けてからまたおいで。' },
     huh: { zh: () => '嗯？收訊不太好。你想找哪一種鳥？還是要我推薦附近好拍的？', en: () => "Hm? Bad signal. Which bird are you looking for? Or should I suggest something nearby?", ko: () => '네? 잘 안 들려요. 어떤 새를 찾으세요? 아니면 근처에 찍기 좋은 새를 알려 드릴까요?', ja: () => 'ん？電波が悪いな。どの鳥を探してる？それとも近くのおすすめを教えようか？' },
-    hello: { zh: () => '喂，相機行。怎麼了，找不到鳥嗎？', en: () => "Camera shop, hello. What's up, can't find a bird?", ko: () => '네, 카메라 가게입니다. 새를 못 찾겠어요?', ja: () => 'はい、カメラ屋です。どうした、鳥が見つからない？' },
+    hello: { zh: () => '喂，我是 Tom。怎麼了，找不到鳥嗎？', en: () => "Hey, Tom here. What's up, can't find a bird?", ko: () => '여보세요, 톰이에요. 새를 못 찾겠어요?', ja: () => 'もしもし、トムだよ。どうした、鳥が見つからない？' },
     bye: { zh: () => '好，拍到好照片記得拿來給我看。', en: () => 'Alright. Bring me the good shots.', ko: () => '네, 좋은 사진 찍으면 가져와요.', ja: () => 'はいよ。いい写真が撮れたら持ってきてね。' },
   }
   const LBL_EN = { '白天': 'during the day', '清晨到白天': 'from early morning through the day', '清晨': 'in the early morning', '晨昏': 'at dawn and dusk', '夜間': 'at night', '黃昏到夜間': 'from dusk into the night', '偶爾過境（上午）': 'in the morning, when it passes through', '偶爾過境（白天）': 'during the day, when it passes through' }
@@ -177,7 +177,7 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
   async function polish(a) {
     if (llm.status !== 'ready' || !a.f) return a.text
     const lang = { zh: '繁體中文', en: 'English', ko: '한국어', ja: '日本語' }[LANG]
-    const msg = `你是鳥類公園旁邊相機行的老闆，個性親切、愛拍鳥，現在在電話裡回答客人。用${lang}、像講電話一樣，把下面這段話換個自然的說法，兩句以內。不准加新的地點、鳥、時間或數字，鳥名、地名、方向、距離都要照抄：\n${a.text}`
+    const msg = `你是 Tom，鳥類公園旁邊相機行的老闆，個性親切、愛拍鳥，現在在電話裡回答客人。用${lang}、像講電話一樣，把下面這段話換個自然的說法，兩句以內。不准加新的地點、鳥、時間或數字，鳥名、地名、方向、距離都要照抄：\n${a.text}`
     try {
       const out = (await Promise.race([rawGen([{ role: 'user', content: msg }], { max_tokens: 90, temperature: 0.5 }), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 6000))])).trim().replace(/^["「]|["」]$/g, '')
       const must = [a.f.name, a.f.loc.slice(0, LANG === 'en' ? 8 : 3)]; if (a.f.here || a.kind === 'rec') must.push(String(a.f.dist))
@@ -189,7 +189,7 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
   // ---------- 聽 ----------
   function listen() {
     if (!on || listening || busy) return
-    if (!SR) { input.hidden = false; player?.controls.unlock(); input.value = ''; input.focus(); status(tr('打字問老闆')); return }
+    if (!SR) { input.hidden = false; player?.controls.unlock(); input.value = ''; input.focus(); status(tr('打字問 Tom')); return }
     rec = new SR(); rec.lang = VLANG; rec.interimResults = true; rec.maxAlternatives = 1
     let heard = '', interim = null
     rec.onresult = (e) => { let s = ''; for (const r of e.results) s += r[0].transcript; heard = s
