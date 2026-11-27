@@ -61,14 +61,20 @@ const isRare = (id) => /稀有/.test(RARE(id))
 const norm = (s) => s.toLowerCase().replace(/[\s,.?!，。？！、'’"「」-]/g, '')
 function lcs(a, b) { let best = 0; for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) { let k = 0; while (a[i + k] && a[i + k] === b[j + k]) k++; if (k > best) best = k } return best }
 function findBird(text, birds) {
-  const q = norm(text); let best = null, bs = 0
+  const q = norm(text), ql = ' ' + text.toLowerCase().replace(/[^a-z\s-]/g, ' ').replace(/\s+/g, ' ') + ' '; let best = null, bs = 0
   for (const b of birds) {
-    const bt = birdText(b.def), names = [bt.name, bt.nick, b.def.name, b.def.nick].filter(Boolean).map(norm)
-    for (const n of names) {
-      const m = lcs(q, n), s = q.includes(n) ? 1 + n.length * 0.01 : m < 2 ? 0 : m / n.length * (n.length >= 3 ? 1 : 0.5)   // 至少要對到兩個字（「鳥為什麼要遷徙」不會因為一個「鳥」字對到五色鳥）
+    const bt = birdText(b.def), names = [bt.name, bt.nick, b.def.name, b.def.nick].filter(Boolean)
+    for (const raw of names) {
+      const n = norm(raw), m = lcs(q, n)
+      let s = q.includes(n) ? 1.5 + n.length * 0.01 : m < 2 ? 0 : m / n.length * (n.length >= 3 ? 1 : 0.5)   // 至少要對到兩個字（「鳥為什麼要遷徙」不會因為一個「鳥」字對到五色鳥）
+      // 英文名常只講後半（kingfisher、night heron、moorhen）：後兩個字、最後一個字（5 個字母以上）整字出現也算
+      const w = raw.toLowerCase().split(/[\s-]+/).filter(Boolean)
+      if (w.length >= 2) { const l2 = ' ' + w.slice(-2).join(' ') + ' ', l1 = ' ' + w.at(-1) + ' '
+        if (ql.includes(l2) || ql.replace(/-/g, ' ').includes(l2)) s = Math.max(s, 1.2); else if (w.at(-1).length >= 5 && (ql.includes(l1) || ql.includes(' ' + w.at(-1) + 's '))) s = Math.max(s, 1.0) }
       if (s > bs) { bs = s; best = b }
     }
   }
+  if (best) best._exact = bs >= 1.5   // 講出完整的名字（「貓頭鷹」對到「XX貓頭鷹」不算）
   return bs >= 0.66 ? best : null
 }
 const WANT_RARE = /稀有|罕見|珍貴|rare|희귀|珍しい|レア/i
@@ -79,37 +85,46 @@ const BYE = /掰|再見|謝謝|沒事了|bye|thanks|thank you|that's all|고마|
 // 答案只從圖鑑資料來（birdinfo 的 intro＋facts，各語言版本）：照問題的主題（吃、巢、公母、叫聲、長相…）挑最對的一句
 const ASK_WHERE = /在哪|哪裡|哪邊|去哪|怎麼找|找得到|找不到|where|find|어디|찾|どこ|探/i
 const TOPICS = [
-  [/吃|食|抓|獵|捕|魚|蟲|eat|food|feed|hunt|prey|catch|fish|insect|먹|사냥|食べ|狩り|餌/i, /吃|食|抓|獵|捕|啄|吞|踢|踩|夾|魚|蟲|kick|stomp|eat|feed|hunt|prey|catch|fish|insect|먹|사냥|잡|食べ|狩|捕|魚|虫/i],
+  [/吃|食|抓|獵|捕|魚|蟲|eat|food|feed|hunt|prey|catch|fish|insect|먹|사냥|食べ|狩り|餌/i, /吃|食|抓|獵|捕|啄|吞|踢|踩|夾|魚|蟲|蹴|踏|걷어차|차서|발로|kick|stomp|eat|feed|hunt|prey|catch|fish|insect|먹|사냥|잡|食べ|狩|捕|魚|虫/i],
   [/巢|窩|蛋|繁殖|育雛|寶寶|小鳥|nest|egg|breed|chick|baby|둥지|알|번식|巣|卵|ひな|子育て/i, /巢|窩|蛋|繁殖|育雛|雛|nest|egg|breed|chick|둥지|알|새끼|巣|卵|ひな/i],
-  [/公|母|雄|雌|男生|女生|male|female|sex|수컷|암컷|オス|メス|雄|雌/i, /雄|雌|公|母|male|female|수컷|암컷|オス|メス/i],
+  [/公|母|雄|雌|男生|女生|male|female|sex|수컷|암컷|암수|オス|メス|雄|雌/i, /雄|雌|公|母|male|female|수컷|암컷|オス|メス/i],
   [/叫|聲|唱|鳴|call|song|sing|sound|voice|울음|소리|노래|鳴き|声|歌/i, /叫聲|叫得|叫起|聲|唱|鳴|call|song|sing|sound|voice|울|소리|노래|鳴|声|歌/i],
   [/長什麼|長怎樣|長相|顏色|什麼顏色|嘴|喙|羽|腳|翅|認|分辨|look|colou?r|bill|beak|feather|leg|wing|identify|tell|생김|색|부리|깃|見た目|色|くちばし|羽/i, /色|嘴|喙|羽|腳|翅|頭|冠|眼|look|colou?r|bill|beak|feather|leg|wing|crest|eye|색|부리|깃|다리|날개|色|くちばし|羽|脚|翼/i],
   [/飛|遷徙|過冬|候鳥|fly|flight|migrat|winter|날|이동|겨울|飛|渡り|冬/i, /飛|遷徙|過冬|候鳥|fly|flight|migrat|winter|날|이동|겨울|飛|渡|冬/i],
 ]
 const INTRO_ASK = /介紹|特別|特色|知識|了解|是什麼鳥|跟我說|講一下|tell me about|about the|special|interesting|fact|소개|특별|알려|紹介|特別|教えて/i
 const STOP = /[的是了牠它在怎麼什為嗎呢啊有一會要那這個樣長鳥]/g
-const bigrams = (s) => { const t = norm(s), o = new Set(); for (let i = 0; i < t.length - 1; i++) o.add(t.slice(i, i + 2)); return o }
+// 比對用的詞：中日韓用兩個字一組；英文用單字（取前 4 個字母當字根：swim／swimming、nest／nests）——英文用字母兩兩一組的話，越長的句子分數越高
+const EN_STOP = new Set(['what', 'does', 'the', 'and', 'how', 'why', 'that', 'like', 'look', 'with', 'from', 'this', 'about', 'tell', 'have', 'there', 'its', 'you', 'your', 'can', 'are', 'for', 'one', 'into'])
+const bigrams = (s) => { const o = new Set()
+  for (const w of s.toLowerCase().match(/[a-z]{3,}/g) ?? []) if (!EN_STOP.has(w)) o.add('w:' + w.slice(0, 4))
+  const t = norm(s).replace(/[a-z0-9]/g, ''); for (let i = 0; i < t.length - 1; i++) o.add(t.slice(i, i + 2)); return o }
 function birdFact(b, q) {
   const bt = birdText(b.def)
-  const intro = (bt.intro ?? '').split(/(?<=[。！？.!?])\s*/).filter(Boolean), facts = bt.facts ?? []
+  const intro = (bt.intro ?? '').split(/(?<=[。！？])\s*|(?<=[.!?])\s+/).filter(Boolean), facts = bt.facts ?? []   // 英文句點後面要有空白才算斷句（「1.2 m」不會被切開）
   const pool = [...intro.map((t) => ({ t, intro: 1 })), ...facts.map((t) => ({ t, intro: 0 }))]
   if (!pool.length) return null
   const names = [bt.name, bt.nick, b.def.name, b.def.nick].filter(Boolean).map(norm)
   let qq = norm(q); for (const n of names) qq = qq.split(n).join('')
-  const qb = bigrams(qq), want = TOPICS.filter(([ask]) => ask.test(qq))   // 用拿掉鳥名的問題判斷主題（「五色鳥」的「色」不算問顏色）
+  let qw = q.toLowerCase(); for (const raw of [bt.name, b.def.name].filter(Boolean)) for (const w of raw.toLowerCase().split(/[\s-]+/)) qw = qw.split(w).join(' ')
+  const qb = bigrams(LANG === 'en' ? qw : qq), want = TOPICS.filter(([ask]) => ask.test(LANG === 'en' ? qw : qq))   // 用拿掉鳥名的問題判斷主題（「五色鳥」的「色」不算問顏色）
   let best = null, bs = -1
   for (const p of pool) {
     let sc = 0; for (const [, has] of want) if (has.test(p.t)) sc += 3
     const pb = bigrams(p.t); for (const x of qb) if (pb.has(x)) sc += 1
     for (const ch of new Set(qq.replace(STOP, ''))) if (/[\u4e00-\u9fff]/.test(ch) && p.t.includes(ch)) sc += 0.5   // 單字也算（「抓蛇」→「蛇還來不及反應」）
-    if (/為什麼|為何|why|왜|なぜ/i.test(q) && /所以|因為|用來|才|方便|就|so |because|to help|그래서|때문|ので|から/i.test(p.t)) sc += 1   // 問為什麼：有講原因的句子優先
+    if (/為什麼|為何|why|왜|なぜ/i.test(q) && /所以|因為|用來|才|方便|就|來自|吃出來|so |because|comes? from|to help|그래서|때문|에서 나와|덕분|ので|から/i.test(p.t)) sc += 1.5   // 問為什麼：有講原因的句子優先
     if (/叫|聲|call|song|sound|울음|소리|鳴き|声/i.test(q) && /「[^」]+」|"[^"]+"/.test(p.t) && /叫聲|叫得|聲|鳴|call|song|sound|울|소리|鳴|声/i.test(p.t)) sc += 2   // 問叫聲：有寫出叫聲（「咯、咯」）的那句
-    if (sc >= 3 && !p.intro) sc += 0.4   // 有對到主題、同分時小知識優先（介紹常常只是順帶提到）
+    if (sc >= 3 && !p.intro && !/為什麼|為何|why|왜|なぜ/i.test(q)) sc += 0.4   // 有對到主題、同分時小知識優先（介紹常常只是順帶提到）
     if (sc > bs) { bs = sc; best = p }
   }
-  if (INTRO_ASK.test(q) || bs <= 0) return { text: [intro[0], facts[0]].filter(Boolean).join(LANG === 'en' ? ' ' : ''), topic: false }
+  if (INTRO_ASK.test(q) || bs <= 0) return { text: [intro[0], facts[0]].filter(Boolean).join((LANG === 'zh' || LANG === 'ja' ? '' : ' ')), topic: false }
   // 問「為什麼／怎麼」又挑到介紹裡的句子：連下一句一起講（「嘴像飯匙」＋「左右掃、碰到小魚就夾」）
-  if (best.intro && /為什麼|為何|怎麼|why|how|왜|어떻게|なぜ|どう/i.test(q)) { const i = intro.indexOf(best.t); if (intro[i + 1]) return { text: best.t + (LANG === 'en' ? ' ' : '') + intro[i + 1], topic: true } }
+  if (best.intro && /為什麼|為何|怎麼|why|how|왜|어떻게|なぜ|どう/i.test(q)) {
+    // 連後面一句一起講；後面那句還在講同一件事（同一個主題）就再多一句（「嘴像飯匙」→「最特別的是嘴」→「左右掃、碰到就夾」）
+    const i = intro.indexOf(best.t), out = [best.t]
+    if (intro[i + 1]) { out.push(intro[i + 1]); if (intro[i + 2] && want.some(([, has]) => has.test(intro[i + 1]))) out.push(intro[i + 2]) }
+    return { text: out.join((LANG === 'zh' || LANG === 'ja' ? '' : ' ')), topic: true } }
   return { text: best.t, topic: true }
 }
 // 沒有指定哪種鳥的常識題（寫好的，Tom 不自己編）
@@ -120,7 +135,7 @@ const GENERAL = [
     a: { zh: '鳥遷徙主要是為了吃的。冬天北方結冰、蟲子也少了，就往南飛到食物多的地方，春天再回去繁殖。有些鳥一年要飛上萬公里。', en: "Birds migrate mostly for food. Up north, winter freezes everything and the insects disappear, so they fly south where food is easy, then head back in spring to breed. Some fly over ten thousand kilometers a year.", ko: '새가 이동하는 건 주로 먹이 때문이에요. 겨울엔 북쪽이 얼고 벌레도 줄어서 먹이가 많은 남쪽으로 갔다가, 봄에 번식하러 돌아가요.', ja: '渡りは主に食べ物のため。冬は北が凍って虫もいなくなるから、餌の多い南へ行って、春になったら子育てに戻るんだ。' } },
   { q: /貓頭鷹|鴞|夜行|晚上.*看|owl|night vision|see at night|부엉이|올빼미|フクロウ|夜行性/i,
     a: { zh: '貓頭鷹的眼睛很大，裡面感光的細胞特別多，一點點月光就看得到。牠們的臉像個碟子，把聲音集中到耳朵，在全黑裡光聽老鼠走路的聲音也抓得到。晚上帶手電筒來，按 F。', en: "Owls have huge eyes packed with light-sensitive cells, so a little moonlight is plenty. Their dish-shaped face funnels sound to their ears, so they can catch a mouse in total darkness just by hearing it. Bring a flashlight at night, press F.", ko: '올빼미는 눈이 아주 크고 빛을 느끼는 세포가 많아서 달빛만 있어도 잘 봐요. 접시 같은 얼굴이 소리를 귀로 모아서 깜깜해도 쥐 소리만 듣고 잡아요.', ja: 'フクロウは目が大きくて光を感じる細胞が多いから、月明かりで十分見える。お皿みたいな顔が音を耳に集めるから、真っ暗でもネズミの足音だけで捕まえられるんだ。' } },
-  { q: /怎麼拍|技巧|靠近|嚇跑|飛走|tips?|approach|scare|get close|가까이|コツ|近づ/i,
+  { q: /怎麼拍|技巧|靠近|嚇跑|飛走|tips?|approach|scare|spook|get close|fly(ing)? away|keep flying|가까이|날아가|도망|コツ|近づ|逃げ/i,
     a: { zh: '慢慢走，按 C 蹲低靠近，鳥就比較不會被嚇跑。不要直直衝過去，從側面繞。等牠在做事的時候按快門，像吃東西、理毛、飛起來那一下，照片最值錢。', en: "Move slowly and hold C to crouch as you get close. Don't walk straight at it, circle in from the side. Shoot when it's doing something, eating, preening, taking off. Those are the shots worth the most.", ko: '천천히 걷고 C를 눌러 몸을 낮춰 다가가세요. 정면으로 가지 말고 옆으로 돌아가요. 먹거나 깃털을 다듬거나 날아오를 때 찍으면 제일 비싸요.', ja: 'ゆっくり歩いて、C でしゃがんで近づくこと。まっすぐ向かわず横から回り込む。食べてる時や羽づくろい、飛び立つ瞬間を撮ると一番高く売れるよ。' } },
 ]
 const T_FACT = {
@@ -214,6 +229,7 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
   function answer(text) {
     const birds = world.birds.filter((b) => b.def?.id)
     const b = findBird(text, birds)
+    if (!b?._exact) { const gq = GENERAL.find((x) => x.q.test(text)); if (gq) return { kind: 'general', text: L(gq.a) } }   // 「貓頭鷹為什麼晚上看得到」問的是貓頭鷹這一類，不是某一種
     if (b && !ASK_WHERE.test(text) && norm(text).length > norm(birdText(b.def).name).length + 1) {   // 問的不是「在哪」、也不只講鳥名 → 知識題
       const k = birdFact(b, text)
       if (k) { lastBird = b; return { kind: 'fact', text: L(T_FACT)(nameOf(b), k.text, k.topic) } }
