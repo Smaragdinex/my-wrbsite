@@ -65,7 +65,7 @@ function findBird(text, birds) {
   for (const b of birds) {
     const bt = birdText(b.def), names = [bt.name, bt.nick, b.def.name, b.def.nick].filter(Boolean).map(norm)
     for (const n of names) {
-      const s = q.includes(n) ? 1 + n.length * 0.01 : lcs(q, n) / n.length * (n.length >= 3 ? 1 : 0.5)
+      const m = lcs(q, n), s = q.includes(n) ? 1 + n.length * 0.01 : m < 2 ? 0 : m / n.length * (n.length >= 3 ? 1 : 0.5)   // 至少要對到兩個字（「鳥為什麼要遷徙」不會因為一個「鳥」字對到五色鳥）
       if (s > bs) { bs = s; best = b }
     }
   }
@@ -74,6 +74,61 @@ function findBird(text, birds) {
 const WANT_RARE = /稀有|罕見|珍貴|rare|희귀|珍しい|レア/i
 const WANT_ANY = /推薦|什麼鳥|哪些鳥|有什麼|好拍|附近|拍什麼|去哪|recommend|what bird|which bird|any bird|anything|nearby|near me|where should|추천|어떤 새|근처|おすすめ|どんな鳥|近く/i
 const BYE = /掰|再見|謝謝|沒事了|bye|thanks|thank you|that's all|고마|안녕|ありがとう|じゃあね/i
+
+// ---------- 鳥的知識（2026-11-27 使用者：「測試老闆 Tom 懂不懂鳥的知識」→ 測 12 題全答成「牠在哪」）----------
+// 答案只從圖鑑資料來（birdinfo 的 intro＋facts，各語言版本）：照問題的主題（吃、巢、公母、叫聲、長相…）挑最對的一句
+const ASK_WHERE = /在哪|哪裡|哪邊|去哪|怎麼找|找得到|找不到|where|find|어디|찾|どこ|探/i
+const TOPICS = [
+  [/吃|食|抓|獵|捕|魚|蟲|eat|food|feed|hunt|prey|catch|fish|insect|먹|사냥|食べ|狩り|餌/i, /吃|食|抓|獵|捕|啄|吞|踢|踩|夾|魚|蟲|kick|stomp|eat|feed|hunt|prey|catch|fish|insect|먹|사냥|잡|食べ|狩|捕|魚|虫/i],
+  [/巢|窩|蛋|繁殖|育雛|寶寶|小鳥|nest|egg|breed|chick|baby|둥지|알|번식|巣|卵|ひな|子育て/i, /巢|窩|蛋|繁殖|育雛|雛|nest|egg|breed|chick|둥지|알|새끼|巣|卵|ひな/i],
+  [/公|母|雄|雌|男生|女生|male|female|sex|수컷|암컷|オス|メス|雄|雌/i, /雄|雌|公|母|male|female|수컷|암컷|オス|メス/i],
+  [/叫|聲|唱|鳴|call|song|sing|sound|voice|울음|소리|노래|鳴き|声|歌/i, /叫聲|叫得|叫起|聲|唱|鳴|call|song|sing|sound|voice|울|소리|노래|鳴|声|歌/i],
+  [/長什麼|長怎樣|長相|顏色|什麼顏色|嘴|喙|羽|腳|翅|認|分辨|look|colou?r|bill|beak|feather|leg|wing|identify|tell|생김|색|부리|깃|見た目|色|くちばし|羽/i, /色|嘴|喙|羽|腳|翅|頭|冠|眼|look|colou?r|bill|beak|feather|leg|wing|crest|eye|색|부리|깃|다리|날개|色|くちばし|羽|脚|翼/i],
+  [/飛|遷徙|過冬|候鳥|fly|flight|migrat|winter|날|이동|겨울|飛|渡り|冬/i, /飛|遷徙|過冬|候鳥|fly|flight|migrat|winter|날|이동|겨울|飛|渡|冬/i],
+]
+const INTRO_ASK = /介紹|特別|特色|知識|了解|是什麼鳥|跟我說|講一下|tell me about|about the|special|interesting|fact|소개|특별|알려|紹介|特別|教えて/i
+const STOP = /[的是了牠它在怎麼什為嗎呢啊有一會要那這個樣長鳥]/g
+const bigrams = (s) => { const t = norm(s), o = new Set(); for (let i = 0; i < t.length - 1; i++) o.add(t.slice(i, i + 2)); return o }
+function birdFact(b, q) {
+  const bt = birdText(b.def)
+  const intro = (bt.intro ?? '').split(/(?<=[。！？.!?])\s*/).filter(Boolean), facts = bt.facts ?? []
+  const pool = [...intro.map((t) => ({ t, intro: 1 })), ...facts.map((t) => ({ t, intro: 0 }))]
+  if (!pool.length) return null
+  const names = [bt.name, bt.nick, b.def.name, b.def.nick].filter(Boolean).map(norm)
+  let qq = norm(q); for (const n of names) qq = qq.split(n).join('')
+  const qb = bigrams(qq), want = TOPICS.filter(([ask]) => ask.test(qq))   // 用拿掉鳥名的問題判斷主題（「五色鳥」的「色」不算問顏色）
+  let best = null, bs = -1
+  for (const p of pool) {
+    let sc = 0; for (const [, has] of want) if (has.test(p.t)) sc += 3
+    const pb = bigrams(p.t); for (const x of qb) if (pb.has(x)) sc += 1
+    for (const ch of new Set(qq.replace(STOP, ''))) if (/[\u4e00-\u9fff]/.test(ch) && p.t.includes(ch)) sc += 0.5   // 單字也算（「抓蛇」→「蛇還來不及反應」）
+    if (/為什麼|為何|why|왜|なぜ/i.test(q) && /所以|因為|用來|才|方便|就|so |because|to help|그래서|때문|ので|から/i.test(p.t)) sc += 1   // 問為什麼：有講原因的句子優先
+    if (/叫|聲|call|song|sound|울음|소리|鳴き|声/i.test(q) && /「[^」]+」|"[^"]+"/.test(p.t) && /叫聲|叫得|聲|鳴|call|song|sound|울|소리|鳴|声/i.test(p.t)) sc += 2   // 問叫聲：有寫出叫聲（「咯、咯」）的那句
+    if (sc >= 3 && !p.intro) sc += 0.4   // 有對到主題、同分時小知識優先（介紹常常只是順帶提到）
+    if (sc > bs) { bs = sc; best = p }
+  }
+  if (INTRO_ASK.test(q) || bs <= 0) return { text: [intro[0], facts[0]].filter(Boolean).join(LANG === 'en' ? ' ' : ''), topic: false }
+  // 問「為什麼／怎麼」又挑到介紹裡的句子：連下一句一起講（「嘴像飯匙」＋「左右掃、碰到小魚就夾」）
+  if (best.intro && /為什麼|為何|怎麼|why|how|왜|어떻게|なぜ|どう/i.test(q)) { const i = intro.indexOf(best.t); if (intro[i + 1]) return { text: best.t + (LANG === 'en' ? ' ' : '') + intro[i + 1], topic: true } }
+  return { text: best.t, topic: true }
+}
+// 沒有指定哪種鳥的常識題（寫好的，Tom 不自己編）
+const GENERAL = [
+  { q: /鏡頭|焦段|相機|器材|lens|focal|camera|gear|렌즈|카메라|レンズ|カメラ/i,
+    a: { zh: '拍鳥最重要是焦段夠長，鳥很怕人，靠太近就飛走了。至少 300 公釐起跳，小鳥最好 600。店裡的鏡頭你可以來看看，拍到好照片賣給我，就有錢換更長的。', en: "For birds, focal length is everything. They spook easily, so you want at least 300mm, and 600mm for the small ones. Come check the lenses at the shop. Sell me good shots and you can afford a longer one.", ko: '새를 찍을 땐 초점거리가 제일 중요해요. 새는 겁이 많아서 최소 300mm, 작은 새는 600mm가 좋아요. 가게에 와서 렌즈 구경해 보세요.', ja: '鳥を撮るなら焦点距離が一番大事。鳥は人を怖がるから、最低でも300ミリ、小鳥なら600ミリ欲しいね。店のレンズを見においで。' } },
+  { q: /遷徙|候鳥|過冬|migrat|winter|이동|철새|渡り鳥|渡り/i,
+    a: { zh: '鳥遷徙主要是為了吃的。冬天北方結冰、蟲子也少了，就往南飛到食物多的地方，春天再回去繁殖。有些鳥一年要飛上萬公里。', en: "Birds migrate mostly for food. Up north, winter freezes everything and the insects disappear, so they fly south where food is easy, then head back in spring to breed. Some fly over ten thousand kilometers a year.", ko: '새가 이동하는 건 주로 먹이 때문이에요. 겨울엔 북쪽이 얼고 벌레도 줄어서 먹이가 많은 남쪽으로 갔다가, 봄에 번식하러 돌아가요.', ja: '渡りは主に食べ物のため。冬は北が凍って虫もいなくなるから、餌の多い南へ行って、春になったら子育てに戻るんだ。' } },
+  { q: /貓頭鷹|鴞|夜行|晚上.*看|owl|night vision|see at night|부엉이|올빼미|フクロウ|夜行性/i,
+    a: { zh: '貓頭鷹的眼睛很大，裡面感光的細胞特別多，一點點月光就看得到。牠們的臉像個碟子，把聲音集中到耳朵，在全黑裡光聽老鼠走路的聲音也抓得到。晚上帶手電筒來，按 F。', en: "Owls have huge eyes packed with light-sensitive cells, so a little moonlight is plenty. Their dish-shaped face funnels sound to their ears, so they can catch a mouse in total darkness just by hearing it. Bring a flashlight at night, press F.", ko: '올빼미는 눈이 아주 크고 빛을 느끼는 세포가 많아서 달빛만 있어도 잘 봐요. 접시 같은 얼굴이 소리를 귀로 모아서 깜깜해도 쥐 소리만 듣고 잡아요.', ja: 'フクロウは目が大きくて光を感じる細胞が多いから、月明かりで十分見える。お皿みたいな顔が音を耳に集めるから、真っ暗でもネズミの足音だけで捕まえられるんだ。' } },
+  { q: /怎麼拍|技巧|靠近|嚇跑|飛走|tips?|approach|scare|get close|가까이|コツ|近づ/i,
+    a: { zh: '慢慢走，按 C 蹲低靠近，鳥就比較不會被嚇跑。不要直直衝過去，從側面繞。等牠在做事的時候按快門，像吃東西、理毛、飛起來那一下，照片最值錢。', en: "Move slowly and hold C to crouch as you get close. Don't walk straight at it, circle in from the side. Shoot when it's doing something, eating, preening, taking off. Those are the shots worth the most.", ko: '천천히 걷고 C를 눌러 몸을 낮춰 다가가세요. 정면으로 가지 말고 옆으로 돌아가요. 먹거나 깃털을 다듬거나 날아오를 때 찍으면 제일 비싸요.', ja: 'ゆっくり歩いて、C でしゃがんで近づくこと。まっすぐ向かわず横から回り込む。食べてる時や羽づくろい、飛び立つ瞬間を撮ると一番高く売れるよ。' } },
+]
+const T_FACT = {
+  zh: (n, t, topic) => `${n}啊，${topic ? '' : '我跟你說，'}${t}${topic ? '' : ''}要不要我告訴你牠現在在哪？`,
+  en: (n, t) => `Ah, the ${n}. ${t} Want me to tell you where it is right now?`,
+  ko: (n, t) => `${n} 말이죠. ${t} 지금 어디 있는지 알려 드릴까요?`,
+  ja: (n, t) => `${n}ね。${t}今どこにいるか教えようか？`,
+}
 
 export function createPhone({ world, camera, hud, state, presence, getHour, player }) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -155,13 +210,20 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
     bye: { zh: () => '好，拍到好照片記得拿來給我看。', en: () => 'Alright. Bring me the good shots.', ko: () => '네, 좋은 사진 찍으면 가져와요.', ja: () => 'はいよ。いい写真が撮れたら持ってきてね。' },
   }
   const LBL_EN = { '白天': 'during the day', '清晨到白天': 'from early morning through the day', '清晨': 'in the early morning', '晨昏': 'at dawn and dusk', '夜間': 'at night', '黃昏到夜間': 'from dusk into the night', '偶爾過境（上午）': 'in the morning, when it passes through', '偶爾過境（白天）': 'during the day, when it passes through' }
+  let lastBird = null
   function answer(text) {
     const birds = world.birds.filter((b) => b.def?.id)
     const b = findBird(text, birds)
+    if (b && !ASK_WHERE.test(text) && norm(text).length > norm(birdText(b.def).name).length + 1) {   // 問的不是「在哪」、也不只講鳥名 → 知識題
+      const k = birdFact(b, text)
+      if (k) { lastBird = b; return { kind: 'fact', text: L(T_FACT)(nameOf(b), k.text, k.topic) } }
+    }
+    if (!b && lastBird && /^(要|好|好啊|好喔|好的|嗯|對|要啊|在哪|在哪裡|告訴我|yes|yeah|sure|ok|okay|please|where|네|좋아요?|응|うん|はい|どこ|教えて)$/i.test(norm(text))) return answer(birdText(lastBird.def).name + '在哪')   // 「要」：接著問剛剛那隻在哪
     if (b) {
       const f = facts(b); f.labelEn = LBL_EN[f.label] ?? f.label
       return { kind: f.here ? 'here' : f.today ? 'later' : 'away', f, text: L(f.here ? T.here : f.today ? T.later : T.away)(f) }
     }
+    { const gq = GENERAL.find((x) => x.q.test(text)); if (gq) return { kind: 'general', text: L(gq.a) } }
     if (WANT_RARE.test(text) || WANT_ANY.test(text)) {
       const here = birds.filter((x) => !x.absent).map((x) => ({ x, d: x.target.distanceTo(camera.position) })).sort((a, c) => a.d - c.d)
       if (!here.length) return { kind: 'none', text: L(T.none)() }
