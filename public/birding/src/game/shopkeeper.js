@@ -1,5 +1,5 @@
 // 相機行老闆：會走動的店員。2026-11-28 使用者要「年輕女生、韓風小姐姐」→ 換成 Irene：ChatGPT 選圖（models/raw/ref/owner-girl/）→ Tripo H3.5（7.7 萬面，不減面）→ Auto Rig（Mixamo）→ 同一組預設動作；
-// 原檔 models/raw/irene-rigged.glb，遊戲用 models/owner-rigged.glb＝shrink-glb-textures（BIRD_TEX=2048）。舊的 Tom 原檔留在 models/raw/owner-rigged.glb。
+// 2026-11-28 晚 第 4 版（使用者選的臉）：Tripo 分件版的臉型→ tools/irene-remesh.py 合成封洞→ Tripo 4K 貼圖→ tools/irene-clean.py→ Auto Rig＋7 動作→ tools/irene-swap-tex.py 換回 4K→ tools/rig-hair-fused.py（髮骨＋頭髮附近不跟肩膀手臂）。原檔 models/raw/irene4/，遊戲用 models/owner-rigged.glb＝irene4-hair.glb（4K 不縮）。
 // 動作：idle 站著、walk 走路（原地，位置由程式移動）、greet_01 打招呼、agree 點頭（介紹器材）、look_around 東張西望、wave_goodbye_02 揮手道別。
 // 行為（狀態機）：
 //   home     櫃台後面站著；玩家在店裡就轉頭看玩家，偶爾東張西望
