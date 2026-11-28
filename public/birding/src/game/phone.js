@@ -129,13 +129,13 @@ function birdFact(b, q) {
 }
 // 沒有指定哪種鳥的常識題（寫好的，Irene 不自己編）
 const GENERAL = [
-  { q: /鏡頭|焦段|相機|器材|lens|focal|camera|gear|렌즈|카메라|レンズ|カメラ/i,
+  { key: 'lens', q: /鏡頭|焦段|相機|器材|lens|focal|camera|gear|렌즈|카메라|レンズ|カメラ/i,
     a: { zh: '拍鳥最重要是焦段夠長，鳥很怕人，靠太近就飛走了。至少 300 公釐起跳，小鳥最好 600。店裡的鏡頭你可以來看看，拍到好照片賣給我，就有錢換更長的。', en: "For birds, focal length is everything. They spook easily, so you want at least 300mm, and 600mm for the small ones. Come check the lenses at the shop. Sell me good shots and you can afford a longer one.", ko: '새를 찍을 땐 초점거리가 제일 중요해요. 새는 겁이 많아서 최소 300mm, 작은 새는 600mm가 좋아요. 가게에 와서 렌즈 구경해 보세요.', ja: '鳥を撮るなら焦点距離が一番大事。鳥は人を怖がるから、最低でも300ミリ、小鳥なら600ミリ欲しいね。店のレンズを見においで。' } },
-  { q: /遷徙|候鳥|過冬|migrat|winter|이동|철새|渡り鳥|渡り/i,
+  { key: 'migrate', q: /遷徙|候鳥|過冬|migrat|winter|이동|철새|渡り鳥|渡り/i,
     a: { zh: '鳥遷徙主要是為了吃的。冬天北方結冰、蟲子也少了，就往南飛到食物多的地方，春天再回去繁殖。有些鳥一年要飛上萬公里。', en: "Birds migrate mostly for food. Up north, winter freezes everything and the insects disappear, so they fly south where food is easy, then head back in spring to breed. Some fly over ten thousand kilometers a year.", ko: '새가 이동하는 건 주로 먹이 때문이에요. 겨울엔 북쪽이 얼고 벌레도 줄어서 먹이가 많은 남쪽으로 갔다가, 봄에 번식하러 돌아가요.', ja: '渡りは主に食べ物のため。冬は北が凍って虫もいなくなるから、餌の多い南へ行って、春になったら子育てに戻るんだ。' } },
-  { q: /貓頭鷹|鴞|夜行|晚上.*看|owl|night vision|see at night|부엉이|올빼미|フクロウ|夜行性/i,
+  { key: 'owl', q: /貓頭鷹|鴞|夜行|晚上.*看|owl|night vision|see at night|부엉이|올빼미|フクロウ|夜行性/i,
     a: { zh: '貓頭鷹的眼睛很大，裡面感光的細胞特別多，一點點月光就看得到。牠們的臉像個碟子，把聲音集中到耳朵，在全黑裡光聽老鼠走路的聲音也抓得到。晚上帶手電筒來，按 F。', en: "Owls have huge eyes packed with light-sensitive cells, so a little moonlight is plenty. Their dish-shaped face funnels sound to their ears, so they can catch a mouse in total darkness just by hearing it. Bring a flashlight at night, press F.", ko: '올빼미는 눈이 아주 크고 빛을 느끼는 세포가 많아서 달빛만 있어도 잘 봐요. 접시 같은 얼굴이 소리를 귀로 모아서 깜깜해도 쥐 소리만 듣고 잡아요.', ja: 'フクロウは目が大きくて光を感じる細胞が多いから、月明かりで十分見える。お皿みたいな顔が音を耳に集めるから、真っ暗でもネズミの足音だけで捕まえられるんだ。' } },
-  { q: /怎麼拍|技巧|靠近|嚇跑|飛走|tips?|approach|scare|spook|get close|fly(ing)? away|keep flying|가까이|날아가|도망|コツ|近づ|逃げ/i,
+  { key: 'tips', q: /怎麼拍|技巧|靠近|嚇跑|飛走|tips?|approach|scare|spook|get close|fly(ing)? away|keep flying|가까이|날아가|도망|コツ|近づ|逃げ/i,
     a: { zh: '慢慢走，按 C 蹲低靠近，鳥就比較不會被嚇跑。不要直直衝過去，從側面繞。等牠在做事的時候按快門，像吃東西、理毛、飛起來那一下，照片最值錢。', en: "Move slowly and hold C to crouch as you get close. Don't walk straight at it, circle in from the side. Shoot when it's doing something, eating, preening, taking off. Those are the shots worth the most.", ko: '천천히 걷고 C를 눌러 몸을 낮춰 다가가세요. 정면으로 가지 말고 옆으로 돌아가요. 먹거나 깃털을 다듬거나 날아오를 때 찍으면 제일 비싸요.', ja: 'ゆっくり歩いて、C でしゃがんで近づくこと。まっすぐ向かわず横から回り込む。食べてる時や羽づくろい、飛び立つ瞬間を撮ると一番高く売れるよ。' } },
 ]
 const T_FACT = {
@@ -180,8 +180,29 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
     const girl = (a) => { for (const k of GIRL) { const v = a.find((x) => x.name.toLowerCase().includes(k) && !/\bmale\b/i.test(x.name)); if (v) return v } }
     return girl(pref) ?? girl(vs) ?? pref[0] ?? vs[0] ?? null
   }
-  function say(text) {
-    line('boss', text)
+  // 2026-11-28 固定台詞（打招呼、再見、收訊不好、晚上、四題常識）中文版用 ElevenLabs「Lucy - Friendly Taiwanese Youth」事先錄好（audio/irene/zh_*.mp3）；
+  // 報鳥位置、圖鑑知識是現場算的，還是系統女聲。檔案載不到或播放失敗就退回系統語音
+  const CLIP = new Set(['hello', 'bye', 'huh', 'none', 'lens', 'migrate', 'owl', 'tips'])
+  let clipEl = null
+  function playClip(key) {
+    return new Promise((res) => {
+      const au = new Audio(`audio/irene/zh_${key}.mp3`); clipEl = au; let done = false
+      const fin = (ok) => { if (!done) { done = true; res(ok) } }
+      au.onended = () => fin(true); au.onerror = () => fin(false)
+      au.play().catch(() => fin(false))
+      setTimeout(() => fin(!au.paused || au.ended), 25000)
+    })
+  }
+  async function say(text, clip) {
+    if (clip && LANG === 'zh' && CLIP.has(clip)) {
+      line('boss', text); speechSynthesis?.cancel()
+      if (await playClip(clip)) return
+      if (!on) return
+      return speak(text)
+    }
+    line('boss', text); return speak(text)
+  }
+  function speak(text) {
     return new Promise((res) => {
       if (!window.speechSynthesis) return res()
       speechSynthesis.cancel()
@@ -232,7 +253,7 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
   function answer(text) {
     const birds = world.birds.filter((b) => b.def?.id)
     const b = findBird(text, birds)
-    if (!b?._exact) { const gq = GENERAL.find((x) => x.q.test(text)); if (gq) return { kind: 'general', text: L(gq.a) } }   // 「貓頭鷹為什麼晚上看得到」問的是貓頭鷹這一類，不是某一種
+    if (!b?._exact) { const gq = GENERAL.find((x) => x.q.test(text)); if (gq) return { kind: 'general', clip: gq.key, text: L(gq.a) } }   // 「貓頭鷹為什麼晚上看得到」問的是貓頭鷹這一類，不是某一種
     if (b && !ASK_WHERE.test(text) && norm(text).length > norm(birdText(b.def).name).length + 1) {   // 問的不是「在哪」、也不只講鳥名 → 知識題
       const k = birdFact(b, text)
       if (k) { lastBird = b; return { kind: 'fact', text: L(T_FACT)(nameOf(b), k.text, k.topic) } }
@@ -242,17 +263,17 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
       const f = facts(b); f.labelEn = LBL_EN[f.label] ?? f.label
       return { kind: f.here ? 'here' : f.today ? 'later' : 'away', f, text: L(f.here ? T.here : f.today ? T.later : T.away)(f) }
     }
-    { const gq = GENERAL.find((x) => x.q.test(text)); if (gq) return { kind: 'general', text: L(gq.a) } }
+    { const gq = GENERAL.find((x) => x.q.test(text)); if (gq) return { kind: 'general', clip: gq.key, text: L(gq.a) } }
     if (WANT_RARE.test(text) || WANT_ANY.test(text)) {
       const here = birds.filter((x) => !x.absent).map((x) => ({ x, d: x.target.distanceTo(camera.position) })).sort((a, c) => a.d - c.d)
-      if (!here.length) return { kind: 'none', text: L(T.none)() }
+      if (!here.length) return { kind: 'none', clip: 'none', text: L(T.none)() }
       const seen = new Set(state.seen ?? [])
       const rare = here.find((h) => isRare(h.x.def.id) && !seen.has(h.x.def.id)) ?? here.find((h) => isRare(h.x.def.id))
       const pick = WANT_RARE.test(text) ? rare : here.find((h) => !seen.has(h.x.def.id)) ?? rare ?? here[0]
       if (pick) { const f = facts(pick.x); return { kind: 'rec', f, text: L(isRare(pick.x.def.id) ? T.recRare : T.rec)(f) } }
     }
-    if (BYE.test(text)) return { kind: 'bye', text: L(T.bye)() }
-    return { kind: 'huh', text: L(T.huh)() }
+    if (BYE.test(text)) return { kind: 'bye', clip: 'bye', text: L(T.bye)() }
+    return { kind: 'huh', clip: 'huh', text: L(T.huh)() }
   }
   // AI 老闆（有載入才用）：只換說法。講出來少了鳥名、地名或距離就不用
   async function polish(a) {
@@ -307,7 +328,7 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
     busy = true; line('me', text); status(tr('老闆在想…'))
     const a = answer(text)
     const out = await polish(a)
-    status(''); await say(out)
+    status(''); await say(out, out === a.text ? a.clip : null)
     busy = false; idle = 0
     if (a.kind === 'bye') return hang(0.4)
     status('')
@@ -327,12 +348,12 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
     await ring(2); if (!on) return
     const okMic = await mic; if (!on) return
     if (okMic !== false) status('')
-    await say(L(T.hello)()); busy = false; if (!on) return
+    await say(L(T.hello)(), 'hello'); busy = false; if (!on) return
     help.textContent = helpText(); if (okMic !== false) listen()
     window.gtag?.('event', 'phone_call', { sr: !!SR, ai: llm.status === 'ready' })
   }
   function hang(delay = 0) {
-    setTimeout(() => { on = false; listening = false; busy = false; try { rec?.abort() } catch {} ; clearTimeout(ringing); speechSynthesis?.cancel(); el.hidden = true; input.hidden = true }, delay * 1000)
+    setTimeout(() => { on = false; listening = false; busy = false; try { rec?.abort() } catch {} ; clearTimeout(ringing); speechSynthesis?.cancel(); clipEl?.pause(); el.hidden = true; input.hidden = true }, delay * 1000)
   }
   function key(e) {
     if (input === document.activeElement) return false
