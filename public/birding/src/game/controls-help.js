@@ -12,7 +12,7 @@ const CALLOUTS = [
   { from: [166, 480], to: [440, 250], key: 'Q', text: tr('換鏡頭') },
   { from: [272, 480], to: [640, 175], key: 'E', text: tr('互動：買賣、休息；舉著相機時開相機設定'), anchor: 'start', dx: -230 },
   { from: [233, 570], to: [280, 900], key: 'W A S D', text: tr('走路') },
-  { from: [635, 480], to: [600, 300], key: 'P', text: tr('打電話問 Tom 鳥在哪（對麥克風說話）'), anchor: 'start', dx: -30 },   // 2026-11-27；11-28 加「麥克風」
+  { from: [635, 480], to: [600, 300], key: 'P', text: tr('打電話問 Irene 鳥在哪（對麥克風說話）'), anchor: 'start', dx: -30 },   // 2026-11-27；11-28 加「麥克風」
   { from: [338, 570], to: [600, 420], key: 'F', text: tr('手電筒（晚上用）') },
   { from: [121, 621], to: [100, 820], key: 'Shift', text: tr('跑步'), anchor: 'start', dx: -40 },
   { from: [312, 621], to: [470, 820], key: 'C', text: tr('按住蹲低、慢慢靠近鳥') },

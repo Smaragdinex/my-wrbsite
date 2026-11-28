@@ -1,4 +1,5 @@
-// 相機行老闆：會走動的店員。模型 models/owner-rigged.glb（Tripo：減面 10k → Auto Rig（Mixamo 骨架）→ 免費預設動作，原檔 models/raw/owner-rigged.glb）。
+// 相機行老闆：會走動的店員。2026-11-28 使用者要「年輕女生、韓風小姐姐」→ 換成 Irene：ChatGPT 選圖（models/raw/ref/owner-girl/）→ Tripo H3.5（7.7 萬面，不減面）→ Auto Rig（Mixamo）→ 同一組預設動作；
+// 原檔 models/raw/irene-rigged.glb，遊戲用 models/owner-rigged.glb＝shrink-glb-textures（BIRD_TEX=2048）。舊的 Tom 原檔留在 models/raw/owner-rigged.glb。
 // 動作：idle 站著、walk 走路（原地，位置由程式移動）、greet_01 打招呼、agree 點頭（介紹器材）、look_around 東張西望、wave_goodbye_02 揮手道別。
 // 行為（狀態機）：
 //   home     櫃台後面站著；玩家在店裡就轉頭看玩家，偶爾東張西望
@@ -42,7 +43,7 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
   // 同一個位置的頂點法線取平均（面積加權）＝平滑著色；UV、骨架權重都不動
   if (new URLSearchParams(location.search).get('smooth') !== '0') root.traverse((o) => { if (o.isMesh) smoothNormals(o.geometry) })   // ?smooth=0：原本的樣子（對照用）
   const box = new THREE.Box3().setFromObject(root, true)
-  const s = 1.7 / (box.max.y - box.min.y)
+  const s = 1.63 / (box.max.y - box.min.y)   // Irene 身高 163 公分（舊的 Tom 1.7）
   const model = new THREE.Group(); root.scale.setScalar(s); root.position.y = -box.min.y * s; model.add(root)
   model.position.set(home.x, 0, home.z); model.rotation.y = homeYaw
   parent.add(model)
