@@ -71,7 +71,8 @@ function labelDraw(it, state) {
 export function preloadStore() {
   const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
   const urls = ['models/owner-rigged.glb', ...BODIES.map((b) => `models/camera/body-${b.id}.glb`), ...LENSES.map((l) => `models/camera/lens-${l.id}.glb`), 'models/store-prints.jpg'].map((u) => `${u}?v=${VER}`)
-  urls.push('models/store-prints.jpg')
+  // 手上的相機（viewmodel.js）和山頂小屋（summit.js）抓的是不帶 ?v 的同一批檔，也一起先抓
+  urls.push('models/store-prints.jpg', 'models/hand-grip3.glb', ...BODIES.map((b) => `models/camera/body-${b.id}.glb`), ...LENSES.map((l) => `models/camera/lens-${l.id}.glb`))
   return Promise.all(urls.map((u) => fetch(u).then((r) => r.arrayBuffer()).catch(() => null)))
 }
 export async function buildStore(scene, state, plantLib, { getSound = () => true } = {}) {
