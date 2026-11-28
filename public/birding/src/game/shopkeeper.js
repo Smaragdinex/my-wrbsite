@@ -1,5 +1,5 @@
 // 相機行老闆：會走動的店員。2026-11-28 使用者要「年輕女生、韓風小姐姐」→ 換成 Irene：ChatGPT 選圖（models/raw/ref/owner-girl/）→ Tripo H3.5（7.7 萬面，不減面）→ Auto Rig（Mixamo）→ 同一組預設動作；
-// 2026-11-28 深夜 使用者選回第 3 版臉（models/raw/irene3-rigged.glb）→ rig-hair-fused.py（髮骨＋頭髮附近不跟肩膀手臂）→ irene3-hair2.glb → shrink BIRD_TEX=2048 → owner-rigged.glb。只播 idle／walk，待在櫃台、偶爾在店裡走一圈（strollSpot）。
+// 2026-11-29 第 6 版：ChatGPT 改圖（頭髮全在肩膀後面、手臂張開 45 度，models/raw/ref/owner-girl/irene-armsout-ref.png）→ Tripo H3.5 Ultra 4K 8 萬面 → Auto Rig＋只有 idle／walk → rig-hair-fused.py → shrink BIRD_TEX=2048 → owner-rigged.glb（原檔 models/raw/irene6/）。只播 idle／walk，待在櫃台、偶爾在店裡走一圈（strollSpot）。
 // 動作：idle 站著、walk 走路（原地，位置由程式移動）、greet_01 打招呼、agree 點頭（介紹器材）、look_around 東張西望、wave_goodbye_02 揮手道別。
 // 行為（狀態機）：
 //   home     櫃台後面站著；玩家在店裡就轉頭看玩家，偶爾東張西望
