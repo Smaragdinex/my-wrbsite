@@ -8,7 +8,7 @@ import * as THREE from 'three'
 import { t as tr, LANG, birdText } from '../i18n.js'
 import { LOBES, lobeSweep, savK, deltaK } from '../layout.js'
 import { forestK } from '../giants.js'
-import { RARITY, llm, rawGen } from './judge.js'
+import { RARITY, llm, rawGen, toTrad } from './judge.js'
 
 const L = (o) => o[LANG] ?? o.en
 // ---------- 分區（老闆講地名用；北＝+z、東＝+x，但玩家沒有指南針，方向一律照玩家面對的方向講）----------
@@ -71,6 +71,8 @@ function findBird(text, birds) {
       const w = raw.toLowerCase().split(/[\s-]+/).filter(Boolean)
       if (w.length >= 2) { const l2 = ' ' + w.slice(-2).join(' ') + ' ', l1 = ' ' + w.at(-1) + ' '
         if (ql.includes(l2) || ql.replace(/-/g, ' ').includes(l2)) s = Math.max(s, 1.2); else if (w.at(-1).length >= 5 && (ql.includes(l1) || ql.includes(' ' + w.at(-1) + 's '))) s = Math.max(s, 1.0) }
+      // 2026-11-29 只講後半（「藍鵲」＝台灣藍鵲、「琵鷺」＝黑面琵鷺）：中文名後兩個字整段出現也算（離玩家最近的那隻優先，在 answer 裡挑）
+      if (/[\u4e00-\u9fff]{3,}/.test(raw) && q.includes(n.slice(-2)) && n.slice(-2) !== '鳥') s = Math.max(s, 0.8)
       if (s > bs) { bs = s; best = b }
     }
   }
@@ -78,12 +80,28 @@ function findBird(text, birds) {
   return bs >= 0.66 ? best : null
 }
 const WANT_RARE = /稀有|罕見|珍貴|rare|희귀|珍しい|レア/i
-const WANT_ANY = /推薦|什麼鳥|哪些鳥|有什麼|好拍|附近|拍什麼|去哪|recommend|what bird|which bird|any bird|anything|nearby|near me|where should|추천|어떤 새|근처|おすすめ|どんな鳥|近く/i
-const BYE = /掰|再見|謝謝|沒事了|bye|thanks|thank you|that's all|고마|안녕|ありがとう|じゃあね/i
+const WANT_ANY = /鳥在哪|鳥最多|哪裡有鳥|哪邊有鳥|找鳥|幫我|推薦|(?<!為)什麼鳥|哪些鳥|有什麼|好拍|附近|拍什麼|去哪|recommend|what bird|which bird|any bird|anything|nearby|near me|where should|추천|어떤 새|근처|おすすめ|どんな鳥|近く/i
+const BYE = /掰|再見|謝謝|沒事了|不用了|不用|bye|thanks|thank you|that's all|no thanks|고마|안녕|ありがとう|じゃあね/i
+// 2026-11-29 使用者：「一直說收訊不太好」→ 量過 50 句常見問法，打招呼、問時間、店在哪、怎麼賺錢、講類別（貓頭鷹、老鷹、鴿子）全部掉到「聽不懂」。
+// 類別：用中文名（def.name）判斷是哪一類，問「在哪」就挑那一類離玩家最近、今天有出來的那隻
+const CATS = [
+  [/貓頭鷹|鴞|角鴞|owl|부엉이|올빼미|フクロウ/i, /鴞|貓頭鷹|鵂/],
+  [/老鷹|猛禽|鷹|鷲|鳶|隼|eagle|hawk|raptor|kite|falcon|매|독수리|猛禽|タカ|ワシ/i, /鷹|鷲|鳶|隼|鷂|鵟|蛇鷲/],
+  [/鴿子|斑鳩|鴿|pigeon|dove|비둘기|ハト/i, /鳩|鴿/],
+  [/鴨子|鴨|duck|오리|カモ/i, /鴨|鴛鴦/],
+  [/鷺|heron|egret|백로|왜가리|サギ/i, /鷺/],
+  [/鶴|crane|두루미|ツル/i, /鶴/],
+  [/水鳥|shorebird|waterbird|물새|水鳥/i, /鷺|鴨|鴴|鷸|琵鷺|鵜鶘|鸕鷀|秧雞|水雞|鶴|鸛/],
+]
+const GREET = /^(你好|妳好|您好|哈囉|嗨|喂|安安|早安|午安|晚安|hi|hello|hey|안녕하세요|여보세요|こんにちは|もしもし)|你是誰|妳是誰|你叫什麼|妳叫什麼|自我介紹|who are you|your name|누구|だれ|誰/i
+const ASK_TIME = /幾點|時間|現在.*(早上|晚上|白天)|what time|몇 시|何時/i
+const ASK_SHOP = /店在哪|相機行|回店|回去店|怎麼回|迷路|回家|入口在哪|shop|store|lost|가게|길을 잃|店|迷子/i
+const ASK_MONEY = /賺錢|錢|賣|價錢|多少錢|值錢|money|sell|price|earn|돈|팔|お金|売/i
+const ASK_FOCUS = /對焦|快門|光圈|ISO|曝光|模糊|糊掉|focus|shutter|exposure|blur|초점|셔터|ピント|シャッター/i
 
 // ---------- 鳥的知識（2026-11-27 使用者：「測試老闆 Irene 懂不懂鳥的知識」→ 測 12 題全答成「牠在哪」）----------
 // 答案只從圖鑑資料來（birdinfo 的 intro＋facts，各語言版本）：照問題的主題（吃、巢、公母、叫聲、長相…）挑最對的一句
-const ASK_WHERE = /在哪|哪裡|哪邊|去哪|怎麼找|找得到|找不到|where|find|어디|찾|どこ|探/i
+const ASK_WHERE = /在哪|哪裡|哪邊|去哪|找|看到|where|find|어디|찾|どこ|探/i
 const TOPICS = [
   [/吃|食|抓|獵|捕|魚|蟲|eat|food|feed|hunt|prey|catch|fish|insect|먹|사냥|食べ|狩り|餌/i, /吃|食|抓|獵|捕|啄|吞|踢|踩|夾|魚|蟲|蹴|踏|걷어차|차서|발로|kick|stomp|eat|feed|hunt|prey|catch|fish|insect|먹|사냥|잡|食べ|狩|捕|魚|虫/i],
   [/巢|窩|蛋|繁殖|育雛|寶寶|小鳥|nest|egg|breed|chick|baby|둥지|알|번식|巣|卵|ひな|子育て/i, /巢|窩|蛋|繁殖|育雛|雛|nest|egg|breed|chick|둥지|알|새끼|巣|卵|ひな/i],
@@ -182,7 +200,7 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
   }
   // 2026-11-28 固定台詞（打招呼、再見、收訊不好、晚上、四題常識）中文版用 ElevenLabs「Lucy - Friendly Taiwanese Youth」事先錄好（audio/irene/zh_*.mp3）；
   // 報鳥位置、圖鑑知識是現場算的，還是系統女聲。檔案載不到或播放失敗就退回系統語音
-  const CLIP = new Set(['hello', 'bye', 'huh', 'none', 'lens', 'migrate', 'owl', 'tips'])
+  const CLIP = new Set(['hello', 'bye', 'huh', 'none', 'lens', 'migrate', 'owl', 'tips', 'greet', 'money', 'focus'])
   let clipEl = null
   function playClip(key) {
     return new Promise((res) => {
@@ -244,15 +262,35 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
       ko: (f) => `오늘 운이 좋네요. ${f.name}가 나왔어요. ${f.loc}, ${f.dir} 약 ${f.dist}미터예요. 보기 힘든 새라 가 볼 만해요.`,
       ja: (f) => `今日はついてるね、${f.name}が出てるよ。${f.loc}、${f.dir}だいたい${f.dist}メートル。珍しいから行く価値あるよ。` },
     none: { zh: () => '這個時間鳥都休息了，等天亮再出來吧。', en: () => "The birds are all resting at this hour. Come back after sunrise.", ko: () => '이 시간엔 새들이 다 쉬고 있어요. 해 뜨고 다시 오세요.', ja: () => 'この時間は鳥もみんな休んでるよ。夜が明けてからまたおいで。' },
-    huh: { zh: () => '嗯？收訊不太好。你想找哪一種鳥？還是要我推薦附近好拍的？', en: () => "Hm? Bad signal. Which bird are you looking for? Or should I suggest something nearby?", ko: () => '네? 잘 안 들려요. 어떤 새를 찾으세요? 아니면 근처에 찍기 좋은 새를 알려 드릴까요?', ja: () => 'ん？電波が悪いな。どの鳥を探してる？それとも近くのおすすめを教えようか？' },
+    huh: { zh: () => '嗯……這個我不太確定耶。你可以問我某種鳥在哪、叫我推薦附近好拍的，或問我拍鳥的技巧。', en: () => "Hmm, I'm not sure about that one. You can ask me where a bird is, ask for a recommendation nearby, or ask for photo tips.", ko: () => '음… 그건 잘 모르겠어요. 어떤 새가 어디 있는지, 근처에 찍기 좋은 새, 아니면 사진 팁을 물어보세요.', ja: () => 'うーん、それはちょっとわからないな。鳥の居場所や、近くのおすすめ、撮り方のコツなら聞いてね。' },
+    greet: { zh: () => '嗨！我是 Irene，公園旁邊相機行的老闆。想找哪種鳥、或要我推薦附近好拍的，都可以問我。', en: () => "Hi! I'm Irene, I run the camera shop by the park. Ask me where any bird is, or I can suggest something nearby.", ko: () => '안녕하세요! 공원 옆 카메라 가게 주인 아이린이에요. 어떤 새가 어디 있는지, 근처 추천도 물어보세요.', ja: () => 'こんにちは！公園の横のカメラ屋のアイリーンだよ。鳥の居場所やおすすめ、何でも聞いてね。' },
+    time: { zh: (h, m, night) => `現在大概 ${h} 點${m ? ` ${m} 分` : ''}。${night ? '晚上大部分的鳥都在睡，貓頭鷹這類夜行性的才出來，記得按 F 開手電筒。' : '鳥這時候都在活動，好拍。'}`, en: (h, m, night) => `It's about ${h}:${String(m).padStart(2, '0')}. ${night ? "Most birds are asleep, only owls and other night birds are out. Press F for your flashlight." : "Birds are active now, good time to shoot."}`, ko: (h, m, night) => `지금 ${h}시 ${m}분쯤이에요. ${night ? '밤엔 대부분 자고, 올빼미 같은 야행성 새만 나와요. F로 손전등을 켜세요.' : '지금은 새들이 활동하는 시간이라 찍기 좋아요.'}`, ja: (h, m, night) => `今は${h}時${m}分くらい。${night ? '夜はほとんどの鳥が寝てて、フクロウみたいな夜の鳥だけ。F でライトをつけてね。' : '今は鳥が動く時間だから撮りやすいよ。'}` },
+    shop: { zh: (f) => `相機行在公園最西邊，從你那邊看在${f.dir}，大概 ${f.dist} 公尺。往那個方向走就會看到。`, en: (f) => `The camera shop is at the far west of the park, ${f.dir}, about ${f.dist} meters from you.`, ko: (f) => `카메라 가게는 공원 맨 서쪽이에요. ${f.dir}, 약 ${f.dist}미터예요.`, ja: (f) => `カメラ屋は公園のいちばん西。${f.dir}、だいたい${f.dist}メートルだよ。` },
+    money: { zh: () => '拍到好照片拿來店裡賣給我就有錢。鳥拍得大、清楚、沒被擋住、正在做事，像吃東西、飛起來，價錢就高；稀有的鳥更值錢。賣的錢可以換更長的鏡頭。', en: () => "Bring good shots to the shop and I'll buy them. Big, sharp, unblocked, and doing something (eating, taking off) pays more, and rare birds pay the most. Spend it on longer lenses.", ko: () => '좋은 사진을 가게에 팔면 돼요. 크고 선명하고 가려지지 않고, 먹거나 나는 순간이면 더 비싸요. 희귀한 새는 더 비싸요.', ja: () => 'いい写真を店に持ってきたら買い取るよ。大きく、くっきり、隠れてなくて、食べたり飛んだりしてる瞬間は高いし、珍しい鳥はもっと高い。' },
+    focus: { zh: () => '鳥放在畫面中間、對焦對到牠的眼睛再按快門。鳥在動的話快門要快，不然會糊；太暗就調高 ISO，但顆粒會變粗。', en: () => "Put the bird in the middle and focus on its eye before you shoot. If it's moving use a fast shutter or it'll blur; if it's dark, raise ISO, but it gets grainy.", ko: () => '새를 화면 가운데 두고 눈에 초점을 맞춘 뒤 찍어요. 움직이면 셔터를 빠르게, 어두우면 ISO를 올리세요.', ja: () => '鳥を真ん中に入れて、目にピントを合わせてから撮ってね。動いてたらシャッターを速く、暗ければISOを上げて。' },
     hello: { zh: () => '喂，我是 Irene。怎麼了，找不到鳥嗎？', en: () => "Hey, Irene here. What's up, can't find a bird?", ko: () => '여보세요, 아이린이에요. 새를 못 찾겠어요?', ja: () => 'もしもし、アイリーンだよ。どうした、鳥が見つからない？' },
     bye: { zh: () => '好，拍到好照片記得拿來給我看。', en: () => 'Alright. Bring me the good shots.', ko: () => '네, 좋은 사진 찍으면 가져와요.', ja: () => 'はいよ。いい写真が撮れたら持ってきてね。' },
   }
+  const SHOP = { x: -80, z: 0 }   // 相機行（store.js，公園最西邊）
   const LBL_EN = { '白天': 'during the day', '清晨到白天': 'from early morning through the day', '清晨': 'in the early morning', '晨昏': 'at dawn and dusk', '夜間': 'at night', '黃昏到夜間': 'from dusk into the night', '偶爾過境（上午）': 'in the morning, when it passes through', '偶爾過境（白天）': 'during the day, when it passes through' }
   let lastBird = null
   function answer(text) {
     const birds = world.birds.filter((b) => b.def?.id)
     const b = findBird(text, birds)
+    // 類別（貓頭鷹、老鷹、鴿子…）：挑那一類今天有出來、離玩家最近的那隻
+    const cat = !b?._exact && CATS.find(([q]) => q.test(text))
+    if (cat && (ASK_WHERE.test(text) || norm(text).length <= 4)) {
+      const pool = birds.filter((x) => cat[1].test(x.def.name)), here = pool.filter((x) => !x.absent).sort((p, q) => p.target.distanceTo(camera.position) - q.target.distanceTo(camera.position))
+      const pick = here[0] ?? pool[0]
+      if (pick) { lastBird = pick; const f = facts(pick); f.labelEn = LBL_EN[f.label] ?? f.label; return { kind: f.here ? 'here' : f.today ? 'later' : 'away', f, text: L(f.here ? T.here : f.today ? T.later : T.away)(f) } }
+    }
+    if (!b) {
+      if (GREET.test(norm(text)) || GREET.test(text)) return { kind: 'greet', clip: 'greet', text: L(T.greet)() }
+      if (ASK_SHOP.test(text)) { const d = Math.hypot(SHOP.x - camera.position.x, SHOP.z - camera.position.z); const f = { dir: relDir(camera, SHOP.x, SHOP.z), dist: roundDist(d) }; return { kind: 'shop', text: d < 15 ? L({ zh: '你就在店門口附近呀，相機行就在這。', en: "You're right by the shop.", ko: '가게 바로 앞이에요.', ja: 'もう店のすぐそばだよ。' }) : L(T.shop)(f) } }
+      if (ASK_TIME.test(text)) { const hh = getHour(), h = Math.floor(hh), m = Math.round((hh - h) * 60 / 5) * 5 % 60; return { kind: 'time', text: L(T.time)(h, m, hh < 5.5 || hh > 19) } }
+      if (ASK_MONEY.test(text)) return { kind: 'money', clip: 'money', text: L(T.money)() }
+      if (ASK_FOCUS.test(text)) return { kind: 'focus', clip: 'focus', text: L(T.focus)() }
+    }
     if (!b?._exact) { const gq = GENERAL.find((x) => x.q.test(text)); if (gq) return { kind: 'general', clip: gq.key, text: L(gq.a) } }   // 「貓頭鷹為什麼晚上看得到」問的是貓頭鷹這一類，不是某一種
     if (b && !ASK_WHERE.test(text) && norm(text).length > norm(birdText(b.def).name).length + 1) {   // 問的不是「在哪」、也不只講鳥名 → 知識題
       const k = birdFact(b, text)
@@ -286,6 +324,23 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
       if (out && out.length < a.text.length * 2 && must.every((m) => out.includes(m))) return out
     } catch {}
     return a.text
+  }
+
+  // 規則聽不懂的（閒聊、遊戲以外的問題）：有載入本地 AI（WebLLM Gemma 2 2B）就讓它用 Irene 的口氣回一兩句；
+  // 給它附近有出現的鳥和時間當參考，回答裡提到清單外的鳥名、或太長就丟掉，改講「不太確定」
+  async function chat(text) {
+    if (llm.status !== 'ready') return null
+    const lang = { zh: '繁體中文', en: 'English', ko: '한국어', ja: '日本語' }[LANG]
+    const near = world.birds.filter((b) => b.def?.id && !b.absent).map((b) => ({ n: nameOf(b), d: b.target.distanceTo(camera.position) })).sort((p, q) => p.d - q.d).slice(0, 6).map((x) => x.n)
+    const sys = `你是 Irene，賞鳥公園旁邊相機行的年輕女老闆，個性親切，正在跟客人講電話。用${lang}回答，口語、一到兩句、40 字以內。你不知道的事就說不確定，不要編造地點、價格或遊戲功能。現在約 ${Math.floor(getHour())} 點；客人附近有：${near.join('、') || '沒有鳥'}。`
+    try {
+      const raw = (await Promise.race([rawGen([{ role: 'user', content: sys + '\n客人說：' + text + '\nIrene：' }], { max_tokens: 80, temperature: 0.6 }), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 6000))])).trim().replace(/^["「]|["」]$/g, '')
+      const out = LANG === 'zh' ? toTrad(raw) : raw
+      if (!out || out.length > 90) return null
+      const all = world.birds.filter((b) => b.def?.id).map(nameOf)
+      if (all.some((n) => out.includes(n) && !near.includes(n))) return null   // 講到不在附近的鳥（可能亂講位置）
+      return out
+    } catch { return null }
   }
 
   // ---------- 聽 ----------
@@ -327,7 +382,8 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
     if (!on) return
     busy = true; line('me', text); status(tr('老闆在想…'))
     const a = answer(text)
-    const out = await polish(a)
+    const out = a.kind === 'huh' ? (await chat(text)) ?? a.text : await polish(a)
+    if (out !== a.text) a.clip = null
     status(''); await say(out, out === a.text ? a.clip : null)
     busy = false; idle = 0
     if (a.kind === 'bye') return hang(0.4)
@@ -367,5 +423,5 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
     if (!busy && !listening && input.hidden && (idle += dt) > 30) hang()   // 30 秒沒講話自動掛斷
   }
   window.__phone = { answer, ask, call, hang, regionOf, get on() { return on } }
-  return { key, update, call, hang, get on() { return on }, get cursor() { return on && (micAsk || !input.hidden) }, answer }
+  return { key, update, call, hang, get on() { return on }, get cursor() { return on && (micAsk || !input.hidden) }, answer, chat }
 }
