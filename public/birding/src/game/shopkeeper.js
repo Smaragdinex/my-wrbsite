@@ -1,5 +1,5 @@
 // 相機行老闆：會走動的店員。2026-11-28 使用者要「年輕女生、韓風小姐姐」→ 換成 Irene：ChatGPT 選圖（models/raw/ref/owner-girl/）→ Tripo H3.5（7.7 萬面，不減面）→ Auto Rig（Mixamo）→ 同一組預設動作；
-// 2026-11-28 晚 第 4 版（使用者選的臉）：Tripo 分件版的臉型→ tools/irene-remesh.py 合成封洞→ Tripo 4K 貼圖→ tools/irene-clean.py→ Auto Rig＋7 動作→ tools/irene-swap-tex.py 換回 4K→ tools/rig-hair-fused.py（髮骨＋頭髮附近不跟肩膀手臂）。原檔 models/raw/irene4/，遊戲用 models/owner-rigged.glb＝irene4-hair.glb（4K 不縮）。
+// 2026-11-28 深夜 使用者選回第 3 版臉（models/raw/irene3-rigged.glb）→ rig-hair-fused.py（髮骨＋頭髮附近不跟肩膀手臂）→ irene3-hair2.glb → shrink BIRD_TEX=2048 → owner-rigged.glb。只播 idle／walk，待在櫃台、偶爾在店裡走一圈（strollSpot）。
 // 動作：idle 站著、walk 走路（原地，位置由程式移動）、greet_01 打招呼、agree 點頭（介紹器材）、look_around 東張西望、wave_goodbye_02 揮手道別。
 // 行為（狀態機）：
 //   home     櫃台後面站著；玩家在店裡就轉頭看玩家，偶爾東張西望
@@ -112,12 +112,15 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
   for (const k of ONCE) if (acts[k]) { acts[k].setLoop(THREE.LoopOnce); acts[k].clampWhenFinished = true }
   acts.idle.play(); acts.walk.play(); idleLegs.play(); idleLegs.setEffectiveWeight(0)
   let one = null, oneOn = false, oneW = 0, moveW = 0, aSpd = 0   // 一次性動作、它的比重、走路比重、實際移動速度
+  // 2026-11-28 使用者：舉手、比讚很傻而且手舉起來會破圖 →「用正常的 idle 就好 走路」。一次性動作全部不播（站著＋講話泡泡），動作檔留著不刪。
+  const NO_GESTURE = true
   function play(name) {   // 只用在一次性的動作（打招呼、點頭、揮手、東張西望）；站／走由速度決定
+    if (NO_GESTURE) return
     const a = acts[name]; if (!a) return
     if (one && one !== a) one.stop()
     a.reset().play(); one = a; oneOn = true
   }
-  const onceDur = (name) => acts[name]?.getClip().duration ?? 2
+  const onceDur = (name) => NO_GESTURE ? 2.5 : acts[name]?.getClip().duration ?? 2
   function blendAnims(dt, moved) {
     const v = moved / Math.max(dt, 1e-3)
     aSpd += (v - aSpd) * Math.min(1, dt * (v < aSpd ? 25 : 12))   // 停下來時腳很快就停（不要人停了腳還在走）
@@ -225,6 +228,15 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     const t = target.clone(); const [i, j] = nearestFree(t.x, t.y); if (solid[i + j * NX] === 0 && t.distanceTo(centre(i, j)) > CELL) t.copy(centre(i, j))
     path = t.distanceTo(pos) < 0.45 ? [] : findPath(pos, t); onArrive = then   // 太近就不用走（不然會一直小碎步）
     if (!path.length) { const f = onArrive; onArrive = null; f?.() }
+  }
+  function strollSpot() {   // 店裡隨便一個走得到的空格：離櫃台 2.5 公尺以上、離玩家 1.5 公尺以上
+    for (let k = 0; k < 40; k++) {
+      const i = Math.floor(Math.random() * NX), j = Math.floor(Math.random() * NZ)
+      if (solid[i + j * NX]) continue
+      const c = centre(i, j); if (c.distanceTo(homeV) < 2.5 || c.distanceTo(P) < 1.5) continue
+      if (findPath(pos, c).length) return c
+    }
+    return null
   }
   const goHome = (then) => { state = 'return'; walkTo(homeV, () => { state = 'home'; faceYaw = homeYaw; then?.() }) }
   const faceTo = (v) => { faceYaw = Math.atan2(v.x - pos.x, v.y - pos.y) }
@@ -464,25 +476,23 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     if (state === 'appraise') faceYaw = homeYaw
     if (!path.length && state !== 'anim' && state !== 'checkout' && state !== 'appraise') {
       if (state === 'home') {
-        if (passage && greeted) {   // 玩家要走了：在櫃台後面揮手
-          greeted = false; ignored = false; lastIntro = null; faceTo(P)
-          doOnce('wave_goodbye_02', tr('慢走！拍照愉快！'), () => { state = 'home' })
-        } else if (here && !greeted && dP < 9) {
-          greeted = true; state = 'greet'
-          const to = P.clone().add(new THREE.Vector2().subVectors(pos, P).setLength(NEAR_PLAYER))
-          asks = 1; engaged = false; ignoreT = 0
-          walkTo(to, () => { faceTo(P); doOnce('greet_01', tr('歡迎光臨！需要幫忙嗎？'), () => { timer = 40 }) })
-        } else {
+        // 2026-11-28 使用者：「不用跟隨玩家，讓她在前台，偶爾在店裡走來走去」→ 只在櫃台打招呼／道別（講話泡泡），不走過去、不陪逛、不介紹
+        if (passage && greeted) { greeted = false; faceTo(P); say(tr('慢走！拍照愉快！'), 2.5) }
+        else if (here && !greeted && dP < 9) { greeted = true; faceTo(P); say(tr('歡迎光臨！需要幫忙嗎？'), 3) }
+        else {
           if (here) faceTo(P); else faceYaw = homeYaw
           if (here) { const a = THREE.MathUtils.euclideanModulo(faceYaw - homeYaw + Math.PI, Math.PI * 2) - Math.PI; faceYaw = homeYaw + THREE.MathUtils.clamp(a, -1.05, 1.05) }
-          homeT = here && greeted ? homeT + dt : 0
-          if (here && greeted && lookItem && lookT > 2.5) introduce()   // 在櫃台也看得到：玩家在一台器材前面站很久就走過來
-          else if (!ignored && homeT > 45 && stillT > 2 && !counterZone(P.x, P.y)) {   // 玩家還在店裡慢慢看 → 再出來問問（被晾過就不再來）
-            homeT = 0; asks = 1; state = 'greet'; engaged = false; ignoreT = 0
-            walkTo(P.clone().add(new THREE.Vector2().subVectors(pos, P).setLength(NEAR_PLAYER)), () => { faceTo(P); doOnce('greet_01', tr('還在看嗎？需要幫忙嗎？'), () => { timer = 40 }) })
+          if ((idleT -= dt) < 0) {
+            idleT = 30 + Math.random() * 40
+            if (!(here && counterZone(P.x, P.y))) {   // 玩家在櫃台前就不走開
+              const to = strollSpot()
+              if (to) { state = 'stroll'; walkTo(to, () => { state = 'browse'; timer = 4 + Math.random() * 5; faceYaw += (Math.random() - 0.5) * 2 }) }
+            }
           }
-          else if ((idleT -= dt) < 0) { idleT = 25 + Math.random() * 20; if (!here) { play('look_around'); timer = onceDur('look_around'); state = 'anim'; onArrive = () => { state = 'home' } } }
         }
+      } else if (state === 'browse') {   // 走到店裡某處，站一下（整理貨架的樣子），再回櫃台
+        timer -= dt
+        if (timer < 0 || (here && counterZone(P.x, P.y))) goHome()
       } else if (state === 'attend') {
         faceTo(P); timer -= dt
         // 有沒有理他：看著他 0.7 秒、看器材、走到他面前 → 有回應
