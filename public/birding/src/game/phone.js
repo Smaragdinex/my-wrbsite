@@ -174,8 +174,11 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
   function pickVoice() {
     const vs = speechSynthesis.getVoices().filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith(VLANG.slice(0, 2)))
     const pref = vs.filter((v) => v.lang.replace('_', '-') === VLANG)
-    const male = (a) => a.find((v) => /male|man|男|daniel|alex|fred|aaron|tom|reed|rocko|eddy|grandpa|ralph|otoya|hattori|yuna/i.test(v.name) && !/female/i.test(v.name))
-    return male(pref) ?? male(vs) ?? pref[0] ?? vs[0] ?? null
+    // 2026-11-28 使用者：「語音改成年輕女生」。照名單順序挑（越前面越像年輕女生），Mac／Windows／Chrome 內建 Google 語音都列；都沒有才用該語言第一個
+    const GIRL = ['meijia', 'hsiaochen', 'hsiaoyu', 'hanhan', 'yating', 'google 國語', 'samantha', 'ava', 'zoe', 'allison', 'aria', 'jenny', 'zira', 'google us english',
+      'yuna', 'sora', 'sunhi', 'heami', 'google 한국', 'kyoko', 'o-ren', 'nanami', 'haruka', 'ayumi', 'google 日本', 'flo', 'sandy', 'shelley', 'female', '女']
+    const girl = (a) => { for (const k of GIRL) { const v = a.find((x) => x.name.toLowerCase().includes(k) && !/\bmale\b/i.test(x.name)); if (v) return v } }
+    return girl(pref) ?? girl(vs) ?? pref[0] ?? vs[0] ?? null
   }
   function say(text) {
     line('boss', text)
@@ -183,7 +186,7 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
       if (!window.speechSynthesis) return res()
       speechSynthesis.cancel()
       const u = new SpeechSynthesisUtterance(text); u.lang = VLANG; const v = pickVoice(); if (v) u.voice = v
-      u.rate = LANG === 'en' ? 1.0 : 1.05; u.pitch = 0.8
+      u.rate = LANG === 'en' ? 1.02 : 1.08; u.pitch = 1.15   // 年輕女生：音調稍高、語速稍快
       let done = false; const fin = () => { if (!done) { done = true; res() } }
       u.onend = fin; u.onerror = fin; setTimeout(fin, 3000 + text.length * 260)
       speechSynthesis.speak(u)
