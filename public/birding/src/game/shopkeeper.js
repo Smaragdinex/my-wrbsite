@@ -35,6 +35,54 @@ function smoothNormals(g) {
   g.setAttribute('normal', new THREE.BufferAttribute(N, 3))
 }
 
+// 2026-11-28 Irene 長髮彈簧骨：tools/rig-hair-bones.py 在 Head 底下加了 3 串髮骨（HairF 右前、HairBL／HairBR 後面左右半，各 3 節），動作檔裡沒有它們的軌道。
+// 每節的尾端當一個有慣性的點（verlet）：被拉回「動作原本的姿勢」（stiff）、往下的重力、速度衰減（drag），長度固定；碰到胸口、脖子、頭、上臂的球就推出去。
+// 再把骨頭轉到指向那個點。（VRM spring bone 的做法，簡化版）
+export function createHairSpring(root, { stiff = 6, drag = 0.12, grav = 2.2 } = {}) {
+  const chains = []; const BN = {}
+  root.traverse((o) => { if (o.isBone) BN[o.name.replace('mixamorig', '').replace(':', '')] = o })
+  for (const k of ['F', 'BL', 'BR']) { const c = [1, 2, 3].map((i) => BN[`Hair${k}${i}`]).filter(Boolean); if (c.length === 3) chains.push(c) }
+  if (!chains.length) return null
+  const V = () => new THREE.Vector3(), Q = () => new THREE.Quaternion()
+  const nodes = chains.flat().map((b) => {
+    const child = b.children.find((c) => c.isBone)
+    const tailLocal = child ? child.position.clone() : b.position.clone().normalize().multiplyScalar(b.position.length() || 0.05)   // 最後一節：沿用自己的長度方向
+    return { b, restQ: b.quaternion.clone(), tailLocal, cur: null, prev: null, len: 0 }
+  })
+  // 碰撞球：[骨頭名, 半徑（模型自己的單位，會乘上世界縮放）, 往前（-z 是背後？用骨頭本地座標 y 往上）偏移]
+  const COLL = [['Spine2', 0.055], ['Spine1', 0.055], ['Neck', 0.035], ['Head', 0.06], ['LeftArm', 0.035], ['RightArm', 0.035], ['LeftShoulder', 0.035], ['RightShoulder', 0.035]]
+    .map(([n, r]) => [BN[n], r]).filter(([b]) => b)
+  const tmp = V(), head = V(), restTail = V(), dir0 = V(), dir1 = V(), pq = Q(), wq = Q(), sc = V(), cs = COLL.map(() => V())
+  return {
+    update(dt) {
+      dt = Math.min(dt, 1 / 30); if (dt <= 0) return
+      root.getWorldScale(sc); const S = sc.x
+      COLL.forEach(([b], i) => b.getWorldPosition(cs[i]))
+      for (const n of nodes) {
+        n.b.quaternion.copy(n.restQ); n.b.updateWorldMatrix(true, false)
+        n.b.getWorldPosition(head)
+        restTail.copy(n.tailLocal).applyMatrix4(n.b.matrixWorld)
+        if (!n.cur) { n.cur = restTail.clone(); n.prev = restTail.clone(); n.len = head.distanceTo(restTail) }
+        // verlet
+        tmp.subVectors(n.cur, n.prev).multiplyScalar(1 - drag)
+        n.prev.copy(n.cur)
+        n.cur.add(tmp).addScaledVector(dir0.subVectors(restTail, n.cur), Math.min(1, stiff * dt)).add(dir1.set(0, -grav * dt * dt, 0))
+        // 長度固定
+        n.cur.sub(head).setLength(n.len).add(head)
+        // 碰撞：推出球外
+        COLL.forEach(([, r], i) => { const R = r * S; tmp.subVectors(n.cur, cs[i]); const d = tmp.length(); if (d < R && d > 1e-6) n.cur.copy(cs[i]).addScaledVector(tmp, R / d) })
+        n.cur.sub(head).setLength(n.len).add(head)
+        // 轉骨頭：世界座標裡從「原本指向」轉到「現在指向」
+        dir0.subVectors(restTail, head).normalize(); dir1.subVectors(n.cur, head).normalize()
+        n.b.getWorldQuaternion(wq); n.b.parent.getWorldQuaternion(pq)
+        wq.premultiply(Q().setFromUnitVectors(dir0, dir1))
+        n.b.quaternion.copy(pq.invert().multiply(wq))
+        n.b.updateWorldMatrix(false, true)
+      }
+    },
+  }
+}
+
 export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYaw, inStore, inPassage, counterZone }) {
   /* ---------- 模型、動作 ---------- */
   const root = gltf.scene
@@ -352,7 +400,9 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     bend(BN.Neck, right, pitch * 0.45); bend(BN.Head, right, pitch * 0.55)
   }
 
-  function tick(t, dt, cam, focusItem, camDir) {
+  const hair = createHairSpring(root)   // 沒有髮骨的模型（舊的 Tom）會是 null
+  function tick(t, dt, cam, focusItem, camDir) { tick0(t, dt, cam, focusItem, camDir); hair?.update(dt) }
+  function tick0(t, dt, cam, focusItem, camDir) {
     mixer.update(dt)
     if (!cam && appr.w > 0.01) { model.position.set(pos.x, 0, pos.y); appraiseTick(dt) }
     if (bubbleT > 0) bubbleT -= dt
@@ -463,5 +513,5 @@ export function createShopkeeper({ gltf, parent, colliders, bounds, home, homeYa
     model.position.set(pos.x, 0, pos.y)
     appraiseTick(dt)
   }
-  return { model, tick, checkout, say, appraise, appraiseShow: (i) => { appr.want = Math.min(i, appr.cards.length - 1) }, get appraising() { return appr.on }, get state() { return state }, get anim() { return one && oneW > 0.5 ? one.getClip().name : moveW > 0.5 ? 'walk' : 'idle' }, get engaged() { return engaged }, get ignored() { return ignored }, get moveW() { return moveW }, get path() { return path }, pos }
+  return { model, tick, play, checkout, say, appraise, appraiseShow: (i) => { appr.want = Math.min(i, appr.cards.length - 1) }, get appraising() { return appr.on }, get state() { return state }, get anim() { return one && oneW > 0.5 ? one.getClip().name : moveW > 0.5 ? 'walk' : 'idle' }, get engaged() { return engaged }, get ignored() { return ignored }, get moveW() { return moveW }, get path() { return path }, pos }
 }
