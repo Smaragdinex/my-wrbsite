@@ -265,15 +265,38 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
   }
 
   // ---------- 聽 ----------
-  function listen() {
+  // 2026-11-28 使用者「不能給網站權限麥克風」：遊戲中滑鼠被鎖住，Chrome 的「允許」按不到、按 Esc 就算拒絕（拒絕幾次會自動封鎖）。
+  // 改成按 P 當下（還算使用者手勢）就先放開滑鼠、主動問麥克風；被擋就直接寫出怎麼解除，先用打字
+  let micOK = false, micAsk = false
+  const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent)
+  function typeMode(msg) { if (msg) status(msg); input.hidden = false; player?.controls.unlock(); input.value = ''; input.focus() }
+  function micHelp(kind) {
+    typeMode(kind === 'system' ? tr('電腦沒讓瀏覽器用麥克風：系統設定 → 隱私權與安全性 → 麥克風，打開這個瀏覽器。現在先打字')
+      : kind === 'service' ? tr('Safari 要先打開聽寫：系統設定 → 鍵盤 → 聽寫。現在先打字')
+      : kind === 'nomic' ? tr('找不到麥克風，先打字')
+      : kind === 'net' ? tr('語音辨識連不上網路，先打字')
+      : tr('麥克風被封鎖了：點網址列左邊的圖示 → 麥克風 → 允許，再重新整理。現在先打字'))
+  }
+  async function ensureMic() {
+    if (micOK) return true
+    try { const p = await navigator.permissions?.query({ name: 'microphone' }); if (p?.state === 'granted') return (micOK = true); if (p?.state === 'denied') { micHelp('denied'); return false } } catch {}
+    if (!navigator.mediaDevices?.getUserMedia) return (micOK = true)   // 舊瀏覽器：交給語音辨識自己問
+    micAsk = true; player?.controls.unlock(); status(tr('請按瀏覽器上方的「允許」使用麥克風'))
+    try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach((t) => t.stop()); return (micOK = true) }
+    catch (e) { micHelp(e?.name === 'NotFoundError' ? 'nomic' : /system/i.test(e?.message ?? '') ? 'system' : 'denied'); return false }
+    finally { micAsk = false }
+  }
+  async function listen() {
     if (!on || listening || busy) return
-    if (!SR) { input.hidden = false; player?.controls.unlock(); input.value = ''; input.focus(); status(tr('打字問 Tom')); return }
+    if (!SR) { typeMode(tr('打字問 Tom')); return }
+    if (!micOK && !(await ensureMic())) return
+    if (!on || listening || busy) return
     rec = new SR(); rec.lang = VLANG; rec.interimResults = true; rec.maxAlternatives = 1
     let heard = '', interim = null
     rec.onresult = (e) => { let s = ''; for (const r of e.results) s += r[0].transcript; heard = s
       if (!interim) { interim = document.createElement('div'); interim.className = 'ph-me ph-interim'; log.appendChild(interim) } interim.textContent = s }
-    rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { status(tr('麥克風被擋住了，改用打字')); input.hidden = false; player?.controls.unlock(); input.focus() } }
-    rec.onend = () => { listening = false; interim?.remove(); if (heard.trim()) ask(heard.trim()); else if (on && !busy) status('') }
+    rec.onerror = (e) => { const k = { 'not-allowed': 'denied', 'service-not-allowed': isSafari ? 'service' : 'denied', 'audio-capture': 'nomic', network: 'net' }[e.error]; if (k) { micOK = false; micHelp(k) } }
+    rec.onend = () => { listening = false; interim?.remove(); if (heard.trim()) ask(heard.trim()); else if (on && !busy && input.hidden) status('') }
     try { rec.start(); listening = true; status('🎤 ' + tr('請說…')) } catch { listening = false }
   }
   async function ask(text) {
@@ -297,9 +320,12 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
     if (on) return
     on = true; el.hidden = false; log.textContent = ''; t0 = performance.now(); idle = 0; help.textContent = ''
     status(tr('撥號中…')); busy = true
+    const mic = SR ? ensureMic() : null   // 趁按 P 的當下先問麥克風（響鈴時同時等玩家按允許）
     await ring(2); if (!on) return
+    const okMic = await mic; if (!on) return
+    if (okMic !== false) status('')
     await say(L(T.hello)()); busy = false; if (!on) return
-    help.textContent = helpText(); listen()
+    help.textContent = helpText(); if (okMic !== false) listen()
     window.gtag?.('event', 'phone_call', { sr: !!SR, ai: llm.status === 'ready' })
   }
   function hang(delay = 0) {
@@ -317,5 +343,5 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
     if (!busy && !listening && input.hidden && (idle += dt) > 30) hang()   // 30 秒沒講話自動掛斷
   }
   window.__phone = { answer, ask, call, hang, regionOf, get on() { return on } }
-  return { key, update, call, hang, get on() { return on }, answer }
+  return { key, update, call, hang, get on() { return on }, get cursor() { return on && (micAsk || !input.hidden) }, answer }
 }

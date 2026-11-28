@@ -170,7 +170,7 @@ const guide = createGuide({ renderer, sfx: (k) => uiFx?.play(k), onClose: (why) 
   return r
 }, onRead: (id) => { if (!state.read.includes(id)) { state.read.push(id); save(); hud.setGuideNew(unreadN()) } } })
 const product = createProductView({ state, getModel: (id) => store.gearModel[id], onChange: () => { save(); store.refresh(); shop.render() }, onClose: () => { if (!shop.isOpen) relock() } })   // 從櫃台的器材清單打開的：關掉回到清單
-const panelOpen = () => album.isOpen || shop.isOpen || product.isOpen || cam.panelOpen || guide.isOpen || appraisal.watching
+const panelOpen = () => !!window.__phoneObj?.cursor || album.isOpen || shop.isOpen || product.isOpen || cam.panelOpen || guide.isOpen || appraisal.watching
 const openPanel = (pnl) => { pnl.open(); player.controls.unlock() }
 
 // 2026-11-13 回報問題用：按 ` 在左上角顯示目前位置／面向／時間（截圖給我們就知道在哪裡、往哪看），再按一次關掉

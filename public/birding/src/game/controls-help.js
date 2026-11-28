@@ -9,10 +9,10 @@ const KEYS = {   // 鍵帽範圍 [x0, x1, 中心 y]，鍵高約 40
 const CALLOUTS = [
   { from: [86, 354], to: [87, 175], key: 'Esc', text: tr('暫停・回選單'), anchor: 'start', dx: -40 },
   { from: [100, 480], to: [230, 255], key: 'Tab', text: tr('相簿') },
-  { from: [166, 480], to: [400, 250], key: 'Q', text: tr('換鏡頭') },
-  { from: [272, 480], to: [640, 175], key: 'E', text: tr('互動：買賣、休息；舉著相機時開相機設定') },
+  { from: [166, 480], to: [440, 250], key: 'Q', text: tr('換鏡頭') },
+  { from: [272, 480], to: [640, 175], key: 'E', text: tr('互動：買賣、休息；舉著相機時開相機設定'), anchor: 'start', dx: -230 },
   { from: [233, 570], to: [280, 900], key: 'W A S D', text: tr('走路') },
-  { from: [635, 480], to: [800, 330], key: 'P', text: tr('打電話問 Tom 鳥在哪'), anchor: 'start', dx: -30 },   // 2026-11-27
+  { from: [635, 480], to: [600, 300], key: 'P', text: tr('打電話問 Tom 鳥在哪（對麥克風說話）'), anchor: 'start', dx: -30 },   // 2026-11-27；11-28 加「麥克風」
   { from: [338, 570], to: [600, 420], key: 'F', text: tr('手電筒（晚上用）') },
   { from: [121, 621], to: [100, 820], key: 'Shift', text: tr('跑步'), anchor: 'start', dx: -40 },
   { from: [312, 621], to: [470, 820], key: 'C', text: tr('按住蹲低、慢慢靠近鳥') },

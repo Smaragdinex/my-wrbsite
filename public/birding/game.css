@@ -370,6 +370,8 @@ svg.controls image { mix-blend-mode: multiply; }
 @keyframes preSun { from { transform: scale(1); opacity: 0.9; } to { transform: scale(1.12); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #pre .cl, #pre .tb, #pre .tb .w, #pre .sky::before { animation: none; } #pre .tb { left: 60%; } }
 #pre .menu-sheet { position: relative; z-index: 2; width: min(620px, calc(100vw - 32px)); color: #1f2a24; }
+#pre #preHelp { width: min(1200px, 96vw); box-sizing: border-box; background: #fffffc; }   /* 2026-11-28 使用者：首頁操作說明太小，跟遊戲內一樣大 */
+#pre #preHelp .ctl { margin: 0 -8px; }
 #pre .lbl { display: block; margin: 16px 0 8px; font-size: 14px; color: #55645b; }
 #pre .opts { display: grid; gap: 8px; }
 #pre .opts button { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 11px 15px; border-radius: 12px; background: rgba(0, 0, 0, 0.045); border: 1.5px solid transparent; color: #1f2a24; }
