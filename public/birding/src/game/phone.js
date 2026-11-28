@@ -414,7 +414,7 @@ export function createPhone({ world, camera, hud, state, presence, getHour, play
   function key(e) {
     if (input === document.activeElement) return false
     if (e.code === 'KeyP') { if (!on) call(); else listen(); return true }
-    if (on && e.code === 'Backspace') { say(L(T.bye)()).then(() => hang(0.2)); return true }
+    if (on && e.code === 'Backspace') { say(L(T.bye)(), 'bye').then(() => hang(0.2)); return true }
     return false
   }
   function update(dt) {
