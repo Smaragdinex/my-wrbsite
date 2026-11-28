@@ -66,6 +66,14 @@ function labelDraw(it, state) {
   }
 }
 
+// 2026-11-28 使用者：「到主畫面後可以先載入相機店」。停在標題畫面時先把店裡的檔案抓進瀏覽器快取（網站快取 10 分鐘），
+// 網址要跟下面 buildStore 用的一模一樣（含 ?v=），按開始後載店就直接從快取拿
+export function preloadStore() {
+  const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
+  const urls = ['models/owner-rigged.glb', ...BODIES.map((b) => `models/camera/body-${b.id}.glb`), ...LENSES.map((l) => `models/camera/lens-${l.id}.glb`), 'models/store-prints.jpg'].map((u) => `${u}?v=${VER}`)
+  urls.push('models/store-prints.jpg')
+  return Promise.all(urls.map((u) => fetch(u).then((r) => r.arrayBuffer()).catch(() => null)))
+}
 export async function buildStore(scene, state, plantLib, { getSound = () => true } = {}) {
   const VER = new URL(import.meta.url).searchParams.get('v') ?? ''
   const loader = new GLTFLoader()

@@ -15,7 +15,7 @@ import { createShop } from './shop.js'
 import { createAppraisal } from './appraise.js'
 import { createCommissions } from './commissions.js'
 import { createProductView } from './product.js'
-import { buildStore } from './store.js'
+import { buildStore, preloadStore } from './store.js'
 import { loadState, saveState, putPhoto, deletePhoto, allPhotos } from './save.js'
 import { judgePhoto, loadLLM, llm, rawGen, RARITY } from './judge.js'
 import { createFlight, flyModels } from './flight.js'
@@ -41,6 +41,7 @@ document.title = tr('鳥類生態園：攝影')
 }
 
 const loadingEl = document.getElementById('loading')
+window.__bootLd?.()   // 交回：開頭下載程式的進度（game.html 裡的小段程式）
 // 載入畫面：下載 0～70%、蓋溫室 70～80%、預熱著色器 80～100%（鳥沿著進度線飛過去）
 const ldNum = document.getElementById('ld-num'), ldMsg = document.getElementById('ld-msg')
 const ldFill = loadingEl.querySelector('.ld-fill'), ldBird = loadingEl.querySelector('.ld-bird')
@@ -79,6 +80,7 @@ const VER_Q = new URL(import.meta.url).searchParams.get('v') ?? ''   // 主頁�
     const show = (el) => { menu.hidden = !!el; setEl.hidden = el !== setEl; hlpEl.hidden = el !== hlpEl }
     const savePick = () => { try { if (pick === 'auto') localStorage.removeItem('birdpark.tier'); else localStorage.setItem('birdpark.tier', pick) } catch {} }
     drawOpts(); pre.hidden = false; loadingEl.hidden = true
+    setTimeout(() => preloadStore(), 1500)   // 標題畫面先抓相機店（等標題的 3D 背景先起來）
     // 即時 3D 的背景（title3d.js）：載好就蓋在影片上面；載不起來（沒有 WebGL、模型抓不到）就照舊播影片
     let t3 = null, gone = false
     import('./title3d.js').then((m) => m.startTitle3D(pre.querySelector('.sky'), { ver: VER_Q })).then((h) => { if (gone) h.stop(); else { t3 = h; pre.querySelector('.sky').classList.add('live') } }).catch((e) => console.warn('[title3d]', e))
